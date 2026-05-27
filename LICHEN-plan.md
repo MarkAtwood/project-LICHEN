@@ -6,845 +6,552 @@
 **Spec Reference:** LICHEN-spec.md
 **Date:** 2026-05-26
 **Status:** Draft
-**License:** CC-BY-4.0 (documentation)
+**License:** CC-BY-4.0 (documentation), GPL-3.0 (code)
 
 ---
 
 ## Executive Summary
 
-This plan describes how to build the LICHEN protocol stack from the specification. The implementation spans:
+This plan describes how to build the LICHEN protocol stack from the specification.
 
-- **Rust** for "bigger" machines (Linux gateways, border routers, test harnesses, simulators)
-- **C** for constrained embedded targets (STM32WL, nRF52840, ESP32)
-- **IETF-style I-Ds** in markdown for all protocol components
-
-The architecture prioritizes a shared core logic (in Rust with `no_std`) that can either run natively or be compiled to C-callable libraries via `cbindgen`. Truly constrained devices get a hand-optimized C implementation sharing only the protocol constants and test vectors with the Rust reference.
+**Key characteristics:**
+- **Standards-based:** 100% IETF protocols (IPv6, SCHC, RPL, CoAP, SenML, OSCORE)
+- **Hardware:** Runs on existing Meshtastic-compatible devices (reflash)
+- **Dual implementation:** Rust (reference) + C (constrained devices)
+- **Decentralized:** No PSK, no mandatory CA, TOFU baseline trust
 
 ---
 
 ## 1. Repository Structure
 
 ```
-lora-ipv6-mesh/
+LICHEN/
 ├── docs/
-│   └── draft-*.md              # IETF-style I-Ds (markdown)
+│   ├── LICHEN-spec.md           # Protocol specification (CC-BY-4.0)
+│   ├── LICHEN-plan.md           # This file
+│   └── draft-lichen-*.md        # IETF-style I-Ds
 ├── rust/
-│   ├── Cargo.toml              # Workspace root
-│   ├── lora-phy/               # LoRa radio abstraction
-│   ├── lora-link/              # Link layer (LLSec, framing)
-│   ├── schc/                   # SCHC compression engine
-│   ├── sixlowpan/              # 6LoWPAN adaptation
-│   ├── rpl/                    # RPL routing
-│   ├── coap/                   # CoAP + OSCORE
-│   ├── mqtt-sn/                # MQTT-SN client
-│   ├── mesh-node/              # Full node binary (Linux/embedded)
-│   ├── mesh-gateway/           # Border router binary
-│   ├── mesh-sim/               # Network simulator
-│   └── ffi/                    # C bindings (cbindgen)
+│   ├── Cargo.toml               # Workspace root
+│   ├── lichen-phy/              # LoRa radio abstraction (SX126x, SX127x)
+│   ├── lichen-link/             # Link layer (LLSec, Ed25519 signatures)
+│   ├── lichen-schc/             # SCHC compression engine
+│   ├── lichen-6lowpan/          # 6LoWPAN adaptation
+│   ├── lichen-ipv6/             # IPv6 minimal + addressing
+│   ├── lichen-rpl/              # RPL routing + Trickle
+│   ├── lichen-coap/             # CoAP + OSCORE + Observe
+│   ├── lichen-senml/            # SenML encoding/decoding
+│   ├── lichen-apps/             # Applications (messaging, SOS, etc.)
+│   ├── lichen-lci/              # Local Client Interface
+│   ├── lichen-node/             # Full node binary
+│   ├── lichen-gateway/          # Border router binary
+│   ├── lichen-sim/              # Network simulator
+│   └── lichen-ffi/              # C bindings (cbindgen)
 ├── c/
-│   ├── include/
-│   │   └── lora_mesh/          # Public headers
+│   ├── include/lichen/          # Public headers
 │   ├── src/
-│   │   ├── phy/                # Radio drivers
-│   │   ├── link/               # Link layer
-│   │   ├── schc/               # SCHC (C impl)
-│   │   ├── ipv6/               # IPv6 minimal
-│   │   ├── rpl/                # RPL
-│   │   └── coap/               # CoAP + OSCORE
-│   ├── port/                   # Platform ports
-│   │   ├── stm32wl/
-│   │   ├── nrf52/
-│   │   └── esp32/
+│   │   ├── phy/                 # Radio drivers
+│   │   ├── link/                # Link layer
+│   │   ├── schc/                # SCHC
+│   │   ├── ipv6/                # IPv6 + 6LoWPAN
+│   │   ├── rpl/                 # RPL
+│   │   ├── coap/                # CoAP + OSCORE
+│   │   ├── senml/               # SenML
+│   │   ├── apps/                # Applications
+│   │   └── lci/                 # Local Client Interface
+│   ├── port/
+│   │   ├── esp32/               # ESP32 + ESP32-S3
+│   │   ├── nrf52/               # nRF52840
+│   │   ├── rp2040/              # RP2040
+│   │   └── stm32wl/             # STM32WL
 │   └── CMakeLists.txt
 ├── test/
-│   ├── vectors/                # Shared test vectors (JSON)
-│   ├── interop/                # Interop test scripts
-│   └── hardware/               # Hardware-in-loop tests
+│   ├── vectors/                 # Shared test vectors (JSON)
+│   ├── interop/                 # Rust ↔ C interop tests
+│   └── hardware/                # Hardware-in-loop tests
 ├── tools/
-│   ├── packet-craft/           # Packet builder/parser CLI
-│   ├── wireshark-dissector/    # Wireshark plugin
-│   └── key-manager/            # Key generation/provisioning
+│   ├── lichen-craft/            # Packet builder/parser CLI
+│   ├── wireshark-dissector/     # Wireshark Lua plugin
+│   └── lichen-keygen/           # Key generation/provisioning
+├── apps/
+│   ├── lichen-cli/              # Command-line client
+│   ├── lichen-tui/              # Terminal UI
+│   └── lichen-web/              # Web dashboard (border router)
 └── examples/
-    ├── sensor-node/            # Reference leaf node
-    ├── router/                 # Reference router
-    └── border-router/          # Reference 6LBR
+    ├── sensor-node/             # Reference leaf node
+    ├── router/                  # Reference router
+    └── border-router/           # Reference 6LBR
 ```
 
 ---
 
-## 2. Phase Plan
+## 2. Hardware Targets
 
-### Phase 0: Foundation (Weeks 1-2)
+**Primary target:** All Meshtastic-compatible hardware (reflash, same radios).
 
-**Goal:** Project scaffolding, tooling, first I-D drafts.
+| Family | Examples | MCU | Radio |
+|--------|----------|-----|-------|
+| ESP32 + SX127x | TTGO T-Beam v1, Heltec LoRa 32 V2 | ESP32 | SX1276/78 |
+| ESP32-S3 + SX126x | Heltec LoRa 32 V3, T-Beam Supreme | ESP32-S3 | SX1262 |
+| nRF52840 + SX126x | RAK4631, LilyGo T-Echo | nRF52840 | SX1262 |
+| RP2040 + SX126x | RAK11310 | RP2040 | SX1262 |
+| STM32WL | RAK3172, Seeed Wio-E5 | STM32WL55 | Integrated |
 
-| Task | Output | Owner |
-|------|--------|-------|
-| Set up Rust workspace with `no_std` crates | `rust/Cargo.toml` | - |
-| Set up C build (CMake + Zephyr integration) | `c/CMakeLists.txt` | - |
-| Define shared constants (frequencies, sync words, ports) | `rust/lora-phy/src/constants.rs`, `c/include/lora_mesh/constants.h` | - |
-| Write `draft-lora-link-01.md` (link layer) | `docs/draft-lora-link-01.md` | - |
-| Write `draft-lora-schc-01.md` (SCHC profile) | `docs/draft-lora-schc-01.md` | - |
-| Create test vector generator skeleton | `test/vectors/` | - |
+**Memory budgets:**
 
-**Exit Criteria:**
-- `cargo build` succeeds for all crates (stub implementations)
-- `cmake --build` succeeds for C library
-- Two draft I-Ds reviewed
+| Platform | RAM | Flash | Constraint Level |
+|----------|-----|-------|------------------|
+| ESP32/ESP32-S3 | 320KB+ | 4MB+ | Comfortable |
+| nRF52840 | 256KB | 1MB | Comfortable |
+| RP2040 | 264KB | 2MB | Comfortable |
+| STM32WL | 64KB | 256KB | Constrained baseline |
 
 ---
 
-### Phase 1: Physical & Link Layer (Weeks 3-5)
+## 3. Phase Plan
+
+### Phase 0: Foundation
+
+**Goal:** Project scaffolding, tooling, CI/CD.
+
+| Task | Output |
+|------|--------|
+| Create Rust workspace with `no_std` crates | `rust/Cargo.toml` |
+| Create C build system (CMake + platform ports) | `c/CMakeLists.txt` |
+| Define shared constants (frequencies, sync word 0x34, ports) | Shared headers |
+| Set up GitHub Actions CI | `.github/workflows/` |
+| Create test vector framework | `test/vectors/` |
+| Write `draft-lichen-link-01.md` | `docs/` |
+
+**Exit Criteria:**
+- `cargo build --workspace` succeeds (stubs)
+- `cmake --build` succeeds for all platforms
+- CI runs on push
+
+---
+
+### Phase 1: Physical & Link Layer
 
 **Goal:** Transmit and receive authenticated frames over LoRa.
 
-#### 1.1 LoRa Radio Abstraction (Rust)
+#### 1.1 Radio Abstraction
 
 ```rust
-// lora-phy/src/lib.rs
 pub trait Radio {
     fn configure(&mut self, config: &Config) -> Result<(), Error>;
     fn transmit(&mut self, data: &[u8]) -> Result<(), Error>;
     fn receive(&mut self, buf: &mut [u8], timeout: Duration) -> Result<usize, Error>;
-    fn cad(&mut self) -> Result<bool, Error>;  // Channel activity detection
+    fn cad(&mut self) -> Result<bool, Error>;
     fn rssi(&self) -> i16;
     fn snr(&self) -> i8;
 }
 ```
 
-Implementations:
-- `sx126x`: SX1261/62/68 driver (SPI, embedded-hal)
-- `sx127x`: SX1276/77/78/79 driver (SPI)
-- `simulated`: For mesh-sim
+Implementations: `sx126x`, `sx127x`, `simulated`
 
-#### 1.2 Link Layer (Rust)
+#### 1.2 Link Layer Frame
 
-```rust
-// lora-link/src/lib.rs
-pub struct LinkFrame {
-    pub llsec: LLSecFlags,
-    pub seq_num: u16,
-    pub dst_addr: Address,
-    pub payload: Vec<u8>,  // or heapless::Vec for no_std
-    pub signature: [u8; 32],
-}
-
-pub trait LinkLayer {
-    fn send(&mut self, frame: &LinkFrame) -> Result<(), Error>;
-    fn recv(&mut self, timeout: Duration) -> Result<LinkFrame, Error>;
-}
-```
+Per spec section 4:
+- Length (1B) + LLSec (1B) + SeqNum (2B) + DstAddr (2-8B) + Payload + Signature (32B)
 
 #### 1.3 Ed25519 Truncated Signatures
 
-```rust
-// lora-link/src/crypto.rs
-pub fn sign_truncated(key: &SigningKey, message: &[u8]) -> [u8; 32] {
-    let sig = key.sign(message);
-    sig.to_bytes()[..32].try_into().unwrap()
-}
-
-pub fn verify_truncated(
-    pubkey: &VerifyingKey,
-    message: &[u8],
-    truncated: &[u8; 32]
-) -> bool {
-    // Reconstruct full signature via deterministic derivation
-    // See spec section 8.3 for algorithm
-}
-```
+32-byte truncated Ed25519 signatures per spec section 8.3.
 
 #### 1.4 Replay Protection
 
-```rust
-// lora-link/src/replay.rs
-pub struct ReplayWindow {
-    last_seq: u16,
-    bitmap: u32,  // 32-packet window
-}
-
-impl ReplayWindow {
-    pub fn check_and_update(&mut self, seq: u16) -> bool { ... }
-}
-```
-
-#### 1.5 C Implementation
-
-Mirror the Rust API for constrained devices:
-
-```c
-// c/include/lora_mesh/link.h
-typedef struct {
-    uint8_t llsec;
-    uint16_t seq_num;
-    lora_addr_t dst;
-    uint8_t *payload;
-    size_t payload_len;
-    uint8_t signature[32];
-} lora_link_frame_t;
-
-int lora_link_send(lora_link_ctx_t *ctx, const lora_link_frame_t *frame);
-int lora_link_recv(lora_link_ctx_t *ctx, lora_link_frame_t *frame, uint32_t timeout_ms);
-```
+16-bit sequence number with 32-entry sliding window.
 
 **Exit Criteria:**
 - Two nodes exchange authenticated frames
-- Replay attack blocked in test
-- Documented in `draft-lora-link-01.md`
+- Replay attack blocked
+- Test vectors for link layer
 
 ---
 
-### Phase 2: SCHC Compression (Weeks 6-8)
+### Phase 2: SCHC Compression
 
-**Goal:** Implement RFC 8724 SCHC for IPv6/UDP/CoAP compression.
+**Goal:** RFC 8724 SCHC for IPv6/UDP/CoAP compression.
 
-#### 2.1 SCHC Engine (Rust)
+#### 2.1 Compression Rules (per spec Appendix A)
 
-```rust
-// schc/src/lib.rs
-pub struct Rule {
-    pub id: u8,
-    pub fields: Vec<FieldDescriptor>,
-}
+| Rule | Use Case | Compressed Size |
+|------|----------|-----------------|
+| 0 | Link-local IPv6 + UDP + CoAP | 4-6 bytes |
+| 1 | Global IPv6 + UDP + CoAP | 12-14 bytes |
+| 2 | ICMPv6 Echo | 3 bytes |
+| 3 | RPL DIO | 8 bytes |
+| 4 | RPL DAO | 6 bytes |
 
-pub struct FieldDescriptor {
-    pub field_id: FieldId,
-    pub target_value: Option<Vec<u8>>,
-    pub matching_operator: MatchingOperator,
-    pub compression_action: CompressionAction,
-}
+#### 2.2 Fragmentation
 
-pub fn compress(rules: &[Rule], packet: &[u8]) -> Result<(u8, Vec<u8>), Error>;
-pub fn decompress(rules: &[Rule], rule_id: u8, residue: &[u8], context: &Context) -> Result<Vec<u8>, Error>;
-```
-
-#### 2.2 Default Rules (per spec Appendix A)
-
-| Rule | Use Case | Implementation Priority |
-|------|----------|------------------------|
-| 0 | Link-local IPv6 + UDP + CoAP | P0 |
-| 1 | Global IPv6 + UDP + CoAP | P0 |
-| 2 | ICMPv6 Echo | P1 |
-| 3 | RPL DIO | P1 |
-| 4 | RPL DAO | P1 |
-
-#### 2.3 Fragmentation (ACK-on-Error)
-
-```rust
-// schc/src/fragment.rs
-pub struct Fragmenter {
-    rule_id: u8,
-    window_size: u8,
-    fcn_bits: u8,
-}
-
-impl Fragmenter {
-    pub fn fragment(&self, packet: &[u8], mtu: usize) -> Vec<Fragment>;
-    pub fn reassemble(&mut self, frag: Fragment) -> Option<Vec<u8>>;
-}
-```
-
-#### 2.4 Test Vectors
-
-Generate from Rust, verify in C:
-
-```json
-// test/vectors/schc-rule0.json
-{
-  "name": "Link-local CoAP GET",
-  "uncompressed": "60000000...",  // Full IPv6+UDP+CoAP hex
-  "rule_id": 0,
-  "residue": "0011",              // Hex
-  "compressed_total": "00001100..."
-}
-```
+ACK-on-Error mode for packets exceeding L2 MTU.
 
 **Exit Criteria:**
-- All default rules implemented and tested
-- Fragmentation working with 60-byte MTU
-- C and Rust produce identical output for all test vectors
-- `draft-lora-schc-01.md` complete
+- All rules implemented and tested
+- Fragmentation working
+- Rust and C produce identical output
 
 ---
 
-### Phase 3: IPv6 and 6LoWPAN (Weeks 9-10)
+### Phase 3: IPv6 and 6LoWPAN
 
-**Goal:** Full IPv6 with SLAAC, 6LoWPAN dispatch.
+**Goal:** Full IPv6 with layered addressing.
 
-#### 3.1 IPv6 Minimal (Rust)
+#### 3.1 Address Types (per spec section 6.1)
 
-```rust
-// sixlowpan/src/ipv6.rs
-pub struct Ipv6Packet {
-    pub traffic_class: u8,
-    pub flow_label: u32,
-    pub next_header: u8,
-    pub hop_limit: u8,
-    pub src: Ipv6Addr,
-    pub dst: Ipv6Addr,
-    pub payload: Vec<u8>,
-}
+| Type | Prefix | When Available |
+|------|--------|----------------|
+| Link-local | fe80::/10 | Always |
+| ULA | fd00::/8 | DODAG root present |
+| GUA | 2000::/3 | BR with upstream prefix |
 
-pub fn derive_iid_from_eui64(eui64: [u8; 8]) -> [u8; 8];
-pub fn derive_iid_from_short(short: u16) -> [u8; 8];
-```
+#### 3.2 Isolated Mesh Support
 
-#### 3.2 6LoWPAN Dispatch
+- Any router can self-elect as DODAG root
+- Election: lowest EUI-64 wins
+- Self-elected root generates ULA prefix
 
-```rust
-// sixlowpan/src/dispatch.rs
-pub enum Dispatch {
-    Ipv6,           // 0x41 - uncompressed
-    Iphc,           // 0x60-0x7F - RFC 6282 IPHC
-    Schc(u8),       // 0x14 + rule_id - RFC 8724
-    FragFirst,      // 0xC0-0xDF
-    FragSubseq,     // 0xE0-0xFF
-}
-```
+#### 3.3 Multiple Border Routers
 
-#### 3.3 ICMPv6
-
-Essential subset:
-- Echo Request/Reply (ping)
-- Destination Unreachable
-- Neighbor Solicitation/Advertisement (if needed for DAD)
+- Each BR advertises its own prefix(es)
+- No coordination required
+- Nodes handle multiple addresses
 
 **Exit Criteria:**
-- Nodes can ping each other (link-local)
-- Global addresses work via border router prefix
-- ICMPv6 compressed via SCHC rule 2
+- Nodes can ping (link-local)
+- ULA addresses work
+- Isolated mesh self-organizes
 
 ---
 
-### Phase 4: RPL Routing (Weeks 11-14)
+### Phase 4: RPL Routing
 
-**Goal:** Mesh formation, upward/downward routing.
+**Goal:** Mesh formation with MRHOF objective function.
 
-#### 4.1 RPL Core (Rust)
+#### 4.1 Control Messages
 
-```rust
-// rpl/src/lib.rs
-pub struct Dodag {
-    pub instance_id: u8,
-    pub dodag_id: Ipv6Addr,
-    pub version: u8,
-    pub rank: u16,
-    pub parent: Option<Neighbor>,
-    pub children: Vec<Neighbor>,
-}
+DIO, DIS, DAO, DAO-ACK per RFC 6550.
 
-pub struct Neighbor {
-    pub addr: Ipv6Addr,
-    pub link_local: Ipv6Addr,
-    pub rank: u16,
-    pub etx: u16,  // Expected transmissions * 128
-}
-```
+#### 4.2 Trickle Timer
 
-#### 4.2 Control Messages
+Imin=4s, Imax=17min, k=10.
 
-| Message | Priority | Notes |
-|---------|----------|-------|
-| DIO | P0 | DODAG advertisement |
-| DIS | P0 | Solicitation |
-| DAO | P0 | Destination advertisement |
-| DAO-ACK | P1 | Acknowledgment |
+#### 4.3 Non-Storing Mode
 
-#### 4.3 Trickle Timer
-
-```rust
-// rpl/src/trickle.rs
-pub struct Trickle {
-    i_min: Duration,
-    i_max: Duration,
-    k: u8,
-    i: Duration,
-    t: Duration,
-    c: u8,
-}
-
-impl Trickle {
-    pub fn reset(&mut self);
-    pub fn consistent(&mut self);
-    pub fn should_transmit(&self) -> bool;
-    pub fn next_interval(&mut self) -> Duration;
-}
-```
-
-#### 4.4 Objective Function (MRHOF)
-
-```rust
-// rpl/src/of.rs
-pub fn calculate_rank(parent_rank: u16, link_etx: u16) -> u16 {
-    let path_etx = parent_rank.saturating_add((link_etx * MIN_HOP_RANK_INCREASE) / 128);
-    path_etx
-}
-
-pub fn select_parent(candidates: &[Neighbor], current: Option<&Neighbor>) -> Option<&Neighbor> {
-    // Prefer lowest rank, with hysteresis
-}
-```
-
-#### 4.5 Non-Storing Mode + 6LoRH
-
-```rust
-// rpl/src/source_route.rs
-pub fn insert_source_route(packet: &mut Ipv6Packet, hops: &[u16]) {
-    // Insert 6LoRH (RFC 8138) header
-}
-
-pub fn process_source_route(packet: &Ipv6Packet) -> Option<u16> {
-    // Return next hop short address
-}
-```
+6LoRH source routing for downward traffic.
 
 **Exit Criteria:**
 - 5-node mesh forms DODAG
-- Upward routing (leaf → root) works
-- Downward routing (root → leaf via source route) works
+- Upward and downward routing work
 - Parent switching on link failure
-- `draft-lora-rpl-01.md` complete
 
 ---
 
-### Phase 5: Security Layer (Weeks 15-17)
+### Phase 5: Security Layer
 
-**Goal:** OSCORE for CoAP, secure RPL mode.
+**Goal:** TOFU trust model, OSCORE encryption.
 
-#### 5.1 OSCORE (Rust)
+#### 5.1 Trust Model (per spec section 8.5)
 
-```rust
-// coap/src/oscore.rs
-pub struct SecurityContext {
-    pub sender_id: Vec<u8>,
-    pub recipient_id: Vec<u8>,
-    pub master_secret: [u8; 16],
-    pub sender_seq: u64,
-}
+| Method | Infrastructure | Trust Level |
+|--------|---------------|-------------|
+| TOFU | None | Pinned |
+| DANE | DNSSEC | Verified |
+| PKIX | CA | Verified |
 
-pub fn protect(ctx: &mut SecurityContext, coap: &CoapMessage) -> Result<CoapMessage, Error>;
-pub fn unprotect(ctx: &SecurityContext, coap: &CoapMessage) -> Result<CoapMessage, Error>;
-```
+**TOFU is mandatory. DANE and PKIX are optional.**
 
-#### 5.2 Key Management (Bootstrap)
-
-Options to implement:
-1. **Pre-shared keys** (simplest, for testing)
-2. **EDHOC (RFC 9528)** - lightweight key exchange (stretch goal)
+#### 5.2 Key Store
 
 ```rust
-// mesh-node/src/keystore.rs
 pub struct KeyStore {
-    pub my_signing_key: SigningKey,
-    pub peer_keys: HashMap<Ipv6Addr, VerifyingKey>,
-    pub oscore_contexts: HashMap<Ipv6Addr, SecurityContext>,
+    pub my_keypair: Ed25519Keypair,
+    pub peers: HashMap<IID, PeerKey>,  // IID → pubkey + trust level
+    pub oscore_contexts: HashMap<IID, OscoreContext>,
 }
 ```
 
-#### 5.3 RPL Secure Mode
+#### 5.3 OSCORE
 
-```rust
-// rpl/src/security.rs
-pub enum SecurityMode {
-    Unsecured,
-    Preinstalled { key: [u8; 16] },
-    Authenticated { /* per-node keys */ },
-}
-```
+RFC 8613 for end-to-end CoAP encryption.
 
 **Exit Criteria:**
-- OSCORE-protected CoAP exchange works end-to-end
-- Unsigned RPL messages rejected in secure mode
-- Key provisioning tool exists
+- TOFU key exchange works
+- OSCORE-protected CoAP works
+- Key pinning with change detection
 
 ---
 
-### Phase 6: Application Layer (Weeks 18-20)
+### Phase 6: Local Client Interface
 
-**Goal:** CoAP server/client, MQTT-SN client, Resource Directory.
+**Goal:** IPv6+CoAP interface for phone apps and local clients.
 
-#### 6.1 CoAP (Rust)
+#### 6.1 Transport Bindings (per spec section 17.3)
 
-```rust
-// coap/src/lib.rs
-pub struct CoapMessage {
-    pub msg_type: MessageType,
-    pub code: Code,
-    pub message_id: u16,
-    pub token: Vec<u8>,
-    pub options: Vec<CoapOption>,
-    pub payload: Vec<u8>,
-}
+| Transport | Framing |
+|-----------|---------|
+| Serial/USB | SLIP (RFC 1055) |
+| BLE | SLIP over BLE UART or 6LoWPAN over BLE |
+| RTOS IPC | Direct buffers |
 
-pub trait CoapHandler {
-    fn handle(&self, request: &CoapMessage) -> CoapMessage;
-}
-```
+#### 6.2 CoAP Resources
 
-Features:
-- [P0] Basic GET/POST/PUT/DELETE
-- [P0] Observe (RFC 7641)
-- [P1] Block-wise transfer (RFC 7959)
-
-#### 6.2 MQTT-SN Client (Rust)
-
-```rust
-// mqtt-sn/src/lib.rs
-pub struct MqttSnClient {
-    pub gateway: Ipv6Addr,
-    pub client_id: String,
-    pub topics: HashMap<u16, String>,  // topic_id → topic_name
-}
-
-impl MqttSnClient {
-    pub fn connect(&mut self) -> Result<(), Error>;
-    pub fn register(&mut self, topic: &str) -> Result<u16, Error>;
-    pub fn publish(&mut self, topic_id: u16, payload: &[u8], qos: QoS) -> Result<(), Error>;
-    pub fn subscribe(&mut self, topic: &str) -> Result<u16, Error>;
-}
-```
-
-#### 6.3 Resource Directory Client
-
-```rust
-// coap/src/rd.rs
-pub fn register(
-    client: &CoapClient,
-    rd_addr: Ipv6Addr,
-    endpoint: &str,
-    resources: &[Resource],
-) -> Result<(), Error>;
-
-pub fn lookup(
-    client: &CoapClient,
-    rd_addr: Ipv6Addr,
-    resource_type: &str,
-) -> Result<Vec<ResourceLink>, Error>;
-```
+| Resource | Purpose |
+|----------|---------|
+| /config | Node configuration |
+| /status | Status (observable) |
+| /keys | Trust store CRUD |
+| /sensors/* | SenML sensor data |
+| /msg/* | Messaging |
 
 **Exit Criteria:**
-- Sensor node publishes temperature via CoAP
-- MQTT-SN client publishes to broker via gateway
-- Resource Directory discovers mesh nodes
+- SLIP framing works over serial
+- BLE UART works
+- CoAP resources implemented
+- Client can address mesh nodes through local node
 
 ---
 
-### Phase 7: Border Router (Weeks 21-23)
+### Phase 7: SenML Sensors
 
-**Goal:** Full 6LBR implementation connecting mesh to internet.
+**Goal:** RFC 8428 SenML for all sensor data.
 
-#### 7.1 Architecture
+#### 7.1 Sensor Profiles (per spec Appendix F)
+
+| Sensor | Resource | Key Fields |
+|--------|----------|------------|
+| Location | /sensors/location | lat, lon, alt, speed, heading |
+| Battery | /sensors/battery | pct, mv, charging |
+| Temperature | /sensors/temp | temp (Cel) |
+| Humidity | /sensors/humidity | rh |
+| Pressure | /sensors/pressure | press (Pa) |
+| Radio | /sensors/radio | rssi, snr, duty |
+
+#### 7.2 Base Name Convention
 
 ```
-┌─────────────────────────────────────────────────┐
-│               Border Router (Linux)              │
-├─────────────────────────────────────────────────┤
-│  ┌─────────┐  ┌──────────┐  ┌────────────────┐ │
-│  │ LoRa    │  │ IPv6     │  │ Resource       │ │
-│  │ Radio   │──│ Routing  │──│ Directory      │ │
-│  └─────────┘  └──────────┘  └────────────────┘ │
-│       │            │              │            │
-│  ┌────┴────┐  ┌────┴────┐  ┌─────┴──────┐    │
-│  │ SCHC    │  │ RPL     │  │ MQTT-SN    │    │
-│  │ Gateway │  │ Root    │  │ Gateway    │    │
-│  └─────────┘  └─────────┘  └────────────┘    │
-│                    │                          │
-│              ┌─────┴─────┐                    │
-│              │ eth0/wlan │                    │
-│              │ Internet  │                    │
-│              └───────────┘                    │
-└─────────────────────────────────────────────────┘
+urn:dev:mac:<EUI-64>:
 ```
 
-#### 7.2 Components
+**Exit Criteria:**
+- All sensor profiles implemented
+- Observable resources work
+- Position beaconing works
+
+---
+
+### Phase 8: Applications
+
+**Goal:** Tactical radio features per spec section 18.
+
+#### 8.1 Messaging (spec 18.1)
+
+- Unicast, multicast, broadcast
+- Delivery receipts
+- Canned messages
+- Store-and-forward (optional)
+
+#### 8.2 Position Sharing (spec 18.2)
+
+- Position beacons via SenML
+- Position cache (blue force tracking)
+- Privacy controls
+
+#### 8.3 Waypoints (spec 18.3)
+
+- CRUD on /waypoints
+- Share via unicast/broadcast
+- Routes as ordered waypoint lists
+
+#### 8.4 Emergency/SOS (spec 18.4)
+
+- Priority multicast
+- Controlled relay
+- Hardware button support
+- Network prioritization
+
+#### 8.5 Presence (spec 18.5)
+
+- Status: available/busy/away/offline/emergency
+- Activity hints
+- Auto-update from GPS
+
+#### 8.6 Check-In/Roll Call (spec 18.6)
+
+- Individual check-in
+- Leader-initiated multicast roll call
+- Missing node detection
+
+#### 8.7 Range Testing (spec 18.7)
+
+- Extended ping with radio telemetry
+- Traceroute through mesh
+
+#### 8.8 Groups (spec 18.8)
+
+- Multicast addressing (RFC 7390)
+- Optional OSCORE group encryption (RFC 9203)
+
+**Exit Criteria:**
+- All P0 applications working
+- SOS priority handling works
+- Group messaging works
+
+---
+
+### Phase 9: Border Router
+
+**Goal:** Full 6LBR connecting mesh to internet.
+
+#### 9.1 Components
 
 | Component | Function |
 |-----------|----------|
-| DODAG Root | Originates RPL instance, assigns prefix |
-| Prefix Delegation | Obtains /64 from upstream (DHCPv6-PD or static) |
-| Source Routing | Inserts 6LoRH for downward traffic |
-| SCHC Context Manager | Distributes compression rules |
-| MQTT-SN Gateway | Translates MQTT-SN ↔ MQTT 3.1.1/5.0 |
+| DODAG Root | RPL root, prefix advertisement |
+| Prefix Manager | ULA generation, GUA delegation |
+| Source Router | 6LoRH insertion for downward traffic |
 | Resource Directory | CoAP RD (RFC 9176) |
-| NTP Server | Time sync for mesh (optional) |
+| MQTT-SN Gateway | MQTT-SN ↔ MQTT bridge |
+
+#### 9.2 Prefix Sources
+
+1. ULA (self-generated, persisted)
+2. Static GUA configuration
+3. DHCPv6-PD from upstream
+4. Tunnel broker
 
 **Exit Criteria:**
 - Internet host can ping mesh node
-- Mesh node can reach internet CoAP server
-- MQTT-SN → MQTT bridging works
+- Mesh node can reach internet
+- Resource Directory operational
 
 ---
 
-### Phase 8: Tooling & Testing (Weeks 24-26)
+### Phase 10: Tooling & Polish
 
-#### 8.1 Packet Craft CLI
+#### 10.1 lichen-craft CLI
 
 ```bash
-# Craft a CoAP GET request
-$ packet-craft coap --method GET --uri /sensors/temp \
-    --compress rule0 --sign mykey.pem \
-    --output packet.bin
-
-# Parse a captured packet
-$ packet-craft parse --input capture.bin --keys keys/
+lichen-craft encode --coap GET /sensors/temp --compress rule0 --sign key.pem
+lichen-craft decode --input packet.bin --keys keydir/
+lichen-craft keygen --output node.key
 ```
 
-#### 8.2 Wireshark Dissector
+#### 10.2 Wireshark Dissector
 
-Lua plugin for:
-- LoRa link layer
-- SCHC decompression
-- RPL control messages
-- CoAP with OSCORE
+Lua plugin for full protocol decode.
 
-#### 8.3 Network Simulator
+#### 10.3 Network Simulator
 
-```rust
-// mesh-sim/src/lib.rs
-pub struct Simulator {
-    pub nodes: Vec<SimNode>,
-    pub topology: Topology,  // Distance matrix, path loss model
-    pub time: SimTime,
-}
+Discrete-event simulation with configurable topology and link quality.
 
-impl Simulator {
-    pub fn run(&mut self, duration: Duration);
-    pub fn inject_fault(&mut self, node: NodeId, fault: Fault);
-    pub fn collect_metrics(&self) -> Metrics;
-}
-```
+#### 10.4 Web Dashboard
 
-Scenarios:
-- Mesh formation time
-- Convergence after node failure
-- Throughput vs. hop count
-- Duty cycle compliance
-
-#### 8.4 Hardware-in-Loop Testing
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Dev Board 1 │────│  Dev Board 2 │────│  Dev Board 3 │
-│  (STM32WL)   │RF  │  (nRF52840)  │RF  │  (ESP32+SX)  │
-└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
-       │                    │                    │
-       └────────────────────┴────────────────────┘
-                           │
-                    ┌──────┴───────┐
-                    │  Test Runner │
-                    │  (pytest)    │
-                    └──────────────┘
-```
+Border router web UI for monitoring and configuration.
 
 **Exit Criteria:**
-- All components have unit tests (>80% coverage)
-- Interop tests pass between Rust and C implementations
-- Simulator reproduces known failure modes
-- Hardware tests pass on 3 different MCU families
+- All tools functional
+- Documentation complete
+- Example applications working
 
 ---
 
-## 3. IETF-Style I-D Documents
+## 4. IETF-Style Documents
 
-| Document | Content | Target Completion |
-|----------|---------|-------------------|
-| `draft-lora-link-01.md` | Link layer frame format, LLSec, signatures | Phase 1 |
-| `draft-lora-schc-01.md` | SCHC rules profile for LoRa IPv6 mesh | Phase 2 |
-| `draft-lora-rpl-01.md` | RPL configuration, MRHOF parameters, 6LoRH | Phase 4 |
-| `draft-lora-security-01.md` | Ed25519 truncation, OSCORE profile, key bootstrap | Phase 5 |
-| `draft-lora-coap-01.md` | CoAP usage, Resource Directory profile | Phase 6 |
-| `draft-lora-border-01.md` | Border router behavior, prefix delegation | Phase 7 |
-
-### I-D Format Template
-
-```markdown
-# <Document Title>
-
-**draft-lora-<component>-<version>**
-
-**Status:** Informational (or Standards Track)
-**Updates:** (if applicable)
-**Obsoletes:** (if applicable)
-
-## Abstract
-
-[Brief description]
-
-## Status of This Memo
-
-[Standard IETF boilerplate for Internet-Draft]
-
-## Table of Contents
-
-1. Introduction
-2. Terminology
-3. Protocol Description
-4. Packet Formats
-5. Security Considerations
-6. IANA Considerations
-7. References
-   7.1. Normative References
-   7.2. Informative References
-8. Acknowledgments
-
-## 1. Introduction
-
-[Context and motivation]
-
-## 2. Terminology
-
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
-"SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
-document are to be interpreted as described in RFC 2119.
-
-...
-```
+| Document | Content | Phase |
+|----------|---------|-------|
+| draft-lichen-link | Link layer, LLSec, Ed25519 | 1 |
+| draft-lichen-schc | SCHC profile for LICHEN | 2 |
+| draft-lichen-addr | IPv6 addressing, ULA, isolated mesh | 3 |
+| draft-lichen-rpl | RPL configuration, MRHOF | 4 |
+| draft-lichen-security | TOFU, DANE, OSCORE profile | 5 |
+| draft-lichen-lci | Local Client Interface | 6 |
+| draft-lichen-senml | SenML sensor profiles | 7 |
+| draft-lichen-apps | Application protocols | 8 |
+| draft-lichen-border | Border router behavior | 9 |
 
 ---
 
-## 4. Hardware Requirements
+## 5. Dependencies
 
-### Development Boards (per developer)
-
-| Board | MCU | Radio | Use |
-|-------|-----|-------|-----|
-| STM32WL Nucleo | STM32WL55 | Integrated SX126x | Primary dev |
-| nRF52840 DK | nRF52840 | External SX1262 | BLE gateway tests |
-| ESP32-S3 DevKit | ESP32-S3 | External SX1262 | WiFi border router |
-| Heltec LoRa 32 V3 | ESP32-S3 | Integrated SX1262 | Cheap node testing |
-
-### Test Lab (shared)
-
-- 5× STM32WL boards for mesh testing
-- 2× Raspberry Pi 4 (border router development)
-- RF attenuators (for controlled link quality tests)
-- Spectrum analyzer (optional, for regulatory compliance)
-
-### Budget Estimate
-
-| Item | Qty | Unit Cost | Total |
-|------|-----|-----------|-------|
-| STM32WL Nucleo | 8 | $50 | $400 |
-| nRF52840 DK | 2 | $50 | $100 |
-| ESP32-S3 + SX1262 | 4 | $25 | $100 |
-| Heltec LoRa 32 V3 | 5 | $20 | $100 |
-| Raspberry Pi 4 | 2 | $75 | $150 |
-| RF attenuators | 4 | $30 | $120 |
-| Antennas, cables, misc | - | - | $150 |
-| **Total** | | | **~$1,120** |
-
----
-
-## 5. Dependencies and Existing Code
-
-### Rust Crates
+### Rust Crates (GPL-3.0 compatible)
 
 | Crate | Use | License |
 |-------|-----|---------|
-| `embedded-hal` | Hardware abstraction | MIT/Apache-2.0 |
-| `sx126x-rs` | SX1261/62 driver | MIT |
-| `ed25519-dalek` | Signatures | BSD-3 |
-| `aes-gcm` | AES-CCM (OSCORE) | MIT/Apache-2.0 |
-| `coap-lite` | CoAP parsing (reference) | MIT |
-| `smoltcp` | IP stack (reference) | 0BSD |
+| embedded-hal | Hardware abstraction | MIT/Apache-2.0 |
+| ed25519-dalek | Signatures | BSD-3 |
+| aes-gcm | OSCORE encryption | MIT/Apache-2.0 |
+| heapless | no_std collections | MIT/Apache-2.0 |
+| defmt | Embedded logging | MIT/Apache-2.0 |
 
 ### C Libraries
 
 | Library | Use | License |
 |---------|-----|---------|
-| `libschc` | SCHC reference | MIT |
-| `liblwm2m` | LwM2M (future) | EPL/EDL |
-| `monocypher` | Ed25519, AES | Public domain |
-| `micro-ecc` | ECDSA fallback | BSD-2 |
-
-### What We Build From Scratch
-
-| Component | Reason |
-|-----------|--------|
-| Link layer | Custom frame format not in existing libs |
-| Truncated Ed25519 | Non-standard truncation scheme |
-| RPL for LoRa | Existing impls assume 802.15.4 timing |
-| SCHC rules | Custom rule set for this profile |
+| monocypher | Ed25519, AES | Public domain |
+| libschc | SCHC reference | MIT |
 
 ---
 
-## 6. Risk Register
+## 6. Resolved Design Decisions
 
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| Truncated Ed25519 security concerns | High | Medium | Document security analysis; offer ECDSA fallback |
-| RPL convergence too slow for LoRa | Medium | Medium | Tune Trickle parameters; test with simulator first |
-| SCHC fragmentation complexity | Medium | Low | Start with ACK-on-Error; defer ACK-always |
-| Hardware radio bugs | Low | Medium | Test on multiple radio chips early |
-| Memory too tight on STM32WL | Medium | Low | Profile early; optimize hot paths in C |
-| Duty cycle violations in EU | High | Low | Build duty cycle tracker into link layer |
+These are settled and reflected in the spec:
 
----
-
-## 7. Success Criteria
-
-### Minimum Viable Network (MVP)
-
-1. 3+ nodes form stable DODAG
-2. Leaf node sends CoAP temperature reading to border router
-3. Border router forwards to internet CoAP client
-4. All traffic authenticated (Ed25519 link signatures)
-5. SCHC compression < 15 bytes for typical telemetry
-
-### Production Ready (v1.0)
-
-1. 50+ node mesh stable over 24 hours
-2. OSCORE encryption on all CoAP traffic
-3. Automatic parent switching on link failure (<30 seconds)
-4. MQTT-SN gateway operational
-5. C implementation running on STM32WL (< 64KB RAM)
-6. Full test vector compatibility between Rust and C
-7. All 6 I-Ds complete and reviewed
+| Decision | Resolution |
+|----------|------------|
+| Project name | LICHEN (LoRa IPv6 CoAP Hybrid Extended Network) |
+| License | CC-BY-4.0 (docs), GPL-3.0 (code) |
+| Hardware | Meshtastic-compatible (reflash) |
+| Trust model | TOFU baseline, DANE/PKIX optional, no PSK, no mandatory CA |
+| IPv6 addressing | Link-local always, ULA default, GUA optional |
+| Isolated meshes | Self-elect root (lowest EUI-64), generate ULA |
+| Multiple BRs | Tolerated, no coordination required |
+| Local interface | IPv6+CoAP over SLIP/BLE (not protobuf) |
+| Sensor data | SenML (RFC 8428) over CBOR |
 
 ---
 
-## 8. Open Questions
+## 7. Open Questions
 
-1. **Truncated Ed25519 implementation:** Spec mentions deterministic derivation of second half. Need to specify exact algorithm. Consider RFC 8032 deterministic signing variant.
-
-2. **SCHC rule distribution:** How do new nodes learn compression rules? Options:
-   - Pre-provisioned (current assumption)
-   - SCHC Rule ID negotiation (complex)
-   - Simple version field in DIO
-
-3. **Time synchronization:** Nodes need rough time sync for:
-   - Replay window (SeqNum rollover)
-   - Duty cycle tracking
-   - Options: NTP over CoAP, GPS, piggyback on DIO
-
-4. **Global prefix source:** Border router needs /64. Options:
-   - Static configuration
-   - DHCPv6-PD from upstream
-   - ULA (fd00::/8) for isolated mesh
-
-5. **Backward compatibility:** Spec says non-goal, but should we at least interop with standard 6LoWPAN/RPL implementations (e.g., Contiki-NG) at IP layer?
+| Question | Options | Notes |
+|----------|---------|-------|
+| Truncated Ed25519 derivation | Deterministic scheme TBD | Need exact algorithm |
+| SCHC rule distribution | Pre-provisioned vs. negotiated | Lean toward pre-provisioned |
+| Time synchronization | NTP/CoAP, GPS, DIO piggyback | Needed for replay protection |
+| DANE record format | TLSA for `_25519._mesh.<name>` | Need exact structure |
 
 ---
 
-## 9. Team Structure (Suggested)
+## 8. Success Criteria
 
-| Role | Responsibility |
-|------|----------------|
-| Protocol Lead | Spec interpretation, I-D authorship, security review |
-| Rust Lead | Core Rust implementation, workspace management |
-| Embedded Lead | C implementation, MCU porting, memory optimization |
-| Test Lead | Simulator, test vectors, hardware-in-loop |
-| Integration Lead | Border router, gateway, tooling |
+### MVP (Minimum Viable Network)
+
+- [ ] 3+ nodes form stable DODAG
+- [ ] Position sharing works
+- [ ] Text messaging works
+- [ ] All traffic Ed25519 authenticated
+- [ ] SCHC compression < 15 bytes for telemetry
+- [ ] Runs on Heltec LoRa 32 V3
+
+### v1.0 (Production Ready)
+
+- [ ] 50+ node mesh stable over 24 hours
+- [ ] OSCORE encryption on all CoAP
+- [ ] Parent switching < 30 seconds
+- [ ] All applications working (messaging, SOS, waypoints, etc.)
+- [ ] C implementation on all target platforms
+- [ ] Full Rust ↔ C interop
+- [ ] All I-Ds complete
 
 ---
 
-## 10. Next Steps
+## 9. Next Steps
 
-1. **Immediate:** Review this plan, resolve open questions
-2. **Week 1:** Set up repos, CI/CD, assign Phase 0 tasks
-3. **Week 2:** First I-D drafts ready for review
-4. **Week 3:** Begin Phase 1 implementation
+1. Create GitHub repo structure
+2. Set up CI/CD
+3. Begin Phase 0 tasks
+4. File beads issues for Phase 0 work items
 
 ---
 
-*This plan is a living document. Update as implementation reveals new constraints.*
+*This plan is a living document. Track implementation progress in beads.*
