@@ -51,16 +51,26 @@ Link:         Custom frame format with truncated Ed25519 sigs
 Physical:     LoRa CSS (SX126x/SX127x)
 ```
 
-## Dual Implementation Strategy
+## Implementation Strategy
 
-This project has **two parallel implementations**, both GPL-3.0:
+| Component | Technology | Location | Purpose |
+|-----------|------------|----------|---------|
+| **Embedded nodes** | Zephyr RTOS | `zephyr/` | ESP32, nRF52840, RP2040, STM32WL |
+| **Linux gateway** | Rust | `rust/` | Border routers, simulators |
+| **STM32WL fallback** | RIOT OS | `riot/` | Only if Zephyr doesn't fit |
 
-| Language | Target | Location | Purpose |
-|----------|--------|----------|---------|
-| **Rust** | Linux, embedded (no_std) | `rust/` | Reference impl, simulators, border routers |
-| **C** | Meshtastic hardware | `c/` | ESP32, nRF52840, RP2040, STM32WL |
+**Why Zephyr, not Arduino?**
+- Native IPv6, 6LoWPAN, CoAP (Arduino has none)
+- Consistent RTOS API across all platforms
+- Better power management
+- We build on Zephyr's network stack, not from scratch
 
-**Critical rule:** Both implementations MUST produce identical output for all test vectors in `test/vectors/`. If Rust and C diverge, that's a bug.
+**STM32WL Risk:**
+- 64KB RAM / 256KB Flash is tight
+- Phase 0 validates memory fit
+- RIOT fallback if needed (~10KB RAM for full stack)
+
+**Critical rule:** All implementations MUST produce identical output for test vectors in `test/vectors/`.
 
 **GPL-3.0 implications:**
 - All distributed binaries must include source or offer to provide it
@@ -211,6 +221,8 @@ Check `bd list` for issues tracking these decisions.
 - **Trust model**: TOFU baseline, DANE/PKIX optional upgrades (see spec 8.5)
 - **License**: CC-BY-4.0 (docs), GPL-3.0 (code)
 - **Hardware**: Meshtastic-compatible devices (reflash)
+- **Embedded RTOS**: Zephyr (primary), RIOT (STM32WL fallback if needed)
+- **Why not Arduino**: No native IPv6/6LoWPAN/RPL/CoAP; Zephyr has all
 - **IPv6 addressing** (see spec 6.1, 12):
   - Link-local always (fe80:: + IID)
   - ULA default when DODAG root present (fd00::/8)

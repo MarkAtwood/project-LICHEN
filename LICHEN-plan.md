@@ -17,8 +17,14 @@ This plan describes how to build the LICHEN protocol stack from the specificatio
 **Key characteristics:**
 - **Standards-based:** 100% IETF protocols (IPv6, SCHC, RPL, CoAP, SenML, OSCORE)
 - **Hardware:** Runs on existing Meshtastic-compatible devices (reflash)
-- **Dual implementation:** Rust (reference) + C (constrained devices)
+- **Software:** Zephyr RTOS (embedded) + Rust (Linux/gateway/simulator)
 - **Decentralized:** No PSK, no mandatory CA, TOFU baseline trust
+
+**Why not Arduino like Meshtastic?**
+- Arduino has no native IPv6, 6LoWPAN, RPL, or CoAP
+- Zephyr has all of these built-in
+- Consistent RTOS API across all platforms
+- Better power management primitives
 
 ---
 
@@ -30,56 +36,59 @@ LICHEN/
 │   ├── LICHEN-spec.md           # Protocol specification (CC-BY-4.0)
 │   ├── LICHEN-plan.md           # This file
 │   └── draft-lichen-*.md        # IETF-style I-Ds
-├── rust/
+│
+├── rust/                        # Rust implementation (Linux, gateway, simulator)
 │   ├── Cargo.toml               # Workspace root
-│   ├── lichen-phy/              # LoRa radio abstraction (SX126x, SX127x)
-│   ├── lichen-link/             # Link layer (LLSec, Ed25519 signatures)
-│   ├── lichen-schc/             # SCHC compression engine
-│   ├── lichen-6lowpan/          # 6LoWPAN adaptation
-│   ├── lichen-ipv6/             # IPv6 minimal + addressing
-│   ├── lichen-rpl/              # RPL routing + Trickle
-│   ├── lichen-coap/             # CoAP + OSCORE + Observe
-│   ├── lichen-senml/            # SenML encoding/decoding
-│   ├── lichen-apps/             # Applications (messaging, SOS, etc.)
-│   ├── lichen-lci/              # Local Client Interface
-│   ├── lichen-node/             # Full node binary
+│   ├── lichen-core/             # Core protocol logic (no_std)
+│   ├── lichen-link/             # Link layer (Ed25519 signatures)
+│   ├── lichen-schc/             # SCHC compression
+│   ├── lichen-coap/             # CoAP + OSCORE
+│   ├── lichen-senml/            # SenML encoding
+│   ├── lichen-apps/             # Applications (messaging, SOS)
+│   ├── lichen-node/             # Linux node binary
 │   ├── lichen-gateway/          # Border router binary
-│   ├── lichen-sim/              # Network simulator
-│   └── lichen-ffi/              # C bindings (cbindgen)
-├── c/
-│   ├── include/lichen/          # Public headers
-│   ├── src/
-│   │   ├── phy/                 # Radio drivers
-│   │   ├── link/                # Link layer
-│   │   ├── schc/                # SCHC
-│   │   ├── ipv6/                # IPv6 + 6LoWPAN
-│   │   ├── rpl/                 # RPL
-│   │   ├── coap/                # CoAP + OSCORE
-│   │   ├── senml/               # SenML
-│   │   ├── apps/                # Applications
-│   │   └── lci/                 # Local Client Interface
-│   ├── port/
-│   │   ├── esp32/               # ESP32 + ESP32-S3
-│   │   ├── nrf52/               # nRF52840
-│   │   ├── rp2040/              # RP2040
-│   │   └── stm32wl/             # STM32WL
-│   └── CMakeLists.txt
+│   └── lichen-sim/              # Network simulator
+│
+├── zephyr/                      # Zephyr implementation (embedded)
+│   ├── west.yml                 # West manifest
+│   ├── CMakeLists.txt
+│   ├── Kconfig                  # LICHEN Kconfig options
+│   ├── subsys/
+│   │   ├── lichen_link/         # Link layer module
+│   │   ├── lichen_schc/         # SCHC module
+│   │   ├── lichen_rpl/          # RPL tuning for LoRa
+│   │   ├── lichen_apps/         # Applications
+│   │   └── lichen_lci/          # Local Client Interface
+│   ├── drivers/
+│   │   └── lora/                # LoRa-specific adaptations
+│   ├── boards/                  # Board-specific overlays
+│   │   ├── heltec_lora32_v3.overlay
+│   │   ├── rak4631.overlay
+│   │   ├── tbeam_supreme.overlay
+│   │   └── nucleo_wl55jc.overlay
+│   └── samples/
+│       ├── basic_node/          # Minimal node example
+│       ├── sensor_node/         # Sensor + position beacon
+│       └── border_router/       # 6LBR example
+│
+├── riot/                        # RIOT fallback (STM32WL if Zephyr too big)
+│   ├── Makefile
+│   └── ... (only if needed)
+│
 ├── test/
 │   ├── vectors/                 # Shared test vectors (JSON)
-│   ├── interop/                 # Rust ↔ C interop tests
+│   ├── interop/                 # Cross-implementation tests
 │   └── hardware/                # Hardware-in-loop tests
+│
 ├── tools/
-│   ├── lichen-craft/            # Packet builder/parser CLI
+│   ├── lichen-craft/            # Packet builder/parser CLI (Rust)
 │   ├── wireshark-dissector/     # Wireshark Lua plugin
-│   └── lichen-keygen/           # Key generation/provisioning
-├── apps/
-│   ├── lichen-cli/              # Command-line client
-│   ├── lichen-tui/              # Terminal UI
-│   └── lichen-web/              # Web dashboard (border router)
-└── examples/
-    ├── sensor-node/             # Reference leaf node
-    ├── router/                  # Reference router
-    └── border-router/           # Reference 6LBR
+│   └── lichen-keygen/           # Key generation tool (Rust)
+│
+└── apps/
+    ├── lichen-cli/              # Command-line client (Rust)
+    ├── lichen-tui/              # Terminal UI (Rust)
+    └── lichen-web/              # Web dashboard (border router)
 ```
 
 ---
@@ -103,20 +112,153 @@ LICHEN/
 | ESP32/ESP32-S3 | 320KB+ | 4MB+ | Comfortable |
 | nRF52840 | 256KB | 1MB | Comfortable |
 | RP2040 | 264KB | 2MB | Comfortable |
-| STM32WL | 64KB | 256KB | Constrained baseline |
+| STM32WL | 64KB | 256KB | **Constrained - risk** |
 
 ---
 
-## 3. Phase Plan
+## 3. Software Architecture
 
-### Phase 0: Foundation
+### 3.1 Why Not Arduino?
 
-**Goal:** Project scaffolding, tooling, CI/CD.
+Meshtastic uses Arduino + PlatformIO. This was reasonable for their goals but wrong for LICHEN:
+
+| Feature | Arduino | Zephyr |
+|---------|---------|--------|
+| IPv6 | Bolt-on | **Native** |
+| 6LoWPAN | No | **Native** |
+| RPL | No | **Partial (usable)** |
+| CoAP | No | **Native** |
+| OSCORE | No | **Available** |
+| Threading | Platform-dependent | **Consistent RTOS API** |
+| Power management | Hidden | **First-class PM subsystem** |
+| BLE | NimBLE (good) | NimBLE or Zephyr BLE |
+
+### 3.2 Tiered Implementation Strategy
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        LICHEN Stack                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────┐    ┌─────────────────────────────┐│
+│  │   Rust (no_std)     │    │         Zephyr RTOS         ││
+│  │                     │    │                             ││
+│  │  • Linux gateway    │    │  • ESP32/ESP32-S3           ││
+│  │  • Simulator        │    │  • nRF52840                 ││
+│  │  • Test harness     │    │  • RP2040                   ││
+│  │  • Border router    │    │  • STM32WL (if fits)        ││
+│  │    (Linux/Pi)       │    │                             ││
+│  └─────────────────────┘    └─────────────────────────────┘│
+│                                                             │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │              Fallback: RIOT or Contiki-NG               ││
+│  │                    (STM32WL only, if needed)            ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 Zephyr Stack Usage
+
+Leverage existing Zephyr subsystems:
+
+| LICHEN Component | Zephyr Subsystem | Notes |
+|------------------|------------------|-------|
+| IPv6 | `CONFIG_NET_IPV6` | Native |
+| 6LoWPAN | `CONFIG_NET_L2_IEEE802154` | Adapt for LoRa |
+| UDP | `CONFIG_NET_UDP` | Native |
+| CoAP | `CONFIG_COAP` | Native library |
+| OSCORE | Custom or port | May need to implement |
+| BLE (LCI) | `CONFIG_BT` | NimBLE or Zephyr BLE |
+| LoRa radio | `CONFIG_LORA` | SX126x/SX127x drivers exist |
+| Crypto | `CONFIG_MBEDTLS` or TinyCrypt | Ed25519 may need monocypher |
+
+**What we build on top of Zephyr:**
+- SCHC compression (custom, ~10KB flash)
+- RPL tuning for LoRa timing
+- Ed25519 truncated signatures
+- LICHEN link layer framing
+- Application layer (messaging, SOS, etc.)
+- Local Client Interface
+
+### 3.4 STM32WL Memory Budget (Critical Path)
+
+```
+FLASH (256 KB available):
+┌────────────────────────────────────┬────────┐
+│ Component                          │ Est.   │
+├────────────────────────────────────┼────────┤
+│ Zephyr kernel + HAL                │ ~40 KB │
+│ IPv6 + 6LoWPAN                     │ ~30 KB │
+│ RPL                                │ ~15 KB │
+│ CoAP                               │ ~15 KB │
+│ OSCORE/DTLS                        │ ~20 KB │
+│ SCHC                               │ ~10 KB │
+│ Ed25519 (monocypher)               │ ~10 KB │
+│ LoRa driver                        │ ~10 KB │
+│ BLE (minimal)                      │ ~30 KB │
+│ LICHEN application                 │ ~40 KB │
+├────────────────────────────────────┼────────┤
+│ TOTAL                              │ ~220KB │
+│ Margin                             │ ~36 KB │
+└────────────────────────────────────┴────────┘
+
+RAM (64 KB available):
+┌────────────────────────────────────┬────────┐
+│ Component                          │ Est.   │
+├────────────────────────────────────┼────────┤
+│ Zephyr kernel                      │ ~4 KB  │
+│ Network buffers (tuned down)       │ ~6 KB  │
+│ IPv6 + neighbor cache              │ ~4 KB  │
+│ RPL routing state                  │ ~3 KB  │
+│ CoAP contexts                      │ ~3 KB  │
+│ SCHC contexts                      │ ~2 KB  │
+│ Key store (limited peers)          │ ~3 KB  │
+│ Application state                  │ ~8 KB  │
+│ Thread stacks (2-3 threads)        │ ~6 KB  │
+│ BLE buffers                        │ ~4 KB  │
+├────────────────────────────────────┼────────┤
+│ TOTAL                              │ ~43 KB │
+│ Margin                             │ ~21 KB │
+└────────────────────────────────────┴────────┘
+```
+
+**Verdict:** Tight but feasible. Requires:
+- Aggressive Kconfig tuning
+- Reduced network buffer count
+- Limited routing table size
+- May disable store-and-forward on STM32WL
+
+### 3.5 Fallback Plan: RIOT OS for STM32WL
+
+If Zephyr doesn't fit on STM32WL after tuning:
+
+| Aspect | Zephyr | RIOT OS |
+|--------|--------|---------|
+| IPv6+6LoWPAN+RPL RAM | ~20-30 KB | **~10 KB** |
+| Flash footprint | ~150+ KB | **~80 KB** |
+| CoAP | Native | Native (gcoap) |
+| LoRa drivers | Good | Good |
+| Maturity | High | Medium |
+| Vendor support | Strong | Community |
+
+RIOT has proven ~10KB RAM for full IPv6/6LoWPAN/RPL stack. If STM32WL can't run Zephyr, we port that platform only to RIOT while keeping Zephyr for everything else.
+
+**Decision point:** End of Phase 1, after STM32WL prototype.
+
+---
+
+## 4. Phase Plan
+
+### Phase 0: Foundation + STM32WL Validation
+
+**Goal:** Project scaffolding, tooling, CI/CD, and **early STM32WL memory validation**.
 
 | Task | Output |
 |------|--------|
 | Create Rust workspace with `no_std` crates | `rust/Cargo.toml` |
-| Create C build system (CMake + platform ports) | `c/CMakeLists.txt` |
+| Set up Zephyr west workspace | `zephyr/west.yml` |
+| **Build minimal Zephyr+IPv6+CoAP on STM32WL** | Memory report |
+| **Validate STM32WL fits (<50KB RAM, <220KB flash)** | Go/no-go decision |
 | Define shared constants (frequencies, sync word 0x34, ports) | Shared headers |
 | Set up GitHub Actions CI | `.github/workflows/` |
 | Create test vector framework | `test/vectors/` |
@@ -124,8 +266,22 @@ LICHEN/
 
 **Exit Criteria:**
 - `cargo build --workspace` succeeds (stubs)
-- `cmake --build` succeeds for all platforms
+- Zephyr builds for nRF52840, ESP32, STM32WL
+- **STM32WL memory validated** (or fallback to RIOT decided)
 - CI runs on push
+
+**STM32WL Validation Build:**
+```bash
+west build -b nucleo_wl55jc samples/net/sockets/coap_client -- \
+  -DCONFIG_NET_IPV6=y \
+  -DCONFIG_NET_UDP=y \
+  -DCONFIG_COAP=y \
+  -DCONFIG_SIZE_OPTIMIZATIONS=y
+west build -t ram_report
+west build -t rom_report
+```
+
+If RAM > 50KB or Flash > 220KB: evaluate RIOT OS fallback.
 
 ---
 
@@ -474,26 +630,75 @@ Border router web UI for monitoring and configuration.
 
 ## 5. Dependencies
 
+### Zephyr RTOS
+
+| Component | Zephyr Module | Notes |
+|-----------|---------------|-------|
+| Kernel | `CONFIG_KERNEL` | Threads, scheduling |
+| IPv6 | `CONFIG_NET_IPV6` | Native stack |
+| UDP | `CONFIG_NET_UDP` | Native |
+| CoAP | `CONFIG_COAP` | Zephyr CoAP library |
+| LoRa | `CONFIG_LORA` | SX126x, SX127x drivers |
+| BLE | `CONFIG_BT` | For Local Client Interface |
+| Crypto | `CONFIG_MBEDTLS` | AES, hashing |
+| Shell | `CONFIG_SHELL` | Debug/CLI (optional) |
+
+**What Zephyr doesn't have (we build):**
+- SCHC compression
+- Ed25519 truncated signatures (use monocypher)
+- LICHEN link layer framing
+- RPL tuning for LoRa timing
+- Application layer
+
 ### Rust Crates (GPL-3.0 compatible)
 
 | Crate | Use | License |
 |-------|-----|---------|
-| embedded-hal | Hardware abstraction | MIT/Apache-2.0 |
 | ed25519-dalek | Signatures | BSD-3 |
 | aes-gcm | OSCORE encryption | MIT/Apache-2.0 |
 | heapless | no_std collections | MIT/Apache-2.0 |
-| defmt | Embedded logging | MIT/Apache-2.0 |
+| coap-lite | CoAP parsing | MIT |
+| smoltcp | IP stack (Linux node) | 0BSD |
 
-### C Libraries
+### C Libraries (for Zephyr modules)
 
 | Library | Use | License |
 |---------|-----|---------|
 | monocypher | Ed25519, AES | Public domain |
 | libschc | SCHC reference | MIT |
 
+### Fallback: RIOT OS (if STM32WL needs it)
+
+| Component | RIOT Module | Notes |
+|-----------|-------------|-------|
+| IPv6/6LoWPAN | GNRC | Proven ~10KB RAM |
+| RPL | GNRC RPL | Lightweight |
+| CoAP | gcoap | Efficient |
+| LoRa | sx126x/sx127x | Drivers available |
+
 ---
 
-## 6. Resolved Design Decisions
+## 6. Risk Register
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| **STM32WL memory overflow** | High | Medium | Early validation in Phase 0; RIOT fallback ready |
+| Zephyr LoRa+6LoWPAN integration issues | Medium | Medium | LoRa is not 802.15.4; may need adaptation layer |
+| Truncated Ed25519 security concerns | High | Low | Document analysis; ECDSA fallback option |
+| RPL convergence too slow for LoRa | Medium | Medium | Tune Trickle; test in simulator first |
+| BLE+LoRa concurrent operation | Medium | Low | Platform-specific; test early |
+| Duty cycle violations (EU) | High | Low | Build duty cycle tracker |
+
+---
+
+## 7. Resolved Design Decisions
+
+**Added in this revision:**
+
+| Decision | Resolution |
+|----------|------------|
+| Embedded RTOS | Zephyr (primary), RIOT (STM32WL fallback if needed) |
+| Why not Arduino | No native IPv6/6LoWPAN/RPL/CoAP; Zephyr has all |
 
 These are settled and reflected in the spec:
 
@@ -511,7 +716,7 @@ These are settled and reflected in the spec:
 
 ---
 
-## 7. Open Questions
+## 8. Open Questions
 
 | Question | Options | Notes |
 |----------|---------|-------|
@@ -519,10 +724,11 @@ These are settled and reflected in the spec:
 | SCHC rule distribution | Pre-provisioned vs. negotiated | Lean toward pre-provisioned |
 | Time synchronization | NTP/CoAP, GPS, DIO piggyback | Needed for replay protection |
 | DANE record format | TLSA for `_25519._mesh.<name>` | Need exact structure |
+| Zephyr 6LoWPAN over LoRa | Adaptation layer design | LoRa ≠ 802.15.4 |
 
 ---
 
-## 8. Success Criteria
+## 9. Success Criteria
 
 ### MVP (Minimum Viable Network)
 
@@ -531,7 +737,8 @@ These are settled and reflected in the spec:
 - [ ] Text messaging works
 - [ ] All traffic Ed25519 authenticated
 - [ ] SCHC compression < 15 bytes for telemetry
-- [ ] Runs on Heltec LoRa 32 V3
+- [ ] Runs on Heltec LoRa 32 V3 (Zephyr)
+- [ ] **STM32WL validated** (Zephyr or RIOT)
 
 ### v1.0 (Production Ready)
 
@@ -539,13 +746,13 @@ These are settled and reflected in the spec:
 - [ ] OSCORE encryption on all CoAP
 - [ ] Parent switching < 30 seconds
 - [ ] All applications working (messaging, SOS, waypoints, etc.)
-- [ ] C implementation on all target platforms
-- [ ] Full Rust ↔ C interop
+- [ ] Zephyr on ESP32, nRF52840, RP2040, (STM32WL or RIOT)
+- [ ] Rust gateway/simulator interop with Zephyr nodes
 - [ ] All I-Ds complete
 
 ---
 
-## 9. Next Steps
+## 10. Next Steps
 
 1. Create GitHub repo structure
 2. Set up CI/CD
