@@ -46,8 +46,8 @@ LLSec: 0x20 (signature, no encryption, short addr) (1 byte)
 SeqNum: 0x0042 (2 bytes)
 DstAddr: 0x0001 (border router short) (2 bytes)
 Payload: (22 bytes)
-Signature: (32 bytes, truncated Ed25519)
-Total: 60 bytes
+Signature: (48 bytes, Schnorr e₁₂₈+s)
+Total: 76 bytes
 ```
 
 **LoRa PHY:**
@@ -66,8 +66,8 @@ CRC: 2 bytes
 | Security (E2E) | 10 | 0* | 2 |
 | Transport + Network | 2 | 16 | - |
 | Routing overhead | 0-6 | 0-7 | 0-64 |
-| Link security | 35 | 0 | 4 |
-| **Total** | **64-70** | **33-40** | **23-87** |
+| Link security | 51 | 0 | 4 |
+| **Total** | **80-86** | **33-40** | **23-87** |
 
 *Meshtastic AES-CTR has no auth overhead; this is a weakness.
 
@@ -136,6 +136,60 @@ Per node, accounting for routing: ~100-300 packets/hour comfortable.
 | Backoff unit | 10 ms | Slot time |
 | Backoff max | 5 | CW = 2^backoff - 1 |
 | Retry limit | 3 | Before reporting failure |
+
+### 14.6. Time Synchronization
+
+Accurate time is needed for replay protection, message TTL, SenML timestamps,
+and scheduled operations. Nodes use a hierarchical approach with graceful
+degradation.
+
+**Time Sources (in priority order):**
+
+| Priority | Source | Accuracy | Requirements | Auth |
+|----------|--------|----------|--------------|------|
+| 1 | GPS (on-device) | ~1ms | GPS hardware + sky view | Implicit |
+| 2 | gpsd (via LCI) | ~1ms | Host with GPS | Local |
+| 3 | NTS (RFC 8915) | ~100ms | Internet via BR | TLS |
+| 4 | Roughtime | ~10s | Internet via BR | Signatures |
+| 5 | Mesh peer (DIO) | ~1s | Peer with time | DIO signature |
+| 6 | None | - | - | - |
+
+**Time Stratum (propagated in DIO Time Option):**
+
+| Value | Meaning | Source |
+|-------|---------|--------|
+| 0 | No sync | Monotonic counters only |
+| 1 | Mesh-derived | ±10s, from peer |
+| 2 | Roughtime | ±10s, from BR |
+| 3 | NTS | ±100ms, from BR |
+| 4 | GPS/gpsd | ±1ms, authoritative |
+
+**DIO Time Option (Type TBD):**
+
+```
++--------+--------+--------+--------+--------+--------+
+| Type   | Length | Stratum| Reserved| Timestamp (4B)  |
++--------+--------+--------+--------+--------+--------+
+   1B       1B       1B       1B          4B (Unix epoch)
+```
+
+Nodes receiving DIO with higher stratum than their own MAY adopt that time.
+Nodes MUST NOT adopt time from lower stratum sources.
+
+**Constrained Node Behavior:**
+
+Nodes without any time source:
+- Use sequence numbers for replay protection (works within power cycle)
+- SHOULD persist epoch counter across reboots (increment on boot)
+- MAY omit absolute timestamps from SenML (use relative only)
+- MUST NOT originate time-sensitive operations (scheduled check-in)
+
+**Border Router Responsibilities:**
+
+Border routers with internet connectivity SHOULD:
+- Run NTS client (preferred) or Roughtime client
+- Advertise time in DIO with appropriate stratum
+- Provide NTS/Roughtime proxy for LCI clients
 
 ---
 
