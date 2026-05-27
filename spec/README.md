@@ -17,9 +17,10 @@ hybrid RPL+LOADng mesh routing, and CoAP application protocols. The design
 prioritizes interoperability with existing IP infrastructure, efficient use of
 constrained bandwidth, and cryptographic authentication of all packets.
 
-LICHEN uses a hybrid routing architecture: RPL for traffic to/from border
-routers (efficient tree routing), and LOADng for peer-to-peer traffic within
-the mesh (efficient reactive routing).
+LICHEN uses a three-tier routing architecture: RPL for border router traffic
+(efficient tree routing), announce-based gradient routing for peer-to-peer
+between active nodes (zero discovery latency), and LOADng as fallback for
+unknown destinations (reactive discovery).
 
 Unlike Meshtastic and MeshCore, LICHEN uses real IPv6 addressing, enabling
 direct communication with internet hosts via border routers and compatibility
@@ -34,7 +35,7 @@ hardware as a reflash -- same radios, new protocol.
 2. [Physical and Link Layers](02-physical-link.md) - LoRa PHY and Frame Format
 3. [Adaptation Layer](03-adaptation.md) - SCHC/6LoWPAN Compression
 4. [Network Layer](04-network.md) - IPv6 Addressing
-5. [Routing](05-routing.md) - Hybrid RPL + LOADng Routing
+5. [Routing](05-routing.md) - Three-Tier Routing (RPL + Announce + LOADng)
 6. [Security](06-security.md) - Security Architecture
 7. [Transport and Application](07-transport-app.md) - UDP, CoAP, MQTT-SN
 8. [Node Types](08-nodes.md) - Roles and Responsibilities
