@@ -2,67 +2,54 @@
 
 # Routing
 
-## 7. Routing
+## 7. Routing Overview
 
-### 7.1. Overview
+### 7.1. Three-Tier Architecture
 
-LICHEN uses a **hybrid routing architecture** combining two protocols:
+LICHEN uses a three-tier routing architecture optimized for different traffic patterns:
 
-| Protocol | Traffic Type | Mechanism |
-|----------|--------------|-----------|
-| **RPL** (RFC 6550) | To/from border router | Proactive tree (DODAG) |
-| **LOADng** (draft-clausen-lln-loadng) | Mesh-internal peer-to-peer | Reactive on-demand |
+| Tier | Protocol | Traffic Type | Mechanism |
+|------|----------|--------------|-----------|
+| 1 | **RPL** | Border router ↔ mesh | Proactive DODAG tree |
+| 2 | **Announce** | Peer-to-peer (active nodes) | Proactive gradient |
+| 3 | **LOADng** | Peer-to-peer (fallback) | Reactive discovery |
 
 **Rationale:**
 
-RPL builds a tree (DODAG) rooted at the border router. This is efficient for:
-- Sensor data flowing UP to the border router
-- Commands flowing DOWN from the border router
+- **RPL** excels at tree-shaped traffic (sensor → gateway → cloud). Most IoT traffic fits this pattern.
 
-However, RPL is inefficient for peer-to-peer traffic within the mesh. Two
-adjacent leaf nodes must route through their common ancestor:
+- **Announce routing** provides instant peer-to-peer paths for active mesh participants. Nodes that announce are immediately reachable via gradient following. No discovery latency.
 
-```
-        Root
-       /    \
-      A      B
-     /        \
-    C          D
-
-C → D via RPL: C → A → Root → B → D (4 hops)
-C → D direct:  C → D                 (1 hop, if in range)
-```
-
-At LoRa data rates with 1% duty cycle, wasting 4× the airtime is unacceptable.
-
-LOADng provides reactive routing for peer-to-peer traffic, discovering efficient
-paths on demand rather than forcing traffic through the DODAG tree.
+- **LOADng** handles edge cases: new nodes, nodes that missed announces, or rarely-contacted destinations. Reactive discovery when gradient doesn't exist.
 
 ### 7.2. Routing Decision
 
-When a node needs to send a packet:
-
 ```
-if dst is link-local (fe80::/10):
-    send directly to neighbor (one hop)
+def route_packet(dst):
+    if is_off_mesh(dst):
+        # External destination (GUA not in mesh, or unknown)
+        return forward_to_rpl_parent()
 
-elif dst is mesh-local (ULA fd00::/8 or mesh GUA):
-    # Peer-to-peer: use LOADng
-    route = loadng_cache.lookup(dst)
-    if route exists:
-        forward via route.next_hop
+    gradient = gradient_table.lookup(dst)
+    if gradient and not gradient.expired:
+        # Known peer - follow gradient
+        return forward_to(gradient.next_hop)
+
     else:
-        queue packet
-        initiate LOADng route discovery (RREQ)
-
-else:
-    # External destination: use RPL toward border router
-    forward to rpl_preferred_parent
+        # Unknown peer - reactive discovery
+        loadng_discover(dst)
+        return queue_pending(dst, packet)
 ```
 
-**Fallback:** If LOADng route discovery fails after timeout, the packet MAY
-be sent via RPL through the root as a last resort. This is inefficient but
-ensures eventual delivery if a path exists.
+**Address classification:**
+
+| Address Type | Classification | Routing |
+|--------------|----------------|---------|
+| Link-local (fe80::/10) | Direct neighbor | Send to neighbor |
+| ULA (fd00::/8) in mesh prefix | Mesh peer | Gradient or LOADng |
+| GUA in mesh prefix | Mesh peer | Gradient or LOADng |
+| Other GUA | Off-mesh | RPL to border router |
+| Unknown | Off-mesh | RPL to border router |
 
 ---
 
@@ -70,11 +57,13 @@ ensures eventual delivery if a path exists.
 
 ### 8.1. Purpose
 
-RPL (RFC 6550) handles traffic to and from the border router:
-- Upward: Mesh nodes → Border router → Internet
-- Downward: Internet → Border router → Mesh nodes (via source routing)
+RPL (RFC 6550) handles traffic to and from border routers:
+- **Upward:** Mesh nodes → Border router → Internet
+- **Downward:** Internet → Border router → Mesh nodes (source routed)
 
-### 8.2. Topology
+RPL is NOT used for peer-to-peer mesh traffic (see Sections 9-10).
+
+### 8.2. DODAG Topology
 
 ```
                     [Border Router]
@@ -89,240 +78,295 @@ RPL (RFC 6550) handles traffic to and from the border router:
     [Node A]    [Node B]  [Node C]    [Node D]
 ```
 
-All nodes maintain a path toward the root (upward route). The root maintains
-paths to all nodes (downward routes via DAO).
+### 8.3. Configuration
 
-### 8.3. Control Messages
+| Parameter | Value |
+|-----------|-------|
+| Mode | Non-storing (MOP=1) |
+| Objective Function | MRHOF with ETX |
+| Trickle Imin | 4 sec |
+| Trickle Imax | 17 min |
 
-| Message | ICMPv6 Code | Direction | Purpose |
-|---------|-------------|-----------|---------|
-| DIO | 0x9B, 0x01 | Downward | DODAG Information Object |
-| DIS | 0x9B, 0x00 | Upward | DODAG Information Solicitation |
-| DAO | 0x9B, 0x02 | Upward | Destination Advertisement Object |
-| DAO-ACK | 0x9B, 0x03 | Downward | DAO acknowledgment |
+See Appendix B for full RPL configuration.
 
-### 8.4. DIO (DODAG Information Object)
-
-Broadcast by routers to advertise DODAG membership:
-
-```
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|   RPLInstanceID   |    Version    |            Rank           |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|G|0|MOP|Prf|           DTSN            |     Flags     | Res   |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-+                          DODAGID                              +
-|                       (128 bits)                              |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                          Options                              |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
-
-### 8.5. Objective Function
-
-**MRHOF with ETX (RFC 6719):** Minimize expected transmissions.
-
-Recommended for LoRa because link quality varies significantly with distance,
-obstacles, and interference.
-
-### 8.6. Rank Calculation
-
-```
-Rank(N) = Rank(Parent) + RankIncrease
-RankIncrease = (ETX * MinHopRankIncrease) / 128
-```
-
-Default MinHopRankIncrease: 256
-
-### 8.7. Trickle Timer
-
-DIO transmissions follow Trickle algorithm (RFC 6206):
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| Imin | 2^12 ms (~4 sec) | Minimum interval |
-| Imax | 2^20 ms (~17 min) | Maximum interval |
-| k | 10 | Redundancy constant |
-
-### 8.8. Non-Storing Mode
-
-LICHEN uses **non-storing mode** exclusively:
-
-- Leaf nodes send DAOs to the DODAG root (not to their parent)
-- Root maintains routing table for entire mesh
-- Downward traffic uses source routing (6LoRH, RFC 8138)
-
-**Rationale:** Non-storing mode minimizes memory requirements on constrained
-leaf nodes. Only the root (typically a border router with more resources)
-needs to store the full routing table.
-
-### 8.9. Downward Routes (Source Routing)
-
-For downward traffic, the root inserts a Source Routing Header (6LoRH):
-
-```
-+--------+--------+--------+--------+
-| 6LoRH  | Hop 1  | Hop 2  | Hop 3  |
-+--------+--------+--------+--------+
-   1B      2B       2B       2B
-```
-
-Compressed addresses (16-bit short addresses) minimize overhead.
-
-### 8.10. Loop Avoidance
-
-- Rank must strictly increase toward leaves
-- Data-path validation via RPL Packet Information (RPI)
-- Inconsistency detection triggers local repair
-
----
-
-## 9. LOADng (Peer-to-Peer Traffic)
-
-### 9.1. Purpose
-
-LOADng (Lightweight Ad hoc On-Demand - Next Generation) provides reactive
-routing for mesh-internal peer-to-peer traffic:
-
-- Node-to-node messaging
-- Position sharing between peers
-- SOS alerts to nearby nodes
-- Any traffic where both endpoints are within the mesh
-
-### 9.2. Protocol Overview
-
-LOADng is a simplified reactive routing protocol based on AODV:
-
-1. **Route Discovery:** When a route is needed, flood a Route Request (RREQ)
-2. **Route Reply:** Destination (or intermediate with route) sends RREP back
-3. **Route Maintenance:** Route Error (RERR) when link breaks
-4. **Route Cache:** Discovered routes cached with timeout
-
-### 9.3. Control Messages
+### 8.4. Control Messages
 
 | Message | Purpose |
 |---------|---------|
-| RREQ | Route Request - flooded to discover route |
-| RREP | Route Reply - unicast back to originator |
-| RERR | Route Error - notify of broken link |
-| RACK | Route Acknowledgment (optional) |
+| DIO | DODAG advertisement (downward flood) |
+| DIS | Solicit DIO (join request) |
+| DAO | Route advertisement to root |
+| DAO-ACK | Confirm DAO receipt |
 
-All LOADng messages are carried as ICMPv6 (type TBD, allocated from experimental range).
+### 8.5. Downward Routing
 
-### 9.4. Route Request (RREQ)
-
-```
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Msg Type| Hop Limit | Seq Num       | Metric        | Flags   |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                    Originator Address                         |
-|                         (128 bits)                            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                    Destination Address                        |
-|                         (128 bits)                            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
-
-**Flooding:** RREQ is broadcast with Hop Limit. Each node:
-1. Checks if it has route to destination → send RREP
-2. Checks if RREQ already seen (by originator + seq) → drop
-3. Decrements Hop Limit, rebroadcasts if > 0
-4. Records reverse route to originator
-
-### 9.5. Route Reply (RREP)
-
-```
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Msg Type| Hop Count | Seq Num       | Metric        | Flags   |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                    Originator Address                         |
-|                         (128 bits)                            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                    Destination Address                        |
-|                         (128 bits)                            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
-
-**Unicast:** RREP follows reverse path recorded during RREQ flooding.
-
-### 9.6. Route Cache
-
-Each node maintains a route cache:
-
-```
-Route Entry:
-  destination: IPv6 address
-  next_hop: IPv6 address (link-local)
-  hop_count: number of hops
-  metric: path cost
-  seq_num: destination sequence number
-  valid_until: expiration timestamp
-```
-
-**Cache size:** 32 entries (configurable). LRU eviction when full.
-
-**Timeout:** Routes expire after 5 minutes of inactivity. Active routes
-(recently used) are refreshed.
-
-### 9.7. Route Error (RERR)
-
-When a link breaks (transmission failure detected), send RERR toward
-affected originators:
-
-```
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Msg Type| Flags     | Error Code    | Reserved                |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                    Unreachable Address                        |
-|                         (128 bits)                            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
-
-Nodes receiving RERR invalidate cached routes through the broken link.
-
-### 9.8. Interaction with RPL
-
-LOADng and RPL coexist on the same nodes:
-
-| Aspect | RPL | LOADng |
-|--------|-----|--------|
-| Routes to | Border router | Mesh peers |
-| Mechanism | Proactive tree | Reactive discovery |
-| State | DODAG, parent | Route cache |
-| Control traffic | DIO/DAO (Trickle-controlled) | RREQ/RREP (on-demand) |
-
-**No conflict:** They serve different traffic patterns and maintain separate
-routing state.
-
-### 9.9. Optimizations for LoRa
-
-**RREQ suppression:** If a node recently forwarded an RREQ for the same
-(originator, destination, seq), suppress duplicates (jitter helps).
-
-**Gratuitous RREP:** Intermediate nodes with fresh routes MAY respond to
-RREQ without forwarding, reducing flood scope.
-
-**Expanding ring search:** Start RREQ with low Hop Limit (2), increase if
-no RREP. Limits flood for nearby destinations.
-
-**Piggyback on data:** Route refresh can piggyback on data packets to
-avoid separate control messages.
+Non-storing mode: root inserts Source Routing Header (6LoRH) for downward packets.
 
 ---
 
-## 10. Summary
+## 9. Announce Routing (Peer-to-Peer Primary)
 
-| Traffic Type | Protocol | Discovery | Path |
-|--------------|----------|-----------|------|
-| To border router | RPL | Proactive (DIO) | DODAG upward |
-| From border router | RPL | Proactive (DAO) | Source routed |
-| Peer-to-peer in mesh | LOADng | Reactive (RREQ/RREP) | Cached route |
-| Broadcast/multicast | Hop-limited flood | N/A | Scoped flood |
+### 9.1. Purpose
 
-The hybrid approach optimizes for both traffic patterns:
-- RPL's tree is efficient for the common case (sensor data to cloud)
-- LOADng's reactive discovery is efficient for the important case (peer chat)
+Announce routing provides zero-latency peer-to-peer paths for active mesh participants. Nodes periodically broadcast signed announcements; other nodes build gradients toward announcers.
+
+**Key insight:** Most peer-to-peer traffic is between nodes that are actively participating in the mesh. These nodes announce regularly. No discovery needed.
+
+### 9.2. Announce Message
+
+Nodes broadcast announces periodically:
+
+```
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Type=ANN  | Flags     | Hop Count   | Seq Num               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Originator IID (8 bytes)                   |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Public Key (32 bytes)                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Signature (48 bytes)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Optional: App Data (variable)              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+Total: ~92 bytes minimum.
+
+**Fields:**
+- **Type:** Announce message identifier
+- **Flags:** Reserved
+- **Hop Count:** Incremented at each relay
+- **Seq Num:** Monotonic, detects duplicates and freshness
+- **Originator IID:** 8-byte Interface Identifier of announcer
+- **Public Key:** Ed25519 public key (32 bytes)
+- **Signature:** Schnorr signature over (IID, pubkey, seq, app_data)
+- **App Data:** Optional application data (node name, capabilities, etc.)
+
+### 9.3. Announce Processing
+
+**On receive announce:**
+
+```
+def process_announce(announce, from_neighbor):
+    # Verify signature
+    if not verify_schnorr(announce.pubkey, announce.signature, announce.signed_data):
+        drop("invalid signature")
+        return
+
+    # Check for duplicate/old
+    existing = gradient_table.get(announce.originator)
+    if existing and existing.seq_num >= announce.seq_num:
+        drop("stale announce")
+        return
+
+    # Install/update gradient
+    gradient_table.update(
+        destination=announce.originator,
+        next_hop=from_neighbor,
+        hop_count=announce.hop_count,
+        seq_num=announce.seq_num,
+        source="announce",
+        expires=now() + GRADIENT_TIMEOUT
+    )
+
+    # Forward if hop count allows
+    if announce.hop_count < MAX_ANNOUNCE_HOPS:
+        announce.hop_count += 1
+        broadcast(announce)
+```
+
+### 9.4. Announce Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| ANNOUNCE_INTERVAL | 300 sec | Time between announces |
+| MAX_ANNOUNCE_HOPS | 15 | Maximum propagation |
+| GRADIENT_TIMEOUT | 600 sec | 2× announce interval |
+| ANNOUNCE_JITTER | 0-30 sec | Random delay to prevent collision |
+
+### 9.5. Bandwidth Budget
+
+For a 20-node mesh:
+- 20 nodes × 92 bytes × 12 announces/hr = 22 KB/hr
+- At SF10/125kHz: ~15 seconds airtime/hr network-wide
+- ~0.04% of 1% duty cycle
+
+Acceptable overhead for instant peer-to-peer routing.
+
+### 9.6. Security
+
+Announces are self-authenticating:
+1. Signature proves sender holds private key for pubkey
+2. TOFU binding associates pubkey with IID
+3. Cannot forge announce for another node's address
+
+First announce from a new node establishes TOFU binding.
+
+---
+
+## 10. LOADng (Peer-to-Peer Fallback)
+
+### 10.1. Purpose
+
+LOADng provides reactive route discovery when no gradient exists:
+- New nodes not yet heard announcing
+- Nodes that stopped announcing (sleeping, failed)
+- First contact before any announce received
+
+### 10.2. When LOADng is Used
+
+```
+if gradient_table.lookup(dst) returns None or expired:
+    initiate LOADng discovery
+```
+
+### 10.3. Route Request (RREQ)
+
+```
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Type=RREQ | Flags     | Hop Limit   | Seq Num               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Originator Address (16 bytes)              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Destination Address (16 bytes)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Signature (48 bytes)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+RREQ is flooded. Each node:
+1. If I am destination → send RREP
+2. If I have gradient to destination → send RREP (intermediate reply)
+3. If seen before (originator + seq) → drop
+4. Otherwise → record reverse gradient, decrement hop limit, rebroadcast
+
+### 10.4. Route Reply (RREP)
+
+```
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Type=RREP | Flags     | Hop Count   | Seq Num               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Originator Address (16 bytes)              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Destination Address (16 bytes)             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                    Signature (48 bytes)                       |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+
+RREP follows reverse path. Each hop installs forward gradient.
+
+### 10.5. Gradient Unification
+
+RREP installs the same gradient entry as announces:
+
+```
+gradient_table.update(
+    destination=rrep.destination,
+    next_hop=from_neighbor,
+    hop_count=rrep.hop_count,
+    source="rrep",  # different source, same table
+    expires=now() + GRADIENT_TIMEOUT
+)
+```
+
+Once discovered, the destination is in gradient table. Future traffic uses gradient, not LOADng.
+
+### 10.6. Route Error (RERR)
+
+When link fails, send RERR toward affected sources. Recipients invalidate gradient entries through broken link.
+
+### 10.7. Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| RREQ_WAIT_TIME | 5 sec |
+| RREQ_RETRIES | 3 |
+| INITIAL_HOP_LIMIT | 4 (expanding ring) |
+| MAX_HOP_LIMIT | 15 |
+
+See Appendix B2 for full LOADng configuration.
+
+---
+
+## 11. Gradient Table
+
+### 11.1. Unified Structure
+
+All routing methods populate a single gradient table:
+
+```
+GradientEntry:
+    destination: IID or IPv6Address
+    next_hop: link-local address of neighbor
+    hop_count: distance in hops
+    seq_num: for freshness comparison
+    source: "announce" | "rrep" | "data" | "rpl"
+    expires: timestamp
+```
+
+### 11.2. Passive Learning
+
+Forwarding nodes can learn gradients from data traffic:
+
+```
+on_forward_packet(packet, from_neighbor):
+    # I just received a packet FROM this source
+    # Therefore, to REACH this source, send to from_neighbor
+    gradient_table.update(
+        destination=packet.source,
+        next_hop=from_neighbor,
+        source="data",
+        expires=now() + DATA_GRADIENT_TIMEOUT
+    )
+```
+
+DATA_GRADIENT_TIMEOUT is shorter (60 sec) since it's opportunistic.
+
+### 11.3. Entry Priority
+
+When multiple sources provide gradient for same destination:
+
+| Source | Priority | Rationale |
+|--------|----------|-----------|
+| announce | High | Explicitly advertised, fresh |
+| rrep | High | Explicitly discovered |
+| data | Low | Opportunistic, may be stale |
+
+Higher priority entry replaces lower. Same priority: prefer lower hop count.
+
+---
+
+## 12. Summary
+
+```
+                         ┌─────────────────┐
+                         │  Border Router  │
+                         │   (Internet)    │
+                         └────────┬────────┘
+                                  │
+                            RPL (DODAG)
+                          upward/downward
+                                  │
+┌─────────────────────────────────┴─────────────────────────────────┐
+│                                                                    │
+│    Node A ◄──────── Gradient ────────► Node B                     │
+│       │            (from announces)        │                       │
+│       │                                    │                       │
+│    Node C ◄─── LOADng (if no gradient) ──► Node D                 │
+│                                                                    │
+│                      Mesh Interior                                 │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+| Traffic | Primary | Fallback |
+|---------|---------|----------|
+| To/from internet | RPL | — |
+| Peer (active node) | Announce gradient | LOADng |
+| Peer (unknown node) | LOADng | RPL via root (inefficient) |
+| Broadcast | Hop-limited flood | — |
+
+The three-tier approach optimizes for each traffic pattern while providing fallbacks for edge cases.
 
 ---
 
