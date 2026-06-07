@@ -1,0 +1,483 @@
+"""Wire protocol encoding/decoding for LICHEN simulator.
+
+Binary protocol using little-endian byte order. Each message starts with
+a 1-byte message type, followed by type-specific payload.
+
+Message types:
+    REGISTER (0x01): Node registration with position
+    OK (0x00): Generic success response
+    ERR (0xFF): Error response with code and message
+    TX (0x10): Transmit request with payload
+    TX_DONE (0x11): Transmit complete with airtime
+    TX_FAIL (0x12): Transmit failed
+    RX (0x20): Receive request with timeout
+    RX_OK (0x21): Receive success with payload, RSSI, SNR
+    RX_TIMEOUT (0x22): Receive timeout
+    TIME (0x30): Time query request
+    TIME_OK (0x31): Time query response
+"""
+
+from __future__ import annotations
+
+import struct
+from typing import Final
+
+# Message type constants
+MSG_OK: Final[int] = 0x00
+MSG_REGISTER: Final[int] = 0x01
+MSG_TX: Final[int] = 0x10
+MSG_TX_DONE: Final[int] = 0x11
+MSG_TX_FAIL: Final[int] = 0x12
+MSG_RX: Final[int] = 0x20
+MSG_RX_OK: Final[int] = 0x21
+MSG_RX_TIMEOUT: Final[int] = 0x22
+MSG_TIME: Final[int] = 0x30
+MSG_TIME_OK: Final[int] = 0x31
+MSG_ERR: Final[int] = 0xFF
+
+# Maximum lengths for variable-length fields
+MAX_ID_LENGTH: Final[int] = 255
+MAX_PAYLOAD_LENGTH: Final[int] = 65535
+MAX_ERR_MSG_LENGTH: Final[int] = 255
+
+
+class ProtocolError(Exception):
+    """Raised when protocol encoding/decoding fails."""
+
+
+def encode_register(
+    sim_id: str, node_id: str, x: float, y: float, z: float
+) -> bytes:
+    """Encode a REGISTER message.
+
+    Format:
+        - 1 byte: message type (0x01)
+        - 1 byte: sim_id length
+        - N bytes: sim_id (UTF-8)
+        - 1 byte: node_id length
+        - N bytes: node_id (UTF-8)
+        - 8 bytes: x position (double, little-endian)
+        - 8 bytes: y position (double, little-endian)
+        - 8 bytes: z position (double, little-endian)
+
+    Args:
+        sim_id: Simulation identifier string.
+        node_id: Node identifier string.
+        x: X coordinate in meters.
+        y: Y coordinate in meters.
+        z: Z coordinate in meters.
+
+    Returns:
+        Encoded message bytes.
+
+    Raises:
+        ProtocolError: If sim_id or node_id exceeds 255 bytes when encoded.
+    """
+    sim_id_bytes = sim_id.encode("utf-8")
+    node_id_bytes = node_id.encode("utf-8")
+
+    if len(sim_id_bytes) > MAX_ID_LENGTH:
+        raise ProtocolError(f"sim_id too long: {len(sim_id_bytes)} > {MAX_ID_LENGTH}")
+    if len(node_id_bytes) > MAX_ID_LENGTH:
+        raise ProtocolError(f"node_id too long: {len(node_id_bytes)} > {MAX_ID_LENGTH}")
+
+    return (
+        struct.pack("<B", MSG_REGISTER)
+        + struct.pack("<B", len(sim_id_bytes))
+        + sim_id_bytes
+        + struct.pack("<B", len(node_id_bytes))
+        + node_id_bytes
+        + struct.pack("<ddd", x, y, z)
+    )
+
+
+def decode_register(data: bytes) -> tuple[str, str, float, float, float]:
+    """Decode a REGISTER message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        Tuple of (sim_id, node_id, x, y, z).
+
+    Raises:
+        ProtocolError: If data is malformed or too short.
+    """
+    if len(data) < 1:
+        raise ProtocolError("REGISTER message too short")
+
+    offset = 0
+
+    # Read sim_id
+    sim_id_len = data[offset]
+    offset += 1
+    if offset + sim_id_len > len(data):
+        raise ProtocolError("REGISTER message truncated at sim_id")
+    sim_id = data[offset : offset + sim_id_len].decode("utf-8")
+    offset += sim_id_len
+
+    # Read node_id
+    if offset >= len(data):
+        raise ProtocolError("REGISTER message truncated before node_id length")
+    node_id_len = data[offset]
+    offset += 1
+    if offset + node_id_len > len(data):
+        raise ProtocolError("REGISTER message truncated at node_id")
+    node_id = data[offset : offset + node_id_len].decode("utf-8")
+    offset += node_id_len
+
+    # Read coordinates
+    if offset + 24 > len(data):
+        raise ProtocolError("REGISTER message truncated at coordinates")
+    x, y, z = struct.unpack_from("<ddd", data, offset)
+
+    return (sim_id, node_id, x, y, z)
+
+
+def encode_tx(payload: bytes) -> bytes:
+    """Encode a TX message.
+
+    Format:
+        - 1 byte: message type (0x10)
+        - 2 bytes: payload length (uint16, little-endian)
+        - N bytes: payload
+
+    Args:
+        payload: Data to transmit.
+
+    Returns:
+        Encoded message bytes.
+
+    Raises:
+        ProtocolError: If payload exceeds 65535 bytes.
+    """
+    if len(payload) > MAX_PAYLOAD_LENGTH:
+        raise ProtocolError(
+            f"payload too long: {len(payload)} > {MAX_PAYLOAD_LENGTH}"
+        )
+
+    return struct.pack("<BH", MSG_TX, len(payload)) + payload
+
+
+def decode_tx(data: bytes) -> bytes:
+    """Decode a TX message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        The payload bytes.
+
+    Raises:
+        ProtocolError: If data is malformed or too short.
+    """
+    if len(data) < 2:
+        raise ProtocolError("TX message too short")
+
+    (payload_len,) = struct.unpack_from("<H", data, 0)
+
+    if len(data) < 2 + payload_len:
+        raise ProtocolError("TX message truncated at payload")
+
+    return data[2 : 2 + payload_len]
+
+
+def encode_tx_done(airtime_us: int) -> bytes:
+    """Encode a TX_DONE message.
+
+    Format:
+        - 1 byte: message type (0x11)
+        - 4 bytes: airtime in microseconds (uint32, little-endian)
+
+    Args:
+        airtime_us: Transmission airtime in microseconds.
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<BI", MSG_TX_DONE, airtime_us)
+
+
+def decode_tx_done(data: bytes) -> int:
+    """Decode a TX_DONE message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        Airtime in microseconds.
+
+    Raises:
+        ProtocolError: If data is too short.
+    """
+    if len(data) < 4:
+        raise ProtocolError("TX_DONE message too short")
+
+    (airtime_us,) = struct.unpack_from("<I", data, 0)
+    return int(airtime_us)
+
+
+def encode_tx_fail() -> bytes:
+    """Encode a TX_FAIL message.
+
+    Format:
+        - 1 byte: message type (0x12)
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<B", MSG_TX_FAIL)
+
+
+def encode_rx(timeout_ms: int) -> bytes:
+    """Encode an RX message.
+
+    Format:
+        - 1 byte: message type (0x20)
+        - 4 bytes: timeout in milliseconds (uint32, little-endian)
+
+    Args:
+        timeout_ms: Receive timeout in milliseconds.
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<BI", MSG_RX, timeout_ms)
+
+
+def decode_rx(data: bytes) -> int:
+    """Decode an RX message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        Timeout in milliseconds.
+
+    Raises:
+        ProtocolError: If data is too short.
+    """
+    if len(data) < 4:
+        raise ProtocolError("RX message too short")
+
+    (timeout_ms,) = struct.unpack_from("<I", data, 0)
+    return int(timeout_ms)
+
+
+def encode_rx_ok(payload: bytes, rssi: int, snr: int) -> bytes:
+    """Encode an RX_OK message.
+
+    Format:
+        - 1 byte: message type (0x21)
+        - 2 bytes: payload length (uint16, little-endian)
+        - N bytes: payload
+        - 2 bytes: RSSI in dBm (int16, little-endian)
+        - 2 bytes: SNR in dB * 10 (int16, little-endian)
+
+    Args:
+        payload: Received data.
+        rssi: Received signal strength in dBm.
+        snr: Signal-to-noise ratio in dB * 10 (e.g., -5.5 dB = -55).
+
+    Returns:
+        Encoded message bytes.
+
+    Raises:
+        ProtocolError: If payload exceeds 65535 bytes.
+    """
+    if len(payload) > MAX_PAYLOAD_LENGTH:
+        raise ProtocolError(
+            f"payload too long: {len(payload)} > {MAX_PAYLOAD_LENGTH}"
+        )
+
+    return (
+        struct.pack("<BH", MSG_RX_OK, len(payload))
+        + payload
+        + struct.pack("<hh", rssi, snr)
+    )
+
+
+def decode_rx_ok(data: bytes) -> tuple[bytes, int, int]:
+    """Decode an RX_OK message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        Tuple of (payload, rssi, snr).
+
+    Raises:
+        ProtocolError: If data is malformed or too short.
+    """
+    if len(data) < 2:
+        raise ProtocolError("RX_OK message too short")
+
+    (payload_len,) = struct.unpack_from("<H", data, 0)
+
+    if len(data) < 2 + payload_len + 4:
+        raise ProtocolError("RX_OK message truncated")
+
+    payload = data[2 : 2 + payload_len]
+    rssi, snr = struct.unpack_from("<hh", data, 2 + payload_len)
+
+    return (payload, rssi, snr)
+
+
+def encode_rx_timeout() -> bytes:
+    """Encode an RX_TIMEOUT message.
+
+    Format:
+        - 1 byte: message type (0x22)
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<B", MSG_RX_TIMEOUT)
+
+
+def encode_time() -> bytes:
+    """Encode a TIME message.
+
+    Format:
+        - 1 byte: message type (0x30)
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<B", MSG_TIME)
+
+
+def encode_time_ok(time_us: int) -> bytes:
+    """Encode a TIME_OK message.
+
+    Format:
+        - 1 byte: message type (0x31)
+        - 8 bytes: time in microseconds (uint64, little-endian)
+
+    Args:
+        time_us: Current simulation time in microseconds.
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<BQ", MSG_TIME_OK, time_us)
+
+
+def decode_time_ok(data: bytes) -> int:
+    """Decode a TIME_OK message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        Time in microseconds.
+
+    Raises:
+        ProtocolError: If data is too short.
+    """
+    if len(data) < 8:
+        raise ProtocolError("TIME_OK message too short")
+
+    (time_us,) = struct.unpack_from("<Q", data, 0)
+    return int(time_us)
+
+
+def encode_ok() -> bytes:
+    """Encode an OK message.
+
+    Format:
+        - 1 byte: message type (0x00)
+
+    Returns:
+        Encoded message bytes.
+    """
+    return struct.pack("<B", MSG_OK)
+
+
+def encode_err(code: int, msg: str) -> bytes:
+    """Encode an ERR message.
+
+    Format:
+        - 1 byte: message type (0xFF)
+        - 1 byte: error code
+        - 1 byte: message length
+        - N bytes: message (UTF-8)
+
+    Args:
+        code: Error code (0-255).
+        msg: Human-readable error message.
+
+    Returns:
+        Encoded message bytes.
+
+    Raises:
+        ProtocolError: If message exceeds 255 bytes when encoded.
+    """
+    msg_bytes = msg.encode("utf-8")
+
+    if len(msg_bytes) > MAX_ERR_MSG_LENGTH:
+        raise ProtocolError(
+            f"error message too long: {len(msg_bytes)} > {MAX_ERR_MSG_LENGTH}"
+        )
+
+    return struct.pack("<BBB", MSG_ERR, code, len(msg_bytes)) + msg_bytes
+
+
+def decode_err(data: bytes) -> tuple[int, str]:
+    """Decode an ERR message payload.
+
+    Args:
+        data: Message bytes (excluding message type byte).
+
+    Returns:
+        Tuple of (error_code, message).
+
+    Raises:
+        ProtocolError: If data is malformed or too short.
+    """
+    if len(data) < 2:
+        raise ProtocolError("ERR message too short")
+
+    code = data[0]
+    msg_len = data[1]
+
+    if len(data) < 2 + msg_len:
+        raise ProtocolError("ERR message truncated at message")
+
+    msg = data[2 : 2 + msg_len].decode("utf-8")
+
+    return (code, msg)
+
+
+def get_message_type(data: bytes) -> int:
+    """Extract the message type from a message.
+
+    Args:
+        data: Complete message bytes.
+
+    Returns:
+        Message type byte.
+
+    Raises:
+        ProtocolError: If data is empty.
+    """
+    if not data:
+        raise ProtocolError("Empty message")
+    return data[0]
+
+
+def get_message_payload(data: bytes) -> bytes:
+    """Extract the payload from a message (everything after the type byte).
+
+    Args:
+        data: Complete message bytes.
+
+    Returns:
+        Message payload (excluding type byte).
+
+    Raises:
+        ProtocolError: If data is empty.
+    """
+    if not data:
+        raise ProtocolError("Empty message")
+    return data[1:]
