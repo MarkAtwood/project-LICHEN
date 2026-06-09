@@ -7,6 +7,7 @@ medium.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
