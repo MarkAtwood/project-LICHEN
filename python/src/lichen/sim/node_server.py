@@ -33,6 +33,7 @@ from lichen.sim.protocol import (
     get_message_payload,
     get_message_type,
 )
+from lichen.sim.simulation import TimeMode
 from lichen.sim.transmission import airtime_us
 
 if TYPE_CHECKING:
@@ -350,10 +351,31 @@ class NodeServer:
             await write_message(writer, encode_err(7, str(e)))
             return
 
-        # Try to get RX result
-        # In barrier sync mode, time advances when all nodes are blocked.
-        # We need to try advancing time and check for received packets.
-        result = self._simulation.get_rx_result(node_id)
+        # Track start time for timeout calculation
+        start_time_us = self._simulation.current_time_us
+        timeout_us = timeout_ms * 1000
+
+        # In barrier sync mode, we need to wait for time to advance
+        # or for a packet to arrive
+        result = None
+        while True:
+            # Check for received packet
+            result = self._simulation.get_rx_result(node_id)
+            if result is not None:
+                break
+
+            # In BARRIER_SYNC mode, try to advance time
+            # This will only advance if all nodes are blocked
+            if self._simulation.time_mode == TimeMode.BARRIER_SYNC:
+                self._simulation.maybe_advance_time()
+
+            # Check if we've timed out
+            elapsed_us = self._simulation.current_time_us - start_time_us
+            if elapsed_us >= timeout_us:
+                break
+
+            # Brief delay before next check to avoid busy loop
+            await asyncio.sleep(0.001)  # 1ms polling interval
 
         if result is not None:
             rx_payload, rssi, snr = result
