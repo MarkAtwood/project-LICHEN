@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import struct
 
+import anyio
 import pytest
 
 from lichen.radio.sim_client import MAX_MESSAGE_LENGTH, SimRadio, SimRadioError
@@ -322,3 +323,84 @@ async def test_recv_rejects_oversized_message() -> None:
         with pytest.raises(ProtocolError, match="exceeds maximum"):
             await radio.connect()
         await radio.close()
+
+
+class _RecordingStream:
+    """In-memory SocketStream stand-in that records operation order.
+
+    Each ``send`` records a "send" event, queues the matching response frame,
+    then yields control so a concurrent task may run. Each ``receive`` records
+    a "recv" event. A test inspects ``events`` to verify that one operation's
+    send->recv exchange is not interleaved with another's.
+    """
+
+    def __init__(self, response_for) -> None:
+        self._response_for = response_for
+        self._inbox = b""
+        self.events: list[str] = []
+
+    async def send(self, data: bytes) -> None:
+        message = data[4:]  # strip the 4-byte length prefix
+        self.events.append("send")
+        response = self._response_for(message)
+        self._inbox += struct.pack("<I", len(response)) + response
+        # Yield here: an unsynchronized concurrent op would interleave its send.
+        await anyio.lowlevel.checkpoint()
+
+    async def receive(self, max_bytes: int) -> bytes:
+        await anyio.lowlevel.checkpoint()
+        if not self._inbox:
+            raise AssertionError("receive() called with no buffered data")
+        chunk, self._inbox = self._inbox[:max_bytes], self._inbox[max_bytes:]
+        self.events.append("recv")
+        return chunk
+
+    async def aclose(self) -> None:
+        pass
+
+
+async def test_concurrent_operations_are_serialized() -> None:
+    """Concurrent operations must not interleave their send/recv exchanges.
+
+    The recording stream yields control at each send, so without serialization
+    the two operations would both send before either reads (events would start
+    with two "send"s). The lock forces each send to be immediately followed by
+    its own recv; this assertion fails if the lock is removed.
+    """
+
+    def response_for(message: bytes) -> bytes:
+        mtype = message[0]
+        if mtype == MSG_TX:
+            return encode_tx_done(1234)
+        if mtype == MSG_TIME:
+            return encode_time_ok(5678)
+        raise AssertionError(f"unexpected request type 0x{mtype:02x}")
+
+    stream = _RecordingStream(response_for)
+    radio = SimRadio("h", 1, "sim", "node", (0.0, 0.0, 0.0))
+    radio._stream = stream  # type: ignore[assignment]  # inject a connected stream
+
+    results: dict[str, object] = {}
+
+    async def run_tx() -> None:
+        results["tx"] = await radio.transmit(b"hello")
+
+    async def run_time() -> None:
+        results["time"] = await radio.get_time()
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(run_tx)
+        tg.start_soon(run_time)
+
+    # Both exchanges completed with their correct, matched responses.
+    assert results["tx"] is True
+    assert results["time"] == 5678
+
+    # Each send is immediately followed by a recv from the same exchange;
+    # no two sends are adjacent.
+    assert stream.events.count("send") == 2
+    for i, kind in enumerate(stream.events):
+        if kind == "send":
+            assert stream.events[i + 1] == "recv", (
+                f"send not immediately followed by recv: {stream.events}"
+            )

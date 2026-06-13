@@ -83,6 +83,10 @@ class SimRadio:
         self._stream: SocketStream | None = None
         self._freq_hz: int = 915_000_000
         self._tx_power_dbm: int = 14
+        # Serializes each request/response exchange. Without it, concurrent
+        # operations could interleave their _send/_recv calls and mismatch
+        # responses to requests (or corrupt frame framing on the shared stream).
+        self._lock = anyio.Lock()
 
     @property
     def freq_hz(self) -> int:
@@ -110,10 +114,9 @@ class SimRadio:
         # Send REGISTER message
         x, y, z = self._position
         msg = encode_register(self._sim_id, self._node_id, x, y, z)
-        await self._send(msg)
-
-        # Await OK response
-        response = await self._recv()
+        async with self._lock:
+            await self._send(msg)
+            response = await self._recv()
         msg_type = get_message_type(response)
 
         if msg_type == MSG_OK:
@@ -139,9 +142,9 @@ class SimRadio:
         self._ensure_connected()
 
         msg = encode_tx(payload)
-        await self._send(msg)
-
-        response = await self._recv()
+        async with self._lock:
+            await self._send(msg)
+            response = await self._recv()
         msg_type = get_message_type(response)
 
         if msg_type == MSG_TX_DONE:
@@ -172,9 +175,9 @@ class SimRadio:
         self._ensure_connected()
 
         msg = encode_rx(timeout_ms)
-        await self._send(msg)
-
-        response = await self._recv()
+        async with self._lock:
+            await self._send(msg)
+            response = await self._recv()
         msg_type = get_message_type(response)
 
         if msg_type == MSG_RX_OK:
@@ -200,9 +203,9 @@ class SimRadio:
         self._ensure_connected()
 
         msg = encode_time()
-        await self._send(msg)
-
-        response = await self._recv()
+        async with self._lock:
+            await self._send(msg)
+            response = await self._recv()
         msg_type = get_message_type(response)
 
         if msg_type == MSG_TIME_OK:
