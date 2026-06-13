@@ -35,7 +35,13 @@ def airtime_us(payload_len: int) -> int:
 
     Returns:
         Airtime in microseconds.
+
+    Raises:
+        ValueError: If payload_len is negative.
     """
+    if payload_len < 0:
+        raise ValueError(f"payload_len must be non-negative, got {payload_len}")
+
     # Symbol time in seconds: 2^SF / BW
     t_symbol_s = (2**_SF) / _BW
 

@@ -33,6 +33,13 @@ from lichen.sim.protocol import (
 if TYPE_CHECKING:
     from anyio.abc import SocketStream
 
+# Upper bound on an incoming framed message, to prevent a malicious or buggy
+# server from triggering a huge allocation via the 4-byte length prefix.
+# The largest legitimate message is an RX_OK carrying a max-size payload
+# (1 type + 2 length + 65535 payload + 4 rssi/snr); 1 MiB leaves generous
+# headroom while bounding memory use.
+MAX_MESSAGE_LENGTH = 1 << 20
+
 
 class SimRadioError(Exception):
     """Raised when SimRadio operations fail."""
@@ -209,8 +216,10 @@ class SimRadio:
     def configure(self, freq_hz: int, tx_power_dbm: int) -> None:
         """Configure the radio parameters.
 
-        These values are stored locally and used by the simulator on subsequent
-        transmissions.
+        These values are stored locally only and exposed via the ``freq_hz`` and
+        ``tx_power_dbm`` properties. The current wire protocol's TX message
+        carries only the payload, so the simulator does not receive or act on
+        these settings; sending them would require a new protocol message.
 
         Args:
             freq_hz: Center frequency in Hz (e.g., 915_000_000 for 915 MHz).
@@ -292,6 +301,10 @@ class SimRadio:
 
             if msg_len == 0:
                 raise ProtocolError("Received zero-length message")
+            if msg_len > MAX_MESSAGE_LENGTH:
+                raise ProtocolError(
+                    f"Message length {msg_len} exceeds maximum {MAX_MESSAGE_LENGTH}"
+                )
 
             # Read the message body
             return await self._recv_exact(msg_len)

@@ -7,12 +7,13 @@ import struct
 
 import pytest
 
-from lichen.radio.sim_client import SimRadio, SimRadioError
+from lichen.radio.sim_client import MAX_MESSAGE_LENGTH, SimRadio, SimRadioError
 from lichen.sim.protocol import (
     MSG_REGISTER,
     MSG_RX,
     MSG_TIME,
     MSG_TX,
+    ProtocolError,
     decode_register,
     decode_rx,
     decode_tx,
@@ -291,3 +292,33 @@ async def test_close_when_not_connected() -> None:
     radio = SimRadio("localhost", 5555, "sim1", "node1", (0, 0, 0))
     # Should not raise
     await radio.close()
+
+
+async def test_recv_rejects_oversized_message() -> None:
+    """A forged length prefix above MAX_MESSAGE_LENGTH is rejected before alloc.
+
+    The server replies with only a 4-byte length prefix claiming an enormous
+    body and never sends the body. A correct client rejects it based on the
+    prefix alone; a missing bound would instead block reading bytes that never
+    arrive (so this test would hang rather than pass).
+    """
+
+    async def handle(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        # Consume the REGISTER frame the client sends on connect.
+        (n,) = struct.unpack("<I", await reader.readexactly(4))
+        await reader.readexactly(n)
+        # Reply with a frame claiming a body larger than the allowed maximum.
+        writer.write(struct.pack("<I", MAX_MESSAGE_LENGTH + 1))
+        await writer.drain()
+        await reader.read()  # hold the connection open until the client closes
+        writer.close()
+
+    server = await asyncio.start_server(handle, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    async with server:
+        radio = SimRadio("127.0.0.1", port, "sim1", "node1", (0, 0, 0))
+        with pytest.raises(ProtocolError, match="exceeds maximum"):
+            await radio.connect()
+        await radio.close()

@@ -2,11 +2,18 @@
 
 from uuid import UUID
 
+import pytest
+
 from lichen.sim.transmission import Transmission, airtime_us
 
 
 class TestAirtimeUs:
     """Tests for airtime_us function."""
+
+    def test_negative_payload_raises(self) -> None:
+        """Negative payload length is invalid input and must be rejected."""
+        with pytest.raises(ValueError, match="non-negative"):
+            airtime_us(-1)
 
     def test_zero_payload(self) -> None:
         """Zero-length payload still has preamble and header overhead."""

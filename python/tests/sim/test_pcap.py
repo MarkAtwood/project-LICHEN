@@ -35,6 +35,30 @@ class TestPcapngWriter:
                 writer.write_packet(timestamp_us=1000, data=b"\x00\x01\x02")
             assert path.exists()
 
+    def test_closes_file_on_init_failure(self, monkeypatch) -> None:
+        """A failure while writing header blocks must not leak the file handle."""
+        opened: list = []
+        real_open = Path.open
+
+        def tracking_open(self_path, *args, **kwargs):
+            handle = real_open(self_path, *args, **kwargs)
+            opened.append(handle)
+            return handle
+
+        def boom(self) -> None:
+            raise RuntimeError("disk full")
+
+        monkeypatch.setattr(Path, "open", tracking_open)
+        monkeypatch.setattr(PcapngWriter, "_write_interface_description_block", boom)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.pcapng"
+            with pytest.raises(RuntimeError, match="disk full"):
+                PcapngWriter(path)
+
+        assert opened, "expected the writer to open the file"
+        assert opened[0].closed, "file handle leaked after init failure"
+
     def test_section_header_block(self) -> None:
         """File should start with valid Section Header Block."""
         with tempfile.TemporaryDirectory() as tmpdir:
