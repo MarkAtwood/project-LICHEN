@@ -694,3 +694,47 @@ class TestLittleEndianness:
         encoded = encode_time_ok(0xFEDCBA9876543210)
         time_val = struct.unpack("<Q", encoded[1:9])[0]
         assert time_val == 0xFEDCBA9876543210
+
+
+class TestEncoderRangeValidation:
+    """Fixed-width integer fields must be range-checked, raising ProtocolError."""
+
+    def test_tx_done_accepts_uint32_bounds(self) -> None:
+        """airtime_us at the uint32 boundaries encodes successfully."""
+        assert decode_tx_done(encode_tx_done(0)[1:]) == 0
+        assert decode_tx_done(encode_tx_done(0xFFFFFFFF)[1:]) == 0xFFFFFFFF
+
+    def test_tx_done_rejects_negative(self) -> None:
+        with pytest.raises(ProtocolError, match="airtime_us out of range"):
+            encode_tx_done(-1)
+
+    def test_tx_done_rejects_over_uint32(self) -> None:
+        with pytest.raises(ProtocolError, match="airtime_us out of range"):
+            encode_tx_done(0x1_0000_0000)
+
+    def test_rx_rejects_out_of_range_timeout(self) -> None:
+        with pytest.raises(ProtocolError, match="timeout_ms out of range"):
+            encode_rx(-1)
+        with pytest.raises(ProtocolError, match="timeout_ms out of range"):
+            encode_rx(0x1_0000_0000)
+
+    def test_rx_ok_accepts_int16_bounds(self) -> None:
+        """rssi/snr at the int16 boundaries encode successfully."""
+        payload, rssi, snr = decode_rx_ok(encode_rx_ok(b"x", -32768, 32767)[1:])
+        assert (payload, rssi, snr) == (b"x", -32768, 32767)
+
+    def test_rx_ok_rejects_out_of_range_rssi(self) -> None:
+        with pytest.raises(ProtocolError, match="rssi out of range"):
+            encode_rx_ok(b"", -32769, 0)
+        with pytest.raises(ProtocolError, match="rssi out of range"):
+            encode_rx_ok(b"", 32768, 0)
+
+    def test_rx_ok_rejects_out_of_range_snr(self) -> None:
+        with pytest.raises(ProtocolError, match="snr out of range"):
+            encode_rx_ok(b"", 0, 40000)
+
+    def test_err_rejects_out_of_range_code(self) -> None:
+        with pytest.raises(ProtocolError, match="code out of range"):
+            encode_err(256, "boom")
+        with pytest.raises(ProtocolError, match="code out of range"):
+            encode_err(-1, "boom")

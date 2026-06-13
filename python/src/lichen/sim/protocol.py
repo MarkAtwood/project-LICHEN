@@ -40,9 +40,25 @@ MAX_ID_LENGTH: Final[int] = 255
 MAX_PAYLOAD_LENGTH: Final[int] = 65535
 MAX_ERR_MSG_LENGTH: Final[int] = 255
 
+# Fixed-width integer field bounds
+_UINT8_MAX: Final[int] = 0xFF
+_UINT32_MAX: Final[int] = 0xFFFFFFFF
+_INT16_MIN: Final[int] = -32768
+_INT16_MAX: Final[int] = 32767
+
 
 class ProtocolError(Exception):
     """Raised when protocol encoding/decoding fails."""
+
+
+def _check_range(name: str, value: int, lo: int, hi: int) -> None:
+    """Validate that an integer field fits its fixed-width packing range.
+
+    Raises:
+        ProtocolError: If value is outside [lo, hi].
+    """
+    if not lo <= value <= hi:
+        raise ProtocolError(f"{name} out of range: {value} not in [{lo}, {hi}]")
 
 
 def encode_register(
@@ -194,7 +210,11 @@ def encode_tx_done(airtime_us: int) -> bytes:
 
     Returns:
         Encoded message bytes.
+
+    Raises:
+        ProtocolError: If airtime_us does not fit in a uint32.
     """
+    _check_range("airtime_us", airtime_us, 0, _UINT32_MAX)
     return struct.pack("<BI", MSG_TX_DONE, airtime_us)
 
 
@@ -241,7 +261,11 @@ def encode_rx(timeout_ms: int) -> bytes:
 
     Returns:
         Encoded message bytes.
+
+    Raises:
+        ProtocolError: If timeout_ms does not fit in a uint32.
     """
+    _check_range("timeout_ms", timeout_ms, 0, _UINT32_MAX)
     return struct.pack("<BI", MSG_RX, timeout_ms)
 
 
@@ -283,12 +307,15 @@ def encode_rx_ok(payload: bytes, rssi: int, snr: int) -> bytes:
         Encoded message bytes.
 
     Raises:
-        ProtocolError: If payload exceeds 65535 bytes.
+        ProtocolError: If payload exceeds 65535 bytes or rssi/snr do not fit
+            in an int16.
     """
     if len(payload) > MAX_PAYLOAD_LENGTH:
         raise ProtocolError(
             f"payload too long: {len(payload)} > {MAX_PAYLOAD_LENGTH}"
         )
+    _check_range("rssi", rssi, _INT16_MIN, _INT16_MAX)
+    _check_range("snr", snr, _INT16_MIN, _INT16_MAX)
 
     return (
         struct.pack("<BH", MSG_RX_OK, len(payload))
@@ -411,8 +438,10 @@ def encode_err(code: int, msg: str) -> bytes:
         Encoded message bytes.
 
     Raises:
-        ProtocolError: If message exceeds 255 bytes when encoded.
+        ProtocolError: If code is outside 0-255 or message exceeds 255 bytes
+            when encoded.
     """
+    _check_range("code", code, 0, _UINT8_MAX)
     msg_bytes = msg.encode("utf-8")
 
     if len(msg_bytes) > MAX_ERR_MSG_LENGTH:

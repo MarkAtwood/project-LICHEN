@@ -83,8 +83,14 @@ class PcapngWriter:
         """
         self._path = Path(path)
         self._file: BinaryIO | None = self._path.open("wb")
-        self._write_section_header_block()
-        self._write_interface_description_block()
+        try:
+            self._write_section_header_block()
+            self._write_interface_description_block()
+        except BaseException:
+            # Don't leak the open handle if writing the header blocks fails.
+            self._file.close()
+            self._file = None
+            raise
 
     def _require_file(self) -> BinaryIO:
         """Return the file handle or raise if closed.
