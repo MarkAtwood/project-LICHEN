@@ -100,7 +100,18 @@ class EventQueue:
         return len(self._heap)
 
     def __iter__(self) -> Iterator[Event]:
-        """Iterate over events in time order (destructive)."""
+        """Iterate over events in time order without modifying the queue.
+
+        Use :meth:`drain` if you want to consume events as you iterate.
+        """
+        for entry in sorted(self._heap):
+            yield entry.event
+
+    def drain(self) -> Iterator[Event]:
+        """Yield events in time order, removing each from the queue.
+
+        The queue is empty once the iterator is exhausted.
+        """
         while self._heap:
             yield self.pop()
 
