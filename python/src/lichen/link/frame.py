@@ -1,0 +1,196 @@
+"""LICHEN link-layer frame format (spec section 4).
+
+Wire layout (spec 4.1)::
+
+    +--------+--------+-------+--------+----------+---------+--------+
+    | Length | LLSec  | Epoch | SeqNum | Dst Addr | Payload | MIC    |
+    +--------+--------+-------+--------+----------+---------+--------+
+       1B       1B       1B      2B       2-8B      var      4-8B
+
+``Length`` is the total frame length excluding the Length field itself.
+Multi-byte integer fields are big-endian.
+
+The LLSec byte (spec 4.2) packs, from the least-significant bit::
+
+    bits 0-1 : Addr Mode  (0=none/broadcast, 1=16-bit, 2=64-bit, 3=elided)
+    bits 2-4 : MIC Length  (0=32-bit, 1=64-bit, 2=reserved)
+    bit  5   : Signature present (Ed25519)
+    bit  6   : Encrypted (AES-CCM)
+    bit  7   : Reserved (must be 0)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import IntEnum
+
+
+class AddrMode(IntEnum):
+    """Destination addressing mode (LLSec bits 0-1, spec 4.3)."""
+
+    NONE = 0  # broadcast, 0 address bytes
+    SHORT = 1  # 16-bit short address, 2 bytes
+    EXTENDED = 2  # EUI-64, 8 bytes
+    ELIDED = 3  # derived from IPv6 destination, 0 address bytes
+
+    @property
+    def addr_len(self) -> int:
+        """Number of destination-address bytes for this mode."""
+        return {AddrMode.NONE: 0, AddrMode.SHORT: 2, AddrMode.EXTENDED: 8,
+                AddrMode.ELIDED: 0}[self]
+
+
+class MicLength(IntEnum):
+    """Message Integrity Code length (LLSec bits 2-4, spec 4.2)."""
+
+    BITS32 = 0  # 4-byte MIC
+    BITS64 = 1  # 8-byte MIC
+
+    @property
+    def mic_len(self) -> int:
+        """Number of MIC bytes for this setting."""
+        return 4 if self == MicLength.BITS32 else 8
+
+
+# LLSec bit fields.
+_ADDR_MODE_MASK = 0b0000_0011
+_MIC_LEN_SHIFT = 2
+_MIC_LEN_MASK = 0b0000_0111
+_SIGNATURE_BIT = 1 << 5
+_ENCRYPTED_BIT = 1 << 6
+_RESERVED_BIT = 1 << 7
+
+_MAX_FRAME_BODY = 255  # the Length field is a single byte
+
+
+class FrameError(Exception):
+    """Raised when a link-layer frame is malformed."""
+
+
+@dataclass
+class LichenFrame:
+    """A parsed LICHEN link-layer frame.
+
+    Attributes:
+        epoch: 8-bit epoch counter (spec 4.4).
+        seqnum: 16-bit sequence number (replay protection).
+        dst_addr: Destination address bytes; length must match ``addr_mode``.
+        payload: Frame payload (typically a SCHC-compressed packet).
+        mic: Message Integrity Code; length must match ``mic_length``.
+        addr_mode: Destination addressing mode.
+        mic_length: MIC length setting.
+        signature_present: Whether an Ed25519 signature is present.
+        encrypted: Whether the payload is AES-CCM encrypted.
+    """
+
+    epoch: int
+    seqnum: int
+    dst_addr: bytes
+    payload: bytes
+    mic: bytes
+    addr_mode: AddrMode = AddrMode.NONE
+    mic_length: MicLength = MicLength.BITS32
+    signature_present: bool = False
+    encrypted: bool = False
+
+    def _validate(self) -> None:
+        if not 0 <= self.epoch <= 0xFF:
+            raise FrameError(f"epoch out of range: {self.epoch}")
+        if not 0 <= self.seqnum <= 0xFFFF:
+            raise FrameError(f"seqnum out of range: {self.seqnum}")
+        if len(self.dst_addr) != self.addr_mode.addr_len:
+            raise FrameError(
+                f"dst_addr is {len(self.dst_addr)} bytes but {self.addr_mode.name} "
+                f"requires {self.addr_mode.addr_len}"
+            )
+        if len(self.mic) != self.mic_length.mic_len:
+            raise FrameError(
+                f"mic is {len(self.mic)} bytes but {self.mic_length.name} "
+                f"requires {self.mic_length.mic_len}"
+            )
+
+    def llsec_byte(self) -> int:
+        """Compute the LLSec flags byte."""
+        value = int(self.addr_mode) & _ADDR_MODE_MASK
+        value |= (int(self.mic_length) & _MIC_LEN_MASK) << _MIC_LEN_SHIFT
+        if self.signature_present:
+            value |= _SIGNATURE_BIT
+        if self.encrypted:
+            value |= _ENCRYPTED_BIT
+        return value
+
+    def to_bytes(self) -> bytes:
+        """Serialize the frame to its on-air byte representation.
+
+        Raises:
+            FrameError: If a field is out of range, lengths are inconsistent
+                with the LLSec modes, or the frame exceeds 255 body bytes.
+        """
+        self._validate()
+        body = (
+            bytes([self.llsec_byte(), self.epoch])
+            + self.seqnum.to_bytes(2, "big")
+            + self.dst_addr
+            + self.payload
+            + self.mic
+        )
+        if len(body) > _MAX_FRAME_BODY:
+            raise FrameError(
+                f"frame body is {len(body)} bytes, exceeds {_MAX_FRAME_BODY}"
+            )
+        return bytes([len(body)]) + body
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> LichenFrame:
+        """Parse a frame from its on-air byte representation.
+
+        Raises:
+            FrameError: If the data is truncated, the length field is wrong, the
+                reserved bit is set, or the MIC-length field is reserved.
+        """
+        if len(data) < 1:
+            raise FrameError("frame is empty")
+        length = data[0]
+        body = data[1:]
+        if len(body) != length:
+            raise FrameError(
+                f"length field says {length} but {len(body)} body bytes present"
+            )
+        # Fixed fields: LLSec(1) + Epoch(1) + SeqNum(2) = 4 bytes minimum.
+        if length < 4:
+            raise FrameError(f"frame body too short: {length} bytes")
+
+        llsec = body[0]
+        if llsec & _RESERVED_BIT:
+            raise FrameError("LLSec reserved bit (7) must be 0")
+        addr_mode = AddrMode(llsec & _ADDR_MODE_MASK)
+        mic_field = (llsec >> _MIC_LEN_SHIFT) & _MIC_LEN_MASK
+        if mic_field > MicLength.BITS64:
+            raise FrameError(f"reserved MIC-length value: {mic_field}")
+        mic_length = MicLength(mic_field)
+
+        epoch = body[1]
+        seqnum = int.from_bytes(body[2:4], "big")
+
+        offset = 4
+        addr_len = addr_mode.addr_len
+        mic_len = mic_length.mic_len
+        if length < offset + addr_len + mic_len:
+            raise FrameError("frame too short for declared address/MIC sizes")
+
+        dst_addr = body[offset : offset + addr_len]
+        offset += addr_len
+        payload = body[offset : len(body) - mic_len]
+        mic = body[len(body) - mic_len :]
+
+        return cls(
+            epoch=epoch,
+            seqnum=seqnum,
+            dst_addr=dst_addr,
+            payload=payload,
+            mic=mic,
+            addr_mode=addr_mode,
+            mic_length=mic_length,
+            signature_present=bool(llsec & _SIGNATURE_BIT),
+            encrypted=bool(llsec & _ENCRYPTED_BIT),
+        )
