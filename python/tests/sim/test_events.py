@@ -186,14 +186,28 @@ class TestEventQueueTieBreaking:
 class TestEventQueueIteration:
     """Test EventQueue iteration."""
 
-    def test_iterate_pops_all_events(self) -> None:
-        """Iterating yields events in order and empties the queue."""
+    def test_iterate_is_non_destructive(self) -> None:
+        """Iterating yields events in time order and leaves the queue intact."""
         queue = EventQueue()
         queue.push(Event(time_us=300))
         queue.push(Event(time_us=100))
         queue.push(Event(time_us=200))
 
         times = [e.time_us for e in queue]
+
+        assert times == [100, 200, 300]
+        assert len(queue) == 3  # not emptied
+        # Re-iterating yields the same events.
+        assert [e.time_us for e in queue] == [100, 200, 300]
+
+    def test_drain_pops_all_events(self) -> None:
+        """drain() yields events in order and empties the queue."""
+        queue = EventQueue()
+        queue.push(Event(time_us=300))
+        queue.push(Event(time_us=100))
+        queue.push(Event(time_us=200))
+
+        times = [e.time_us for e in queue.drain()]
 
         assert times == [100, 200, 300]
         assert queue.is_empty()
