@@ -1,0 +1,89 @@
+"""LOADng route error handling (RERR) (spec section 10.6, 9.7).
+
+When a link to a next hop fails, every route through it is invalidated and a
+RERR naming each now-unreachable destination is sent toward the upstream nodes
+that were using the route (its precursors). A received RERR invalidates the
+matching local route and propagates further upstream.
+
+Like the discovery handler this is a deterministic, action-returning class: it
+mutates the route cache / gradient table and returns the RERRs to transmit; the
+caller owns the radio and clock. Precursors must be recorded via
+:meth:`record_flow` as data is forwarded so failures can be attributed.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from ipaddress import IPv6Address
+
+from lichen.gradient import GradientTable
+from lichen.loadng.cache import RouteCache
+from lichen.loadng.messages import RERR
+
+
+def _addr(value: IPv6Address | str) -> IPv6Address:
+    return value if isinstance(value, IPv6Address) else IPv6Address(value)
+
+
+@dataclass
+class RerrAction:
+    """A RERR to transmit and the precursors to send it to."""
+
+    rerr: RERR
+    notify: list[IPv6Address] = field(default_factory=list)
+    invalidated: list[IPv6Address] = field(default_factory=list)
+
+
+class RouteErrorManager:
+    """Tracks route precursors and handles link failures / RERRs for one node."""
+
+    def __init__(self, gradient: GradientTable, cache: RouteCache) -> None:
+        self.gradient = gradient
+        self.cache = cache
+        self._precursors: dict[IPv6Address, set[IPv6Address]] = {}
+
+    def record_flow(
+        self, destination: IPv6Address | str, upstream: IPv6Address | str
+    ) -> None:
+        """Note that ``upstream`` forwards traffic to ``destination`` through us."""
+        self._precursors.setdefault(_addr(destination), set()).add(_addr(upstream))
+
+    def on_link_failure(self, next_hop: IPv6Address | str) -> list[RerrAction]:
+        """Invalidate routes through a failed ``next_hop`` and build RERRs."""
+        nh = _addr(next_hop)
+        dests = set(self.cache.remove_via(nh)) | set(self.gradient.remove_via(nh))
+        return [self._build_action(dest) for dest in sorted(dests, key=str)]
+
+    def process_rerr(
+        self, rerr: RERR, from_neighbor: IPv6Address | str
+    ) -> RerrAction | None:
+        """Process a received RERR; return a propagated RERR action or None.
+
+        Only acts if a local route to the unreachable destination goes through
+        ``from_neighbor`` (the neighbour that reported the failure).
+        """
+        dest = _addr(rerr.unreachable)
+        from_neighbor = _addr(from_neighbor)
+
+        grad = self.gradient.lookup(dest)
+        route = self.cache.lookup(dest)
+        affected = (grad is not None and grad.next_hop == from_neighbor) or (
+            route is not None and route.next_hop == from_neighbor
+        )
+        if not affected:
+            return None
+
+        if grad is not None and grad.next_hop == from_neighbor:
+            self.gradient.remove(dest)
+        if route is not None and route.next_hop == from_neighbor:
+            self.cache.remove(dest)
+
+        return self._build_action(dest, error_code=rerr.error_code)
+
+    def _build_action(self, dest: IPv6Address, error_code: int = 0) -> RerrAction:
+        precursors = self._precursors.pop(dest, set())
+        return RerrAction(
+            rerr=RERR(unreachable=dest, error_code=error_code),
+            notify=sorted(precursors, key=str),
+            invalidated=[dest],
+        )

@@ -18,6 +18,7 @@ from lichen.loadng.discovery import (
     RrepResult,
     RreqResult,
 )
+from lichen.loadng.error import RerrAction, RouteErrorManager
 from lichen.loadng.messages import (
     INITIAL_HOP_LIMIT,
     MAX_HOP_LIMIT,
@@ -47,8 +48,10 @@ __all__ = [
     "LoadngError",
     "LoadngMessage",
     "LoadngRouter",
+    "RerrAction",
     "RouteCache",
     "RouteEntry",
+    "RouteErrorManager",
     "RreqResult",
     "RrepResult",
     "from_icmpv6",
