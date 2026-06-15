@@ -19,6 +19,14 @@ from lichen.rpl.messages import (
     from_icmpv6,
     to_icmpv6,
 )
+from lichen.rpl.routing import (
+    RoutingError,
+    RoutingTable,
+    SourceRoutingHeader,
+    advance_source_route,
+    insert_source_route,
+    next_hop_upward,
+)
 from lichen.rpl.trickle import TrickleTimer
 
 __all__ = [
@@ -30,12 +38,18 @@ __all__ = [
     "DodagState",
     "ModeOfOperation",
     "ParentCandidate",
+    "RoutingError",
+    "RoutingTable",
     "RplCode",
     "RplError",
     "RplMessage",
     "RplOption",
     "RplOptionType",
+    "SourceRoutingHeader",
     "TrickleTimer",
+    "advance_source_route",
     "from_icmpv6",
+    "insert_source_route",
+    "next_hop_upward",
     "to_icmpv6",
 ]
