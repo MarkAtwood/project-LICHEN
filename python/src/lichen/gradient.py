@@ -106,6 +106,14 @@ class GradientTable:
         """Remove the gradient for ``destination`` if present."""
         self._entries.pop(_addr(destination), None)
 
+    def remove_via(self, next_hop: IPv6Address | str) -> list[IPv6Address]:
+        """Remove every gradient routing through ``next_hop``; return their dsts."""
+        nh = _addr(next_hop)
+        dests = [d for d, e in self._entries.items() if e.next_hop == nh]
+        for dest in dests:
+            del self._entries[dest]
+        return dests
+
     def expire_old(self, now: int) -> int:
         """Drop entries whose ``expires`` is at or before ``now``; return count."""
         stale = [d for d, e in self._entries.items() if e.expires <= now]

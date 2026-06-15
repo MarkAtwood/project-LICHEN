@@ -76,6 +76,14 @@ class RouteCache:
         """Remove the route to ``destination`` if present."""
         self._entries.pop(_addr(destination), None)
 
+    def remove_via(self, next_hop: IPv6Address | str) -> list[IPv6Address]:
+        """Remove every route through ``next_hop``; return their destinations."""
+        nh = _addr(next_hop)
+        dests = [d for d, e in self._entries.items() if e.next_hop == nh]
+        for dest in dests:
+            del self._entries[dest]
+        return dests
+
     def refresh(self, destination: IPv6Address | str, now: int) -> bool:
         """Extend a route's validity to ``now + route_timeout``; True if found."""
         dest = _addr(destination)
