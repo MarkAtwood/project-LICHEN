@@ -5,6 +5,13 @@ exists. This package currently provides the control-message codecs (RREQ,
 RREP, RERR).
 """
 
+from lichen.loadng.cache import (
+    ROUTE_CACHE_SIZE,
+    ROUTE_REFRESH_MS,
+    ROUTE_TIMEOUT_MS,
+    RouteCache,
+    RouteEntry,
+)
 from lichen.loadng.messages import (
     INITIAL_HOP_LIMIT,
     MAX_HOP_LIMIT,
@@ -22,6 +29,9 @@ from lichen.loadng.messages import (
 __all__ = [
     "INITIAL_HOP_LIMIT",
     "MAX_HOP_LIMIT",
+    "ROUTE_CACHE_SIZE",
+    "ROUTE_REFRESH_MS",
+    "ROUTE_TIMEOUT_MS",
     "RERR",
     "RREP",
     "RREQ",
@@ -29,6 +39,8 @@ __all__ = [
     "LoadngCode",
     "LoadngError",
     "LoadngMessage",
+    "RouteCache",
+    "RouteEntry",
     "from_icmpv6",
     "to_icmpv6",
 ]
