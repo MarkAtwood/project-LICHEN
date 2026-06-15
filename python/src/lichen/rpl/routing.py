@@ -1,0 +1,179 @@
+"""RPL non-storing routing table and source-routed forwarding (spec section 8.5).
+
+In non-storing mode only the root holds a routing table; it learns each node's
+parent from DAOs (assembled by the DAO handler) and stores the full path to each
+target. Downward packets carry an RFC 6554 Source Routing Header (SRH, a Type 3
+Routing extension header); intermediate nodes forward by advancing it per
+RFC 8200 section 4.4. Upward packets simply go to the preferred parent.
+
+The SRH here is uncompressed (CmprI = CmprE = 0); on-air 6LoRH compression is a
+SCHC-layer concern.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from ipaddress import IPv6Address
+
+from lichen.ipv6.packet import ExtensionHeader, IPv6Packet, NextHeader
+from lichen.rpl.dodag import DodagState
+
+ROUTING_TYPE_SOURCE_ROUTE = 3
+_SRH_FIELDS_LENGTH = 6  # routing_type, segments_left, CmprI/E, 3-byte pad/reserved
+
+
+class RoutingError(Exception):
+    """Raised on malformed routes or source-routing headers."""
+
+
+def _addr(value: IPv6Address | str | bytes) -> IPv6Address:
+    return value if isinstance(value, IPv6Address) else IPv6Address(value)
+
+
+@dataclass
+class SourceRoutingHeader:
+    """An RFC 6554 Source Routing Header (uncompressed).
+
+    ``addresses`` are the hops still to be visited; ``segments_left`` counts how
+    many remain. The next hop is ``addresses[len(addresses) - segments_left]``.
+    """
+
+    segments_left: int
+    addresses: list[IPv6Address] = field(default_factory=list)
+
+    def to_ext_data(self) -> bytes:
+        """The extension-header body after the next-header/length prefix."""
+        fields = bytes(
+            [ROUTING_TYPE_SOURCE_ROUTE, self.segments_left, 0, 0, 0, 0]
+        )
+        return fields + b"".join(a.packed for a in self.addresses)
+
+    @classmethod
+    def from_ext_data(cls, data: bytes) -> SourceRoutingHeader:
+        if len(data) < _SRH_FIELDS_LENGTH:
+            raise RoutingError("source routing header too short")
+        if data[0] != ROUTING_TYPE_SOURCE_ROUTE:
+            raise RoutingError(f"not a source routing header: type {data[0]}")
+        segments_left = data[1]
+        addr_bytes = data[_SRH_FIELDS_LENGTH:]
+        if len(addr_bytes) % 16 != 0:
+            raise RoutingError("source-route address list is not 16-byte aligned")
+        addresses = [
+            IPv6Address(addr_bytes[i : i + 16])
+            for i in range(0, len(addr_bytes), 16)
+        ]
+        return cls(segments_left=segments_left, addresses=addresses)
+
+    def to_extension_header(self) -> ExtensionHeader:
+        return ExtensionHeader(NextHeader.ROUTING, self.to_ext_data())
+
+    @classmethod
+    def from_extension_header(cls, ext: ExtensionHeader) -> SourceRoutingHeader:
+        return cls.from_ext_data(ext.data)
+
+
+@dataclass
+class RoutingTable:
+    """Root-side map of target address to the source-route path reaching it.
+
+    A path is the ordered list of hops from the root to the target, the target
+    itself being the final element.
+    """
+
+    _routes: dict[IPv6Address, list[IPv6Address]] = field(default_factory=dict)
+
+    def add_route(
+        self, target: IPv6Address | str, path: list[IPv6Address | str]
+    ) -> None:
+        if not path:
+            raise RoutingError("route path must not be empty")
+        self._routes[_addr(target)] = [_addr(a) for a in path]
+
+    def remove_route(self, target: IPv6Address | str) -> None:
+        self._routes.pop(_addr(target), None)
+
+    def lookup(self, target: IPv6Address | str) -> list[IPv6Address] | None:
+        path = self._routes.get(_addr(target))
+        return list(path) if path is not None else None
+
+    def build_source_route(
+        self, target: IPv6Address | str
+    ) -> list[IPv6Address] | None:
+        """The hop path to ``target``, or ``None`` if no route is known."""
+        return self.lookup(target)
+
+    def __len__(self) -> int:
+        return len(self._routes)
+
+    def __contains__(self, target: IPv6Address | str) -> bool:
+        return _addr(target) in self._routes
+
+
+def next_hop_upward(dodag: DodagState) -> str | None:
+    """Next hop toward the root: the preferred parent (``None`` if unjoined)."""
+    return dodag.preferred_parent
+
+
+def insert_source_route(
+    packet: IPv6Packet, path: list[IPv6Address | str]
+) -> tuple[IPv6Packet, IPv6Address]:
+    """At the root: prepend an SRH for ``path`` and return (packet, first hop).
+
+    ``path`` is ``[h1, ..., hk, destination]``. The IPv6 destination is set to
+    the first hop. A single-element path (destination is a direct neighbour)
+    needs no SRH.
+    """
+    hops = [_addr(a) for a in path]
+    if not hops:
+        raise RoutingError("path must not be empty")
+    first_hop = hops[0]
+    new_header = replace(packet.header, dst_addr=first_hop)
+
+    if len(hops) == 1:
+        new_packet = replace(packet, header=new_header)
+        return new_packet, first_hop
+
+    remaining = hops[1:]
+    srh = SourceRoutingHeader(segments_left=len(remaining), addresses=remaining)
+    new_packet = IPv6Packet(
+        header=new_header,
+        payload=packet.payload,
+        extension_headers=[srh.to_extension_header(), *packet.extension_headers],
+    )
+    return new_packet, first_hop
+
+
+def _find_routing_header(packet: IPv6Packet) -> int | None:
+    for i, ext in enumerate(packet.extension_headers):
+        if ext.header_type == NextHeader.ROUTING:
+            return i
+    return None
+
+
+def advance_source_route(
+    packet: IPv6Packet,
+) -> tuple[IPv6Packet, IPv6Address | None]:
+    """At an intermediate node: consume one SRH hop (RFC 8200 4.4).
+
+    Returns ``(updated_packet, next_hop)``. ``next_hop`` is ``None`` when this
+    node is the final destination (no SRH, or segments_left already 0).
+    """
+    idx = _find_routing_header(packet)
+    if idx is None:
+        return packet, None
+
+    srh = SourceRoutingHeader.from_extension_header(packet.extension_headers[idx])
+    if srh.segments_left == 0:
+        return packet, None
+
+    i = len(srh.addresses) - srh.segments_left
+    if not 0 <= i < len(srh.addresses):
+        raise RoutingError("segments_left inconsistent with address list")
+    next_hop = srh.addresses[i]
+    srh.segments_left -= 1
+
+    new_exts = list(packet.extension_headers)
+    new_exts[idx] = srh.to_extension_header()
+    new_header = replace(packet.header, dst_addr=next_hop)
+    new_packet = replace(packet, header=new_header, extension_headers=new_exts)
+    return new_packet, next_hop
