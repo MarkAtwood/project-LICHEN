@@ -18,6 +18,7 @@ from lichen.rpl.messages import (
     from_icmpv6,
     to_icmpv6,
 )
+from lichen.rpl.trickle import TrickleTimer
 
 __all__ = [
     "DAO",
@@ -30,6 +31,7 @@ __all__ = [
     "RplMessage",
     "RplOption",
     "RplOptionType",
+    "TrickleTimer",
     "from_icmpv6",
     "to_icmpv6",
 ]
