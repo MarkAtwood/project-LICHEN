@@ -12,6 +12,12 @@ from lichen.loadng.cache import (
     RouteCache,
     RouteEntry,
 )
+from lichen.loadng.discovery import (
+    SUPPRESS_WINDOW_MS,
+    LoadngRouter,
+    RrepResult,
+    RreqResult,
+)
 from lichen.loadng.messages import (
     INITIAL_HOP_LIMIT,
     MAX_HOP_LIMIT,
@@ -32,6 +38,7 @@ __all__ = [
     "ROUTE_CACHE_SIZE",
     "ROUTE_REFRESH_MS",
     "ROUTE_TIMEOUT_MS",
+    "SUPPRESS_WINDOW_MS",
     "RERR",
     "RREP",
     "RREQ",
@@ -39,8 +46,11 @@ __all__ = [
     "LoadngCode",
     "LoadngError",
     "LoadngMessage",
+    "LoadngRouter",
     "RouteCache",
     "RouteEntry",
+    "RreqResult",
+    "RrepResult",
     "from_icmpv6",
     "to_icmpv6",
 ]
