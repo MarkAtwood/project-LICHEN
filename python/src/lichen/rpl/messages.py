@@ -195,6 +195,10 @@ class DAO:
     reserved: int = 0
     options: list[RplOption] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if self.dodag_id is not None and not isinstance(self.dodag_id, IPv6Address):
+            self.dodag_id = IPv6Address(self.dodag_id)
+
     def to_bytes(self) -> bytes:
         d_flag = self.dodag_id is not None
         kd = (
@@ -241,6 +245,10 @@ class DAOAck:
     dodag_id: IPv6Address | None = None
     flags: int = 0
     options: list[RplOption] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.dodag_id is not None and not isinstance(self.dodag_id, IPv6Address):
+            self.dodag_id = IPv6Address(self.dodag_id)
 
     def to_bytes(self) -> bytes:
         d_flag = self.dodag_id is not None
