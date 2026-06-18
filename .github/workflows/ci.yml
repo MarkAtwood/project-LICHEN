@@ -38,12 +38,8 @@ jobs:
         run: ruff check src tests
 
       - name: Tests
-        # The integration suite now runs (the BARRIER_SYNC RX-timeout deadlock
-        # fgk is fixed). One case is deselected pending lora_ipv6_mesh-euj
-        # (back-to-back transmits self-collide). The per-test timeout is a
-        # safety net so any new hang fails instead of stalling the runner
-        # (thread method is async-safe).
-        run: >
-          PYTHONPATH=src pytest -q
-          --timeout=120 --timeout-method=thread
-          --deselect "tests/sim/test_integration.py::TestChaosMonkeyOperations::test_partition_rule_blocks_cross_group"
+        # The full suite runs, including the integration tests (the BARRIER_SYNC
+        # deadlock fgk and the half-duplex self-collision euj are both fixed).
+        # The per-test timeout is a safety net so any new hang fails instead of
+        # stalling the runner (thread method is async-safe).
+        run: PYTHONPATH=src pytest -q --timeout=120 --timeout-method=thread
