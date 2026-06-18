@@ -46,6 +46,25 @@ def test_link_local_preferred_over_global() -> None:
     assert compress_packet(raw)[0] == 0
 
 
+def test_icmpv6_echo_rule2_round_trip() -> None:
+    from lichen.ipv6.icmpv6 import EchoRequest
+
+    req = EchoRequest(identifier=0xABCD, sequence=7, data=b"ping")
+    raw = _icmpv6_ipv6(LL_SRC, LL_DST, req.to_message())
+    compressed = compress_packet(raw)
+    assert compressed[0] == 2  # rule 2 (link-local ICMPv6 echo)
+    assert decompress_packet(compressed) == raw
+
+
+def test_icmpv6_echo_reply_round_trip() -> None:
+    from lichen.ipv6.icmpv6 import EchoReply
+
+    rep = EchoReply(identifier=1, sequence=99, data=b"")
+    raw = _icmpv6_ipv6(LL_SRC, LL_DST, rep.to_message())
+    assert compress_packet(raw)[0] == 2
+    assert decompress_packet(compress_packet(raw)) == raw
+
+
 def test_rpl_dio_rule3_round_trip() -> None:
     dio = DIO(
         rpl_instance_id=0, version=1, rank=256, dtsn=0, dodag_id="fe80::1",

@@ -126,11 +126,13 @@ UDP_PORT_RULE = Rule(
 )
 
 
-# ICMPv6 Echo Request/Reply (spec appendix A.1 rule 2). Type distinguishes
-# request (128) from reply (129) so it is carried; code is always 0; the
-# checksum is recomputed over the pseudo-header on decompression.
+# ICMPv6 Echo header building block (id 66, alongside the CoAP/UDP blocks).
+# Compresses just the ICMPv6 echo header; the whole-packet rule 2
+# (LINK_LOCAL_ICMPV6_ECHO_RULE) wraps this with the IPv6 header. Type
+# distinguishes request (128) from reply (129); code is always 0; the checksum
+# is recomputed over the pseudo-header on decompression.
 ICMPV6_ECHO_RULE = Rule(
-    rule_id=2,
+    rule_id=66,
     fields=(
         FieldDescriptor("ICMPv6.Type", 8, MO.IGNORE, CDA.VALUE_SENT),
         FieldDescriptor("ICMPv6.Code", 8, MO.EQUAL, CDA.NOT_SENT, target_value=0),
@@ -209,6 +211,17 @@ def _icmpv6_rpl_fields(code: int) -> tuple[FieldDescriptor, ...]:
     )
 
 
+def _icmpv6_echo_fields() -> tuple[FieldDescriptor, ...]:
+    # ICMPv6 Echo Request (128) / Reply (129); code 0; checksum recomputed.
+    return (
+        FieldDescriptor("ICMPv6.type", 8, MO.IGNORE, CDA.VALUE_SENT),
+        FieldDescriptor("ICMPv6.code", 8, MO.EQUAL, CDA.NOT_SENT, target_value=0),
+        FieldDescriptor("ICMPv6.checksum", 16, MO.IGNORE, CDA.COMPUTE),
+        FieldDescriptor("ICMPv6.identifier", 16, MO.IGNORE, CDA.VALUE_SENT),
+        FieldDescriptor("ICMPv6.sequence", 16, MO.IGNORE, CDA.VALUE_SENT),
+    )
+
+
 # Rule 0 / 1: link-local / global IPv6 + UDP + CoAP.
 LINK_LOCAL_COAP_RULE = Rule(
     rule_id=0,
@@ -217,6 +230,12 @@ LINK_LOCAL_COAP_RULE = Rule(
 GLOBAL_COAP_RULE = Rule(
     rule_id=1,
     fields=_ipv6_header_fields(17, link_local=False) + _udp_fields() + _coap_fields(),
+)
+
+# Rule 2: link-local IPv6 + ICMPv6 Echo (whole packet).
+LINK_LOCAL_ICMPV6_ECHO_RULE = Rule(
+    rule_id=2,
+    fields=_ipv6_header_fields(58, link_local=True) + _icmpv6_echo_fields(),
 )
 
 # Rule 3: RPL DIO base object (RFC 6550 6.3) over link-local ICMPv6.
@@ -256,6 +275,7 @@ RPL_DAO_RULE = Rule(
 RULES: dict[int, Rule] = {
     LINK_LOCAL_COAP_RULE.rule_id: LINK_LOCAL_COAP_RULE,
     GLOBAL_COAP_RULE.rule_id: GLOBAL_COAP_RULE,
+    LINK_LOCAL_ICMPV6_ECHO_RULE.rule_id: LINK_LOCAL_ICMPV6_ECHO_RULE,
     RPL_DIO_RULE.rule_id: RPL_DIO_RULE,
     RPL_DAO_RULE.rule_id: RPL_DAO_RULE,
     ICMPV6_ECHO_RULE.rule_id: ICMPV6_ECHO_RULE,
