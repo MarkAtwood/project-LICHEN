@@ -7,6 +7,7 @@ medium.
 
 from __future__ import annotations
 
+import random
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
@@ -55,6 +56,7 @@ class Simulation:
         sim_id: str,
         time_mode: TimeMode = TimeMode.BARRIER_SYNC,
         chaos_engine: ChaosEngine | None = None,
+        seed: int | None = None,
     ) -> None:
         """Initialize a new simulation.
 
@@ -62,6 +64,9 @@ class Simulation:
             sim_id: Unique identifier for this simulation.
             time_mode: Time advancement mode. Defaults to BARRIER_SYNC.
             chaos_engine: Optional ChaosEngine for applying network fault rules.
+            seed: Optional seed for the simulation's random number generator.
+                Two simulations created with the same seed draw the same random
+                sequence, making probabilistic runs (e.g. chaos loss) reproducible.
         """
         self._id = sim_id
         self._time_mode = time_mode
@@ -73,6 +78,8 @@ class Simulation:
         self._active_transmissions: dict[str, str] = {}  # node_id -> transmission_id
         self._chaos_engine = chaos_engine
         self._metrics = Metrics()
+        self._seed = seed
+        self._rng = random.Random(seed)
 
     @property
     def id(self) -> str:
@@ -103,6 +110,26 @@ class Simulation:
     def metrics(self) -> Metrics:
         """Return the metrics collector for this simulation."""
         return self._metrics
+
+    @property
+    def seed(self) -> int | None:
+        """Return the seed used for this simulation's RNG (None if unseeded)."""
+        return self._seed
+
+    @property
+    def rng(self) -> random.Random:
+        """Return the simulation's seedable random number generator.
+
+        Simulation components requiring randomness should draw from this
+        generator (rather than the global :mod:`random`) so that runs are
+        reproducible when a seed is set.
+        """
+        return self._rng
+
+    def reseed(self, seed: int | None) -> None:
+        """Reset the RNG to a new seed, restoring reproducible state."""
+        self._seed = seed
+        self._rng = random.Random(seed)
 
     @property
     def chaos_engine(self) -> ChaosEngine | None:
