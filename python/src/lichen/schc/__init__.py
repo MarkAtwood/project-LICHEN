@@ -29,6 +29,7 @@ from lichen.schc.fragment import (
 from lichen.schc.headers import (
     CoapUdpGlobalProfile,
     CoapUdpLinkLocalProfile,
+    Icmpv6EchoProfile,
     PacketProfile,
     RplDaoProfile,
     RplDioProfile,
@@ -69,6 +70,7 @@ __all__ = [
     "FragmentReceiver",
     "FragmentSender",
     "ICMPV6_ECHO_RULE",
+    "Icmpv6EchoProfile",
     "MO",
     "NoMatchingRuleError",
     "PacketProfile",

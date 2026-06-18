@@ -93,8 +93,9 @@ def test_decompress_unknown_rule_id() -> None:
 def test_default_context_has_registry_rules() -> None:
     ctx = SchcContext()
     assert len(ctx) >= 3
-    # The ICMPv6 Echo rule (id 2) is present and selectable.
-    assert ctx.get(2) is not None
+    # The ICMPv6 Echo header building block (id 66) is present and selectable
+    # for an ICMPv6-only field set (rule 2 is the whole-packet variant).
+    assert ctx.get(66) is not None
     fields = {
         "ICMPv6.Type": 128,
         "ICMPv6.Code": 0,
@@ -103,7 +104,7 @@ def test_default_context_has_registry_rules() -> None:
         "ICMPv6.Sequence": 7,
     }
     rule = ctx.select_rule(fields)
-    assert rule is not None and rule.rule_id == 2
+    assert rule is not None and rule.rule_id == 66
 
 
 def test_icmpv6_echo_round_trip() -> None:
@@ -116,7 +117,7 @@ def test_icmpv6_echo_round_trip() -> None:
         "ICMPv6.Sequence": 42,
     }
     packet = ctx.compress(fields)
-    assert packet[0] == 2
+    assert packet[0] == 66
     # Residue: Type(8) + Identifier(16) + Sequence(16) = 40 bits = 5 bytes.
     assert len(packet) == 1 + 5
     rule_id, out = ctx.decompress(packet)

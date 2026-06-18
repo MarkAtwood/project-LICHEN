@@ -30,6 +30,7 @@ from lichen.schc.codec import compress, decompress, residue_byte_length
 from lichen.schc.rules import (
     GLOBAL_COAP_RULE,
     LINK_LOCAL_COAP_RULE,
+    LINK_LOCAL_ICMPV6_ECHO_RULE,
     RPL_DAO_RULE,
     RPL_DIO_RULE,
     RULE_ID_UNCOMPRESSED,
@@ -39,7 +40,9 @@ from lichen.schc.rules import (
 _LINK_LOCAL_PREFIX64 = 0xFE80_0000_0000_0000  # top 64 bits of fe80::/64
 _COAP_FIXED_HEADER = 4
 _ICMPV6_RPL_TYPE = 155
+_ICMPV6_ECHO_TYPES = (128, 129)  # Echo Request / Reply
 _ICMPV6_HEADER = 4  # type, code, checksum
+_ICMPV6_ECHO_BASE = 8  # type, code, checksum, identifier, sequence
 _DIO_BASE = 24
 _DAO_BASE_WITH_DODAGID = 20
 
@@ -297,9 +300,68 @@ class RplDaoProfile(_RplProfile):
         )
 
 
+class Icmpv6EchoProfile(PacketProfile):
+    """Link-local IPv6 + ICMPv6 Echo Request/Reply (SCHC rule 2)."""
+
+    rule = LINK_LOCAL_ICMPV6_ECHO_RULE
+
+    def matches(self, raw: bytes) -> bool:
+        if len(raw) < HEADER_LENGTH + _ICMPV6_ECHO_BASE:
+            return False
+        try:
+            header = IPv6Header.from_bytes(raw)
+        except Exception:
+            return False
+        if header.next_header != NextHeader.ICMPV6:
+            return False
+        if len(raw) < HEADER_LENGTH + header.payload_length:
+            return False
+        if header.payload_length < _ICMPV6_ECHO_BASE:
+            return False
+        if not (
+            _is_link_local(int(header.src_addr))
+            and _is_link_local(int(header.dst_addr))
+        ):
+            return False
+        icmpv6 = raw[HEADER_LENGTH:]
+        return icmpv6[0] in _ICMPV6_ECHO_TYPES and icmpv6[1] == 0
+
+    def parse(self, raw: bytes) -> tuple[dict[str, int], bytes]:
+        header = IPv6Header.from_bytes(raw)
+        icmpv6 = raw[HEADER_LENGTH : HEADER_LENGTH + header.payload_length]
+        fields = _ipv6_fields(header)
+        fields.update(
+            {
+                "ICMPv6.type": icmpv6[0],
+                "ICMPv6.code": icmpv6[1],
+                "ICMPv6.checksum": int.from_bytes(icmpv6[2:4], "big"),
+                "ICMPv6.identifier": int.from_bytes(icmpv6[4:6], "big"),
+                "ICMPv6.sequence": int.from_bytes(icmpv6[6:8], "big"),
+            }
+        )
+        return fields, icmpv6[_ICMPV6_ECHO_BASE:]
+
+    def build(self, fields: dict[str, int | None], tail: bytes) -> bytes:
+        src = IPv6Address(fields["IPv6.src"])
+        dst = IPv6Address(fields["IPv6.dst"])
+        body = (
+            int(fields["ICMPv6.identifier"]).to_bytes(2, "big")
+            + int(fields["ICMPv6.sequence"]).to_bytes(2, "big")
+            + tail
+        )
+        msg_type = fields["ICMPv6.type"]
+        code = fields["ICMPv6.code"]
+        zero = bytes([msg_type, code, 0, 0]) + body
+        checksum = icmpv6_checksum(src, dst, zero)
+        icmpv6 = bytes([msg_type, code]) + checksum.to_bytes(2, "big") + body
+        header = _ipv6_header(fields, NextHeader.ICMPV6, len(icmpv6))
+        return header.to_bytes() + icmpv6
+
+
 DEFAULT_PROFILES: tuple[PacketProfile, ...] = (
     CoapUdpLinkLocalProfile(),
     CoapUdpGlobalProfile(),
+    Icmpv6EchoProfile(),
     RplDioProfile(),
     RplDaoProfile(),
 )
