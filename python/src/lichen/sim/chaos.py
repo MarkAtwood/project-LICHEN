@@ -7,6 +7,7 @@ degradations into the simulator for testing resilience and edge cases.
 from __future__ import annotations
 
 import math
+import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Literal
@@ -88,6 +89,54 @@ class DropRule(ChaosRule):
     ) -> RxCandidate | None:
         """Drop the packet by returning None."""
         return None
+
+
+@dataclass
+class LossRule(ChaosRule):
+    """Probabilistically drop packets to/from a node.
+
+    Each matching reception is dropped with probability ``loss_probability``,
+    drawing from ``rng``. Pass a seeded generator (e.g. a Simulation's ``rng``)
+    to make the loss pattern reproducible.
+
+    Attributes:
+        node_id: ID of the node to target.
+        loss_probability: Drop probability in [0.0, 1.0].
+        direction: Which direction to affect ("tx", "rx", or "both").
+        rng: Random source; defaults to an unseeded generator.
+        id: Unique rule identifier.
+    """
+
+    node_id: str
+    loss_probability: float
+    direction: Literal["tx", "rx", "both"] = "both"
+    rng: random.Random = field(default_factory=random.Random)
+    id: str = field(default_factory=lambda: str(uuid4()))
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.loss_probability <= 1.0:
+            raise ValueError(
+                f"loss_probability must be in [0, 1], got {self.loss_probability}"
+            )
+
+    def matches(self, tx: Transmission, rx_node_id: str) -> bool:
+        """Match if node_id is sender (tx) or receiver (rx) based on direction."""
+        if self.direction == "tx":
+            return tx.source_node_id == self.node_id
+        elif self.direction == "rx":
+            return rx_node_id == self.node_id
+        else:  # both
+            return tx.source_node_id == self.node_id or rx_node_id == self.node_id
+
+    def apply(
+        self,
+        candidate: RxCandidate,
+        rx_position: tuple[float, float, float] | None = None,
+    ) -> RxCandidate | None:
+        """Drop the packet with the configured probability, else pass it on."""
+        if self.rng.random() < self.loss_probability:
+            return None
+        return candidate
 
 
 @dataclass
