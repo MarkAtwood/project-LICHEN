@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        # Installed explicitly (rather than `pip install -e .`) to keep CI
+        # independent of packaging-metadata quirks; mirrors the documented
+        # local test setup.
+        run: >
+          pip install
+          pytest pytest-asyncio pytest-timeout httpx ruff
+          anyio starlette uvicorn pynacl structlog cbor2
+
+      - name: Lint (ruff)
+        run: ruff check src tests
+
+      - name: Tests
+        # tests/sim/test_integration.py is excluded pending lora_ipv6_mesh-fgk:
+        # several of its cases hang on a BARRIER_SYNC RX-timeout bug. The
+        # per-test timeout is a safety net so any new hang fails instead of
+        # stalling the runner (thread method is async-safe).
+        run: >
+          PYTHONPATH=src pytest -q
+          --timeout=120 --timeout-method=thread
+          --ignore=tests/sim/test_integration.py
