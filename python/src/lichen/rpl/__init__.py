@@ -33,6 +33,13 @@ from lichen.rpl.routing import (
     insert_source_route,
     next_hop_upward,
 )
+from lichen.rpl.visualize import (
+    format_source_route,
+    ranks_from_states,
+    to_ascii,
+    to_dot,
+    topology_from_states,
+)
 from lichen.rpl.trickle import TrickleTimer
 
 __all__ = [
@@ -58,8 +65,13 @@ __all__ = [
     "SourceRoutingHeader",
     "TrickleTimer",
     "advance_source_route",
+    "format_source_route",
     "from_icmpv6",
     "insert_source_route",
     "next_hop_upward",
+    "ranks_from_states",
+    "to_ascii",
+    "to_dot",
     "to_icmpv6",
+    "topology_from_states",
 ]
