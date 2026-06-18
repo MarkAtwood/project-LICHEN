@@ -247,11 +247,15 @@ class Simulation:
         Args:
             event: The TxEndEvent to handle.
         """
-        node = self._nodes.get(event.node_id)
-        if node is not None and node.state == NodeState.TX:
-            node.state = NodeState.IDLE
         self._medium.end_tx(event.transmission_id)
-        self._active_transmissions.pop(event.node_id, None)
+        # Only clear node state for the node's *current* transmission. A stale
+        # TxEndEvent from a transmission that was superseded by a later one
+        # (half-duplex, see start_transmission) must not retire the new one.
+        if self._active_transmissions.get(event.node_id) == event.transmission_id:
+            node = self._nodes.get(event.node_id)
+            if node is not None and node.state == NodeState.TX:
+                node.state = NodeState.IDLE
+            self._active_transmissions.pop(event.node_id, None)
         logger.debug(
             "tx_end",
             sim_id=self._id,
@@ -337,6 +341,15 @@ class Simulation:
             raise ValueError(f"Node '{node_id}' does not exist")
         if not node.connected:
             raise ValueError(f"Node '{node_id}' is not connected")
+
+        # Half-duplex: a radio emits at most one signal at a time. If the node
+        # is already transmitting, end the previous transmission before starting
+        # the new one so the two never coexist in the medium (which would
+        # otherwise self-collide at receivers). The superseded transmission's
+        # pending TxEndEvent becomes a no-op (see _handle_tx_end).
+        previous_tx_id = self._active_transmissions.get(node_id)
+        if previous_tx_id is not None:
+            self._medium.end_tx(previous_tx_id)
 
         node.state = NodeState.TX
 

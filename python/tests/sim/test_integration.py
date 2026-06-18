@@ -136,15 +136,15 @@ class TestTwoNodeTxRx:
             assert result is None  # Timeout, signal too weak
 
     @pytest.mark.asyncio
-    async def test_rapid_tx_causes_collision(
+    async def test_back_to_back_tx_is_half_duplex(
         self, simulator_server: tuple[SimulatorServer, Simulation]
     ) -> None:
-        """Rapid transmissions without time advancement cause collisions.
+        """A node's new transmission supersedes its own in-flight one.
 
-        In BARRIER_SYNC mode, simulation time only advances when events
-        are processed. Sending multiple TX before the first completes
-        results in overlapping transmissions that collide (neither
-        can be decoded due to equal signal strength).
+        A half-duplex radio cannot emit two overlapping signals, so a second TX
+        before the first completes replaces it in the medium rather than
+        self-colliding. (Collisions between *different* transmitters are covered
+        by test_multiple_transmitters_collision.)
         """
         server, sim = simulator_server
 
@@ -162,12 +162,12 @@ class TestTwoNodeTxRx:
             assert result is not None
             assert result[0] == b"First"
 
-            # Second TX without time advancement adds to active transmissions
-            # Both transmissions overlap at time=0, causing a collision
+            # A second TX from the same node supersedes the first; no
+            # self-collision, and the latest transmission is what is received.
             await radio_a.transmit(b"Second")
             result = await radio_b.receive(1000)
-            # Collision: two equal-strength signals, neither decoded
-            assert result is None
+            assert result is not None
+            assert result[0] == b"Second"
 
 
 class TestRssiAccuracy:
