@@ -165,3 +165,14 @@ def test_from_icmpv6_rejects_non_rpl() -> None:
 def test_from_icmpv6_rejects_unknown_code() -> None:
     with pytest.raises(RplError):
         from_icmpv6(Icmpv6Message(type=155, code=99, body=b""))
+
+
+def test_dao_coerces_str_dodag_id() -> None:
+    # DAO/DAO-ACK accept a string dodag_id like DIO (coerced to IPv6Address).
+    dao = DAO(rpl_instance_id=0, dao_sequence=5, dodag_id="fd00::1")
+    assert dao.dodag_id == IPv6Address("fd00::1")
+    assert DAO.from_bytes(dao.to_bytes()) == dao
+
+    ack = DAOAck(rpl_instance_id=0, dao_sequence=5, dodag_id="fd00::1")
+    assert ack.dodag_id == IPv6Address("fd00::1")
+    assert DAOAck.from_bytes(ack.to_bytes()) == ack
