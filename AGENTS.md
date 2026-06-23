@@ -35,8 +35,11 @@ Run `bd prime` for full command reference. See the Beads section at the end of t
 **Relationship to Meshtastic:** LICHEN runs on the same hardware (reflash), but the protocol is **not backward compatible**. Different sync word (0x34 vs 0x2B), different framing, real IPv6 instead of proprietary addressing. A device runs one or the other, not both.
 
 **Key specs:**
-- `LICHEN-spec.md` - Protocol specification (the "what")
+- `spec/` - Protocol specifications:
+  - `spec/drafts/draft-lichen-schnorr-00.md` - **48-byte Schnorr signatures** (CRITICAL: test vectors in Appendix A)
+  - `spec/01-introduction.md` through `spec/18-applications.md` - Full protocol spec
 - `LICHEN-plan.md` - Implementation plan (the "how")
+- `test/vectors/` - Canonical test vectors (JSON) for cross-implementation validation
 
 ## Architecture at a Glance
 
@@ -209,12 +212,18 @@ Use RFC 2119 keywords (MUST, SHOULD, MAY) consistently.
 
 ## Open Questions (Check Before Implementing)
 
-1. **Truncated Ed25519 derivation** - Exact algorithm for deriving second half from first
-2. **SCHC rule distribution** - Pre-provisioned vs. negotiated
-3. **Time synchronization** - NTP over CoAP, GPS, or piggyback on DIO?
-4. **DANE record format** - Exact TLSA record structure for `_25519._mesh.<name>`
+1. **SCHC rule distribution** - Pre-provisioned vs. negotiated
+2. **Time synchronization** - NTP over CoAP, GPS, or piggyback on DIO?
+3. **DANE record format** - Exact TLSA record structure for `_25519._mesh.<name>`
 
 Check `bd list` for issues tracking these decisions.
+
+## Resolved Crypto
+
+- **48-byte Schnorr signatures** - See `spec/drafts/draft-lichen-schnorr-00.md`
+  - Curve25519/Ed25519, SHA-512, 16-byte truncated challenge + 32-byte response
+  - Reference impl: `python/src/lichen/crypto/schnorr48.py`
+  - Test vectors: `test/vectors/schnorr48.json`
 
 ## Resolved Decisions
 
