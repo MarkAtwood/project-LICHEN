@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """App data encodings for announce messages (spec 9.7, 11.4).
 
 Supports:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for SCHC fragmentation — sender side (RFC 8724 section 8).
 
 Oracles: the canonical CRC-32 check value (crc32(b"123456789") = 0xCBF43926)

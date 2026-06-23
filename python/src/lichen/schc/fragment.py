@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """SCHC fragmentation — ACK-on-Error sender side (RFC 8724 section 8).
 
 A compressed packet larger than the link MTU is split into *tiles* carried by

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LOADng reactive route discovery (spec sections 10.3-10.5, B2.6).
 
 Implements RREQ/RREP processing as a deterministic, side-effect-free handler:

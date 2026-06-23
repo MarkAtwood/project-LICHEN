@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN Node class - main integration point for protocol stack.
 
 The Node class integrates all protocol layers:

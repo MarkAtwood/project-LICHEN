@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN IPv6 network layer.
 
 Address handling (IID derivation, link-local/ULA/GUA construction) and IPv6

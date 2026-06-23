@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """RPL DODAG state machine and parent selection (RFC 6550, spec section 8).
 
 Implements DODAG join/parent selection using MRHOF with ETX (spec B.1). A node

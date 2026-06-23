@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """TUI application for a simulated LICHEN node.
 
 Provides an interactive terminal interface for controlling a node

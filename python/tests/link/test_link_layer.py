@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for link layer TX/RX with signatures.
 
 Why these tests: The link layer is the security boundary. Bugs here mean:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for announce scheduler.
 
 Why these tests: The scheduler controls announce timing and sequence numbers.

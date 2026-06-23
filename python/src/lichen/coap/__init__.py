@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """CoAP application layer for LICHEN (spec section 7).
 
 A custom aiocoap transport that carries CoAP over the LICHEN stack, plus the

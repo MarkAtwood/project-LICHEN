@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """RPL non-storing routing table and source-routed forwarding (spec section 8.5).
 
 In non-storing mode only the root holds a routing table; it learns each node's

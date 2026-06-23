@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """SCHC reassembly state machine — ACK-on-Error receiver (RFC 8724 section 8).
 
 Pairs with :class:`lichen.schc.fragment.FragmentSender`. :class:`FragmentReceiver`

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Unified gradient (routing) table (spec section 11).
 
 A single table holds next-hop gradients toward destinations, populated by every

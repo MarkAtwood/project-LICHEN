@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for crypto identity module.
 
 Why these tests: Identity is security-critical. A bug here means:

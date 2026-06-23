@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for ICMPv6 (RFC 4443, spec 6.4).
 
 The checksum oracle is hand-computed: for a zero-filled Echo Request body

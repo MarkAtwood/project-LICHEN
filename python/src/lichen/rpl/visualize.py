@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """DODAG visualization for the simulation harness (spec section 8).
 
 Renders the routing tree formed by RPL into serializable representations that a

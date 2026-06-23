@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Event queue system for the LICHEN simulator.
 
 Provides a priority queue of simulation events ordered by time, with

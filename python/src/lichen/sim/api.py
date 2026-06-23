@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """REST API for controlling the LICHEN simulator.
 
 This module provides a Starlette-based REST API for managing simulations,

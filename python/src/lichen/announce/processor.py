@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Announce message processing (spec section 9.3).
 
 Processes incoming announces: verifies signatures, detects duplicates,

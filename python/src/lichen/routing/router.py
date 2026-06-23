@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Hybrid routing decision logic (spec section 7.2).
 
 The Router decides how to forward each packet based on destination address:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """SimRadio client for the LICHEN simulator.
 
 This module provides a Radio implementation that connects to the simulator

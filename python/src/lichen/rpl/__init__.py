@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN RPL routing (RFC 6550, spec section 8).
 
 RPL carries border-router traffic via a proactive DODAG tree. This package

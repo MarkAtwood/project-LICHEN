@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for announce processor.
 
 Why these tests: The processor is where security decisions happen. Bugs here mean:

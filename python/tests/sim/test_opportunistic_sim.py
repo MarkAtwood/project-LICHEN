@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Simulation integration tests for opportunistic forwarding (spec 9.9).
 
 Tests verify that:

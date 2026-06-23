@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Node identity and keypair management.
 
 Why this exists: Every LICHEN node needs a stable cryptographic identity for:

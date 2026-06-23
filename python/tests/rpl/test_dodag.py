@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for the RPL DODAG state machine and parent selection (MRHOF).
 
 Cost oracle: path_cost = advertised_rank + round(link_etx * 256). A perfect

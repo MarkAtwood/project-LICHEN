@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """aiocoap transport binding for the LICHEN stack (spec section 7).
 
 Implements a custom aiocoap :class:`~aiocoap.interfaces.MessageInterface` so

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """UDP header codec over IPv6 (RFC 768, RFC 8200 pseudo-header checksum).
 
 A minimal UDP datagram: an 8-byte header (source/destination ports, length,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LOADng control message codecs (spec section 10, appendix B2).
 
 LOADng provides reactive peer-to-peer route discovery. Messages are ICMPv6

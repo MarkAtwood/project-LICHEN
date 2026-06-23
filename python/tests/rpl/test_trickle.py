@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for the Trickle timer (RFC 6206).
 
 Times are integer milliseconds; the RNG is injected so transmit instants are

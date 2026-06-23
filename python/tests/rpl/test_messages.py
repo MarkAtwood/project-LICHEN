@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for RPL control message codecs (RFC 6550).
 
 Byte oracles are hand-constructed from the RFC 6550 base-object layouts.

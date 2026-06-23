@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Whole-packet SCHC compression: packet bytes <-> field dicts (RFC 8724).
 
 Bridges parsed protocol headers and the field-dict the SCHC codec consumes. A

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """IPv6 addressing for LICHEN (spec sections 6.1, 6.2, 12).
 
 Interface-Identifier (IID) derivation and construction of the three LICHEN

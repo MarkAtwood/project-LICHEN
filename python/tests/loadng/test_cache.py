@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for the LOADng route cache (spec 9.6, B2.2)."""
 
 from __future__ import annotations
