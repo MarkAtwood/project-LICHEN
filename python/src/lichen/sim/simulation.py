@@ -13,7 +13,14 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from lichen.sim.events import Event, EventQueue, RxTimeoutEvent, TxEndEvent
+from lichen.sim.events import (
+    Event,
+    EventQueue,
+    ObserverRegistry,
+    RxTimeoutEvent,
+    SimulationObserver,
+    TxEndEvent,
+)
 from lichen.sim.medium import Medium
 from lichen.sim.metrics import Metrics
 from lichen.sim.node import NodeState, SimNode
@@ -80,6 +87,7 @@ class Simulation:
         self._metrics = Metrics()
         self._seed = seed
         self._rng = random.Random(seed)
+        self._observers = ObserverRegistry()
 
     @property
     def id(self) -> str:
@@ -141,6 +149,25 @@ class Simulation:
         """Set the chaos engine."""
         self._chaos_engine = engine
 
+    def add_observer(self, observer: SimulationObserver) -> None:
+        """Register an observer for simulation events.
+
+        Observers receive callbacks for TX/RX, collisions, and node lifecycle.
+        See SimulationObserver protocol for available callbacks.
+
+        Args:
+            observer: Observer to register. Duplicates are silently ignored.
+        """
+        self._observers.add(observer)
+
+    def remove_observer(self, observer: SimulationObserver) -> None:
+        """Unregister an observer.
+
+        Args:
+            observer: Observer to remove. No-op if not registered.
+        """
+        self._observers.remove(observer)
+
     def add_node(self, node_id: str, x: float, y: float, z: float) -> SimNode:
         """Create and add a new node to the simulation.
 
@@ -161,6 +188,17 @@ class Simulation:
 
         node = SimNode(id=node_id, position=(x, y, z), connected=True)
         self._nodes[node_id] = node
+
+        # Notify observers (after node is fully added)
+        self._observers.notify(
+            "on_node_added",
+            sim_id=self._id,
+            node_id=node_id,
+            x=x,
+            y=y,
+            z=z,
+        )
+
         return node
 
     def remove_node(self, node_id: str) -> None:
@@ -173,11 +211,20 @@ class Simulation:
             node_id: ID of the node to remove.
         """
         node = self._nodes.pop(node_id, None)
-        if node is not None:
-            node.disconnect()
+        if node is None:
+            return  # Node didn't exist, nothing to do
+
+        node.disconnect()
         self._pending_rx_timeouts.pop(node_id, None)
         self._active_transmissions.pop(node_id, None)
         self._event_queue.remove_events_for_node(node_id)
+
+        # Notify observers (after cleanup complete)
+        self._observers.notify(
+            "on_node_removed",
+            sim_id=self._id,
+            node_id=node_id,
+        )
 
     def get_node(self, node_id: str) -> SimNode | None:
         """Get a node by ID.
@@ -264,6 +311,15 @@ class Simulation:
             time_us=event.time_us,
         )
 
+        # Notify observers
+        self._observers.notify(
+            "on_tx_end",
+            sim_id=self._id,
+            node_id=event.node_id,
+            tx_id=event.transmission_id,
+            time_us=event.time_us,
+        )
+
     def _handle_rx_timeout(self, event: RxTimeoutEvent) -> None:
         """Handle receive timeout event.
 
@@ -276,6 +332,14 @@ class Simulation:
         self._pending_rx_timeouts.pop(event.node_id, None)
         logger.debug(
             "rx_timeout",
+            sim_id=self._id,
+            node_id=event.node_id,
+            time_us=event.time_us,
+        )
+
+        # Notify observers
+        self._observers.notify(
+            "on_rx_timeout",
             sim_id=self._id,
             node_id=event.node_id,
             time_us=event.time_us,
@@ -373,6 +437,16 @@ class Simulation:
             end_us=tx.end_time_us,
         )
 
+        # Notify observers
+        self._observers.notify(
+            "on_tx_start",
+            sim_id=self._id,
+            node_id=node_id,
+            tx_id=tx.id,
+            payload_len=len(payload),
+            time_us=tx.start_time_us,
+        )
+
         end_event = TxEndEvent(
             time_us=tx.end_time_us,
             node_id=node_id,
@@ -467,6 +541,14 @@ class Simulation:
                     time_us=self._current_time_us,
                     tx_ids=tx_ids,
                 )
+                # Notify observers
+                self._observers.notify(
+                    "on_collision",
+                    sim_id=self._id,
+                    node_id=node_id,
+                    tx_ids=tx_ids,
+                    time_us=self._current_time_us,
+                )
             return None
 
         self._metrics.record_reception(node_id, tx.id, self._current_time_us)
@@ -479,6 +561,18 @@ class Simulation:
                     sim_id=self._id,
                     node_id=node_id,
                     tx_id=tx.id,
+                    rssi=int(candidate.rssi),
+                    snr=int(candidate.snr),
+                    time_us=self._current_time_us,
+                )
+                # Notify observers
+                self._observers.notify(
+                    "on_rx_success",
+                    sim_id=self._id,
+                    node_id=node_id,
+                    tx_id=tx.id,
+                    from_node_id=tx.source_node_id,
+                    payload_len=len(tx.payload),
                     rssi=int(candidate.rssi),
                     snr=int(candidate.snr),
                     time_us=self._current_time_us,
