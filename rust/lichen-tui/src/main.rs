@@ -1,16 +1,21 @@
 //! lichen-tui — terminal dashboard for a LICHEN mesh node.
 //!
 //! Layout:
-//!   ┌─ Contacts ────┬─ Messages ──────────────────────────────┐
-//!   │ Alice   now   │ [12:31] fe80::1   anyone on mesh?       │
-//!   │ Bob     2m    │ [12:33] local     here — 3 hops, SF10   │
-//!   │ Carol   8m    │ ...                                      │
-//!   ├───────────────┴──────────────────────────────────────────┤
-//!   │ LICHEN  node: [::1]:5683  SF10/125kHz  Tab:focus  q:quit │
+//!   ┌─ Neighbors ──────────┬─ Node Info ────────────────────────┐
+//!   │ ● fe80::1  -108 dBm  │ node      [::1]:5683               │
+//!   │                      │ status    connected                 │
+//!   │ ● fe80::2  -115 dBm  │ uptime    1h 23m                   │
+//!   │                      │ firmware  0.1.0                     │
+//!   ├──────────────────────┴───────────────────────────────────┤
+//!   │ LICHEN  [::1]:5683  connected  ↑↓/jk:nav  q:quit         │
 //!   └──────────────────────────────────────────────────────────┘
 //!
-//! Keys: Tab — switch focus  ↑↓/jk — navigate  q/Ctrl-C — quit
+//! Keys: ↑↓/jk — navigate neighbors  q/Ctrl-C — quit
 
+mod coap;
+
+use ciborium::value::Value;
+use clap::Parser;
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
@@ -25,8 +30,7 @@ use ratatui::{
     Terminal,
 };
 use std::{io, net::SocketAddr, time::Duration};
-
-use clap::Parser;
+use tokio::sync::watch;
 
 /// LICHEN terminal user interface.
 #[derive(Parser)]
@@ -37,87 +41,149 @@ struct Cli {
     node: SocketAddr,
 }
 
-// ── app state ────────────────────────────────────────────────────────────────
+// ── data types ────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Pane {
-    Contacts,
-    Messages,
+#[derive(Clone, Default)]
+struct NodeStatus {
+    uptime_secs: Option<u64>,
+    firmware: Option<String>,
 }
 
-struct Contact {
-    addr: &'static str,
-    alias: &'static str,
-    last_seen: &'static str,
+#[derive(Clone)]
+struct Neighbor {
+    addr: String,
+    rssi: Option<i32>,
 }
 
-struct Message {
-    time: &'static str,
-    from: &'static str,
-    text: &'static str,
+#[derive(Clone, Default)]
+struct NodeData {
+    status: NodeStatus,
+    neighbors: Vec<Neighbor>,
+}
+
+// ── CBOR decoding ─────────────────────────────────────────────────────────────
+
+fn parse_status(bytes: &[u8]) -> NodeStatus {
+    let Ok(Value::Map(entries)) = ciborium::de::from_reader(bytes) else {
+        return NodeStatus::default();
+    };
+    let mut s = NodeStatus::default();
+    for (k, v) in entries {
+        let Value::Text(key) = k else { continue };
+        match key.as_str() {
+            "uptime" => {
+                if let Value::Integer(n) = v {
+                    s.uptime_secs = Some(i128::from(n) as u64);
+                }
+            }
+            "firmware" => {
+                if let Value::Text(fw) = v {
+                    s.firmware = Some(fw);
+                }
+            }
+            _ => {}
+        }
+    }
+    s
+}
+
+fn parse_neighbors(bytes: &[u8]) -> Vec<Neighbor> {
+    let Ok(Value::Array(items)) = ciborium::de::from_reader(bytes) else {
+        return vec![];
+    };
+    items
+        .into_iter()
+        .filter_map(|item| {
+            let Value::Map(entries) = item else {
+                return None;
+            };
+            let mut addr = None;
+            let mut rssi = None;
+            for (k, v) in entries {
+                let Value::Text(key) = k else { continue };
+                match key.as_str() {
+                    "addr" => {
+                        if let Value::Text(a) = v {
+                            addr = Some(a);
+                        }
+                    }
+                    "rssi" => {
+                        if let Value::Integer(r) = v {
+                            rssi = Some(i128::from(r) as i32);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            addr.map(|a| Neighbor { addr: a, rssi })
+        })
+        .collect()
+}
+
+// ── background polling ────────────────────────────────────────────────────────
+
+async fn poll_node(node: SocketAddr) -> Result<NodeData, String> {
+    let (sr, nr) = tokio::join!(coap::get(node, "status"), coap::get(node, "neighbors"));
+    if let (Err(e), Err(_)) = (&sr, &nr) {
+        return Err(e.clone());
+    }
+    Ok(NodeData {
+        status: sr.ok().as_deref().map(parse_status).unwrap_or_default(),
+        neighbors: nr.ok().as_deref().map(parse_neighbors).unwrap_or_default(),
+    })
+}
+
+// ── app state ─────────────────────────────────────────────────────────────────
+
+enum ConnState {
+    Connecting,
+    Connected,
+    Error(String),
 }
 
 struct App {
-    contacts: Vec<Contact>,
-    messages: Vec<Message>,
-    contact_state: ListState,
-    message_state: ListState,
-    focus: Pane,
     node: SocketAddr,
+    data: NodeData,
+    conn: ConnState,
+    list_state: ListState,
     should_quit: bool,
+    rx: watch::Receiver<Option<Result<NodeData, String>>>,
 }
 
 impl App {
-    fn new(node: SocketAddr) -> Self {
-        let mut contact_state = ListState::default();
-        contact_state.select(Some(0));
-        let mut message_state = ListState::default();
-        message_state.select(Some(0));
-        Self {
-            contacts: vec![
-                Contact {
-                    addr: "fe80::1",
-                    alias: "Alice",
-                    last_seen: "now",
-                },
-                Contact {
-                    addr: "fe80::2",
-                    alias: "Bob",
-                    last_seen: "2m",
-                },
-                Contact {
-                    addr: "fe80::3",
-                    alias: "Carol",
-                    last_seen: "8m",
-                },
-            ],
-            messages: vec![
-                Message {
-                    time: "12:31",
-                    from: "fe80::1",
-                    text: "anyone on mesh?",
-                },
-                Message {
-                    time: "12:33",
-                    from: "local",
-                    text: "here — 3 hops, SF10",
-                },
-                Message {
-                    time: "12:34",
-                    from: "fe80::2",
-                    text: "solid signal tonight",
-                },
-                Message {
-                    time: "12:35",
-                    from: "fe80::1",
-                    text: "RSSI -108, SNR +4",
-                },
-            ],
-            contact_state,
-            message_state,
-            focus: Pane::Contacts,
+    fn new(node: SocketAddr, rx: watch::Receiver<Option<Result<NodeData, String>>>) -> Self {
+        App {
             node,
+            data: NodeData::default(),
+            conn: ConnState::Connecting,
+            list_state: ListState::default(),
             should_quit: false,
+            rx,
+        }
+    }
+
+    fn apply_update(&mut self) {
+        if !self.rx.has_changed().unwrap_or(false) {
+            return;
+        }
+        let update = self.rx.borrow_and_update().clone();
+        let Some(result) = update else { return };
+        match result {
+            Ok(data) => {
+                let n = data.neighbors.len();
+                if let Some(sel) = self.list_state.selected() {
+                    if n == 0 {
+                        self.list_state.select(None);
+                    } else if sel >= n {
+                        self.list_state.select(Some(n - 1));
+                    }
+                }
+                self.data = data;
+                self.conn = ConnState::Connected;
+            }
+            Err(e) => {
+                self.conn = ConnState::Error(e);
+            }
         }
     }
 
@@ -126,34 +192,17 @@ impl App {
             (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
                 self.should_quit = true;
             }
-            (KeyCode::Tab, _) => {
-                self.focus = match self.focus {
-                    Pane::Contacts => Pane::Messages,
-                    Pane::Messages => Pane::Contacts,
-                };
+            (KeyCode::Down, _) | (KeyCode::Char('j'), _) => {
+                let n = self.data.neighbors.len();
+                if n > 0 {
+                    let i = self.list_state.selected().unwrap_or(0);
+                    self.list_state.select(Some((i + 1).min(n - 1)));
+                }
             }
-            (KeyCode::Down, _) | (KeyCode::Char('j'), _) => match self.focus {
-                Pane::Contacts => {
-                    let i = self.contact_state.selected().unwrap_or(0);
-                    self.contact_state
-                        .select(Some((i + 1).min(self.contacts.len().saturating_sub(1))));
-                }
-                Pane::Messages => {
-                    let i = self.message_state.selected().unwrap_or(0);
-                    self.message_state
-                        .select(Some((i + 1).min(self.messages.len().saturating_sub(1))));
-                }
-            },
-            (KeyCode::Up, _) | (KeyCode::Char('k'), _) => match self.focus {
-                Pane::Contacts => {
-                    let i = self.contact_state.selected().unwrap_or(0);
-                    self.contact_state.select(Some(i.saturating_sub(1)));
-                }
-                Pane::Messages => {
-                    let i = self.message_state.selected().unwrap_or(0);
-                    self.message_state.select(Some(i.saturating_sub(1)));
-                }
-            },
+            (KeyCode::Up, _) | (KeyCode::Char('k'), _) if !self.data.neighbors.is_empty() => {
+                let i = self.list_state.selected().unwrap_or(0);
+                self.list_state.select(Some(i.saturating_sub(1)));
+            }
             _ => {}
         }
     }
@@ -163,89 +212,125 @@ impl App {
 
 fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let area = f.area();
-
     let outer = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(area);
-
     let body = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(22), Constraint::Min(0)])
+        .constraints([Constraint::Length(26), Constraint::Min(0)])
         .split(outer[0]);
 
-    // Contacts
-    let contact_focused = app.focus == Pane::Contacts;
-    let contact_items: Vec<ListItem> = app
-        .contacts
-        .iter()
-        .map(|c| {
-            ListItem::new(vec![
-                Line::from(vec![
-                    Span::styled(format!("{:<8}", c.alias), Style::default().fg(Color::Cyan)),
+    // ── Neighbors pane ────────────────────────────────────────────────────────
+    let neighbor_items: Vec<ListItem> = if app.data.neighbors.is_empty() {
+        let msg = match &app.conn {
+            ConnState::Connecting => " Connecting…".into(),
+            ConnState::Connected => " No neighbors".into(),
+            ConnState::Error(e) => format!(" {e}"),
+        };
+        vec![ListItem::new(Span::styled(
+            msg,
+            Style::default().fg(Color::DarkGray),
+        ))]
+    } else {
+        app.data
+            .neighbors
+            .iter()
+            .map(|nb| {
+                let rssi_str = nb
+                    .rssi
+                    .map(|r| format!("{r:+} dBm"))
+                    .unwrap_or_else(|| "? dBm".into());
+                ListItem::new(Line::from(vec![
+                    Span::styled("● ", Style::default().fg(Color::Green)),
                     Span::styled(
-                        format!(" {}", c.last_seen),
-                        Style::default().fg(Color::DarkGray),
+                        format!("{:<16}", truncate(&nb.addr, 16)),
+                        Style::default().fg(Color::Cyan),
                     ),
-                ]),
-                Line::from(Span::styled(
-                    format!("  {}", c.addr),
-                    Style::default().fg(Color::DarkGray),
-                )),
-            ])
-        })
-        .collect();
-    let contacts = List::new(contact_items)
+                    Span::styled(rssi_str, Style::default().fg(Color::DarkGray)),
+                ]))
+            })
+            .collect()
+    };
+    let neighbors = List::new(neighbor_items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Contacts ")
-                .border_style(focus_style(contact_focused)),
+                .title(" Neighbors ")
+                .border_style(Style::default().fg(Color::Yellow)),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
-    f.render_stateful_widget(contacts, body[0], &mut app.contact_state);
+    f.render_stateful_widget(neighbors, body[0], &mut app.list_state);
 
-    // Messages
-    let msg_focused = app.focus == Pane::Messages;
-    let msg_items: Vec<ListItem> = app
-        .messages
-        .iter()
-        .map(|m| {
-            let from_color = if m.from == "local" {
-                Color::Green
-            } else {
-                Color::Cyan
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(
-                    format!("[{}] ", m.time),
-                    Style::default().fg(Color::DarkGray),
-                ),
-                Span::styled(format!("{:<10} ", m.from), Style::default().fg(from_color)),
-                Span::raw(m.text),
-            ]))
-        })
-        .collect();
-    let messages = List::new(msg_items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Messages ")
-                .border_style(focus_style(msg_focused)),
-        )
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED));
-    f.render_stateful_widget(messages, body[1], &mut app.message_state);
+    // ── Node info pane ────────────────────────────────────────────────────────
+    let conn_str = match &app.conn {
+        ConnState::Connecting => Span::styled("connecting…", Style::default().fg(Color::Yellow)),
+        ConnState::Connected => Span::styled("connected", Style::default().fg(Color::Green)),
+        ConnState::Error(e) => Span::styled(truncate(e, 30), Style::default().fg(Color::Red)),
+    };
+    let uptime_str = app
+        .data
+        .status
+        .uptime_secs
+        .map(fmt_uptime)
+        .unwrap_or_else(|| "—".into());
+    let firmware_str = app
+        .data
+        .status
+        .firmware
+        .as_deref()
+        .unwrap_or("—")
+        .to_owned();
 
-    // Status bar
+    let info_text = vec![
+        Line::from(vec![
+            Span::styled(
+                format!("{:<10}", "node"),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::raw(app.node.to_string()),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                format!("{:<10}", "status"),
+                Style::default().fg(Color::DarkGray),
+            ),
+            conn_str,
+        ]),
+        Line::from(vec![
+            Span::styled(
+                format!("{:<10}", "uptime"),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::raw(uptime_str),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                format!("{:<10}", "firmware"),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::raw(firmware_str),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                format!("{:<10}", "neighbors"),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::raw(app.data.neighbors.len().to_string()),
+        ]),
+    ];
+    let info = Paragraph::new(info_text)
+        .block(Block::default().borders(Borders::ALL).title(" Node Info "));
+    f.render_widget(info, body[1]);
+
+    // ── Status bar ────────────────────────────────────────────────────────────
     let status = Paragraph::new(Line::from(vec![
         Span::styled(
             " LICHEN ",
             Style::default().fg(Color::Black).bg(Color::Green),
         ),
-        Span::raw(format!("  node: {}  ", app.node)),
+        Span::raw(format!("  {}  ", app.node)),
         Span::styled("SF10/125kHz  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Tab", Style::default().fg(Color::Yellow)),
-        Span::raw(":focus  "),
         Span::styled("↑↓/jk", Style::default().fg(Color::Yellow)),
         Span::raw(":nav  "),
         Span::styled("q", Style::default().fg(Color::Yellow)),
@@ -254,11 +339,24 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
     f.render_widget(status, outer[1]);
 }
 
-fn focus_style(focused: bool) -> Style {
-    if focused {
-        Style::default().fg(Color::Yellow)
+fn fmt_uptime(secs: u64) -> String {
+    let h = secs / 3600;
+    let m = (secs % 3600) / 60;
+    let s = secs % 60;
+    if h > 0 {
+        format!("{h}h {m:02}m")
+    } else if m > 0 {
+        format!("{m}m {s:02}s")
     } else {
-        Style::default()
+        format!("{s}s")
+    }
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_owned()
+    } else {
+        format!("{}…", &s[..max - 1])
     }
 }
 
@@ -267,7 +365,18 @@ fn focus_style(focused: bool) -> Style {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let cli = Cli::parse();
-    let mut app = App::new(cli.node);
+    let node = cli.node;
+
+    let (tx, rx) = watch::channel::<Option<Result<NodeData, String>>>(None);
+
+    tokio::spawn(async move {
+        loop {
+            tx.send(Some(poll_node(node).await)).ok();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    });
+
+    let mut app = App::new(node, rx);
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -280,7 +389,6 @@ async fn main() -> io::Result<()> {
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
-
     result
 }
 
@@ -289,14 +397,13 @@ async fn run(
     app: &mut App,
 ) -> io::Result<()> {
     loop {
+        app.apply_update();
         terminal.draw(|f| ui(f, app))?;
-
-        if event::poll(Duration::from_millis(50))? {
+        if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 app.on_key(key.code, key.modifiers);
             }
         }
-
         if app.should_quit {
             break;
         }

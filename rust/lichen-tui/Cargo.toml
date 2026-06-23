@@ -12,7 +12,8 @@ path = "src/main.rs"
 [dependencies]
 lichen-core = { path = "../lichen-core" }
 
-clap       = { version = "4", features = ["derive", "env"] }
-ratatui    = "0.29"
-crossterm  = "0.28"
-tokio      = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+ciborium  = "0.2"
+clap      = { version = "4", features = ["derive", "env"] }
+ratatui   = "0.29"
+crossterm = "0.28"
+tokio     = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
