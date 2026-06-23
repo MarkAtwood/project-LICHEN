@@ -11,6 +11,7 @@ members = [
     "lichen-sim",
     "lichen-apps",
     "lichen-cli",
+    "lichen-tui",
 ]
 
 [workspace.package]
