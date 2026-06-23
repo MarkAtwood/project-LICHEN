@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """ICMPv6 messages and handling (RFC 4443, spec section 6.4).
 
 Implements the diagnostic message types — Echo Request/Reply and the error

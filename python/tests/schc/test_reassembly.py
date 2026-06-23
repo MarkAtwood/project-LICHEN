@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for SCHC reassembly — receiver side (RFC 8724 section 8)."""
 
 from __future__ import annotations

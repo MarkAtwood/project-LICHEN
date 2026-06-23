@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Metrics collection for the LICHEN simulator.
 
 Tracks transmission and reception activity in a running simulation:

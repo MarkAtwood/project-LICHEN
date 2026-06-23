@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Simulation integration tests for backpressure congestion routing (spec 11.4).
 
 Tests verify that:

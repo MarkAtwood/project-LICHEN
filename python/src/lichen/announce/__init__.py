@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN announce routing (spec section 9).
 
 Announce routing provides zero-latency peer-to-peer paths for active mesh

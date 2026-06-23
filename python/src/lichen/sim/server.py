@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Main entry point for the LICHEN simulator server.
 
 This module provides the SimulatorServer class that runs both the TCP node

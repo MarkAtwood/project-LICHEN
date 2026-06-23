@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Trickle timer (RFC 6206), used by RPL to pace DIO transmissions.
 
 The timer is a deterministic state machine driven by an explicit clock (all

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN 48-byte Schnorr signatures per draft-lichen-schnorr-00.
 
 Curve25519/Ed25519, SHA-512, 16-byte truncated challenge + 32-byte response.

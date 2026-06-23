@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Radio medium simulation for the LICHEN simulator.
 
 This module provides the Medium class that tracks active transmissions and

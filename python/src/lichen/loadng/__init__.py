@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN LOADng routing (spec section 10, appendix B2).
 
 LOADng is the reactive peer-to-peer fallback used when no gradient route

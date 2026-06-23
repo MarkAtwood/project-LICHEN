@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Multi-node simulation integration tests (sxe).
 
 Tests the full announce routing stack with multiple nodes in simulation.

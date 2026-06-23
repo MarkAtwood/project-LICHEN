@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LoRa radio propagation model for LICHEN simulator.
 
 Implements the log-distance path loss model for simulating LoRa radio

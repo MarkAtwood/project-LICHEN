@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """pcapng packet capture writer for the LICHEN simulator.
 
 This module provides a writer for the pcapng file format, allowing

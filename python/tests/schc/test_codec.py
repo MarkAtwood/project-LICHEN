@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for the SCHC compression engine.
 
 Oracles are hand-computed from RFC 8724 semantics and the LICHEN rule

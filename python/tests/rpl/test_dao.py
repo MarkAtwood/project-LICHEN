@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for RPL DAO handling and route advertisement (non-storing mode)."""
 
 from __future__ import annotations

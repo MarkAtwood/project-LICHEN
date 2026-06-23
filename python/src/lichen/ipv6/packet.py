@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """IPv6 packet construction and parsing (RFC 8200, spec section 6).
 
 Provides the fixed 40-byte :class:`IPv6Header`, a generic

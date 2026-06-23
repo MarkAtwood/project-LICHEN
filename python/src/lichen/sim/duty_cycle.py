@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Duty cycle tracking for LoRa transmissions.
 
 EU 868MHz regulations require 1% duty cycle (36 seconds per hour).

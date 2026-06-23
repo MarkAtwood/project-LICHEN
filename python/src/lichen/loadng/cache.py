@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LOADng route cache (spec section 9.6, appendix B2.2).
 
 Holds discovered forward routes (destination -> next hop) with their metric and

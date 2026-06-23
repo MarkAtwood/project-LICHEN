@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for IPv6 address handling and IID derivation (spec 6.1, 6.2, 12).
 
 Oracles are hand-computed or taken from the spec's worked example addresses

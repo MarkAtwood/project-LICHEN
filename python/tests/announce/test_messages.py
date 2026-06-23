@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for announce message codec.
 
 Why these tests: Announce messages are the primary routing mechanism for active

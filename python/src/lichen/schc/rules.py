@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """SCHC rule definitions for LICHEN (RFC 8724).
 
 A SCHC *rule* describes, field by field, how a header is compressed. Each field

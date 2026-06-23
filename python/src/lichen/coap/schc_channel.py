@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """A SCHC-compressing datagram channel for the CoAP transport (spec sections 3, 7).
 
 Wraps an inner :class:`~lichen.coap.transport.DatagramChannel`: outbound CoAP

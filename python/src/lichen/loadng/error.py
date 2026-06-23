@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LOADng route error handling (RERR) (spec section 10.6, 9.7).
 
 When a link to a next hop fails, every route through it is invalidated and a

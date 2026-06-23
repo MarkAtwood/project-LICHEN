@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Wire protocol encoding/decoding for LICHEN simulator.
 
 Binary protocol using little-endian byte order. Each message starts with

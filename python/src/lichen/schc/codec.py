@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """SCHC compression/decompression engine (RFC 8724).
 
 Given a :class:`~lichen.schc.rules.Rule` and a mapping of field values, the

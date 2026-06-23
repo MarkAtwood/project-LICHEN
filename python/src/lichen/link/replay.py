@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Link-layer replay protection (spec section 4.4).
 
 Replay protection uses a 24-bit logical counter formed from the 8-bit epoch

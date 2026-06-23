@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for the WebSocket interface.
 
 Tests the WebSocketManager, WebSocketObserver, and API integration.

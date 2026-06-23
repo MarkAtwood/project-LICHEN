@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Core simulation engine for the LICHEN simulator.
 
 This module provides the Simulation class that orchestrates simulated nodes,

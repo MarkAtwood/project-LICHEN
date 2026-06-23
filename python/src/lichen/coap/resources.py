@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Basic CoAP resources for a LICHEN node (spec section 7, RFC 6690).
 
 Exposes ``/.well-known/core`` (resource discovery), ``/status``, ``/neighbors``,

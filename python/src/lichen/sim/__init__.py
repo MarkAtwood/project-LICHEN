@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """LICHEN wireless channel simulator.
 
 Simulates LoRa radio propagation for testing without hardware.

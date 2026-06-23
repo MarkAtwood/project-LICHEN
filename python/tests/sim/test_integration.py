@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Integration tests for the LICHEN simulator.
 
 Tests the full simulator stack end-to-end: SimulatorServer, NodeServer,

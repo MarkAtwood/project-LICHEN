@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for LOADng control message codecs (spec section 10, B2).
 
 Byte oracles are hand-built from the spec 10.3/10.4 wire layouts:

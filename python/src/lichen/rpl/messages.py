@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """RPL control message codecs (RFC 6550, spec section 8).
 
 RPL control messages are ICMPv6 type 155, with the code selecting the message:

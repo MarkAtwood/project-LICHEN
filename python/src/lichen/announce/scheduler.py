@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Announce scheduler for periodic transmission (spec section 9.4).
 
 Manages the announce loop: waits interval + jitter, builds signed announces,

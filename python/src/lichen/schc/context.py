@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
 """SCHC rule context and selection (RFC 8724 section 7).
 
 A :class:`SchcContext` holds the active rule set and selects a matching rule for
