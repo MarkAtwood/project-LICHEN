@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
 <!-- Part of LICHEN Protocol Specification -->
 
 # Appendix B: RPL Configuration

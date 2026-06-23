@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
 # SCHC Profile for LoRa Mesh Networks
 
 ```
