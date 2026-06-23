@@ -57,4 +57,6 @@ pytest
 
 ## License
 
+Copyright by the contributors to the LICHEN project.
+
 GPL-3.0-or-later

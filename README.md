@@ -268,8 +268,10 @@ LICHEN is authentication-first, not encryption-first. Every packet is signed (se
 
 ## License
 
+Copyright by the contributors to the LICHEN project.
+
 - Documentation: CC-BY-4.0
-- Code: GPL-3.0 (when implemented)
+- Code: GPL-3.0-or-later
 
 ## Acknowledgments
 
