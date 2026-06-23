@@ -16,7 +16,8 @@
 | q0p | Full node integration | ✅ Done — `node.py` with 13 tests |
 | 8rd | Announce scheduler | ✅ Done — `announce/scheduler.py` with 25 tests |
 | sxe | Multi-node simulation integration | ✅ Done — `tests/sim/test_multinode.py` with 8 tests |
-| 1a0/ijj | CoAP integration + gate | Ready to verify |
+| 1a0 | CoAP integration | ✅ Done — `coap/` module with 13 tests |
+| ijj | Prototype validation gate | ✅ Done — 1000+ tests, ready for embedded |
 
 ## Key Files
 
