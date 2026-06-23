@@ -1,0 +1,457 @@
+"""Tests for announce processor.
+
+Why these tests: The processor is where security decisions happen. Bugs here mean:
+- Invalid signatures accepted (authentication bypass)
+- IID/pubkey mismatches accepted (identity spoofing)
+- Stale announces accepted (old state injection)
+- Gradient not updated (routing failure)
+- Should_relay wrong (flooding or isolation)
+
+Test categories:
+1. Signature verification
+2. IID/pubkey binding
+3. Duplicate/stale detection
+4. Gradient table updates
+5. Relay decisions
+"""
+
+import pytest
+from ipaddress import IPv6Address
+
+from lichen.announce.messages import (
+    SIGNATURE_LENGTH,
+    MAX_ANNOUNCE_HOPS,
+    AnnounceMessage,
+)
+from lichen.announce.processor import (
+    GRADIENT_TIMEOUT_MS,
+    AnnounceProcessor,
+    AnnounceRejectReason,
+)
+from lichen.crypto.identity import Identity, _pubkey_to_iid
+from lichen.crypto.schnorr48 import sign
+from lichen.gradient import GradientSource, GradientTable
+
+
+def make_signed_announce(
+    identity: Identity,
+    seq_num: int = 0,
+    hop_count: int = 0,
+    app_data: bytes = b"",
+) -> AnnounceMessage:
+    """Create a properly signed announce message.
+
+    Why a helper: Tests need valid signatures. This ensures consistency.
+    """
+    msg = AnnounceMessage(
+        originator_iid=identity.iid,
+        pubkey=identity.pubkey,
+        seq_num=seq_num,
+        hop_count=hop_count,
+        app_data=app_data,
+    )
+    signature = sign(identity.privkey, identity.pubkey, msg.signed_data())
+    return AnnounceMessage(
+        originator_iid=msg.originator_iid,
+        pubkey=msg.pubkey,
+        seq_num=msg.seq_num,
+        hop_count=msg.hop_count,
+        signature=signature,
+        app_data=msg.app_data,
+    )
+
+
+@pytest.fixture
+def identity() -> Identity:
+    """A test identity for the announcer."""
+    return Identity.from_seed(bytes(32))
+
+
+@pytest.fixture
+def other_identity() -> Identity:
+    """A different identity for negative tests."""
+    return Identity.from_seed(bytes([1] + [0] * 31))
+
+
+@pytest.fixture
+def neighbor() -> IPv6Address:
+    """Link-local address of the neighbor who forwarded the announce."""
+    return IPv6Address("fe80::1")
+
+
+@pytest.fixture
+def processor() -> AnnounceProcessor:
+    """An announce processor with empty gradient table."""
+    # Why simple address_builder: Tests don't care about prefix.
+    # Just prepend a fixed prefix to the IID.
+    def build_address(iid: bytes) -> IPv6Address:
+        prefix = bytes([0xFD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        return IPv6Address(prefix + iid)
+
+    return AnnounceProcessor(
+        gradient_table=GradientTable(),
+        address_builder=build_address,
+    )
+
+
+class TestSignatureVerification:
+    """Tests for signature validation."""
+
+    def test_accepts_valid_signature(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """A properly signed announce is accepted."""
+        # Why test: Baseline - valid announces must work.
+        announce = make_signed_announce(identity, seq_num=1)
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is True
+        assert result.reject_reason is None
+
+    def test_rejects_invalid_signature(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """An announce with garbage signature is rejected."""
+        # Why test: Invalid signatures must be caught.
+        announce = AnnounceMessage(
+            originator_iid=identity.iid,
+            pubkey=identity.pubkey,
+            seq_num=1,
+            signature=bytes(SIGNATURE_LENGTH),  # Garbage signature
+        )
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is False
+        assert result.reject_reason == AnnounceRejectReason.INVALID_SIGNATURE
+
+    def test_rejects_signature_for_wrong_data(
+        self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address
+    ):
+        """Signature computed over different data is rejected."""
+        # Why test: Attacker might try to reuse a signature from another message.
+        # Sign over different seq_num
+        original = make_signed_announce(identity, seq_num=1)
+
+        # Create message with different seq_num but same signature
+        tampered = AnnounceMessage(
+            originator_iid=identity.iid,
+            pubkey=identity.pubkey,
+            seq_num=2,  # Different!
+            signature=original.signature,
+        )
+        result = processor.process(tampered, neighbor, now_ms=0)
+
+        assert result.accepted is False
+        assert result.reject_reason == AnnounceRejectReason.INVALID_SIGNATURE
+
+
+class TestIIDBinding:
+    """Tests for IID/pubkey binding validation."""
+
+    def test_rejects_iid_mismatch(
+        self, processor: AnnounceProcessor, identity: Identity, other_identity: Identity, neighbor: IPv6Address
+    ):
+        """Rejects announce where IID doesn't match pubkey hash."""
+        # Why test: Attacker might try to announce for someone else's IID.
+        # Create announce with identity's IID but other_identity's pubkey
+        msg = AnnounceMessage(
+            originator_iid=identity.iid,  # From identity
+            pubkey=other_identity.pubkey,  # From other_identity - mismatch!
+            seq_num=1,
+        )
+        # Sign with other_identity (the signature will be valid for the pubkey)
+        signature = sign(other_identity.privkey, other_identity.pubkey, msg.signed_data())
+        announce = AnnounceMessage(
+            originator_iid=msg.originator_iid,
+            pubkey=msg.pubkey,
+            seq_num=msg.seq_num,
+            signature=signature,
+        )
+
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is False
+        assert result.reject_reason == AnnounceRejectReason.IID_MISMATCH
+
+    def test_iid_check_is_before_signature(self, processor: AnnounceProcessor, neighbor: IPv6Address):
+        """IID check happens before signature verification (cheaper)."""
+        # Why test: IID check is O(1), signature is O(crypto). Check IID first.
+        # Create announce with mismatched IID - should fail on IID, not signature
+        bad_iid = bytes([0xFF] * 8)  # Definitely wrong
+        announce = AnnounceMessage(
+            originator_iid=bad_iid,
+            pubkey=bytes(32),  # Zero pubkey - would fail signature too
+            seq_num=1,
+            signature=bytes(SIGNATURE_LENGTH),  # Garbage signature
+        )
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        # Should fail on IID mismatch, not signature
+        assert result.reject_reason == AnnounceRejectReason.IID_MISMATCH
+
+
+class TestDuplicateDetection:
+    """Tests for stale/duplicate announce detection."""
+
+    def test_accepts_first_announce(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """First announce from an originator is always accepted."""
+        # Why test: New originators must be able to join.
+        announce = make_signed_announce(identity, seq_num=1)
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is True
+
+    def test_accepts_higher_seq_num(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Announce with higher seq_num is accepted."""
+        # Why test: Newer announces replace older ones.
+        first = make_signed_announce(identity, seq_num=1)
+        second = make_signed_announce(identity, seq_num=2)
+
+        processor.process(first, neighbor, now_ms=0)
+        result = processor.process(second, neighbor, now_ms=1000)
+
+        assert result.accepted is True
+
+    def test_rejects_equal_seq_num(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Announce with equal seq_num is rejected (duplicate)."""
+        # Why test: Duplicate announces waste bandwidth and could be replays.
+        first = make_signed_announce(identity, seq_num=1)
+        duplicate = make_signed_announce(identity, seq_num=1)
+
+        processor.process(first, neighbor, now_ms=0)
+        result = processor.process(duplicate, neighbor, now_ms=1000)
+
+        assert result.accepted is False
+        assert result.reject_reason == AnnounceRejectReason.STALE_SEQNUM
+
+    def test_rejects_lower_seq_num(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Announce with lower seq_num is rejected (stale)."""
+        # Why test: Old announces might be delayed or replayed.
+        newer = make_signed_announce(identity, seq_num=10)
+        older = make_signed_announce(identity, seq_num=5)
+
+        processor.process(newer, neighbor, now_ms=0)
+        result = processor.process(older, neighbor, now_ms=1000)
+
+        assert result.accepted is False
+        assert result.reject_reason == AnnounceRejectReason.STALE_SEQNUM
+
+    def test_different_originators_independent(
+        self, processor: AnnounceProcessor, identity: Identity, other_identity: Identity, neighbor: IPv6Address
+    ):
+        """seq_num tracking is per-originator."""
+        # Why test: Originators have independent sequence spaces.
+        ann1 = make_signed_announce(identity, seq_num=100)
+        ann2 = make_signed_announce(other_identity, seq_num=1)  # Lower but different originator
+
+        processor.process(ann1, neighbor, now_ms=0)
+        result = processor.process(ann2, neighbor, now_ms=1000)
+
+        assert result.accepted is True  # Different originator, so accepted
+
+    def test_reset_seen_allows_lower_seq(
+        self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address
+    ):
+        """reset_seen() allows accepting lower seq_num again."""
+        # Why test: Key rotation may reset seq_num.
+        first = make_signed_announce(identity, seq_num=100)
+        processor.process(first, neighbor, now_ms=0)
+
+        processor.reset_seen(identity.iid)
+
+        second = make_signed_announce(identity, seq_num=1)
+        result = processor.process(second, neighbor, now_ms=1000)
+
+        assert result.accepted is True
+
+
+class TestGradientUpdate:
+    """Tests for gradient table updates."""
+
+    def test_installs_gradient_on_accept(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Accepted announce creates gradient entry."""
+        # Why test: The whole point is to build routing tables.
+        announce = make_signed_announce(identity, seq_num=1, hop_count=3)
+        processor.process(announce, neighbor, now_ms=0)
+
+        # Build expected destination
+        prefix = bytes([0xFD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        expected_dest = IPv6Address(prefix + identity.iid)
+
+        entry = processor.gradient_table.lookup(expected_dest, now=0)
+        assert entry is not None
+        assert entry.next_hop == neighbor
+        assert entry.hop_count == 3
+        assert entry.seq_num == 1
+        assert entry.source == GradientSource.ANNOUNCE
+
+    def test_gradient_expires_correctly(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Gradient entry has correct expiration time."""
+        # Why test: Stale gradients must expire.
+        now = 10000
+        announce = make_signed_announce(identity, seq_num=1)
+        processor.process(announce, neighbor, now_ms=now)
+
+        prefix = bytes([0xFD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        dest = IPv6Address(prefix + identity.iid)
+
+        entry = processor.gradient_table.lookup(dest, now=now)
+        assert entry is not None
+        assert entry.expires == now + GRADIENT_TIMEOUT_MS
+
+        # Should be gone after timeout
+        entry_later = processor.gradient_table.lookup(dest, now=now + GRADIENT_TIMEOUT_MS + 1)
+        assert entry_later is None
+
+    def test_updates_gradient_on_newer_announce(
+        self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address
+    ):
+        """Newer announce updates existing gradient."""
+        # Why test: Better routes should replace worse ones.
+        first = make_signed_announce(identity, seq_num=1, hop_count=5)
+        second = make_signed_announce(identity, seq_num=2, hop_count=3)  # Closer
+
+        processor.process(first, neighbor, now_ms=0)
+        processor.process(second, neighbor, now_ms=1000)
+
+        prefix = bytes([0xFD, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        dest = IPv6Address(prefix + identity.iid)
+
+        entry = processor.gradient_table.lookup(dest, now=1000)
+        assert entry is not None
+        assert entry.hop_count == 3
+        assert entry.seq_num == 2
+
+    def test_no_gradient_on_reject(
+        self, processor: AnnounceProcessor, identity: Identity, other_identity: Identity, neighbor: IPv6Address
+    ):
+        """Rejected announce does not create gradient."""
+        # Why test: Invalid announces must not affect routing.
+        # Create invalid announce (bad signature)
+        announce = AnnounceMessage(
+            originator_iid=identity.iid,
+            pubkey=identity.pubkey,
+            seq_num=1,
+            signature=bytes(SIGNATURE_LENGTH),  # Garbage
+        )
+        processor.process(announce, neighbor, now_ms=0)
+
+        assert len(processor.gradient_table) == 0
+
+
+class TestRelayDecision:
+    """Tests for should_relay determination."""
+
+    def test_should_relay_true_below_max(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """should_relay is True when hop_count < MAX."""
+        # Why test: Valid announces should propagate.
+        announce = make_signed_announce(identity, seq_num=1, hop_count=5)
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is True
+        assert result.should_relay is True
+
+    def test_should_relay_false_at_max(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """should_relay is False when hop_count == MAX."""
+        # Why test: Prevents infinite flooding.
+        announce = make_signed_announce(identity, seq_num=1, hop_count=MAX_ANNOUNCE_HOPS)
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is True
+        assert result.should_relay is False
+
+    def test_should_relay_false_on_reject(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """should_relay is False when announce is rejected."""
+        # Why test: Invalid announces must not be propagated.
+        announce = AnnounceMessage(
+            originator_iid=identity.iid,
+            pubkey=identity.pubkey,
+            seq_num=1,
+            signature=bytes(SIGNATURE_LENGTH),  # Garbage
+        )
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.accepted is False
+        assert result.should_relay is False
+
+    def test_get_relay_message_increments_hop(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """get_relay_message() returns message with hop_count + 1."""
+        # Why test: Relayed messages must have incremented hop count.
+        announce = make_signed_announce(identity, seq_num=1, hop_count=5)
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.should_relay is True
+        relay_msg = processor.get_relay_message(announce)
+
+        assert relay_msg is not None
+        assert relay_msg.hop_count == 6
+        # Signature unchanged (still valid because hop_count not signed)
+        assert relay_msg.signature == announce.signature
+
+    def test_get_relay_message_none_at_max(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """get_relay_message() returns None when at hop limit."""
+        # Why test: Should not be able to create relay message at limit.
+        announce = make_signed_announce(identity, seq_num=1, hop_count=MAX_ANNOUNCE_HOPS)
+
+        relay_msg = processor.get_relay_message(announce)
+        assert relay_msg is None
+
+
+class TestResultMetadata:
+    """Tests for AnnounceResult metadata."""
+
+    def test_result_contains_peer(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Successful result includes PeerIdentity."""
+        # Why test: Caller may want to learn about the peer.
+        announce = make_signed_announce(identity, seq_num=1)
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.peer is not None
+        assert result.peer.pubkey == identity.pubkey
+        assert result.peer.iid == identity.iid
+
+    def test_result_no_peer_on_reject(self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address):
+        """Rejected result has no peer."""
+        # Why test: Can't trust peer identity if announce is invalid.
+        announce = AnnounceMessage(
+            originator_iid=identity.iid,
+            pubkey=identity.pubkey,
+            seq_num=1,
+            signature=bytes(SIGNATURE_LENGTH),
+        )
+        result = processor.process(announce, neighbor, now_ms=0)
+
+        assert result.peer is None
+
+
+class TestKnownOriginators:
+    """Tests for known_originators() debug method."""
+
+    def test_empty_initially(self, processor: AnnounceProcessor):
+        """No originators known before any announces."""
+        assert processor.known_originators() == []
+
+    def test_tracks_accepted_originators(
+        self, processor: AnnounceProcessor, identity: Identity, other_identity: Identity, neighbor: IPv6Address
+    ):
+        """known_originators() returns IIDs of accepted announces."""
+        ann1 = make_signed_announce(identity, seq_num=1)
+        ann2 = make_signed_announce(other_identity, seq_num=1)
+
+        processor.process(ann1, neighbor, now_ms=0)
+        processor.process(ann2, neighbor, now_ms=1000)
+
+        originators = processor.known_originators()
+        assert len(originators) == 2
+        assert identity.iid in originators
+        assert other_identity.iid in originators
+
+    def test_does_not_track_rejected(
+        self, processor: AnnounceProcessor, identity: Identity, neighbor: IPv6Address
+    ):
+        """Rejected announces do not appear in known_originators()."""
+        announce = AnnounceMessage(
+            originator_iid=identity.iid,
+            pubkey=identity.pubkey,
+            seq_num=1,
+            signature=bytes(SIGNATURE_LENGTH),  # Garbage
+        )
+        processor.process(announce, neighbor, now_ms=0)
+
+        assert processor.known_originators() == []
