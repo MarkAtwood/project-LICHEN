@@ -122,9 +122,7 @@ async fn run_serial(gw: &mut Gateway, interface: &str, _baud: u32) {
     // tokio-serial requires a blocking port; bridge via spawn_blocking or
     // use tokio-serial's AsyncSerial. For now, stub with a clear error.
     info!(interface, "opening serial port");
-    let mut tty = match tokio_serial::SerialStream::open(
-        &tokio_serial::new(interface, _baud),
-    ) {
+    let mut tty = match tokio_serial::SerialStream::open(&tokio_serial::new(interface, _baud)) {
         Ok(p) => p,
         Err(e) => {
             error!("cannot open {interface}: {e}");
