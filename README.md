@@ -157,6 +157,19 @@ POST coap://[ff02::1]/sos               # Emergency broadcast
 GET  coap://[node]/.well-known/core     # Resource discovery
 ```
 
+### Device Interfaces
+
+LICHEN supports multiple device interface protocols for mobile apps and host connections. Firmware decides which to compile in:
+
+| Protocol | Purpose | Apps |
+|----------|---------|------|
+| **LICHEN Native** | Clean-sheet design: CBOR, full mesh state, config, OTA | (ours) |
+| **Meshtastic compat** | BLE GATT + Protobuf, same as Meshtastic | Meshtastic iOS/Android |
+| **MeshCore compat** | BLE/USB/WiFi, same as MeshCore | MeshCore Open (Flutter) |
+| **KISS mode** | BLE KISS API for TNC apps | aprs.fi, APRSDroid |
+
+Why four protocols? Meet users where they are. Ham operators have KISS apps. Meshtastic users have Meshtastic apps. But we also define our own protocol that does it right — CBOR encoding, identical framing across BLE/USB/serial/IP, full access to mesh state. Not every puck implements all four; firmware config selects which to include.
+
 ## Project Status
 
 **Phase: Prototype**
