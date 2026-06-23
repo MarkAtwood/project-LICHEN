@@ -13,7 +13,8 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from starlette.routing import Route
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket
 
 from lichen.sim.chaos import (
     ChaosEngine,
@@ -24,6 +25,11 @@ from lichen.sim.chaos import (
     PartitionRule,
 )
 from lichen.sim.simulation import Simulation, TimeMode
+from lichen.sim.websocket import (
+    WebSocketManager,
+    WebSocketObserver,
+    handle_websocket,
+)
 
 
 def _error_response(message: str, status_code: int = 400) -> JSONResponse:
@@ -94,6 +100,8 @@ class SimulatorAPI:
         """
         self._simulations: dict[str, Simulation] = {}
         self._chaos_engines: dict[str, ChaosEngine] = {}
+        self._ws_observers: dict[str, WebSocketObserver] = {}
+        self._ws_manager = WebSocketManager()
         self._app: Starlette | None = None
         self._on_simulation_created = on_simulation_created
         self._on_simulation_deleted = on_simulation_deleted
@@ -154,6 +162,11 @@ class SimulatorAPI:
         self._simulations[sim_id] = sim
         self._chaos_engines[sim_id] = chaos_engine
 
+        # Register WebSocket observer for real-time event streaming
+        ws_observer = WebSocketObserver(self._ws_manager, sim_id)
+        sim.add_observer(ws_observer)
+        self._ws_observers[sim_id] = ws_observer
+
         if self._on_simulation_created is not None:
             await self._on_simulation_created(sim_id)
 
@@ -172,6 +185,13 @@ class SimulatorAPI:
 
         if self._on_simulation_deleted is not None:
             await self._on_simulation_deleted(sim_id)
+
+        # Remove WebSocket observer
+        ws_observer = self._ws_observers.pop(sim_id, None)
+        if ws_observer is not None:
+            sim = self._simulations.get(sim_id)
+            if sim is not None:
+                sim.remove_observer(ws_observer)
 
         del self._simulations[sim_id]
         del self._chaos_engines[sim_id]
@@ -591,6 +611,26 @@ class SimulatorAPI:
 
         return JSONResponse({"nodes": nodes})
 
+    async def websocket_endpoint(self, websocket: WebSocket) -> None:
+        """WebSocket endpoint for real-time simulation events.
+
+        GET /sim/{sim_id}/ws
+
+        Protocol:
+        - Server sends events as JSON: {"event": "tx_start", ...}
+        - Client can send commands:
+          - {"cmd": "subscribe", "events": ["tx_start", "rx_success"]}
+          - {"cmd": "unsubscribe", "events": ["collision"]}
+          - {"cmd": "ping"} -> {"event": "pong"}
+        """
+        sim_id = websocket.path_params["sim_id"]
+
+        if sim_id not in self._simulations:
+            await websocket.close(code=4004, reason=f"Simulation '{sim_id}' not found")
+            return
+
+        await handle_websocket(websocket, self._ws_manager, sim_id)
+
     def create_app(self) -> Starlette:
         """Create or return cached Starlette application with all routes.
 
@@ -624,6 +664,8 @@ class SimulatorAPI:
             Route("/sim/{sim_id}/chaos/jam", self.add_chaos_jam, methods=["POST"]),
             Route("/sim/{sim_id}/topology", self.get_topology, methods=["GET"]),
             Route("/sim/{sim_id}/metrics", self.get_metrics, methods=["GET"]),
+            # WebSocket for real-time events
+            WebSocketRoute("/sim/{sim_id}/ws", self.websocket_endpoint),
         ]
         self._app = Starlette(routes=routes)
         return self._app
