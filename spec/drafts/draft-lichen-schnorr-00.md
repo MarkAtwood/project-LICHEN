@@ -132,7 +132,7 @@ Process:
 3. Compute challenge:
    e_full = H(R || pubkey || msg)
    e = e_full[0:16]                    // Truncate to 128 bits
-   e_scalar = e_full mod L             // Full value for arithmetic
+   e_scalar = e || zeros(16)           // Pad to 32 bytes, little-endian
 
 4. Compute response:
    s = (r + e_scalar * privkey) mod L
@@ -320,20 +320,57 @@ this scheme is adopted for use in COSE (RFC 8152) or similar frameworks.
 
 ## Appendix A. Test Vectors
 
-**TODO:** Add test vectors from reference implementation.
+Machine-readable vectors: `test/vectors/schnorr48.json`
 
-Test vectors will include:
-- Known key pairs
-- Known message/signature pairs
-- Edge cases (empty message, maximum length message)
-- Invalid signature detection
+### A.1. Valid Signatures
+
+**Vector 1: Empty message**
+```
+seed:       0000000000000000000000000000000000000000000000000000000000000000
+private:    5046adc1dba838867b2bbbfdd0c3423e58b57970b5267a90f57960924a87f156
+public:     3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29
+message:    (empty)
+signature:  26f70691bbde0c1e8becc00e7e7663cb6b72364b6ea208fdabef226c5b0d07ce
+            c9c661fd69671981ca40277598ea9c01
+```
+
+**Vector 2: Simple message "test"**
+```
+seed:       deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe
+private:    50b8c29238a8403e0ac69e23d47b9184c371a92460d518351b099944bbdfa867
+public:     9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d
+message:    74657374
+signature:  c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8
+            706676c26685a806d6e0d74f345e2009
+```
+
+**Vector 3: Pangram**
+```
+seed:       0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+private:    b0829ce3ccf1d8edd5da1132d46271b0169f58b6414fd263d3c98da627170f5e
+public:     207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6
+message:    54686520717569636b2062726f776e20666f78206a756d7073206f766572
+            20746865206c617a7920646f67
+signature:  e15b69ed5bd6fccc6c624431eb1bb08341ba571158da31249ac72a28af7f77ea
+            0534b94cc1f8650dead98ccae16ec803
+```
+
+### A.2. Invalid Signatures
+
+These MUST be rejected by conforming implementations:
+
+1. **Wrong message**: Vector 2 signature with message "wrong" (77726f6e67)
+2. **Tampered challenge**: Flip bit 40 of Vector 2 signature
+3. **Tampered response**: Flip bit 160 of Vector 2 signature
+4. **Wrong public key**: Vector 2 signature with Vector 3's public key
+5. **Truncated signature**: Vector 2 signature with last byte removed (47 bytes)
+6. **Zero signature**: 48 zero bytes
 
 ## Appendix B. Reference Implementation
 
-**TODO:** Link to reference implementation.
+Python reference: `python/src/lichen/crypto/schnorr48.py`
 
-A reference implementation in Rust (using ed25519-dalek as base) and
-C (using monocypher as base) will be provided.
+Uses pynacl (libsodium bindings) for Ed25519 primitives.
 
 ## Authors' Address
 
