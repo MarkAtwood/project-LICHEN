@@ -139,8 +139,8 @@ mod tests {
         assert!(w.accept(100));
         // Advance window past slot 0.
         assert!(w.accept(164)); // 64 slots ahead
-        // seq=100 is now 64 slots behind last_seq=164 — exactly at the edge.
-        // offset = 64, which is >= 64, so rejected.
+                                // seq=100 is now 64 slots behind last_seq=164 — exactly at the edge.
+                                // offset = 64, which is >= 64, so rejected.
         assert!(!w.accept(100));
         assert!(!w.accept(50)); // way too old
     }

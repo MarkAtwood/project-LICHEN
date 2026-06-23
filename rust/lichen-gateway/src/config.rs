@@ -39,9 +39,15 @@ pub struct RplConfig {
     pub mode: String,
 }
 
-fn default_baud() -> u32 { 115_200 }
-fn default_instance_id() -> u8 { 1 }
-fn default_mop() -> String { "non-storing".to_string() }
+fn default_baud() -> u32 {
+    115_200
+}
+fn default_instance_id() -> u8 {
+    1
+}
+fn default_mop() -> String {
+    "non-storing".to_string()
+}
 
 impl Config {
     pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
@@ -88,9 +94,13 @@ impl std::fmt::Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 impl From<io::Error> for ConfigError {
-    fn from(e: io::Error) -> Self { ConfigError::Io(e) }
+    fn from(e: io::Error) -> Self {
+        ConfigError::Io(e)
+    }
 }
 
 impl From<toml::de::Error> for ConfigError {
-    fn from(e: toml::de::Error) -> Self { ConfigError::Parse(e) }
+    fn from(e: toml::de::Error) -> Self {
+        ConfigError::Parse(e)
+    }
 }

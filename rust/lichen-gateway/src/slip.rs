@@ -16,10 +16,7 @@ const ESC_ESC: u8 = 0xDD; // sent in place of ESC inside a packet
 ///
 /// Surrounds the packet with END bytes and escapes any END/ESC bytes in the
 /// payload per RFC 1055 §2.
-pub async fn send_packet<W: AsyncWrite + Unpin>(
-    writer: &mut W,
-    packet: &[u8],
-) -> io::Result<()> {
+pub async fn send_packet<W: AsyncWrite + Unpin>(writer: &mut W, packet: &[u8]) -> io::Result<()> {
     // Leading END flushes any garbage from a previous interrupted packet.
     writer.write_all(&[END]).await?;
 
@@ -73,7 +70,10 @@ pub async fn recv_packet<R: AsyncRead + Unpin>(
             ESC_END if in_escape => {
                 in_escape = false;
                 if out >= buf.len() {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "SLIP packet too large"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "SLIP packet too large",
+                    ));
                 }
                 buf[out] = END;
                 out += 1;
@@ -81,7 +81,10 @@ pub async fn recv_packet<R: AsyncRead + Unpin>(
             ESC_ESC if in_escape => {
                 in_escape = false;
                 if out >= buf.len() {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "SLIP packet too large"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "SLIP packet too large",
+                    ));
                 }
                 buf[out] = ESC;
                 out += 1;
@@ -89,7 +92,10 @@ pub async fn recv_packet<R: AsyncRead + Unpin>(
             b => {
                 in_escape = false;
                 if out >= buf.len() {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "SLIP packet too large"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "SLIP packet too large",
+                    ));
                 }
                 buf[out] = b;
                 out += 1;
@@ -107,7 +113,9 @@ mod tests {
         send_packet(&mut wire, packet).await.unwrap();
 
         let mut decoded = vec![0u8; packet.len() + 4];
-        let n = recv_packet(&mut wire.as_slice(), &mut decoded).await.unwrap();
+        let n = recv_packet(&mut wire.as_slice(), &mut decoded)
+            .await
+            .unwrap();
         decoded.truncate(n);
         decoded
     }

@@ -4,7 +4,7 @@
 //! The CoAP transport is a thin wrapper that will be replaced by the real
 //! lichen-coap client once it implements network I/O.
 
-use crate::{ConfigAction, KeyAction, OutputFormat, PositionAction, output};
+use crate::{output, ConfigAction, KeyAction, OutputFormat, PositionAction};
 use std::net::SocketAddr;
 
 type CmdResult = Result<(), Box<dyn std::error::Error>>;
@@ -13,7 +13,11 @@ type CmdResult = Result<(), Box<dyn std::error::Error>>;
 pub async fn status(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
     let _resp = coap_get(node, "/status").await?;
     output::print_kv("node", &node.to_string(), fmt);
-    output::print_kv("status", "ok (stub — CoAP transport not yet connected)", fmt);
+    output::print_kv(
+        "status",
+        "ok (stub — CoAP transport not yet connected)",
+        fmt,
+    );
     Ok(())
 }
 
@@ -25,12 +29,7 @@ pub async fn neighbors(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
 }
 
 /// POST coap://[to]/msg/inbox
-pub async fn send(
-    _node: SocketAddr,
-    to: &str,
-    message: &str,
-    fmt: &OutputFormat,
-) -> CmdResult {
+pub async fn send(_node: SocketAddr, to: &str, message: &str, fmt: &OutputFormat) -> CmdResult {
     output::print_kv("to", to, fmt);
     output::print_kv("message", message, fmt);
     output::print_kv("status", "queued (stub)", fmt);
@@ -71,11 +70,7 @@ pub async fn config(node: SocketAddr, action: ConfigAction, fmt: &OutputFormat) 
     Ok(())
 }
 
-pub async fn position(
-    node: SocketAddr,
-    action: PositionAction,
-    fmt: &OutputFormat,
-) -> CmdResult {
+pub async fn position(node: SocketAddr, action: PositionAction, fmt: &OutputFormat) -> CmdResult {
     match action {
         PositionAction::Show => {
             let _resp = coap_get(node, "/sensors/location").await?;

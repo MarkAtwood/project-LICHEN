@@ -8,7 +8,10 @@ pub fn print<T: Serialize + std::fmt::Display>(value: &T, fmt: &OutputFormat) {
     match fmt {
         OutputFormat::Human => println!("{value}"),
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(value).unwrap_or_else(|e| e.to_string()))
+            println!(
+                "{}",
+                serde_json::to_string_pretty(value).unwrap_or_else(|e| e.to_string())
+            )
         }
     }
 }

@@ -23,5 +23,8 @@
 pub mod frame;
 pub mod replay;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "schnorr")]
+pub mod schnorr;
+
+#[cfg(any(test, feature = "std"))]
 extern crate std;
