@@ -51,6 +51,7 @@ hardware as a reflash -- same radios, new protocol.
 - [Appendix B2: LOADng Configuration](appendix-loadng.md) - LOADng Routing Parameters
 - [Appendix C-E: Miscellaneous](appendix-misc.md) - Resource Directory, Comparison, Example
 - [Appendix F: SenML Profile](appendix-senml.md) - Sensor Data Format
+- [Appendix G: Design Rationale](appendix-design-rationale.md) - Inspirations and Constraints
 
 ### Internet-Drafts (Preliminary)
 
