@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
 # Project Instructions for AI Agents
 
 This file provides instructions and context for AI coding agents working on this project.

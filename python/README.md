@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
 # LICHEN Python Prototype
 
 Python implementation of the LICHEN mesh networking stack for protocol validation.

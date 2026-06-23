@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
 # LICHEN Test Vectors
 
 Language-neutral conformance vectors for the LICHEN protocol. The **Python

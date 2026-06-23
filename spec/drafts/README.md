@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+<!-- SPDX-FileCopyrightText: The contributors to the LICHEN project -->
+
 # LICHEN Internet-Drafts
 
 **STATUS: PRELIMINARY — WORK IN PROGRESS**
