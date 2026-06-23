@@ -22,6 +22,13 @@ from lichen.announce.processor import (
     AnnounceProcessor,
     AnnounceResult,
 )
+from lichen.announce.scheduler import (
+    DEFAULT_INTERVAL_MS,
+    DEFAULT_JITTER_MS,
+    AnnounceScheduler,
+    AnnounceTransmitter,
+    SchedulerConfig,
+)
 
 __all__ = [
     "ANNOUNCE_INTERVAL_MS",
@@ -31,7 +38,12 @@ __all__ = [
     "AnnounceMessage",
     "AnnounceProcessor",
     "AnnounceResult",
+    "AnnounceScheduler",
+    "AnnounceTransmitter",
+    "DEFAULT_INTERVAL_MS",
+    "DEFAULT_JITTER_MS",
     "GRADIENT_TIMEOUT_MS",
     "MAX_ANNOUNCE_HOPS",
     "SIGNATURE_LENGTH",
+    "SchedulerConfig",
 ]

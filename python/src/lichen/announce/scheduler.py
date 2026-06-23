@@ -1,0 +1,294 @@
+"""Announce scheduler for periodic transmission (spec section 9.4).
+
+Manages the announce loop: waits interval + jitter, builds signed announces,
+transmits via link layer, increments sequence number.
+
+Why separate from Node: Single responsibility. The scheduler owns timing and
+sequence number management. Node owns lifecycle and layer integration.
+
+Why sequence number persistence matters: If seq_num resets on reboot, peers
+may reject our new announces as "stale" (lower than what they've seen).
+For the prototype, we don't persist to flash. Production implementations
+MUST persist seq_num to non-volatile storage.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import random
+from dataclasses import dataclass, field
+from typing import Callable, Protocol
+
+from lichen.announce.messages import AnnounceMessage
+from lichen.crypto.identity import Identity
+from lichen.crypto.schnorr48 import sign
+
+logger = logging.getLogger(__name__)
+
+# Why 300_000: Spec section 9.4. 5 minutes between announces.
+DEFAULT_INTERVAL_MS = 300_000
+
+# Why 30_000: Spec section 9.4. Random jitter 0-30 seconds prevents collision.
+DEFAULT_JITTER_MS = 30_000
+
+
+class AnnounceTransmitter(Protocol):
+    """Protocol for transmitting announces.
+
+    Why a protocol: Decouples scheduler from link layer. Allows testing
+    with mocks and different transmission strategies.
+    """
+
+    async def transmit_announce(self, data: bytes) -> bool:
+        """Transmit announce data. Returns True on success."""
+        ...
+
+
+@dataclass
+class SchedulerConfig:
+    """Configuration for the announce scheduler.
+
+    Why separate config: Makes construction clear, allows runtime changes.
+
+    Attributes:
+        interval_ms: Time between announces in milliseconds.
+        jitter_ms: Maximum random jitter to add.
+        initial_delay_ms: Delay before first announce.
+            Why: Allows node to receive announces from others first,
+            building gradients before advertising ourselves.
+    """
+
+    interval_ms: int = DEFAULT_INTERVAL_MS
+    jitter_ms: int = DEFAULT_JITTER_MS
+    initial_delay_ms: int = 5_000  # 5 seconds before first announce
+
+
+@dataclass
+class AnnounceScheduler:
+    """Periodic announce transmission scheduler (spec 9.4).
+
+    Why this class: Encapsulates the announce loop, sequence number
+    management, and timing. Can be started/stopped independently.
+
+    Attributes:
+        identity: This node's cryptographic identity.
+        transmitter: How to send announces (link layer or mock).
+        config: Scheduler configuration.
+        app_data: Optional application data to include in announces.
+        _seq_num: Current sequence number (16-bit, wraps).
+        _running: Whether the scheduler is running.
+        _task: The async task running the loop.
+    """
+
+    identity: Identity
+    transmitter: AnnounceTransmitter
+    config: SchedulerConfig = field(default_factory=SchedulerConfig)
+    app_data: bytes = field(default=b"")
+
+    # Internal state
+    _seq_num: int = field(default=0, init=False, repr=False)
+    _running: bool = field(default=False, init=False, repr=False)
+    _task: asyncio.Task | None = field(default=None, init=False, repr=False)
+
+    # Callbacks for persistence (optional)
+    _on_seq_change: Callable[[int], None] | None = field(
+        default=None, init=False, repr=False
+    )
+
+    def set_seq_num(self, seq_num: int) -> None:
+        """Set the sequence number (for persistence restore).
+
+        Why exposed: On startup, caller loads persisted seq_num and
+        sets it here before starting the scheduler.
+
+        Args:
+            seq_num: The sequence number to restore.
+
+        Raises:
+            ValueError: If seq_num is out of range.
+        """
+        if not 0 <= seq_num <= 0xFFFF:
+            raise ValueError(f"seq_num out of range: {seq_num}")
+        self._seq_num = seq_num
+        logger.info("sequence number set to %d", seq_num)
+
+    def get_seq_num(self) -> int:
+        """Get the current sequence number (for persistence save)."""
+        return self._seq_num
+
+    def set_on_seq_change(self, callback: Callable[[int], None]) -> None:
+        """Set callback for sequence number changes (for persistence).
+
+        Why callback: Caller owns persistence. We notify when seq_num
+        changes so they can save it.
+
+        Args:
+            callback: Called with new seq_num whenever it increments.
+        """
+        self._on_seq_change = callback
+
+    def _increment_seq(self) -> int:
+        """Increment and return the new sequence number.
+
+        Why wrap at 0xFFFF: seq_num is 16-bit per spec.
+        """
+        self._seq_num = (self._seq_num + 1) & 0xFFFF
+
+        # Why notify: Allows caller to persist the new value.
+        if self._on_seq_change:
+            try:
+                self._on_seq_change(self._seq_num)
+            except Exception as e:
+                logger.warning("seq_change callback failed: %s", e)
+
+        return self._seq_num
+
+    def build_announce(self) -> AnnounceMessage:
+        """Build a signed announce message.
+
+        Why separate method: Allows testing without running the loop.
+        Also useful for manual announce triggers.
+
+        Returns:
+            A fully signed AnnounceMessage ready for transmission.
+        """
+        seq = self._increment_seq()
+
+        # Why build unsigned first: Need signed_data() before signing.
+        msg = AnnounceMessage(
+            originator_iid=self.identity.iid,
+            pubkey=self.identity.pubkey,
+            seq_num=seq,
+            hop_count=0,  # We're the originator
+            app_data=self.app_data,
+        )
+
+        # Why sign with our key: Proves we own this IID/pubkey.
+        signature = sign(
+            self.identity.privkey,
+            self.identity.pubkey,
+            msg.signed_data(),
+        )
+
+        # Why create new message with signature: AnnounceMessage is immutable-ish.
+        return AnnounceMessage(
+            originator_iid=msg.originator_iid,
+            pubkey=msg.pubkey,
+            seq_num=msg.seq_num,
+            hop_count=msg.hop_count,
+            signature=signature,
+            app_data=msg.app_data,
+        )
+
+    async def start(self) -> None:
+        """Start the announce scheduler.
+
+        Why async: Creates a background task that runs until stop().
+
+        Raises:
+            RuntimeError: If already running.
+        """
+        if self._running:
+            raise RuntimeError("scheduler already running")
+
+        self._running = True
+        self._task = asyncio.create_task(
+            self._loop(),
+            name=f"announce-{self.identity.iid.hex()[:8]}",
+        )
+        logger.info("announce scheduler started")
+
+    async def stop(self) -> None:
+        """Stop the announce scheduler.
+
+        Why graceful: Cancels the task and waits for it to finish.
+        Safe to call even if not running.
+        """
+        if not self._running:
+            return
+
+        self._running = False
+
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+        logger.info("announce scheduler stopped")
+
+    async def _loop(self) -> None:
+        """The main announce loop.
+
+        Why infinite loop: Runs until cancelled by stop().
+
+        Flow:
+        1. Wait initial delay (let node discover peers first)
+        2. Loop forever:
+           a. Build and send announce
+           b. Wait interval + random jitter
+        """
+        # Why initial delay: Let node receive announces from others first.
+        # This builds gradients before we advertise ourselves.
+        try:
+            await asyncio.sleep(self.config.initial_delay_ms / 1000)
+        except asyncio.CancelledError:
+            return
+
+        while self._running:
+            try:
+                # Send announce
+                await self._send_announce()
+
+                # Wait with jitter
+                # Why jitter: Prevents all nodes announcing at the same time.
+                jitter = random.randint(0, self.config.jitter_ms)
+                delay = (self.config.interval_ms + jitter) / 1000
+                await asyncio.sleep(delay)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                # Why catch-all: Don't let one failure stop the loop.
+                logger.exception("error in announce loop: %s", e)
+                # Brief pause before retry
+                await asyncio.sleep(1)
+
+    async def _send_announce(self) -> None:
+        """Build and transmit an announce.
+
+        Why separate method: Allows manual triggering for testing.
+        """
+        announce = self.build_announce()
+        data = announce.to_bytes()
+
+        success = await self.transmitter.transmit_announce(data)
+        if success:
+            logger.info("sent announce seq=%d", announce.seq_num)
+        else:
+            logger.warning("failed to send announce seq=%d", announce.seq_num)
+
+    async def send_now(self) -> bool:
+        """Manually trigger an immediate announce.
+
+        Why exposed: Useful for testing and for triggering announces
+        after significant events (e.g., topology change).
+
+        Returns:
+            True if announce was sent successfully.
+        """
+        if not self._running:
+            logger.warning("cannot send announce: scheduler not running")
+            return False
+
+        announce = self.build_announce()
+        data = announce.to_bytes()
+        return await self.transmitter.transmit_announce(data)
+
+    @property
+    def is_running(self) -> bool:
+        """Whether the scheduler is currently running."""
+        return self._running

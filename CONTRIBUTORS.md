@@ -11,10 +11,10 @@
 |-------|-------------|--------|
 | 9a9 | Schnorr48 signature implementation | ✅ Done — vectors in `test/vectors/schnorr48.json` |
 | muq | Link TX/RX with signatures | ✅ Done — `link_layer.py` with 20 tests |
-| l1r | Announce message format/processing | ✅ Done — `announce/` module with 53 tests |
+| l1r | Announce message format/processing | ✅ Done — `announce/` module with 78 tests |
 | aj0 | Hybrid routing (RPL + LOADng) | ✅ Done — `routing/` module with 26 tests |
 | q0p | Full node integration | ✅ Done — `node.py` with 13 tests |
-| 8rd | Announce scheduler | Ready to start |
+| 8rd | Announce scheduler | ✅ Done — `announce/scheduler.py` with 25 tests |
 | sxe | Multi-node simulation integration | Ready to start |
 | 1a0/ijj | CoAP integration + gate | Ready to verify |
 

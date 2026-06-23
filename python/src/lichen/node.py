@@ -26,9 +26,9 @@ from ipaddress import IPv6Address
 from typing import Callable
 
 from lichen.announce.messages import AnnounceMessage, ANNOUNCE_TYPE
-from lichen.announce.processor import AnnounceProcessor, GRADIENT_TIMEOUT_MS
+from lichen.announce.processor import AnnounceProcessor
+from lichen.announce.scheduler import AnnounceScheduler, SchedulerConfig
 from lichen.crypto.identity import Identity, PeerIdentity
-from lichen.crypto.schnorr48 import sign
 from lichen.gradient import GradientTable
 from lichen.link.frame import LichenFrame
 from lichen.link.link_layer import LinkLayer, RxFrame
@@ -105,15 +105,15 @@ class Node:
     # Lifecycle state
     state: NodeState = field(default=NodeState.STOPPED, init=False)
     _receive_task: asyncio.Task | None = field(default=None, init=False, repr=False)
-    _announce_task: asyncio.Task | None = field(default=None, init=False, repr=False)
+
+    # Announce scheduler - manages periodic announce transmission
+    # Why separate: Single responsibility, persistence support, testability.
+    _scheduler: AnnounceScheduler = field(init=False, repr=False)
 
     # Callbacks
     _on_receive: Callable[[bytes, PeerIdentity], None] | None = field(
         default=None, init=False, repr=False
     )
-
-    # Sequence number for announces
-    _announce_seq: int = field(default=0, init=False, repr=False)
 
     def __post_init__(self) -> None:
         # Why initialize layers here: They depend on self.identity, self.radio.
@@ -138,6 +138,18 @@ class Node:
         self.announce_processor = AnnounceProcessor(
             gradient_table=self.gradient_table,
             address_builder=build_address,
+        )
+
+        # Why scheduler: Encapsulates announce timing, signing, sequence numbers.
+        # The transmitter lambda bridges scheduler to link layer.
+        self._scheduler = AnnounceScheduler(
+            identity=self.identity,
+            transmitter=self,  # Node implements AnnounceTransmitter
+            config=SchedulerConfig(
+                interval_ms=self.config.announce_interval_ms,
+                jitter_ms=self.config.announce_jitter_ms,
+                initial_delay_ms=5_000,  # Why 5s: Let node discover peers first.
+            ),
         )
 
     def _peer_lookup(self, hint: bytes) -> PeerIdentity | None:
@@ -171,6 +183,14 @@ class Node:
         """Remove a peer from the database."""
         self.peer_db.pop(iid, None)
 
+    async def transmit_announce(self, data: bytes) -> bool:
+        """Transmit announce data via link layer (AnnounceTransmitter protocol).
+
+        Why a method on Node: Node owns the link layer. Scheduler calls this
+        to actually send the announce bytes over the air.
+        """
+        return await self.link.send(data)
+
     def set_on_receive(self, callback: Callable[[bytes, PeerIdentity], None]) -> None:
         """Set callback for received application data.
 
@@ -196,11 +216,9 @@ class Node:
             name=f"node-rx-{self.identity.iid.hex()[:8]}",
         )
 
-        # Start announce loop
-        self._announce_task = asyncio.create_task(
-            self._announce_loop(),
-            name=f"node-ann-{self.identity.iid.hex()[:8]}",
-        )
+        # Start announce scheduler
+        # Why separate: Scheduler owns timing and seq_num; Node owns integration.
+        await self._scheduler.start()
 
         self.state = NodeState.RUNNING
         logger.info("node started")
@@ -216,7 +234,11 @@ class Node:
         self.state = NodeState.STOPPING
         logger.info("stopping node")
 
-        # Cancel tasks
+        # Stop announce scheduler first
+        # Why first: Prevents new announces while shutting down.
+        await self._scheduler.stop()
+
+        # Cancel receive task
         if self._receive_task:
             self._receive_task.cancel()
             try:
@@ -224,14 +246,6 @@ class Node:
             except asyncio.CancelledError:
                 pass
             self._receive_task = None
-
-        if self._announce_task:
-            self._announce_task.cancel()
-            try:
-                await self._announce_task
-            except asyncio.CancelledError:
-                pass
-            self._announce_task = None
 
         self.state = NodeState.STOPPED
         logger.info("node stopped")
@@ -314,61 +328,25 @@ class Node:
         if success:
             logger.debug("relayed announce from %s", announce.originator_iid.hex())
 
-    async def _announce_loop(self) -> None:
-        """Periodically send our own announces.
-
-        Why loop: Spec section 9.4 - announce every 5 minutes with jitter.
-        """
-        import random
-
-        while True:
-            try:
-                # Wait with jitter
-                jitter = random.randint(0, self.config.announce_jitter_ms)
-                await asyncio.sleep((self.config.announce_interval_ms + jitter) / 1000)
-
-                # Send announce
-                await self._send_announce()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.exception("error in announce loop: %s", e)
-
     async def _send_announce(self) -> None:
         """Send our own announce message.
 
         Why separate method: Allows testing and manual triggering.
+        Delegates to scheduler for announce building (signing, seq_num).
         """
-        self._announce_seq = (self._announce_seq + 1) & 0xFFFF
-
-        # Build unsigned announce
-        msg = AnnounceMessage(
-            originator_iid=self.identity.iid,
-            pubkey=self.identity.pubkey,
-            seq_num=self._announce_seq,
-            hop_count=0,
-        )
-
-        # Sign it
-        signature = sign(
-            self.identity.privkey,
-            self.identity.pubkey,
-            msg.signed_data(),
-        )
-
-        # Create signed message
-        signed_msg = AnnounceMessage(
-            originator_iid=msg.originator_iid,
-            pubkey=msg.pubkey,
-            seq_num=msg.seq_num,
-            hop_count=msg.hop_count,
-            signature=signature,
-        )
-
-        # Send via link layer
-        success = await self.link.send(signed_msg.to_bytes())
+        announce = self._scheduler.build_announce()
+        data = announce.to_bytes()
+        success = await self.link.send(data)
         if success:
-            logger.info("sent announce seq=%d", self._announce_seq)
+            logger.info("sent announce seq=%d", announce.seq_num)
+
+    @property
+    def _announce_seq(self) -> int:
+        """Current announce sequence number (for backwards compatibility).
+
+        Why property: Tests expect node._announce_seq. Delegate to scheduler.
+        """
+        return self._scheduler.get_seq_num()
 
     async def send(self, dst: IPv6Address, payload: bytes) -> bool:
         """Send application data to a destination.
@@ -398,5 +376,5 @@ class Node:
             "state": self.state.name,
             "peers": len(self.peer_db),
             "gradients": len(self.gradient_table),
-            "announce_seq": self._announce_seq,
+            "announce_seq": self._scheduler.get_seq_num(),
         }
