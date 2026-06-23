@@ -116,17 +116,23 @@ Addresses are stable, routable, and work with standard IPv6 tools.
 
 ### Routing
 
-LICHEN uses three-tier hybrid routing, not one-size-fits-all:
+LICHEN uses multi-tier hybrid routing, not one-size-fits-all:
 
 | Tier | Protocol | Traffic Type |
 |------|----------|--------------|
 | 1 | **RPL** | Border router ↔ mesh (tree-shaped, upward/downward) |
 | 2 | **Announce** | Peer-to-peer between active nodes (instant, proactive) |
 | 3 | **LOADng** | Unknown destinations (reactive discovery fallback) |
+| 4 | **GPSR** | Geographic routing using GPS coordinates |
+| 5 | **Backpressure** | Congestion-aware path selection via queue depth |
+| 6 | **DTN** | Store-and-forward for partitioned networks |
+| 7 | **Opportunistic** | Coordinated multi-forwarder broadcast (ExOR-style) |
 
 RPL builds a tree rooted at the border router for internet traffic. Announce routing builds gradients toward active mesh participants — nodes periodically broadcast signed announcements, so peers can reach each other instantly. LOADng provides reactive route discovery for new or sleeping nodes.
 
-All three methods populate a unified gradient table. No flooding for unicast traffic.
+The advanced routing extensions (GPSR, backpressure, DTN, opportunistic) draw from techniques proven in tactical MANET radios like TSM-X and Wave Relay, adapted to LoRa's constrained bandwidth. See `spec/appendix-design-rationale.md` for inspirations and tradeoffs.
+
+All methods populate a unified gradient table. No flooding for unicast traffic.
 
 ### Compression
 
@@ -153,15 +159,15 @@ GET  coap://[node]/.well-known/core     # Resource discovery
 
 ## Project Status
 
-**Phase: Specification + Prototype**
+**Phase: Prototype**
 
 - [x] Protocol specification (see `spec/`)
 - [x] Internet-Drafts for novel components (see `spec/drafts/`)
-- [ ] Python prototype with simulated radio
+- [x] Python prototype with simulated radio
 - [ ] Rust reference implementation
 - [ ] Zephyr embedded implementation
 
-This is not production-ready software. It's a working design that needs implementation.
+The Python prototype includes a full network simulator with multi-node topologies, barrier-synchronized time, and integration tests for all routing algorithms. Not production-ready, but validates the protocol design.
 
 ## Repository Structure
 
@@ -171,18 +177,28 @@ LICHEN/
 ├── spec/                   # Protocol specification
 │   ├── README.md           # Spec index
 │   ├── 01-architecture.md  # Design principles
-│   ├── 05-routing.md       # Three-tier routing
+│   ├── 05-routing.md       # Multi-tier routing
 │   ├── 06-security.md      # Security architecture
-│   ├── appendix-rpl.md     # RPL configuration
-│   ├── appendix-loadng.md  # LOADng configuration
-│   ├── ...                 # Other spec documents
+│   ├── appendix-design-rationale.md  # Inspirations & constraints
 │   └── drafts/             # Internet-Drafts
-├── python/                 # (planned) Python prototype
+├── python/                 # Python prototype
+│   ├── src/lichen/         # Core protocol implementation
+│   ├── tests/              # Unit and integration tests
+│   └── tests/sim/          # Multi-node simulation tests
 ├── rust/                   # (planned) Rust implementation
 └── zephyr/                 # (planned) Zephyr embedded
 ```
 
 ## Getting Started
+
+**Run the simulator:**
+```bash
+cd python
+pip install -e ".[dev]"
+pytest                          # Run all tests
+pytest tests/sim/               # Run simulation tests only
+lichen-sim --help               # Start simulator server
+```
 
 **Read the spec:**
 ```bash
@@ -192,8 +208,9 @@ ls spec/*.md
 **Key documents:**
 - `spec/README.md` — Table of contents
 - `spec/01-architecture.md` — Why these design choices
-- `spec/05-routing.md` — Three-tier routing (RPL + Announce + LOADng)
+- `spec/05-routing.md` — Multi-tier routing
 - `spec/06-security.md` — Security architecture
+- `spec/appendix-design-rationale.md` — Tactical radio inspirations
 - `spec/drafts/` — Standalone components (Schnorr sigs, SCHC profile, RPL config)
 
 ## Contributing
@@ -205,10 +222,10 @@ bd show <id>    # View issue details
 ```
 
 Areas needing work:
-1. Python prototype (wireless simulator first)
-2. Test vectors for crypto
-3. SCHC compression implementation
-4. Zephyr port
+1. Rust reference implementation
+2. Zephyr embedded port
+3. Real radio integration (SX126x/SX127x drivers)
+4. Border router implementation
 
 ## FAQ
 
@@ -220,9 +237,9 @@ Areas needing work:
 
 LoRaWAN is star topology — every node talks to a gateway, no mesh. Good for city-scale IoT with infrastructure, not for off-grid mesh.
 
-**Why three routing protocols?**
+**Why so many routing protocols?**
 
-Each solves a different problem. RPL excels at tree-shaped sensor→gateway traffic but peer-to-peer goes through the common ancestor (inefficient). Announce routing gives instant peer-to-peer between active nodes but can't find sleeping or new nodes. LOADng discovers unknown destinations reactively. Together they cover all traffic patterns efficiently. Thread rejected pure RPL for similar reasons.
+Each solves a different problem. RPL excels at tree-shaped sensor→gateway traffic. Announce routing gives instant peer-to-peer between active nodes. LOADng discovers unknown destinations reactively. GPSR uses geographic coordinates when topology is unknown but positions are. Backpressure routes around congested nodes. DTN handles network partitions via store-and-forward. Opportunistic forwarding uses coordinated broadcast when multiple paths exist. These aren't all active simultaneously—they're tools selected based on conditions. See `spec/appendix-design-rationale.md` for how this draws from tactical MANET experience.
 
 **Why Schnorr instead of Ed25519?**
 
@@ -230,7 +247,7 @@ Ed25519 signatures are 64 bytes. Our Schnorr variant is 48 bytes. At LoRa data r
 
 **Can I use this today?**
 
-Not yet. The spec is solid; the implementation doesn't exist yet. Use Meshtastic if you need something working now.
+The Python simulator works and validates the protocol design. Real hardware support (Zephyr/ESP32) is not yet implemented. Use Meshtastic if you need radios working now; use LICHEN's simulator if you want to experiment with the protocol.
 
 **What about encryption?**
 
