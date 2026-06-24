@@ -6,5 +6,7 @@
 pub mod config;
 pub mod gateway;
 pub mod slip;
+#[cfg(target_os = "linux")]
+pub mod tun;
 
 pub use gateway::Gateway;
