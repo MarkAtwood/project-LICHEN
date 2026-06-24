@@ -61,15 +61,15 @@ jobs:
           workspaces: rust
 
       - name: Build
-        run: cargo build --workspace --features lichen-link/schnorr
+        run: cargo build --workspace --features lichen-link/schnorr,lichen-link/std
         working-directory: rust
 
       - name: Test
-        run: cargo test --workspace --features lichen-link/schnorr
+        run: cargo test --workspace --features lichen-link/schnorr,lichen-link/std
         working-directory: rust
 
       - name: Clippy
-        run: cargo clippy --workspace --features lichen-link/schnorr -- -D warnings
+        run: cargo clippy --workspace --features lichen-link/schnorr,lichen-link/std -- -D warnings
         working-directory: rust
 
       - name: Format check
@@ -81,13 +81,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # west T2 topology: manifest repo (lichen/) must sit alongside zephyr/.
-          # Checking out to a subdirectory replicates the workspace layout.
-          path: lichen
+        # Check out to workspace root so lichen/ (the manifest repo) sits
+        # alongside zephyr/ — the standard west T2 workspace layout.
 
       - name: Install system deps
-        run: sudo apt-get install -y --no-install-recommends cmake ninja-build gcc
+        # gcc-multilib provides 32-bit headers needed by native_sim (-m32 build)
+        run: sudo apt-get install -y --no-install-recommends cmake ninja-build gcc gcc-multilib
 
       - name: Install west and Python deps
         run: pip install west
@@ -117,4 +116,4 @@ jobs:
         run: west zephyr-export
 
       - name: Build gateway (native_sim)
-        run: west build -b native_sim lichen/apps/gateway
+        run: west build -b native_sim lichen/apps/gateway -- -DZEPHYR_TOOLCHAIN_VARIANT=host

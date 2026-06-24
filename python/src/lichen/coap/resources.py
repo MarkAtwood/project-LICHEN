@@ -1,23 +1,28 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Basic CoAP resources for a LICHEN node (spec section 7, RFC 6690).
+"""CoAP resources for a LICHEN node (spec section 7, RFC 6690).
 
 Exposes ``/.well-known/core`` (resource discovery), ``/status``, ``/neighbors``,
 and ``/config``. Payloads use CBOR (content-format 60), the compact encoding
 appropriate for constrained LoRa links.
 
-Because the integrated Node class does not exist yet, the resources read from an
-injected :class:`NodeInfo` provider rather than a live node; :func:`build_site`
-wires them into an aiocoap Site. Swap in a node-backed provider once it lands.
+Also provides :class:`ProxyResource` — a forward proxy (RFC 7252 §5.7) that
+lets a local client reach any mesh node by passing a ``Proxy-Uri`` option.
+
+Because the integrated Node class does not exist yet, the local resources read
+from an injected :class:`NodeInfo` provider rather than a live node; swap in
+a node-backed provider once it lands.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+import aiocoap
 import cbor2
-from aiocoap import CHANGED, CONTENT, Message, resource
+from aiocoap import BAD_GATEWAY, BAD_REQUEST, CHANGED, CONTENT, Message, resource
 from aiocoap.numbers import ContentFormat
 
 CBOR = ContentFormat.CBOR
@@ -104,11 +109,65 @@ class ConfigResource(_ReadResource):
         if not isinstance(updates, dict):
             return Message(code=CHANGED)  # ignore non-object bodies
         self.node_info.set_config(updates)
-        return _cbor_response(self.node_info.get_config())
+        return Message(code=CHANGED)
 
 
-def build_site(node_info: NodeInfo) -> resource.Site:
-    """Build an aiocoap Site exposing the LICHEN node resources."""
+class ProxyResource(resource.Resource):
+    """CoAP forward proxy — relays requests with Proxy-Uri into the mesh.
+
+    A local client (phone, desktop) sends a request to ``/proxy`` on the
+    gateway with a ``Proxy-Uri`` option naming the target mesh node::
+
+        GET coap://[gateway]/proxy
+        Proxy-Uri: coap://[fd00::2]/status
+
+    The gateway forwards the request via its mesh-side aiocoap context and
+    relays the response — including any CoAP error codes from the target.
+    The ``mesh_ctx`` must be a context whose transport can route to mesh nodes
+    (e.g. a :class:`~lichen.coap.transport.LichenTransport` backed by a
+    :class:`~lichen.coap.node_channel.NodeChannel`).
+
+    Per RFC 7252 §5.7, the Proxy-Uri option is stripped before forwarding.
+    """
+
+    def __init__(self, mesh_ctx: aiocoap.Context, *, timeout: float = 30.0) -> None:
+        super().__init__()
+        self._mesh_ctx = mesh_ctx
+        self._timeout = timeout
+
+    async def render(self, request: Message) -> Message:
+        target = request.opt.proxy_uri
+        if not target:
+            return Message(code=BAD_REQUEST)
+
+        fwd = Message(code=request.code, uri=target, payload=request.payload)
+        if request.opt.content_format is not None:
+            fwd.opt.content_format = request.opt.content_format
+
+        try:
+            response = await asyncio.wait_for(
+                self._mesh_ctx.request(fwd).response,
+                timeout=self._timeout,
+            )
+        except Exception:
+            return Message(code=BAD_GATEWAY)
+
+        relay = Message(code=response.code, payload=response.payload)
+        if response.opt.content_format is not None:
+            relay.opt.content_format = response.opt.content_format
+        return relay
+
+
+def build_site(
+    node_info: NodeInfo,
+    *,
+    mesh_client: aiocoap.Context | None = None,
+) -> resource.Site:
+    """Build an aiocoap Site exposing the LICHEN node resources.
+
+    Pass ``mesh_client`` to also expose a forward proxy at ``/proxy``
+    that routes requests with ``Proxy-Uri`` into the mesh.
+    """
     site = resource.Site()
     site.add_resource(
         [".well-known", "core"],
@@ -117,4 +176,6 @@ def build_site(node_info: NodeInfo) -> resource.Site:
     site.add_resource(["status"], StatusResource(node_info))
     site.add_resource(["neighbors"], NeighborsResource(node_info))
     site.add_resource(["config"], ConfigResource(node_info))
+    if mesh_client is not None:
+        site.add_resource(["proxy"], ProxyResource(mesh_client))
     return site

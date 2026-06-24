@@ -9,9 +9,7 @@ modification, etc.).
 
 from __future__ import annotations
 
-import pytest
-
-from lichen.sim.events import ObserverRegistry, SimulationObserver
+from lichen.sim.events import ObserverRegistry
 from lichen.sim.simulation import Simulation
 
 
@@ -74,7 +72,9 @@ class TestObserverRegistry:
         observer = RecordingObserver()
 
         registry.add(observer)
-        registry.notify("on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000)
+        registry.notify(
+            "on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000
+        )
 
         assert len(observer.events) == 1
         assert observer.events[0][0] == "tx_start"
@@ -101,7 +101,9 @@ class TestObserverRegistry:
 
         registry.add(observer)
         registry.remove(observer)
-        registry.notify("on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000)
+        registry.notify(
+            "on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000
+        )
 
         assert len(observer.events) == 0
 
@@ -123,7 +125,9 @@ class TestObserverRegistry:
 
         assert len(registry) == 1
 
-        registry.notify("on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000)
+        registry.notify(
+            "on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000
+        )
         assert len(observer.events) == 1  # Only called once
 
     def test_exception_does_not_stop_others(self) -> None:
@@ -134,7 +138,9 @@ class TestObserverRegistry:
 
         registry.add(exploding)
         registry.add(recording)
-        registry.notify("on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000)
+        registry.notify(
+            "on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000
+        )
 
         # Recording observer should still have received the event
         assert len(recording.events) == 1
@@ -147,7 +153,9 @@ class TestObserverRegistry:
         registry.add(partial)
         # Should not raise even though PartialObserver doesn't have on_node_added
         registry.notify("on_node_added", sim_id="s", node_id="n", x=0.0, y=0.0, z=0.0)
-        registry.notify("on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000)
+        registry.notify(
+            "on_tx_start", sim_id="test", node_id="n1", tx_id="t1", payload_len=10, time_us=1000
+        )
 
         # Only tx_start should be recorded
         assert len(partial.events) == 1

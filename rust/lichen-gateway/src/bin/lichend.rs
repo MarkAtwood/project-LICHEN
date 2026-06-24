@@ -1,20 +1,24 @@
 //! lichend — LICHEN border router daemon.
 //!
+//! Bridges the LoRa mesh (SLIP over serial or TCP simulator) to the Linux
+//! IPv6 stack via a TUN device. Acts as RPL DODAG root in Non-Storing Mode.
+//!
 //! Usage:
-//!   lichend [OPTIONS]
 //!   lichend --config /etc/lichen/gateway.toml
-//!   lichend --sim               # use TCP simulator instead of real serial
+//!   lichend --sim                          # TCP simulator, TUN device
+//!   lichend --sim --no-tun                 # TCP simulator, logging only (CI)
 
 use clap::Parser;
 use lichen_core::addr::NodeId;
 use lichen_gateway::{config::Config, slip, Gateway};
+use lichen_sim::SimClient;
 use std::path::PathBuf;
-use tokio::{
-    io::{AsyncWriteExt, BufReader},
-    signal,
-};
-use tracing::{error, info};
+use tokio::{signal, sync::mpsc};
+use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
+
+#[cfg(target_os = "linux")]
+use lichen_gateway::tun::TunDevice;
 
 #[derive(Parser)]
 #[command(name = "lichend", about = "LICHEN border router daemon")]
@@ -24,7 +28,6 @@ struct Args {
     config: Option<PathBuf>,
 
     /// Connect to the simulator instead of a real serial port.
-    /// Overrides mesh.interface in the config file.
     #[arg(long)]
     sim: bool,
 
@@ -36,6 +39,16 @@ struct Args {
     #[arg(long, default_value = "0200000000000001")]
     node_id: String,
 
+    /// Simulation ID to join (used with --sim; must match a simulation
+    /// already created on the Python server).
+    #[arg(long, default_value = "lichen")]
+    sim_id: String,
+
+    /// Skip TUN device creation (logs packets instead of forwarding).
+    /// Required when running without CAP_NET_ADMIN (e.g. CI).
+    #[arg(long)]
+    no_tun: bool,
+
     /// Log level filter (e.g. `info`, `debug`, `lichen_gateway=trace`).
     #[arg(long, env = "RUST_LOG", default_value = "info")]
     log: String,
@@ -44,7 +57,6 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-
     fmt().with_env_filter(EnvFilter::new(&args.log)).init();
 
     let config = if let Some(path) = &args.config {
@@ -68,61 +80,190 @@ async fn main() {
 
     info!(
         interface = if use_sim { &args.sim_addr } else { &config.mesh.interface },
-        node_id = ?node_id,
+        ?node_id,
         prefix = %config.ipv6.prefix,
         rpl_mode = %config.rpl.mode,
         "lichend starting"
     );
 
+    // Open TUN device unless --no-tun or non-Linux.
+    #[cfg(target_os = "linux")]
+    let tun = if args.no_tun {
+        warn!("--no-tun: TUN device skipped; packets will be logged only");
+        None
+    } else {
+        match TunDevice::open("lichen0") {
+            Ok(dev) => {
+                if let Err(e) = lichen_gateway::tun::configure("lichen0", &config.ipv6.prefix) {
+                    error!("TUN configure: {e} (try running as root or with CAP_NET_ADMIN)");
+                    std::process::exit(1);
+                }
+                Some(dev)
+            }
+            Err(e) => {
+                error!("TUN open: {e} (try running as root or with CAP_NET_ADMIN)");
+                std::process::exit(1);
+            }
+        }
+    };
+    #[cfg(not(target_os = "linux"))]
+    let tun: Option<()> = {
+        if !args.no_tun {
+            warn!("TUN is only supported on Linux; running in --no-tun mode");
+        }
+        None
+    };
+
     let mut gw = Gateway::new(node_id);
 
     if use_sim {
-        run_sim(&mut gw, &args.sim_addr).await;
+        run_sim(&mut gw, &args.sim_addr, &args.sim_id, &args.node_id, tun).await;
     } else {
-        run_serial(&mut gw, &config.mesh.interface, config.mesh.baud).await;
+        run_serial(&mut gw, &config.mesh.interface, config.mesh.baud, tun).await;
     }
 }
 
-/// Run the daemon connected to the lichen-sim TCP server.
-async fn run_sim(gw: &mut Gateway, addr: &str) {
-    let stream = match tokio::net::TcpStream::connect(addr).await {
+// ── forwarding helpers ────────────────────────────────────────────────────────
+
+/// Resolves to never — used in select! when TUN is absent.
+async fn tun_recv_none(_buf: &mut [u8]) -> std::io::Result<usize> {
+    std::future::pending().await
+}
+
+/// Resolves to never — used in select! when TUN is absent.
+async fn tun_send_none(_buf: &[u8]) -> std::io::Result<()> {
+    std::future::pending().await
+}
+
+// ── sim mode ─────────────────────────────────────────────────────────────────
+
+#[cfg(target_os = "linux")]
+async fn run_sim(
+    gw: &mut Gateway,
+    addr: &str,
+    sim_id: &str,
+    node_id: &str,
+    tun: Option<TunDevice>,
+) {
+    run_sim_inner(gw, addr, sim_id, node_id, tun).await
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn run_sim(gw: &mut Gateway, addr: &str, sim_id: &str, node_id: &str, _tun: Option<()>) {
+    run_sim_inner(gw, addr, sim_id, node_id, None::<()>).await
+}
+
+/// Sim mode: connects to the Python simulator and exchanges SCHC frames.
+///
+/// The simulator protocol is strictly request→response: you cannot send a
+/// TX and an RX concurrently. We handle this by running the SimClient in a
+/// dedicated task with two channels:
+///   tx_send  — gateway → sim task (frames to transmit)
+///   rx_recv  — sim task → gateway (frames received from the sim)
+///
+/// The sim task loops: drain tx_send → receive(50 ms) → push to rx_recv.
+/// The gateway task loops: select! on rx_recv, TUN recv, ctrl_c.
+async fn run_sim_inner<T>(gw: &mut Gateway, addr: &str, sim_id: &str, node_id: &str, tun: Option<T>)
+where
+    T: TunLike,
+{
+    let sock_addr = match addr.parse() {
+        Ok(a) => a,
+        Err(e) => {
+            error!("invalid sim address '{addr}': {e}");
+            return;
+        }
+    };
+
+    let mut sim = match SimClient::connect(sock_addr, sim_id, node_id, 0.0, 0.0, 0.0).await {
         Ok(s) => s,
         Err(e) => {
             error!("cannot connect to simulator at {addr}: {e}");
             return;
         }
     };
-    info!("connected to simulator at {addr}");
-    let (reader, mut writer) = stream.into_split();
-    let mut reader = BufReader::new(reader);
+    info!(addr, sim_id, node_id, "connected to simulator");
 
-    let mut buf = vec![0u8; 1500];
+    // Channels between the gateway task and the sim protocol task.
+    let (tx_send, mut tx_recv) = mpsc::channel::<Vec<u8>>(8);
+    let (rx_send, mut rx_recv) = mpsc::channel::<Vec<u8>>(8);
+
+    // Sim protocol task: sequential TX-drain → RX(50 ms) loop.
+    let sim_task = tokio::spawn(async move {
+        loop {
+            // Drain all pending TX frames before the next RX window.
+            while let Ok(frame) = tx_recv.try_recv() {
+                match sim.transmit(&frame).await {
+                    Ok(airtime_us) => info!(airtime_us, "TX done"),
+                    Err(e) => warn!("TX failed: {e}"),
+                }
+            }
+            // Listen for an incoming frame with a short timeout.
+            match sim.receive(50).await {
+                Ok(Some((payload, rssi, snr))) => {
+                    info!(len = payload.len(), rssi, snr, "RX frame");
+                    if rx_send.send(payload).await.is_err() {
+                        break; // gateway task dropped rx_recv → shutting down
+                    }
+                }
+                Ok(None) => {} // RX_TIMEOUT — loop again
+                Err(e) => {
+                    error!("sim receive error: {e}");
+                    break;
+                }
+            }
+        }
+    });
+
+    let mut tun_buf = vec![0u8; 1500];
+
     loop {
         tokio::select! {
-            result = slip::recv_packet(&mut reader, &mut buf) => {
+            Some(frame) = rx_recv.recv() => {
+                forward_mesh_to_upstream(gw, &frame, &tun).await;
+            }
+            result = async { match &tun {
+                Some(t) => t.recv_pkt(&mut tun_buf).await,
+                None => tun_recv_none(&mut tun_buf).await,
+            }} => {
                 match result {
-                    Ok(n) => gw.handle_mesh_packet(&buf[..n]),
-                    Err(e) => {
-                        error!("SLIP receive error: {e}");
-                        break;
+                    Ok(n) => {
+                        if let Some(schc) = gw.upstream_to_mesh(&tun_buf[..n]) {
+                            // Best-effort: drop if sim task is behind.
+                            let _ = tx_send.try_send(schc);
+                        }
                     }
+                    Err(e) => { error!("TUN recv: {e}"); break; }
                 }
             }
             _ = signal::ctrl_c() => {
                 info!("shutting down");
-                let _ = writer.shutdown().await;
                 break;
             }
         }
     }
+
+    sim_task.abort();
 }
 
-/// Run the daemon connected to a real serial port (SLIP over USB CDC-ACM).
-async fn run_serial(gw: &mut Gateway, interface: &str, _baud: u32) {
-    // tokio-serial requires a blocking port; bridge via spawn_blocking or
-    // use tokio-serial's AsyncSerial. For now, stub with a clear error.
+// ── serial mode ───────────────────────────────────────────────────────────────
+
+#[cfg(target_os = "linux")]
+async fn run_serial(gw: &mut Gateway, interface: &str, baud: u32, tun: Option<TunDevice>) {
+    run_serial_inner(gw, interface, baud, tun).await
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn run_serial(gw: &mut Gateway, interface: &str, baud: u32, _tun: Option<()>) {
+    run_serial_inner(gw, interface, baud, None::<()>).await
+}
+
+async fn run_serial_inner<T>(gw: &mut Gateway, interface: &str, baud: u32, tun: Option<T>)
+where
+    T: TunLike,
+{
     info!(interface, "opening serial port");
-    let mut tty = match tokio_serial::SerialStream::open(&tokio_serial::new(interface, _baud)) {
+    let mut tty = match tokio_serial::SerialStream::open(&tokio_serial::new(interface, baud)) {
         Ok(p) => p,
         Err(e) => {
             error!("cannot open {interface}: {e}");
@@ -130,16 +271,30 @@ async fn run_serial(gw: &mut Gateway, interface: &str, _baud: u32) {
         }
     };
 
-    let mut buf = vec![0u8; 1500];
+    let mut slip_buf = vec![0u8; 1500];
+    let mut tun_buf = vec![0u8; 1500];
+
     loop {
         tokio::select! {
-            result = slip::recv_packet(&mut tty, &mut buf) => {
+            result = slip::recv_packet(&mut tty, &mut slip_buf) => {
                 match result {
-                    Ok(n) => gw.handle_mesh_packet(&buf[..n]),
-                    Err(e) => {
-                        error!("SLIP receive error: {e}");
-                        break;
+                    Ok(n) => forward_mesh_to_upstream(gw, &slip_buf[..n], &tun).await,
+                    Err(e) => { error!("SLIP recv: {e}"); break; }
+                }
+            }
+            result = async { match &tun {
+                Some(t) => t.recv_pkt(&mut tun_buf).await,
+                None => tun_recv_none(&mut tun_buf).await,
+            }} => {
+                match result {
+                    Ok(n) => {
+                        if let Some(schc) = gw.upstream_to_mesh(&tun_buf[..n]) {
+                            if let Err(e) = slip::send_packet(&mut tty, &schc).await {
+                                error!("SLIP send: {e}"); break;
+                            }
+                        }
                     }
+                    Err(e) => { error!("TUN recv: {e}"); break; }
                 }
             }
             _ = signal::ctrl_c() => {
@@ -148,8 +303,66 @@ async fn run_serial(gw: &mut Gateway, interface: &str, _baud: u32) {
             }
         }
     }
-    let _ = gw; // suppress unused warning in stub
 }
+
+// ── packet forwarding ─────────────────────────────────────────────────────────
+
+async fn forward_mesh_to_upstream<T: TunLike>(gw: &mut Gateway, frame: &[u8], tun: &Option<T>) {
+    if let Some(ipv6) = gw.mesh_to_upstream(frame) {
+        if let Some(t) = tun {
+            if let Err(e) = t.send_pkt(&ipv6).await {
+                error!("TUN write: {e}");
+            }
+        }
+    }
+}
+
+// ── TunLike trait (abstracts TunDevice vs. no-op placeholder) ─────────────────
+
+trait TunLike {
+    fn recv_pkt<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> impl std::future::Future<Output = std::io::Result<usize>> + 'a;
+    fn send_pkt<'a>(
+        &'a self,
+        buf: &'a [u8],
+    ) -> impl std::future::Future<Output = std::io::Result<()>> + 'a;
+}
+
+#[cfg(target_os = "linux")]
+impl TunLike for TunDevice {
+    fn recv_pkt<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> impl std::future::Future<Output = std::io::Result<usize>> + 'a {
+        self.recv(buf)
+    }
+    fn send_pkt<'a>(
+        &'a self,
+        buf: &'a [u8],
+    ) -> impl std::future::Future<Output = std::io::Result<()>> + 'a {
+        self.send(buf)
+    }
+}
+
+// Placeholder for non-Linux builds (never instantiated).
+impl TunLike for () {
+    fn recv_pkt<'a>(
+        &'a self,
+        buf: &'a mut [u8],
+    ) -> impl std::future::Future<Output = std::io::Result<usize>> + 'a {
+        tun_recv_none(buf)
+    }
+    fn send_pkt<'a>(
+        &'a self,
+        buf: &'a [u8],
+    ) -> impl std::future::Future<Output = std::io::Result<()>> + 'a {
+        tun_send_none(buf)
+    }
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 fn parse_node_id(hex: &str) -> Result<NodeId, String> {
     let bytes = (0..hex.len())

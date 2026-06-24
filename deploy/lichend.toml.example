@@ -1,0 +1,28 @@
+# lichend — LICHEN border router configuration
+# Copy to /etc/lichen/gateway.toml and adjust for your deployment.
+
+[mesh]
+# Serial device connected to the LoRa puck (CDC-ACM or hardware UART).
+# Use "sim" to connect to the lichen-sim TCP simulator instead.
+interface = "/dev/ttyACM0"
+
+# Baud rate — only relevant for hardware UART; ignored for CDC-ACM and sim.
+baud = 115200
+
+# TCP address of the lichen-sim server (only used when interface = "sim").
+# sim_addr = "127.0.0.1:4444"
+
+[ipv6]
+# ULA or GUA prefix delegated to the mesh.
+# The gateway address is derived as prefix::1 (e.g. fd00:lichen:1::1/48).
+prefix = "fd00:lichen:1::/48"
+
+# Host network interface with upstream IPv6 connectivity.
+upstream = "eth0"
+
+[rpl]
+# RPL instance ID (0–255). Default 1 is fine for a single DODAG.
+instance_id = 1
+
+# RPL mode of operation: "non-storing" (MOP 1) or "storing" (MOP 2).
+mode = "non-storing"
