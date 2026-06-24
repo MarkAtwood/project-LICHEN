@@ -9,10 +9,6 @@ pub fn print_kv(key: &str, value: &str, fmt: &OutputFormat) {
     }
 }
 
-pub fn print_error(msg: &str) {
-    eprintln!("error: {msg}");
-}
-
 /// Display a ciborium CBOR value using the chosen format.
 pub fn print_cbor(value: ciborium::value::Value, fmt: &OutputFormat) {
     let json = cbor_to_json(value);

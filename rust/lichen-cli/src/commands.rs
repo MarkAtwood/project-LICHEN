@@ -3,7 +3,7 @@
 //! Each function sends a real CoAP request to the node, decodes the CBOR
 //! response, and prints it using the selected output format.
 
-use crate::{output, ConfigAction, KeyAction, OutputFormat, PositionAction};
+use crate::{output, ConfigAction, KeyAction, OutputFormat, PositionAction, RdAction};
 use lichen_coap::client;
 use std::net::SocketAddr;
 
@@ -210,6 +210,45 @@ pub async fn position(node: SocketAddr, action: PositionAction, fmt: &OutputForm
             output::print_cbor(cbor, fmt);
         }
     }
-    let _ = node;
+    Ok(())
+}
+
+pub async fn rd(node: SocketAddr, action: RdAction, fmt: &OutputFormat) -> CmdResult {
+    match action {
+        RdAction::List { ep } => {
+            let path = match &ep {
+                Some(name) => format!("/rd?ep={name}"),
+                None => "/rd".to_owned(),
+            };
+            let resp = client::get(node, &path).await?;
+            let cbor = decode_cbor(&resp)?;
+            match &cbor {
+                ciborium::value::Value::Array(arr) if arr.is_empty() => {
+                    println!("(no registrations)");
+                }
+                _ => output::print_cbor(cbor, fmt),
+            }
+        }
+        RdAction::Register { ep, lt } => {
+            let ep_name = ep.unwrap_or_else(|| node.to_string());
+            let path = format!("/rd?ep={ep_name}&lt={lt}");
+            let resp = client::post(node, &path, &[]).await?;
+            if resp.is_success() {
+                output::print_kv("registered", &ep_name, fmt);
+                output::print_kv("lt", &lt.to_string(), fmt);
+            } else {
+                return Err(format!("registration failed: {}", resp.code_str()).into());
+            }
+        }
+        RdAction::Delete { id } => {
+            let path = format!("/rd/{id}");
+            let resp = client::delete(node, &path).await?;
+            if resp.is_success() {
+                output::print_kv("deleted", &id, fmt);
+            } else {
+                return Err(format!("delete failed: {}", resp.code_str()).into());
+            }
+        }
+    }
     Ok(())
 }
