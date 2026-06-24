@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+"""SLIP framing codec (RFC 1055).
+
+SLIP wraps IPv6 packets for transport over a serial UART — the link between a
+local client (phone, desktop) and the gateway node.
+
+Wire encoding::
+
+    END     = 0xC0  — marks packet boundaries (prepended and appended)
+    ESC     = 0xDB  — escape prefix
+    ESC_END = 0xDC  — ESC ESC_END encodes a literal 0xC0 in the payload
+    ESC_ESC = 0xDD  — ESC ESC_ESC encodes a literal 0xDB in the payload
+
+Usage::
+
+    # Encode one packet for transmission:
+    frame = encode(ipv6_bytes)
+
+    # Decode a stream of bytes incrementally:
+    dec = StreamDecoder()
+    for chunk in uart_read():
+        for packet in dec.feed(chunk):
+            process(packet)
+"""
+
+from __future__ import annotations
+
+END = 0xC0
+ESC = 0xDB
+ESC_END = 0xDC
+ESC_ESC = 0xDD
+
+
+def encode(packet: bytes) -> bytes:
+    """Return ``packet`` wrapped in SLIP framing.
+
+    The result is: END + escaped(packet) + END.
+    Leading END acts as a flush in case the receiver is out of sync.
+    """
+    out = bytearray()
+    out.append(END)
+    for byte in packet:
+        if byte == END:
+            out.append(ESC)
+            out.append(ESC_END)
+        elif byte == ESC:
+            out.append(ESC)
+            out.append(ESC_ESC)
+        else:
+            out.append(byte)
+    out.append(END)
+    return bytes(out)
+
+
+def decode(frame: bytes) -> bytes:
+    """Decode a single SLIP frame, stripping END bytes and un-escaping.
+
+    ``frame`` may include leading/trailing END bytes; they are ignored.
+    Raises :class:`ValueError` on a malformed escape sequence.
+    """
+    out = bytearray()
+    i = 0
+    while i < len(frame):
+        b = frame[i]
+        if b == END:
+            i += 1
+            continue
+        if b == ESC:
+            i += 1
+            if i >= len(frame):
+                raise ValueError("SLIP frame ends with bare ESC")
+            nxt = frame[i]
+            if nxt == ESC_END:
+                out.append(END)
+            elif nxt == ESC_ESC:
+                out.append(ESC)
+            else:
+                raise ValueError(f"SLIP: invalid escape byte 0x{nxt:02x}")
+        else:
+            out.append(b)
+        i += 1
+    return bytes(out)
+
+
+class StreamDecoder:
+    """Incrementally decode a SLIP byte stream.
+
+    Feed arbitrary chunks of bytes from a UART or pipe; call :meth:`feed` and
+    iterate the returned packets.  Partial packets are buffered between calls.
+    """
+
+    def __init__(self) -> None:
+        self._buf: bytearray = bytearray()
+        self._escaped: bool = False
+
+    def feed(self, data: bytes) -> list[bytes]:
+        """Process ``data`` and return all complete packets decoded so far."""
+        packets: list[bytes] = []
+        for byte in data:
+            if self._escaped:
+                self._escaped = False
+                if byte == ESC_END:
+                    self._buf.append(END)
+                elif byte == ESC_ESC:
+                    self._buf.append(ESC)
+                # else: invalid escape — silently drop (best-effort on lossy links)
+            elif byte == ESC:
+                self._escaped = True
+            elif byte == END:
+                if self._buf:
+                    packets.append(bytes(self._buf))
+                    self._buf = bytearray()
+                # else: consecutive END bytes (idle or sync) — ignore
+            else:
+                self._buf.append(byte)
+        return packets
+
+    def reset(self) -> None:
+        """Discard any partial packet and reset escape state."""
+        self._buf = bytearray()
+        self._escaped = False
