@@ -1,6 +1,5 @@
 build:
   cmake: drivers
   kconfig: drivers/Kconfig
-dts:
-  bindings:
-    - dts/bindings
+  settings:
+    dts_root: ..

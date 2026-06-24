@@ -10,19 +10,8 @@
  *   drivers/lora/sx126x.c (subghz variant)
  */
 
-/ {
-	chosen {
-		zephyr,lora = &lora0;
-	};
-};
-
 /*
- * lora0 is the alias node for the sub-GHz radio in the upstream board file.
- * It is wired internally — no external SPI CS / reset / busy GPIOs needed.
+ * &lora is the sub-GHz radio node defined in nucleo_wl55jc.dts.
+ * Already enabled by default; nothing to override for basic use.
+ * Frequency and power are configured at runtime via LoRa API.
  */
-&lora0 {
-	status = "okay";
-
-	tx-power = <22>;        /* dBm — STM32WL HP PA max */
-	frequency = <868000000>;
-};
