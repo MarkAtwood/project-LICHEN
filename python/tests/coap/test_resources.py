@@ -90,9 +90,10 @@ async def test_config_get_and_put() -> None:
             payload=cbor2.dumps({"tx_power_dbm": 20}),
         )
         put_resp = await client.request(put).response
-        assert put_resp.code == aiocoap.CONTENT
-        # The update is reflected, other keys preserved.
-        updated = cbor2.loads(put_resp.payload)
+        assert put_resp.code == aiocoap.CHANGED
+        # Verify the update is reflected by reading back.
+        get_resp = await client.request(Message(code=GET, uri="coap://server/config")).response
+        updated = cbor2.loads(get_resp.payload)
         assert updated["tx_power_dbm"] == 20
         assert updated["region"] == "US915"
         assert info.config["tx_power_dbm"] == 20
