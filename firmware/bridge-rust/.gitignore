@@ -1,0 +1,4 @@
+target/
+*.bin
+*.uf2
+*.zip
