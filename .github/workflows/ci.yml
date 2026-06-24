@@ -115,4 +115,6 @@ jobs:
         run: west zephyr-export
 
       - name: Build gateway (native_sim)
+        env:
+          ZEPHYR_TOOLCHAIN_VARIANT: host
         run: west build -b native_sim lichen/apps/gateway

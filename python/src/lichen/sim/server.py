@@ -99,8 +99,13 @@ class SimulatorServer:
         )
         self._uvicorn_server = uvicorn.Server(config)
 
-        # Run uvicorn in background task; save ref for clean shutdown in stop().
-        self._uvicorn_task = asyncio.create_task(self._uvicorn_server.serve())
+        # Only start the uvicorn task when a real port was requested.
+        # api_port=0 callers (tests, tools using ASGITransport) never need an
+        # actual HTTP socket; skipping the task avoids uvicorn-cleanup hangs
+        # that arise under Python 3.12 / uvicorn ≥0.49 when the server has had
+        # time to fully initialise before being cancelled.
+        if self.api_port != 0:
+            self._uvicorn_task = asyncio.create_task(self._uvicorn_server.serve())
 
         self._logger.info(
             "Simulator server started",
