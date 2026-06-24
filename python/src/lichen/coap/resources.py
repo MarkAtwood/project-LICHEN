@@ -18,6 +18,10 @@ Observable resources (RFC 7641):
 * :class:`SenMLLocationResource` — ``/location`` — SenML+CBOR lat/lon/alt pack;
   updated by calling :meth:`~SenMLLocationResource.update`.
 
+* :class:`PresenceResource` — ``/presence`` — CBOR list of recently-heard
+  neighbour nodes; updated by calling :meth:`~PresenceResource.seen` whenever a
+  beacon arrives from a mesh peer.
+
 Because the integrated Node class does not exist yet, the local resources read
 from an injected :class:`NodeInfo` provider rather than a live node; swap in
 a node-backed provider once it lands.
@@ -240,19 +244,90 @@ class SenMLLocationResource(resource.ObservableResource):
         return msg
 
 
+class PresenceResource(resource.ObservableResource):
+    """Observable ``/presence`` — CBOR list of recently-heard mesh nodes.
+
+    Each entry is a plain dict serialised to CBOR::
+
+        {"id": "<hex-eui64>", "rank": 256, "t": 1700000000.0}
+
+    An optional ``"rssi"`` key (integer dBm) is included when the caller
+    provides it.  Entries are keyed internally by the hex EUI-64 string so
+    a later :meth:`seen` call for the same node overwrites the old entry.
+
+    Example::
+
+        presence = PresenceResource()
+        site = build_site(info, presence_resource=presence)
+        # When a beacon arrives from a neighbour:
+        presence.seen(bytes.fromhex("0102030405060708"), rank=256, t=1700000000.0)
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._peers: dict[str, dict[str, Any]] = {}
+
+    def seen(
+        self,
+        eui64: bytes,
+        rank: int,
+        t: float,
+        rssi: int | None = None,
+    ) -> None:
+        """Record or refresh a peer's presence and notify observers.
+
+        Args:
+            eui64: 8-byte EUI-64 identifier of the peer.
+            rank:  RPL rank of the peer node.
+            t:     Unix timestamp of the observation.
+            rssi:  Received signal strength in dBm, or ``None`` if unknown.
+        """
+        entry: dict[str, Any] = {"id": eui64.hex(), "rank": rank, "t": t}
+        if rssi is not None:
+            entry["rssi"] = rssi
+        self._peers[eui64.hex()] = entry
+        self.updated_state()
+
+    def evict(self, eui64: bytes) -> None:
+        """Remove a peer from the presence table and notify observers.
+
+        No-op if the peer is not in the table.
+        """
+        if self._peers.pop(eui64.hex(), None) is not None:
+            self.updated_state()
+
+    def purge_older_than(self, cutoff_t: float) -> int:
+        """Remove entries with ``t < cutoff_t`` and notify if any were removed.
+
+        Returns the number of entries evicted.
+        """
+        stale = [k for k, v in self._peers.items() if v["t"] < cutoff_t]
+        for k in stale:
+            del self._peers[k]
+        if stale:
+            self.updated_state()
+        return len(stale)
+
+    async def render_get(self, request: Message) -> Message:
+        msg = Message(code=CONTENT, payload=cbor2.dumps(list(self._peers.values())))
+        msg.opt.content_format = CBOR
+        return msg
+
+
 def build_site(
     node_info: NodeInfo,
     *,
     mesh_client: aiocoap.Context | None = None,
     sensors_resource: SenMLSensorsResource | None = None,
     location_resource: SenMLLocationResource | None = None,
+    presence_resource: PresenceResource | None = None,
 ) -> resource.Site:
     """Build an aiocoap Site exposing the LICHEN node resources.
 
     Pass ``mesh_client`` to also expose a forward proxy at ``/proxy``.
-    Pass pre-constructed observable resources to expose ``/sensors`` and/or
-    ``/location``; callers hold the references and call ``update()`` to push
-    readings to observers.
+    Pass pre-constructed observable resources to expose ``/sensors``,
+    ``/location``, and/or ``/presence``; callers hold the references and
+    call ``update()`` / ``seen()`` to push data to observers.
     """
     site = resource.Site()
     site.add_resource(
@@ -268,4 +343,6 @@ def build_site(
         site.add_resource(["sensors"], sensors_resource)
     if location_resource is not None:
         site.add_resource(["location"], location_resource)
+    if presence_resource is not None:
+        site.add_resource(["presence"], presence_resource)
     return site
