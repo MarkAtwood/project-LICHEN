@@ -63,6 +63,7 @@ class SimulatorServer:
         self._node_servers: dict[str, asyncio.Server] = {}
         self._api: SimulatorAPI | None = None
         self._uvicorn_server: uvicorn.Server | None = None
+        self._uvicorn_task: asyncio.Task[None] | None = None
         self._shutdown_event: asyncio.Event | None = None
         self._logger = structlog.get_logger()
         self._next_node_port = node_port
@@ -98,8 +99,13 @@ class SimulatorServer:
         )
         self._uvicorn_server = uvicorn.Server(config)
 
-        # Run uvicorn in background task
-        asyncio.create_task(self._uvicorn_server.serve())
+        # Only start the uvicorn task when a real port was requested.
+        # api_port=0 callers (tests, tools using ASGITransport) never need an
+        # actual HTTP socket; skipping the task avoids uvicorn-cleanup hangs
+        # that arise under Python 3.12 / uvicorn ≥0.49 when the server has had
+        # time to fully initialise before being cancelled.
+        if self.api_port != 0:
+            self._uvicorn_task = asyncio.create_task(self._uvicorn_server.serve())
 
         self._logger.info(
             "Simulator server started",
@@ -118,9 +124,19 @@ class SimulatorServer:
         if self._shutdown_event is not None:
             self._shutdown_event.set()
 
-        # Stop uvicorn
+        # Stop uvicorn: signal exit, then await the task so it is fully done
+        # before we return. Without this await the task leaks into the event
+        # loop and Python 3.12's stricter asyncio cleanup hangs.
         if self._uvicorn_server is not None:
             self._uvicorn_server.should_exit = True
+        if self._uvicorn_task is not None and not self._uvicorn_task.done():
+            try:
+                await asyncio.wait_for(self._uvicorn_task, timeout=2.0)
+            except (TimeoutError, asyncio.CancelledError):
+                self._uvicorn_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._uvicorn_task
+            self._uvicorn_task = None
 
         # Close all node servers
         for sim_id in list(self._node_servers.keys()):
@@ -256,7 +272,11 @@ class SimulatorServer:
         server = self._node_servers.pop(sim_id, None)
         if server is not None:
             server.close()
-            await server.wait_closed()
+            # Python 3.12 changed wait_closed(): if close() fires _wakeup()
+            # before wait_closed() adds its future to _waiters, the future
+            # never resolves. Cap with a timeout to prevent indefinite hang.
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(server.wait_closed(), timeout=1.0)
             self._logger.info("Stopped node server", sim_id=sim_id)
 
 

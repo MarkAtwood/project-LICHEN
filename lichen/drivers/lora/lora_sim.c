@@ -110,7 +110,7 @@ static int read_frame(int fd, uint8_t *buf, uint32_t buf_size)
 
 static int lora_sim_connect(struct lora_sim_data *data)
 {
-	struct zsock_sockaddr_in addr = {
+	struct sockaddr_in addr = {
 		.sin_family = AF_INET,
 		.sin_port   = htons(CONFIG_LORA_LICHEN_SIM_PORT),
 	};
@@ -122,7 +122,7 @@ static int lora_sim_connect(struct lora_sim_data *data)
 		LOG_ERR("socket() failed: %d", errno);
 		return -errno;
 	}
-	if (zsock_connect(data->fd, (struct zsock_sockaddr *)&addr, sizeof(addr)) < 0) {
+	if (zsock_connect(data->fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		LOG_ERR("connect() to %s:%d failed: %d",
 			CONFIG_LORA_LICHEN_SIM_HOST,
 			CONFIG_LORA_LICHEN_SIM_PORT, errno);

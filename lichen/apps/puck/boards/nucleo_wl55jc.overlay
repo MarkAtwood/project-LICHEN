@@ -1,0 +1,16 @@
+/*
+ * Nucleo-WL55JC — STM32WL55 with built-in Sub-GHz radio.
+ *
+ * The board DTS already configures the Sub-GHz radio (&lora / radio@0 inside
+ * &subghzspi) with GPIOs, TCXO timing, and the RFO-HP output. This overlay
+ * just points the Zephyr LoRa and SLIP aliases at those nodes.
+ *
+ * SLIP is tunnelled over LPUART1 (PA2/PA3 → ST-LINK virtual COM port).
+ */
+
+/ {
+	chosen {
+		zephyr,lora      = &lora;
+		zephyr,slip-uart = &lpuart1;
+	};
+};

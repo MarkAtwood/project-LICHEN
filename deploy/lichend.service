@@ -1,0 +1,27 @@
+[Unit]
+Description=LICHEN border router daemon (lichend)
+Documentation=https://github.com/fr0sty1/project-LICHEN
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lichend --config /etc/lichen/gateway.toml
+Restart=on-failure
+RestartSec=5
+
+# CAP_NET_ADMIN is required to create/configure the TUN device.
+User=root
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+
+# Harden the service where possible.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+# Allow writing to /run for potential future PID file.
+RuntimeDirectory=lichend
+
+[Install]
+WantedBy=multi-user.target
