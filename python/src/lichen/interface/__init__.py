@@ -18,6 +18,7 @@ from lichen.interface.messages import (
 )
 from lichen.interface.tcp import TcpConnection, TcpServer, connect, serve
 from lichen.interface.handler import NodeHandler, bind_native
+from lichen.interface.serial import SerialConnection, open_serial, list_serial_ports
 
 __all__ = [
     # Framing
@@ -47,4 +48,8 @@ __all__ = [
     # Node handler
     "NodeHandler",
     "bind_native",
+    # Serial transport
+    "SerialConnection",
+    "open_serial",
+    "list_serial_ports",
 ]
