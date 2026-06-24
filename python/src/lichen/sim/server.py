@@ -63,6 +63,7 @@ class SimulatorServer:
         self._node_servers: dict[str, asyncio.Server] = {}
         self._api: SimulatorAPI | None = None
         self._uvicorn_server: uvicorn.Server | None = None
+        self._uvicorn_task: asyncio.Task[None] | None = None
         self._shutdown_event: asyncio.Event | None = None
         self._logger = structlog.get_logger()
         self._next_node_port = node_port
@@ -98,8 +99,8 @@ class SimulatorServer:
         )
         self._uvicorn_server = uvicorn.Server(config)
 
-        # Run uvicorn in background task
-        asyncio.create_task(self._uvicorn_server.serve())
+        # Run uvicorn in background task; save ref for clean shutdown in stop().
+        self._uvicorn_task = asyncio.create_task(self._uvicorn_server.serve())
 
         self._logger.info(
             "Simulator server started",
@@ -118,9 +119,19 @@ class SimulatorServer:
         if self._shutdown_event is not None:
             self._shutdown_event.set()
 
-        # Stop uvicorn
+        # Stop uvicorn: signal exit, then await the task so it is fully done
+        # before we return. Without this await the task leaks into the event
+        # loop and Python 3.12's stricter asyncio cleanup hangs.
         if self._uvicorn_server is not None:
             self._uvicorn_server.should_exit = True
+        if self._uvicorn_task is not None and not self._uvicorn_task.done():
+            try:
+                await asyncio.wait_for(self._uvicorn_task, timeout=2.0)
+            except (TimeoutError, asyncio.CancelledError):
+                self._uvicorn_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._uvicorn_task
+            self._uvicorn_task = None
 
         # Close all node servers
         for sim_id in list(self._node_servers.keys()):

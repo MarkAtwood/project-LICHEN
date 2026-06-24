@@ -473,12 +473,15 @@ mod tests {
         prefix[1] = 0x80;
         prefix[15] = 1;
 
-        let target = RplTarget { prefix_len: 128, prefix };
+        let target = RplTarget {
+            prefix_len: 128,
+            prefix,
+        };
         let mut buf = [0u8; 22];
         let n = target.encode_option(&mut buf).unwrap();
         assert_eq!(buf[0], OPT_RPL_TARGET);
         assert_eq!(buf[1], 18); // 2 + 16 bytes for /128
-        assert_eq!(buf[2], 0);  // flags
+        assert_eq!(buf[2], 0); // flags
         assert_eq!(buf[3], 128); // prefix_len
         assert_eq!(&buf[4..20], &prefix);
         assert_eq!(n, 20);
@@ -506,7 +509,7 @@ mod tests {
         let n = ti.encode_option(&mut buf).unwrap();
         assert_eq!(buf[0], OPT_TRANSIT_INFO);
         assert_eq!(buf[1], 20);
-        assert_eq!(buf[4], 3);   // path_sequence
+        assert_eq!(buf[4], 3); // path_sequence
         assert_eq!(buf[5], 255); // path_lifetime
         assert_eq!(&buf[6..22], &parent);
 
@@ -539,7 +542,10 @@ mod tests {
         let mut parent_addr = [0u8; 16];
         parent_addr[15] = 2;
 
-        let target = RplTarget { prefix_len: 128, prefix: target_addr };
+        let target = RplTarget {
+            prefix_len: 128,
+            prefix: target_addr,
+        };
         let transit = TransitInfo {
             path_control: 0,
             path_sequence: 0,

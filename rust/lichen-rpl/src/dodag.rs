@@ -231,9 +231,7 @@ mod tests {
 
     /// Link-local address with given IID.
     fn ll(iid: u8) -> [u8; 16] {
-        [
-            0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid,
-        ]
+        [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid]
     }
 
     fn dodag_id() -> [u8; 16] {

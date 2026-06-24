@@ -115,22 +115,34 @@ fn downward_routes_assembled_from_daos() {
     // n2 sends DAO: target=n2, parent=root
     let mut mgr2 = DaoManager::new(ll(2), 0, dodag_id());
     assert!(root.process_dao(&mgr2.build_dao(root_addr)));
-    assert_eq!(root.routing_table.lookup(&ll(2)), Some(&[ll(2)] as &[[u8; 16]]));
+    assert_eq!(
+        root.routing_table.lookup(&ll(2)),
+        Some(&[ll(2)] as &[[u8; 16]])
+    );
 
     // n3 sends DAO: target=n3, parent=n2
     let mut mgr3 = DaoManager::new(ll(3), 0, dodag_id());
     assert!(root.process_dao(&mgr3.build_dao(ll(2))));
-    assert_eq!(root.routing_table.lookup(&ll(3)), Some(&[ll(2), ll(3)] as &[[u8; 16]]));
+    assert_eq!(
+        root.routing_table.lookup(&ll(3)),
+        Some(&[ll(2), ll(3)] as &[[u8; 16]])
+    );
 
     // n5 sends DAO: target=n5, parent=root (single hop)
     let mut mgr5 = DaoManager::new(ll(5), 0, dodag_id());
     assert!(root.process_dao(&mgr5.build_dao(root_addr)));
-    assert_eq!(root.routing_table.lookup(&ll(5)), Some(&[ll(5)] as &[[u8; 16]]));
+    assert_eq!(
+        root.routing_table.lookup(&ll(5)),
+        Some(&[ll(5)] as &[[u8; 16]])
+    );
 
     // n4 sends DAO: target=n4, parent=n2 (two hops: root→n2→n4)
     let mut mgr4 = DaoManager::new(ll(4), 0, dodag_id());
     assert!(root.process_dao(&mgr4.build_dao(ll(2))));
-    assert_eq!(root.routing_table.lookup(&ll(4)), Some(&[ll(2), ll(4)] as &[[u8; 16]]));
+    assert_eq!(
+        root.routing_table.lookup(&ll(4)),
+        Some(&[ll(2), ll(4)] as &[[u8; 16]])
+    );
 
     // Root has routes to all 4 non-root nodes
     assert_eq!(root.routing_table.len(), 4);
@@ -171,8 +183,8 @@ fn route_updates_when_node_reparents() {
     let mut mgr4 = DaoManager::new(ll(4), 0, dodag_id());
 
     root.process_dao(&mgr2.build_dao(root_addr)); // n2 → root
-    root.process_dao(&mgr3.build_dao(ll(2)));     // n3 → n2
-    root.process_dao(&mgr4.build_dao(ll(3)));     // n4 → n3
+    root.process_dao(&mgr3.build_dao(ll(2))); // n3 → n2
+    root.process_dao(&mgr4.build_dao(ll(3))); // n4 → n3
 
     assert_eq!(
         root.routing_table.lookup(&ll(4)),
