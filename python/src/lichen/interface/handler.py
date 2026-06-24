@@ -168,7 +168,7 @@ class NodeHandler:
                     next_hop=next_hop_iid,
                     hops=entry.hop_count,
                     seq=entry.sequence,
-                    expires_ms=max(0, entry.expires_at - int(asyncio.get_event_loop().time() * 1000)),
+                    expires_ms=max(0, entry.expires_at - int(asyncio.get_running_loop().time() * 1000)),
                 )
             )
 

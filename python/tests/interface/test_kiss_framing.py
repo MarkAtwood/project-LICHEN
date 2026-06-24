@@ -280,3 +280,34 @@ class TestKissReader:
         # First frame invalid (bad escape), second valid
         assert len(frames) == 1
         assert frames[0].data == b"A"
+
+    def test_minimal_frame_no_payload(self):
+        """Minimal valid frame: FEND|CMD|FEND (command byte, no payload data)."""
+        reader = KissReader()
+        reader.feed(bytes([FEND, 0x00, FEND]))
+        frames = list(reader)
+        assert len(frames) == 1
+        assert frames[0].port == 0
+        assert frames[0].command == 0
+        assert frames[0].data == b""
+
+    def test_minimal_frame_with_leading_fends(self):
+        """Minimal frame with multiple leading FENDs (inter-frame padding)."""
+        reader = KissReader()
+        reader.feed(bytes([FEND, FEND, FEND, 0x00, FEND]))
+        frames = list(reader)
+        assert len(frames) == 1
+        assert frames[0].port == 0
+        assert frames[0].command == 0
+        assert frames[0].data == b""
+
+    def test_consecutive_minimal_frames(self):
+        """Multiple consecutive minimal frames with various commands."""
+        reader = KissReader()
+        # Three minimal frames: DATA (0x00), TXDELAY (0x01), RETURN (0x0F)
+        reader.feed(bytes([FEND, 0x00, FEND, FEND, 0x01, FEND, FEND, 0x0F, FEND]))
+        frames = list(reader)
+        assert len(frames) == 3
+        assert frames[0].command == 0x00
+        assert frames[1].command == 0x01
+        assert frames[2].command == 0x0F

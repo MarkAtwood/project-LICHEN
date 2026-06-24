@@ -66,9 +66,14 @@ def test_mac48_to_eui64_rejects_wrong_length() -> None:
 
 
 def test_short_addr_to_iid() -> None:
-    # 0x0000_00FF_FE00_0000 | (0x0001 << 48) = 0x0001_00FF_FE00_0000
+    # RFC 4944 section 6: IID = 0000:00FF:FE00:XXXX (short addr in low bytes)
+    # 0x0000_00FF_FE00_0000 | 0x0001 = 0x0000_00FF_FE00_0001
     assert short_addr_to_iid(0x0001) == bytes(
-        [0x00, 0x01, 0x00, 0xFF, 0xFE, 0x00, 0x00, 0x00]
+        [0x00, 0x00, 0x00, 0xFF, 0xFE, 0x00, 0x00, 0x01]
+    )
+    # Additional test vector: 0xABCD should give 0000:00FF:FE00:ABCD
+    assert short_addr_to_iid(0xABCD) == bytes(
+        [0x00, 0x00, 0x00, 0xFF, 0xFE, 0x00, 0xAB, 0xCD]
     )
 
 

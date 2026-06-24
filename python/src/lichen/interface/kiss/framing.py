@@ -202,8 +202,8 @@ class KissReader:
         if len(self.buffer) < 3:
             return None
 
-        # Find frame end (next FEND after start)
-        # Skip consecutive FENDs at start
+        # Skip inter-frame FEND padding to find frame content start.
+        # After this loop, start points to the CMD byte (first non-FEND).
         start = 0
         while start < len(self.buffer) and self.buffer[start] == FEND:
             start += 1
