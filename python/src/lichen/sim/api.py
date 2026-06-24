@@ -24,6 +24,7 @@ from lichen.sim.chaos import (
     DegradeRule,
     DropRule,
     JammerRule,
+    LatencyRule,
     PartitionRule,
 )
 from lichen.sim.simulation import Simulation, TimeMode
@@ -58,23 +59,28 @@ def _rule_to_dict(rule: ChaosRule) -> dict[str, Any]:
     """
     result: dict[str, Any] = {"id": rule.id}
 
-    if isinstance(rule, DropRule):
-        result["type"] = "drop"
-        result["node_id"] = rule.node_id
-        result["direction"] = rule.direction
-    elif isinstance(rule, PartitionRule):
-        result["type"] = "partition"
-        result["groups"] = [list(group) for group in rule.groups]
-    elif isinstance(rule, DegradeRule):
-        result["type"] = "degrade"
-        result["node_id"] = rule.node_id
-        result["rssi_penalty_db"] = rule.rssi_penalty_db
-    elif isinstance(rule, JammerRule):
-        result["type"] = "jammer"
-        result["x"] = rule.x
-        result["y"] = rule.y
-        result["z"] = rule.z
-        result["radius_m"] = rule.radius_m
+    match rule:
+        case DropRule():
+            result["type"] = "drop"
+            result["node_id"] = rule.node_id
+            result["direction"] = rule.direction
+        case PartitionRule():
+            result["type"] = "partition"
+            result["groups"] = [list(group) for group in rule.groups]
+        case DegradeRule():
+            result["type"] = "degrade"
+            result["node_id"] = rule.node_id
+            result["rssi_penalty_db"] = rule.rssi_penalty_db
+        case JammerRule():
+            result["type"] = "jammer"
+            result["x"] = rule.x
+            result["y"] = rule.y
+            result["z"] = rule.z
+            result["radius_m"] = rule.radius_m
+        case LatencyRule():
+            result["type"] = "latency"
+            result["node_id"] = rule.node_id
+            result["added_us"] = rule.added_us
 
     return result
 
@@ -548,6 +554,48 @@ class SimulatorAPI:
 
         return JSONResponse({"rule_id": rule.id, "type": "jammer"})
 
+    async def add_chaos_latency(self, request: Request) -> JSONResponse:
+        """Add a latency rule.
+
+        POST /sim/{sim_id}/chaos/latency
+        Body: {"node_id": "n1", "added_us": 5000}
+        Returns: {"rule_id": "uuid", "type": "latency"}
+        """
+        sim_id = request.path_params["sim_id"]
+
+        if sim_id not in self._simulations:
+            return _error_response(f"Simulation '{sim_id}' not found", status_code=404)
+
+        engine = self._get_chaos_engine(sim_id)
+        if engine is None:
+            return _error_response(f"Simulation '{sim_id}' not found", status_code=404)
+
+        try:
+            body = await request.json()
+        except json.JSONDecodeError:
+            return _error_response("Invalid JSON body")
+
+        node_id = body.get("node_id")
+        added_us = body.get("added_us")
+
+        if node_id is None:
+            return _error_response("Missing required field: node_id")
+        if added_us is None:
+            return _error_response("Missing required field: added_us")
+
+        try:
+            added_us = int(added_us)
+        except (TypeError, ValueError):
+            return _error_response("added_us must be an integer")
+
+        if added_us <= 0:
+            return _error_response("added_us must be positive")
+
+        rule = LatencyRule(node_id=node_id, added_us=added_us)
+        engine.add_rule(rule)
+
+        return JSONResponse({"rule_id": rule.id, "type": "latency"})
+
     async def clear_chaos(self, request: Request) -> JSONResponse:
         """Clear all chaos rules.
 
@@ -664,6 +712,11 @@ class SimulatorAPI:
                 methods=["POST"],
             ),
             Route("/sim/{sim_id}/chaos/jam", self.add_chaos_jam, methods=["POST"]),
+            Route(
+                "/sim/{sim_id}/chaos/latency",
+                self.add_chaos_latency,
+                methods=["POST"],
+            ),
             Route("/sim/{sim_id}/topology", self.get_topology, methods=["GET"]),
             Route("/sim/{sim_id}/metrics", self.get_metrics, methods=["GET"]),
             # WebSocket for real-time events

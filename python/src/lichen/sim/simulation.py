@@ -285,10 +285,11 @@ class Simulation:
         Args:
             event: The event to handle.
         """
-        if isinstance(event, TxEndEvent):
-            self._handle_tx_end(event)
-        elif isinstance(event, RxTimeoutEvent):
-            self._handle_rx_timeout(event)
+        match event:
+            case TxEndEvent():
+                self._handle_tx_end(event)
+            case RxTimeoutEvent():
+                self._handle_rx_timeout(event)
 
     def _handle_tx_end(self, event: TxEndEvent) -> None:
         """Handle transmission end event.
@@ -528,6 +529,14 @@ class Simulation:
                 if result is not None:
                     filtered_candidates.append(result)
             candidates = filtered_candidates
+
+        # Drop candidates whose LatencyRule-added delivery delay hasn't elapsed.
+        candidates = [
+            c for c in candidates
+            if c.added_latency_us == 0
+            or self._current_time_us
+            >= c.transmission.end_time_us + c.added_latency_us
+        ]
 
         tx = self._medium.resolve_reception(candidates)
         if tx is None:

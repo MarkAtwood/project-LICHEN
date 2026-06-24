@@ -1,0 +1,29 @@
+/*
+ * RAK4631 — nRF52840 + SX1262
+ *
+ * The upstream board definition (boards/arm/rak4631_nrf52840) declares the
+ * SX1262 as &lora0 on SPI3.  This overlay enables the node and applies the
+ * LICHEN RF defaults.
+ */
+
+/ {
+	chosen {
+		zephyr,lora      = &lora0;
+		zephyr,slip-uart = &cdc_acm_uart0;
+	};
+};
+
+/* CDC-ACM virtual UART — the host sees this as a /dev/ttyACMx port.
+ * The SLIP driver uses it as its serial backend. */
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&lora0 {
+	status = "okay";
+
+	tx-power = <22>;        /* dBm */
+	frequency = <868000000>;
+};

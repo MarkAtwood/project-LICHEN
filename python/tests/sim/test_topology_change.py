@@ -24,12 +24,12 @@ from ipaddress import IPv6Address
 import pytest
 
 from lichen.announce.messages import AnnounceMessage
-from lichen.announce.processor import AnnounceProcessor, GRADIENT_TIMEOUT_MS
+from lichen.announce.processor import GRADIENT_TIMEOUT_MS, AnnounceProcessor
 from lichen.announce.scheduler import AnnounceScheduler, SchedulerConfig
 from lichen.crypto.identity import Identity
 from lichen.gradient import GradientTable
 from lichen.radio.sim_client import SimRadio
-from lichen.sim.chaos import ChaosEngine, DropRule, PartitionRule
+from lichen.sim.chaos import DropRule, PartitionRule
 from lichen.sim.server import SimulatorServer
 from lichen.sim.simulation import Simulation, TimeMode
 
@@ -272,7 +272,7 @@ class TestNodeFailure:
             assert result_c is not None, "C should hear A initially"
 
             # Also drain B's receive
-            result_b = await radio_b.receive(100)
+            await radio_b.receive(100)
 
             # B fails (drops all packets)
             drop_b = DropRule(node_id="node-b", direction="both")
@@ -337,7 +337,6 @@ class TestNodeMobility:
         assert node_port is not None
 
         identity_e = make_identity(4)  # Mobile node E
-        identity_b = make_identity(1)  # Stationary node B
 
         # B's gradient table
         gradient_b = GradientTable()
