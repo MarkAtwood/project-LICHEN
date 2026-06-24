@@ -6,11 +6,9 @@ from __future__ import annotations
 
 import aiocoap
 import cbor2
-import pytest
 from aiocoap import GET, PUT, Message
-from aiocoap import resource as aio_resource
 
-from lichen.coap.resources import ProxyResource, StaticNodeInfo, build_site
+from lichen.coap.resources import StaticNodeInfo, build_site
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 
 
