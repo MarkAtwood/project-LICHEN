@@ -1,13 +1,11 @@
-//! Gateway state and async event loop.
+//! Gateway state and packet forwarding.
 
 use lichen_core::addr::NodeId;
 use lichen_node::Node;
+use lichen_schc::codec::{compress, decompress, SchcError};
 use tracing::{info, warn};
 
 /// Top-level border router state.
-///
-/// Holds a `Node` for protocol layer state and a routing table mapping mesh
-/// IPv6 addresses to EUI-64 nexthops.
 pub struct Gateway {
     pub node: Node,
     /// Routes installed in the kernel routing table.
@@ -24,38 +22,64 @@ impl Gateway {
         }
     }
 
-    /// Process a raw IPv6 packet received from the mesh (via SLIP).
+    /// SCHC-decompress a frame received from the mesh via SLIP.
     ///
-    /// Stub: logs the packet length; real implementation will forward to the
-    /// upstream tun interface.
-    pub fn handle_mesh_packet(&mut self, packet: &[u8]) {
-        if packet.len() < 40 {
-            warn!(len = packet.len(), "mesh packet too short for IPv6 header");
-            return;
+    /// Returns the raw IPv6 packet to inject into the upstream TUN device, or
+    /// `None` if decompression fails or the result is not a valid IPv6 packet.
+    pub fn mesh_to_upstream(&mut self, schc_frame: &[u8]) -> Option<Vec<u8>> {
+        let mut out = vec![0u8; 1500];
+        match decompress(schc_frame, &mut out) {
+            Ok(n) => {
+                out.truncate(n);
+                if out.len() < 40 || out[0] >> 4 != 6 {
+                    warn!(len = out.len(), "decompressed frame is not IPv6");
+                    return None;
+                }
+                let payload_len = u16::from_be_bytes([out[4], out[5]]);
+                info!(payload_len, "mesh → upstream");
+                Some(out)
+            }
+            Err(SchcError::UnknownRuleId(id)) => {
+                warn!(rule_id = id, "SCHC: unknown rule — dropping");
+                None
+            }
+            Err(e) => {
+                warn!("SCHC decompress: {e:?}");
+                None
+            }
         }
-        if packet[0] >> 4 != 6 {
-            warn!("non-IPv6 packet received from mesh");
-            return;
-        }
-        let payload_len = u16::from_be_bytes([packet[4], packet[5]]);
-        info!(payload_len, "packet from mesh");
     }
 
-    /// Process a raw IPv6 packet received from upstream.
+    /// SCHC-compress an IPv6 packet from the upstream TUN device for the mesh.
     ///
-    /// Stub: looks up the destination in the route table; real implementation
-    /// will SCHC-compress and forward via SLIP.
-    pub fn handle_upstream_packet(&mut self, packet: &[u8]) {
-        if packet.len() < 40 {
-            return;
+    /// Returns the compressed frame to send via SLIP, or `None` on error.
+    pub fn upstream_to_mesh(&mut self, ipv6_packet: &[u8]) -> Option<Vec<u8>> {
+        if ipv6_packet.len() < 40 || ipv6_packet[0] >> 4 != 6 {
+            warn!(
+                len = ipv6_packet.len(),
+                "upstream packet is not IPv6 — dropping"
+            );
+            return None;
         }
-        let dst: [u8; 16] = packet[24..40].try_into().unwrap();
+        let dst: [u8; 16] = ipv6_packet[24..40].try_into().unwrap();
         if let Some(nexthop) = self.routes.get(&dst) {
-            info!(?nexthop, "routing packet to mesh node");
+            info!(?nexthop, "routing to mesh node");
+        }
+        let mut out = vec![0u8; ipv6_packet.len() + 2];
+        match compress(ipv6_packet, &mut out) {
+            Ok(n) => {
+                out.truncate(n);
+                info!(compressed_len = n, "upstream → mesh");
+                Some(out)
+            }
+            Err(e) => {
+                warn!("SCHC compress: {e:?}");
+                None
+            }
         }
     }
 
-    /// Record that `node_id` is reachable at `addr`.
+    /// Record that `node_id` is reachable via `addr`.
     pub fn add_route(&mut self, addr: [u8; 16], node_id: NodeId) {
         self.routes.insert(addr, node_id);
     }

@@ -559,8 +559,10 @@ name = "lichen-gateway"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "libc",
  "lichen-core",
  "lichen-node",
+ "lichen-schc",
  "serde",
  "tokio",
  "tokio-serial",
