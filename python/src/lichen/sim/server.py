@@ -20,6 +20,7 @@ import uvicorn
 
 from lichen.sim.api import SimulatorAPI
 from lichen.sim.node_server import start_node_server
+from lichen.sim.pcap import PcapngWriter
 from lichen.sim.simulation import Simulation, TimeMode
 
 if TYPE_CHECKING:
@@ -44,7 +45,11 @@ class SimulatorServer:
     """
 
     def __init__(
-        self, node_port: int = 4444, api_port: int = 4445, bind_host: str = "127.0.0.1"
+        self,
+        node_port: int = 4444,
+        api_port: int = 4445,
+        bind_host: str = "127.0.0.1",
+        pcap_writer: PcapngWriter | None = None,
     ) -> None:
         """Initialize the simulator server.
 
@@ -55,10 +60,13 @@ class SimulatorServer:
             bind_host: Host address to bind. Defaults to ``127.0.0.1``
                 (loopback only). Set to ``0.0.0.0`` only on a trusted
                 network — the API has no authentication.
+            pcap_writer: Optional PcapngWriter to receive captured frames
+                from all simulations.  The caller owns the writer's lifetime.
         """
         self.node_port = node_port
         self.api_port = api_port
         self.bind_host = bind_host
+        self._pcap_writer = pcap_writer
         self._simulations: dict[str, Simulation] = {}
         self._node_servers: dict[str, asyncio.Server] = {}
         self._api: SimulatorAPI | None = None
@@ -253,7 +261,9 @@ class SimulatorServer:
             port = self._next_node_port
             self._next_node_port += 1
 
-        server = await start_node_server(sim, host=self.bind_host, port=port)
+        server = await start_node_server(
+            sim, host=self.bind_host, port=port, pcap_writer=self._pcap_writer
+        )
         self._node_servers[sim_id] = server
 
         actual_port = server.sockets[0].getsockname()[1]
@@ -307,6 +317,12 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--pcap",
+        metavar="FILE",
+        default=None,
+        help="Write captured LICHEN frames to a pcapng file (readable by Wireshark).",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -327,9 +343,13 @@ def main() -> None:
         format="%(message)s",
     )
 
-    # Create server
+    # Create server (optionally with pcap capture)
+    pcap_writer = PcapngWriter(args.pcap) if args.pcap else None
     server = SimulatorServer(
-        node_port=args.node_port, api_port=args.api_port, bind_host=args.bind_address
+        node_port=args.node_port,
+        api_port=args.api_port,
+        bind_host=args.bind_address,
+        pcap_writer=pcap_writer,
     )
 
     async def run() -> None:
@@ -354,6 +374,8 @@ def main() -> None:
     # Run the server
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run())
+    if pcap_writer is not None:
+        pcap_writer.close()
 
 
 if __name__ == "__main__":
