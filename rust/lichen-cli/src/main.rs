@@ -15,6 +15,9 @@
 //!   lichen config get tx_power_dbm
 //!   lichen config set tx_power_dbm 10
 //!   lichen position show
+//!   lichen rd list
+//!   lichen rd register --ep my-node --lt 3600
+//!   lichen rd delete <id>
 
 mod commands;
 mod output;
@@ -95,6 +98,12 @@ enum Command {
         #[command(subcommand)]
         action: PositionAction,
     },
+
+    /// CoAP Resource Directory (RFC 9176).
+    Rd {
+        #[command(subcommand)]
+        action: RdAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -151,6 +160,30 @@ enum PositionAction {
     Peers,
 }
 
+#[derive(Subcommand)]
+enum RdAction {
+    /// List registered endpoints.
+    List {
+        /// Filter by endpoint name.
+        #[arg(long)]
+        ep: Option<String>,
+    },
+    /// Register this node with the Resource Directory.
+    Register {
+        /// Endpoint name (default: node address).
+        #[arg(long)]
+        ep: Option<String>,
+        /// Lifetime in seconds (default: 3600).
+        #[arg(long, default_value_t = 3600)]
+        lt: u32,
+    },
+    /// Delete a registration by ID.
+    Delete {
+        /// Registration ID returned by `register`.
+        id: String,
+    },
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -180,6 +213,7 @@ async fn main() {
         Command::Key { action } => commands::key(cli.node, action, &fmt).await,
         Command::Config { action } => commands::config(cli.node, action, &fmt).await,
         Command::Position { action } => commands::position(cli.node, action, &fmt).await,
+        Command::Rd { action } => commands::rd(cli.node, action, &fmt).await,
     };
 
     if let Err(e) = result {
