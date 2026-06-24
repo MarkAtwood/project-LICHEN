@@ -262,12 +262,18 @@ mod tests {
 
     #[test]
     fn truncated_body_error() {
-        assert_eq!(LichenFrame::from_bytes(&[0x0f, 0x00]), Err(FrameError::TruncatedBody));
+        assert_eq!(
+            LichenFrame::from_bytes(&[0x0f, 0x00]),
+            Err(FrameError::TruncatedBody)
+        );
     }
 
     #[test]
     fn reserved_bit_error() {
         let wire = from_hex("0b8001000261626301020304");
-        assert_eq!(LichenFrame::from_bytes(&wire), Err(FrameError::ReservedBitSet));
+        assert_eq!(
+            LichenFrame::from_bytes(&wire),
+            Err(FrameError::ReservedBitSet)
+        );
     }
 }

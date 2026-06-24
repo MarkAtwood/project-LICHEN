@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 if TYPE_CHECKING:
-    from lichen.sim.simulation import Simulation
+    pass
 
 logger = logging.getLogger(__name__)
 

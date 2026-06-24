@@ -15,7 +15,6 @@ These scenarios exercise edge cases the basic line topology tests miss.
 
 from __future__ import annotations
 
-import math
 import random
 from collections.abc import AsyncGenerator
 from ipaddress import IPv6Address
@@ -30,7 +29,6 @@ from lichen.gradient import GradientEntry, GradientSource, GradientTable
 from lichen.radio.sim_client import SimRadio
 from lichen.sim.server import SimulatorServer
 from lichen.sim.simulation import Simulation, TimeMode
-
 
 # -----------------------------------------------------------------------------
 # Fixtures and helpers
@@ -222,8 +220,6 @@ class TestRingTopology:
         port = server.get_node_server_port("topology-test")
         assert port is not None
 
-        # 4 nodes in a square, 100m sides
-        positions = [(0, 0), (100, 0), (100, 100), (0, 100)]
         identity_0 = make_identity(0)
         announce_0 = build_announce_bytes(identity_0)
 
@@ -233,7 +229,7 @@ class TestRingTopology:
             "127.0.0.1", port, "topology-test", "ring-1", (100.0, 0.0, 0.0)
         ) as radio_1, SimRadio(
             "127.0.0.1", port, "topology-test", "ring-2", (100.0, 100.0, 0.0)
-        ) as radio_2, SimRadio(
+        ) as _radio_2, SimRadio(
             "127.0.0.1", port, "topology-test", "ring-3", (0.0, 100.0, 0.0)
         ) as radio_3:
             # Node 0 announces
