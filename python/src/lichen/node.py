@@ -302,7 +302,7 @@ class Node:
                 self._on_receive(payload, rx.sender)
             return
 
-        now_ms = int(asyncio.get_event_loop().time() * 1000)
+        now_ms = int(asyncio.get_running_loop().time() * 1000)
         decision, _next_hop = self.router.route(packet, now_ms)
 
         if decision == RouteDecision.DELIVER_LOCAL:
@@ -335,7 +335,7 @@ class Node:
         )
 
         # Get current time in ms (in production, use monotonic clock)
-        now_ms = int(asyncio.get_event_loop().time() * 1000)
+        now_ms = int(asyncio.get_running_loop().time() * 1000)
 
         result = self.announce_processor.process(announce, from_neighbor, now_ms)
 
@@ -404,7 +404,7 @@ class Node:
         if len(self._relay_seen) > 128:
             self._relay_seen.clear()
 
-        now_ms = int(asyncio.get_event_loop().time() * 1000)
+        now_ms = int(asyncio.get_running_loop().time() * 1000)
         decision, _next_hop = self.router.route(packet, now_ms)
 
         if decision == RouteDecision.FORWARD:

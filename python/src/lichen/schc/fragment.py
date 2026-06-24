@@ -121,6 +121,11 @@ class Ack:
         complete = bool(data[1] & 0x01)
         n = data[2]
         body = data[3:]
+        required_bytes = (n + 7) // 8
+        if len(body) < required_bytes:
+            raise FragmentError(
+                f"ACK bitmap truncated: need {required_bytes} bytes, got {len(body)}"
+            )
         bitmap = []
         for i in range(n):
             byte = body[i // 8]
