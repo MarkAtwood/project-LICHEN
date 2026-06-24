@@ -1,0 +1,16 @@
+[package]
+name = "lichen-link"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "LICHEN link layer: frame format, LLSec modes, and replay window."
+
+[features]
+default = []
+std = []
+schnorr = ["dep:curve25519-dalek", "dep:sha2"]
+
+[dependencies]
+curve25519-dalek = { version = "4.1.3", default-features = false, features = ["alloc"], optional = true }
+lichen-core = { path = "../lichen-core" }
+sha2 = { version = "0.11.0", default-features = false, optional = true }
