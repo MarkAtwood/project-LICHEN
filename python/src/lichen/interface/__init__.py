@@ -16,12 +16,15 @@ from lichen.interface.messages import (
     encode_message,
     decode_message,
 )
+from lichen.interface.tcp import TcpConnection, TcpServer, connect, serve
 
 __all__ = [
+    # Framing
     "FrameReader",
     "FrameWriter",
     "frame",
     "unframe",
+    # Messages
     "Message",
     "Hello",
     "ConfigGet",
@@ -35,4 +38,9 @@ __all__ = [
     "LogSubscribe",
     "encode_message",
     "decode_message",
+    # TCP transport
+    "TcpConnection",
+    "TcpServer",
+    "connect",
+    "serve",
 ]
