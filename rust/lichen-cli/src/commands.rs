@@ -1,50 +1,156 @@
 //! CLI command implementations.
 //!
-//! Each function sends a CoAP request to the node and formats the response.
-//! The CoAP transport is a thin wrapper that will be replaced by the real
-//! lichen-coap client once it implements network I/O.
+//! Each function sends a real CoAP request to the node, decodes the CBOR
+//! response, and prints it using the selected output format.
 
 use crate::{output, ConfigAction, KeyAction, OutputFormat, PositionAction};
+use lichen_coap::client;
 use std::net::SocketAddr;
 
 type CmdResult = Result<(), Box<dyn std::error::Error>>;
 
-/// GET coap://[node]/status
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn decode_cbor(
+    resp: &client::Response,
+) -> Result<ciborium::value::Value, Box<dyn std::error::Error>> {
+    if !resp.is_success() {
+        return Err(format!("CoAP error {}", resp.code_str()).into());
+    }
+    if resp.payload.is_empty() {
+        return Ok(ciborium::value::Value::Map(vec![]));
+    }
+    let v: ciborium::value::Value = ciborium::de::from_reader(resp.payload.as_slice())?;
+    Ok(v)
+}
+
+fn encode_cbor(v: &serde_json::Value) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let cbor_val = json_to_cbor(v);
+    let mut buf = Vec::new();
+    ciborium::ser::into_writer(&cbor_val, &mut buf)?;
+    Ok(buf)
+}
+
+fn json_to_cbor(v: &serde_json::Value) -> ciborium::value::Value {
+    use ciborium::value::Value;
+    match v {
+        serde_json::Value::Null => Value::Null,
+        serde_json::Value::Bool(b) => Value::Bool(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Integer(i.into())
+            } else {
+                Value::Float(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::String(s) => Value::Text(s.clone()),
+        serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_to_cbor).collect()),
+        serde_json::Value::Object(map) => Value::Map(
+            map.iter()
+                .map(|(k, v)| (Value::Text(k.clone()), json_to_cbor(v)))
+                .collect(),
+        ),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
 pub async fn status(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
-    let _resp = coap_get(node, "/status").await?;
-    output::print_kv("node", &node.to_string(), fmt);
-    output::print_kv(
-        "status",
-        "ok (stub — CoAP transport not yet connected)",
-        fmt,
-    );
+    println!("LICHEN node {node}");
+    let resp = client::get(node, "/status").await?;
+    let cbor = decode_cbor(&resp)?;
+    output::print_cbor(cbor, fmt);
     Ok(())
 }
 
-/// GET coap://[node]/neighbors
 pub async fn neighbors(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
-    let _resp = coap_get(node, "/neighbors").await?;
-    output::print_kv("neighbors", "(stub)", fmt);
+    let resp = client::get(node, "/neighbors").await?;
+    let cbor = decode_cbor(&resp)?;
+    match &cbor {
+        ciborium::value::Value::Array(arr) if arr.is_empty() => {
+            println!("(no neighbors)");
+        }
+        _ => output::print_cbor(cbor, fmt),
+    }
     Ok(())
 }
 
-/// POST coap://[to]/msg/inbox
-pub async fn send(_node: SocketAddr, to: &str, message: &str, fmt: &OutputFormat) -> CmdResult {
-    output::print_kv("to", to, fmt);
-    output::print_kv("message", message, fmt);
-    output::print_kv("status", "queued (stub)", fmt);
+pub async fn presence(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
+    let resp = client::get(node, "/presence").await?;
+    let cbor = decode_cbor(&resp)?;
+    match &cbor {
+        ciborium::value::Value::Array(arr) if arr.is_empty() => {
+            println!("(no peers in presence table)");
+        }
+        _ => output::print_cbor(cbor, fmt),
+    }
+    Ok(())
+}
+
+pub async fn send(node: SocketAddr, to: &str, message: &str, fmt: &OutputFormat) -> CmdResult {
+    let body_json = serde_json::json!({ "to": to, "text": message });
+    let body = encode_cbor(&body_json)?;
+    let resp = client::post(node, "/messages", &body).await?;
+    if resp.is_success() {
+        output::print_kv("sent", message, fmt);
+        output::print_kv("to", to, fmt);
+    } else {
+        return Err(format!("send failed: {}", resp.code_str()).into());
+    }
+    Ok(())
+}
+
+pub async fn inbox(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
+    let resp = client::get(node, "/messages").await?;
+    let cbor = decode_cbor(&resp)?;
+    match &cbor {
+        ciborium::value::Value::Array(arr) if arr.is_empty() => {
+            println!("(inbox empty)");
+        }
+        _ => output::print_cbor(cbor, fmt),
+    }
+    Ok(())
+}
+
+pub async fn sos_status(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
+    let resp = client::get(node, "/sos").await?;
+    let cbor = decode_cbor(&resp)?;
+    output::print_cbor(cbor, fmt);
+    Ok(())
+}
+
+pub async fn sos_activate(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
+    let resp = client::put(node, "/sos", &[]).await?;
+    if resp.is_success() {
+        output::print_kv("sos", "ACTIVE — emergency beacon transmitted", fmt);
+    } else {
+        return Err(format!("SOS activation failed: {}", resp.code_str()).into());
+    }
+    Ok(())
+}
+
+pub async fn sos_cancel(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
+    let resp = client::delete(node, "/sos").await?;
+    if resp.is_success() {
+        output::print_kv("sos", "cancelled", fmt);
+    } else {
+        return Err(format!("SOS cancel failed: {}", resp.code_str()).into());
+    }
     Ok(())
 }
 
 pub async fn key(node: SocketAddr, action: KeyAction, fmt: &OutputFormat) -> CmdResult {
+    let _ = node;
     match action {
         KeyAction::Fingerprint => {
-            let _resp = coap_get(node, "/key/fingerprint").await?;
-            output::print_kv("fingerprint", "(stub)", fmt);
+            output::print_kv("fingerprint", "(crypto not yet implemented)", fmt);
         }
         KeyAction::List => {
-            let _resp = coap_get(node, "/key/peers").await?;
-            output::print_kv("peers", "(stub)", fmt);
+            output::print_kv("peers", "(crypto not yet implemented)", fmt);
         }
         KeyAction::Pin { peer } => {
             output::print_kv("pinned", &peer, fmt);
@@ -59,12 +165,30 @@ pub async fn key(node: SocketAddr, action: KeyAction, fmt: &OutputFormat) -> Cmd
 pub async fn config(node: SocketAddr, action: ConfigAction, fmt: &OutputFormat) -> CmdResult {
     match action {
         ConfigAction::Get { key } => {
-            let path = format!("/config/{}", key.replace('.', "/"));
-            let _resp = coap_get(node, &path).await?;
-            output::print_kv(&key, "(stub)", fmt);
+            let resp = client::get(node, "/config").await?;
+            let cbor = decode_cbor(&resp)?;
+            if let ciborium::value::Value::Map(ref pairs) = cbor {
+                for (k, v) in pairs {
+                    if let ciborium::value::Value::Text(ref s) = k {
+                        if s == &key {
+                            output::print_cbor(v.clone(), fmt);
+                            return Ok(());
+                        }
+                    }
+                }
+                return Err(format!("key '{key}' not found in config").into());
+            }
+            output::print_cbor(cbor, fmt);
         }
         ConfigAction::Set { key, value } => {
-            output::print_kv("set", &format!("{key} = {value}"), fmt);
+            let body_json = serde_json::json!({ key.clone(): value });
+            let body = encode_cbor(&body_json)?;
+            let resp = client::put(node, "/config", &body).await?;
+            if resp.is_success() {
+                output::print_kv(&key, &value, fmt);
+            } else {
+                return Err(format!("config set failed: {}", resp.code_str()).into());
+            }
         }
     }
     Ok(())
@@ -73,21 +197,19 @@ pub async fn config(node: SocketAddr, action: ConfigAction, fmt: &OutputFormat) 
 pub async fn position(node: SocketAddr, action: PositionAction, fmt: &OutputFormat) -> CmdResult {
     match action {
         PositionAction::Show => {
-            let _resp = coap_get(node, "/sensors/location").await?;
-            output::print_kv("position", "(stub)", fmt);
+            let resp = client::get(node, "/location").await?;
+            let cbor = decode_cbor(&resp)?;
+            output::print_cbor(cbor, fmt);
         }
         PositionAction::Broadcast => {
-            output::print_kv("broadcast", "queued (stub)", fmt);
+            output::print_kv("broadcast", "(not yet implemented)", fmt);
         }
         PositionAction::Peers => {
-            output::print_kv("peers", "(stub)", fmt);
+            let resp = client::get(node, "/presence").await?;
+            let cbor = decode_cbor(&resp)?;
+            output::print_cbor(cbor, fmt);
         }
     }
+    let _ = node;
     Ok(())
-}
-
-/// Stub CoAP GET — returns empty bytes.
-/// Will be replaced by a real UDP CoAP client once lichen-coap grows network I/O.
-async fn coap_get(_node: SocketAddr, _path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    Ok(vec![])
 }
