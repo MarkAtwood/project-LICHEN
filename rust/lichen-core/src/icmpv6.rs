@@ -132,9 +132,7 @@ mod tests {
     use crate::addr::Ipv6Addr;
 
     fn ll(iid: u8) -> Ipv6Addr {
-        Ipv6Addr([
-            0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid,
-        ])
+        Ipv6Addr([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid])
     }
 
     #[test]

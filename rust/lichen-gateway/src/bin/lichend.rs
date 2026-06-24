@@ -149,13 +149,7 @@ async fn run_sim(
 }
 
 #[cfg(not(target_os = "linux"))]
-async fn run_sim(
-    gw: &mut Gateway,
-    addr: &str,
-    sim_id: &str,
-    node_id: &str,
-    _tun: Option<()>,
-) {
+async fn run_sim(gw: &mut Gateway, addr: &str, sim_id: &str, node_id: &str, _tun: Option<()>) {
     run_sim_inner(gw, addr, sim_id, node_id, None::<()>).await
 }
 
@@ -169,13 +163,8 @@ async fn run_sim(
 ///
 /// The sim task loops: drain tx_send → receive(50 ms) → push to rx_recv.
 /// The gateway task loops: select! on rx_recv, TUN recv, ctrl_c.
-async fn run_sim_inner<T>(
-    gw: &mut Gateway,
-    addr: &str,
-    sim_id: &str,
-    node_id: &str,
-    tun: Option<T>,
-) where
+async fn run_sim_inner<T>(gw: &mut Gateway, addr: &str, sim_id: &str, node_id: &str, tun: Option<T>)
+where
     T: TunLike,
 {
     let sock_addr = match addr.parse() {

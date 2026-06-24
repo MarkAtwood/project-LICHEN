@@ -61,15 +61,15 @@ jobs:
           workspaces: rust
 
       - name: Build
-        run: cargo build --workspace --features lichen-link/schnorr
+        run: cargo build --workspace --features lichen-link/schnorr,lichen-link/std
         working-directory: rust
 
       - name: Test
-        run: cargo test --workspace --features lichen-link/schnorr
+        run: cargo test --workspace --features lichen-link/schnorr,lichen-link/std
         working-directory: rust
 
       - name: Clippy
-        run: cargo clippy --workspace --features lichen-link/schnorr -- -D warnings
+        run: cargo clippy --workspace --features lichen-link/schnorr,lichen-link/std -- -D warnings
         working-directory: rust
 
       - name: Format check

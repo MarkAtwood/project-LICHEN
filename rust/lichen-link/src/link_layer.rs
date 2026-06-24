@@ -47,7 +47,9 @@ pub struct ReplayProtector {
 
 impl ReplayProtector {
     pub fn new() -> Self {
-        ReplayProtector { windows: HashMap::new() }
+        ReplayProtector {
+            windows: HashMap::new(),
+        }
     }
 
     /// Check and advance the window. Returns `true` if the frame is fresh.
@@ -188,11 +190,16 @@ impl LinkLayer {
         // Key pinning: first-contact pins IID→pubkey; subsequent frames must match.
         match self.pinned.get(&sender.iid) {
             Some(pk) if pk != &sender.pubkey => return Err(RxError::KeyChange),
-            None => { self.pinned.insert(sender.iid, sender.pubkey); }
+            None => {
+                self.pinned.insert(sender.iid, sender.pubkey);
+            }
             _ => {}
         }
 
-        if !self.replay.check_and_update(&sender.pubkey, frame.epoch, frame.seqnum) {
+        if !self
+            .replay
+            .check_and_update(&sender.pubkey, frame.epoch, frame.seqnum)
+        {
             return Err(RxError::Replay);
         }
 
@@ -256,7 +263,10 @@ mod tests {
         let mut wire = [0u8; 256];
         let n = ll_alice.build_frame(1, 1, &[], b"hi", &mut wire);
 
-        assert_eq!(ll_bob.receive_frame(&wire[..n]).unwrap_err(), RxError::UnknownSender);
+        assert_eq!(
+            ll_bob.receive_frame(&wire[..n]).unwrap_err(),
+            RxError::UnknownSender
+        );
     }
 
     #[test]
@@ -272,7 +282,10 @@ mod tests {
 
         // Flip a bit in the inner payload region
         wire[6] ^= 0xFF;
-        assert_eq!(ll_bob.receive_frame(&wire[..n]).unwrap_err(), RxError::UnknownSender);
+        assert_eq!(
+            ll_bob.receive_frame(&wire[..n]).unwrap_err(),
+            RxError::UnknownSender
+        );
     }
 
     #[test]
@@ -304,7 +317,10 @@ mod tests {
 
         // First RX succeeds and pins alice_iid → alice's pubkey.
         ll_bob.receive_frame(&wire1[..n1]).unwrap();
-        assert_eq!(ll_bob.pinned_pubkey_for(&alice_iid), Some(&alice_peer.pubkey));
+        assert_eq!(
+            ll_bob.pinned_pubkey_for(&alice_iid),
+            Some(&alice_peer.pubkey)
+        );
 
         // Simulate key change: overwrite pin with a different pubkey.
         let impostor_pk = Identity::from_seed([0x99u8; 32]).pubkey;
@@ -314,7 +330,10 @@ mod tests {
         let ll_alice2 = LinkLayer::new(Identity::from_seed([0x01u8; 32]));
         let mut wire2 = [0u8; 256];
         let n2 = ll_alice2.build_frame(1, 2, &[], b"hi", &mut wire2);
-        assert_eq!(ll_bob.receive_frame(&wire2[..n2]).unwrap_err(), RxError::KeyChange);
+        assert_eq!(
+            ll_bob.receive_frame(&wire2[..n2]).unwrap_err(),
+            RxError::KeyChange
+        );
     }
 
     #[test]
@@ -344,6 +363,9 @@ mod tests {
         let mut wire2 = [0u8; 256];
         let n2 = ll_new.build_frame(1, 1, &[], b"rotated", &mut wire2);
         ll_bob.receive_frame(&wire2[..n2]).unwrap();
-        assert_eq!(ll_bob.pinned_pubkey_for(&new_alice_peer.iid), Some(&new_alice_peer.pubkey));
+        assert_eq!(
+            ll_bob.pinned_pubkey_for(&new_alice_peer.iid),
+            Some(&new_alice_peer.pubkey)
+        );
     }
 }

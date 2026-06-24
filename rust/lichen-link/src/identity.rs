@@ -26,7 +26,12 @@ impl Identity {
     pub fn from_seed(seed: [u8; 32]) -> Self {
         let (privkey, pubkey) = derive_keypair(&seed);
         let iid = iid_from_pubkey(&pubkey);
-        Identity { seed, privkey, pubkey, iid }
+        Identity {
+            seed,
+            privkey,
+            pubkey,
+            iid,
+        }
     }
 }
 

@@ -145,7 +145,7 @@ class TestWebSocketManager:
         ws2.send_text = AsyncMock()
 
         c1 = await manager.connect(ws1, "sim1", client_id="c1")
-        c2 = await manager.connect(ws2, "sim1", client_id="c2")
+        _c2 = await manager.connect(ws2, "sim1", client_id="c2")
 
         # c1 subscribes only to tx_start
         c1.subscriptions.add("tx_start")
@@ -183,7 +183,7 @@ class TestWebSocketManager:
         self, manager: WebSocketManager, mock_websocket: AsyncMock
     ) -> None:
         """send_to_client sends to specific client."""
-        client = await manager.connect(mock_websocket, "sim1", client_id="c1")
+        _client = await manager.connect(mock_websocket, "sim1", client_id="c1")
 
         result = await manager.send_to_client("c1", {"msg": "hello"})
 
