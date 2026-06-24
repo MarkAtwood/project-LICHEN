@@ -81,10 +81,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # west T2 topology: manifest repo (lichen/) must sit alongside zephyr/.
-          # Checking out to a subdirectory replicates the workspace layout.
-          path: lichen
+        # Check out to workspace root so lichen/ (the manifest repo) sits
+        # alongside zephyr/ — the standard west T2 workspace layout.
 
       - name: Install system deps
         run: sudo apt-get install -y --no-install-recommends cmake ninja-build gcc

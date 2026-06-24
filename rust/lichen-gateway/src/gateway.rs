@@ -91,9 +91,7 @@ mod tests {
     use lichen_core::{addr::Ipv6Addr, icmpv6};
 
     fn ll(iid: u8) -> Ipv6Addr {
-        Ipv6Addr([
-            0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid,
-        ])
+        Ipv6Addr([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid])
     }
 
     fn test_gateway() -> Gateway {

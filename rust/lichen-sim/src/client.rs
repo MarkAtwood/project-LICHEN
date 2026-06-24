@@ -32,7 +32,10 @@ const MSG_ERR: u8 = 0xFF;
 pub enum SimError {
     Io(std::io::Error),
     /// Server returned an ERR response.
-    Server { code: u8, message: String },
+    Server {
+        code: u8,
+        message: String,
+    },
     /// Response did not match the expected message type.
     Protocol(&'static str),
     /// Simulator rejected the TX (TX_FAIL).
