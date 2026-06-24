@@ -17,6 +17,7 @@ from lichen.interface.messages import (
     decode_message,
 )
 from lichen.interface.tcp import TcpConnection, TcpServer, connect, serve
+from lichen.interface.handler import NodeHandler, bind_native
 
 __all__ = [
     # Framing
@@ -43,4 +44,7 @@ __all__ = [
     "TcpServer",
     "connect",
     "serve",
+    # Node handler
+    "NodeHandler",
+    "bind_native",
 ]
