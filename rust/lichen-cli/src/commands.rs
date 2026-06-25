@@ -144,13 +144,23 @@ pub async fn sos_cancel(node: SocketAddr, fmt: &OutputFormat) -> CmdResult {
 }
 
 pub async fn key(node: SocketAddr, action: KeyAction, fmt: &OutputFormat) -> CmdResult {
-    let _ = node;
     match action {
         KeyAction::Fingerprint => {
-            output::print_kv("fingerprint", "(crypto not yet implemented)", fmt);
+            let resp = client::get(node, "/key").await?;
+            let cbor = decode_cbor(&resp)?;
+            if let ciborium::value::Value::Map(ref pairs) = cbor {
+                for (k, v) in pairs {
+                    if matches!(k, ciborium::value::Value::Text(s) if s == "fingerprint") {
+                        output::print_cbor(v.clone(), fmt);
+                        return Ok(());
+                    }
+                }
+                return Err("node did not return a fingerprint".into());
+            }
+            output::print_cbor(cbor, fmt);
         }
         KeyAction::List => {
-            output::print_kv("peers", "(crypto not yet implemented)", fmt);
+            output::print_kv("peers", "(no peer-key endpoint yet)", fmt);
         }
         KeyAction::Pin { peer } => {
             output::print_kv("pinned", &peer, fmt);

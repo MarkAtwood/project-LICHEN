@@ -52,7 +52,7 @@ class Simulation:
       connected nodes are blocked (in RX_WAIT state). This ensures
       reproducible behavior for testing.
 
-    - REALTIME: Time advances with the wall clock (not yet implemented).
+    - REALTIME: Time advances with the wall clock.
 
     Attributes:
         id: Unique identifier for this simulation instance.
