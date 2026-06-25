@@ -139,6 +139,11 @@ async def api_status(request: Request) -> JSONResponse:
     return JSONResponse({"ok": data is not None, "data": data})
 
 
+def _senml_row(name: Any, value: Any, unit: Any) -> str:
+    cell = f"{_esc(value)}{(' ' + _esc(unit)) if unit else ''}"
+    return f"<tr><th>{_esc(name)}</th><td>{cell}</td></tr>"
+
+
 def _render_senml(data: Any) -> str:
     """Render a SenML pack (list of [name, value, unit?, time?] or maps) as a table."""
     if data is None:
@@ -150,12 +155,12 @@ def _render_senml(data: Any) -> str:
         if isinstance(entry, list) and len(entry) >= 2:
             name, value = entry[0], entry[1]
             unit = entry[2] if len(entry) > 2 else ""
-            rows.append(f"<tr><th>{_esc(name)}</th><td>{_esc(value)}{(' ' + _esc(unit)) if unit else ''}</td></tr>")
+            rows.append(_senml_row(name, value, unit))
         elif isinstance(entry, dict):
             name = entry.get("n", entry.get(0, ""))
             value = entry.get("v", entry.get("vs", entry.get("vb", entry.get(2, ""))))
             unit = entry.get("u", entry.get(1, ""))
-            rows.append(f"<tr><th>{_esc(name)}</th><td>{_esc(value)}{(' ' + _esc(unit)) if unit else ''}</td></tr>")
+            rows.append(_senml_row(name, value, unit))
     if not rows:
         return f"<pre>{_esc(json.dumps(data, default=str))}</pre>"
     return f"<table class='kv'>{''.join(rows)}</table>"
@@ -192,14 +197,18 @@ _PAGE_HTML = """\
     :root { --bg: #0d1117; --fg: #e6edf3; --border: #30363d;
             --accent: #238636; --err: #f85149; --muted: #8b949e; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--fg); font: 14px/1.5 'Cascadia Code', monospace; padding: 1rem; }
+    body { background: var(--bg); color: var(--fg);
+           font: 14px/1.5 'Cascadia Code', monospace; padding: 1rem; }
     h1 { font-size: 1.1rem; margin-bottom: 1.5rem; color: var(--accent); }
     h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: .1em;
          color: var(--muted); margin-bottom: .5rem; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
-    .card { background: #161b22; border: 1px solid var(--border); border-radius: 6px; padding: 1rem; }
+    .grid { display: grid; gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+    .card { background: #161b22; border: 1px solid var(--border);
+            border-radius: 6px; padding: 1rem; }
     table.kv { width: 100%; border-collapse: collapse; }
-    table.kv th, table.kv td { padding: .25rem .5rem; border-bottom: 1px solid var(--border); text-align: left; }
+    table.kv th, table.kv td { padding: .25rem .5rem;
+      border-bottom: 1px solid var(--border); text-align: left; }
     table.kv th { color: var(--muted); width: 40%; }
     ul { list-style: none; }
     li { border-bottom: 1px solid var(--border); padding: .4rem 0; }
