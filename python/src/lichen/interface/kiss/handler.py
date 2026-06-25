@@ -82,13 +82,13 @@ class KissHandler:
 
     Attributes:
         config: KISS-configurable parameters.
-        on_tx_frame: Called with payload when DATA frame received (send to radio).
+        on_tx_frame: Called with (port, payload) when DATA frame received.
         on_exit: Called when RETURN command received.
         port_filter: Only handle frames for this port (None = all ports).
     """
 
     config: KissConfig = field(default_factory=DefaultKissConfig)
-    on_tx_frame: Callable[[bytes], None] | None = None
+    on_tx_frame: Callable[[int, bytes], None] | None = None
     on_exit: Callable[[], None] | None = None
     port_filter: int | None = None
     _exited: bool = field(default=False, repr=False)
@@ -135,7 +135,7 @@ class KissHandler:
     def _handle_data(self, frame: KissFrame) -> None:
         """Forward data frame to TX callback."""
         if self.on_tx_frame is not None:
-            self.on_tx_frame(frame.data)
+            self.on_tx_frame(frame.port, frame.data)
         return None
 
     def _handle_txdelay(self, frame: KissFrame) -> None:
