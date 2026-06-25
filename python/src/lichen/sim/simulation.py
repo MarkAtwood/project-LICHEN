@@ -10,6 +10,7 @@ medium.
 from __future__ import annotations
 
 import random
+import time
 from enum import Enum, auto
 from typing import TYPE_CHECKING
 
@@ -90,6 +91,7 @@ class Simulation:
         self._seed = seed
         self._rng = random.Random(seed)
         self._observers = ObserverRegistry()
+        self._realtime_epoch_us: int = time.monotonic_ns() // 1000
 
     @property
     def id(self) -> str:
@@ -361,6 +363,20 @@ class Simulation:
         Returns:
             True if time was advanced, False otherwise.
         """
+        if self._time_mode == TimeMode.REALTIME:
+            now_us = time.monotonic_ns() // 1000 - self._realtime_epoch_us
+            if now_us <= self._current_time_us:
+                return False
+            self._current_time_us = now_us
+            advanced = False
+            while True:
+                next_event = self._event_queue.peek()
+                if next_event is None or next_event.time_us > self._current_time_us:
+                    break
+                self.process_next_event()
+                advanced = True
+            return advanced
+
         if self._time_mode != TimeMode.BARRIER_SYNC:
             return False
 
