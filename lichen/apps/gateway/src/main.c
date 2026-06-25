@@ -19,7 +19,14 @@ LOG_MODULE_REGISTER(lichen_gateway, LOG_LEVEL_INF);
 /* LoRa parameters per LICHEN spec: SF10 / 125 kHz / CR4-5.
  * Frequency is region-dependent; 868 MHz (EU) is the default.
  * Override per board via a board-specific Kconfig once that lands. */
-#define LORA_FREQ_HZ 868000000U
+#define LORA_FREQ_HZ     868000000U
+#define LORA_MAX_FRAME   255
+#define LORA_RX_STACKSZ  1024
+#define LORA_RX_PRIORITY 7
+
+/* Set by main() after lora_config() succeeds; read by the RX thread. */
+static const struct device *s_lora_dev;
+static K_SEM_DEFINE(s_radio_ready, 0, 1);
 
 /* CBOR content-format code (RFC 7252 §12.3 / IANA CoAP Content-Formats) */
 #define CBOR_CONTENT_FORMAT 60
@@ -195,6 +202,38 @@ static const uint16_t coap_port = 5683;
 COAP_SERVICE_DEFINE(lichen_coap, NULL, &coap_port, COAP_SERVICE_AUTOSTART);
 
 /* --------------------------------------------------------------------------
+ * LoRa RX thread — runs continuously, logs every received frame.
+ * -------------------------------------------------------------------------- */
+
+static void lora_rx_entry(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+
+	k_sem_take(&s_radio_ready, K_FOREVER);
+
+	uint8_t buf[LORA_MAX_FRAME];
+	int16_t rssi;
+	int8_t  snr;
+
+	while (1) {
+		int len = lora_recv(s_lora_dev, buf, sizeof(buf),
+				    K_FOREVER, &rssi, &snr);
+		if (len > 0) {
+			LOG_INF("RX %d B rssi=%d snr=%d [%02x%s]",
+				len, rssi, snr, buf[0],
+				len > 1 ? " ..." : "");
+		} else if (len < 0) {
+			LOG_WRN("lora_recv err: %d", len);
+			k_sleep(K_MSEC(100));
+		}
+	}
+}
+
+K_THREAD_DEFINE(lora_rx, LORA_RX_STACKSZ,
+		lora_rx_entry, NULL, NULL, NULL,
+		LORA_RX_PRIORITY, 0, 0);
+
+/* --------------------------------------------------------------------------
  * main
  * -------------------------------------------------------------------------- */
 
@@ -204,9 +243,9 @@ int main(void)
 
 	/* LoRa radio init.  The sim driver ignores RF parameters and returns 0;
 	 * on hardware this configures the SX126x transceiver. */
-	const struct device *lora_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_lora));
+	s_lora_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_lora));
 
-	if (!device_is_ready(lora_dev)) {
+	if (!device_is_ready(s_lora_dev)) {
 		/* Expected in CI (no sim server); gateway still serves CoAP. */
 		LOG_WRN("LoRa radio not ready — CoAP-only mode");
 	} else {
@@ -220,12 +259,13 @@ int main(void)
 			.tx           = false,       /* start in receive mode */
 			.public_network = false,
 		};
-		int ret = lora_config(lora_dev, &lora_cfg);
+		int ret = lora_config(s_lora_dev, &lora_cfg);
 
 		if (ret < 0) {
 			LOG_ERR("LoRa config failed: %d", ret);
 		} else {
 			LOG_INF("LoRa SF10/125kHz/CR4-5 @ %u Hz", LORA_FREQ_HZ);
+			k_sem_give(&s_radio_ready);
 		}
 	}
 
