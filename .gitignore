@@ -12,3 +12,12 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# Zephyr west workspace (fetched by west update)
+.west/
+/zephyr/
+/modules/
+/bootloader/
+/build/
+/tools/edtt/
+/tools/net-tools/

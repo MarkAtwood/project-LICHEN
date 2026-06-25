@@ -6,6 +6,7 @@ Curve25519/Ed25519, SHA-512, 16-byte truncated challenge + 32-byte response.
 Deterministic nonce prevents catastrophic failure from reuse.
 """
 
+import hmac
 from hashlib import sha512
 
 from nacl.bindings import (
@@ -151,5 +152,5 @@ def verify(pubkey: bytes, msg: bytes, sig: bytes) -> bool:
     e_full_hash, _ = _hash_to_scalar(R_prime + pubkey + msg)
     e_prime = e_full_hash[:16]
 
-    # 5. Compare (constant-time would be better, but Python...)
-    return e_prime == e_received
+    # 5. Constant-time comparison to prevent timing side-channel
+    return hmac.compare_digest(e_prime, e_received)

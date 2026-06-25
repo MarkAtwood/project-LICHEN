@@ -85,7 +85,7 @@ class InMemoryChannel(DatagramChannel):
         self._network._register(self._host, receiver)
 
     def send_datagram(self, data: bytes, dest: str) -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.call_soon(self._network._deliver, self._host, dest, data)
 
     def close(self) -> None:

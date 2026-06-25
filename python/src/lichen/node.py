@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -66,12 +67,18 @@ class NodeConfig:
             Why 30000: Spec section 9.4 (0-30 seconds).
         pending_timeout_ms: How long to queue packets waiting for discovery.
             Why 5000: LOADng RREQ_WAIT_TIME is 5 seconds.
+        rreq_jitter_min_ms: Minimum jitter before sending RREQ.
+            Why 0: Allow immediate transmission when no contention.
+        rreq_jitter_max_ms: Maximum jitter before sending RREQ.
+            Why 100: LOADng spec recommends short jitter to reduce collisions.
     """
 
     receive_timeout_ms: int = 1000
     announce_interval_ms: int = 300_000
     announce_jitter_ms: int = 30_000
     pending_timeout_ms: int = 5_000
+    rreq_jitter_min_ms: int = 0
+    rreq_jitter_max_ms: int = 100
 
 
 @dataclass
@@ -295,7 +302,7 @@ class Node:
                 self._on_receive(payload, rx.sender)
             return
 
-        now_ms = int(asyncio.get_event_loop().time() * 1000)
+        now_ms = int(asyncio.get_running_loop().time() * 1000)
         decision, _next_hop = self.router.route(packet, now_ms)
 
         if decision == RouteDecision.DELIVER_LOCAL:
@@ -328,7 +335,7 @@ class Node:
         )
 
         # Get current time in ms (in production, use monotonic clock)
-        now_ms = int(asyncio.get_event_loop().time() * 1000)
+        now_ms = int(asyncio.get_running_loop().time() * 1000)
 
         result = self.announce_processor.process(announce, from_neighbor, now_ms)
 
@@ -397,7 +404,7 @@ class Node:
         if len(self._relay_seen) > 128:
             self._relay_seen.clear()
 
-        now_ms = int(asyncio.get_event_loop().time() * 1000)
+        now_ms = int(asyncio.get_running_loop().time() * 1000)
         decision, _next_hop = self.router.route(packet, now_ms)
 
         if decision == RouteDecision.FORWARD:
@@ -408,12 +415,54 @@ class Node:
             return True
         return False
 
+    def scheduled_send(
+        self,
+        data: bytes,
+        min_delay_ms: int | None = None,
+        max_delay_ms: int | None = None,
+    ) -> asyncio.Task:
+        """Schedule a transmission after a random jitter delay.
+
+        Why jitter: RREQ rebroadcast uses jitter to reduce collision probability
+        when multiple nodes forward the same RREQ (LOADng spec).
+
+        Args:
+            data: Bytes to transmit via link layer.
+            min_delay_ms: Minimum delay in milliseconds. Defaults to config.rreq_jitter_min_ms.
+            max_delay_ms: Maximum delay in milliseconds. Defaults to config.rreq_jitter_max_ms.
+
+        Returns:
+            The asyncio Task that will perform the delayed send.
+        """
+        if min_delay_ms is None:
+            min_delay_ms = self.config.rreq_jitter_min_ms
+        if max_delay_ms is None:
+            max_delay_ms = self.config.rreq_jitter_max_ms
+
+        delay_ms = random.randint(min_delay_ms, max_delay_ms)
+
+        async def _delayed_send() -> bool:
+            await asyncio.sleep(delay_ms / 1000)
+            return await self.link.send(data)
+
+        return asyncio.create_task(
+            _delayed_send(),
+            name=f"scheduled-send-{delay_ms}ms",
+        )
+
     def get_status(self) -> dict:
         """Get node status for debugging/monitoring.
 
         Returns:
             Dict with node state, peer count, gradient count, etc.
+            Includes `uptime` and `firmware` for Rust TUI compatibility.
         """
+        # ponytail: uptime from event loop time, good enough for sim
+        try:
+            loop = asyncio.get_running_loop()
+            uptime_secs = int(loop.time())
+        except RuntimeError:
+            uptime_secs = 0
         return {
             "iid": self.identity.iid.hex(),
             "pubkey": self.identity.pubkey.hex()[:16] + "...",
@@ -421,4 +470,37 @@ class Node:
             "peers": len(self.peer_db),
             "gradients": len(self.gradient_table),
             "announce_seq": self._scheduler.get_seq_num(),
+            "uptime": uptime_secs,
+            "firmware": "sim-0.1.0",
         }
+
+    def get_neighbors(self) -> list[dict]:
+        """Get neighbor list for CoAP /neighbors resource.
+
+        Returns:
+            List of dicts with `addr` and `rssi` keys.
+        """
+        # ponytail: peer_db has IIDs, convert to link-local addresses
+        neighbors = []
+        for iid in self.peer_db:
+            addr = IPv6Address(b"\xfe\x80\x00\x00\x00\x00\x00\x00" + iid)
+            neighbors.append({
+                "addr": str(addr),
+                "rssi": -100,  # ponytail: no per-peer RSSI tracking yet
+            })
+        return neighbors
+
+    def get_config(self) -> dict:
+        """Get node config for CoAP /config resource."""
+        return {
+            "receive_timeout_ms": self.config.receive_timeout_ms,
+            "announce_interval_ms": self.config.announce_interval_ms,
+        }
+
+    def set_config(self, updates: dict) -> None:
+        """Update node config from CoAP /config PUT."""
+        # ponytail: only allow safe updates, ignore unknown keys
+        if "receive_timeout_ms" in updates:
+            self.config.receive_timeout_ms = int(updates["receive_timeout_ms"])
+        if "announce_interval_ms" in updates:
+            self.config.announce_interval_ms = int(updates["announce_interval_ms"])
