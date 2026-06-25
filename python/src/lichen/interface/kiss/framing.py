@@ -194,7 +194,11 @@ class KissReader:
             yield frame
 
     def _try_extract_frame(self) -> KissFrame | None:
-        """Try to extract one complete frame from buffer."""
+        """Try to extract one complete frame from buffer.
+
+        Note: Port 12 with command 0 produces CMD byte 0xC0, which equals FEND.
+        This is ambiguous with inter-frame padding and not supported. Use ports 0-11.
+        """
         # Skip leading non-FEND bytes (sync)
         while self.buffer and self.buffer[0] != FEND:
             del self.buffer[0]
@@ -204,6 +208,7 @@ class KissReader:
 
         # Skip inter-frame FEND padding to find frame content start.
         # After this loop, start points to the CMD byte (first non-FEND).
+        # ponytail: port 12 cmd 0 = 0xC0 = FEND is unsupported, matches real TNCs
         start = 0
         while start < len(self.buffer) and self.buffer[start] == FEND:
             start += 1
