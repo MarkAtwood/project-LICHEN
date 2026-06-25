@@ -7,7 +7,12 @@ description = "CoAP (RFC 7252): message types, options, and blockwise transfer s
 
 [features]
 default = []
-std = []
+std = ["dep:tokio"]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }
+
+[dependencies.tokio]
+version = "1"
+features = ["net", "time", "rt"]
+optional = true

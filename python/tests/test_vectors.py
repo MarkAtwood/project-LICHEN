@@ -15,6 +15,9 @@ from pathlib import Path
 
 import pytest
 
+from lichen.crypto.identity import Identity
+from lichen.crypto.schnorr48 import sign as schnorr_sign
+from lichen.crypto.schnorr48 import verify as schnorr_verify
 from lichen.link.frame import AddrMode, LichenFrame, MicLength
 from lichen.schc.headers import compress_packet, decompress_packet
 
@@ -83,3 +86,24 @@ def test_frame_vector(name: str, vector: dict) -> None:
 def test_all_schc_rules_covered() -> None:
     rule_ids = {v["rule_id"] for _, v in _schc_cases()}
     assert {0, 1, 2, 3, 4} <= rule_ids  # every whole-packet rule has a vector
+
+
+def _schnorr_cases():
+    doc = _load("schnorr48.json")
+    return [(v["description"], v) for v in doc["vectors"]]
+
+
+@pytest.mark.parametrize("desc,vector", _schnorr_cases())
+def test_schnorr_vector(desc: str, vector: dict) -> None:
+    pubkey = bytes.fromhex(vector["public_key"])
+    msg = bytes.fromhex(vector["message"]) if vector["message"] else b""
+    sig = bytes.fromhex(vector["signature"])
+    result = schnorr_verify(pubkey, msg, sig)
+    expected = vector["valid"]
+    assert result == expected, (
+        f"{'valid sig rejected' if expected else 'invalid sig accepted'}: {desc}"
+    )
+    if expected and "seed" in vector:
+        identity = Identity.from_seed(bytes.fromhex(vector["seed"]))
+        computed = schnorr_sign(identity.privkey, identity.pubkey, msg)
+        assert computed == sig, f"sign() output mismatch: {desc}"

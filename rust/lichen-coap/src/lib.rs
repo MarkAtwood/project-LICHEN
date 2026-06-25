@@ -4,7 +4,7 @@
 //! All CoAP traffic in LICHEN uses UDP port 5683 (or 5684 for DTLS) and is
 //! header-compressed via SCHC before transmission over the link layer.
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod message;
 pub mod option;
@@ -12,4 +12,4 @@ pub mod option;
 pub use message::{MessageCode, MessageType};
 
 #[cfg(feature = "std")]
-extern crate std;
+pub mod client;
