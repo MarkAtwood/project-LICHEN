@@ -580,9 +580,30 @@ class _RdRegistrationResource(resource.Resource):
         return Message(code=DELETED)
 
 
+class KeyResource(resource.Resource):
+    """GET /key — returns this node's public key and fingerprint as CBOR.
+
+    Response map keys:
+    - ``"fingerprint"``: hex string of the first 8 bytes of the public key.
+    - ``"pubkey"``: raw 32-byte public key.
+    """
+
+    def __init__(self, pubkey: bytes) -> None:
+        super().__init__()
+        self._pubkey = pubkey
+
+    async def render_get(self, request: Message) -> Message:
+        data = {
+            "fingerprint": self._pubkey[:8].hex(),
+            "pubkey": self._pubkey,
+        }
+        return _cbor_response(data)
+
+
 def build_site(
     node_info: NodeInfo,
     *,
+    pubkey: bytes | None = None,
     mesh_client: aiocoap.Context | None = None,
     sensors_resource: SenMLSensorsResource | None = None,
     location_resource: SenMLLocationResource | None = None,
@@ -623,4 +644,6 @@ def build_site(
         site.add_resource(["sos"], sos_resource)
     if resource_directory:
         site.add_resource(["rd"], ResourceDirectoryResource(site))
+    if pubkey is not None:
+        site.add_resource(["key"], KeyResource(pubkey))
     return site
