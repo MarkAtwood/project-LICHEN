@@ -1,5 +1,9 @@
-/ { chosen { zephyr,lora = &lora0; }; };
+/ {
+	chosen {
+		zephyr,lora        = &lora0;
+		lichen,native-uart = &cdc_acm_uart0;
+	};
+};
 
-&lora0 { status = "okay"; };
-
-&gnss0 { status = "okay"; };
+&lora0  { status = "okay"; };
+&gnss0  { status = "okay"; };
