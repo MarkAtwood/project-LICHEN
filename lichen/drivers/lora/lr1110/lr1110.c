@@ -145,6 +145,8 @@ static int lr1110_lora_config(const struct device *dev,
 			      struct lora_modem_config *cfg)
 {
 	lr1110_hal_reset(dev);
+	lr1110_system_calibrate(dev, 0x3Fu); /* all 6 calibration blocks */
+	lr1110_system_clear_errors(dev);
 
 	lr1110_radio_set_packet_type(dev, LR1110_RADIO_PACKET_LORA);
 	lr1110_radio_set_rf_frequency(dev, cfg->frequency);
@@ -177,6 +179,10 @@ static int lr1110_lora_config(const struct device *dev,
 	lr1110_radio_set_tx_params(dev, cfg->tx_power, LR1110_RADIO_RAMP_TIME_40U);
 
 	lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0);
+	lr1110_radio_set_rx_tx_fallback_mode(dev, LR1110_RADIO_RX_TX_FALLBACK_MODE_STDBYRC);
+	lr1110_radio_set_lora_sync_word(dev, cfg->public_network
+		? LR1110_RADIO_LORA_NETWORK_PUBLIC
+		: LR1110_RADIO_LORA_NETWORK_PRIVATE);
 
 #if DT_INST_NODE_HAS_PROP(0, tx_enable_gpios)
 	gpio_pin_set_dt(&lr1110_gpio_tx_enable, cfg->tx ? 1 : 0);

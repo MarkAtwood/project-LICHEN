@@ -7,7 +7,8 @@
  *   Write:      CS↓ [opcode+params] [data] CS↑  → wait BUSY↓
  *   Read:       CS↓ [opcode+params]        CS↑  → wait BUSY↓
  *               CS↓ [NOP×(1+N)]            CS↑  → receive [stat, data×N]
- *               → wait BUSY↓
+ *               (no trailing BUSY wait — chip is ready before data phase)
+ *   Sleep:      CS↓ [0x01 0x1B ...]       CS↑  → 1ms (no BUSY — chip sleeps immediately)
  *   Write+Read: CS↓ [cmd×N] simultaneous rx [resp×N] CS↑  (GetStatus only)
  */
 
@@ -56,7 +57,13 @@ lr1110_hal_status_t lr1110_hal_write(const void *context,
 		LOG_ERR("SPI write failed");
 		return LR1110_HAL_STATUS_ERROR;
 	}
-	wait_busy();
+
+	/* SetSleep (0x01 0x1B) puts the chip to sleep immediately — no BUSY transition */
+	if (command_length >= 2 && command[0] == 0x01 && command[1] == 0x1B) {
+		k_busy_wait(1000);
+	} else {
+		wait_busy();
+	}
 	return LR1110_HAL_STATUS_OK;
 }
 
@@ -92,7 +99,6 @@ lr1110_hal_status_t lr1110_hal_read(const void *context,
 		LOG_ERR("SPI read failed");
 		return LR1110_HAL_STATUS_ERROR;
 	}
-	wait_busy();
 	return LR1110_HAL_STATUS_OK;
 }
 
@@ -120,21 +126,20 @@ void lr1110_hal_reset(const void *context)
 {
 	ARG_UNUSED(context);
 	gpio_pin_set_dt(&lr1110_gpio_reset, 1);
-	k_sleep(K_MSEC(10));
+	k_busy_wait(1000);
 	gpio_pin_set_dt(&lr1110_gpio_reset, 0);
-	k_sleep(K_MSEC(10));
+	k_busy_wait(1000);
+	k_sleep(K_MSEC(200)); /* wait for internal firmware to load */
 }
 
 lr1110_hal_status_t lr1110_hal_wakeup(const void *context)
 {
 	ARG_UNUSED(context);
 
-	/* CS toggle with a dummy byte wakes the chip from sleep */
-	uint8_t dummy = 0x00;
-	struct spi_buf buf = { .buf = &dummy, .len = 1 };
-	const struct spi_buf_set tx = { .buffers = &buf, .count = 1 };
-
-	spi_write_dt(&lr1110_bus, &tx);
+	/* CS pulse (no SPI bytes) wakes the LR1110 from sleep */
+	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 1);
+	k_busy_wait(100);
+	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 0);
 	wait_busy();
 	return LR1110_HAL_STATUS_OK;
 }
