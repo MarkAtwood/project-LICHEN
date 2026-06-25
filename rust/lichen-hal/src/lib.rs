@@ -102,6 +102,90 @@ pub trait NonVolatile {
     fn delete(&mut self, key: &str) -> bool;
 }
 
+// ============================================================================
+// Device UI traits
+// ============================================================================
+
+/// Display error types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayError {
+    /// Display not initialized or initialization failed.
+    NotInitialized,
+    /// Communication error with display hardware.
+    BusError,
+    /// Coordinates out of bounds.
+    OutOfBounds,
+}
+
+/// Display interface for rendering UI.
+///
+/// Supports text, primitives, and double-buffered flush. Coordinate system
+/// is top-left origin, x increasing right, y increasing down.
+pub trait Display {
+    /// Initialize the display hardware.
+    fn init(&mut self) -> Result<(), DisplayError>;
+
+    /// Clear the display (fill with background color).
+    fn clear(&mut self);
+
+    /// Draw text at position.
+    fn draw_text(&mut self, x: u16, y: u16, text: &str);
+
+    /// Draw a rectangle outline or filled.
+    fn draw_rect(&mut self, x: u16, y: u16, w: u16, h: u16, filled: bool);
+
+    /// Flush the framebuffer to the display.
+    fn flush(&mut self);
+}
+
+/// Button state flags.
+///
+/// Bitflags for physical buttons. Hardware variants map their inputs
+/// to these logical buttons.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ButtonState {
+    /// Primary action button (enter/select).
+    pub primary: bool,
+    /// Secondary/back button.
+    pub secondary: bool,
+    /// Up navigation.
+    pub up: bool,
+    /// Down navigation.
+    pub down: bool,
+    /// Left navigation.
+    pub left: bool,
+    /// Right navigation.
+    pub right: bool,
+}
+
+/// Input interface for buttons, encoders, and touch.
+///
+/// Poll-based interface. Implementations should debounce as needed.
+pub trait Input {
+    /// Poll current button state.
+    fn poll_buttons(&mut self) -> ButtonState;
+
+    /// Poll rotary encoder. Returns delta since last poll, or None if no encoder.
+    fn poll_encoder(&mut self) -> Option<i8>;
+
+    /// Poll touch screen. Returns (x, y) if touched, None otherwise.
+    fn poll_touch(&mut self) -> Option<(u16, u16)>;
+}
+
+/// Power management interface.
+///
+/// Battery status, charging state, and backlight control.
+pub trait Power {
+    /// Battery charge level as percentage (0-100).
+    fn battery_percent(&self) -> u8;
+
+    /// Whether device is currently charging.
+    fn is_charging(&self) -> bool;
+
+    /// Set backlight brightness (0 = off, 255 = max).
+    fn set_backlight(&mut self, level: u8);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

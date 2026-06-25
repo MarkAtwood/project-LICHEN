@@ -1,0 +1,16 @@
+[package]
+name = "lichen-meshtastic"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "Meshtastic protobuf types for LICHEN bridge"
+
+[features]
+default = ["std"]
+std = ["prost/std"]
+
+[dependencies]
+prost = { version = "0.13", default-features = false, features = ["derive"] }
+
+[build-dependencies]
+prost-build = "0.13"

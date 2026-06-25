@@ -1,0 +1,173 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Extracted from https://github.com/meshtastic/protobufs
+// Minimal subset for LICHEN Meshtastic bridge
+
+syntax = "proto3";
+
+package meshtastic;
+
+import "meshtastic/config.proto";
+import "meshtastic/portnums.proto";
+import "meshtastic/telemetry.proto";
+
+// GPS Position
+message Position {
+  optional sfixed32 latitude_i = 1;
+  optional sfixed32 longitude_i = 2;
+  optional int32 altitude = 3;
+  fixed32 time = 4;
+
+  enum LocSource {
+    LOC_UNSET = 0;
+    LOC_MANUAL = 1;
+    LOC_INTERNAL = 2;
+    LOC_EXTERNAL = 3;
+  }
+  LocSource location_source = 5;
+
+  enum AltSource {
+    ALT_UNSET = 0;
+    ALT_MANUAL = 1;
+    ALT_INTERNAL = 2;
+    ALT_EXTERNAL = 3;
+    ALT_BAROMETRIC = 4;
+  }
+  AltSource altitude_source = 6;
+
+  fixed32 timestamp = 7;
+  int32 timestamp_millis_adjust = 8;
+  optional sint32 altitude_hae = 9;
+  optional sint32 altitude_geoidal_separation = 10;
+  uint32 PDOP = 11;
+  uint32 HDOP = 12;
+  uint32 VDOP = 13;
+  uint32 gps_accuracy = 14;
+  optional uint32 ground_speed = 15;
+  optional uint32 ground_track = 16;
+  uint32 fix_quality = 17;
+  uint32 fix_type = 18;
+  uint32 sats_in_view = 19;
+  uint32 sensor_id = 20;
+  uint32 next_update = 21;
+  uint32 seq_number = 22;
+  uint32 precision_bits = 23;
+}
+
+// Hardware model identifiers (subset)
+enum HardwareModel {
+  UNSET = 0;
+  TLORA_V2 = 1;
+  TLORA_V1 = 2;
+  TBEAM = 4;
+  HELTEC_V2_0 = 5;
+  T_ECHO = 7;
+  RAK4631 = 9;
+  HELTEC_V2_1 = 10;
+  HELTEC_V1 = 11;
+  LILYGO_TBEAM_S3_CORE = 12;
+  RAK11200 = 13;
+  NANO_G1 = 14;
+  STATION_G1 = 25;
+  LORA_RELAY_V1 = 32;
+  NRF52840_PCA10059 = 40;
+  HELTEC_V3 = 43;
+  HELTEC_WSL_V3 = 44;
+  RPI_PICO = 47;
+  HELTEC_WIRELESS_TRACKER = 48;
+  HELTEC_WIRELESS_PAPER = 49;
+  T_DECK = 50;
+  T_WATCH_S3 = 51;
+  PORTDUINO = 37;
+  ANDROID_SIM = 38;
+  PRIVATE_HW = 255;
+}
+
+// User identity
+message User {
+  string id = 1;
+  string long_name = 2;
+  string short_name = 3;
+  bytes macaddr = 4 [deprecated = true];
+  HardwareModel hw_model = 5;
+  bool is_licensed = 6;
+  Config.DeviceConfig.Role role = 7;
+  bytes public_key = 8;
+  optional bool is_unmessagable = 9;
+}
+
+// Data payload within a mesh packet
+message Data {
+  PortNum portnum = 1;
+  bytes payload = 2;
+  bool want_response = 3;
+  fixed32 dest = 4;
+  fixed32 source = 5;
+  fixed32 request_id = 6;
+  fixed32 reply_id = 7;
+  fixed32 emoji = 8;
+  optional uint32 bitfield = 9;
+}
+
+// Full node information
+message NodeInfo {
+  uint32 num = 1;
+  User user = 2;
+  Position position = 3;
+  float snr = 4;
+  fixed32 last_heard = 5;
+  DeviceMetrics device_metrics = 6;
+  uint32 channel = 7;
+  bool via_mqtt = 8;
+  optional uint32 hops_away = 9;
+  bool is_favorite = 10;
+  bool is_ignored = 11;
+  bool is_key_manually_verified = 12;
+  bool is_muted = 13;
+  bool has_xeddsa_signed = 14;
+}
+
+// Over-the-mesh packet envelope
+message MeshPacket {
+  enum Priority {
+    UNSET = 0;
+    MIN = 1;
+    BACKGROUND = 10;
+    DEFAULT = 64;
+    RELIABLE = 70;
+    RESPONSE = 80;
+    HIGH = 100;
+    ALERT = 110;
+    ACK = 120;
+    MAX = 127;
+  }
+
+  enum Delayed {
+    NO_DELAY = 0;
+    DELAYED_BROADCAST = 1;
+    DELAYED_DIRECT = 2;
+  }
+
+  fixed32 from = 1;
+  fixed32 to = 2;
+  uint32 channel = 3;
+
+  oneof payload_variant {
+    Data decoded = 4;
+    bytes encrypted = 5;
+  }
+
+  fixed32 id = 6;
+  fixed32 rx_time = 7;
+  float rx_snr = 8;
+  uint32 hop_limit = 9;
+  bool want_ack = 10;
+  Priority priority = 11;
+  int32 rx_rssi = 12;
+  Delayed delayed = 13 [deprecated = true];
+  bool via_mqtt = 14;
+  uint32 hop_start = 15;
+  bytes public_key = 16;
+  bool pki_encrypted = 17;
+  uint32 next_hop = 18;
+  uint32 relay_node = 19;
+}

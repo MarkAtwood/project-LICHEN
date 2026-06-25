@@ -9,5 +9,10 @@ description = "Hardware abstraction traits for LICHEN. Implemented by Embassy HA
 default = []
 std = []
 
+# Hardware variants
+tdeck = []   # T-Deck: ST7789, keyboard, trackball
+tbeam = []   # T-Beam: SSD1306, buttons
+twatch = []  # T-Watch: ST7789, touch
+
 [dependencies]
 # ponytail: no deps, pure traits
