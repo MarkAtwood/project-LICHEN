@@ -20,8 +20,8 @@ from .handler import KissHandler, DefaultKissConfig
 
 log = logging.getLogger(__name__)
 
-# Frame callback type: receives raw payload from DATA frames
-FrameCallback = Callable[[bytes], None]
+# Frame callback type: receives (port, payload) from DATA frames
+FrameCallback = Callable[[int, bytes], None]
 
 
 @dataclass
@@ -33,7 +33,7 @@ class KissSerialConnection:
         port: Serial port path.
         baudrate: Baud rate.
         handler: KissHandler for command dispatch.
-        on_frame: Called when DATA frame received (radio TX).
+        on_frame: Called with (port, payload) when DATA frame received.
     """
 
     port: str

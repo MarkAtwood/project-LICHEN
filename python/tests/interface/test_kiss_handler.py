@@ -14,12 +14,12 @@ from lichen.interface.kiss import (
 class TestKissHandlerDataCommand:
     def test_data_frame_calls_tx_callback(self):
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p))
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)))
 
         frame = KissFrame(port=0, command=KissCommand.DATA, data=b"hello")
         handler.handle(frame)
 
-        assert received == [b"hello"]
+        assert received == [(0, b"hello")]
 
     def test_data_frame_no_callback_ok(self):
         handler = KissHandler()
@@ -29,12 +29,21 @@ class TestKissHandlerDataCommand:
 
     def test_data_frame_empty_payload(self):
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p))
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)))
 
         frame = KissFrame(port=0, command=KissCommand.DATA, data=b"")
         handler.handle(frame)
 
-        assert received == [b""]
+        assert received == [(0, b"")]
+
+    def test_data_frame_includes_port(self):
+        received = []
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)))
+
+        frame = KissFrame(port=3, command=KissCommand.DATA, data=b"test")
+        handler.handle(frame)
+
+        assert received == [(3, b"test")]
 
 
 class TestKissHandlerConfigCommands:
@@ -125,7 +134,7 @@ class TestKissHandlerReturnCommand:
 
     def test_after_exit_frames_ignored(self):
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p))
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)))
 
         handler.handle(KissFrame(port=0, command=KissCommand.RETURN, data=b""))
         handler.handle(KissFrame(port=0, command=KissCommand.DATA, data=b"ignored"))
@@ -144,16 +153,16 @@ class TestKissHandlerReturnCommand:
 class TestKissHandlerPortFilter:
     def test_port_filter_accepts_matching(self):
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p), port_filter=2)
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)), port_filter=2)
 
         frame = KissFrame(port=2, command=KissCommand.DATA, data=b"yes")
         handler.handle(frame)
 
-        assert received == [b"yes"]
+        assert received == [(2, b"yes")]
 
     def test_port_filter_rejects_nonmatching(self):
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p), port_filter=2)
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)), port_filter=2)
 
         frame = KissFrame(port=0, command=KissCommand.DATA, data=b"no")
         handler.handle(frame)
@@ -162,7 +171,7 @@ class TestKissHandlerPortFilter:
 
     def test_no_port_filter_accepts_all(self):
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p))
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append((port, data)))
 
         for port in [0, 5, 15]:
             handler.handle(KissFrame(port=port, command=KissCommand.DATA, data=bytes([port])))

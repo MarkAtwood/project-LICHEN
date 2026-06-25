@@ -138,7 +138,7 @@ class TestHandlerIntegration:
     def test_reader_to_handler_flow(self):
         """Frames from reader go to handler."""
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p))
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append(data))
         reader = KissReader()
 
         # Feed multiple frames
@@ -156,7 +156,7 @@ class TestHandlerIntegration:
     def test_return_stops_processing(self):
         """RETURN command stops further processing."""
         received = []
-        handler = KissHandler(on_tx_frame=lambda p: received.append(p))
+        handler = KissHandler(on_tx_frame=lambda port, data: received.append(data))
         reader = KissReader()
 
         reader.feed(kiss_encode(0, KissCommand.DATA, b"before"))
@@ -297,7 +297,7 @@ class TestSerialIntegration:
         with patch("serial.Serial", return_value=mock):
             conn = KissSerialConnection(
                 port="/dev/test",
-                on_frame=lambda p: received.append(p),
+                on_frame=lambda port, data: received.append(data),
             )
             await conn.open()
 
@@ -322,7 +322,7 @@ class TestSerialIntegration:
         with patch("serial.Serial", return_value=mock):
             conn = KissSerialConnection(
                 port="/dev/test",
-                on_frame=lambda p: received.append(p),
+                on_frame=lambda port, data: received.append(data),
             )
             await conn.open()
 

@@ -66,8 +66,8 @@ class TestKissSerialConnection:
     async def test_recv_data_frame(self, mock_serial):
         received = []
 
-        def on_frame(payload):
-            received.append(payload)
+        def on_frame(port, payload):
+            received.append((port, payload))
 
         with patch("serial.Serial", return_value=mock_serial):
             conn = KissSerialConnection(port="/dev/test", on_frame=on_frame)
@@ -80,15 +80,15 @@ class TestKissSerialConnection:
             # Process it
             await conn.recv()
 
-            assert received == [b"hello"]
+            assert received == [(0, b"hello")]
             await conn.close()
 
     @pytest.mark.asyncio
     async def test_recv_multiple_frames(self, mock_serial):
         received = []
 
-        def on_frame(payload):
-            received.append(payload)
+        def on_frame(port, payload):
+            received.append((port, payload))
 
         with patch("serial.Serial", return_value=mock_serial):
             conn = KissSerialConnection(port="/dev/test", on_frame=on_frame)
@@ -100,7 +100,7 @@ class TestKissSerialConnection:
 
             await conn.recv()
 
-            assert received == [b"one", b"two"]
+            assert received == [(0, b"one"), (0, b"two")]
             await conn.close()
 
     @pytest.mark.asyncio
@@ -154,8 +154,8 @@ class TestKissSerialConnection:
         """Test frame reassembly across multiple reads."""
         received = []
 
-        def on_frame(payload):
-            received.append(payload)
+        def on_frame(port, payload):
+            received.append((port, payload))
 
         with patch("serial.Serial", return_value=mock_serial):
             conn = KissSerialConnection(port="/dev/test", on_frame=on_frame)
@@ -173,7 +173,7 @@ class TestKissSerialConnection:
             # Second half
             mock_serial.inject(frame[mid:])
             await conn.recv()
-            assert received == [b"split"]
+            assert received == [(0, b"split")]
 
             await conn.close()
 
@@ -192,8 +192,8 @@ class TestKissSerialConnection:
         """Verify on_frame callback is connected to handler."""
         received = []
 
-        def on_frame(payload):
-            received.append(payload)
+        def on_frame(port, payload):
+            received.append((port, payload))
 
         with patch("serial.Serial", return_value=mock_serial):
             conn = KissSerialConnection(port="/dev/test", on_frame=on_frame)
@@ -207,8 +207,8 @@ class TestKissSerialRun:
     async def test_run_until_return(self, mock_serial):
         frames = []
 
-        def on_frame(payload):
-            frames.append(payload)
+        def on_frame(port, payload):
+            frames.append((port, payload))
 
         with patch("serial.Serial", return_value=mock_serial):
             conn = KissSerialConnection(port="/dev/test", on_frame=on_frame)
@@ -221,5 +221,5 @@ class TestKissSerialRun:
 
             await conn.run()
 
-            assert frames == [b"a", b"b"]
+            assert frames == [(0, b"a"), (0, b"b")]
             assert conn.closed
