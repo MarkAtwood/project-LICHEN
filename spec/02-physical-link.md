@@ -17,7 +17,7 @@ LoRa Chirp Spread Spectrum (CSS) as implemented by Semtech SX126x and SX127x.
 |-----------|--------|---------|-------|
 | Frequency | FREQ | Regional | See 3.3 |
 | Bandwidth | BW | 125 kHz | Balance of range/throughput |
-| Spreading Factor | SF | 9 | Adjustable per-link |
+| Spreading Factor | SF | 10 | Adjustable per-link (see Appendix: Design Rationale §7) |
 | Coding Rate | CR | 4/5 | Minimal FEC overhead |
 | Preamble | - | 8 symbols | Standard LoRa |
 | Sync Word | SYNC | 0x34 | Distinct from Meshtastic (0x2B) |

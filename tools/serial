@@ -1,0 +1,4 @@
+#!/bin/bash
+# Safe serial reader wrapper
+# ponytail: just calls the python script with the right interpreter
+exec "$(dirname "$0")/../python/.venv/bin/python" "$(dirname "$0")/safe_serial.py" "$@"

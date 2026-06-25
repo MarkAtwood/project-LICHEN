@@ -246,7 +246,116 @@ This is deliberate. A protocol that handles every edge case optimally is a
 protocol too complex to implement correctly on a microcontroller. LICHEN
 handles common cases well and degrades gracefully on edge cases.
 
-## 7. Summary
+## 7. Physical Layer Parameter Choices
+
+The LoRa PHY parameters are chosen as a middle-ground compromise:
+
+### 7.1. Spreading Factor: SF10
+
+| SF | Sensitivity | Airtime (50B) | Range | Use Case |
+|----|-------------|---------------|-------|----------|
+| SF7 | -123 dBm | ~30ms | Short | High-density urban |
+| SF10 | -132 dBm | ~250ms | Medium | General purpose |
+| SF12 | -137 dBm | ~1s | Long | Rural/wilderness |
+
+**Why SF10:**
+
+- **Not SF7-8:** LICHEN targets mesh networking over distance, not adjacent-room
+  communication. Urban deployments need wall penetration. SF10 provides ~9dB
+  more link budget than SF7—the difference between "works indoors" and "doesn't."
+
+- **Not SF11-12:** Airtime matters for battery and duty cycle. SF10→SF12 doubles
+  airtime for only ~5dB more range—diminishing returns. A node sending 100
+  packets/day at SF10 uses half the airtime of SF12, extending battery life
+  proportionally.
+
+- **SF10 is the middle:** Good range for multi-hop mesh without excessive airtime.
+  Most links that fail at SF10 would need a relay node anyway.
+
+### 7.2. Bandwidth: 125 kHz
+
+| BW | Data Rate | Sensitivity | Crystal Tolerance |
+|----|-----------|-------------|-------------------|
+| 62.5 kHz | Slowest | Best | Tight |
+| 125 kHz | Medium | Good | Relaxed |
+| 250 kHz | Fast | Worse | Relaxed |
+| 500 kHz | Fastest | Worst | Relaxed |
+
+**Why 125 kHz:**
+
+- **More robust than 250 kHz:** ~3dB better sensitivity. In marginal conditions,
+  this is the difference between packet reception and loss.
+
+- **Tolerates cheaper crystals:** Wider bandwidth means less sensitivity to
+  frequency offset from temperature drift or cheap oscillators. Enables use of
+  low-cost modules.
+
+- **Not 62.5 kHz:** Requires tighter frequency accuracy than cheap modules provide.
+  The sensitivity gain doesn't justify the hardware cost increase.
+
+### 7.3. Coding Rate: CR 4/5
+
+| CR | Overhead | Error Correction |
+|----|----------|------------------|
+| 4/5 | 25% | Minimal |
+| 4/6 | 50% | Low |
+| 4/7 | 75% | Medium |
+| 4/8 | 100% | High |
+
+**Why 4/5:**
+
+- **Minimal overhead:** LoRa's chirp modulation already provides good noise
+  immunity. FEC provides diminishing returns on top of that.
+
+- **Airtime matters:** Higher CR means longer packets. The extra robustness
+  rarely saves packets that wouldn't have been saved by retransmission.
+
+- **ADR can adjust:** If a specific link needs more robustness, ADR can increase
+  CR for that link. Default to minimal overhead.
+
+### 7.4. Sync Word: 0x34
+
+| Sync Word | Used By |
+|-----------|---------|
+| 0x12 | LoRaWAN private networks |
+| 0x34 | LoRaWAN public networks / LICHEN |
+| 0x2B | Meshtastic |
+
+**Why 0x34:**
+
+- **Not 0x2B (Meshtastic):** In areas with Meshtastic traffic, LICHEN nodes
+  would receive every Meshtastic packet, wasting CPU and battery filtering them.
+  The sync word check happens in radio hardware—different sync word means zero
+  processing cost for foreign packets.
+
+- **Using 0x34 (LoRaWAN public):** Chosen arbitrarily from unused space. Could
+  be any value except 0x12 and 0x2B. LoRaWAN public networks are rare; collision
+  risk is low.
+
+- **Alternative:** A LICHEN-specific sync word (e.g., 0x4C for 'L') would provide
+  complete isolation. 0x34 was chosen for historical reasons and works fine.
+
+### 7.5. Comparison with Meshtastic
+
+| Parameter | LICHEN | Meshtastic "Long Fast" |
+|-----------|--------|------------------------|
+| SF | 10 | 11 |
+| BW | 125 kHz | 250 kHz |
+| CR | 4/5 | 4/5 |
+| Sync | 0x34 | 0x2B |
+| Data Rate | ~980 bps | ~6.8 kbps |
+
+Different design goals:
+
+- **Meshtastic optimizes for throughput:** Higher BW, slightly higher SF for range
+- **LICHEN optimizes for link budget:** Lower BW for sensitivity, lower SF for
+  airtime efficiency
+
+The PHY parameters are incompatible—LICHEN and Meshtastic devices cannot hear
+each other even on the same frequency. This is intentional; mixing protocols
+on shared PHY would create interference without interoperability.
+
+## 8. Summary
 
 LICHEN applies concepts proven in tactical MANETs to the constrained world of
 LoRa:

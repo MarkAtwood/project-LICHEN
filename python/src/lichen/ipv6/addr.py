@@ -62,13 +62,14 @@ def mac48_to_eui64(mac: bytes) -> bytes:
 
 
 def short_addr_to_iid(short_addr: int) -> bytes:
-    """Derive an IID from a 16-bit short address (spec 6.2).
+    """Derive an IID from a 16-bit short address (RFC 4944 section 6).
 
-    ``IID = 0x0000_00FF_FE00_0000 | (short_addr << 48)``
+    Format: ``0000:00FF:FE00:XXXX`` where XXXX is the 16-bit short address
+    in the low bytes of the IID.
     """
     if not 0 <= short_addr <= 0xFFFF:
         raise AddrError(f"short address out of range: {short_addr}")
-    value = 0x0000_00FF_FE00_0000 | (short_addr << 48)
+    value = 0x0000_00FF_FE00_0000 | short_addr
     return value.to_bytes(8, "big")
 
 

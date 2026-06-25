@@ -1,0 +1,46 @@
+/* RAK4631 device tree overlay for LICHEN bridge */
+
+/ {
+    chosen {
+        zephyr,console = &cdc_acm_uart0;
+        zephyr,shell-uart = &cdc_acm_uart0;
+    };
+
+    aliases {
+        led0 = &green_led;
+        lora0 = &lora;
+    };
+
+    leds {
+        compatible = "gpio-leds";
+        green_led: led_0 {
+            gpios = <&gpio0 35 GPIO_ACTIVE_LOW>;
+            label = "Green LED";
+        };
+    };
+};
+
+&zephyr_udc0 {
+    cdc_acm_uart0: cdc_acm_uart0 {
+        compatible = "zephyr,cdc-acm-uart";
+    };
+};
+
+/* SX1262 on SPI3 */
+&spi3 {
+    status = "okay";
+    cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;  /* P1.10 = NSS */
+
+    lora: sx1262@0 {
+        compatible = "semtech,sx1262";
+        reg = <0>;
+        spi-max-frequency = <8000000>;
+        reset-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;   /* P1.06 = RST */
+        busy-gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;  /* P1.14 = BUSY */
+        dio1-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;  /* P1.15 = DIO1 */
+        /* DIO2 controls RF switch internally */
+        dio2-tx-enable;
+        /* 1.8V TCXO */
+        tcxo-power-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+    };
+};

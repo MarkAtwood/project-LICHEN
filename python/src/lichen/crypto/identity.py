@@ -9,26 +9,61 @@ Why this exists: Every LICHEN node needs a stable cryptographic identity for:
 
 The identity is derived from a 32-byte seed (typically from secure storage or
 hardware RNG). The seed MUST be kept secret; the public key can be shared freely.
+
+Security Note on Key Material Zeroing
+-------------------------------------
+This module makes a best-effort attempt to zero sensitive key material (seed,
+privkey) when an Identity is wiped or garbage-collected. However, Python has
+fundamental limitations that prevent guaranteed secure erasure:
+
+1. Immutable bytes: Python's `bytes` type is immutable, so any bytes object
+   passed to us may persist elsewhere in memory.
+2. GC copies: The garbage collector may copy objects during compaction.
+3. Interning: Small bytes objects may be interned by the interpreter.
+4. String coercion: Debug output, exceptions, etc. may create copies.
+5. No mlock: Python doesn't support memory locking to prevent swapping.
+
+We mitigate by storing secrets in mutable `bytearray` internally, which allows
+in-place zeroing. This is defense-in-depth, not a guarantee. For high-security
+applications, consider hardware security modules or native extensions with
+proper memory protection (e.g., libsodium's sodium_memzero).
 """
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 
 from .schnorr48 import derive_keypair
 
 
-@dataclass(frozen=True, slots=True)
+def _to_bytearray(data: bytes | bytearray) -> bytearray:
+    """Convert bytes to bytearray for mutable storage."""
+    if isinstance(data, bytearray):
+        return data
+    return bytearray(data)
+
+
+def _zero_bytearray(arr: bytearray) -> None:
+    """Zero out a bytearray in-place."""
+    for i in range(len(arr)):
+        arr[i] = 0
+
+
+@dataclass(slots=True)
 class Identity:
     """A node's cryptographic identity.
 
-    Why frozen: Identity should never change after creation. A changed identity
-    means a different node. Frozen prevents accidental mutation.
+    Why not frozen: We need mutable bytearrays for secure zeroing of key
+    material. The class is otherwise treated as immutable after construction.
 
     Why slots: Memory efficiency matters on constrained devices. We may have
     many peer identities cached.
+
+    Security: Call wipe() when done with this identity to zero key material.
+    The destructor also attempts zeroing, but explicit wipe() is preferred
+    since Python's GC timing is unpredictable.
 
     Attributes:
         seed: 32-byte secret seed. NEVER log, transmit, or expose this.
@@ -37,21 +72,63 @@ class Identity:
         iid: 8-byte Interface Identifier derived from pubkey (for IPv6).
     """
 
-    seed: bytes
-    privkey: bytes
+    # Internal storage uses bytearray for mutable zeroing
+    _seed: bytearray = field(repr=False)
+    _privkey: bytearray = field(repr=False)
     pubkey: bytes
     iid: bytes
+    _wiped: bool = field(default=False, repr=False)
+
+    @property
+    def seed(self) -> bytes:
+        """Return seed as immutable bytes (for API compatibility)."""
+        if self._wiped:
+            raise ValueError("Identity has been wiped")
+        return bytes(self._seed)
+
+    @property
+    def privkey(self) -> bytes:
+        """Return privkey as immutable bytes (for API compatibility)."""
+        if self._wiped:
+            raise ValueError("Identity has been wiped")
+        return bytes(self._privkey)
 
     def __post_init__(self) -> None:
         # Why validate here: catch bugs early, fail fast
-        if len(self.seed) != 32:
-            raise ValueError(f"seed must be 32 bytes, got {len(self.seed)}")
-        if len(self.privkey) != 32:
-            raise ValueError(f"privkey must be 32 bytes, got {len(self.privkey)}")
+        if len(self._seed) != 32:
+            raise ValueError(f"seed must be 32 bytes, got {len(self._seed)}")
+        if len(self._privkey) != 32:
+            raise ValueError(f"privkey must be 32 bytes, got {len(self._privkey)}")
         if len(self.pubkey) != 32:
             raise ValueError(f"pubkey must be 32 bytes, got {len(self.pubkey)}")
         if len(self.iid) != 8:
             raise ValueError(f"iid must be 8 bytes, got {len(self.iid)}")
+
+    def wipe(self) -> None:
+        """Zero key material. Call when done with this identity.
+
+        Best-effort zeroing of secret key material. See module docstring for
+        limitations. After wiping, accessing seed or privkey raises ValueError.
+
+        This is idempotent - calling multiple times is safe.
+        """
+        if self._wiped:
+            return
+        _zero_bytearray(self._seed)
+        _zero_bytearray(self._privkey)
+        self._wiped = True
+
+    def __del__(self) -> None:
+        """Best-effort zeroing on garbage collection.
+
+        Explicit wipe() is preferred since GC timing is unpredictable.
+        """
+        # Guard against partially-constructed objects during __del__
+        if hasattr(self, "_wiped") and not self._wiped:
+            if hasattr(self, "_seed"):
+                _zero_bytearray(self._seed)
+            if hasattr(self, "_privkey"):
+                _zero_bytearray(self._privkey)
 
     @classmethod
     def from_seed(cls, seed: bytes) -> Identity:
@@ -75,7 +152,12 @@ class Identity:
         privkey, pubkey = derive_keypair(seed)
         iid = _pubkey_to_iid(pubkey)
 
-        return cls(seed=seed, privkey=privkey, pubkey=pubkey, iid=iid)
+        return cls(
+            _seed=_to_bytearray(seed),
+            _privkey=_to_bytearray(privkey),
+            pubkey=pubkey,
+            iid=iid,
+        )
 
     @classmethod
     def generate(cls) -> Identity:
@@ -94,6 +176,8 @@ class Identity:
 
     def __repr__(self) -> str:
         # Why custom repr: NEVER leak seed or privkey in logs
+        if self._wiped:
+            return "Identity(WIPED)"
         return f"Identity(pubkey={self.pubkey.hex()[:16]}..., iid={self.iid.hex()})"
 
 

@@ -118,6 +118,12 @@ enum SosAction {
 
 #[derive(Subcommand)]
 enum KeyAction {
+    /// Generate a new Ed25519 keypair (for initial node setup).
+    Generate {
+        /// Output file for private key (default: stdout).
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+    },
     /// Print this node's public key fingerprint.
     Fingerprint,
     /// List trusted peer keys.
