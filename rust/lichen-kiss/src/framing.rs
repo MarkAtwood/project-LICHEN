@@ -443,6 +443,92 @@ impl KissReader {
     }
 }
 
+/// Incremental KISS frame writer with output queue.
+///
+/// Queue frames with `queue_frame()`, then drain encoded bytes with `try_get_frame()`.
+///
+/// # Example
+///
+/// ```
+/// # #[cfg(feature = "kiss")]
+/// # {
+/// use lichen_kiss::{KissWriter, KissCommand};
+///
+/// let mut writer = KissWriter::new();
+/// let mut out = [0u8; 64];
+///
+/// // Queue a frame
+/// writer.queue_frame(0, KissCommand::Data, b"Hi").unwrap();
+///
+/// // Get encoded frame
+/// if let Some(len) = writer.try_get_frame(&mut out) {
+///     // out[..len] contains: FEND, CMD, escaped data, FEND
+/// }
+/// # }
+/// ```
+pub struct KissWriter {
+    // ponytail: 8 frames × 512 bytes each = 4KB max, sufficient for typical TNC traffic
+    queue: heapless::Deque<heapless::Vec<u8, 512>, 8>,
+}
+
+impl Default for KissWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KissWriter {
+    /// Create a new writer.
+    pub const fn new() -> Self {
+        Self {
+            queue: heapless::Deque::new(),
+        }
+    }
+
+    /// Queue a frame for transmission.
+    ///
+    /// The frame is pre-encoded (FEND delimiters + escaping) and stored in the queue.
+    /// Returns an error if the queue is full or the frame is too large.
+    pub fn queue_frame(&mut self, port: u8, cmd: KissCommand, data: &[u8]) -> Result<(), KissError> {
+        self.queue_frame_raw(port, cmd as u8, data)
+    }
+
+    /// Queue a frame with raw command byte.
+    pub fn queue_frame_raw(&mut self, port: u8, cmd: u8, data: &[u8]) -> Result<(), KissError> {
+        let mut frame: heapless::Vec<u8, 512> = heapless::Vec::new();
+        let mut tmp = [0u8; 512];
+        let len = kiss_encode_raw(port, cmd, data, &mut tmp)?;
+        frame.extend_from_slice(&tmp[..len]).map_err(|_| KissError::BufferTooSmall)?;
+        self.queue.push_back(frame).map_err(|_| KissError::BufferTooSmall)?;
+        Ok(())
+    }
+
+    /// Try to get the next encoded frame from the queue.
+    ///
+    /// Returns the number of bytes written to `out`, or `None` if queue is empty.
+    pub fn try_get_frame(&mut self, out: &mut [u8]) -> Option<usize> {
+        let frame = self.queue.pop_front()?;
+        let len = frame.len().min(out.len());
+        out[..len].copy_from_slice(&frame[..len]);
+        Some(len)
+    }
+
+    /// Number of frames waiting in queue.
+    pub fn pending_count(&self) -> usize {
+        self.queue.len()
+    }
+
+    /// Check if queue is empty.
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    /// Clear all pending frames.
+    pub fn clear(&mut self) {
+        self.queue.clear();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -722,5 +808,60 @@ mod tests {
         assert_eq!(KissCommand::from_u8(0x0F), Some(KissCommand::Return));
         assert_eq!(KissCommand::from_u8(0x07), None);
         assert_eq!(KissCommand::from_u8(0x10), None);
+    }
+
+    #[test]
+    fn test_writer_simple() {
+        let mut writer = KissWriter::new();
+        let mut out = [0u8; 64];
+
+        writer.queue_frame(0, KissCommand::Data, b"Hi").unwrap();
+        assert_eq!(writer.pending_count(), 1);
+
+        let len = writer.try_get_frame(&mut out).unwrap();
+        assert_eq!(&out[..len], &[FEND, 0x00, b'H', b'i', FEND]);
+        assert!(writer.is_empty());
+    }
+
+    #[test]
+    fn test_writer_multiple_frames() {
+        let mut writer = KissWriter::new();
+        let mut out = [0u8; 64];
+
+        writer.queue_frame(0, KissCommand::Data, b"A").unwrap();
+        writer.queue_frame(1, KissCommand::Data, b"B").unwrap();
+        assert_eq!(writer.pending_count(), 2);
+
+        let len1 = writer.try_get_frame(&mut out).unwrap();
+        assert_eq!(&out[..len1], &[FEND, 0x00, b'A', FEND]);
+
+        let len2 = writer.try_get_frame(&mut out).unwrap();
+        assert_eq!(&out[..len2], &[FEND, 0x10, b'B', FEND]); // port 1 = 0x10
+
+        assert!(writer.try_get_frame(&mut out).is_none());
+    }
+
+    #[test]
+    fn test_writer_with_escaping() {
+        let mut writer = KissWriter::new();
+        let mut out = [0u8; 64];
+
+        // Data containing FEND byte
+        writer.queue_frame(0, KissCommand::Data, &[0x41, FEND, 0x42]).unwrap();
+
+        let len = writer.try_get_frame(&mut out).unwrap();
+        assert_eq!(&out[..len], &[FEND, 0x00, 0x41, FESC, TFEND, 0x42, FEND]);
+    }
+
+    #[test]
+    fn test_writer_clear() {
+        let mut writer = KissWriter::new();
+
+        writer.queue_frame(0, KissCommand::Data, b"A").unwrap();
+        writer.queue_frame(0, KissCommand::Data, b"B").unwrap();
+        assert_eq!(writer.pending_count(), 2);
+
+        writer.clear();
+        assert!(writer.is_empty());
     }
 }
