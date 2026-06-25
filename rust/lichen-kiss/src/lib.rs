@@ -44,9 +44,16 @@ pub mod aprs;
 #[cfg(feature = "kiss-ble")]
 pub mod ble;
 
+#[cfg(feature = "bridge")]
+pub mod bridge;
+
 // Re-export core types when kiss feature is enabled
 #[cfg(feature = "kiss")]
 pub use framing::{
-    KissCommand, KissError, KissFrame, KissReader, kiss_decode, kiss_encode, kiss_escape,
-    kiss_unescape, FEND, FESC, TFEND, TFESC,
+    KissCommand, KissError, KissFrame, KissReader, KissWriter, kiss_decode, kiss_encode,
+    kiss_escape, kiss_unescape, FEND, FESC, TFEND, TFESC,
 };
+
+// Re-export bridge types when bridge feature is enabled
+#[cfg(feature = "bridge")]
+pub use bridge::{BridgeError, DecodedKissFrame, KissBridge, PORT_AX25, PORT_RAW};
