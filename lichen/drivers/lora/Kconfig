@@ -37,3 +37,5 @@ config LORA_LICHEN_RENODE
 	help
 	  Memory-mapped driver for Renode LichenSubGHz peripheral. Bridges
 	  to lichen-sim via the C# peripheral's TCP socket.
+
+rsource "lr1110/Kconfig"
