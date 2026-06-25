@@ -1,15 +1,23 @@
 //! lichen — LICHEN node CLI.
 //!
-//! Connects to a node via CoAP over UDP (or a SLIP serial link bridged by
-//! lichend) and provides commands for status, messaging, key management, and
-//! position sharing.
+//! Connects to a node via CoAP over UDP and provides commands for status,
+//! messaging, presence, SOS, position, and node configuration.
 //!
 //! Examples:
 //!   lichen status
-//!   lichen send --to fe80::1 "hello"
 //!   lichen neighbors
-//!   lichen key fingerprint
-//!   lichen config get lora.frequency
+//!   lichen presence
+//!   lichen send --to fe80::1 "hello mesh"
+//!   lichen inbox
+//!   lichen sos activate
+//!   lichen sos status
+//!   lichen sos cancel
+//!   lichen config get tx_power_dbm
+//!   lichen config set tx_power_dbm 10
+//!   lichen position show
+//!   lichen rd list
+//!   lichen rd register --ep my-node --lt 3600
+//!   lichen rd delete <id>
 
 mod commands;
 mod output;
@@ -46,19 +54,31 @@ enum OutputFormat {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Show node status (uptime, firmware, memory, radio stats).
+    /// Show node status (rank, role, radio stats).
     Status,
 
     /// List known neighbors and their link quality.
     Neighbors,
 
+    /// Show the live table of recently-heard mesh peers.
+    Presence,
+
     /// Send a text message to a node.
     Send {
-        /// Destination IPv6 address or alias.
+        /// Destination node IPv6 address, or "all" for broadcast.
         #[arg(long)]
         to: String,
         /// Message text.
         message: String,
+    },
+
+    /// Show received messages (inbox).
+    Inbox,
+
+    /// Emergency SOS beacon.
+    Sos {
+        #[command(subcommand)]
+        action: SosAction,
     },
 
     /// Key management subcommands.
@@ -78,6 +98,22 @@ enum Command {
         #[command(subcommand)]
         action: PositionAction,
     },
+
+    /// CoAP Resource Directory (RFC 9176).
+    Rd {
+        #[command(subcommand)]
+        action: RdAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum SosAction {
+    /// Activate the SOS emergency beacon.
+    Activate,
+    /// Cancel a previously activated SOS beacon.
+    Cancel,
+    /// Show the current SOS state.
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -108,12 +144,12 @@ enum KeyAction {
 enum ConfigAction {
     /// Read a configuration value.
     Get {
-        /// Dotted key path, e.g. `lora.frequency`.
+        /// Key name, e.g. `tx_power_dbm`.
         key: String,
     },
     /// Write a configuration value.
     Set {
-        /// Dotted key path.
+        /// Key name.
         key: String,
         /// New value (string; node validates type).
         value: String,
@@ -126,8 +162,32 @@ enum PositionAction {
     Show,
     /// Broadcast this node's position to the mesh.
     Broadcast,
-    /// List peer positions.
+    /// List peer positions (from presence table).
     Peers,
+}
+
+#[derive(Subcommand)]
+enum RdAction {
+    /// List registered endpoints.
+    List {
+        /// Filter by endpoint name.
+        #[arg(long)]
+        ep: Option<String>,
+    },
+    /// Register this node with the Resource Directory.
+    Register {
+        /// Endpoint name (default: node address).
+        #[arg(long)]
+        ep: Option<String>,
+        /// Lifetime in seconds (default: 3600).
+        #[arg(long, default_value_t = 3600)]
+        lt: u32,
+    },
+    /// Delete a registration by ID.
+    Delete {
+        /// Registration ID returned by `register`.
+        id: String,
+    },
 }
 
 #[tokio::main]
@@ -148,10 +208,18 @@ async fn main() {
     let result = match cli.command {
         Command::Status => commands::status(cli.node, &fmt).await,
         Command::Neighbors => commands::neighbors(cli.node, &fmt).await,
+        Command::Presence => commands::presence(cli.node, &fmt).await,
         Command::Send { to, message } => commands::send(cli.node, &to, &message, &fmt).await,
+        Command::Inbox => commands::inbox(cli.node, &fmt).await,
+        Command::Sos { action } => match action {
+            SosAction::Activate => commands::sos_activate(cli.node, &fmt).await,
+            SosAction::Cancel => commands::sos_cancel(cli.node, &fmt).await,
+            SosAction::Status => commands::sos_status(cli.node, &fmt).await,
+        },
         Command::Key { action } => commands::key(cli.node, action, &fmt).await,
         Command::Config { action } => commands::config(cli.node, action, &fmt).await,
         Command::Position { action } => commands::position(cli.node, action, &fmt).await,
+        Command::Rd { action } => commands::rd(cli.node, action, &fmt).await,
     };
 
     if let Err(e) = result {

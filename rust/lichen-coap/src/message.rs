@@ -59,3 +59,49 @@ pub struct CoapMessage<'a> {
 
 /// Default CoAP port, re-exported for convenience.
 pub const COAP_PORT: u16 = PORT_COAP;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn message_code_class_and_detail() {
+        // Requests: class 0
+        assert_eq!(MessageCode::GET.class(), 0);
+        assert_eq!(MessageCode::GET.detail(), 1);
+        assert_eq!(MessageCode::POST.class(), 0);
+        assert_eq!(MessageCode::POST.detail(), 2);
+        assert_eq!(MessageCode::PUT.class(), 0);
+        assert_eq!(MessageCode::PUT.detail(), 3);
+        assert_eq!(MessageCode::DELETE.class(), 0);
+        assert_eq!(MessageCode::DELETE.detail(), 4);
+        // 2.xx Success
+        assert_eq!(MessageCode::CREATED.class(), 2);
+        assert_eq!(MessageCode::CREATED.detail(), 1);
+        assert_eq!(MessageCode::CONTENT.class(), 2);
+        assert_eq!(MessageCode::CONTENT.detail(), 5);
+        // 4.xx Client Error
+        assert_eq!(MessageCode::BAD_REQUEST.class(), 4);
+        assert_eq!(MessageCode::BAD_REQUEST.detail(), 0);
+        assert_eq!(MessageCode::NOT_FOUND.class(), 4);
+        assert_eq!(MessageCode::NOT_FOUND.detail(), 4);
+        // 5.xx Server Error
+        assert_eq!(MessageCode::INTERNAL_ERROR.class(), 5);
+        assert_eq!(MessageCode::INTERNAL_ERROR.detail(), 0);
+    }
+
+    #[test]
+    fn message_code_equality() {
+        assert_eq!(MessageCode::CONTENT, MessageCode::CONTENT);
+        assert_ne!(MessageCode::CONTENT, MessageCode::CREATED);
+        assert_ne!(MessageCode::GET, MessageCode::POST);
+    }
+
+    #[test]
+    fn message_type_repr_values() {
+        assert_eq!(MessageType::Confirmable as u8, 0);
+        assert_eq!(MessageType::NonConfirmable as u8, 1);
+        assert_eq!(MessageType::Acknowledgement as u8, 2);
+        assert_eq!(MessageType::Reset as u8, 3);
+    }
+}

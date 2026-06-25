@@ -38,7 +38,6 @@ from lichen.sim.protocol import (
     get_message_payload,
     get_message_type,
 )
-from lichen.sim.simulation import TimeMode
 from lichen.sim.transmission import airtime_us
 
 if TYPE_CHECKING:
@@ -358,12 +357,8 @@ class NodeServer:
             await write_message(writer, encode_err(7, str(e)))
             return
 
-        # Track start time for timeout calculation
         start_time_us = self._simulation.current_time_us
         timeout_us = timeout_ms * 1000
-
-        # In barrier sync mode, we need to wait for time to advance
-        # or for a packet to arrive
         result = None
         while True:
             # Check for received packet
@@ -371,10 +366,7 @@ class NodeServer:
             if result is not None:
                 break
 
-            # In BARRIER_SYNC mode, try to advance time
-            # This will only advance if all nodes are blocked
-            if self._simulation.time_mode == TimeMode.BARRIER_SYNC:
-                self._simulation.maybe_advance_time()
+            self._simulation.maybe_advance_time()
 
             # Check if we've timed out
             elapsed_us = self._simulation.current_time_us - start_time_us

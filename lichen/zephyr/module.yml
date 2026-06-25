@@ -3,3 +3,4 @@ build:
   kconfig: drivers/Kconfig
   settings:
     dts_root: ..
+    board_root: .
