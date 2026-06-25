@@ -1,0 +1,118 @@
+/*
+ * RAK19007 WisBlock Base Board (2nd Gen) + RAK4631 Core
+ * Device tree overlay for LICHEN bridge
+ *
+ * RAK4631 Core: nRF52840 + SX1262
+ * RAK19007 Base: 4 sensor slots (A-D), IO slot, USB-C
+ *
+ * SX1262 SPI pins (fixed on RAK4631 core):
+ *   SCK  = P1.11
+ *   MISO = P1.13
+ *   MOSI = P1.12
+ *   NSS  = P1.10
+ *
+ * SX1262 control pins:
+ *   RESET = P1.06
+ *   BUSY  = P1.14
+ *   DIO1  = P1.15
+ *   DIO2  = RF switch (internal)
+ *   TCXO  = P1.07
+ *
+ * WisBlock slot GPIO mapping (accent nRF52840 pins):
+ *   IO1 = P0.17 (Slot A pin 12, Slot B pin 10)
+ *   IO2 = P1.02 (Slot A pin 10, Slot B pin 12) - controls 3V3_S power
+ *   IO3 = P0.21 (Slot C pin 12)
+ *   IO4 = P0.04 (Slot C pin 10)
+ *   IO5 = P0.09 (Slot D pin 12)
+ *   IO6 = P0.10 (Slot D pin 10)
+ *
+ * UART1 (Slot A & D):
+ *   TX1 = P0.16
+ *   RX1 = P0.15
+ *
+ * I2C1 (all slots):
+ *   SCL = P0.14
+ *   SDA = P0.13
+ *
+ * User button: AIN1 = P0.31 (directly accessible on base board)
+ */
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+	};
+
+	aliases {
+		led0 = &green_led;
+		led1 = &blue_led;
+		lora0 = &lora;
+		sw0 = &user_button;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		green_led: led_0 {
+			gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;  /* P1.03 */
+			label = "Green LED";
+		};
+		blue_led: led_1 {
+			gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;  /* P1.04 */
+			label = "Blue LED";
+		};
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		user_button: button_0 {
+			gpios = <&gpio0 31 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;  /* AIN1 */
+			label = "User Button";
+		};
+	};
+
+	/* 3V3_S switchable power rail for sensor slots */
+	wisblock_power: wisblock-power {
+		compatible = "regulator-fixed";
+		regulator-name = "3V3_S";
+		enable-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;  /* IO2 = P1.02 */
+		regulator-boot-on;
+	};
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/* I2C1 for WisBlock sensor slots */
+&i2c0 {
+	status = "okay";
+	/* SCL = P0.14, SDA = P0.13 (default pinmux) */
+};
+
+/* UART1 for Slot A/D modules (e.g., GPS) */
+&uart1 {
+	status = "okay";
+	current-speed = <9600>;
+	/* TX = P0.16, RX = P0.15 */
+};
+
+/* SX1262 on SPI3 */
+&spi3 {
+	status = "okay";
+	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;  /* P1.10 = NSS */
+
+	lora: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		reset-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;   /* P1.06 = RST */
+		busy-gpios = <&gpio1 14 GPIO_ACTIVE_HIGH>;  /* P1.14 = BUSY */
+		dio1-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;  /* P1.15 = DIO1 */
+		/* DIO2 controls RF switch internally */
+		dio2-tx-enable;
+		/* 1.8V TCXO */
+		tcxo-power-gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;  /* P1.07 */
+	};
+};
