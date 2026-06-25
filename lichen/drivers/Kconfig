@@ -1,2 +1,3 @@
 rsource "lora/Kconfig"
 rsource "lora_loopback/Kconfig"
+rsource "gnss/Kconfig"
