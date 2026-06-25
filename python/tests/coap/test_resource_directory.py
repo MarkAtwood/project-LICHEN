@@ -4,15 +4,12 @@
 
 from __future__ import annotations
 
-import cbor2
-import pytest
-from aiocoap import DELETE, GET, POST, Message
-
 import aiocoap
+import cbor2
+from aiocoap import DELETE, GET, POST, Message
 
 from lichen.coap.resources import StaticNodeInfo, build_site
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
-
 
 # ---------------------------------------------------------------------------
 # Helpers

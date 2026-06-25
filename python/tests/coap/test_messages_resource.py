@@ -8,7 +8,6 @@ import asyncio
 
 import aiocoap
 import cbor2
-import pytest
 from aiocoap import GET, POST, Message
 
 from lichen.coap.resources import MessagesResource, StaticNodeInfo, build_site
