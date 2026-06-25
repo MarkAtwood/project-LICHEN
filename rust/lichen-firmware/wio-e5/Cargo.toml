@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+[package]
+name = "lichen-firmware-wio-e5"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "LICHEN firmware for Seeed Wio-E5 (STM32WL55)"
+
+[dependencies]
+# Embassy framework
+embassy-executor = { version = "0.7", features = ["arch-cortex-m", "executor-thread"] }
+embassy-time = "0.4"
+embassy-sync = "0.6"
+
+# STM32WL HAL with SubGHz radio
+embassy-stm32 = { version = "0.2", features = [
+    "stm32wl55jc-cm4",
+    "time-driver-any",
+    "exti",
+] }
+
+# Cortex-M support
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+panic-halt = "1.0"
+
+# LICHEN crates
+lichen-hal = { path = "../../lichen-hal" }
+lichen-core = { path = "../../lichen-core" }
+
+# Logging (defmt for size-constrained targets)
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+# Note: Profile settings are in workspace root Cargo.toml
+# For embedded targets, use:
+#   [profile.release]
+#   opt-level = "s", lto = true, codegen-units = 1

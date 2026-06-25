@@ -1,0 +1,17 @@
+[package]
+name = "lichen-kiss"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "KISS protocol framing for TNC app compatibility (APRSDroid, aprs.fi)."
+
+[features]
+default = []
+std = []
+kiss = []
+kiss-aprs = ["kiss"]
+kiss-ble = ["kiss"]
+
+[dependencies]
+
+[dev-dependencies]

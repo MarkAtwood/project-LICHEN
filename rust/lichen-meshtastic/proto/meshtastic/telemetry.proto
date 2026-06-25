@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Extracted from https://github.com/meshtastic/protobufs
+// Minimal subset for LICHEN Meshtastic bridge - just DeviceMetrics
+
+syntax = "proto3";
+
+package meshtastic;
+
+message DeviceMetrics {
+  optional uint32 battery_level = 1;
+  optional float voltage = 2;
+  optional float channel_utilization = 3;
+  optional float air_util_tx = 4;
+  optional uint32 uptime_seconds = 5;
+}
