@@ -2,11 +2,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: The contributors to the LICHEN project
  *
- * Seeed SenseCAP T1000-E — nRF52840-QIAA + LR1110
+ * Seeed SenseCAP T1000-E — nRF52840-QIAA + LR1110 + AG3335
  *
- * WARNING: GPIO pin assignments are UNVERIFIED PLACEHOLDERS marked
- * with TODO comments.  Verify against the T1000-E schematic (or the
- * Amazon Sidewalk SDK hw_config.h) before flashing real hardware.
+ * All GPIO pin assignments verified against Meshtastic firmware:
+ *   variants/nrf52840/tracker-t1000-e/variant.h
  */
 
 /dts-v1/;
@@ -50,11 +49,14 @@
 /*
  * LR1110 on SPI2.
  *
- * TODO: replace placeholder GPIO pin numbers with verified values.
- *   CS     = P1.04 (placeholder — verify)
- *   RESET  = P1.05 (placeholder — verify)
- *   BUSY   = P1.06 (placeholder — verify)
- *   DIO9   = P1.07 (placeholder — verify)
+ * Pin assignments verified against Meshtastic variant.h:
+ *   CS    = P0.12  SCK  = P0.11  MOSI = P1.09  MISO = P1.08
+ *   RESET = P1.10 (active-low NRESET)
+ *   BUSY  = P0.07 (active-high DIO2)
+ *   IRQ   = P1.01 (active-high DIO1/DIO9)
+ *
+ * DIO3 TCXO (1.6 V) and DIO5-DIO8 RF switch are internal to the
+ * LR1110 — no external nRF52840 GPIOs required for those signals.
  *
  * The LR1110 on T1000-E uses the LP PA (≤14 dBm) supplied via DCDC.
  * Add hp-max-power in an app overlay if the HP PA path is wired.
@@ -62,7 +64,7 @@
 &spi2 {
 	compatible = "nordic,nrf-spim";
 	status = "okay";
-	cs-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;   /* TODO: verify */
+	cs-gpios = <&gpio0 12 GPIO_ACTIVE_LOW>;
 	pinctrl-0 = <&spi2_default>;
 	pinctrl-1 = <&spi2_sleep>;
 	pinctrl-names = "default", "sleep";
@@ -71,9 +73,9 @@
 		compatible = "semtech,lr1110";
 		reg = <0>;
 		status = "disabled";
-		reset-gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;  /* TODO: verify */
-		busy-gpios  = <&gpio1 6 GPIO_ACTIVE_HIGH>; /* TODO: verify */
-		dio9-gpios  = <&gpio1 7 GPIO_ACTIVE_HIGH>; /* TODO: verify */
+		reset-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>;
+		busy-gpios  = <&gpio0  7 GPIO_ACTIVE_HIGH>;
+		dio9-gpios  = <&gpio1  1 GPIO_ACTIVE_HIGH>;
 		spi-max-frequency = <8000000>;
 	};
 };
