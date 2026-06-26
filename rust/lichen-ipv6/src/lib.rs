@@ -1,0 +1,690 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+//! Minimal IPv6/ICMPv6/UDP for LICHEN mesh nodes.
+//!
+//! # ponytail: not a full IP stack
+//!
+//! This is NOT smoltcp. No TCP, no DHCP, no DNS, no reassembly, no routing
+//! tables. Just the bytes that go over LoRa:
+//!
+//! - IPv6 header construction/parsing (40 bytes)
+//! - ICMPv6 Echo Request/Reply (ping)
+//! - ICMPv6 Neighbor Solicitation/Advertisement
+//! - UDP header (8 bytes, for CoAP)
+//!
+//! Standalone pucks can originate/terminate traffic. Border router handles
+//! the real IP stack for internet connectivity.
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+use heapless::Vec;
+
+/// IPv6 header length (fixed, no extension headers for LICHEN).
+pub const IPV6_HEADER_LEN: usize = 40;
+
+/// UDP header length.
+pub const UDP_HEADER_LEN: usize = 8;
+
+/// ICMPv6 header length (type + code + checksum).
+pub const ICMPV6_HEADER_LEN: usize = 4;
+
+/// Next Header values.
+pub mod next_header {
+    pub const ICMPV6: u8 = 58;
+    pub const UDP: u8 = 17;
+}
+
+/// ICMPv6 message types.
+pub mod icmpv6_type {
+    pub const ECHO_REQUEST: u8 = 128;
+    pub const ECHO_REPLY: u8 = 129;
+    pub const NEIGHBOR_SOLICITATION: u8 = 135;
+    pub const NEIGHBOR_ADVERTISEMENT: u8 = 136;
+}
+
+/// IPv6 address (128 bits).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Addr(pub [u8; 16]);
+
+impl Addr {
+    /// All-zeros (unspecified) address.
+    pub const UNSPECIFIED: Self = Self([0; 16]);
+
+    /// Loopback address (::1).
+    pub const LOOPBACK: Self = Self([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+
+    /// All-nodes multicast (ff02::1).
+    pub const ALL_NODES: Self = Self([
+        0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01,
+    ]);
+
+    /// All-routers multicast (ff02::2).
+    pub const ALL_ROUTERS: Self = Self([
+        0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02,
+    ]);
+
+    /// Create link-local address from 8-byte node ID (EUI-64).
+    ///
+    /// Format: fe80::XX:XX:XX:ff:fe:XX:XX:XX with U/L bit flipped.
+    pub fn link_local_from_eui64(eui64: &[u8; 8]) -> Self {
+        let mut addr = [0u8; 16];
+        addr[0] = 0xfe;
+        addr[1] = 0x80;
+        // bytes 2-7 are zero (link-local prefix)
+        addr[8] = eui64[0] ^ 0x02; // Flip U/L bit
+        addr[9] = eui64[1];
+        addr[10] = eui64[2];
+        addr[11] = eui64[3];
+        addr[12] = eui64[4];
+        addr[13] = eui64[5];
+        addr[14] = eui64[6];
+        addr[15] = eui64[7];
+        Self(addr)
+    }
+
+    /// Create link-local address from 6-byte MAC (insert ff:fe).
+    pub fn link_local_from_mac(mac: &[u8; 6]) -> Self {
+        let mut eui64 = [0u8; 8];
+        eui64[0] = mac[0];
+        eui64[1] = mac[1];
+        eui64[2] = mac[2];
+        eui64[3] = 0xff;
+        eui64[4] = 0xfe;
+        eui64[5] = mac[3];
+        eui64[6] = mac[4];
+        eui64[7] = mac[5];
+        Self::link_local_from_eui64(&eui64)
+    }
+
+    /// Create solicited-node multicast address for this unicast address.
+    ///
+    /// Format: ff02::1:ffXX:XXXX (last 24 bits of unicast).
+    pub fn solicited_node(&self) -> Self {
+        let mut addr = [0u8; 16];
+        addr[0] = 0xff;
+        addr[1] = 0x02;
+        addr[11] = 0x01;
+        addr[12] = 0xff;
+        addr[13] = self.0[13];
+        addr[14] = self.0[14];
+        addr[15] = self.0[15];
+        Self(addr)
+    }
+
+    /// Check if this is a link-local address (fe80::/10).
+    pub fn is_link_local(&self) -> bool {
+        self.0[0] == 0xfe && (self.0[1] & 0xc0) == 0x80
+    }
+
+    /// Check if this is a multicast address (ff00::/8).
+    pub fn is_multicast(&self) -> bool {
+        self.0[0] == 0xff
+    }
+
+    /// Get raw bytes.
+    pub fn as_bytes(&self) -> &[u8; 16] {
+        &self.0
+    }
+}
+
+/// IPv6 header (40 bytes, no extension headers).
+#[derive(Debug, Clone, Copy)]
+pub struct Ipv6Header {
+    pub traffic_class: u8,
+    pub flow_label: u32, // 20 bits
+    pub payload_len: u16,
+    pub next_header: u8,
+    pub hop_limit: u8,
+    pub src: Addr,
+    pub dst: Addr,
+}
+
+impl Ipv6Header {
+    /// Create a new IPv6 header with sensible defaults.
+    pub fn new(next_header: u8, src: Addr, dst: Addr) -> Self {
+        Self {
+            traffic_class: 0,
+            flow_label: 0,
+            payload_len: 0, // Set when encoding
+            next_header,
+            hop_limit: 64,
+            src,
+            dst,
+        }
+    }
+
+    /// Encode header to bytes.
+    pub fn encode(&self, payload_len: u16) -> [u8; IPV6_HEADER_LEN] {
+        let mut buf = [0u8; IPV6_HEADER_LEN];
+
+        // Version (4) | Traffic Class (8) | Flow Label (20)
+        buf[0] = 0x60 | (self.traffic_class >> 4);
+        buf[1] = (self.traffic_class << 4) | ((self.flow_label >> 16) as u8 & 0x0f);
+        buf[2] = (self.flow_label >> 8) as u8;
+        buf[3] = self.flow_label as u8;
+
+        // Payload length
+        buf[4] = (payload_len >> 8) as u8;
+        buf[5] = payload_len as u8;
+
+        // Next header, hop limit
+        buf[6] = self.next_header;
+        buf[7] = self.hop_limit;
+
+        // Addresses
+        buf[8..24].copy_from_slice(&self.src.0);
+        buf[24..40].copy_from_slice(&self.dst.0);
+
+        buf
+    }
+
+    /// Parse header from bytes.
+    pub fn parse(buf: &[u8]) -> Option<Self> {
+        if buf.len() < IPV6_HEADER_LEN {
+            return None;
+        }
+
+        // Check version
+        if (buf[0] >> 4) != 6 {
+            return None;
+        }
+
+        let traffic_class = ((buf[0] & 0x0f) << 4) | (buf[1] >> 4);
+        let flow_label =
+            ((buf[1] as u32 & 0x0f) << 16) | ((buf[2] as u32) << 8) | (buf[3] as u32);
+        let payload_len = ((buf[4] as u16) << 8) | (buf[5] as u16);
+        let next_header = buf[6];
+        let hop_limit = buf[7];
+
+        let mut src = [0u8; 16];
+        let mut dst = [0u8; 16];
+        src.copy_from_slice(&buf[8..24]);
+        dst.copy_from_slice(&buf[24..40]);
+
+        Some(Self {
+            traffic_class,
+            flow_label,
+            payload_len,
+            next_header,
+            hop_limit,
+            src: Addr(src),
+            dst: Addr(dst),
+        })
+    }
+}
+
+/// UDP header (8 bytes).
+#[derive(Debug, Clone, Copy)]
+pub struct UdpHeader {
+    pub src_port: u16,
+    pub dst_port: u16,
+    pub length: u16,
+    pub checksum: u16,
+}
+
+impl UdpHeader {
+    /// Create new UDP header.
+    pub fn new(src_port: u16, dst_port: u16) -> Self {
+        Self {
+            src_port,
+            dst_port,
+            length: 0,   // Set when encoding
+            checksum: 0, // Set when encoding
+        }
+    }
+
+    /// Encode header to bytes.
+    pub fn encode(&self, payload_len: usize, src: &Addr, dst: &Addr, payload: &[u8]) -> [u8; UDP_HEADER_LEN] {
+        let length = (UDP_HEADER_LEN + payload_len) as u16;
+
+        let mut buf = [0u8; UDP_HEADER_LEN];
+        buf[0] = (self.src_port >> 8) as u8;
+        buf[1] = self.src_port as u8;
+        buf[2] = (self.dst_port >> 8) as u8;
+        buf[3] = self.dst_port as u8;
+        buf[4] = (length >> 8) as u8;
+        buf[5] = length as u8;
+
+        // Compute checksum over pseudo-header + UDP header + payload
+        let checksum = udp_checksum(src, dst, &buf, payload);
+        buf[6] = (checksum >> 8) as u8;
+        buf[7] = checksum as u8;
+
+        buf
+    }
+
+    /// Parse header from bytes.
+    pub fn parse(buf: &[u8]) -> Option<Self> {
+        if buf.len() < UDP_HEADER_LEN {
+            return None;
+        }
+
+        Some(Self {
+            src_port: ((buf[0] as u16) << 8) | (buf[1] as u16),
+            dst_port: ((buf[2] as u16) << 8) | (buf[3] as u16),
+            length: ((buf[4] as u16) << 8) | (buf[5] as u16),
+            checksum: ((buf[6] as u16) << 8) | (buf[7] as u16),
+        })
+    }
+}
+
+/// ICMPv6 Echo message (request or reply).
+#[derive(Debug, Clone, Copy)]
+pub struct Icmpv6Echo {
+    pub id: u16,
+    pub seq: u16,
+}
+
+impl Icmpv6Echo {
+    /// Build Echo Request packet (header + data).
+    pub fn build_request(
+        &self,
+        src: &Addr,
+        dst: &Addr,
+        data: &[u8],
+    ) -> Vec<u8, 128> {
+        self.build(icmpv6_type::ECHO_REQUEST, src, dst, data)
+    }
+
+    /// Build Echo Reply packet.
+    pub fn build_reply(
+        &self,
+        src: &Addr,
+        dst: &Addr,
+        data: &[u8],
+    ) -> Vec<u8, 128> {
+        self.build(icmpv6_type::ECHO_REPLY, src, dst, data)
+    }
+
+    fn build(
+        &self,
+        msg_type: u8,
+        src: &Addr,
+        dst: &Addr,
+        data: &[u8],
+    ) -> Vec<u8, 128> {
+        let mut pkt = Vec::new();
+
+        // ICMPv6 header: type, code, checksum (placeholder)
+        let _ = pkt.push(msg_type);
+        let _ = pkt.push(0); // code
+        let _ = pkt.push(0); // checksum high (placeholder)
+        let _ = pkt.push(0); // checksum low
+
+        // Echo header: id, seq
+        let _ = pkt.push((self.id >> 8) as u8);
+        let _ = pkt.push(self.id as u8);
+        let _ = pkt.push((self.seq >> 8) as u8);
+        let _ = pkt.push(self.seq as u8);
+
+        // Data
+        let _ = pkt.extend_from_slice(data);
+
+        // Compute checksum
+        let checksum = icmpv6_checksum(src, dst, &pkt);
+        pkt[2] = (checksum >> 8) as u8;
+        pkt[3] = checksum as u8;
+
+        pkt
+    }
+
+    /// Parse Echo message from ICMPv6 payload (after type/code/checksum).
+    pub fn parse(buf: &[u8]) -> Option<Self> {
+        if buf.len() < 4 {
+            return None;
+        }
+
+        Some(Self {
+            id: ((buf[0] as u16) << 8) | (buf[1] as u16),
+            seq: ((buf[2] as u16) << 8) | (buf[3] as u16),
+        })
+    }
+}
+
+/// ICMPv6 Neighbor Solicitation.
+#[derive(Debug, Clone, Copy)]
+pub struct NeighborSolicitation {
+    pub target: Addr,
+}
+
+impl NeighborSolicitation {
+    /// Build NS packet.
+    pub fn build(&self, src: &Addr, dst: &Addr) -> Vec<u8, 64> {
+        let mut pkt = Vec::new();
+
+        // ICMPv6 header
+        let _ = pkt.push(icmpv6_type::NEIGHBOR_SOLICITATION);
+        let _ = pkt.push(0); // code
+        let _ = pkt.push(0); // checksum
+        let _ = pkt.push(0);
+
+        // Reserved (4 bytes)
+        let _ = pkt.extend_from_slice(&[0u8; 4]);
+
+        // Target address (16 bytes)
+        let _ = pkt.extend_from_slice(&self.target.0);
+
+        // Compute checksum
+        let checksum = icmpv6_checksum(src, dst, &pkt);
+        pkt[2] = (checksum >> 8) as u8;
+        pkt[3] = checksum as u8;
+
+        pkt
+    }
+
+    /// Parse NS from ICMPv6 payload.
+    pub fn parse(buf: &[u8]) -> Option<Self> {
+        // After type/code/checksum: 4 reserved + 16 target
+        if buf.len() < 20 {
+            return None;
+        }
+
+        let mut target = [0u8; 16];
+        target.copy_from_slice(&buf[4..20]);
+
+        Some(Self {
+            target: Addr(target),
+        })
+    }
+}
+
+/// ICMPv6 Neighbor Advertisement.
+#[derive(Debug, Clone, Copy)]
+pub struct NeighborAdvertisement {
+    pub target: Addr,
+    pub router: bool,
+    pub solicited: bool,
+    pub override_flag: bool,
+}
+
+impl NeighborAdvertisement {
+    /// Build NA packet.
+    pub fn build(&self, src: &Addr, dst: &Addr) -> Vec<u8, 64> {
+        let mut pkt = Vec::new();
+
+        // ICMPv6 header
+        let _ = pkt.push(icmpv6_type::NEIGHBOR_ADVERTISEMENT);
+        let _ = pkt.push(0); // code
+        let _ = pkt.push(0); // checksum
+        let _ = pkt.push(0);
+
+        // Flags + reserved (4 bytes)
+        let mut flags = 0u8;
+        if self.router {
+            flags |= 0x80;
+        }
+        if self.solicited {
+            flags |= 0x40;
+        }
+        if self.override_flag {
+            flags |= 0x20;
+        }
+        let _ = pkt.push(flags);
+        let _ = pkt.extend_from_slice(&[0u8; 3]);
+
+        // Target address
+        let _ = pkt.extend_from_slice(&self.target.0);
+
+        // Compute checksum
+        let checksum = icmpv6_checksum(src, dst, &pkt);
+        pkt[2] = (checksum >> 8) as u8;
+        pkt[3] = checksum as u8;
+
+        pkt
+    }
+}
+
+/// Compute ICMPv6 checksum over pseudo-header + message.
+fn icmpv6_checksum(src: &Addr, dst: &Addr, icmpv6_msg: &[u8]) -> u16 {
+    let mut sum: u32 = 0;
+
+    // Pseudo-header: src, dst, length, next header
+    for chunk in src.0.chunks(2) {
+        sum += ((chunk[0] as u32) << 8) | (chunk[1] as u32);
+    }
+    for chunk in dst.0.chunks(2) {
+        sum += ((chunk[0] as u32) << 8) | (chunk[1] as u32);
+    }
+    sum += icmpv6_msg.len() as u32; // Upper-layer length
+    sum += next_header::ICMPV6 as u32; // Next header
+
+    // ICMPv6 message (with checksum field zeroed - caller should have zeros there)
+    let mut i = 0;
+    while i + 1 < icmpv6_msg.len() {
+        // Skip checksum field (bytes 2-3)
+        if i == 2 {
+            i += 2;
+            continue;
+        }
+        sum += ((icmpv6_msg[i] as u32) << 8) | (icmpv6_msg[i + 1] as u32);
+        i += 2;
+    }
+    if i < icmpv6_msg.len() {
+        sum += (icmpv6_msg[i] as u32) << 8;
+    }
+
+    // Fold 32-bit sum to 16 bits
+    while sum >> 16 != 0 {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+
+    !sum as u16
+}
+
+/// Compute UDP checksum over pseudo-header + UDP header + payload.
+fn udp_checksum(src: &Addr, dst: &Addr, udp_header: &[u8], payload: &[u8]) -> u16 {
+    let mut sum: u32 = 0;
+    let length = udp_header.len() + payload.len();
+
+    // Pseudo-header
+    for chunk in src.0.chunks(2) {
+        sum += ((chunk[0] as u32) << 8) | (chunk[1] as u32);
+    }
+    for chunk in dst.0.chunks(2) {
+        sum += ((chunk[0] as u32) << 8) | (chunk[1] as u32);
+    }
+    sum += length as u32;
+    sum += next_header::UDP as u32;
+
+    // UDP header (skip checksum field at bytes 6-7)
+    for i in (0..udp_header.len()).step_by(2) {
+        if i == 6 {
+            continue; // Skip checksum
+        }
+        let high = udp_header[i] as u32;
+        let low = if i + 1 < udp_header.len() {
+            udp_header[i + 1] as u32
+        } else {
+            0
+        };
+        sum += (high << 8) | low;
+    }
+
+    // Payload
+    let mut i = 0;
+    while i + 1 < payload.len() {
+        sum += ((payload[i] as u32) << 8) | (payload[i + 1] as u32);
+        i += 2;
+    }
+    if i < payload.len() {
+        sum += (payload[i] as u32) << 8;
+    }
+
+    // Fold
+    while sum >> 16 != 0 {
+        sum = (sum & 0xffff) + (sum >> 16);
+    }
+
+    let result = !sum as u16;
+    // UDP checksum of 0 is transmitted as 0xFFFF
+    if result == 0 {
+        0xffff
+    } else {
+        result
+    }
+}
+
+/// Parse an incoming IPv6 packet.
+///
+/// Returns (header, next_header, payload).
+pub fn parse_packet(buf: &[u8]) -> Option<(Ipv6Header, &[u8])> {
+    let header = Ipv6Header::parse(buf)?;
+    let payload_start = IPV6_HEADER_LEN;
+    let payload_end = payload_start + header.payload_len as usize;
+
+    if buf.len() < payload_end {
+        return None;
+    }
+
+    Some((header, &buf[payload_start..payload_end]))
+}
+
+/// Dispatch incoming ICMPv6 message.
+///
+/// Returns response packet if one should be sent.
+pub fn handle_icmpv6(
+    local_addr: &Addr,
+    ip_header: &Ipv6Header,
+    icmpv6_payload: &[u8],
+) -> Option<Vec<u8, 256>> {
+    if icmpv6_payload.len() < ICMPV6_HEADER_LEN {
+        return None;
+    }
+
+    let msg_type = icmpv6_payload[0];
+    let _code = icmpv6_payload[1];
+    // checksum at [2..4]
+    let body = &icmpv6_payload[ICMPV6_HEADER_LEN..];
+
+    match msg_type {
+        icmpv6_type::ECHO_REQUEST => {
+            // Reply to ping
+            let echo = Icmpv6Echo::parse(body)?;
+            let data = &body[4..]; // After id+seq
+
+            let reply_icmp = echo.build_reply(local_addr, &ip_header.src, data);
+            let reply_ip = Ipv6Header::new(next_header::ICMPV6, *local_addr, ip_header.src);
+
+            let mut pkt = Vec::new();
+            let _ = pkt.extend_from_slice(&reply_ip.encode(reply_icmp.len() as u16));
+            let _ = pkt.extend_from_slice(&reply_icmp);
+
+            Some(pkt)
+        }
+
+        icmpv6_type::NEIGHBOR_SOLICITATION => {
+            let ns = NeighborSolicitation::parse(body)?;
+
+            // Only respond if target is us
+            if ns.target != *local_addr {
+                return None;
+            }
+
+            let na = NeighborAdvertisement {
+                target: *local_addr,
+                router: false,
+                solicited: true,
+                override_flag: true,
+            };
+
+            let reply_icmp = na.build(local_addr, &ip_header.src);
+            let reply_ip = Ipv6Header::new(next_header::ICMPV6, *local_addr, ip_header.src);
+
+            let mut pkt = Vec::new();
+            let _ = pkt.extend_from_slice(&reply_ip.encode(reply_icmp.len() as u16));
+            let _ = pkt.extend_from_slice(&reply_icmp);
+
+            Some(pkt)
+        }
+
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hex_literal::hex;
+
+    #[test]
+    fn test_link_local_from_mac() {
+        let mac = hex!("00 11 22 33 44 55");
+        let addr = Addr::link_local_from_mac(&mac);
+
+        // fe80::0211:22ff:fe33:4455
+        assert!(addr.is_link_local());
+        assert_eq!(
+            addr.0,
+            hex!("fe80 0000 0000 0000 0211 22ff fe33 4455")
+        );
+    }
+
+    #[test]
+    fn test_solicited_node() {
+        let addr = Addr(hex!("fe80 0000 0000 0000 0211 22ff fe33 4455"));
+        let sn = addr.solicited_node();
+
+        // ff02::1:ff33:4455
+        assert_eq!(
+            sn.0,
+            hex!("ff02 0000 0000 0000 0000 0001 ff33 4455")
+        );
+    }
+
+    #[test]
+    fn test_ipv6_header_roundtrip() {
+        let src = Addr::link_local_from_mac(&hex!("001122334455"));
+        let dst = Addr::link_local_from_mac(&hex!("665544332211"));
+
+        let hdr = Ipv6Header::new(next_header::ICMPV6, src, dst);
+        let encoded = hdr.encode(24);
+        let parsed = Ipv6Header::parse(&encoded).unwrap();
+
+        assert_eq!(parsed.src, src);
+        assert_eq!(parsed.dst, dst);
+        assert_eq!(parsed.next_header, next_header::ICMPV6);
+        assert_eq!(parsed.payload_len, 24);
+    }
+
+    #[test]
+    fn test_echo_request_response() {
+        let src = Addr::link_local_from_mac(&hex!("001122334455"));
+        let dst = Addr::link_local_from_mac(&hex!("665544332211"));
+
+        let echo = Icmpv6Echo { id: 1, seq: 1 };
+        let request = echo.build_request(&src, &dst, b"ping");
+
+        assert_eq!(request[0], icmpv6_type::ECHO_REQUEST);
+        assert_eq!(request.len(), 8 + 4); // header + "ping"
+
+        let reply = echo.build_reply(&dst, &src, b"ping");
+        assert_eq!(reply[0], icmpv6_type::ECHO_REPLY);
+    }
+
+    #[test]
+    fn test_handle_ping() {
+        let local = Addr::link_local_from_mac(&hex!("001122334455"));
+        let remote = Addr::link_local_from_mac(&hex!("665544332211"));
+
+        // Build a ping request
+        let echo = Icmpv6Echo { id: 42, seq: 1 };
+        let icmp_req = echo.build_request(&remote, &local, b"test");
+
+        let ip_hdr = Ipv6Header::new(next_header::ICMPV6, remote, local);
+
+        // Handle it
+        let response = handle_icmpv6(&local, &ip_hdr, &icmp_req);
+        assert!(response.is_some());
+
+        let pkt = response.unwrap();
+        // Should be IPv6 header + ICMPv6 reply
+        assert!(pkt.len() > IPV6_HEADER_LEN);
+
+        // Parse response
+        let (resp_ip, resp_payload) = parse_packet(&pkt).unwrap();
+        assert_eq!(resp_ip.src, local);
+        assert_eq!(resp_ip.dst, remote);
+        assert_eq!(resp_payload[0], icmpv6_type::ECHO_REPLY);
+    }
+}

@@ -4,10 +4,13 @@
 //! and hardware. Implementations live in lichen-embassy (embedded) or use std
 //! directly (Linux border router).
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
 extern crate std;
+
+#[cfg(feature = "std")]
+pub mod loopback;
 
 /// Received packet metadata.
 #[derive(Debug, Clone, Copy)]
