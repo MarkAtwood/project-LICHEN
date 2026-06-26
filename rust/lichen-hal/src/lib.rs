@@ -12,6 +12,8 @@ extern crate std;
 #[cfg(feature = "std")]
 pub mod loopback;
 
+pub mod storage;
+
 /// Received packet metadata.
 #[derive(Debug, Clone, Copy)]
 pub struct RxPacket {

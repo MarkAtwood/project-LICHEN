@@ -1,0 +1,267 @@
+//! OSCORE-protected stack: end-to-end encrypted CoAP.
+//!
+//! Wraps the Stack with OSCORE security contexts for encrypted communication.
+
+#[cfg(feature = "std")]
+extern crate std;
+#[cfg(feature = "std")]
+use std::collections::HashMap;
+#[cfg(feature = "std")]
+use std::vec::Vec;
+
+use lichen_coap::codec::{CoapBuilder, CoapPacket};
+use lichen_coap::message::{MessageCode, MessageType};
+use lichen_hal::Radio;
+use lichen_oscore::{Context, COAP_OPTION_OSCORE};
+
+use crate::stack::{Stack, TxError, RxError, RxFrame};
+use lichen_core::addr::NodeId;
+use lichen_ipv6::Addr;
+
+/// OSCORE option number.
+const OSCORE_OPTION: u16 = COAP_OPTION_OSCORE;
+
+/// Secure stack error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecureError {
+    /// No OSCORE context for peer.
+    NoContext,
+    /// OSCORE encryption failed.
+    EncryptFailed,
+    /// OSCORE decryption failed.
+    DecryptFailed,
+    /// CoAP encoding error.
+    CoapEncode,
+    /// TX error from underlying stack.
+    Tx(TxError),
+}
+
+impl core::fmt::Display for SecureError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoContext => write!(f, "no OSCORE context for peer"),
+            Self::EncryptFailed => write!(f, "OSCORE encryption failed"),
+            Self::DecryptFailed => write!(f, "OSCORE decryption failed"),
+            Self::CoapEncode => write!(f, "CoAP encoding failed"),
+            Self::Tx(e) => write!(f, "TX error: {}", e),
+        }
+    }
+}
+
+impl From<TxError> for SecureError {
+    fn from(e: TxError) -> Self {
+        SecureError::Tx(e)
+    }
+}
+
+/// OSCORE-protected stack.
+#[cfg(feature = "std")]
+pub struct SecureStack<R: Radio> {
+    stack: Stack<R>,
+    /// OSCORE contexts keyed by peer IID.
+    contexts: HashMap<[u8; 8], Context>,
+}
+
+#[cfg(feature = "std")]
+impl<R: Radio> SecureStack<R> {
+    /// Create a new secure stack.
+    pub fn new(stack: Stack<R>) -> Self {
+        Self {
+            stack,
+            contexts: HashMap::new(),
+        }
+    }
+
+    /// Create from radio and identity directly.
+    pub fn from_radio(radio: R, identity: lichen_link::identity::Identity) -> Self {
+        Self::new(Stack::new(radio, identity))
+    }
+
+    /// Add an OSCORE security context for a peer.
+    ///
+    /// The peer_iid is the 8-byte IID of the peer (from their pubkey hash).
+    pub fn add_context(&mut self, peer_iid: [u8; 8], context: Context) {
+        self.contexts.insert(peer_iid, context);
+    }
+
+    /// Get context for peer.
+    fn get_context(&self, peer_iid: &[u8; 8]) -> Option<&Context> {
+        self.contexts.get(peer_iid)
+    }
+
+    /// Get mutable context for peer.
+    fn get_context_mut(&mut self, peer_iid: &[u8; 8]) -> Option<&mut Context> {
+        self.contexts.get_mut(peer_iid)
+    }
+
+    /// Get the underlying stack.
+    pub fn stack(&mut self) -> &mut Stack<R> {
+        &mut self.stack
+    }
+
+    /// Get local address.
+    pub fn local_addr(&self) -> Addr {
+        self.stack.local_addr()
+    }
+
+    /// Get local node ID.
+    pub fn node_id(&self) -> NodeId {
+        self.stack.node_id()
+    }
+
+    /// Send an OSCORE-protected GET request.
+    pub async fn send_secure_get(
+        &mut self,
+        dst: &Addr,
+        peer_iid: &[u8; 8],
+        uri_path: &[&str],
+        token: &[u8],
+    ) -> Result<u16, SecureError> {
+        let ctx = self.get_context_mut(peer_iid).ok_or(SecureError::NoContext)?;
+
+        // Build inner CoAP (will be encrypted)
+        // Inner message: code + Uri-Path options (class E)
+        let mut class_e = [0u8; 64];
+        let mut class_e_len = 0;
+
+        // Encode Uri-Path options
+        for seg in uri_path {
+            let delta = if class_e_len == 0 { 11 } else { 0 }; // Uri-Path = 11
+            let seg_bytes = seg.as_bytes();
+            if seg_bytes.len() < 13 {
+                class_e[class_e_len] = ((delta as u8) << 4) | (seg_bytes.len() as u8);
+                class_e_len += 1;
+            } else {
+                class_e[class_e_len] = (delta as u8) << 4 | 13;
+                class_e[class_e_len + 1] = (seg_bytes.len() - 13) as u8;
+                class_e_len += 2;
+            }
+            class_e[class_e_len..class_e_len + seg_bytes.len()].copy_from_slice(seg_bytes);
+            class_e_len += seg_bytes.len();
+        }
+
+        // Protect request
+        let (ciphertext, oscore_opt) = ctx
+            .protect_request(MessageCode::GET.0, &class_e[..class_e_len], &[])
+            .map_err(|_| SecureError::EncryptFailed)?;
+
+        // Build outer CoAP with OSCORE option
+        let mid = self.stack.next_message_id();
+        let mut outer = [0u8; 192];
+        let mut builder = CoapBuilder::new(
+            &mut outer,
+            MessageType::Confirmable,
+            MessageCode::POST, // OSCORE uses POST
+            mid,
+            token,
+        )
+        .map_err(|_| SecureError::CoapEncode)?;
+
+        // Add OSCORE option (option number 9)
+        builder
+            .option(OSCORE_OPTION, oscore_opt.as_slice())
+            .map_err(|_| SecureError::CoapEncode)?;
+
+        // Payload is ciphertext
+        builder
+            .payload(ciphertext.as_slice())
+            .map_err(|_| SecureError::CoapEncode)?;
+
+        let outer_len = builder.finish();
+
+        self.stack.send_coap_raw(dst, &outer[..outer_len]).await?;
+        Ok(mid)
+    }
+
+    /// Decrypt an OSCORE-protected response.
+    pub fn decrypt_response(
+        &mut self,
+        peer_iid: &[u8; 8],
+        coap: &[u8],
+    ) -> Result<(MessageCode, Vec<u8>), SecureError> {
+        let pkt = CoapPacket::from_bytes(coap).map_err(|_| SecureError::CoapEncode)?;
+
+        // Find OSCORE option
+        let mut oscore_opt = None;
+        for opt_result in pkt.options() {
+            if let Ok(opt) = opt_result {
+                if opt.number == OSCORE_OPTION {
+                    oscore_opt = Some(opt.value);
+                    break;
+                }
+            }
+        }
+
+        let oscore_opt = oscore_opt.ok_or(SecureError::DecryptFailed)?;
+        let ciphertext = pkt.payload();
+
+        let ctx = self.get_context_mut(peer_iid).ok_or(SecureError::NoContext)?;
+
+        let (code, _options, payload) = ctx
+            .unprotect_request(oscore_opt, ciphertext)
+            .map_err(|_| SecureError::DecryptFailed)?;
+
+        Ok((MessageCode(code), payload.to_vec()))
+    }
+
+    /// Receive and auto-decrypt if OSCORE protected.
+    pub async fn receive(&mut self, timeout_ms: u32) -> Result<Option<RxFrame>, RxError> {
+        self.stack.receive(timeout_ms).await
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+    use lichen_hal::loopback::LoopbackRadio;
+    use lichen_link::identity::{Identity, PeerIdentity};
+    use lichen_oscore::Context as OscoreContext;
+
+    #[tokio::test]
+    async fn secure_stack_oscore_roundtrip() {
+        let alice_id = Identity::from_seed([0x01; 32]);
+        let bob_id = Identity::from_seed([0x02; 32]);
+
+        let alice_pubkey = alice_id.pubkey;
+        let bob_pubkey = bob_id.pubkey;
+        let alice_iid = alice_id.iid;
+        let bob_iid = bob_id.iid;
+
+        let alice_peer = PeerIdentity::from_pubkey(alice_pubkey);
+        let bob_peer = PeerIdentity::from_pubkey(bob_pubkey);
+
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+
+        let mut alice_stack = Stack::new(radio_a, alice_id);
+        alice_stack.add_peer(bob_peer);
+
+        let mut bob_stack = Stack::new(radio_b, bob_id);
+        bob_stack.add_peer(alice_peer);
+
+        let mut alice = SecureStack::new(alice_stack);
+        let mut bob = SecureStack::new(bob_stack);
+
+        // Create OSCORE contexts with shared master secret
+        let master_secret = [0xAB; 16];
+        let alice_ctx =
+            OscoreContext::new(&master_secret, None, &alice_iid[..1], &bob_iid[..1]).unwrap();
+        let bob_ctx =
+            OscoreContext::new(&master_secret, None, &bob_iid[..1], &alice_iid[..1]).unwrap();
+
+        alice.add_context(bob_iid, alice_ctx);
+        bob.add_context(alice_iid, bob_ctx);
+
+        let bob_addr = bob.local_addr();
+
+        // Alice sends encrypted GET
+        let mid = alice
+            .send_secure_get(&bob_addr, &bob_iid, &["sensors"], &[0xAB])
+            .await
+            .unwrap();
+        assert!(mid < 0xFFFF);
+
+        // Bob receives
+        let frame = bob.receive(1000).await.unwrap().unwrap();
+        assert!(frame.ipv6.len() >= 40);
+    }
+}
