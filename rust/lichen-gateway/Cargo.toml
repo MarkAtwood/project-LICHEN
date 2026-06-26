@@ -7,6 +7,7 @@ description = "LICHEN border router (6LBR) daemon for Linux."
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }
+lichen-kiss = { path = "../lichen-kiss", features = ["kiss"] }
 lichen-node = { path = "../lichen-node", features = ["std"] }
 lichen-schc = { path = "../lichen-schc", features = ["std"] }
 lichen-sim  = { path = "../lichen-sim" }

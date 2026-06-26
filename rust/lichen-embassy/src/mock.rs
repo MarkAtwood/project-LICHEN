@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 /// Mock radio that stores transmitted packets and can be fed received packets.
+#[derive(Debug)]
 pub struct MockRadio {
     config: RadioConfig,
     tx_queue: Mutex<Vec<Vec<u8>>>,
@@ -30,9 +31,9 @@ impl MockRadio {
     }
 
     /// Feed a packet to be received.
-    pub fn feed_rx(&self, data: Vec<u8>, rssi: i16, snr: i8) {
+    pub fn feed_rx(&self, data: &[u8], rssi: i16, snr: i8) {
         self.rx_queue.lock().unwrap().push((
-            data.clone(),
+            data.to_vec(),
             RxPacket {
                 len: data.len(),
                 rssi: Some(rssi),
@@ -86,6 +87,7 @@ impl lichen_hal::Radio for MockRadio {
 }
 
 /// Mock clock using std::time::Instant.
+#[derive(Debug)]
 pub struct MockClock {
     start: Instant,
 }
@@ -110,12 +112,35 @@ impl Clock for MockClock {
     }
 }
 
-/// Mock RNG using std random.
+/// Mock RNG for testing only - uses deterministic xorshift PRNG.
+///
+/// # Security Warning
+///
+/// **DO NOT USE FOR CRYPTOGRAPHIC OPERATIONS.**
+///
+/// This implementation:
+/// - Uses a hardcoded seed (`0xDEADBEEF`) - output is fully predictable
+/// - Uses xorshift which is NOT cryptographically secure
+/// - Produces identical sequences across all instances and runs
+///
+/// This is intentionally simple and deterministic for reproducible tests.
+/// For production, use a hardware RNG or OS-provided CSPRNG.
+///
+/// # Accidental Production Use
+///
+/// The `mock` feature should never be enabled in release builds. If you see
+/// compile warnings about the mock feature in release mode, that's a bug.
+#[cfg_attr(
+    all(feature = "mock", not(debug_assertions)),
+    deprecated(note = "MockRng enabled in release build - this is a security risk!")
+)]
+#[derive(Debug)]
 pub struct MockRng;
 
 impl Rng for MockRng {
     fn fill_bytes(&mut self, buf: &mut [u8]) {
-        // ponytail: use simple xorshift instead of pulling in rand crate
+        // SECURITY: Deterministic xorshift - NOT cryptographically secure.
+        // ponytail: simple xorshift instead of pulling in rand crate
         static mut SEED: u64 = 0xDEADBEEF;
         for byte in buf.iter_mut() {
             unsafe {
@@ -129,6 +154,7 @@ impl Rng for MockRng {
 }
 
 /// Mock non-volatile storage using a HashMap.
+#[derive(Debug)]
 pub struct MockNonVolatile {
     data: Mutex<HashMap<String, Vec<u8>>>,
 }
@@ -148,6 +174,8 @@ impl Default for MockNonVolatile {
 }
 
 impl NonVolatile for MockNonVolatile {
+    type Error = core::convert::Infallible;
+
     fn read(&self, key: &str, buf: &mut [u8]) -> Option<usize> {
         let data = self.data.lock().unwrap();
         data.get(key).map(|v| {
@@ -157,7 +185,7 @@ impl NonVolatile for MockNonVolatile {
         })
     }
 
-    fn write(&mut self, key: &str, data: &[u8]) -> Result<(), ()> {
+    fn write(&mut self, key: &str, data: &[u8]) -> Result<(), Self::Error> {
         self.data
             .lock()
             .unwrap()
@@ -221,7 +249,7 @@ mod tests {
         use lichen_hal::Radio;
 
         let mut radio = MockRadio::new();
-        radio.feed_rx(b"incoming".to_vec(), -80, 10);
+        radio.feed_rx(b"incoming", -80, 10);
 
         let mut buf = [0u8; 64];
         let pkt = radio.receive(&mut buf, 1000).await.unwrap().unwrap();

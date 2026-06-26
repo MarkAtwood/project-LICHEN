@@ -10,6 +10,8 @@
 // Include generated protobuf code
 include!("meshtastic.rs");
 
+pub mod gatt;
+
 #[cfg(test)]
 mod tests {
     use super::*;

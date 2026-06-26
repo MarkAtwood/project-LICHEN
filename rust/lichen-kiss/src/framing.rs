@@ -63,10 +63,10 @@ impl KissCommand {
 }
 
 /// KISS protocol error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KissError {
     /// Frame is too short.
-    FrameTooShort,
+    TooShort,
     /// Frame does not start with FEND.
     MissingStartFend,
     /// Frame does not end with FEND.
@@ -88,7 +88,7 @@ pub enum KissError {
 impl fmt::Display for KissError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FrameTooShort => write!(f, "frame too short"),
+            Self::TooShort => write!(f, "frame too short"),
             Self::MissingStartFend => write!(f, "frame must start with FEND (0xC0)"),
             Self::MissingEndFend => write!(f, "frame must end with FEND (0xC0)"),
             Self::EmptyFrame => write!(f, "empty frame"),
@@ -100,6 +100,9 @@ impl fmt::Display for KissError {
         }
     }
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for KissError {}
 
 /// Decoded KISS frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -261,7 +264,7 @@ pub fn kiss_encode_raw(port: u8, command: u8, data: &[u8], out: &mut [u8]) -> Re
 /// The data is NOT unescaped - use `kiss_unescape` to get the raw payload.
 pub fn kiss_decode(frame: &[u8]) -> Result<KissFrame<'_>, KissError> {
     if frame.len() < 3 {
-        return Err(KissError::FrameTooShort);
+        return Err(KissError::TooShort);
     }
 
     if frame[0] != FEND {
@@ -315,6 +318,7 @@ pub fn kiss_decode(frame: &[u8]) -> Result<KissFrame<'_>, KissError> {
 /// }
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct KissReader {
     buffer: [u8; MAX_FRAME_SIZE * 2],
     len: usize,
@@ -466,6 +470,7 @@ impl KissReader {
 /// }
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct KissWriter {
     // ponytail: 8 frames × 512 bytes each = 4KB max, sufficient for typical TNC traffic
     queue: heapless::Deque<heapless::Vec<u8, 512>, 8>,
@@ -705,7 +710,7 @@ mod tests {
 
     #[test]
     fn test_decode_too_short() {
-        assert_eq!(kiss_decode(&[FEND, FEND]), Err(KissError::FrameTooShort));
+        assert_eq!(kiss_decode(&[FEND, FEND]), Err(KissError::TooShort));
     }
 
     #[test]

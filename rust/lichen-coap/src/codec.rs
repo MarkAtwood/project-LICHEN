@@ -1,0 +1,697 @@
+//! CoAP message codec (RFC 7252, no_std).
+//!
+//! Zero-copy parsing and building of CoAP messages. Options are parsed lazily
+//! via an iterator to avoid allocation.
+
+use crate::message::{MessageCode, MessageType};
+use crate::option::OptionNumber;
+
+/// CoAP version (always 1 for RFC 7252).
+pub const COAP_VERSION: u8 = 1;
+
+/// Minimum CoAP header length (4 bytes).
+pub const MIN_HEADER_LEN: usize = 4;
+
+/// Maximum token length (8 bytes per RFC 7252).
+pub const MAX_TOKEN_LEN: usize = 8;
+
+/// Payload marker byte (0xFF).
+pub const PAYLOAD_MARKER: u8 = 0xFF;
+
+/// CoAP parse error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoapError {
+    /// Message too short.
+    TooShort,
+    /// Wrong CoAP version (expected 1).
+    WrongVersion(u8),
+    /// Token length > 8.
+    TokenTooLong(u8),
+    /// Invalid option delta (15).
+    InvalidOptionDelta,
+    /// Invalid option length (15).
+    InvalidOptionLength,
+    /// Option runs past end of message.
+    TruncatedOption,
+    /// Output buffer too small.
+    BufferTooSmall,
+}
+
+impl core::fmt::Display for CoapError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "CoAP message too short"),
+            Self::WrongVersion(v) => write!(f, "wrong CoAP version: {}", v),
+            Self::TokenTooLong(n) => write!(f, "token length {} > 8", n),
+            Self::InvalidOptionDelta => write!(f, "invalid option delta 15"),
+            Self::InvalidOptionLength => write!(f, "invalid option length 15"),
+            Self::TruncatedOption => write!(f, "option runs past end of message"),
+            Self::BufferTooSmall => write!(f, "output buffer too small"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CoapError {}
+
+/// A parsed CoAP message (zero-copy).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoapPacket<'a> {
+    /// Raw message bytes.
+    data: &'a [u8],
+    /// Offset where options start (after token).
+    options_start: usize,
+    /// Offset where options end (at the payload marker, or data.len() if none).
+    options_end: usize,
+    /// Offset where payload starts (after 0xFF marker), or data.len() if none.
+    payload_start: usize,
+}
+
+impl<'a> CoapPacket<'a> {
+    /// Parse a CoAP message from bytes.
+    pub fn from_bytes(data: &'a [u8]) -> Result<Self, CoapError> {
+        if data.len() < MIN_HEADER_LEN {
+            return Err(CoapError::TooShort);
+        }
+
+        let ver = data[0] >> 6;
+        if ver != COAP_VERSION {
+            return Err(CoapError::WrongVersion(ver));
+        }
+
+        let tkl = (data[0] & 0x0F) as usize;
+        if tkl > MAX_TOKEN_LEN {
+            return Err(CoapError::TokenTooLong(tkl as u8));
+        }
+
+        let options_start = MIN_HEADER_LEN + tkl;
+        if data.len() < options_start {
+            return Err(CoapError::TooShort);
+        }
+
+        // Find payload marker
+        let (options_end, payload_start) = match find_payload_marker(&data[options_start..])? {
+            Some(off) => (options_start + off, options_start + off + 1), // off is at 0xFF, +1 to skip
+            None => (data.len(), data.len()), // no marker, no payload
+        };
+
+        Ok(Self {
+            data,
+            options_start,
+            options_end,
+            payload_start,
+        })
+    }
+
+    /// Message type (CON, NON, ACK, RST).
+    pub fn msg_type(&self) -> MessageType {
+        match (self.data[0] >> 4) & 0x03 {
+            0 => MessageType::Confirmable,
+            1 => MessageType::NonConfirmable,
+            2 => MessageType::Acknowledgement,
+            _ => MessageType::Reset,
+        }
+    }
+
+    /// Message code.
+    pub fn code(&self) -> MessageCode {
+        MessageCode(self.data[1])
+    }
+
+    /// Message ID.
+    pub fn message_id(&self) -> u16 {
+        u16::from_be_bytes([self.data[2], self.data[3]])
+    }
+
+    /// Token bytes (0-8 bytes).
+    pub fn token(&self) -> &'a [u8] {
+        &self.data[MIN_HEADER_LEN..self.options_start]
+    }
+
+    /// Iterator over options.
+    pub fn options(&self) -> OptionIterator<'a> {
+        OptionIterator {
+            data: &self.data[self.options_start..self.options_end],
+            offset: 0,
+            current_number: 0,
+        }
+    }
+
+    /// Payload bytes (empty if no payload marker).
+    pub fn payload(&self) -> &'a [u8] {
+        if self.payload_start < self.data.len() {
+            &self.data[self.payload_start..]
+        } else {
+            &[]
+        }
+    }
+
+    /// Raw message bytes.
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.data
+    }
+
+    /// True if this is a request (code class 0, detail > 0).
+    pub fn is_request(&self) -> bool {
+        self.code().class() == 0 && self.code().detail() > 0
+    }
+
+    /// True if this is a success response (code class 2).
+    pub fn is_success(&self) -> bool {
+        self.code().class() == 2
+    }
+}
+
+/// Find the payload marker (0xFF) in the options section.
+/// Returns offset relative to start of slice, or None if no marker.
+fn find_payload_marker(data: &[u8]) -> Result<Option<usize>, CoapError> {
+    let mut i = 0;
+    while i < data.len() {
+        if data[i] == PAYLOAD_MARKER {
+            return Ok(Some(i));
+        }
+        // Skip option
+        let delta_nibble = (data[i] >> 4) & 0x0F;
+        let len_nibble = data[i] & 0x0F;
+        i += 1;
+
+        // Handle extended delta
+        match delta_nibble {
+            13 => {
+                if i >= data.len() {
+                    return Err(CoapError::TruncatedOption);
+                }
+                i += 1;
+            }
+            14 => {
+                if i + 1 >= data.len() {
+                    return Err(CoapError::TruncatedOption);
+                }
+                i += 2;
+            }
+            15 => return Err(CoapError::InvalidOptionDelta),
+            _ => {}
+        }
+
+        // Handle extended length
+        let opt_len = match len_nibble {
+            13 => {
+                if i >= data.len() {
+                    return Err(CoapError::TruncatedOption);
+                }
+                let v = data[i] as usize + 13;
+                i += 1;
+                v
+            }
+            14 => {
+                if i + 1 >= data.len() {
+                    return Err(CoapError::TruncatedOption);
+                }
+                let v = ((data[i] as usize) << 8 | data[i + 1] as usize) + 269;
+                i += 2;
+                v
+            }
+            15 => return Err(CoapError::InvalidOptionLength),
+            n => n as usize,
+        };
+
+        i = i.saturating_add(opt_len);
+        if i > data.len() {
+            return Err(CoapError::TruncatedOption);
+        }
+    }
+    Ok(None)
+}
+
+/// A single CoAP option.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CoapOption<'a> {
+    /// Option number (cumulative from delta).
+    pub number: u16,
+    /// Option value.
+    pub value: &'a [u8],
+}
+
+impl<'a> CoapOption<'a> {
+    /// Interpret value as u32 (for integer options like Max-Age).
+    pub fn as_uint(&self) -> u32 {
+        let mut val = 0u32;
+        for &b in self.value {
+            val = (val << 8) | b as u32;
+        }
+        val
+    }
+
+    /// True if this is a Uri-Path option.
+    pub fn is_uri_path(&self) -> bool {
+        self.number == OptionNumber::UriPath as u16
+    }
+
+    /// True if this is a Content-Format option.
+    pub fn is_content_format(&self) -> bool {
+        self.number == OptionNumber::ContentFormat as u16
+    }
+}
+
+/// Iterator over CoAP options.
+#[derive(Debug, Clone)]
+pub struct OptionIterator<'a> {
+    data: &'a [u8],
+    offset: usize,
+    current_number: u16,
+}
+
+impl<'a> Iterator for OptionIterator<'a> {
+    type Item = Result<CoapOption<'a>, CoapError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset >= self.data.len() {
+            return None;
+        }
+
+        let first = self.data[self.offset];
+        if first == PAYLOAD_MARKER {
+            return None;
+        }
+
+        let delta_nibble = (first >> 4) & 0x0F;
+        let len_nibble = first & 0x0F;
+        self.offset += 1;
+
+        // Extended delta
+        let delta = match delta_nibble {
+            13 => {
+                if self.offset >= self.data.len() {
+                    return Some(Err(CoapError::TruncatedOption));
+                }
+                let d = self.data[self.offset] as u16 + 13;
+                self.offset += 1;
+                d
+            }
+            14 => {
+                if self.offset + 1 >= self.data.len() {
+                    return Some(Err(CoapError::TruncatedOption));
+                }
+                let d = ((self.data[self.offset] as u16) << 8
+                    | self.data[self.offset + 1] as u16)
+                    + 269;
+                self.offset += 2;
+                d
+            }
+            15 => return Some(Err(CoapError::InvalidOptionDelta)),
+            n => n as u16,
+        };
+
+        // Extended length
+        let len = match len_nibble {
+            13 => {
+                if self.offset >= self.data.len() {
+                    return Some(Err(CoapError::TruncatedOption));
+                }
+                let l = self.data[self.offset] as usize + 13;
+                self.offset += 1;
+                l
+            }
+            14 => {
+                if self.offset + 1 >= self.data.len() {
+                    return Some(Err(CoapError::TruncatedOption));
+                }
+                let l = ((self.data[self.offset] as usize) << 8
+                    | self.data[self.offset + 1] as usize)
+                    + 269;
+                self.offset += 2;
+                l
+            }
+            15 => return Some(Err(CoapError::InvalidOptionLength)),
+            n => n as usize,
+        };
+
+        if self.offset + len > self.data.len() {
+            return Some(Err(CoapError::TruncatedOption));
+        }
+
+        self.current_number = self.current_number.saturating_add(delta);
+        let value = &self.data[self.offset..self.offset + len];
+        self.offset += len;
+
+        Some(Ok(CoapOption {
+            number: self.current_number,
+            value,
+        }))
+    }
+}
+
+// ── Message Building ────────────────────────────────────────────────────────
+
+/// Builder for CoAP messages.
+#[derive(Debug)]
+pub struct CoapBuilder<'a> {
+    out: &'a mut [u8],
+    pos: usize,
+    last_option_number: u16,
+    options_done: bool,
+}
+
+impl<'a> CoapBuilder<'a> {
+    /// Start building a CoAP message into `out`.
+    ///
+    /// Writes the 4-byte header and token immediately.
+    pub fn new(
+        out: &'a mut [u8],
+        msg_type: MessageType,
+        code: MessageCode,
+        message_id: u16,
+        token: &[u8],
+    ) -> Result<Self, CoapError> {
+        let tkl = token.len();
+        if tkl > MAX_TOKEN_LEN {
+            return Err(CoapError::TokenTooLong(tkl as u8));
+        }
+        let header_len = MIN_HEADER_LEN + tkl;
+        if out.len() < header_len {
+            return Err(CoapError::BufferTooSmall);
+        }
+
+        out[0] = (COAP_VERSION << 6) | ((msg_type as u8) << 4) | (tkl as u8);
+        out[1] = code.0;
+        out[2..4].copy_from_slice(&message_id.to_be_bytes());
+        out[MIN_HEADER_LEN..header_len].copy_from_slice(token);
+
+        Ok(Self {
+            out,
+            pos: header_len,
+            last_option_number: 0,
+            options_done: false,
+        })
+    }
+
+    /// Add an option. Options must be added in increasing number order.
+    pub fn option(&mut self, number: u16, value: &[u8]) -> Result<&mut Self, CoapError> {
+        if self.options_done {
+            // Can't add options after payload marker
+            return Err(CoapError::InvalidOptionDelta);
+        }
+        if number < self.last_option_number {
+            // Options must be in order
+            return Err(CoapError::InvalidOptionDelta);
+        }
+
+        let delta = number - self.last_option_number;
+        let needed = option_encoding_len(delta, value.len());
+        if self.pos + needed > self.out.len() {
+            return Err(CoapError::BufferTooSmall);
+        }
+
+        self.pos += write_option(&mut self.out[self.pos..], delta, value);
+        self.last_option_number = number;
+        Ok(self)
+    }
+
+    /// Add a Uri-Path option.
+    pub fn uri_path(&mut self, segment: &str) -> Result<&mut Self, CoapError> {
+        self.option(OptionNumber::UriPath as u16, segment.as_bytes())
+    }
+
+    /// Add a Content-Format option.
+    pub fn content_format(&mut self, format: u16) -> Result<&mut Self, CoapError> {
+        // Encode as minimal uint
+        let value = if format == 0 {
+            &[]
+        } else if format <= 0xFF {
+            &[format as u8][..]
+        } else {
+            &[(format >> 8) as u8, format as u8][..]
+        };
+        self.option(OptionNumber::ContentFormat as u16, value)
+    }
+
+    /// Add payload. This finalizes the options section.
+    pub fn payload(&mut self, data: &[u8]) -> Result<&mut Self, CoapError> {
+        if !data.is_empty() {
+            if self.pos + 1 + data.len() > self.out.len() {
+                return Err(CoapError::BufferTooSmall);
+            }
+            self.out[self.pos] = PAYLOAD_MARKER;
+            self.pos += 1;
+            self.out[self.pos..self.pos + data.len()].copy_from_slice(data);
+            self.pos += data.len();
+        }
+        self.options_done = true;
+        Ok(self)
+    }
+
+    /// Finalize and return the number of bytes written.
+    pub fn finish(self) -> usize {
+        self.pos
+    }
+
+    /// Finalize and return the message slice.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.out[..self.pos]
+    }
+}
+
+/// Calculate encoding length for an option.
+fn option_encoding_len(delta: u16, value_len: usize) -> usize {
+    let delta_ext = if delta < 13 {
+        0
+    } else if delta < 269 {
+        1
+    } else {
+        2
+    };
+    let len_ext = if value_len < 13 {
+        0
+    } else if value_len < 269 {
+        1
+    } else {
+        2
+    };
+    1 + delta_ext + len_ext + value_len
+}
+
+/// Write an option, returning bytes written.
+fn write_option(out: &mut [u8], delta: u16, value: &[u8]) -> usize {
+    let mut pos = 0;
+
+    // First byte: delta nibble | length nibble
+    let (delta_nibble, delta_ext) = if delta < 13 {
+        (delta as u8, None)
+    } else if delta < 269 {
+        (13, Some((delta - 13) as u8))
+    } else {
+        (14, None) // Will write 2 bytes
+    };
+
+    let len = value.len();
+    let (len_nibble, len_ext) = if len < 13 {
+        (len as u8, None)
+    } else if len < 269 {
+        (13, Some((len - 13) as u8))
+    } else {
+        (14, None) // Will write 2 bytes
+    };
+
+    out[pos] = (delta_nibble << 4) | len_nibble;
+    pos += 1;
+
+    // Extended delta
+    if delta_nibble == 13 {
+        out[pos] = delta_ext.unwrap();
+        pos += 1;
+    } else if delta_nibble == 14 {
+        let ext = delta - 269;
+        out[pos] = (ext >> 8) as u8;
+        out[pos + 1] = ext as u8;
+        pos += 2;
+    }
+
+    // Extended length
+    if len_nibble == 13 {
+        out[pos] = len_ext.unwrap();
+        pos += 1;
+    } else if len_nibble == 14 {
+        let ext = len - 269;
+        out[pos] = (ext >> 8) as u8;
+        out[pos + 1] = ext as u8;
+        pos += 2;
+    }
+
+    // Value
+    out[pos..pos + len].copy_from_slice(value);
+    pos + len
+}
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    extern crate std;
+    use std::vec::Vec;
+    use super::*;
+
+    #[test]
+    fn parse_minimal_message() {
+        // CON GET with empty token, no options, no payload
+        let data = [0x40, 0x01, 0x00, 0x01]; // Ver=1, T=CON, TKL=0, Code=0.01, MID=1
+        let pkt = CoapPacket::from_bytes(&data).unwrap();
+        assert_eq!(pkt.msg_type(), MessageType::Confirmable);
+        assert_eq!(pkt.code(), MessageCode::GET);
+        assert_eq!(pkt.message_id(), 1);
+        assert_eq!(pkt.token(), &[]);
+        assert_eq!(pkt.payload(), &[]);
+        assert!(pkt.is_request());
+    }
+
+    #[test]
+    fn parse_with_token() {
+        // NON POST with 4-byte token
+        let data = [0x54, 0x02, 0x12, 0x34, 0xDE, 0xAD, 0xBE, 0xEF];
+        let pkt = CoapPacket::from_bytes(&data).unwrap();
+        assert_eq!(pkt.msg_type(), MessageType::NonConfirmable);
+        assert_eq!(pkt.code(), MessageCode::POST);
+        assert_eq!(pkt.message_id(), 0x1234);
+        assert_eq!(pkt.token(), &[0xDE, 0xAD, 0xBE, 0xEF]);
+    }
+
+    #[test]
+    fn parse_with_payload() {
+        // ACK 2.05 Content with payload
+        let data = [0x60, 0x45, 0x00, 0x01, 0xFF, 0x48, 0x65, 0x6C, 0x6C, 0x6F];
+        let pkt = CoapPacket::from_bytes(&data).unwrap();
+        assert_eq!(pkt.msg_type(), MessageType::Acknowledgement);
+        assert_eq!(pkt.code(), MessageCode::CONTENT);
+        assert!(pkt.is_success());
+        assert_eq!(pkt.payload(), b"Hello");
+    }
+
+    #[test]
+    fn parse_with_options() {
+        // GET /test with Uri-Path option (11)
+        // Option: delta=11, len=4, value="test"
+        let data = [
+            0x40, 0x01, 0x00, 0x01, // header
+            0xB4, b't', b'e', b's', b't', // Uri-Path "test"
+        ];
+        let pkt = CoapPacket::from_bytes(&data).unwrap();
+        let opts: Vec<_> = pkt.options().collect();
+        assert_eq!(opts.len(), 1);
+        let opt = opts[0].as_ref().unwrap();
+        assert_eq!(opt.number, 11);
+        assert_eq!(opt.value, b"test");
+        assert!(opt.is_uri_path());
+    }
+
+    #[test]
+    fn parse_extended_delta() {
+        // Option with delta=13 (extended 1 byte): delta nibble=13, ext=0 => delta=13
+        let data = [
+            0x40, 0x01, 0x00, 0x01, // header
+            0xD0, 0x00, // delta=13, len=0
+        ];
+        let pkt = CoapPacket::from_bytes(&data).unwrap();
+        let opts: Vec<_> = pkt.options().collect();
+        assert_eq!(opts.len(), 1);
+        assert_eq!(opts[0].as_ref().unwrap().number, 13);
+    }
+
+    #[test]
+    fn build_simple_get() {
+        let mut buf = [0u8; 32];
+        let mut builder = CoapBuilder::new(
+            &mut buf,
+            MessageType::Confirmable,
+            MessageCode::GET,
+            0x1234,
+            &[0xAB, 0xCD],
+        )
+        .unwrap();
+        builder.uri_path("test").unwrap();
+        let n = builder.finish();
+
+        let pkt = CoapPacket::from_bytes(&buf[..n]).unwrap();
+        assert_eq!(pkt.msg_type(), MessageType::Confirmable);
+        assert_eq!(pkt.code(), MessageCode::GET);
+        assert_eq!(pkt.message_id(), 0x1234);
+        assert_eq!(pkt.token(), &[0xAB, 0xCD]);
+
+        let paths: Vec<_> = pkt
+            .options()
+            .filter_map(|o| o.ok())
+            .filter(|o| o.is_uri_path())
+            .collect();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].value, b"test");
+    }
+
+    #[test]
+    fn build_post_with_payload() {
+        let mut buf = [0u8; 64];
+        let mut builder = CoapBuilder::new(
+            &mut buf,
+            MessageType::NonConfirmable,
+            MessageCode::POST,
+            0x5678,
+            &[],
+        )
+        .unwrap();
+        builder.uri_path("sensors").unwrap();
+        builder.uri_path("temp").unwrap();
+        builder.content_format(60).unwrap(); // CBOR
+        builder.payload(b"{\"v\":25}").unwrap();
+        let n = builder.finish();
+
+        let pkt = CoapPacket::from_bytes(&buf[..n]).unwrap();
+        assert_eq!(pkt.code(), MessageCode::POST);
+        assert_eq!(pkt.payload(), b"{\"v\":25}");
+
+        let opts: Vec<_> = pkt.options().filter_map(|o| o.ok()).collect();
+        assert_eq!(opts.len(), 3);
+        assert_eq!(opts[0].value, b"sensors");
+        assert_eq!(opts[1].value, b"temp");
+        assert_eq!(opts[2].number, OptionNumber::ContentFormat as u16);
+        assert_eq!(opts[2].as_uint(), 60);
+    }
+
+    #[test]
+    fn roundtrip() {
+        let mut buf = [0u8; 64];
+        let mut builder = CoapBuilder::new(
+            &mut buf,
+            MessageType::Confirmable,
+            MessageCode::PUT,
+            0xABCD,
+            &[1, 2, 3, 4],
+        )
+        .unwrap();
+        builder.uri_path("a").unwrap();
+        builder.uri_path("b").unwrap();
+        builder.payload(b"hello world").unwrap();
+        let n = builder.finish();
+
+        let pkt = CoapPacket::from_bytes(&buf[..n]).unwrap();
+        assert_eq!(pkt.msg_type(), MessageType::Confirmable);
+        assert_eq!(pkt.code(), MessageCode::PUT);
+        assert_eq!(pkt.message_id(), 0xABCD);
+        assert_eq!(pkt.token(), &[1, 2, 3, 4]);
+        assert_eq!(pkt.payload(), b"hello world");
+    }
+
+    #[test]
+    fn token_too_long() {
+        let data = [0x49, 0x01, 0x00, 0x01]; // TKL=9
+        assert_eq!(
+            CoapPacket::from_bytes(&data),
+            Err(CoapError::TokenTooLong(9))
+        );
+    }
+
+    #[test]
+    fn wrong_version() {
+        let data = [0x80, 0x01, 0x00, 0x01]; // Ver=2
+        assert_eq!(CoapPacket::from_bytes(&data), Err(CoapError::WrongVersion(2)));
+    }
+
+    #[test]
+    fn too_short() {
+        assert_eq!(CoapPacket::from_bytes(&[0x40, 0x01]), Err(CoapError::TooShort));
+    }
+}

@@ -39,6 +39,21 @@ pub enum AnnounceError {
     HopCountExceeded,
 }
 
+impl core::fmt::Display for AnnounceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "message too short"),
+            Self::WrongType(t) => write!(f, "wrong announce type: {}", t),
+            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::NotSigned => write!(f, "announce not signed"),
+            Self::HopCountExceeded => write!(f, "hop count exceeded"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for AnnounceError {}
+
 /// A parsed announce message.
 ///
 /// References slices from the original buffer to avoid allocation.
@@ -106,6 +121,7 @@ impl<'a> Announce<'a> {
 }
 
 /// Builder for creating announce messages.
+#[derive(Debug)]
 pub struct AnnounceBuilder<'a> {
     pub originator_iid: &'a [u8; 8],
     pub pubkey: &'a [u8; 32],

@@ -1,4 +1,4 @@
-//! Async UDP CoAP client (requires `std` feature).
+//! Async UDP CoAP client (requires `tokio` feature).
 //!
 //! Sends a single CoAP request and waits for a response, with a 5-second
 //! timeout.  Supports GET, POST, and PUT with optional CBOR payloads.
@@ -15,6 +15,7 @@ const COAP_VERSION_CON: u8 = 0x40; // Ver=1 | T=CON
 const TIMEOUT_S: u64 = 5;
 
 /// A decoded CoAP response.
+#[derive(Debug)]
 pub struct Response {
     /// Raw CoAP code byte (class in upper 3 bits, detail in lower 5).
     pub code: u8,
@@ -77,8 +78,7 @@ async fn request(
     let mut buf = vec![0u8; 1280];
     let n = timeout(Duration::from_secs(TIMEOUT_S), sock.recv(&mut buf))
         .await
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "CoAP timeout"))?
-        .map_err(|e| e)?;
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "CoAP timeout"))??;
 
     decode(&buf[..n])
 }

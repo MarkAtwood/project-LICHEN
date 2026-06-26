@@ -65,6 +65,7 @@ pub struct AppFrame {
 ///     // Send notify_buf[..len] to RX characteristic
 /// }
 /// ```
+#[derive(Debug)]
 pub struct KissBleTnc {
     reader: KissReader,
     writer: KissWriter,

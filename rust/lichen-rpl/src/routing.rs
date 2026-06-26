@@ -12,8 +12,12 @@ use std::{
     vec::Vec,
 };
 
-use crate::messages::{Dao, OptionIter, RplTarget, TransitInfo, OPT_RPL_TARGET, OPT_TRANSIT_INFO};
+#[cfg(feature = "std")]
+use crate::messages::{
+    Dao, OptionIter, RplError, RplTarget, TransitInfo, OPT_RPL_TARGET, OPT_TRANSIT_INFO,
+};
 
+#[cfg(feature = "std")]
 const MAX_CHAIN: usize = 64;
 
 // ── Source Routing Header (RFC 6554) ─────────────────────────────────────────
@@ -22,6 +26,7 @@ const MAX_CHAIN: usize = 64;
 ///
 /// `addresses` are the hops still to visit; `segments_left` counts how many remain.
 #[cfg(feature = "std")]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SourceRoutingHeader {
     pub segments_left: u8,
     pub addresses: Vec<[u8; 16]>,
@@ -30,10 +35,10 @@ pub struct SourceRoutingHeader {
 #[cfg(feature = "std")]
 impl SourceRoutingHeader {
     /// Encode to the SRH wire format: 6 fixed bytes + 16 bytes per address.
-    pub fn encode(&self, out: &mut [u8]) -> usize {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, RplError> {
         let needed = 6 + self.addresses.len() * 16;
         if out.len() < needed {
-            return 0;
+            return Err(RplError::BufferTooSmall);
         }
         out[0] = 3; // routing type
         out[1] = self.segments_left;
@@ -44,25 +49,26 @@ impl SourceRoutingHeader {
         for (i, addr) in self.addresses.iter().enumerate() {
             out[6 + i * 16..6 + (i + 1) * 16].copy_from_slice(addr);
         }
-        needed
+        Ok(needed)
     }
 
     /// Parse from SRH wire bytes (starting at the routing-type byte).
-    pub fn parse(data: &[u8]) -> Option<Self> {
-        if data.len() < 6 || data[0] != 3 {
-            return None;
+    pub fn from_bytes(data: &[u8]) -> Result<Self, RplError> {
+        if data.len() < 6 {
+            return Err(RplError::TooShort);
+        }
+        if data[0] != 3 {
+            return Err(RplError::BadRoutingType(data[0]));
         }
         let addr_bytes = &data[6..];
         if !addr_bytes.len().is_multiple_of(16) {
-            return None;
+            return Err(RplError::TooShort);
         }
-        let mut addresses = Vec::with_capacity(addr_bytes.len() / 16);
-        for chunk in addr_bytes.chunks_exact(16) {
-            let mut a = [0u8; 16];
-            a.copy_from_slice(chunk);
-            addresses.push(a);
-        }
-        Some(Self {
+        let addresses: Vec<[u8; 16]> = addr_bytes
+            .chunks_exact(16)
+            .map(|chunk| chunk.try_into().unwrap())
+            .collect();
+        Ok(Self {
             segments_left: data[1],
             addresses,
         })
@@ -76,7 +82,7 @@ impl SourceRoutingHeader {
 /// The first element is the root's direct neighbour; the last is the target.
 /// A single-hop target has a one-element path containing only itself.
 #[cfg(feature = "std")]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct RoutingTable {
     routes: HashMap<[u8; 16], Vec<[u8; 16]>>,
 }
@@ -115,6 +121,7 @@ impl RoutingTable {
 ///
 /// On the root, `routing_table` is updated in place as DAOs arrive.
 #[cfg(feature = "std")]
+#[derive(Debug)]
 pub struct DaoManager {
     pub node_address: [u8; 16],
     pub is_root: bool,
@@ -159,14 +166,14 @@ impl DaoManager {
         };
 
         let mut buf = [0u8; 64]; // DAO(20) + Target(20) + TransitInfo(22) = 62
-        let mut pos = dao.encode(&mut buf).unwrap_or(0);
+        let mut pos = dao.write_to(&mut buf).unwrap_or(0);
 
         let target = RplTarget {
             prefix_len: 128,
             prefix: self.node_address,
         };
         let mut tmp = [0u8; 24];
-        let n = target.encode_option(&mut tmp).unwrap_or(0);
+        let n = target.write_to(&mut tmp).unwrap_or(0);
         buf[pos..pos + n].copy_from_slice(&tmp[..n]);
         pos += n;
 
@@ -176,7 +183,7 @@ impl DaoManager {
             path_lifetime: 255,
             parent_address: parent_addr,
         };
-        pos += transit.encode_option(&mut buf[pos..]).unwrap_or(0);
+        pos += transit.write_to(&mut buf[pos..]).unwrap_or(0);
 
         buf[..pos].to_vec()
     }
@@ -188,9 +195,8 @@ impl DaoManager {
         if !self.is_root {
             return false;
         }
-        let (target, parent) = match self.extract_edge(dao_bytes) {
-            Some(pair) => pair,
-            None => return false,
+        let Some((target, parent)) = self.extract_edge(dao_bytes) else {
+            return false;
         };
         self.parent_map.insert(target, parent);
         self.rebuild_routes();
@@ -205,14 +211,10 @@ impl DaoManager {
             let opt = opt.ok()?;
             match opt.opt_type {
                 OPT_RPL_TARGET => {
-                    if let Ok(t) = RplTarget::parse(opt.data) {
-                        target = Some(t.prefix);
-                    }
+                    target = RplTarget::from_bytes(opt.data).ok().map(|t| t.prefix);
                 }
                 OPT_TRANSIT_INFO => {
-                    if let Ok(ti) = TransitInfo::parse(opt.data) {
-                        parent = Some(ti.parent_address);
-                    }
+                    parent = TransitInfo::from_bytes(opt.data).ok().map(|ti| ti.parent_address);
                 }
                 _ => {}
             }
@@ -296,21 +298,32 @@ mod tests {
             addresses: addresses.clone(),
         };
         let mut buf = [0u8; 38]; // 6 + 2*16
-        let n = srh.encode(&mut buf);
+        let n = srh.write_to(&mut buf).unwrap();
         assert_eq!(n, 38);
         assert_eq!(buf[0], 3); // routing type
         assert_eq!(buf[1], 2); // segments_left
 
-        let decoded = SourceRoutingHeader::parse(&buf[..n]).unwrap();
+        let decoded = SourceRoutingHeader::from_bytes(&buf[..n]).unwrap();
         assert_eq!(decoded.segments_left, 2);
         assert_eq!(decoded.addresses, addresses);
     }
 
     #[test]
-    fn srh_wrong_type_returns_none() {
+    fn srh_encode_buffer_too_small() {
+        let addresses: Vec<[u8; 16]> = [ll(2), ll(3)].into_iter().collect();
+        let srh = SourceRoutingHeader {
+            segments_left: 2,
+            addresses,
+        };
+        let mut buf = [0u8; 37]; // one byte short of needed 38
+        assert_eq!(srh.write_to(&mut buf), Err(RplError::BufferTooSmall));
+    }
+
+    #[test]
+    fn srh_wrong_type_returns_error() {
         let mut buf = [0u8; 6];
         buf[0] = 0; // routing type 0, not 3
-        assert!(SourceRoutingHeader::parse(&buf).is_none());
+        assert_eq!(SourceRoutingHeader::from_bytes(&buf), Err(RplError::BadRoutingType(0)));
     }
 
     #[test]
@@ -319,7 +332,7 @@ mod tests {
         let dao_bytes = mgr.build_dao(ll(1));
 
         // Parse the DAO base
-        let dao = Dao::parse(&dao_bytes).unwrap();
+        let dao = Dao::from_bytes(&dao_bytes).unwrap();
         assert_eq!(dao.dao_sequence, 1);
         assert_eq!(dao.dodag_id, dodag_id());
 
@@ -332,12 +345,12 @@ mod tests {
             match opt.opt_type {
                 OPT_RPL_TARGET => {
                     found_target = true;
-                    let t = RplTarget::parse(opt.data).unwrap();
+                    let t = RplTarget::from_bytes(opt.data).unwrap();
                     assert_eq!(t.prefix, ll(2)); // advertises itself
                 }
                 OPT_TRANSIT_INFO => {
                     found_transit = true;
-                    let ti = TransitInfo::parse(opt.data).unwrap();
+                    let ti = TransitInfo::from_bytes(opt.data).unwrap();
                     assert_eq!(ti.parent_address, ll(1)); // via parent 1
                 }
                 _ => {}
@@ -395,8 +408,8 @@ mod tests {
     #[test]
     fn dao_sequence_increments() {
         let mut mgr = DaoManager::new(ll(2), 0, dodag_id());
-        let d1 = Dao::parse(&mgr.build_dao(ll(1))).unwrap();
-        let d2 = Dao::parse(&mgr.build_dao(ll(1))).unwrap();
+        let d1 = Dao::from_bytes(&mgr.build_dao(ll(1))).unwrap();
+        let d2 = Dao::from_bytes(&mgr.build_dao(ll(1))).unwrap();
         assert_eq!(d2.dao_sequence, d1.dao_sequence + 1);
     }
 }

@@ -92,11 +92,14 @@ pub trait Rng {
 ///
 /// Used for identity keys, routing state, etc. Keys are short ASCII strings.
 pub trait NonVolatile {
+    /// Error type for storage operations.
+    type Error;
+
     /// Read value for key into buffer. Returns bytes read, or None if not found.
     fn read(&self, key: &str, buf: &mut [u8]) -> Option<usize>;
 
     /// Write value for key. Returns Err if storage full or key too long.
-    fn write(&mut self, key: &str, data: &[u8]) -> Result<(), ()>;
+    fn write(&mut self, key: &str, data: &[u8]) -> Result<(), Self::Error>;
 
     /// Delete key. Returns true if key existed.
     fn delete(&mut self, key: &str) -> bool;
@@ -116,6 +119,19 @@ pub enum DisplayError {
     /// Coordinates out of bounds.
     OutOfBounds,
 }
+
+impl core::fmt::Display for DisplayError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NotInitialized => write!(f, "display not initialized"),
+            Self::BusError => write!(f, "display bus error"),
+            Self::OutOfBounds => write!(f, "coordinates out of bounds"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for DisplayError {}
 
 /// Display interface for rendering UI.
 ///

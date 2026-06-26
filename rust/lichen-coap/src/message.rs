@@ -4,8 +4,9 @@ use lichen_core::constants::PORT_COAP;
 
 /// CoAP message type (RFC 7252 §3, 2-bit field).
 #[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum MessageType {
+    #[default]
     Confirmable = 0,
     NonConfirmable = 1,
     Acknowledgement = 2,
@@ -13,7 +14,7 @@ pub enum MessageType {
 }
 
 /// CoAP message code: class (3 bits) + detail (5 bits), written as `c.dd`.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct MessageCode(pub u8);
 
 impl MessageCode {
@@ -49,6 +50,7 @@ impl MessageCode {
 }
 
 /// A minimal CoAP message header (wire layout: Ver|T|TKL | Code | Message ID).
+#[derive(Debug)]
 pub struct CoapMessage<'a> {
     pub msg_type: MessageType,
     pub code: MessageCode,

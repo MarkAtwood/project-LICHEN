@@ -4,6 +4,7 @@ use lichen_core::{addr::Ipv6Addr, addr::NodeId, icmpv6};
 use lichen_schc::codec;
 
 /// Top-level node state.
+#[derive(Debug)]
 pub struct Node {
     pub node_id: NodeId,
 }

@@ -10,19 +10,25 @@ use std::{
 use tokio::io::unix::AsyncFd;
 use tracing::info;
 
-// TUNSETIFF ioctl number: _IOW('T', 202, struct ifreq) = 0x400454CA
+// TUNSETIFF ioctl number from <linux/if_tun.h>: _IOW('T', 202, int) = 0x400454CA
 const TUNSETIFF: libc::c_ulong = 0x4004_54ca;
 const IFF_TUN: libc::c_short = 0x0001;
 const IFF_NO_PI: libc::c_short = 0x1000; // suppress 4-byte packet-info header
 
+/// Matches Linux `struct ifreq` from <linux/if.h> for ioctl ABI compatibility.
+///
+/// The kernel struct is 40 bytes: 16-byte `ifr_name` + 24-byte union (`ifr_ifru`).
+/// We only need `ifr_flags` (2 bytes) from the union, so we pad the remaining
+/// 22 bytes to preserve the struct size the kernel expects.
 #[repr(C)]
 struct Ifreq {
     ifr_name: [u8; 16],
     ifr_flags: libc::c_short,
-    _pad: [u8; 22],
+    _pad: [u8; 22], // remainder of 24-byte ifr_ifru union
 }
 
 /// An async Linux TUN device.
+#[derive(Debug)]
 pub struct TunDevice {
     inner: AsyncFd<OwnedFd>,
     pub name: String,
@@ -38,7 +44,11 @@ impl TunDevice {
             )
         };
         if fd < 0 {
-            return Err(io::Error::last_os_error());
+            let e = io::Error::last_os_error();
+            return Err(io::Error::new(
+                e.kind(),
+                format!("failed to open /dev/net/tun: {e} (requires CAP_NET_ADMIN or root)"),
+            ));
         }
 
         let mut ifr = Ifreq {
@@ -53,7 +63,10 @@ impl TunDevice {
         if rc < 0 {
             let e = io::Error::last_os_error();
             unsafe { libc::close(fd) };
-            return Err(e);
+            return Err(io::Error::new(
+                e.kind(),
+                format!("TUNSETIFF ioctl failed for interface '{name}': {e}"),
+            ));
         }
 
         // Must be non-blocking for tokio AsyncFd.
@@ -61,7 +74,10 @@ impl TunDevice {
         if fl < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK) } < 0 {
             let e = io::Error::last_os_error();
             unsafe { libc::close(fd) };
-            return Err(e);
+            return Err(io::Error::new(
+                e.kind(),
+                format!("failed to set O_NONBLOCK on TUN fd: {e}"),
+            ));
         }
 
         let owned = unsafe { OwnedFd::from_raw_fd(fd) };
@@ -85,7 +101,8 @@ impl TunDevice {
                     )
                 };
                 if n < 0 {
-                    Err(io::Error::last_os_error())
+                    let e = io::Error::last_os_error();
+                    Err(io::Error::new(e.kind(), format!("TUN read failed: {e}")))
                 } else {
                     Ok(n as usize)
                 }
@@ -109,7 +126,11 @@ impl TunDevice {
                     )
                 };
                 if n < 0 {
-                    Err(io::Error::last_os_error())
+                    let e = io::Error::last_os_error();
+                    Err(io::Error::new(
+                        e.kind(),
+                        format!("TUN write failed ({} bytes): {e}", buf.len()),
+                    ))
                 } else {
                     Ok(())
                 }

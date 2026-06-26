@@ -3,6 +3,14 @@
 //! Implements the LICHEN frame format with LLSec flags, replay-window tracking,
 //! and stubs for future AES-CCM encryption and Schnorr-48 link signatures.
 //!
+//! # Threat Model Note
+//!
+//! Keys are device-held: anyone with physical access has the key. The existing
+//! side-channel mitigations (constant-time comparison, zeroize-on-drop) are
+//! retained as low-cost best practice, but don't meaningfully improve security
+//! for this use case. Remote timing attacks over a high-latency LoRa mesh are
+//! impractical. Don't add more crypto hardening without a concrete threat.
+//!
 //! Wire layout (spec 4.1):
 //! ```text
 //! +--------+--------+-------+--------+----------+---------+-------+

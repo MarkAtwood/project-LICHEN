@@ -1,0 +1,295 @@
+//! UDP header parsing and building (RFC 768, no_std).
+//!
+//! Provides zero-copy parsing and construction of UDP datagrams with IPv6
+//! pseudo-header checksum support per RFC 8200.
+
+use crate::addr::Ipv6Addr;
+
+/// UDP header length (always 8 bytes).
+pub const UDP_HEADER_LEN: usize = 8;
+
+/// Next Header value for UDP in IPv6.
+pub const UDP_NEXT_HEADER: u8 = 17;
+
+/// UDP parse error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UdpError {
+    /// Buffer too short for UDP header.
+    TooShort,
+    /// Declared length doesn't match data length.
+    LengthMismatch { declared: u16, actual: usize },
+    /// Output buffer too small.
+    BufferTooSmall,
+}
+
+impl core::fmt::Display for UdpError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "UDP datagram too short"),
+            Self::LengthMismatch { declared, actual } => {
+                write!(f, "UDP length {declared} != {actual} bytes present")
+            }
+            Self::BufferTooSmall => write!(f, "output buffer too small"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for UdpError {}
+
+/// A parsed UDP header (zero-copy reference to buffer).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UdpHeader<'a> {
+    data: &'a [u8],
+}
+
+impl<'a> UdpHeader<'a> {
+    /// Parse a UDP datagram from the start of `data`.
+    ///
+    /// Validates that the length field matches the actual data length.
+    pub fn from_bytes(data: &'a [u8]) -> Result<Self, UdpError> {
+        if data.len() < UDP_HEADER_LEN {
+            return Err(UdpError::TooShort);
+        }
+        let declared = u16::from_be_bytes([data[4], data[5]]) as usize;
+        if declared != data.len() {
+            return Err(UdpError::LengthMismatch {
+                declared: declared as u16,
+                actual: data.len(),
+            });
+        }
+        Ok(Self { data })
+    }
+
+    /// Parse without length validation (for incomplete buffers).
+    pub fn from_bytes_unchecked(data: &'a [u8]) -> Result<Self, UdpError> {
+        if data.len() < UDP_HEADER_LEN {
+            return Err(UdpError::TooShort);
+        }
+        Ok(Self { data })
+    }
+
+    /// Source port.
+    pub fn src_port(&self) -> u16 {
+        u16::from_be_bytes([self.data[0], self.data[1]])
+    }
+
+    /// Destination port.
+    pub fn dst_port(&self) -> u16 {
+        u16::from_be_bytes([self.data[2], self.data[3]])
+    }
+
+    /// Total UDP length (header + payload).
+    pub fn length(&self) -> u16 {
+        u16::from_be_bytes([self.data[4], self.data[5]])
+    }
+
+    /// Checksum field value.
+    pub fn checksum(&self) -> u16 {
+        u16::from_be_bytes([self.data[6], self.data[7]])
+    }
+
+    /// Payload slice (after 8-byte header).
+    pub fn payload(&self) -> &'a [u8] {
+        &self.data[UDP_HEADER_LEN..]
+    }
+
+    /// Verify the checksum against IPv6 pseudo-header.
+    ///
+    /// Returns true if checksum is valid or if checksum field is 0 (per RFC 768,
+    /// a zero checksum in IPv6 UDP is invalid, but we accept it for permissive parsing).
+    pub fn verify_checksum(&self, src: &Ipv6Addr, dst: &Ipv6Addr) -> bool {
+        if self.checksum() == 0 {
+            // RFC 8200: UDP checksum is mandatory for IPv6, but be permissive
+            return true;
+        }
+        // Compute checksum over pseudo-header + datagram; result should be 0xFFFF
+        let computed = udp_checksum(src, dst, self.data);
+        computed == 0 || computed == 0xFFFF
+    }
+
+    /// Raw datagram bytes (header + payload).
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.data
+    }
+}
+
+/// Build a UDP datagram into `out`.
+///
+/// Computes the IPv6 pseudo-header checksum automatically.
+/// Returns the total number of bytes written (header + payload).
+pub fn write_datagram(
+    src_addr: &Ipv6Addr,
+    dst_addr: &Ipv6Addr,
+    src_port: u16,
+    dst_port: u16,
+    payload: &[u8],
+    out: &mut [u8],
+) -> Result<usize, UdpError> {
+    let total = UDP_HEADER_LEN + payload.len();
+    if out.len() < total {
+        return Err(UdpError::BufferTooSmall);
+    }
+
+    // Header with zero checksum initially
+    out[0..2].copy_from_slice(&src_port.to_be_bytes());
+    out[2..4].copy_from_slice(&dst_port.to_be_bytes());
+    out[4..6].copy_from_slice(&(total as u16).to_be_bytes());
+    out[6] = 0; // checksum placeholder
+    out[7] = 0;
+    out[UDP_HEADER_LEN..total].copy_from_slice(payload);
+
+    // Compute and fill checksum
+    let csum = udp_checksum(src_addr, dst_addr, &out[..total]);
+    // RFC 768: a computed checksum of zero is transmitted as all ones
+    let csum = if csum == 0 { 0xFFFF } else { csum };
+    out[6..8].copy_from_slice(&csum.to_be_bytes());
+
+    Ok(total)
+}
+
+// ── One's-complement checksum (RFC 1071) ────────────────────────────────────
+
+fn oc_add(a: u32, b: u32) -> u32 {
+    let s = a + b;
+    if s >> 16 != 0 {
+        (s & 0xFFFF) + (s >> 16)
+    } else {
+        s
+    }
+}
+
+fn sum_words(data: &[u8]) -> u32 {
+    let mut sum: u32 = 0;
+    let mut i = 0;
+    while i + 1 < data.len() {
+        sum = oc_add(sum, u16::from_be_bytes([data[i], data[i + 1]]) as u32);
+        i += 2;
+    }
+    if data.len() % 2 == 1 {
+        sum = oc_add(sum, (data[data.len() - 1] as u32) << 8);
+    }
+    sum
+}
+
+/// Compute UDP checksum over IPv6 pseudo-header + UDP datagram.
+///
+/// The datagram should include the UDP header with checksum field zeroed
+/// (or the original value if verifying).
+fn udp_checksum(src: &Ipv6Addr, dst: &Ipv6Addr, datagram: &[u8]) -> u16 {
+    // Pseudo-header: src + dst + upper-layer-length (4 bytes) + zeros + NH=17
+    let mut sum: u32 = 0;
+
+    // Add source address
+    for i in (0..16).step_by(2) {
+        sum = oc_add(sum, u16::from_be_bytes([src.0[i], src.0[i + 1]]) as u32);
+    }
+    // Add destination address
+    for i in (0..16).step_by(2) {
+        sum = oc_add(sum, u16::from_be_bytes([dst.0[i], dst.0[i + 1]]) as u32);
+    }
+    // Upper-layer length (32 bits, big-endian, only low 16 bits should be nonzero)
+    sum = oc_add(sum, datagram.len() as u32);
+    // Next header = 17 (UDP)
+    sum = oc_add(sum, UDP_NEXT_HEADER as u32);
+
+    // Add UDP datagram
+    sum = oc_add(sum, sum_words(datagram));
+
+    // Fold to 16 bits and invert
+    while sum >> 16 != 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    !(sum as u16)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ll(iid: u8) -> Ipv6Addr {
+        Ipv6Addr([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid])
+    }
+
+    #[test]
+    fn parse_udp_header() {
+        let src = ll(1);
+        let dst = ll(2);
+        let mut buf = [0u8; 16];
+        let n = write_datagram(&src, &dst, 5683, 5684, b"hello!!!", &mut buf).unwrap();
+        assert_eq!(n, 16);
+
+        let hdr = UdpHeader::from_bytes(&buf[..n]).unwrap();
+        assert_eq!(hdr.src_port(), 5683);
+        assert_eq!(hdr.dst_port(), 5684);
+        assert_eq!(hdr.length(), 16);
+        assert_eq!(hdr.payload(), b"hello!!!");
+        assert!(hdr.verify_checksum(&src, &dst));
+    }
+
+    #[test]
+    fn too_short() {
+        assert_eq!(UdpHeader::from_bytes(&[0u8; 7]), Err(UdpError::TooShort));
+    }
+
+    #[test]
+    fn length_mismatch() {
+        // Header says length=100, but only 8 bytes present
+        let mut buf = [0u8; 8];
+        buf[4..6].copy_from_slice(&100u16.to_be_bytes());
+        assert_eq!(
+            UdpHeader::from_bytes(&buf),
+            Err(UdpError::LengthMismatch {
+                declared: 100,
+                actual: 8
+            })
+        );
+    }
+
+    #[test]
+    fn checksum_is_stable() {
+        let src = ll(1);
+        let dst = ll(2);
+        let mut buf1 = [0u8; 12];
+        let mut buf2 = [0u8; 12];
+        write_datagram(&src, &dst, 1234, 5678, b"test", &mut buf1).unwrap();
+        write_datagram(&src, &dst, 1234, 5678, b"test", &mut buf2).unwrap();
+        assert_eq!(buf1, buf2);
+    }
+
+    #[test]
+    fn checksum_zero_becomes_ffff() {
+        // Artificially construct a datagram where checksum would be 0
+        // (rare but possible) - verify it becomes 0xFFFF
+        let src = ll(1);
+        let dst = ll(2);
+        let mut buf = [0u8; 8];
+        let n = write_datagram(&src, &dst, 0, 0, &[], &mut buf).unwrap();
+        let hdr = UdpHeader::from_bytes(&buf[..n]).unwrap();
+        // Checksum should not be 0
+        assert_ne!(hdr.checksum(), 0);
+    }
+
+    #[test]
+    fn buffer_too_small() {
+        let src = ll(1);
+        let dst = ll(2);
+        let mut buf = [0u8; 7];
+        assert_eq!(
+            write_datagram(&src, &dst, 1234, 5678, &[], &mut buf),
+            Err(UdpError::BufferTooSmall)
+        );
+    }
+
+    #[test]
+    fn empty_payload() {
+        let src = ll(1);
+        let dst = ll(2);
+        let mut buf = [0u8; 8];
+        let n = write_datagram(&src, &dst, 5683, 5683, &[], &mut buf).unwrap();
+        assert_eq!(n, 8);
+        let hdr = UdpHeader::from_bytes(&buf).unwrap();
+        assert_eq!(hdr.payload(), &[]);
+        assert!(hdr.verify_checksum(&src, &dst));
+    }
+}

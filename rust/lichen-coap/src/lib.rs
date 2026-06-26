@@ -6,10 +6,12 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod codec;
 pub mod message;
 pub mod option;
 
+pub use codec::{CoapBuilder, CoapError, CoapOption, CoapPacket};
 pub use message::{MessageCode, MessageType};
 
-#[cfg(feature = "std")]
+#[cfg(feature = "tokio")]
 pub mod client;

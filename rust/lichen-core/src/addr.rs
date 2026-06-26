@@ -11,6 +11,34 @@ impl Ipv6Addr {
     pub fn is_link_local(&self) -> bool {
         self.0[0] == 0xfe && (self.0[1] & 0xc0) == 0x80
     }
+
+    /// True if this is a Unique Local Address (fc00::/7, typically fd00::/8).
+    ///
+    /// Per RFC 4193, ULAs have the prefix fc00::/7. In practice, the L bit
+    /// (bit 8) is set to 1 for locally-assigned addresses, giving fd00::/8.
+    pub fn is_ula(&self) -> bool {
+        // fc00::/7 means first byte has top 7 bits = 1111110x (0xfc or 0xfd)
+        (self.0[0] & 0xfe) == 0xfc
+    }
+
+    /// True if this is a Global Unicast Address (2000::/3).
+    ///
+    /// Per RFC 4291, GUAs have the prefix 2000::/3, meaning the first 3 bits
+    /// are 001 (addresses 2000:: through 3fff::).
+    pub fn is_gua(&self) -> bool {
+        // 2000::/3 means first byte has top 3 bits = 001 (0x20..0x3f)
+        (self.0[0] & 0xe0) == 0x20
+    }
+
+    /// True if this is a multicast address (ff00::/8).
+    pub fn is_multicast(&self) -> bool {
+        self.0[0] == 0xff
+    }
+
+    /// True if this is the loopback address (::1).
+    pub fn is_loopback(&self) -> bool {
+        self.0 == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+    }
 }
 
 /// A 64-bit node identifier (EUI-64 derived from the radio hardware address).
@@ -93,5 +121,60 @@ mod tests {
         let node = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
         let prefix = [0xfd, 0x00, 0, 0, 0, 0, 0, 0];
         assert!(!node.ula_addr(prefix).is_link_local());
+    }
+
+    #[test]
+    fn is_ula_fd00() {
+        // fd00::/8 is a common ULA prefix
+        let addr = Ipv6Addr([0xfd, 0x00, 0x12, 0x34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_ula());
+        assert!(!addr.is_link_local());
+        assert!(!addr.is_gua());
+    }
+
+    #[test]
+    fn is_ula_fc00() {
+        // fc00::/8 is also technically ULA (but L=0, rarely used)
+        let addr = Ipv6Addr([0xfc, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_ula());
+    }
+
+    #[test]
+    fn is_gua() {
+        // 2001:db8::/32 is documentation prefix (a GUA)
+        let addr = Ipv6Addr([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_gua());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_link_local());
+    }
+
+    #[test]
+    fn is_gua_range() {
+        // 2000::/3 means 2000:: through 3fff::
+        let addr_2000 = Ipv6Addr([0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        let addr_3fff = Ipv6Addr([0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr_2000.is_gua());
+        assert!(addr_3fff.is_gua());
+
+        // 4000:: is NOT a GUA
+        let addr_4000 = Ipv6Addr([0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(!addr_4000.is_gua());
+    }
+
+    #[test]
+    fn is_multicast() {
+        let addr = Ipv6Addr([0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_multicast());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_gua());
+    }
+
+    #[test]
+    fn is_loopback() {
+        let addr = Ipv6Addr([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_loopback());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_gua());
+        assert!(!addr.is_multicast());
     }
 }
