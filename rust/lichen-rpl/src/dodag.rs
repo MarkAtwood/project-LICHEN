@@ -13,6 +13,7 @@
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
+#[cfg(feature = "std")]
 use crate::messages::Dio;
 
 pub const INFINITE_RANK: u16 = 0xFFFF;
@@ -41,6 +42,7 @@ pub struct ParentCandidate {
 
 impl ParentCandidate {
     /// Rank this node would achieve via this parent (MRHOF, spec B.1).
+    #[cfg(feature = "std")]
     pub fn path_cost(&self, mhri: u16) -> u16 {
         self.rank
             .saturating_add((self.link_etx * mhri as f32).round() as u16)
@@ -49,6 +51,7 @@ impl ParentCandidate {
 
 /// RPL DODAG membership state for a single node.
 #[cfg(feature = "std")]
+#[derive(Debug)]
 pub struct DodagState {
     pub rpl_instance_id: u8,
     pub dodag_id: [u8; 16],

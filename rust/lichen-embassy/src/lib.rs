@@ -11,9 +11,11 @@
 
 #![cfg_attr(not(feature = "mock"), no_std)]
 
+/// Mock HAL implementation for host-side testing.
 #[cfg(feature = "mock")]
 pub mod mock;
 
+/// ESP32-S3 HAL implementation using esp-hal.
 #[cfg(feature = "esp32s3")]
 pub mod esp32s3;
 

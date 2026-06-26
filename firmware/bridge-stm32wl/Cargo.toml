@@ -11,6 +11,9 @@ embassy-stm32 = { version = "0.6", features = ["stm32wle5jc", "defmt", "time-dri
 embassy-sync = { version = "0.8", features = ["defmt"] }
 embassy-futures = "0.1"
 
+# LoRa PHY driver
+lora-phy = { version = "3.0", default-features = false }
+
 # Logging
 defmt = "1"
 defmt-rtt = "1"

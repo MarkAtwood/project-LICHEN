@@ -9,12 +9,14 @@ use sha2::{Digest, Sha256};
 /// RFC 4291 §2.5.1 — locally-administered identifier.
 pub fn iid_from_pubkey(pubkey: &[u8; 32]) -> [u8; 8] {
     let hash = Sha256::digest(pubkey);
+    // SAFETY: SHA-256 output is 32 bytes, so [..8] is exactly 8 bytes
     let mut iid: [u8; 8] = hash[..8].try_into().unwrap();
     iid[0] &= 0b1111_1101; // clear U/L bit
     iid
 }
 
 /// Local node identity (seed + derived keypair + IID).
+#[derive(Debug)]
 pub struct Identity {
     pub seed: [u8; 32],
     pub privkey: [u8; 32],

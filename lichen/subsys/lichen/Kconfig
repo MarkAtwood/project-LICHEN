@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN protocol subsystem Kconfig
+
+menuconfig LICHEN
+	bool "LICHEN protocol stack"
+	help
+	  Enable the LICHEN (LoRa IPv6 CoAP Hybrid Extended Network)
+	  protocol stack for mesh networking over LoRa.
+
+if LICHEN
+
+rsource "link/Kconfig"
+
+endif # LICHEN

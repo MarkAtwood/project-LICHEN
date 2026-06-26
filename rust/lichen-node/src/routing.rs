@@ -15,6 +15,7 @@ pub enum RoutingMode {
 }
 
 /// Minimal RPL instance state stub.
+#[derive(Debug)]
 pub struct RplInstance {
     pub instance_id: u8,
     pub mode_of_operation: u8,

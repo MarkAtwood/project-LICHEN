@@ -1,7 +1,7 @@
 //! SLIP framing (RFC 1055).
 //!
 //! SLIP is a trivial byte-stuffing framing protocol.  Each packet is bounded
-//! by END (0xC0) bytes; END and ESC bytes in the payload are replaced by
+//! by FEND (0xC0) bytes; FEND and FESC bytes in the payload are replaced by
 //! two-byte escape sequences.
 //!
 //! Provides both async functions (`send_packet`/`recv_packet`) and a stateful
@@ -11,10 +11,59 @@ use std::collections::VecDeque;
 use std::io;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-const END: u8 = 0xC0;
-const ESC: u8 = 0xDB;
-const ESC_END: u8 = 0xDC; // sent in place of END inside a packet
-const ESC_ESC: u8 = 0xDD; // sent in place of ESC inside a packet
+// Use shared framing constants from lichen-kiss (KISS and SLIP use the same byte values).
+use lichen_kiss::framing::{FEND, FESC, TFEND, TFESC};
+
+/// Escape a single byte for SLIP transmission.
+///
+/// Returns `(bytes, len)` where `bytes[..len]` contains the escaped output.
+/// For FEND/FESC, returns a 2-byte escape sequence; otherwise the byte unchanged.
+#[inline]
+const fn slip_escape(byte: u8) -> ([u8; 2], usize) {
+    match byte {
+        FEND => ([FESC, TFEND], 2),
+        FESC => ([FESC, TFESC], 2),
+        b => ([b, 0], 1),
+    }
+}
+
+/// SLIP-encode a packet into a Vec, including leading and trailing FEND.
+fn slip_encode(packet: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(packet.len() * 2 + 2);
+    buf.push(FEND);
+    for &byte in packet {
+        let (escaped, len) = slip_escape(byte);
+        buf.extend_from_slice(&escaped[..len]);
+    }
+    buf.push(FEND);
+    buf
+}
+
+/// Result of processing one byte during SLIP unescaping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SlipDecodeResult {
+    /// No output byte yet (start of escape sequence or inter-packet FEND).
+    None,
+    /// Decoded byte to append to buffer.
+    Byte(u8),
+    /// End of packet (FEND received with data in buffer).
+    End,
+}
+
+/// Process one byte during SLIP reception.
+///
+/// `in_escape` tracks whether the previous byte was FESC.
+/// Returns the decode result and the updated escape state.
+#[inline]
+fn slip_decode_byte(byte: u8, in_escape: bool) -> (SlipDecodeResult, bool) {
+    match byte {
+        FEND => (SlipDecodeResult::End, false),
+        FESC => (SlipDecodeResult::None, true),
+        TFEND if in_escape => (SlipDecodeResult::Byte(FEND), false),
+        TFESC if in_escape => (SlipDecodeResult::Byte(FESC), false),
+        b => (SlipDecodeResult::Byte(b), false),
+    }
+}
 
 /// SLIP framing error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,11 +85,19 @@ impl std::fmt::Display for SlipError {
 
 impl std::error::Error for SlipError {}
 
+/// Maximum size of raw packet data (before SLIP encoding).
+const TX_BUFFER_SIZE: usize = 4096;
+/// Maximum number of packets in TX queue.
+const TX_QUEUE_CAPACITY: usize = 8;
+
 /// Stateful SLIP framer with RX accumulation and TX queue.
 ///
 /// Feed incoming bytes with `feed()`, retrieve complete packets from the
 /// returned iterator. Queue outgoing packets with `queue_send()`, drain
 /// encoded bytes with `try_get_tx()`.
+///
+/// TX packets are stored in a pre-allocated ring buffer and SLIP-encoded
+/// on-the-fly when retrieved, avoiding per-packet allocation.
 ///
 /// # Example
 ///
@@ -55,7 +112,7 @@ impl std::error::Error for SlipError {}
 /// // Get encoded bytes to write to serial
 /// let mut tx_buf = [0u8; 64];
 /// if let Some(len) = framer.try_get_tx(&mut tx_buf) {
-///     // tx_buf[..len] contains: END, escaped data, END
+///     // tx_buf[..len] contains: FEND, escaped data, FEND
 /// }
 ///
 /// // Feed incoming bytes from serial
@@ -67,7 +124,12 @@ impl std::error::Error for SlipError {}
 pub struct SlipFramer {
     rx_buffer: Vec<u8>,
     rx_in_escape: bool,
-    tx_queue: VecDeque<Vec<u8>>,
+    /// Pre-allocated buffer for TX packet data (raw, not yet SLIP-encoded).
+    tx_buffer: Box<[u8; TX_BUFFER_SIZE]>,
+    /// Write position in tx_buffer.
+    tx_write: usize,
+    /// Queue of (offset, length) for pending packets in tx_buffer.
+    tx_packets: VecDeque<(usize, usize)>,
 }
 
 impl Default for SlipFramer {
@@ -82,7 +144,9 @@ impl SlipFramer {
         Self {
             rx_buffer: Vec::with_capacity(2048),
             rx_in_escape: false,
-            tx_queue: VecDeque::with_capacity(8),
+            tx_buffer: Box::new([0u8; TX_BUFFER_SIZE]),
+            tx_write: 0,
+            tx_packets: VecDeque::with_capacity(TX_QUEUE_CAPACITY),
         }
     }
 
@@ -100,93 +164,104 @@ impl SlipFramer {
 
     /// Queue a packet for transmission.
     ///
-    /// The packet is SLIP-encoded and stored in the TX queue.
-    /// Returns error if queue is full (max 8 pending packets).
+    /// The packet data is copied to a pre-allocated buffer and SLIP-encoded
+    /// on retrieval. Returns error if queue is full (max 8 pending packets)
+    /// or if buffer space is exhausted.
     pub fn queue_send(&mut self, packet: &[u8]) -> Result<(), SlipError> {
-        if self.tx_queue.len() >= 8 {
+        if self.tx_packets.len() >= TX_QUEUE_CAPACITY {
             return Err(SlipError::QueueFull);
         }
 
-        // Encode: leading END + escaped data + trailing END
-        let mut encoded = Vec::with_capacity(packet.len() + 4);
-        encoded.push(END);
-        for &byte in packet {
-            match byte {
-                END => {
-                    encoded.push(ESC);
-                    encoded.push(ESC_END);
-                }
-                ESC => {
-                    encoded.push(ESC);
-                    encoded.push(ESC_ESC);
-                }
-                b => encoded.push(b),
-            }
+        // Compact buffer if we've consumed all packets
+        if self.tx_packets.is_empty() {
+            self.tx_write = 0;
         }
-        encoded.push(END);
 
-        self.tx_queue.push_back(encoded);
+        // Check if packet fits
+        if self.tx_write + packet.len() > TX_BUFFER_SIZE {
+            return Err(SlipError::PacketTooLarge);
+        }
+
+        // Copy raw packet data to buffer
+        let offset = self.tx_write;
+        self.tx_buffer[offset..offset + packet.len()].copy_from_slice(packet);
+        self.tx_write += packet.len();
+        self.tx_packets.push_back((offset, packet.len()));
+
         Ok(())
     }
 
-    /// Try to get the next encoded TX frame.
+    /// Try to get the next SLIP-encoded TX frame.
     ///
-    /// Returns the number of bytes written to `out`, or `None` if queue is empty.
+    /// Encodes the packet on-the-fly into `out`. Returns the number of bytes
+    /// written, or `None` if queue is empty. Caller must provide a buffer
+    /// large enough for worst-case encoding (2 + 2*packet_len bytes).
     pub fn try_get_tx(&mut self, out: &mut [u8]) -> Option<usize> {
-        let frame = self.tx_queue.pop_front()?;
-        let len = frame.len().min(out.len());
-        out[..len].copy_from_slice(&frame[..len]);
-        Some(len)
+        let (offset, len) = self.tx_packets.pop_front()?;
+        let packet = &self.tx_buffer[offset..offset + len];
+
+        // Encode: leading FEND + escaped data + trailing FEND
+        let mut pos = 0;
+
+        if pos >= out.len() {
+            return Some(0);
+        }
+        out[pos] = FEND;
+        pos += 1;
+
+        for &byte in packet {
+            let (escaped, len) = slip_escape(byte);
+            if pos + len > out.len() {
+                return Some(pos);
+            }
+            out[pos..pos + len].copy_from_slice(&escaped[..len]);
+            pos += len;
+        }
+
+        if pos < out.len() {
+            out[pos] = FEND;
+            pos += 1;
+        }
+
+        Some(pos)
     }
 
     /// Number of packets waiting in TX queue.
     pub fn tx_pending(&self) -> usize {
-        self.tx_queue.len()
+        self.tx_packets.len()
     }
 
     /// Check if TX queue is empty.
     pub fn tx_empty(&self) -> bool {
-        self.tx_queue.is_empty()
+        self.tx_packets.is_empty()
     }
 
     /// Clear RX state and TX queue.
     pub fn clear(&mut self) {
         self.rx_buffer.clear();
         self.rx_in_escape = false;
-        self.tx_queue.clear();
+        self.tx_write = 0;
+        self.tx_packets.clear();
     }
 
-    /// Process one byte, returning a complete packet if END delimiter received.
+    /// Process one byte, returning a complete packet if FEND delimiter received.
     fn process_byte(&mut self, byte: u8) -> Option<Vec<u8>> {
-        match byte {
-            END => {
+        let (result, new_escape) = slip_decode_byte(byte, self.rx_in_escape);
+        self.rx_in_escape = new_escape;
+
+        match result {
+            SlipDecodeResult::End => {
                 if self.rx_buffer.is_empty() {
-                    // Empty END: inter-packet separator, ignore
                     None
                 } else {
-                    // Complete packet
                     Some(std::mem::take(&mut self.rx_buffer))
                 }
             }
-            ESC => {
-                self.rx_in_escape = true;
-                None
-            }
-            ESC_END if self.rx_in_escape => {
-                self.rx_in_escape = false;
-                self.rx_buffer.push(END);
-                None
-            }
-            ESC_ESC if self.rx_in_escape => {
-                self.rx_in_escape = false;
-                self.rx_buffer.push(ESC);
-                None
-            }
-            b => {
-                self.rx_in_escape = false;
+            SlipDecodeResult::Byte(b) => {
                 self.rx_buffer.push(b);
                 None
             }
+            SlipDecodeResult::None => None,
         }
     }
 }
@@ -215,34 +290,18 @@ impl<'a> Iterator for SlipFeedIter<'a> {
 
 /// Send `packet` as a single SLIP frame on `writer`.
 ///
-/// Surrounds the packet with END bytes and escapes any END/ESC bytes in the
-/// payload per RFC 1055 §2.
+/// Surrounds the packet with FEND bytes and escapes any FEND/FESC bytes in the
+/// payload per RFC 1055 S2.
 pub async fn send_packet<W: AsyncWrite + Unpin>(writer: &mut W, packet: &[u8]) -> io::Result<()> {
-    // Leading END flushes any garbage from a previous interrupted packet.
-    writer.write_all(&[END]).await?;
-
-    let mut buf = Vec::with_capacity(packet.len() + 2);
-    for &byte in packet {
-        match byte {
-            END => {
-                buf.push(ESC);
-                buf.push(ESC_END);
-            }
-            ESC => {
-                buf.push(ESC);
-                buf.push(ESC_ESC);
-            }
-            b => buf.push(b),
-        }
-    }
-    buf.push(END);
+    // slip_encode includes leading FEND (flushes garbage) and trailing FEND.
+    let buf = slip_encode(packet);
     writer.write_all(&buf).await?;
     Ok(())
 }
 
 /// Read one SLIP packet from `reader` into `buf`.
 ///
-/// Blocks until a complete packet is received (terminated by END).
+/// Blocks until a complete packet is received (terminated by FEND).
 /// Returns the number of bytes written into `buf`, or an error if `buf`
 /// is too small.
 pub async fn recv_packet<R: AsyncRead + Unpin>(
@@ -255,43 +314,18 @@ pub async fn recv_packet<R: AsyncRead + Unpin>(
     loop {
         let mut byte = [0u8; 1];
         reader.read_exact(&mut byte).await?;
-        let byte = byte[0];
 
-        match byte {
-            END => {
+        let (result, new_escape) = slip_decode_byte(byte[0], in_escape);
+        in_escape = new_escape;
+
+        match result {
+            SlipDecodeResult::End => {
                 if out > 0 {
-                    // Non-empty packet complete.
                     return Ok(out);
                 }
-                // Empty END: inter-packet separator, keep reading.
+                // Empty FEND: inter-packet separator, keep reading.
             }
-            ESC => {
-                in_escape = true;
-            }
-            ESC_END if in_escape => {
-                in_escape = false;
-                if out >= buf.len() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "SLIP packet too large",
-                    ));
-                }
-                buf[out] = END;
-                out += 1;
-            }
-            ESC_ESC if in_escape => {
-                in_escape = false;
-                if out >= buf.len() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "SLIP packet too large",
-                    ));
-                }
-                buf[out] = ESC;
-                out += 1;
-            }
-            b => {
-                in_escape = false;
+            SlipDecodeResult::Byte(b) => {
                 if out >= buf.len() {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -301,6 +335,7 @@ pub async fn recv_packet<R: AsyncRead + Unpin>(
                 buf[out] = b;
                 out += 1;
             }
+            SlipDecodeResult::None => {}
         }
     }
 }
@@ -328,27 +363,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn packet_with_end_byte() {
-        let data = [0x01, END, 0x02];
+    async fn packet_with_fend_byte() {
+        let data = [0x01, FEND, 0x02];
         assert_eq!(roundtrip(&data).await, &data);
     }
 
     #[tokio::test]
-    async fn packet_with_esc_byte() {
-        let data = [0x01, ESC, 0x02];
+    async fn packet_with_fesc_byte() {
+        let data = [0x01, FESC, 0x02];
         assert_eq!(roundtrip(&data).await, &data);
     }
 
     #[tokio::test]
     async fn packet_with_both_special_bytes() {
-        let data = [END, ESC, END, 0x42, ESC];
+        let data = [FEND, FESC, FEND, 0x42, FESC];
         assert_eq!(roundtrip(&data).await, &data);
     }
 
     #[test]
     fn framer_simple_rx() {
         let mut framer = SlipFramer::new();
-        let packets: Vec<_> = framer.feed(&[END, b'H', b'i', END]).collect();
+        let packets: Vec<_> = framer.feed(&[FEND, b'H', b'i', FEND]).collect();
         assert_eq!(packets.len(), 1);
         assert_eq!(packets[0], b"Hi");
     }
@@ -358,11 +393,11 @@ mod tests {
         let mut framer = SlipFramer::new();
 
         // Feed partial packet
-        let packets1: Vec<_> = framer.feed(&[END, b'H']).collect();
+        let packets1: Vec<_> = framer.feed(&[FEND, b'H']).collect();
         assert!(packets1.is_empty());
 
         // Complete it
-        let packets2: Vec<_> = framer.feed(&[b'i', END]).collect();
+        let packets2: Vec<_> = framer.feed(&[b'i', FEND]).collect();
         assert_eq!(packets2.len(), 1);
         assert_eq!(packets2[0], b"Hi");
     }
@@ -370,7 +405,7 @@ mod tests {
     #[test]
     fn framer_multiple_rx() {
         let mut framer = SlipFramer::new();
-        let packets: Vec<_> = framer.feed(&[END, b'A', END, END, b'B', END]).collect();
+        let packets: Vec<_> = framer.feed(&[FEND, b'A', FEND, FEND, b'B', FEND]).collect();
         assert_eq!(packets.len(), 2);
         assert_eq!(packets[0], b"A");
         assert_eq!(packets[1], b"B");
@@ -379,10 +414,10 @@ mod tests {
     #[test]
     fn framer_rx_with_escapes() {
         let mut framer = SlipFramer::new();
-        // "A" + END (escaped) + "B"
-        let packets: Vec<_> = framer.feed(&[END, b'A', ESC, ESC_END, b'B', END]).collect();
+        // "A" + FEND (escaped) + "B"
+        let packets: Vec<_> = framer.feed(&[FEND, b'A', FESC, TFEND, b'B', FEND]).collect();
         assert_eq!(packets.len(), 1);
-        assert_eq!(packets[0], &[b'A', END, b'B']);
+        assert_eq!(packets[0], &[b'A', FEND, b'B']);
     }
 
     #[test]
@@ -394,7 +429,7 @@ mod tests {
         assert_eq!(framer.tx_pending(), 1);
 
         let len = framer.try_get_tx(&mut out).unwrap();
-        assert_eq!(&out[..len], &[END, b'H', b'i', END]);
+        assert_eq!(&out[..len], &[FEND, b'H', b'i', FEND]);
         assert!(framer.tx_empty());
     }
 
@@ -403,9 +438,9 @@ mod tests {
         let mut framer = SlipFramer::new();
         let mut out = [0u8; 64];
 
-        framer.queue_send(&[b'A', END, b'B']).unwrap();
+        framer.queue_send(&[b'A', FEND, b'B']).unwrap();
         let len = framer.try_get_tx(&mut out).unwrap();
-        assert_eq!(&out[..len], &[END, b'A', ESC, ESC_END, b'B', END]);
+        assert_eq!(&out[..len], &[FEND, b'A', FESC, TFEND, b'B', FEND]);
     }
 
     #[test]

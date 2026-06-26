@@ -15,6 +15,17 @@ pub enum AddrMode {
 }
 
 impl AddrMode {
+    /// Try to convert a u8 to an AddrMode.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::None),
+            1 => Some(Self::Short),
+            2 => Some(Self::Extended),
+            3 => Some(Self::Elided),
+            _ => None,
+        }
+    }
+
     pub fn addr_len(self) -> usize {
         match self {
             AddrMode::None | AddrMode::Elided => 0,
@@ -35,11 +46,54 @@ pub enum MicLength {
 }
 
 impl MicLength {
+    /// Try to convert a u8 to a MicLength.
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::Bits32),
+            1 => Some(Self::Bits64),
+            _ => None,
+        }
+    }
+
     pub fn mic_len(self) -> usize {
         match self {
             MicLength::Bits32 => 4,
             MicLength::Bits64 => 8,
         }
+    }
+}
+
+/// Whether the frame includes a Schnorr signature (LLSec bit 5, spec 4.4).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Signature {
+    /// No signature appended.
+    #[default]
+    Absent,
+    /// 48-byte Schnorr signature present.
+    Present,
+}
+
+impl Signature {
+    /// Returns true if a signature is present.
+    pub fn is_present(self) -> bool {
+        matches!(self, Signature::Present)
+    }
+}
+
+/// Whether the frame payload is encrypted (LLSec bit 6, spec 4.5).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Encryption {
+    /// Payload is plaintext.
+    #[default]
+    Plaintext,
+    /// Payload is AES-CCM encrypted.
+    Encrypted,
+}
+
+impl Encryption {
+    /// Returns true if payload is encrypted.
+    pub fn is_encrypted(self) -> bool {
+        matches!(self, Encryption::Encrypted)
     }
 }
 
@@ -55,17 +109,33 @@ const RESERVED_BIT: u8 = 1 << 7;
 pub const MAX_FRAME_BODY: usize = 255;
 
 /// Error type for link-layer frame parsing and serialisation.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameError {
     Empty,
-    TruncatedBody,
-    BodyTooShort,
+    TooShort,
     ReservedBitSet,
     ReservedMicLength(u8),
     AddrLenMismatch,
     MicLenMismatch,
     FrameTooLarge,
 }
+
+impl core::fmt::Display for FrameError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "empty frame"),
+            Self::TooShort => write!(f, "frame too short"),
+            Self::ReservedBitSet => write!(f, "reserved bit set"),
+            Self::ReservedMicLength(v) => write!(f, "reserved MIC length: {}", v),
+            Self::AddrLenMismatch => write!(f, "address length mismatch"),
+            Self::MicLenMismatch => write!(f, "MIC length mismatch"),
+            Self::FrameTooLarge => write!(f, "frame too large"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for FrameError {}
 
 /// A parsed LICHEN link-layer frame.
 ///
@@ -80,8 +150,8 @@ pub struct LichenFrame<'a> {
     pub mic: &'a [u8],
     pub addr_mode: AddrMode,
     pub mic_length: MicLength,
-    pub signature_present: bool,
-    pub encrypted: bool,
+    pub signature: Signature,
+    pub encryption: Encryption,
 }
 
 impl<'a> LichenFrame<'a> {
@@ -89,10 +159,10 @@ impl<'a> LichenFrame<'a> {
     pub fn llsec_byte(&self) -> u8 {
         let mut v = (self.addr_mode as u8) & ADDR_MODE_MASK;
         v |= ((self.mic_length as u8) & MIC_LEN_MASK) << MIC_LEN_SHIFT;
-        if self.signature_present {
+        if self.signature.is_present() {
             v |= SIGNATURE_BIT;
         }
-        if self.encrypted {
+        if self.encryption.is_encrypted() {
             v |= ENCRYPTED_BIT;
         }
         v
@@ -131,33 +201,25 @@ impl<'a> LichenFrame<'a> {
             return Err(FrameError::Empty);
         }
         let length = data[0] as usize;
-        let body = data.get(1..1 + length).ok_or(FrameError::TruncatedBody)?;
+        let body = data.get(1..1 + length).ok_or(FrameError::TooShort)?;
         if length < 4 {
-            return Err(FrameError::BodyTooShort);
+            return Err(FrameError::TooShort);
         }
         let llsec = body[0];
         if llsec & RESERVED_BIT != 0 {
             return Err(FrameError::ReservedBitSet);
         }
-        let addr_mode = match llsec & ADDR_MODE_MASK {
-            0 => AddrMode::None,
-            1 => AddrMode::Short,
-            2 => AddrMode::Extended,
-            3 => AddrMode::Elided,
-            _ => unreachable!(),
-        };
+        // ADDR_MODE_MASK is 0b11, so value is always 0-3; from_u8 covers all cases
+        let addr_mode = AddrMode::from_u8(llsec & ADDR_MODE_MASK).unwrap();
         let mic_field = (llsec >> MIC_LEN_SHIFT) & MIC_LEN_MASK;
-        let mic_length = match mic_field {
-            0 => MicLength::Bits32,
-            1 => MicLength::Bits64,
-            v => return Err(FrameError::ReservedMicLength(v)),
-        };
+        let mic_length = MicLength::from_u8(mic_field)
+            .ok_or(FrameError::ReservedMicLength(mic_field))?;
         let epoch = body[1];
         let seqnum = u16::from_be_bytes([body[2], body[3]]);
         let addr_len = addr_mode.addr_len();
         let mic_len = mic_length.mic_len();
         if body.len() < 4 + addr_len + mic_len {
-            return Err(FrameError::BodyTooShort);
+            return Err(FrameError::TooShort);
         }
         let dst_addr = &body[4..4 + addr_len];
         let payload_end = body.len() - mic_len;
@@ -171,8 +233,16 @@ impl<'a> LichenFrame<'a> {
             mic,
             addr_mode,
             mic_length,
-            signature_present: llsec & SIGNATURE_BIT != 0,
-            encrypted: llsec & ENCRYPTED_BIT != 0,
+            signature: if llsec & SIGNATURE_BIT != 0 {
+                Signature::Present
+            } else {
+                Signature::Absent
+            },
+            encryption: if llsec & ENCRYPTED_BIT != 0 {
+                Encryption::Encrypted
+            } else {
+                Encryption::Plaintext
+            },
         })
     }
 }
@@ -200,8 +270,8 @@ mod tests {
         assert_eq!(frame.mic, &[0x01, 0x02, 0x03, 0x04]);
         assert_eq!(frame.addr_mode, AddrMode::None);
         assert_eq!(frame.mic_length, MicLength::Bits32);
-        assert!(!frame.signature_present);
-        assert!(!frame.encrypted);
+        assert_eq!(frame.signature, Signature::Absent);
+        assert_eq!(frame.encryption, Encryption::Plaintext);
         let mut buf = [0u8; 64];
         let n = frame.write_to(&mut buf).unwrap();
         assert_eq!(&buf[..n], &wire[..]);
@@ -248,8 +318,8 @@ mod tests {
         assert_eq!(frame.dst_addr, &[] as &[u8]);
         assert_eq!(frame.payload, &[0x78]);
         assert_eq!(frame.mic, &[0u8; 4]);
-        assert!(frame.signature_present);
-        assert!(frame.encrypted);
+        assert_eq!(frame.signature, Signature::Present);
+        assert_eq!(frame.encryption, Encryption::Encrypted);
         let mut buf = [0u8; 64];
         let n = frame.write_to(&mut buf).unwrap();
         assert_eq!(&buf[..n], &wire[..]);
@@ -261,10 +331,10 @@ mod tests {
     }
 
     #[test]
-    fn truncated_body_error() {
+    fn too_short_error() {
         assert_eq!(
             LichenFrame::from_bytes(&[0x0f, 0x00]),
-            Err(FrameError::TruncatedBody)
+            Err(FrameError::TooShort)
         );
     }
 

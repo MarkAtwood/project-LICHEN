@@ -8,6 +8,7 @@
 
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT, edwards::CompressedEdwardsY, scalar::Scalar,
+    traits::IsIdentity,
 };
 use sha2::{Digest, Sha512};
 
@@ -21,6 +22,7 @@ pub fn derive_keypair(seed: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
     let mut h = [0u8; 64];
     h.copy_from_slice(&hash[..]);
 
+    // SAFETY: h is 64 bytes, so h[..32] is exactly 32 bytes
     let privkey = clamp(h[..32].try_into().unwrap());
     let priv_scalar = Scalar::from_bytes_mod_order(privkey);
     let pubkey = (priv_scalar * ED25519_BASEPOINT_POINT)
@@ -51,6 +53,7 @@ pub fn sign(privkey: &[u8; 32], pubkey: &[u8; 32], msg: &[u8]) -> [u8; 48] {
         .chain_update(pubkey)
         .chain_update(msg)
         .finalize();
+    // SAFETY: e_hash is 64 bytes (SHA-512 output), so [..16] is exactly 16 bytes
     let e: [u8; 16] = e_hash[..16].try_into().unwrap();
 
     // 4. e_scalar = e || 0x00*16 (32-byte little-endian scalar)
@@ -71,6 +74,7 @@ pub fn sign(privkey: &[u8; 32], pubkey: &[u8; 32], msg: &[u8]) -> [u8; 48] {
 /// Verify a 48-byte signature. Returns `true` if valid.
 pub fn verify(pubkey: &[u8; 32], msg: &[u8], sig: &[u8; 48]) -> bool {
     // 1. Parse: e_received (16 bytes) || s (32 bytes)
+    // SAFETY: sig is exactly 48 bytes, so [..16] = 16 bytes and [16..] = 32 bytes
     let e_received: [u8; 16] = sig[..16].try_into().unwrap();
     let s_bytes: [u8; 32] = sig[16..].try_into().unwrap();
 
@@ -84,10 +88,10 @@ pub fn verify(pubkey: &[u8; 32], msg: &[u8], sig: &[u8; 48]) -> bool {
         return false;
     }
 
-    // 3. Decompress public key — rejects invalid/low-order points
+    // 3. Decompress public key and reject identity/low-order points
     let pubkey_point = match CompressedEdwardsY(*pubkey).decompress() {
-        Some(p) => p,
-        None => return false,
+        Some(p) if !p.is_identity() && p.is_torsion_free() => p,
+        _ => return false,
     };
 
     // 4. e_scalar = e_received || 0x00*16
@@ -147,6 +151,8 @@ pub fn verify_frame(
     }
     let split = payload_with_sig.len() - SIGNATURE_LENGTH;
     let inner_payload = &payload_with_sig[..split];
+    // SAFETY: length check above ensures payload_with_sig.len() >= 48,
+    // so [split..] is exactly SIGNATURE_LENGTH (48) bytes
     let sig: [u8; 48] = payload_with_sig[split..].try_into().unwrap();
     let mut buf = [0u8; 256];
     let msg = build_signable(&mut buf, epoch, seqnum, dst_addr, inner_payload);
@@ -364,7 +370,7 @@ mod tests {
 
     #[test]
     fn two_node_frame_exchange() {
-        use crate::frame::{AddrMode, LichenFrame, MicLength};
+        use crate::frame::{AddrMode, Encryption, LichenFrame, MicLength, Signature};
         use crate::replay::ReplayWindow;
 
         let seed_a = [0x01u8; 32];
@@ -394,15 +400,15 @@ mod tests {
             mic: &[0u8; 4],
             addr_mode: AddrMode::Short,
             mic_length: MicLength::Bits32,
-            signature_present: true,
-            encrypted: false,
+            signature: Signature::Present,
+            encryption: Encryption::Plaintext,
         };
         let mut wire = [0u8; 128];
         let n = frame.write_to(&mut wire).unwrap();
 
         // Node B: parse and verify
         let rx = LichenFrame::from_bytes(&wire[..n]).unwrap();
-        assert!(rx.signature_present);
+        assert_eq!(rx.signature, Signature::Present);
         assert!(
             replay.accept(rx.seqnum),
             "first delivery should pass replay window"

@@ -45,6 +45,19 @@ pub enum LoadngError {
     UnknownCode(u8),
 }
 
+impl core::fmt::Display for LoadngError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "message too short"),
+            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::UnknownCode(c) => write!(f, "unknown LOADng code: {}", c),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for LoadngError {}
+
 // RREQ/RREP fixed length: flags(1) + hop(1) + seq(2) + orig(16) + dest(16) = 36
 const RREQ_RREP_LEN: usize = 36;
 // RERR fixed length: flags(1) + error_code(1) + unreachable(16) = 18

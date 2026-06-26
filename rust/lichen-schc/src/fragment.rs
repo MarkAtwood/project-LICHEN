@@ -31,6 +31,22 @@ pub enum FragmentError {
     InvalidWindowSize,
 }
 
+impl core::fmt::Display for FragmentError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "fragment too short"),
+            Self::InvalidFcn => write!(f, "invalid FCN"),
+            Self::InvalidWindow => write!(f, "invalid window"),
+            Self::MicMissing => write!(f, "MIC missing on All-1 fragment"),
+            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::InvalidWindowSize => write!(f, "invalid window size"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for FragmentError {}
+
 // ─── CRC32 (ISO 3309 / zlib) ─────────────────────────────────────────────────
 
 /// CRC32 over `data`, matching `zlib.crc32` in Python.
@@ -72,7 +88,7 @@ impl<'a> Fragment<'a> {
     }
 
     /// Serialize into `out`. Returns bytes written.
-    pub fn to_bytes(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
         if self.window > 1 {
             return Err(FragmentError::InvalidWindow);
         }
@@ -158,7 +174,7 @@ impl Ack {
         }
     }
 
-    pub fn to_bytes(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
         let n = self.bitmap_len;
         let body_bytes = n.div_ceil(8);
         let needed = 3 + body_bytes;
@@ -209,6 +225,7 @@ impl Ack {
 /// Splits a payload into SCHC fragments with window/FCN scheduling.
 ///
 /// Computes the MIC (CRC32) eagerly; all other data is computed on demand.
+#[derive(Debug)]
 pub struct FragmentSender<'a> {
     payload: &'a [u8],
     pub rule_id: u8,
@@ -323,6 +340,7 @@ impl<'a> FragmentSender<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct FragmentIter<'s, 'p> {
     sender: &'s FragmentSender<'p>,
     index: usize,
@@ -337,6 +355,7 @@ impl<'s, 'p> Iterator for FragmentIter<'s, 'p> {
     }
 }
 
+#[derive(Debug)]
 pub struct FragmentsInWindow<'s, 'p> {
     sender: &'s FragmentSender<'p>,
     current: usize,
@@ -355,6 +374,7 @@ impl<'s, 'p> Iterator for FragmentsInWindow<'s, 'p> {
     }
 }
 
+#[derive(Debug)]
 pub struct RetransmitIter<'s, 'b> {
     sender: &'s FragmentSender<'s>,
     start: usize,
@@ -584,7 +604,7 @@ mod tests {
             mic: [0u8; MIC_LENGTH],
         };
         let mut buf = [0u8; 16];
-        let n = frag.to_bytes(&mut buf).unwrap();
+        let n = frag.write_to(&mut buf).unwrap();
         // Header: rule_id=20, then (1<<6)|5 = 0x45
         assert_eq!(buf[0], 20);
         assert_eq!(buf[1], 0x45);
@@ -606,7 +626,7 @@ mod tests {
             mic,
         };
         let mut buf = [0u8; 16];
-        let n = frag.to_bytes(&mut buf).unwrap();
+        let n = frag.write_to(&mut buf).unwrap();
         // Header byte: (0<<6)|63 = 0x3F
         assert_eq!(buf[0], 20);
         assert_eq!(buf[1], ALL_1_FCN);
@@ -627,7 +647,7 @@ mod tests {
             mic: [0u8; MIC_LENGTH],
         };
         let mut buf = [0u8; 16];
-        assert_eq!(frag.to_bytes(&mut buf), Err(FragmentError::MicMissing));
+        assert_eq!(frag.write_to(&mut buf), Err(FragmentError::MicMissing));
     }
 
     #[test]
@@ -677,7 +697,7 @@ mod tests {
         let bitmap = [true, false, true, true, false, false, false];
         let ack = Ack::new(20, 0, &bitmap, false);
         let mut buf = [0u8; 16];
-        let n = ack.to_bytes(&mut buf).unwrap();
+        let n = ack.write_to(&mut buf).unwrap();
         let restored = Ack::from_bytes(&buf[..n]).unwrap();
         assert_eq!(restored.rule_id, 20);
         assert_eq!(restored.window, 0);

@@ -6,10 +6,11 @@ license.workspace = true
 description = "Meshtastic protobuf types for LICHEN bridge"
 
 [features]
-default = ["std"]
+default = []
 std = ["prost/std"]
 
 [dependencies]
+heapless = "0.8"
 prost = { version = "0.13", default-features = false, features = ["derive"] }
 
 [build-dependencies]

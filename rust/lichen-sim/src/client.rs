@@ -65,6 +65,7 @@ impl From<std::io::Error> for SimError {
 /// [`transmit`](SimClient::transmit) / [`receive`](SimClient::receive) in a
 /// loop. The protocol is strictly request → response: do not call both
 /// concurrently from different tasks without external synchronisation.
+#[derive(Debug)]
 pub struct SimClient {
     reader: BufReader<OwnedReadHalf>,
     writer: OwnedWriteHalf,

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::vec::Vec;
 
-use crate::frame::{FrameError, LichenFrame};
+use crate::frame::{Encryption, FrameError, LichenFrame, Signature};
 use crate::identity::{Identity, PeerIdentity};
 use crate::replay::ReplayWindow;
 use crate::schnorr::{self, SIGNATURE_LENGTH};
@@ -20,9 +20,31 @@ pub enum RxError {
     /// Replay-window check failed (duplicate or too-old seqnum).
     Replay,
     /// Payload shorter than the mandatory 48-byte signature trailer.
-    TruncatedPayload,
+    TooShort,
     /// A previously-pinned IID appeared with a different public key.
     KeyChange,
+}
+
+impl std::fmt::Display for RxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Frame(e) => write!(f, "frame error: {}", e),
+            Self::Unsigned => write!(f, "frame has no signature"),
+            Self::UnknownSender => write!(f, "unknown sender"),
+            Self::Replay => write!(f, "replay detected"),
+            Self::TooShort => write!(f, "payload too short"),
+            Self::KeyChange => write!(f, "key change detected"),
+        }
+    }
+}
+
+impl std::error::Error for RxError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Frame(e) => Some(e),
+            _ => None,
+        }
+    }
 }
 
 impl From<FrameError> for RxError {
@@ -41,6 +63,7 @@ pub struct RxFrame {
 }
 
 /// Per-peer replay-window tracker keyed by `(pubkey, epoch)`.
+#[derive(Debug)]
 pub struct ReplayProtector {
     windows: HashMap<([u8; 32], u8), ReplayWindow>,
 }
@@ -80,6 +103,7 @@ impl Default for ReplayProtector {
 /// Key pinning: once an IID is seen with a valid signature, its pubkey is
 /// stored in `pinned`. Subsequent frames from the same IID must match the
 /// pinned pubkey; a mismatch returns `RxError::KeyChange`.
+#[derive(Debug)]
 pub struct LinkLayer {
     pub identity: Identity,
     peers: HashMap<[u8; 8], PeerIdentity>,
@@ -123,6 +147,12 @@ impl LinkLayer {
     ///
     /// inner_payload is signed; the resulting wire frame contains
     /// `inner_payload || sig(48B)` as its payload field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `out` is smaller than the serialised frame size. Callers must
+    /// provide a buffer of at least `inner_payload.len() + 48 + 6` bytes (frame
+    /// header + signature trailer).
     pub fn build_frame(
         &self,
         epoch: u8,
@@ -151,8 +181,8 @@ impl LinkLayer {
             mic: &[0u8; 4],
             addr_mode: crate::frame::AddrMode::None,
             mic_length: crate::frame::MicLength::Bits32,
-            signature_present: true,
-            encrypted: false,
+            signature: Signature::Present,
+            encryption: Encryption::Plaintext,
         };
         frame.write_to(out).expect("build_frame: buffer too small")
     }
@@ -161,11 +191,11 @@ impl LinkLayer {
     pub fn receive_frame(&mut self, wire: &[u8]) -> Result<RxFrame, RxError> {
         let frame = LichenFrame::from_bytes(wire)?;
 
-        if !frame.signature_present {
+        if !frame.signature.is_present() {
             return Err(RxError::Unsigned);
         }
         if frame.payload.len() < SIGNATURE_LENGTH {
-            return Err(RxError::TruncatedPayload);
+            return Err(RxError::TooShort);
         }
 
         let inner_len = frame.payload.len() - SIGNATURE_LENGTH;

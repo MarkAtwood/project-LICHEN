@@ -20,9 +20,23 @@ pub enum SchcError {
     BufferTooSmall,
     /// The rule ID in the compressed data is unknown.
     UnknownRuleId(u8),
-    /// The compressed data is truncated.
-    Truncated,
+    /// The compressed data is too short.
+    TooShort,
 }
+
+impl core::fmt::Display for SchcError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoMatchingRule => write!(f, "no matching rule"),
+            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::UnknownRuleId(id) => write!(f, "unknown rule ID: {}", id),
+            Self::TooShort => write!(f, "compressed data too short"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for SchcError {}
 
 // ─── bit-packing ─────────────────────────────────────────────────────────────
 
@@ -71,7 +85,7 @@ impl<'a> BitReader<'a> {
 
     fn read(&mut self, nbits: usize) -> Result<u128, SchcError> {
         if self.pos + nbits > self.buf.len() * 8 {
-            return Err(SchcError::Truncated);
+            return Err(SchcError::TooShort);
         }
         let mut value: u128 = 0;
         for _ in 0..nbits {
@@ -112,24 +126,24 @@ fn oc_add(a: u32, b: u32) -> u32 {
 
 fn checksum_bytes(data: &[u8]) -> u32 {
     let mut sum: u32 = 0;
-    let mut i = 0;
-    while i + 1 < data.len() {
-        sum = oc_add(sum, u16::from_be_bytes([data[i], data[i + 1]]) as u32);
-        i += 2;
+    let chunks = data.chunks_exact(2);
+    let remainder = chunks.remainder();
+    for pair in chunks {
+        sum = oc_add(sum, u16::from_be_bytes([pair[0], pair[1]]) as u32);
     }
-    if data.len() % 2 == 1 {
-        sum = oc_add(sum, (data[data.len() - 1] as u32) << 8);
+    if let Some(&last) = remainder.first() {
+        sum = oc_add(sum, (last as u32) << 8);
     }
     sum
 }
 
 fn pseudo_sum(src: &[u8], dst: &[u8], next_header: u8, length: u16) -> u32 {
     let mut sum: u32 = 0;
-    for i in (0..16).step_by(2) {
-        sum = oc_add(sum, u16::from_be_bytes([src[i], src[i + 1]]) as u32);
+    for pair in src.chunks_exact(2) {
+        sum = oc_add(sum, u16::from_be_bytes([pair[0], pair[1]]) as u32);
     }
-    for i in (0..16).step_by(2) {
-        sum = oc_add(sum, u16::from_be_bytes([dst[i], dst[i + 1]]) as u32);
+    for pair in dst.chunks_exact(2) {
+        sum = oc_add(sum, u16::from_be_bytes([pair[0], pair[1]]) as u32);
     }
     sum = oc_add(sum, length as u32);
     oc_add(sum, next_header as u32)
@@ -669,7 +683,7 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 /// Returns the number of bytes written to `out`.
 pub fn decompress(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if data.is_empty() {
-        return Err(SchcError::Truncated);
+        return Err(SchcError::TooShort);
     }
     match data[0] {
         RULE_LINK_LOCAL_COAP => decompress_coap(data, out, RULE_LINK_LOCAL_COAP),

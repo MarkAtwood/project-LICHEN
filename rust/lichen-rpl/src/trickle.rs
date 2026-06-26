@@ -20,6 +20,7 @@ pub enum TrickleEvent {
 ///
 /// All times are integer milliseconds. The caller supplies random offsets so the
 /// timer is deterministic and testable without a live RNG.
+#[derive(Debug)]
 pub struct TrickleTimer {
     pub imin: u32,
     pub max_interval: u32,
