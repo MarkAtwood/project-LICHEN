@@ -1,12 +1,45 @@
 //! Node state and receive-path dispatch.
 
 use lichen_core::{addr::Ipv6Addr, addr::NodeId, icmpv6};
+use lichen_core::constants::RPL_ICMPV6_TYPE;
 use lichen_schc::codec;
+
+#[cfg(feature = "std")]
+use crate::routing::Router;
+
+/// ICMPv6 RPL message codes.
+pub mod rpl_code {
+    pub const DIS: u8 = 0;
+    pub const DIO: u8 = 1;
+    pub const DAO: u8 = 2;
+    pub const DAO_ACK: u8 = 3;
+}
+
+/// RPL event returned from handle_frame when RPL messages are processed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RplEvent {
+    /// No RPL event.
+    None,
+    /// DIO received, trickle should be reset if inconsistent.
+    DioReceived { inconsistent: bool },
+    /// DAO received (root only).
+    DaoReceived { route_updated: bool },
+    /// DIS received, should send DIO.
+    DisReceived,
+}
 
 /// Top-level node state.
 #[derive(Debug)]
 pub struct Node {
     pub node_id: NodeId,
+}
+
+/// Node with integrated RPL router (std only).
+#[cfg(feature = "std")]
+#[derive(Debug)]
+pub struct RplNode {
+    pub node: Node,
+    pub router: Router,
 }
 
 impl Node {
@@ -66,6 +99,150 @@ impl Node {
         );
 
         codec::compress(&reply_pkt[..n], out).unwrap_or_default()
+    }
+}
+
+#[cfg(feature = "std")]
+impl RplNode {
+    /// Create a new RPL-enabled node.
+    pub fn new(node_id: NodeId, dodag_id: [u8; 16]) -> Self {
+        let node_addr = node_id.link_local_addr().0;
+        Self {
+            node: Node::new(node_id),
+            router: Router::new(node_addr, dodag_id),
+        }
+    }
+
+    /// Create a new RPL-enabled node as DODAG root.
+    pub fn new_root(node_id: NodeId) -> Self {
+        let node_addr = node_id.link_local_addr().0;
+        Self {
+            node: Node::new(node_id),
+            router: Router::new_root(node_addr),
+        }
+    }
+
+    /// Process a received SCHC frame with RPL handling.
+    ///
+    /// Returns (reply_len, rpl_event). reply_len > 0 means a reply should be sent.
+    pub fn handle_frame_rpl(
+        &mut self,
+        schc_frame: &[u8],
+        reply: &mut [u8],
+        now_ms: u32,
+    ) -> (usize, RplEvent) {
+        let mut ipv6 = [0u8; 256];
+        let n = match codec::decompress(schc_frame, &mut ipv6) {
+            Ok(n) => n,
+            Err(_) => return (0, RplEvent::None),
+        };
+        if n < 40 || ipv6[0] >> 4 != 6 {
+            return (0, RplEvent::None);
+        }
+        let pkt = &ipv6[..n];
+
+        let nh = pkt[6];
+        if nh == 58 {
+            // ICMPv6
+            if n < 44 {
+                return (0, RplEvent::None);
+            }
+            let icmp_type = pkt[40];
+            let icmp_code = pkt[41];
+
+            if icmp_type == icmpv6::ECHO_REQUEST {
+                // Handle ping
+                let mut dst_bytes = [0u8; 16];
+                dst_bytes.copy_from_slice(&pkt[24..40]);
+                if dst_bytes == self.node.node_id.link_local_addr().0 {
+                    let reply_len = self.node.reply_echo(pkt, reply);
+                    return (reply_len, RplEvent::None);
+                }
+            } else if icmp_type == RPL_ICMPV6_TYPE {
+                // RPL message
+                let mut sender_addr = [0u8; 16];
+                sender_addr.copy_from_slice(&pkt[8..24]);
+
+                match icmp_code {
+                    rpl_code::DIO => {
+                        if n < 44 + 24 {
+                            return (0, RplEvent::None);
+                        }
+                        let dio_bytes = &pkt[44..];
+                        if let Ok(dio) = lichen_rpl::messages::Dio::from_bytes(dio_bytes) {
+                            // ponytail: use 0 for rssi, real radio would provide it
+                            let inconsistent = self.router.process_dio(&dio, sender_addr, 0, now_ms);
+                            return (0, RplEvent::DioReceived { inconsistent });
+                        }
+                    }
+                    rpl_code::DAO => {
+                        if n < 44 + 20 {
+                            return (0, RplEvent::None);
+                        }
+                        let dao_bytes = &pkt[44..n];
+                        let route_updated = self.router.process_dao(dao_bytes);
+                        return (0, RplEvent::DaoReceived { route_updated });
+                    }
+                    rpl_code::DIS => {
+                        return (0, RplEvent::DisReceived);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        (0, RplEvent::None)
+    }
+
+    /// Build a DIO message for transmission.
+    pub fn build_dio(&self, out: &mut [u8]) -> usize {
+        self.router.build_dio(out)
+    }
+
+    /// Build a DAO message for transmission to parent.
+    #[cfg(feature = "std")]
+    pub fn build_dao(&mut self) -> std::vec::Vec<u8> {
+        self.router.build_dao()
+    }
+
+    /// Check if this node is joined to the DODAG.
+    pub fn is_joined(&self) -> bool {
+        self.router.is_joined()
+    }
+
+    /// Check if this node is the DODAG root.
+    pub fn is_root(&self) -> bool {
+        self.router.is_root()
+    }
+
+    /// Get current rank.
+    pub fn rank(&self) -> u16 {
+        self.router.rank()
+    }
+
+    /// Get preferred parent address.
+    pub fn preferred_parent(&self) -> Option<[u8; 16]> {
+        self.router.preferred_parent()
+    }
+
+    /// Handle trickle timer transmit event.
+    pub fn trickle_transmit(&mut self) -> bool {
+        self.router.trickle_transmit()
+    }
+
+    /// Handle trickle timer expiry.
+    pub fn trickle_expire(&mut self, now_ms: u32, rand_offset: u32) {
+        self.router.trickle_expire(now_ms, rand_offset);
+    }
+
+    /// Reset trickle timer on inconsistency.
+    pub fn trickle_reset(&mut self, now_ms: u32, rand_offset: u32) {
+        self.router.trickle_reset(now_ms, rand_offset);
+    }
+
+    /// Start trickle timer.
+    pub fn trickle_start(&mut self, now_ms: u32, rand_offset: u32) {
+        self.router.trickle_start(now_ms, rand_offset);
     }
 }
 

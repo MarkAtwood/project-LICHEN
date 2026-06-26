@@ -1762,6 +1762,7 @@ dependencies = [
 name = "lichen-hal"
 version = "0.1.0"
 dependencies = [
+ "heapless 0.8.0",
  "tokio",
 ]
 
@@ -1803,11 +1804,13 @@ dependencies = [
 name = "lichen-node"
 version = "0.1.0"
 dependencies = [
+ "heapless 0.8.0",
  "lichen-coap",
  "lichen-core",
  "lichen-hal",
  "lichen-ipv6",
  "lichen-link",
+ "lichen-oscore",
  "lichen-rpl",
  "lichen-schc",
  "tokio",

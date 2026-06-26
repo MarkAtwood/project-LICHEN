@@ -15,7 +15,7 @@ tbeam = []   # T-Beam: SSD1306, buttons
 twatch = []  # T-Watch: ST7789, touch
 
 [dependencies]
-# ponytail: no deps, pure traits
+heapless = "0.8"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

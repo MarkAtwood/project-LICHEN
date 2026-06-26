@@ -15,8 +15,10 @@ embassy-time = "0.4"
 embassy-sync = "0.6"
 
 # STM32WL HAL with SubGHz radio
+# ponytail: STM32WL55 is dual-core but we only run on CM4
+# Using stm32wle5 variant for single-core init pattern
 embassy-stm32 = { version = "0.2", features = [
-    "stm32wl55jc-cm4",
+    "stm32wle5jb",
     "time-driver-any",
     "exti",
 ] }
