@@ -20,13 +20,11 @@ nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     systickFrequency: 48000000
     IRQ -> cpu@0
 
-// RCC - use WBA model (closest available)
-rcc: Miscellaneous.STM32WBA_RCC @ sysbus 0x58000000
-    nvic: nvic
-    lptim1: lptim1
+// RCC - custom stub that returns clocks ready
+rcc: Miscellaneous.STM32WL_RCC @ sysbus 0x58000000
 
-// PWR
-pwr: Miscellaneous.STM32WBA_PWR @ sysbus 0x58000400
+// PWR - custom stub
+pwr: Miscellaneous.STM32WL_PWR @ sysbus 0x58000400
 
 // LPUART1 - main console
 lpuart1: UART.STM32F7_USART @ sysbus 0x40008000
@@ -72,7 +70,8 @@ iwdg: Timers.STM32_IndependentWatchdog @ sysbus 0x40003000
 // RTC
 rtc: Timers.STM32F4_RTC @ sysbus 0x40002800
 
-// Stub SubGHz radio region
-sysbus:
-    init:
-        SilenceRange <0x58010000 0x1400>
+// SubGHz radio - bridges to lichen-sim via TCP
+// ponytail: custom peripheral, not real register emulation
+subghz: Wireless.LichenSubGHz @ sysbus 0x58010000
+    simHost: "127.0.0.1"
+    simPort: 5555

@@ -4,6 +4,12 @@
 $name?="NUCLEO-WL55JC"
 
 using sysbus
+
+# Load custom peripherals
+include $ORIGIN/../peripherals/STM32WL_RCC.cs
+include $ORIGIN/../peripherals/STM32WL_PWR.cs
+include $ORIGIN/../peripherals/LichenSubGHz.cs
+
 mach create $name
 machine LoadPlatformDescription $ORIGIN/stm32wl55.repl
 

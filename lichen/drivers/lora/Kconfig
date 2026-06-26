@@ -30,3 +30,10 @@ config LORA_LICHEN_SIM_SIM_ID
 	default "lichen"
 
 endif # LORA_LICHEN_SIM
+
+config LORA_LICHEN_RENODE
+	bool "LICHEN Renode LoRa driver"
+	depends on LORA
+	help
+	  Memory-mapped driver for Renode LichenSubGHz peripheral. Bridges
+	  to lichen-sim via the C# peripheral's TCP socket.
