@@ -1,0 +1,104 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file trickle.c
+ * @brief Trickle timer (RFC 6206) implementation
+ *
+ * Ported from rust/lichen-rpl/src/trickle.rs
+ */
+
+#include <lichen/rpl_trickle.h>
+
+/* Saturating multiply - clamp at UINT32_MAX on overflow */
+static uint32_t sat_mul_u32(uint32_t a, uint32_t b)
+{
+	uint64_t result = (uint64_t)a * b;
+	return result > UINT32_MAX ? UINT32_MAX : (uint32_t)result;
+}
+
+/* Internal: begin a new interval */
+static void begin_interval(struct lichen_trickle *t,
+			   uint32_t now,
+			   uint32_t rand_offset)
+{
+	t->interval_start = now;
+	t->counter = 0;
+	t->transmitted = false;
+
+	uint32_t half = t->interval / 2;
+	/* transmit_time is uniform in [now + half, now + interval) */
+	uint32_t offset = (half > 0) ? (rand_offset % half) : 0;
+	t->transmit_time = now + half + offset;
+}
+
+void lichen_trickle_init(struct lichen_trickle *t,
+			 uint32_t imin_ms,
+			 uint32_t imax_doublings,
+			 uint32_t k)
+{
+	t->imin = imin_ms;
+
+	/* Calculate max_interval = imin << doublings, clamped at UINT32_MAX */
+	if (imax_doublings >= 32) {
+		t->max_interval = UINT32_MAX;
+	} else {
+		uint32_t shifted = imin_ms << imax_doublings;
+		/* Check for overflow: if shifted < imin, we overflowed */
+		t->max_interval = (shifted < imin_ms) ? UINT32_MAX : shifted;
+	}
+
+	t->k = k;
+	t->interval = imin_ms;
+	t->counter = 0;
+	t->interval_start = 0;
+	t->transmit_time = 0;
+	t->transmitted = false;
+}
+
+void lichen_trickle_start(struct lichen_trickle *t,
+			  uint32_t now,
+			  uint32_t rand_offset)
+{
+	t->interval = t->imin;
+	begin_interval(t, now, rand_offset);
+}
+
+bool lichen_trickle_fire_transmit(struct lichen_trickle *t)
+{
+	t->transmitted = true;
+	return lichen_trickle_should_transmit(t);
+}
+
+void lichen_trickle_expire(struct lichen_trickle *t,
+			   uint32_t now,
+			   uint32_t rand_offset)
+{
+	/* Double interval, capped at max_interval */
+	uint32_t doubled = sat_mul_u32(t->interval, 2);
+	t->interval = (doubled < t->max_interval) ? doubled : t->max_interval;
+	begin_interval(t, now, rand_offset);
+}
+
+void lichen_trickle_reset(struct lichen_trickle *t,
+			  uint32_t now,
+			  uint32_t rand_offset)
+{
+	/* RFC 6206 section 4.2: no-op if already at imin */
+	if (t->interval != t->imin) {
+		t->interval = t->imin;
+		begin_interval(t, now, rand_offset);
+	}
+}
+
+void lichen_trickle_next_event(const struct lichen_trickle *t,
+			       struct lichen_trickle_event *out)
+{
+	if (!t->transmitted) {
+		out->type = LICHEN_TRICKLE_TRANSMIT;
+		out->at_ms = t->transmit_time;
+	} else {
+		out->type = LICHEN_TRICKLE_EXPIRE;
+		out->at_ms = lichen_trickle_interval_end(t);
+	}
+}

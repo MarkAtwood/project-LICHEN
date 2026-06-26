@@ -1,0 +1,224 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file lora_l2.c
+ * @brief LICHEN LoRa L2 network interface driver implementation
+ *
+ * This module provides the bridge between Zephyr's IPv6 stack and LoRa radio.
+ * It's structured as a service that can be attached to the default interface
+ * rather than creating its own network device (which requires more complex
+ * devicetree integration).
+ *
+ * Architecture:
+ *   Application calls lichen_lora_l2_start()
+ *       -> Configures LoRa radio
+ *       -> Starts RX thread
+ *       -> TX is called directly via lichen_lora_l2_tx()
+ *
+ * Threading model:
+ * - TX is synchronous (called from application context)
+ * - RX runs in dedicated thread, can invoke callbacks for received packets
+ */
+
+#include "lora_l2.h"
+
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/lora.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
+
+LOG_MODULE_REGISTER(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
+
+/* RX thread configuration */
+#define RX_THREAD_STACK_SIZE 2048
+#define RX_THREAD_PRIORITY   7
+#define RX_TIMEOUT_MS        5000
+
+/* LoRa device - aliased in devicetree */
+#define LORA_DEV DEVICE_DT_GET(DT_ALIAS(lora0))
+
+/* RX thread and stack */
+static K_THREAD_STACK_DEFINE(rx_stack, RX_THREAD_STACK_SIZE);
+static struct k_thread rx_thread_data;
+
+/* Module state */
+static struct {
+    const struct device *lora_dev;
+    bool running;
+    uint8_t eui64[8];
+    lichen_lora_rx_cb_t rx_callback;
+    void *rx_callback_user_data;
+} lora_state;
+
+/**
+ * @brief Generate EUI-64 from device unique ID or random
+ *
+ * In production, this should derive from:
+ * 1. Hardware unique ID (e.g., nRF52's DEVICEID)
+ * 2. Ed25519 public key (first 8 bytes with U/L bit flipped)
+ *
+ * For now, we use random + local admin bit to avoid conflicts.
+ */
+static void generate_eui64(uint8_t *eui64)
+{
+    sys_rand_get(eui64, 8);
+
+    /* Set locally administered bit (bit 1 of first byte) */
+    /* Clear multicast bit (bit 0 of first byte) */
+    eui64[0] = (eui64[0] | 0x02) & 0xFE;
+
+    LOG_INF("Generated EUI-64: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+            eui64[0], eui64[1], eui64[2], eui64[3],
+            eui64[4], eui64[5], eui64[6], eui64[7]);
+}
+
+/**
+ * @brief RX thread - continuously receives LoRa packets
+ */
+static void rx_thread(void *arg1, void *arg2, void *arg3)
+{
+    ARG_UNUSED(arg1);
+    ARG_UNUSED(arg2);
+    ARG_UNUSED(arg3);
+
+    int ret;
+    uint8_t rx_buf[256];
+    int16_t rssi;
+    int8_t snr;
+
+    LOG_INF("LoRa L2 RX thread started");
+
+    while (lora_state.running) {
+        ret = lora_recv(lora_state.lora_dev, rx_buf, sizeof(rx_buf),
+                        K_MSEC(RX_TIMEOUT_MS), &rssi, &snr);
+
+        if (ret < 0) {
+            if (ret == -EAGAIN) {
+                continue;  /* Timeout - normal */
+            }
+            LOG_ERR("LoRa RX error: %d", ret);
+            continue;
+        }
+
+        if (ret == 0) {
+            continue;  /* Empty packet */
+        }
+
+        LOG_DBG("RX %d bytes, RSSI=%d dBm, SNR=%d dB", ret, rssi, snr);
+
+        /* Invoke callback if registered */
+        if (lora_state.rx_callback) {
+            lora_state.rx_callback(rx_buf, ret, rssi, snr,
+                                   lora_state.rx_callback_user_data);
+        }
+    }
+
+    LOG_INF("LoRa L2 RX thread exiting");
+}
+
+int lichen_lora_l2_init(void)
+{
+    lora_state.lora_dev = LORA_DEV;
+    lora_state.running = false;
+    lora_state.rx_callback = NULL;
+
+    if (!device_is_ready(lora_state.lora_dev)) {
+        LOG_ERR("LoRa device not ready");
+        return -ENODEV;
+    }
+
+    generate_eui64(lora_state.eui64);
+
+    LOG_INF("LICHEN LoRa L2 initialized");
+    return 0;
+}
+
+int lichen_lora_l2_start(void)
+{
+    if (lora_state.running) {
+        return 0;  /* Already running */
+    }
+
+    /* Configure LoRa radio for LICHEN defaults */
+    struct lora_modem_config config = {
+        .frequency = 915000000,
+        .bandwidth = BW_125_KHZ,
+        .datarate = SF_10,
+        .coding_rate = CR_4_5,
+        .preamble_len = 8,
+        .tx_power = 22,
+        .tx = true,
+    };
+
+    int ret = lora_config(lora_state.lora_dev, &config);
+    if (ret < 0) {
+        LOG_ERR("LoRa config failed: %d", ret);
+        return ret;
+    }
+
+    lora_state.running = true;
+
+    /* Start RX thread */
+    k_thread_create(&rx_thread_data, rx_stack,
+                    K_THREAD_STACK_SIZEOF(rx_stack),
+                    rx_thread, NULL, NULL, NULL,
+                    RX_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_thread_name_set(&rx_thread_data, "lora_rx");
+
+    LOG_INF("LoRa L2 started: SF10, BW125, 915MHz");
+    return 0;
+}
+
+int lichen_lora_l2_stop(void)
+{
+    if (!lora_state.running) {
+        return 0;
+    }
+
+    lora_state.running = false;
+    k_thread_join(&rx_thread_data, K_MSEC(RX_TIMEOUT_MS + 1000));
+
+    LOG_INF("LoRa L2 stopped");
+    return 0;
+}
+
+int lichen_lora_l2_tx(const uint8_t *data, size_t len)
+{
+    if (!lora_state.running) {
+        LOG_WRN("LoRa L2 not running");
+        return -ENETDOWN;
+    }
+
+    if (len > 255) {
+        LOG_ERR("Packet too large: %zu", len);
+        return -EMSGSIZE;
+    }
+
+    LOG_DBG("TX %zu bytes", len);
+
+    int ret = lora_send(lora_state.lora_dev, (uint8_t *)data, len);
+    if (ret < 0) {
+        LOG_ERR("LoRa TX failed: %d", ret);
+        return ret;
+    }
+
+    return 0;
+}
+
+void lichen_lora_l2_set_rx_callback(lichen_lora_rx_cb_t cb, void *user_data)
+{
+    lora_state.rx_callback = cb;
+    lora_state.rx_callback_user_data = user_data;
+}
+
+const uint8_t *lichen_lora_l2_get_eui64(void)
+{
+    return lora_state.eui64;
+}
+
+bool lichen_lora_l2_is_running(void)
+{
+    return lora_state.running;
+}

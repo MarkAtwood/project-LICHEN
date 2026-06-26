@@ -5,21 +5,10 @@
  * @file schnorr48.c
  * @brief Schnorr-48 signatures per draft-lichen-schnorr-00
  *
- * IMPLEMENTATION STATUS: STUB
+ * 48-byte deterministic Schnorr signatures over Ed25519:
+ *   16-byte truncated challenge (e) || 32-byte response (s)
  *
- * This file provides the API stubs for Schnorr-48 signatures.
- * Full implementation requires Ed25519 primitives not available
- * in Zephyr's bundled mbedTLS (which lacks Edwards curves).
- *
- * Options for completing this implementation:
- *
- * 1. SUPERCOP ref10 - public domain Ed25519 reference, ~8KB code
- * 2. TweetNaCl - minimal Ed25519 in ~1KB, but variable-time
- * 3. Monocypher - small, audited, constant-time Ed25519
- * 4. Rust FFI - use lichen-link crate via cbindgen
- *
- * Monocypher is recommended for production embedded use.
- *
+ * Uses Monocypher for Ed25519 primitives and SHA-512.
  * Test vectors: test/vectors/schnorr48.json
  * Reference impl: python/src/lichen/crypto/schnorr48.py
  */
@@ -27,15 +16,161 @@
 #include <lichen/schnorr48.h>
 #include <string.h>
 
-/*
- * SHA-512 is available via mbedTLS or Zephyr's tinycrypt.
- * Ed25519 point operations need an external library.
- *
- * ponytail: placeholder implementation returns fixed patterns
- * for development builds; production MUST use real crypto.
- */
+#ifdef CONFIG_LICHEN_CRYPTO_MONOCYPHER
+#include "monocypher.h"
+#include "monocypher-ed25519.h"
 
-#ifdef CONFIG_LICHEN_LINK_SCHNORR_STUB
+/**
+ * @brief Apply Ed25519 clamping to a scalar.
+ *
+ * Clears bits 0-2, sets bit 254, clears bit 255.
+ */
+static void clamp_scalar(uint8_t s[32])
+{
+	s[0] &= 248;
+	s[31] &= 127;
+	s[31] |= 64;
+}
+
+void schnorr48_derive_keypair(const uint8_t seed[32],
+			      uint8_t privkey[32],
+			      uint8_t pubkey[32])
+{
+	uint8_t hash[64];
+
+	/* h = SHA-512(seed) */
+	crypto_sha512(hash, seed, 32);
+
+	/* privkey = clamp(h[0:32]) */
+	memcpy(privkey, hash, 32);
+	clamp_scalar(privkey);
+
+	/* pubkey = privkey * B */
+	crypto_eddsa_scalarbase(pubkey, privkey);
+
+	/* Wipe sensitive data */
+	crypto_wipe(hash, sizeof(hash));
+}
+
+void schnorr48_sign(const uint8_t privkey[32],
+		    const uint8_t pubkey[32],
+		    const uint8_t *msg, size_t msg_len,
+		    uint8_t sig[48])
+{
+	uint8_t nonce_hash[64];
+	uint8_t r_scalar[32];
+	uint8_t R[32];
+	uint8_t e_hash[64];
+	uint8_t e_extended[32];
+	crypto_sha512_ctx ctx;
+
+	/*
+	 * 1. Deterministic nonce: r = SHA-512(privkey || msg) mod L
+	 */
+	crypto_sha512_init(&ctx);
+	crypto_sha512_update(&ctx, privkey, 32);
+	crypto_sha512_update(&ctx, msg, msg_len);
+	crypto_sha512_final(&ctx, nonce_hash);
+
+	/* Reduce 64-byte hash to scalar mod L */
+	crypto_eddsa_reduce(r_scalar, nonce_hash);
+
+	/*
+	 * 2. Commitment: R = r * B
+	 */
+	crypto_eddsa_scalarbase(R, r_scalar);
+
+	/*
+	 * 3. Challenge: e = SHA-512(R || pubkey || msg)[0:16]
+	 */
+	crypto_sha512_init(&ctx);
+	crypto_sha512_update(&ctx, R, 32);
+	crypto_sha512_update(&ctx, pubkey, 32);
+	crypto_sha512_update(&ctx, msg, msg_len);
+	crypto_sha512_final(&ctx, e_hash);
+
+	/* Copy truncated challenge to signature */
+	memcpy(sig, e_hash, 16);
+
+	/*
+	 * 4. e_extended = e || 0x00*16 (32-byte scalar)
+	 */
+	memcpy(e_extended, e_hash, 16);
+	memset(e_extended + 16, 0, 16);
+
+	/*
+	 * 5. s = (r + e_extended * privkey) mod L
+	 *    Using crypto_eddsa_mul_add: r + a*b = r + e*priv
+	 */
+	crypto_eddsa_mul_add(sig + 16, e_extended, privkey, r_scalar);
+
+	/* Wipe sensitive data */
+	crypto_wipe(nonce_hash, sizeof(nonce_hash));
+	crypto_wipe(r_scalar, sizeof(r_scalar));
+	crypto_wipe(R, sizeof(R));
+	crypto_wipe(e_hash, sizeof(e_hash));
+	crypto_wipe(e_extended, sizeof(e_extended));
+	crypto_wipe(&ctx, sizeof(ctx));
+}
+
+bool schnorr48_verify(const uint8_t pubkey[32],
+		      const uint8_t *msg, size_t msg_len,
+		      const uint8_t sig[48])
+{
+	const uint8_t *e_received = sig;
+	const uint8_t *s = sig + 16;
+	uint8_t e_extended[32];
+	uint8_t R_prime[32];
+	uint8_t e_hash[64];
+	crypto_sha512_ctx ctx;
+
+	/*
+	 * 1. Check s is non-zero
+	 */
+	uint8_t s_is_zero = 0;
+	for (int i = 0; i < 32; i++) {
+		s_is_zero |= s[i];
+	}
+	if (s_is_zero == 0) {
+		return false;
+	}
+
+	/*
+	 * 2. e_extended = e_received || 0x00*16
+	 */
+	memcpy(e_extended, e_received, 16);
+	memset(e_extended + 16, 0, 16);
+
+	/*
+	 * 3. R' = s*B - e_extended*pubkey
+	 *    Returns -1 if pubkey is invalid or s >= L
+	 */
+	if (crypto_eddsa_recover_r(R_prime, pubkey, s, e_extended) != 0) {
+		return false;
+	}
+
+	/*
+	 * 4. e' = SHA-512(R' || pubkey || msg)[0:16]
+	 */
+	crypto_sha512_init(&ctx);
+	crypto_sha512_update(&ctx, R_prime, 32);
+	crypto_sha512_update(&ctx, pubkey, 32);
+	crypto_sha512_update(&ctx, msg, msg_len);
+	crypto_sha512_final(&ctx, e_hash);
+
+	/*
+	 * 5. Constant-time comparison of e' and e_received
+	 */
+	return crypto_verify16(e_hash, e_received) == 0;
+}
+
+#else /* !CONFIG_LICHEN_CRYPTO_MONOCYPHER */
+
+/*
+ * Stub implementation for builds without Monocypher.
+ * Returns fixed patterns for development; NOT FOR PRODUCTION.
+ */
+#ifdef CONFIG_LICHEN_LINK_SCHNORR
 #warning "Using stub Schnorr-48 implementation - NOT FOR PRODUCTION"
 #endif
 
@@ -43,18 +178,8 @@ void schnorr48_derive_keypair(const uint8_t seed[32],
 			      uint8_t privkey[32],
 			      uint8_t pubkey[32])
 {
-	/*
-	 * Real implementation:
-	 *   h = SHA-512(seed)
-	 *   privkey = clamp(h[0:32])
-	 *   pubkey = privkey * B (Ed25519 base point multiplication)
-	 */
-
-	/* ponytail: stub copies seed to privkey, zeros pubkey */
 	memcpy(privkey, seed, 32);
 	memset(pubkey, 0, 32);
-
-	/* Stub: set pubkey[0] = 0x01 to indicate stub mode */
 	pubkey[0] = 0x01;
 }
 
@@ -63,23 +188,10 @@ void schnorr48_sign(const uint8_t privkey[32],
 		    const uint8_t *msg, size_t msg_len,
 		    uint8_t sig[48])
 {
-	/*
-	 * Real implementation (draft-lichen-schnorr-00 Section 4.2):
-	 *
-	 * 1. r = H(privkey || msg) mod L       // deterministic nonce
-	 * 2. R = r * B                         // commitment point
-	 * 3. e = H(R || pubkey || msg)[0:16]   // truncated challenge
-	 * 4. e_scalar = e || 0x00*16           // extend to 32 bytes
-	 * 5. s = (r + e_scalar * privkey) mod L // response
-	 * 6. sig = e || s                       // 48 bytes
-	 */
-
 	(void)privkey;
 	(void)pubkey;
 	(void)msg;
 	(void)msg_len;
-
-	/* ponytail: stub returns zeros */
 	memset(sig, 0, 48);
 }
 
@@ -87,25 +199,16 @@ bool schnorr48_verify(const uint8_t pubkey[32],
 		      const uint8_t *msg, size_t msg_len,
 		      const uint8_t sig[48])
 {
-	/*
-	 * Real implementation (draft-lichen-schnorr-00 Section 4.3):
-	 *
-	 * 1. e_received = sig[0:16], s = sig[16:48]
-	 * 2. Check s is canonical (< L) and non-zero
-	 * 3. e_extended = e_received || 0x00*16
-	 * 4. R' = s*B - e_extended*pubkey
-	 * 5. e' = H(R' || pubkey || msg)[0:16]
-	 * 6. Return e' == e_received (constant-time)
-	 */
-
 	(void)pubkey;
 	(void)msg;
 	(void)msg_len;
 	(void)sig;
-
-	/* ponytail: stub always returns false (fail-safe) */
 	return false;
 }
+
+#endif /* CONFIG_LICHEN_CRYPTO_MONOCYPHER */
+
+/* Frame helpers are shared between real and stub implementations */
 
 void schnorr48_sign_frame(uint8_t epoch, uint16_t seqnum,
 			  const uint8_t *dst_addr, size_t dst_addr_len,
@@ -114,10 +217,6 @@ void schnorr48_sign_frame(uint8_t epoch, uint16_t seqnum,
 			  const uint8_t pubkey[32],
 			  uint8_t sig[48])
 {
-	/*
-	 * Build signable data: epoch(1) || seqnum(2, BE) || dst_addr || payload
-	 * Then call schnorr48_sign() on the result.
-	 */
 	uint8_t buf[256];
 	size_t off = 0;
 
@@ -150,7 +249,6 @@ bool schnorr48_verify_frame(uint8_t epoch, uint16_t seqnum,
 	size_t inner_len = payload_len - SCHNORR48_SIG_LEN;
 	const uint8_t *sig = &payload[inner_len];
 
-	/* Build signable data */
 	uint8_t buf[256];
 	size_t off = 0;
 

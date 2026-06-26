@@ -15,3 +15,8 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_LINK_SCHNORR
 )
 
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Include crypto headers for Monocypher when using Schnorr-48
+zephyr_include_directories_ifdef(CONFIG_LICHEN_CRYPTO_MONOCYPHER
+  ${CMAKE_CURRENT_SOURCE_DIR}/../crypto
+)

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN crypto subsystem Kconfig
+
+config LICHEN_CRYPTO_MONOCYPHER
+	bool "Monocypher cryptographic library"
+	default y if LICHEN_LINK_SCHNORR
+	help
+	  Include the Monocypher cryptographic library (v4.0.3).
+	  Provides Ed25519/EdDSA primitives, SHA-512, X25519, and
+	  authenticated encryption.
+
+	  This is required for Schnorr-48 link signatures.
+	  Size: ~3KB code on Cortex-M.
