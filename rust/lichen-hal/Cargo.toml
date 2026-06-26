@@ -16,3 +16,6 @@ twatch = []  # T-Watch: ST7789, touch
 
 [dependencies]
 # ponytail: no deps, pure traits
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

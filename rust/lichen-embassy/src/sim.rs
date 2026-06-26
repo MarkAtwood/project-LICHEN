@@ -1,0 +1,205 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+//! Simulation radio that bridges to lichen-sim via TCP.
+//!
+//! Allows running Rust firmware in QEMU/Renode with packet transfer
+//! through lichen-sim's simulated RF medium.
+//!
+//! Protocol matches LichenSubGHz.cs (Renode peripheral):
+//! - TX: [len:4][0x10][payload_len:2][payload] → [len:4][0x11][airtime:4]
+//! - RX: [len:4][0x20] → [len:4][0x21][len:2][payload][rssi:2][snr:2] or [len:4][0x23]
+
+use std::io::{Read, Write};
+use std::net::TcpStream;
+use std::time::Duration;
+
+use lichen_hal::{Radio, RadioConfig, RxPacket};
+
+/// Radio that connects to lichen-sim for packet transfer.
+///
+/// Use this when running firmware in QEMU or other emulators that don't
+/// simulate real LoRa hardware.
+pub struct SimRadio {
+    stream: TcpStream,
+    config: RadioConfig,
+}
+
+/// Error type for SimRadio operations.
+#[derive(Debug)]
+pub enum SimError {
+    /// Connection to lichen-sim failed or was lost.
+    Connection(std::io::Error),
+    /// Protocol error (bad response from sim).
+    Protocol,
+}
+
+impl From<std::io::Error> for SimError {
+    fn from(e: std::io::Error) -> Self {
+        SimError::Connection(e)
+    }
+}
+
+impl SimRadio {
+    /// Connect to lichen-sim.
+    ///
+    /// Default address is 127.0.0.1:5555.
+    pub fn connect(host: &str, port: u16) -> Result<Self, SimError> {
+        let addr = format!("{}:{}", host, port);
+        let stream = TcpStream::connect(&addr)?;
+        stream.set_nodelay(true)?;
+        stream.set_read_timeout(Some(Duration::from_millis(100)))?;
+
+        Ok(Self {
+            stream,
+            config: RadioConfig::default(),
+        })
+    }
+
+    /// Connect to default lichen-sim address (127.0.0.1:5555).
+    pub fn connect_default() -> Result<Self, SimError> {
+        Self::connect("127.0.0.1", 5555)
+    }
+
+    fn send_message(&mut self, msg: &[u8]) -> Result<(), SimError> {
+        // Length prefix (little-endian u32)
+        let len = msg.len() as u32;
+        self.stream.write_all(&len.to_le_bytes())?;
+        self.stream.write_all(msg)?;
+        self.stream.flush()?;
+        Ok(())
+    }
+
+    fn recv_message(&mut self) -> Result<Vec<u8>, SimError> {
+        // Read length prefix
+        let mut len_buf = [0u8; 4];
+        self.stream.read_exact(&mut len_buf)?;
+        let len = u32::from_le_bytes(len_buf) as usize;
+
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+        if len > 1024 {
+            return Err(SimError::Protocol);
+        }
+
+        // Read payload
+        let mut data = vec![0u8; len];
+        self.stream.read_exact(&mut data)?;
+        Ok(data)
+    }
+}
+
+impl Radio for SimRadio {
+    type Error = SimError;
+
+    async fn transmit(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
+        // Build TX message: [0x10][payload_len:2][payload]
+        let mut msg = Vec::with_capacity(3 + payload.len());
+        msg.push(0x10); // MSG_TX
+        msg.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        msg.extend_from_slice(payload);
+
+        self.send_message(&msg)?;
+
+        // Read TX_DONE response
+        let resp = self.recv_message()?;
+        if resp.is_empty() || resp[0] != 0x11 {
+            return Err(SimError::Protocol);
+        }
+
+        // resp[1..5] contains airtime in us (ignored for now)
+        Ok(())
+    }
+
+    async fn receive(
+        &mut self,
+        buf: &mut [u8],
+        timeout_ms: u32,
+    ) -> Result<Option<RxPacket>, Self::Error> {
+        // Server returns immediately (non-blocking), so we poll in a loop
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_millis(timeout_ms as u64);
+
+        // Use short read timeout for individual polls
+        self.stream.set_read_timeout(Some(Duration::from_millis(50)))?;
+
+        loop {
+            // Send RX_POLL
+            self.send_message(&[0x20])?;
+
+            // Read response
+            let resp = match self.recv_message() {
+                Ok(r) => r,
+                Err(SimError::Connection(e))
+                    if e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
+                    if start.elapsed() >= timeout {
+                        return Ok(None);
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+
+            if resp.is_empty() {
+                return Err(SimError::Protocol);
+            }
+
+            match resp[0] {
+                0x21 => {
+                    // RX_OK: [0x21][len:2][payload][rssi:2][snr:2]
+                    if resp.len() < 3 {
+                        return Err(SimError::Protocol);
+                    }
+
+                    let payload_len = u16::from_le_bytes([resp[1], resp[2]]) as usize;
+                    if resp.len() < 3 + payload_len + 4 {
+                        return Err(SimError::Protocol);
+                    }
+
+                    let copy_len = payload_len.min(buf.len());
+                    buf[..copy_len].copy_from_slice(&resp[3..3 + copy_len]);
+
+                    let rssi_offset = 3 + payload_len;
+                    let rssi = i16::from_le_bytes([resp[rssi_offset], resp[rssi_offset + 1]]);
+                    let snr = i16::from_le_bytes([resp[rssi_offset + 2], resp[rssi_offset + 3]]);
+
+                    return Ok(Some(RxPacket {
+                        len: payload_len,
+                        rssi: Some(rssi),
+                        snr: Some(snr as i8),
+                    }));
+                }
+                0x23 => {
+                    // RX_EMPTY - check timeout
+                    if start.elapsed() >= timeout {
+                        return Ok(None);
+                    }
+                    // ponytail: 10ms poll interval, good enough for simulation
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
+                _ => return Err(SimError::Protocol),
+            }
+        }
+    }
+
+    fn configure(&mut self, config: &RadioConfig) {
+        self.config = *config;
+        // ponytail: config sent to sim on next TX/RX if sim supports it
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sim_radio_error_display() {
+        let err = SimError::Protocol;
+        assert!(format!("{:?}", err).contains("Protocol"));
+    }
+}

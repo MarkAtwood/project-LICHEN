@@ -8,13 +8,14 @@ description = "Embassy HAL implementations for LICHEN. Feature-gated per target.
 [features]
 default = []
 # Target features - only one should be enabled at a time
-esp32s3 = ["dep:esp-hal"]
+esp32s3 = ["dep:esp-hal", "dep:lora-phy", "dep:embedded-hal-async"]
+stm32wl = ["dep:embassy-stm32", "dep:lora-phy", "dep:embedded-hal-async"]
 # nrf52840 = ["dep:embassy-nrf"]  # ponytail: uncomment when targeting nRF
 # rp2040 = ["dep:embassy-rp"]     # ponytail: uncomment when targeting RP2040
-# stm32wl = ["dep:embassy-stm32"] # ponytail: uncomment when targeting STM32WL
 
-# Mock/simulator target for host testing
+# Mock/simulator targets for host testing
 mock = []
+sim = []  # Bridges to lichen-sim via TCP for QEMU/Renode
 
 [dependencies]
 lichen-hal = { path = "../lichen-hal" }
@@ -24,15 +25,20 @@ lichen-core = { path = "../lichen-core" }
 embassy-time = "0.4"
 embassy-sync = "0.6"
 
+# LoRa PHY driver (feature-gated for radio targets)
+lora-phy = { version = "3", default-features = false, optional = true }
+embedded-hal-async = { version = "1", optional = true }
+
 # Target-specific HALs (feature-gated)
 [target.'cfg(target_arch = "xtensa")'.dependencies]
 esp-hal = { version = "0.23", optional = true }
 
+[target.'cfg(any(target_arch = "thumbv7em", target_arch = "arm"))'.dependencies]
+embassy-stm32 = { version = "0.2", optional = true, features = ["stm32wl55jc-cm4"] }
+
 # ponytail: other targets commented until actually needed
-# [target.'cfg(target_arch = "thumbv7em")'.dependencies]
 # embassy-nrf = { version = "0.2", optional = true }
 # embassy-rp = { version = "0.2", optional = true }
-# embassy-stm32 = { version = "0.2", optional = true }
 
 [dev-dependencies]
 # ponytail: tokio only for tests, not for the library itself
