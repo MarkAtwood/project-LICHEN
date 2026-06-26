@@ -37,26 +37,47 @@ impl LoadngCode {
     }
 }
 
+use crate::error::{BufferTooSmall, TooShort};
+
 /// LOADng message parse error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoadngError {
-    TooShort,
-    BufferTooSmall,
+    TooShort(TooShort),
+    BufferTooSmall(BufferTooSmall),
     UnknownCode(u8),
 }
 
 impl core::fmt::Display for LoadngError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::TooShort => write!(f, "message too short"),
-            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::TooShort(e) => write!(f, "LOADng {}", e),
+            Self::BufferTooSmall(e) => write!(f, "LOADng {}", e),
             Self::UnknownCode(c) => write!(f, "unknown LOADng code: {}", c),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for LoadngError {}
+impl core::error::Error for LoadngError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for LoadngError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for LoadngError {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
+}
 
 // RREQ/RREP fixed length: flags(1) + hop(1) + seq(2) + orig(16) + dest(16) = 36
 const RREQ_RREP_LEN: usize = 36;
@@ -77,7 +98,7 @@ impl Rreq {
     /// Parse RREQ from ICMPv6 body (after type/code/checksum).
     pub fn from_bytes(data: &[u8]) -> Result<Self, LoadngError> {
         if data.len() < RREQ_RREP_LEN {
-            return Err(LoadngError::TooShort);
+            return Err(TooShort::new(RREQ_RREP_LEN, data.len()).into());
         }
         Ok(Self {
             flags: data[0],
@@ -91,7 +112,7 @@ impl Rreq {
     /// Serialize to buffer. Returns bytes written.
     pub fn write_to(&self, out: &mut [u8]) -> Result<usize, LoadngError> {
         if out.len() < RREQ_RREP_LEN {
-            return Err(LoadngError::BufferTooSmall);
+            return Err(BufferTooSmall::new(RREQ_RREP_LEN, out.len()).into());
         }
         out[0] = self.flags;
         out[1] = self.hop_limit;
@@ -128,7 +149,7 @@ impl Rrep {
     /// Parse RREP from ICMPv6 body.
     pub fn from_bytes(data: &[u8]) -> Result<Self, LoadngError> {
         if data.len() < RREQ_RREP_LEN {
-            return Err(LoadngError::TooShort);
+            return Err(TooShort::new(RREQ_RREP_LEN, data.len()).into());
         }
         Ok(Self {
             flags: data[0],
@@ -142,7 +163,7 @@ impl Rrep {
     /// Serialize to buffer. Returns bytes written.
     pub fn write_to(&self, out: &mut [u8]) -> Result<usize, LoadngError> {
         if out.len() < RREQ_RREP_LEN {
-            return Err(LoadngError::BufferTooSmall);
+            return Err(BufferTooSmall::new(RREQ_RREP_LEN, out.len()).into());
         }
         out[0] = self.flags;
         out[1] = self.hop_count;
@@ -173,7 +194,7 @@ impl Rerr {
     /// Parse RERR from ICMPv6 body.
     pub fn from_bytes(data: &[u8]) -> Result<Self, LoadngError> {
         if data.len() < RERR_LEN {
-            return Err(LoadngError::TooShort);
+            return Err(TooShort::new(RERR_LEN, data.len()).into());
         }
         Ok(Self {
             flags: data[0],
@@ -185,7 +206,7 @@ impl Rerr {
     /// Serialize to buffer. Returns bytes written.
     pub fn write_to(&self, out: &mut [u8]) -> Result<usize, LoadngError> {
         if out.len() < RERR_LEN {
-            return Err(LoadngError::BufferTooSmall);
+            return Err(BufferTooSmall::new(RERR_LEN, out.len()).into());
         }
         out[0] = self.flags;
         out[1] = self.error_code;

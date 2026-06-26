@@ -5,6 +5,7 @@
 
 use crate::message::{MessageCode, MessageType};
 use crate::option::OptionNumber;
+use lichen_core::error::{BufferTooSmall, TooShort};
 
 /// CoAP version (always 1 for RFC 7252).
 pub const COAP_VERSION: u8 = 1;
@@ -22,7 +23,7 @@ pub const PAYLOAD_MARKER: u8 = 0xFF;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoapError {
     /// Message too short.
-    TooShort,
+    TooShort(TooShort),
     /// Wrong CoAP version (expected 1).
     WrongVersion(u8),
     /// Token length > 8.
@@ -34,25 +35,50 @@ pub enum CoapError {
     /// Option runs past end of message.
     TruncatedOption,
     /// Output buffer too small.
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
+    /// Invalid Block option value.
+    InvalidBlockOption,
+    /// Payload exceeds maximum size.
+    PayloadTooLarge,
 }
 
 impl core::fmt::Display for CoapError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::TooShort => write!(f, "CoAP message too short"),
+            Self::TooShort(e) => write!(f, "CoAP {}", e),
             Self::WrongVersion(v) => write!(f, "wrong CoAP version: {}", v),
             Self::TokenTooLong(n) => write!(f, "token length {} > 8", n),
             Self::InvalidOptionDelta => write!(f, "invalid option delta 15"),
             Self::InvalidOptionLength => write!(f, "invalid option length 15"),
             Self::TruncatedOption => write!(f, "option runs past end of message"),
-            Self::BufferTooSmall => write!(f, "output buffer too small"),
+            Self::BufferTooSmall(e) => write!(f, "CoAP {}", e),
+            Self::InvalidBlockOption => write!(f, "invalid Block option value"),
+            Self::PayloadTooLarge => write!(f, "payload exceeds maximum size"),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for CoapError {}
+impl core::error::Error for CoapError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for CoapError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for CoapError {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
+}
 
 /// A parsed CoAP message (zero-copy).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +97,7 @@ impl<'a> CoapPacket<'a> {
     /// Parse a CoAP message from bytes.
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, CoapError> {
         if data.len() < MIN_HEADER_LEN {
-            return Err(CoapError::TooShort);
+            return Err(TooShort::new(MIN_HEADER_LEN, data.len()).into());
         }
 
         let ver = data[0] >> 6;
@@ -86,7 +112,7 @@ impl<'a> CoapPacket<'a> {
 
         let options_start = MIN_HEADER_LEN + tkl;
         if data.len() < options_start {
-            return Err(CoapError::TooShort);
+            return Err(TooShort::new(options_start, data.len()).into());
         }
 
         // Find payload marker
@@ -369,7 +395,7 @@ impl<'a> CoapBuilder<'a> {
         }
         let header_len = MIN_HEADER_LEN + tkl;
         if out.len() < header_len {
-            return Err(CoapError::BufferTooSmall);
+            return Err(BufferTooSmall::new(header_len, out.len()).into());
         }
 
         out[0] = (COAP_VERSION << 6) | ((msg_type as u8) << 4) | (tkl as u8);
@@ -399,7 +425,7 @@ impl<'a> CoapBuilder<'a> {
         let delta = number - self.last_option_number;
         let needed = option_encoding_len(delta, value.len());
         if self.pos + needed > self.out.len() {
-            return Err(CoapError::BufferTooSmall);
+            return Err(BufferTooSmall::new(self.pos + needed, self.out.len()).into());
         }
 
         self.pos += write_option(&mut self.out[self.pos..], delta, value);
@@ -428,8 +454,9 @@ impl<'a> CoapBuilder<'a> {
     /// Add payload. This finalizes the options section.
     pub fn payload(&mut self, data: &[u8]) -> Result<&mut Self, CoapError> {
         if !data.is_empty() {
-            if self.pos + 1 + data.len() > self.out.len() {
-                return Err(CoapError::BufferTooSmall);
+            let needed = self.pos + 1 + data.len();
+            if needed > self.out.len() {
+                return Err(BufferTooSmall::new(needed, self.out.len()).into());
             }
             self.out[self.pos] = PAYLOAD_MARKER;
             self.pos += 1;
@@ -692,6 +719,9 @@ mod tests {
 
     #[test]
     fn too_short() {
-        assert_eq!(CoapPacket::from_bytes(&[0x40, 0x01]), Err(CoapError::TooShort));
+        assert!(matches!(
+            CoapPacket::from_bytes(&[0x40, 0x01]),
+            Err(CoapError::TooShort(_))
+        ));
     }
 }

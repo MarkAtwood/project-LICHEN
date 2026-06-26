@@ -37,13 +37,18 @@ LOG_MODULE_REGISTER(lichen_l2, CONFIG_LICHEN_L2_LOG_LEVEL);
 /* Maximum frame size for LoRa */
 #define MAX_LORA_FRAME 255
 
-/* Scratch buffers for TX/RX processing */
+/*
+ * Scratch buffers for TX/RX processing.
+ * Protected by mutexes since multiple threads may call L2 send/recv.
+ */
 static uint8_t tx_ipv6_buf[LICHEN_L2_MTU + 40];  /* IPv6 packet */
 static uint8_t tx_schc_buf[MAX_LORA_FRAME];      /* SCHC compressed */
 static uint8_t tx_frame_buf[MAX_LORA_FRAME];     /* LICHEN frame */
+static K_MUTEX_DEFINE(tx_mutex);
 
 static uint8_t rx_schc_buf[MAX_LORA_FRAME];      /* SCHC compressed (from frame) */
 static uint8_t rx_ipv6_buf[LICHEN_L2_MTU + 40];  /* Decompressed IPv6 */
+static K_MUTEX_DEFINE(rx_mutex);
 
 /* Link context for framing */
 #if HAVE_LICHEN_LINK
@@ -94,6 +99,8 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 		return -EMSGSIZE;
 	}
 
+	k_mutex_lock(&tx_mutex, K_FOREVER);
+
 	struct net_buf *frag = pkt->frags;
 	size_t offset = 0;
 
@@ -101,7 +108,11 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 		size_t copy_len = frag->len;
 
 		if (offset + copy_len > sizeof(tx_ipv6_buf)) {
-			copy_len = sizeof(tx_ipv6_buf) - offset;
+			LOG_ERR("Fragment exceeds buffer during linearization: "
+				"offset=%zu frag_len=%zu buf_size=%zu",
+				offset, frag->len, sizeof(tx_ipv6_buf));
+			k_mutex_unlock(&tx_mutex);
+			return -EMSGSIZE;
 		}
 		memcpy(&tx_ipv6_buf[offset], frag->data, copy_len);
 		offset += copy_len;
@@ -116,6 +127,7 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 					    tx_schc_buf, sizeof(tx_schc_buf));
 	if (schc_len < 0) {
 		LOG_ERR("SCHC compress failed: %d", schc_len);
+		k_mutex_unlock(&tx_mutex);
 		return schc_len;
 	}
 
@@ -139,6 +151,7 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 					   sizeof(tx_frame_buf));
 	if (frame_len < 0) {
 		LOG_ERR("Frame build failed: %d", frame_len);
+		k_mutex_unlock(&tx_mutex);
 		return frame_len;
 	}
 
@@ -150,6 +163,8 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 	/* No LICHEN link layer - send raw IPv6 (for testing) */
 	ret = lichen_lora_l2_tx(tx_ipv6_buf, pkt_len);
 #endif
+
+	k_mutex_unlock(&tx_mutex);
 
 	if (ret < 0) {
 		LOG_ERR("LoRa TX failed: %d", ret);
@@ -304,6 +319,8 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 
 	LOG_DBG("RX: %zu bytes, RSSI=%d, SNR=%d", len, rssi, snr);
 
+	k_mutex_lock(&rx_mutex, K_FOREVER);
+
 #if HAVE_LICHEN_LINK
 	/* Parse LICHEN frame */
 	struct lichen_frame frame;
@@ -311,6 +328,7 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 	ret = lichen_frame_parse(&frame, data, len);
 	if (ret < 0) {
 		LOG_WRN("Frame parse failed: %d", ret);
+		k_mutex_unlock(&rx_mutex);
 		return;
 	}
 
@@ -323,6 +341,7 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 	/* Copy payload for decompression */
 	if (frame.payload_len > sizeof(rx_schc_buf)) {
 		LOG_WRN("Payload too large: %zu", frame.payload_len);
+		k_mutex_unlock(&rx_mutex);
 		return;
 	}
 	memcpy(rx_schc_buf, frame.payload, frame.payload_len);
@@ -332,6 +351,7 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 				     rx_ipv6_buf, sizeof(rx_ipv6_buf));
 	if (ret < 0) {
 		LOG_ERR("SCHC decompress failed: %d", ret);
+		k_mutex_unlock(&rx_mutex);
 		return;
 	}
 	ipv6_len = ret;
@@ -341,6 +361,7 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 	/* No LICHEN link layer - treat as raw IPv6 */
 	if (len > sizeof(rx_ipv6_buf)) {
 		LOG_WRN("Packet too large: %zu", len);
+		k_mutex_unlock(&rx_mutex);
 		return;
 	}
 	memcpy(rx_ipv6_buf, data, len);
@@ -353,6 +374,7 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 							   0, K_NO_WAIT);
 	if (pkt == NULL) {
 		LOG_ERR("Failed to allocate RX packet");
+		k_mutex_unlock(&rx_mutex);
 		return;
 	}
 
@@ -361,8 +383,11 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 	if (ret < 0) {
 		LOG_ERR("Failed to write packet data: %d", ret);
 		net_pkt_unref(pkt);
+		k_mutex_unlock(&rx_mutex);
 		return;
 	}
+
+	k_mutex_unlock(&rx_mutex);
 
 	/* Inject into the network stack */
 	ret = net_recv_data(iface, pkt);

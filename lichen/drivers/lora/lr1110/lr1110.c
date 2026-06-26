@@ -144,8 +144,20 @@ static void lr1110_dio9_isr(const struct device *port,
 static int lr1110_lora_config(const struct device *dev,
 			      struct lora_modem_config *cfg)
 {
-	lr1110_hal_reset(dev);
-	lr1110_system_calibrate(dev, 0x3Fu); /* all 6 calibration blocks */
+	int ret;
+
+	ret = lr1110_hal_reset(dev);
+	if (ret < 0) {
+		LOG_ERR("lr1110_hal_reset failed: %d", ret);
+		return ret;
+	}
+
+	ret = lr1110_system_calibrate(dev, 0x3Fu); /* all 6 calibration blocks */
+	if (ret < 0) {
+		LOG_ERR("lr1110_system_calibrate failed: %d", ret);
+		return ret;
+	}
+
 	lr1110_system_clear_errors(dev);
 
 	lr1110_radio_set_packet_type(dev, LR1110_RADIO_PACKET_LORA);
@@ -204,6 +216,9 @@ static int lr1110_lora_config(const struct device *dev,
 static int lr1110_lora_send(const struct device *dev, uint8_t *data,
 			    uint32_t data_len)
 {
+	if (dev == NULL || data == NULL) {
+		return -EINVAL;
+	}
 	struct lr1110_data *drv = dev->data;
 
 	if (data_len > LR1110_MAX_PAYLOAD) {

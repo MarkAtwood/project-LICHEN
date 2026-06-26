@@ -203,13 +203,19 @@ int lichen_rpl_target_parse(struct lichen_rpl_target *target,
 	}
 
 	/* data[0] = flags, skipped */
-	target->prefix_len = data[1];
+	uint8_t prefix_len = data[1];
 
-	size_t nbytes = div_ceil(target->prefix_len, 8);
+	/* IPv6 prefix cannot exceed 128 bits (16 bytes) */
+	if (prefix_len > 128) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+
+	size_t nbytes = div_ceil(prefix_len, 8);
 	if (len < 2 + nbytes) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}
 
+	target->prefix_len = prefix_len;
 	memset(target->prefix, 0, 16);
 	memcpy(target->prefix, &data[2], nbytes);
 

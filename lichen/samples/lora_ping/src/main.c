@@ -54,7 +54,11 @@ int main(void)
 
 		/* Wait for response */
 		config.tx = false;
-		lora_config(lora, &config);
+		ret = lora_config(lora, &config);
+		if (ret < 0) {
+			LOG_ERR("lora_config (RX) failed: %d", ret);
+			continue;
+		}
 
 		ret = lora_recv(lora, rx_buf, sizeof(rx_buf),
 				K_SECONDS(5), &rssi, &snr);
@@ -68,7 +72,11 @@ int main(void)
 		}
 
 		config.tx = true;
-		lora_config(lora, &config);
+		ret = lora_config(lora, &config);
+		if (ret < 0) {
+			LOG_ERR("lora_config (TX) failed: %d", ret);
+			continue;
+		}
 
 		k_sleep(K_SECONDS(2));
 	}

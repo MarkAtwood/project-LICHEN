@@ -7,19 +7,28 @@ description = "Embassy HAL implementations for LICHEN. Feature-gated per target.
 
 [features]
 default = []
+std = []
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt", "lichen-hal/defmt", "lichen-core/defmt"]
+log = ["dep:log", "lichen-hal/log", "lichen-core/log"]
+
 # Target features - only one should be enabled at a time
 esp32s3 = ["dep:esp-hal", "dep:lora-phy", "dep:embedded-hal-async"]
 stm32wl = ["dep:embassy-stm32", "dep:lora-phy", "dep:embedded-hal-async"]
 # nrf52840 = ["dep:embassy-nrf"]  # ponytail: uncomment when targeting nRF
 # rp2040 = ["dep:embassy-rp"]     # ponytail: uncomment when targeting RP2040
 
-# Mock/simulator targets for host testing
-mock = []
-sim = []  # Bridges to lichen-sim via TCP for QEMU/Renode
+# Mock/simulator targets for host testing (require std)
+mock = ["std"]
+sim = ["std"]  # Bridges to lichen-sim via TCP for QEMU/Renode
 
 [dependencies]
 lichen-hal = { path = "../lichen-hal" }
 lichen-core = { path = "../lichen-core" }
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
 
 # Embassy core (always needed)
 embassy-time = "0.4"

@@ -4,6 +4,7 @@
 //! pseudo-header checksum support per RFC 8200.
 
 use crate::addr::Ipv6Addr;
+use crate::error::{BufferTooSmall, TooShort};
 
 /// UDP header length (always 8 bytes).
 pub const UDP_HEADER_LEN: usize = 8;
@@ -15,27 +16,46 @@ pub const UDP_NEXT_HEADER: u8 = 17;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UdpError {
     /// Buffer too short for UDP header.
-    TooShort,
+    TooShort(TooShort),
     /// Declared length doesn't match data length.
     LengthMismatch { declared: u16, actual: usize },
     /// Output buffer too small.
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
 }
 
 impl core::fmt::Display for UdpError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::TooShort => write!(f, "UDP datagram too short"),
+            Self::TooShort(e) => write!(f, "UDP {}", e),
             Self::LengthMismatch { declared, actual } => {
                 write!(f, "UDP length {declared} != {actual} bytes present")
             }
-            Self::BufferTooSmall => write!(f, "output buffer too small"),
+            Self::BufferTooSmall(e) => write!(f, "UDP {}", e),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for UdpError {}
+impl core::error::Error for UdpError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for UdpError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for UdpError {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
+}
 
 /// A parsed UDP header (zero-copy reference to buffer).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +69,7 @@ impl<'a> UdpHeader<'a> {
     /// Validates that the length field matches the actual data length.
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, UdpError> {
         if data.len() < UDP_HEADER_LEN {
-            return Err(UdpError::TooShort);
+            return Err(TooShort::new(UDP_HEADER_LEN, data.len()).into());
         }
         let declared = u16::from_be_bytes([data[4], data[5]]) as usize;
         if declared != data.len() {
@@ -64,7 +84,7 @@ impl<'a> UdpHeader<'a> {
     /// Parse without length validation (for incomplete buffers).
     pub fn from_bytes_unchecked(data: &'a [u8]) -> Result<Self, UdpError> {
         if data.len() < UDP_HEADER_LEN {
-            return Err(UdpError::TooShort);
+            return Err(TooShort::new(UDP_HEADER_LEN, data.len()).into());
         }
         Ok(Self { data })
     }
@@ -128,7 +148,7 @@ pub fn write_datagram(
 ) -> Result<usize, UdpError> {
     let total = UDP_HEADER_LEN + payload.len();
     if out.len() < total {
-        return Err(UdpError::BufferTooSmall);
+        return Err(BufferTooSmall::new(total, out.len()).into());
     }
 
     // Header with zero checksum initially
@@ -229,7 +249,10 @@ mod tests {
 
     #[test]
     fn too_short() {
-        assert_eq!(UdpHeader::from_bytes(&[0u8; 7]), Err(UdpError::TooShort));
+        assert_eq!(
+            UdpHeader::from_bytes(&[0u8; 7]),
+            Err(UdpError::TooShort(TooShort::new(UDP_HEADER_LEN, 7)))
+        );
     }
 
     #[test]
@@ -277,7 +300,7 @@ mod tests {
         let mut buf = [0u8; 7];
         assert_eq!(
             write_datagram(&src, &dst, 1234, 5678, &[], &mut buf),
-            Err(UdpError::BufferTooSmall)
+            Err(UdpError::BufferTooSmall(BufferTooSmall::new(UDP_HEADER_LEN, 7)))
         );
     }
 

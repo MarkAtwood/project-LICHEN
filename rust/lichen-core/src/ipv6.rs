@@ -3,9 +3,18 @@
 //! Provides zero-copy parsing of IPv6 fixed headers for routing decisions.
 
 use crate::addr::Ipv6Addr;
+use crate::error::{BufferTooSmall, TooShort};
 
 /// IPv6 header length (fixed portion, no extension headers).
 pub const IPV6_HEADER_LEN: usize = 40;
+
+/// IPv6 header field offsets.
+pub mod field {
+    /// Byte offset of source address (16 bytes).
+    pub const SRC_OFFSET: usize = 8;
+    /// Byte offset of destination address (16 bytes).
+    pub const DST_OFFSET: usize = 24;
+}
 
 /// Common next header values.
 pub mod next_header {
@@ -29,7 +38,7 @@ pub mod next_header {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ipv6Error {
     /// Buffer too short for the expected data.
-    TooShort,
+    TooShort(TooShort),
     /// Wrong IP version (expected 6).
     WrongVersion(u8),
     /// Extension header length is not a multiple of 8 bytes.
@@ -37,13 +46,13 @@ pub enum Ipv6Error {
     /// Fragment headers are not supported (LICHEN uses SCHC fragmentation).
     FragmentNotSupported,
     /// Output buffer too small.
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
 }
 
 impl core::fmt::Display for Ipv6Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::TooShort => write!(f, "IPv6 packet too short"),
+            Self::TooShort(e) => write!(f, "IPv6 {}", e),
             Self::WrongVersion(v) => write!(f, "wrong IP version: {}", v),
             Self::InvalidExtensionLength => {
                 write!(f, "extension header length must be a multiple of 8")
@@ -51,13 +60,32 @@ impl core::fmt::Display for Ipv6Error {
             Self::FragmentNotSupported => {
                 write!(f, "IPv6 Fragment headers not supported (use SCHC)")
             }
-            Self::BufferTooSmall => write!(f, "output buffer too small"),
+            Self::BufferTooSmall(e) => write!(f, "IPv6 {}", e),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Ipv6Error {}
+impl core::error::Error for Ipv6Error {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for Ipv6Error {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for Ipv6Error {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
+}
 
 /// A parsed IPv6 header (zero-copy reference to buffer).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +97,7 @@ impl<'a> Ipv6Header<'a> {
     /// Parse IPv6 header from packet start.
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, Ipv6Error> {
         if data.len() < IPV6_HEADER_LEN {
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(IPV6_HEADER_LEN, data.len()).into());
         }
         let version = data[0] >> 4;
         if version != 6 {
@@ -121,7 +149,7 @@ impl<'a> Ipv6Header<'a> {
         let plen = self.payload_length() as usize;
         let total = IPV6_HEADER_LEN + plen;
         if self.data.len() < total {
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(total, self.data.len()).into());
         }
         Ok(&self.data[IPV6_HEADER_LEN..total])
     }
@@ -149,7 +177,7 @@ pub fn write_header(
     out: &mut [u8],
 ) -> Result<usize, Ipv6Error> {
     if out.len() < IPV6_HEADER_LEN {
-        return Err(Ipv6Error::TooShort);
+        return Err(BufferTooSmall::new(IPV6_HEADER_LEN, out.len()).into());
     }
     out[0] = 0x60; // version=6, TC=0, flow=0
     out[1] = 0;
@@ -185,15 +213,15 @@ impl<'a> ExtensionHeader<'a> {
     pub fn from_bytes(header_type: u8, data: &'a [u8]) -> Result<(Self, usize), Ipv6Error> {
         if !next_header::is_tlv_extension(header_type) {
             // Not a TLV extension header we handle
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(2, data.len()).into());
         }
         if data.len() < 2 {
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(2, data.len()).into());
         }
         let hdr_ext_len = data[1] as usize;
         let total_len = (hdr_ext_len + 1) * 8;
         if data.len() < total_len {
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(total_len, data.len()).into());
         }
         Ok((
             Self {
@@ -249,7 +277,7 @@ pub fn write_extension_header(
         return Err(Ipv6Error::InvalidExtensionLength);
     }
     if out.len() < total_len {
-        return Err(Ipv6Error::BufferTooSmall);
+        return Err(BufferTooSmall::new(total_len, out.len()).into());
     }
     let _ = header_type; // used for documentation/validation only
     let hdr_ext_len = (total_len / 8 - 1) as u8;
@@ -286,13 +314,13 @@ pub fn walk_extension_chain(
 
     while next_header::is_tlv_extension(nh) {
         if offset + 2 > payload.len() {
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(offset + 2, payload.len()).into());
         }
         let following = payload[offset];
         let hdr_ext_len = payload[offset + 1] as usize;
         let total = (hdr_ext_len + 1) * 8;
         if offset + total > payload.len() {
-            return Err(Ipv6Error::TooShort);
+            return Err(TooShort::new(offset + total, payload.len()).into());
         }
         offset += total;
         nh = following;
@@ -316,7 +344,7 @@ pub fn walk_extension_chain(
 /// `out` must have at least `len` bytes available.
 pub fn write_padding(len: usize, out: &mut [u8]) -> Result<(), Ipv6Error> {
     if out.len() < len {
-        return Err(Ipv6Error::BufferTooSmall);
+        return Err(BufferTooSmall::new(len, out.len()).into());
     }
     match len {
         0 => {}
@@ -362,7 +390,10 @@ mod tests {
 
     #[test]
     fn too_short() {
-        assert_eq!(Ipv6Header::from_bytes(&[0u8; 39]), Err(Ipv6Error::TooShort));
+        assert_eq!(
+            Ipv6Header::from_bytes(&[0u8; 39]),
+            Err(Ipv6Error::TooShort(TooShort::new(IPV6_HEADER_LEN, 39)))
+        );
     }
 
     #[test]
@@ -371,7 +402,7 @@ mod tests {
         write_header(&ll(1), &ll(2), 0, 64, 10, &mut pkt).unwrap();
         // Says payload is 10 bytes but buffer only has 4 after header
         let hdr = Ipv6Header::from_bytes(&pkt).unwrap();
-        assert_eq!(hdr.payload(), Err(Ipv6Error::TooShort));
+        assert!(matches!(hdr.payload(), Err(Ipv6Error::TooShort(_))));
     }
 
     #[test]
@@ -505,10 +536,10 @@ mod tests {
         payload[0] = next_header::UDP;
         payload[1] = 1; // 16 bytes
 
-        assert_eq!(
+        assert!(matches!(
             walk_extension_chain(&payload, next_header::HOP_BY_HOP),
-            Err(Ipv6Error::TooShort)
-        );
+            Err(Ipv6Error::TooShort(_))
+        ));
     }
 
     #[test]

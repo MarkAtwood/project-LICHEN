@@ -8,8 +8,9 @@
 //! - `rp2040`: RP2040 with SX1262 (embassy-rp)
 //! - `stm32wl`: STM32WL55 with integrated SubGHz (embassy-stm32)
 //! - `mock`: Host-side mock for testing
+//! - `std`: Enable std (automatically enabled by mock/sim)
 
-#![cfg_attr(not(any(feature = "mock", feature = "sim")), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 /// Mock HAL implementation for host-side testing.
 #[cfg(feature = "mock")]

@@ -62,7 +62,8 @@ struct lichen_frame {
 	uint8_t dst_addr[8];     /**< Destination address (0-8 bytes) */
 	uint8_t dst_addr_len;    /**< Destination address length */
 	const uint8_t *payload;  /**< Payload (may include signature) */
-	size_t payload_len;      /**< Payload length */
+	size_t payload_len;      /**< Total payload length (includes signature if present) */
+	size_t inner_payload_len; /**< Payload length excluding signature (equals payload_len when no signature) */
 	uint8_t mic[8];          /**< Message integrity code */
 	uint8_t mic_len;         /**< MIC length (4 or 8) */
 
@@ -148,6 +149,8 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
  */
 struct lichen_link_rx_ctx {
 	const uint8_t *peer_pubkey;  /**< 32-byte peer public key (NULL if unknown) */
+	const uint8_t *peer_eui64;   /**< 8-byte peer EUI-64 for MIC nonce */
+	const uint8_t *link_key;     /**< 16-byte AES-128 key for MIC (NULL to skip) */
 	uint32_t current_time;       /**< Current timestamp for replay aging */
 };
 

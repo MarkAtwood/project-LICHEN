@@ -104,8 +104,7 @@ impl core::fmt::Display for GattError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for GattError {}
+impl core::error::Error for GattError {}
 
 /// Trait for BLE peripheral abstraction.
 ///

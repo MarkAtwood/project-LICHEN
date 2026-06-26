@@ -1,45 +1,8 @@
-//! Address types: IPv6Addr and NodeId (EUI-64).
+//! Address types: Ipv6Addr (re-exported from lichen-ipv6) and NodeId (EUI-64).
 
-/// A 128-bit IPv6 address, stored in network (big-endian) byte order.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Ipv6Addr(pub [u8; 16]);
-
-impl Ipv6Addr {
-    pub const UNSPECIFIED: Self = Self([0u8; 16]);
-
-    /// True if this is a link-local address (fe80::/10).
-    pub fn is_link_local(&self) -> bool {
-        self.0[0] == 0xfe && (self.0[1] & 0xc0) == 0x80
-    }
-
-    /// True if this is a Unique Local Address (fc00::/7, typically fd00::/8).
-    ///
-    /// Per RFC 4193, ULAs have the prefix fc00::/7. In practice, the L bit
-    /// (bit 8) is set to 1 for locally-assigned addresses, giving fd00::/8.
-    pub fn is_ula(&self) -> bool {
-        // fc00::/7 means first byte has top 7 bits = 1111110x (0xfc or 0xfd)
-        (self.0[0] & 0xfe) == 0xfc
-    }
-
-    /// True if this is a Global Unicast Address (2000::/3).
-    ///
-    /// Per RFC 4291, GUAs have the prefix 2000::/3, meaning the first 3 bits
-    /// are 001 (addresses 2000:: through 3fff::).
-    pub fn is_gua(&self) -> bool {
-        // 2000::/3 means first byte has top 3 bits = 001 (0x20..0x3f)
-        (self.0[0] & 0xe0) == 0x20
-    }
-
-    /// True if this is a multicast address (ff00::/8).
-    pub fn is_multicast(&self) -> bool {
-        self.0[0] == 0xff
-    }
-
-    /// True if this is the loopback address (::1).
-    pub fn is_loopback(&self) -> bool {
-        self.0 == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-    }
-}
+// Re-export Addr from lichen-ipv6 as Ipv6Addr for backward compatibility.
+// This eliminates the duplicate type definition while preserving the API.
+pub use lichen_ipv6::Addr as Ipv6Addr;
 
 /// A 64-bit node identifier (EUI-64 derived from the radio hardware address).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

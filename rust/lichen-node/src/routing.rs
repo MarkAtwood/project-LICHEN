@@ -16,7 +16,7 @@ use std::vec::Vec;
 #[cfg(feature = "std")]
 pub use lichen_rpl::dodag::{DodagRole, DodagState, ParentCandidate, ROOT_RANK};
 #[cfg(feature = "std")]
-pub use lichen_rpl::messages::{Dao, Dio, DodagConfig, RplError};
+pub use lichen_rpl::message::{Dao, Dio, DodagConfig, RplError};
 #[cfg(feature = "std")]
 pub use lichen_rpl::routing::{DaoManager, RoutingTable, SourceRoutingHeader};
 #[cfg(feature = "std")]
@@ -107,6 +107,7 @@ impl NeighborTable {
     pub fn prune(&mut self, now_ms: u32, max_age_ms: u32) {
         for slot in self.entries.iter_mut() {
             if let Some(n) = slot {
+                // Handles u32 overflow after ~49 days
                 if now_ms.wrapping_sub(n.last_seen_ms) > max_age_ms {
                     *slot = None;
                 }

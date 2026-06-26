@@ -213,6 +213,36 @@ static int test_unknown_rule_id(void)
 	return 1;
 }
 
+static int test_truncated_coap_linklocal(void)
+{
+	/* Rule 0 (link-local CoAP) needs at least 26 bytes (1 rule + 25 residue).
+	 * Verify truncated packets are rejected with SCHC_ERR_TOO_SHORT. */
+	uint8_t data[25] = { 0 }; /* rule_id=0, plus 24 bytes (1 short) */
+	uint8_t out[64];
+
+	int ret = lichen_schc_decompress(data, sizeof(data), out, sizeof(out));
+	if (ret != SCHC_ERR_TOO_SHORT) {
+		printf("  FAIL: expected SCHC_ERR_TOO_SHORT for 25-byte input (got %d)\n", ret);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_truncated_coap_global(void)
+{
+	/* Rule 1 (global CoAP) needs at least 42 bytes (1 rule + 41 residue).
+	 * Verify truncated packets are rejected with SCHC_ERR_TOO_SHORT. */
+	uint8_t data[41] = { 1 }; /* rule_id=1, plus 40 bytes (1 short) */
+	uint8_t out[64];
+
+	int ret = lichen_schc_decompress(data, sizeof(data), out, sizeof(out));
+	if (ret != SCHC_ERR_TOO_SHORT) {
+		printf("  FAIL: expected SCHC_ERR_TOO_SHORT for 41-byte input (got %d)\n", ret);
+		return 0;
+	}
+	return 1;
+}
+
 /* ─── test runner ─────────────────────────────────────────────────────────── */
 
 #define RUN_TEST(fn) do { \
@@ -236,6 +266,8 @@ int main(void)
 	RUN_TEST(test_rpl_dao);
 	RUN_TEST(test_uncompressed_fallback);
 	RUN_TEST(test_unknown_rule_id);
+	RUN_TEST(test_truncated_coap_linklocal);
+	RUN_TEST(test_truncated_coap_global);
 
 	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
 

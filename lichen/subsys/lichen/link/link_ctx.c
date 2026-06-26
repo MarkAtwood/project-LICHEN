@@ -7,18 +7,29 @@
  */
 
 #include <lichen/link_ctx.h>
+#include <lichen/errno.h>
 #include <string.h>
+#include <stdbool.h>
 
 #ifdef CONFIG_LICHEN_CRYPTO_MONOCYPHER
 #include "monocypher.h"
 #include "monocypher-ed25519.h"
 #endif
 
-/* Error codes - use Zephyr errno if available */
+/* ─── Logging ─────────────────────────────────────────────────────────────── */
+
 #ifdef __ZEPHYR__
-#include <errno.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(link_ctx, CONFIG_LICHEN_LINK_LOG_LEVEL);
 #else
-#define EINVAL 22
+/* Minimal logging for non-Zephyr builds */
+#include <stdio.h>
+#define LOG_WRN(...) fprintf(stderr, "WRN: " __VA_ARGS__)
+#endif
+
+/* Runtime warning flag for stub crypto */
+#ifndef CONFIG_LICHEN_CRYPTO_MONOCYPHER
+static bool stub_warned_load_key = false;
 #endif
 
 int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
@@ -30,9 +41,11 @@ int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
 	memcpy(ctx->eui64, eui64, LICHEN_EUI64_LEN);
 	memset(ctx->ed25519_sk, 0, LICHEN_SK_LEN);
 	memset(ctx->ed25519_pk, 0, LICHEN_PK_LEN);
+	memset(ctx->link_key, 0, LICHEN_LINK_KEY_LEN);
 	ctx->epoch = 0;
 	ctx->tx_seq = 0;
 	ctx->has_key = false;
+	ctx->has_link_key = false;
 
 	return 0;
 }
@@ -72,6 +85,10 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32])
 	crypto_wipe(hash, sizeof(hash));
 #else
 	/* Stub for builds without Monocypher - NOT FOR PRODUCTION */
+	if (!stub_warned_load_key) {
+		LOG_WRN("INSECURE: using stub lichen_link_load_key - NOT FOR PRODUCTION\n");
+		stub_warned_load_key = true;
+	}
 	memcpy(ctx->ed25519_sk, seed, LICHEN_SK_LEN);
 	memset(ctx->ed25519_pk, 0, LICHEN_PK_LEN);
 	ctx->ed25519_pk[0] = 0x01;
@@ -83,6 +100,9 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32])
 
 uint16_t lichen_link_next_seq(struct lichen_link_ctx *ctx)
 {
+	if (ctx == NULL) {
+		return 0;
+	}
 	uint16_t seq = ctx->tx_seq;
 	ctx->tx_seq++;
 	return seq;
@@ -90,5 +110,21 @@ uint16_t lichen_link_next_seq(struct lichen_link_ctx *ctx)
 
 void lichen_link_set_epoch(struct lichen_link_ctx *ctx, uint8_t epoch)
 {
+	if (ctx == NULL) {
+		return;
+	}
 	ctx->epoch = epoch;
+}
+
+int lichen_link_load_link_key(struct lichen_link_ctx *ctx,
+			      const uint8_t link_key[LICHEN_LINK_KEY_LEN])
+{
+	if (ctx == NULL || link_key == NULL) {
+		return -EINVAL;
+	}
+
+	memcpy(ctx->link_key, link_key, LICHEN_LINK_KEY_LEN);
+	ctx->has_link_key = true;
+
+	return 0;
 }

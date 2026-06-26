@@ -1,5 +1,8 @@
 //! LICHEN frame format (spec section 4).
 
+use crate::seqnum::LinkSeqNum;
+use lichen_core::error::TooShort;
+
 /// Destination addressing mode (LLSec bits 0-1, spec 4.3).
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -112,7 +115,7 @@ pub const MAX_FRAME_BODY: usize = 255;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameError {
     Empty,
-    TooShort,
+    TooShort(TooShort),
     ReservedBitSet,
     ReservedMicLength(u8),
     AddrLenMismatch,
@@ -124,7 +127,7 @@ impl core::fmt::Display for FrameError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Empty => write!(f, "empty frame"),
-            Self::TooShort => write!(f, "frame too short"),
+            Self::TooShort(e) => write!(f, "frame {}", e),
             Self::ReservedBitSet => write!(f, "reserved bit set"),
             Self::ReservedMicLength(v) => write!(f, "reserved MIC length: {}", v),
             Self::AddrLenMismatch => write!(f, "address length mismatch"),
@@ -134,8 +137,20 @@ impl core::fmt::Display for FrameError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for FrameError {}
+impl core::error::Error for FrameError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for FrameError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
 
 /// A parsed LICHEN link-layer frame.
 ///
@@ -144,7 +159,7 @@ impl std::error::Error for FrameError {}
 #[derive(Debug, PartialEq, Eq)]
 pub struct LichenFrame<'a> {
     pub epoch: u8,
-    pub seqnum: u16,
+    pub seqnum: LinkSeqNum,
     pub dst_addr: &'a [u8],
     pub payload: &'a [u8],
     pub mic: &'a [u8],
@@ -172,7 +187,8 @@ impl<'a> LichenFrame<'a> {
     ///
     /// Returns `FrameError::FrameTooLarge` if the body exceeds 255 bytes.
     pub fn write_to(&self, buf: &mut [u8]) -> Result<usize, FrameError> {
-        let body_len = 1 + 1 + 2 + self.dst_addr.len() + self.payload.len() + self.mic.len();
+        // body = LLSec(1) + epoch(1) + seqnum(2) + dst_addr + payload + MIC
+        let body_len = 4 + self.dst_addr.len() + self.payload.len() + self.mic.len();
         if body_len > MAX_FRAME_BODY {
             return Err(FrameError::FrameTooLarge);
         }
@@ -183,8 +199,9 @@ impl<'a> LichenFrame<'a> {
         buf[0] = body_len as u8;
         buf[1] = self.llsec_byte();
         buf[2] = self.epoch;
-        buf[3] = (self.seqnum >> 8) as u8;
-        buf[4] = self.seqnum as u8;
+        let seqnum_bytes = self.seqnum.to_be_bytes();
+        buf[3] = seqnum_bytes[0];
+        buf[4] = seqnum_bytes[1];
         let mut off = 5;
         buf[off..off + self.dst_addr.len()].copy_from_slice(self.dst_addr);
         off += self.dst_addr.len();
@@ -201,9 +218,12 @@ impl<'a> LichenFrame<'a> {
             return Err(FrameError::Empty);
         }
         let length = data[0] as usize;
-        let body = data.get(1..1 + length).ok_or(FrameError::TooShort)?;
+        let expected_total = 1 + length;
+        let body = data
+            .get(1..expected_total)
+            .ok_or_else(|| TooShort::new(expected_total, data.len()))?;
         if length < 4 {
-            return Err(FrameError::TooShort);
+            return Err(TooShort::new(4, length).into());
         }
         let llsec = body[0];
         if llsec & RESERVED_BIT != 0 {
@@ -215,11 +235,12 @@ impl<'a> LichenFrame<'a> {
         let mic_length = MicLength::from_u8(mic_field)
             .ok_or(FrameError::ReservedMicLength(mic_field))?;
         let epoch = body[1];
-        let seqnum = u16::from_be_bytes([body[2], body[3]]);
+        let seqnum = LinkSeqNum::from_be_bytes([body[2], body[3]]);
         let addr_len = addr_mode.addr_len();
         let mic_len = mic_length.mic_len();
-        if body.len() < 4 + addr_len + mic_len {
-            return Err(FrameError::TooShort);
+        let min_body = 4 + addr_len + mic_len;
+        if body.len() < min_body {
+            return Err(TooShort::new(min_body, body.len()).into());
         }
         let dst_addr = &body[4..4 + addr_len];
         let payload_end = body.len() - mic_len;
@@ -250,21 +271,14 @@ impl<'a> LichenFrame<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::vec::Vec;
-
-    fn from_hex(s: &str) -> Vec<u8> {
-        (0..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
-            .collect()
-    }
+    use crate::test_utils::from_hex;
 
     #[test]
     fn broadcast_min_roundtrip() {
         let wire = from_hex("0b0001000261626301020304");
         let frame = LichenFrame::from_bytes(&wire).unwrap();
         assert_eq!(frame.epoch, 1);
-        assert_eq!(frame.seqnum, 2);
+        assert_eq!(frame.seqnum.get(), 2);
         assert_eq!(frame.dst_addr, &[] as &[u8]);
         assert_eq!(frame.payload, b"abc");
         assert_eq!(frame.mic, &[0x01, 0x02, 0x03, 0x04]);
@@ -282,7 +296,7 @@ mod tests {
         let wire = from_hex("0c01102030abcd686900000000");
         let frame = LichenFrame::from_bytes(&wire).unwrap();
         assert_eq!(frame.epoch, 16);
-        assert_eq!(frame.seqnum, 0x2030);
+        assert_eq!(frame.seqnum.get(), 0x2030);
         assert_eq!(frame.dst_addr, &[0xab, 0xcd]);
         assert_eq!(frame.payload, b"hi");
         assert_eq!(frame.mic, &[0u8; 4]);
@@ -298,7 +312,7 @@ mod tests {
         let wire = from_hex("1806ffffff0001020304050607646174610001020304050607");
         let frame = LichenFrame::from_bytes(&wire).unwrap();
         assert_eq!(frame.epoch, 255);
-        assert_eq!(frame.seqnum, 0xffff);
+        assert_eq!(frame.seqnum.get(), 0xffff);
         assert_eq!(frame.dst_addr, &[0, 1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(frame.payload, b"data");
         assert_eq!(frame.mic, &[0, 1, 2, 3, 4, 5, 6, 7]);
@@ -314,7 +328,7 @@ mod tests {
         let wire = from_hex("09600300047800000000");
         let frame = LichenFrame::from_bytes(&wire).unwrap();
         assert_eq!(frame.epoch, 3);
-        assert_eq!(frame.seqnum, 4);
+        assert_eq!(frame.seqnum.get(), 4);
         assert_eq!(frame.dst_addr, &[] as &[u8]);
         assert_eq!(frame.payload, &[0x78]);
         assert_eq!(frame.mic, &[0u8; 4]);
@@ -332,10 +346,10 @@ mod tests {
 
     #[test]
     fn too_short_error() {
-        assert_eq!(
+        assert!(matches!(
             LichenFrame::from_bytes(&[0x0f, 0x00]),
-            Err(FrameError::TooShort)
-        );
+            Err(FrameError::TooShort(_))
+        ));
     }
 
     #[test]

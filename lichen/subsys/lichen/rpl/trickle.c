@@ -39,13 +39,17 @@ void lichen_trickle_init(struct lichen_trickle *t,
 {
 	t->imin = imin_ms;
 
-	/* Calculate max_interval = imin << doublings, clamped at UINT32_MAX */
-	if (imax_doublings >= 32) {
+	/* Calculate max_interval = imin << doublings, clamped at UINT32_MAX.
+	 * Overflow occurs if any of the top `doublings` bits are set in imin,
+	 * since those bits would be shifted out. Check before shifting.
+	 * Special case: doublings=0 means no shift, so no overflow possible. */
+	if (imax_doublings == 0) {
+		t->max_interval = imin_ms;
+	} else if (imax_doublings >= 32 ||
+		   (imin_ms >> (32 - imax_doublings)) > 0) {
 		t->max_interval = UINT32_MAX;
 	} else {
-		uint32_t shifted = imin_ms << imax_doublings;
-		/* Check for overflow: if shifted < imin, we overflowed */
-		t->max_interval = (shifted < imin_ms) ? UINT32_MAX : shifted;
+		t->max_interval = imin_ms << imax_doublings;
 	}
 
 	t->k = k;

@@ -22,7 +22,7 @@
  * @param[out] prk      32-byte pseudorandom key
  * @return 0 on success, -1 on failure
  */
-int hkdf_extract(const uint8_t *salt, size_t salt_len,
+int lichen_hkdf_extract(const uint8_t *salt, size_t salt_len,
 		 const uint8_t *ikm, size_t ikm_len,
 		 uint8_t prk[32]);
 
@@ -36,7 +36,7 @@ int hkdf_extract(const uint8_t *salt, size_t salt_len,
  * @param[in]  okm_len  Desired output length (max 255*32)
  * @return 0 on success, -1 on failure
  */
-int hkdf_expand(const uint8_t prk[32],
+int lichen_hkdf_expand(const uint8_t prk[32],
 		const uint8_t *info, size_t info_len,
 		uint8_t *okm, size_t okm_len);
 
@@ -53,7 +53,7 @@ int hkdf_expand(const uint8_t prk[32],
  * @param[in]  okm_len  Desired output length
  * @return 0 on success, -1 on failure
  */
-int hkdf_sha256(const uint8_t *salt, size_t salt_len,
+int lichen_hkdf_sha256(const uint8_t *salt, size_t salt_len,
 		const uint8_t *ikm, size_t ikm_len,
 		const uint8_t *info, size_t info_len,
 		uint8_t *okm, size_t okm_len);

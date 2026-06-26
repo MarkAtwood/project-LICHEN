@@ -191,10 +191,16 @@ static int test_keypair_derivation(void)
 
 		uint8_t seed[32], expected_priv[32], expected_pub[32];
 		uint8_t got_priv[32], got_pub[32];
+		size_t n;
 
-		hex_decode(v->seed, seed, 32);
-		hex_decode(v->private_key, expected_priv, 32);
-		hex_decode(v->public_key, expected_pub, 32);
+		n = hex_decode(v->seed, seed, 32);
+		ASSERT_TRUE(n == 32, "seed hex_decode");
+
+		n = hex_decode(v->private_key, expected_priv, 32);
+		ASSERT_TRUE(n == 32, "private_key hex_decode");
+
+		n = hex_decode(v->public_key, expected_pub, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
 
 		schnorr48_derive_keypair(seed, got_priv, got_pub);
 
@@ -215,11 +221,18 @@ static int test_sign_matches_vectors(void)
 
 		uint8_t privkey[32], pubkey[32], expected_sig[48], got_sig[48];
 		uint8_t message[256];
-		size_t msg_len;
+		size_t msg_len, n;
 
-		hex_decode(v->private_key, privkey, 32);
-		hex_decode(v->public_key, pubkey, 32);
-		hex_decode(v->signature, expected_sig, 48);
+		n = hex_decode(v->private_key, privkey, 32);
+		ASSERT_TRUE(n == 32, "private_key hex_decode");
+
+		n = hex_decode(v->public_key, pubkey, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		n = hex_decode(v->signature, expected_sig, 48);
+		ASSERT_TRUE(n == 48, "signature hex_decode");
+
+		/* Empty message is valid (strlen == 0) */
 		msg_len = hex_decode(v->message, message, sizeof(message));
 
 		schnorr48_sign(privkey, pubkey, message, msg_len, got_sig);
@@ -238,10 +251,15 @@ static int test_verify_valid_signatures(void)
 
 		uint8_t pubkey[32], sig[48];
 		uint8_t message[256];
-		size_t msg_len;
+		size_t msg_len, n;
 
-		hex_decode(v->public_key, pubkey, 32);
-		hex_decode(v->signature, sig, 48);
+		n = hex_decode(v->public_key, pubkey, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		n = hex_decode(v->signature, sig, 48);
+		ASSERT_TRUE(n == 48, "signature hex_decode");
+
+		/* Empty message is valid (strlen == 0) */
 		msg_len = hex_decode(v->message, message, sizeof(message));
 
 		char msg_buf[128];
@@ -258,10 +276,15 @@ static int test_verify_invalid_signatures(void)
 
 		uint8_t pubkey[32], sig[48];
 		uint8_t message[256];
-		size_t msg_len;
+		size_t msg_len, n;
 
-		hex_decode(v->public_key, pubkey, 32);
-		hex_decode(v->signature, sig, 48);
+		n = hex_decode(v->public_key, pubkey, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		n = hex_decode(v->signature, sig, 48);
+		ASSERT_TRUE(n == 48, "signature hex_decode");
+
+		/* Empty message is valid (strlen == 0) */
 		msg_len = hex_decode(v->message, message, sizeof(message));
 
 		char msg_buf[128];

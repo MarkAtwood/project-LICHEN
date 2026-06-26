@@ -14,7 +14,7 @@
 use std::collections::HashMap;
 
 #[cfg(feature = "std")]
-use crate::messages::Dio;
+use crate::message::Dio;
 
 pub const INFINITE_RANK: u16 = 0xFFFF;
 pub const ROOT_RANK: u16 = 256; // MinHopRankIncrease

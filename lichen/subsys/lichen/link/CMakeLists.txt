@@ -26,3 +26,6 @@ zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../schc/include)
 zephyr_include_directories_ifdef(CONFIG_LICHEN_CRYPTO_MONOCYPHER
   ${CMAKE_CURRENT_SOURCE_DIR}/../crypto
 )
+
+# Include OSCORE headers for AES-CCM MIC computation
+zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../oscore)

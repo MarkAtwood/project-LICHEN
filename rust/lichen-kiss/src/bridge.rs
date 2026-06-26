@@ -12,6 +12,7 @@
 use core::fmt;
 
 use lichen_link::frame::{AddrMode, Encryption, FrameError, LichenFrame, MicLength, Signature};
+use lichen_link::seqnum::LinkSeqNum;
 
 use crate::framing::{kiss_decode, kiss_encode, kiss_unescape, KissCommand, KissError, FEND};
 
@@ -59,11 +60,11 @@ impl fmt::Display for BridgeError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for BridgeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for BridgeError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Kiss(e) => Some(e),
+            Self::Frame(e) => Some(e),
             _ => None,
         }
     }
@@ -119,7 +120,7 @@ pub struct KissBridge {
     /// Default epoch for outgoing frames.
     pub default_epoch: u8,
     /// Default sequence number (incremented on each TX).
-    pub seqnum: u16,
+    pub seqnum: LinkSeqNum,
 }
 
 impl KissBridge {
@@ -127,7 +128,7 @@ impl KissBridge {
     pub const fn new() -> Self {
         Self {
             default_epoch: 0,
-            seqnum: 0,
+            seqnum: LinkSeqNum::new(0),
         }
     }
 
@@ -273,9 +274,11 @@ impl KissBridge {
         // Placeholder MIC (4 bytes of zeros - real MIC computed by security layer)
         let mic = [0u8; 4];
 
+        let seqnum = self.seqnum.fetch_increment();
+
         let frame = LichenFrame {
             epoch: self.default_epoch,
-            seqnum: self.seqnum,
+            seqnum,
             dst_addr,
             payload,
             mic: &mic,
@@ -284,9 +287,6 @@ impl KissBridge {
             signature: Signature::Absent,
             encryption: Encryption::Plaintext,
         };
-
-        // Increment sequence number for next frame
-        self.seqnum = self.seqnum.wrapping_add(1);
 
         self.encode_link_frame(&frame, port, work_buf, out)
     }
@@ -379,7 +379,7 @@ mod tests {
         let frame = bridge.handle_kiss_frame(&kiss_buf[..kiss_len], &mut work_buf).unwrap();
 
         assert_eq!(frame.epoch, 1);
-        assert_eq!(frame.seqnum, 2);
+        assert_eq!(frame.seqnum.get(), 2);
         assert_eq!(frame.payload, b"abc");
         assert_eq!(frame.addr_mode, AddrMode::None);
     }
@@ -391,7 +391,7 @@ mod tests {
         let mic = [0u8; 4];
         let frame = LichenFrame {
             epoch: 5,
-            seqnum: 100,
+            seqnum: LinkSeqNum::new(100),
             dst_addr: &[],
             payload: b"test",
             mic: &mic,
@@ -410,7 +410,7 @@ mod tests {
         let decoded_frame = bridge.handle_kiss_frame(&out[..len], &mut decode_buf).unwrap();
 
         assert_eq!(decoded_frame.epoch, 5);
-        assert_eq!(decoded_frame.seqnum, 100);
+        assert_eq!(decoded_frame.seqnum.get(), 100);
         assert_eq!(decoded_frame.payload, b"test");
     }
 
@@ -418,21 +418,21 @@ mod tests {
     fn test_encode_payload_as_frame_broadcast() {
         let mut bridge = KissBridge::new();
         bridge.default_epoch = 3;
-        bridge.seqnum = 10;
+        bridge.seqnum = LinkSeqNum::new(10);
 
         let mut work_buf = [0u8; 256];
         let mut out = [0u8; 128];
         let len = bridge.encode_payload_as_frame(b"hello", &[], PORT_RAW, &mut work_buf, &mut out).unwrap();
 
         // Verify seqnum incremented
-        assert_eq!(bridge.seqnum, 11);
+        assert_eq!(bridge.seqnum.get(), 11);
 
         // Decode and verify
         let mut decode_buf = [0u8; 256];
         let frame = bridge.handle_kiss_frame(&out[..len], &mut decode_buf).unwrap();
 
         assert_eq!(frame.epoch, 3);
-        assert_eq!(frame.seqnum, 10);
+        assert_eq!(frame.seqnum.get(), 10);
         assert_eq!(frame.payload, b"hello");
         assert_eq!(frame.addr_mode, AddrMode::None);
     }
@@ -481,7 +481,7 @@ mod tests {
     fn test_bridge_default() {
         let bridge = KissBridge::default();
         assert_eq!(bridge.default_epoch, 0);
-        assert_eq!(bridge.seqnum, 0);
+        assert_eq!(bridge.seqnum.get(), 0);
     }
 
     #[test]

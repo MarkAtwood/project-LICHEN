@@ -7,10 +7,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 // Include generated protobuf code
 include!("meshtastic.rs");
 
+pub mod address;
 pub mod gatt;
+
+// Re-export commonly used types for convenience
+pub use address::{AddressMapper, Ipv6AddrMeshtasticExt, MeshtasticNodeId};
 
 #[cfg(test)]
 mod tests {

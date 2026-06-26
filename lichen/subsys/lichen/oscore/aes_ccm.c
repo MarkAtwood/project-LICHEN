@@ -16,10 +16,11 @@
 #include <string.h>
 #include <tinycrypt/aes.h>
 #include <tinycrypt/ccm_mode.h>
+#include <monocypher.h>
 
 #include "aes_ccm.h"
 
-int aes_ccm_encrypt(const uint8_t key[AES_CCM_KEY_LEN],
+int lichen_aes_ccm_encrypt(const uint8_t key[AES_CCM_KEY_LEN],
 		    const uint8_t nonce[AES_CCM_NONCE_LEN],
 		    const uint8_t *aad, size_t aad_len,
 		    const uint8_t *plaintext, size_t pt_len,
@@ -28,18 +29,19 @@ int aes_ccm_encrypt(const uint8_t key[AES_CCM_KEY_LEN],
 	struct tc_aes_key_sched_struct sched;
 	struct tc_ccm_mode_struct ccm;
 	int ret;
+	int result = -1;
 
 	/* Initialize AES key schedule */
 	ret = tc_aes128_set_encrypt_key(&sched, key);
 	if (ret != TC_CRYPTO_SUCCESS) {
-		return -1;
+		goto cleanup;
 	}
 
 	/* Configure CCM mode */
 	ret = tc_ccm_config(&ccm, &sched, (uint8_t *)nonce, AES_CCM_NONCE_LEN,
 			    AES_CCM_TAG_LEN);
 	if (ret != TC_CRYPTO_SUCCESS) {
-		return -1;
+		goto cleanup;
 	}
 
 	/* Encrypt and authenticate */
@@ -48,13 +50,19 @@ int aes_ccm_encrypt(const uint8_t key[AES_CCM_KEY_LEN],
 					   plaintext, pt_len,
 					   &ccm);
 	if (ret != TC_CRYPTO_SUCCESS) {
-		return -1;
+		goto cleanup;
 	}
 
-	return 0;
+	result = 0;
+
+cleanup:
+	/* Wipe key schedule and CCM state to prevent key leakage */
+	crypto_wipe(&sched, sizeof(sched));
+	crypto_wipe(&ccm, sizeof(ccm));
+	return result;
 }
 
-int aes_ccm_decrypt(const uint8_t key[AES_CCM_KEY_LEN],
+int lichen_aes_ccm_decrypt(const uint8_t key[AES_CCM_KEY_LEN],
 		    const uint8_t nonce[AES_CCM_NONCE_LEN],
 		    const uint8_t *aad, size_t aad_len,
 		    const uint8_t *ciphertext, size_t ct_len,
@@ -63,6 +71,7 @@ int aes_ccm_decrypt(const uint8_t key[AES_CCM_KEY_LEN],
 	struct tc_aes_key_sched_struct sched;
 	struct tc_ccm_mode_struct ccm;
 	int ret;
+	int result = -1;
 
 	if (ct_len < AES_CCM_TAG_LEN) {
 		return -1;
@@ -71,14 +80,14 @@ int aes_ccm_decrypt(const uint8_t key[AES_CCM_KEY_LEN],
 	/* Initialize AES key schedule */
 	ret = tc_aes128_set_encrypt_key(&sched, key);
 	if (ret != TC_CRYPTO_SUCCESS) {
-		return -1;
+		goto cleanup;
 	}
 
 	/* Configure CCM mode */
 	ret = tc_ccm_config(&ccm, &sched, (uint8_t *)nonce, AES_CCM_NONCE_LEN,
 			    AES_CCM_TAG_LEN);
 	if (ret != TC_CRYPTO_SUCCESS) {
-		return -1;
+		goto cleanup;
 	}
 
 	/* Decrypt and verify */
@@ -87,8 +96,14 @@ int aes_ccm_decrypt(const uint8_t key[AES_CCM_KEY_LEN],
 					     ciphertext, ct_len,
 					     &ccm);
 	if (ret != TC_CRYPTO_SUCCESS) {
-		return -1;
+		goto cleanup;
 	}
 
-	return 0;
+	result = 0;
+
+cleanup:
+	/* Wipe key schedule and CCM state to prevent key leakage */
+	crypto_wipe(&sched, sizeof(sched));
+	crypto_wipe(&ccm, sizeof(ccm));
+	return result;
 }

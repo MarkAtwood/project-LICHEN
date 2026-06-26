@@ -14,20 +14,22 @@
 #include <lichen/senml.h>
 
 /* CBOR SenML label indices (RFC 8428 Section 6) */
-#define SENML_LABEL_BN -2  /* Base Name */
-#define SENML_LABEL_BT -3  /* Base Time */
-#define SENML_LABEL_BU -4  /* Base Unit */
-#define SENML_LABEL_BV -5  /* Base Value */
-#define SENML_LABEL_BS -6  /* Base Sum */
-#define SENML_LABEL_N   0  /* Name */
-#define SENML_LABEL_U   1  /* Unit */
-#define SENML_LABEL_V   2  /* Value */
-#define SENML_LABEL_VS  3  /* String Value */
-#define SENML_LABEL_VB  4  /* Boolean Value */
-#define SENML_LABEL_S   5  /* Sum */
-#define SENML_LABEL_T   6  /* Time */
-#define SENML_LABEL_UT  7  /* Update Time */
-#define SENML_LABEL_VD  8  /* Data Value */
+enum senml_label {
+	SENML_LABEL_BS = -6,  /* Base Sum */
+	SENML_LABEL_BV = -5,  /* Base Value */
+	SENML_LABEL_BU = -4,  /* Base Unit */
+	SENML_LABEL_BT = -3,  /* Base Time */
+	SENML_LABEL_BN = -2,  /* Base Name */
+	SENML_LABEL_N  =  0,  /* Name */
+	SENML_LABEL_U  =  1,  /* Unit */
+	SENML_LABEL_V  =  2,  /* Value */
+	SENML_LABEL_VS =  3,  /* String Value */
+	SENML_LABEL_VB =  4,  /* Boolean Value */
+	SENML_LABEL_S  =  5,  /* Sum */
+	SENML_LABEL_T  =  6,  /* Time */
+	SENML_LABEL_UT =  7,  /* Update Time */
+	SENML_LABEL_VD =  8,  /* Data Value */
+};
 
 /*
  * Minimal CBOR encoding helpers.
@@ -86,6 +88,10 @@ static int cbor_encode_int(uint8_t *buf, size_t buflen, int64_t val)
 static int cbor_encode_tstr(uint8_t *buf, size_t buflen, const char *str)
 {
 	size_t len = strlen(str);
+	/* Guard against strings too long to express in a signed int return */
+	if (len > (size_t)INT_MAX - 9) {
+		return -1;
+	}
 	int hdr = cbor_encode_uint(buf, buflen, 3, len);
 	if (hdr < 0) return -1;
 	if ((size_t)hdr + len > buflen) return -1;

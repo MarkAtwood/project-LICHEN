@@ -27,6 +27,10 @@ static bool addr_eq(const uint8_t *a, const uint8_t *b)
  * path_cost = rank + (link_etx * mhri) / 256
  *
  * Using fixed-point: link_etx=256 means ETX=1.0, so we divide by 256.
+ *
+ * Overflow handling: multiplication is done in uint32_t (max product
+ * 65535*65535 = 4,294,836,225 fits). Result saturates to 0xFFFF
+ * (LICHEN_RPL_INFINITE_RANK) if the sum exceeds uint16_t range.
  */
 static uint16_t path_cost(const struct lichen_rpl_parent *p, uint16_t mhri)
 {
@@ -100,6 +104,9 @@ void lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
 			   const uint8_t *dodag_id,
 			   uint8_t version)
 {
+	if (d == NULL || dodag_id == NULL) {
+		return;
+	}
 	memset(d, 0, sizeof(*d));
 
 	d->rpl_instance_id = rpl_instance_id;
@@ -193,6 +200,10 @@ void lichen_rpl_dodag_process_dio(struct lichen_rpl_dodag *d,
 				  const uint8_t *neighbor_addr,
 				  uint16_t link_etx)
 {
+	if (d == NULL || dio == NULL || neighbor_addr == NULL) {
+		return;
+	}
+
 	/* Root ignores DIOs */
 	if (d->role == LICHEN_RPL_ROOT) {
 		return;

@@ -27,7 +27,7 @@ pub enum Cda {
 }
 
 /// One field's compression behaviour within a rule (RFC 8724 §7.4).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FieldDescriptor {
     /// Stable identifier, e.g. `"CoAP.MID"`.
     pub field_id: &'static str,
@@ -45,7 +45,7 @@ pub struct FieldDescriptor {
 /// A SCHC rule: an ordered list of field descriptors keyed by a rule ID.
 ///
 /// Rule IDs 0-127 are compression rules; 255 is the uncompressed fallback.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Rule {
     pub rule_id: u8,
     pub fields: &'static [FieldDescriptor],

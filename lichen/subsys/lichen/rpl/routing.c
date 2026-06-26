@@ -11,8 +11,9 @@
 #include <lichen/rpl_routing.h>
 #include <string.h>
 
-/* Maximum chain depth for loop detection */
-#define MAX_CHAIN 64
+/* Ensure LICHEN_RPL_MAX_HOPS fits in uint8_t (used for num_addresses field) */
+_Static_assert(LICHEN_RPL_MAX_HOPS <= 255,
+	       "LICHEN_RPL_MAX_HOPS exceeds uint8_t range");
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
 
@@ -24,6 +25,60 @@ static bool addr_eq(const uint8_t *a, const uint8_t *b)
 static void addr_copy(uint8_t *dst, const uint8_t *src)
 {
 	memcpy(dst, src, 16);
+}
+
+/* ── Visited Set for O(1) Loop Detection ──────────────────────────────────── */
+
+#define VISITED_BUCKETS 16  /* power of 2, >= LICHEN_RPL_MAX_HOPS */
+
+/* Simple hash of IPv6 address for visited set indexing */
+static inline uint32_t addr_hash(const uint8_t *addr)
+{
+	/* XOR fold 16 bytes into 32 bits */
+	uint32_t h = 0;
+	for (int i = 0; i < 16; i += 4) {
+		h ^= (uint32_t)addr[i] |
+		     ((uint32_t)addr[i + 1] << 8) |
+		     ((uint32_t)addr[i + 2] << 16) |
+		     ((uint32_t)addr[i + 3] << 24);
+	}
+	return h;
+}
+
+/* Visited set for loop detection - open-addressed hash table */
+struct visited_set {
+	uint8_t addrs[VISITED_BUCKETS][16];
+	bool occupied[VISITED_BUCKETS];
+};
+
+static inline void visited_init(struct visited_set *v)
+{
+	memset(v->occupied, 0, sizeof(v->occupied));
+}
+
+/* Returns true if addr was already visited (loop), false if newly added */
+static inline bool visited_check_and_add(struct visited_set *v, const uint8_t *addr)
+{
+	uint32_t bucket = addr_hash(addr) % VISITED_BUCKETS;
+	uint32_t start = bucket;
+
+	/* Linear probe for collision handling */
+	do {
+		if (!v->occupied[bucket]) {
+			/* Empty slot - add and return "not visited" */
+			memcpy(v->addrs[bucket], addr, 16);
+			v->occupied[bucket] = true;
+			return false;
+		}
+		if (addr_eq(v->addrs[bucket], addr)) {
+			/* Found - loop detected */
+			return true;
+		}
+		bucket = (bucket + 1) % VISITED_BUCKETS;
+	} while (bucket != start);
+
+	/* Table full - treat as loop to avoid infinite walk */
+	return true;
 }
 
 /* ── Source Routing Header ─────────────────────────────────────────────────── */
@@ -175,6 +230,9 @@ void lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
 				 uint8_t rpl_instance_id,
 				 const uint8_t *dodag_id)
 {
+	if (dm == NULL || node_address == NULL || dodag_id == NULL) {
+		return;
+	}
 	memset(dm, 0, sizeof(*dm));
 	addr_copy(dm->node_address, node_address);
 	dm->rpl_instance_id = rpl_instance_id;
@@ -317,6 +375,9 @@ static struct lichen_rpl_parent_edge *find_free_edge(struct lichen_rpl_dao_manag
 /**
  * Walk target → parent → ... → root and return the downward path.
  * Returns path_len, or 0 if chain is incomplete or has a loop.
+ *
+ * Uses hash-based visited set for O(1) loop detection per hop,
+ * making overall complexity O(n) instead of O(n^2).
  */
 static int assemble_path(struct lichen_rpl_dao_manager *dm,
 			 const uint8_t *target,
@@ -325,11 +386,14 @@ static int assemble_path(struct lichen_rpl_dao_manager *dm,
 	uint8_t chain[LICHEN_RPL_MAX_HOPS][16];
 	int chain_len = 0;
 
+	struct visited_set visited;
+	visited_init(&visited);
+
 	uint8_t node[16];
 	addr_copy(node, target);
 
-	/* Simple loop detection using linear search */
-	for (int depth = 0; depth < MAX_CHAIN; depth++) {
+	/* Walk chain with O(1) loop detection via hash set */
+	while (chain_len < LICHEN_RPL_MAX_HOPS) {
 		if (addr_eq(node, dm->node_address)) {
 			/* Reached root - reverse chain into path */
 			for (int i = 0; i < chain_len; i++) {
@@ -338,15 +402,9 @@ static int assemble_path(struct lichen_rpl_dao_manager *dm,
 			return chain_len;
 		}
 
-		/* Check for loop */
-		for (int i = 0; i < chain_len; i++) {
-			if (addr_eq(chain[i], node)) {
-				return 0;  /* Loop detected */
-			}
-		}
-
-		if (chain_len >= LICHEN_RPL_MAX_HOPS) {
-			return 0;  /* Too many hops */
+		/* Check for loop using visited set (O(1) amortized) */
+		if (visited_check_and_add(&visited, node)) {
+			return 0;  /* Loop detected */
 		}
 
 		addr_copy(chain[chain_len], node);
@@ -361,11 +419,13 @@ static int assemble_path(struct lichen_rpl_dao_manager *dm,
 		addr_copy(node, edge->parent);
 	}
 
-	return 0;  /* Chain too long */
+	return 0;  /* Too many hops */
 }
 
-static void rebuild_routes(struct lichen_rpl_dao_manager *dm)
+static int rebuild_routes(struct lichen_rpl_dao_manager *dm)
 {
+	int failures = 0;
+
 	/* Iterate all edges and try to assemble paths */
 	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_ROUTES; i++) {
 		if (!dm->parent_map[i].valid) {
@@ -376,11 +436,16 @@ static void rebuild_routes(struct lichen_rpl_dao_manager *dm)
 		int path_len = assemble_path(dm, dm->parent_map[i].target, path);
 
 		if (path_len > 0) {
-			lichen_rpl_routing_table_add(&dm->routing_table,
-						     dm->parent_map[i].target,
-						     path, (uint8_t)path_len);
+			int ret = lichen_rpl_routing_table_add(&dm->routing_table,
+							       dm->parent_map[i].target,
+							       path, (uint8_t)path_len);
+			if (ret < 0) {
+				failures++;
+			}
 		}
 	}
+
+	return failures > 0 ? -1 : 0;
 }
 
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
@@ -410,7 +475,7 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
 	addr_copy(edge->parent, parent);
 	edge->valid = true;
 
-	rebuild_routes(dm);
+	(void)rebuild_routes(dm);  /* Best-effort rebuild; lookup below determines success */
 
 	return lichen_rpl_routing_table_lookup(&dm->routing_table, target) != NULL;
 }

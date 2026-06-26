@@ -94,19 +94,24 @@ static ssize_t nus_rx_write(struct bt_conn *conn,
 				b = SLIP_ESC;
 			}
 			/* unknown escape sequence: pass byte through */
+
+			/* Check buffer space BEFORE writing decoded escape byte */
+			if (s_rx_len >= sizeof(s_rx_buf)) {
+				continue;
+			}
+			s_rx_buf[s_rx_len++] = b;
 		} else if (b == SLIP_ESC) {
 			s_rx_esc = true;
-			continue;
 		} else if (b == SLIP_END) {
 			if (s_rx_len > 0) {
 				slip_dispatch(s_rx_buf, s_rx_len);
 				s_rx_len = 0;
 			}
-			continue;
-		}
-
-		if (s_rx_len < sizeof(s_rx_buf)) {
-			s_rx_buf[s_rx_len++] = b;
+		} else {
+			/* Regular byte — store if buffer has space */
+			if (s_rx_len < sizeof(s_rx_buf)) {
+				s_rx_buf[s_rx_len++] = b;
+			}
 		}
 	}
 	return len;
@@ -211,16 +216,28 @@ int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 		return -ENOTCONN;
 	}
 
-	/* Encode SLIP frame */
+	/* Encode SLIP frame — check space before each write to prevent overflow */
 	s_tx_frame[fi++] = SLIP_END;
-	for (size_t i = 0; i < len && fi < sizeof(s_tx_frame) - 1u; i++) {
+	for (size_t i = 0; i < len; i++) {
 		if (ipv6[i] == SLIP_END) {
+			/* Escape sequence needs 2 bytes + 1 reserved for trailing END */
+			if (fi + 2u > sizeof(s_tx_frame) - 1u) {
+				return -ENOMEM;
+			}
 			s_tx_frame[fi++] = SLIP_ESC;
 			s_tx_frame[fi++] = SLIP_ESC_END;
 		} else if (ipv6[i] == SLIP_ESC) {
+			/* Escape sequence needs 2 bytes + 1 reserved for trailing END */
+			if (fi + 2u > sizeof(s_tx_frame) - 1u) {
+				return -ENOMEM;
+			}
 			s_tx_frame[fi++] = SLIP_ESC;
 			s_tx_frame[fi++] = SLIP_ESC_ESC;
 		} else {
+			/* Regular byte needs 1 byte + 1 reserved for trailing END */
+			if (fi + 1u > sizeof(s_tx_frame) - 1u) {
+				return -ENOMEM;
+			}
 			s_tx_frame[fi++] = ipv6[i];
 		}
 	}

@@ -16,6 +16,7 @@
 #include <lichen/oscore.h>
 #include "aes_ccm.h"
 #include "hkdf.h"
+#include <monocypher.h>
 
 LOG_MODULE_REGISTER(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
 
@@ -256,11 +257,11 @@ void oscore_ctx_free(struct oscore_ctx *ctx)
 
 	k_mutex_lock(&s_ctx_mutex, K_FOREVER);
 
-	/* Secure wipe of key material */
-	memset(ctx->master_secret, 0, sizeof(ctx->master_secret));
-	memset(ctx->sender_key, 0, sizeof(ctx->sender_key));
-	memset(ctx->recipient_key, 0, sizeof(ctx->recipient_key));
-	memset(ctx->common_iv, 0, sizeof(ctx->common_iv));
+	/* Secure wipe of key material (crypto_wipe cannot be optimized away) */
+	crypto_wipe(ctx->master_secret, sizeof(ctx->master_secret));
+	crypto_wipe(ctx->sender_key, sizeof(ctx->sender_key));
+	crypto_wipe(ctx->recipient_key, sizeof(ctx->recipient_key));
+	crypto_wipe(ctx->common_iv, sizeof(ctx->common_iv));
 	ctx->active = false;
 
 	k_mutex_unlock(&s_ctx_mutex);
@@ -556,6 +557,7 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 	size_t piv_len;
 	uint8_t plaintext[256];
 	size_t pt_len;
+	int ret;
 
 	if (ctx == NULL || ciphertext == NULL || oscore_opt == NULL) {
 		return OSCORE_ERR_INVALID_PARAM;
@@ -578,7 +580,8 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 
 	if (options_len > 0) {
 		if (pt_len + options_len >= sizeof(plaintext)) {
-			return OSCORE_ERR_BUFFER_TOO_SMALL;
+			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+			goto cleanup_protect_request;
 		}
 		memcpy(plaintext + pt_len, options, options_len);
 		pt_len += options_len;
@@ -586,7 +589,8 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 
 	if (payload_len > 0) {
 		if (pt_len + 1 + payload_len >= sizeof(plaintext)) {
-			return OSCORE_ERR_BUFFER_TOO_SMALL;
+			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+			goto cleanup_protect_request;
 		}
 		plaintext[pt_len++] = 0xFF; /* Payload marker */
 		memcpy(plaintext + pt_len, payload, payload_len);
@@ -601,7 +605,8 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 	/* Check output buffer size */
 	size_t required_ct_len = pt_len + OSCORE_TAG_LEN;
 	if (*ciphertext_len < required_ct_len) {
-		return OSCORE_ERR_BUFFER_TOO_SMALL;
+		ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+		goto cleanup_protect_request;
 	}
 
 	/* Encrypt */
@@ -609,7 +614,8 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 			    aad, aad_len,
 			    plaintext, pt_len,
 			    ciphertext) != 0) {
-		return OSCORE_ERR_DECRYPT_FAILED;
+		ret = OSCORE_ERR_DECRYPT_FAILED;
+		goto cleanup_protect_request;
 	}
 	*ciphertext_len = required_ct_len;
 
@@ -625,11 +631,18 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 
 	int opt_len = oscore_option_build(&opt, oscore_opt, *oscore_opt_len);
 	if (opt_len < 0) {
-		return opt_len;
+		ret = opt_len;
+		goto cleanup_protect_request;
 	}
 	*oscore_opt_len = (size_t)opt_len;
 
-	return OSCORE_OK;
+	ret = OSCORE_OK;
+
+cleanup_protect_request:
+	crypto_wipe(nonce, sizeof(nonce));
+	crypto_wipe(piv, sizeof(piv));
+	crypto_wipe(plaintext, sizeof(plaintext));
+	return ret;
 }
 
 int oscore_unprotect_request(struct oscore_ctx *ctx,
@@ -681,19 +694,22 @@ int oscore_unprotect_request(struct oscore_ctx *ctx,
 	/* Decrypt */
 	size_t pt_len = ciphertext_len - OSCORE_TAG_LEN;
 	if (pt_len > sizeof(plaintext)) {
-		return OSCORE_ERR_BUFFER_TOO_SMALL;
+		ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+		goto cleanup_unprotect_request;
 	}
 
 	if (aes_ccm_decrypt(ctx->recipient_key, nonce,
 			    aad, aad_len,
 			    ciphertext, ciphertext_len,
 			    plaintext) != 0) {
-		return OSCORE_ERR_DECRYPT_FAILED;
+		ret = OSCORE_ERR_DECRYPT_FAILED;
+		goto cleanup_unprotect_request;
 	}
 
 	/* Parse plaintext: code || options || 0xFF || payload */
 	if (pt_len < 1) {
-		return OSCORE_ERR_INVALID_PARAM;
+		ret = OSCORE_ERR_INVALID_PARAM;
+		goto cleanup_unprotect_request;
 	}
 	*code = plaintext[0];
 
@@ -707,7 +723,8 @@ int oscore_unprotect_request(struct oscore_ctx *ctx,
 	size_t opt_len = marker_pos - 1;
 	if (options != NULL && options_len != NULL) {
 		if (*options_len < opt_len) {
-			return OSCORE_ERR_BUFFER_TOO_SMALL;
+			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+			goto cleanup_unprotect_request;
 		}
 		memcpy(options, plaintext + 1, opt_len);
 		*options_len = opt_len;
@@ -718,7 +735,8 @@ int oscore_unprotect_request(struct oscore_ctx *ctx,
 		size_t pay_len = pt_len - marker_pos - 1;
 		if (payload != NULL && payload_len != NULL) {
 			if (*payload_len < pay_len) {
-				return OSCORE_ERR_BUFFER_TOO_SMALL;
+				ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+				goto cleanup_unprotect_request;
 			}
 			memcpy(payload, plaintext + marker_pos + 1, pay_len);
 			*payload_len = pay_len;
@@ -727,7 +745,12 @@ int oscore_unprotect_request(struct oscore_ctx *ctx,
 		*payload_len = 0;
 	}
 
-	return OSCORE_OK;
+	ret = OSCORE_OK;
+
+cleanup_unprotect_request:
+	crypto_wipe(nonce, sizeof(nonce));
+	crypto_wipe(plaintext, sizeof(plaintext));
+	return ret;
 }
 
 int oscore_protect_response(struct oscore_ctx *ctx,
@@ -741,6 +764,7 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 	uint8_t nonce[OSCORE_NONCE_LEN];
 	uint8_t plaintext[256];
 	size_t pt_len;
+	int ret;
 
 	if (ctx == NULL || ciphertext == NULL || oscore_opt == NULL) {
 		return OSCORE_ERR_INVALID_PARAM;
@@ -756,7 +780,8 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 
 	if (options_len > 0) {
 		if (pt_len + options_len >= sizeof(plaintext)) {
-			return OSCORE_ERR_BUFFER_TOO_SMALL;
+			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+			goto cleanup_protect_response;
 		}
 		memcpy(plaintext + pt_len, options, options_len);
 		pt_len += options_len;
@@ -764,7 +789,8 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 
 	if (payload_len > 0) {
 		if (pt_len + 1 + payload_len >= sizeof(plaintext)) {
-			return OSCORE_ERR_BUFFER_TOO_SMALL;
+			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+			goto cleanup_protect_response;
 		}
 		plaintext[pt_len++] = 0xFF;
 		memcpy(plaintext + pt_len, payload, payload_len);
@@ -778,7 +804,8 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 	/* Check output buffer size */
 	size_t required_ct_len = pt_len + OSCORE_TAG_LEN;
 	if (*ciphertext_len < required_ct_len) {
-		return OSCORE_ERR_BUFFER_TOO_SMALL;
+		ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+		goto cleanup_protect_response;
 	}
 
 	/* Encrypt with sender key */
@@ -786,7 +813,8 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 			    aad, aad_len,
 			    plaintext, pt_len,
 			    ciphertext) != 0) {
-		return OSCORE_ERR_DECRYPT_FAILED;
+		ret = OSCORE_ERR_DECRYPT_FAILED;
+		goto cleanup_protect_response;
 	}
 	*ciphertext_len = required_ct_len;
 
@@ -794,11 +822,17 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 	struct oscore_option opt = {0};
 	int opt_len = oscore_option_build(&opt, oscore_opt, *oscore_opt_len);
 	if (opt_len < 0) {
-		return opt_len;
+		ret = opt_len;
+		goto cleanup_protect_response;
 	}
 	*oscore_opt_len = (size_t)opt_len;
 
-	return OSCORE_OK;
+	ret = OSCORE_OK;
+
+cleanup_protect_response:
+	crypto_wipe(nonce, sizeof(nonce));
+	crypto_wipe(plaintext, sizeof(plaintext));
+	return ret;
 }
 
 int oscore_unprotect_response(struct oscore_ctx *ctx,
@@ -811,6 +845,7 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 {
 	uint8_t nonce[OSCORE_NONCE_LEN];
 	uint8_t plaintext[256];
+	int ret;
 
 	(void)oscore_opt;
 	(void)oscore_opt_len;
@@ -834,19 +869,22 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 	/* Decrypt with recipient key */
 	size_t pt_len = ciphertext_len - OSCORE_TAG_LEN;
 	if (pt_len > sizeof(plaintext)) {
-		return OSCORE_ERR_BUFFER_TOO_SMALL;
+		ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+		goto cleanup_unprotect_response;
 	}
 
 	if (aes_ccm_decrypt(ctx->recipient_key, nonce,
 			    aad, aad_len,
 			    ciphertext, ciphertext_len,
 			    plaintext) != 0) {
-		return OSCORE_ERR_DECRYPT_FAILED;
+		ret = OSCORE_ERR_DECRYPT_FAILED;
+		goto cleanup_unprotect_response;
 	}
 
 	/* Parse plaintext */
 	if (pt_len < 1) {
-		return OSCORE_ERR_INVALID_PARAM;
+		ret = OSCORE_ERR_INVALID_PARAM;
+		goto cleanup_unprotect_response;
 	}
 	*code = plaintext[0];
 
@@ -860,7 +898,8 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 	size_t opt_len = marker_pos - 1;
 	if (options != NULL && options_len != NULL) {
 		if (*options_len < opt_len) {
-			return OSCORE_ERR_BUFFER_TOO_SMALL;
+			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+			goto cleanup_unprotect_response;
 		}
 		memcpy(options, plaintext + 1, opt_len);
 		*options_len = opt_len;
@@ -871,7 +910,8 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 		size_t pay_len = pt_len - marker_pos - 1;
 		if (payload != NULL && payload_len != NULL) {
 			if (*payload_len < pay_len) {
-				return OSCORE_ERR_BUFFER_TOO_SMALL;
+				ret = OSCORE_ERR_BUFFER_TOO_SMALL;
+				goto cleanup_unprotect_response;
 			}
 			memcpy(payload, plaintext + marker_pos + 1, pay_len);
 			*payload_len = pay_len;
@@ -880,5 +920,10 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 		*payload_len = 0;
 	}
 
-	return OSCORE_OK;
+	ret = OSCORE_OK;
+
+cleanup_unprotect_response:
+	crypto_wipe(nonce, sizeof(nonce));
+	crypto_wipe(plaintext, sizeof(plaintext));
+	return ret;
 }

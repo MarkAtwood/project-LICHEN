@@ -6,12 +6,35 @@
 //! - Link layer sequence numbers (for replay protection continuity)
 
 use crate::NonVolatile;
+use lichen_link::{PublicKey, Seed};
 
-/// Key names for persistent storage.
+/// Storage key constants for persistent identity and link state.
+///
+/// # Design Rationale
+///
+/// Keys are defined as constants rather than inline strings to:
+/// - **Prevent typos**: A misspelled constant is a compile error; a misspelled
+///   string silently reads/writes the wrong slot.
+/// - **Enable refactoring**: Renaming a key updates all usages automatically.
+/// - **Support grep/IDE navigation**: Constants are discoverable; magic strings
+///   scattered across call sites are not.
+///
+/// # Naming Convention
+///
+/// Keys use a `namespace.field` format with short names (8 chars max) to
+/// minimize flash wear and storage overhead on embedded targets. The prefixes
+/// group related data:
+/// - `id.*` — node identity (seed, replay-protection state)
+/// - `peers.*` — peer public keys
+/// - `peer.N` — individual peer entries (see [`peer_key`])
 pub mod keys {
+    /// 32-byte Ed25519 seed that derives the node's keypair.
     pub const IDENTITY_SEED: &str = "id.seed";
+    /// Link-layer epoch counter (1 byte) for replay protection.
     pub const EPOCH: &str = "id.epoch";
+    /// Link-layer sequence number (2 bytes, big-endian) for replay protection.
     pub const SEQNUM: &str = "id.seq";
+    /// Number of persisted peers (1 byte).
     pub const PEER_COUNT: &str = "peers.n";
 }
 
@@ -21,26 +44,27 @@ pub const MAX_PEERS: usize = 16;
 /// Get peer key name for index.
 pub fn peer_key(index: usize) -> heapless::String<16> {
     let mut s = heapless::String::new();
-    core::fmt::write(&mut s, format_args!("peer.{}", index)).ok();
+    core::fmt::write(&mut s, format_args!("peer.{}", index))
+        .expect("peer key always fits in 16 bytes");
     s
 }
 
 /// Load identity seed from storage.
 ///
 /// Returns `Some(seed)` if found and valid, `None` otherwise.
-pub fn load_seed<S: NonVolatile>(storage: &S) -> Option<[u8; 32]> {
+pub fn load_seed<S: NonVolatile>(storage: &S) -> Option<Seed> {
     let mut buf = [0u8; 32];
     let n = storage.read(keys::IDENTITY_SEED, &mut buf)?;
     if n == 32 {
-        Some(buf)
+        Some(Seed::new(buf))
     } else {
         None
     }
 }
 
 /// Save identity seed to storage.
-pub fn save_seed<S: NonVolatile>(storage: &mut S, seed: &[u8; 32]) -> Result<(), S::Error> {
-    storage.write(keys::IDENTITY_SEED, seed)
+pub fn save_seed<S: NonVolatile>(storage: &mut S, seed: &Seed) -> Result<(), S::Error> {
+    storage.write(keys::IDENTITY_SEED, seed.as_bytes())
 }
 
 /// Load link layer epoch from storage.
@@ -85,7 +109,7 @@ pub fn load_peer_count<S: NonVolatile>(storage: &S) -> usize {
 }
 
 /// Load a peer pubkey from storage.
-pub fn load_peer<S: NonVolatile>(storage: &S, index: usize) -> Option<[u8; 32]> {
+pub fn load_peer<S: NonVolatile>(storage: &S, index: usize) -> Option<PublicKey> {
     if index >= MAX_PEERS {
         return None;
     }
@@ -93,7 +117,7 @@ pub fn load_peer<S: NonVolatile>(storage: &S, index: usize) -> Option<[u8; 32]> 
     let mut buf = [0u8; 32];
     let n = storage.read(&key, &mut buf)?;
     if n == 32 {
-        Some(buf)
+        Some(PublicKey::new(buf))
     } else {
         None
     }
@@ -102,12 +126,12 @@ pub fn load_peer<S: NonVolatile>(storage: &S, index: usize) -> Option<[u8; 32]> 
 /// Save peer table to storage.
 ///
 /// Overwrites existing peers. Pass a slice of pubkeys.
-pub fn save_peers<S: NonVolatile>(storage: &mut S, peers: &[[u8; 32]]) -> Result<(), S::Error> {
+pub fn save_peers<S: NonVolatile>(storage: &mut S, peers: &[PublicKey]) -> Result<(), S::Error> {
     let count = peers.len().min(MAX_PEERS);
     storage.write(keys::PEER_COUNT, &[count as u8])?;
     for (i, pubkey) in peers.iter().take(count).enumerate() {
         let key = peer_key(i);
-        storage.write(&key, pubkey)?;
+        storage.write(&key, pubkey.as_bytes())?;
     }
     Ok(())
 }
@@ -134,9 +158,10 @@ pub mod mem {
         }
 
         /// Simulate reboot by clearing volatile state but keeping persisted data.
-        pub fn clear_volatile(&mut self) {
-            // No-op for MemStorage since it's all "persistent"
-        }
+        ///
+        /// No-op: MemStorage is always persistent, so "reboot" changes nothing.
+        /// Call this in tests to verify data survives simulated reboots.
+        pub fn clear_volatile(&mut self) {}
     }
 
     impl NonVolatile for MemStorage {
@@ -168,7 +193,7 @@ mod tests {
     #[test]
     fn seed_round_trip() {
         let mut storage = MemStorage::new();
-        let seed = [0xABu8; 32];
+        let seed = Seed::new([0xABu8; 32]);
 
         assert!(load_seed(&storage).is_none());
         save_seed(&mut storage, &seed).unwrap();
@@ -192,22 +217,26 @@ mod tests {
     #[test]
     fn peers_round_trip() {
         let mut storage = MemStorage::new();
-        let peers = [[0x01u8; 32], [0x02u8; 32], [0x03u8; 32]];
+        let peers = [
+            PublicKey::new([0x01u8; 32]),
+            PublicKey::new([0x02u8; 32]),
+            PublicKey::new([0x03u8; 32]),
+        ];
 
         assert_eq!(load_peer_count(&storage), 0);
         save_peers(&mut storage, &peers).unwrap();
 
         assert_eq!(load_peer_count(&storage), 3);
-        assert_eq!(load_peer(&storage, 0), Some([0x01u8; 32]));
-        assert_eq!(load_peer(&storage, 1), Some([0x02u8; 32]));
-        assert_eq!(load_peer(&storage, 2), Some([0x03u8; 32]));
+        assert_eq!(load_peer(&storage, 0), Some(PublicKey::new([0x01u8; 32])));
+        assert_eq!(load_peer(&storage, 1), Some(PublicKey::new([0x02u8; 32])));
+        assert_eq!(load_peer(&storage, 2), Some(PublicKey::new([0x03u8; 32])));
         assert!(load_peer(&storage, 3).is_none());
     }
 
     #[test]
     fn seed_survives_simulated_reboot() {
         let mut storage = MemStorage::new();
-        let seed = [0xDEu8; 32];
+        let seed = Seed::new([0xDEu8; 32]);
         save_seed(&mut storage, &seed).unwrap();
 
         // Simulate "reboot" - data persists
