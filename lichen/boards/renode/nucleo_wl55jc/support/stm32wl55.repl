@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: Apache-2.0
+// STM32WL55 platform for Renode
+// Based on STM32WBA with WL55-specific memory map
+// ponytail: minimal platform, expand peripherals as needed
+
+// Memory
+flash: Memory.MappedMemory @ sysbus 0x08000000
+    size: 0x40000  // 256KB
+
+sram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x10000  // 64KB
+
+// CPU - Cortex-M4 (not M33 like WBA)
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m4f"
+    nvic: nvic
+
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    priorityMask: 0xF0
+    systickFrequency: 48000000
+    IRQ -> cpu@0
+
+// RCC - use WBA model (closest available)
+rcc: Miscellaneous.STM32WBA_RCC @ sysbus 0x58000000
+    nvic: nvic
+    lptim1: lptim1
+
+// PWR
+pwr: Miscellaneous.STM32WBA_PWR @ sysbus 0x58000400
+
+// LPUART1 - main console
+lpuart1: UART.STM32F7_USART @ sysbus 0x40008000
+    frequency: 48000000
+    lowPowerMode: true
+    IRQ -> nvic@37
+
+// USART1
+usart1: UART.STM32F7_USART @ sysbus 0x40013800
+    frequency: 48000000
+    IRQ -> nvic@38
+
+// USART2
+usart2: UART.STM32F7_USART @ sysbus 0x40004400
+    frequency: 48000000
+    IRQ -> nvic@39
+
+// LPTIM1 - used for Zephyr ticks
+lptim1: Timers.STM32L0_LpTimer @ sysbus 0x40007C00
+    frequency: 32000
+    -> nvic@65
+
+// Flash controller stub
+flash_ctrl: MTD.STM32WBA_FlashController @ sysbus 0x58004000
+    flash: flash
+
+// GPIO
+gpioPortA: GPIOPort.STM32_GPIOPort @ sysbus <0x48000000, +0x400>
+    numberOfAFs: 16
+
+gpioPortB: GPIOPort.STM32_GPIOPort @ sysbus <0x48000400, +0x400>
+    numberOfAFs: 16
+
+gpioPortC: GPIOPort.STM32_GPIOPort @ sysbus <0x48000800, +0x400>
+    numberOfAFs: 16
+
+// Watchdog
+iwdg: Timers.STM32_IndependentWatchdog @ sysbus 0x40003000
+    frequency: 32000
+    windowOption: false
+    defaultPrescaler: 0x4
+
+// RTC
+rtc: Timers.STM32F4_RTC @ sysbus 0x40002800
+
+// Stub SubGHz radio region
+sysbus:
+    init:
+        SilenceRange <0x58010000 0x1400>
