@@ -7,4 +7,4 @@ rsource "../drivers/Kconfig"
 rsource "../subsys/Kconfig"
 
 # L2 integration from bridge-zephyr (Zephyr network stack integration)
-rsource "../../../firmware/bridge-zephyr/subsys/lichen/Kconfig"
+rsource "../../firmware/bridge-zephyr/subsys/lichen/Kconfig"
