@@ -5,82 +5,127 @@
  * @file replay.c
  * @brief Sliding window replay protection
  *
- * Implements RFC 4303 style anti-replay with a sliding window bitmap.
+ * Implements per-peer replay protection using a 64-slot bitmap window.
+ * Ported from rust/lichen-link/src/replay.rs
+ *
+ * The window tracks sequence numbers relative to the highest seen.
+ * Bit 0 = last_seq, bit i = last_seq - i. Sequence arithmetic wraps
+ * at 65536 with half-space normalization to handle u16 wraparound.
  */
 
-#include <lichen/replay.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
-
-#define WINDOW_SIZE CONFIG_LICHEN_LINK_REPLAY_WINDOW
+#include <lichen/replay.h>
 
 void lichen_replay_init(struct lichen_replay_window *rw)
 {
-	rw->highest_seq = 0;
-	memset(rw->bitmap, 0, sizeof(rw->bitmap));
+	rw->last_seq = 0;
+	rw->bitmap = 0;
+	rw->initialised = false;
 }
 
-bool lichen_replay_accept(struct lichen_replay_window *rw, uint16_t seqnum)
+bool lichen_replay_check(struct lichen_replay_window *rw, uint16_t seq)
 {
-	/* Handle first packet */
-	if (rw->highest_seq == 0 && rw->bitmap[0] == 0) {
-		rw->highest_seq = seqnum;
-		/* Mark this sequence as seen */
-		rw->bitmap[0] = 1;
+	int32_t diff;
+
+	if (!rw->initialised) {
+		rw->last_seq = seq;
+		rw->bitmap = 1;
+		rw->initialised = true;
 		return true;
 	}
 
-	/* Check if seqnum is ahead of window */
-	if (seqnum > rw->highest_seq) {
-		uint16_t diff = seqnum - rw->highest_seq;
+	/* Signed distance: positive means seq is newer than last_seq.
+	 * Use i32 arithmetic to handle wrapping correctly. */
+	diff = (int32_t)seq - (int32_t)rw->last_seq;
 
-		if (diff >= WINDOW_SIZE) {
-			/* Far ahead: reset window */
-			memset(rw->bitmap, 0, sizeof(rw->bitmap));
+	/* Normalise to [-32768, 32767] range (half the u16 space) */
+	if (diff > 32767) {
+		diff -= 65536;
+	} else if (diff < -32768) {
+		diff += 65536;
+	}
+
+	if (diff > 0) {
+		/* Newer than anything we've seen: advance the window */
+		uint32_t shift = (uint32_t)diff;
+
+		if (shift >= 64) {
+			/* Entire window is beyond what we've seen; reset it */
+			rw->bitmap = 1;
 		} else {
-			/* Shift window: move bitmap left by diff positions */
-			for (int i = WINDOW_SIZE - 1; i >= 0; i--) {
-				int src_bit = i - (int)diff;
-				int byte_idx = i / 8;
-				int bit_idx = i % 8;
-				int src_byte = src_bit / 8;
-				int src_bit_idx = src_bit % 8;
-
-				if (src_bit >= 0) {
-					if (rw->bitmap[src_byte] & (1 << src_bit_idx)) {
-						rw->bitmap[byte_idx] |= (1 << bit_idx);
-					} else {
-						rw->bitmap[byte_idx] &= ~(1 << bit_idx);
-					}
-				} else {
-					rw->bitmap[byte_idx] &= ~(1 << bit_idx);
-				}
-			}
+			rw->bitmap = (rw->bitmap << shift) | 1;
 		}
-
-		rw->highest_seq = seqnum;
-		/* Mark position 0 as seen (current packet) */
-		rw->bitmap[0] |= 1;
+		rw->last_seq = seq;
 		return true;
 	}
 
-	/* Check if seqnum is within window */
-	uint16_t age = rw->highest_seq - seqnum;
-
-	if (age >= WINDOW_SIZE) {
-		/* Too old: reject */
+	if (diff == 0) {
+		/* Exact duplicate of last_seq */
 		return false;
 	}
 
-	/* Check if already seen */
-	int byte_idx = age / 8;
-	int bit_idx = age % 8;
+	/* Older than last_seq: check the bitmask */
+	uint32_t offset = (uint32_t)(-diff);
 
-	if (rw->bitmap[byte_idx] & (1 << bit_idx)) {
-		/* Already seen: replay */
+	if (offset >= 64) {
+		/* Outside the window - too old to verify, reject */
 		return false;
 	}
 
-	/* Mark as seen */
-	rw->bitmap[byte_idx] |= (1 << bit_idx);
+	uint64_t bit = (uint64_t)1 << offset;
+
+	if (rw->bitmap & bit) {
+		/* Already seen */
+		return false;
+	}
+
+	rw->bitmap |= bit;
 	return true;
+}
+
+void lichen_replay_table_init(struct lichen_replay_table *table)
+{
+	memset(table, 0, sizeof(*table));
+}
+
+struct lichen_replay_window *lichen_replay_get(struct lichen_replay_table *table,
+					       const uint8_t eui64[LICHEN_EUI64_SIZE])
+{
+	int free_slot = -1;
+
+	/* Search for existing entry or first free slot */
+	for (int i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
+		if (table->peers[i].active) {
+			if (memcmp(table->peers[i].eui64, eui64, LICHEN_EUI64_SIZE) == 0) {
+				return &table->peers[i].window;
+			}
+		} else if (free_slot < 0) {
+			free_slot = i;
+		}
+	}
+
+	/* Not found - create new entry if there's room */
+	if (free_slot < 0) {
+		return NULL;
+	}
+
+	memcpy(table->peers[free_slot].eui64, eui64, LICHEN_EUI64_SIZE);
+	lichen_replay_init(&table->peers[free_slot].window);
+	table->peers[free_slot].active = true;
+
+	return &table->peers[free_slot].window;
+}
+
+void lichen_replay_remove(struct lichen_replay_table *table,
+			  const uint8_t eui64[LICHEN_EUI64_SIZE])
+{
+	for (int i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
+		if (table->peers[i].active &&
+		    memcmp(table->peers[i].eui64, eui64, LICHEN_EUI64_SIZE) == 0) {
+			table->peers[i].active = false;
+			return;
+		}
+	}
 }

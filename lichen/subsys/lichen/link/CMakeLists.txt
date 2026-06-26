@@ -7,6 +7,9 @@ zephyr_library()
 
 zephyr_library_sources(
   frame.c
+  lichen_link_rx.c
+  lichen_link_tx.c
+  link_ctx.c
   replay.c
 )
 
@@ -15,6 +18,9 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_LINK_SCHNORR
 )
 
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Include SCHC headers for compression/decompression
+zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../schc/include)
 
 # Include crypto headers for Monocypher when using Schnorr-48
 zephyr_include_directories_ifdef(CONFIG_LICHEN_CRYPTO_MONOCYPHER

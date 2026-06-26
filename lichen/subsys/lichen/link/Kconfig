@@ -6,9 +6,11 @@
 menuconfig LICHEN_LINK
 	bool "LICHEN link layer"
 	depends on LICHEN
+	select LICHEN_SCHC
 	help
 	  Enable the LICHEN link layer with Schnorr-48 signatures
-	  and replay protection.
+	  and replay protection. Automatically enables SCHC header
+	  compression for IPv6 packet handling.
 
 if LICHEN_LINK
 
@@ -19,22 +21,14 @@ config LICHEN_LINK_SCHNORR
 	  Enable 48-byte Schnorr signatures per draft-lichen-schnorr-00.
 	  This provides sender authentication for every link-layer frame.
 
-config LICHEN_LINK_REPLAY_WINDOW
-	int "Replay window size (bits)"
-	default 64
-	range 32 256
-	help
-	  Size of the per-neighbor replay protection window in bits.
-	  Larger values tolerate more out-of-order delivery but use
-	  more memory.
-
 config LICHEN_LINK_MAX_NEIGHBORS
 	int "Maximum tracked neighbors"
 	default 16
 	range 4 64
 	help
 	  Maximum number of neighbors to track replay state for.
-	  Each neighbor uses (REPLAY_WINDOW / 8 + 4) bytes of RAM.
+	  Each neighbor uses approximately 20 bytes of RAM (EUI-64 +
+	  64-bit replay window + metadata).
 
 config LICHEN_LINK_LOG_LEVEL
 	int "Link layer log level"
