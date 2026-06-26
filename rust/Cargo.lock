@@ -1808,6 +1808,7 @@ dependencies = [
  "lichen-hal",
  "lichen-ipv6",
  "lichen-link",
+ "lichen-rpl",
  "lichen-schc",
  "tokio",
 ]
