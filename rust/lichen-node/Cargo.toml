@@ -7,7 +7,7 @@ description = "LICHEN integration crate: combines link, SCHC, CoAP, and routing 
 
 [features]
 default = []
-std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr"]
+std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std"]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }
@@ -16,6 +16,7 @@ lichen-link = { path = "../lichen-link" }
 lichen-schc = { path = "../lichen-schc" }
 lichen-coap = { path = "../lichen-coap" }
 lichen-ipv6 = { path = "../lichen-ipv6" }
+lichen-rpl = { path = "../lichen-rpl", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
