@@ -16,6 +16,14 @@
 
 LOG_MODULE_REGISTER(lichen_gateway, LOG_LEVEL_INF);
 
+/*
+ * Manual LoRa handling (non-L2 mode).
+ *
+ * When CONFIG_LICHEN_L2 is enabled, the L2 layer handles all LoRa
+ * initialization and RX via its own thread. These definitions are only
+ * needed for direct LoRa testing without the full network stack.
+ */
+#ifndef CONFIG_LICHEN_L2
 /* LoRa parameters per LICHEN spec: SF10 / 125 kHz / CR4-5.
  * Frequency is region-dependent; 868 MHz (EU) is the default.
  * Override per board via a board-specific Kconfig once that lands. */
@@ -27,6 +35,7 @@ LOG_MODULE_REGISTER(lichen_gateway, LOG_LEVEL_INF);
 /* Set by main() after lora_config() succeeds; read by the RX thread. */
 static const struct device *s_lora_dev;
 static K_SEM_DEFINE(s_radio_ready, 0, 1);
+#endif /* !CONFIG_LICHEN_L2 */
 
 /* CBOR content-format code (RFC 7252 §12.3 / IANA CoAP Content-Formats) */
 #define CBOR_CONTENT_FORMAT 60
@@ -296,8 +305,13 @@ COAP_SERVICE_DEFINE(lichen_coap, NULL, &coap_port, COAP_SERVICE_AUTOSTART);
 
 /* --------------------------------------------------------------------------
  * LoRa RX thread — runs continuously, logs every received frame.
+ *
+ * When CONFIG_LICHEN_L2 is enabled, the L2 layer handles LoRa RX via its own
+ * thread and routes packets through the IPv6 stack. This manual RX thread is
+ * only used for direct LoRa testing without the full network stack.
  * -------------------------------------------------------------------------- */
 
+#ifndef CONFIG_LICHEN_L2
 static void lora_rx_entry(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
@@ -325,6 +339,7 @@ static void lora_rx_entry(void *a, void *b, void *c)
 K_THREAD_DEFINE(lora_rx, LORA_RX_STACKSZ,
 		lora_rx_entry, NULL, NULL, NULL,
 		LORA_RX_PRIORITY, 0, 0);
+#endif /* !CONFIG_LICHEN_L2 */
 
 /* --------------------------------------------------------------------------
  * main
@@ -334,6 +349,14 @@ int main(void)
 {
 	LOG_INF("LICHEN gateway starting");
 
+#ifdef CONFIG_LICHEN_L2
+	/*
+	 * When LICHEN L2 is enabled, the L2 layer handles LoRa initialization
+	 * and RX automatically via NET_DEVICE_INIT. The L2 interface will be
+	 * available to the IPv6 stack for sending/receiving packets over LoRa.
+	 */
+	LOG_INF("LICHEN L2 enabled - LoRa handled by network stack");
+#else
 	/* LoRa radio init.  The sim driver ignores RF parameters and returns 0;
 	 * on hardware this configures the SX126x transceiver. */
 	s_lora_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_lora));
@@ -361,6 +384,7 @@ int main(void)
 			k_sem_give(&s_radio_ready);
 		}
 	}
+#endif /* !CONFIG_LICHEN_L2 */
 
 	/* SLIP bridge: enabled by Kconfig on hardware (CONFIG_SLIP +
 	 * CONFIG_NET_SLIP_TAP).  native_sim uses the lichen-sim driver

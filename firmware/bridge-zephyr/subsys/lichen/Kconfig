@@ -1,12 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 
-menuconfig LICHEN
-	bool "LICHEN LoRa mesh networking"
-	help
-	  Enable LICHEN (LoRa IPv6 CoAP Hybrid Extended Network) support.
-	  This provides IPv6 networking over LoRa radio with SCHC compression,
-	  Ed25519 link signatures, and mesh routing.
+# LICHEN L2 network integration options
+# These extend the base LICHEN Kconfig from lichen/subsys/lichen/Kconfig
+# with Zephyr network stack integration.
 
 if LICHEN
 

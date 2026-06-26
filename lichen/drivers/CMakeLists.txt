@@ -1,1 +1,2 @@
 add_subdirectory_ifdef(CONFIG_LORA_LICHEN_SIM lora)
+add_subdirectory_ifdef(CONFIG_LORA_LOOPBACK lora_loopback)
