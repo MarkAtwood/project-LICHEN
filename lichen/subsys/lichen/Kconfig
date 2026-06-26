@@ -11,6 +11,12 @@ menuconfig LICHEN
 
 if LICHEN
 
+rsource "coap/Kconfig"
+rsource "crypto/Kconfig"
 rsource "link/Kconfig"
+rsource "oscore/Kconfig"
+rsource "schc/Kconfig"
+rsource "senml/Kconfig"
+rsource "rpl/Kconfig"
 
 endif # LICHEN

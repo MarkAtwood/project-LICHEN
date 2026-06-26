@@ -1,0 +1,162 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file lichen/rpl_dodag.h
+ * @brief RPL DODAG state machine with MRHOF parent selection (RFC 6550)
+ *
+ * Key behaviors:
+ * - Node starts UNJOINED; on hearing a usable DIO it elects a preferred
+ *   parent and becomes JOINED.
+ * - Rank = preferred_parent.rank + round(link_etx * MinHopRankIncrease)
+ * - Hysteresis: switch parent only if candidate improves path cost by
+ *   more than PARENT_SWITCH_THRESHOLD.
+ * - MaxRankIncrease: reject candidates that would take rank above the
+ *   lowest rank we have ever held plus max_rank_increase.
+ */
+
+#ifndef LICHEN_RPL_DODAG_H_
+#define LICHEN_RPL_DODAG_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <lichen/rpl_messages.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ── Constants ─────────────────────────────────────────────────────────────── */
+
+#define LICHEN_RPL_INFINITE_RANK          0xFFFF
+#define LICHEN_RPL_ROOT_RANK              256
+#define LICHEN_RPL_DEFAULT_MIN_HOP_RANK   256
+#define LICHEN_RPL_DEFAULT_MAX_RANK_INC   2048
+#define LICHEN_RPL_DEFAULT_SWITCH_THRESH  192
+
+/* Default max parents (can be overridden by Kconfig) */
+#ifndef CONFIG_LICHEN_RPL_MAX_PARENTS
+#define CONFIG_LICHEN_RPL_MAX_PARENTS 4
+#endif
+
+/* ── Types ─────────────────────────────────────────────────────────────────── */
+
+/**
+ * @brief Node's role in the DODAG
+ */
+enum lichen_rpl_role {
+	LICHEN_RPL_UNJOINED,
+	LICHEN_RPL_JOINED,
+	LICHEN_RPL_ROOT,
+};
+
+/**
+ * @brief A neighbor advertising membership in the DODAG
+ *
+ * For embedded use, we avoid floats by using fixed-point ETX (scaled by 256).
+ * ETX=256 means perfect link (1.0), ETX=512 means 50% delivery (2.0).
+ */
+struct lichen_rpl_parent {
+	uint8_t addr[16];     /**< Full IPv6 link-local address */
+	uint16_t rank;        /**< Advertised rank */
+	uint16_t link_etx;    /**< Fixed-point ETX (1.0 = 256) */
+	bool valid;           /**< Slot in use */
+};
+
+/**
+ * @brief RPL DODAG membership state for a single node
+ *
+ * All parent candidates are stored in a fixed-size array to avoid allocation.
+ */
+struct lichen_rpl_dodag {
+	uint8_t rpl_instance_id;
+	uint8_t dodag_id[16];
+	uint8_t version;
+	enum lichen_rpl_role role;
+	uint16_t rank;
+	uint8_t preferred_parent[16];
+	bool has_preferred_parent;
+
+	/* Configuration */
+	uint16_t min_hop_rank_increase;
+	uint16_t max_rank_increase;
+	uint16_t parent_switch_threshold;
+
+	/* Parent candidates */
+	struct lichen_rpl_parent parents[CONFIG_LICHEN_RPL_MAX_PARENTS];
+
+	/* Lowest rank ever achieved (for MaxRankIncrease check) */
+	uint16_t lowest_rank;
+};
+
+/* ── Functions ─────────────────────────────────────────────────────────────── */
+
+/**
+ * @brief Initialize an unjoined node for the given DODAG.
+ */
+void lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
+			   uint8_t rpl_instance_id,
+			   const uint8_t *dodag_id,
+			   uint8_t version);
+
+/**
+ * @brief Initialize a DODAG root with rank = ROOT_RANK.
+ */
+void lichen_rpl_dodag_init_root(struct lichen_rpl_dodag *d,
+				uint8_t rpl_instance_id,
+				const uint8_t *dodag_id,
+				uint8_t version);
+
+/**
+ * @brief Check if node is root.
+ */
+static inline bool lichen_rpl_dodag_is_root(const struct lichen_rpl_dodag *d)
+{
+	return d->role == LICHEN_RPL_ROOT;
+}
+
+/**
+ * @brief Check if node is joined (either JOINED or ROOT).
+ */
+static inline bool lichen_rpl_dodag_is_joined(const struct lichen_rpl_dodag *d)
+{
+	return d->role == LICHEN_RPL_JOINED || d->role == LICHEN_RPL_ROOT;
+}
+
+/**
+ * @brief Process a received DIO.
+ *
+ * @param d            DODAG state
+ * @param dio          Parsed DIO message
+ * @param neighbor_addr IPv6 address of the DIO sender (16 bytes)
+ * @param link_etx     Fixed-point ETX estimate (256 = perfect link)
+ */
+void lichen_rpl_dodag_process_dio(struct lichen_rpl_dodag *d,
+				  const struct lichen_rpl_dio *dio,
+				  const uint8_t *neighbor_addr,
+				  uint16_t link_etx);
+
+/**
+ * @brief Drop a neighbor (e.g., link failure) and re-select parent.
+ *
+ * @param d    DODAG state
+ * @param addr IPv6 address of the neighbor to remove (16 bytes)
+ */
+void lichen_rpl_dodag_remove_parent(struct lichen_rpl_dodag *d,
+				    const uint8_t *addr);
+
+/**
+ * @brief Get the number of parent candidates currently tracked.
+ */
+int lichen_rpl_dodag_parent_count(const struct lichen_rpl_dodag *d);
+
+/**
+ * @brief Force parent re-selection (e.g., after link quality change).
+ */
+void lichen_rpl_dodag_select_parent(struct lichen_rpl_dodag *d);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LICHEN_RPL_DODAG_H_ */

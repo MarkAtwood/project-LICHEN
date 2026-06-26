@@ -1,0 +1,189 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file lichen/senml.h
+ * @brief SenML CBOR encoder for sensor data (RFC 8428)
+ *
+ * Provides helpers for encoding sensor readings as SenML over CBOR.
+ * Content-Format: application/senml+cbor (112)
+ */
+
+#ifndef LICHEN_SENML_H_
+#define LICHEN_SENML_H_
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** SenML+CBOR content format */
+#define SENML_CBOR_CONTENT_FORMAT 112
+
+/** Maximum records in a single SenML pack */
+#define SENML_MAX_RECORDS 16
+
+/** Maximum name string length */
+#define SENML_MAX_NAME_LEN 32
+
+/** Maximum unit string length */
+#define SENML_MAX_UNIT_LEN 8
+
+/**
+ * @brief SenML value type
+ */
+enum senml_value_type {
+	SENML_VALUE_FLOAT,   /**< Floating point value (v) */
+	SENML_VALUE_BOOL,    /**< Boolean value (vb) */
+	SENML_VALUE_STRING,  /**< String value (vs) - not yet supported */
+	SENML_VALUE_DATA,    /**< Binary data (vd) - not yet supported */
+};
+
+/**
+ * @brief SenML record
+ */
+struct senml_record {
+	const char *name;          /**< Record name (n) */
+	const char *unit;          /**< Unit (u) - may be NULL */
+	enum senml_value_type type;
+	union {
+		float f;           /**< Float value */
+		bool b;            /**< Boolean value */
+	} value;
+	int32_t time_offset;       /**< Time offset from base (t) - 0 means not set */
+	bool has_time;             /**< Include time offset */
+};
+
+/**
+ * @brief SenML pack (array of records with common base)
+ */
+struct senml_pack {
+	const char *base_name;     /**< Base name (bn) - may be NULL */
+	uint64_t base_time;        /**< Base time (bt) - 0 means not set */
+	bool has_base_time;        /**< Include base time */
+	struct senml_record records[SENML_MAX_RECORDS];
+	size_t record_count;
+};
+
+/**
+ * @brief Initialize a SenML pack.
+ *
+ * @param[out] pack       Pack to initialize
+ * @param[in]  base_name  Base name (e.g., "urn:dev:mac:0011223344556677:")
+ * @param[in]  base_time  Base Unix timestamp (0 to omit)
+ */
+void senml_pack_init(struct senml_pack *pack,
+		     const char *base_name,
+		     uint64_t base_time);
+
+/**
+ * @brief Add a float record to the pack.
+ *
+ * @param[in,out] pack  SenML pack
+ * @param[in]     name  Record name (e.g., "temp")
+ * @param[in]     unit  Unit string (e.g., "Cel") or NULL
+ * @param[in]     value Float value
+ * @return 0 on success, -1 if pack is full
+ */
+int senml_add_float(struct senml_pack *pack,
+		    const char *name,
+		    const char *unit,
+		    float value);
+
+/**
+ * @brief Add a float record with time offset.
+ *
+ * @param[in,out] pack        SenML pack
+ * @param[in]     name        Record name
+ * @param[in]     unit        Unit string or NULL
+ * @param[in]     value       Float value
+ * @param[in]     time_offset Seconds from base_time
+ * @return 0 on success, -1 if pack is full
+ */
+int senml_add_float_t(struct senml_pack *pack,
+		      const char *name,
+		      const char *unit,
+		      float value,
+		      int32_t time_offset);
+
+/**
+ * @brief Add a boolean record to the pack.
+ *
+ * @param[in,out] pack  SenML pack
+ * @param[in]     name  Record name (e.g., "charging")
+ * @param[in]     value Boolean value
+ * @return 0 on success, -1 if pack is full
+ */
+int senml_add_bool(struct senml_pack *pack,
+		   const char *name,
+		   bool value);
+
+/**
+ * @brief Encode SenML pack to CBOR.
+ *
+ * @param[in]  pack    SenML pack to encode
+ * @param[out] buf     Output buffer
+ * @param[in]  buflen  Buffer size
+ * @return Bytes written, or negative error code
+ */
+int senml_encode_cbor(const struct senml_pack *pack,
+		      uint8_t *buf, size_t buflen);
+
+/* --------------------------------------------------------------------------
+ * Convenience functions for common sensor types
+ * -------------------------------------------------------------------------- */
+
+/**
+ * @brief Encode location as SenML.
+ *
+ * @param[in]  base_name  Base name or NULL
+ * @param[in]  base_time  Unix timestamp or 0
+ * @param[in]  lat        Latitude (WGS84 degrees)
+ * @param[in]  lon        Longitude (WGS84 degrees)
+ * @param[in]  alt        Altitude (meters) or NAN to omit
+ * @param[out] buf        Output buffer
+ * @param[in]  buflen     Buffer size
+ * @return Bytes written, or negative error code
+ */
+int senml_encode_location(const char *base_name, uint64_t base_time,
+			  float lat, float lon, float alt,
+			  uint8_t *buf, size_t buflen);
+
+/**
+ * @brief Encode battery status as SenML.
+ *
+ * @param[in]  base_name  Base name or NULL
+ * @param[in]  base_time  Unix timestamp or 0
+ * @param[in]  percent    State of charge (0-100)
+ * @param[in]  mv         Battery voltage in millivolts
+ * @param[in]  charging   True if charging
+ * @param[out] buf        Output buffer
+ * @param[in]  buflen     Buffer size
+ * @return Bytes written, or negative error code
+ */
+int senml_encode_battery(const char *base_name, uint64_t base_time,
+			 uint8_t percent, uint16_t mv, bool charging,
+			 uint8_t *buf, size_t buflen);
+
+/**
+ * @brief Encode temperature as SenML.
+ *
+ * @param[in]  base_name  Base name or NULL
+ * @param[in]  base_time  Unix timestamp or 0
+ * @param[in]  temp_c     Temperature in Celsius
+ * @param[out] buf        Output buffer
+ * @param[in]  buflen     Buffer size
+ * @return Bytes written, or negative error code
+ */
+int senml_encode_temperature(const char *base_name, uint64_t base_time,
+			     float temp_c,
+			     uint8_t *buf, size_t buflen);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LICHEN_SENML_H_ */

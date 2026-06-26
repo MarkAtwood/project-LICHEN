@@ -1,0 +1,286 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file lichen/oscore.h
+ * @brief OSCORE (RFC 8613) API for end-to-end CoAP security
+ *
+ * Implements Object Security for Constrained RESTful Environments using
+ * AES-CCM-16-64-128 (Algorithm ID 10 from RFC 8152).
+ *
+ * Cipher parameters:
+ *   - 128-bit key
+ *   - 104-bit nonce (13 bytes)
+ *   - 64-bit authentication tag (8 bytes)
+ *   - 16-byte L field for CCM
+ *
+ * Key derivation uses HKDF-SHA256 per RFC 8613 Section 3.2.
+ */
+
+#ifndef LICHEN_OSCORE_H_
+#define LICHEN_OSCORE_H_
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** AES-CCM-16-64-128 key length */
+#define OSCORE_KEY_LEN 16
+
+/** AES-CCM-16-64-128 nonce length (13 bytes) */
+#define OSCORE_NONCE_LEN 13
+
+/** AES-CCM-16-64-128 tag length (8 bytes) */
+#define OSCORE_TAG_LEN 8
+
+/** Maximum Sender/Recipient ID length */
+#define OSCORE_ID_MAX_LEN 8
+
+/** Maximum Partial IV length */
+#define OSCORE_PIV_MAX_LEN 5
+
+/** OSCORE CoAP option number */
+#define COAP_OPTION_OSCORE 9
+
+/**
+ * @brief OSCORE error codes
+ */
+enum oscore_err {
+	OSCORE_OK = 0,
+	OSCORE_ERR_INVALID_PARAM = -1,
+	OSCORE_ERR_NO_CONTEXT = -2,
+	OSCORE_ERR_REPLAY = -3,
+	OSCORE_ERR_DECRYPT_FAILED = -4,
+	OSCORE_ERR_BUFFER_TOO_SMALL = -5,
+	OSCORE_ERR_KEY_DERIVATION = -6,
+	OSCORE_ERR_NO_MEMORY = -7,
+};
+
+/**
+ * @brief OSCORE security context
+ *
+ * Contains the cryptographic material and state for one peer.
+ * Each context has a sender context (for outgoing messages) and
+ * a recipient context (for incoming messages).
+ */
+struct oscore_ctx {
+	/* Common context (shared) */
+	uint8_t master_secret[OSCORE_KEY_LEN]; /**< Master Secret */
+	uint8_t master_salt[8];                 /**< Master Salt (optional) */
+	uint8_t master_salt_len;                /**< Salt length (0-8) */
+	uint8_t common_iv[OSCORE_NONCE_LEN];    /**< Common IV */
+	uint8_t id_context[8];                  /**< ID Context (optional) */
+	uint8_t id_context_len;                 /**< ID Context length */
+
+	/* Sender context */
+	uint8_t sender_id[OSCORE_ID_MAX_LEN];   /**< Sender ID */
+	uint8_t sender_id_len;                  /**< Sender ID length */
+	uint8_t sender_key[OSCORE_KEY_LEN];     /**< Sender Key */
+	uint32_t sender_seq;                    /**< Sender Sequence Number */
+
+	/* Recipient context */
+	uint8_t recipient_id[OSCORE_ID_MAX_LEN]; /**< Recipient ID */
+	uint8_t recipient_id_len;                /**< Recipient ID length */
+	uint8_t recipient_key[OSCORE_KEY_LEN];   /**< Recipient Key */
+	uint32_t recipient_seq;                  /**< Last received seq */
+	uint32_t replay_window;                  /**< Replay window bitmap */
+
+	/* State */
+	bool active;                             /**< Context is in use */
+};
+
+/**
+ * @brief OSCORE option value structure
+ *
+ * Parsed representation of the OSCORE CoAP option.
+ */
+struct oscore_option {
+	uint8_t piv[OSCORE_PIV_MAX_LEN];        /**< Partial IV */
+	uint8_t piv_len;                         /**< PIV length */
+	uint8_t kid[OSCORE_ID_MAX_LEN];         /**< Key Identifier */
+	uint8_t kid_len;                         /**< KID length */
+	uint8_t kid_context[8];                  /**< Key ID Context */
+	uint8_t kid_context_len;                 /**< KID Context length */
+	bool has_piv;                            /**< PIV present */
+	bool has_kid;                            /**< KID present */
+	bool has_kid_context;                    /**< KID Context present */
+};
+
+/**
+ * @brief Initialize the OSCORE subsystem.
+ *
+ * Must be called once at startup before using other OSCORE functions.
+ *
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_init(void);
+
+/**
+ * @brief Create a new OSCORE security context.
+ *
+ * Derives sender and recipient keys from the master secret using HKDF.
+ *
+ * @param[in] master_secret  16-byte master secret
+ * @param[in] master_salt    Master salt (may be NULL)
+ * @param[in] master_salt_len Salt length (0 if salt is NULL)
+ * @param[in] sender_id      Sender ID
+ * @param[in] sender_id_len  Sender ID length
+ * @param[in] recipient_id   Recipient ID
+ * @param[in] recipient_id_len Recipient ID length
+ * @param[out] ctx           Output context pointer
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_ctx_create(const uint8_t master_secret[OSCORE_KEY_LEN],
+		      const uint8_t *master_salt, size_t master_salt_len,
+		      const uint8_t *sender_id, size_t sender_id_len,
+		      const uint8_t *recipient_id, size_t recipient_id_len,
+		      struct oscore_ctx **ctx);
+
+/**
+ * @brief Free an OSCORE security context.
+ *
+ * Securely wipes key material before release.
+ *
+ * @param[in] ctx Context to free
+ */
+void oscore_ctx_free(struct oscore_ctx *ctx);
+
+/**
+ * @brief Look up a security context by recipient ID.
+ *
+ * @param[in] recipient_id   Recipient ID to search for
+ * @param[in] recipient_id_len Length of recipient ID
+ * @return Pointer to context, or NULL if not found
+ */
+struct oscore_ctx *oscore_ctx_lookup(const uint8_t *recipient_id,
+				     size_t recipient_id_len);
+
+/**
+ * @brief Parse an OSCORE CoAP option.
+ *
+ * @param[in]  data     Option value bytes
+ * @param[in]  len      Option value length
+ * @param[out] option   Parsed option structure
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_option_parse(const uint8_t *data, size_t len,
+			struct oscore_option *option);
+
+/**
+ * @brief Build an OSCORE CoAP option value.
+ *
+ * @param[in]  option   Option structure to encode
+ * @param[out] buf      Output buffer
+ * @param[in]  buflen   Buffer size
+ * @return Bytes written, or negative error code
+ */
+int oscore_option_build(const struct oscore_option *option,
+			uint8_t *buf, size_t buflen);
+
+/**
+ * @brief Protect a CoAP request with OSCORE.
+ *
+ * Encrypts the request payload and authenticated options.
+ *
+ * @param[in]     ctx          Security context
+ * @param[in]     code         CoAP request code
+ * @param[in]     options      CoAP options to protect (Class E)
+ * @param[in]     options_len  Options length
+ * @param[in]     payload      Request payload
+ * @param[in]     payload_len  Payload length
+ * @param[out]    ciphertext   Output ciphertext buffer
+ * @param[in,out] ciphertext_len Input: buffer size, output: ciphertext length
+ * @param[out]    oscore_opt   Output OSCORE option value
+ * @param[in,out] oscore_opt_len Input: buffer size, output: option length
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_protect_request(struct oscore_ctx *ctx,
+			   uint8_t code,
+			   const uint8_t *options, size_t options_len,
+			   const uint8_t *payload, size_t payload_len,
+			   uint8_t *ciphertext, size_t *ciphertext_len,
+			   uint8_t *oscore_opt, size_t *oscore_opt_len);
+
+/**
+ * @brief Unprotect an OSCORE-protected CoAP request.
+ *
+ * Decrypts and verifies the request.
+ *
+ * @param[in]     ctx           Security context
+ * @param[in]     oscore_opt    OSCORE option value
+ * @param[in]     oscore_opt_len OSCORE option length
+ * @param[in]     ciphertext    Encrypted payload
+ * @param[in]     ciphertext_len Ciphertext length
+ * @param[out]    code          Original CoAP request code
+ * @param[out]    options       Decrypted Class E options
+ * @param[in,out] options_len   Input: buffer size, output: options length
+ * @param[out]    payload       Decrypted payload
+ * @param[in,out] payload_len   Input: buffer size, output: payload length
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_unprotect_request(struct oscore_ctx *ctx,
+			     const uint8_t *oscore_opt, size_t oscore_opt_len,
+			     const uint8_t *ciphertext, size_t ciphertext_len,
+			     uint8_t *code,
+			     uint8_t *options, size_t *options_len,
+			     uint8_t *payload, size_t *payload_len);
+
+/**
+ * @brief Protect a CoAP response with OSCORE.
+ *
+ * @param[in]     ctx          Security context
+ * @param[in]     request_piv  Partial IV from request
+ * @param[in]     request_piv_len Request PIV length
+ * @param[in]     code         CoAP response code
+ * @param[in]     options      CoAP options to protect (Class E)
+ * @param[in]     options_len  Options length
+ * @param[in]     payload      Response payload
+ * @param[in]     payload_len  Payload length
+ * @param[out]    ciphertext   Output ciphertext buffer
+ * @param[in,out] ciphertext_len Input: buffer size, output: ciphertext length
+ * @param[out]    oscore_opt   Output OSCORE option value
+ * @param[in,out] oscore_opt_len Input: buffer size, output: option length
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_protect_response(struct oscore_ctx *ctx,
+			    const uint8_t *request_piv, size_t request_piv_len,
+			    uint8_t code,
+			    const uint8_t *options, size_t options_len,
+			    const uint8_t *payload, size_t payload_len,
+			    uint8_t *ciphertext, size_t *ciphertext_len,
+			    uint8_t *oscore_opt, size_t *oscore_opt_len);
+
+/**
+ * @brief Unprotect an OSCORE-protected CoAP response.
+ *
+ * @param[in]     ctx            Security context
+ * @param[in]     request_piv    Partial IV from original request
+ * @param[in]     request_piv_len Request PIV length
+ * @param[in]     oscore_opt     OSCORE option value
+ * @param[in]     oscore_opt_len OSCORE option length
+ * @param[in]     ciphertext     Encrypted payload
+ * @param[in]     ciphertext_len Ciphertext length
+ * @param[out]    code           Original CoAP response code
+ * @param[out]    options        Decrypted Class E options
+ * @param[in,out] options_len    Input: buffer size, output: options length
+ * @param[out]    payload        Decrypted payload
+ * @param[in,out] payload_len    Input: buffer size, output: payload length
+ * @return 0 on success, negative error code on failure
+ */
+int oscore_unprotect_response(struct oscore_ctx *ctx,
+			      const uint8_t *request_piv, size_t request_piv_len,
+			      const uint8_t *oscore_opt, size_t oscore_opt_len,
+			      const uint8_t *ciphertext, size_t ciphertext_len,
+			      uint8_t *code,
+			      uint8_t *options, size_t *options_len,
+			      uint8_t *payload, size_t *payload_len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LICHEN_OSCORE_H_ */

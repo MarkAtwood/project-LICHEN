@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN RPL routing Kconfig
+
+menuconfig LICHEN_RPL
+	bool "LICHEN RPL routing"
+	depends on LICHEN
+	help
+	  Enable RPL (RFC 6550) routing for DODAG mesh formation.
+	  Provides upward routing via preferred parents and downward
+	  routing via source routes (non-storing mode).
+
+if LICHEN_RPL
+
+config LICHEN_RPL_MRHOF
+	bool "MRHOF objective function"
+	default y
+	help
+	  Use Minimum Rank with Hysteresis Objective Function (MRHOF)
+	  for parent selection (RFC 6719). MRHOF selects parents based
+	  on ETX link quality with hysteresis to prevent flapping.
+
+config LICHEN_RPL_MAX_PARENTS
+	int "Maximum parent candidates"
+	default 4
+	range 2 16
+	help
+	  Maximum number of parent candidates to track per DODAG.
+	  More parents improves resilience but uses more memory.
+
+config LICHEN_RPL_MAX_ROUTES
+	int "Maximum routing table entries"
+	default 32
+	range 8 128
+	help
+	  Maximum number of target routes in the routing table.
+	  Only relevant for root nodes in non-storing mode.
+
+config LICHEN_RPL_TRICKLE_IMIN_MS
+	int "Trickle Imin (ms)"
+	default 1000
+	range 100 60000
+	help
+	  Minimum Trickle interval in milliseconds (RFC 6206).
+	  Smaller values speed up convergence but increase traffic.
+
+config LICHEN_RPL_TRICKLE_IMAX_DOUBLINGS
+	int "Trickle Imax doublings"
+	default 8
+	range 1 16
+	help
+	  Number of times Imin is doubled to reach Imax (RFC 6206).
+	  Imax = Imin * 2^doublings.
+
+config LICHEN_RPL_TRICKLE_K
+	int "Trickle redundancy constant"
+	default 10
+	range 1 255
+	help
+	  Redundancy constant k for Trickle (RFC 6206).
+	  Suppress transmission if k or more consistent messages heard.
+
+config LICHEN_RPL_MIN_HOP_RANK_INCREASE
+	int "MinHopRankIncrease"
+	default 256
+	range 1 65535
+	help
+	  Minimum increase in rank between a node and its parent.
+	  Standard value is 256 (RFC 6550).
+
+config LICHEN_RPL_MAX_RANK_INCREASE
+	int "MaxRankIncrease"
+	default 2048
+	range 256 65535
+	help
+	  Maximum allowed increase from the lowest rank ever held.
+	  Prevents routing loops during topology changes.
+
+config LICHEN_RPL_PARENT_SWITCH_THRESHOLD
+	int "Parent switch threshold"
+	default 192
+	range 0 65535
+	depends on LICHEN_RPL_MRHOF
+	help
+	  Minimum cost improvement required to switch parents.
+	  Provides hysteresis to prevent flapping.
+
+config LICHEN_RPL_LOG_LEVEL
+	int "RPL log level"
+	default 3
+	range 0 4
+	help
+	  Log level for LICHEN RPL:
+	  0=off, 1=error, 2=warning, 3=info, 4=debug
+
+endif # LICHEN_RPL

@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+menuconfig LICHEN
+	bool "LICHEN LoRa mesh networking"
+	help
+	  Enable LICHEN (LoRa IPv6 CoAP Hybrid Extended Network) support.
+	  This provides IPv6 networking over LoRa radio with SCHC compression,
+	  Ed25519 link signatures, and mesh routing.
+
+if LICHEN
+
+config LICHEN_LORA_L2
+	bool "LICHEN LoRa L2 network interface"
+	depends on LORA
+	depends on NET_L2_VIRTUAL || NET_RAW_MODE
+	default y
+	help
+	  Enable the LICHEN LoRa L2 network interface driver. This bridges
+	  Zephyr's IPv6 stack to the LoRa radio, enabling IPv6 packets to
+	  be sent and received over LoRa.
+
+config LICHEN_LORA_L2_LOG_LEVEL
+	int "LICHEN LoRa L2 log level"
+	depends on LICHEN_LORA_L2
+	default 3
+	range 0 4
+	help
+	  Log level for LICHEN LoRa L2 driver.
+	  0 = Off, 1 = Error, 2 = Warning, 3 = Info, 4 = Debug
+
+config LICHEN_LORA_L2_RX_STACK_SIZE
+	int "LICHEN LoRa L2 RX thread stack size"
+	depends on LICHEN_LORA_L2
+	default 2048
+	help
+	  Stack size for the LoRa L2 RX thread.
+
+config LICHEN_LORA_L2_RX_PRIORITY
+	int "LICHEN LoRa L2 RX thread priority"
+	depends on LICHEN_LORA_L2
+	default 7
+	help
+	  Priority for the LoRa L2 RX thread. Lower numbers = higher priority.
+
+config LICHEN_IPV6
+	bool "LICHEN IPv6 address utilities"
+	default y
+	help
+	  Enable LICHEN IPv6 address utilities. This handles:
+	  - Link-local address derivation from EUI-64
+	  - ULA address construction
+	  - GUA address construction
+	  These are standalone utilities that work with or without
+	  Zephyr's full networking stack.
+
+config LICHEN_IPV6_ULA_PREFIX
+	string "Default ULA prefix"
+	depends on LICHEN_IPV6
+	default "fd00:lich:en00::"
+	help
+	  Default ULA prefix used when no DODAG root provides one.
+	  Format: fd00:xxxx:xxxx:: (must be in fd00::/8)
+
+endif # LICHEN
