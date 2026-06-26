@@ -9,6 +9,13 @@
 #include <lichen/link.h>
 #include <string.h>
 
+/* Error codes */
+#ifdef __ZEPHYR__
+#include <errno.h>
+#else
+#define EINVAL 22
+#endif
+
 /* LLSec byte bit positions */
 #define LLSEC_ADDR_MODE_MASK  0x03
 #define LLSEC_MIC_LEN_SHIFT   2
@@ -23,22 +30,27 @@ static const uint8_t addr_lens[] = { 0, 2, 8, 0 };
 int lichen_frame_parse(struct lichen_frame *frame,
 		       const uint8_t *data, size_t len)
 {
-	if (len < 5) {
-		/* Minimum: length(1) + llsec(1) + epoch(1) + seqnum(2) */
-		return -1;
+	/*
+	 * Minimum frame size: 9 bytes
+	 *   length(1) + llsec(1) + epoch(1) + seqnum(2) + mic(4) = 9
+	 * With 64-bit MIC it's 13 bytes, but we can't know MIC length
+	 * until we parse LLSec, so check for minimum 32-bit MIC first.
+	 */
+	if (len < 9) {
+		return -EINVAL;
 	}
 
 	size_t off = 0;
 	uint8_t frame_len = data[off++];
 
 	if (frame_len != len - 1) {
-		return -2; /* Length mismatch */
+		return -EINVAL;
 	}
 
 	uint8_t llsec = data[off++];
 
 	if (llsec & LLSEC_RESERVED) {
-		return -3; /* Reserved bit set */
+		return -EINVAL;
 	}
 
 	frame->addr_mode = llsec & LLSEC_ADDR_MODE_MASK;
@@ -46,23 +58,25 @@ int lichen_frame_parse(struct lichen_frame *frame,
 	frame->signature_present = (llsec & LLSEC_SIG_PRESENT) != 0;
 	frame->encrypted = (llsec & LLSEC_ENCRYPTED) != 0;
 
+	/* Now that we know MIC length, verify frame is long enough */
+	frame->mic_len = (frame->mic_length == LICHEN_MIC_64) ? 8 : 4;
+	uint8_t addr_len = addr_lens[frame->addr_mode];
+
+	/* Check total required length: header(5) + addr + mic */
+	if (len < 5 + addr_len + frame->mic_len) {
+		return -EINVAL;
+	}
+
 	frame->epoch = data[off++];
 	frame->seqnum = ((uint16_t)data[off] << 8) | data[off + 1];
 	off += 2;
 
 	/* Destination address */
-	frame->dst_addr_len = addr_lens[frame->addr_mode];
-	if (off + frame->dst_addr_len > len) {
-		return -4; /* Truncated address */
-	}
+	frame->dst_addr_len = addr_len;
 	memcpy(frame->dst_addr, &data[off], frame->dst_addr_len);
 	off += frame->dst_addr_len;
 
 	/* MIC at the end */
-	frame->mic_len = (frame->mic_length == LICHEN_MIC_64) ? 8 : 4;
-	if (off + frame->mic_len > len) {
-		return -5; /* Truncated MIC */
-	}
 	memcpy(frame->mic, &data[len - frame->mic_len], frame->mic_len);
 
 	/* Payload is everything between address and MIC */

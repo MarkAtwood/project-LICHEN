@@ -1,13 +1,22 @@
 /*
  * native_sim overlay for the LICHEN gateway.
  *
- * Instantiates the simulator LoRa driver (lora_sim.c).  Radio parameters and
- * node identity are configured via Kconfig (see native_sim.conf).
+ * Instantiates the loopback LoRa driver for testing without hardware.
+ * For full simulation with multiple nodes, switch to "lichen,lora-sim"
+ * and update native_sim.conf accordingly.
  */
 
 / {
-	lora0: lora {
-		compatible = "lichen,lora-sim";
+	aliases {
+		lora0 = &lora_sim;
+	};
+
+	chosen {
+		zephyr,lora = &lora_sim;
+	};
+
+	lora_sim: lora {
+		compatible = "lichen,lora-loopback";
 		status = "okay";
 	};
 };

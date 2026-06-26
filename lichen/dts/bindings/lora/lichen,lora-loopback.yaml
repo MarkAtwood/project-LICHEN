@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+description: LoRa loopback driver for testing without hardware
+compatible: "lichen,lora-loopback"
+include: base.yaml
