@@ -91,7 +91,14 @@ impl std::fmt::Display for ConfigError {
     }
 }
 
-impl std::error::Error for ConfigError {}
+impl core::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            ConfigError::Io(e) => Some(e),
+            ConfigError::Parse(e) => Some(e),
+        }
+    }
+}
 
 impl From<io::Error> for ConfigError {
     fn from(e: io::Error) -> Self {

@@ -69,12 +69,25 @@ static void coap_response_handler(int16_t code, size_t offset, const uint8_t *pa
 {
 	struct request_ctx *ctx = user_data;
 
-	if (ctx == NULL || ctx->callback == NULL) {
+	if (ctx == NULL) {
+		return;
+	}
+
+	/*
+	 * Negative codes indicate transport errors (e.g., -ETIMEDOUT, -ECANCELED).
+	 * In error cases, Zephyr sets last_block=true, but call callback with
+	 * error indication regardless.
+	 */
+	if (code < 0) {
+		if (ctx->callback != NULL) {
+			ctx->callback(ctx->user_data, 0, NULL, 0);
+		}
+		k_free(ctx);
 		return;
 	}
 
 	/* For simplicity, only handle non-blockwise responses */
-	if (offset == 0 && last_block) {
+	if (ctx->callback != NULL && offset == 0 && last_block) {
 		ctx->callback(ctx->user_data, (uint8_t)code, payload, len);
 	}
 
@@ -140,6 +153,10 @@ int lichen_coap_get(const struct sockaddr_in6 *addr,
 		    lichen_coap_response_cb callback,
 		    void *user_data)
 {
+	if (addr == NULL || path == NULL) {
+		return LICHEN_COAP_ERR_NO_MEMORY;
+	}
+
 	struct lichen_coap_request req = {
 		.method = COAP_METHOD_GET,
 		.path = path,

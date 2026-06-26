@@ -18,6 +18,7 @@ int ble_uart_init(void);
  * notification.  Frames larger than the ATT MTU are split across multiple
  * bt_gatt_notify calls.
  *
- * Returns 0, -ENOTCONN if no phone is connected, or negative errno.
+ * Returns 0, -ENOTCONN if no phone is connected, -ENOMEM if the SLIP-encoded
+ * frame exceeds buffer capacity, or negative errno on other failures.
  */
 int ble_uart_send_slip(const uint8_t *ipv6, size_t len);

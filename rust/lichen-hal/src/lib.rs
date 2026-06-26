@@ -40,13 +40,49 @@ pub struct RadioConfig {
     pub frequency: u32,
 }
 
+/// Common error type for Radio implementations.
+///
+/// Generic over `E` for hardware-specific errors (e.g., SPI errors).
+/// Implementations that cannot fail use `core::convert::Infallible` for `E`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RadioError<E> {
+    /// Hardware bus error (SPI, I2C, etc).
+    Bus(E),
+    /// Radio hardware returned an error or is unresponsive.
+    Hardware,
+    /// Protocol error (bad response, framing, etc).
+    Protocol,
+    /// Connection lost (for networked/simulated radios).
+    Connection,
+}
+
+impl<E: core::fmt::Debug> core::fmt::Display for RadioError<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Bus(e) => write!(f, "bus error: {:?}", e),
+            Self::Hardware => write!(f, "radio hardware error"),
+            Self::Protocol => write!(f, "protocol error"),
+            Self::Connection => write!(f, "connection lost"),
+        }
+    }
+}
+
+impl<E: core::fmt::Debug + core::error::Error + 'static> core::error::Error for RadioError<E> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Bus(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 impl Default for RadioConfig {
     fn default() -> Self {
         // ponytail: LICHEN defaults from spec
         Self {
             spreading_factor: 10,
             bandwidth: 125_000,
-            coding_rate: 5, // CR 4/5
+            coding_rate: 5, // CR 4/5 -- denominator only (4 is fixed per LoRa spec)
             tx_power: 14,
             frequency: 915_000_000,
         }
@@ -135,8 +171,7 @@ impl core::fmt::Display for DisplayError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for DisplayError {}
+impl core::error::Error for DisplayError {}
 
 /// Display interface for rendering UI.
 ///

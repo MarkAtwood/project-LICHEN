@@ -12,6 +12,7 @@
 #include <string.h>
 #include <tinycrypt/sha256.h>
 #include <tinycrypt/hmac.h>
+#include <monocypher.h>
 
 #include "hkdf.h"
 
@@ -31,18 +32,22 @@ static int hmac_sha256(const uint8_t *key, size_t key_len,
 		return -1;
 	}
 	if (tc_hmac_init(&h) != TC_CRYPTO_SUCCESS) {
+		crypto_wipe(&h, sizeof(h));
 		return -1;
 	}
 	if (tc_hmac_update(&h, data, data_len) != TC_CRYPTO_SUCCESS) {
+		crypto_wipe(&h, sizeof(h));
 		return -1;
 	}
 	if (tc_hmac_final(out, TC_SHA256_DIGEST_SIZE, &h) != TC_CRYPTO_SUCCESS) {
+		crypto_wipe(&h, sizeof(h));
 		return -1;
 	}
+	crypto_wipe(&h, sizeof(h));
 	return 0;
 }
 
-int hkdf_extract(const uint8_t *salt, size_t salt_len,
+int lichen_hkdf_extract(const uint8_t *salt, size_t salt_len,
 		 const uint8_t *ikm, size_t ikm_len,
 		 uint8_t prk[32])
 {
@@ -61,7 +66,7 @@ int hkdf_extract(const uint8_t *salt, size_t salt_len,
 	return hmac_sha256(salt, salt_len, ikm, ikm_len, prk);
 }
 
-int hkdf_expand(const uint8_t prk[32],
+int lichen_hkdf_expand(const uint8_t prk[32],
 		const uint8_t *info, size_t info_len,
 		uint8_t *okm, size_t okm_len)
 {
@@ -79,10 +84,10 @@ int hkdf_expand(const uint8_t prk[32],
 	uint8_t counter = 1;
 
 	if (okm_len > 255 * SHA256_HASH_LEN) {
-		return -1; /* OKM too long */
+		return -1; /* OKM too long (no secrets to wipe yet) */
 	}
 	if (info_len > 255) {
-		return -1; /* Info too long for our buffer */
+		return -1; /* Info too long for our buffer (no secrets to wipe yet) */
 	}
 
 	while (offset < okm_len) {
@@ -105,6 +110,8 @@ int hkdf_expand(const uint8_t prk[32],
 
 		/* T(i) = HMAC(PRK, T(i-1) || info || i) */
 		if (hmac_sha256(prk, SHA256_HASH_LEN, buf, buf_len, t) != 0) {
+			crypto_wipe(t, sizeof(t));
+			crypto_wipe(buf, sizeof(buf));
 			return -1;
 		}
 		t_len = SHA256_HASH_LEN;
@@ -118,10 +125,14 @@ int hkdf_expand(const uint8_t prk[32],
 		offset += to_copy;
 	}
 
+	/* Wipe intermediate key material */
+	crypto_wipe(t, sizeof(t));
+	crypto_wipe(buf, sizeof(buf));
+
 	return 0;
 }
 
-int hkdf_sha256(const uint8_t *salt, size_t salt_len,
+int lichen_hkdf_sha256(const uint8_t *salt, size_t salt_len,
 		const uint8_t *ikm, size_t ikm_len,
 		const uint8_t *info, size_t info_len,
 		uint8_t *okm, size_t okm_len)
@@ -129,15 +140,15 @@ int hkdf_sha256(const uint8_t *salt, size_t salt_len,
 	uint8_t prk[SHA256_HASH_LEN];
 	int ret;
 
-	ret = hkdf_extract(salt, salt_len, ikm, ikm_len, prk);
+	ret = lichen_hkdf_extract(salt, salt_len, ikm, ikm_len, prk);
 	if (ret != 0) {
 		return ret;
 	}
 
-	ret = hkdf_expand(prk, info, info_len, okm, okm_len);
+	ret = lichen_hkdf_expand(prk, info, info_len, okm, okm_len);
 
-	/* Wipe PRK */
-	memset(prk, 0, sizeof(prk));
+	/* Wipe PRK (crypto_wipe cannot be optimized away) */
+	crypto_wipe(prk, sizeof(prk));
 
 	return ret;
 }

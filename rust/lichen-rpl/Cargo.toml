@@ -8,9 +8,16 @@ description = "RPL routing protocol engine for LICHEN (RFC 6550, Non-Storing Mod
 [features]
 default = []
 std = []
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt", "lichen-core/defmt"]
+log = ["dep:log", "lichen-core/log"]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
 
 [dev-dependencies]
 # Integration tests need std for HashMap-based state machines

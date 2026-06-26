@@ -108,6 +108,9 @@ static int lora_renode_send(const struct device *dev,
 	const struct lora_renode_config *cfg = dev->config;
 	struct lora_renode_data *drv = dev->data;
 
+	if (dev == NULL || data == NULL) {
+		return -EINVAL;
+	}
 	if (!drv->connected) {
 		LOG_WRN("not connected to lichen-sim");
 		return -ENOTCONN;
@@ -158,11 +161,12 @@ static int lora_renode_recv(const struct device *dev,
 		return -ENOTCONN;
 	}
 
-	uint32_t timeout_ms = k_ticks_to_ms_floor32(timeout.ticks);
+	bool forever = K_TIMEOUT_EQ(timeout, K_FOREVER);
+	uint32_t timeout_ms = forever ? 0 : k_ticks_to_ms_floor32(timeout.ticks);
 	uint32_t elapsed = 0;
 
 	/* Poll RX_STATUS until packet or timeout */
-	while (elapsed < timeout_ms) {
+	while (forever || elapsed < timeout_ms) {
 		uint32_t status = reg_read(cfg, REG_RX_STATUS);
 
 		if (status == RX_AVAILABLE) {

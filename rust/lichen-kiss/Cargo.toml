@@ -12,10 +12,17 @@ kiss = []
 kiss-aprs = ["kiss"]
 kiss-ble = ["kiss"]
 bridge = ["kiss", "dep:lichen-link"]
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt"]
+log = ["dep:log"]
 
 [dependencies]
 heapless = "0.8"
 lichen-link = { path = "../lichen-link", default-features = false, optional = true }
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
 
 [dev-dependencies]
 lichen-link = { path = "../lichen-link" }

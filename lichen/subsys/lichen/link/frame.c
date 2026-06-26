@@ -7,14 +7,8 @@
  */
 
 #include <lichen/link.h>
+#include <lichen/errno.h>
 #include <string.h>
-
-/* Error codes */
-#ifdef __ZEPHYR__
-#include <errno.h>
-#else
-#define EINVAL 22
-#endif
 
 /* LLSec byte bit positions */
 #define LLSEC_ADDR_MODE_MASK  0x03
@@ -82,6 +76,16 @@ int lichen_frame_parse(struct lichen_frame *frame,
 	/* Payload is everything between address and MIC */
 	frame->payload = &data[off];
 	frame->payload_len = len - off - frame->mic_len;
+
+	/* Compute inner payload length (excluding signature if present) */
+	if (frame->signature_present) {
+		if (frame->payload_len < LICHEN_SIG_LEN) {
+			return -EINVAL;  /* Payload too short for signature */
+		}
+		frame->inner_payload_len = frame->payload_len - LICHEN_SIG_LEN;
+	} else {
+		frame->inner_payload_len = frame->payload_len;
+	}
 
 	return 0;
 }

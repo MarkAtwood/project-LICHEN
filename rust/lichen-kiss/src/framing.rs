@@ -101,8 +101,7 @@ impl fmt::Display for KissError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for KissError {}
+impl core::error::Error for KissError {}
 
 /// Decoded KISS frame.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -6,11 +6,16 @@
 //! Provides a pair of connected radios for host-side integration tests.
 //! TX on one side appears as RX on the other.
 
-use crate::{Radio, RadioConfig, RxPacket};
+use crate::{Radio, RadioConfig, RadioError, RxPacket};
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
 /// Shared channel between loopback radio pair.
+///
+/// This is a thin wrapper around VecDeque that provides radio-semantic method
+/// names (send/recv). Intentionally minimal: the wrapper costs nothing at
+/// runtime and keeps the Radio impl readable. If the underlying queue type
+/// changes (e.g., to a bounded channel), the change is localized here.
 struct Channel {
     queue: VecDeque<Vec<u8>>,
 }
@@ -68,16 +73,12 @@ impl LoopbackRadio {
 
     /// Check if there are pending packets to receive.
     pub fn has_pending(&self) -> bool {
-        self.rx_chan.lock().unwrap().queue.is_empty() == false
+        !self.rx_chan.lock().unwrap().queue.is_empty()
     }
 }
 
-/// Loopback never fails.
-#[derive(Debug, Clone, Copy)]
-pub struct Infallible;
-
 impl Radio for LoopbackRadio {
-    type Error = Infallible;
+    type Error = RadioError<std::convert::Infallible>;
 
     async fn transmit(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
         self.tx_chan.lock().unwrap().send(payload);

@@ -20,6 +20,31 @@
 
 use heapless::Vec;
 
+/// IPv6 parse error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ipv6Error {
+    /// Buffer too short for header.
+    TooShort,
+    /// Wrong IP version (expected 6).
+    WrongVersion(u8),
+    /// Output buffer too small for serialization.
+    BufferTooSmall { needed: usize, available: usize },
+}
+
+impl core::fmt::Display for Ipv6Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "buffer too short"),
+            Self::WrongVersion(v) => write!(f, "wrong IP version: {} (expected 6)", v),
+            Self::BufferTooSmall { needed, available } => {
+                write!(f, "buffer too small: need {} bytes, have {}", needed, available)
+            }
+        }
+    }
+}
+
+impl core::error::Error for Ipv6Error {}
+
 /// IPv6 header length (fixed, no extension headers for LICHEN).
 pub const IPV6_HEADER_LEN: usize = 40;
 
@@ -44,7 +69,7 @@ pub mod icmpv6_type {
 }
 
 /// IPv6 address (128 bits).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub struct Addr(pub [u8; 16]);
 
 impl Addr {
@@ -122,9 +147,39 @@ impl Addr {
         self.0[0] == 0xff
     }
 
+    /// Check if this is a Unique Local Address (fc00::/7, typically fd00::/8).
+    ///
+    /// Per RFC 4193, ULAs have the prefix fc00::/7. In practice, the L bit
+    /// (bit 8) is set to 1 for locally-assigned addresses, giving fd00::/8.
+    pub fn is_ula(&self) -> bool {
+        // fc00::/7 means first byte has top 7 bits = 1111110x (0xfc or 0xfd)
+        (self.0[0] & 0xfe) == 0xfc
+    }
+
+    /// Check if this is a Global Unicast Address (2000::/3).
+    ///
+    /// Per RFC 4291, GUAs have the prefix 2000::/3, meaning the first 3 bits
+    /// are 001 (addresses 2000:: through 3fff::).
+    pub fn is_gua(&self) -> bool {
+        // 2000::/3 means first byte has top 3 bits = 001 (0x20..0x3f)
+        (self.0[0] & 0xe0) == 0x20
+    }
+
+    /// Check if this is the loopback address (::1).
+    pub fn is_loopback(&self) -> bool {
+        self.0 == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+    }
+
     /// Get raw bytes.
     pub fn as_bytes(&self) -> &[u8; 16] {
         &self.0
+    }
+
+    /// Extract the Interface Identifier (IID) - the low 64 bits.
+    pub fn iid(&self) -> [u8; 8] {
+        let mut iid = [0u8; 8];
+        iid.copy_from_slice(&self.0[8..16]);
+        iid
     }
 }
 
@@ -154,40 +209,48 @@ impl Ipv6Header {
         }
     }
 
-    /// Encode header to bytes.
-    pub fn encode(&self, payload_len: u16) -> [u8; IPV6_HEADER_LEN] {
-        let mut buf = [0u8; IPV6_HEADER_LEN];
+    /// Write header to output buffer.
+    ///
+    /// Returns the number of bytes written (always `IPV6_HEADER_LEN`).
+    pub fn write_to(&self, payload_len: u16, out: &mut [u8]) -> Result<usize, Ipv6Error> {
+        if out.len() < IPV6_HEADER_LEN {
+            return Err(Ipv6Error::BufferTooSmall {
+                needed: IPV6_HEADER_LEN,
+                available: out.len(),
+            });
+        }
 
         // Version (4) | Traffic Class (8) | Flow Label (20)
-        buf[0] = 0x60 | (self.traffic_class >> 4);
-        buf[1] = (self.traffic_class << 4) | ((self.flow_label >> 16) as u8 & 0x0f);
-        buf[2] = (self.flow_label >> 8) as u8;
-        buf[3] = self.flow_label as u8;
+        out[0] = 0x60 | (self.traffic_class >> 4);
+        out[1] = (self.traffic_class << 4) | ((self.flow_label >> 16) as u8 & 0x0f);
+        out[2] = (self.flow_label >> 8) as u8;
+        out[3] = self.flow_label as u8;
 
         // Payload length
-        buf[4] = (payload_len >> 8) as u8;
-        buf[5] = payload_len as u8;
+        out[4] = (payload_len >> 8) as u8;
+        out[5] = payload_len as u8;
 
         // Next header, hop limit
-        buf[6] = self.next_header;
-        buf[7] = self.hop_limit;
+        out[6] = self.next_header;
+        out[7] = self.hop_limit;
 
         // Addresses
-        buf[8..24].copy_from_slice(&self.src.0);
-        buf[24..40].copy_from_slice(&self.dst.0);
+        out[8..24].copy_from_slice(&self.src.0);
+        out[24..40].copy_from_slice(&self.dst.0);
 
-        buf
+        Ok(IPV6_HEADER_LEN)
     }
 
     /// Parse header from bytes.
-    pub fn parse(buf: &[u8]) -> Option<Self> {
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, Ipv6Error> {
         if buf.len() < IPV6_HEADER_LEN {
-            return None;
+            return Err(Ipv6Error::TooShort);
         }
 
         // Check version
-        if (buf[0] >> 4) != 6 {
-            return None;
+        let version = buf[0] >> 4;
+        if version != 6 {
+            return Err(Ipv6Error::WrongVersion(version));
         }
 
         let traffic_class = ((buf[0] & 0x0f) << 4) | (buf[1] >> 4);
@@ -202,7 +265,7 @@ impl Ipv6Header {
         src.copy_from_slice(&buf[8..24]);
         dst.copy_from_slice(&buf[24..40]);
 
-        Some(Self {
+        Ok(Self {
             traffic_class,
             flow_label,
             payload_len,
@@ -234,33 +297,48 @@ impl UdpHeader {
         }
     }
 
-    /// Encode header to bytes.
-    pub fn encode(&self, payload_len: usize, src: &Addr, dst: &Addr, payload: &[u8]) -> [u8; UDP_HEADER_LEN] {
+    /// Write header to output buffer.
+    ///
+    /// Returns the number of bytes written (always `UDP_HEADER_LEN`).
+    pub fn write_to(
+        &self,
+        payload_len: usize,
+        src: &Addr,
+        dst: &Addr,
+        payload: &[u8],
+        out: &mut [u8],
+    ) -> Result<usize, Ipv6Error> {
+        if out.len() < UDP_HEADER_LEN {
+            return Err(Ipv6Error::BufferTooSmall {
+                needed: UDP_HEADER_LEN,
+                available: out.len(),
+            });
+        }
+
         let length = (UDP_HEADER_LEN + payload_len) as u16;
 
-        let mut buf = [0u8; UDP_HEADER_LEN];
-        buf[0] = (self.src_port >> 8) as u8;
-        buf[1] = self.src_port as u8;
-        buf[2] = (self.dst_port >> 8) as u8;
-        buf[3] = self.dst_port as u8;
-        buf[4] = (length >> 8) as u8;
-        buf[5] = length as u8;
+        out[0] = (self.src_port >> 8) as u8;
+        out[1] = self.src_port as u8;
+        out[2] = (self.dst_port >> 8) as u8;
+        out[3] = self.dst_port as u8;
+        out[4] = (length >> 8) as u8;
+        out[5] = length as u8;
 
         // Compute checksum over pseudo-header + UDP header + payload
-        let checksum = udp_checksum(src, dst, &buf, payload);
-        buf[6] = (checksum >> 8) as u8;
-        buf[7] = checksum as u8;
+        let checksum = udp_checksum(src, dst, &out[..UDP_HEADER_LEN], payload);
+        out[6] = (checksum >> 8) as u8;
+        out[7] = checksum as u8;
 
-        buf
+        Ok(UDP_HEADER_LEN)
     }
 
     /// Parse header from bytes.
-    pub fn parse(buf: &[u8]) -> Option<Self> {
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, Ipv6Error> {
         if buf.len() < UDP_HEADER_LEN {
-            return None;
+            return Err(Ipv6Error::TooShort);
         }
 
-        Some(Self {
+        Ok(Self {
             src_port: ((buf[0] as u16) << 8) | (buf[1] as u16),
             dst_port: ((buf[2] as u16) << 8) | (buf[3] as u16),
             length: ((buf[4] as u16) << 8) | (buf[5] as u16),
@@ -330,12 +408,12 @@ impl Icmpv6Echo {
     }
 
     /// Parse Echo message from ICMPv6 payload (after type/code/checksum).
-    pub fn parse(buf: &[u8]) -> Option<Self> {
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, Ipv6Error> {
         if buf.len() < 4 {
-            return None;
+            return Err(Ipv6Error::TooShort);
         }
 
-        Some(Self {
+        Ok(Self {
             id: ((buf[0] as u16) << 8) | (buf[1] as u16),
             seq: ((buf[2] as u16) << 8) | (buf[3] as u16),
         })
@@ -374,16 +452,16 @@ impl NeighborSolicitation {
     }
 
     /// Parse NS from ICMPv6 payload.
-    pub fn parse(buf: &[u8]) -> Option<Self> {
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, Ipv6Error> {
         // After type/code/checksum: 4 reserved + 16 target
         if buf.len() < 20 {
-            return None;
+            return Err(Ipv6Error::TooShort);
         }
 
         let mut target = [0u8; 16];
         target.copy_from_slice(&buf[4..20]);
 
-        Some(Self {
+        Ok(Self {
             target: Addr(target),
         })
     }
@@ -527,17 +605,17 @@ fn udp_checksum(src: &Addr, dst: &Addr, udp_header: &[u8], payload: &[u8]) -> u1
 
 /// Parse an incoming IPv6 packet.
 ///
-/// Returns (header, next_header, payload).
-pub fn parse_packet(buf: &[u8]) -> Option<(Ipv6Header, &[u8])> {
-    let header = Ipv6Header::parse(buf)?;
+/// Returns (header, payload).
+pub fn parse_packet(buf: &[u8]) -> Result<(Ipv6Header, &[u8]), Ipv6Error> {
+    let header = Ipv6Header::from_bytes(buf)?;
     let payload_start = IPV6_HEADER_LEN;
     let payload_end = payload_start + header.payload_len as usize;
 
     if buf.len() < payload_end {
-        return None;
+        return Err(Ipv6Error::TooShort);
     }
 
-    Some((header, &buf[payload_start..payload_end]))
+    Ok((header, &buf[payload_start..payload_end]))
 }
 
 /// Dispatch incoming ICMPv6 message.
@@ -560,21 +638,23 @@ pub fn handle_icmpv6(
     match msg_type {
         icmpv6_type::ECHO_REQUEST => {
             // Reply to ping
-            let echo = Icmpv6Echo::parse(body)?;
+            let echo = Icmpv6Echo::from_bytes(body).ok()?;
             let data = &body[4..]; // After id+seq
 
             let reply_icmp = echo.build_reply(local_addr, &ip_header.src, data);
             let reply_ip = Ipv6Header::new(next_header::ICMPV6, *local_addr, ip_header.src);
 
             let mut pkt = Vec::new();
-            let _ = pkt.extend_from_slice(&reply_ip.encode(reply_icmp.len() as u16));
+            let mut ip_buf = [0u8; IPV6_HEADER_LEN];
+            reply_ip.write_to(reply_icmp.len() as u16, &mut ip_buf).ok()?;
+            let _ = pkt.extend_from_slice(&ip_buf);
             let _ = pkt.extend_from_slice(&reply_icmp);
 
             Some(pkt)
         }
 
         icmpv6_type::NEIGHBOR_SOLICITATION => {
-            let ns = NeighborSolicitation::parse(body)?;
+            let ns = NeighborSolicitation::from_bytes(body).ok()?;
 
             // Only respond if target is us
             if ns.target != *local_addr {
@@ -592,7 +672,9 @@ pub fn handle_icmpv6(
             let reply_ip = Ipv6Header::new(next_header::ICMPV6, *local_addr, ip_header.src);
 
             let mut pkt = Vec::new();
-            let _ = pkt.extend_from_slice(&reply_ip.encode(reply_icmp.len() as u16));
+            let mut ip_buf = [0u8; IPV6_HEADER_LEN];
+            reply_ip.write_to(reply_icmp.len() as u16, &mut ip_buf).ok()?;
+            let _ = pkt.extend_from_slice(&ip_buf);
             let _ = pkt.extend_from_slice(&reply_icmp);
 
             Some(pkt)
@@ -638,8 +720,10 @@ mod tests {
         let dst = Addr::link_local_from_mac(&hex!("665544332211"));
 
         let hdr = Ipv6Header::new(next_header::ICMPV6, src, dst);
-        let encoded = hdr.encode(24);
-        let parsed = Ipv6Header::parse(&encoded).unwrap();
+        let mut buf = [0u8; IPV6_HEADER_LEN];
+        let n = hdr.write_to(24, &mut buf).unwrap();
+        assert_eq!(n, IPV6_HEADER_LEN);
+        let parsed = Ipv6Header::from_bytes(&buf).unwrap();
 
         assert_eq!(parsed.src, src);
         assert_eq!(parsed.dst, dst);
@@ -686,5 +770,52 @@ mod tests {
         assert_eq!(resp_ip.src, local);
         assert_eq!(resp_ip.dst, remote);
         assert_eq!(resp_payload[0], icmpv6_type::ECHO_REPLY);
+    }
+
+    #[test]
+    fn test_is_ula() {
+        // fd00::/8 is a common ULA prefix
+        let addr = Addr(hex!("fd00 1234 0000 0000 0000 0000 0000 0001"));
+        assert!(addr.is_ula());
+        assert!(!addr.is_link_local());
+        assert!(!addr.is_gua());
+
+        // fc00::/8 is also technically ULA (but L=0, rarely used)
+        let addr2 = Addr(hex!("fc00 0000 0000 0000 0000 0000 0000 0001"));
+        assert!(addr2.is_ula());
+    }
+
+    #[test]
+    fn test_is_gua() {
+        // 2001:db8::/32 is documentation prefix (a GUA)
+        let addr = Addr(hex!("2001 0db8 0000 0000 0000 0000 0000 0001"));
+        assert!(addr.is_gua());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_link_local());
+
+        // 2000::/3 means 2000:: through 3fff::
+        let addr_2000 = Addr(hex!("2000 0000 0000 0000 0000 0000 0000 0001"));
+        let addr_3fff = Addr(hex!("3fff ffff ffff ffff 0000 0000 0000 0001"));
+        assert!(addr_2000.is_gua());
+        assert!(addr_3fff.is_gua());
+
+        // 4000:: is NOT a GUA
+        let addr_4000 = Addr(hex!("4000 0000 0000 0000 0000 0000 0000 0001"));
+        assert!(!addr_4000.is_gua());
+    }
+
+    #[test]
+    fn test_is_loopback() {
+        assert!(Addr::LOOPBACK.is_loopback());
+        let addr = Addr(hex!("0000 0000 0000 0000 0000 0000 0000 0001"));
+        assert!(addr.is_loopback());
+        assert!(!Addr::UNSPECIFIED.is_loopback());
+    }
+
+    #[test]
+    fn test_iid() {
+        let addr = Addr(hex!("fe80 0000 0000 0000 0211 22ff fe33 4455"));
+        let iid = addr.iid();
+        assert_eq!(iid, hex!("0211 22ff fe33 4455"));
     }
 }

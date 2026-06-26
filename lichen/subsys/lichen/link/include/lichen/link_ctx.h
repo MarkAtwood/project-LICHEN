@@ -33,6 +33,9 @@ extern "C" {
 /** Ed25519 public key length (compressed point) */
 #define LICHEN_PK_LEN 32
 
+/** AES-128 link-layer key length */
+#define LICHEN_LINK_KEY_LEN 16
+
 /**
  * @brief LICHEN link layer context
  *
@@ -43,9 +46,11 @@ struct lichen_link_ctx {
 	uint8_t eui64[LICHEN_EUI64_LEN]; /**< Node's EUI-64 address */
 	uint8_t ed25519_sk[LICHEN_SK_LEN]; /**< Ed25519 secret key (clamped) */
 	uint8_t ed25519_pk[LICHEN_PK_LEN]; /**< Ed25519 public key */
+	uint8_t link_key[LICHEN_LINK_KEY_LEN]; /**< AES-128 key for link MIC */
 	uint8_t epoch;    /**< Current epoch (key rotation counter) */
 	uint16_t tx_seq;  /**< TX sequence counter */
 	bool has_key;     /**< Whether keypair is loaded */
+	bool has_link_key; /**< Whether link-layer key is loaded */
 };
 
 /**
@@ -93,6 +98,20 @@ uint16_t lichen_link_next_seq(struct lichen_link_ctx *ctx);
  * @param[in]     epoch New epoch value
  */
 void lichen_link_set_epoch(struct lichen_link_ctx *ctx, uint8_t epoch);
+
+/**
+ * @brief Load a 128-bit AES key for link-layer MIC computation.
+ *
+ * This key is used for AES-CCM-64 MIC computation/verification on
+ * link-layer frames. It is typically derived from a shared secret
+ * or pre-shared key.
+ *
+ * @param[in,out] ctx      Link context
+ * @param[in]     link_key 16-byte AES-128 key
+ * @return 0 on success, -EINVAL if ctx or link_key is NULL
+ */
+int lichen_link_load_link_key(struct lichen_link_ctx *ctx,
+			      const uint8_t link_key[LICHEN_LINK_KEY_LEN]);
 
 #ifdef __cplusplus
 }

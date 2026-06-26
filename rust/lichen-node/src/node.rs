@@ -1,8 +1,16 @@
 //! Node state and receive-path dispatch.
 
-use lichen_core::{addr::Ipv6Addr, addr::NodeId, icmpv6};
+#[cfg(feature = "std")]
 use lichen_core::constants::RPL_ICMPV6_TYPE;
+use lichen_core::icmpv6::{echo_field, ICMPV6_HEADER_LEN};
+#[cfg(feature = "std")]
+use lichen_core::icmpv6::hdr_field;
+use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
+use lichen_core::{addr::Ipv6Addr, addr::NodeId, icmpv6};
 use lichen_schc::codec;
+
+/// IPv6 version number expected in the first 4 bits of the header.
+const IPV6_VERSION: u8 = 6;
 
 #[cfg(feature = "std")]
 use crate::routing::Router;
@@ -14,6 +22,13 @@ pub mod rpl_code {
     pub const DAO: u8 = 2;
     pub const DAO_ACK: u8 = 3;
 }
+
+/// Minimum RPL DIO base message length (RFC 6550 Section 6.3.1).
+#[cfg(feature = "std")]
+const RPL_DIO_BASE_LEN: usize = 24;
+/// Minimum RPL DAO base message length (RFC 6550 Section 6.4).
+#[cfg(feature = "std")]
+const RPL_DAO_BASE_LEN: usize = 20;
 
 /// RPL event returned from handle_frame when RPL messages are processed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,43 +77,68 @@ impl Node {
             Ok(n) => n,
             Err(_) => return 0,
         };
-        if n < 40 || ipv6[0] >> 4 != 6 {
+
+        let mut reply_ipv6 = [0u8; 256];
+        let reply_ipv6_len = self.handle_ipv6(&ipv6[..n], &mut reply_ipv6);
+        if reply_ipv6_len > 0 {
+            codec::compress(&reply_ipv6[..reply_ipv6_len], reply).unwrap_or_default()
+        } else {
+            0
+        }
+    }
+
+    /// Process a received IPv6 packet directly (no SCHC layer).
+    ///
+    /// Dispatches on protocol:
+    /// - ICMPv6 Echo Request addressed to this node → builds an IPv6
+    ///   Echo Reply into `reply` and returns the byte count.
+    ///
+    /// Returns 0 when no reply should be sent.
+    ///
+    /// `reply` must be at least 256 bytes.
+    pub fn handle_ipv6(&self, ipv6: &[u8], reply: &mut [u8]) -> usize {
+        let n = ipv6.len();
+        if n < IPV6_HEADER_LEN || ipv6[0] >> 4 != IPV6_VERSION {
             return 0;
         }
-        let pkt = &ipv6[..n];
 
-        let nh = pkt[6];
-        if nh == 58 && n >= 48 && pkt[40] == icmpv6::ECHO_REQUEST {
+        let nh = ipv6[6];
+        let min_icmpv6_len = IPV6_HEADER_LEN + ICMPV6_HEADER_LEN;
+        if nh == next_header::ICMPV6 && n >= min_icmpv6_len && ipv6[IPV6_HEADER_LEN] == icmpv6::ECHO_REQUEST {
             let mut dst_bytes = [0u8; 16];
-            dst_bytes.copy_from_slice(&pkt[24..40]);
+            dst_bytes.copy_from_slice(&ipv6[field::DST_OFFSET..IPV6_HEADER_LEN]);
             if dst_bytes == self.node_id.link_local_addr().0 {
-                return self.reply_echo(pkt, reply);
+                return self.reply_echo_ipv6(ipv6, reply);
             }
         }
         0
     }
 
-    fn reply_echo(&self, ipv6: &[u8], out: &mut [u8]) -> usize {
+    fn reply_echo_ipv6(&self, ipv6: &[u8], out: &mut [u8]) -> usize {
         let mut reply_src = [0u8; 16];
         let mut reply_dst = [0u8; 16];
-        reply_src.copy_from_slice(&ipv6[24..40]); // original dst = our address
-        reply_dst.copy_from_slice(&ipv6[8..24]); // original src = requester
+        // Swap src/dst for reply: original dst = our address becomes reply src
+        reply_src.copy_from_slice(&ipv6[field::DST_OFFSET..IPV6_HEADER_LEN]);
+        reply_dst.copy_from_slice(&ipv6[field::SRC_OFFSET..field::DST_OFFSET]);
 
-        let id = u16::from_be_bytes([ipv6[44], ipv6[45]]);
-        let seq = u16::from_be_bytes([ipv6[46], ipv6[47]]);
-        let data = &ipv6[48..];
+        // ICMPv6 echo fields are at IPv6 header + ICMPv6 header offsets
+        let icmpv6_start = IPV6_HEADER_LEN;
+        let id_offset = icmpv6_start + echo_field::ID_OFFSET;
+        let seq_offset = icmpv6_start + echo_field::SEQ_OFFSET;
+        let data_offset = icmpv6_start + echo_field::DATA_OFFSET;
 
-        let mut reply_pkt = [0u8; 256];
-        let n = icmpv6::echo_reply(
+        let id = u16::from_be_bytes([ipv6[id_offset], ipv6[id_offset + 1]]);
+        let seq = u16::from_be_bytes([ipv6[seq_offset], ipv6[seq_offset + 1]]);
+        let data = &ipv6[data_offset..];
+
+        icmpv6::echo_reply(
             &Ipv6Addr(reply_src),
             &Ipv6Addr(reply_dst),
             id,
             seq,
             data,
-            &mut reply_pkt,
-        );
-
-        codec::compress(&reply_pkt[..n], out).unwrap_or_default()
+            out,
+        )
     }
 }
 
@@ -136,50 +176,53 @@ impl RplNode {
             Ok(n) => n,
             Err(_) => return (0, RplEvent::None),
         };
-        if n < 40 || ipv6[0] >> 4 != 6 {
+        if n < IPV6_HEADER_LEN || ipv6[0] >> 4 != IPV6_VERSION {
             return (0, RplEvent::None);
         }
         let pkt = &ipv6[..n];
 
         let nh = pkt[6];
-        if nh == 58 {
-            // ICMPv6
-            if n < 44 {
+        if nh == next_header::ICMPV6 {
+            // ICMPv6 - need at least header + type/code/checksum
+            let min_icmpv6 = IPV6_HEADER_LEN + hdr_field::BODY_OFFSET;
+            if n < min_icmpv6 {
                 return (0, RplEvent::None);
             }
-            let icmp_type = pkt[40];
-            let icmp_code = pkt[41];
+            let icmpv6_start = IPV6_HEADER_LEN;
+            let icmp_type = pkt[icmpv6_start + hdr_field::TYPE_OFFSET];
+            let icmp_code = pkt[icmpv6_start + hdr_field::CODE_OFFSET];
 
             if icmp_type == icmpv6::ECHO_REQUEST {
                 // Handle ping
                 let mut dst_bytes = [0u8; 16];
-                dst_bytes.copy_from_slice(&pkt[24..40]);
+                dst_bytes.copy_from_slice(&pkt[field::DST_OFFSET..IPV6_HEADER_LEN]);
                 if dst_bytes == self.node.node_id.link_local_addr().0 {
-                    let reply_len = self.node.reply_echo(pkt, reply);
+                    let reply_len = self.node.reply_echo_ipv6(pkt, reply);
                     return (reply_len, RplEvent::None);
                 }
             } else if icmp_type == RPL_ICMPV6_TYPE {
                 // RPL message
                 let mut sender_addr = [0u8; 16];
-                sender_addr.copy_from_slice(&pkt[8..24]);
+                sender_addr.copy_from_slice(&pkt[field::SRC_OFFSET..field::DST_OFFSET]);
+                let body_offset = icmpv6_start + hdr_field::BODY_OFFSET;
 
                 match icmp_code {
                     rpl_code::DIO => {
-                        if n < 44 + 24 {
+                        if n < body_offset + RPL_DIO_BASE_LEN {
                             return (0, RplEvent::None);
                         }
-                        let dio_bytes = &pkt[44..];
-                        if let Ok(dio) = lichen_rpl::messages::Dio::from_bytes(dio_bytes) {
+                        let dio_bytes = &pkt[body_offset..];
+                        if let Ok(dio) = lichen_rpl::message::Dio::from_bytes(dio_bytes) {
                             // ponytail: use 0 for rssi, real radio would provide it
                             let inconsistent = self.router.process_dio(&dio, sender_addr, 0, now_ms);
                             return (0, RplEvent::DioReceived { inconsistent });
                         }
                     }
                     rpl_code::DAO => {
-                        if n < 44 + 20 {
+                        if n < body_offset + RPL_DAO_BASE_LEN {
                             return (0, RplEvent::None);
                         }
-                        let dao_bytes = &pkt[44..n];
+                        let dao_bytes = &pkt[body_offset..n];
                         let route_updated = self.router.process_dao(dao_bytes);
                         return (0, RplEvent::DaoReceived { route_updated });
                     }

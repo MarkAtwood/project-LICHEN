@@ -14,7 +14,7 @@ use lora_phy::mod_params::{
 use lora_phy::sx126x::{self, Sx1262, Sx126x, TcxoCtrlVoltage};
 use lora_phy::{LoRa, RadioError, RxMode};
 
-use lichen_hal::{Radio, RadioConfig, RxPacket};
+use lichen_hal::{Radio, RadioConfig, RadioError, RxPacket};
 
 /// SX1262 Radio wrapper implementing lichen_hal::Radio.
 ///
@@ -29,14 +29,8 @@ where
     config: RadioConfig,
 }
 
-/// Error type for SX1262 operations.
-#[derive(Debug)]
-pub enum Sx1262Error<E> {
-    /// SPI communication error.
-    Spi(E),
-    /// Radio returned an error.
-    Radio,
-}
+/// Type alias for SX1262 radio errors using the common RadioError type.
+pub type Sx1262Error<E> = RadioError<E>;
 
 impl<SPI, IV, D> Sx1262Radio<SPI, IV, D>
 where
@@ -67,7 +61,7 @@ where
         let sx126x = Sx126x::new(spi, iv, config);
         let lora = LoRa::new(sx126x, false, delay)
             .await
-            .map_err(|_| Sx1262Error::Radio)?;
+            .map_err(|_| RadioError::Hardware)?;
 
         Ok(Self {
             lora,
@@ -134,9 +128,9 @@ where
         self.lora
             .prepare_for_tx(&mdltn, &mut tx_params, self.config.tx_power as i32, payload)
             .await
-            .map_err(|_| Sx1262Error::Radio)?;
+            .map_err(|_| RadioError::Hardware)?;
 
-        self.lora.tx().await.map_err(|_| Sx1262Error::Radio)?;
+        self.lora.tx().await.map_err(|_| RadioError::Hardware)?;
 
         Ok(())
     }
@@ -159,7 +153,7 @@ where
         self.lora
             .prepare_for_rx(RxMode::Single(timeout_ms), &mdltn, &rx_params)
             .await
-            .map_err(|_| Sx1262Error::Radio)?;
+            .map_err(|_| RadioError::Hardware)?;
 
         match self.lora.rx(&rx_params, buf).await {
             Ok((len, status)) => Ok(Some(RxPacket {
@@ -168,7 +162,7 @@ where
                 snr: Some(status.snr as i8), // lora-phy uses i16, we use i8
             })),
             Err(lora_phy::RadioError::ReceiveTimeout) => Ok(None),
-            Err(_) => Err(Sx1262Error::Radio),
+            Err(_) => Err(RadioError::Hardware),
         }
     }
 

@@ -83,7 +83,7 @@ impl std::fmt::Display for SlipError {
     }
 }
 
-impl std::error::Error for SlipError {}
+impl core::error::Error for SlipError {}
 
 /// Maximum size of raw packet data (before SLIP encoding).
 const TX_BUFFER_SIZE: usize = 4096;

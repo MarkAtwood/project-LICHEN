@@ -14,7 +14,7 @@ use lichen_coap::message::{MessageCode, MessageType};
 use lichen_hal::Radio;
 use lichen_oscore::{Context, COAP_OPTION_OSCORE};
 
-use crate::stack::{Stack, TxError, RxError, RxFrame};
+use crate::stack::{Stack, TxError, RxError, ReceivedIpv6};
 use lichen_core::addr::NodeId;
 use lichen_ipv6::Addr;
 
@@ -44,6 +44,15 @@ impl core::fmt::Display for SecureError {
             Self::DecryptFailed => write!(f, "OSCORE decryption failed"),
             Self::CoapEncode => write!(f, "CoAP encoding failed"),
             Self::Tx(e) => write!(f, "TX error: {}", e),
+        }
+    }
+}
+
+impl core::error::Error for SecureError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Tx(e) => Some(e),
+            _ => None,
         }
     }
 }
@@ -124,9 +133,13 @@ impl<R: Radio> SecureStack<R> {
         let mut class_e = [0u8; 64];
         let mut class_e_len = 0;
 
-        // Encode Uri-Path options
+        // Encode Uri-Path options using CoAP delta encoding (RFC 7252 section 3.1).
+        // Option delta = current_option_number - previous_option_number.
+        // First Uri-Path (option 11): delta = 11 - 0 = 11.
+        // Subsequent Uri-Path options: delta = 11 - 11 = 0 (same option number repeats).
+        // Length < 13: fits in 4-bit nibble. Length >= 13: use extended form (13 + ext byte).
         for seg in uri_path {
-            let delta = if class_e_len == 0 { 11 } else { 0 }; // Uri-Path = 11
+            let delta = if class_e_len == 0 { 11 } else { 0 };
             let seg_bytes = seg.as_bytes();
             if seg_bytes.len() < 13 {
                 class_e[class_e_len] = ((delta as u8) << 4) | (seg_bytes.len() as u8);
@@ -205,7 +218,7 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Receive and auto-decrypt if OSCORE protected.
-    pub async fn receive(&mut self, timeout_ms: u32) -> Result<Option<RxFrame>, RxError> {
+    pub async fn receive(&mut self, timeout_ms: u32) -> Result<Option<ReceivedIpv6>, RxError> {
         self.stack.receive(timeout_ms).await
     }
 }
@@ -215,12 +228,13 @@ mod tests {
     use super::*;
     use lichen_hal::loopback::LoopbackRadio;
     use lichen_link::identity::{Identity, PeerIdentity};
+    use lichen_link::Seed;
     use lichen_oscore::Context as OscoreContext;
 
     #[tokio::test]
     async fn secure_stack_oscore_roundtrip() {
-        let alice_id = Identity::from_seed([0x01; 32]);
-        let bob_id = Identity::from_seed([0x02; 32]);
+        let alice_id = Identity::from_seed(Seed::new([0x01; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x02; 32]));
 
         let alice_pubkey = alice_id.pubkey;
         let bob_pubkey = bob_id.pubkey;

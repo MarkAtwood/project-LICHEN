@@ -3,7 +3,7 @@
 //! These implement the lichen-hal traits using std, allowing protocol logic
 //! to be tested without real hardware.
 
-use lichen_hal::{Clock, NonVolatile, RadioConfig, Rng, RxPacket};
+use lichen_hal::{Clock, NonVolatile, RadioConfig, RadioError, Rng, RxPacket};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -50,7 +50,7 @@ impl Default for MockRadio {
 }
 
 impl lichen_hal::Radio for MockRadio {
-    type Error = std::io::Error;
+    type Error = RadioError<core::convert::Infallible>;
 
     async fn transmit(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
         self.tx_queue.lock().unwrap().push(payload.to_vec());

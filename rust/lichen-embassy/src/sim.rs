@@ -14,7 +14,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
-use lichen_hal::{Radio, RadioConfig, RxPacket};
+use lichen_hal::{Radio, RadioConfig, RadioError, RxPacket};
 
 /// Radio that connects to lichen-sim for packet transfer.
 ///
@@ -25,20 +25,9 @@ pub struct SimRadio {
     config: RadioConfig,
 }
 
-/// Error type for SimRadio operations.
-#[derive(Debug)]
-pub enum SimError {
-    /// Connection to lichen-sim failed or was lost.
-    Connection(std::io::Error),
-    /// Protocol error (bad response from sim).
-    Protocol,
-}
-
-impl From<std::io::Error> for SimError {
-    fn from(e: std::io::Error) -> Self {
-        SimError::Connection(e)
-    }
-}
+/// Type alias for SimRadio errors using the common RadioError type.
+/// Uses std::io::Error as the bus error type for connection errors.
+pub type SimError = RadioError<std::io::Error>;
 
 impl SimRadio {
     /// Connect to lichen-sim.
@@ -46,9 +35,9 @@ impl SimRadio {
     /// Default address is 127.0.0.1:5555.
     pub fn connect(host: &str, port: u16) -> Result<Self, SimError> {
         let addr = format!("{}:{}", host, port);
-        let stream = TcpStream::connect(&addr)?;
-        stream.set_nodelay(true)?;
-        stream.set_read_timeout(Some(Duration::from_millis(100)))?;
+        let stream = TcpStream::connect(&addr).map_err(RadioError::Bus)?;
+        stream.set_nodelay(true).map_err(RadioError::Bus)?;
+        stream.set_read_timeout(Some(Duration::from_millis(100))).map_err(RadioError::Bus)?;
 
         Ok(Self {
             stream,
@@ -64,28 +53,28 @@ impl SimRadio {
     fn send_message(&mut self, msg: &[u8]) -> Result<(), SimError> {
         // Length prefix (little-endian u32)
         let len = msg.len() as u32;
-        self.stream.write_all(&len.to_le_bytes())?;
-        self.stream.write_all(msg)?;
-        self.stream.flush()?;
+        self.stream.write_all(&len.to_le_bytes()).map_err(RadioError::Bus)?;
+        self.stream.write_all(msg).map_err(RadioError::Bus)?;
+        self.stream.flush().map_err(RadioError::Bus)?;
         Ok(())
     }
 
     fn recv_message(&mut self) -> Result<Vec<u8>, SimError> {
         // Read length prefix
         let mut len_buf = [0u8; 4];
-        self.stream.read_exact(&mut len_buf)?;
+        self.stream.read_exact(&mut len_buf).map_err(RadioError::Bus)?;
         let len = u32::from_le_bytes(len_buf) as usize;
 
         if len == 0 {
             return Ok(Vec::new());
         }
         if len > 1024 {
-            return Err(SimError::Protocol);
+            return Err(RadioError::Protocol);
         }
 
         // Read payload
         let mut data = vec![0u8; len];
-        self.stream.read_exact(&mut data)?;
+        self.stream.read_exact(&mut data).map_err(RadioError::Bus)?;
         Ok(data)
     }
 }
@@ -105,7 +94,7 @@ impl Radio for SimRadio {
         // Read TX_DONE response
         let resp = self.recv_message()?;
         if resp.is_empty() || resp[0] != 0x11 {
-            return Err(SimError::Protocol);
+            return Err(RadioError::Protocol);
         }
 
         // resp[1..5] contains airtime in us (ignored for now)
@@ -122,16 +111,16 @@ impl Radio for SimRadio {
         let timeout = Duration::from_millis(timeout_ms as u64);
 
         // Use short read timeout for individual polls
-        self.stream.set_read_timeout(Some(Duration::from_millis(50)))?;
+        self.stream.set_read_timeout(Some(Duration::from_millis(50))).map_err(RadioError::Bus)?;
 
         loop {
             // Send RX_POLL
-            self.send_message(&[0x20])?;
+            self.send_message(&[0x20])?;  // Already returns SimError
 
             // Read response
             let resp = match self.recv_message() {
                 Ok(r) => r,
-                Err(SimError::Connection(e))
+                Err(RadioError::Bus(e))
                     if e.kind() == std::io::ErrorKind::TimedOut
                         || e.kind() == std::io::ErrorKind::WouldBlock =>
                 {
@@ -145,19 +134,19 @@ impl Radio for SimRadio {
             };
 
             if resp.is_empty() {
-                return Err(SimError::Protocol);
+                return Err(RadioError::Protocol);
             }
 
             match resp[0] {
                 0x21 => {
                     // RX_OK: [0x21][len:2][payload][rssi:2][snr:2]
                     if resp.len() < 3 {
-                        return Err(SimError::Protocol);
+                        return Err(RadioError::Protocol);
                     }
 
                     let payload_len = u16::from_le_bytes([resp[1], resp[2]]) as usize;
                     if resp.len() < 3 + payload_len + 4 {
-                        return Err(SimError::Protocol);
+                        return Err(RadioError::Protocol);
                     }
 
                     let copy_len = payload_len.min(buf.len());
@@ -182,7 +171,7 @@ impl Radio for SimRadio {
                     std::thread::sleep(Duration::from_millis(10));
                     continue;
                 }
-                _ => return Err(SimError::Protocol),
+                _ => return Err(RadioError::Protocol),
             }
         }
     }
@@ -199,7 +188,7 @@ mod tests {
 
     #[test]
     fn sim_radio_error_display() {
-        let err = SimError::Protocol;
+        let err: SimError = RadioError::Protocol;
         assert!(format!("{:?}", err).contains("Protocol"));
     }
 }

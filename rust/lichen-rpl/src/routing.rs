@@ -13,7 +13,7 @@ use std::{
 };
 
 #[cfg(feature = "std")]
-use crate::messages::{
+use crate::message::{
     Dao, OptionIter, RplError, RplTarget, TransitInfo, OPT_RPL_TARGET, OPT_TRANSIT_INFO,
 };
 

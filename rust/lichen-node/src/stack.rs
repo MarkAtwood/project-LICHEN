@@ -16,6 +16,8 @@ use lichen_coap::codec::CoapBuilder;
 use lichen_coap::message::{MessageCode, MessageType};
 use lichen_hal::Radio;
 use lichen_ipv6::{next_header, Addr, Ipv6Header, IPV6_HEADER_LEN, UDP_HEADER_LEN};
+use lichen_link::link_layer::LinkRxError;
+use lichen_link::seqnum::LinkSeqNum;
 use lichen_schc::codec;
 
 use crate::Node;
@@ -50,13 +52,15 @@ impl core::fmt::Display for TxError {
     }
 }
 
+impl core::error::Error for TxError {}
+
 /// RX path error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RxError {
     /// Radio receive failed.
     RadioRx,
-    /// Link layer verification failed.
-    LinkVerify,
+    /// Link layer error (signature, replay, key mismatch, etc.).
+    Link(LinkRxError),
     /// SCHC decompression failed.
     SchcDecompress,
     /// Timeout waiting for frame.
@@ -67,24 +71,39 @@ impl core::fmt::Display for RxError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::RadioRx => write!(f, "radio RX failed"),
-            Self::LinkVerify => write!(f, "link verification failed"),
+            Self::Link(e) => write!(f, "link error: {}", e),
             Self::SchcDecompress => write!(f, "SCHC decompression failed"),
             Self::Timeout => write!(f, "receive timeout"),
         }
     }
 }
 
-/// Received frame with metadata.
+impl core::error::Error for RxError {}
+
+impl From<LinkRxError> for RxError {
+    fn from(e: LinkRxError) -> Self {
+        RxError::Link(e)
+    }
+}
+
+/// A fully processed received packet: authenticated, decompressed, with radio metadata.
+///
+/// This represents the output of the complete RX path through the stack:
+/// 1. Radio reception (provides rssi/snr)
+/// 2. Link-layer authentication (see [`lichen_link::link_layer::AuthenticatedFrame`])
+/// 3. SCHC decompression (produces the full IPv6 packet)
+///
+/// The `ipv6` field contains a complete IPv6 packet ready for upper-layer processing.
 #[cfg(feature = "std")]
 #[derive(Debug)]
-pub struct RxFrame {
+pub struct ReceivedIpv6 {
     /// Decompressed IPv6 packet.
     pub ipv6: Vec<u8>,
-    /// Sender IID.
+    /// Sender IID (from authenticated link-layer identity).
     pub sender_iid: [u8; 8],
-    /// RSSI if available.
+    /// RSSI in dBm (if radio provides it).
     pub rssi: Option<i16>,
-    /// SNR if available.
+    /// SNR in dB (if radio provides it).
     pub snr: Option<i8>,
 }
 
@@ -95,7 +114,7 @@ pub struct Stack<R: Radio> {
     link: lichen_link::link_layer::LinkLayer,
     node: Node,
     epoch: u8,
-    seqnum: u16,
+    seqnum: LinkSeqNum,
     message_id: u16,
 }
 
@@ -109,7 +128,7 @@ impl<R: Radio> Stack<R> {
             link: lichen_link::link_layer::LinkLayer::new(identity),
             node: Node::new(node_id),
             epoch: 0,
-            seqnum: 0,
+            seqnum: LinkSeqNum::new(0),
             message_id: 0,
         }
     }
@@ -137,10 +156,45 @@ impl<R: Radio> Stack<R> {
     }
 
     /// Get the next sequence number.
-    pub fn next_seqnum(&mut self) -> u16 {
-        let seq = self.seqnum;
-        self.seqnum = self.seqnum.wrapping_add(1);
-        seq
+    pub fn next_seqnum(&mut self) -> LinkSeqNum {
+        self.seqnum.fetch_increment()
+    }
+
+    /// Build and send a CoAP request.
+    ///
+    /// Common helper for GET/POST/PUT. Returns the message ID for matching responses.
+    async fn send_coap_request(
+        &mut self,
+        dst: &Addr,
+        method: MessageCode,
+        uri_path: &[&str],
+        token: &[u8],
+        content_format: Option<u16>,
+        payload: Option<&[u8]>,
+    ) -> Result<u16, TxError> {
+        let mid = self.next_message_id();
+        let mut coap = [0u8; 192];
+        let mut builder = CoapBuilder::new(
+            &mut coap,
+            MessageType::Confirmable,
+            method,
+            mid,
+            token,
+        )
+        .map_err(|_| TxError::CoapEncode)?;
+        for seg in uri_path {
+            builder.uri_path(seg).map_err(|_| TxError::CoapEncode)?;
+        }
+        if let Some(cf) = content_format {
+            builder.content_format(cf).map_err(|_| TxError::CoapEncode)?;
+        }
+        if let Some(p) = payload {
+            builder.payload(p).map_err(|_| TxError::CoapEncode)?;
+        }
+        let coap_len = builder.finish();
+
+        self.send_coap_raw(dst, &coap[..coap_len]).await?;
+        Ok(mid)
     }
 
     /// Build a CoAP GET request and transmit it.
@@ -152,23 +206,8 @@ impl<R: Radio> Stack<R> {
         uri_path: &[&str],
         token: &[u8],
     ) -> Result<u16, TxError> {
-        let mid = self.next_message_id();
-        let mut coap = [0u8; 128];
-        let mut builder = CoapBuilder::new(
-            &mut coap,
-            MessageType::Confirmable,
-            MessageCode::GET,
-            mid,
-            token,
-        )
-        .map_err(|_| TxError::CoapEncode)?;
-        for seg in uri_path {
-            builder.uri_path(seg).map_err(|_| TxError::CoapEncode)?;
-        }
-        let coap_len = builder.finish();
-
-        self.send_coap_raw(dst, &coap[..coap_len]).await?;
-        Ok(mid)
+        self.send_coap_request(dst, MessageCode::GET, uri_path, token, None, None)
+            .await
     }
 
     /// Build a CoAP POST request and transmit it.
@@ -182,30 +221,13 @@ impl<R: Radio> Stack<R> {
         content_format: Option<u16>,
         payload: &[u8],
     ) -> Result<u16, TxError> {
-        let mid = self.next_message_id();
-        let mut coap = [0u8; 192];
-        let mut builder = CoapBuilder::new(
-            &mut coap,
-            MessageType::Confirmable,
-            MessageCode::POST,
-            mid,
-            token,
-        )
-        .map_err(|_| TxError::CoapEncode)?;
-        for seg in uri_path {
-            builder.uri_path(seg).map_err(|_| TxError::CoapEncode)?;
-        }
-        if let Some(cf) = content_format {
-            builder.content_format(cf).map_err(|_| TxError::CoapEncode)?;
-        }
-        builder.payload(payload).map_err(|_| TxError::CoapEncode)?;
-        let coap_len = builder.finish();
-
-        self.send_coap_raw(dst, &coap[..coap_len]).await?;
-        Ok(mid)
+        self.send_coap_request(dst, MessageCode::POST, uri_path, token, content_format, Some(payload))
+            .await
     }
 
     /// Build a CoAP PUT request and transmit it.
+    ///
+    /// Returns the message ID for matching responses.
     pub async fn send_put(
         &mut self,
         dst: &Addr,
@@ -214,27 +236,8 @@ impl<R: Radio> Stack<R> {
         content_format: Option<u16>,
         payload: &[u8],
     ) -> Result<u16, TxError> {
-        let mid = self.next_message_id();
-        let mut coap = [0u8; 192];
-        let mut builder = CoapBuilder::new(
-            &mut coap,
-            MessageType::Confirmable,
-            MessageCode::PUT,
-            mid,
-            token,
-        )
-        .map_err(|_| TxError::CoapEncode)?;
-        for seg in uri_path {
-            builder.uri_path(seg).map_err(|_| TxError::CoapEncode)?;
-        }
-        if let Some(cf) = content_format {
-            builder.content_format(cf).map_err(|_| TxError::CoapEncode)?;
-        }
-        builder.payload(payload).map_err(|_| TxError::CoapEncode)?;
-        let coap_len = builder.finish();
-
-        self.send_coap_raw(dst, &coap[..coap_len]).await?;
-        Ok(mid)
+        self.send_coap_request(dst, MessageCode::PUT, uri_path, token, content_format, Some(payload))
+            .await
     }
 
     /// Send a raw CoAP message to destination.
@@ -247,11 +250,11 @@ impl<R: Radio> Stack<R> {
         let udp_len = (UDP_HEADER_LEN + coap.len()) as u16;
         let mut ipv6 = [0u8; 256];
         let ip_hdr = Ipv6Header::new(next_header::UDP, src, *dst);
-        ipv6[..IPV6_HEADER_LEN].copy_from_slice(&ip_hdr.encode(udp_len));
+        ip_hdr.write_to(udp_len, &mut ipv6[..IPV6_HEADER_LEN]).map_err(|_| TxError::BufferTooSmall)?;
 
         // UDP header: src_port, dst_port, length, checksum
-        let src_port: u16 = PORT_COAP;
-        let dst_port: u16 = PORT_COAP;
+        let src_port = PORT_COAP;
+        let dst_port = PORT_COAP;
         ipv6[40..42].copy_from_slice(&src_port.to_be_bytes());
         ipv6[42..44].copy_from_slice(&dst_port.to_be_bytes());
         ipv6[44..46].copy_from_slice(&udp_len.to_be_bytes());
@@ -308,7 +311,7 @@ impl<R: Radio> Stack<R> {
     /// Receive a frame with timeout.
     ///
     /// Path: Radio RX → L2 verify → SCHC decompress → IPv6
-    pub async fn receive(&mut self, timeout_ms: u32) -> Result<Option<RxFrame>, RxError> {
+    pub async fn receive(&mut self, timeout_ms: u32) -> Result<Option<ReceivedIpv6>, RxError> {
         let mut buf = [0u8; MAX_FRAME_SIZE];
         let rx = self
             .radio
@@ -321,13 +324,13 @@ impl<R: Radio> Stack<R> {
         };
 
         let wire = &buf[..pkt.len];
-        let l2 = self.link.receive_frame(wire).map_err(|_| RxError::LinkVerify)?;
+        let l2 = self.link.receive_frame(wire)?;
 
         let mut ipv6 = vec![0u8; 256];
         let n = codec::decompress(&l2.payload, &mut ipv6).map_err(|_| RxError::SchcDecompress)?;
         ipv6.truncate(n);
 
-        Ok(Some(RxFrame {
+        Ok(Some(ReceivedIpv6 {
             ipv6,
             sender_iid: l2.sender.iid,
             rssi: pkt.rssi,
@@ -338,27 +341,16 @@ impl<R: Radio> Stack<R> {
     /// Handle a received frame and generate a reply if applicable.
     ///
     /// For ICMPv6 Echo Requests, automatically sends Echo Reply.
-    pub async fn handle_and_reply(&mut self, frame: &RxFrame) -> Result<bool, TxError> {
-        // Re-compress for node dispatch (node expects SCHC frames)
-        let mut schc = [0u8; 200];
-        let schc_len =
-            codec::compress(&frame.ipv6, &mut schc).map_err(|_| TxError::SchcCompress)?;
-
-        let mut reply_schc = [0u8; 258];
-        let reply_len = self.node.handle_frame(&schc[..schc_len], &mut reply_schc);
+    pub async fn handle_and_reply(&mut self, frame: &ReceivedIpv6) -> Result<bool, TxError> {
+        let mut reply_ipv6 = [0u8; 256];
+        let reply_len = self.node.handle_ipv6(&frame.ipv6, &mut reply_ipv6);
 
         if reply_len > 0 {
-            // Decompress reply to get the IPv6 packet
-            let mut reply_ipv6 = [0u8; 256];
-            let reply_ipv6_len = codec::decompress(&reply_schc[..reply_len], &mut reply_ipv6)
-                .map_err(|_| TxError::SchcCompress)?;
-
-            // Send the reply
-            self.send_ipv6_raw(&reply_ipv6[..reply_ipv6_len]).await?;
-            return Ok(true);
+            self.send_ipv6_raw(&reply_ipv6[..reply_len]).await?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-
-        Ok(false)
     }
 
     /// Run the receive loop, handling incoming frames.
@@ -367,7 +359,7 @@ impl<R: Radio> Stack<R> {
     /// the callback returns `false` or on error.
     pub async fn run<F>(&mut self, mut callback: F) -> Result<(), RxError>
     where
-        F: FnMut(&RxFrame) -> bool,
+        F: FnMut(&ReceivedIpv6) -> bool,
     {
         loop {
             match self.receive(1000).await? {
@@ -460,11 +452,12 @@ mod tests {
     use super::*;
     use lichen_hal::loopback::LoopbackRadio;
     use lichen_link::identity::{Identity, PeerIdentity};
+    use lichen_link::Seed;
 
     #[tokio::test]
     async fn stack_send_get_loopback() {
-        let alice_id = Identity::from_seed([0x01; 32]);
-        let bob_id = Identity::from_seed([0x02; 32]);
+        let alice_id = Identity::from_seed(Seed::new([0x01; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x02; 32]));
 
         let alice_pubkey = alice_id.pubkey;
         let bob_pubkey = bob_id.pubkey;
@@ -493,8 +486,8 @@ mod tests {
 
     #[tokio::test]
     async fn stack_ping_pong() {
-        let alice_id = Identity::from_seed([0x01; 32]);
-        let bob_id = Identity::from_seed([0x02; 32]);
+        let alice_id = Identity::from_seed(Seed::new([0x01; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x02; 32]));
 
         let alice_peer = PeerIdentity::from_pubkey(alice_id.pubkey);
         let bob_peer = PeerIdentity::from_pubkey(bob_id.pubkey);
@@ -514,8 +507,8 @@ mod tests {
         let echo = lichen_ipv6::Icmpv6Echo { id: 42, seq: 1 };
         let icmp = echo.build_request(&alice_addr, &bob_addr, b"ping");
         let ip_hdr = Ipv6Header::new(next_header::ICMPV6, alice_addr, bob_addr);
-        let mut ipv6 = Vec::new();
-        ipv6.extend_from_slice(&ip_hdr.encode(icmp.len() as u16));
+        let mut ipv6 = vec![0u8; IPV6_HEADER_LEN];
+        ip_hdr.write_to(icmp.len() as u16, &mut ipv6[..IPV6_HEADER_LEN]).unwrap();
         ipv6.extend_from_slice(&icmp);
 
         alice.send_ipv6_raw(&ipv6).await.unwrap();

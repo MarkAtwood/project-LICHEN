@@ -38,4 +38,18 @@ config LICHEN_LINK_LOG_LEVEL
 	  Log level for LICHEN link layer:
 	  0=off, 1=error, 2=warning, 3=info, 4=debug
 
+config LICHEN_LINK_MIC_SKIP_VERIFY
+	bool "Skip MIC verification (DANGEROUS)"
+	default n
+	help
+	  DANGER: Disables MIC verification, allowing forged frames to be
+	  accepted. This option exists ONLY for testing environments where
+	  link-layer keys are not yet provisioned.
+
+	  NEVER enable this in production — it completely disables frame
+	  authentication and allows any attacker to inject packets.
+
+	  When enabled, a warning is logged for every received frame to
+	  make the insecure state obvious.
+
 endif # LICHEN_LINK

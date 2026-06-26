@@ -6,8 +6,15 @@ license.workspace = true
 description = "SCHC header compression (RFC 8724): rule model and compress/decompress stubs."
 
 [features]
-default = []
+default = ["std"]
 std = []
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt", "lichen-core/defmt"]
+log = ["dep:log", "lichen-core/log"]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }

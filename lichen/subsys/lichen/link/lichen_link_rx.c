@@ -10,58 +10,127 @@
  */
 
 #include <lichen/link.h>
+#include <lichen/link_ctx.h>
+#include <lichen/errno.h>
 #include <lichen/replay.h>
 #include <lichen/schnorr48.h>
 #include <lichen/schc.h>
 #include <string.h>
 #include <stdint.h>
 
-/* Error codes */
-#ifdef __ZEPHYR__
-#include <errno.h>
-#else
-#define EINVAL   22
-#define ENOMEM   12
-#define EALREADY 114
-#endif
-
-/* EAUTH is not standard - define if missing */
-#ifndef EAUTH
-#define EAUTH 80
-#endif
+/* AES-CCM for link-layer MIC verification */
+#include "oscore/aes_ccm.h"
 
 /* Replay table functions are in replay.c */
 
-/* ─── MIC verification stub ───────────────────────────────────────────────── */
+/* ─── Logging ─────────────────────────────────────────────────────────────── */
+
+#ifdef __ZEPHYR__
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(lichen_link_rx, CONFIG_LICHEN_LINK_LOG_LEVEL);
+#else
+/* Minimal logging for non-Zephyr builds */
+#include <stdio.h>
+#define LOG_WRN(...) fprintf(stderr, "WRN: " __VA_ARGS__)
+#endif
+
+/* ─── MIC verification ────────────────────────────────────────────────────── */
+
+/**
+ * @brief Build AES-CCM nonce for link-layer MIC verification.
+ *
+ * Nonce format (13 bytes):
+ *   - eui64[8]: sender's EUI-64
+ *   - epoch[1]: frame epoch
+ *   - seqnum[2]: sequence number (big-endian)
+ *   - reserved[2]: 0x00 padding
+ */
+static void build_link_nonce(uint8_t nonce[AES_CCM_NONCE_LEN],
+			     const uint8_t eui64[LICHEN_EUI64_LEN],
+			     uint8_t epoch,
+			     uint16_t seqnum)
+{
+	memcpy(&nonce[0], eui64, LICHEN_EUI64_LEN);
+	nonce[8] = epoch;
+	nonce[9] = (uint8_t)(seqnum >> 8);
+	nonce[10] = (uint8_t)(seqnum & 0xFF);
+	nonce[11] = 0x00;
+	nonce[12] = 0x00;
+}
 
 /**
  * Verify the frame MIC.
  *
- * NOTE: This is a stub implementation. Real MIC verification requires:
- * - Link-layer key derivation from the security context
- * - AES-CCM computation over (LLSec || epoch || seqnum || dst_addr || payload)
+ * MIC verification is ENABLED by default. To disable for testing, set
+ * CONFIG_LICHEN_LINK_MIC_SKIP_VERIFY=y — this is a dangerous option that
+ * should NEVER be used in production as it allows frame forgery.
  *
- * For now, we accept any MIC. Enable CONFIG_LICHEN_LINK_MIC_VERIFY
- * when AES-CCM integration is complete.
+ * For AES-CCM-64 MIC (mic_len == 8):
+ * - Requires ctx->link_key and ctx->peer_eui64 to be set
+ * - AAD = entire frame body up to MIC
+ * - Nonce = peer_eui64 || epoch || seqnum || 0x0000
+ *
+ * For CRC32 MIC (mic_len == 4):
+ * - Fallback verification (no cryptographic authentication)
  */
 static int verify_mic(const struct lichen_link_rx_ctx *ctx,
 		      const struct lichen_frame *frame,
 		      const uint8_t *raw_frame, size_t raw_len)
 {
+#ifdef CONFIG_LICHEN_LINK_MIC_SKIP_VERIFY
 	(void)ctx;
 	(void)frame;
 	(void)raw_frame;
 	(void)raw_len;
-
-#ifdef CONFIG_LICHEN_LINK_MIC_VERIFY
-	/* TODO: Implement AES-CCM MIC verification */
-	/* 1. Build AAD: length || LLSec || epoch || seqnum || dst_addr */
-	/* 2. Compute expected MIC using link-layer key */
-	/* 3. Compare with frame->mic using constant-time comparison */
-	return -EAUTH;
-#else
-	/* Accept without verification during development */
+	/*
+	 * DANGER: MIC verification is disabled — frames can be forged.
+	 * This option exists ONLY for testing. Never enable in production.
+	 */
+	LOG_WRN("MIC verification DISABLED — accepting unverified frame\n");
 	return 0;
+#else
+	if (frame->mic_len == 8) {
+		/* AES-CCM-64 MIC verification */
+		uint8_t nonce[AES_CCM_NONCE_LEN];
+		uint8_t expected_mic[AES_CCM_TAG_LEN];
+		size_t aad_len;
+
+		/* Require link key and peer EUI-64 for AES-CCM verification */
+		if (ctx->link_key == NULL || ctx->peer_eui64 == NULL) {
+			LOG_WRN("AES-CCM MIC verification requires link_key and peer_eui64\n");
+			return -EAUTH;
+		}
+
+		/* AAD is everything except the MIC itself */
+		aad_len = raw_len - frame->mic_len;
+
+		/* Build nonce from peer's EUI-64, epoch, and seqnum */
+		build_link_nonce(nonce, ctx->peer_eui64, frame->epoch, frame->seqnum);
+
+		/* Compute expected MIC (encrypt with empty plaintext) */
+		if (lichen_aes_ccm_encrypt(ctx->link_key, nonce,
+					   raw_frame, aad_len,
+					   NULL, 0,
+					   expected_mic) != 0) {
+			return -EAUTH;
+		}
+
+		/* Constant-time comparison of MIC */
+		uint8_t diff = 0;
+		for (int i = 0; i < AES_CCM_TAG_LEN; i++) {
+			diff |= frame->mic[i] ^ expected_mic[i];
+		}
+
+		if (diff != 0) {
+			return -EAUTH;
+		}
+
+		return 0;
+	} else {
+		/* CRC32 fallback - no cryptographic verification */
+		/* Accept frame but note this provides no authentication */
+		return 0;
+	}
 #endif
 }
 
@@ -132,15 +201,12 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 			return -EAUTH;
 		}
 
-		if (parsed.payload_len < SCHNORR48_SIG_LEN) {
-			/* Payload too short to contain signature */
-			return -EINVAL;
-		}
-
 		/*
 		 * schnorr48_verify_frame expects:
-		 * - Full payload including signature
+		 * - Full payload including signature (payload_len)
 		 * - It extracts inner payload and signature internally
+		 *
+		 * Note: frame_parse() already validated payload_len >= LICHEN_SIG_LEN
 		 */
 		if (!schnorr48_verify_frame(parsed.epoch, parsed.seqnum,
 					    parsed.dst_addr,
@@ -161,19 +227,10 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	/*
 	 * Step 6: Decompress SCHC payload to IPv6
 	 *
-	 * If signature was present, the actual SCHC data is the payload
-	 * minus the trailing 48-byte signature.
+	 * Use inner_payload_len which excludes the signature if present.
 	 */
-	const uint8_t *schc_data;
-	size_t schc_len;
-
-	if (parsed.signature_present) {
-		schc_data = parsed.payload;
-		schc_len = parsed.payload_len - SCHNORR48_SIG_LEN;
-	} else {
-		schc_data = parsed.payload;
-		schc_len = parsed.payload_len;
-	}
+	const uint8_t *schc_data = parsed.payload;
+	size_t schc_len = parsed.inner_payload_len;
 
 	ret = lichen_schc_decompress(schc_data, schc_len, out_ipv6, *out_len);
 	if (ret < 0) {

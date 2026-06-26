@@ -90,15 +90,12 @@ int coap_oscore_unprotect_request(struct oscore_ctx *ctx,
 		return -EINVAL;
 	}
 
-	/* Unprotect */
-	uint8_t options_buf[64];
-	size_t options_len = sizeof(options_buf);
-
+	/* Unprotect (Class E options not used yet, pass NULL) */
 	ret = oscore_unprotect_request(ctx,
 				       oscore_opt, oscore_opt_len,
 				       ciphertext, ciphertext_len,
 				       original_code,
-				       options_buf, &options_len,
+				       NULL, NULL,
 				       payload, payload_len);
 	if (ret != OSCORE_OK) {
 		LOG_WRN("OSCORE unprotect failed: %d", ret);

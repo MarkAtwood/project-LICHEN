@@ -26,8 +26,7 @@ impl core::fmt::Display for CborError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for CborError {}
+impl core::error::Error for CborError {}
 
 // RFC 8428 §6 Table 4 integer labels
 const L_BN: i8 = -2; // base name

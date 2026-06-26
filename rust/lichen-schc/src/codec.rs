@@ -10,6 +10,12 @@ use lichen_core::constants::{
     RULE_GLOBAL_COAP, RULE_ICMPV6_ECHO, RULE_LINK_LOCAL_COAP, RULE_RPL_DAO, RULE_RPL_DIO,
     RULE_UNCOMPRESSED,
 };
+use lichen_core::error::{BufferTooSmall, TooShort};
+
+/// IPv6 link-local prefix (fe80::/64) as a u128 with the prefix in the high 64 bits.
+/// To reconstruct a full link-local address, OR this with a 64-bit Interface Identifier (IID).
+/// See RFC 4291 Section 2.5.6: Link-Local addresses have the format fe80::<IID>/10.
+const LINK_LOCAL_PREFIX: u128 = 0xFE80_0000_0000_0000_u128 << 64;
 
 /// Error returned by compression/decompression.
 #[derive(Debug, PartialEq, Eq)]
@@ -17,26 +23,45 @@ pub enum SchcError {
     /// No rule matched the packet headers.
     NoMatchingRule,
     /// The output buffer is too small.
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
     /// The rule ID in the compressed data is unknown.
     UnknownRuleId(u8),
     /// The compressed data is too short.
-    TooShort,
+    TooShort(TooShort),
 }
 
 impl core::fmt::Display for SchcError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::NoMatchingRule => write!(f, "no matching rule"),
-            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::BufferTooSmall(e) => write!(f, "SCHC {}", e),
             Self::UnknownRuleId(id) => write!(f, "unknown rule ID: {}", id),
-            Self::TooShort => write!(f, "compressed data too short"),
+            Self::TooShort(e) => write!(f, "SCHC {}", e),
         }
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for SchcError {}
+impl core::error::Error for SchcError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for SchcError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for SchcError {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
+}
 
 // ─── bit-packing ─────────────────────────────────────────────────────────────
 
@@ -60,7 +85,7 @@ impl<'a> BitWriter<'a> {
             let byte_pos = self.nbits / 8;
             let bit_pos = 7 - (self.nbits % 8);
             if byte_pos >= self.buf.len() {
-                return Err(SchcError::BufferTooSmall);
+                return Err(BufferTooSmall::new(byte_pos + 1, self.buf.len()).into());
             }
             self.buf[byte_pos] |= bit << bit_pos;
             self.nbits += 1;
@@ -84,8 +109,10 @@ impl<'a> BitReader<'a> {
     }
 
     fn read(&mut self, nbits: usize) -> Result<u128, SchcError> {
-        if self.pos + nbits > self.buf.len() * 8 {
-            return Err(SchcError::TooShort);
+        let required_bits = self.pos + nbits;
+        let available_bits = self.buf.len() * 8;
+        if required_bits > available_bits {
+            return Err(TooShort::new(required_bits.div_ceil(8), self.buf.len()).into());
         }
         let mut value: u128 = 0;
         for _ in 0..nbits {
@@ -176,15 +203,32 @@ fn icmpv6_checksum(src: &[u8], dst: &[u8], icmpv6_payload: &[u8]) -> u16 {
 }
 
 // ─── per-rule compress ────────────────────────────────────────────────────────
+//
+// IPv6 header layout (40 bytes):
+//   [0..4]   - Version/TC/Flow Label
+//   [4..6]   - Payload Length
+//   [6]      - Next Header (17=UDP, 58=ICMPv6)
+//   [7]      - Hop Limit
+//   [8..24]  - Source Address (16 bytes)
+//   [24..40] - Destination Address (16 bytes)
+//
+// ICMPv6 header (4 bytes, at offset 40):
+//   [40]     - Type (128=Echo Request, 129=Echo Reply, 155=RPL)
+//   [41]     - Code (1=DIO, 2=DAO for RPL)
+//   [42..44] - Checksum
+//
+// RPL body starts at offset 44 (after IPv6 + ICMPv6 header).
 
 /// Rule 0 (link-local) and Rule 1 (global): IPv6 + UDP + CoAP.
 fn compress_coap(packet: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, SchcError> {
     if packet.len() < 40 + 8 + 4 {
         return Err(SchcError::NoMatchingRule);
     }
+    // IPv6 header fields (see layout comment above)
     let hop_limit = packet[7];
     let src = &packet[8..24];
     let dst = &packet[24..40];
+    // UDP header starts immediately after IPv6
     let udp = &packet[40..];
     let src_port = u16::from_be_bytes([udp[0], udp[1]]);
     let dst_port = u16::from_be_bytes([udp[2], udp[3]]);
@@ -196,7 +240,7 @@ fn compress_coap(packet: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     let tail = &coap[4..];
 
     if out.is_empty() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(1, 0).into());
     }
     out[0] = rule_id;
 
@@ -226,7 +270,7 @@ fn compress_coap(packet: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     let tail_start = 1 + residue_len;
     let needed = tail_start + tail.len();
     if needed > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
@@ -234,12 +278,15 @@ fn compress_coap(packet: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
 
 /// Rule 2: link-local IPv6 + ICMPv6 Echo.
 fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
+    // 40 (IPv6) + 8 (ICMPv6 Echo: type + code + checksum + id + seq)
     if packet.len() < 40 + 8 {
         return Err(SchcError::NoMatchingRule);
     }
+    // IPv6 header fields (see layout comment above)
     let hop_limit = packet[7];
     let src = &packet[8..24];
     let dst = &packet[24..40];
+    // ICMPv6 header starts at offset 40
     let icmp = &packet[40..];
     let icmp_type = icmp[0];
     let icmp_id = u16::from_be_bytes([icmp[4], icmp[5]]);
@@ -261,7 +308,7 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     let tail_start = 1 + residue_len;
     let needed = tail_start + tail.len();
     if needed > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
@@ -269,13 +316,16 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
 
 /// Rule 3: link-local IPv6 + ICMPv6 RPL DIO.
 fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
+    // 40 (IPv6) + 4 (ICMPv6 header) + 24 (DIO base: instance + version + rank + G/MOP/Prf + DTSN + flags + reserved + DODAGID)
     if packet.len() < 40 + 4 + 24 {
         return Err(SchcError::NoMatchingRule);
     }
+    // IPv6 header fields (see layout comment above)
     let hop_limit = packet[7];
     let src = &packet[8..24];
     let dst = &packet[24..40];
-    let rpl = &packet[44..]; // skip ICMPv6 type/code/checksum (4 bytes)
+    // RPL body starts at offset 44: skip 40-byte IPv6 + 4-byte ICMPv6 header (type/code/checksum)
+    let rpl = &packet[44..];
     let instance = rpl[0];
     let version = rpl[1];
     let rank = u16::from_be_bytes([rpl[2], rpl[3]]);
@@ -303,7 +353,7 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let tail_start = 1 + residue_len;
     let needed = tail_start + tail.len();
     if needed > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
@@ -311,12 +361,15 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 
 /// Rule 4: link-local IPv6 + ICMPv6 RPL DAO with DODAGID.
 fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
+    // 40 (IPv6) + 4 (ICMPv6 header) + 20 (DAO base with D=1: instance + K/D/flags + reserved + seq + DODAGID)
     if packet.len() < 40 + 4 + 20 {
         return Err(SchcError::NoMatchingRule);
     }
+    // IPv6 header fields (see layout comment above)
     let hop_limit = packet[7];
     let src = &packet[8..24];
     let dst = &packet[24..40];
+    // RPL body starts at offset 44: skip 40-byte IPv6 + 4-byte ICMPv6 header (type/code/checksum)
     let rpl = &packet[44..];
     let instance = rpl[0];
     let kd_flags = rpl[1];
@@ -341,7 +394,7 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let tail_start = 1 + residue_len;
     let needed = tail_start + tail.len();
     if needed > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
@@ -358,8 +411,8 @@ fn decompress_coap(data: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
         let src_iid = r.read(64)?;
         let dst_iid = r.read(64)?;
         (
-            (0xFE80_0000_0000_0000_u128 << 64) | src_iid,
-            (0xFE80_0000_0000_0000_u128 << 64) | dst_iid,
+            LINK_LOCAL_PREFIX | src_iid,
+            LINK_LOCAL_PREFIX | dst_iid,
         )
     } else {
         (r.read(128)?, r.read(128)?)
@@ -380,8 +433,9 @@ fn decompress_coap(data: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     let coap_len = 4 + tail.len();
     let udp_len = (8 + coap_len) as u16;
 
-    // Build CoAP bytes for checksum
-    let mut coap_buf = [0u8; 1500];
+    // Build CoAP bytes for checksum.
+    // Buffer sized for max LoRa frame payload (255 bytes) which bounds the tail.
+    let mut coap_buf = [0u8; 256];
     coap_buf[0] = coap_b0;
     coap_buf[1] = coap_code;
     coap_buf[2] = (coap_mid >> 8) as u8;
@@ -393,7 +447,7 @@ fn decompress_coap(data: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     let ipv6_payload_len = udp_len;
     let total = 40 + 8 + coap_len;
     if total > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(total, out.len()).into());
     }
 
     // IPv6 header
@@ -431,19 +485,19 @@ fn decompress_icmpv6_echo(data: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
 
     let tail = &data[1 + r.residue_byte_end()..];
 
-    let src = ((0xFE80_0000_0000_0000_u128 << 64) | src_iid).to_be_bytes();
-    let dst = ((0xFE80_0000_0000_0000_u128 << 64) | dst_iid).to_be_bytes();
+    let src = (LINK_LOCAL_PREFIX | src_iid).to_be_bytes();
+    let dst = (LINK_LOCAL_PREFIX | dst_iid).to_be_bytes();
 
     // ICMPv6 payload: type(1) code(1) cksum(2) id(2) seq(2) + tail
-    let icmp_body_len = 4 + tail.len(); // after checksum, reuse buf
     let icmp_len = 8 + tail.len();
     let total = 40 + icmp_len;
     if total > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(total, out.len()).into());
     }
 
-    // Build ICMPv6 with zero checksum for computation
-    let mut icmp_buf = [0u8; 1500];
+    // Build ICMPv6 with zero checksum for computation.
+    // Buffer sized for max LoRa frame payload (255 bytes) which bounds the tail.
+    let mut icmp_buf = [0u8; 256];
     icmp_buf[0] = icmp_type;
     icmp_buf[1] = 0; // code NOT_SENT = 0
     icmp_buf[2] = 0; // checksum placeholder hi
@@ -480,7 +534,6 @@ fn decompress_icmpv6_echo(data: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     out[47] = icmp_seq as u8;
     out[48..48 + tail.len()].copy_from_slice(tail);
 
-    let _ = icmp_body_len; // suppress unused warning
     Ok(total)
 }
 
@@ -499,18 +552,19 @@ fn decompress_rpl_dio(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 
     let tail = &data[1 + r.residue_byte_end()..];
 
-    let src = ((0xFE80_0000_0000_0000_u128 << 64) | src_iid).to_be_bytes();
-    let dst = ((0xFE80_0000_0000_0000_u128 << 64) | dst_iid).to_be_bytes();
+    let src = (LINK_LOCAL_PREFIX | src_iid).to_be_bytes();
+    let dst = (LINK_LOCAL_PREFIX | dst_iid).to_be_bytes();
 
     // RPL DIO base (24 bytes) + tail
     let rpl_body_len = 24 + tail.len();
     let icmp_len = 4 + rpl_body_len; // type+code+cksum + body
     let total = 40 + icmp_len;
     if total > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(total, out.len()).into());
     }
 
-    let mut icmp_buf = [0u8; 512];
+    // Buffer sized for max LoRa frame payload (255 bytes) which bounds the tail.
+    let mut icmp_buf = [0u8; 256];
     icmp_buf[0] = 155; // RPL
     icmp_buf[1] = 1; // DIO code
     icmp_buf[2] = 0; // checksum placeholder
@@ -560,17 +614,18 @@ fn decompress_rpl_dao(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 
     let tail = &data[1 + r.residue_byte_end()..];
 
-    let src = ((0xFE80_0000_0000_0000_u128 << 64) | src_iid).to_be_bytes();
-    let dst = ((0xFE80_0000_0000_0000_u128 << 64) | dst_iid).to_be_bytes();
+    let src = (LINK_LOCAL_PREFIX | src_iid).to_be_bytes();
+    let dst = (LINK_LOCAL_PREFIX | dst_iid).to_be_bytes();
 
     let rpl_body_len = 20 + tail.len();
     let icmp_len = 4 + rpl_body_len;
     let total = 40 + icmp_len;
     if total > out.len() {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(total, out.len()).into());
     }
 
-    let mut icmp_buf = [0u8; 512];
+    // Buffer sized for max LoRa frame payload (255 bytes) which bounds the tail.
+    let mut icmp_buf = [0u8; 256];
     icmp_buf[0] = 155; // RPL
     icmp_buf[1] = 2; // DAO code
     icmp_buf[2] = 0; // checksum placeholder
@@ -614,7 +669,7 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
         // Not IPv6 — uncompressed fallback
         let needed = 1 + packet.len();
         if out.len() < needed {
-            return Err(SchcError::BufferTooSmall);
+            return Err(BufferTooSmall::new(needed, out.len()).into());
         }
         out[0] = RULE_UNCOMPRESSED;
         out[1..needed].copy_from_slice(packet);
@@ -658,7 +713,8 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
                 }
             } else if icmp_code == 2 && packet.len() >= 40 + 4 + 20 {
                 // DAO — only rule 4 if D flag set
-                let kd_flags = packet[45]; // rpl[1] in DAO base
+                // packet[45] = offset 40 (IPv6) + 4 (ICMPv6 header) + 1 (instance) = K/D/flags byte
+                let kd_flags = packet[45];
                 if kd_flags & 0x40 != 0 {
                     if let Ok(n) = compress_rpl_dao(packet, out) {
                         return Ok(n);
@@ -671,7 +727,7 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     // Uncompressed fallback
     let needed = 1 + packet.len();
     if out.len() < needed {
-        return Err(SchcError::BufferTooSmall);
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[0] = RULE_UNCOMPRESSED;
     out[1..needed].copy_from_slice(packet);
@@ -683,7 +739,7 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 /// Returns the number of bytes written to `out`.
 pub fn decompress(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if data.is_empty() {
-        return Err(SchcError::TooShort);
+        return Err(TooShort::new(1, 0).into());
     }
     match data[0] {
         RULE_LINK_LOCAL_COAP => decompress_coap(data, out, RULE_LINK_LOCAL_COAP),
@@ -694,7 +750,7 @@ pub fn decompress(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
         RULE_UNCOMPRESSED => {
             let payload = &data[1..];
             if out.len() < payload.len() {
-                return Err(SchcError::BufferTooSmall);
+                return Err(BufferTooSmall::new(payload.len(), out.len()).into());
             }
             out[..payload.len()].copy_from_slice(payload);
             Ok(payload.len())

@@ -1,6 +1,32 @@
 //! CoAP resource dispatch: URI routing to handlers.
 //!
 //! Provides a simple resource registry mapping URI paths to handler functions.
+//!
+//! # Compile-Time Dispatch Tables
+//!
+//! The dispatch table is built entirely at compile time using `const fn`:
+//!
+//! - [`Resource::new`], [`Resource::get`], [`Resource::put`], [`Resource::post`],
+//!   [`Resource::delete`] are all `const fn`, enabling builder-pattern construction
+//!   in const contexts.
+//! - [`Dispatcher::new`] and [`default_dispatcher`] are `const fn`, so the entire
+//!   routing table can be a `static` with zero runtime initialization cost.
+//!
+//! This is critical for embedded targets where:
+//! - RAM is scarce (the table lives in flash, not RAM)
+//! - Startup must be deterministic (no heap allocation, no runtime setup)
+//! - Code size matters (the compiler can inline and optimize the fixed table)
+//!
+//! ## Example
+//!
+//! ```ignore
+//! static DISPATCHER: Dispatcher<2> = Dispatcher::new([
+//!     Resource::new(&[b"sensors"]).get(handle_sensors),
+//!     Resource::new(&[b"config"]).get(handle_config).put(handle_config_put),
+//! ]);
+//! ```
+//!
+//! The `DISPATCHER` is computed at compile time and placed in `.rodata`.
 
 use lichen_coap::codec::{CoapBuilder, CoapPacket};
 use lichen_coap::message::{MessageCode, MessageType};
@@ -128,15 +154,8 @@ impl<'a> Request<'a> {
 
     /// Check if path matches the given segments.
     pub fn path_matches(&self, segments: &[&[u8]]) -> bool {
-        if self.path_len != segments.len() {
-            return false;
-        }
-        for (i, seg) in segments.iter().enumerate() {
-            if self.path[i] != *seg {
-                return false;
-            }
-        }
-        true
+        self.path_len == segments.len()
+            && self.path[..self.path_len].iter().zip(segments).all(|(a, b)| a == b)
     }
 
     /// Get path segment at index.
@@ -152,7 +171,10 @@ impl<'a> Request<'a> {
 /// Handler function type.
 pub type Handler = fn(&Request) -> Response;
 
-/// Resource entry.
+/// A CoAP resource with path and method handlers.
+///
+/// All builder methods are `const fn` to enable compile-time dispatch table
+/// construction. See the [module documentation](self) for rationale.
 #[derive(Clone, Copy)]
 pub struct Resource {
     pub path: &'static [&'static [u8]],
@@ -194,7 +216,10 @@ impl Resource {
     }
 }
 
-/// Resource dispatcher.
+/// CoAP resource dispatcher with compile-time table construction.
+///
+/// The generic parameter `N` is the number of resources. Use [`Dispatcher::new`]
+/// (a `const fn`) to build the table at compile time as a `static`.
 pub struct Dispatcher<const N: usize> {
     resources: [Resource; N],
 }

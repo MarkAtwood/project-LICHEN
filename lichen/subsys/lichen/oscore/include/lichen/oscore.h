@@ -58,6 +58,7 @@ enum oscore_err {
 	OSCORE_ERR_BUFFER_TOO_SMALL = -5,
 	OSCORE_ERR_KEY_DERIVATION = -6,
 	OSCORE_ERR_NO_MEMORY = -7,
+	OSCORE_ERR_SEQ_EXHAUSTED = -8,  /**< Sender sequence exhausted, key rotation required */
 };
 
 /**
@@ -152,12 +153,18 @@ void oscore_ctx_free(struct oscore_ctx *ctx);
 /**
  * @brief Look up a security context by recipient ID.
  *
- * @param[in] recipient_id   Recipient ID to search for
- * @param[in] recipient_id_len Length of recipient ID
- * @return Pointer to context, or NULL if not found
+ * Copies the context into the caller-provided buffer to avoid TOCTOU races.
+ * The caller should use the copied context for all subsequent operations.
+ *
+ * @param[in]  recipient_id     Recipient ID to search for
+ * @param[in]  recipient_id_len Length of recipient ID
+ * @param[out] ctx_out          Buffer to copy context into (must not be NULL)
+ * @return 0 on success, OSCORE_ERR_NO_CONTEXT if not found,
+ *         OSCORE_ERR_INVALID_PARAM if ctx_out is NULL
  */
-struct oscore_ctx *oscore_ctx_lookup(const uint8_t *recipient_id,
-				     size_t recipient_id_len);
+int oscore_ctx_lookup(const uint8_t *recipient_id,
+		      size_t recipient_id_len,
+		      struct oscore_ctx *ctx_out);
 
 /**
  * @brief Parse an OSCORE CoAP option.

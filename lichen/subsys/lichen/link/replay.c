@@ -40,7 +40,29 @@ bool lichen_replay_check(struct lichen_replay_window *rw, uint16_t seq)
 	 * Use i32 arithmetic to handle wrapping correctly. */
 	diff = (int32_t)seq - (int32_t)rw->last_seq;
 
-	/* Normalise to [-32768, 32767] range (half the u16 space) */
+	/*
+	 * Half-space comparison for u16 sequence numbers:
+	 *
+	 * When sequence numbers wrap (0 follows 65535), naive comparison
+	 * breaks: 0 < 65535 suggests 0 is "older", but it's actually newer.
+	 *
+	 * The fix: interpret any distance > 32767 as a backward wrap.
+	 * We split the 65536-value space in half around the current position:
+	 *   - Differences in [1, 32767] mean seq is ahead (newer)
+	 *   - Differences in [-32768, -1] mean seq is behind (older)
+	 *
+	 * Example: last_seq=65530, seq=5
+	 *   Raw diff: 5 - 65530 = -65525 (in i32)
+	 *   After normalisation: -65525 + 65536 = 11 (seq is 11 ahead, newer)
+	 *
+	 * Example: last_seq=5, seq=65530
+	 *   Raw diff: 65530 - 5 = 65525 (in i32)
+	 *   After normalisation: 65525 - 65536 = -11 (seq is 11 behind, older)
+	 *
+	 * This works as long as no two valid sequence numbers are ever more
+	 * than 32767 apart - a safe assumption when packets arrive in roughly
+	 * sequential order with a 64-slot window.
+	 */
 	if (diff > 32767) {
 		diff -= 65536;
 	} else if (diff < -32768) {

@@ -5,6 +5,7 @@
 //! payloads (downloads).
 
 use crate::codec::{CoapBuilder, CoapError, CoapOption};
+use lichen_core::error::BufferTooSmall;
 use crate::option::OptionNumber;
 
 /// Block option value (Block1 or Block2).
@@ -31,18 +32,21 @@ impl BlockOption {
 
     /// Create a new block option.
     ///
-    /// # Panics
-    /// Panics if `szx > 6` or `num > 0xFFFFF` (20-bit max).
-    pub fn new(num: u32, more: bool, szx: u8) -> Self {
-        assert!(szx <= 6, "SZX must be 0-6");
-        assert!(num <= 0xFFFFF, "block number must fit in 20 bits");
-        Self { num, more, szx }
+    /// Returns `Err(CoapError::InvalidBlockOption)` if `szx > 6` or `num > 0xFFFFF` (20-bit max).
+    pub fn new(num: u32, more: bool, szx: u8) -> Result<Self, CoapError> {
+        if szx > 6 {
+            return Err(CoapError::InvalidBlockOption);
+        }
+        if num > 0xFFFFF {
+            return Err(CoapError::InvalidBlockOption);
+        }
+        Ok(Self { num, more, szx })
     }
 
     /// Parse from option value bytes (1-3 bytes).
-    pub fn from_bytes(data: &[u8]) -> Option<Self> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, CoapError> {
         if data.is_empty() || data.len() > 3 {
-            return None;
+            return Err(CoapError::InvalidBlockOption);
         }
         // Decode as big-endian integer
         let mut val = 0u32;
@@ -53,20 +57,37 @@ impl BlockOption {
         let more = (val & 0x08) != 0;
         let num = val >> 4;
         if szx > 6 {
-            return None;
+            return Err(CoapError::InvalidBlockOption);
         }
-        Some(Self { num, more, szx })
+        Ok(Self { num, more, szx })
     }
 
-    /// Encode to bytes (1-3 bytes, minimal encoding).
-    pub fn to_bytes(&self) -> ([u8; 3], usize) {
+    /// Write to output buffer (1-3 bytes, minimal encoding).
+    ///
+    /// Returns the number of bytes written.
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, CoapError> {
         let val = (self.num << 4) | ((self.more as u32) << 3) | (self.szx as u32);
         if val <= 0xFF {
-            ([val as u8, 0, 0], 1)
+            if out.is_empty() {
+                return Err(BufferTooSmall::new(1, 0).into());
+            }
+            out[0] = val as u8;
+            Ok(1)
         } else if val <= 0xFFFF {
-            ([(val >> 8) as u8, val as u8, 0], 2)
+            if out.len() < 2 {
+                return Err(BufferTooSmall::new(2, out.len()).into());
+            }
+            out[0] = (val >> 8) as u8;
+            out[1] = val as u8;
+            Ok(2)
         } else {
-            ([(val >> 16) as u8, (val >> 8) as u8, val as u8], 3)
+            if out.len() < 3 {
+                return Err(BufferTooSmall::new(3, out.len()).into());
+            }
+            out[0] = (val >> 16) as u8;
+            out[1] = (val >> 8) as u8;
+            out[2] = val as u8;
+            Ok(3)
         }
     }
 
@@ -81,7 +102,9 @@ impl BlockOption {
     }
 
     /// Create from block size (rounds down to valid SZX).
-    pub fn from_size(num: u32, more: bool, size: usize) -> Self {
+    ///
+    /// Returns `Err(CoapError::InvalidBlockOption)` if `num > 0xFFFFF` (20-bit max).
+    pub fn from_size(num: u32, more: bool, size: usize) -> Result<Self, CoapError> {
         let szx = size_to_szx(size);
         Self::new(num, more, szx)
     }
@@ -128,11 +151,11 @@ impl<'a> CoapOption<'a> {
     }
 
     /// Parse as Block1 or Block2 option.
-    pub fn as_block(&self) -> Option<BlockOption> {
+    pub fn as_block(&self) -> Result<BlockOption, CoapError> {
         if self.is_block1() || self.is_block2() {
             BlockOption::from_bytes(self.value)
         } else {
-            None
+            Err(CoapError::InvalidBlockOption)
         }
     }
 }
@@ -140,14 +163,16 @@ impl<'a> CoapOption<'a> {
 impl<'a> CoapBuilder<'a> {
     /// Add a Block1 option (for request payload chunking).
     pub fn block1(&mut self, block: BlockOption) -> Result<&mut Self, CoapError> {
-        let (bytes, len) = block.to_bytes();
-        self.option(OptionNumber::Block1 as u16, &bytes[..len])
+        let mut buf = [0u8; 3];
+        let len = block.write_to(&mut buf)?;
+        self.option(OptionNumber::Block1 as u16, &buf[..len])
     }
 
     /// Add a Block2 option (for response payload chunking).
     pub fn block2(&mut self, block: BlockOption) -> Result<&mut Self, CoapError> {
-        let (bytes, len) = block.to_bytes();
-        self.option(OptionNumber::Block2 as u16, &bytes[..len])
+        let mut buf = [0u8; 3];
+        let len = block.write_to(&mut buf)?;
+        self.option(OptionNumber::Block2 as u16, &buf[..len])
     }
 
     /// Add a Size1 option (total request body size).
@@ -202,13 +227,15 @@ impl BlockSender {
     pub const MAX_PAYLOAD: usize = 4096;
 
     /// Create a new sender for the given payload.
-    pub fn new(payload: &[u8], block_size: usize) -> Option<Self> {
+    ///
+    /// Returns `Err(CoapError::PayloadTooLarge)` if the payload exceeds `MAX_PAYLOAD`.
+    pub fn new(payload: &[u8], block_size: usize) -> Result<Self, CoapError> {
         if payload.len() > Self::MAX_PAYLOAD {
-            return None;
+            return Err(CoapError::PayloadTooLarge);
         }
         let mut data = [0u8; Self::MAX_PAYLOAD];
         data[..payload.len()].copy_from_slice(payload);
-        Some(Self {
+        Ok(Self {
             data,
             data_len: payload.len(),
             block_size: block_size.clamp(BlockOption::MIN_SIZE, BlockOption::MAX_SIZE),
@@ -228,6 +255,9 @@ impl BlockSender {
     }
 
     /// Get the next block to send. Returns (block_option, block_data).
+    ///
+    /// Returns `None` if the transfer is complete or no more blocks.
+    /// Block number is always valid because MAX_PAYLOAD / MIN_SIZE < 0xFFFFF.
     pub fn next_block(&self) -> Option<(BlockOption, &[u8])> {
         if self.complete {
             return None;
@@ -238,7 +268,9 @@ impl BlockSender {
         }
         let end = (offset + self.block_size).min(self.data_len);
         let more = end < self.data_len;
-        let block = BlockOption::from_size(self.current_block, more, self.block_size);
+        // Block number is bounded: MAX_PAYLOAD / MIN_SIZE = 256, well under 0xFFFFF
+        let block = BlockOption::from_size(self.current_block, more, self.block_size)
+            .expect("block number within bounds");
         Some((block, &self.data[offset..end]))
     }
 
@@ -313,8 +345,9 @@ impl BlockReceiver {
             return Err(CoapError::InvalidOptionDelta);
         }
         let offset = block.offset();
-        if offset + data.len() > Self::MAX_PAYLOAD {
-            return Err(CoapError::BufferTooSmall);
+        let needed = offset + data.len();
+        if needed > Self::MAX_PAYLOAD {
+            return Err(BufferTooSmall::new(needed, Self::MAX_PAYLOAD).into());
         }
 
         self.data[offset..offset + data.len()].copy_from_slice(data);
@@ -333,8 +366,12 @@ impl BlockReceiver {
     }
 
     /// Next block number to request.
+    ///
+    /// Block number is always valid because MAX_PAYLOAD / MIN_SIZE < 0xFFFFF.
     pub fn next_request_block(&self) -> BlockOption {
+        // Block number is bounded: MAX_PAYLOAD / MIN_SIZE = 256, well under 0xFFFFF
         BlockOption::from_size(self.expected_block, false, self.block_size)
+            .expect("block number within bounds")
     }
 
     pub fn is_complete(&self) -> bool {
@@ -349,33 +386,34 @@ mod tests {
     #[test]
     fn block_option_roundtrip() {
         let cases = [
-            BlockOption::new(0, false, 2),   // num=0, m=0, szx=2 (64 bytes)
-            BlockOption::new(0, true, 2),    // num=0, m=1, szx=2
-            BlockOption::new(15, false, 6),  // num=15, m=0, szx=6 (1024 bytes)
-            BlockOption::new(255, true, 4),  // num=255, m=1, szx=4
-            BlockOption::new(4095, true, 0), // large block number
+            BlockOption::new(0, false, 2).unwrap(),   // num=0, m=0, szx=2 (64 bytes)
+            BlockOption::new(0, true, 2).unwrap(),    // num=0, m=1, szx=2
+            BlockOption::new(15, false, 6).unwrap(),  // num=15, m=0, szx=6 (1024 bytes)
+            BlockOption::new(255, true, 4).unwrap(),  // num=255, m=1, szx=4
+            BlockOption::new(4095, true, 0).unwrap(), // large block number
         ];
         for original in cases {
-            let (bytes, len) = original.to_bytes();
-            let parsed = BlockOption::from_bytes(&bytes[..len]).unwrap();
+            let mut buf = [0u8; 3];
+            let len = original.write_to(&mut buf).unwrap();
+            let parsed = BlockOption::from_bytes(&buf[..len]).unwrap();
             assert_eq!(parsed, original, "roundtrip failed for {:?}", original);
         }
     }
 
     #[test]
     fn block_option_size() {
-        assert_eq!(BlockOption::new(0, false, 0).size(), 16);
-        assert_eq!(BlockOption::new(0, false, 1).size(), 32);
-        assert_eq!(BlockOption::new(0, false, 2).size(), 64);
-        assert_eq!(BlockOption::new(0, false, 3).size(), 128);
-        assert_eq!(BlockOption::new(0, false, 4).size(), 256);
-        assert_eq!(BlockOption::new(0, false, 5).size(), 512);
-        assert_eq!(BlockOption::new(0, false, 6).size(), 1024);
+        assert_eq!(BlockOption::new(0, false, 0).unwrap().size(), 16);
+        assert_eq!(BlockOption::new(0, false, 1).unwrap().size(), 32);
+        assert_eq!(BlockOption::new(0, false, 2).unwrap().size(), 64);
+        assert_eq!(BlockOption::new(0, false, 3).unwrap().size(), 128);
+        assert_eq!(BlockOption::new(0, false, 4).unwrap().size(), 256);
+        assert_eq!(BlockOption::new(0, false, 5).unwrap().size(), 512);
+        assert_eq!(BlockOption::new(0, false, 6).unwrap().size(), 1024);
     }
 
     #[test]
     fn block_option_offset() {
-        let block = BlockOption::new(3, false, 4); // block 3, 256 bytes
+        let block = BlockOption::new(3, false, 4).unwrap(); // block 3, 256 bytes
         assert_eq!(block.offset(), 768);
     }
 
@@ -445,7 +483,7 @@ mod tests {
     #[test]
     fn receiver_single_block() {
         let mut receiver = BlockReceiver::new(64);
-        let block = BlockOption::new(0, false, 2);
+        let block = BlockOption::new(0, false, 2).unwrap();
         let done = receiver.receive_block(block, b"hello").unwrap();
         assert!(done);
         assert_eq!(receiver.payload(), b"hello");
@@ -456,15 +494,15 @@ mod tests {
         let mut receiver = BlockReceiver::new(64);
 
         // Block 0
-        let block0 = BlockOption::new(0, true, 2);
+        let block0 = BlockOption::new(0, true, 2).unwrap();
         assert!(!receiver.receive_block(block0, &[1u8; 64]).unwrap());
 
         // Block 1
-        let block1 = BlockOption::new(1, true, 2);
+        let block1 = BlockOption::new(1, true, 2).unwrap();
         assert!(!receiver.receive_block(block1, &[2u8; 64]).unwrap());
 
         // Block 2 (final)
-        let block2 = BlockOption::new(2, false, 2);
+        let block2 = BlockOption::new(2, false, 2).unwrap();
         assert!(receiver.receive_block(block2, &[3u8; 32]).unwrap());
 
         let payload = receiver.payload();
@@ -472,5 +510,30 @@ mod tests {
         assert!(payload[..64].iter().all(|&b| b == 1));
         assert!(payload[64..128].iter().all(|&b| b == 2));
         assert!(payload[128..160].iter().all(|&b| b == 3));
+    }
+
+    #[test]
+    fn block_option_invalid_szx() {
+        assert_eq!(
+            BlockOption::new(0, false, 7),
+            Err(CoapError::InvalidBlockOption)
+        );
+    }
+
+    #[test]
+    fn block_option_invalid_num() {
+        assert_eq!(
+            BlockOption::new(0x100000, false, 2),
+            Err(CoapError::InvalidBlockOption)
+        );
+    }
+
+    #[test]
+    fn block_sender_payload_too_large() {
+        let payload = [0u8; BlockSender::MAX_PAYLOAD + 1];
+        assert!(matches!(
+            BlockSender::new(&payload, 64),
+            Err(CoapError::PayloadTooLarge)
+        ));
     }
 }

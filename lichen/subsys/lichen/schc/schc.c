@@ -204,7 +204,11 @@ static uint16_t udp_checksum(const uint8_t src[16], const uint8_t dst[16],
 			     uint16_t src_port, uint16_t dst_port,
 			     const uint8_t *payload, size_t payload_len)
 {
-	uint16_t udp_len = 8 + payload_len;
+	/* UDP length field is 16 bits; header is 8 bytes, max payload is 65527 */
+	if (payload_len > UINT16_MAX - 8) {
+		return 0;
+	}
+	uint16_t udp_len = (uint16_t)(8 + payload_len);
 	uint32_t sum = pseudo_sum(src, dst, 17, udp_len);
 
 	sum = oc_add(sum, src_port);
@@ -225,6 +229,52 @@ static uint16_t icmpv6_checksum(const uint8_t src[16], const uint8_t dst[16],
 }
 
 /* ─── per-rule compress ───────────────────────────────────────────────────── */
+
+/**
+ * Common epilogue for compress_* functions: compute output size, bounds-check,
+ * copy the uncompressed tail, and return the total compressed length.
+ *
+ * @param w         Pointer to bit_writer (already populated with residue)
+ * @param out       Output buffer (rule ID already at out[0])
+ * @param out_len   Size of output buffer
+ * @param tail      Pointer to uncompressed tail data
+ * @param tail_len  Length of tail data
+ * @return          Total compressed length on success, SCHC_ERR_BUFFER_TOO_SMALL on failure
+ */
+static int compress_finish(const struct bit_writer *w, uint8_t *out,
+			   size_t out_len, const uint8_t *tail, size_t tail_len)
+{
+	size_t residue_len = bit_writer_byte_len(w);
+	size_t tail_start = 1 + residue_len;
+	size_t needed = tail_start + tail_len;
+
+	if (needed > out_len) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
+	memcpy(&out[tail_start], tail, tail_len);
+	return (int)needed;
+}
+
+/**
+ * Common prologue for link-local compress_* functions: write hop_limit and
+ * src/dst IIDs (64 bits each).
+ *
+ * @param w          Pointer to initialized bit_writer
+ * @param hop_limit  IPv6 hop limit
+ * @param src        Source IPv6 address (16 bytes)
+ * @param dst        Destination IPv6 address (16 bytes)
+ * @return           0 on success, -1 on buffer overflow
+ */
+static int compress_link_local_header(struct bit_writer *w, uint8_t hop_limit,
+				      const uint8_t *src, const uint8_t *dst)
+{
+	if (bit_writer_write(w, hop_limit, 8) < 0 ||
+	    bit_writer_write128(w, &src[8], 64) < 0 ||
+	    bit_writer_write128(w, &dst[8], 64) < 0) {
+		return -1;
+	}
+	return 0;
+}
 
 /**
  * Rule 0 (link-local) and Rule 1 (global): IPv6 + UDP + CoAP.
@@ -285,15 +335,7 @@ static int compress_coap(const uint8_t *packet, size_t pkt_len,
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
 
-	size_t residue_len = bit_writer_byte_len(&w);
-	size_t tail_start = 1 + residue_len;
-	size_t needed = tail_start + tail_len;
-
-	if (needed > out_len) {
-		return SCHC_ERR_BUFFER_TOO_SMALL;
-	}
-	memcpy(&out[tail_start], tail, tail_len);
-	return (int)needed;
+	return compress_finish(&w, out, out_len, tail, tail_len);
 }
 
 /**
@@ -321,24 +363,14 @@ static int compress_icmpv6_echo(const uint8_t *packet, size_t pkt_len,
 	struct bit_writer w;
 	bit_writer_init(&w, &out[1], out_len - 1);
 
-	if (bit_writer_write(&w, hop_limit, 8) < 0 ||
-	    bit_writer_write128(&w, &src[8], 64) < 0 ||
-	    bit_writer_write128(&w, &dst[8], 64) < 0 ||
+	if (compress_link_local_header(&w, hop_limit, src, dst) < 0 ||
 	    bit_writer_write(&w, icmp_type, 8) < 0 ||
 	    bit_writer_write(&w, icmp_id, 16) < 0 ||
 	    bit_writer_write(&w, icmp_seq, 16) < 0) {
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
 
-	size_t residue_len = bit_writer_byte_len(&w);
-	size_t tail_start = 1 + residue_len;
-	size_t needed = tail_start + tail_len;
-
-	if (needed > out_len) {
-		return SCHC_ERR_BUFFER_TOO_SMALL;
-	}
-	memcpy(&out[tail_start], tail, tail_len);
-	return (int)needed;
+	return compress_finish(&w, out, out_len, tail, tail_len);
 }
 
 /**
@@ -370,9 +402,7 @@ static int compress_rpl_dio(const uint8_t *packet, size_t pkt_len,
 	struct bit_writer w;
 	bit_writer_init(&w, &out[1], out_len - 1);
 
-	if (bit_writer_write(&w, hop_limit, 8) < 0 ||
-	    bit_writer_write128(&w, &src[8], 64) < 0 ||
-	    bit_writer_write128(&w, &dst[8], 64) < 0 ||
+	if (compress_link_local_header(&w, hop_limit, src, dst) < 0 ||
 	    bit_writer_write(&w, instance, 8) < 0 ||
 	    bit_writer_write(&w, version, 8) < 0 ||
 	    bit_writer_write(&w, rank, 16) < 0 ||
@@ -382,15 +412,7 @@ static int compress_rpl_dio(const uint8_t *packet, size_t pkt_len,
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
 
-	size_t residue_len = bit_writer_byte_len(&w);
-	size_t tail_start = 1 + residue_len;
-	size_t needed = tail_start + tail_len;
-
-	if (needed > out_len) {
-		return SCHC_ERR_BUFFER_TOO_SMALL;
-	}
-	memcpy(&out[tail_start], tail, tail_len);
-	return (int)needed;
+	return compress_finish(&w, out, out_len, tail, tail_len);
 }
 
 /**
@@ -420,9 +442,7 @@ static int compress_rpl_dao(const uint8_t *packet, size_t pkt_len,
 	struct bit_writer w;
 	bit_writer_init(&w, &out[1], out_len - 1);
 
-	if (bit_writer_write(&w, hop_limit, 8) < 0 ||
-	    bit_writer_write128(&w, &src[8], 64) < 0 ||
-	    bit_writer_write128(&w, &dst[8], 64) < 0 ||
+	if (compress_link_local_header(&w, hop_limit, src, dst) < 0 ||
 	    bit_writer_write(&w, instance, 8) < 0 ||
 	    bit_writer_write(&w, kd_flags, 8) < 0 ||
 	    bit_writer_write(&w, seq, 8) < 0 ||
@@ -430,15 +450,7 @@ static int compress_rpl_dao(const uint8_t *packet, size_t pkt_len,
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
 
-	size_t residue_len = bit_writer_byte_len(&w);
-	size_t tail_start = 1 + residue_len;
-	size_t needed = tail_start + tail_len;
-
-	if (needed > out_len) {
-		return SCHC_ERR_BUFFER_TOO_SMALL;
-	}
-	memcpy(&out[tail_start], tail, tail_len);
-	return (int)needed;
+	return compress_finish(&w, out, out_len, tail, tail_len);
 }
 
 /* ─── per-rule decompress ─────────────────────────────────────────────────── */
@@ -446,6 +458,16 @@ static int compress_rpl_dao(const uint8_t *packet, size_t pkt_len,
 static int decompress_coap(const uint8_t *data, size_t data_len,
 			   uint8_t *out, size_t out_len, uint8_t rule_id)
 {
+	/*
+	 * Minimum residue size (excluding rule ID byte):
+	 * - Rule 0 (link-local): 8 + 64 + 64 + 16 + 16 + 2 + 4 + 8 + 16 = 198 bits = 25 bytes
+	 * - Rule 1 (global):     8 + 128 + 128 + 16 + 16 + 2 + 4 + 8 + 16 = 326 bits = 41 bytes
+	 */
+	size_t min_residue = (rule_id == SCHC_RULE_LINK_LOCAL_COAP) ? 25 : 41;
+	if (data_len < 1 + min_residue) {
+		return SCHC_ERR_TOO_SHORT;
+	}
+
 	struct bit_reader r;
 	bit_reader_init(&r, &data[1], data_len - 1);
 
@@ -496,11 +518,17 @@ static int decompress_coap(const uint8_t *data, size_t data_len,
 
 	/* Build CoAP for checksum computation */
 	uint8_t coap_buf[512];
+
+	/* Ensure tail fits in working buffer */
+	if (tail_len > sizeof(coap_buf) - 4) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
+
 	coap_buf[0] = coap_b0;
 	coap_buf[1] = (uint8_t)coap_code;
 	coap_buf[2] = (uint8_t)(coap_mid >> 8);
 	coap_buf[3] = (uint8_t)coap_mid;
-	if (tail_len > 0 && tail_len <= sizeof(coap_buf) - 4) {
+	if (tail_len > 0) {
 		memcpy(&coap_buf[4], tail, tail_len);
 	}
 
@@ -545,6 +573,14 @@ static int decompress_coap(const uint8_t *data, size_t data_len,
 static int decompress_icmpv6_echo(const uint8_t *data, size_t data_len,
 				  uint8_t *out, size_t out_len)
 {
+	/*
+	 * Minimum residue size (excluding rule ID byte):
+	 * 8 + 64 + 64 + 8 + 16 + 16 = 176 bits = 22 bytes
+	 */
+	if (data_len < 1 + 22) {
+		return SCHC_ERR_TOO_SHORT;
+	}
+
 	struct bit_reader r;
 	bit_reader_init(&r, &data[1], data_len - 1);
 
@@ -587,6 +623,12 @@ static int decompress_icmpv6_echo(const uint8_t *data, size_t data_len,
 
 	/* Build ICMPv6 with zero checksum for computation */
 	uint8_t icmp_buf[512];
+
+	/* Ensure tail fits in working buffer */
+	if (tail_len > sizeof(icmp_buf) - 8) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
+
 	icmp_buf[0] = (uint8_t)icmp_type;
 	icmp_buf[1] = 0; /* code NOT_SENT = 0 */
 	icmp_buf[2] = 0; /* checksum placeholder */
@@ -595,7 +637,7 @@ static int decompress_icmpv6_echo(const uint8_t *data, size_t data_len,
 	icmp_buf[5] = (uint8_t)icmp_id;
 	icmp_buf[6] = (uint8_t)(icmp_seq >> 8);
 	icmp_buf[7] = (uint8_t)icmp_seq;
-	if (tail_len > 0 && tail_len <= sizeof(icmp_buf) - 8) {
+	if (tail_len > 0) {
 		memcpy(&icmp_buf[8], tail, tail_len);
 	}
 
@@ -680,6 +722,12 @@ static int decompress_rpl_dio(const uint8_t *data, size_t data_len,
 	}
 
 	uint8_t icmp_buf[512];
+
+	/* Ensure tail fits in working buffer (28 = DIO header) */
+	if (tail_len > sizeof(icmp_buf) - 28) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
+
 	icmp_buf[0] = 155; /* RPL */
 	icmp_buf[1] = 1;   /* DIO code */
 	icmp_buf[2] = 0;   /* checksum placeholder */
@@ -693,7 +741,7 @@ static int decompress_rpl_dio(const uint8_t *data, size_t data_len,
 	icmp_buf[10] = 0; /* flags (NOT_SENT = 0) */
 	icmp_buf[11] = 0; /* reserved (NOT_SENT = 0) */
 	memcpy(&icmp_buf[12], dodagid, 16);
-	if (tail_len > 0 && tail_len <= sizeof(icmp_buf) - 28) {
+	if (tail_len > 0) {
 		memcpy(&icmp_buf[28], tail, tail_len);
 	}
 
@@ -767,6 +815,12 @@ static int decompress_rpl_dao(const uint8_t *data, size_t data_len,
 	}
 
 	uint8_t icmp_buf[512];
+
+	/* Ensure tail fits in working buffer (24 = DAO header) */
+	if (tail_len > sizeof(icmp_buf) - 24) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
+
 	icmp_buf[0] = 155; /* RPL */
 	icmp_buf[1] = 2;   /* DAO code */
 	icmp_buf[2] = 0;   /* checksum placeholder */
@@ -776,7 +830,7 @@ static int decompress_rpl_dao(const uint8_t *data, size_t data_len,
 	icmp_buf[6] = 0; /* reserved (NOT_SENT = 0) */
 	icmp_buf[7] = (uint8_t)seq;
 	memcpy(&icmp_buf[8], dodagid, 16);
-	if (tail_len > 0 && tail_len <= sizeof(icmp_buf) - 24) {
+	if (tail_len > 0) {
 		memcpy(&icmp_buf[24], tail, tail_len);
 	}
 
