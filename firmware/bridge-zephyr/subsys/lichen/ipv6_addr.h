@@ -29,6 +29,13 @@
 extern "C" {
 #endif
 
+/*
+ * Use Zephyr's struct in6_addr when networking stack is available,
+ * otherwise define our own compatible structure.
+ */
+#if defined(CONFIG_NET_IPV6) && defined(__ZEPHYR__)
+#include <zephyr/net/net_ip.h>
+#else
 /**
  * @brief IPv6 address structure
  *
@@ -38,6 +45,7 @@ extern "C" {
 struct in6_addr {
     uint8_t s6_addr[16];
 };
+#endif
 
 /**
  * @brief Buffer size for IPv6 address string (including null terminator)

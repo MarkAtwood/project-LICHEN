@@ -11,14 +11,14 @@ menuconfig LICHEN
 if LICHEN
 
 config LICHEN_LORA_L2
-	bool "LICHEN LoRa L2 network interface"
+	bool "LICHEN LoRa L2 driver"
 	depends on LORA
-	depends on NET_L2_VIRTUAL || NET_RAW_MODE
 	default y
 	help
-	  Enable the LICHEN LoRa L2 network interface driver. This bridges
-	  Zephyr's IPv6 stack to the LoRa radio, enabling IPv6 packets to
-	  be sent and received over LoRa.
+	  Enable the LICHEN LoRa L2 driver. This provides low-level LoRa
+	  radio access including TX/RX threads and EUI-64 generation.
+	  This is the hardware abstraction layer; enable LICHEN_L2 for
+	  full IPv6 stack integration.
 
 config LICHEN_LORA_L2_LOG_LEVEL
 	int "LICHEN LoRa L2 log level"
@@ -42,6 +42,32 @@ config LICHEN_LORA_L2_RX_PRIORITY
 	default 7
 	help
 	  Priority for the LoRa L2 RX thread. Lower numbers = higher priority.
+
+config LICHEN_L2
+	bool "LICHEN Zephyr L2 network interface"
+	depends on LICHEN_LORA_L2
+	depends on NETWORKING
+	depends on NET_IPV6
+	depends on LICHEN_IPV6
+	default y if NET_IPV6
+	help
+	  Register LICHEN as a Zephyr L2 network interface so the IPv6
+	  stack routes packets through it. This implements the net_l2
+	  callbacks (recv, send, enable, flags) and bridges IPv6 packets
+	  to the LoRa radio via SCHC compression and LICHEN framing.
+
+	  When enabled, this creates a network device called "LICHEN" that
+	  appears as a standard Zephyr network interface, allowing IPv6
+	  applications to send/receive packets over LoRa transparently.
+
+config LICHEN_L2_LOG_LEVEL
+	int "LICHEN L2 log level"
+	depends on LICHEN_L2
+	default 3
+	range 0 4
+	help
+	  Log level for LICHEN Zephyr L2 interface.
+	  0 = Off, 1 = Error, 2 = Warning, 3 = Info, 4 = Debug
 
 config LICHEN_IPV6
 	bool "LICHEN IPv6 address utilities"

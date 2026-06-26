@@ -95,6 +95,95 @@ int lichen_frame_parse(struct lichen_frame *frame,
 int lichen_frame_write(const struct lichen_frame *frame,
 		       uint8_t *buf, size_t buflen);
 
+/* ─── replay table ────────────────────────────────────────────────────────── */
+
+#include <lichen/replay.h>
+
+/* Replay structs and functions are defined in replay.h */
+
+/* ─── link context ────────────────────────────────────────────────────────── */
+
+/* Forward declaration - full definition in link_ctx.h */
+struct lichen_link_ctx;
+
+/* ─── TX path ─────────────────────────────────────────────────────────────── */
+
+/**
+ * @brief Build and transmit a LICHEN frame from an IPv6 packet.
+ *
+ * Takes an IPv6 packet, compresses it with SCHC, builds a LICHEN frame
+ * with optional Schnorr-48 signature, and outputs the wire-ready frame.
+ *
+ * Steps:
+ * 1. Compress IPv6 with SCHC
+ * 2. Build frame header: length, LLSec flags, epoch, seqnum, dst addr
+ * 3. Append compressed payload
+ * 4. If signing enabled, compute Schnorr-48 signature and append
+ * 5. Compute MIC (CRC32 placeholder for AES-CCM)
+ *
+ * @param[in]     ctx        Link context with keypair and sequence state
+ * @param[in]     ipv6_pkt   IPv6 packet to transmit
+ * @param[in]     ipv6_len   Length of IPv6 packet
+ * @param[in]     dst_eui64  Destination EUI-64 (NULL for broadcast)
+ * @param[out]    out_frame  Output buffer for LICHEN frame
+ * @param[in,out] out_len    In: buffer size, Out: frame length
+ * @return 0 on success, negative error code on failure
+ *         -EINVAL: NULL parameter
+ *         -ENOMEM: Output buffer too small
+ *         -EMSGSIZE: Frame would exceed 255 bytes
+ */
+int lichen_link_tx(struct lichen_link_ctx *ctx,
+		   const uint8_t *ipv6_pkt, size_t ipv6_len,
+		   const uint8_t *dst_eui64,
+		   uint8_t *out_frame, size_t *out_len);
+
+/* ─── RX path ─────────────────────────────────────────────────────────────── */
+
+/**
+ * @brief RX context for frame reception
+ *
+ * Provides peer context for signature verification and timing
+ * for replay aging. Set peer_pubkey before calling lichen_link_rx()
+ * for signed frames.
+ */
+struct lichen_link_rx_ctx {
+	const uint8_t *peer_pubkey;  /**< 32-byte peer public key (NULL if unknown) */
+	uint32_t current_time;       /**< Current timestamp for replay aging */
+};
+
+/**
+ * @brief Parse a LICHEN frame and extract the IPv6 packet.
+ *
+ * Takes a raw LICHEN frame, verifies replay protection and signatures,
+ * and decompresses the payload to a full IPv6 packet.
+ *
+ * Steps:
+ * 1. Parse frame header: length, LLSec, epoch, seqnum, dst addr
+ * 2. Check replay window for this sender
+ * 3. If signature present, verify Schnorr-48 using sender's public key
+ * 4. Verify MIC
+ * 5. Decompress payload with SCHC
+ * 6. Return decompressed IPv6 packet
+ *
+ * @param[in]     ctx        RX context (must have peer_pubkey set for signed frames)
+ * @param[in,out] replay     Replay table (NULL to skip replay check)
+ * @param[in]     frame      Raw LICHEN frame bytes
+ * @param[in]     frame_len  Length of frame
+ * @param[out]    out_ipv6   Output buffer for IPv6 packet
+ * @param[in,out] out_len    In: buffer size, Out: IPv6 packet length
+ * @param[out]    src_eui64  Filled with sender's EUI-64 (8 bytes)
+ * @return 0 on success, negative error code on failure
+ *         -EINVAL: malformed frame
+ *         -EAUTH: signature/MIC verification failed
+ *         -EALREADY: replay detected
+ *         -ENOMEM: output buffer too small
+ */
+int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
+		   struct lichen_replay_table *replay,
+		   const uint8_t *frame, size_t frame_len,
+		   uint8_t *out_ipv6, size_t *out_len,
+		   uint8_t *src_eui64);
+
 #ifdef __cplusplus
 }
 #endif
