@@ -1,0 +1,7 @@
+description: LICHEN Renode LoRa driver (memory-mapped to LichenSubGHz peripheral)
+compatible: "lichen,lora-renode"
+include: base.yaml
+
+properties:
+  reg:
+    required: true

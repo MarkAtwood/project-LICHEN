@@ -8,6 +8,7 @@ Provides TCP interface for nodes and HTTP REST API for control.
 
 from lichen.sim.node import NodeState, SimNode
 from lichen.sim.pcap import PcapngWriter
+from lichen.sim.renode_server import RenodeServer, start_renode_server
 from lichen.sim.propagation import (
     CAPTURE_THRESHOLD_DB,
     PATH_LOSS_FREE_SPACE,
@@ -26,6 +27,8 @@ from lichen.sim.propagation import (
 __all__ = [
     "CAPTURE_THRESHOLD_DB",
     "NodeState",
+    "RenodeServer",
+    "start_renode_server",
     "PATH_LOSS_FREE_SPACE",
     "PcapngWriter",
     "PATH_LOSS_INDOOR",
