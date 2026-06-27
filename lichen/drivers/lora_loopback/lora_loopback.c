@@ -106,9 +106,12 @@ static int lora_loopback_recv(const struct device *dev,
 		return ret;
 	}
 
-	uint8_t copy_len = MIN(pkt.len, size);
+	if (pkt.len > size) {
+		LOG_ERR("recv: packet too large for buffer: %u > %u", pkt.len, size);
+		return -EMSGSIZE;
+	}
 
-	memcpy(payload, pkt.data, copy_len);
+	memcpy(payload, pkt.data, pkt.len);
 
 	/* Provide simulated RSSI and SNR values */
 	if (rssi != NULL) {
@@ -118,8 +121,8 @@ static int lora_loopback_recv(const struct device *dev,
 		*snr = CONFIG_LORA_LOOPBACK_SNR;
 	}
 
-	LOG_DBG("received %u bytes (from loopback queue)", copy_len);
-	return copy_len;
+	LOG_DBG("received %u bytes (from loopback queue)", pkt.len);
+	return pkt.len;
 }
 
 static int lora_loopback_init(const struct device *dev)

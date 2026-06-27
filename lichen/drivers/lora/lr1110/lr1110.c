@@ -79,6 +79,12 @@ struct lr1110_data {
 	uint32_t             last_irq;
 };
 
+/*
+ * Single-instance limitation: This driver uses a global dev_data struct and
+ * lr1110_dev pointer, so only one LR1110 device is supported. Multi-instance
+ * support would require passing instance data through the lr1110_driver HAL
+ * context pointer and refactoring the DT macros to allocate per-instance data.
+ */
 static struct lr1110_data dev_data;
 
 /* Used as the lr1110_driver "context" pointer in all library calls */
@@ -120,9 +126,22 @@ static void lr1110_irq_work_handler(struct k_work *work)
 	lr1110_system_stat1_t stat1;
 	lr1110_system_stat2_t stat2;
 	uint32_t irq = 0;
+	int ret;
 
-	lr1110_system_get_status(lr1110_dev, &stat1, &stat2, &irq);
-	lr1110_system_clear_irq(lr1110_dev, irq);
+	ret = lr1110_system_get_status(lr1110_dev, &stat1, &stat2, &irq);
+	if (ret != 0) {
+		LOG_ERR("lr1110_system_get_status failed: %d", ret);
+		/* Signal error to waiting thread */
+		data->last_irq = 0;
+		k_sem_give(&data->radio_sem);
+		return;
+	}
+
+	ret = lr1110_system_clear_irq(lr1110_dev, irq);
+	if (ret != 0) {
+		LOG_WRN("lr1110_system_clear_irq failed: %d", ret);
+	}
+
 	data->last_irq = irq;
 	k_sem_give(&data->radio_sem);
 }
@@ -160,8 +179,17 @@ static int lr1110_lora_config(const struct device *dev,
 
 	lr1110_system_clear_errors(dev);
 
-	lr1110_radio_set_packet_type(dev, LR1110_RADIO_PACKET_LORA);
-	lr1110_radio_set_rf_frequency(dev, cfg->frequency);
+	ret = lr1110_radio_set_packet_type(dev, LR1110_RADIO_PACKET_LORA);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_packet_type failed: %d", ret);
+		return -EIO;
+	}
+
+	ret = lr1110_radio_set_rf_frequency(dev, cfg->frequency);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_rf_frequency failed: %d", ret);
+		return -EIO;
+	}
 
 	lr1110_radio_modulation_param_lora_t mod = {
 		.spreading_factor = map_sf(cfg->datarate),
@@ -169,7 +197,11 @@ static int lr1110_lora_config(const struct device *dev,
 		.coding_rate      = map_cr(cfg->coding_rate),
 		.ppm_offset       = 0,
 	};
-	lr1110_radio_set_modulation_param_lora(dev, &mod);
+	ret = lr1110_radio_set_modulation_param_lora(dev, &mod);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_modulation_param_lora failed: %d", ret);
+		return -EIO;
+	}
 
 	lr1110_radio_packet_param_lora_t pkt = {
 		.preamble_length_in_symb = cfg->preamble_len,
@@ -179,7 +211,11 @@ static int lr1110_lora_config(const struct device *dev,
 		.iq = cfg->iq_inverted ? LR1110_RADIO_LORA_IQ_INVERTED
 				       : LR1110_RADIO_LORA_IQ_STANDARD,
 	};
-	lr1110_radio_set_packet_param_lora(dev, &pkt);
+	ret = lr1110_radio_set_packet_param_lora(dev, &pkt);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_packet_param_lora failed: %d", ret);
+		return -EIO;
+	}
 
 	lr1110_radio_pa_config_t pa = {
 		.pa_sel        = LR1110_PA_SEL,
@@ -187,14 +223,37 @@ static int lr1110_lora_config(const struct device *dev,
 		.pa_dutycycle  = LR1110_PA_DC,
 		.pa_hp_sel     = LR1110_PA_HP_SEL,
 	};
-	lr1110_radio_set_pa_config(dev, &pa);
-	lr1110_radio_set_tx_params(dev, cfg->tx_power, LR1110_RADIO_RAMP_TIME_40U);
+	ret = lr1110_radio_set_pa_config(dev, &pa);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_pa_config failed: %d", ret);
+		return -EIO;
+	}
 
-	lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0);
-	lr1110_radio_set_rx_tx_fallback_mode(dev, LR1110_RADIO_RX_TX_FALLBACK_MODE_STDBYRC);
-	lr1110_radio_set_lora_sync_word(dev, cfg->public_network
+	ret = lr1110_radio_set_tx_params(dev, cfg->tx_power, LR1110_RADIO_RAMP_TIME_40U);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_tx_params failed: %d", ret);
+		return -EIO;
+	}
+
+	ret = lr1110_system_set_dio_irq_params(dev, LR1110_IRQ_RADIO, 0);
+	if (ret != 0) {
+		LOG_ERR("lr1110_system_set_dio_irq_params failed: %d", ret);
+		return -EIO;
+	}
+
+	ret = lr1110_radio_set_rx_tx_fallback_mode(dev, LR1110_RADIO_RX_TX_FALLBACK_MODE_STDBYRC);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_rx_tx_fallback_mode failed: %d", ret);
+		return -EIO;
+	}
+
+	ret = lr1110_radio_set_lora_sync_word(dev, cfg->public_network
 		? LR1110_RADIO_LORA_NETWORK_PUBLIC
 		: LR1110_RADIO_LORA_NETWORK_PRIVATE);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_lora_sync_word failed: %d", ret);
+		return -EIO;
+	}
 
 #if DT_INST_NODE_HAS_PROP(0, tx_enable_gpios)
 	gpio_pin_set_dt(&lr1110_gpio_tx_enable, cfg->tx ? 1 : 0);
@@ -258,10 +317,14 @@ static int lr1110_lora_recv(const struct device *dev, uint8_t *data,
 	lr1110_radio_set_rx(dev, LR1110_RX_CONTINUOUS);
 
 	if (k_sem_take(&drv->radio_sem, timeout) != 0) {
+		/* Timeout waiting for IRQ - put radio back to standby */
+		lr1110_radio_set_standby(dev, LR1110_RADIO_STANDBY_CFG_RC);
 		return -EAGAIN;
 	}
 
 	if (!(drv->last_irq & LR1110_SYSTEM_IRQ_RXDONE_MASK)) {
+		/* Error path - ensure radio is not left in RX mode */
+		lr1110_radio_set_standby(dev, LR1110_RADIO_STANDBY_CFG_RC);
 		if (drv->last_irq & LR1110_SYSTEM_IRQ_TIMEOUT_MASK) {
 			return -EAGAIN;
 		}
@@ -270,19 +333,32 @@ static int lr1110_lora_recv(const struct device *dev, uint8_t *data,
 	}
 
 	lr1110_radio_rxbuffer_status_t buf_status;
-	lr1110_radio_get_rxbuffer_status(dev, &buf_status);
+	int ret = lr1110_radio_get_rxbuffer_status(dev, &buf_status);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_get_rxbuffer_status failed: %d", ret);
+		return -EIO;
+	}
 
 	uint8_t len = MIN(buf_status.rx_payload_length, size);
-	lr1110_regmem_read_buffer8(dev, data, buf_status.rx_start_buffer_pointer, len);
+	ret = lr1110_regmem_read_buffer8(dev, data, buf_status.rx_start_buffer_pointer, len);
+	if (ret != 0) {
+		LOG_ERR("lr1110_regmem_read_buffer8 failed: %d", ret);
+		return -EIO;
+	}
 
 	if (rssi || snr) {
 		lr1110_radio_packet_status_lora_t pkt_status;
-		lr1110_radio_get_packet_status_lora(dev, &pkt_status);
-		if (rssi) {
-			*rssi = pkt_status.rssi_packet_in_dbm;
-		}
-		if (snr) {
-			*snr = pkt_status.snr_packet_in_db;
+		ret = lr1110_radio_get_packet_status_lora(dev, &pkt_status);
+		if (ret != 0) {
+			LOG_WRN("lr1110_radio_get_packet_status_lora failed: %d", ret);
+			/* Non-fatal: we have the data, just not the RSSI/SNR */
+		} else {
+			if (rssi) {
+				*rssi = pkt_status.rssi_packet_in_dbm;
+			}
+			if (snr) {
+				*snr = pkt_status.snr_packet_in_db;
+			}
 		}
 	}
 

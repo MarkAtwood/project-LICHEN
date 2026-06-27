@@ -86,6 +86,24 @@ static int gnss_ag3335_power_on(const struct device *dev)
 	const struct gnss_ag3335_config *cfg = dev->config;
 	int ret;
 
+	/* Verify all GPIOs are ready before configuring */
+	if (!gpio_is_ready_dt(&cfg->vrtc_gpio)) {
+		LOG_ERR("VRTC GPIO not ready");
+		return -ENODEV;
+	}
+	if (!gpio_is_ready_dt(&cfg->sleep_int_gpio)) {
+		LOG_ERR("SLEEP_INT GPIO not ready");
+		return -ENODEV;
+	}
+	if (!gpio_is_ready_dt(&cfg->reset_gpio)) {
+		LOG_ERR("RESET GPIO not ready");
+		return -ENODEV;
+	}
+	if (!gpio_is_ready_dt(&cfg->enable_gpio)) {
+		LOG_ERR("ENABLE GPIO not ready");
+		return -ENODEV;
+	}
+
 	ret = gpio_pin_configure_dt(&cfg->vrtc_gpio, GPIO_OUTPUT_INACTIVE);
 	if (ret < 0) {
 		LOG_ERR("Failed to configure VRTC GPIO: %d", ret);
