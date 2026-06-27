@@ -22,7 +22,7 @@ LOG_MODULE_REGISTER(lichen_puck, LOG_LEVEL_INF);
 /* LoRa parameters per LICHEN spec: SF10 / 125 kHz / CR4-5 @ 868 MHz (EU). */
 #define LORA_FREQ_HZ       868000000U
 #define LORA_MAX_FRAME     255
-#define BEACON_INTERVAL_MS 60000
+#define BEACON_INTERVAL_MS CONFIG_LICHEN_PUCK_BEACON_INTERVAL_MS
 
 /* Placeholder IID — in production derive from nRF52840 FICR. */
 static const uint8_t s_iid[8] = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77 };

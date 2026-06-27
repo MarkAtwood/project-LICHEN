@@ -180,30 +180,32 @@ zephyr_udc0: &usbd {
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* MCUboot bootloader (48 kB) */
-		boot_partition: partition@0 {
+		/*
+		 * Adafruit nRF52840 bootloader + SoftDevice S140 v6.1.1:
+		 *   0x0000–0x0FFF  MBR (4 KB, Nordic)
+		 *   0x1000–0x26FFF SoftDevice S140 (152 KB, fixed by bootloader)
+		 *   0x27000        APP_START_ADDR — first writable address
+		 *
+		 * MCUboot occupies the first 48 KB above APP_START_ADDR.
+		 */
+		boot_partition: partition@27000 {
 			label = "mcuboot";
-			reg = <0x00000000 0x0000C000>;
+			reg = <0x00027000 0x0000C000>;
 		};
-		/* Application slot 0 (412 kB) */
-		slot0_partition: partition@c000 {
+		/* Application slot 0 (356 KB) */
+		slot0_partition: partition@33000 {
 			label = "image-0";
-			reg = <0x0000C000 0x00067000>;
+			reg = <0x00033000 0x00059000>;
 		};
-		/* Application slot 1 (412 kB) — for OTA */
-		slot1_partition: partition@73000 {
+		/* Application slot 1 (356 KB) — SMP OTA staging */
+		slot1_partition: partition@8c000 {
 			label = "image-1";
-			reg = <0x00073000 0x00067000>;
+			reg = <0x0008c000 0x00059000>;
 		};
-		/* MCUboot scratch (120 kB) */
-		scratch_partition: partition@da000 {
-			label = "image-scratch";
-			reg = <0x000da000 0x0001e000>;
-		};
-		/* NVS / LittleFS storage (32 kB) */
-		storage_partition: partition@f8000 {
+		/* NVS / LittleFS storage (16 KB) */
+		storage_partition: partition@e5000 {
 			label = "storage";
-			reg = <0x000f8000 0x00008000>;
+			reg = <0x000e5000 0x00004000>;
 		};
 	};
 };

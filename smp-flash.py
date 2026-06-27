@@ -49,47 +49,55 @@ def _crc16(data: bytes) -> int:
     return crc
 
 def _encode_frame(op: int, group: int, seq: int, cmd_id: int, payload: bytes) -> bytes:
-    hdr = struct.pack(">BBHHBB", op, 0, len(payload), group, seq & 0xFF, cmd_id)
-    enc = base64.b64encode(hdr + payload)
-    length = len(enc) + 2               # +2 for CRC bytes
-    crc_input = struct.pack(">H", length) + enc
-    crc = _crc16(crc_input)
-    return SMP_SOF + struct.pack(">H", length) + enc + struct.pack(">H", crc)
+    """Build one mcumgr serial frame: SOF + base64(pkt_len | SMP_hdr | payload | crc) + \n"""
+    smp_hdr = struct.pack(">BBHHBB", op, 0, len(payload), group, seq & 0xFF, cmd_id)
+    raw = smp_hdr + payload
+    crc = _crc16(raw)
+    pkt_len = len(raw) + 2  # includes CRC
+    inner = struct.pack(">H", pkt_len) + raw + struct.pack(">H", crc)
+    return SMP_SOF + base64.b64encode(inner) + b'\n'
 
 def _read_frame(ser: serial.Serial) -> bytes:
-    """Block until one complete SMP frame is received; return the decoded SMP bytes."""
+    """Block until one complete SMP frame is received; return raw SMP bytes (hdr+payload)."""
     deadline = time.monotonic() + TIMEOUT_S
     buf = bytearray()
 
-    # Wait for SOF
+    # Read bytes until \n (mcumgr serial frame terminator)
     while time.monotonic() < deadline:
         b = ser.read(1)
         if not b:
             continue
-        buf += b
-        if len(buf) >= 2 and buf[-2:] == SMP_SOF:
+        if b == b'\n':
             break
+        buf += b
     else:
-        raise TimeoutError("Timeout waiting for SMP response SOF")
+        raise TimeoutError("Timeout waiting for SMP response")
 
-    # Read 2-byte length
-    length_bytes = ser.read(2)
-    if len(length_bytes) < 2:
-        raise IOError("Short read on length")
-    length = struct.unpack(">H", length_bytes)[0]
+    if len(buf) < 2 or bytes(buf[:2]) != SMP_SOF:
+        raise ValueError(f"Bad SOF: {buf[:2].hex() if len(buf) >= 2 else 'short'}")
 
-    # Read length bytes (base64 data + 2-byte CRC)
-    body = ser.read(length)
-    if len(body) < length:
-        raise IOError(f"Short read on body: got {len(body)}, want {length}")
+    # Decode base64 portion (after 2-byte SOF)
+    try:
+        decoded = base64.b64decode(buf[2:])
+    except Exception as e:
+        raise ValueError(f"Base64 decode failed: {e}")
 
-    enc_data = body[:-2]
-    recv_crc = struct.unpack(">H", body[-2:])[0]
-    calc_crc = _crc16(length_bytes + enc_data)
-    if recv_crc != calc_crc:
-        raise ValueError(f"CRC mismatch: got {recv_crc:#06x}, calc {calc_crc:#06x}")
+    if len(decoded) < 4:
+        raise ValueError(f"Decoded frame too short: {len(decoded)} bytes")
 
-    return base64.b64decode(enc_data)
+    # First 2 bytes = pkt_len (SMP data + CRC); rest = SMP data + CRC
+    pkt_len = struct.unpack(">H", decoded[:2])[0]
+    smp_and_crc = decoded[2:]
+
+    if len(smp_and_crc) != pkt_len:
+        raise ValueError(f"Length mismatch: got {len(smp_and_crc)}, want {pkt_len}")
+
+    # Verify CRC: crc16(SMP_data || CRC) must be 0 (self-verifying)
+    if _crc16(smp_and_crc) != 0:
+        raise ValueError(f"CRC verify failed")
+
+    # Return SMP header + payload (strip trailing 2-byte CRC)
+    return bytes(smp_and_crc[:-2])
 
 def _parse_response(raw: bytes) -> dict:
     # 8-byte SMP header, then CBOR payload
