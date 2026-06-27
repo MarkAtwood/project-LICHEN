@@ -50,6 +50,7 @@ static K_MUTEX_DEFINE(lora_mutex);
 static struct {
     const struct device *lora_dev;
     atomic_t running;
+    atomic_t initialized;
     uint8_t eui64[8];
     lichen_lora_rx_cb_t rx_callback;
     void *rx_callback_user_data;
@@ -111,10 +112,14 @@ static void rx_thread(void *arg1, void *arg2, void *arg3)
 
         LOG_DBG("RX %d bytes, RSSI=%d dBm, SNR=%d dB", ret, rssi, snr);
 
-        /* Invoke callback if registered */
-        if (lora_state.rx_callback) {
-            lora_state.rx_callback(rx_buf, ret, rssi, snr,
-                                   lora_state.rx_callback_user_data);
+        /* Invoke callback if registered - snapshot under lock for consistency */
+        k_mutex_lock(&lora_mutex, K_FOREVER);
+        lichen_lora_rx_cb_t cb = lora_state.rx_callback;
+        void *cb_user_data = lora_state.rx_callback_user_data;
+        k_mutex_unlock(&lora_mutex);
+
+        if (cb) {
+            cb(rx_buf, ret, rssi, snr, cb_user_data);
         }
     }
 
@@ -125,6 +130,7 @@ int lichen_lora_l2_init(void)
 {
     lora_state.lora_dev = LORA_DEV;
     atomic_set(&lora_state.running, 0);
+    atomic_set(&lora_state.initialized, 0);
     lora_state.rx_callback = NULL;
 
     if (!device_is_ready(lora_state.lora_dev)) {
@@ -133,6 +139,7 @@ int lichen_lora_l2_init(void)
     }
 
     generate_eui64(lora_state.eui64);
+    atomic_set(&lora_state.initialized, 1);
 
     LOG_INF("LICHEN LoRa L2 initialized");
     return 0;
@@ -204,6 +211,11 @@ int lichen_lora_l2_stop(void)
 
 int lichen_lora_l2_tx(const uint8_t *data, size_t len)
 {
+    if (data == NULL) {
+        LOG_ERR("TX data pointer is NULL");
+        return -EINVAL;
+    }
+
     if (len > 255) {
         LOG_ERR("Packet too large: %zu", len);
         return -EMSGSIZE;
@@ -233,12 +245,23 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len)
 
 void lichen_lora_l2_set_rx_callback(lichen_lora_rx_cb_t cb, void *user_data)
 {
-    lora_state.rx_callback = cb;
+    /*
+     * Use mutex to ensure atomic update of callback + user_data pair.
+     * The RX thread reads both fields, so they must be updated together
+     * to avoid invoking a callback with mismatched user_data.
+     */
+    k_mutex_lock(&lora_mutex, K_FOREVER);
     lora_state.rx_callback_user_data = user_data;
+    lora_state.rx_callback = cb;
+    k_mutex_unlock(&lora_mutex);
 }
 
 const uint8_t *lichen_lora_l2_get_eui64(void)
 {
+    if (!atomic_get(&lora_state.initialized)) {
+        LOG_ERR("LoRa L2 not initialized");
+        return NULL;
+    }
     return lora_state.eui64;
 }
 
