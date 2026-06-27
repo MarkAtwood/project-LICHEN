@@ -13,6 +13,10 @@
  *   | Length | LLSec  | Epoch | SeqNum | Dst Addr | Payload |  MIC  |
  *   +--------+--------+-------+--------+----------+---------+-------+
  *      1B       1B       1B      2B       0/2/8B     var      4/8B
+ *
+ * @note Portability: bool (from stdbool.h) is used for in-memory state only.
+ *       Wire formats use explicit uint8_t fields and bit manipulation.
+ *       Structs are never raw-serialized; all encoding is byte-level.
  */
 
 #ifndef LICHEN_LINK_H_
