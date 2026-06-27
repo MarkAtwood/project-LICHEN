@@ -142,7 +142,8 @@ static bool encode_record(zcbor_state_t *state,
 	/* Base name (first record only) */
 	if (is_first && pack->base_name != NULL) {
 		if (!zcbor_int32_put(state, SENML_LABEL_BN) ||
-		    !zcbor_tstr_put_term(state, pack->base_name, 256)) {
+		    !zcbor_tstr_put_term(state, pack->base_name,
+					 SENML_MAX_NAME_LEN + 1)) {
 			return false;
 		}
 	}
@@ -158,7 +159,8 @@ static bool encode_record(zcbor_state_t *state,
 	/* Name */
 	if (rec->name != NULL) {
 		if (!zcbor_int32_put(state, SENML_LABEL_N) ||
-		    !zcbor_tstr_put_term(state, rec->name, 256)) {
+		    !zcbor_tstr_put_term(state, rec->name,
+					 SENML_MAX_NAME_LEN + 1)) {
 			return false;
 		}
 	}
@@ -166,7 +168,8 @@ static bool encode_record(zcbor_state_t *state,
 	/* Unit */
 	if (rec->unit != NULL) {
 		if (!zcbor_int32_put(state, SENML_LABEL_U) ||
-		    !zcbor_tstr_put_term(state, rec->unit, 256)) {
+		    !zcbor_tstr_put_term(state, rec->unit,
+					 SENML_MAX_UNIT_LEN + 1)) {
 			return false;
 		}
 	}
