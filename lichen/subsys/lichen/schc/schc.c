@@ -8,11 +8,38 @@
  * Ported from rust/lichen-schc/src/codec.rs.
  * Bit order: MSB-first (network bit order). The residue is zero-padded to
  * a byte boundary.
+ *
+ * SECURITY CONSIDERATIONS
+ * =======================
+ * SCHC compression can leak information about packet contents through
+ * compressed size variations (compression oracle attack). In contexts where
+ * encrypted payloads are compressed, an attacker observing compressed sizes
+ * may infer plaintext content by correlating size changes with known inputs.
+ *
+ * Mitigations applied in LICHEN:
+ * - OSCORE encryption happens BEFORE SCHC compression, so encrypted CoAP
+ *   payloads appear as opaque bytes that don't compress differentially.
+ * - Link-layer encryption (if any) wraps the already-compressed frame.
+ *
+ * Residual risks:
+ * - Header field values (ports, addresses, hop limit) are compressed but
+ *   not encrypted; their presence in specific rules may leak metadata.
+ * - Tail length variations remain observable.
+ *
+ * For high-security deployments, consider padding payloads to fixed sizes
+ * before OSCORE encryption.
  */
 
 #include <lichen/schc.h>
 #include <string.h>
 #include <stdbool.h>
+
+/* IPv6 protocol constants */
+#define IPV6_NH_UDP     17   /* UDP next header (RFC 768) */
+#define IPV6_NH_ICMPV6  58   /* ICMPv6 next header (RFC 4443) */
+#define IPV6_HDR_LEN    40   /* IPv6 base header length */
+#define UDP_HDR_LEN     8    /* UDP header length */
+#define ICMPV6_TYPE_RPL 155  /* RPL ICMPv6 type (RFC 6550) */
 
 /* ─── bit-packing ─────────────────────────────────────────────────────────── */
 
@@ -33,43 +60,117 @@ static void bit_writer_init(struct bit_writer *w, uint8_t *buf, size_t len)
 /**
  * Write the low @p nbits of @p value, MSB first.
  * Returns 0 on success, -1 if buffer too small.
+ *
+ * Optimized to write full bytes when bit-aligned, falling back to
+ * bit-by-bit for partial bytes.
  */
 static int bit_writer_write(struct bit_writer *w, uint64_t value, int nbits)
 {
-	for (int i = nbits - 1; i >= 0; i--) {
-		uint8_t bit = (value >> i) & 1;
-		size_t byte_pos = w->nbits / 8;
-		int bit_pos = 7 - (w->nbits % 8);
-
-		if (byte_pos >= w->buf_len) {
-			return -1;
-		}
-		w->buf[byte_pos] |= bit << bit_pos;
-		w->nbits++;
+	/* Reject invalid bit counts */
+	if (nbits < 0 || nbits > 64) {
+		return -1;
 	}
+
+	/* Check if we have enough space (worst case: ceil of bits to bytes) */
+	size_t bytes_needed = (w->nbits + (size_t)nbits + 7) / 8;
+	if (bytes_needed > w->buf_len) {
+		return -1;
+	}
+
+	int remaining = nbits;
+
+	/* If not byte-aligned, write bits until we are (or until done) */
+	int bit_offset = w->nbits % 8;
+	if (bit_offset != 0) {
+		int bits_to_align = 8 - bit_offset;
+		if (bits_to_align > remaining) {
+			bits_to_align = remaining;
+		}
+		/* Extract the top 'bits_to_align' bits from the remaining value */
+		int shift = remaining - bits_to_align;
+		uint8_t partial = (value >> shift) & ((1 << bits_to_align) - 1);
+		w->buf[w->nbits / 8] |= partial << (8 - bit_offset - bits_to_align);
+		w->nbits += bits_to_align;
+		remaining -= bits_to_align;
+	}
+
+	/* Write full bytes */
+	while (remaining >= 8) {
+		remaining -= 8;
+		w->buf[w->nbits / 8] = (value >> remaining) & 0xFF;
+		w->nbits += 8;
+	}
+
+	/* Write any remaining bits */
+	if (remaining > 0) {
+		uint8_t partial = value & ((1 << remaining) - 1);
+		w->buf[w->nbits / 8] = partial << (8 - remaining);
+		w->nbits += remaining;
+	}
+
 	return 0;
 }
 
 /**
- * Write 128 bits (for full IPv6 addresses).
+ * Write up to 128 bits from a byte array (for IPv6 addresses).
+ *
+ * Optimized to use memcpy for full bytes when byte-aligned, falling back
+ * to bit-by-bit for unaligned cases or partial bytes.
  */
 static int bit_writer_write128(struct bit_writer *w,
 			       const uint8_t value[16], int nbits)
 {
-	for (int i = 0; i < nbits; i++) {
-		int byte_idx = i / 8;
-		int bit_idx = 7 - (i % 8);
-		uint8_t bit = (value[byte_idx] >> bit_idx) & 1;
-
-		size_t byte_pos = w->nbits / 8;
-		int bit_pos = 7 - (w->nbits % 8);
-
-		if (byte_pos >= w->buf_len) {
-			return -1;
-		}
-		w->buf[byte_pos] |= bit << bit_pos;
-		w->nbits++;
+	/* Reject invalid bit counts */
+	if (nbits < 0 || nbits > 128) {
+		return -1;
 	}
+
+	/* Check if we have enough space */
+	size_t bytes_needed = (w->nbits + (size_t)nbits + 7) / 8;
+	if (bytes_needed > w->buf_len) {
+		return -1;
+	}
+
+	int remaining = nbits;
+	int src_bit = 0;  /* bit position in value[] */
+
+	/* If not byte-aligned, write bits until we are (or until done) */
+	int bit_offset = w->nbits % 8;
+	if (bit_offset != 0) {
+		int bits_to_align = 8 - bit_offset;
+		if (bits_to_align > remaining) {
+			bits_to_align = remaining;
+		}
+		for (int i = 0; i < bits_to_align; i++) {
+			int byte_idx = src_bit / 8;
+			int bit_idx = 7 - (src_bit % 8);
+			uint8_t bit = (value[byte_idx] >> bit_idx) & 1;
+			w->buf[w->nbits / 8] |= bit << (7 - (w->nbits % 8));
+			w->nbits++;
+			src_bit++;
+		}
+		remaining -= bits_to_align;
+	}
+
+	/* Copy full bytes directly when both src and dst are byte-aligned */
+	if (remaining >= 8 && (src_bit % 8) == 0) {
+		int full_bytes = remaining / 8;
+		memcpy(&w->buf[w->nbits / 8], &value[src_bit / 8], full_bytes);
+		w->nbits += full_bytes * 8;
+		src_bit += full_bytes * 8;
+		remaining -= full_bytes * 8;
+	}
+
+	/* Write any remaining bits */
+	for (int i = 0; i < remaining; i++) {
+		int byte_idx = src_bit / 8;
+		int bit_idx = 7 - (src_bit % 8);
+		uint8_t bit = (value[byte_idx] >> bit_idx) & 1;
+		w->buf[w->nbits / 8] |= bit << (7 - (w->nbits % 8));
+		w->nbits++;
+		src_bit++;
+	}
+
 	return 0;
 }
 
@@ -94,19 +195,50 @@ static void bit_reader_init(struct bit_reader *r, const uint8_t *buf, size_t len
 /**
  * Read @p nbits from the bit stream (max 64 bits).
  * Returns 0 on success, -1 if not enough data.
+ *
+ * Optimized to extract full bytes directly when byte-aligned, falling back
+ * to bit-by-bit for unaligned or partial reads.
  */
 static int bit_reader_read(struct bit_reader *r, int nbits, uint64_t *out)
 {
-	if (r->pos + nbits > r->buf_len * 8) {
+	if (nbits < 0 || nbits > 64 || r->pos + (size_t)nbits > r->buf_len * 8) {
 		return -1;
 	}
+
 	uint64_t value = 0;
-	for (int i = 0; i < nbits; i++) {
+	int remaining = nbits;
+
+	/* If not byte-aligned, read bits until we are (or until done) */
+	int bit_offset = r->pos % 8;
+	if (bit_offset != 0) {
+		int bits_to_align = 8 - bit_offset;
+		if (bits_to_align > remaining) {
+			bits_to_align = remaining;
+		}
+		for (int i = 0; i < bits_to_align; i++) {
+			uint8_t byte = r->buf[r->pos / 8];
+			uint8_t bit = (byte >> (7 - (r->pos % 8))) & 1;
+			value = (value << 1) | bit;
+			r->pos++;
+		}
+		remaining -= bits_to_align;
+	}
+
+	/* Read full bytes directly */
+	while (remaining >= 8) {
+		value = (value << 8) | r->buf[r->pos / 8];
+		r->pos += 8;
+		remaining -= 8;
+	}
+
+	/* Read any remaining bits */
+	for (int i = 0; i < remaining; i++) {
 		uint8_t byte = r->buf[r->pos / 8];
 		uint8_t bit = (byte >> (7 - (r->pos % 8))) & 1;
 		value = (value << 1) | bit;
 		r->pos++;
 	}
+
 	*out = value;
 	return 0;
 }
@@ -114,14 +246,30 @@ static int bit_reader_read(struct bit_reader *r, int nbits, uint64_t *out)
 /**
  * Read up to 128 bits into a byte array.
  * @p out_size specifies the size of the output buffer (must be >= nbits/8).
+ *
+ * Optimized to use memcpy when byte-aligned and nbits is a multiple of 8,
+ * falling back to bit-by-bit otherwise.
  */
 static int bit_reader_read_bytes(struct bit_reader *r, int nbits,
 				 uint8_t *out, size_t out_size)
 {
-	size_t bytes_needed = (nbits + 7) / 8;
-	if (bytes_needed > out_size || r->pos + nbits > r->buf_len * 8) {
+	if (nbits < 0) {
 		return -1;
 	}
+	size_t bytes_needed = ((size_t)nbits + 7) / 8;
+	if (bytes_needed > out_size || r->pos + (size_t)nbits > r->buf_len * 8) {
+		return -1;
+	}
+
+	/* Fast path: byte-aligned reader and nbits is multiple of 8 */
+	if ((r->pos % 8) == 0 && (nbits % 8) == 0) {
+		int full_bytes = nbits / 8;
+		memcpy(out, &r->buf[r->pos / 8], full_bytes);
+		r->pos += nbits;
+		return 0;
+	}
+
+	/* Slow path: bit-by-bit for unaligned or partial byte reads */
 	memset(out, 0, bytes_needed);
 	for (int i = 0; i < nbits; i++) {
 		uint8_t byte = r->buf[r->pos / 8];
@@ -200,13 +348,26 @@ static uint16_t finalize_checksum(uint32_t sum)
 	return ~((uint16_t)sum);
 }
 
-static uint16_t udp_checksum(const uint8_t src[16], const uint8_t dst[16],
-			     uint16_t src_port, uint16_t dst_port,
-			     const uint8_t *payload, size_t payload_len)
+/**
+ * @brief Compute UDP checksum.
+ *
+ * @param src         Source IPv6 address
+ * @param dst         Destination IPv6 address
+ * @param src_port    Source port
+ * @param dst_port    Destination port
+ * @param payload     UDP payload (CoAP data)
+ * @param payload_len Payload length
+ * @param cksum_out   Output: computed checksum (only valid if return is 0)
+ * @return 0 on success, -1 if payload_len would overflow UDP length field
+ */
+static int udp_checksum(const uint8_t src[16], const uint8_t dst[16],
+			uint16_t src_port, uint16_t dst_port,
+			const uint8_t *payload, size_t payload_len,
+			uint16_t *cksum_out)
 {
 	/* UDP length field is 16 bits; header is 8 bytes, max payload is 65527 */
 	if (payload_len > UINT16_MAX - 8) {
-		return 0;
+		return -1;
 	}
 	uint16_t udp_len = (uint16_t)(8 + payload_len);
 	uint32_t sum = pseudo_sum(src, dst, 17, udp_len);
@@ -216,7 +377,8 @@ static uint16_t udp_checksum(const uint8_t src[16], const uint8_t dst[16],
 	sum = oc_add(sum, udp_len);
 	/* checksum field (0 during computation) */
 	sum = oc_add(sum, checksum_bytes(payload, payload_len));
-	return finalize_checksum(sum);
+	*cksum_out = finalize_checksum(sum);
+	return 0;
 }
 
 static uint16_t icmpv6_checksum(const uint8_t src[16], const uint8_t dst[16],
@@ -229,6 +391,21 @@ static uint16_t icmpv6_checksum(const uint8_t src[16], const uint8_t dst[16],
 }
 
 /* ─── per-rule compress ───────────────────────────────────────────────────── */
+
+/*
+ * Compression functions follow a common pattern:
+ *
+ *   1. Validate minimum input length for the rule
+ *   2. Write rule ID to out[0]
+ *   3. Initialize bit_writer at out[1]
+ *   4. For link-local rules: call compress_link_local_header() helper
+ *      For global rules: write full addresses inline
+ *   5. Write protocol-specific fields
+ *   6. Call compress_finish() to copy tail and return total length
+ *
+ * This pattern ensures consistent bounds checking and avoids code duplication
+ * for the common prologue (link-local header) and epilogue (tail copy).
+ */
 
 /**
  * Common epilogue for compress_* functions: compute output size, bounds-check,
@@ -358,6 +535,9 @@ static int compress_icmpv6_echo(const uint8_t *packet, size_t pkt_len,
 	const uint8_t *tail = &icmp[8];
 	size_t tail_len = pkt_len - 40 - 8;
 
+	if (out_len < 1) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
 	out[0] = SCHC_RULE_ICMPV6_ECHO;
 
 	struct bit_writer w;
@@ -397,6 +577,9 @@ static int compress_rpl_dio(const uint8_t *packet, size_t pkt_len,
 	const uint8_t *tail = &rpl[24];
 	size_t tail_len = pkt_len - 40 - 4 - 24;
 
+	if (out_len < 1) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
 	out[0] = SCHC_RULE_RPL_DIO;
 
 	struct bit_writer w;
@@ -437,6 +620,9 @@ static int compress_rpl_dao(const uint8_t *packet, size_t pkt_len,
 	const uint8_t *tail = &rpl[20];
 	size_t tail_len = pkt_len - 40 - 4 - 20;
 
+	if (out_len < 1) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
 	out[0] = SCHC_RULE_RPL_DAO;
 
 	struct bit_writer w;
@@ -532,8 +718,11 @@ static int decompress_coap(const uint8_t *data, size_t data_len,
 		memcpy(&coap_buf[4], tail, tail_len);
 	}
 
-	uint16_t udp_cksum = udp_checksum(src, dst, (uint16_t)src_port,
-					  (uint16_t)dst_port, coap_buf, coap_len);
+	uint16_t udp_cksum;
+	if (udp_checksum(src, dst, (uint16_t)src_port, (uint16_t)dst_port,
+			 coap_buf, coap_len, &udp_cksum) < 0) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;  /* Payload too large for UDP */
+	}
 
 	uint16_t ipv6_payload_len = udp_len;
 	size_t total = 40 + 8 + coap_len;
@@ -674,6 +863,14 @@ static int decompress_icmpv6_echo(const uint8_t *data, size_t data_len,
 static int decompress_rpl_dio(const uint8_t *data, size_t data_len,
 			      uint8_t *out, size_t out_len)
 {
+	/*
+	 * Minimum residue size (excluding rule ID byte):
+	 * 8 + 64 + 64 + 8 + 8 + 16 + 8 + 8 + 128 = 312 bits = 39 bytes
+	 */
+	if (data_len < 1 + 39) {
+		return SCHC_ERR_TOO_SHORT;
+	}
+
 	struct bit_reader r;
 	bit_reader_init(&r, &data[1], data_len - 1);
 
@@ -770,6 +967,14 @@ static int decompress_rpl_dio(const uint8_t *data, size_t data_len,
 static int decompress_rpl_dao(const uint8_t *data, size_t data_len,
 			      uint8_t *out, size_t out_len)
 {
+	/*
+	 * Minimum residue size (excluding rule ID byte):
+	 * 8 + 64 + 64 + 8 + 8 + 8 + 128 = 288 bits = 36 bytes
+	 */
+	if (data_len < 1 + 36) {
+		return SCHC_ERR_TOO_SHORT;
+	}
+
 	struct bit_reader r;
 	bit_reader_init(&r, &data[1], data_len - 1);
 
@@ -863,7 +1068,7 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 {
 	int ret;
 
-	if (pkt_len < 40 || (packet[0] >> 4) != 6) {
+	if (pkt_len < IPV6_HDR_LEN || (packet[0] >> 4) != 6) {
 		/* Not IPv6 - uncompressed fallback */
 		size_t needed = 1 + pkt_len;
 		if (out_len < needed) {
@@ -878,7 +1083,7 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	const uint8_t *src = &packet[8];
 	const uint8_t *dst = &packet[24];
 
-	if (nh == 17) {
+	if (nh == IPV6_NH_UDP) {
 		/* UDP - rules 0 or 1 */
 		if (is_link_local(src) && is_link_local(dst)) {
 			ret = compress_coap(packet, pkt_len, out, out_len,
@@ -893,22 +1098,22 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 				return ret;
 			}
 		}
-	} else if (nh == 58 && pkt_len >= 40 + 4) {
+	} else if (nh == IPV6_NH_ICMPV6 && pkt_len >= IPV6_HDR_LEN + 4) {
 		/* ICMPv6 */
-		uint8_t icmp_type = packet[40];
-		uint8_t icmp_code = packet[41];
+		uint8_t icmp_type = packet[IPV6_HDR_LEN];
+		uint8_t icmp_code = packet[IPV6_HDR_LEN + 1];
 
 		if ((icmp_type == 128 || icmp_type == 129) &&
 		    icmp_code == 0 &&
 		    is_link_local(src) && is_link_local(dst) &&
-		    pkt_len >= 40 + 8) {
+		    pkt_len >= IPV6_HDR_LEN + UDP_HDR_LEN) {
 			ret = compress_icmpv6_echo(packet, pkt_len, out, out_len);
 			if (ret > 0) {
 				return ret;
 			}
-		} else if (icmp_type == 155 &&
+		} else if (icmp_type == ICMPV6_TYPE_RPL &&
 			   is_link_local(src) && is_link_local(dst)) {
-			if (icmp_code == 1 && pkt_len >= 40 + 4 + 24) {
+			if (icmp_code == 1 && pkt_len >= IPV6_HDR_LEN + 4 + 24) {
 				/* DIO */
 				ret = compress_rpl_dio(packet, pkt_len, out, out_len);
 				if (ret > 0) {
