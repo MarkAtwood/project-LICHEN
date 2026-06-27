@@ -248,27 +248,36 @@ COAP_RESOURCE_DEFINE(neighbors, lichen_coap, {
  * -------------------------------------------------------------------------- */
 
 /*
- * Build CBOR {"tx_power_dbm": <val>} into buf (must be >= 15 bytes).
+ * Build CBOR {"tx_power_dbm": <val>} into buf (must be >= 16 bytes).
  *   a1              -- map(1)
  *   6c "tx_power_dbm" -- tstr(12)
- *   <val>           -- uint or negative int (fits in one CBOR byte: -24..23)
+ *   <val>           -- uint or negative int
  *
- * Returns encoded byte count.
+ * Returns encoded byte count (15 or 16).
  */
 static size_t encode_config_cbor(uint8_t *buf, size_t buf_size)
 {
-	if (buf_size < 15) {
+	if (buf_size < 16) {
 		return 0;
 	}
 	buf[0] = 0xa1;
 	buf[1] = 0x6c;
 	(void)memcpy(&buf[2], "tx_power_dbm", 12);
-	if (s_tx_power_dbm >= 0) {
+	if (s_tx_power_dbm >= 0 && s_tx_power_dbm <= 23) {
 		buf[14] = (uint8_t)s_tx_power_dbm;
+		return 15;
+	} else if (s_tx_power_dbm >= 24) {
+		buf[14] = 0x18;
+		buf[15] = (uint8_t)s_tx_power_dbm;
+		return 16;
+	} else if (s_tx_power_dbm >= -24) {
+		buf[14] = (uint8_t)(0x20u + (uint8_t)(-s_tx_power_dbm - 1));
+		return 15;
 	} else {
-		buf[14] = (uint8_t)(0x20u | (uint8_t)(-s_tx_power_dbm - 1));
+		buf[14] = 0x38;
+		buf[15] = (uint8_t)(-s_tx_power_dbm - 1);
+		return 16;
 	}
-	return 15;
 }
 
 static int config_get(struct coap_resource *resource,
