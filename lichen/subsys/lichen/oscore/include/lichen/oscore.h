@@ -43,6 +43,9 @@ extern "C" {
 /** Maximum Partial IV length */
 #define OSCORE_PIV_MAX_LEN 5
 
+/** Position of sender_id_len in nonce (NONCE_LEN - 7 per RFC 8613 Section 5.2) */
+#define OSCORE_NONCE_S_POS 6
+
 /** OSCORE CoAP option number */
 #define COAP_OPTION_OSCORE 9
 
@@ -151,10 +154,41 @@ int oscore_ctx_create(const uint8_t master_secret[OSCORE_KEY_LEN],
 void oscore_ctx_free(struct oscore_ctx *ctx);
 
 /**
- * @brief Look up a security context by recipient ID.
+ * @brief Set the sender sequence number for nonce persistence.
  *
- * Copies the context into the caller-provided buffer to avoid TOCTOU races.
- * The caller should use the copied context for all subsequent operations.
+ * IMPORTANT: AES-CCM requires unique nonces per key. After a reboot,
+ * the sender sequence must be restored to a value greater than any
+ * previously used value to prevent nonce reuse. Callers should persist
+ * sender_seq to non-volatile storage and restore it here after reboot.
+ *
+ * A common pattern is to persist sender_seq periodically (e.g., every
+ * 100 messages) plus a safety margin, then restore sender_seq + margin
+ * after reboot.
+ *
+ * @param[in] ctx       Security context
+ * @param[in] sender_seq New sender sequence number (must be > any previously used)
+ * @return 0 on success, OSCORE_ERR_INVALID_PARAM if ctx is NULL
+ */
+int oscore_ctx_set_sender_seq(struct oscore_ctx *ctx, uint32_t sender_seq);
+
+/**
+ * @brief Get the current sender sequence number for persistence.
+ *
+ * @param[in]  ctx        Security context
+ * @param[out] sender_seq Current sender sequence number
+ * @return 0 on success, OSCORE_ERR_INVALID_PARAM if ctx or sender_seq is NULL
+ */
+int oscore_ctx_get_sender_seq(const struct oscore_ctx *ctx, uint32_t *sender_seq);
+
+/**
+ * @brief Look up a security context by recipient ID (copy).
+ *
+ * Copies the context into the caller-provided buffer.
+ *
+ * WARNING: The copied context CANNOT be used with oscore_protect_request()
+ * or oscore_unprotect_request() because those functions require a pointer
+ * to the real internal context for atomic state updates. Use oscore_ctx_get()
+ * instead for contexts that will be used with protect/unprotect.
  *
  * @param[in]  recipient_id     Recipient ID to search for
  * @param[in]  recipient_id_len Length of recipient ID
@@ -165,6 +199,23 @@ void oscore_ctx_free(struct oscore_ctx *ctx);
 int oscore_ctx_lookup(const uint8_t *recipient_id,
 		      size_t recipient_id_len,
 		      struct oscore_ctx *ctx_out);
+
+/**
+ * @brief Get a security context pointer by recipient ID.
+ *
+ * Returns a pointer to the internal context. This pointer is required for
+ * oscore_protect_request() and oscore_unprotect_request() which perform
+ * atomic updates to sender_seq and replay_window.
+ *
+ * @param[in]  recipient_id     Recipient ID to search for
+ * @param[in]  recipient_id_len Length of recipient ID
+ * @param[out] ctx_out          Pointer to receive context pointer
+ * @return 0 on success, OSCORE_ERR_NO_CONTEXT if not found,
+ *         OSCORE_ERR_INVALID_PARAM if ctx_out is NULL
+ */
+int oscore_ctx_get(const uint8_t *recipient_id,
+		   size_t recipient_id_len,
+		   struct oscore_ctx **ctx_out);
 
 /**
  * @brief Parse an OSCORE CoAP option.

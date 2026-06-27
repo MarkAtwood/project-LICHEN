@@ -28,24 +28,36 @@ bool coap_oscore_is_protected(const struct coap_packet *request)
 	return ret > 0;
 }
 
+/**
+ * @brief Get the OSCORE option from a CoAP request.
+ *
+ * @return 0 on success, OSCORE_ERR_NO_CONTEXT if option not present,
+ *         OSCORE_ERR_BUFFER_TOO_SMALL if buffer insufficient
+ */
 int coap_oscore_get_option(const struct coap_packet *request,
 			   uint8_t *opt_data, size_t *opt_len)
 {
 	struct coap_option opt;
 	int ret;
 
+	/*
+	 * Note: We trust Zephyr's coap_find_options to return valid
+	 * opt.value and opt.len from the parsed packet. If processing
+	 * untrusted network packets, Zephyr's CoAP parser provides the
+	 * first line of defense against malformed packets.
+	 */
 	ret = coap_find_options(request, COAP_OPTION_OSCORE, &opt, 1);
 	if (ret < 1) {
-		return -ENOENT;
+		return OSCORE_ERR_NO_CONTEXT;
 	}
 
 	if (opt.len > *opt_len) {
-		return -ENOMEM;
+		return OSCORE_ERR_BUFFER_TOO_SMALL;
 	}
 
 	memcpy(opt_data, opt.value, opt.len);
 	*opt_len = opt.len;
-	return 0;
+	return OSCORE_OK;
 }
 
 int coap_oscore_unprotect_request(struct oscore_ctx *ctx,
@@ -87,7 +99,7 @@ int coap_oscore_unprotect_request(struct oscore_ctx *ctx,
 	/* Get encrypted payload */
 	ciphertext = coap_packet_get_payload(request, &ciphertext_len);
 	if (ciphertext == NULL || ciphertext_len == 0) {
-		return -EINVAL;
+		return OSCORE_ERR_INVALID_PARAM;
 	}
 
 	/* Unprotect (Class E options not used yet, pass NULL) */
@@ -104,7 +116,7 @@ int coap_oscore_unprotect_request(struct oscore_ctx *ctx,
 
 	LOG_DBG("Unprotected OSCORE request: code=0x%02x, payload=%zu",
 		*original_code, *payload_len);
-	return 0;
+	return OSCORE_OK;
 }
 
 int coap_oscore_protect_response(struct oscore_ctx *ctx,

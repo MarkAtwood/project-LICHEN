@@ -29,7 +29,20 @@ int lichen_aes_ccm_encrypt(const uint8_t key[AES_CCM_KEY_LEN],
 	struct tc_aes_key_sched_struct sched;
 	struct tc_ccm_mode_struct ccm;
 	int ret;
-	int result = -1;
+	int result = AES_CCM_ERR_GENERIC;
+
+	/* Validate required pointers */
+	if (key == NULL || nonce == NULL || ciphertext == NULL) {
+		return AES_CCM_ERR_INVALID_PARAM;
+	}
+
+	/* Validate parameters: NULL with nonzero length is invalid */
+	if (aad == NULL && aad_len > 0) {
+		return AES_CCM_ERR_INVALID_PARAM;
+	}
+	if (plaintext == NULL && pt_len > 0) {
+		return AES_CCM_ERR_INVALID_PARAM;
+	}
 
 	/* Initialize AES key schedule */
 	ret = tc_aes128_set_encrypt_key(&sched, key);
@@ -71,10 +84,20 @@ int lichen_aes_ccm_decrypt(const uint8_t key[AES_CCM_KEY_LEN],
 	struct tc_aes_key_sched_struct sched;
 	struct tc_ccm_mode_struct ccm;
 	int ret;
-	int result = -1;
+	int result = AES_CCM_ERR_GENERIC;
+
+	/* Validate required pointers */
+	if (key == NULL || nonce == NULL || ciphertext == NULL || plaintext == NULL) {
+		return AES_CCM_ERR_INVALID_PARAM;
+	}
+
+	/* Validate parameters: NULL aad with nonzero aad_len is invalid */
+	if (aad == NULL && aad_len > 0) {
+		return AES_CCM_ERR_INVALID_PARAM;
+	}
 
 	if (ct_len < AES_CCM_TAG_LEN) {
-		return -1;
+		return AES_CCM_ERR_INVALID_PARAM;
 	}
 
 	/* Initialize AES key schedule */

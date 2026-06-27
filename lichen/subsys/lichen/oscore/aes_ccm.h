@@ -23,6 +23,11 @@
 /** CCM authentication tag length */
 #define AES_CCM_TAG_LEN 8
 
+/** Error codes for AES-CCM functions */
+#define AES_CCM_OK             0   /**< Success */
+#define AES_CCM_ERR_GENERIC   -1   /**< Generic/crypto failure */
+#define AES_CCM_ERR_INVALID_PARAM -2  /**< Invalid parameter (e.g., NULL aad with nonzero len) */
+
 /**
  * @brief AES-CCM-16-64-128 encryption
  *
