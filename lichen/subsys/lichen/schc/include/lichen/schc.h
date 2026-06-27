@@ -16,6 +16,10 @@
  *   Rule 255: uncompressed passthrough
  *
  * Compression target: 48+ byte IPv6/UDP header to 3-6 bytes.
+ *
+ * @warning SECURITY: CoAP payloads MUST be OSCORE-encrypted before calling
+ * lichen_schc_compress(). Compressing plaintext leaks information through
+ * size variations (compression oracle attack). See schc.c for details.
  */
 
 #ifndef LICHEN_SCHC_H_
@@ -50,6 +54,9 @@ enum schc_error {
  *
  * Selects the best matching rule and writes the compressed residue to @p out.
  * Falls back to rule 255 (uncompressed) if no rule matches.
+ *
+ * @warning CoAP payloads MUST be OSCORE-protected before compression.
+ * Compressing plaintext enables compression oracle attacks.
  *
  * @param[in]  packet    Full IPv6 packet
  * @param[in]  pkt_len   Length of packet
