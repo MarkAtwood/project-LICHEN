@@ -1,15 +1,25 @@
 /*
- * T-Echo puck overlay — enables the SX1262 LoRa radio and wires it
- * into the Zephyr LoRa subsystem.
+ * T-Echo puck overlay — SX1262 LoRa + USB CDC-ACM console.
+ *
+ * The board DTS (lichen/boards/lilygo/t_echo/t_echo_nrf52840.dts) defines
+ * the SX1262 node on SPI1 as disabled.  Enable it here and wire USB CDC
+ * so log output appears on the USB serial port (no J-Link required).
  */
 
 / {
 	chosen {
-		zephyr,lora = &lora;
+		zephyr,lora       = &lora;
+		zephyr,console    = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
 	};
 };
 
-/* Enable the SX1262 node (disabled by default in the board DTS) */
 &lora {
 	status = "okay";
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
 };

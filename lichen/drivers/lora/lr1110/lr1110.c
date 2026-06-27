@@ -144,20 +144,14 @@ static void lr1110_dio9_isr(const struct device *port,
 static int lr1110_lora_config(const struct device *dev,
 			      struct lora_modem_config *cfg)
 {
-	int ret;
+	/* Disable DIO9 interrupt before reset: the LR1110 asserts DIO9 during
+	 * its boot sequence. Without this, the spurious ISR fires irq_work which
+	 * races the SPI bus against the calibration sequence and can leave DIO9
+	 * stuck high — so the TXDONE edge is never seen. */
+	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
 
-	ret = lr1110_hal_reset(dev);
-	if (ret < 0) {
-		LOG_ERR("lr1110_hal_reset failed: %d", ret);
-		return ret;
-	}
-
-	ret = lr1110_system_calibrate(dev, 0x3Fu); /* all 6 calibration blocks */
-	if (ret < 0) {
-		LOG_ERR("lr1110_system_calibrate failed: %d", ret);
-		return ret;
-	}
-
+	lr1110_hal_reset(dev);
+	lr1110_system_calibrate(dev, 0x3Fu); /* all 6 calibration blocks */
 	lr1110_system_clear_errors(dev);
 
 	lr1110_radio_set_packet_type(dev, LR1110_RADIO_PACKET_LORA);
@@ -200,6 +194,10 @@ static int lr1110_lora_config(const struct device *dev,
 	gpio_pin_set_dt(&lr1110_gpio_tx_enable, cfg->tx ? 1 : 0);
 #endif
 
+	/* Clear any IRQ flags the chip set during boot/calibration. DIO9 must
+	 * be deasserted before we re-enable the GPIO interrupt, otherwise the
+	 * first TXDONE won't generate a new rising edge. */
+	lr1110_system_clear_irq(dev, 0xFFFFFFFFu);
 	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_EDGE_TO_ACTIVE);
 
 	LOG_INF("LR1110 cfg: %u Hz SF%u BW%u CR4/%u pwr=%d tx=%d",

@@ -43,23 +43,6 @@ SYS_INIT(lichen_usb_early_init, APPLICATION, 0);
 
 #elif IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
 
-/* T1000-E boot diagnostic: blink P0.24 (STATUS LED, active-high) 5 times
- * using raw NRF GPIO registers — fires at PRE_KERNEL_1, before any Zephyr
- * driver initialises, to prove MCUboot handed off to our image. */
-static int t1000e_boot_blink(void)
-{
-	/* 3 slow blinks (~1 s on / 1 s off) — clearly distinct from bootloader
-	 * DFU pattern; if you see these, our code is executing. */
-	NRF_P0->DIRSET = BIT(24);
-	for (int b = 0; b < 3; b++) {
-		NRF_P0->OUTSET = BIT(24);
-		for (volatile uint32_t i = 0; i < 64000000; i++);
-		NRF_P0->OUTCLR = BIT(24);
-		for (volatile uint32_t i = 0; i < 64000000; i++);
-	}
-	return 0;
-}
-SYS_INIT(t1000e_boot_blink, PRE_KERNEL_1, 99);
 
 USBD_DEVICE_DEFINE(lichen_usbd,
 		   DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
@@ -119,8 +102,6 @@ static void buzz_n(int n)
 
 static int lichen_usb_early_init(void)
 {
-	buzz_n(1); /* 1 beep: APPLICATION-level init reached */
-
 	int ret;
 
 	ret = usbd_add_descriptor(&lichen_usbd, &lichen_lang);
