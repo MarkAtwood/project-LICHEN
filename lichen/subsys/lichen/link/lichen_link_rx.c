@@ -239,12 +239,17 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	}
 
 	/*
-	 * Step 4: Check replay window (peek only - don't mark seen yet)
+	 * Step 4: Get replay window handle (check deferred to Step 7)
 	 *
-	 * SECURITY: We check if the sequence number WOULD be rejected before
-	 * doing expensive decompression, but we don't mark it as seen until
-	 * AFTER all validation succeeds (including SCHC decompression).
-	 * Otherwise a malformed frame could poison the replay window.
+	 * We look up the replay window here but defer the atomic check-and-
+	 * commit to Step 7, after all validation succeeds. This prevents
+	 * malformed frames from polluting the replay window.
+	 *
+	 * Note: We deliberately do NOT peek at replay state here. A peek
+	 * without commit creates a TOCTOU race where concurrent frames with
+	 * the same sequence could both pass the peek, wasting CPU on
+	 * signature/MIC verification for frames that will ultimately be
+	 * rejected. The atomic check-and-commit in Step 7 is correct.
 	 */
 	struct lichen_replay_window *replay_window = NULL;
 	if (replay != NULL) {
@@ -252,39 +257,6 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 		if (replay_window == NULL) {
 			/* Table full */
 			return -ENOMEM;
-		}
-
-		/*
-		 * Peek at replay state: if this would definitely be rejected,
-		 * fail early. We use the same logic as lichen_replay_check but
-		 * without modifying state.
-		 */
-		if (replay_window->initialised) {
-			int32_t diff = (int32_t)parsed.seqnum -
-				       (int32_t)replay_window->last_seq;
-			if (diff > 32767) {
-				diff -= 65536;
-			} else if (diff < -32768) {
-				diff += 65536;
-			}
-
-			if (diff == 0) {
-				/* Exact duplicate */
-				return -EALREADY;
-			}
-			if (diff < 0) {
-				uint32_t offset = (uint32_t)(-diff);
-				if (offset >= 64) {
-					/* Outside window - too old */
-					return -EALREADY;
-				}
-				uint64_t bit = (uint64_t)1 << offset;
-				if (replay_window->bitmap & bit) {
-					/* Already seen */
-					return -EALREADY;
-				}
-			}
-			/* diff > 0 means newer - will be accepted */
 		}
 	}
 
@@ -317,14 +289,19 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	}
 
 	/*
-	 * Step 7: Mark frame as seen in replay table
+	 * Step 7: Atomic replay check-and-commit
 	 *
-	 * SECURITY: Only mark as seen AFTER all validation succeeds.
+	 * SECURITY: Only check/commit AFTER all validation succeeds.
 	 * This prevents malformed frames from polluting the replay window.
+	 *
+	 * lichen_replay_check() atomically checks whether the sequence is
+	 * valid AND marks it as seen in a single operation, eliminating the
+	 * TOCTOU race that a separate peek-then-commit pattern would create.
 	 */
 	if (replay_window != NULL) {
-		/* This should always return true since we peeked above */
-		(void)lichen_replay_check(replay_window, parsed.seqnum);
+		if (!lichen_replay_check(replay_window, parsed.seqnum)) {
+			return -EALREADY;
+		}
 	}
 
 	*out_len = (size_t)ret;

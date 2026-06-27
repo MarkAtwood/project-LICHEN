@@ -86,14 +86,15 @@ void schnorr48_derive_keypair(const uint8_t seed[32],
  *
  * @param[in]  privkey  32-byte private key
  * @param[in]  pubkey   32-byte public key
- * @param[in]  msg      Message to sign
+ * @param[in]  msg      Message to sign (may be NULL if msg_len is 0)
  * @param[in]  msg_len  Message length
  * @param[out] sig      48-byte signature output
+ * @return 0 on success, -1 if msg is NULL with nonzero msg_len
  */
-void schnorr48_sign(const uint8_t privkey[32],
-		    const uint8_t pubkey[32],
-		    const uint8_t *msg, size_t msg_len,
-		    uint8_t sig[48]);
+int schnorr48_sign(const uint8_t privkey[32],
+		   const uint8_t pubkey[32],
+		   const uint8_t *msg, size_t msg_len,
+		   uint8_t sig[48]);
 
 /**
  * @brief Verify a Schnorr-48 signature.

@@ -43,6 +43,9 @@ extern "C" {
 /** Maximum Partial IV length */
 #define OSCORE_PIV_MAX_LEN 5
 
+/** Maximum ID Context length */
+#define OSCORE_ID_CONTEXT_MAX_LEN 8
+
 /** Position of sender_id_len in nonce (NONCE_LEN - 7 per RFC 8613 Section 5.2) */
 #define OSCORE_NONCE_S_POS 6
 
@@ -62,6 +65,7 @@ enum oscore_err {
 	OSCORE_ERR_KEY_DERIVATION = -6,
 	OSCORE_ERR_NO_MEMORY = -7,
 	OSCORE_ERR_SEQ_EXHAUSTED = -8,  /**< Sender sequence exhausted, key rotation required */
+	OSCORE_ERR_ENCRYPT_FAILED = -9, /**< Encryption failed */
 };
 
 /**
@@ -77,7 +81,7 @@ struct oscore_ctx {
 	uint8_t master_salt[8];                 /**< Master Salt (optional) */
 	uint8_t master_salt_len;                /**< Salt length (0-8) */
 	uint8_t common_iv[OSCORE_NONCE_LEN];    /**< Common IV */
-	uint8_t id_context[8];                  /**< ID Context (optional) */
+	uint8_t id_context[OSCORE_ID_CONTEXT_MAX_LEN]; /**< ID Context (optional) */
 	uint8_t id_context_len;                 /**< ID Context length */
 
 	/* Sender context */
@@ -101,13 +105,16 @@ struct oscore_ctx {
  * @brief OSCORE option value structure
  *
  * Parsed representation of the OSCORE CoAP option.
+ *
+ * @note piv_len == 0 indicates no Partial IV regardless of has_piv value.
+ *       When building, set has_piv = true AND piv_len > 0 to include PIV.
  */
 struct oscore_option {
 	uint8_t piv[OSCORE_PIV_MAX_LEN];        /**< Partial IV */
 	uint8_t piv_len;                         /**< PIV length */
 	uint8_t kid[OSCORE_ID_MAX_LEN];         /**< Key Identifier */
 	uint8_t kid_len;                         /**< KID length */
-	uint8_t kid_context[8];                  /**< Key ID Context */
+	uint8_t kid_context[OSCORE_ID_CONTEXT_MAX_LEN]; /**< Key ID Context */
 	uint8_t kid_context_len;                 /**< KID Context length */
 	bool has_piv;                            /**< PIV present */
 	bool has_kid;                            /**< KID present */

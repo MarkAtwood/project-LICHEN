@@ -30,6 +30,7 @@ LOG_MODULE_REGISTER(lichen_puck, LOG_LEVEL_INF);
 #define BEACON_TOTAL_LEN (BEACON_HDR_LEN + BEACON_MIC_LEN)
 static uint8_t s_beacon[BEACON_TOTAL_LEN];
 static uint8_t s_seqnum;
+static uint8_t s_epoch;
 
 static int lora_set_mode(const struct device *dev, bool tx)
 {
@@ -51,9 +52,12 @@ static void send_beacon(const struct device *dev)
 	/* Build beacon header */
 	s_beacon[0] = BEACON_TOTAL_LEN;
 	s_beacon[1] = 0x00;  /* LLSec: AddrMode=0, MIC32, no sig, no enc */
-	s_beacon[2] = 0x00;  /* epoch */
-	s_beacon[3] = 0x00;  /* seqhi */
-	s_beacon[4] = ++s_seqnum;  /* seqlo */
+	if (++s_seqnum == 0) {
+		s_epoch++;  /* Increment epoch on seqnum wrap */
+	}
+	s_beacon[2] = s_epoch;   /* epoch */
+	s_beacon[3] = 0x00;      /* seqhi */
+	s_beacon[4] = s_seqnum;  /* seqlo */
 
 	/* Compute CRC32 MIC over header (bytes 1-4, excluding length byte) */
 	uint32_t mic = crc32_ieee(&s_beacon[1], BEACON_HDR_LEN - 1);

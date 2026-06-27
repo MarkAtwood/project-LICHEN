@@ -175,10 +175,16 @@ int lichen_lora_l2_start(void)
     atomic_set(&lora_state.running, 1);
 
     /* Start RX thread */
-    k_thread_create(&rx_thread_data, rx_stack,
-                    K_THREAD_STACK_SIZEOF(rx_stack),
-                    rx_thread, NULL, NULL, NULL,
-                    RX_THREAD_PRIORITY, 0, K_NO_WAIT);
+    k_tid_t tid = k_thread_create(&rx_thread_data, rx_stack,
+                                  K_THREAD_STACK_SIZEOF(rx_stack),
+                                  rx_thread, NULL, NULL, NULL,
+                                  RX_THREAD_PRIORITY, 0, K_NO_WAIT);
+    if (tid == NULL) {
+        atomic_set(&lora_state.running, 0);
+        LOG_ERR("Failed to create LoRa RX thread");
+        k_mutex_unlock(&lora_mutex);
+        return -ENOMEM;
+    }
     k_thread_name_set(&rx_thread_data, "lora_rx");
 
     k_mutex_unlock(&lora_mutex);
@@ -231,7 +237,11 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len)
 
     LOG_DBG("TX %zu bytes", len);
 
-    int ret = lora_send(lora_state.lora_dev, (uint8_t *)data, len);
+    /* Copy to local buffer - Zephyr's lora_send takes non-const uint8_t* */
+    uint8_t tx_buf[256];
+    memcpy(tx_buf, data, len);
+
+    int ret = lora_send(lora_state.lora_dev, tx_buf, len);
 
     k_mutex_unlock(&lora_mutex);
 

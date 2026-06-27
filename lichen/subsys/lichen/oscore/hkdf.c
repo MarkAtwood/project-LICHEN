@@ -44,9 +44,11 @@ static int hmac_sha256(const uint8_t *key, size_t key_len,
 		crypto_wipe(&h, sizeof(h));
 		return -EIO;
 	}
-	if (tc_hmac_update(&h, data, data_len) != TC_CRYPTO_SUCCESS) {
-		crypto_wipe(&h, sizeof(h));
-		return -EIO;
+	if (data_len > 0) {
+		if (tc_hmac_update(&h, data, data_len) != TC_CRYPTO_SUCCESS) {
+			crypto_wipe(&h, sizeof(h));
+			return -EIO;
+		}
 	}
 	if (tc_hmac_final(out, TC_SHA256_DIGEST_SIZE, &h) != TC_CRYPTO_SUCCESS) {
 		crypto_wipe(&h, sizeof(h));
@@ -95,7 +97,7 @@ int lichen_hkdf_expand(const uint8_t prk[32],
 	uint8_t buf[SHA256_HASH_LEN + 256 + 1]; /* T(i-1) || info || counter */
 	size_t t_len = 0;
 	size_t offset = 0;
-	uint8_t counter = 1;
+	uint16_t counter = 1; /* uint16_t to avoid overflow if bounds check is ever weakened */
 
 	/* prk and okm are required */
 	if (prk == NULL || okm == NULL) {

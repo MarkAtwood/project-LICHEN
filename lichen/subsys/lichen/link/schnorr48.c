@@ -52,10 +52,10 @@ void schnorr48_derive_keypair(const uint8_t seed[32],
 	crypto_wipe(hash, sizeof(hash));
 }
 
-void schnorr48_sign(const uint8_t privkey[32],
-		    const uint8_t pubkey[32],
-		    const uint8_t *msg, size_t msg_len,
-		    uint8_t sig[48])
+int schnorr48_sign(const uint8_t privkey[32],
+		   const uint8_t pubkey[32],
+		   const uint8_t *msg, size_t msg_len,
+		   uint8_t sig[48])
 {
 	uint8_t nonce_hash[64];
 	uint8_t r_scalar[32];
@@ -71,7 +71,7 @@ void schnorr48_sign(const uint8_t privkey[32],
 	if (msg_len > 0 && msg == NULL) {
 		/* Cannot sign: NULL message with nonzero length */
 		memset(sig, 0, SCHNORR48_SIG_LEN);
-		return;
+		return -1;
 	}
 
 	/*
@@ -125,6 +125,8 @@ void schnorr48_sign(const uint8_t privkey[32],
 	crypto_wipe(e_hash, sizeof(e_hash));
 	crypto_wipe(e_extended, sizeof(e_extended));
 	crypto_wipe(&ctx, sizeof(ctx));
+
+	return 0;
 }
 
 bool schnorr48_verify(const uint8_t pubkey[32],
@@ -217,10 +219,10 @@ void schnorr48_derive_keypair(const uint8_t seed[32],
 	schnorr48_stub_abort("schnorr48_derive_keypair");
 }
 
-void schnorr48_sign(const uint8_t privkey[32],
-		    const uint8_t pubkey[32],
-		    const uint8_t *msg, size_t msg_len,
-		    uint8_t sig[48])
+int schnorr48_sign(const uint8_t privkey[32],
+		   const uint8_t pubkey[32],
+		   const uint8_t *msg, size_t msg_len,
+		   uint8_t sig[48])
 {
 	(void)privkey;
 	(void)pubkey;
@@ -228,6 +230,7 @@ void schnorr48_sign(const uint8_t privkey[32],
 	(void)msg_len;
 	(void)sig;
 	schnorr48_stub_abort("schnorr48_sign");
+	return -1; /* unreachable, but satisfies compiler */
 }
 
 bool schnorr48_verify(const uint8_t pubkey[32],

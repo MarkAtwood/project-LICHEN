@@ -137,13 +137,13 @@ static void adopt_version(struct lichen_rpl_dodag *d,
 
 /* ── Public API ────────────────────────────────────────────────────────────── */
 
-void lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
-			   uint8_t rpl_instance_id,
-			   const uint8_t *dodag_id,
-			   uint8_t version)
+int lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
+			  uint8_t rpl_instance_id,
+			  const uint8_t *dodag_id,
+			  uint8_t version)
 {
 	if (d == NULL || dodag_id == NULL) {
-		return;
+		return LICHEN_RPL_ERR_INVALID;
 	}
 	memset(d, 0, sizeof(*d));
 
@@ -158,17 +158,22 @@ void lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
 	d->max_rank_increase = LICHEN_RPL_DEFAULT_MAX_RANK_INC;
 	d->parent_switch_threshold = LICHEN_RPL_DEFAULT_SWITCH_THRESH;
 	d->lowest_rank = LICHEN_RPL_INFINITE_RANK;
+	return 0;
 }
 
-void lichen_rpl_dodag_init_root(struct lichen_rpl_dodag *d,
-				uint8_t rpl_instance_id,
-				const uint8_t *dodag_id,
-				uint8_t version)
+int lichen_rpl_dodag_init_root(struct lichen_rpl_dodag *d,
+			       uint8_t rpl_instance_id,
+			       const uint8_t *dodag_id,
+			       uint8_t version)
 {
-	lichen_rpl_dodag_init(d, rpl_instance_id, dodag_id, version);
+	int err = lichen_rpl_dodag_init(d, rpl_instance_id, dodag_id, version);
+	if (err != 0) {
+		return err;
+	}
 	d->role = LICHEN_RPL_ROOT;
 	d->rank = LICHEN_RPL_ROOT_RANK;
 	d->lowest_rank = LICHEN_RPL_ROOT_RANK;
+	return 0;
 }
 
 void lichen_rpl_dodag_select_parent(struct lichen_rpl_dodag *d)

@@ -51,6 +51,7 @@ struct lichen_link_ctx {
 	uint16_t tx_seq;  /**< TX sequence counter */
 	bool has_key;     /**< Whether keypair is loaded */
 	bool has_link_key; /**< Whether link-layer key is loaded */
+	bool nonce_exhausted; /**< Nonce space exhausted, TX blocked until key rotation */
 };
 
 /**
@@ -90,13 +91,22 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32]);
 /**
  * @brief Increment and return the next TX sequence number.
  *
- * The sequence number wraps from 0xFFFF to 0x0000. Callers should
- * handle epoch rotation when this happens.
+ * The sequence number wraps from 0xFFFF to 0x0000. When this happens,
+ * the epoch is incremented. If the epoch wraps from 255 to 0, the nonce
+ * space is exhausted and this function returns an error.
  *
- * @param[in,out] ctx Link context
- * @return Next sequence number to use
+ * SECURITY: After 256 * 65536 = 16M frames, the nonce space is exhausted.
+ * The nonce for AES-CCM is (eui64, epoch, seqnum), so continuing to TX
+ * after nonce exhaustion would cause catastrophic nonce reuse. This
+ * function sets ctx->nonce_exhausted and returns -EOVERFLOW when this
+ * occurs. TX is blocked until key rotation clears the flag.
+ *
+ * @param[in,out] ctx    Link context
+ * @param[out]    seqnum Pointer to receive the sequence number (on success)
+ *
+ * @return 0 on success, -EINVAL if ctx/seqnum is NULL, -EOVERFLOW if nonce exhausted
  */
-uint16_t lichen_link_next_seq(struct lichen_link_ctx *ctx);
+int lichen_link_next_seq(struct lichen_link_ctx *ctx, uint16_t *seqnum);
 
 /**
  * @brief Set the current epoch.

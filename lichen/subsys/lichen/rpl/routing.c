@@ -90,6 +90,13 @@ static inline bool visited_check_and_add(struct visited_set *v, const uint8_t *a
 int lichen_rpl_srh_write(const struct lichen_rpl_srh *srh,
 			 uint8_t *buf, size_t len)
 {
+	if (srh == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+	/* segments_left must not exceed num_addresses */
+	if (srh->segments_left > srh->num_addresses) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	size_t needed = 6 + (size_t)srh->num_addresses * 16;
 	if (len < needed) {
 		return LICHEN_RPL_ERR_BUF_SMALL;
@@ -112,6 +119,9 @@ int lichen_rpl_srh_write(const struct lichen_rpl_srh *srh,
 int lichen_rpl_srh_parse(struct lichen_rpl_srh *srh,
 			 const uint8_t *data, size_t len)
 {
+	if (srh == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	if (len < 6) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}
@@ -151,6 +161,9 @@ int lichen_rpl_srh_parse(struct lichen_rpl_srh *srh,
 
 void lichen_rpl_routing_table_init(struct lichen_rpl_routing_table *rt)
 {
+	if (rt == NULL) {
+		return;
+	}
 	memset(rt, 0, sizeof(*rt));
 }
 
@@ -180,6 +193,10 @@ int lichen_rpl_routing_table_add(struct lichen_rpl_routing_table *rt,
 				 const uint8_t path[][16],
 				 uint8_t path_len)
 {
+	if (rt == NULL || target == NULL || path == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+
 	/* A route with no hops is unusable - reject it */
 	if (path_len == 0) {
 		return -1;
@@ -210,6 +227,9 @@ int lichen_rpl_routing_table_add(struct lichen_rpl_routing_table *rt,
 void lichen_rpl_routing_table_remove(struct lichen_rpl_routing_table *rt,
 				     const uint8_t *target)
 {
+	if (rt == NULL || target == NULL) {
+		return;
+	}
 	struct lichen_rpl_route *r = find_route(rt, target);
 	if (r != NULL) {
 		r->valid = false;
@@ -220,6 +240,9 @@ const struct lichen_rpl_route *
 lichen_rpl_routing_table_lookup(const struct lichen_rpl_routing_table *rt,
 				const uint8_t *target)
 {
+	if (rt == NULL || target == NULL) {
+		return NULL;
+	}
 	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_ROUTES; i++) {
 		if (rt->routes[i].valid && addr_eq(rt->routes[i].target, target)) {
 			return &rt->routes[i];
@@ -230,6 +253,9 @@ lichen_rpl_routing_table_lookup(const struct lichen_rpl_routing_table *rt,
 
 int lichen_rpl_routing_table_count(const struct lichen_rpl_routing_table *rt)
 {
+	if (rt == NULL) {
+		return 0;
+	}
 	int count = 0;
 	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_ROUTES; i++) {
 		if (rt->routes[i].valid) {
@@ -500,6 +526,10 @@ static int rebuild_routes(struct lichen_rpl_dao_manager *dm)
 			continue;
 		}
 
+		/* Clear existing route before rebuilding to avoid stale entries
+		 * if rebuild fails */
+		lichen_rpl_routing_table_remove(&dm->routing_table,
+						dm->parent_map[i].target);
 		if (rebuild_single_route(dm, dm->parent_map[i].target) < 0) {
 			failures++;
 		}

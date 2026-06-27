@@ -16,13 +16,7 @@
 #include <string.h>
 
 /* Error codes */
-#ifdef __ZEPHYR__
-#include <errno.h>
-#else
-#define EINVAL 22
-#define ENOMEM 12
-#define EMSGSIZE 90
-#endif
+#include <lichen/errno.h>
 
 /* AES-CCM for link-layer MIC */
 #include "oscore/aes_ccm.h"
@@ -68,6 +62,7 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 	size_t off;
 	size_t frame_body_len;
 	uint8_t mic_len;
+	int ret;
 
 	if (ctx == NULL || ipv6_pkt == NULL || out_frame == NULL || out_len == NULL) {
 		return -EINVAL;
@@ -117,7 +112,11 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 	}
 
 	/* Get next sequence number using the link context API */
-	seqnum = lichen_link_next_seq(ctx);
+	int seq_err = lichen_link_next_seq(ctx, &seqnum);
+	if (seq_err != 0) {
+		/* Nonce exhausted or invalid context - TX blocked */
+		return seq_err;
+	}
 
 	/* Step 2: If signing enabled (has_key set), compute Schnorr-48 signature */
 	if (ctx->has_key) {
@@ -133,12 +132,8 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 					 compressed, compressed_len,
 					 ctx->ed25519_sk, ctx->ed25519_pk,
 					 &payload_buf[compressed_len]) != 0) {
-			/*
-			 * SECURITY: Wipe payload_buf to avoid leaking partial data.
-			 * The signature slot may contain uninitialized stack data.
-			 */
-			memset(payload_buf, 0, sizeof(payload_buf));
-			return -EINVAL;
+			ret = -EINVAL;
+			goto cleanup;
 		}
 
 		payload_len = compressed_len + SCHNORR48_SIG_LEN;
@@ -160,12 +155,14 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 	frame_body_len = 1 + 1 + 2 + dst_addr_len + payload_len + mic_len;
 
 	if (frame_body_len > 255) {
-		return -EMSGSIZE;
+		ret = -EMSGSIZE;
+		goto cleanup;
 	}
 
 	/* Total frame = length byte + body */
 	if (1 + frame_body_len > *out_len) {
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto cleanup;
 	}
 
 	/* Step 3: Build frame header */
@@ -227,7 +224,8 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 					   &out_frame[0], aad_len,
 					   NULL, 0,
 					   mic_out) != 0) {
-			return -EINVAL;
+			ret = -EINVAL;
+			goto cleanup;
 		}
 
 		/* Append 64-bit MIC */
@@ -257,5 +255,13 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 	}
 
 	*out_len = off;
-	return 0;
+	ret = 0;
+
+cleanup:
+	/*
+	 * SECURITY: Wipe payload_buf on all exits to avoid leaking signature
+	 * or partial frame data on the stack.
+	 */
+	memset(payload_buf, 0, sizeof(payload_buf));
+	return ret;
 }

@@ -135,12 +135,13 @@ static int lora_renode_send(const struct device *dev,
 	reg_write(cfg, REG_TX_TRIGGER, 1);
 
 	/* Poll for completion.
-	 * 1000 retries × 1ms sleep = ~1 second max wait, which exceeds the
-	 * longest LoRa airtime at SF12/125kHz (~1.3s for 255B). The peripheral
-	 * should complete well before this; timeout indicates a stuck radio.
+	 * TX_TIMEOUT_MS covers the longest LoRa airtime: SF12/125kHz with 255B
+	 * payload takes ~1.3s. 2 seconds provides margin for simulation overhead.
+	 * Timeout indicates a stuck radio.
 	 */
+	#define TX_TIMEOUT_MS 2000
 	uint32_t status;
-	int retries = 1000;
+	int retries = TX_TIMEOUT_MS;
 
 	do {
 		status = reg_read(cfg, REG_TX_STATUS);

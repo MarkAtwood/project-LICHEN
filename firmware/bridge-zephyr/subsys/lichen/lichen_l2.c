@@ -125,6 +125,17 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 
 #if HAVE_LICHEN_LINK
 	/*
+	 * Guard against access before initialization (python-t7j5.1).
+	 * This mirrors the RX path guard - could happen if IPv6 stack tries
+	 * to transmit during early startup before lichen_l2_iface_init() completes.
+	 */
+	if (!link_ctx_initialized) {
+		LOG_WRN("TX attempted before link_ctx initialized");
+		k_mutex_unlock(&tx_mutex);
+		return -EAGAIN;
+	}
+
+	/*
 	 * Use lichen_link_tx() to build the complete frame with proper MIC.
 	 * This handles:
 	 * - SCHC compression
@@ -173,8 +184,16 @@ static int lichen_l2_enable(struct net_if *iface, bool state)
 	} else {
 		int ret = lichen_lora_l2_stop();
 #if HAVE_LICHEN_LINK
-		/* Clean up link context: wipe keys, reset sequence state */
+		/*
+		 * Clean up link context: wipe keys, reset sequence state.
+		 * Hold rx_mutex to prevent TOCTOU race with lichen_l2_input() -
+		 * ensures any in-flight RX completes before we invalidate link_ctx.
+		 * (python-t7j5.4)
+		 */
+		k_mutex_lock(&rx_mutex, K_FOREVER);
+		link_ctx_initialized = false;
 		lichen_link_cleanup(&link_ctx);
+		k_mutex_unlock(&rx_mutex);
 #endif
 		return ret;
 	}
@@ -273,6 +292,10 @@ void lichen_l2_iface_init(struct net_if *iface)
 
 	/* Get our EUI-64 */
 	const uint8_t *eui64 = lichen_lora_l2_get_eui64();
+	if (eui64 == NULL) {
+		LOG_ERR("Failed to get EUI-64 from LoRa L2");
+		return;
+	}
 
 	/* Set link-layer address on the interface */
 	net_if_set_link_addr(iface, (uint8_t *)eui64, LICHEN_L2_ADDR_LEN,

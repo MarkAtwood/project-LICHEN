@@ -10,6 +10,14 @@
 
 #include <lichen/rpl_trickle.h>
 
+/* Saturating add - clamp at UINT32_MAX on overflow */
+static uint32_t sat_add_u32(uint32_t a, uint32_t b)
+{
+	uint32_t result = a + b;
+	/* Overflow if result < either operand */
+	return (result < a) ? UINT32_MAX : result;
+}
+
 /* Saturating multiply - clamp at UINT32_MAX on overflow */
 static uint32_t sat_mul_u32(uint32_t a, uint32_t b)
 {
@@ -29,7 +37,7 @@ static void begin_interval(struct lichen_trickle *t,
 	uint32_t half = t->interval / 2;
 	/* transmit_time is uniform in [now + half, now + interval) */
 	uint32_t offset = (half > 0) ? (rand_offset % half) : 0;
-	t->transmit_time = now + half + offset;
+	t->transmit_time = sat_add_u32(sat_add_u32(now, half), offset);
 }
 
 void lichen_trickle_init(struct lichen_trickle *t,
@@ -37,6 +45,10 @@ void lichen_trickle_init(struct lichen_trickle *t,
 			 uint32_t imax_doublings,
 			 uint32_t k)
 {
+	if (t == NULL) {
+		return;
+	}
+
 	t->imin = imin_ms;
 
 	/* Calculate max_interval = imin << doublings, clamped at UINT32_MAX.
@@ -64,6 +76,10 @@ void lichen_trickle_start(struct lichen_trickle *t,
 			  uint32_t now,
 			  uint32_t rand_offset)
 {
+	if (t == NULL) {
+		return;
+	}
+
 	t->interval = t->imin;
 	begin_interval(t, now, rand_offset);
 }

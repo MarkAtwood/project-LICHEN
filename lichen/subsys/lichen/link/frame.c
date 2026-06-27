@@ -111,12 +111,13 @@ int lichen_frame_write(const struct lichen_frame *frame,
 	}
 
 	/*
-	 * Note: Caller must initialize frame->mic before calling this function.
+	 * Caller must initialize frame->mic and frame->mic_len before calling.
 	 * The MIC is not computed here - it must be computed externally over
 	 * the frame data and stored in frame->mic before serialization.
-	 * The TX path (lichen_link_tx.c) builds frames directly without using
-	 * this function, computing the MIC inline.
 	 */
+	if (frame->mic_len != LICHEN_MIC_32_LEN && frame->mic_len != LICHEN_MIC_64_LEN) {
+		return -EINVAL;
+	}
 
 	uint8_t addr_len = addr_lens[frame->addr_mode];
 	uint8_t mic_len = (frame->mic_length == LICHEN_MIC_64) ? LICHEN_MIC_64_LEN : LICHEN_MIC_32_LEN;
@@ -160,8 +161,11 @@ int lichen_frame_write(const struct lichen_frame *frame,
 	memcpy(&buf[off], frame->dst_addr, addr_len);
 	off += addr_len;
 
-	/* Payload (guard against NULL with len=0, which is UB) */
+	/* Payload */
 	if (frame->payload_len > 0) {
+		if (frame->payload == NULL) {
+			return -EINVAL;
+		}
 		memcpy(&buf[off], frame->payload, frame->payload_len);
 	}
 	off += frame->payload_len;

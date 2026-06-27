@@ -229,13 +229,22 @@ int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 	uint16_t fi = 0;
 	int rc = 0;
 
-	if (!s_conn) {
+	/*
+	 * Capture connection reference atomically. This prevents a race where
+	 * s_conn becomes NULL (via on_disconnected) between our check and use.
+	 * The reference keeps the connection object valid for our entire send.
+	 */
+	struct bt_conn *conn = s_conn;
+
+	if (conn == NULL) {
 		return -ENOTCONN;
 	}
+	bt_conn_ref(conn);
 
 	/* Validate input length to prevent overflow */
 	if (len > SLIP_BUF_SIZE) {
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto out_unref;
 	}
 
 	k_mutex_lock(&s_tx_mutex, K_FOREVER);
@@ -271,12 +280,12 @@ int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 	s_tx_frame[fi++] = SLIP_END;
 
 	/* Send in chunks ≤ (ATT_MTU − 3) bytes; default MTU gives 20 bytes */
-	uint16_t mtu    = bt_gatt_get_mtu(s_conn);
+	uint16_t mtu    = bt_gatt_get_mtu(conn);
 	uint16_t chunk  = (mtu > 3u) ? (uint16_t)(mtu - 3u) : 20u;
 
 	for (uint16_t off = 0; off < fi; off += chunk) {
 		uint16_t n = MIN(chunk, (uint16_t)(fi - off));
-		rc = bt_gatt_notify(s_conn,
+		rc = bt_gatt_notify(conn,
 				    &nus_svc.attrs[NUS_TX_VAL_IDX],
 				    &s_tx_frame[off], n);
 		if (rc < 0) {
@@ -287,6 +296,8 @@ int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 
 out:
 	k_mutex_unlock(&s_tx_mutex);
+out_unref:
+	bt_conn_unref(conn);
 	return rc;
 }
 
