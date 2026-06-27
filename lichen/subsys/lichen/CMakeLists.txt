@@ -5,6 +5,7 @@
 
 add_subdirectory_ifdef(CONFIG_LICHEN_COAP coap)
 add_subdirectory_ifdef(CONFIG_LICHEN_CRYPTO_MONOCYPHER crypto)
+add_subdirectory_ifdef(CONFIG_LICHEN_EDHOC edhoc)
 add_subdirectory_ifdef(CONFIG_LICHEN_LINK link)
 add_subdirectory_ifdef(CONFIG_LICHEN_OSCORE oscore)
 add_subdirectory_ifdef(CONFIG_LICHEN_SCHC schc)
