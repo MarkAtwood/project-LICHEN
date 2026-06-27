@@ -82,20 +82,31 @@ void lichen_trickle_start(struct lichen_trickle *t,
 
 /**
  * @brief Get the absolute time when the current interval ends.
+ *
+ * Uses saturating addition to handle time wraparound after ~49.7 days.
+ * When saturated, returns UINT32_MAX to avoid scheduling events in the past.
  */
 static inline uint32_t lichen_trickle_interval_end(const struct lichen_trickle *t)
 {
-	return t->interval_start + t->interval;
+	uint32_t end = t->interval_start + t->interval;
+	/* Saturate on overflow: if result < start, we wrapped */
+	if (end < t->interval_start) {
+		return UINT32_MAX;
+	}
+	return end;
 }
 
 /**
  * @brief Record a consistent transmission from a neighbor (RFC 6206 step 3).
  *
  * Call this when receiving a DIO with the same DODAG version.
+ * Uses saturating increment to prevent counter wrap causing spurious transmits.
  */
 static inline void lichen_trickle_heard_consistent(struct lichen_trickle *t)
 {
-	t->counter++;
+	if (t->counter < UINT32_MAX) {
+		t->counter++;
+	}
 }
 
 /**

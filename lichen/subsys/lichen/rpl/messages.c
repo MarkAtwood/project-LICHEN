@@ -79,6 +79,9 @@ int lichen_rpl_dio_write(const struct lichen_rpl_dio *dio,
 
 const uint8_t *lichen_rpl_dio_options(const uint8_t *data, size_t len)
 {
+	if (data == NULL) {
+		return NULL;
+	}
 	if (len > LICHEN_RPL_DIO_BASE_LEN) {
 		return &data[LICHEN_RPL_DIO_BASE_LEN];
 	}
@@ -87,20 +90,35 @@ const uint8_t *lichen_rpl_dio_options(const uint8_t *data, size_t len)
 
 /* ── DAO ───────────────────────────────────────────────────────────────────── */
 
+/** DAO base without DODAGID (D=0) is 4 bytes */
+#define DAO_BASE_NO_DODAGID  4
+
 int lichen_rpl_dao_parse(struct lichen_rpl_dao *dao,
 			 const uint8_t *data, size_t len)
 {
-	if (len < LICHEN_RPL_DAO_BASE_LEN) {
+	/* Minimum: 4 bytes base without DODAGID */
+	if (len < DAO_BASE_NO_DODAGID) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}
 
 	uint8_t kd = data[1];
+	bool d_flag = (kd >> 6) & 1;
+
+	/* If D-flag set, DODAGID is present (16 bytes more) */
+	if (d_flag && len < LICHEN_RPL_DAO_BASE_LEN) {
+		return LICHEN_RPL_ERR_TOO_SHORT;
+	}
 
 	dao->rpl_instance_id = data[0];
 	dao->ack_requested = (kd >> 7) & 1;
 	dao->flags = kd & 0x3F;
 	dao->dao_sequence = data[3];
-	memcpy(dao->dodag_id, &data[4], 16);
+
+	if (d_flag) {
+		memcpy(dao->dodag_id, &data[4], 16);
+	} else {
+		memset(dao->dodag_id, 0, 16);
+	}
 
 	return LICHEN_RPL_OK;
 }
@@ -128,8 +146,21 @@ int lichen_rpl_dao_write(const struct lichen_rpl_dao *dao,
 
 const uint8_t *lichen_rpl_dao_options(const uint8_t *data, size_t len)
 {
-	if (len > LICHEN_RPL_DAO_BASE_LEN) {
-		return &data[LICHEN_RPL_DAO_BASE_LEN];
+	if (data == NULL) {
+		return NULL;
+	}
+
+	/* Check D-flag (bit 6 of byte 1) to determine base length */
+	if (len < DAO_BASE_NO_DODAGID) {
+		return NULL;
+	}
+
+	uint8_t kd = data[1];
+	bool d_flag = (kd >> 6) & 1;
+	size_t base_len = d_flag ? LICHEN_RPL_DAO_BASE_LEN : DAO_BASE_NO_DODAGID;
+
+	if (len > base_len) {
+		return &data[base_len];
 	}
 	return NULL;
 }
@@ -205,8 +236,12 @@ int lichen_rpl_target_parse(struct lichen_rpl_target *target,
 	/* data[0] = flags, skipped */
 	uint8_t prefix_len = data[1];
 
-	/* IPv6 prefix cannot exceed 128 bits (16 bytes) */
-	if (prefix_len > 128) {
+	/*
+	 * IPv6 prefix must be 1-128 bits. prefix_len=0 would mean no target,
+	 * which is invalid for routing purposes (RFC 6550 does not define
+	 * a "default route" semantic for RPL Target options).
+	 */
+	if (prefix_len == 0 || prefix_len > 128) {
 		return LICHEN_RPL_ERR_BAD_OPT;
 	}
 

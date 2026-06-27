@@ -28,6 +28,7 @@ extern "C" {
 #define LICHEN_RPL_ERR_BAD_OPT    -3
 #define LICHEN_RPL_ERR_BAD_RT     -4
 #define LICHEN_RPL_ERR_BUF_SMALL  -5
+#define LICHEN_RPL_ERR_INVALID    -6  /**< NULL pointer or invalid argument */
 
 /* ── Option type bytes ─────────────────────────────────────────────────────── */
 
@@ -157,6 +158,30 @@ const uint8_t *lichen_rpl_dao_options(const uint8_t *data, size_t len);
 
 /**
  * @brief Get length of options following DAO base.
+ *
+ * @param data      DAO message bytes (needed to check D-flag)
+ * @param total_len Total length of DAO message
+ * @return Length of options, or 0 if none
+ *
+ * @note The D-flag (bit 6 of byte 1) determines whether DODAGID is present:
+ *       D=1: base is 20 bytes (with DODAGID)
+ *       D=0: base is 4 bytes (no DODAGID)
+ */
+static inline size_t lichen_rpl_dao_options_len_ex(const uint8_t *data,
+						   size_t total_len)
+{
+	if (data == NULL || total_len < 4) {
+		return 0;
+	}
+	/* D-flag is bit 6 of byte 1 */
+	bool d_flag = (data[1] >> 6) & 1;
+	size_t base_len = d_flag ? LICHEN_RPL_DAO_BASE_LEN : 4;
+	return (total_len > base_len) ? (total_len - base_len) : 0;
+}
+
+/**
+ * @brief Get length of options following DAO base (legacy, assumes D=1).
+ * @deprecated Use lichen_rpl_dao_options_len_ex() for D-flag aware calculation.
  */
 static inline size_t lichen_rpl_dao_options_len(size_t total_len)
 {
