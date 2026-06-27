@@ -6,12 +6,14 @@
  * @brief SenML CBOR encoder
  *
  * Encodes sensor data as SenML (RFC 8428) in CBOR format.
- * Uses minimal hand-rolled CBOR encoding to avoid dependencies.
+ * Uses Zephyr's zcbor library for CBOR encoding.
  */
 
 #include <string.h>
 #include <math.h>
 #include <lichen/senml.h>
+#include <lichen/errno.h>
+#include <zcbor_encode.h>
 
 /* CBOR SenML label indices (RFC 8428 Section 6) */
 enum senml_label {
@@ -31,97 +33,6 @@ enum senml_label {
 	SENML_LABEL_VD =  8,  /* Data Value */
 };
 
-/*
- * Minimal CBOR encoding helpers.
- * Returns bytes written, or -1 on overflow.
- */
-
-static int cbor_encode_uint(uint8_t *buf, size_t buflen, uint8_t major, uint64_t val)
-{
-	if (val <= 23) {
-		if (buflen < 1) return -1;
-		buf[0] = (major << 5) | (uint8_t)val;
-		return 1;
-	} else if (val <= 0xFF) {
-		if (buflen < 2) return -1;
-		buf[0] = (major << 5) | 24;
-		buf[1] = (uint8_t)val;
-		return 2;
-	} else if (val <= 0xFFFF) {
-		if (buflen < 3) return -1;
-		buf[0] = (major << 5) | 25;
-		buf[1] = (uint8_t)(val >> 8);
-		buf[2] = (uint8_t)val;
-		return 3;
-	} else if (val <= 0xFFFFFFFF) {
-		if (buflen < 5) return -1;
-		buf[0] = (major << 5) | 26;
-		buf[1] = (uint8_t)(val >> 24);
-		buf[2] = (uint8_t)(val >> 16);
-		buf[3] = (uint8_t)(val >> 8);
-		buf[4] = (uint8_t)val;
-		return 5;
-	} else {
-		if (buflen < 9) return -1;
-		buf[0] = (major << 5) | 27;
-		buf[1] = (uint8_t)(val >> 56);
-		buf[2] = (uint8_t)(val >> 48);
-		buf[3] = (uint8_t)(val >> 40);
-		buf[4] = (uint8_t)(val >> 32);
-		buf[5] = (uint8_t)(val >> 24);
-		buf[6] = (uint8_t)(val >> 16);
-		buf[7] = (uint8_t)(val >> 8);
-		buf[8] = (uint8_t)val;
-		return 9;
-	}
-}
-
-static int cbor_encode_int(uint8_t *buf, size_t buflen, int64_t val)
-{
-	if (val >= 0) {
-		return cbor_encode_uint(buf, buflen, 0, (uint64_t)val);
-	} else {
-		return cbor_encode_uint(buf, buflen, 1, (uint64_t)(-1 - val));
-	}
-}
-
-static int cbor_encode_tstr(uint8_t *buf, size_t buflen, const char *str)
-{
-	size_t len = strlen(str);
-	/* Guard against strings too long to express in a signed int return */
-	if (len > (size_t)INT_MAX - 9) {
-		return -1;
-	}
-	int hdr = cbor_encode_uint(buf, buflen, 3, len);
-	if (hdr < 0) return -1;
-	if ((size_t)hdr + len > buflen) return -1;
-	memcpy(buf + hdr, str, len);
-	return hdr + (int)len;
-}
-
-static int cbor_encode_float(uint8_t *buf, size_t buflen, float val)
-{
-	/* IEEE 754 single-precision float (CBOR major 7, additional 26) */
-	if (buflen < 5) return -1;
-
-	uint32_t bits;
-	memcpy(&bits, &val, sizeof(bits));
-
-	buf[0] = 0xFA; /* float32 */
-	buf[1] = (uint8_t)(bits >> 24);
-	buf[2] = (uint8_t)(bits >> 16);
-	buf[3] = (uint8_t)(bits >> 8);
-	buf[4] = (uint8_t)bits;
-	return 5;
-}
-
-static int cbor_encode_bool(uint8_t *buf, size_t buflen, bool val)
-{
-	if (buflen < 1) return -1;
-	buf[0] = val ? 0xF5 : 0xF4; /* true : false */
-	return 1;
-}
-
 void senml_pack_init(struct senml_pack *pack,
 		     const char *base_name,
 		     uint64_t base_time)
@@ -140,7 +51,7 @@ int senml_add_float(struct senml_pack *pack,
 		    float value)
 {
 	if (pack->record_count >= SENML_MAX_RECORDS) {
-		return -1;
+		return -ENOMEM;
 	}
 
 	struct senml_record *rec = &pack->records[pack->record_count++];
@@ -160,7 +71,7 @@ int senml_add_float_t(struct senml_pack *pack,
 		      int32_t time_offset)
 {
 	if (pack->record_count >= SENML_MAX_RECORDS) {
-		return -1;
+		return -ENOMEM;
 	}
 
 	struct senml_record *rec = &pack->records[pack->record_count++];
@@ -179,7 +90,7 @@ int senml_add_bool(struct senml_pack *pack,
 		   bool value)
 {
 	if (pack->record_count >= SENML_MAX_RECORDS) {
-		return -1;
+		return -ENOMEM;
 	}
 
 	struct senml_record *rec = &pack->records[pack->record_count++];
@@ -195,135 +106,118 @@ int senml_add_bool(struct senml_pack *pack,
 /*
  * Encode a single SenML record as a CBOR map.
  */
-static int encode_record(const struct senml_record *rec,
-			 const struct senml_pack *pack,
-			 bool is_first,
-			 uint8_t *buf, size_t buflen)
+static bool encode_record(zcbor_state_t *state,
+			  const struct senml_record *rec,
+			  const struct senml_pack *pack,
+			  bool is_first)
 {
-	size_t off = 0;
-	int r;
-
 	/* Count map entries */
-	int entries = 0;
+	size_t entries = 1; /* value always present */
 	if (is_first && pack->base_name != NULL) entries++;
 	if (is_first && pack->has_base_time) entries++;
 	if (rec->name != NULL) entries++;
 	if (rec->unit != NULL) entries++;
-	entries++; /* value always present */
 	if (rec->has_time) entries++;
 
-	/* Map header */
-	r = cbor_encode_uint(buf + off, buflen - off, 5, (uint64_t)entries);
-	if (r < 0) return -1;
-	off += (size_t)r;
+	if (!zcbor_map_start_encode(state, entries)) {
+		return false;
+	}
 
 	/* Base name (first record only) */
 	if (is_first && pack->base_name != NULL) {
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_BN);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_tstr(buf + off, buflen - off, pack->base_name);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_BN) ||
+		    !zcbor_tstr_put_term(state, pack->base_name, 256)) {
+			return false;
+		}
 	}
 
 	/* Base time (first record only) */
 	if (is_first && pack->has_base_time) {
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_BT);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_uint(buf + off, buflen - off, 0, pack->base_time);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_BT) ||
+		    !zcbor_uint64_put(state, pack->base_time)) {
+			return false;
+		}
 	}
 
 	/* Name */
 	if (rec->name != NULL) {
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_N);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_tstr(buf + off, buflen - off, rec->name);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_N) ||
+		    !zcbor_tstr_put_term(state, rec->name, 256)) {
+			return false;
+		}
 	}
 
 	/* Unit */
 	if (rec->unit != NULL) {
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_U);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_tstr(buf + off, buflen - off, rec->unit);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_U) ||
+		    !zcbor_tstr_put_term(state, rec->unit, 256)) {
+			return false;
+		}
 	}
 
 	/* Value */
 	switch (rec->type) {
 	case SENML_VALUE_FLOAT:
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_V);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_float(buf + off, buflen - off, rec->value.f);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_V) ||
+		    !zcbor_float32_put(state, rec->value.f)) {
+			return false;
+		}
 		break;
 
 	case SENML_VALUE_BOOL:
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_VB);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_bool(buf + off, buflen - off, rec->value.b);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_VB) ||
+		    !zcbor_bool_put(state, rec->value.b)) {
+			return false;
+		}
 		break;
 
 	default:
-		return -1;
+		return false;
 	}
 
 	/* Time offset */
 	if (rec->has_time) {
-		r = cbor_encode_int(buf + off, buflen - off, SENML_LABEL_T);
-		if (r < 0) return -1;
-		off += (size_t)r;
-
-		r = cbor_encode_int(buf + off, buflen - off, rec->time_offset);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!zcbor_int32_put(state, SENML_LABEL_T) ||
+		    !zcbor_int32_put(state, rec->time_offset)) {
+			return false;
+		}
 	}
 
-	return (int)off;
+	return zcbor_map_end_encode(state, entries);
 }
 
 int senml_encode_cbor(const struct senml_pack *pack,
 		      uint8_t *buf, size_t buflen)
 {
-	size_t off = 0;
-	int r;
-
 	if (pack->record_count == 0) {
-		return -1;
+		return -EINVAL;
 	}
 
+	ZCBOR_STATE_E(state, 1, buf, buflen, 1);
+
 	/* SenML is an array of records */
-	r = cbor_encode_uint(buf, buflen, 4, pack->record_count);
-	if (r < 0) return -1;
-	off += (size_t)r;
+	if (!zcbor_list_start_encode(state, pack->record_count)) {
+		return -ENOMEM;
+	}
 
 	/* Encode each record */
 	for (size_t i = 0; i < pack->record_count; i++) {
-		r = encode_record(&pack->records[i], pack, (i == 0), buf + off, buflen - off);
-		if (r < 0) return -1;
-		off += (size_t)r;
+		if (!encode_record(state, &pack->records[i], pack, (i == 0))) {
+			return -ENOMEM;
+		}
 	}
 
-	return (int)off;
+	if (!zcbor_list_end_encode(state, pack->record_count)) {
+		return -ENOMEM;
+	}
+
+	/* Calculate encoded length */
+	size_t encoded_len = state->payload - buf;
+	if (encoded_len > (size_t)INT_MAX) {
+		return -EMSGSIZE;
+	}
+
+	return (int)encoded_len;
 }
 
 int senml_encode_location(const char *base_name, uint64_t base_time,
@@ -331,13 +225,26 @@ int senml_encode_location(const char *base_name, uint64_t base_time,
 			  uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
+	int ret;
 
 	senml_pack_init(&pack, base_name, base_time);
-	senml_add_float(&pack, "lat", "lat", lat);
-	senml_add_float(&pack, "lon", "lon", lon);
+
+	/* RFC 8428 uses "deg" (degrees) as the SenML unit for lat/lon */
+	ret = senml_add_float(&pack, "lat", "deg", lat);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = senml_add_float(&pack, "lon", "deg", lon);
+	if (ret < 0) {
+		return ret;
+	}
 
 	if (!isnan(alt)) {
-		senml_add_float(&pack, "alt", "m", alt);
+		ret = senml_add_float(&pack, "alt", "m", alt);
+		if (ret < 0) {
+			return ret;
+		}
 	}
 
 	return senml_encode_cbor(&pack, buf, buflen);
@@ -348,11 +255,25 @@ int senml_encode_battery(const char *base_name, uint64_t base_time,
 			 uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
+	int ret;
 
 	senml_pack_init(&pack, base_name, base_time);
-	senml_add_float(&pack, "pct", "%RH", (float)percent);
-	senml_add_float(&pack, "mv", "mV", (float)mv);
-	senml_add_bool(&pack, "charging", charging);
+
+	/* Use "%" for battery percentage (not %RH which is relative humidity) */
+	ret = senml_add_float(&pack, "pct", "%", (float)percent);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = senml_add_float(&pack, "mv", "mV", (float)mv);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = senml_add_bool(&pack, "charging", charging);
+	if (ret < 0) {
+		return ret;
+	}
 
 	return senml_encode_cbor(&pack, buf, buflen);
 }
@@ -362,9 +283,14 @@ int senml_encode_temperature(const char *base_name, uint64_t base_time,
 			     uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
+	int ret;
 
 	senml_pack_init(&pack, base_name, base_time);
-	senml_add_float(&pack, "temp", "Cel", temp_c);
+
+	ret = senml_add_float(&pack, "temp", "Cel", temp_c);
+	if (ret < 0) {
+		return ret;
+	}
 
 	return senml_encode_cbor(&pack, buf, buflen);
 }

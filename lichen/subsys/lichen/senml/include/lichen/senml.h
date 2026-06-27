@@ -86,7 +86,7 @@ void senml_pack_init(struct senml_pack *pack,
  * @param[in]     name  Record name (e.g., "temp")
  * @param[in]     unit  Unit string (e.g., "Cel") or NULL
  * @param[in]     value Float value
- * @return 0 on success, -1 if pack is full
+ * @return 0 on success, -ENOMEM if pack is full
  */
 int senml_add_float(struct senml_pack *pack,
 		    const char *name,
@@ -101,7 +101,7 @@ int senml_add_float(struct senml_pack *pack,
  * @param[in]     unit        Unit string or NULL
  * @param[in]     value       Float value
  * @param[in]     time_offset Seconds from base_time
- * @return 0 on success, -1 if pack is full
+ * @return 0 on success, -ENOMEM if pack is full
  */
 int senml_add_float_t(struct senml_pack *pack,
 		      const char *name,
@@ -115,7 +115,7 @@ int senml_add_float_t(struct senml_pack *pack,
  * @param[in,out] pack  SenML pack
  * @param[in]     name  Record name (e.g., "charging")
  * @param[in]     value Boolean value
- * @return 0 on success, -1 if pack is full
+ * @return 0 on success, -ENOMEM if pack is full
  */
 int senml_add_bool(struct senml_pack *pack,
 		   const char *name,
@@ -127,7 +127,10 @@ int senml_add_bool(struct senml_pack *pack,
  * @param[in]  pack    SenML pack to encode
  * @param[out] buf     Output buffer
  * @param[in]  buflen  Buffer size
- * @return Bytes written, or negative error code
+ * @return Bytes written, or negative error code:
+ *         -EINVAL if pack has no records or invalid value type
+ *         -ENOMEM if buffer too small
+ *         -EMSGSIZE if string too long to encode
  */
 int senml_encode_cbor(const struct senml_pack *pack,
 		      uint8_t *buf, size_t buflen);
