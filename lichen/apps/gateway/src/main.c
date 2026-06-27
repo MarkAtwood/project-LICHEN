@@ -112,8 +112,10 @@ static size_t encode_status_cbor(uint8_t *buf, size_t buf_size, uint16_t rank)
 	 *   64 "root"       -- tstr(4)
 	 *   66 "uptime"     -- tstr(6)
 	 *   1a XX XX XX XX  -- uint(32-bit)
+	 * Total: 1 + 7 + 7 + 13 = 28 bytes
 	 */
-	if (buf_size < 28) {
+#define STATUS_CBOR_SIZE 28
+	if (buf_size < STATUS_CBOR_SIZE) {
 		return 0;
 	}
 

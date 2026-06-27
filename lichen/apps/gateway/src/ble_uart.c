@@ -47,7 +47,13 @@ static struct bt_uuid_128 nus_tx_uuid  = BT_UUID_INIT_128(BT_UUID_NUS_TX_VAL);
 /* Active connection (NULL when no phone is connected) */
 static struct bt_conn *s_conn;
 
-/* SLIP reassembly state — written only from the BT RX thread */
+/* Mutex protecting SLIP reassembly state */
+static K_MUTEX_DEFINE(s_rx_mutex);
+
+/* Mutex protecting TX buffer */
+static K_MUTEX_DEFINE(s_tx_mutex);
+
+/* SLIP reassembly state — protected by s_rx_mutex */
 static uint8_t  s_rx_buf[SLIP_BUF_SIZE];
 static uint16_t s_rx_len;
 static bool     s_rx_esc;
@@ -83,6 +89,8 @@ static ssize_t nus_rx_write(struct bt_conn *conn,
 	ARG_UNUSED(offset);
 	ARG_UNUSED(flags);
 
+	k_mutex_lock(&s_rx_mutex, K_FOREVER);
+
 	for (uint16_t i = 0; i < len; i++) {
 		uint8_t b = data[i];
 
@@ -114,6 +122,8 @@ static ssize_t nus_rx_write(struct bt_conn *conn,
 			}
 		}
 	}
+
+	k_mutex_unlock(&s_rx_mutex);
 	return len;
 }
 
@@ -181,8 +191,10 @@ static void on_connected(struct bt_conn *conn, uint8_t err)
 		return;
 	}
 	s_conn = bt_conn_ref(conn);
+	k_mutex_lock(&s_rx_mutex, K_FOREVER);
 	s_rx_len = 0;
 	s_rx_esc = false;
+	k_mutex_unlock(&s_rx_mutex);
 	LOG_INF("BLE phone connected");
 }
 
@@ -208,13 +220,25 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 
 int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 {
-	/* Worst-case SLIP frame: every byte escaped → 2× len, plus 2 END bytes */
+	/*
+	 * Static buffer is safe: BLE stack serializes all sends through the
+	 * connection callback, so concurrent calls cannot interleave.
+	 * Worst-case SLIP frame: every byte escaped → 2× len, plus 2 END bytes.
+	 */
 	static uint8_t s_tx_frame[SLIP_BUF_SIZE * 2u + 2u];
 	uint16_t fi = 0;
+	int rc = 0;
 
 	if (!s_conn) {
 		return -ENOTCONN;
 	}
+
+	/* Validate input length to prevent overflow */
+	if (len > SLIP_BUF_SIZE) {
+		return -ENOMEM;
+	}
+
+	k_mutex_lock(&s_tx_mutex, K_FOREVER);
 
 	/* Encode SLIP frame — check space before each write to prevent overflow */
 	s_tx_frame[fi++] = SLIP_END;
@@ -222,21 +246,24 @@ int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 		if (ipv6[i] == SLIP_END) {
 			/* Escape sequence needs 2 bytes + 1 reserved for trailing END */
 			if (fi + 2u > sizeof(s_tx_frame) - 1u) {
-				return -ENOMEM;
+				rc = -ENOMEM;
+				goto out;
 			}
 			s_tx_frame[fi++] = SLIP_ESC;
 			s_tx_frame[fi++] = SLIP_ESC_END;
 		} else if (ipv6[i] == SLIP_ESC) {
 			/* Escape sequence needs 2 bytes + 1 reserved for trailing END */
 			if (fi + 2u > sizeof(s_tx_frame) - 1u) {
-				return -ENOMEM;
+				rc = -ENOMEM;
+				goto out;
 			}
 			s_tx_frame[fi++] = SLIP_ESC;
 			s_tx_frame[fi++] = SLIP_ESC_ESC;
 		} else {
 			/* Regular byte needs 1 byte + 1 reserved for trailing END */
 			if (fi + 1u > sizeof(s_tx_frame) - 1u) {
-				return -ENOMEM;
+				rc = -ENOMEM;
+				goto out;
 			}
 			s_tx_frame[fi++] = ipv6[i];
 		}
@@ -248,15 +275,19 @@ int ble_uart_send_slip(const uint8_t *ipv6, size_t len)
 	uint16_t chunk  = (mtu > 3u) ? (uint16_t)(mtu - 3u) : 20u;
 
 	for (uint16_t off = 0; off < fi; off += chunk) {
-		uint16_t n  = MIN(chunk, (uint16_t)(fi - off));
-		int      rc = bt_gatt_notify(s_conn,
-					     &nus_svc.attrs[NUS_TX_VAL_IDX],
-					     &s_tx_frame[off], n);
+		uint16_t n = MIN(chunk, (uint16_t)(fi - off));
+		rc = bt_gatt_notify(s_conn,
+				    &nus_svc.attrs[NUS_TX_VAL_IDX],
+				    &s_tx_frame[off], n);
 		if (rc < 0) {
-			return rc;
+			goto out;
 		}
 	}
-	return 0;
+	rc = 0;
+
+out:
+	k_mutex_unlock(&s_tx_mutex);
+	return rc;
 }
 
 int ble_uart_init(void)
