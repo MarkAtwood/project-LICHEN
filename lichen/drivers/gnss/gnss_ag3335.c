@@ -345,9 +345,12 @@ static int gnss_ag3335_init(const struct device *dev)
                                                                                     \
 	static struct gnss_ag3335_data gnss_ag3335_data_##inst;                     \
                                                                                     \
-	PM_DEVICE_DT_INST_DEFINE(inst, gnss_ag3335_pm_action);                      \
+	IF_ENABLED(CONFIG_PM_DEVICE, (                                              \
+		PM_DEVICE_DT_INST_DEFINE(inst, gnss_ag3335_pm_action);              \
+	))                                                                          \
                                                                                     \
-	DEVICE_DT_INST_DEFINE(inst, gnss_ag3335_init, PM_DEVICE_DT_INST_GET(inst), \
+	DEVICE_DT_INST_DEFINE(inst, gnss_ag3335_init,                               \
+			      PM_DEVICE_DT_INST_GET(inst),                          \
 			      &gnss_ag3335_data_##inst, &gnss_ag3335_config_##inst, \
 			      POST_KERNEL, CONFIG_GNSS_INIT_PRIORITY,               \
 			      &gnss_ag3335_api);
