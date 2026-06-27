@@ -12,6 +12,7 @@
 
 #include "ipv6_addr.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
 
@@ -27,6 +28,11 @@ static const uint8_t link_local_prefix[8] = {
 
 void lichen_eui64_to_iid(const uint8_t *eui64, uint8_t *iid)
 {
+    if (eui64 == NULL || iid == NULL) {
+        LOG_ERR("eui64_to_iid: NULL pointer");
+        return;
+    }
+
     /* Copy and flip U/L bit per spec 6.2 */
     memcpy(iid, eui64, 8);
     iid[0] ^= UL_BIT;
@@ -34,6 +40,11 @@ void lichen_eui64_to_iid(const uint8_t *eui64, uint8_t *iid)
 
 void lichen_pubkey_to_iid(const uint8_t *pubkey, uint8_t *iid)
 {
+    if (pubkey == NULL || iid == NULL) {
+        LOG_ERR("pubkey_to_iid: NULL pointer");
+        return;
+    }
+
     /* Use first 8 bytes of pubkey */
     memcpy(iid, pubkey, 8);
 
@@ -43,6 +54,11 @@ void lichen_pubkey_to_iid(const uint8_t *pubkey, uint8_t *iid)
 
 void lichen_make_link_local(const uint8_t *iid, struct in6_addr *addr)
 {
+    if (iid == NULL || addr == NULL) {
+        LOG_ERR("make_link_local: NULL pointer");
+        return;
+    }
+
     /* fe80::0000:0000:0000:0000 + IID */
     memcpy(addr->s6_addr, link_local_prefix, 8);
     memcpy(&addr->s6_addr[8], iid, 8);
@@ -51,6 +67,11 @@ void lichen_make_link_local(const uint8_t *iid, struct in6_addr *addr)
 int lichen_make_ula(const uint8_t *prefix, const uint8_t *iid,
                     struct in6_addr *addr)
 {
+    if (prefix == NULL || iid == NULL || addr == NULL) {
+        LOG_ERR("make_ula: NULL pointer");
+        return -EINVAL;
+    }
+
     /* Check prefix is in fd00::/8 */
     if (prefix[0] != 0xfd) {
         LOG_ERR("ULA prefix must be in fd00::/8, got %02x", prefix[0]);
@@ -65,6 +86,11 @@ int lichen_make_ula(const uint8_t *prefix, const uint8_t *iid,
 int lichen_make_gua(const uint8_t *prefix, const uint8_t *iid,
                     struct in6_addr *addr)
 {
+    if (prefix == NULL || iid == NULL || addr == NULL) {
+        LOG_ERR("make_gua: NULL pointer");
+        return -EINVAL;
+    }
+
     /* Check prefix is in 2000::/3 (first 3 bits = 001) */
     if ((prefix[0] & 0xE0) != 0x20) {
         LOG_ERR("GUA prefix must be in 2000::/3, got %02x", prefix[0]);
@@ -78,6 +104,11 @@ int lichen_make_gua(const uint8_t *prefix, const uint8_t *iid,
 
 void lichen_ipv6_addr_to_str(const struct in6_addr *addr, char *buf, size_t buflen)
 {
+    if (addr == NULL || buf == NULL) {
+        LOG_ERR("ipv6_addr_to_str: NULL pointer");
+        return;
+    }
+
     if (buflen < LICHEN_IPV6_ADDR_STR_LEN) {
         if (buflen > 0) {
             buf[0] = '\0';
@@ -86,7 +117,7 @@ void lichen_ipv6_addr_to_str(const struct in6_addr *addr, char *buf, size_t bufl
     }
 
     /* Simple IPv6 formatting (not compressed) */
-    snprintf(buf, buflen,
+    int ret = snprintf(buf, buflen,
              "%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
              "%02x%02x:%02x%02x:%02x%02x:%02x%02x",
              addr->s6_addr[0], addr->s6_addr[1],
@@ -97,4 +128,12 @@ void lichen_ipv6_addr_to_str(const struct in6_addr *addr, char *buf, size_t bufl
              addr->s6_addr[10], addr->s6_addr[11],
              addr->s6_addr[12], addr->s6_addr[13],
              addr->s6_addr[14], addr->s6_addr[15]);
+
+    /* Handle truncation or error */
+    if (ret < 0 || (size_t)ret >= buflen) {
+        LOG_WRN("IPv6 addr format truncated or failed");
+        if (buflen > 0) {
+            buf[buflen - 1] = '\0';
+        }
+    }
 }

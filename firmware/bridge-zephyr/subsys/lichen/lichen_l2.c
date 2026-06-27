@@ -28,7 +28,7 @@ LOG_MODULE_REGISTER(lichen_l2, CONFIG_LICHEN_L2_LOG_LEVEL);
 #if defined(CONFIG_LICHEN_LINK)
 #include <lichen/link.h>
 #include <lichen/link_ctx.h>
-#include <lichen/link_schc.h>
+#include <lichen/schc.h>
 #define HAVE_LICHEN_LINK 1
 #else
 #define HAVE_LICHEN_LINK 0
@@ -40,19 +40,21 @@ LOG_MODULE_REGISTER(lichen_l2, CONFIG_LICHEN_L2_LOG_LEVEL);
 /*
  * Scratch buffers for TX/RX processing.
  * Protected by mutexes since multiple threads may call L2 send/recv.
+ *
+ * Note: SCHC compression/decompression is handled internally by lichen_link_tx/rx,
+ * so we only need the raw IPv6 and final frame buffers here.
  */
 static uint8_t tx_ipv6_buf[LICHEN_L2_MTU + 40];  /* IPv6 packet */
-static uint8_t tx_schc_buf[MAX_LORA_FRAME];      /* SCHC compressed */
 static uint8_t tx_frame_buf[MAX_LORA_FRAME];     /* LICHEN frame */
 static K_MUTEX_DEFINE(tx_mutex);
 
-static uint8_t rx_schc_buf[MAX_LORA_FRAME];      /* SCHC compressed (from frame) */
 static uint8_t rx_ipv6_buf[LICHEN_L2_MTU + 40];  /* Decompressed IPv6 */
 static K_MUTEX_DEFINE(rx_mutex);
 
 /* Link context for framing */
 #if HAVE_LICHEN_LINK
 static struct lichen_link_ctx link_ctx;
+static bool link_ctx_initialized;  /* Guards access to link_ctx (python-ano.27) */
 #endif
 
 /* Cached interface pointer for RX callback */
@@ -122,40 +124,23 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
 	LOG_DBG("TX IPv6 packet: %zu bytes", pkt_len);
 
 #if HAVE_LICHEN_LINK
-	/* SCHC compress */
-	int schc_len = lichen_link_compress(tx_ipv6_buf, pkt_len,
-					    tx_schc_buf, sizeof(tx_schc_buf));
-	if (schc_len < 0) {
-		LOG_ERR("SCHC compress failed: %d", schc_len);
+	/*
+	 * Use lichen_link_tx() to build the complete frame with proper MIC.
+	 * This handles:
+	 * - SCHC compression
+	 * - Schnorr-48 signature if has_key
+	 * - AES-CCM-64 MIC if has_link_key, else CRC32 fallback
+	 */
+	size_t frame_len = sizeof(tx_frame_buf);
+	ret = lichen_link_tx(&link_ctx, tx_ipv6_buf, pkt_len, NULL,
+			     tx_frame_buf, &frame_len);
+	if (ret < 0) {
+		LOG_ERR("Frame build failed: %d", ret);
 		k_mutex_unlock(&tx_mutex);
-		return schc_len;
+		return ret;
 	}
 
-	LOG_DBG("SCHC compressed: %zu -> %d bytes", pkt_len, schc_len);
-
-	/* Build LICHEN frame */
-	struct lichen_frame frame = {
-		.epoch = link_ctx.epoch,
-		.seqnum = lichen_link_next_seq(&link_ctx),
-		.addr_mode = LICHEN_ADDR_BROADCAST,
-		.mic_length = LICHEN_MIC_32,
-		.signature_present = false,  /* TODO: enable when crypto ready */
-		.encrypted = false,
-		.payload = tx_schc_buf,
-		.payload_len = schc_len,
-		.mic = {0},  /* TODO: compute MIC */
-		.mic_len = 4,
-	};
-
-	int frame_len = lichen_frame_write(&frame, tx_frame_buf,
-					   sizeof(tx_frame_buf));
-	if (frame_len < 0) {
-		LOG_ERR("Frame build failed: %d", frame_len);
-		k_mutex_unlock(&tx_mutex);
-		return frame_len;
-	}
-
-	LOG_DBG("LICHEN frame: %d bytes", frame_len);
+	LOG_DBG("LICHEN frame: %zu bytes", frame_len);
 
 	/* Send via LoRa */
 	ret = lichen_lora_l2_tx(tx_frame_buf, frame_len);
@@ -180,12 +165,18 @@ static int lichen_l2_send(struct net_if *iface, struct net_pkt *pkt)
  */
 static int lichen_l2_enable(struct net_if *iface, bool state)
 {
+	ARG_UNUSED(iface);
 	LOG_INF("LICHEN L2 %s", state ? "enabled" : "disabled");
 
 	if (state) {
 		return lichen_lora_l2_start();
 	} else {
-		return lichen_lora_l2_stop();
+		int ret = lichen_lora_l2_stop();
+#if HAVE_LICHEN_LINK
+		/* Clean up link context: wipe keys, reset sequence state */
+		lichen_link_cleanup(&link_ctx);
+#endif
+		return ret;
 	}
 }
 
@@ -288,14 +279,15 @@ void lichen_l2_iface_init(struct net_if *iface)
 			     NET_LINK_UNKNOWN);
 
 #if HAVE_LICHEN_LINK
-	/* Initialize link context */
+	/* Initialize link context before enabling RX */
 	lichen_link_init(&link_ctx, eui64);
+	link_ctx_initialized = true;  /* Mark as safe to access (python-ano.27) */
 #endif
 
 	/* Cache interface for RX callback */
 	lichen_iface = iface;
 
-	/* Register RX callback */
+	/* Register RX callback - must happen AFTER link_ctx is initialized */
 	lichen_lora_l2_set_rx_callback(lora_rx_callback, NULL);
 
 	/* Derive and log link-local address */
@@ -322,41 +314,48 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 	k_mutex_lock(&rx_mutex, K_FOREVER);
 
 #if HAVE_LICHEN_LINK
-	/* Parse LICHEN frame */
-	struct lichen_frame frame;
+	/*
+	 * Guard against access before initialization (python-ano.27).
+	 * This shouldn't happen in normal operation, but could if a packet
+	 * arrives during early startup before lichen_l2_iface_init() completes.
+	 */
+	if (!link_ctx_initialized) {
+		LOG_WRN("RX before link_ctx initialized - dropping frame");
+		k_mutex_unlock(&rx_mutex);
+		return;
+	}
 
-	ret = lichen_frame_parse(&frame, data, len);
+	/*
+	 * Use lichen_link_rx() to process the complete frame. This handles:
+	 * - Frame parsing
+	 * - Replay protection (if replay table provided)
+	 * - Schnorr-48 signature verification (if peer_pubkey provided)
+	 * - MIC verification (AES-CCM-64 or CRC32)
+	 * - SCHC decompression
+	 *
+	 * For broadcast reception without peer context, we use minimal RX ctx.
+	 */
+	struct lichen_link_rx_ctx rx_ctx = {
+		.peer_pubkey = NULL,  /* Unknown sender - no signature verification */
+		.peer_eui64 = NULL,   /* Unknown sender - CRC32 mode only */
+		.link_key = link_ctx.has_link_key ? link_ctx.link_key : NULL,
+		.current_time = 0,
+	};
+	uint8_t src_eui64[8];
+
+	ipv6_len = sizeof(rx_ipv6_buf);
+	ret = lichen_link_rx(&rx_ctx, NULL, data, len,
+			     rx_ipv6_buf, &ipv6_len, src_eui64);
 	if (ret < 0) {
-		LOG_WRN("Frame parse failed: %d", ret);
+		LOG_WRN("Frame RX failed: %d", ret);
 		k_mutex_unlock(&rx_mutex);
 		return;
 	}
 
-	LOG_DBG("Frame: epoch=%u seq=%u payload=%zu",
-		frame.epoch, frame.seqnum, frame.payload_len);
-
-	/* TODO: Verify signature if present */
-	/* TODO: Check replay window */
-
-	/* Copy payload for decompression */
-	if (frame.payload_len > sizeof(rx_schc_buf)) {
-		LOG_WRN("Payload too large: %zu", frame.payload_len);
-		k_mutex_unlock(&rx_mutex);
-		return;
-	}
-	memcpy(rx_schc_buf, frame.payload, frame.payload_len);
-
-	/* SCHC decompress */
-	ret = lichen_link_decompress(rx_schc_buf, frame.payload_len,
-				     rx_ipv6_buf, sizeof(rx_ipv6_buf));
-	if (ret < 0) {
-		LOG_ERR("SCHC decompress failed: %d", ret);
-		k_mutex_unlock(&rx_mutex);
-		return;
-	}
-	ipv6_len = ret;
-
-	LOG_DBG("Decompressed: %zu -> %zu bytes", frame.payload_len, ipv6_len);
+	LOG_DBG("Decompressed %zu bytes from %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+		ipv6_len,
+		src_eui64[0], src_eui64[1], src_eui64[2], src_eui64[3],
+		src_eui64[4], src_eui64[5], src_eui64[6], src_eui64[7]);
 #else
 	/* No LICHEN link layer - treat as raw IPv6 */
 	if (len > sizeof(rx_ipv6_buf)) {
@@ -389,7 +388,15 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 
 	k_mutex_unlock(&rx_mutex);
 
-	/* Inject into the network stack */
+	/*
+	 * Inject into the network stack.
+	 *
+	 * Ownership semantics:
+	 * - On success (ret >= 0): net_recv_data takes ownership of pkt.
+	 *   The network stack will unref the packet when processing completes.
+	 *   We MUST NOT access or unref pkt after this point.
+	 * - On failure (ret < 0): We retain ownership and must unref pkt.
+	 */
 	ret = net_recv_data(iface, pkt);
 	if (ret < 0) {
 		LOG_ERR("net_recv_data failed: %d", ret);
@@ -397,5 +404,6 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 		return;
 	}
 
+	/* pkt ownership transferred to network stack - do not access */
 	LOG_DBG("Injected %zu byte IPv6 packet into stack", ipv6_len);
 }

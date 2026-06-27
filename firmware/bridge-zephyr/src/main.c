@@ -54,8 +54,12 @@ int main(void)
 
 #if defined(HAS_LED)
     if (gpio_is_ready_dt(&led)) {
-        gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-        gpio_pin_set_dt(&led, 1);
+        ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
+        if (ret < 0) {
+            LOG_ERR("Failed to configure LED GPIO: %d", ret);
+        } else {
+            gpio_pin_set_dt(&led, 1);
+        }
     }
 #endif
 
