@@ -9,6 +9,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/logging/log.h>
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
+#include <zephyr/usb/usb_device.h>
+#endif
 
 #if IS_ENABLED(CONFIG_LICHEN_NATIVE)
 #include <lichen/native.h>
@@ -136,15 +139,22 @@ int main(void)
 {
 	LOG_INF("LICHEN puck starting");
 
+	/* Enable USB early so CDC-ACM enumerates before peripheral drivers
+	 * start — guarantees serial log visibility even if LoRa/GNSS fails. */
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
+	usb_enable(NULL);
+	k_sleep(K_MSEC(200));
+#endif
+
 	/* LoRa radio */
 	const struct device *lora_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_lora));
 	if (!device_is_ready(lora_dev)) {
-		LOG_ERR("LoRa radio not ready");
-		return -ENODEV;
+		LOG_ERR("LoRa radio not ready — spinning for serial debug");
+		k_sleep(K_FOREVER);
 	}
 	if (lora_set_mode(lora_dev, false) < 0) {
-		LOG_ERR("LoRa config failed");
-		return -EIO;
+		LOG_ERR("LoRa config failed — spinning for serial debug");
+		k_sleep(K_FOREVER);
 	}
 	LOG_INF("LoRa SF10/125kHz/CR4-5 @ %u Hz", LORA_FREQ_HZ);
 
