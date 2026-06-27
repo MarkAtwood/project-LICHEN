@@ -22,7 +22,8 @@
 # Usage:
 #   ./flash-t1000e.sh              # build if needed, then flash
 #   ./flash-t1000e.sh --rebuild    # force rebuild before flash
-#   Put T1000-E in UF2 bootloader mode (double-tap reset) before running.
+#   LICHEN firmware must be running (1200-bps touch triggers the bootloader).
+#   For bare-metal recovery (no firmware), double-tap reset first.
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -88,12 +89,13 @@ adafruit-nrfutil dfu genpkg \
 
 echo ""
 echo "==> Flashing via serial DFU on $PORT..."
-echo "    (device must be in UF2 bootloader mode — double-tap reset)"
+echo "    (triggering bootloader via 1200-bps touch — no manual reset needed)"
 adafruit-nrfutil --verbose dfu serial \
     --package "$COMBINED_DFU" \
     -p "$PORT" \
     -b 115200 \
-    --singlebank
+    --singlebank \
+    --touch 1200
 
 echo ""
 echo "Done. Expected boot sequence:"

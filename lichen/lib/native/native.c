@@ -17,9 +17,15 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/reboot.h>
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/init.h>
+#elif IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
+#include <zephyr/usb/usbd.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/init.h>
+#include <nrfx_power.h>
 #endif
 #include <string.h>
 
@@ -32,6 +38,126 @@ static int lichen_usb_early_init(void)
 {
 	int ret = usb_enable(NULL);
 	return (ret == -EALREADY) ? 0 : ret;
+}
+SYS_INIT(lichen_usb_early_init, APPLICATION, 0);
+
+#elif IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
+
+/* T1000-E boot diagnostic: blink P0.24 (STATUS LED, active-high) 5 times
+ * using raw NRF GPIO registers — fires at PRE_KERNEL_1, before any Zephyr
+ * driver initialises, to prove MCUboot handed off to our image. */
+static int t1000e_boot_blink(void)
+{
+	/* 3 slow blinks (~1 s on / 1 s off) — clearly distinct from bootloader
+	 * DFU pattern; if you see these, our code is executing. */
+	NRF_P0->DIRSET = BIT(24);
+	for (int b = 0; b < 3; b++) {
+		NRF_P0->OUTSET = BIT(24);
+		for (volatile uint32_t i = 0; i < 64000000; i++);
+		NRF_P0->OUTCLR = BIT(24);
+		for (volatile uint32_t i = 0; i < 64000000; i++);
+	}
+	return 0;
+}
+SYS_INIT(t1000e_boot_blink, PRE_KERNEL_1, 99);
+
+USBD_DEVICE_DEFINE(lichen_usbd,
+		   DEVICE_DT_GET(DT_NODELABEL(zephyr_udc0)),
+		   0x2FE3, 0x0100);
+
+USBD_DESC_LANG_DEFINE(lichen_lang);
+USBD_DESC_MANUFACTURER_DEFINE(lichen_mfr, "LICHEN Project");
+USBD_DESC_PRODUCT_DEFINE(lichen_product, "LICHEN Node");
+USBD_DESC_SERIAL_NUMBER_DEFINE(lichen_sn);
+
+USBD_CONFIGURATION_DEFINE(lichen_fs_config, 0, 100);
+
+static void lichen_usbd_msg_cb(struct usbd_context *const ctx,
+			       const struct usbd_msg *msg)
+{
+	if (usbd_can_detect_vbus(ctx)) {
+		if (msg->type == USBD_MSG_VBUS_READY) {
+			usbd_enable(ctx);
+		} else if (msg->type == USBD_MSG_VBUS_REMOVED) {
+			usbd_disable(ctx);
+		}
+	}
+}
+
+/*
+ * T1000-E buzzer: P0.25 (signal) + P1.05 (enable, active-high).
+ * 2 kHz square wave, n beeps of 150 ms each separated by 200 ms gaps.
+ */
+static void buzz_n(int n)
+{
+	const struct device *gpio0_dev = DEVICE_DT_GET(DT_NODELABEL(gpio0));
+	const struct device *gpio1_dev = DEVICE_DT_GET(DT_NODELABEL(gpio1));
+
+	if (!device_is_ready(gpio0_dev) || !device_is_ready(gpio1_dev)) {
+		return;
+	}
+	/* P1.05 = BUZZER_EN — power the buzzer */
+	gpio_pin_configure(gpio1_dev, 5, GPIO_OUTPUT_ACTIVE);
+	/* P0.25 = PIN_BUZZER — audio signal */
+	gpio_pin_configure(gpio0_dev, 25, GPIO_OUTPUT_INACTIVE);
+
+	for (int b = 0; b < n; b++) {
+		if (b > 0) {
+			k_busy_wait(200000); /* 200 ms gap between beeps */
+		}
+		for (int i = 0; i < 300; i++) { /* 300 × 500 µs = 150 ms */
+			gpio_pin_set_raw(gpio0_dev, 25, 1);
+			k_busy_wait(250);
+			gpio_pin_set_raw(gpio0_dev, 25, 0);
+			k_busy_wait(250);
+		}
+	}
+
+	gpio_pin_configure(gpio0_dev, 25, GPIO_INPUT);
+	gpio_pin_configure(gpio1_dev, 5, GPIO_OUTPUT_INACTIVE); /* disable */
+}
+
+static int lichen_usb_early_init(void)
+{
+	buzz_n(1); /* 1 beep: APPLICATION-level init reached */
+
+	int ret;
+
+	ret = usbd_add_descriptor(&lichen_usbd, &lichen_lang);
+	if (ret) { return ret; }
+	ret = usbd_add_descriptor(&lichen_usbd, &lichen_mfr);
+	if (ret) { return ret; }
+	ret = usbd_add_descriptor(&lichen_usbd, &lichen_product);
+	if (ret) { return ret; }
+	ret = usbd_add_descriptor(&lichen_usbd, &lichen_sn);
+	if (ret) { return ret; }
+
+	ret = usbd_add_configuration(&lichen_usbd, USBD_SPEED_FS, &lichen_fs_config);
+	if (ret) { return ret; }
+
+	ret = usbd_register_all_classes(&lichen_usbd, USBD_SPEED_FS, 1);
+	if (ret) { return ret; }
+
+	/* IAD triple required for multi-interface CDC-ACM (two instances) */
+	usbd_device_set_code_triple(&lichen_usbd, USBD_SPEED_FS,
+				    USB_BCC_MISCELLANEOUS, 0x02, 0x01);
+
+	ret = usbd_msg_register_cb(&lichen_usbd, lichen_usbd_msg_cb);
+	if (ret) { return ret; }
+
+	ret = usbd_init(&lichen_usbd);
+	if (ret) { return ret; }
+
+	/* The VBUS_READY callback may have fired during usbd_init() (ghost
+	 * event from the UF2 bootloader) before the INITIALIZED state flag
+	 * was set, causing usbd_enable() to fail silently.  Check VBUS now
+	 * that init is complete and enable directly if VBUS is present.
+	 * Hot-plug after boot is handled by lichen_usbd_msg_cb. */
+	if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
+		ret = usbd_enable(&lichen_usbd);
+	}
+
+	return ret;
 }
 SYS_INIT(lichen_usb_early_init, APPLICATION, 0);
 #endif
@@ -341,11 +467,53 @@ static void rx_thread_fn(void *p1, void *p2, void *p3)
 }
 
 /* --------------------------------------------------------------------------
+ * 1200-bps touch reset (Adafruit/Arduino convention)
+ *
+ * When a host opens the CDC ACM port at 1200 baud with DTR de-asserted,
+ * write the Adafruit UF2 bootloader magic to GPREGRET and cold-reboot.
+ * The bootloader checks GPREGRET on startup: 0x57 → enter UF2 DFU mode.
+ * This lets adafruit-nrfutil --touch 1200 trigger a headless reflash.
+ * -------------------------------------------------------------------------- */
+
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
+#define DFU_MAGIC_UF2_RESET 0x57u
+
+static void dfu_reset_work_fn(struct k_work *work)
+{
+	ARG_UNUSED(work);
+	NRF_POWER->GPREGRET = DFU_MAGIC_UF2_RESET;
+	sys_reboot(SYS_REBOOT_COLD);
+}
+static K_WORK_DEFINE(s_dfu_reset_work, dfu_reset_work_fn);
+
+static void dfu_touch_poll_fn(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(s_dfu_touch_poll, dfu_touch_poll_fn);
+
+static void dfu_touch_poll_fn(struct k_work *work)
+{
+	if (s_uart && device_is_ready(s_uart)) {
+		uint32_t baud = 0, dtr = 1;
+
+		uart_line_ctrl_get(s_uart, UART_LINE_CTRL_BAUD_RATE, &baud);
+		uart_line_ctrl_get(s_uart, UART_LINE_CTRL_DTR, &dtr);
+		if (baud == 1200 && !dtr) {
+			k_work_submit(&s_dfu_reset_work);
+			return; /* don't reschedule — reboot incoming */
+		}
+	}
+	k_work_reschedule(&s_dfu_touch_poll, K_MSEC(100));
+}
+#endif /* CONFIG_USB_DEVICE_STACK_NEXT */
+
+/* --------------------------------------------------------------------------
  * Public API
  * -------------------------------------------------------------------------- */
 
 int lichen_native_init(lichen_native_rx_cb_t rx_cb)
 {
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
+	buzz_n(2); /* 2 beeps: LoRa/GNSS passed, native transport initializing */
+#endif
 	s_rx_cb = rx_cb;
 	s_log_subscribed = false;
 
@@ -375,6 +543,10 @@ int lichen_native_init(lichen_native_rx_cb_t rx_cb)
 			rx_thread_fn, NULL, NULL, NULL,
 			K_PRIO_COOP(7), 0, K_NO_WAIT);
 	k_thread_name_set(&s_rx_thread, "native_rx");
+
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
+	k_work_schedule(&s_dfu_touch_poll, K_MSEC(100));
+#endif
 
 	return 0;
 }
