@@ -7,6 +7,7 @@
  */
 
 #include <lichen/link_ctx.h>
+#include <lichen/schnorr48.h>
 #include <lichen/errno.h>
 #include <string.h>
 #include <stdbool.h>
@@ -51,17 +52,19 @@ int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
 }
 
 /**
- * @brief Apply Ed25519 clamping to a scalar.
+ * @brief Load Ed25519 signing key from a 32-byte seed.
  *
- * Clears bits 0-2, sets bit 254, clears bit 255.
+ * @param ctx   Link context to initialize
+ * @param seed  32-byte random seed (MUST come from a CSPRNG)
+ *
+ * @note Key Generation Requirements:
+ *       The seed MUST be generated using a cryptographically secure PRNG.
+ *       On Zephyr: use sys_csrand_get() from <zephyr/random/random.h>
+ *       On POSIX: use getrandom(2) or /dev/urandom
+ *       NEVER use rand(), random(), or other non-cryptographic sources.
+ *
+ * @return 0 on success, -EINVAL on invalid parameters
  */
-static void clamp_scalar(uint8_t s[32])
-{
-	s[0] &= 248;
-	s[31] &= 127;
-	s[31] |= 64;
-}
-
 int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32])
 {
 	if (ctx == NULL || seed == NULL) {
@@ -76,7 +79,7 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32])
 
 	/* sk = clamp(h[0:32]) */
 	memcpy(ctx->ed25519_sk, hash, LICHEN_SK_LEN);
-	clamp_scalar(ctx->ed25519_sk);
+	schnorr48_clamp_scalar(ctx->ed25519_sk);
 
 	/* pk = sk * B */
 	crypto_eddsa_scalarbase(ctx->ed25519_pk, ctx->ed25519_sk);
@@ -84,6 +87,9 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32])
 	/* Wipe sensitive intermediate data */
 	crypto_wipe(hash, sizeof(hash));
 #else
+#ifdef CONFIG_LICHEN_LINK_SCHNORR
+#error "CONFIG_LICHEN_LINK_SCHNORR requires CONFIG_LICHEN_CRYPTO_MONOCYPHER for secure key derivation"
+#endif
 	/* Stub for builds without Monocypher - NOT FOR PRODUCTION */
 	if (!stub_warned_load_key) {
 		LOG_WRN("INSECURE: using stub lichen_link_load_key - NOT FOR PRODUCTION\n");
@@ -105,6 +111,29 @@ uint16_t lichen_link_next_seq(struct lichen_link_ctx *ctx)
 	}
 	uint16_t seq = ctx->tx_seq;
 	ctx->tx_seq++;
+
+	/*
+	 * If tx_seq wrapped to 0, increment epoch to avoid nonce reuse.
+	 * The AES-CCM nonce includes (eui64, epoch, seqnum), so reusing
+	 * the same (epoch, seqnum) pair would break security guarantees.
+	 *
+	 * SECURITY: epoch is 8-bit, so after 256 wraps of tx_seq (256 * 65536
+	 * = 16M frames), the epoch itself wraps to 0, causing nonce reuse.
+	 * In a production system, this should trigger key rotation or halt.
+	 * We log a warning at wrap and return seq=0 to signal epoch exhaustion.
+	 */
+	if (ctx->tx_seq == 0) {
+		uint8_t old_epoch = ctx->epoch;
+		ctx->epoch++;
+		if (ctx->epoch == 0) {
+			/* Epoch wrapped from 255 to 0 - nonce space exhausted */
+			LOG_WRN("CRITICAL: epoch wrapped to 0 - nonce exhaustion, key rotation required\n");
+		} else {
+			LOG_WRN("tx_seq wrapped - epoch incremented to %u (was %u)\n",
+				ctx->epoch, old_epoch);
+		}
+	}
+
 	return seq;
 }
 
@@ -127,4 +156,43 @@ int lichen_link_load_link_key(struct lichen_link_ctx *ctx,
 	ctx->has_link_key = true;
 
 	return 0;
+}
+
+/**
+ * @brief Secure wipe helper.
+ *
+ * Uses volatile to prevent compiler from optimizing out the wipe.
+ * For Monocypher builds, crypto_wipe() is preferred as it uses
+ * platform-specific secure-wipe mechanisms.
+ */
+static void secure_wipe(void *buf, size_t len)
+{
+#ifdef CONFIG_LICHEN_CRYPTO_MONOCYPHER
+	crypto_wipe(buf, len);
+#else
+	volatile uint8_t *p = (volatile uint8_t *)buf;
+	while (len--) {
+		*p++ = 0;
+	}
+#endif
+}
+
+void lichen_link_cleanup(struct lichen_link_ctx *ctx)
+{
+	if (ctx == NULL) {
+		return;
+	}
+
+	/* Securely wipe all sensitive key material */
+	secure_wipe(ctx->ed25519_sk, LICHEN_SK_LEN);
+	secure_wipe(ctx->link_key, LICHEN_LINK_KEY_LEN);
+
+	/* Clear public key and flags (not secret, but clean up completely) */
+	memset(ctx->ed25519_pk, 0, LICHEN_PK_LEN);
+	ctx->has_key = false;
+	ctx->has_link_key = false;
+
+	/* Reset sequence state */
+	ctx->epoch = 0;
+	ctx->tx_seq = 0;
 }

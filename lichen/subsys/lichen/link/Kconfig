@@ -6,6 +6,7 @@
 menuconfig LICHEN_LINK
 	bool "LICHEN link layer"
 	depends on LICHEN
+	select CRC
 	select LICHEN_SCHC
 	help
 	  Enable the LICHEN link layer with Schnorr-48 signatures

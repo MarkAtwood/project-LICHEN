@@ -53,6 +53,12 @@ enum lichen_mic_len {
 	LICHEN_MIC_64 = 1,  /**< 64-bit MIC (8 bytes) */
 };
 
+/** 32-bit MIC length in bytes */
+#define LICHEN_MIC_32_LEN 4
+
+/** 64-bit MIC length in bytes */
+#define LICHEN_MIC_64_LEN 8
+
 /**
  * @brief LICHEN frame structure for parsing/building frames
  */

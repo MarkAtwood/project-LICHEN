@@ -18,8 +18,14 @@
 #define LLSEC_ENCRYPTED       0x40
 #define LLSEC_RESERVED        0x80
 
-/* Address lengths by mode */
+/* Address lengths by mode (index = enum lichen_addr_mode value) */
 static const uint8_t addr_lens[] = { 0, 2, 8, 0 };
+
+/* Compile-time assertions: ensure struct field sizes match max values */
+_Static_assert(sizeof(((struct lichen_frame *)0)->dst_addr) >= 8,
+	       "dst_addr must hold at least 8 bytes (EUI-64)");
+_Static_assert(sizeof(((struct lichen_frame *)0)->mic) >= 8,
+	       "mic must hold at least 8 bytes (64-bit MIC)");
 
 int lichen_frame_parse(struct lichen_frame *frame,
 		       const uint8_t *data, size_t len)
@@ -48,12 +54,18 @@ int lichen_frame_parse(struct lichen_frame *frame,
 	}
 
 	frame->addr_mode = llsec & LLSEC_ADDR_MODE_MASK;
+
+	/* Reject ELIDED (addr_mode=3) - context-dependent addressing not yet supported */
+	if (frame->addr_mode == LICHEN_ADDR_ELIDED) {
+		return -EINVAL;
+	}
+
 	frame->mic_length = (llsec & LLSEC_MIC_LEN_MASK) ? LICHEN_MIC_64 : LICHEN_MIC_32;
 	frame->signature_present = (llsec & LLSEC_SIG_PRESENT) != 0;
 	frame->encrypted = (llsec & LLSEC_ENCRYPTED) != 0;
 
 	/* Now that we know MIC length, verify frame is long enough */
-	frame->mic_len = (frame->mic_length == LICHEN_MIC_64) ? 8 : 4;
+	frame->mic_len = (frame->mic_length == LICHEN_MIC_64) ? LICHEN_MIC_64_LEN : LICHEN_MIC_32_LEN;
 	uint8_t addr_len = addr_lens[frame->addr_mode];
 
 	/* Check total required length: header(5) + addr + mic */
@@ -93,14 +105,30 @@ int lichen_frame_parse(struct lichen_frame *frame,
 int lichen_frame_write(const struct lichen_frame *frame,
 		       uint8_t *buf, size_t buflen)
 {
+	/* Reject ELIDED mode - not yet supported (matches parse behavior) */
+	if (frame->addr_mode == LICHEN_ADDR_ELIDED) {
+		return -EINVAL;
+	}
+
+	/*
+	 * Note: Caller must initialize frame->mic before calling this function.
+	 * The MIC is not computed here - it must be computed externally over
+	 * the frame data and stored in frame->mic before serialization.
+	 * The TX path (lichen_link_tx.c) builds frames directly without using
+	 * this function, computing the MIC inline.
+	 */
+
 	uint8_t addr_len = addr_lens[frame->addr_mode];
-	uint8_t mic_len = (frame->mic_length == LICHEN_MIC_64) ? 8 : 4;
+	uint8_t mic_len = (frame->mic_length == LICHEN_MIC_64) ? LICHEN_MIC_64_LEN : LICHEN_MIC_32_LEN;
 
 	/* Calculate total frame size */
 	size_t frame_len = 1 + 1 + 1 + 2 + addr_len + frame->payload_len + mic_len;
 
-	if (frame_len > buflen || frame_len > 256) {
-		return -1; /* Buffer too small or frame too large */
+	if (frame_len > buflen) {
+		return -ENOMEM; /* Buffer too small */
+	}
+	if (frame_len > 256) {
+		return -EMSGSIZE; /* Frame too large */
 	}
 
 	size_t off = 0;
@@ -132,8 +160,10 @@ int lichen_frame_write(const struct lichen_frame *frame,
 	memcpy(&buf[off], frame->dst_addr, addr_len);
 	off += addr_len;
 
-	/* Payload */
-	memcpy(&buf[off], frame->payload, frame->payload_len);
+	/* Payload (guard against NULL with len=0, which is UB) */
+	if (frame->payload_len > 0) {
+		memcpy(&buf[off], frame->payload, frame->payload_len);
+	}
 	off += frame->payload_len;
 
 	/* MIC */

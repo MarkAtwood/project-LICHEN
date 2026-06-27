@@ -26,8 +26,8 @@ extern "C" {
 #define CONFIG_LICHEN_LINK_MAX_NEIGHBORS 16
 #endif
 
-/** Size of EUI-64 address in bytes */
-#define LICHEN_EUI64_SIZE 8
+/* Use LICHEN_EUI64_LEN from link_ctx.h for consistency */
+#include <lichen/link_ctx.h>
 
 /**
  * @brief Replay window state for one peer
@@ -46,8 +46,9 @@ struct lichen_replay_window {
  * @brief Per-peer replay table entry
  */
 struct lichen_replay_entry {
-	uint8_t eui64[LICHEN_EUI64_SIZE]; /**< Peer's EUI-64 address */
+	uint8_t eui64[LICHEN_EUI64_LEN]; /**< Peer's EUI-64 address */
 	struct lichen_replay_window window;
+	uint32_t last_used;                /**< Monotonic counter for LRU eviction */
 	bool active;                       /**< Entry is in use */
 };
 
@@ -56,6 +57,7 @@ struct lichen_replay_entry {
  */
 struct lichen_replay_table {
 	struct lichen_replay_entry peers[CONFIG_LICHEN_LINK_MAX_NEIGHBORS];
+	uint32_t access_counter;           /**< Monotonic counter for LRU tracking */
 };
 
 /**
@@ -92,14 +94,19 @@ void lichen_replay_table_init(struct lichen_replay_table *table);
  * @brief Get or create replay window for a peer.
  *
  * Looks up the replay window for the given EUI-64 address. If no entry
- * exists and there's room in the table, creates a new entry.
+ * exists and there's room in the table, creates a new entry. If the table
+ * is full, the least-recently-used entry is evicted to make room.
+ *
+ * Security note: An attacker spoofing frames from many addresses can cause
+ * legitimate peer windows to be evicted. Consider sizing the table for the
+ * expected number of neighbors plus margin for transient peers.
  *
  * @param[in,out] table Replay table
  * @param[in]     eui64 Peer's EUI-64 address (8 bytes)
- * @return Pointer to replay window, or NULL if table is full
+ * @return Pointer to replay window, or NULL only on invalid input
  */
 struct lichen_replay_window *lichen_replay_get(struct lichen_replay_table *table,
-					       const uint8_t eui64[LICHEN_EUI64_SIZE]);
+					       const uint8_t eui64[LICHEN_EUI64_LEN]);
 
 /**
  * @brief Remove a peer from the replay table.
@@ -108,7 +115,7 @@ struct lichen_replay_window *lichen_replay_get(struct lichen_replay_table *table
  * @param[in]     eui64 Peer's EUI-64 address (8 bytes)
  */
 void lichen_replay_remove(struct lichen_replay_table *table,
-			  const uint8_t eui64[LICHEN_EUI64_SIZE]);
+			  const uint8_t eui64[LICHEN_EUI64_LEN]);
 
 #ifdef __cplusplus
 }
