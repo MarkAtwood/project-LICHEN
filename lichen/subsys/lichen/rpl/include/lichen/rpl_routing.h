@@ -97,7 +97,8 @@ void lichen_rpl_routing_table_init(struct lichen_rpl_routing_table *rt);
  * @param target   Target address (16 bytes)
  * @param path     Array of hop addresses
  * @param path_len Number of hops (includes target)
- * @return 0 on success, -1 if table full
+ * @return 0 on success, LICHEN_RPL_ERR_INVALID if NULL or path_len==0,
+ *         LICHEN_RPL_ERR_OVERRUN if path too long or table full
  */
 int lichen_rpl_routing_table_add(struct lichen_rpl_routing_table *rt,
 				 const uint8_t *target,

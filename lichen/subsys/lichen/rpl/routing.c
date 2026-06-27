@@ -199,18 +199,18 @@ int lichen_rpl_routing_table_add(struct lichen_rpl_routing_table *rt,
 
 	/* A route with no hops is unusable - reject it */
 	if (path_len == 0) {
-		return -1;
+		return LICHEN_RPL_ERR_INVALID;
 	}
 
 	if (path_len > LICHEN_RPL_MAX_HOPS) {
-		return -1;
+		return LICHEN_RPL_ERR_OVERRUN;
 	}
 
 	struct lichen_rpl_route *r = find_route(rt, target);
 	if (r == NULL) {
 		r = find_free_route(rt);
 		if (r == NULL) {
-			return -1;  /* Table full */
+			return LICHEN_RPL_ERR_OVERRUN;  /* Table full */
 		}
 	}
 
@@ -486,7 +486,7 @@ static int assemble_path(struct lichen_rpl_dao_manager *dm,
 /**
  * Rebuild route for a single target after its parent edge changed.
  *
- * @return 0 on success, -1 if route assembly or installation failed
+ * @return 0 on success, negative LICHEN_RPL_ERR_* if assembly or install failed
  */
 static int rebuild_single_route(struct lichen_rpl_dao_manager *dm,
 				const uint8_t *target)
@@ -498,7 +498,7 @@ static int rebuild_single_route(struct lichen_rpl_dao_manager *dm,
 		return lichen_rpl_routing_table_add(&dm->routing_table,
 						    target, path, (uint8_t)path_len);
 	}
-	return -1;
+	return LICHEN_RPL_ERR_INVALID;  /* Path assembly failed (loop/incomplete) */
 }
 
 /**
