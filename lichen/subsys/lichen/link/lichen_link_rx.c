@@ -21,6 +21,9 @@
 /* AES-CCM for link-layer MIC verification */
 #include "oscore/aes_ccm.h"
 
+/* CRC32 for non-crypto MIC fallback */
+#include <zephyr/sys/crc.h>
+
 /* Replay table functions are in replay.c */
 
 /* ─── Logging ─────────────────────────────────────────────────────────────── */
@@ -77,7 +80,12 @@ static int verify_mic(const struct lichen_link_rx_ctx *ctx,
 		      const struct lichen_frame *frame,
 		      const uint8_t *raw_frame, size_t raw_len)
 {
+/*
+ * Compile-time warning if MIC verification is disabled.
+ * This makes the insecure configuration visible in build logs.
+ */
 #ifdef CONFIG_LICHEN_LINK_MIC_SKIP_VERIFY
+#warning "CONFIG_LICHEN_LINK_MIC_SKIP_VERIFY is enabled - MIC verification DISABLED, frames can be forged!"
 	(void)ctx;
 	(void)frame;
 	(void)raw_frame;
@@ -127,8 +135,29 @@ static int verify_mic(const struct lichen_link_rx_ctx *ctx,
 
 		return 0;
 	} else {
-		/* CRC32 fallback - no cryptographic verification */
-		/* Accept frame but note this provides no authentication */
+		/*
+		 * CRC32 fallback - verifies data integrity (transmission errors)
+		 * but provides NO cryptographic authentication. An attacker can
+		 * forge frames by computing a valid CRC32.
+		 *
+		 * WARNING: This mode should only be used for testing or when
+		 * authentication is provided by a higher layer (e.g., OSCORE).
+		 */
+		size_t aad_len = raw_len - frame->mic_len;
+		uint32_t expected_crc = crc32_ieee(&raw_frame[1], aad_len - 1);
+
+		/* Extract received CRC32 (little-endian per TX convention) */
+		uint32_t received_crc = (uint32_t)frame->mic[0] |
+					((uint32_t)frame->mic[1] << 8) |
+					((uint32_t)frame->mic[2] << 16) |
+					((uint32_t)frame->mic[3] << 24);
+
+		if (expected_crc != received_crc) {
+			LOG_WRN("CRC32 mismatch: expected 0x%08x, got 0x%08x\n",
+				expected_crc, received_crc);
+			return -EAUTH;
+		}
+
 		return 0;
 	}
 #endif
@@ -156,45 +185,7 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 		return -EINVAL;
 	}
 
-	/*
-	 * Step 2: Extract source EUI-64
-	 *
-	 * The source address is not in the frame header - it must be
-	 * derived from one of:
-	 * - Radio layer metadata (LoRa)
-	 * - Signature verification (sender's public key)
-	 * - Explicit source field in extended frames
-	 *
-	 * For signed frames, we derive EUI-64 from the sender's public
-	 * key after signature verification. For unsigned frames, the
-	 * caller must provide the source via ctx->peer_pubkey context.
-	 *
-	 * TEMPORARY: Use first 8 bytes of peer_pubkey as EUI-64.
-	 * Real implementation should use SHA-256(pubkey)[0:8].
-	 */
-	if (ctx->peer_pubkey != NULL) {
-		memcpy(src_eui64, ctx->peer_pubkey, 8);
-	} else {
-		/* No peer context - cannot determine source */
-		memset(src_eui64, 0, 8);
-	}
-
-	/* Step 3: Check replay window */
-	if (replay != NULL) {
-		struct lichen_replay_window *window;
-
-		window = lichen_replay_get(replay, src_eui64);
-		if (window == NULL) {
-			/* Table full */
-			return -ENOMEM;
-		}
-
-		if (!lichen_replay_check(window, parsed.seqnum)) {
-			return -EALREADY;
-		}
-	}
-
-	/* Step 4: Verify Schnorr-48 signature if present */
+	/* Step 2: Verify Schnorr-48 signature if present */
 	if (parsed.signature_present) {
 		if (ctx->peer_pubkey == NULL) {
 			/* Cannot verify without sender's public key */
@@ -207,14 +198,93 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 		 * - It extracts inner payload and signature internally
 		 *
 		 * Note: frame_parse() already validated payload_len >= LICHEN_SIG_LEN
+		 * Returns: 1=valid, 0=invalid signature, -1=invalid parameters
 		 */
-		if (!schnorr48_verify_frame(parsed.epoch, parsed.seqnum,
-					    parsed.dst_addr,
-					    parsed.dst_addr_len,
-					    parsed.payload,
-					    parsed.payload_len,
-					    ctx->peer_pubkey)) {
+		int verify_result = schnorr48_verify_frame(parsed.epoch, parsed.seqnum,
+							   parsed.dst_addr,
+							   parsed.dst_addr_len,
+							   parsed.payload,
+							   parsed.payload_len,
+							   ctx->peer_pubkey);
+		if (verify_result != 1) {
 			return -EAUTH;
+		}
+	}
+
+	/*
+	 * Step 3: Extract source EUI-64
+	 *
+	 * The source address is not in the frame header - it must be
+	 * derived from one of:
+	 * - Radio layer metadata (LoRa)
+	 * - Signature verification (sender's public key)
+	 * - Explicit source field in extended frames
+	 *
+	 * For signed frames, we derive EUI-64 from the sender's public
+	 * key after signature verification. For unsigned frames, the
+	 * caller must provide the source via ctx->peer_pubkey context.
+	 *
+	 * SECURITY: This MUST happen AFTER signature verification (Step 2).
+	 * Using peer_pubkey before verification would allow an attacker to
+	 * poison data structures (like the replay window) with spoofed EUI-64s.
+	 *
+	 * TEMPORARY: Use first 8 bytes of peer_pubkey as EUI-64.
+	 * Real implementation should use SHA-256(pubkey)[0:8].
+	 */
+	if (ctx->peer_pubkey != NULL) {
+		memcpy(src_eui64, ctx->peer_pubkey, LICHEN_EUI64_LEN);
+	} else {
+		/* No peer context - cannot determine source */
+		memset(src_eui64, 0, LICHEN_EUI64_LEN);
+	}
+
+	/*
+	 * Step 4: Check replay window (peek only - don't mark seen yet)
+	 *
+	 * SECURITY: We check if the sequence number WOULD be rejected before
+	 * doing expensive decompression, but we don't mark it as seen until
+	 * AFTER all validation succeeds (including SCHC decompression).
+	 * Otherwise a malformed frame could poison the replay window.
+	 */
+	struct lichen_replay_window *replay_window = NULL;
+	if (replay != NULL) {
+		replay_window = lichen_replay_get(replay, src_eui64);
+		if (replay_window == NULL) {
+			/* Table full */
+			return -ENOMEM;
+		}
+
+		/*
+		 * Peek at replay state: if this would definitely be rejected,
+		 * fail early. We use the same logic as lichen_replay_check but
+		 * without modifying state.
+		 */
+		if (replay_window->initialised) {
+			int32_t diff = (int32_t)parsed.seqnum -
+				       (int32_t)replay_window->last_seq;
+			if (diff > 32767) {
+				diff -= 65536;
+			} else if (diff < -32768) {
+				diff += 65536;
+			}
+
+			if (diff == 0) {
+				/* Exact duplicate */
+				return -EALREADY;
+			}
+			if (diff < 0) {
+				uint32_t offset = (uint32_t)(-diff);
+				if (offset >= 64) {
+					/* Outside window - too old */
+					return -EALREADY;
+				}
+				uint64_t bit = (uint64_t)1 << offset;
+				if (replay_window->bitmap & bit) {
+					/* Already seen */
+					return -EALREADY;
+				}
+			}
+			/* diff > 0 means newer - will be accepted */
 		}
 	}
 
@@ -228,9 +298,15 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	 * Step 6: Decompress SCHC payload to IPv6
 	 *
 	 * Use inner_payload_len which excludes the signature if present.
+	 * Minimum IPv6 header is 40 bytes; require at least that.
 	 */
 	const uint8_t *schc_data = parsed.payload;
 	size_t schc_len = parsed.inner_payload_len;
+
+	/* Validate output buffer can hold minimum IPv6 header */
+	if (*out_len < 40) {
+		return -ENOMEM;
+	}
 
 	ret = lichen_schc_decompress(schc_data, schc_len, out_ipv6, *out_len);
 	if (ret < 0) {
@@ -238,6 +314,17 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 			return -ENOMEM;
 		}
 		return -EINVAL;
+	}
+
+	/*
+	 * Step 7: Mark frame as seen in replay table
+	 *
+	 * SECURITY: Only mark as seen AFTER all validation succeeds.
+	 * This prevents malformed frames from polluting the replay window.
+	 */
+	if (replay_window != NULL) {
+		/* This should always return true since we peeked above */
+		(void)lichen_replay_check(replay_window, parsed.seqnum);
 	}
 
 	*out_len = (size_t)ret;

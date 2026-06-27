@@ -15,8 +15,26 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <string.h>
 #include <lichen/replay.h>
+
+/**
+ * @brief Constant-time comparison for 8-byte values (EUI-64)
+ *
+ * Prevents timing side-channels when comparing addresses.
+ * Returns 0 if equal, non-zero otherwise.
+ */
+static int eui64_ct_compare(const uint8_t a[LICHEN_EUI64_LEN],
+			    const uint8_t b[LICHEN_EUI64_LEN])
+{
+	uint8_t diff = 0;
+
+	for (size_t i = 0; i < LICHEN_EUI64_LEN; i++) {
+		diff |= a[i] ^ b[i];
+	}
+	return diff;
+}
 
 void lichen_replay_init(struct lichen_replay_window *rw)
 {
@@ -41,7 +59,8 @@ bool lichen_replay_check(struct lichen_replay_window *rw, uint16_t seq)
 	diff = (int32_t)seq - (int32_t)rw->last_seq;
 
 	/*
-	 * Half-space comparison for u16 sequence numbers:
+	 * Half-space comparison for u16 sequence numbers (RFC 1982 Serial
+	 * Number Arithmetic).
 	 *
 	 * When sequence numbers wrap (0 follows 65535), naive comparison
 	 * breaks: 0 < 65535 suggests 0 is "older", but it's actually newer.
@@ -62,6 +81,9 @@ bool lichen_replay_check(struct lichen_replay_window *rw, uint16_t seq)
 	 * This works as long as no two valid sequence numbers are ever more
 	 * than 32767 apart - a safe assumption when packets arrive in roughly
 	 * sequential order with a 64-slot window.
+	 *
+	 * See RFC 1982 Section 3.2 for the formal definition of serial number
+	 * comparison with SERIAL_BITS=16.
 	 */
 	if (diff > 32767) {
 		diff -= 65536;
@@ -70,7 +92,18 @@ bool lichen_replay_check(struct lichen_replay_window *rw, uint16_t seq)
 	}
 
 	if (diff > 0) {
-		/* Newer than anything we've seen: advance the window */
+		/*
+		 * Newer than anything we've seen: advance the window.
+		 *
+		 * Validate diff is within the positive half-space (1 to 32767).
+		 * After RFC 1982 normalization, diff should be in [-32768, 32767].
+		 * If diff > 32767 here, something is wrong with the normalization.
+		 */
+		if (diff > 32767) {
+			/* Should not happen after normalization - reject */
+			return false;
+		}
+
 		uint32_t shift = (uint32_t)diff;
 
 		if (shift >= 64) {
@@ -112,40 +145,100 @@ void lichen_replay_table_init(struct lichen_replay_table *table)
 	memset(table, 0, sizeof(*table));
 }
 
-struct lichen_replay_window *lichen_replay_get(struct lichen_replay_table *table,
-					       const uint8_t eui64[LICHEN_EUI64_SIZE])
+/**
+ * @brief Safely increment access counter with wrap handling.
+ *
+ * When the counter wraps, we re-normalize all timestamps by finding the
+ * minimum and subtracting it from all entries, then continue from there.
+ * This preserves relative ordering for LRU eviction.
+ */
+static void increment_access_counter(struct lichen_replay_table *table)
 {
-	int free_slot = -1;
+	if (table->access_counter == UINT32_MAX) {
+		/* Counter would wrap - re-normalize all timestamps */
+		uint32_t min_time = UINT32_MAX;
 
-	/* Search for existing entry or first free slot */
-	for (int i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
+		/* Find minimum timestamp */
+		for (size_t i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
+			if (table->peers[i].active &&
+			    table->peers[i].last_used < min_time) {
+				min_time = table->peers[i].last_used;
+			}
+		}
+
+		/* Subtract minimum from all timestamps */
+		if (min_time > 0) {
+			for (size_t i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
+				if (table->peers[i].active) {
+					table->peers[i].last_used -= min_time;
+				}
+			}
+			table->access_counter -= min_time;
+		}
+	}
+	table->access_counter++;
+}
+
+struct lichen_replay_window *lichen_replay_get(struct lichen_replay_table *table,
+					       const uint8_t eui64[LICHEN_EUI64_LEN])
+{
+	/* Validate parameters */
+	if (table == NULL || eui64 == NULL) {
+		return NULL;
+	}
+
+	size_t free_slot = CONFIG_LICHEN_LINK_MAX_NEIGHBORS; /* invalid sentinel */
+	size_t lru_slot = 0;
+	uint32_t lru_time = UINT32_MAX;
+
+	/* Search for existing entry, first free slot, and LRU candidate */
+	for (size_t i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
 		if (table->peers[i].active) {
-			if (memcmp(table->peers[i].eui64, eui64, LICHEN_EUI64_SIZE) == 0) {
+			if (eui64_ct_compare(table->peers[i].eui64, eui64) == 0) {
+				/* Found: update LRU timestamp and return */
+				increment_access_counter(table);
+				table->peers[i].last_used = table->access_counter;
 				return &table->peers[i].window;
 			}
-		} else if (free_slot < 0) {
+			/* Track LRU candidate for eviction */
+			if (table->peers[i].last_used < lru_time) {
+				lru_time = table->peers[i].last_used;
+				lru_slot = i;
+			}
+		} else if (free_slot == CONFIG_LICHEN_LINK_MAX_NEIGHBORS) {
 			free_slot = i;
 		}
 	}
 
-	/* Not found - create new entry if there's room */
-	if (free_slot < 0) {
-		return NULL;
+	/* Not found - use free slot or evict LRU entry */
+	size_t target_slot;
+
+	if (free_slot < CONFIG_LICHEN_LINK_MAX_NEIGHBORS) {
+		target_slot = free_slot;
+	} else {
+		/* Table full: evict LRU entry */
+		target_slot = lru_slot;
 	}
 
-	memcpy(table->peers[free_slot].eui64, eui64, LICHEN_EUI64_SIZE);
-	lichen_replay_init(&table->peers[free_slot].window);
-	table->peers[free_slot].active = true;
+	memcpy(table->peers[target_slot].eui64, eui64, LICHEN_EUI64_LEN);
+	lichen_replay_init(&table->peers[target_slot].window);
+	increment_access_counter(table);
+	table->peers[target_slot].last_used = table->access_counter;
+	table->peers[target_slot].active = true;
 
-	return &table->peers[free_slot].window;
+	return &table->peers[target_slot].window;
 }
 
 void lichen_replay_remove(struct lichen_replay_table *table,
-			  const uint8_t eui64[LICHEN_EUI64_SIZE])
+			  const uint8_t eui64[LICHEN_EUI64_LEN])
 {
-	for (int i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
+	if (table == NULL || eui64 == NULL) {
+		return;
+	}
+
+	for (size_t i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
 		if (table->peers[i].active &&
-		    memcmp(table->peers[i].eui64, eui64, LICHEN_EUI64_SIZE) == 0) {
+		    eui64_ct_compare(table->peers[i].eui64, eui64) == 0) {
 			table->peers[i].active = false;
 			return;
 		}
