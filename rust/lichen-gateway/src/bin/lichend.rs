@@ -10,10 +10,10 @@
 
 use clap::Parser;
 use lichen_core::addr::NodeId;
-use lichen_gateway::{config::Config, slip, Gateway};
+use lichen_gateway::{config::Config, slip::SlipFramer, Gateway};
 use lichen_sim::SimClient;
 use std::path::PathBuf;
-use tokio::{signal, sync::mpsc};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, signal, sync::mpsc};
 use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, EnvFilter};
 
@@ -271,15 +271,22 @@ where
         }
     };
 
-    let mut slip_buf = vec![0u8; 1500];
+    let mut slip = SlipFramer::new();
+    let mut rx_buf = vec![0u8; 1500];
     let mut tun_buf = vec![0u8; 1500];
+    let mut tx_buf = vec![0u8; 1500];
 
     loop {
         tokio::select! {
-            result = slip::recv_packet(&mut tty, &mut slip_buf) => {
+            result = tty.read(&mut rx_buf) => {
                 match result {
-                    Ok(n) => forward_mesh_to_upstream(gw, &slip_buf[..n], &tun).await,
-                    Err(e) => { error!("SLIP recv: {e}"); break; }
+                    Ok(0) => { info!("serial port closed"); break; }
+                    Ok(n) => {
+                        for packet in slip.feed(&rx_buf[..n]) {
+                            forward_mesh_to_upstream(gw, &packet, &tun).await;
+                        }
+                    }
+                    Err(e) => { error!("serial read: {e}"); break; }
                 }
             }
             result = async { match &tun {
@@ -289,8 +296,8 @@ where
                 match result {
                     Ok(n) => {
                         if let Some(schc) = gw.upstream_to_mesh(&tun_buf[..n]) {
-                            if let Err(e) = slip::send_packet(&mut tty, &schc).await {
-                                error!("SLIP send: {e}"); break;
+                            if let Err(e) = slip.queue_send(&schc) {
+                                warn!("SLIP queue full, dropping packet: {e}");
                             }
                         }
                     }
@@ -300,6 +307,14 @@ where
             _ = signal::ctrl_c() => {
                 info!("shutting down");
                 break;
+            }
+        }
+
+        // Drain TX queue to serial
+        while let Some(n) = slip.try_get_tx(&mut tx_buf) {
+            if let Err(e) = tty.write_all(&tx_buf[..n]).await {
+                error!("serial write: {e}");
+                return;
             }
         }
     }

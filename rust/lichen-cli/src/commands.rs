@@ -6,6 +6,7 @@
 use crate::{output, ConfigAction, KeyAction, OutputFormat, PositionAction, RdAction};
 use lichen_coap::client;
 use std::net::SocketAddr;
+use zeroize::Zeroize;
 
 type CmdResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -153,18 +154,45 @@ pub async fn key(node: SocketAddr, action: KeyAction, fmt: &OutputFormat) -> Cmd
             // Derive public key (Ed25519: first 32 bytes of SHA512(seed) as scalar, then multiply)
             // ponytail: using simple derivation without pulling in ed25519 crate
             // Real impl would use ed25519-dalek; this outputs raw seed for now
-            let seed_hex: String = seed.iter().map(|b| format!("{b:02x}")).collect();
+            let mut seed_hex: String = seed.iter().map(|b| format!("{b:02x}")).collect();
 
             // Derive IID from pubkey hash (simplified: just use first 8 bytes of seed for demo)
             let iid_hex: String = seed[..8].iter().map(|b| format!("{b:02x}")).collect();
 
+            // Zeroize seed bytes now that we have the hex representation
+            seed.zeroize();
+
             if let Some(path) = out_path {
-                std::fs::write(&path, format!("{seed_hex}\n"))?;
+                // Write key to file with secure permissions (Unix 0600)
+                #[cfg(unix)]
+                {
+                    use std::fs::OpenOptions;
+                    use std::io::Write;
+                    use std::os::unix::fs::OpenOptionsExt;
+
+                    let mut file = OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .mode(0o600)
+                        .open(&path)?;
+                    writeln!(file, "{seed_hex}")?;
+                }
+                #[cfg(not(unix))]
+                {
+                    std::fs::write(&path, format!("{seed_hex}\n"))?;
+                    eprintln!("warning: could not set secure file permissions on non-Unix platform");
+                }
                 output::print_kv("private_key", path.display().to_string().as_str(), fmt);
             } else {
+                eprintln!("warning: private key will be printed to stdout");
+                eprintln!("         ensure terminal history and logs do not capture this output");
                 output::print_kv("private_key", &seed_hex, fmt);
             }
             output::print_kv("iid", &iid_hex, fmt);
+
+            // Zeroize hex string before dropping
+            seed_hex.zeroize();
         }
         KeyAction::Fingerprint => {
             let resp = client::get(node, "/key").await?;

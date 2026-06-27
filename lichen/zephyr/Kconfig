@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN Zephyr module Kconfig extension
+
+rsource "../drivers/Kconfig"
+rsource "../lib/Kconfig"
+rsource "../subsys/Kconfig"
+
+# L2 integration from bridge-zephyr (Zephyr network stack integration)
+rsource "../../firmware/bridge-zephyr/subsys/lichen/Kconfig"

@@ -12,6 +12,8 @@
 //!   byte 2: n  (bitmap length)
 //!   bytes 3..: ceil(n/8) bitmap bytes, MSB-first
 
+use lichen_core::error::{BufferTooSmall, TooShort};
+
 /// 6-bit all-ones FCN, marks the last fragment of a datagram.
 pub const ALL_1_FCN: u8 = 63;
 /// CRC32 MIC length in bytes.
@@ -23,12 +25,47 @@ pub const MAX_WINDOW_SIZE: usize = 62;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FragmentError {
-    TooShort,
+    TooShort(TooShort),
     InvalidFcn,
     InvalidWindow,
     MicMissing,
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
     InvalidWindowSize,
+}
+
+impl core::fmt::Display for FragmentError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort(e) => write!(f, "fragment {}", e),
+            Self::InvalidFcn => write!(f, "invalid FCN"),
+            Self::InvalidWindow => write!(f, "invalid window"),
+            Self::MicMissing => write!(f, "MIC missing on All-1 fragment"),
+            Self::BufferTooSmall(e) => write!(f, "fragment {}", e),
+            Self::InvalidWindowSize => write!(f, "invalid window size"),
+        }
+    }
+}
+
+impl core::error::Error for FragmentError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for FragmentError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for FragmentError {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
 }
 
 // ─── CRC32 (ISO 3309 / zlib) ─────────────────────────────────────────────────
@@ -72,7 +109,7 @@ impl<'a> Fragment<'a> {
     }
 
     /// Serialize into `out`. Returns bytes written.
-    pub fn to_bytes(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
         if self.window > 1 {
             return Err(FragmentError::InvalidWindow);
         }
@@ -85,7 +122,7 @@ impl<'a> Fragment<'a> {
         let extra = if self.is_all_1() { MIC_LENGTH } else { 0 };
         let needed = 2 + extra + self.payload.len();
         if out.len() < needed {
-            return Err(FragmentError::BufferTooSmall);
+            return Err(BufferTooSmall::new(needed, out.len()).into());
         }
         out[0] = self.rule_id;
         out[1] = ((self.window & 1) << 6) | (self.fcn & 0x3F);
@@ -101,7 +138,7 @@ impl<'a> Fragment<'a> {
     /// Parse a fragment from `data`, borrowing the payload slice.
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, FragmentError> {
         if data.len() < 2 {
-            return Err(FragmentError::TooShort);
+            return Err(TooShort::new(2, data.len()).into());
         }
         let rule_id = data[0];
         let window = (data[1] >> 6) & 1;
@@ -109,7 +146,7 @@ impl<'a> Fragment<'a> {
         let rest = &data[2..];
         if fcn == ALL_1_FCN {
             if rest.len() < MIC_LENGTH {
-                return Err(FragmentError::TooShort);
+                return Err(TooShort::new(2 + MIC_LENGTH, data.len()).into());
             }
             let mut mic = [0u8; MIC_LENGTH];
             mic.copy_from_slice(&rest[..MIC_LENGTH]);
@@ -135,7 +172,7 @@ impl<'a> Fragment<'a> {
 // ─── Ack ──────────────────────────────────────────────────────────────────────
 
 /// An ACK-on-Error acknowledgement bitmap.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ack {
     pub rule_id: u8,
     pub window: u8,
@@ -158,12 +195,12 @@ impl Ack {
         }
     }
 
-    pub fn to_bytes(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, FragmentError> {
         let n = self.bitmap_len;
         let body_bytes = n.div_ceil(8);
         let needed = 3 + body_bytes;
         if out.len() < needed {
-            return Err(FragmentError::BufferTooSmall);
+            return Err(BufferTooSmall::new(needed, out.len()).into());
         }
         out[0] = self.rule_id;
         out[1] = ((self.window & 1) << 6) | (if self.complete { 1 } else { 0 });
@@ -182,7 +219,7 @@ impl Ack {
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, FragmentError> {
         if data.len() < 3 {
-            return Err(FragmentError::TooShort);
+            return Err(TooShort::new(3, data.len()).into());
         }
         let rule_id = data[0];
         let window = (data[1] >> 6) & 1;
@@ -209,6 +246,7 @@ impl Ack {
 /// Splits a payload into SCHC fragments with window/FCN scheduling.
 ///
 /// Computes the MIC (CRC32) eagerly; all other data is computed on demand.
+#[derive(Debug)]
 pub struct FragmentSender<'a> {
     payload: &'a [u8],
     pub rule_id: u8,
@@ -226,7 +264,7 @@ impl<'a> FragmentSender<'a> {
         window_size: usize,
     ) -> Result<Self, FragmentError> {
         if tile_size == 0 {
-            return Err(FragmentError::BufferTooSmall);
+            return Err(BufferTooSmall::new(1, 0).into());
         }
         if window_size == 0 || window_size > MAX_WINDOW_SIZE {
             return Err(FragmentError::InvalidWindowSize);
@@ -323,6 +361,7 @@ impl<'a> FragmentSender<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct FragmentIter<'s, 'p> {
     sender: &'s FragmentSender<'p>,
     index: usize,
@@ -337,6 +376,7 @@ impl<'s, 'p> Iterator for FragmentIter<'s, 'p> {
     }
 }
 
+#[derive(Debug)]
 pub struct FragmentsInWindow<'s, 'p> {
     sender: &'s FragmentSender<'p>,
     current: usize,
@@ -355,6 +395,7 @@ impl<'s, 'p> Iterator for FragmentsInWindow<'s, 'p> {
     }
 }
 
+#[derive(Debug)]
 pub struct RetransmitIter<'s, 'b> {
     sender: &'s FragmentSender<'s>,
     start: usize,
@@ -406,6 +447,7 @@ mod std_ext {
     }
 
     /// Reassembles a single datagram from ACK-on-Error fragments.
+    #[derive(Debug)]
     pub struct FragmentReceiver {
         window_size: usize,
         rule_id: u8,
@@ -419,6 +461,7 @@ mod std_ext {
         pub reassembled: Option<Vec<u8>>,
     }
 
+    #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct ReceiverResult {
         pub ack: Option<Ack>,
         pub reassembled: Option<Vec<u8>>,
@@ -516,10 +559,11 @@ mod std_ext {
             let bitmap = self.window_bitmap(self.all1_window);
             let nack = Ack::new(self.rule_id, (self.all1_window % 2) as u8, &bitmap, false);
 
-            let mut indices: Vec<usize> = self.tiles.keys().cloned().collect();
-            indices.sort_unstable();
-            let expected: Vec<usize> = (0..indices.len()).collect();
-            if indices != expected {
+            // O(n) contiguity check: if we have n tiles and max index is n-1,
+            // all indices 0..n must be present (HashMap keys are unique).
+            let n = self.tiles.len();
+            let contiguous = n > 0 && self.tiles.keys().max() == Some(&(n - 1));
+            if !contiguous {
                 return ReceiverResult {
                     ack: Some(nack),
                     reassembled: None,
@@ -528,8 +572,8 @@ mod std_ext {
             }
 
             let mut data: Vec<u8> = Vec::new();
-            for i in &indices {
-                data.extend_from_slice(self.tiles[i].as_slice());
+            for i in 0..n {
+                data.extend_from_slice(self.tiles[&i].as_slice());
             }
             data.extend_from_slice(&self.all1_payload);
 
@@ -584,7 +628,7 @@ mod tests {
             mic: [0u8; MIC_LENGTH],
         };
         let mut buf = [0u8; 16];
-        let n = frag.to_bytes(&mut buf).unwrap();
+        let n = frag.write_to(&mut buf).unwrap();
         // Header: rule_id=20, then (1<<6)|5 = 0x45
         assert_eq!(buf[0], 20);
         assert_eq!(buf[1], 0x45);
@@ -606,7 +650,7 @@ mod tests {
             mic,
         };
         let mut buf = [0u8; 16];
-        let n = frag.to_bytes(&mut buf).unwrap();
+        let n = frag.write_to(&mut buf).unwrap();
         // Header byte: (0<<6)|63 = 0x3F
         assert_eq!(buf[0], 20);
         assert_eq!(buf[1], ALL_1_FCN);
@@ -627,7 +671,7 @@ mod tests {
             mic: [0u8; MIC_LENGTH],
         };
         let mut buf = [0u8; 16];
-        assert_eq!(frag.to_bytes(&mut buf), Err(FragmentError::MicMissing));
+        assert_eq!(frag.write_to(&mut buf), Err(FragmentError::MicMissing));
     }
 
     #[test]
@@ -677,7 +721,7 @@ mod tests {
         let bitmap = [true, false, true, true, false, false, false];
         let ack = Ack::new(20, 0, &bitmap, false);
         let mut buf = [0u8; 16];
-        let n = ack.to_bytes(&mut buf).unwrap();
+        let n = ack.write_to(&mut buf).unwrap();
         let restored = Ack::from_bytes(&buf[..n]).unwrap();
         assert_eq!(restored.rule_id, 20);
         assert_eq!(restored.window, 0);

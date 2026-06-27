@@ -5,8 +5,14 @@ version.workspace = true
 license.workspace = true
 description = "LICHEN border router (6LBR) daemon for Linux."
 
+[features]
+default = []
+# Enable log feature on all dependencies for unified logging
+log = ["lichen-core/log", "lichen-kiss/log", "lichen-node/log", "lichen-schc/log", "lichen-sim/log"]
+
 [dependencies]
 lichen-core = { path = "../lichen-core" }
+lichen-kiss = { path = "../lichen-kiss", features = ["kiss"] }
 lichen-node = { path = "../lichen-node", features = ["std"] }
 lichen-schc = { path = "../lichen-schc", features = ["std"] }
 lichen-sim  = { path = "../lichen-sim" }

@@ -16,6 +16,18 @@ pub enum CborError {
     NotImplemented,
 }
 
+impl core::fmt::Display for CborError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::InvalidInput => write!(f, "invalid CBOR input"),
+            Self::NotImplemented => write!(f, "CBOR feature not implemented"),
+        }
+    }
+}
+
+impl core::error::Error for CborError {}
+
 // RFC 8428 §6 Table 4 integer labels
 const L_BN: i8 = -2; // base name
 const L_BT: i8 = -3; // base time
@@ -536,5 +548,39 @@ mod tests {
         let count = decode(&data, &mut buf).unwrap();
         assert_eq!(count, 1);
         assert_eq!(buf[0].name, Some("temp"));
+    }
+
+    #[test]
+    fn record_method_encode_parse_roundtrip() {
+        let record = Record {
+            name: Some("temp"),
+            value: Some(23.5),
+            unit: Some("Cel"),
+            ..Record::empty()
+        };
+        let mut buf = [0u8; 64];
+        let n = record.encode(&mut buf).unwrap();
+        let decoded = Record::parse(&buf[..n]).unwrap();
+        assert_eq!(decoded.name, Some("temp"));
+        assert_eq!(decoded.value, Some(23.5));
+        assert_eq!(decoded.unit, Some("Cel"));
+    }
+
+    #[test]
+    fn record_parse_rejects_multi_record_pack() {
+        // Create a pack with 2 records, then try to parse as single
+        let records = [
+            Record {
+                name: Some("a"),
+                ..Record::empty()
+            },
+            Record {
+                name: Some("b"),
+                ..Record::empty()
+            },
+        ];
+        let mut buf = [0u8; 64];
+        let n = encode(&records, &mut buf).unwrap();
+        assert_eq!(Record::parse(&buf[..n]), Err(CborError::InvalidInput));
     }
 }

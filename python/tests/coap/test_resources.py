@@ -102,6 +102,56 @@ async def test_config_get_and_put() -> None:
         await server.shutdown()
 
 
+@pytest.mark.asyncio
+async def test_config_put_empty_payload_returns_bad_request() -> None:
+    info = _node_info()
+    client, server = await _client_server(info)
+    try:
+        put = Message(code=PUT, uri="coap://server/config", payload=b"")
+        resp = await client.request(put).response
+        assert resp.code == aiocoap.BAD_REQUEST
+        # Config should remain unchanged
+        assert info.config["tx_power_dbm"] == 14
+    finally:
+        await client.shutdown()
+        await server.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_config_put_invalid_cbor_returns_bad_request() -> None:
+    info = _node_info()
+    client, server = await _client_server(info)
+    try:
+        put = Message(code=PUT, uri="coap://server/config", payload=b"\xff\xfe\xfd")
+        resp = await client.request(put).response
+        assert resp.code == aiocoap.BAD_REQUEST
+        # Config should remain unchanged
+        assert info.config["tx_power_dbm"] == 14
+    finally:
+        await client.shutdown()
+        await server.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_config_put_non_dict_cbor_returns_bad_request() -> None:
+    info = _node_info()
+    client, server = await _client_server(info)
+    try:
+        # Send a CBOR list instead of a dict
+        put = Message(
+            code=PUT,
+            uri="coap://server/config",
+            payload=cbor2.dumps([1, 2, 3]),
+        )
+        resp = await client.request(put).response
+        assert resp.code == aiocoap.BAD_REQUEST
+        # Config should remain unchanged
+        assert info.config["tx_power_dbm"] == 14
+    finally:
+        await client.shutdown()
+        await server.shutdown()
+
+
 def test_static_node_info_is_copy_safe() -> None:
     info = StaticNodeInfo(status={"a": 1})
     snapshot = info.get_status()

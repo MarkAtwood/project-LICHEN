@@ -52,6 +52,33 @@ SIGNATURE_LENGTH = 48
 # when encryption is enabled; for now we use zeros as a placeholder.
 PLACEHOLDER_MIC = bytes(4)
 
+# Track whether we've warned about MIC verification being disabled.
+# Why module-level: Log the warning once per process, not per frame.
+_mic_verify_warned = False
+
+
+def _verify_mic_stub(frame: LichenFrame) -> bool:
+    """Stub MIC verification - accepts all frames but warns once.
+
+    SECURITY WARNING: MIC verification is not implemented. All frames are
+    accepted regardless of MIC value. This allows frame forgery by any
+    attacker who can inject radio traffic.
+
+    Real implementation requires AES-CCM computation over:
+    (LLSec || epoch || seqnum || dst_addr || payload)
+
+    Returns:
+        Always True (accepts all frames).
+    """
+    global _mic_verify_warned
+    if not _mic_verify_warned:
+        logger.warning(
+            "MIC verification DISABLED (stub) - accepting unverified frames. "
+            "This is a security risk: frames can be forged."
+        )
+        _mic_verify_warned = True
+    return True
+
 
 @dataclass
 class RxFrame:
@@ -376,6 +403,11 @@ class LinkLayer:
             )
             return None
         self._pinned_keys[sender.iid] = sender.pubkey
+
+        # Step 4.6: Verify MIC (stub - logs warning, always accepts)
+        # TODO: Implement AES-CCM MIC verification when encryption is added.
+        # The MIC covers: LLSec || epoch || seqnum || dst_addr || payload
+        _verify_mic_stub(frame)
 
         # Step 5: Replay protection
         # Why use pubkey as sender ID: It's the unique identifier for a node.

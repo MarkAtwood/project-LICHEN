@@ -7,10 +7,18 @@ description = "CoAP (RFC 7252): message types, options, and blockwise transfer s
 
 [features]
 default = []
-std = ["dep:tokio"]
+std = []
+tokio = ["std", "dep:tokio"]
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt", "lichen-core/defmt"]
+log = ["dep:log", "lichen-core/log"]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
 
 [dependencies.tokio]
 version = "1"

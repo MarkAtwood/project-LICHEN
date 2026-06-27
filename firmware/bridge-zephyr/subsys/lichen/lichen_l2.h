@@ -1,0 +1,77 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file lichen_l2.h
+ * @brief LICHEN Zephyr L2 network interface
+ *
+ * Registers LICHEN as a Zephyr network L2 layer so that the IPv6 stack
+ * routes packets through the LoRa radio via SCHC compression and LICHEN
+ * link framing.
+ *
+ * TX path: IPv6 packet -> SCHC compress -> LICHEN frame -> LoRa TX
+ * RX path: LoRa RX -> LICHEN frame parse -> SCHC decompress -> IPv6 stack
+ */
+
+#ifndef LICHEN_L2_H_
+#define LICHEN_L2_H_
+
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_l2.h>
+#include <zephyr/net/net_pkt.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief MTU for LICHEN interface
+ *
+ * This is the maximum IPv6 packet size we can send. After SCHC compression
+ * and LICHEN framing, the on-air payload fits within LoRa limits.
+ */
+#define LICHEN_L2_MTU 200
+
+/**
+ * @brief Link-layer address length (EUI-64)
+ */
+#define LICHEN_L2_ADDR_LEN 8
+
+/**
+ * @brief L2 layer name for NET_L2_INIT
+ */
+#define LICHEN_L2 lichen_l2
+
+/**
+ * @brief Initialize the LICHEN L2 layer.
+ *
+ * Sets up the LoRa driver and link context. Called during network
+ * interface initialization.
+ *
+ * @param iface Network interface
+ */
+void lichen_l2_iface_init(struct net_if *iface);
+
+/**
+ * @brief Process a received LoRa packet.
+ *
+ * Called from the LoRa RX callback. Parses the LICHEN frame, performs
+ * SCHC decompression, and injects the IPv6 packet into the stack.
+ *
+ * @param iface Network interface
+ * @param data  Raw received data
+ * @param len   Length of received data
+ * @param rssi  RSSI in dBm
+ * @param snr   SNR in dB
+ */
+void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
+		     int16_t rssi, int8_t snr);
+
+/* Declare the L2 struct for external reference */
+NET_L2_DECLARE_PUBLIC(LICHEN_L2);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LICHEN_L2_H_ */

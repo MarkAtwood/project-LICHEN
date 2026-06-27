@@ -1,0 +1,36 @@
+[package]
+name = "lichen-bridge-stm32wl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Embassy framework - match versions from bridge-rust as closely as possible
+embassy-executor = { version = "0.10", features = ["platform-cortex-m", "executor-thread", "defmt"] }
+embassy-time = { version = "0.5", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-stm32 = { version = "0.6", features = ["stm32wle5jc", "defmt", "time-driver-any", "exti"] }
+embassy-sync = { version = "0.8", features = ["defmt"] }
+embassy-futures = "0.1"
+
+# LoRa PHY driver
+lora-phy = { version = "3.0", default-features = false }
+
+# Logging
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }
+
+# Cortex-M
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7"
+embedded-hal = "1"
+embedded-hal-async = "1"
+static_cell = "2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+debug = true  # keep debug info for defmt
+
+[profile.dev]
+opt-level = 1  # some optimization even in dev

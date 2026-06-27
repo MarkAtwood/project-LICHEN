@@ -1,17 +1,8 @@
-//! Address types: IPv6Addr and NodeId (EUI-64).
+//! Address types: Ipv6Addr (re-exported from lichen-ipv6) and NodeId (EUI-64).
 
-/// A 128-bit IPv6 address, stored in network (big-endian) byte order.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Ipv6Addr(pub [u8; 16]);
-
-impl Ipv6Addr {
-    pub const UNSPECIFIED: Self = Self([0u8; 16]);
-
-    /// True if this is a link-local address (fe80::/10).
-    pub fn is_link_local(&self) -> bool {
-        self.0[0] == 0xfe && (self.0[1] & 0xc0) == 0x80
-    }
-}
+// Re-export Addr from lichen-ipv6 as Ipv6Addr for backward compatibility.
+// This eliminates the duplicate type definition while preserving the API.
+pub use lichen_ipv6::Addr as Ipv6Addr;
 
 /// A 64-bit node identifier (EUI-64 derived from the radio hardware address).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -93,5 +84,60 @@ mod tests {
         let node = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
         let prefix = [0xfd, 0x00, 0, 0, 0, 0, 0, 0];
         assert!(!node.ula_addr(prefix).is_link_local());
+    }
+
+    #[test]
+    fn is_ula_fd00() {
+        // fd00::/8 is a common ULA prefix
+        let addr = Ipv6Addr([0xfd, 0x00, 0x12, 0x34, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_ula());
+        assert!(!addr.is_link_local());
+        assert!(!addr.is_gua());
+    }
+
+    #[test]
+    fn is_ula_fc00() {
+        // fc00::/8 is also technically ULA (but L=0, rarely used)
+        let addr = Ipv6Addr([0xfc, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_ula());
+    }
+
+    #[test]
+    fn is_gua() {
+        // 2001:db8::/32 is documentation prefix (a GUA)
+        let addr = Ipv6Addr([0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_gua());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_link_local());
+    }
+
+    #[test]
+    fn is_gua_range() {
+        // 2000::/3 means 2000:: through 3fff::
+        let addr_2000 = Ipv6Addr([0x20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        let addr_3fff = Ipv6Addr([0x3f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr_2000.is_gua());
+        assert!(addr_3fff.is_gua());
+
+        // 4000:: is NOT a GUA
+        let addr_4000 = Ipv6Addr([0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(!addr_4000.is_gua());
+    }
+
+    #[test]
+    fn is_multicast() {
+        let addr = Ipv6Addr([0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_multicast());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_gua());
+    }
+
+    #[test]
+    fn is_loopback() {
+        let addr = Ipv6Addr([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert!(addr.is_loopback());
+        assert!(!addr.is_ula());
+        assert!(!addr.is_gua());
+        assert!(!addr.is_multicast());
     }
 }

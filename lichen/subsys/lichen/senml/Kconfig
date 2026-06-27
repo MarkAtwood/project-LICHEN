@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN SenML subsystem Kconfig
+
+menuconfig LICHEN_SENML
+	bool "SenML CBOR encoder"
+	depends on LICHEN
+	help
+	  Enable SenML (RFC 8428) CBOR encoding for sensor data.
+	  Content-Format: application/senml+cbor (112)
+
+if LICHEN_SENML
+
+config LICHEN_SENML_LOG_LEVEL
+	int "SenML log level"
+	default 3
+	range 0 4
+	help
+	  Log level for LICHEN SenML encoder:
+	  0=off, 1=error, 2=warning, 3=info, 4=debug
+
+endif # LICHEN_SENML

@@ -4,10 +4,15 @@
 //! and hardware. Implementations live in lichen-embassy (embedded) or use std
 //! directly (Linux border router).
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
 extern crate std;
+
+#[cfg(feature = "std")]
+pub mod loopback;
+
+pub mod storage;
 
 /// Received packet metadata.
 #[derive(Debug, Clone, Copy)]
@@ -35,13 +40,49 @@ pub struct RadioConfig {
     pub frequency: u32,
 }
 
+/// Common error type for Radio implementations.
+///
+/// Generic over `E` for hardware-specific errors (e.g., SPI errors).
+/// Implementations that cannot fail use `core::convert::Infallible` for `E`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RadioError<E> {
+    /// Hardware bus error (SPI, I2C, etc).
+    Bus(E),
+    /// Radio hardware returned an error or is unresponsive.
+    Hardware,
+    /// Protocol error (bad response, framing, etc).
+    Protocol,
+    /// Connection lost (for networked/simulated radios).
+    Connection,
+}
+
+impl<E: core::fmt::Debug> core::fmt::Display for RadioError<E> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Bus(e) => write!(f, "bus error: {:?}", e),
+            Self::Hardware => write!(f, "radio hardware error"),
+            Self::Protocol => write!(f, "protocol error"),
+            Self::Connection => write!(f, "connection lost"),
+        }
+    }
+}
+
+impl<E: core::fmt::Debug + core::error::Error + 'static> core::error::Error for RadioError<E> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Bus(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 impl Default for RadioConfig {
     fn default() -> Self {
         // ponytail: LICHEN defaults from spec
         Self {
             spreading_factor: 10,
             bandwidth: 125_000,
-            coding_rate: 5, // CR 4/5
+            coding_rate: 5, // CR 4/5 -- denominator only (4 is fixed per LoRa spec)
             tx_power: 14,
             frequency: 915_000_000,
         }
@@ -92,14 +133,113 @@ pub trait Rng {
 ///
 /// Used for identity keys, routing state, etc. Keys are short ASCII strings.
 pub trait NonVolatile {
+    /// Error type for storage operations.
+    type Error;
+
     /// Read value for key into buffer. Returns bytes read, or None if not found.
     fn read(&self, key: &str, buf: &mut [u8]) -> Option<usize>;
 
     /// Write value for key. Returns Err if storage full or key too long.
-    fn write(&mut self, key: &str, data: &[u8]) -> Result<(), ()>;
+    fn write(&mut self, key: &str, data: &[u8]) -> Result<(), Self::Error>;
 
     /// Delete key. Returns true if key existed.
     fn delete(&mut self, key: &str) -> bool;
+}
+
+// ============================================================================
+// Device UI traits
+// ============================================================================
+
+/// Display error types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayError {
+    /// Display not initialized or initialization failed.
+    NotInitialized,
+    /// Communication error with display hardware.
+    BusError,
+    /// Coordinates out of bounds.
+    OutOfBounds,
+}
+
+impl core::fmt::Display for DisplayError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NotInitialized => write!(f, "display not initialized"),
+            Self::BusError => write!(f, "display bus error"),
+            Self::OutOfBounds => write!(f, "coordinates out of bounds"),
+        }
+    }
+}
+
+impl core::error::Error for DisplayError {}
+
+/// Display interface for rendering UI.
+///
+/// Supports text, primitives, and double-buffered flush. Coordinate system
+/// is top-left origin, x increasing right, y increasing down.
+pub trait Display {
+    /// Initialize the display hardware.
+    fn init(&mut self) -> Result<(), DisplayError>;
+
+    /// Clear the display (fill with background color).
+    fn clear(&mut self);
+
+    /// Draw text at position.
+    fn draw_text(&mut self, x: u16, y: u16, text: &str);
+
+    /// Draw a rectangle outline or filled.
+    fn draw_rect(&mut self, x: u16, y: u16, w: u16, h: u16, filled: bool);
+
+    /// Flush the framebuffer to the display.
+    fn flush(&mut self);
+}
+
+/// Button state flags.
+///
+/// Bitflags for physical buttons. Hardware variants map their inputs
+/// to these logical buttons.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ButtonState {
+    /// Primary action button (enter/select).
+    pub primary: bool,
+    /// Secondary/back button.
+    pub secondary: bool,
+    /// Up navigation.
+    pub up: bool,
+    /// Down navigation.
+    pub down: bool,
+    /// Left navigation.
+    pub left: bool,
+    /// Right navigation.
+    pub right: bool,
+}
+
+/// Input interface for buttons, encoders, and touch.
+///
+/// Poll-based interface. Implementations should debounce as needed.
+pub trait Input {
+    /// Poll current button state.
+    fn poll_buttons(&mut self) -> ButtonState;
+
+    /// Poll rotary encoder. Returns delta since last poll, or None if no encoder.
+    fn poll_encoder(&mut self) -> Option<i8>;
+
+    /// Poll touch screen. Returns (x, y) if touched, None otherwise.
+    fn poll_touch(&mut self) -> Option<(u16, u16)>;
+}
+
+/// Power management interface.
+///
+/// Battery status, charging state, and backlight control.
+pub trait Power {
+    /// Battery charge level as percentage (0-100).
+    fn battery_percent(&self) -> u8;
+
+    /// Whether device is currently charging.
+    fn is_charging(&self) -> bool;
+
+    /// Set backlight brightness (0 = off, 255 = max).
+    fn set_backlight(&mut self, level: u8);
 }
 
 #[cfg(test)]

@@ -9,6 +9,15 @@ decompressor reverses the process, looking the rule up by its leading Rule ID.
 
 Bits are packed most-significant-first (network bit order). The residue is
 padded to a byte boundary with zero bits, per RFC 8724.
+
+Naming note: this module uses ``compress``/``decompress`` rather than the
+``encode``/``decode`` verbs used elsewhere in the codebase.  This follows RFC
+8724 terminology and reflects a semantic distinction: SCHC is true compression
+— it elides header fields entirely when they can be reconstructed from shared
+context, reducing a 40-byte IPv6 header to as little as 1-2 bytes.  By contrast,
+SLIP and message serialization are *encodings* — bijective transformations
+between representations with no information reduction.  The verb choice signals
+that SCHC requires matching rules on both ends to function.
 """
 
 from __future__ import annotations

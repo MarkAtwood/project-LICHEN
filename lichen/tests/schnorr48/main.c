@@ -1,0 +1,395 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file main.c
+ * @brief Schnorr-48 unit tests using vectors from test/vectors/schnorr48.json
+ *
+ * Tests keypair derivation, signing, and verification against known vectors.
+ */
+
+#include <lichen/schnorr48.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h>
+
+/* Hex decode helpers */
+
+static int hex_digit(char c)
+{
+	if (c >= '0' && c <= '9') return c - '0';
+	if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+	return -1;
+}
+
+static size_t hex_decode(const char *hex, uint8_t *out, size_t max_len)
+{
+	size_t hex_len = strlen(hex);
+	size_t bytes = hex_len / 2;
+
+	if (bytes > max_len) {
+		return 0;
+	}
+
+	for (size_t i = 0; i < bytes; i++) {
+		int hi = hex_digit(hex[i * 2]);
+		int lo = hex_digit(hex[i * 2 + 1]);
+		if (hi < 0 || lo < 0) {
+			return 0;
+		}
+		out[i] = (hi << 4) | lo;
+	}
+	return bytes;
+}
+
+static void hex_dump(const char *label, const uint8_t *buf, size_t len)
+{
+	printf("%s: ", label);
+	for (size_t i = 0; i < len; i++) {
+		printf("%02x", buf[i]);
+	}
+	printf("\n");
+}
+
+/* Test infrastructure */
+
+static int tests_run = 0;
+static int tests_passed = 0;
+
+#define ASSERT_MEM_EQ(a, b, len, msg) do { \
+	if (memcmp((a), (b), (len)) != 0) { \
+		printf("  FAIL: %s\n", msg); \
+		hex_dump("    got", (a), (len)); \
+		hex_dump("    exp", (b), (len)); \
+		return 0; \
+	} \
+} while (0)
+
+#define ASSERT_TRUE(cond, msg) do { \
+	if (!(cond)) { \
+		printf("  FAIL: %s\n", msg); \
+		return 0; \
+	} \
+} while (0)
+
+#define ASSERT_FALSE(cond, msg) do { \
+	if ((cond)) { \
+		printf("  FAIL: %s (expected false)\n", msg); \
+		return 0; \
+	} \
+} while (0)
+
+/* Test vector structure */
+
+struct test_vector {
+	const char *description;
+	const char *seed;
+	const char *private_key;
+	const char *public_key;
+	const char *message;
+	const char *signature;
+	int valid;
+};
+
+/*
+ * Test vectors from test/vectors/schnorr48.json
+ */
+
+static const struct test_vector valid_vectors[] = {
+	{
+		.description = "Empty message, zero seed",
+		.seed = "0000000000000000000000000000000000000000000000000000000000000000",
+		.private_key = "5046adc1dba838867b2bbbfdd0c3423e58b57970b5267a90f57960924a87f156",
+		.public_key = "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+		.message = "",
+		.signature = "26f70691bbde0c1e8becc00e7e7663cb6b72364b6ea208fdabef226c5b0d07cec9c661fd69671981ca40277598ea9c01",
+		.valid = 1,
+	},
+	{
+		.description = "Simple 'test' message",
+		.seed = "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
+		.private_key = "50b8c29238a8403e0ac69e23d47b9184c371a92460d518351b099944bbdfa867",
+		.public_key = "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+		.message = "74657374",
+		.signature = "c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009",
+		.valid = 1,
+	},
+	{
+		.description = "Longer message (pangram)",
+		.seed = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		.private_key = "b0829ce3ccf1d8edd5da1132d46271b0169f58b6414fd263d3c98da627170f5e",
+		.public_key = "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
+		.message = "54686520717569636b2062726f776e20666f78206a756d7073206f76657220746865206c617a7920646f67",
+		.signature = "e15b69ed5bd6fccc6c624431eb1bb08341ba571158da31249ac72a28af7f77ea0534b94cc1f8650dead98ccae16ec803",
+		.valid = 1,
+	},
+	{
+		.description = "Binary message with null bytes",
+		.seed = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		.private_key = "20cd6935864716a79d74dd5fabbd8964304051ca41a31c4659158ebb7c3d0b57",
+		.public_key = "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5",
+		.message = "000102030000fffe",
+		.signature = "5f305af4656afd6278b1f2be87853e67e952b1449f17380a24ff98ee90fbcec193b82bd58f33291658b452b610febe0a",
+		.valid = 1,
+	},
+	{
+		.description = "LICHEN frame-like structure",
+		.seed = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+		.private_key = "68ae63a46076e4e250dd1cf4b15c5f645827bb55af53e23b76d8f3ffd1b8dd55",
+		.public_key = "9474957069b71153ee776274d7d7b842fe9ddf33df44dc61b851f73c885af800",
+		.message = "0100000100000000000000000000000000000000436f4150207061796c6f6164",
+		.signature = "9d76e7510ffc2bad6e5d45b3b6db1ebe2586389ec18b4fb8297c4e366e912f5a0a6ac2f2e52769009e006e92ba864403",
+		.valid = 1,
+	},
+};
+
+static const struct test_vector invalid_vectors[] = {
+	{
+		.description = "Invalid: signature from vector 2 with wrong message",
+		.public_key = "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+		.message = "77726f6e67",
+		.signature = "c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009",
+		.valid = 0,
+	},
+	{
+		.description = "Invalid: tampered challenge byte",
+		.public_key = "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+		.message = "74657374",
+		.signature = "c9bec10578953fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009",
+		.valid = 0,
+	},
+	{
+		.description = "Invalid: tampered response byte",
+		.public_key = "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+		.message = "74657374",
+		.signature = "c9bec10578943fc8d453252fb262fa03ad2220609c98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009",
+		.valid = 0,
+	},
+	{
+		.description = "Invalid: wrong public key",
+		.public_key = "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
+		.message = "74657374",
+		.signature = "c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009",
+		.valid = 0,
+	},
+	{
+		.description = "Invalid: all-zero signature",
+		.public_key = "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+		.message = "74657374",
+		.signature = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+		.valid = 0,
+	},
+};
+
+/* Test functions */
+
+static int test_keypair_derivation(void)
+{
+	for (size_t i = 0; i < sizeof(valid_vectors) / sizeof(valid_vectors[0]); i++) {
+		const struct test_vector *v = &valid_vectors[i];
+
+		uint8_t seed[32], expected_priv[32], expected_pub[32];
+		uint8_t got_priv[32], got_pub[32];
+		size_t n;
+
+		n = hex_decode(v->seed, seed, 32);
+		ASSERT_TRUE(n == 32, "seed hex_decode");
+
+		n = hex_decode(v->private_key, expected_priv, 32);
+		ASSERT_TRUE(n == 32, "private_key hex_decode");
+
+		n = hex_decode(v->public_key, expected_pub, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		schnorr48_derive_keypair(seed, got_priv, got_pub);
+
+		char msg[128];
+		snprintf(msg, sizeof(msg), "vector %zu privkey: %s", i, v->description);
+		ASSERT_MEM_EQ(got_priv, expected_priv, 32, msg);
+
+		snprintf(msg, sizeof(msg), "vector %zu pubkey: %s", i, v->description);
+		ASSERT_MEM_EQ(got_pub, expected_pub, 32, msg);
+	}
+	return 1;
+}
+
+static int test_sign_matches_vectors(void)
+{
+	for (size_t i = 0; i < sizeof(valid_vectors) / sizeof(valid_vectors[0]); i++) {
+		const struct test_vector *v = &valid_vectors[i];
+
+		uint8_t privkey[32], pubkey[32], expected_sig[48], got_sig[48];
+		uint8_t message[256];
+		size_t msg_len, n;
+
+		n = hex_decode(v->private_key, privkey, 32);
+		ASSERT_TRUE(n == 32, "private_key hex_decode");
+
+		n = hex_decode(v->public_key, pubkey, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		n = hex_decode(v->signature, expected_sig, 48);
+		ASSERT_TRUE(n == 48, "signature hex_decode");
+
+		/* Empty message is valid (strlen == 0) */
+		msg_len = hex_decode(v->message, message, sizeof(message));
+
+		schnorr48_sign(privkey, pubkey, message, msg_len, got_sig);
+
+		char msg_buf[128];
+		snprintf(msg_buf, sizeof(msg_buf), "vector %zu signature: %s", i, v->description);
+		ASSERT_MEM_EQ(got_sig, expected_sig, 48, msg_buf);
+	}
+	return 1;
+}
+
+static int test_verify_valid_signatures(void)
+{
+	for (size_t i = 0; i < sizeof(valid_vectors) / sizeof(valid_vectors[0]); i++) {
+		const struct test_vector *v = &valid_vectors[i];
+
+		uint8_t pubkey[32], sig[48];
+		uint8_t message[256];
+		size_t msg_len, n;
+
+		n = hex_decode(v->public_key, pubkey, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		n = hex_decode(v->signature, sig, 48);
+		ASSERT_TRUE(n == 48, "signature hex_decode");
+
+		/* Empty message is valid (strlen == 0) */
+		msg_len = hex_decode(v->message, message, sizeof(message));
+
+		char msg_buf[128];
+		snprintf(msg_buf, sizeof(msg_buf), "vector %zu: %s", i, v->description);
+		ASSERT_TRUE(schnorr48_verify(pubkey, message, msg_len, sig), msg_buf);
+	}
+	return 1;
+}
+
+static int test_verify_invalid_signatures(void)
+{
+	for (size_t i = 0; i < sizeof(invalid_vectors) / sizeof(invalid_vectors[0]); i++) {
+		const struct test_vector *v = &invalid_vectors[i];
+
+		uint8_t pubkey[32], sig[48];
+		uint8_t message[256];
+		size_t msg_len, n;
+
+		n = hex_decode(v->public_key, pubkey, 32);
+		ASSERT_TRUE(n == 32, "public_key hex_decode");
+
+		n = hex_decode(v->signature, sig, 48);
+		ASSERT_TRUE(n == 48, "signature hex_decode");
+
+		/* Empty message is valid (strlen == 0) */
+		msg_len = hex_decode(v->message, message, sizeof(message));
+
+		char msg_buf[128];
+		snprintf(msg_buf, sizeof(msg_buf), "vector %zu: %s", i, v->description);
+		ASSERT_FALSE(schnorr48_verify(pubkey, message, msg_len, sig), msg_buf);
+	}
+	return 1;
+}
+
+static int test_sign_verify_roundtrip(void)
+{
+	/* Test with fresh keys and arbitrary message */
+	uint8_t seed[32] = {
+		0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+		0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+		0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+		0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+	};
+	uint8_t privkey[32], pubkey[32];
+	uint8_t message[] = "hello LICHEN mesh network";
+	uint8_t sig[48];
+
+	schnorr48_derive_keypair(seed, privkey, pubkey);
+	schnorr48_sign(privkey, pubkey, message, sizeof(message) - 1, sig);
+
+	ASSERT_TRUE(schnorr48_verify(pubkey, message, sizeof(message) - 1, sig),
+		    "roundtrip verify");
+
+	/* Tamper with message */
+	message[0] ^= 1;
+	ASSERT_FALSE(schnorr48_verify(pubkey, message, sizeof(message) - 1, sig),
+		     "tampered message should fail");
+	message[0] ^= 1;  /* restore */
+
+	/* Tamper with signature */
+	sig[0] ^= 1;
+	ASSERT_FALSE(schnorr48_verify(pubkey, message, sizeof(message) - 1, sig),
+		     "tampered signature should fail");
+	sig[0] ^= 1;  /* restore */
+
+	/* Wrong pubkey */
+	uint8_t wrong_pubkey[32];
+	memset(wrong_pubkey, 0x42, 32);
+	ASSERT_FALSE(schnorr48_verify(wrong_pubkey, message, sizeof(message) - 1, sig),
+		     "wrong pubkey should fail");
+
+	return 1;
+}
+
+static int test_frame_sign_verify(void)
+{
+	uint8_t seed[32] = { 0 };
+	uint8_t privkey[32], pubkey[32];
+
+	schnorr48_derive_keypair(seed, privkey, pubkey);
+
+	uint8_t dst_addr[] = { 0x00, 0x01 };
+	uint8_t inner_payload[] = "CoAP";
+	uint8_t sig[48];
+
+	schnorr48_sign_frame(1, 42, dst_addr, 2, inner_payload, 4, privkey, pubkey, sig);
+
+	/* Build full payload: inner || sig */
+	uint8_t full_payload[4 + 48];
+	memcpy(full_payload, inner_payload, 4);
+	memcpy(full_payload + 4, sig, 48);
+
+	ASSERT_TRUE(schnorr48_verify_frame(1, 42, dst_addr, 2, full_payload, 52, pubkey),
+		    "frame verify");
+
+	/* Wrong epoch */
+	ASSERT_FALSE(schnorr48_verify_frame(2, 42, dst_addr, 2, full_payload, 52, pubkey),
+		     "wrong epoch should fail");
+
+	/* Wrong seqnum */
+	ASSERT_FALSE(schnorr48_verify_frame(1, 43, dst_addr, 2, full_payload, 52, pubkey),
+		     "wrong seqnum should fail");
+
+	return 1;
+}
+
+/* Test runner */
+
+#define RUN_TEST(fn) do { \
+	printf("  %s...", #fn); \
+	tests_run++; \
+	if (fn()) { \
+		printf(" OK\n"); \
+		tests_passed++; \
+	} \
+} while (0)
+
+int main(void)
+{
+	printf("Schnorr-48 Unit Tests\n");
+	printf("=====================\n\n");
+
+	RUN_TEST(test_keypair_derivation);
+	RUN_TEST(test_sign_matches_vectors);
+	RUN_TEST(test_verify_valid_signatures);
+	RUN_TEST(test_verify_invalid_signatures);
+	RUN_TEST(test_sign_verify_roundtrip);
+	RUN_TEST(test_frame_sign_verify);
+
+	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
+
+	return (tests_passed == tests_run) ? 0 : 1;
+}

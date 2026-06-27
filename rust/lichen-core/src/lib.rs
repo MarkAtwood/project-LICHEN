@@ -9,9 +9,11 @@
 pub mod addr;
 pub mod announce;
 pub mod constants;
+pub mod error;
 pub mod icmpv6;
 pub mod ipv6;
 pub mod loadng;
+pub mod udp;
 
 #[cfg(feature = "std")]
 extern crate std;

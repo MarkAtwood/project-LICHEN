@@ -84,33 +84,82 @@ MODEM_CHAT_SCRIPT_EMPTY_DEFINE(gnss_ag3335_init_chat_script);
 static int gnss_ag3335_power_on(const struct device *dev)
 {
 	const struct gnss_ag3335_config *cfg = dev->config;
+	int ret;
 
-	if (gpio_pin_configure_dt(&cfg->vrtc_gpio,      GPIO_OUTPUT_INACTIVE) < 0 ||
-	    gpio_pin_configure_dt(&cfg->sleep_int_gpio,  GPIO_OUTPUT_INACTIVE) < 0 ||
-	    gpio_pin_configure_dt(&cfg->reset_gpio,      GPIO_OUTPUT_INACTIVE) < 0 ||
-	    gpio_pin_configure_dt(&cfg->enable_gpio,     GPIO_OUTPUT_INACTIVE) < 0) {
-		LOG_ERR("GPIO configuration failed");
-		return -EIO;
+	ret = gpio_pin_configure_dt(&cfg->vrtc_gpio, GPIO_OUTPUT_INACTIVE);
+	if (ret < 0) {
+		LOG_ERR("Failed to configure VRTC GPIO: %d", ret);
+		return ret;
 	}
 
-	gpio_pin_set_dt(&cfg->vrtc_gpio,      1); /* RTC backup — hold always */
-	gpio_pin_set_dt(&cfg->sleep_int_gpio, 1); /* normal op  — hold always */
-	gpio_pin_set_dt(&cfg->enable_gpio,    1); /* main power on */
+	ret = gpio_pin_configure_dt(&cfg->sleep_int_gpio, GPIO_OUTPUT_INACTIVE);
+	if (ret < 0) {
+		LOG_ERR("Failed to configure SLEEP_INT GPIO: %d", ret);
+		return ret;
+	}
+
+	ret = gpio_pin_configure_dt(&cfg->reset_gpio, GPIO_OUTPUT_INACTIVE);
+	if (ret < 0) {
+		LOG_ERR("Failed to configure RESET GPIO: %d", ret);
+		return ret;
+	}
+
+	ret = gpio_pin_configure_dt(&cfg->enable_gpio, GPIO_OUTPUT_INACTIVE);
+	if (ret < 0) {
+		LOG_ERR("Failed to configure ENABLE GPIO: %d", ret);
+		return ret;
+	}
+
+	ret = gpio_pin_set_dt(&cfg->vrtc_gpio, 1);
+	if (ret < 0) {
+		LOG_ERR("Failed to set VRTC GPIO: %d", ret);
+		return ret;
+	}
+
+	ret = gpio_pin_set_dt(&cfg->sleep_int_gpio, 1);
+	if (ret < 0) {
+		LOG_ERR("Failed to set SLEEP_INT GPIO: %d", ret);
+		return ret;
+	}
+
+	ret = gpio_pin_set_dt(&cfg->enable_gpio, 1);
+	if (ret < 0) {
+		LOG_ERR("Failed to set ENABLE GPIO: %d", ret);
+		return ret;
+	}
+
 	k_sleep(K_MSEC(200));
 
-	gpio_pin_set_dt(&cfg->reset_gpio, 1);
+	ret = gpio_pin_set_dt(&cfg->reset_gpio, 1);
+	if (ret < 0) {
+		LOG_ERR("Failed to set RESET GPIO high: %d", ret);
+		return ret;
+	}
+
 	k_sleep(K_MSEC(10));
-	gpio_pin_set_dt(&cfg->reset_gpio, 0);
+
+	ret = gpio_pin_set_dt(&cfg->reset_gpio, 0);
+	if (ret < 0) {
+		LOG_ERR("Failed to set RESET GPIO low: %d", ret);
+		return ret;
+	}
+
 	k_sleep(K_MSEC(100));
 
 	return 0;
 }
 
-static void gnss_ag3335_power_off(const struct device *dev)
+static int gnss_ag3335_power_off(const struct device *dev)
 {
 	const struct gnss_ag3335_config *cfg = dev->config;
+	int ret;
 
-	gpio_pin_set_dt(&cfg->enable_gpio, 0);
+	ret = gpio_pin_set_dt(&cfg->enable_gpio, 0);
+	if (ret < 0) {
+		LOG_ERR("Failed to clear ENABLE GPIO: %d", ret);
+	}
+
+	return ret;
 }
 
 /* --------------------------------------------------------------------------
@@ -154,8 +203,7 @@ static int gnss_ag3335_suspend(const struct device *dev)
 	struct gnss_ag3335_data *data = dev->data;
 
 	modem_pipe_close(data->uart_pipe);
-	gnss_ag3335_power_off(dev);
-	return 0;
+	return gnss_ag3335_power_off(dev);
 }
 
 static int gnss_ag3335_pm_action(const struct device *dev,

@@ -9,6 +9,7 @@
 pub mod cbor;
 pub mod record;
 
+pub use cbor::CborError;
 pub use record::Record;
 
 #[cfg(feature = "std")]

@@ -3,14 +3,17 @@
 use std::collections::HashMap;
 use std::vec::Vec;
 
-use crate::frame::{FrameError, LichenFrame};
+use crate::frame::{Encryption, FrameError, LichenFrame, Signature};
 use crate::identity::{Identity, PeerIdentity};
+use crate::keys::PublicKey;
 use crate::replay::ReplayWindow;
 use crate::schnorr::{self, SIGNATURE_LENGTH};
+use crate::seqnum::LinkSeqNum;
+use lichen_core::error::TooShort;
 
 /// Error returned by [`LinkLayer::receive_frame`].
-#[derive(Debug, PartialEq, Eq)]
-pub enum RxError {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkRxError {
     Frame(FrameError),
     /// Frame has no signature but all LICHEN frames must be signed.
     Unsigned,
@@ -20,20 +23,57 @@ pub enum RxError {
     /// Replay-window check failed (duplicate or too-old seqnum).
     Replay,
     /// Payload shorter than the mandatory 48-byte signature trailer.
-    TruncatedPayload,
+    TooShort(TooShort),
     /// A previously-pinned IID appeared with a different public key.
     KeyChange,
 }
 
-impl From<FrameError> for RxError {
-    fn from(e: FrameError) -> Self {
-        RxError::Frame(e)
+impl std::fmt::Display for LinkRxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Frame(e) => write!(f, "frame error: {}", e),
+            Self::Unsigned => write!(f, "frame has no signature"),
+            Self::UnknownSender => write!(f, "unknown sender"),
+            Self::Replay => write!(f, "replay detected"),
+            Self::TooShort(e) => write!(f, "payload {}", e),
+            Self::KeyChange => write!(f, "key change detected"),
+        }
     }
 }
 
-/// A successfully received and authenticated frame.
+impl core::error::Error for LinkRxError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Frame(e) => Some(e),
+            Self::TooShort(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<FrameError> for LinkRxError {
+    fn from(e: FrameError) -> Self {
+        LinkRxError::Frame(e)
+    }
+}
+
+impl From<TooShort> for LinkRxError {
+    fn from(e: TooShort) -> Self {
+        LinkRxError::TooShort(e)
+    }
+}
+
+/// A successfully received and authenticated link-layer frame.
+///
+/// Returned by [`LinkLayer::receive_frame`] after signature verification
+/// and replay protection pass. The payload excludes the 48-byte Schnorr
+/// signature trailer; it contains the SCHC-compressed IPv6 packet ready
+/// for decompression.
+///
+/// Note: This is distinct from `lichen_node::ReceivedIpv6` which represents
+/// a fully decompressed IPv6 packet with radio metadata attached.
 #[derive(Debug)]
-pub struct RxFrame {
+pub struct AuthenticatedFrame {
     /// The inner payload (everything before the 48-byte signature trailer).
     pub payload: Vec<u8>,
     /// Identity of the authenticated sender.
@@ -41,8 +81,9 @@ pub struct RxFrame {
 }
 
 /// Per-peer replay-window tracker keyed by `(pubkey, epoch)`.
+#[derive(Debug)]
 pub struct ReplayProtector {
-    windows: HashMap<([u8; 32], u8), ReplayWindow>,
+    windows: HashMap<(PublicKey, u8), ReplayWindow>,
 }
 
 impl ReplayProtector {
@@ -53,14 +94,14 @@ impl ReplayProtector {
     }
 
     /// Check and advance the window. Returns `true` if the frame is fresh.
-    pub fn check_and_update(&mut self, pubkey: &[u8; 32], epoch: u8, seqnum: u16) -> bool {
+    pub fn check_and_update(&mut self, pubkey: &PublicKey, epoch: u8, seqnum: LinkSeqNum) -> bool {
         self.windows
             .entry((*pubkey, epoch))
             .or_default()
             .accept(seqnum)
     }
 
-    pub fn reset_peer(&mut self, pubkey: &[u8; 32]) {
+    pub fn reset_peer(&mut self, pubkey: &PublicKey) {
         self.windows.retain(|(pk, _), _| pk != pubkey);
     }
 }
@@ -79,12 +120,23 @@ impl Default for ReplayProtector {
 ///
 /// Key pinning: once an IID is seen with a valid signature, its pubkey is
 /// stored in `pinned`. Subsequent frames from the same IID must match the
-/// pinned pubkey; a mismatch returns `RxError::KeyChange`.
+/// pinned pubkey; a mismatch returns `LinkRxError::KeyChange`.
 pub struct LinkLayer {
-    pub identity: Identity,
+    identity: Identity,
     peers: HashMap<[u8; 8], PeerIdentity>,
     replay: ReplayProtector,
-    pinned: HashMap<[u8; 8], [u8; 32]>,
+    pinned: HashMap<[u8; 8], PublicKey>,
+}
+
+impl std::fmt::Debug for LinkLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LinkLayer")
+            .field("identity", &"[REDACTED]")
+            .field("peers", &self.peers)
+            .field("replay", &self.replay)
+            .field("pinned", &self.pinned)
+            .finish()
+    }
 }
 
 impl LinkLayer {
@@ -103,7 +155,7 @@ impl LinkLayer {
     }
 
     /// Return the pinned pubkey for an IID, or None if not yet seen.
-    pub fn pinned_pubkey_for(&self, iid: &[u8; 8]) -> Option<&[u8; 32]> {
+    pub fn pinned_pubkey_for(&self, iid: &[u8; 8]) -> Option<&PublicKey> {
         self.pinned.get(iid)
     }
 
@@ -123,10 +175,16 @@ impl LinkLayer {
     ///
     /// inner_payload is signed; the resulting wire frame contains
     /// `inner_payload || sig(48B)` as its payload field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `out` is smaller than the serialised frame size. Callers must
+    /// provide a buffer of at least `inner_payload.len() + 48 + 6` bytes (frame
+    /// header + signature trailer).
     pub fn build_frame(
         &self,
         epoch: u8,
-        seqnum: u16,
+        seqnum: LinkSeqNum,
         dst_addr: &[u8],
         inner_payload: &[u8],
         out: &mut [u8],
@@ -151,21 +209,21 @@ impl LinkLayer {
             mic: &[0u8; 4],
             addr_mode: crate::frame::AddrMode::None,
             mic_length: crate::frame::MicLength::Bits32,
-            signature_present: true,
-            encrypted: false,
+            signature: Signature::Present,
+            encryption: Encryption::Plaintext,
         };
         frame.write_to(out).expect("build_frame: buffer too small")
     }
 
     /// Parse, authenticate, and replay-check an incoming frame.
-    pub fn receive_frame(&mut self, wire: &[u8]) -> Result<RxFrame, RxError> {
+    pub fn receive_frame(&mut self, wire: &[u8]) -> Result<AuthenticatedFrame, LinkRxError> {
         let frame = LichenFrame::from_bytes(wire)?;
 
-        if !frame.signature_present {
-            return Err(RxError::Unsigned);
+        if !frame.signature.is_present() {
+            return Err(LinkRxError::Unsigned);
         }
         if frame.payload.len() < SIGNATURE_LENGTH {
-            return Err(RxError::TruncatedPayload);
+            return Err(TooShort::new(SIGNATURE_LENGTH, frame.payload.len()).into());
         }
 
         let inner_len = frame.payload.len() - SIGNATURE_LENGTH;
@@ -185,11 +243,11 @@ impl LinkLayer {
                 )
             })
             .cloned()
-            .ok_or(RxError::UnknownSender)?;
+            .ok_or(LinkRxError::UnknownSender)?;
 
         // Key pinning: first-contact pins IID→pubkey; subsequent frames must match.
         match self.pinned.get(&sender.iid) {
-            Some(pk) if pk != &sender.pubkey => return Err(RxError::KeyChange),
+            Some(pk) if *pk != sender.pubkey => return Err(LinkRxError::KeyChange),
             None => {
                 self.pinned.insert(sender.iid, sender.pubkey);
             }
@@ -200,10 +258,10 @@ impl LinkLayer {
             .replay
             .check_and_update(&sender.pubkey, frame.epoch, frame.seqnum)
         {
-            return Err(RxError::Replay);
+            return Err(LinkRxError::Replay);
         }
 
-        Ok(RxFrame {
+        Ok(AuthenticatedFrame {
             payload: inner_payload.to_vec(),
             sender,
         })
@@ -214,22 +272,27 @@ impl LinkLayer {
 mod tests {
     use super::*;
     use crate::identity::Identity;
+    use crate::keys::Seed;
 
     fn make_ll(seed: u8) -> LinkLayer {
-        LinkLayer::new(Identity::from_seed([seed; 32]))
+        LinkLayer::new(Identity::from_seed(Seed::new([seed; 32])))
+    }
+
+    fn seq(n: u16) -> LinkSeqNum {
+        LinkSeqNum::new(n)
     }
 
     #[test]
     fn tx_rx_basic() {
-        let alice = Identity::from_seed([0x01u8; 32]);
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
 
         let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
-        let mut ll_bob = LinkLayer::new(Identity::from_seed([0x02u8; 32]));
+        let mut ll_bob = LinkLayer::new(Identity::from_seed(Seed::new([0x02u8; 32])));
         ll_bob.add_peer(alice_peer);
 
         let ll_alice = LinkLayer::new(alice);
         let mut wire = [0u8; 256];
-        let n = ll_alice.build_frame(1, 1, &[], b"hello", &mut wire);
+        let n = ll_alice.build_frame(1, seq(1), &[], b"hello", &mut wire);
 
         let rx = ll_bob.receive_frame(&wire[..n]).unwrap();
         assert_eq!(rx.payload, b"hello");
@@ -237,8 +300,8 @@ mod tests {
 
     #[test]
     fn replay_rejected() {
-        let alice = Identity::from_seed([0x01u8; 32]);
-        let bob_seed = [0x02u8; 32];
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
+        let bob_seed = Seed::new([0x02u8; 32]);
 
         let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
         let mut ll_bob = LinkLayer::new(Identity::from_seed(bob_seed));
@@ -246,45 +309,45 @@ mod tests {
 
         let ll_alice = LinkLayer::new(alice);
         let mut wire = [0u8; 256];
-        let n = ll_alice.build_frame(1, 42, &[], b"data", &mut wire);
+        let n = ll_alice.build_frame(1, seq(42), &[], b"data", &mut wire);
 
         ll_bob.receive_frame(&wire[..n]).unwrap();
         let err = ll_bob.receive_frame(&wire[..n]).unwrap_err();
-        assert_eq!(err, RxError::Replay);
+        assert_eq!(err, LinkRxError::Replay);
     }
 
     #[test]
     fn unknown_sender_rejected() {
-        let alice = Identity::from_seed([0x01u8; 32]);
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
         let mut ll_bob = make_ll(0x02);
         // Alice is NOT added as a peer
 
         let ll_alice = LinkLayer::new(alice);
         let mut wire = [0u8; 256];
-        let n = ll_alice.build_frame(1, 1, &[], b"hi", &mut wire);
+        let n = ll_alice.build_frame(1, seq(1), &[], b"hi", &mut wire);
 
         assert_eq!(
             ll_bob.receive_frame(&wire[..n]).unwrap_err(),
-            RxError::UnknownSender
+            LinkRxError::UnknownSender
         );
     }
 
     #[test]
     fn tampered_payload_rejected() {
-        let alice = Identity::from_seed([0x01u8; 32]);
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
         let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
         let mut ll_bob = make_ll(0x02);
         ll_bob.add_peer(alice_peer);
 
         let ll_alice = LinkLayer::new(alice);
         let mut wire = [0u8; 256];
-        let n = ll_alice.build_frame(1, 1, &[], b"hello", &mut wire);
+        let n = ll_alice.build_frame(1, seq(1), &[], b"hello", &mut wire);
 
         // Flip a bit in the inner payload region
         wire[6] ^= 0xFF;
         assert_eq!(
             ll_bob.receive_frame(&wire[..n]).unwrap_err(),
-            RxError::UnknownSender
+            LinkRxError::UnknownSender
         );
     }
 
@@ -292,7 +355,7 @@ mod tests {
     fn peer_count_tracked() {
         let mut ll = make_ll(0x01);
         assert_eq!(ll.peer_count(), 0);
-        let peer_a = PeerIdentity::from_pubkey(Identity::from_seed([0x02u8; 32]).pubkey);
+        let peer_a = PeerIdentity::from_pubkey(Identity::from_seed(Seed::new([0x02u8; 32])).pubkey);
         let iid_a = peer_a.iid;
         ll.add_peer(peer_a);
         assert_eq!(ll.peer_count(), 1);
@@ -305,7 +368,7 @@ mod tests {
         // Pin alice's IID to alice's pubkey on first successful RX.
         // Then swap alice's peer entry for an impersonator with the same IID
         // (achieved by manually overwriting the pin). Second RX must fail with KeyChange.
-        let alice = Identity::from_seed([0x01u8; 32]);
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
         let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
         let alice_iid = alice_peer.iid;
         let mut ll_bob = make_ll(0x02);
@@ -313,7 +376,7 @@ mod tests {
 
         let ll_alice = LinkLayer::new(alice);
         let mut wire1 = [0u8; 256];
-        let n1 = ll_alice.build_frame(1, 1, &[], b"hello", &mut wire1);
+        let n1 = ll_alice.build_frame(1, seq(1), &[], b"hello", &mut wire1);
 
         // First RX succeeds and pins alice_iid → alice's pubkey.
         ll_bob.receive_frame(&wire1[..n1]).unwrap();
@@ -323,30 +386,30 @@ mod tests {
         );
 
         // Simulate key change: overwrite pin with a different pubkey.
-        let impostor_pk = Identity::from_seed([0x99u8; 32]).pubkey;
+        let impostor_pk = Identity::from_seed(Seed::new([0x99u8; 32])).pubkey;
         ll_bob.pinned.insert(alice_iid, impostor_pk);
 
         // Second RX with same alice frame must now fail with KeyChange.
-        let ll_alice2 = LinkLayer::new(Identity::from_seed([0x01u8; 32]));
+        let ll_alice2 = LinkLayer::new(Identity::from_seed(Seed::new([0x01u8; 32])));
         let mut wire2 = [0u8; 256];
-        let n2 = ll_alice2.build_frame(1, 2, &[], b"hi", &mut wire2);
+        let n2 = ll_alice2.build_frame(1, seq(2), &[], b"hi", &mut wire2);
         assert_eq!(
             ll_bob.receive_frame(&wire2[..n2]).unwrap_err(),
-            RxError::KeyChange
+            LinkRxError::KeyChange
         );
     }
 
     #[test]
     fn unpin_allows_key_rotation() {
-        let alice = Identity::from_seed([0x01u8; 32]);
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
         let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
         let alice_iid = alice_peer.iid;
         let mut ll_bob = make_ll(0x02);
         ll_bob.add_peer(alice_peer);
 
-        let ll_alice = LinkLayer::new(Identity::from_seed([0x01u8; 32]));
+        let ll_alice = LinkLayer::new(Identity::from_seed(Seed::new([0x01u8; 32])));
         let mut wire = [0u8; 256];
-        let n = ll_alice.build_frame(1, 1, &[], b"hello", &mut wire);
+        let n = ll_alice.build_frame(1, seq(1), &[], b"hello", &mut wire);
         ll_bob.receive_frame(&wire[..n]).unwrap();
 
         // Admin unpins: allows accepting a new key for this IID.
@@ -354,14 +417,14 @@ mod tests {
         assert_eq!(ll_bob.pinned_pubkey_for(&alice_iid), None);
 
         // New key accepted and re-pinned.
-        let new_alice = Identity::from_seed([0xAAu8; 32]);
+        let new_alice = Identity::from_seed(Seed::new([0xAAu8; 32]));
         let new_alice_peer = PeerIdentity::from_pubkey(new_alice.pubkey);
         ll_bob.remove_peer(&alice_iid);
         ll_bob.add_peer(new_alice_peer.clone());
 
         let ll_new = LinkLayer::new(new_alice);
         let mut wire2 = [0u8; 256];
-        let n2 = ll_new.build_frame(1, 1, &[], b"rotated", &mut wire2);
+        let n2 = ll_new.build_frame(1, seq(1), &[], b"rotated", &mut wire2);
         ll_bob.receive_frame(&wire2[..n2]).unwrap();
         assert_eq!(
             ll_bob.pinned_pubkey_for(&new_alice_peer.iid),

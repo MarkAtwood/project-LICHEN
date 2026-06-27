@@ -26,8 +26,16 @@ extern const struct spi_dt_spec  lr1110_bus;
 extern const struct gpio_dt_spec lr1110_gpio_busy;
 extern const struct gpio_dt_spec lr1110_gpio_reset;
 
-/* Zero-filled NOP pad for the read response phase (max 256 data + 1 stat) */
-static const uint8_t nop_pad[257];
+/*
+ * Zero-filled NOP pad for the SPI read response phase.
+ *
+ * The LR1110's two-phase read protocol clocks out 1 status byte followed by
+ * up to 256 data bytes. The radio buffer is 256 bytes (per LR1110 datasheet
+ * section 5.2), so the maximum response is 1 + 256 = 257 bytes. We transmit
+ * NOPs (0x00) to generate the SPI clock while receiving.
+ */
+#define LR1110_HAL_MAX_READ_DATA 256U
+static const uint8_t nop_pad[1U + LR1110_HAL_MAX_READ_DATA];
 
 static void wait_busy(void)
 {
@@ -74,6 +82,12 @@ lr1110_hal_status_t lr1110_hal_read(const void *context,
 				    const uint16_t data_length)
 {
 	ARG_UNUSED(context);
+
+	if (data_length > LR1110_HAL_MAX_READ_DATA) {
+		LOG_ERR("Read length %u exceeds max %u", data_length,
+			LR1110_HAL_MAX_READ_DATA);
+		return LR1110_HAL_STATUS_ERROR;
+	}
 
 	/* Phase 1: send command */
 	struct spi_buf cmd_buf = { .buf = (void *)command, .len = command_length };
@@ -136,10 +150,11 @@ lr1110_hal_status_t lr1110_hal_wakeup(const void *context)
 {
 	ARG_UNUSED(context);
 
-	/* CS pulse (no SPI bytes) wakes the LR1110 from sleep */
-	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 1);
-	k_busy_wait(100);
+	/* CS pulse (no SPI bytes) wakes the LR1110 from sleep.
+	 * CS is active-low: assert LOW to wake, then release HIGH. */
 	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 0);
+	k_busy_wait(100);
+	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 1);
 	wait_busy();
 	return LR1110_HAL_STATUS_OK;
 }

@@ -8,7 +8,7 @@
 
 use lichen_rpl::{
     dodag::{DodagState, MIN_HOP_RANK_INCREASE, ROOT_RANK},
-    messages::Dio,
+    message::Dio,
     routing::DaoManager,
 };
 

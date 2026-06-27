@@ -1,0 +1,27 @@
+/*
+ * Overlay for running nucleo_wl55jc in Renode with lichen-sim bridge.
+ * Replaces the real SubGHz radio with our memory-mapped simulator driver.
+ *
+ * Usage:
+ *   west build -b nucleo_wl55jc -- \
+ *     -DDTC_OVERLAY_FILE=lichen/boards/renode/nucleo_wl55jc/nucleo_wl55jc_renode.overlay \
+ *     -DCONFIG_LORA_LICHEN_RENODE=y
+ */
+
+/* Disable the real SubGHz radio */
+&subghzspi {
+	status = "disabled";
+};
+
+/ {
+	/* Add our simulator radio at the SubGHz peripheral address */
+	lora_renode: lora@58010000 {
+		compatible = "lichen,lora-renode";
+		reg = <0x58010000 0x300>;
+		status = "okay";
+	};
+
+	aliases {
+		lora0 = &lora_renode;
+	};
+};

@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+[package]
+name = "lichen-oscore"
+description = "OSCORE (RFC 8613) implementation for LICHEN"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+# ponytail: using pure-Rust crypto crates until a battle-tested no_std OSCORE
+# crate exists (liboscore requires C FFI which complicates embedded cross-compile).
+# Switch to liboscore or coapcore when they mature for embedded targets.
+aes = { version = "0.8", default-features = false }
+ccm = { version = "0.5", default-features = false }
+heapless = "0.8"
+hkdf = { version = "0.13", default-features = false }
+sha2 = { version = "0.11", default-features = false }
+zeroize = { version = "1.8", default-features = false, features = ["derive"] }
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
+
+[dev-dependencies]
+hex-literal = "0.4"
+
+[features]
+default = []
+std = []
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt"]
+log = ["dep:log"]
