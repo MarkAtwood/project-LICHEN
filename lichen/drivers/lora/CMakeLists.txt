@@ -1,3 +1,4 @@
 zephyr_library()
 zephyr_library_sources_ifdef(CONFIG_LORA_LICHEN_SIM lora_sim.c)
+zephyr_library_sources_ifdef(CONFIG_LORA_LICHEN_RENODE lora_renode.c)
 add_subdirectory_ifdef(CONFIG_LORA_LR1110 lr1110)

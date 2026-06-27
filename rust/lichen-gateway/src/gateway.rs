@@ -6,6 +6,7 @@ use lichen_schc::codec::{compress, decompress, SchcError};
 use tracing::{info, warn};
 
 /// Top-level border router state.
+#[derive(Debug)]
 pub struct Gateway {
     pub node: Node,
     /// Routes installed in the kernel routing table.
@@ -60,10 +61,6 @@ impl Gateway {
                 "upstream packet is not IPv6 — dropping"
             );
             return None;
-        }
-        let dst: [u8; 16] = ipv6_packet[24..40].try_into().unwrap();
-        if let Some(nexthop) = self.routes.get(&dst) {
-            info!(?nexthop, "routing to mesh node");
         }
         let mut out = vec![0u8; ipv6_packet.len() + 2];
         match compress(ipv6_packet, &mut out) {

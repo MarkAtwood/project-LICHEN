@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+[package]
+name = "lichen-ipv6"
+description = "Minimal IPv6/ICMPv6/UDP for LICHEN mesh nodes"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+# ponytail: no smoltcp, no full IP stack. Just header construction + ICMPv6
+# basics for standalone pucks. ~300 LOC vs 15k+.
+heapless = "0.8"
+
+# Logging backends (optional, feature-gated)
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4", default-features = false, optional = true }
+
+[dev-dependencies]
+hex-literal = "0.4"
+
+[features]
+default = []
+std = []
+# Logging: enable one or neither, not both
+defmt = ["dep:defmt"]
+log = ["dep:log"]

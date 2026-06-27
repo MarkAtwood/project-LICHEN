@@ -29,14 +29,50 @@ pub const MAX_ANNOUNCE_HOPS: u8 = 15;
 /// Fixed portion length before app_data.
 const FIXED_LENGTH: usize = 1 + 1 + 1 + 2 + 8 + 32 + 48;
 
+use crate::error::{BufferTooSmall, TooShort};
+
 /// Announce message parse/serialize error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnnounceError {
-    TooShort,
+    TooShort(TooShort),
     WrongType(u8),
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
     NotSigned,
     HopCountExceeded,
+}
+
+impl core::fmt::Display for AnnounceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort(e) => write!(f, "announce {}", e),
+            Self::WrongType(t) => write!(f, "wrong announce type: {}", t),
+            Self::BufferTooSmall(e) => write!(f, "announce {}", e),
+            Self::NotSigned => write!(f, "announce not signed"),
+            Self::HopCountExceeded => write!(f, "hop count exceeded"),
+        }
+    }
+}
+
+impl core::error::Error for AnnounceError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::TooShort(e) => Some(e),
+            Self::BufferTooSmall(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<TooShort> for AnnounceError {
+    fn from(e: TooShort) -> Self {
+        Self::TooShort(e)
+    }
+}
+
+impl From<BufferTooSmall> for AnnounceError {
+    fn from(e: BufferTooSmall) -> Self {
+        Self::BufferTooSmall(e)
+    }
 }
 
 /// A parsed announce message.
@@ -57,7 +93,7 @@ impl<'a> Announce<'a> {
     /// Parse from wire format.
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, AnnounceError> {
         if data.len() < FIXED_LENGTH {
-            return Err(AnnounceError::TooShort);
+            return Err(TooShort::new(FIXED_LENGTH, data.len()).into());
         }
         if data[0] != ANNOUNCE_TYPE {
             return Err(AnnounceError::WrongType(data[0]));
@@ -90,7 +126,7 @@ impl<'a> Announce<'a> {
     pub fn write_signed_data(&self, out: &mut [u8]) -> Result<usize, AnnounceError> {
         let len = self.signed_data_len();
         if out.len() < len {
-            return Err(AnnounceError::BufferTooSmall);
+            return Err(BufferTooSmall::new(len, out.len()).into());
         }
         out[..8].copy_from_slice(self.originator_iid);
         out[8..40].copy_from_slice(self.pubkey);
@@ -106,6 +142,7 @@ impl<'a> Announce<'a> {
 }
 
 /// Builder for creating announce messages.
+#[derive(Debug)]
 pub struct AnnounceBuilder<'a> {
     pub originator_iid: &'a [u8; 8],
     pub pubkey: &'a [u8; 32],
@@ -121,7 +158,7 @@ impl<'a> AnnounceBuilder<'a> {
     pub fn write_to(&self, out: &mut [u8]) -> Result<usize, AnnounceError> {
         let total = FIXED_LENGTH + self.app_data.len();
         if out.len() < total {
-            return Err(AnnounceError::BufferTooSmall);
+            return Err(BufferTooSmall::new(total, out.len()).into());
         }
 
         out[0] = ANNOUNCE_TYPE;
@@ -182,7 +219,10 @@ mod tests {
 
     #[test]
     fn too_short() {
-        assert_eq!(Announce::from_bytes(&[0u8; 92]), Err(AnnounceError::TooShort));
+        assert_eq!(
+            Announce::from_bytes(&[0u8; 92]),
+            Err(AnnounceError::TooShort(TooShort::new(FIXED_LENGTH, 92)))
+        );
     }
 
     #[test]

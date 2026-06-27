@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+config LORA_LOOPBACK
+	bool "LoRa loopback driver for testing"
+	depends on LORA
+	help
+	  Simple loopback driver for native_sim that loops transmitted packets
+	  back to the receiver. No external simulator or hardware required.
+	  Useful for testing the L2 stack without network connectivity.
+
+if LORA_LOOPBACK
+
+config LORA_LOOPBACK_QUEUE_DEPTH
+	int "Loopback queue depth"
+	default 8
+	range 1 64
+	help
+	  Maximum number of packets that can be queued for loopback.
+	  Packets sent when the queue is full will be dropped.
+
+config LORA_LOOPBACK_RSSI
+	int "Simulated RSSI value (dBm)"
+	default -50
+	range -150 0
+	help
+	  RSSI value reported for received loopback packets.
+
+config LORA_LOOPBACK_SNR
+	int "Simulated SNR value (dB)"
+	default 10
+	range -20 20
+	help
+	  SNR value reported for received loopback packets.
+
+endif # LORA_LOOPBACK

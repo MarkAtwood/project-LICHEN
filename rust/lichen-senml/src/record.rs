@@ -1,10 +1,23 @@
 //! SenML record type (RFC 8428 §4).
 
+use crate::cbor::{self, CborError};
+
 /// A single SenML record.
 ///
 /// Fields mirror RFC 8428 §4.3. All string fields are `&str` slices to avoid
 /// heap allocation; owned variants can be built with `alloc` (future work).
-#[derive(Debug)]
+///
+/// # Encoding/Decoding
+///
+/// Single records can use the method API for consistency with other crates:
+/// ```ignore
+/// let n = record.encode(&mut buf)?;
+/// let record = Record::parse(&data)?;
+/// ```
+///
+/// For batch operations on multiple records, use [`cbor::encode`] and
+/// [`cbor::decode`] directly, which avoid repeated array framing overhead.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Record<'a> {
     /// Base name, e.g. `"urn:dev:mac:0123456789abcdef:"`.
     pub base_name: Option<&'a str>,
@@ -36,5 +49,27 @@ impl<'a> Record<'a> {
             bool_value: None,
             unit: None,
         }
+    }
+
+    /// Encode this record as a SenML-CBOR pack (single-element array).
+    ///
+    /// Returns the number of bytes written. For encoding multiple records,
+    /// use [`cbor::encode`] to avoid repeated array framing.
+    pub fn encode(&self, out: &mut [u8]) -> Result<usize, CborError> {
+        cbor::encode(core::slice::from_ref(self), out)
+    }
+
+    /// Parse a single record from a SenML-CBOR pack.
+    ///
+    /// Returns the parsed record. The input must be a CBOR array containing
+    /// exactly one record map. For decoding multiple records, use
+    /// [`cbor::decode`].
+    pub fn parse(data: &'a [u8]) -> Result<Self, CborError> {
+        let mut buf = [Record::empty()];
+        let count = cbor::decode(data, &mut buf)?;
+        if count != 1 {
+            return Err(CborError::InvalidInput);
+        }
+        Ok(buf[0])
     }
 }

@@ -123,9 +123,14 @@ class ConfigResource(_ReadResource):
         return _cbor_response(self.node_info.get_config())
 
     async def render_put(self, request: Message) -> Message:
-        updates = cbor2.loads(request.payload) if request.payload else {}
+        if not request.payload:
+            return Message(code=BAD_REQUEST)
+        try:
+            updates = cbor2.loads(request.payload)
+        except Exception:
+            return Message(code=BAD_REQUEST)
         if not isinstance(updates, dict):
-            return Message(code=CHANGED)  # ignore non-object bodies
+            return Message(code=BAD_REQUEST)
         self.node_info.set_config(updates)
         return Message(code=CHANGED)
 

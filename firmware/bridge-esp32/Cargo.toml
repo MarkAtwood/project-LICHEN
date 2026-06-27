@@ -1,0 +1,33 @@
+[package]
+name = "lichen-bridge-esp32"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# ESP32 HAL with Embassy support
+esp-hal = { version = "1.1", features = ["esp32", "unstable"] }
+esp-hal-embassy = { version = "0.9", features = ["esp32"] }
+esp-println = { version = "0.14", features = ["esp32", "log"] }
+esp-backtrace = { version = "0.15", features = ["esp32", "panic-handler", "println"] }
+esp-alloc = "0.7"
+
+# Embassy
+embassy-executor = { version = "0.10", features = ["task-arena-size-65536"] }
+embassy-time = "0.5"
+embassy-sync = "0.8"
+embassy-futures = "0.1"
+
+# Embedded
+embedded-hal = "1"
+embedded-hal-async = "1"
+static_cell = "2"
+log = "0.4"
+
+[profile.release]
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1
+debug = true

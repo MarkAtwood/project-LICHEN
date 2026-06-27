@@ -11,8 +11,25 @@ pub enum RplError {
     TooShort,
     OptionOverrun,
     BadOptionType(u8),
+    BadRoutingType(u8),
     BufferTooSmall,
+    InvalidOption,
 }
+
+impl core::fmt::Display for RplError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "message too short"),
+            Self::OptionOverrun => write!(f, "option overruns buffer"),
+            Self::BadOptionType(t) => write!(f, "bad option type: {}", t),
+            Self::BadRoutingType(t) => write!(f, "bad routing type: {}", t),
+            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::InvalidOption => write!(f, "invalid option value"),
+        }
+    }
+}
+
+impl core::error::Error for RplError {}
 
 // ── Option type bytes ─────────────────────────────────────────────────────────
 
@@ -54,7 +71,7 @@ pub struct Dio {
 impl Dio {
     pub const BASE_LEN: usize = 24;
 
-    pub fn parse(data: &[u8]) -> Result<Self, RplError> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, RplError> {
         if data.len() < Self::BASE_LEN {
             return Err(RplError::TooShort);
         }
@@ -68,11 +85,13 @@ impl Dio {
             preference: gmop & 0x7,
             dtsn: data[5],
             flags: data[6],
+            // SAFETY: length check above ensures data.len() >= BASE_LEN (24),
+            // so 8..24 is within bounds and exactly 16 bytes
             dodag_id: data[8..24].try_into().unwrap(),
         })
     }
 
-    pub fn encode(&self, out: &mut [u8]) -> Result<usize, RplError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, RplError> {
         if out.len() < Self::BASE_LEN {
             return Err(RplError::BufferTooSmall);
         }
@@ -120,7 +139,7 @@ pub struct Dao {
 impl Dao {
     pub const BASE_LEN: usize = 20;
 
-    pub fn parse(data: &[u8]) -> Result<Self, RplError> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, RplError> {
         if data.len() < Self::BASE_LEN {
             return Err(RplError::TooShort);
         }
@@ -130,11 +149,13 @@ impl Dao {
             ack_requested: (kd >> 7) & 1 == 1,
             flags: kd & 0x3F,
             dao_sequence: data[3],
+            // SAFETY: length check above ensures data.len() >= BASE_LEN (20),
+            // so 4..20 is within bounds and exactly 16 bytes
             dodag_id: data[4..20].try_into().unwrap(),
         })
     }
 
-    pub fn encode(&self, out: &mut [u8]) -> Result<usize, RplError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, RplError> {
         if out.len() < Self::BASE_LEN {
             return Err(RplError::BufferTooSmall);
         }
@@ -190,7 +211,7 @@ impl Default for DodagConfig {
 }
 
 impl DodagConfig {
-    pub fn parse(data: &[u8]) -> Result<Self, RplError> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, RplError> {
         if data.len() < DODAG_CONFIG_DATA_LEN {
             return Err(RplError::TooShort);
         }
@@ -206,7 +227,7 @@ impl DodagConfig {
         })
     }
 
-    pub fn encode_option(&self, out: &mut [u8]) -> Result<usize, RplError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, RplError> {
         let needed = 2 + DODAG_CONFIG_DATA_LEN;
         if out.len() < needed {
             return Err(RplError::BufferTooSmall);
@@ -242,11 +263,15 @@ pub struct RplTarget {
 
 impl RplTarget {
     /// Parse from the option data bytes (after type/length).
-    pub fn parse(data: &[u8]) -> Result<Self, RplError> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, RplError> {
         if data.len() < 2 {
             return Err(RplError::TooShort);
         }
         let prefix_len = data[1];
+        // IPv6 prefix cannot exceed 128 bits (16 bytes)
+        if prefix_len > 128 {
+            return Err(RplError::InvalidOption);
+        }
         let nbytes = (prefix_len as usize).div_ceil(8);
         if data.len() < 2 + nbytes {
             return Err(RplError::TooShort);
@@ -256,7 +281,7 @@ impl RplTarget {
         Ok(Self { prefix_len, prefix })
     }
 
-    pub fn encode_option(&self, out: &mut [u8]) -> Result<usize, RplError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, RplError> {
         // Always encode full /128 for simplicity
         let nbytes = (self.prefix_len as usize).div_ceil(8);
         let data_len = 2 + nbytes;
@@ -289,10 +314,12 @@ pub struct TransitInfo {
 impl TransitInfo {
     pub const DATA_LEN: usize = 20; // flags(1)+path_ctl(1)+path_seq(1)+path_life(1)+addr(16)
 
-    pub fn parse(data: &[u8]) -> Result<Self, RplError> {
+    pub fn from_bytes(data: &[u8]) -> Result<Self, RplError> {
         if data.len() < Self::DATA_LEN {
             return Err(RplError::TooShort);
         }
+        // SAFETY: length check above ensures data.len() >= DATA_LEN (20),
+        // so 4..20 is within bounds and exactly 16 bytes
         Ok(Self {
             path_control: data[1],
             path_sequence: data[2],
@@ -301,7 +328,7 @@ impl TransitInfo {
         })
     }
 
-    pub fn encode_option(&self, out: &mut [u8]) -> Result<usize, RplError> {
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, RplError> {
         let needed = 2 + Self::DATA_LEN;
         if out.len() < needed {
             return Err(RplError::BufferTooSmall);
@@ -320,6 +347,7 @@ impl TransitInfo {
 // ── TLV option iterator ───────────────────────────────────────────────────────
 
 /// An iterator over RPL TLV options in a byte slice.
+#[derive(Debug)]
 pub struct OptionIter<'a> {
     data: &'a [u8],
     pos: usize,
@@ -400,7 +428,7 @@ mod tests {
         };
 
         let mut buf = [0u8; 24];
-        orig.encode(&mut buf).unwrap();
+        orig.write_to(&mut buf).unwrap();
 
         // gmop = (1<<7) | (1<<3) | 0 = 0x88
         assert_eq!(buf[0], 0); // instance id
@@ -410,13 +438,13 @@ mod tests {
         assert_eq!(buf[5], 42); // dtsn
         assert_eq!(&buf[8..24], &dodag_id);
 
-        let decoded = Dio::parse(&buf).unwrap();
+        let decoded = Dio::from_bytes(&buf).unwrap();
         assert_eq!(decoded, orig);
     }
 
     #[test]
     fn dio_too_short() {
-        assert_eq!(Dio::parse(&[0u8; 23]), Err(RplError::TooShort));
+        assert_eq!(Dio::from_bytes(&[0u8; 23]), Err(RplError::TooShort));
     }
 
     // ── DAO round-trip ────────────────────────────────────────────────────────
@@ -435,7 +463,7 @@ mod tests {
         };
 
         let mut buf = [0u8; 20];
-        orig.encode(&mut buf).unwrap();
+        orig.write_to(&mut buf).unwrap();
 
         // kd: K=0, D=1 → 0x40
         assert_eq!(buf[0], 0);
@@ -444,7 +472,7 @@ mod tests {
         assert_eq!(buf[3], 7); // sequence
         assert_eq!(&buf[4..20], &dodag_id);
 
-        let decoded = Dao::parse(&buf).unwrap();
+        let decoded = Dao::from_bytes(&buf).unwrap();
         assert_eq!(decoded, orig);
     }
 
@@ -460,7 +488,7 @@ mod tests {
             dodag_id,
         };
         let mut buf = [0u8; 20];
-        dao.encode(&mut buf).unwrap();
+        dao.write_to(&mut buf).unwrap();
         assert_eq!(buf[1], 0xC0); // K=1, D=1
     }
 
@@ -478,7 +506,7 @@ mod tests {
             prefix,
         };
         let mut buf = [0u8; 22];
-        let n = target.encode_option(&mut buf).unwrap();
+        let n = target.write_to(&mut buf).unwrap();
         assert_eq!(buf[0], OPT_RPL_TARGET);
         assert_eq!(buf[1], 18); // 2 + 16 bytes for /128
         assert_eq!(buf[2], 0); // flags
@@ -486,7 +514,7 @@ mod tests {
         assert_eq!(&buf[4..20], &prefix);
         assert_eq!(n, 20);
 
-        let decoded = RplTarget::parse(&buf[2..n]).unwrap();
+        let decoded = RplTarget::from_bytes(&buf[2..n]).unwrap();
         assert_eq!(decoded, target);
     }
 
@@ -506,14 +534,14 @@ mod tests {
             parent_address: parent,
         };
         let mut buf = [0u8; 24];
-        let n = ti.encode_option(&mut buf).unwrap();
+        let n = ti.write_to(&mut buf).unwrap();
         assert_eq!(buf[0], OPT_TRANSIT_INFO);
         assert_eq!(buf[1], 20);
         assert_eq!(buf[4], 3); // path_sequence
         assert_eq!(buf[5], 255); // path_lifetime
         assert_eq!(&buf[6..22], &parent);
 
-        let decoded = TransitInfo::parse(&buf[2..n]).unwrap();
+        let decoded = TransitInfo::from_bytes(&buf[2..n]).unwrap();
         assert_eq!(decoded, ti);
     }
 
@@ -523,11 +551,11 @@ mod tests {
     fn dodag_config_encode_decode() {
         let cfg = DodagConfig::default();
         let mut buf = [0u8; 20];
-        let n = cfg.encode_option(&mut buf).unwrap();
+        let n = cfg.write_to(&mut buf).unwrap();
         assert_eq!(buf[0], OPT_DODAG_CONFIG);
         assert_eq!(buf[1], 14);
 
-        let decoded = DodagConfig::parse(&buf[2..n]).unwrap();
+        let decoded = DodagConfig::from_bytes(&buf[2..n]).unwrap();
         assert_eq!(decoded.min_hop_rank_increase, 256);
         assert_eq!(decoded.max_rank_increase, 2048);
         assert_eq!(decoded.ocp, 1);
@@ -556,10 +584,10 @@ mod tests {
         let mut buf = [0u8; 50];
         let mut pos = 0;
         let mut tmp = [0u8; 25];
-        let n = target.encode_option(&mut tmp).unwrap();
+        let n = target.write_to(&mut tmp).unwrap();
         buf[pos..pos + n].copy_from_slice(&tmp[..n]);
         pos += n;
-        let n = transit.encode_option(&mut tmp).unwrap();
+        let n = transit.write_to(&mut tmp).unwrap();
         buf[pos..pos + n].copy_from_slice(&tmp[..n]);
         pos += n;
 
@@ -570,12 +598,12 @@ mod tests {
             match opt.opt_type {
                 OPT_RPL_TARGET => {
                     found_target = true;
-                    let t = RplTarget::parse(opt.data).unwrap();
+                    let t = RplTarget::from_bytes(opt.data).unwrap();
                     assert_eq!(t.prefix, target_addr);
                 }
                 OPT_TRANSIT_INFO => {
                     found_transit = true;
-                    let ti = TransitInfo::parse(opt.data).unwrap();
+                    let ti = TransitInfo::from_bytes(opt.data).unwrap();
                     assert_eq!(ti.parent_address, parent_addr);
                 }
                 _ => {}

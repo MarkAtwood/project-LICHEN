@@ -20,6 +20,14 @@
 
 LOG_MODULE_REGISTER(lichen_gateway, LOG_LEVEL_INF);
 
+/*
+ * Manual LoRa handling (non-L2 mode).
+ *
+ * When CONFIG_LICHEN_L2 is enabled, the L2 layer handles all LoRa
+ * initialization and RX via its own thread. These definitions are only
+ * needed for direct LoRa testing without the full network stack.
+ */
+#ifndef CONFIG_LICHEN_L2
 /* LoRa parameters per LICHEN spec: SF10 / 125 kHz / CR4-5.
  * Frequency is region-dependent; 868 MHz (EU) is the default.
  * Override per board via a board-specific Kconfig once that lands. */
@@ -31,6 +39,7 @@ LOG_MODULE_REGISTER(lichen_gateway, LOG_LEVEL_INF);
 /* Set by main() after lora_config() succeeds; read by the RX thread. */
 static const struct device *s_lora_dev;
 static K_SEM_DEFINE(s_radio_ready, 0, 1);
+#endif /* !CONFIG_LICHEN_L2 */
 
 /* CBOR content-format code (RFC 7252 §12.3 / IANA CoAP Content-Formats) */
 #define CBOR_CONTENT_FORMAT 60
@@ -87,38 +96,131 @@ static int coap_respond(struct coap_resource *resource,
 }
 
 /* --------------------------------------------------------------------------
- * /status
+ * /status (Observable)
  * -------------------------------------------------------------------------- */
 
 /*
- * Pre-encoded CBOR: {"rank": 256, "role": "root"}
- *   a2              -- map(2)
- *   64 "rank"       -- tstr(4)
- *   19 01 00        -- uint(256)
- *   64 "role"       -- tstr(4)
- *   64 "root"       -- tstr(4)
+ * Build CBOR: {"rank": <rank>, "role": "root", "uptime": <ms>}
+ * Returns encoded byte count.
  */
-static const uint8_t cbor_status[] = {
-	0xa2,
-	0x64, 'r', 'a', 'n', 'k',
-	0x19, 0x01, 0x00,
-	0x64, 'r', 'o', 'l', 'e',
-	0x64, 'r', 'o', 'o', 't',
-};
+static size_t encode_status_cbor(uint8_t *buf, size_t buf_size, uint16_t rank)
+{
+	uint32_t uptime_ms = k_uptime_get_32();
+
+	/*
+	 * CBOR encoding:
+	 *   a3              -- map(3)
+	 *   64 "rank"       -- tstr(4)
+	 *   19 XX XX        -- uint(16-bit)
+	 *   64 "role"       -- tstr(4)
+	 *   64 "root"       -- tstr(4)
+	 *   66 "uptime"     -- tstr(6)
+	 *   1a XX XX XX XX  -- uint(32-bit)
+	 */
+	if (buf_size < 28) {
+		return 0;
+	}
+
+	size_t off = 0;
+	buf[off++] = 0xa3; /* map(3) */
+
+	/* rank: uint16 */
+	buf[off++] = 0x64; /* tstr(4) */
+	buf[off++] = 'r'; buf[off++] = 'a'; buf[off++] = 'n'; buf[off++] = 'k';
+	buf[off++] = 0x19; /* uint16 */
+	buf[off++] = (uint8_t)(rank >> 8);
+	buf[off++] = (uint8_t)(rank & 0xFF);
+
+	/* role: "root" */
+	buf[off++] = 0x64; /* tstr(4) */
+	buf[off++] = 'r'; buf[off++] = 'o'; buf[off++] = 'l'; buf[off++] = 'e';
+	buf[off++] = 0x64; /* tstr(4) */
+	buf[off++] = 'r'; buf[off++] = 'o'; buf[off++] = 'o'; buf[off++] = 't';
+
+	/* uptime: uint32 */
+	buf[off++] = 0x66; /* tstr(6) */
+	buf[off++] = 'u'; buf[off++] = 'p'; buf[off++] = 't';
+	buf[off++] = 'i'; buf[off++] = 'm'; buf[off++] = 'e';
+	buf[off++] = 0x1a; /* uint32 */
+	buf[off++] = (uint8_t)(uptime_ms >> 24);
+	buf[off++] = (uint8_t)(uptime_ms >> 16);
+	buf[off++] = (uint8_t)(uptime_ms >> 8);
+	buf[off++] = (uint8_t)(uptime_ms & 0xFF);
+
+	return off;
+}
+
+/* Gateway status state (observable) */
+static uint16_t s_rank = 256;  /* RPL rank: 256 = root */
 
 static int status_get(struct coap_resource *resource,
 		      struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
 {
+	uint8_t cbor_buf[32];
+	size_t len = encode_status_cbor(cbor_buf, sizeof(cbor_buf), s_rank);
+
 	return coap_respond(resource, request, addr, addr_len,
-			    COAP_RESPONSE_CODE_CONTENT,
-			    cbor_status, sizeof(cbor_status));
+			    COAP_RESPONSE_CODE_CONTENT, cbor_buf, len);
+}
+
+/*
+ * Notify callback for Observe (RFC 7641).
+ * Called by coap_resource_notify() when we want to push updates to observers.
+ */
+static void status_notify(struct coap_resource *resource,
+			  struct coap_observer *observer)
+{
+	uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
+	uint8_t cbor_buf[32];
+	struct coap_packet notif;
+	size_t cbor_len;
+	int r;
+
+	cbor_len = encode_status_cbor(cbor_buf, sizeof(cbor_buf), s_rank);
+	if (cbor_len == 0) {
+		return;
+	}
+
+	r = coap_packet_init(&notif, buf, sizeof(buf), COAP_VERSION_1,
+			     COAP_TYPE_NON_CON,
+			     observer->tkl, observer->token,
+			     COAP_RESPONSE_CODE_CONTENT, 0);
+	if (r < 0) {
+		return;
+	}
+
+	/* Add Observe option with the resource age */
+	r = coap_append_option_int(&notif, COAP_OPTION_OBSERVE, resource->age);
+	if (r < 0) {
+		return;
+	}
+
+	r = coap_append_option_int(&notif, COAP_OPTION_CONTENT_FORMAT,
+				   CBOR_CONTENT_FORMAT);
+	if (r < 0) {
+		return;
+	}
+
+	r = coap_packet_append_payload_marker(&notif);
+	if (r < 0) {
+		return;
+	}
+
+	r = coap_packet_append_payload(&notif, cbor_buf, cbor_len);
+	if (r < 0) {
+		return;
+	}
+
+	(void)coap_resource_send(resource, &notif,
+				 &observer->addr, sizeof(observer->addr), NULL);
 }
 
 static const char * const status_path[] = { "status", NULL };
 COAP_RESOURCE_DEFINE(status, lichen_coap, {
-	.get  = status_get,
-	.path = status_path,
+	.get    = status_get,
+	.notify = status_notify,
+	.path   = status_path,
 });
 
 /* --------------------------------------------------------------------------
@@ -207,8 +309,13 @@ COAP_SERVICE_DEFINE(lichen_coap, NULL, &coap_port, COAP_SERVICE_AUTOSTART);
 
 /* --------------------------------------------------------------------------
  * LoRa RX thread — runs continuously, logs every received frame.
+ *
+ * When CONFIG_LICHEN_L2 is enabled, the L2 layer handles LoRa RX via its own
+ * thread and routes packets through the IPv6 stack. This manual RX thread is
+ * only used for direct LoRa testing without the full network stack.
  * -------------------------------------------------------------------------- */
 
+#ifndef CONFIG_LICHEN_L2
 static void lora_rx_entry(void *a, void *b, void *c)
 {
 	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
@@ -242,6 +349,7 @@ static void lora_rx_entry(void *a, void *b, void *c)
 K_THREAD_DEFINE(lora_rx, LORA_RX_STACKSZ,
 		lora_rx_entry, NULL, NULL, NULL,
 		LORA_RX_PRIORITY, 0, 0);
+#endif /* !CONFIG_LICHEN_L2 */
 
 /* --------------------------------------------------------------------------
  * main
@@ -251,6 +359,14 @@ int main(void)
 {
 	LOG_INF("LICHEN gateway starting");
 
+#ifdef CONFIG_LICHEN_L2
+	/*
+	 * When LICHEN L2 is enabled, the L2 layer handles LoRa initialization
+	 * and RX automatically via NET_DEVICE_INIT. The L2 interface will be
+	 * available to the IPv6 stack for sending/receiving packets over LoRa.
+	 */
+	LOG_INF("LICHEN L2 enabled - LoRa handled by network stack");
+#else
 	/* LoRa radio init.  The sim driver ignores RF parameters and returns 0;
 	 * on hardware this configures the SX126x transceiver. */
 	s_lora_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_lora));
@@ -278,6 +394,7 @@ int main(void)
 			k_sem_give(&s_radio_ready);
 		}
 	}
+#endif /* !CONFIG_LICHEN_L2 */
 
 	/* LICHEN Native over USB CDC-ACM */
 #if IS_ENABLED(CONFIG_LICHEN_NATIVE)

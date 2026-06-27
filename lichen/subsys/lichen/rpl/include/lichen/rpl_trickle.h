@@ -1,0 +1,153 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+
+/**
+ * @file lichen/rpl_trickle.h
+ * @brief Trickle timer (RFC 6206) - deterministic state machine
+ *
+ * Caller-driven clock design: the caller is responsible for providing random
+ * offsets (for reproducible tests) and polling next_event() to schedule timers.
+ *
+ * No async, no allocation, suitable for embedded systems.
+ */
+
+#ifndef LICHEN_RPL_TRICKLE_H_
+#define LICHEN_RPL_TRICKLE_H_
+
+#include <stdint.h>
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Trickle event type
+ */
+enum lichen_trickle_event_type {
+	/** Transmit at or after at_ms if counter < k */
+	LICHEN_TRICKLE_TRANSMIT,
+	/** Current interval ends at at_ms; call expire */
+	LICHEN_TRICKLE_EXPIRE,
+};
+
+/**
+ * @brief Trickle scheduled event
+ */
+struct lichen_trickle_event {
+	enum lichen_trickle_event_type type;
+	uint32_t at_ms;
+};
+
+/**
+ * @brief RFC 6206 Trickle timer state
+ *
+ * All times are integer milliseconds. The caller supplies random offsets
+ * so the timer is deterministic and testable without a live RNG.
+ */
+struct lichen_trickle {
+	uint32_t imin;           /**< Minimum interval (Imin) in ms */
+	uint32_t max_interval;   /**< Maximum interval (Imax) in ms */
+	uint32_t k;              /**< Redundancy constant */
+	uint32_t interval;       /**< Current interval size in ms */
+	uint32_t counter;        /**< Consistency counter (c) */
+	uint32_t interval_start; /**< Start time of current interval */
+	uint32_t transmit_time;  /**< Scheduled transmit time */
+	bool transmitted;        /**< Whether transmit point has passed */
+};
+
+/**
+ * @brief Initialize a Trickle timer.
+ *
+ * @param t              Timer to initialize
+ * @param imin_ms        Minimum interval in milliseconds
+ * @param imax_doublings Number of times imin is doubled to reach max
+ * @param k              Redundancy constant
+ */
+void lichen_trickle_init(struct lichen_trickle *t,
+			 uint32_t imin_ms,
+			 uint32_t imax_doublings,
+			 uint32_t k);
+
+/**
+ * @brief Begin the first interval (RFC 6206 step 1-2).
+ *
+ * @param t           Timer
+ * @param now         Current time in ms
+ * @param rand_offset Random value in [0, imin/2) for transmit scheduling
+ */
+void lichen_trickle_start(struct lichen_trickle *t,
+			  uint32_t now,
+			  uint32_t rand_offset);
+
+/**
+ * @brief Get the absolute time when the current interval ends.
+ */
+static inline uint32_t lichen_trickle_interval_end(const struct lichen_trickle *t)
+{
+	return t->interval_start + t->interval;
+}
+
+/**
+ * @brief Record a consistent transmission from a neighbor (RFC 6206 step 3).
+ *
+ * Call this when receiving a DIO with the same DODAG version.
+ */
+static inline void lichen_trickle_heard_consistent(struct lichen_trickle *t)
+{
+	t->counter++;
+}
+
+/**
+ * @brief Check if a DIO should be sent at transmit time (c < k, RFC 6206 step 4).
+ */
+static inline bool lichen_trickle_should_transmit(const struct lichen_trickle *t)
+{
+	return t->counter < t->k;
+}
+
+/**
+ * @brief Mark the transmit point reached.
+ *
+ * @return true if a DIO should be sent (counter < k)
+ */
+bool lichen_trickle_fire_transmit(struct lichen_trickle *t);
+
+/**
+ * @brief End the current interval: double (capped) and start the next (step 5).
+ *
+ * @param t           Timer
+ * @param now         Current time in ms
+ * @param rand_offset Random value in [0, new_interval/2) for transmit scheduling
+ */
+void lichen_trickle_expire(struct lichen_trickle *t,
+			   uint32_t now,
+			   uint32_t rand_offset);
+
+/**
+ * @brief Handle an inconsistency: shrink to imin and restart (RFC 6206 step 6).
+ *
+ * No-op if the interval is already imin (RFC 6206 section 4.2).
+ *
+ * @param t           Timer
+ * @param now         Current time in ms
+ * @param rand_offset Random value in [0, imin/2) for transmit scheduling
+ */
+void lichen_trickle_reset(struct lichen_trickle *t,
+			  uint32_t now,
+			  uint32_t rand_offset);
+
+/**
+ * @brief Get the next scheduled event.
+ *
+ * @param t   Timer
+ * @param out Event to populate
+ */
+void lichen_trickle_next_event(const struct lichen_trickle *t,
+			       struct lichen_trickle_event *out);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LICHEN_RPL_TRICKLE_H_ */

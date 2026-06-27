@@ -6,41 +6,40 @@
 //! Curve25519-dalek provides timing-safe scalar multiplication.
 //! Nonce is deterministic (RFC 6979 style) to prevent nonce reuse.
 
+use crate::keys::{PrivateKey, PublicKey, Seed};
+use crate::seqnum::LinkSeqNum;
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT, edwards::CompressedEdwardsY, scalar::Scalar,
+    traits::IsIdentity,
 };
 use sha2::{Digest, Sha512};
 
-/// Derive an Ed25519 keypair from a 32-byte seed.
+/// Derive an Ed25519 keypair from a seed.
 ///
 /// Returns `(privkey, pubkey)`:
-/// - `privkey` — 32-byte clamped scalar (little-endian)
-/// - `pubkey`  — 32-byte compressed Ed25519 point
-pub fn derive_keypair(seed: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
-    let hash = Sha512::digest(seed);
-    let mut h = [0u8; 64];
-    h.copy_from_slice(&hash[..]);
-
-    let privkey = clamp(h[..32].try_into().unwrap());
-    let priv_scalar = Scalar::from_bytes_mod_order(privkey);
-    let pubkey = (priv_scalar * ED25519_BASEPOINT_POINT)
+/// - `privkey` — clamped Ed25519 scalar (little-endian)
+/// - `pubkey`  — compressed Ed25519 point
+pub fn derive_keypair(seed: &Seed) -> (PrivateKey, PublicKey) {
+    let hash = Sha512::digest(seed.as_bytes());
+    // SAFETY: hash is 64 bytes, so hash[..32] is exactly 32 bytes
+    let privkey_bytes = clamp(hash[..32].try_into().unwrap());
+    let priv_scalar = Scalar::from_bytes_mod_order(privkey_bytes);
+    let pubkey_bytes = (priv_scalar * ED25519_BASEPOINT_POINT)
         .compress()
         .to_bytes();
-    (privkey, pubkey)
+    (PrivateKey::new(privkey_bytes), PublicKey::new(pubkey_bytes))
 }
 
 /// Sign `msg`. Returns 48-byte signature `e[16] || s[32]`.
 ///
 /// `privkey` and `pubkey` must come from [`derive_keypair`].
-pub fn sign(privkey: &[u8; 32], pubkey: &[u8; 32], msg: &[u8]) -> [u8; 48] {
+pub fn sign(privkey: &PrivateKey, pubkey: &PublicKey, msg: &[u8]) -> [u8; 48] {
     // 1. Deterministic nonce: r = SHA-512(privkey || msg) mod L
     let nonce_hash = Sha512::new()
-        .chain_update(privkey)
+        .chain_update(privkey.as_bytes())
         .chain_update(msg)
         .finalize();
-    let mut nh = [0u8; 64];
-    nh.copy_from_slice(&nonce_hash[..]);
-    let r = Scalar::from_bytes_mod_order_wide(&nh);
+    let r = Scalar::from_bytes_mod_order_wide(&nonce_hash.into());
 
     // 2. Commitment: R = r * B
     let r_bytes = (r * ED25519_BASEPOINT_POINT).compress().to_bytes();
@@ -48,18 +47,20 @@ pub fn sign(privkey: &[u8; 32], pubkey: &[u8; 32], msg: &[u8]) -> [u8; 48] {
     // 3. Challenge: e = SHA-512(R || pubkey || msg)[..16]
     let e_hash = Sha512::new()
         .chain_update(r_bytes)
-        .chain_update(pubkey)
+        .chain_update(pubkey.as_bytes())
         .chain_update(msg)
         .finalize();
+    // SAFETY: e_hash is 64 bytes (SHA-512 output), so [..16] is exactly 16 bytes
     let e: [u8; 16] = e_hash[..16].try_into().unwrap();
 
-    // 4. e_scalar = e || 0x00*16 (32-byte little-endian scalar)
+    // 4. Extend 16-byte challenge to 32-byte scalar. Zero-padding the high
+    //    bytes is correct because Scalar uses little-endian representation.
     let mut e_extended = [0u8; 32];
     e_extended[..16].copy_from_slice(&e);
     let e_scalar = Scalar::from_bytes_mod_order(e_extended);
 
     // 5. s = (r + e_scalar * priv_scalar) mod L
-    let priv_scalar = Scalar::from_bytes_mod_order(*privkey);
+    let priv_scalar = Scalar::from_bytes_mod_order(*privkey.as_bytes());
     let s = r + e_scalar * priv_scalar;
 
     let mut sig = [0u8; 48];
@@ -69,14 +70,23 @@ pub fn sign(privkey: &[u8; 32], pubkey: &[u8; 32], msg: &[u8]) -> [u8; 48] {
 }
 
 /// Verify a 48-byte signature. Returns `true` if valid.
-pub fn verify(pubkey: &[u8; 32], msg: &[u8], sig: &[u8; 48]) -> bool {
+///
+/// Defense-in-depth checks (beyond what minimal Schnorr requires):
+/// - Rejects non-canonical scalars (s >= L, the curve order)
+/// - Rejects zero scalars (s == 0)
+/// - Rejects identity point as pubkey
+/// - Rejects low-order/torsion points as pubkey (not in prime-order subgroup)
+///
+/// These checks prevent attacks on cofactor-sensitive operations and ensure
+/// the pubkey represents a legitimate Ed25519 public key.
+pub fn verify(pubkey: &PublicKey, msg: &[u8], sig: &[u8; 48]) -> bool {
     // 1. Parse: e_received (16 bytes) || s (32 bytes)
+    // SAFETY: sig is exactly 48 bytes, so [..16] = 16 bytes and [16..] = 32 bytes
     let e_received: [u8; 16] = sig[..16].try_into().unwrap();
     let s_bytes: [u8; 32] = sig[16..].try_into().unwrap();
 
     // 2. s must be canonical (< L) and non-zero
-    let s_opt: Option<Scalar> = Scalar::from_canonical_bytes(s_bytes).into();
-    let s = match s_opt {
+    let s: Scalar = match Scalar::from_canonical_bytes(s_bytes).into() {
         Some(s) => s,
         None => return false,
     };
@@ -84,13 +94,14 @@ pub fn verify(pubkey: &[u8; 32], msg: &[u8], sig: &[u8; 48]) -> bool {
         return false;
     }
 
-    // 3. Decompress public key — rejects invalid/low-order points
-    let pubkey_point = match CompressedEdwardsY(*pubkey).decompress() {
-        Some(p) => p,
-        None => return false,
+    // 3. Decompress public key and reject identity/low-order points
+    let pubkey_point = match CompressedEdwardsY(*pubkey.as_bytes()).decompress() {
+        Some(p) if !p.is_identity() && p.is_torsion_free() => p,
+        _ => return false,
     };
 
-    // 4. e_scalar = e_received || 0x00*16
+    // 4. Extend 16-byte challenge to 32-byte scalar. Zero-padding the high
+    //    bytes is correct because Scalar uses little-endian representation.
     let mut e_extended = [0u8; 32];
     e_extended[..16].copy_from_slice(&e_received);
     let e_scalar = Scalar::from_bytes_mod_order(e_extended);
@@ -103,7 +114,7 @@ pub fn verify(pubkey: &[u8; 32], msg: &[u8], sig: &[u8; 48]) -> bool {
     // 6. Recompute challenge and compare
     let e_check = Sha512::new()
         .chain_update(r_prime.as_bytes())
-        .chain_update(pubkey)
+        .chain_update(pubkey.as_bytes())
         .chain_update(msg)
         .finalize();
 
@@ -119,11 +130,11 @@ pub const SIGNATURE_LENGTH: usize = 48;
 /// This matches the Python reference: `_build_signable_data`.
 pub fn sign_frame(
     epoch: u8,
-    seqnum: u16,
+    seqnum: LinkSeqNum,
     dst_addr: &[u8],
     inner_payload: &[u8],
-    privkey: &[u8; 32],
-    pubkey: &[u8; 32],
+    privkey: &PrivateKey,
+    pubkey: &PublicKey,
 ) -> [u8; 48] {
     let mut buf = [0u8; 256];
     let msg = build_signable(&mut buf, epoch, seqnum, dst_addr, inner_payload);
@@ -137,16 +148,18 @@ pub fn sign_frame(
 /// does not verify.
 pub fn verify_frame(
     epoch: u8,
-    seqnum: u16,
+    seqnum: LinkSeqNum,
     dst_addr: &[u8],
     payload_with_sig: &[u8],
-    sender_pubkey: &[u8; 32],
+    sender_pubkey: &PublicKey,
 ) -> bool {
     if payload_with_sig.len() < SIGNATURE_LENGTH {
         return false;
     }
     let split = payload_with_sig.len() - SIGNATURE_LENGTH;
     let inner_payload = &payload_with_sig[..split];
+    // SAFETY: length check above ensures payload_with_sig.len() >= 48,
+    // so [split..] is exactly SIGNATURE_LENGTH (48) bytes
     let sig: [u8; 48] = payload_with_sig[split..].try_into().unwrap();
     let mut buf = [0u8; 256];
     let msg = build_signable(&mut buf, epoch, seqnum, dst_addr, inner_payload);
@@ -157,7 +170,7 @@ pub fn verify_frame(
 fn build_signable<'a>(
     buf: &'a mut [u8; 256],
     epoch: u8,
-    seqnum: u16,
+    seqnum: LinkSeqNum,
     dst_addr: &[u8],
     inner_payload: &[u8],
 ) -> &'a [u8] {
@@ -202,18 +215,18 @@ mod tests {
 
     #[test]
     fn derive_vector1() {
-        let seed = arr32(&hex(
+        let seed = Seed::new(arr32(&hex(
             "0000000000000000000000000000000000000000000000000000000000000000",
-        ));
+        )));
         let (priv_got, pub_got) = derive_keypair(&seed);
         assert_eq!(
-            priv_got,
+            *priv_got.as_bytes(),
             arr32(&hex(
                 "5046adc1dba838867b2bbbfdd0c3423e58b57970b5267a90f57960924a87f156"
             ))
         );
         assert_eq!(
-            pub_got,
+            *pub_got.as_bytes(),
             arr32(&hex(
                 "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
             ))
@@ -222,18 +235,18 @@ mod tests {
 
     #[test]
     fn derive_vector2() {
-        let seed = arr32(&hex(
+        let seed = Seed::new(arr32(&hex(
             "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
-        ));
+        )));
         let (priv_got, pub_got) = derive_keypair(&seed);
         assert_eq!(
-            priv_got,
+            *priv_got.as_bytes(),
             arr32(&hex(
                 "50b8c29238a8403e0ac69e23d47b9184c371a92460d518351b099944bbdfa867"
             ))
         );
         assert_eq!(
-            pub_got,
+            *pub_got.as_bytes(),
             arr32(&hex(
                 "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d"
             ))
@@ -285,8 +298,8 @@ mod tests {
     #[test]
     fn sign_matches_vectors() {
         for (i, v) in VALID.iter().enumerate() {
-            let privkey = arr32(&hex(v.privkey));
-            let pubkey = arr32(&hex(v.pubkey));
+            let privkey = PrivateKey::new(arr32(&hex(v.privkey)));
+            let pubkey = PublicKey::new(arr32(&hex(v.pubkey)));
             let msg = hex(v.message);
             let expected = hex(v.signature);
             let got = sign(&privkey, &pubkey, &msg);
@@ -301,7 +314,7 @@ mod tests {
     #[test]
     fn verify_valid_vectors() {
         for (i, v) in VALID.iter().enumerate() {
-            let pubkey = arr32(&hex(v.pubkey));
+            let pubkey = PublicKey::new(arr32(&hex(v.pubkey)));
             let msg = hex(v.message);
             let sig = arr48(&hex(v.signature));
             assert!(verify(&pubkey, &msg, &sig), "vector {i} verify rejected");
@@ -312,9 +325,9 @@ mod tests {
 
     #[test]
     fn invalid_wrong_message() {
-        let pubkey = arr32(&hex(
+        let pubkey = PublicKey::new(arr32(&hex(
             "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
-        ));
+        )));
         let msg = hex("77726f6e67"); // "wrong"
         let sig    = arr48(&hex("c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009"));
         assert!(!verify(&pubkey, &msg, &sig));
@@ -322,9 +335,9 @@ mod tests {
 
     #[test]
     fn invalid_tampered_challenge() {
-        let pubkey = arr32(&hex(
+        let pubkey = PublicKey::new(arr32(&hex(
             "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
-        ));
+        )));
         let msg = hex("74657374");
         let sig    = arr48(&hex("c9bec10578953fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009"));
         assert!(!verify(&pubkey, &msg, &sig));
@@ -332,9 +345,9 @@ mod tests {
 
     #[test]
     fn invalid_tampered_response() {
-        let pubkey = arr32(&hex(
+        let pubkey = PublicKey::new(arr32(&hex(
             "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
-        ));
+        )));
         let msg = hex("74657374");
         let sig    = arr48(&hex("c9bec10578943fc8d453252fb262fa03ad2220609c98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009"));
         assert!(!verify(&pubkey, &msg, &sig));
@@ -342,9 +355,9 @@ mod tests {
 
     #[test]
     fn invalid_wrong_pubkey() {
-        let pubkey = arr32(&hex(
+        let pubkey = PublicKey::new(arr32(&hex(
             "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6",
-        ));
+        )));
         let msg = hex("74657374");
         let sig    = arr48(&hex("c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009"));
         assert!(!verify(&pubkey, &msg, &sig));
@@ -352,30 +365,78 @@ mod tests {
 
     #[test]
     fn invalid_all_zeros() {
-        let pubkey = arr32(&hex(
+        let pubkey = PublicKey::new(arr32(&hex(
             "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
-        ));
+        )));
         let msg = hex("74657374");
         let sig = [0u8; 48];
         assert!(!verify(&pubkey, &msg, &sig));
+    }
+
+    // ── point validation tests ───────────────────────────────────────────
+    // Defense-in-depth: verify rejects identity points, low-order points,
+    // non-canonical scalars, and zero scalars.
+
+    #[test]
+    fn invalid_identity_point_pubkey() {
+        // Identity point: y=1, x=0 encoded as 0x01 || 0x00*31
+        let pubkey = PublicKey::new(arr32(&hex(
+            "0100000000000000000000000000000000000000000000000000000000000000",
+        )));
+        let msg = hex("74657374");
+        let sig = arr48(&hex("c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009"));
+        assert!(!verify(&pubkey, &msg, &sig), "identity point must be rejected");
+    }
+
+    #[test]
+    fn invalid_low_order_pubkey() {
+        // 8-torsion point (not in prime-order subgroup)
+        let pubkey = PublicKey::new(arr32(&hex(
+            "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+        )));
+        let msg = hex("74657374");
+        let sig = arr48(&hex("c9bec10578943fc8d453252fb262fa03ad2220609d98dda4b561d4b02281f1e8706676c26685a806d6e0d74f345e2009"));
+        assert!(!verify(&pubkey, &msg, &sig), "low-order point must be rejected");
+    }
+
+    #[test]
+    fn invalid_non_canonical_s() {
+        // s = L (curve order), which is non-canonical (must be < L)
+        let pubkey = PublicKey::new(arr32(&hex(
+            "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+        )));
+        let msg = hex("74657374");
+        let sig = arr48(&hex("c9bec10578943fc8d453252fb262fa03edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010"));
+        assert!(!verify(&pubkey, &msg, &sig), "non-canonical s must be rejected");
+    }
+
+    #[test]
+    fn invalid_zero_s() {
+        // s = 0 is invalid
+        let pubkey = PublicKey::new(arr32(&hex(
+            "9d7725e28403e00e9ee54f9b14c868faf99b4b2fafa936eda28f8ae40207780d",
+        )));
+        let msg = hex("74657374");
+        let sig = arr48(&hex("c9bec10578943fc8d453252fb262fa030000000000000000000000000000000000000000000000000000000000000000"));
+        assert!(!verify(&pubkey, &msg, &sig), "zero s must be rejected");
     }
 
     // ── two-node authenticated frame exchange ────────────────────────────
 
     #[test]
     fn two_node_frame_exchange() {
-        use crate::frame::{AddrMode, LichenFrame, MicLength};
+        use crate::frame::{AddrMode, Encryption, LichenFrame, MicLength, Signature};
         use crate::replay::ReplayWindow;
 
-        let seed_a = [0x01u8; 32];
+        let seed_a = Seed::new([0x01u8; 32]);
         let (priv_a, pub_a) = derive_keypair(&seed_a);
-        let seed_b = [0x02u8; 32];
+        let seed_b = Seed::new([0x02u8; 32]);
         let (_, pub_b) = derive_keypair(&seed_b);
 
         let mut replay = ReplayWindow::new();
 
         let epoch: u8 = 1;
-        let seqnum: u16 = 42;
+        let seqnum = LinkSeqNum::new(42);
         let dst_addr = [0x00u8, 0x01u8];
         let inner_payload = b"hello";
 
@@ -394,15 +455,15 @@ mod tests {
             mic: &[0u8; 4],
             addr_mode: AddrMode::Short,
             mic_length: MicLength::Bits32,
-            signature_present: true,
-            encrypted: false,
+            signature: Signature::Present,
+            encryption: Encryption::Plaintext,
         };
         let mut wire = [0u8; 128];
         let n = frame.write_to(&mut wire).unwrap();
 
         // Node B: parse and verify
         let rx = LichenFrame::from_bytes(&wire[..n]).unwrap();
-        assert!(rx.signature_present);
+        assert_eq!(rx.signature, Signature::Present);
         assert!(
             replay.accept(rx.seqnum),
             "first delivery should pass replay window"

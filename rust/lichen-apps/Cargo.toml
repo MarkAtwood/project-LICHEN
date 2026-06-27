@@ -5,5 +5,12 @@ version.workspace = true
 license.workspace = true
 description = "Shared application utilities and CLI parsing stubs for LICHEN tools."
 
+[features]
+default = []
+# Logging: propagates to dependencies
+log = ["dep:log", "lichen-node/log"]
+
 [dependencies]
+# Logging backend (optional, feature-gated)
+log = { version = "0.4", default-features = false, optional = true }
 lichen-node = { path = "../lichen-node", features = ["std"] }

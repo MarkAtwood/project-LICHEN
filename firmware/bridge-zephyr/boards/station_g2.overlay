@@ -1,0 +1,96 @@
+/*
+ * B&Q Consulting Station G2 device tree overlay for LICHEN bridge
+ *
+ * ESP32-S3 + SX1262 LoRa (with PA/LNA)
+ *
+ * SX1262 SPI pins:
+ *   SCK  = GPIO12
+ *   MISO = GPIO14
+ *   MOSI = GPIO13
+ *   NSS  = GPIO11
+ *
+ * SX1262 control pins:
+ *   RESET = GPIO21
+ *   BUSY  = GPIO47
+ *   DIO1  = GPIO48
+ *   DIO2  = RF switch (TX/RX enable, controlled internally)
+ *   DIO3  = TCXO voltage (1.8V)
+ *
+ * OLED display (SH1107, I2C):
+ *   SDA = GPIO5
+ *   SCL = GPIO6
+ *
+ * User button = GPIO38
+ * Battery ADC = GPIO4
+ */
+
+#include <zephyr/dt-bindings/pinctrl/esp32s3-pinctrl.h>
+
+/ {
+	chosen {
+		zephyr,console = &usb_serial;
+		zephyr,shell-uart = &usb_serial;
+	};
+
+	aliases {
+		lora0 = &lora;
+		sw0 = &user_button;
+	};
+
+	buttons {
+		compatible = "gpio-keys";
+		user_button: button_0 {
+			gpios = <&gpio1 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;  /* GPIO38 */
+			label = "User button";
+			zephyr,code = <0>;
+		};
+	};
+};
+
+&pinctrl {
+	/* SPI2 for SX1262 */
+	spim2_default: spim2_default {
+		group1 {
+			pinmux = <SPIM2_MISO_GPIO14>,
+				 <SPIM2_SCLK_GPIO12>;
+		};
+		group2 {
+			pinmux = <SPIM2_MOSI_GPIO13>;
+			output-low;
+		};
+	};
+};
+
+&usb_serial {
+	status = "okay";
+};
+
+&spi2 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-0 = <&spim2_default>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio0 11 GPIO_ACTIVE_LOW>;  /* NSS = GPIO11 */
+
+	lora: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		reset-gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;  /* RESET = GPIO21 */
+		busy-gpios = <&gpio1 15 GPIO_ACTIVE_HIGH>;  /* BUSY = GPIO47 */
+		dio1-gpios = <&gpio1 16 GPIO_ACTIVE_HIGH>;  /* DIO1 = GPIO48 */
+		/* DIO2 controls RF switch internally */
+		dio2-tx-enable;
+		/* DIO3 provides TCXO voltage */
+		tcxo-power-startup-delay-ms = <5>;
+	};
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};

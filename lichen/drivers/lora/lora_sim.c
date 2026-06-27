@@ -41,6 +41,9 @@ LOG_MODULE_REGISTER(lora_sim, CONFIG_LORA_LOG_LEVEL);
 /* Maximum receive buffer for a single frame (256-byte LoRa payload + headers) */
 #define RX_BUF_MAX 320
 
+/* Socket timeout in milliseconds - prevents indefinite blocking on disconnected simulator */
+#define SOCKET_TIMEOUT_MS 5000
+
 struct lora_sim_data {
 	int fd;
 };
@@ -52,8 +55,17 @@ static int send_exact(int fd, const uint8_t *buf, int len)
 	while (len > 0) {
 		int n = zsock_send(fd, buf, len, 0);
 
-		if (n <= 0) {
+		if (n < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				LOG_ERR("send timeout - simulator may be disconnected");
+				return -ETIMEDOUT;
+			}
+			LOG_ERR("send error: %d", errno);
 			return -EIO;
+		}
+		if (n == 0) {
+			LOG_ERR("send: connection closed by simulator");
+			return -ECONNRESET;
 		}
 		buf += n;
 		len -= n;
@@ -66,8 +78,17 @@ static int recv_exact(int fd, uint8_t *buf, int len)
 	while (len > 0) {
 		int n = zsock_recv(fd, buf, len, MSG_WAITALL);
 
-		if (n <= 0) {
+		if (n < 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				LOG_ERR("recv timeout - simulator may be disconnected");
+				return -ETIMEDOUT;
+			}
+			LOG_ERR("recv error: %d", errno);
 			return -EIO;
+		}
+		if (n == 0) {
+			LOG_ERR("recv: connection closed by simulator");
+			return -ECONNRESET;
 		}
 		buf += n;
 		len -= n;
@@ -114,6 +135,10 @@ static int lora_sim_connect(struct lora_sim_data *data)
 		.sin_family = AF_INET,
 		.sin_port   = htons(CONFIG_LORA_LICHEN_SIM_PORT),
 	};
+	struct zsock_timeval tv = {
+		.tv_sec  = SOCKET_TIMEOUT_MS / 1000,
+		.tv_usec = (SOCKET_TIMEOUT_MS % 1000) * 1000,
+	};
 
 	zsock_inet_pton(AF_INET, CONFIG_LORA_LICHEN_SIM_HOST, &addr.sin_addr);
 
@@ -122,6 +147,18 @@ static int lora_sim_connect(struct lora_sim_data *data)
 		LOG_ERR("socket() failed: %d", errno);
 		return -errno;
 	}
+
+	/* Set socket timeouts to prevent indefinite blocking on disconnected simulator.
+	 * This is critical for Zephyr cooperative threads where blocking forever
+	 * freezes the entire system.
+	 */
+	if (zsock_setsockopt(data->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+		LOG_WRN("setsockopt(SO_RCVTIMEO) failed: %d", errno);
+	}
+	if (zsock_setsockopt(data->fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+		LOG_WRN("setsockopt(SO_SNDTIMEO) failed: %d", errno);
+	}
+
 	if (zsock_connect(data->fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		LOG_ERR("connect() to %s:%d failed: %d",
 			CONFIG_LORA_LICHEN_SIM_HOST,
@@ -141,14 +178,30 @@ static int lora_sim_register(struct lora_sim_data *data)
 	static const char node_id[] = CONFIG_LORA_LICHEN_SIM_NODE_ID;
 	uint8_t buf[256];
 	int off = 0;
+	size_t sim_id_len = strlen(sim_id);
+	size_t node_id_len = strlen(node_id);
+
+	/* Validate string lengths fit in uint8_t and total message fits in buffer.
+	 * Message format: 1B type + 1B sim_id_len + sim_id + 1B node_id_len + node_id + 24B xyz
+	 * Maximum usable space for strings: 256 - 1 - 1 - 1 - 24 = 229 bytes
+	 */
+	if (sim_id_len > 255 || node_id_len > 255) {
+		LOG_ERR("sim_id or node_id exceeds 255 bytes");
+		return -EINVAL;
+	}
+	if (1 + 1 + sim_id_len + 1 + node_id_len + 24 > sizeof(buf)) {
+		LOG_ERR("REGISTER message too large: sim_id=%zu + node_id=%zu exceeds buffer",
+			sim_id_len, node_id_len);
+		return -EMSGSIZE;
+	}
 
 	buf[off++] = MSG_REGISTER;
-	buf[off++] = (uint8_t)strlen(sim_id);
-	memcpy(buf + off, sim_id, strlen(sim_id));
-	off += strlen(sim_id);
-	buf[off++] = (uint8_t)strlen(node_id);
-	memcpy(buf + off, node_id, strlen(node_id));
-	off += strlen(node_id);
+	buf[off++] = (uint8_t)sim_id_len;
+	memcpy(buf + off, sim_id, sim_id_len);
+	off += sim_id_len;
+	buf[off++] = (uint8_t)node_id_len;
+	memcpy(buf + off, node_id, node_id_len);
+	off += node_id_len;
 	/* Position: (0.0, 0.0, 0.0) as three IEEE 754 doubles, little-endian */
 	memset(buf + off, 0, 24);
 	off += 24;
@@ -185,6 +238,9 @@ static int lora_sim_config(const struct device *dev,
 static int lora_sim_send(const struct device *dev,
 			 uint8_t *data, uint32_t data_len)
 {
+	if (dev == NULL || data == NULL) {
+		return -EINVAL;
+	}
 	struct lora_sim_data *drv = dev->data;
 	uint8_t buf[256 + 3];
 	int off = 0;
@@ -225,7 +281,11 @@ static int lora_sim_recv(const struct device *dev,
 {
 	struct lora_sim_data *drv = dev->data;
 
-	uint32_t timeout_ms = k_ticks_to_ms_floor32(timeout.ticks);
+	/* K_FOREVER sends 0xFFFFFFFF as the explicit "wait forever" marker.
+	 * The server interprets this as infinite timeout.
+	 */
+	bool forever = K_TIMEOUT_EQ(timeout, K_FOREVER);
+	uint32_t timeout_ms = forever ? UINT32_MAX : k_ticks_to_ms_floor32(timeout.ticks);
 	uint8_t req[5];
 
 	req[0] = MSG_RX;

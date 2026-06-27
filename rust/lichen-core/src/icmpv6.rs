@@ -4,6 +4,30 @@
 //! buffer. The IPv6 pseudo-header checksum is computed automatically.
 
 use crate::addr::Ipv6Addr;
+use crate::ipv6::{next_header, IPV6_HEADER_LEN};
+
+/// ICMPv6 fixed header length (type, code, checksum, message body).
+pub const ICMPV6_HEADER_LEN: usize = 8;
+
+/// ICMPv6 header field offsets (relative to ICMPv6 header start).
+pub mod hdr_field {
+    /// Offset of ICMPv6 type byte.
+    pub const TYPE_OFFSET: usize = 0;
+    /// Offset of ICMPv6 code byte.
+    pub const CODE_OFFSET: usize = 1;
+    /// Offset of ICMPv6 message body (after type, code, checksum).
+    pub const BODY_OFFSET: usize = 4;
+}
+
+/// ICMPv6 Echo message field offsets (relative to ICMPv6 header start).
+pub mod echo_field {
+    /// Offset of echo identifier (2 bytes, relative to ICMPv6 header).
+    pub const ID_OFFSET: usize = 4;
+    /// Offset of echo sequence number (2 bytes, relative to ICMPv6 header).
+    pub const SEQ_OFFSET: usize = 6;
+    /// Offset of echo data (relative to ICMPv6 header).
+    pub const DATA_OFFSET: usize = 8;
+}
 
 /// ICMPv6 Echo Request type byte.
 pub const ECHO_REQUEST: u8 = 128;
@@ -47,8 +71,8 @@ fn build(
     data: &[u8],
     out: &mut [u8],
 ) -> usize {
-    let icmpv6_len = 8 + data.len();
-    let total = 40 + icmpv6_len;
+    let icmpv6_len = ICMPV6_HEADER_LEN + data.len();
+    let total = IPV6_HEADER_LEN + icmpv6_len;
 
     // IPv6 fixed header (40 bytes)
     out[0] = 0x60; // version=6, TC=0, flow=0
@@ -56,7 +80,7 @@ fn build(
     out[2] = 0;
     out[3] = 0;
     out[4..6].copy_from_slice(&(icmpv6_len as u16).to_be_bytes());
-    out[6] = 58; // next header = ICMPv6
+    out[6] = next_header::ICMPV6;
     out[7] = 64; // hop limit
     out[8..24].copy_from_slice(&src.0);
     out[24..40].copy_from_slice(&dst.0);
@@ -115,7 +139,7 @@ fn icmpv6_checksum(src: &[u8], dst: &[u8], icmpv6_payload: &[u8]) -> u16 {
         sum = oc_add(sum, u16::from_be_bytes([dst[i], dst[i + 1]]) as u32);
     }
     sum = oc_add(sum, icmpv6_payload.len() as u32);
-    sum = oc_add(sum, 58u32); // next header
+    sum = oc_add(sum, next_header::ICMPV6 as u32);
 
     sum = oc_add(sum, sum_words(icmpv6_payload));
 

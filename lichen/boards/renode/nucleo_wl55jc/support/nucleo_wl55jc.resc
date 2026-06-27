@@ -1,0 +1,26 @@
+:name: NUCLEO-WL55JC
+:description: Run Zephyr on STM32WL55 (NUCLEO-WL55JC board) in Renode
+
+$name?="NUCLEO-WL55JC"
+
+using sysbus
+
+# Load custom peripherals
+include $ORIGIN/../peripherals/STM32WL_RCC.cs
+include $ORIGIN/../peripherals/STM32WL_PWR.cs
+include $ORIGIN/../peripherals/LichenSubGHz.cs
+
+mach create $name
+machine LoadPlatformDescription $ORIGIN/stm32wl55.repl
+
+# LPUART1 is the console (ST-Link virtual COM)
+showAnalyzer lpuart1
+
+# 48 MHz system clock
+cpu PerformanceInMips 48
+
+macro reset
+"""
+    sysbus LoadELF $elf
+"""
+runMacro $reset

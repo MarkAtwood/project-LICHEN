@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN SCHC header compression Kconfig
+
+menuconfig LICHEN_SCHC
+	bool "SCHC header compression (RFC 8724)"
+	depends on LICHEN
+	help
+	  Enable Static Context Header Compression for IPv6/UDP/CoAP
+	  and ICMPv6 packets. Compresses 48+ byte headers to 3-6 bytes.
+
+	  Rules implemented:
+	  - Rule 0: link-local IPv6 + UDP + CoAP
+	  - Rule 1: global IPv6 + UDP + CoAP
+	  - Rule 2: ICMPv6 Echo (link-local)
+	  - Rule 3: RPL DIO (link-local ICMPv6)
+	  - Rule 4: RPL DAO (link-local ICMPv6)
+	  - Rule 255: uncompressed passthrough
+
+if LICHEN_SCHC
+
+config LICHEN_SCHC_LOG_LEVEL
+	int "SCHC log level"
+	default 3
+	range 0 4
+	help
+	  Log level for LICHEN SCHC subsystem:
+	  0=off, 1=error, 2=warning, 3=info, 4=debug
+
+endif # LICHEN_SCHC

@@ -59,12 +59,22 @@ impl From<std::io::Error> for SimError {
     }
 }
 
+impl std::error::Error for SimError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 /// Async TCP client for the LICHEN node server.
 ///
 /// Call [`SimClient::connect`] to connect and register, then use
 /// [`transmit`](SimClient::transmit) / [`receive`](SimClient::receive) in a
 /// loop. The protocol is strictly request → response: do not call both
 /// concurrently from different tasks without external synchronisation.
+#[derive(Debug)]
 pub struct SimClient {
     reader: BufReader<OwnedReadHalf>,
     writer: OwnedWriteHalf,

@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN link layer Kconfig
+
+menuconfig LICHEN_LINK
+	bool "LICHEN link layer"
+	depends on LICHEN
+	select LICHEN_SCHC
+	help
+	  Enable the LICHEN link layer with Schnorr-48 signatures
+	  and replay protection. Automatically enables SCHC header
+	  compression for IPv6 packet handling.
+
+if LICHEN_LINK
+
+config LICHEN_LINK_SCHNORR
+	bool "Schnorr-48 link signatures"
+	default y
+	help
+	  Enable 48-byte Schnorr signatures per draft-lichen-schnorr-00.
+	  This provides sender authentication for every link-layer frame.
+
+config LICHEN_LINK_MAX_NEIGHBORS
+	int "Maximum tracked neighbors"
+	default 16
+	range 4 64
+	help
+	  Maximum number of neighbors to track replay state for.
+	  Each neighbor uses approximately 20 bytes of RAM (EUI-64 +
+	  64-bit replay window + metadata).
+
+config LICHEN_LINK_LOG_LEVEL
+	int "Link layer log level"
+	default 3
+	range 0 4
+	help
+	  Log level for LICHEN link layer:
+	  0=off, 1=error, 2=warning, 3=info, 4=debug
+
+config LICHEN_LINK_MIC_SKIP_VERIFY
+	bool "Skip MIC verification (DANGEROUS)"
+	default n
+	help
+	  DANGER: Disables MIC verification, allowing forged frames to be
+	  accepted. This option exists ONLY for testing environments where
+	  link-layer keys are not yet provisioned.
+
+	  NEVER enable this in production — it completely disables frame
+	  authentication and allows any attacker to inject packets.
+
+	  When enabled, a warning is logged for every received frame to
+	  make the insecure state obvious.
+
+endif # LICHEN_LINK

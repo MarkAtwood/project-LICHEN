@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+# LICHEN OSCORE subsystem Kconfig
+
+menuconfig LICHEN_OSCORE
+	bool "OSCORE end-to-end CoAP security"
+	depends on LICHEN
+	select TINYCRYPT
+	select TINYCRYPT_AES
+	select TINYCRYPT_AES_CCM
+	select TINYCRYPT_SHA256
+	help
+	  Enable OSCORE (RFC 8613) for end-to-end CoAP security.
+	  Uses AES-CCM-16-64-128 for encryption and authentication.
+
+if LICHEN_OSCORE
+
+config LICHEN_OSCORE_MAX_CONTEXTS
+	int "Maximum OSCORE security contexts"
+	default 8
+	range 2 32
+	help
+	  Maximum number of OSCORE security contexts (peers).
+	  Each context uses approximately 100 bytes of RAM.
+
+config LICHEN_OSCORE_REPLAY_WINDOW
+	int "OSCORE replay window size"
+	default 32
+	range 16 128
+	help
+	  Size of the OSCORE replay window in sequence numbers.
+	  Larger values tolerate more out-of-order delivery.
+
+config LICHEN_OSCORE_LOG_LEVEL
+	int "OSCORE log level"
+	default 3
+	range 0 4
+	help
+	  Log level for OSCORE subsystem:
+	  0=off, 1=error, 2=warning, 3=info, 4=debug
+
+endif # LICHEN_OSCORE

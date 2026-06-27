@@ -117,3 +117,64 @@ jobs:
 
       - name: Build gateway (native_sim)
         run: west build -b native_sim lichen/apps/gateway -- -DZEPHYR_TOOLCHAIN_VARIANT=host
+
+      - name: Build puck (native_sim)
+        run: west build -b native_sim lichen/apps/puck --pristine -- -DZEPHYR_TOOLCHAIN_VARIANT=host
+
+  zephyr-hardware:
+    name: Zephyr hardware targets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # nRF52840 boards (ARM Cortex-M4F)
+          - board: rak4631_nrf52840
+            app: puck
+          - board: t_echo_nrf52840
+            app: puck
+          # STM32WL boards (ARM Cortex-M4)
+          - board: nucleo_wl55jc
+            app: gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: sudo apt-get install -y --no-install-recommends cmake ninja-build
+
+      - name: Install west
+        run: pip install west
+
+      - name: Install Zephyr SDK
+        run: |
+          wget -q https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.16.8/zephyr-sdk-0.16.8_linux-x86_64_minimal.tar.xz
+          tar xf zephyr-sdk-0.16.8_linux-x86_64_minimal.tar.xz
+          cd zephyr-sdk-0.16.8
+          ./setup.sh -t arm-zephyr-eabi -h -c
+
+      - name: Cache Zephyr checkout
+        id: cache-zephyr
+        uses: actions/cache@v4
+        with:
+          path: zephyr
+          key: zephyr-${{ hashFiles('lichen/west.yml') }}
+          restore-keys: zephyr-
+
+      - name: west init + update
+        if: steps.cache-zephyr.outputs.cache-hit != 'true'
+        run: |
+          west init -l lichen/
+          west update
+
+      - name: west init (manifest only, Zephyr from cache)
+        if: steps.cache-zephyr.outputs.cache-hit == 'true'
+        run: west init -l lichen/
+
+      - name: Install Zephyr Python requirements
+        run: pip install -r zephyr/scripts/requirements.txt
+
+      - name: west zephyr-export
+        run: west zephyr-export
+
+      - name: Build ${{ matrix.app }} for ${{ matrix.board }}
+        run: west build -b ${{ matrix.board }} lichen/apps/${{ matrix.app }}

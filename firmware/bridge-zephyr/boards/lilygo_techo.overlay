@@ -1,0 +1,98 @@
+/*
+ * LilyGo T-Echo device tree overlay for LICHEN bridge
+ *
+ * nRF52840 + SX1262 LoRa + 1.54" e-ink + L76K GPS
+ *
+ * SX1262 SPI pins (directly on nRF52):
+ *   MOSI  = P0.22
+ *   MISO  = P0.23
+ *   SCK   = P0.19
+ *   NSS   = P0.24
+ *
+ * SX1262 control pins:
+ *   RESET = P0.25
+ *   BUSY  = P0.17
+ *   DIO1  = P0.20
+ *   DIO3  = P0.21 (TCXO control, directly driven by SX1262)
+ *
+ * E-Ink Display (not enabled - for reference):
+ *   MOSI  = P1.06 (38)   DC    = P0.28
+ *   MISO  = P0.29        RST   = P0.02
+ *   SCK   = P0.31        BUSY  = P0.03
+ *   CS    = P0.30        BL    = P1.11 (43)
+ *
+ * GPS L76K UART (not enabled - for reference):
+ *   TX    = P1.08 (40)   PPS   = P1.04 (36)
+ *   RX    = P1.09 (41)   WAKE  = P1.02 (34)
+ *                        RST   = P1.05 (37)
+ *
+ * User button: P1.10 (active low)
+ * LEDs: Blue P0.14, Green P1.01, Red P1.03 (charger)
+ */
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+	};
+
+	aliases {
+		led0 = &blue_led;
+		lora0 = &lora;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		blue_led: led_0 {
+			gpios = <&gpio0 14 GPIO_ACTIVE_LOW>;
+			label = "Blue LED";
+		};
+	};
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/* SX1262 on SPI2 */
+&spi2 {
+	status = "okay";
+	pinctrl-0 = <&spi2_default>;
+	pinctrl-1 = <&spi2_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpio0 24 GPIO_ACTIVE_LOW>;  /* P0.24 = NSS */
+
+	lora: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		reset-gpios = <&gpio0 25 GPIO_ACTIVE_LOW>;   /* P0.25 = RST */
+		busy-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;   /* P0.17 = BUSY */
+		dio1-gpios = <&gpio0 20 GPIO_ACTIVE_HIGH>;   /* P0.20 = DIO1 */
+		/* DIO2 controls RF switch internally */
+		dio2-tx-enable;
+		/* 1.8V TCXO on DIO3 (P0.21), managed by SX1262 */
+		tcxo-wakeup-time = <5>;
+	};
+};
+
+&pinctrl {
+	spi2_default: spi2_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 19)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 22)>,
+				<NRF_PSEL(SPIM_MISO, 0, 23)>;
+		};
+	};
+
+	spi2_sleep: spi2_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 19)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 22)>,
+				<NRF_PSEL(SPIM_MISO, 0, 23)>;
+			low-power-enable;
+		};
+	};
+};
