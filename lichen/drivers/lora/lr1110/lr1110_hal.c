@@ -26,6 +26,10 @@ extern const struct spi_dt_spec  lr1110_bus;
 extern const struct gpio_dt_spec lr1110_gpio_busy;
 extern const struct gpio_dt_spec lr1110_gpio_reset;
 
+/* LR1110 SetSleep command opcode (puts chip to sleep immediately) */
+#define LR1110_CMD_SET_SLEEP_0 0x01
+#define LR1110_CMD_SET_SLEEP_1 0x1B
+
 /*
  * Zero-filled NOP pad for the SPI read response phase.
  *
@@ -66,8 +70,10 @@ lr1110_hal_status_t lr1110_hal_write(const void *context,
 		return LR1110_HAL_STATUS_ERROR;
 	}
 
-	/* SetSleep (0x01 0x1B) puts the chip to sleep immediately — no BUSY transition */
-	if (command_length >= 2 && command[0] == 0x01 && command[1] == 0x1B) {
+	/* SetSleep puts the chip to sleep immediately — no BUSY transition */
+	if (command_length >= 2 &&
+	    command[0] == LR1110_CMD_SET_SLEEP_0 &&
+	    command[1] == LR1110_CMD_SET_SLEEP_1) {
 		k_busy_wait(1000);
 	} else {
 		wait_busy();
@@ -136,25 +142,52 @@ lr1110_hal_status_t lr1110_hal_write_read(const void *context,
 	return LR1110_HAL_STATUS_OK;
 }
 
-void lr1110_hal_reset(const void *context)
+int lr1110_hal_reset(const void *context)
 {
 	ARG_UNUSED(context);
-	gpio_pin_set_dt(&lr1110_gpio_reset, 1);
+
+	int ret = gpio_pin_set_dt(&lr1110_gpio_reset, 1);
+	if (ret < 0) {
+		LOG_ERR("Failed to assert reset GPIO: %d", ret);
+		return ret;
+	}
 	k_busy_wait(1000);
-	gpio_pin_set_dt(&lr1110_gpio_reset, 0);
+
+	ret = gpio_pin_set_dt(&lr1110_gpio_reset, 0);
+	if (ret < 0) {
+		LOG_ERR("Failed to deassert reset GPIO: %d", ret);
+		return ret;
+	}
 	k_busy_wait(1000);
 	k_sleep(K_MSEC(200)); /* wait for internal firmware to load */
+
+	return 0;
 }
 
 lr1110_hal_status_t lr1110_hal_wakeup(const void *context)
 {
 	ARG_UNUSED(context);
 
-	/* CS pulse (no SPI bytes) wakes the LR1110 from sleep.
-	 * CS is active-low: assert LOW to wake, then release HIGH. */
-	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 0);
+	/*
+	 * CS pulse (no SPI bytes) wakes the LR1110 from sleep.
+	 * CS is active-low: assert LOW to wake, then release HIGH.
+	 *
+	 * gpio_pin_set_dt() interprets values relative to GPIO_ACTIVE_* flags:
+	 *   value=1 → logical active (asserted) → LOW for ACTIVE_LOW
+	 *   value=0 → logical inactive (deasserted) → HIGH for ACTIVE_LOW
+	 */
+	int ret = gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 1);
+	if (ret < 0) {
+		LOG_ERR("Failed to assert CS GPIO: %d", ret);
+		return LR1110_HAL_STATUS_ERROR;
+	}
 	k_busy_wait(100);
-	gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 1);
+
+	ret = gpio_pin_set_dt(&lr1110_bus.config.cs.gpio, 0);
+	if (ret < 0) {
+		LOG_ERR("Failed to deassert CS GPIO: %d", ret);
+		return LR1110_HAL_STATUS_ERROR;
+	}
 	wait_busy();
 	return LR1110_HAL_STATUS_OK;
 }
