@@ -155,15 +155,6 @@ static int icmp_reply_handler(struct net_icmp_ctx *ctx,
 
 	LOG_INF("Received Echo Reply: %s -> %s", src_str, dst_str);
 
-	/* Extract identifier and sequence from ICMP header */
-	/* ICMPv6 Echo: type(1) + code(1) + checksum(2) + id(2) + seq(2) */
-	struct net_buf *frag = pkt->buffer;
-
-	if (frag && frag->len >= 8) {
-		/* Skip IPv6 header to get to ICMP data */
-		/* The cursor should already be positioned at ICMP */
-	}
-
 	test->reply_received = true;
 	k_sem_give(&test->reply_sem);
 

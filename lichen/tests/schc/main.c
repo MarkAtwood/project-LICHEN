@@ -9,6 +9,10 @@
  * forms. Each test verifies:
  *   1. compress(packet) == expected_compressed
  *   2. decompress(compressed) == packet
+ *
+ * Note: This test uses 1500-byte buffers (4x per round_trip call) to handle
+ * arbitrary MTU-sized packets. This is intentional for test coverage of
+ * edge cases. Production code should use appropriately sized buffers.
  */
 
 #include <lichen/schc.h>
