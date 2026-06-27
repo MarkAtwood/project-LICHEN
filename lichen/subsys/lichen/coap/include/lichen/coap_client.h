@@ -27,6 +27,9 @@ extern "C" {
 /** Maximum response payload size */
 #define LICHEN_COAP_MAX_PAYLOAD 256
 
+/** Sentinel value indicating content_format was not set (use in initializers) */
+#define LICHEN_COAP_FMT_UNSET UINT16_MAX
+
 /**
  * @brief CoAP request result codes
  */
@@ -63,7 +66,7 @@ struct lichen_coap_request {
 	uint8_t method;                     /**< CoAP method (GET, POST, etc) */
 	const uint8_t *payload;             /**< Request payload (optional) */
 	size_t payload_len;                 /**< Payload length */
-	uint16_t content_format;            /**< Content format (optional) */
+	uint16_t content_format;            /**< Content format (LICHEN_COAP_FMT_UNSET = not set) */
 	bool confirmable;                   /**< Use CON message type */
 	lichen_coap_response_cb callback;   /**< Response callback */
 	void *user_data;                    /**< User context for callback */

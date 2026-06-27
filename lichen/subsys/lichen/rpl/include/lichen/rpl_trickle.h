@@ -120,6 +120,7 @@ static inline bool lichen_trickle_should_transmit(const struct lichen_trickle *t
 /**
  * @brief Mark the transmit point reached.
  *
+ * @pre t must be non-NULL and initialized via lichen_trickle_init()
  * @return true if a DIO should be sent (counter < k)
  */
 bool lichen_trickle_fire_transmit(struct lichen_trickle *t);
@@ -127,6 +128,7 @@ bool lichen_trickle_fire_transmit(struct lichen_trickle *t);
 /**
  * @brief End the current interval: double (capped) and start the next (step 5).
  *
+ * @pre t must be non-NULL and initialized via lichen_trickle_init()
  * @param t           Timer
  * @param now         Current time in ms
  * @param rand_offset Random value in [0, new_interval/2) for transmit scheduling
@@ -140,6 +142,7 @@ void lichen_trickle_expire(struct lichen_trickle *t,
  *
  * No-op if the interval is already imin (RFC 6206 section 4.2).
  *
+ * @pre t must be non-NULL and initialized via lichen_trickle_init()
  * @param t           Timer
  * @param now         Current time in ms
  * @param rand_offset Random value in [0, imin/2) for transmit scheduling
@@ -151,6 +154,7 @@ void lichen_trickle_reset(struct lichen_trickle *t,
 /**
  * @brief Get the next scheduled event.
  *
+ * @pre t and out must be non-NULL; t must be initialized via lichen_trickle_init()
  * @param t   Timer
  * @param out Event to populate
  */

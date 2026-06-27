@@ -35,9 +35,16 @@ LOG_MODULE_REGISTER(edhoc, CONFIG_LICHEN_EDHOC_LOG_LEVEL);
 static void sha256_hash(const uint8_t *data, size_t len, uint8_t out[32])
 {
 	struct tc_sha256_state_struct state;
-	tc_sha256_init(&state);
-	tc_sha256_update(&state, data, len);
-	tc_sha256_final(out, &state);
+	int rc;
+
+	rc = tc_sha256_init(&state);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_sha256_init failed");
+
+	rc = tc_sha256_update(&state, data, len);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_sha256_update failed");
+
+	rc = tc_sha256_final(out, &state);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_sha256_final failed");
 }
 
 /*
@@ -48,10 +55,19 @@ static void hmac_sha256(const uint8_t *key, size_t key_len,
 			uint8_t out[32])
 {
 	struct tc_hmac_state_struct state;
-	tc_hmac_set_key(&state, key, key_len);
-	tc_hmac_init(&state);
-	tc_hmac_update(&state, data, data_len);
-	tc_hmac_final(out, TC_SHA256_DIGEST_SIZE, &state);
+	int rc;
+
+	rc = tc_hmac_set_key(&state, key, key_len);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_set_key failed");
+
+	rc = tc_hmac_init(&state);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_init failed");
+
+	rc = tc_hmac_update(&state, data, data_len);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_update failed");
+
+	rc = tc_hmac_final(out, TC_SHA256_DIGEST_SIZE, &state);
+	__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_final failed");
 }
 
 /*
@@ -72,10 +88,15 @@ static void hkdf_extract(const uint8_t *salt, size_t salt_len,
 /*
  * HKDF-Expand (RFC 5869)
  */
-static void hkdf_expand(const uint8_t prk[32],
-			const uint8_t *info, size_t info_len,
-			uint8_t *okm, size_t okm_len)
+static int hkdf_expand(const uint8_t prk[32],
+		       const uint8_t *info, size_t info_len,
+		       uint8_t *okm, size_t okm_len)
 {
+	/* RFC 5869: L <= 255*HashLen (HashLen=32 for SHA-256) */
+	if (okm_len > 255 * 32) {
+		return -EINVAL;
+	}
+
 	uint8_t t[32] = {0};
 	uint8_t t_len = 0;
 	uint8_t counter = 1;
@@ -83,15 +104,27 @@ static void hkdf_expand(const uint8_t prk[32],
 
 	while (offset < okm_len) {
 		struct tc_hmac_state_struct state;
-		tc_hmac_set_key(&state, prk, 32);
-		tc_hmac_init(&state);
+		int rc;
+
+		rc = tc_hmac_set_key(&state, prk, 32);
+		__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_set_key failed");
+
+		rc = tc_hmac_init(&state);
+		__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_init failed");
 
 		if (t_len > 0) {
-			tc_hmac_update(&state, t, t_len);
+			rc = tc_hmac_update(&state, t, t_len);
+			__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_update failed");
 		}
-		tc_hmac_update(&state, info, info_len);
-		tc_hmac_update(&state, &counter, 1);
-		tc_hmac_final(t, TC_SHA256_DIGEST_SIZE, &state);
+		rc = tc_hmac_update(&state, info, info_len);
+		__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_update failed");
+
+		rc = tc_hmac_update(&state, &counter, 1);
+		__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_update failed");
+
+		rc = tc_hmac_final(t, TC_SHA256_DIGEST_SIZE, &state);
+		__ASSERT(rc == TC_CRYPTO_SUCCESS, "tc_hmac_final failed");
+
 		t_len = 32;
 
 		size_t copy_len = MIN(32, okm_len - offset);
@@ -99,6 +132,8 @@ static void hkdf_expand(const uint8_t prk[32],
 		offset += copy_len;
 		counter++;
 	}
+
+	return 0;
 }
 
 /*
@@ -132,8 +167,7 @@ static int edhoc_kdf(const uint8_t prk[32],
 
 	info_len = zse->payload - info;
 
-	hkdf_expand(prk, info, info_len, out, out_len);
-	return 0;
+	return hkdf_expand(prk, info, info_len, out, out_len);
 }
 
 /*
@@ -202,11 +236,16 @@ static int aead_decrypt(const uint8_t key[16],
 
 /*
  * Generate X25519 keypair
+ * Returns 0 on success, -ENODEV if CSPRNG unavailable
  */
-static void x25519_keypair(uint8_t sk[32], uint8_t pk[32])
+static int x25519_keypair(uint8_t sk[32], uint8_t pk[32])
 {
-	sys_rand_get(sk, 32);
+	if (sys_csrand_get(sk, 32) != 0) {
+		LOG_ERR("CSPRNG unavailable for X25519 key generation");
+		return -ENODEV;
+	}
 	crypto_x25519_public_key(pk, sk);
+	return 0;
 }
 
 /*
@@ -217,6 +256,21 @@ static void x25519_shared_secret(uint8_t shared[32],
 				 const uint8_t pk[32])
 {
 	crypto_x25519(shared, sk, pk);
+}
+
+/*
+ * Constant-time check for all-zeros buffer (RFC 7748 Section 6.1)
+ * X25519 with a small-order public key produces an all-zeros shared secret,
+ * which must be rejected to prevent contributory behavior attacks.
+ * Returns true if all bytes are zero.
+ */
+static bool is_all_zeros(const uint8_t *buf, size_t len)
+{
+	uint8_t acc = 0;
+	for (size_t i = 0; i < len; i++) {
+		acc |= buf[i];
+	}
+	return acc == 0;
 }
 
 /*
@@ -282,12 +336,18 @@ int edhoc_initiator_init(struct edhoc_initiator *ctx,
 		memcpy(ctx->c_i, c_i, c_i_len);
 		ctx->c_i_len = c_i_len;
 	} else {
-		sys_rand_get(ctx->c_i, 1);
+		if (sys_csrand_get(ctx->c_i, 1) != 0) {
+			LOG_ERR("CSPRNG unavailable for C_I generation");
+			return -ENODEV;
+		}
 		ctx->c_i_len = 1;
 	}
 
 	/* Generate ephemeral X25519 keypair */
-	x25519_keypair(ctx->eph_sk, ctx->eph_pk);
+	int ret = x25519_keypair(ctx->eph_sk, ctx->eph_pk);
+	if (ret != 0) {
+		return ret;
+	}
 
 	return 0;
 }
@@ -333,6 +393,10 @@ int edhoc_initiator_create_msg1(struct edhoc_initiator *ctx,
 	*msg1_len = zse->payload - msg1;
 
 	/* Save msg1 for TH computation */
+	if (*msg1_len > sizeof(ctx->msg1)) {
+		LOG_ERR("msg1 length %zu exceeds buffer %zu", *msg1_len, sizeof(ctx->msg1));
+		return -ENOMEM;
+	}
 	memcpy(ctx->msg1, msg1, *msg1_len);
 	ctx->msg1_len = *msg1_len;
 
@@ -347,6 +411,10 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 				 size_t *msg3_len)
 {
 	int ret;
+	uint8_t g_xy[32] = {0};
+	uint8_t k_3[16] = {0};
+	uint8_t iv_3[13] = {0};
+	uint8_t signature_3[64] = {0};
 
 	if (ctx == NULL || msg2 == NULL || peer_pubkey == NULL ||
 	    msg3 == NULL || msg3_len == NULL) {
@@ -395,8 +463,14 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	}
 
 	/* Compute shared secret G_XY */
-	uint8_t g_xy[32];
 	x25519_shared_secret(g_xy, ctx->eph_sk, ctx->g_y);
+
+	/* RFC 7748 Section 6.1: reject all-zeros shared secret */
+	if (is_all_zeros(g_xy, 32)) {
+		LOG_ERR("X25519 produced all-zeros shared secret");
+		crypto_wipe(g_xy, sizeof(g_xy));
+		return -EINVAL;
+	}
 
 	/* TH_2 = H(G_Y || H(message_1)) */
 	uint8_t h_msg1[32];
@@ -414,12 +488,13 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	/* Decrypt CIPHERTEXT_2 with KEYSTREAM_2 (XOR) */
 	uint8_t keystream_2[128];
 	if (ct2_len > sizeof(keystream_2)) {
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err_wipe;
 	}
 	ret = edhoc_kdf(ctx->prk_2e, ctx->th_2, "KEYSTREAM_2", NULL, 0,
 			keystream_2, ct2_len);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 
 	uint8_t plaintext_2[128];
@@ -433,16 +508,33 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 
 	struct zcbor_string id_cred_r;
 	if (!zcbor_bstr_decode(zsd_pt2, &id_cred_r)) {
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_wipe;
 	}
 
 	struct zcbor_string signature_2;
 	if (!zcbor_bstr_decode(zsd_pt2, &signature_2)) {
+		ret = -EINVAL;
+		goto err_wipe;
+	}
+	if (signature_2.len != EDHOC_ED25519_SIG_LEN) {
 		return -EINVAL;
 	}
 
-	/* ponytail: signature verification simplified for SIGN_SIGN */
-	/* Full impl would verify M_2 = (context, ID_CRED_R, TH_2, CRED_R) */
+	/* Verify Signature_2 over M_2 = (ID_CRED_R, TH_2, CRED_R) */
+	/* Matches how the responder constructs and signs M_2 per RFC 9528 */
+	uint8_t m_2[128];
+	size_t m_2_len = 0;
+	ZCBOR_STATE_E(zse_m2, 0, m_2, sizeof(m_2), 0);
+	zcbor_bstr_encode_ptr(zse_m2, peer_pubkey, 32);
+	zcbor_bstr_encode_ptr(zse_m2, ctx->th_2, 32);
+	zcbor_bstr_encode_ptr(zse_m2, peer_pubkey, 32);
+	m_2_len = zse_m2->payload - m_2;
+
+	if (ed25519_verify(peer_pubkey, signature_2.value, m_2, m_2_len) != 0) {
+		LOG_ERR("Signature_2 verification failed");
+		return -EACCES;
+	}
 
 	/* PRK_3e2m = PRK_2e for SIGN_SIGN Suite 0 */
 	memcpy(ctx->prk_3e2m, ctx->prk_2e, 32);
@@ -474,7 +566,6 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	zcbor_bstr_encode_ptr(zse_m3, ctx->ed_pubkey, 32);
 	m_3_len = zse_m3->payload - m_3;
 
-	uint8_t signature_3[64];
 	ed25519_sign(signature_3, ctx->ed_seed, m_3, m_3_len);
 
 	/* Encode PLAINTEXT_3 */
@@ -485,14 +576,13 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	size_t pt3_len = zse_pt3->payload - plaintext_3;
 
 	/* K_3 and IV_3 for AEAD */
-	uint8_t k_3[16], iv_3[13];
 	ret = edhoc_kdf(ctx->prk_3e2m, ctx->th_3, "K_3", NULL, 0, k_3, 16);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 	ret = edhoc_kdf(ctx->prk_3e2m, ctx->th_3, "IV_3", NULL, 0, iv_3, 13);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 
 	/* A_3 for AAD - simplified */
@@ -507,11 +597,12 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 
 	/* Encrypt PLAINTEXT_3 -> CIPHERTEXT_3 (Message 3) */
 	if (msg3_size < pt3_len + 8) {
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err_wipe;
 	}
 	ret = aead_encrypt(k_3, iv_3, a_3, a_3_len, plaintext_3, pt3_len, msg3);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 	*msg3_len = pt3_len + 8;
 
@@ -530,6 +621,17 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 
 	ctx->state = EDHOC_STATE_COMPLETED;
 	return 0;
+
+err_wipe:
+	crypto_wipe(g_xy, sizeof(g_xy));
+	crypto_wipe(k_3, sizeof(k_3));
+	crypto_wipe(iv_3, sizeof(iv_3));
+	crypto_wipe(signature_3, sizeof(signature_3));
+	crypto_wipe(ctx->eph_sk, sizeof(ctx->eph_sk));
+	crypto_wipe(ctx->prk_2e, sizeof(ctx->prk_2e));
+	crypto_wipe(ctx->prk_3e2m, sizeof(ctx->prk_3e2m));
+	crypto_wipe(ctx->prk_4e3m, sizeof(ctx->prk_4e3m));
+	return ret;
 }
 
 int edhoc_initiator_export_oscore(const struct edhoc_initiator *ctx,
@@ -589,11 +691,17 @@ int edhoc_responder_init(struct edhoc_responder *ctx,
 		memcpy(ctx->c_r, c_r, c_r_len);
 		ctx->c_r_len = c_r_len;
 	} else {
-		sys_rand_get(ctx->c_r, 1);
+		if (sys_csrand_get(ctx->c_r, 1) != 0) {
+			LOG_ERR("CSPRNG unavailable for C_R generation");
+			return -ENODEV;
+		}
 		ctx->c_r_len = 1;
 	}
 
-	x25519_keypair(ctx->eph_sk, ctx->eph_pk);
+	int ret = x25519_keypair(ctx->eph_sk, ctx->eph_pk);
+	if (ret != 0) {
+		return ret;
+	}
 
 	return 0;
 }
@@ -605,6 +713,8 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 				 size_t *msg2_len)
 {
 	int ret;
+	uint8_t g_xy[32] = {0};
+	uint8_t signature_2[64] = {0};
 
 	if (ctx == NULL || msg1 == NULL || peer_pubkey == NULL ||
 	    msg2 == NULL || msg2_len == NULL) {
@@ -664,8 +774,14 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 	}
 
 	/* Compute shared secret */
-	uint8_t g_xy[32];
 	x25519_shared_secret(g_xy, ctx->eph_sk, ctx->g_x);
+
+	/* RFC 7748 Section 6.1: reject all-zeros shared secret */
+	if (is_all_zeros(g_xy, 32)) {
+		LOG_ERR("X25519 produced all-zeros shared secret");
+		crypto_wipe(g_xy, sizeof(g_xy));
+		return -EINVAL;
+	}
 
 	/* TH_2 = H(G_Y || H(message_1)) */
 	uint8_t h_msg1[32];
@@ -692,7 +808,6 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 	zcbor_bstr_encode_ptr(zse_m2, ctx->ed_pubkey, 32);
 	m_2_len = zse_m2->payload - m_2;
 
-	uint8_t signature_2[64];
 	ed25519_sign(signature_2, ctx->ed_seed, m_2, m_2_len);
 
 	uint8_t plaintext_2[128];
@@ -706,7 +821,7 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 	ret = edhoc_kdf(ctx->prk_2e, ctx->th_2, "KEYSTREAM_2", NULL, 0,
 			keystream_2, pt2_len);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 
 	uint8_t ciphertext_2[128];
@@ -732,17 +847,20 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 	memcpy(g_y_ct2 + 32, ciphertext_2, pt2_len);
 
 	if (!zcbor_bstr_encode_ptr(zse, g_y_ct2, 32 + pt2_len)) {
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err_wipe;
 	}
 
 	/* C_R encoding */
 	if (ctx->c_r_len == 1 && ctx->c_r[0] <= 23) {
 		if (!zcbor_int32_put(zse, ctx->c_r[0])) {
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto err_wipe;
 		}
 	} else {
 		if (!zcbor_bstr_encode_ptr(zse, ctx->c_r, ctx->c_r_len)) {
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto err_wipe;
 		}
 	}
 
@@ -752,6 +870,14 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 
 	ctx->state = EDHOC_STATE_MSG2_SENT;
 	return 0;
+
+err_wipe:
+	crypto_wipe(g_xy, sizeof(g_xy));
+	crypto_wipe(signature_2, sizeof(signature_2));
+	crypto_wipe(ctx->eph_sk, sizeof(ctx->eph_sk));
+	crypto_wipe(ctx->prk_2e, sizeof(ctx->prk_2e));
+	crypto_wipe(ctx->prk_3e2m, sizeof(ctx->prk_3e2m));
+	return ret;
 }
 
 int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
@@ -759,6 +885,8 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 				 const uint8_t *peer_pubkey)
 {
 	int ret;
+	uint8_t k_3[16] = {0};
+	uint8_t iv_3[13] = {0};
 
 	if (ctx == NULL || msg3 == NULL || peer_pubkey == NULL) {
 		return -EINVAL;
@@ -768,14 +896,13 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 	}
 
 	/* K_3 and IV_3 for AEAD decryption */
-	uint8_t k_3[16], iv_3[13];
 	ret = edhoc_kdf(ctx->prk_3e2m, ctx->th_3, "K_3", NULL, 0, k_3, 16);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 	ret = edhoc_kdf(ctx->prk_3e2m, ctx->th_3, "IV_3", NULL, 0, iv_3, 13);
 	if (ret != 0) {
-		return ret;
+		goto err_wipe;
 	}
 
 	/* A_3 for AAD */
@@ -793,7 +920,7 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 	ret = aead_decrypt(k_3, iv_3, a_3, a_3_len, msg3, msg3_len, plaintext_3);
 	if (ret != 0) {
 		LOG_ERR("AEAD decryption failed");
-		return ret;
+		goto err_wipe;
 	}
 	size_t pt3_len = msg3_len - 8;
 
@@ -802,12 +929,14 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 
 	struct zcbor_string id_cred_i;
 	if (!zcbor_bstr_decode(zsd, &id_cred_i)) {
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_wipe;
 	}
 
 	struct zcbor_string signature_3;
 	if (!zcbor_bstr_decode(zsd, &signature_3)) {
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_wipe;
 	}
 
 	/* Verify Signature_3 */
@@ -821,7 +950,8 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 
 	if (ed25519_verify(peer_pubkey, signature_3.value, m_3, m_3_len) != 0) {
 		LOG_ERR("Signature verification failed");
-		return -EACCES;
+		ret = -EACCES;
+		goto err_wipe;
 	}
 
 	/* PRK_4e3m = PRK_3e2m for SIGN_SIGN */
@@ -841,6 +971,15 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 
 	ctx->state = EDHOC_STATE_COMPLETED;
 	return 0;
+
+err_wipe:
+	crypto_wipe(k_3, sizeof(k_3));
+	crypto_wipe(iv_3, sizeof(iv_3));
+	crypto_wipe(ctx->eph_sk, sizeof(ctx->eph_sk));
+	crypto_wipe(ctx->prk_2e, sizeof(ctx->prk_2e));
+	crypto_wipe(ctx->prk_3e2m, sizeof(ctx->prk_3e2m));
+	crypto_wipe(ctx->prk_4e3m, sizeof(ctx->prk_4e3m));
+	return ret;
 }
 
 int edhoc_responder_export_oscore(const struct edhoc_responder *ctx,

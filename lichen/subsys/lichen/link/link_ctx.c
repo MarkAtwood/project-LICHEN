@@ -47,6 +47,7 @@ int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
 	ctx->tx_seq = 0;
 	ctx->has_key = false;
 	ctx->has_link_key = false;
+	ctx->nonce_exhausted = false;
 
 	return 0;
 }
@@ -104,37 +105,47 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx, const uint8_t seed[32])
 	return 0;
 }
 
-uint16_t lichen_link_next_seq(struct lichen_link_ctx *ctx)
+int lichen_link_next_seq(struct lichen_link_ctx *ctx, uint16_t *seqnum)
 {
-	if (ctx == NULL) {
-		return 0;
+	if (ctx == NULL || seqnum == NULL) {
+		return -EINVAL;
 	}
-	uint16_t seq = ctx->tx_seq;
+
+	/*
+	 * SECURITY: Once nonce space is exhausted, block all TX until key
+	 * rotation occurs. Continuing would cause catastrophic nonce reuse
+	 * in AES-CCM, completely breaking confidentiality and authenticity.
+	 */
+	if (ctx->nonce_exhausted) {
+		return -EOVERFLOW;
+	}
+
+	*seqnum = ctx->tx_seq;
 	ctx->tx_seq++;
 
 	/*
 	 * If tx_seq wrapped to 0, increment epoch to avoid nonce reuse.
 	 * The AES-CCM nonce includes (eui64, epoch, seqnum), so reusing
 	 * the same (epoch, seqnum) pair would break security guarantees.
-	 *
-	 * SECURITY: epoch is 8-bit, so after 256 wraps of tx_seq (256 * 65536
-	 * = 16M frames), the epoch itself wraps to 0, causing nonce reuse.
-	 * In a production system, this should trigger key rotation or halt.
-	 * We log a warning at wrap and return seq=0 to signal epoch exhaustion.
 	 */
 	if (ctx->tx_seq == 0) {
 		uint8_t old_epoch = ctx->epoch;
 		ctx->epoch++;
 		if (ctx->epoch == 0) {
-			/* Epoch wrapped from 255 to 0 - nonce space exhausted */
-			LOG_WRN("CRITICAL: epoch wrapped to 0 - nonce exhaustion, key rotation required\n");
+			/*
+			 * SECURITY: epoch wrapped from 255 to 0 - nonce space
+			 * exhausted after 256 * 65536 = 16M frames. Block all
+			 * further TX until key rotation clears the flag.
+			 */
+			ctx->nonce_exhausted = true;
+			LOG_WRN("CRITICAL: nonce exhausted after 16M frames, TX blocked until key rotation\n");
 		} else {
 			LOG_WRN("tx_seq wrapped - epoch incremented to %u (was %u)\n",
 				ctx->epoch, old_epoch);
 		}
 	}
 
-	return seq;
+	return 0;
 }
 
 void lichen_link_set_epoch(struct lichen_link_ctx *ctx, uint8_t epoch)
@@ -192,7 +203,8 @@ void lichen_link_cleanup(struct lichen_link_ctx *ctx)
 	ctx->has_key = false;
 	ctx->has_link_key = false;
 
-	/* Reset sequence state */
+	/* Reset sequence state and nonce exhaustion flag */
 	ctx->epoch = 0;
 	ctx->tx_seq = 0;
+	ctx->nonce_exhausted = false;
 }

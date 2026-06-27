@@ -285,8 +285,16 @@ static int lr1110_lora_send(const struct device *dev, uint8_t *data,
 	}
 
 	k_sem_reset(&drv->radio_sem);
-	lr1110_regmem_write_buffer8(dev, data, (uint8_t)data_len);
-	lr1110_radio_set_tx(dev, 0);
+	int ret = lr1110_regmem_write_buffer8(dev, data, (uint8_t)data_len);
+	if (ret != 0) {
+		LOG_ERR("lr1110_regmem_write_buffer8 failed: %d", ret);
+		return -EIO;
+	}
+	ret = lr1110_radio_set_tx(dev, 0);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_tx failed: %d", ret);
+		return -EIO;
+	}
 
 	if (k_sem_take(&drv->radio_sem, K_SECONDS(10)) != 0) {
 		LOG_ERR("TX timeout");
@@ -314,17 +322,27 @@ static int lr1110_lora_recv(const struct device *dev, uint8_t *data,
 	struct lr1110_data *drv = dev->data;
 
 	k_sem_reset(&drv->radio_sem);
-	lr1110_radio_set_rx(dev, LR1110_RX_CONTINUOUS);
+	int ret = lr1110_radio_set_rx(dev, LR1110_RX_CONTINUOUS);
+	if (ret != 0) {
+		LOG_ERR("lr1110_radio_set_rx failed: %d", ret);
+		return -EIO;
+	}
 
 	if (k_sem_take(&drv->radio_sem, timeout) != 0) {
 		/* Timeout waiting for IRQ - put radio back to standby */
-		lr1110_radio_set_standby(dev, LR1110_RADIO_STANDBY_CFG_RC);
+		ret = lr1110_radio_set_standby(dev, LR1110_RADIO_STANDBY_CFG_RC);
+		if (ret != 0) {
+			LOG_WRN("lr1110_radio_set_standby failed: %d", ret);
+		}
 		return -EAGAIN;
 	}
 
 	if (!(drv->last_irq & LR1110_SYSTEM_IRQ_RXDONE_MASK)) {
 		/* Error path - ensure radio is not left in RX mode */
-		lr1110_radio_set_standby(dev, LR1110_RADIO_STANDBY_CFG_RC);
+		ret = lr1110_radio_set_standby(dev, LR1110_RADIO_STANDBY_CFG_RC);
+		if (ret != 0) {
+			LOG_WRN("lr1110_radio_set_standby failed: %d", ret);
+		}
 		if (drv->last_irq & LR1110_SYSTEM_IRQ_TIMEOUT_MASK) {
 			return -EAGAIN;
 		}
@@ -333,7 +351,7 @@ static int lr1110_lora_recv(const struct device *dev, uint8_t *data,
 	}
 
 	lr1110_radio_rxbuffer_status_t buf_status;
-	int ret = lr1110_radio_get_rxbuffer_status(dev, &buf_status);
+	ret = lr1110_radio_get_rxbuffer_status(dev, &buf_status);
 	if (ret != 0) {
 		LOG_ERR("lr1110_radio_get_rxbuffer_status failed: %d", ret);
 		return -EIO;

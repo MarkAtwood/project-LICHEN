@@ -26,6 +26,9 @@ LOG_MODULE_REGISTER(lichen_coap_client, LOG_LEVEL_INF);
 /* Maximum URI path length (all components joined with '/') */
 #define COAP_MAX_PATH_LEN 64
 
+/* Maximum number of URI path components (defense against unterminated arrays) */
+#define COAP_MAX_PATH_COMPONENTS 8
+
 /* CoAP client socket - protected by s_mutex for thread safety */
 static int s_sock = -1;
 static struct coap_client s_client;
@@ -176,6 +179,13 @@ static void coap_response_handler(int16_t code, size_t offset, const uint8_t *pa
 		k_work_cancel_delayable(&ctx->timeout_work);
 
 		if (ctx->callback != NULL) {
+			/*
+			 * CoAP codes are 3-bit class + 5-bit detail (max 0x9F).
+			 * Negative error codes are filtered at line 134, so code
+			 * is guaranteed non-negative here. Assert the uint8_t cast
+			 * is safe.
+			 */
+			__ASSERT(code >= 0 && code <= 0xFF, "Invalid CoAP code: %d", code);
 			ctx->callback(ctx->user_data, (uint8_t)code,
 				      ctx->response_buf, ctx->response_len);
 		}
@@ -222,7 +232,7 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 	 * Zephyr's coap_client expects a single path string like "sensors/temp".
 	 */
 	size_t path_pos = 0;
-	for (size_t i = 0; req->path[i] != NULL; i++) {
+	for (size_t i = 0; i < COAP_MAX_PATH_COMPONENTS && req->path[i] != NULL; i++) {
 		size_t comp_len = strlen(req->path[i]);
 		if (i > 0) {
 			/* Add separator between components */
@@ -250,9 +260,19 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 	client_req.cb = coap_response_handler;
 	client_req.user_data = ctx;
 
-	if (req->content_format != 0) {
+	if (req->content_format != LICHEN_COAP_FMT_UNSET) {
 		client_req.fmt = req->content_format;
 	}
+
+	/*
+	 * Schedule timeout cleanup BEFORE sending request to avoid use-after-free.
+	 * If callback fires synchronously and frees ctx, scheduling afterward
+	 * would write to freed memory. Use 2x the request timeout to allow
+	 * Zephyr's CoAP layer to handle normal timeouts; this catches cases
+	 * where the callback never fires at all.
+	 */
+	uint32_t timeout_ms = req->timeout_ms > 0 ? req->timeout_ms : LICHEN_COAP_TIMEOUT_MS;
+	k_work_schedule(&ctx->timeout_work, K_MSEC(timeout_ms * 2));
 
 	/* Send request using snapshotted socket */
 	ret = coap_client_req(&s_client, sock,
@@ -260,17 +280,10 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 			      &client_req, NULL);
 	if (ret < 0) {
 		LOG_WRN("CoAP request failed: %d", ret);
+		k_work_cancel_delayable(&ctx->timeout_work);
 		k_free(ctx);
 		return LICHEN_COAP_ERR_SEND_FAILED;
 	}
-
-	/*
-	 * Schedule timeout cleanup. Use 2x the request timeout to allow
-	 * Zephyr's CoAP layer to handle normal timeouts; this catches cases
-	 * where the callback never fires at all.
-	 */
-	uint32_t timeout_ms = req->timeout_ms > 0 ? req->timeout_ms : LICHEN_COAP_TIMEOUT_MS;
-	k_work_schedule(&ctx->timeout_work, K_MSEC(timeout_ms * 2));
 
 	return LICHEN_COAP_OK;
 }
@@ -281,12 +294,13 @@ int lichen_coap_get(const struct sockaddr_in6 *addr,
 		    void *user_data)
 {
 	if (addr == NULL || path == NULL) {
-		return LICHEN_COAP_ERR_NO_MEMORY;
+		return LICHEN_COAP_ERR_INVALID_PARAM;
 	}
 
 	struct lichen_coap_request req = {
 		.method = COAP_METHOD_GET,
 		.path = path,
+		.content_format = LICHEN_COAP_FMT_UNSET,
 		.confirmable = true,
 		.callback = callback,
 		.user_data = user_data,
@@ -305,7 +319,7 @@ int lichen_coap_post_cbor(const struct sockaddr_in6 *addr,
 			  void *user_data)
 {
 	if (addr == NULL || path == NULL) {
-		return LICHEN_COAP_ERR_NO_MEMORY;
+		return LICHEN_COAP_ERR_INVALID_PARAM;
 	}
 
 	struct lichen_coap_request req = {

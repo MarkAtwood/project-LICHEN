@@ -99,9 +99,6 @@ static int ctx_get_index(const struct oscore_ctx *ctx)
 /* COSE Algorithm ID for AES-CCM-16-64-128 */
 #define OSCORE_ALG_AEAD 10
 
-/* Maximum ID Context length - must match struct field sizes */
-#define OSCORE_ID_CONTEXT_MAX_LEN 8
-
 /*
  * Replay window implementation uses a 32-bit bitmap. The configurable
  * window size must not exceed what can be tracked in uint32_t.
@@ -137,6 +134,16 @@ static int build_info_cbor(const uint8_t *id, size_t id_len,
 			   uint8_t *buf, size_t buf_len)
 {
 	size_t off = 0;
+
+	/*
+	 * Defense in depth: reject lengths that would truncate when cast to
+	 * uint8_t in the CBOR encoding below. Callers use bounded values
+	 * (OSCORE IDs are ≤ 7 bytes per RFC 8613), but this prevents silent
+	 * corruption if invariants are violated. (python-t7j5.120)
+	 */
+	if (id_len > 255 || id_context_len > 255) {
+		return -1;
+	}
 
 	/* Array of 5 elements: 0x85 */
 	if (off >= buf_len) return -1;
@@ -387,6 +394,11 @@ int oscore_ctx_create(const uint8_t master_secret[OSCORE_KEY_LEN],
 		return OSCORE_ERR_INVALID_PARAM;
 	}
 
+	if ((sender_id == NULL && sender_id_len > 0) ||
+	    (recipient_id == NULL && recipient_id_len > 0)) {
+		return OSCORE_ERR_INVALID_PARAM;
+	}
+
 	if (sender_id_len > OSCORE_ID_MAX_LEN ||
 	    recipient_id_len > OSCORE_ID_MAX_LEN ||
 	    master_salt_len > 8) {
@@ -540,6 +552,11 @@ int oscore_ctx_set_sender_seq(struct oscore_ctx *ctx, uint32_t sender_seq)
 	return OSCORE_OK;
 }
 
+/**
+ * @note Unlike oscore_ctx_set_sender_seq(), this function works on any
+ *       oscore_ctx pointer including copies from oscore_ctx_lookup().
+ *       The mutex protects only the read operation, not pointer validity.
+ */
 int oscore_ctx_get_sender_seq(const struct oscore_ctx *ctx, uint32_t *sender_seq)
 {
 	if (ctx == NULL || sender_seq == NULL) {
@@ -587,6 +604,12 @@ int oscore_ctx_lookup(const uint8_t *recipient_id,
 	return ret;
 }
 
+/**
+ * @warning The returned pointer references internal state and is only valid
+ * while no other thread modifies or frees OSCORE contexts. For thread-safe
+ * access, use oscore_ctx_lookup() which copies the context, or ensure
+ * external synchronization around all uses of the returned pointer.
+ */
 int oscore_ctx_get(const uint8_t *recipient_id,
 		   size_t recipient_id_len,
 		   struct oscore_ctx **ctx_out)
@@ -669,7 +692,7 @@ int oscore_option_parse(const uint8_t *data, size_t len,
 		uint8_t s = *p++;
 		remaining--;
 
-		if (s > 8 || s > remaining) {
+		if (s > OSCORE_ID_CONTEXT_MAX_LEN || s > remaining) {
 			return OSCORE_ERR_INVALID_PARAM;
 		}
 		memcpy(option->kid_context, p, s);
@@ -726,7 +749,7 @@ int oscore_option_build(const struct oscore_option *option,
 		flags |= 0x08;
 	}
 	if (option->has_piv) {
-		flags |= option->piv_len & 0x07;
+		flags |= option->piv_len;  /* piv_len <= 5 validated above */
 	}
 
 	if (off >= buflen) {
@@ -895,6 +918,11 @@ static bool replay_check_acceptable(const struct oscore_ctx *ctx, uint32_t seq)
  *
  * Returns true if update succeeded, false if seq is no longer acceptable
  * (another thread may have advanced the window during decryption).
+ *
+ * Note: OSCORE replay protection provides at-least-once rejection, not
+ * exactly-once delivery. Concurrent threads may both accept the same
+ * authentic packet before either marks the window. Applications requiring
+ * exactly-once semantics must add their own sequence tracking.
  */
 static bool replay_update_window(struct oscore_ctx *ctx, uint32_t seq)
 {
@@ -1053,7 +1081,7 @@ int oscore_protect_request(struct oscore_ctx *ctx,
 			    aad, aad_len,
 			    plaintext, pt_len,
 			    ciphertext) != 0) {
-		ret = OSCORE_ERR_DECRYPT_FAILED;
+		ret = OSCORE_ERR_ENCRYPT_FAILED;
 		goto cleanup_protect_request;
 	}
 	*ciphertext_len = required_ct_len;
@@ -1094,6 +1122,9 @@ cleanup_protect_request:
  *
  * Returns the position of the 0xFF marker, or the end of data if no payload.
  * Returns -1 on malformed options (e.g., option extends past data).
+ *
+ * ponytail: Return type is int, limiting buffer size to INT_MAX bytes (~2GB).
+ * OSCORE payloads on constrained devices won't approach this limit.
  */
 static int find_coap_payload_marker(const uint8_t *data, size_t len)
 {
@@ -1268,7 +1299,11 @@ int oscore_unprotect_request(struct oscore_ctx *ctx,
 
 	/* Copy options */
 	size_t opt_len = marker_pos - 1;
-	if (options != NULL && options_len != NULL) {
+	if (options == NULL) {
+		if (options_len != NULL) {
+			*options_len = 0;
+		}
+	} else if (options_len != NULL) {
 		if (*options_len < opt_len) {
 			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
 			goto cleanup_unprotect_request;
@@ -1314,6 +1349,10 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 	int ret;
 
 	if (ctx == NULL || ciphertext == NULL || oscore_opt == NULL) {
+		return OSCORE_ERR_INVALID_PARAM;
+	}
+
+	if (request_piv == NULL && request_piv_len > 0) {
 		return OSCORE_ERR_INVALID_PARAM;
 	}
 
@@ -1367,7 +1406,7 @@ int oscore_protect_response(struct oscore_ctx *ctx,
 			    aad, aad_len,
 			    plaintext, pt_len,
 			    ciphertext) != 0) {
-		ret = OSCORE_ERR_DECRYPT_FAILED;
+		ret = OSCORE_ERR_ENCRYPT_FAILED;
 		goto cleanup_protect_response;
 	}
 	*ciphertext_len = required_ct_len;
@@ -1409,6 +1448,10 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 	}
 
 	if (ciphertext_len < OSCORE_TAG_LEN + 1) {
+		return OSCORE_ERR_INVALID_PARAM;
+	}
+
+	if (request_piv == NULL && request_piv_len > 0) {
 		return OSCORE_ERR_INVALID_PARAM;
 	}
 
@@ -1462,7 +1505,11 @@ int oscore_unprotect_response(struct oscore_ctx *ctx,
 
 	/* Copy options */
 	size_t opt_len = marker_pos - 1;
-	if (options != NULL && options_len != NULL) {
+	if (options == NULL) {
+		if (options_len != NULL) {
+			*options_len = 0;
+		}
+	} else if (options_len != NULL) {
 		if (*options_len < opt_len) {
 			ret = OSCORE_ERR_BUFFER_TOO_SMALL;
 			goto cleanup_unprotect_response;

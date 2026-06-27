@@ -35,6 +35,9 @@ static size_t div_ceil(size_t a, size_t b)
 int lichen_rpl_dio_parse(struct lichen_rpl_dio *dio,
 			 const uint8_t *data, size_t len)
 {
+	if (dio == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	if (len < LICHEN_RPL_DIO_BASE_LEN) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}
@@ -57,6 +60,9 @@ int lichen_rpl_dio_parse(struct lichen_rpl_dio *dio,
 int lichen_rpl_dio_write(const struct lichen_rpl_dio *dio,
 			 uint8_t *buf, size_t len)
 {
+	if (dio == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	if (len < LICHEN_RPL_DIO_BASE_LEN) {
 		return LICHEN_RPL_ERR_BUF_SMALL;
 	}
@@ -96,6 +102,9 @@ const uint8_t *lichen_rpl_dio_options(const uint8_t *data, size_t len)
 int lichen_rpl_dao_parse(struct lichen_rpl_dao *dao,
 			 const uint8_t *data, size_t len)
 {
+	if (dao == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	/* Minimum: 4 bytes base without DODAGID */
 	if (len < DAO_BASE_NO_DODAGID) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
@@ -126,6 +135,9 @@ int lichen_rpl_dao_parse(struct lichen_rpl_dao *dao,
 int lichen_rpl_dao_write(const struct lichen_rpl_dao *dao,
 			 uint8_t *buf, size_t len)
 {
+	if (dao == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	if (len < LICHEN_RPL_DAO_BASE_LEN) {
 		return LICHEN_RPL_ERR_BUF_SMALL;
 	}
@@ -229,6 +241,9 @@ int lichen_rpl_dodag_config_write(const struct lichen_rpl_dodag_config *cfg,
 int lichen_rpl_target_parse(struct lichen_rpl_target *target,
 			    const uint8_t *data, size_t len)
 {
+	if (target == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	if (len < 2) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}
@@ -260,6 +275,10 @@ int lichen_rpl_target_parse(struct lichen_rpl_target *target,
 int lichen_rpl_target_write(const struct lichen_rpl_target *target,
 			    uint8_t *buf, size_t len)
 {
+	if (target->prefix_len == 0 || target->prefix_len > 128) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+
 	size_t nbytes = div_ceil(target->prefix_len, 8);
 	size_t data_len = 2 + nbytes;
 	size_t needed = 2 + data_len;
@@ -282,6 +301,9 @@ int lichen_rpl_target_write(const struct lichen_rpl_target *target,
 int lichen_rpl_transit_info_parse(struct lichen_rpl_transit_info *ti,
 				  const uint8_t *data, size_t len)
 {
+	if (ti == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	if (len < LICHEN_RPL_TRANSIT_INFO_DATA_LEN) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}

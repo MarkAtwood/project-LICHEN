@@ -15,6 +15,7 @@
  *   - ENOMEM (12): Out of memory / buffer too small
  *   - EMSGSIZE (90): Message too long
  *   - EALREADY (114): Operation already in progress / duplicate
+ *   - EOVERFLOW (75): Value too large (nonce space exhausted)
  *
  * **LICHEN-specific codes** (project-defined, not in POSIX):
  *   - EAUTH (80): Authentication/signature verification failed
@@ -56,6 +57,11 @@
 /** Operation already in progress (replay detected) */
 #ifndef EALREADY
 #define EALREADY 114
+#endif
+
+/** Value too large (nonce space exhausted) */
+#ifndef EOVERFLOW
+#define EOVERFLOW 75
 #endif
 
 #endif /* __ZEPHYR__ */

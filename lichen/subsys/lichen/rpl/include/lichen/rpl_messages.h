@@ -95,9 +95,10 @@ int lichen_rpl_dio_write(const struct lichen_rpl_dio *dio,
 /**
  * @brief Get pointer to options following DIO base.
  *
- * @param data Full DIO message
- * @param len  Length of data
- * @return Pointer to options, or NULL if no options
+ * @param data The DIO message buffer. MUST be valid for at least @p len bytes.
+ *             Caller is responsible for ensuring data/len consistency.
+ * @param len  Total length of the DIO message.
+ * @return Pointer to options, or NULL if no options present.
  */
 const uint8_t *lichen_rpl_dio_options(const uint8_t *data, size_t len);
 

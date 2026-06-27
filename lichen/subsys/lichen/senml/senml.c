@@ -37,6 +37,10 @@ void senml_pack_init(struct senml_pack *pack,
 		     const char *base_name,
 		     uint64_t base_time)
 {
+	if (pack == NULL) {
+		return;
+	}
+
 	memset(pack, 0, sizeof(*pack));
 	pack->base_name = base_name;
 	if (base_time > 0) {
@@ -50,6 +54,10 @@ int senml_add_float(struct senml_pack *pack,
 		    const char *unit,
 		    float value)
 {
+	if (pack == NULL) {
+		return -EINVAL;
+	}
+
 	if (pack->record_count >= SENML_MAX_RECORDS) {
 		return -ENOMEM;
 	}
@@ -70,6 +78,10 @@ int senml_add_float_t(struct senml_pack *pack,
 		      float value,
 		      int32_t time_offset)
 {
+	if (pack == NULL) {
+		return -EINVAL;
+	}
+
 	if (pack->record_count >= SENML_MAX_RECORDS) {
 		return -ENOMEM;
 	}
@@ -89,6 +101,10 @@ int senml_add_bool(struct senml_pack *pack,
 		   const char *name,
 		   bool value)
 {
+	if (pack == NULL) {
+		return -EINVAL;
+	}
+
 	if (pack->record_count >= SENML_MAX_RECORDS) {
 		return -ENOMEM;
 	}
@@ -189,6 +205,10 @@ static bool encode_record(zcbor_state_t *state,
 int senml_encode_cbor(const struct senml_pack *pack,
 		      uint8_t *buf, size_t buflen)
 {
+	if (pack == NULL || buf == NULL) {
+		return -EINVAL;
+	}
+
 	if (pack->record_count == 0) {
 		return -EINVAL;
 	}

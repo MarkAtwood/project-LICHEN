@@ -93,19 +93,23 @@ struct lichen_rpl_dodag {
 
 /**
  * @brief Initialize an unjoined node for the given DODAG.
+ *
+ * @return 0 on success, LICHEN_RPL_ERR_INVALID if d or dodag_id is NULL.
  */
-void lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
-			   uint8_t rpl_instance_id,
-			   const uint8_t *dodag_id,
-			   uint8_t version);
+int lichen_rpl_dodag_init(struct lichen_rpl_dodag *d,
+			  uint8_t rpl_instance_id,
+			  const uint8_t *dodag_id,
+			  uint8_t version);
 
 /**
  * @brief Initialize a DODAG root with rank = ROOT_RANK.
+ *
+ * @return 0 on success, LICHEN_RPL_ERR_INVALID if d or dodag_id is NULL.
  */
-void lichen_rpl_dodag_init_root(struct lichen_rpl_dodag *d,
-				uint8_t rpl_instance_id,
-				const uint8_t *dodag_id,
-				uint8_t version);
+int lichen_rpl_dodag_init_root(struct lichen_rpl_dodag *d,
+			       uint8_t rpl_instance_id,
+			       const uint8_t *dodag_id,
+			       uint8_t version);
 
 /**
  * @brief Check if node is root.
