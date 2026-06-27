@@ -21,6 +21,7 @@
 #include <tinycrypt/aes.h>
 #include <tinycrypt/ccm_mode.h>
 #include <tinycrypt/constants.h>
+#include <zcbor_common.h>
 #include <zcbor_encode.h>
 #include <zcbor_decode.h>
 
@@ -310,6 +311,9 @@ static size_t encode_cid(uint8_t *out, size_t out_size,
 	} else {
 		zcbor_bstr_encode_ptr(zse, cid, cid_len);
 	}
+	if (!zcbor_check_error(zse)) {
+		return 0;
+	}
 
 	return zse->payload - out;
 }
@@ -564,6 +568,9 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	zcbor_bstr_encode_ptr(zse_m3, ctx->ed_pubkey, 32);
 	zcbor_bstr_encode_ptr(zse_m3, ctx->th_3, 32);
 	zcbor_bstr_encode_ptr(zse_m3, ctx->ed_pubkey, 32);
+	if (!zcbor_check_error(zse_m3)) {
+		return -EINVAL;
+	}
 	m_3_len = zse_m3->payload - m_3;
 
 	ed25519_sign(signature_3, ctx->ed_seed, m_3, m_3_len);
@@ -573,6 +580,9 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	ZCBOR_STATE_E(zse_pt3, 0, plaintext_3, sizeof(plaintext_3), 0);
 	zcbor_bstr_encode_ptr(zse_pt3, ctx->ed_pubkey, 32);
 	zcbor_bstr_encode_ptr(zse_pt3, signature_3, 64);
+	if (!zcbor_check_error(zse_pt3)) {
+		return -EINVAL;
+	}
 	size_t pt3_len = zse_pt3->payload - plaintext_3;
 
 	/* K_3 and IV_3 for AEAD */
@@ -593,6 +603,9 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	zcbor_bstr_encode_ptr(zse_a3, NULL, 0);
 	zcbor_bstr_encode_ptr(zse_a3, ctx->th_3, 32);
 	zcbor_list_end_encode(zse_a3, 3);
+	if (!zcbor_check_error(zse_a3)) {
+		return -EINVAL;
+	}
 	size_t a_3_len = zse_a3->payload - a_3;
 
 	/* Encrypt PLAINTEXT_3 -> CIPHERTEXT_3 (Message 3) */
@@ -806,6 +819,9 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 	zcbor_bstr_encode_ptr(zse_m2, ctx->ed_pubkey, 32);
 	zcbor_bstr_encode_ptr(zse_m2, ctx->th_2, 32);
 	zcbor_bstr_encode_ptr(zse_m2, ctx->ed_pubkey, 32);
+	if (!zcbor_check_error(zse_m2)) {
+		return -EINVAL;
+	}
 	m_2_len = zse_m2->payload - m_2;
 
 	ed25519_sign(signature_2, ctx->ed_seed, m_2, m_2_len);
@@ -814,6 +830,9 @@ int edhoc_responder_process_msg1(struct edhoc_responder *ctx,
 	ZCBOR_STATE_E(zse_pt2, 0, plaintext_2, sizeof(plaintext_2), 0);
 	zcbor_bstr_encode_ptr(zse_pt2, ctx->ed_pubkey, 32);
 	zcbor_bstr_encode_ptr(zse_pt2, signature_2, 64);
+	if (!zcbor_check_error(zse_pt2)) {
+		return -EINVAL;
+	}
 	size_t pt2_len = zse_pt2->payload - plaintext_2;
 
 	/* KEYSTREAM_2 for XOR encryption */
@@ -913,6 +932,9 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 	zcbor_bstr_encode_ptr(zse_a3, NULL, 0);
 	zcbor_bstr_encode_ptr(zse_a3, ctx->th_3, 32);
 	zcbor_list_end_encode(zse_a3, 3);
+	if (!zcbor_check_error(zse_a3)) {
+		return -EINVAL;
+	}
 	size_t a_3_len = zse_a3->payload - a_3;
 
 	/* Decrypt CIPHERTEXT_3 */
@@ -946,6 +968,9 @@ int edhoc_responder_process_msg3(struct edhoc_responder *ctx,
 	zcbor_bstr_encode_ptr(zse_m3, id_cred_i.value, id_cred_i.len);
 	zcbor_bstr_encode_ptr(zse_m3, ctx->th_3, 32);
 	zcbor_bstr_encode_ptr(zse_m3, peer_pubkey, 32);
+	if (!zcbor_check_error(zse_m3)) {
+		return -EINVAL;
+	}
 	m_3_len = zse_m3->payload - m_3;
 
 	if (ed25519_verify(peer_pubkey, signature_3.value, m_3, m_3_len) != 0) {
