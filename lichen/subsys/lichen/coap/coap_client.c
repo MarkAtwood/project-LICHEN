@@ -11,6 +11,7 @@
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_client.h>
@@ -22,16 +23,23 @@ LOG_MODULE_REGISTER(lichen_coap_client, LOG_LEVEL_INF);
 /* CBOR content-format code */
 #define CBOR_CONTENT_FORMAT 60
 
-/* CoAP client socket */
+/* Maximum URI path length (all components joined with '/') */
+#define COAP_MAX_PATH_LEN 64
+
+/* CoAP client socket - protected by s_mutex for thread safety */
 static int s_sock = -1;
 static struct coap_client s_client;
 static bool s_initialized;
+static K_MUTEX_DEFINE(s_mutex);
 
 int lichen_coap_client_init(void)
 {
 	int ret;
 
+	k_mutex_lock(&s_mutex, K_FOREVER);
+
 	if (s_initialized) {
+		k_mutex_unlock(&s_mutex);
 		return 0;
 	}
 
@@ -39,6 +47,7 @@ int lichen_coap_client_init(void)
 	s_sock = zsock_socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	if (s_sock < 0) {
 		LOG_ERR("Failed to create socket: %d", errno);
+		k_mutex_unlock(&s_mutex);
 		return -errno;
 	}
 
@@ -48,21 +57,55 @@ int lichen_coap_client_init(void)
 		LOG_ERR("CoAP client init failed: %d", ret);
 		zsock_close(s_sock);
 		s_sock = -1;
+		k_mutex_unlock(&s_mutex);
 		return ret;
 	}
 
 	s_initialized = true;
+	k_mutex_unlock(&s_mutex);
 	LOG_INF("CoAP client initialized");
 	return 0;
 }
 
 /*
  * Internal response handler that maps to user callback.
+ *
+ * The timeout_work ensures cleanup if the CoAP layer never calls back
+ * (e.g., socket error before request is sent).
+ *
+ * Race prevention: completed flag is set atomically. Whichever path
+ * (callback or timeout) sets it first owns the ctx and frees it.
  */
 struct request_ctx {
 	lichen_coap_response_cb callback;
 	void *user_data;
+	struct k_work_delayable timeout_work;
+	atomic_t completed;  /* Set atomically; first setter owns cleanup */
+	char path_buf[COAP_MAX_PATH_LEN];  /* Joined URI path for Zephyr */
+	uint8_t response_buf[LICHEN_COAP_MAX_PAYLOAD];  /* Accumulated response */
+	size_t response_len;  /* Current accumulated length */
 };
+
+static void request_timeout_handler(struct k_work *work)
+{
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct request_ctx *ctx = CONTAINER_OF(dwork, struct request_ctx, timeout_work);
+
+	/* Atomically check and set completed flag; if already set, exit */
+	if (atomic_set(&ctx->completed, 1) != 0) {
+		/* Callback already fired; it owns cleanup */
+		return;
+	}
+
+	LOG_WRN("CoAP request timeout - no callback received");
+
+	/* Notify user of timeout */
+	if (ctx->callback != NULL) {
+		ctx->callback(ctx->user_data, 0, NULL, 0);
+	}
+
+	k_free(ctx);
+}
 
 static void coap_response_handler(int16_t code, size_t offset, const uint8_t *payload,
 				  size_t len, bool last_block, void *user_data)
@@ -74,11 +117,25 @@ static void coap_response_handler(int16_t code, size_t offset, const uint8_t *pa
 	}
 
 	/*
+	 * Check if timeout handler already claimed ownership.
+	 * We don't set completed here for intermediate blocks - only on last_block
+	 * or error do we claim ownership and clean up.
+	 */
+	if (atomic_get(&ctx->completed) != 0) {
+		/* Timeout handler owns cleanup */
+		return;
+	}
+
+	/*
 	 * Negative codes indicate transport errors (e.g., -ETIMEDOUT, -ECANCELED).
 	 * In error cases, Zephyr sets last_block=true, but call callback with
 	 * error indication regardless.
 	 */
 	if (code < 0) {
+		if (atomic_set(&ctx->completed, 1) != 0) {
+			return;  /* Lost race to timeout */
+		}
+		k_work_cancel_delayable(&ctx->timeout_work);
 		if (ctx->callback != NULL) {
 			ctx->callback(ctx->user_data, 0, NULL, 0);
 		}
@@ -86,13 +143,42 @@ static void coap_response_handler(int16_t code, size_t offset, const uint8_t *pa
 		return;
 	}
 
-	/* For simplicity, only handle non-blockwise responses */
-	if (ctx->callback != NULL && offset == 0 && last_block) {
-		ctx->callback(ctx->user_data, (uint8_t)code, payload, len);
+	/*
+	 * Accumulate blockwise response payload.
+	 * Each block arrives with its offset; copy into response_buf.
+	 * On last_block, deliver the complete accumulated response.
+	 */
+	if (payload != NULL && len > 0) {
+		size_t copy_len = len;
+		if (offset + len > sizeof(ctx->response_buf)) {
+			/* Truncate to fit buffer */
+			if (offset < sizeof(ctx->response_buf)) {
+				copy_len = sizeof(ctx->response_buf) - offset;
+			} else {
+				copy_len = 0;
+			}
+			LOG_WRN("Response truncated: %zu bytes at offset %zu exceeds buffer",
+				len, offset);
+		}
+		if (copy_len > 0) {
+			memcpy(ctx->response_buf + offset, payload, copy_len);
+			if (offset + copy_len > ctx->response_len) {
+				ctx->response_len = offset + copy_len;
+			}
+		}
 	}
 
-	/* Free context after last block */
 	if (last_block) {
+		/* Claim ownership and clean up */
+		if (atomic_set(&ctx->completed, 1) != 0) {
+			return;  /* Lost race to timeout */
+		}
+		k_work_cancel_delayable(&ctx->timeout_work);
+
+		if (ctx->callback != NULL) {
+			ctx->callback(ctx->user_data, (uint8_t)code,
+				      ctx->response_buf, ctx->response_len);
+		}
 		k_free(ctx);
 	}
 }
@@ -102,6 +188,11 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 	struct coap_client_request client_req = {0};
 	struct request_ctx *ctx;
 	int ret;
+	int sock;
+
+	if (req == NULL) {
+		return LICHEN_COAP_ERR_INVALID_PARAM;
+	}
 
 	if (!s_initialized) {
 		ret = lichen_coap_client_init();
@@ -110,9 +201,10 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 		}
 	}
 
-	if (req == NULL) {
-		return LICHEN_COAP_ERR_NO_MEMORY;
-	}
+	/* Snapshot socket under lock - callbacks run without lock held */
+	k_mutex_lock(&s_mutex, K_FOREVER);
+	sock = s_sock;
+	k_mutex_unlock(&s_mutex);
 
 	/* Allocate context for callback */
 	ctx = k_malloc(sizeof(*ctx));
@@ -121,11 +213,38 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 	}
 	ctx->callback = req->callback;
 	ctx->user_data = req->user_data;
+	ctx->response_len = 0;
+	atomic_set(&ctx->completed, 0);
+	k_work_init_delayable(&ctx->timeout_work, request_timeout_handler);
+
+	/*
+	 * Join path components into a single URI path string.
+	 * Zephyr's coap_client expects a single path string like "sensors/temp".
+	 */
+	size_t path_pos = 0;
+	for (size_t i = 0; req->path[i] != NULL; i++) {
+		size_t comp_len = strlen(req->path[i]);
+		if (i > 0) {
+			/* Add separator between components */
+			if (path_pos + 1 >= sizeof(ctx->path_buf)) {
+				k_free(ctx);
+				return LICHEN_COAP_ERR_NO_MEMORY;
+			}
+			ctx->path_buf[path_pos++] = '/';
+		}
+		if (path_pos + comp_len >= sizeof(ctx->path_buf)) {
+			k_free(ctx);
+			return LICHEN_COAP_ERR_NO_MEMORY;
+		}
+		memcpy(ctx->path_buf + path_pos, req->path[i], comp_len);
+		path_pos += comp_len;
+	}
+	ctx->path_buf[path_pos] = '\0';
 
 	/* Build request */
 	client_req.method = req->method;
 	client_req.confirmable = req->confirmable;
-	client_req.path = req->path[0];  /* First path component */
+	client_req.path = ctx->path_buf;
 	client_req.payload = (uint8_t *)req->payload;
 	client_req.len = req->payload_len;
 	client_req.cb = coap_response_handler;
@@ -135,8 +254,8 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 		client_req.fmt = req->content_format;
 	}
 
-	/* Send request */
-	ret = coap_client_req(&s_client, s_sock,
+	/* Send request using snapshotted socket */
+	ret = coap_client_req(&s_client, sock,
 			      (const struct sockaddr *)&req->addr,
 			      &client_req, NULL);
 	if (ret < 0) {
@@ -144,6 +263,14 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 		k_free(ctx);
 		return LICHEN_COAP_ERR_SEND_FAILED;
 	}
+
+	/*
+	 * Schedule timeout cleanup. Use 2x the request timeout to allow
+	 * Zephyr's CoAP layer to handle normal timeouts; this catches cases
+	 * where the callback never fires at all.
+	 */
+	uint32_t timeout_ms = req->timeout_ms > 0 ? req->timeout_ms : LICHEN_COAP_TIMEOUT_MS;
+	k_work_schedule(&ctx->timeout_work, K_MSEC(timeout_ms * 2));
 
 	return LICHEN_COAP_OK;
 }
@@ -177,6 +304,10 @@ int lichen_coap_post_cbor(const struct sockaddr_in6 *addr,
 			  lichen_coap_response_cb callback,
 			  void *user_data)
 {
+	if (addr == NULL || path == NULL) {
+		return LICHEN_COAP_ERR_NO_MEMORY;
+	}
+
 	struct lichen_coap_request req = {
 		.method = COAP_METHOD_POST,
 		.path = path,
