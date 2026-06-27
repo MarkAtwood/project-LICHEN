@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
-# Flash MCUboot + LICHEN puck firmware to T1000-E via UF2 drag-and-drop.
+# Flash MCUboot + LICHEN puck firmware to T1000-E via serial DFU.
 #
-# First-time setup only. After this, use smp-flash.py for OTA updates:
+# The T1000-E (Adafruit nRF52 UF2 bootloader v0.9.1, Seeed build) has
+# APP_START_ADDR = 0x1000. Flash layout (no SoftDevice; Zephyr BLE stack):
+#
+#   0x0000–0x0FFF  Nordic MBR (4 KB)
+#   0x1000–0xCFFF  MCUboot boot_partition (48 KB)
+#   0xD000–0x65FFF slot0_partition (356 KB)
+#   0x66000–0xBEFFF slot1_partition (356 KB) — SMP OTA target
+#   0xBF000–0xC2FFF storage_partition (16 KB)
+#
+# UF2 drag-and-drop silently rejects writes above the 0xFF000 image_size
+# boundary after the first serial DFU. Serial DFU is the only reliable path.
+#
+# After first flash, use SMP OTA for app updates:
 #   python3 smp-flash.py rfc2217://localhost:4005 build_t1000e_puck/zephyr/zephyr.slot0.signed.bin
 #
 # Usage:
 #   ./flash-t1000e-uf2.sh [--build]   # --build forces MCUboot rebuild
+#   Put T1000-E in UF2 bootloader mode (double-tap reset) before running.
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -13,20 +26,20 @@ cd "$(dirname "$0")"
 APP_BUILD="build_t1000e_puck"
 MCUBOOT_BUILD="build_mcuboot_t1000e"
 IMGTOOL="bootloader/mcuboot/scripts/imgtool.py"
-UF2CONV="zephyr/scripts/build/uf2conv.py"
-COMBINED_UF2="lichen_t1000e.uf2"
-FAMILY="0xada52840"
 HEADER_SIZE="0x200"
-SLOT_SIZE="0x5A000"   # slot0_partition size from t1000_e DTS (360 KB)
-SLOT0_ADDR="0x32000"  # slot0_partition offset; MCUboot at 0x26000 (APP_START_ADDR)
+SLOT_SIZE="0x59000"    # slot0_partition size from t1000_e DTS (356 KB)
+SLOT0_ADDR="0xD000"    # slot0_partition base (boot_partition@1000 + 0xC000)
+COMBINED_BIN="/tmp/t1000e_combined.bin"
+COMBINED_DFU="/tmp/t1000e_combined_dfu.zip"
+PORT="${T1000E_PORT:-/dev/ttyACM0}"
 
-# Adjust PYTHONPATH for cbor2 if needed
 export PYTHONPATH="/home/frosty/.local/lib/python3.10/site-packages:${PYTHONPATH:-}"
+export ZEPHYR_SDK_INSTALL_DIR=/home/frosty/.local/share/safe-agent/b9243483d7697056/zephyr-sdk-0.16.8
 
 # -----------------------------------------------------------------------
-# 1. Build MCUboot (once; skip if already built unless --build passed)
+# 1. Build MCUboot (once; skip unless --build)
 # -----------------------------------------------------------------------
-if [[ "${1:-}" == "--build" || ! -f "$MCUBOOT_BUILD/zephyr/zephyr.hex" ]]; then
+if [[ "${1:-}" == "--build" || ! -f "$MCUBOOT_BUILD/zephyr/zephyr.bin" ]]; then
     echo "==> Building MCUboot for t1000_e/nrf52840..."
     west build -d "$MCUBOOT_BUILD" -b "t1000_e/nrf52840" \
         bootloader/mcuboot/boot/zephyr -- \
@@ -37,21 +50,19 @@ if [[ "${1:-}" == "--build" || ! -f "$MCUBOOT_BUILD/zephyr/zephyr.hex" ]]; then
         -DCONFIG_USB_CDC_ACM=n \
         -DCONFIG_UART_CONSOLE=n \
         -DCONFIG_CONSOLE=n \
-        -DCONFIG_LOG=n
+        -DCONFIG_LOG=n \
+        -DCONFIG_BOOT_WATCHDOG_FEED=n
 fi
 
 # -----------------------------------------------------------------------
-# 2. Sign LICHEN puck firmware (add MCUboot header — no key for NONE type)
+# 2. Sign LICHEN puck firmware
 # -----------------------------------------------------------------------
-if [[ ! -f "$APP_BUILD/zephyr/zephyr.hex" ]]; then
+if [[ ! -f "$APP_BUILD/zephyr/zephyr.bin" ]]; then
     echo "ERROR: $APP_BUILD not built — run: west build -d $APP_BUILD" >&2
     exit 1
 fi
 
-echo "==> Adding MCUboot header to firmware..."
-# zephyr.bin starts with CONFIG_BOOT_HEADER_SIZE zeros (pre-allocated header space),
-# followed by the ARM vector table. Strip those zeros so imgtool --pad-header adds
-# a real MCUboot header in their place (without --pad-header imgtool would double-pad).
+echo "==> Signing firmware..."
 TMP_CONTENT=$(mktemp /tmp/lichen_content_XXXXXX.bin)
 dd if="$APP_BUILD/zephyr/zephyr.bin" bs=512 skip=1 of="$TMP_CONTENT" 2>/dev/null
 python3 "$IMGTOOL" sign \
@@ -65,60 +76,54 @@ python3 "$IMGTOOL" sign \
 rm -f "$TMP_CONTENT"
 
 # -----------------------------------------------------------------------
-# 3. Combine MCUboot + signed firmware into a single UF2
-#    MCUboot hex:  0x026000–0x031FFF (boot_partition, APP_START_ADDR)
-#    Firmware hex: 0x032000–         (slot0_partition)
-#    Concatenate by stripping the EOF record (:00000001FF) from MCUboot hex.
+# 3. Build combined binary: MCUboot at 0x1000 + slot0 at 0xD000
+#
+# MCUboot is compiled for boot_partition@1000 (APP_START_ADDR), so its
+# Reset vector lands within 0x1000-0xCFFF. No stub needed.
 # -----------------------------------------------------------------------
-echo "==> Building combined UF2..."
-TMP_HEX=$(mktemp /tmp/lichen_combined_XXXXXX.hex)
-TMP_SLOT0_HEX=$(mktemp /tmp/lichen_slot0_XXXXXX.hex)
-# Convert signed slot0 BIN back to intel hex at the correct base address
-arm-none-eabi-objcopy -I binary -O ihex \
-    --change-addresses "$SLOT0_ADDR" \
-    "$APP_BUILD/zephyr/zephyr.slot0.signed.bin" \
-    "$TMP_SLOT0_HEX"
-grep -v '^:00000001FF' "$MCUBOOT_BUILD/zephyr/zephyr.hex" > "$TMP_HEX"
-cat "$TMP_SLOT0_HEX" >> "$TMP_HEX"
-python3 "$UF2CONV" "$TMP_HEX" -f "$FAMILY" -o "$COMBINED_UF2"
-rm "$TMP_HEX" "$TMP_SLOT0_HEX"
-echo "    Created: $COMBINED_UF2"
+echo "==> Building combined DFU binary..."
+python3 - <<'PYEOF'
+import struct, sys
+
+MCUBOOT_ADDR = 0x1000   # APP_START_ADDR = boot_partition base
+SLOT0_ADDR   = 0xD000   # slot0_partition base
+
+mcuboot = open("build_mcuboot_t1000e/zephyr/zephyr.bin", "rb").read()
+slot0   = open("build_t1000e_puck/zephyr/zephyr.slot0.signed.bin", "rb").read()
+
+reset = struct.unpack_from("<I", mcuboot, 4)[0]
+assert MCUBOOT_ADDR <= reset < SLOT0_ADDR, \
+    f"MCUboot Reset=0x{reset:08X} not in boot_partition — wrong build?"
+
+pad = b"\xff" * (SLOT0_ADDR - MCUBOOT_ADDR - len(mcuboot))
+combined = mcuboot + pad + slot0
+
+with open("/tmp/t1000e_combined.bin", "wb") as f:
+    f.write(combined)
+print(f"  mcuboot@0x{MCUBOOT_ADDR:05X} ({len(mcuboot)}B)  slot0@0x{SLOT0_ADDR:05X} ({len(slot0)}B)  total={len(combined)}B")
+PYEOF
 
 # -----------------------------------------------------------------------
-# 4. Wait for T1000-E UF2 drive to mount, then copy
+# 4. Package and flash via serial DFU
 # -----------------------------------------------------------------------
+echo "==> Creating DFU package..."
+adafruit-nrfutil dfu genpkg \
+    --dev-type 0x0052 \
+    --application "$COMBINED_BIN" \
+    --application-version 2 \
+    "$COMBINED_DFU"
+
 echo ""
-echo "Put T1000-E into bootloader mode (double-tap reset or hold button while plugging in)."
-echo "Waiting for UF2 drive to mount..."
+echo "==> Flashing via serial DFU on $PORT..."
+echo "    (device must be in UF2 bootloader mode — double-tap reset)"
+adafruit-nrfutil --verbose dfu serial \
+    --package "$COMBINED_DFU" \
+    -p "$PORT" \
+    -b 115200 \
+    --singlebank
 
-MOUNT=""
-for i in $(seq 1 60); do
-    # Look for the Adafruit/Seeed UF2 bootloader volume
-    for candidate in \
-        /run/media/"$USER"/T1000* \
-        /run/media/"$USER"/SEEED* \
-        /run/media/"$USER"/NRF52* \
-        /media/"$USER"/T1000* \
-        /media/"$USER"/SEEED* \
-        /media/"$USER"/NRF52* \
-        /media/T1000* /media/SEEED* /media/NRF52*; do
-        if [[ -d "$candidate" && -f "$candidate/INFO_UF2.TXT" ]]; then
-            MOUNT="$candidate"
-            break 2
-        fi
-    done
-    sleep 1
-done
-
-if [[ -z "$MOUNT" ]]; then
-    echo "ERROR: T1000-E drive not found after 60s." >&2
-    echo "Copy manually: cp $COMBINED_UF2 <mount-point>/" >&2
-    exit 1
-fi
-
-echo "==> Found drive: $MOUNT"
-cat "$MOUNT/INFO_UF2.TXT" 2>/dev/null | head -4 || true
 echo ""
-echo "==> Flashing $COMBINED_UF2 → $MOUNT/"
-cp "$COMBINED_UF2" "$MOUNT/"
-echo "    Done. T1000-E will reboot into LICHEN firmware."
+echo "Done. Expected boot sequence:"
+echo "  PRE_KERNEL_1: 3 slow blinks (~1s each) on P0.24"
+echo "  APPLICATION:  1 beep (USB init) + 2 beeps (LoRa/GNSS OK)"
+echo "  USB CDC: 'LICHEN Node' / 'LICHEN Project' on /dev/ttyACM0 + ttyACM1"
