@@ -30,6 +30,10 @@ static void addr_copy(uint8_t *dst, const uint8_t *src)
 /* ── Visited Set for O(1) Loop Detection ──────────────────────────────────── */
 
 #define VISITED_BUCKETS 16  /* power of 2, >= LICHEN_RPL_MAX_HOPS */
+_Static_assert((VISITED_BUCKETS & (VISITED_BUCKETS - 1)) == 0,
+               "VISITED_BUCKETS must be power of 2 for bitwise AND optimization");
+_Static_assert(VISITED_BUCKETS >= LICHEN_RPL_MAX_HOPS,
+               "VISITED_BUCKETS must be >= LICHEN_RPL_MAX_HOPS for loop detection");
 
 /* Simple hash of IPv6 address for visited set indexing */
 static inline uint32_t addr_hash(const uint8_t *addr)
@@ -59,7 +63,7 @@ static inline void visited_init(struct visited_set *v)
 /* Returns true if addr was already visited (loop), false if newly added */
 static inline bool visited_check_and_add(struct visited_set *v, const uint8_t *addr)
 {
-	uint32_t bucket = addr_hash(addr) % VISITED_BUCKETS;
+	uint32_t bucket = addr_hash(addr) & (VISITED_BUCKETS - 1);
 	uint32_t start = bucket;
 
 	/* Linear probe for collision handling */
@@ -74,7 +78,7 @@ static inline bool visited_check_and_add(struct visited_set *v, const uint8_t *a
 			/* Found - loop detected */
 			return true;
 		}
-		bucket = (bucket + 1) % VISITED_BUCKETS;
+		bucket = (bucket + 1) & (VISITED_BUCKETS - 1);
 	} while (bucket != start);
 
 	/* Table full - treat as loop to avoid infinite walk */
@@ -126,7 +130,14 @@ int lichen_rpl_srh_parse(struct lichen_rpl_srh *srh,
 		return LICHEN_RPL_ERR_OVERRUN;
 	}
 
-	srh->segments_left = data[1];
+	uint8_t segments_left = data[1];
+
+	/* segments_left must not exceed num_addresses */
+	if (segments_left > num_addrs) {
+		return LICHEN_RPL_ERR_BAD_RT;
+	}
+
+	srh->segments_left = segments_left;
 	srh->num_addresses = (uint8_t)num_addrs;
 
 	for (size_t i = 0; i < num_addrs; i++) {
@@ -169,6 +180,11 @@ int lichen_rpl_routing_table_add(struct lichen_rpl_routing_table *rt,
 				 const uint8_t path[][16],
 				 uint8_t path_len)
 {
+	/* A route with no hops is unusable - reject it */
+	if (path_len == 0) {
+		return -1;
+	}
+
 	if (path_len > LICHEN_RPL_MAX_HOPS) {
 		return -1;
 	}
@@ -225,13 +241,13 @@ int lichen_rpl_routing_table_count(const struct lichen_rpl_routing_table *rt)
 
 /* ── DAO Manager ───────────────────────────────────────────────────────────── */
 
-void lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
-				 const uint8_t *node_address,
-				 uint8_t rpl_instance_id,
-				 const uint8_t *dodag_id)
+int lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
+				const uint8_t *node_address,
+				uint8_t rpl_instance_id,
+				const uint8_t *dodag_id)
 {
 	if (dm == NULL || node_address == NULL || dodag_id == NULL) {
-		return;
+		return LICHEN_RPL_ERR_INVALID;
 	}
 	memset(dm, 0, sizeof(*dm));
 	addr_copy(dm->node_address, node_address);
@@ -239,34 +255,43 @@ void lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
 	addr_copy(dm->dodag_id, dodag_id);
 	dm->is_root = false;
 	dm->dao_sequence = 0;
+	return LICHEN_RPL_OK;
 }
 
-void lichen_rpl_dao_manager_init_root(struct lichen_rpl_dao_manager *dm,
-				      const uint8_t *node_address,
-				      uint8_t rpl_instance_id,
-				      const uint8_t *dodag_id)
+int lichen_rpl_dao_manager_init_root(struct lichen_rpl_dao_manager *dm,
+				     const uint8_t *node_address,
+				     uint8_t rpl_instance_id,
+				     const uint8_t *dodag_id)
 {
-	lichen_rpl_dao_manager_init(dm, node_address, rpl_instance_id, dodag_id);
+	int ret = lichen_rpl_dao_manager_init(dm, node_address, rpl_instance_id, dodag_id);
+	if (ret != LICHEN_RPL_OK) {
+		return ret;
+	}
 	dm->is_root = true;
 	lichen_rpl_routing_table_init(&dm->routing_table);
+	return LICHEN_RPL_OK;
 }
 
 int lichen_rpl_dao_manager_build_dao(struct lichen_rpl_dao_manager *dm,
 				     const uint8_t *parent_addr,
 				     uint8_t *buf, size_t len)
 {
-	/* Need: DAO(20) + Target(20) + TransitInfo(22) = 62 bytes */
-	if (len < 64) {
+	/* Need: DAO(20) + Target(20) + TransitInfo(22) = 62 bytes, pad to 64 */
+#define LICHEN_RPL_DAO_MIN_BUF 64
+	if (len < LICHEN_RPL_DAO_MIN_BUF) {
 		return LICHEN_RPL_ERR_BUF_SMALL;
 	}
 
+	/* Use current sequence, then increment for next call.
+	 * This ensures sequence 0 is used on the first DAO. */
+	uint8_t seq = dm->dao_sequence;
 	dm->dao_sequence++;
 
 	struct lichen_rpl_dao dao = {
 		.rpl_instance_id = dm->rpl_instance_id,
 		.ack_requested = false,
 		.flags = 0,
-		.dao_sequence = dm->dao_sequence,
+		.dao_sequence = seq,
 	};
 	addr_copy(dao.dodag_id, dm->dodag_id);
 
@@ -304,12 +329,22 @@ int lichen_rpl_dao_manager_build_dao(struct lichen_rpl_dao_manager *dm,
 	return pos;
 }
 
-/* Extract target → parent edge from DAO options */
+/**
+ * Extract target → parent edge from DAO options.
+ *
+ * Per RFC 6550 Section 6.7.7, Transit Information options apply to the
+ * immediately preceding RPL Target option(s). This function extracts
+ * the first valid (Target, Transit Info) pair.
+ *
+ * Note: Multiple targets may share a single Transit Info. This function
+ * returns only the first target; a more complete implementation would
+ * return all targets for the same transit info.
+ */
 static bool extract_edge(const uint8_t *dao_bytes, size_t len,
 			 uint8_t *target_out, uint8_t *parent_out)
 {
 	const uint8_t *opts = lichen_rpl_dao_options(dao_bytes, len);
-	size_t opts_len = lichen_rpl_dao_options_len(len);
+	size_t opts_len = lichen_rpl_dao_options_len_ex(dao_bytes, len);
 
 	if (opts == NULL || opts_len == 0) {
 		return false;
@@ -319,9 +354,7 @@ static bool extract_edge(const uint8_t *dao_bytes, size_t len,
 	lichen_rpl_opt_iter_init(&it, opts, opts_len);
 
 	bool have_target = false;
-	bool have_parent = false;
 	uint8_t target[16];
-	uint8_t parent[16];
 
 	struct lichen_rpl_raw_opt opt;
 	while (lichen_rpl_opt_iter_next(&it, &opt) == LICHEN_RPL_OK) {
@@ -332,18 +365,20 @@ static bool extract_edge(const uint8_t *dao_bytes, size_t len,
 				have_target = true;
 			}
 		} else if (opt.opt_type == LICHEN_RPL_OPT_TRANSIT_INFO) {
-			struct lichen_rpl_transit_info ti;
-			if (lichen_rpl_transit_info_parse(&ti, opt.data, opt.data_len) == LICHEN_RPL_OK) {
-				addr_copy(parent, ti.parent_address);
-				have_parent = true;
+			/*
+			 * Transit Info applies to the preceding Target(s).
+			 * Return the first valid pair and stop.
+			 */
+			if (have_target) {
+				struct lichen_rpl_transit_info ti;
+				if (lichen_rpl_transit_info_parse(&ti, opt.data, opt.data_len) == LICHEN_RPL_OK) {
+					addr_copy(target_out, target);
+					addr_copy(parent_out, ti.parent_address);
+					return true;
+				}
 			}
+			/* No preceding target for this transit info - continue */
 		}
-	}
-
-	if (have_target && have_parent) {
-		addr_copy(target_out, target);
-		addr_copy(parent_out, parent);
-		return true;
 	}
 
 	return false;
@@ -422,6 +457,39 @@ static int assemble_path(struct lichen_rpl_dao_manager *dm,
 	return 0;  /* Too many hops */
 }
 
+/**
+ * Rebuild route for a single target after its parent edge changed.
+ *
+ * @return 0 on success, -1 if route assembly or installation failed
+ */
+static int rebuild_single_route(struct lichen_rpl_dao_manager *dm,
+				const uint8_t *target)
+{
+	uint8_t path[LICHEN_RPL_MAX_HOPS][16];
+	int path_len = assemble_path(dm, target, path);
+
+	if (path_len > 0) {
+		return lichen_rpl_routing_table_add(&dm->routing_table,
+						    target, path, (uint8_t)path_len);
+	}
+	return -1;
+}
+
+/**
+ * Rebuild all routes that may be affected by a parent edge change.
+ *
+ * Complexity: O(E * H) where E = CONFIG_LICHEN_RPL_MAX_ROUTES edges,
+ * H = LICHEN_RPL_MAX_HOPS. Each edge triggers assemble_path() which
+ * walks up to H hops with O(1) visited-set lookups per hop.
+ *
+ * For small networks (E <= 32, H <= 16), this is acceptable. For larger
+ * deployments, consider incremental updates: only rebuild routes whose
+ * path includes the changed parent. This would require either:
+ * 1. Tracking reverse dependencies (which routes transit each node), or
+ * 2. Caching assembled paths and invalidating on parent change
+ *
+ * Current approach prioritizes simplicity and correctness over efficiency.
+ */
 static int rebuild_routes(struct lichen_rpl_dao_manager *dm)
 {
 	int failures = 0;
@@ -432,22 +500,37 @@ static int rebuild_routes(struct lichen_rpl_dao_manager *dm)
 			continue;
 		}
 
-		uint8_t path[LICHEN_RPL_MAX_HOPS][16];
-		int path_len = assemble_path(dm, dm->parent_map[i].target, path);
-
-		if (path_len > 0) {
-			int ret = lichen_rpl_routing_table_add(&dm->routing_table,
-							       dm->parent_map[i].target,
-							       path, (uint8_t)path_len);
-			if (ret < 0) {
-				failures++;
-			}
+		if (rebuild_single_route(dm, dm->parent_map[i].target) < 0) {
+			failures++;
 		}
 	}
 
 	return failures > 0 ? -1 : 0;
 }
 
+/**
+ * Process a received DAO message and update routing table.
+ *
+ * SECURITY: This function does not authenticate DAO messages. The caller
+ * MUST ensure DAOs are received over an authenticated channel (OSCORE or
+ * link-layer authentication per LICHEN security architecture). Unauthenticated
+ * DAOs enable routing poisoning attacks where an attacker claims to be the
+ * parent for arbitrary targets, redirecting traffic through themselves.
+ *
+ * The LICHEN frame layer provides Schnorr link signatures (48B) which
+ * authenticate the immediate sender. For DAO security, verify that:
+ * 1. The DAO was received from an authenticated link neighbor
+ * 2. The claimed target/parent relationship is plausible (e.g., target
+ *    is the immediate sender, or the sender is a known router)
+ *
+ * RFC 6550 Section 10 defines RPL security modes, but LICHEN relies on
+ * the link-layer and OSCORE for authentication instead.
+ *
+ * @param dm         DAO manager (must be root)
+ * @param dao_bytes  Raw DAO message bytes
+ * @param len        Length of dao_bytes
+ * @return true if a route to the DAO target was successfully installed
+ */
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
 					const uint8_t *dao_bytes, size_t len)
 {

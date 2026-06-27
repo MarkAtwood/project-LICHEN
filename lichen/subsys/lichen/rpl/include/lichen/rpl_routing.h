@@ -157,19 +157,31 @@ struct lichen_rpl_dao_manager {
 
 /**
  * @brief Initialize DAO manager for a non-root node.
+ *
+ * @param dm           DAO manager (must not be NULL)
+ * @param node_address Node's IPv6 address (must not be NULL)
+ * @param rpl_instance_id RPL instance ID
+ * @param dodag_id     DODAG ID (must not be NULL)
+ * @return 0 on success, LICHEN_RPL_ERR_INVALID if any pointer is NULL
  */
-void lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
-				 const uint8_t *node_address,
-				 uint8_t rpl_instance_id,
-				 const uint8_t *dodag_id);
+int lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
+				const uint8_t *node_address,
+				uint8_t rpl_instance_id,
+				const uint8_t *dodag_id);
 
 /**
  * @brief Initialize DAO manager for root node.
+ *
+ * @param dm           DAO manager (must not be NULL)
+ * @param node_address Node's IPv6 address (must not be NULL)
+ * @param rpl_instance_id RPL instance ID
+ * @param dodag_id     DODAG ID (must not be NULL)
+ * @return 0 on success, LICHEN_RPL_ERR_INVALID if any pointer is NULL
  */
-void lichen_rpl_dao_manager_init_root(struct lichen_rpl_dao_manager *dm,
-				      const uint8_t *node_address,
-				      uint8_t rpl_instance_id,
-				      const uint8_t *dodag_id);
+int lichen_rpl_dao_manager_init_root(struct lichen_rpl_dao_manager *dm,
+				     const uint8_t *node_address,
+				     uint8_t rpl_instance_id,
+				     const uint8_t *dodag_id);
 
 /**
  * @brief Build a DAO advertising this node with given parent.

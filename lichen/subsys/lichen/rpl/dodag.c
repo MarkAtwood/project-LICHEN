@@ -22,6 +22,44 @@ static bool addr_eq(const uint8_t *a, const uint8_t *b)
 }
 
 /**
+ * RFC 6550 Section 7.2: Lollipop sequence number comparison.
+ *
+ * RPL version numbers use a "lollipop" counter: values 0-127 are in the
+ * linear region (restart), 128-255 are in the circular region (normal).
+ *
+ * Returns true if 'a' is newer than 'b' per lollipop semantics.
+ * The circular region uses modular comparison with a window of SEQUENCE_WINDOW.
+ */
+#define LOLLIPOP_MAX_VALUE    255
+#define LOLLIPOP_CIRCULAR_BIT 128
+#define LOLLIPOP_SEQUENCE_WINDOW 16
+
+static bool version_is_newer(uint8_t a, uint8_t b)
+{
+	/* If both in linear region (0-127), simple comparison */
+	if (a < LOLLIPOP_CIRCULAR_BIT && b < LOLLIPOP_CIRCULAR_BIT) {
+		return a > b;
+	}
+
+	/* If both in circular region (128-255), use modular comparison */
+	if (a >= LOLLIPOP_CIRCULAR_BIT && b >= LOLLIPOP_CIRCULAR_BIT) {
+		/*
+		 * The circular region has 128 values (128-255).
+		 * a is newer than b if (a - b) mod 128 is in (0, WINDOW].
+		 * We mask with 0x7F to get the circular distance.
+		 */
+		uint8_t diff = (uint8_t)((a - b) & 0x7F);
+		return diff > 0 && diff <= LOLLIPOP_SEQUENCE_WINDOW;
+	}
+
+	/*
+	 * Mixed regions: linear (restart) is always newer than circular.
+	 * A node restarting with version 0 should be accepted over version 250.
+	 */
+	return a < LOLLIPOP_CIRCULAR_BIT;
+}
+
+/**
  * Calculate path cost via this parent (MRHOF, RFC 6719 appendix B.1).
  *
  * path_cost = rank + (link_etx * mhri) / 256
@@ -174,10 +212,12 @@ void lichen_rpl_dodag_select_parent(struct lichen_rpl_dodag *d)
 		struct lichen_rpl_parent *cur = find_parent(d, d->preferred_parent);
 		if (cur != NULL) {
 			uint16_t cur_cost = path_cost(cur, mhri);
-			/* improvement = cur_cost - best_cost */
-			/* switch only if best_cost < cur_cost - threshold */
-			if (cur_cost > threshold &&
-			    best_cost > cur_cost - threshold) {
+			/*
+			 * Hysteresis: only switch if improvement exceeds threshold.
+			 * Stay with current if: best_cost + threshold >= cur_cost
+			 * This form avoids underflow when cur_cost <= threshold.
+			 */
+			if ((uint32_t)best_cost + threshold >= cur_cost) {
 				/* Not enough improvement - stay with current */
 				chosen_addr = cur->addr;
 				chosen_cost = cur_cost;
@@ -215,11 +255,18 @@ void lichen_rpl_dodag_process_dio(struct lichen_rpl_dodag *d,
 		return;
 	}
 
-	/* Newer version or first DIO? Rejoin. */
-	if (dio->version > d->version || !lichen_rpl_dodag_is_joined(d)) {
+	/*
+	 * Version handling per RFC 6550 lollipop semantics.
+	 * A newer version triggers DODAG rejoin; stale versions are ignored.
+	 */
+	if (!lichen_rpl_dodag_is_joined(d)) {
+		/* First DIO - join unconditionally */
 		adopt_version(d, dio);
-	} else if (dio->version < d->version) {
-		/* Stale version */
+	} else if (version_is_newer(dio->version, d->version)) {
+		/* Newer version - rejoin the DODAG */
+		adopt_version(d, dio);
+	} else if (dio->version != d->version) {
+		/* Stale version (not newer and not equal) - ignore */
 		return;
 	}
 
