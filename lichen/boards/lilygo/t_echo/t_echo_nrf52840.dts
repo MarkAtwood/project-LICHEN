@@ -137,7 +137,9 @@
 		dio2-tx-enable;
 		dio3-tcxo-voltage    = <SX126X_DIO3_TCXO_1V8>;
 		tcxo-power-startup-delay-ms = <5>;
-		spi-max-frequency    = <8000000>;
+		/* 2 MHz (was 8 MHz): conservative SPI clock — 8 MHz intermittently
+		 * wedges the nRF52840 SPIM on a post-RXDONE radio read. */
+		spi-max-frequency    = <2000000>;
 	};
 };
 
@@ -182,30 +184,30 @@ zephyr_udc0: &usbd {
 
 		/*
 		 * Adafruit nRF52840 bootloader + SoftDevice S140 v6.1.1:
-		 *   0x0000–0x0FFF  MBR (4 KB, Nordic)
-		 *   0x1000–0x26FFF SoftDevice S140 (152 KB, fixed by bootloader)
-		 *   0x27000        APP_START_ADDR — first writable address
+		 *   0x0000–0x25FFF MBR + SoftDevice S140 (152 KB total)
+		 *   0x26000        APP_START_ADDR — first writable address
+		 *                  (confirmed empirically: serial DFU writes here)
 		 *
 		 * MCUboot occupies the first 48 KB above APP_START_ADDR.
 		 */
-		boot_partition: partition@27000 {
+		boot_partition: partition@26000 {
 			label = "mcuboot";
-			reg = <0x00027000 0x0000C000>;
+			reg = <0x00026000 0x0000C000>;
 		};
 		/* Application slot 0 (356 KB) */
-		slot0_partition: partition@33000 {
+		slot0_partition: partition@32000 {
 			label = "image-0";
-			reg = <0x00033000 0x00059000>;
+			reg = <0x00032000 0x00059000>;
 		};
 		/* Application slot 1 (356 KB) — SMP OTA staging */
-		slot1_partition: partition@8c000 {
+		slot1_partition: partition@8b000 {
 			label = "image-1";
-			reg = <0x0008c000 0x00059000>;
+			reg = <0x0008b000 0x00059000>;
 		};
 		/* NVS / LittleFS storage (16 KB) */
-		storage_partition: partition@e5000 {
+		storage_partition: partition@e4000 {
 			label = "storage";
-			reg = <0x000e5000 0x00004000>;
+			reg = <0x000e4000 0x00004000>;
 		};
 	};
 };
