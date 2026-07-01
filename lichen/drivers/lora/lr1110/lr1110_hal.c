@@ -39,7 +39,14 @@ static const uint8_t nop_pad[1U + LR1110_HAL_MAX_READ_DATA];
 
 static void wait_busy(void)
 {
+	int64_t deadline = k_uptime_get() + 500;
+
 	while (gpio_pin_get_dt(&lr1110_gpio_busy) > 0) {
+		if (k_uptime_get() > deadline) {
+			LOG_ERR("LR1110 BUSY stuck — hard reset");
+			lr1110_hal_reset(NULL);
+			return;
+		}
 		k_sleep(K_MSEC(1));
 	}
 }

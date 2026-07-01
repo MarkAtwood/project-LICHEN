@@ -125,6 +125,11 @@ static void lr1110_irq_work_handler(struct k_work *work)
 	lr1110_system_clear_irq(lr1110_dev, irq);
 	data->last_irq = irq;
 	k_sem_give(&data->radio_sem);
+
+	/* Re-arm the DIO9 edge interrupt now that clear_irq has deasserted the
+	 * line. The hard ISR disables it on entry to prevent an interrupt storm
+	 * if DIO9 stays asserted (nRF GPIO SENSE re-triggers on a held level). */
+	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_EDGE_TO_ACTIVE);
 }
 
 static void lr1110_dio9_isr(const struct device *port,
@@ -134,6 +139,12 @@ static void lr1110_dio9_isr(const struct device *port,
 	ARG_UNUSED(pins);
 	struct lr1110_data *data = CONTAINER_OF(cb, struct lr1110_data, dio9_cb);
 
+	/* Disable the interrupt immediately: if DIO9 stays asserted (the LR1110
+	 * holds it high until the IRQ is cleared over SPI), an nRF SENSE-based
+	 * "edge" interrupt re-fires continuously and pegs the CPU in this ISR,
+	 * starving every thread — including the k_sem_take timeout. The work
+	 * handler re-arms it after clearing the chip IRQ (which deasserts DIO9). */
+	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
 	k_work_submit(&data->irq_work);
 }
 
@@ -151,6 +162,13 @@ static int lr1110_lora_config(const struct device *dev,
 	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
 
 	lr1110_hal_reset(dev);
+
+	/* The Seeed T1000-E clocks the LR1110 from a TCXO. It must be powered
+	 * (via set_tcxo_mode) BEFORE calibration, otherwise the HF crystal never
+	 * starts and every RF command (set_tx) fails with a command error.
+	 * 1.8 V supply; timeout in 30.52 us RTC steps. */
+	lr1110_system_set_tcxo_mode(dev, LR1110_SYSTEM_TCXO_SUPPLY_VOLTAGE_1_8V, 4096);
+
 	lr1110_system_calibrate(dev, 0x3Fu); /* all 6 calibration blocks */
 	lr1110_system_clear_errors(dev);
 
@@ -194,11 +212,14 @@ static int lr1110_lora_config(const struct device *dev,
 	gpio_pin_set_dt(&lr1110_gpio_tx_enable, cfg->tx ? 1 : 0);
 #endif
 
-	/* Clear any IRQ flags the chip set during boot/calibration. DIO9 must
-	 * be deasserted before we re-enable the GPIO interrupt, otherwise the
-	 * first TXDONE won't generate a new rising edge. */
+	/* Clear any IRQ flags the chip set during boot/calibration.
+	 *
+	 * NOTE: we deliberately DO NOT enable the DIO9 GPIO interrupt. TX and RX
+	 * both poll the IRQ status over SPI. Enabling the interrupt lets its
+	 * work handler issue SPI transactions concurrently with the polling
+	 * loop; that race intermittently wedges an SPI transfer and hangs the
+	 * main thread. Pure polling keeps all radio SPI on one thread. */
 	lr1110_system_clear_irq(dev, 0xFFFFFFFFu);
-	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_EDGE_TO_ACTIVE);
 
 	LOG_INF("LR1110 cfg: %u Hz SF%u BW%u CR4/%u pwr=%d tx=%d",
 		cfg->frequency,
@@ -223,20 +244,35 @@ static int lr1110_lora_send(const struct device *dev, uint8_t *data,
 		return -EMSGSIZE;
 	}
 
-	k_sem_reset(&drv->radio_sem);
+	/* Poll for TXDONE over SPI rather than via the DIO9 interrupt: the LR1110
+	 * signals TX/RX errors (CMDERR, ERR) on IRQ bits that are NOT routed to
+	 * DIO9, so a failed TX would otherwise never wake a waiting semaphore.
+	 * Polling lets us observe the true status and bound the wait. */
+	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
+
 	lr1110_regmem_write_buffer8(dev, data, (uint8_t)data_len);
 	lr1110_radio_set_tx(dev, 0);
 
-	if (k_sem_take(&drv->radio_sem, K_SECONDS(10)) != 0) {
-		LOG_ERR("TX timeout");
-		return -ETIMEDOUT;
+	/* SF10/BW125 airtime for a short frame is well under 1 s. Poll every
+	 * 10 ms (up to 3 s) — infrequent enough to keep SPIM traffic light (it
+	 * contends with USB EasyDMA), fast enough for prompt TXDONE detection. */
+	lr1110_system_stat1_t stat1;
+	lr1110_system_stat2_t stat2;
+	uint32_t irq = 0;
+	for (int i = 0; i < 300; i++) {
+		k_sleep(K_MSEC(10));
+		lr1110_system_get_status(dev, &stat1, &stat2, &irq);
+		if (irq & LR1110_SYSTEM_IRQ_TXDONE_MASK) {
+			break;
+		}
 	}
+	lr1110_system_clear_irq(dev, irq);
 
-	if (drv->last_irq & LR1110_SYSTEM_IRQ_TXDONE_MASK) {
+	if (irq & LR1110_SYSTEM_IRQ_TXDONE_MASK) {
 		return 0;
 	}
-	LOG_ERR("TX error irq=0x%08x", drv->last_irq);
-	return -EIO;
+	LOG_ERR("TX no TXDONE irq=0x%08x", irq);
+	return -ETIMEDOUT;
 }
 
 static int lr1110_lora_send_async(const struct device *dev, uint8_t *data,
@@ -252,19 +288,29 @@ static int lr1110_lora_recv(const struct device *dev, uint8_t *data,
 {
 	struct lr1110_data *drv = dev->data;
 
-	k_sem_reset(&drv->radio_sem);
+	ARG_UNUSED(drv);
+
+	/* Poll for RXDONE over SPI, mirroring the TX path. The DIO9 interrupt +
+	 * work-handler get_status sequence intermittently hard-freezes the CPU
+	 * when it runs on a received packet, so we drive RX by polling too. */
+	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
 	lr1110_radio_set_rx(dev, LR1110_RX_CONTINUOUS);
 
-	if (k_sem_take(&drv->radio_sem, timeout) != 0) {
-		return -EAGAIN;
-	}
+	int64_t deadline = k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
+	lr1110_system_stat1_t stat1;
+	lr1110_system_stat2_t stat2;
+	uint32_t irq = 0;
+	do {
+		k_sleep(K_MSEC(20));
+		lr1110_system_get_status(dev, &stat1, &stat2, &irq);
+	} while (!(irq & (LR1110_SYSTEM_IRQ_RXDONE_MASK |
+			  LR1110_SYSTEM_IRQ_TIMEOUT_MASK)) &&
+		 k_uptime_get() < deadline);
 
-	if (!(drv->last_irq & LR1110_SYSTEM_IRQ_RXDONE_MASK)) {
-		if (drv->last_irq & LR1110_SYSTEM_IRQ_TIMEOUT_MASK) {
-			return -EAGAIN;
-		}
-		LOG_WRN("RX error irq=0x%08x", drv->last_irq);
-		return -EIO;
+	lr1110_system_clear_irq(dev, irq);
+
+	if (!(irq & LR1110_SYSTEM_IRQ_RXDONE_MASK)) {
+		return -EAGAIN;
 	}
 
 	lr1110_radio_rxbuffer_status_t buf_status;

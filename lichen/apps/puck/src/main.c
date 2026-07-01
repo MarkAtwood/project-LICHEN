@@ -6,6 +6,7 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/lora.h>
+#include <zephyr/drivers/watchdog.h>
 #include <zephyr/kernel.h>
 #include <zephyr/pm/device.h>
 #include <zephyr/logging/log.h>
@@ -132,6 +133,62 @@ static void send_beacon(const struct device *dev)
 }
 
 /* --------------------------------------------------------------------------
+ * Hardware watchdog — resilience against radio-driver lockups
+ *
+ * A LoRa TX/RX can wedge the main thread indefinitely (e.g. an SPI transaction
+ * to the radio that never completes). Rather than hang forever, arm the SoC
+ * watchdog and feed it once per main-loop iteration. If the loop stops making
+ * progress, the watchdog resets the SoC and the node reboots back into service
+ * within a couple of seconds.
+ *
+ * WDT_TIMEOUT_MS must exceed the worst-case single iteration: a 5 s RX window
+ * plus a beacon TX (radio reconfig + up to ~3 s poll) ≈ 9 s. 20 s gives margin.
+ * -------------------------------------------------------------------------- */
+
+#define WDT_TIMEOUT_MS 20000
+
+static const struct device *s_wdt;
+static int s_wdt_channel = -1;
+
+static void wdt_init(void)
+{
+	s_wdt = DEVICE_DT_GET(DT_ALIAS(watchdog0));
+	if (!device_is_ready(s_wdt)) {
+		LOG_WRN("watchdog not ready — running without it");
+		s_wdt = NULL;
+		return;
+	}
+
+	struct wdt_timeout_cfg cfg = {
+		.flags   = WDT_FLAG_RESET_SOC,
+		.window  = { .min = 0, .max = WDT_TIMEOUT_MS },
+		.callback = NULL,
+	};
+
+	s_wdt_channel = wdt_install_timeout(s_wdt, &cfg);
+	if (s_wdt_channel < 0) {
+		LOG_WRN("wdt_install_timeout failed: %d", s_wdt_channel);
+		s_wdt = NULL;
+		return;
+	}
+
+	int ret = wdt_setup(s_wdt, WDT_OPT_PAUSE_HALTED_BY_DBG);
+	if (ret < 0) {
+		LOG_WRN("wdt_setup failed: %d", ret);
+		s_wdt = NULL;
+		return;
+	}
+	LOG_INF("watchdog armed (%d ms)", WDT_TIMEOUT_MS);
+}
+
+static inline void wdt_kick(void)
+{
+	if (s_wdt) {
+		wdt_feed(s_wdt, s_wdt_channel);
+	}
+}
+
+/* --------------------------------------------------------------------------
  * Main
  * -------------------------------------------------------------------------- */
 
@@ -174,6 +231,11 @@ int main(void)
 	}
 #endif
 
+	/* Arm the watchdog just before entering the loop: everything above runs
+	 * quickly and deterministically; the loop is where a radio call can
+	 * wedge. */
+	wdt_init();
+
 	/* Main loop: RX with 5s timeout, beacon every 60s. */
 	uint8_t buf[LORA_MAX_FRAME];
 	int16_t rssi;
@@ -182,6 +244,8 @@ int main(void)
 	int64_t last_info_ms = 0;
 
 	while (1) {
+		wdt_kick();
+
 		int len = lora_recv(lora_dev, buf, sizeof(buf),
 				    K_SECONDS(5), &rssi, &snr);
 
