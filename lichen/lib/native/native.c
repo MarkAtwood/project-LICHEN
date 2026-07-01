@@ -133,9 +133,12 @@ static int lichen_usb_early_init(void)
 	 * event from the UF2 bootloader) before the INITIALIZED state flag
 	 * was set, causing usbd_enable() to fail silently.  Check VBUS now
 	 * that init is complete and enable directly if VBUS is present.
-	 * Hot-plug after boot is handled by lichen_usbd_msg_cb. */
+	 * Hot-plug after boot is handled by lichen_usbd_msg_cb.
+	 * -EALREADY: callback fired again after init completed and already
+	 * enabled; not an error. */
 	if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
 		ret = usbd_enable(&lichen_usbd);
+		if (ret == -EALREADY) { ret = 0; }
 	}
 
 	return ret;
@@ -492,7 +495,7 @@ static void dfu_touch_poll_fn(struct k_work *work)
 
 int lichen_native_init(lichen_native_rx_cb_t rx_cb)
 {
-#if IS_ENABLED(CONFIG_USB_DEVICE_STACK_NEXT)
+#if IS_ENABLED(CONFIG_LICHEN_NATIVE_BUZZER)
 	buzz_n(2); /* 2 beeps: LoRa/GNSS passed, native transport initializing */
 #endif
 	s_rx_cb = rx_cb;
