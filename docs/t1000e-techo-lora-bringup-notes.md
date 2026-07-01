@@ -1,0 +1,154 @@
+# T1000-E + T-Echo LoRa Bring-up — Engineering Notes
+
+Debug log for getting the LICHEN puck firmware to reliably exchange LoRa beacons
+between a **Seeed T1000-E** (nRF52840 + **LR1110**) and a **LilyGo T-Echo**
+(nRF52840 + **SX1262**). Captures what worked, what didn't, and why — so the
+next person doesn't repeat the dead ends.
+
+**Goal:** both devices show `message_received` on their LICHEN Native `if00`
+port, proving they receive each other's 5-byte announce beacons.
+
+**Status (as of this writing):** ✅ Demo works — both boards receive each other.
+Firmware is resilient: **headless operation = 0 reboots**; the one remaining
+intermittent freeze happens *only while a host holds the USB-CDC port open* and
+is auto-recovered by the watchdog. See "Open items".
+
+---
+
+## Hardware / boot facts (verified)
+
+| | T1000-E | T-Echo |
+|---|---|---|
+| MCU / radio | nRF52840 + LR1110 | nRF52840 + SX1262 |
+| Bootloader | Adafruit UF2 @ 0xF4000, **no SoftDevice**, APP_START **0x1000** | Adafruit UF2 + SoftDevice S140, APP_START **0x26000** |
+| MCUboot | @0x1000, slot0 @0xD000 | @0x26000, slot0 @0x32000 |
+| CDC ports | if00 = LICHEN Native **+ console** (shared!), if02 = mcumgr SMP | if00 = LICHEN Native, if02 = console/log |
+| Radio clock | **TCXO** (needs `set_tcxo_mode`) | TCXO on DIO3 (`dio3-tcxo-voltage`) |
+| DFU port name after touch | `Seeed_Studio_T1000-E_…` | `LilyGo_T-Echo_v1_…` |
+
+- Always use `/dev/serial/by-id/` paths, never `/dev/ttyACM*` (they reorder).
+- Zephyr errno: `ETIMEDOUT = 116`, so "beacon TX failed: -116" = a TX timeout.
+
+---
+
+## Root causes found (the wins)
+
+### 1. Flash scripts silently never flashed (the big one)
+`flash-t1000e.sh` / `flash-t_echo.sh` run
+`adafruit-nrfutil dfu serial --touch 1200`, which does the 1200-bps touch
+**and then reopens the same port path**. But after the touch the device
+re-enumerates under a *different* name (`LICHEN_Node…` → `Seeed_Studio…` /
+`LilyGo…`), so nrfutil hits "No such file or directory", **writes zero bytes**,
+and the script prints "Done." anyway. For a long time every "reflash" silently
+failed — the board kept running the *previous* firmware.
+
+**Working procedure (used throughout):**
+1. Touch separately in Python (open at 1200 baud, DTR de-asserted, close).
+2. `sleep 3`; find the *new* DFU port name.
+3. `adafruit-nrfutil dfu serial --package X.zip -p <DFU_PORT> -b 115200 --singlebank` **without** `--touch`.
+4. Success = transfer progress bars + `Device programmed.`
+
+**Fallback when serial DFU wedges (happened on T-Echo):** UF2 drag-drop —
+`uf2conv.py -c -b 0x26000 -f 0xADA52840 combined.bin -o x.uf2`, mount the
+`TECHOBOOT` volume (`udisksctl mount -b /dev/sda`), `cp x.uf2 <mnt>/`, `sync`.
+
+### 2. LR1110 "TX hang" = missing TCXO init
+The T1000-E clocks the LR1110 from a TCXO, but `lr1110_lora_config()` never
+called `lr1110_system_set_tcxo_mode()`. Consequence chain, proven by
+instrumenting `lr1110_system_get_errors()`:
+- After `calibrate`, errors = **0x0020 = HF_XOSC_START** (HF crystal never started).
+- RF PLL can't lock → `set_tx()` returns **CMDERR** (`irq` bit 22, `0x00400000`).
+- TXDONE never fires; the old `k_sem_take(10s)` waited on a DIO9 edge that never
+  came, and — combined with back-to-back SPI right after `set_tx` — hard-froze
+  the CPU (so even the 10s timeout never fired).
+
+**Fix:** `lr1110_system_set_tcxo_mode(dev, ..._1_8V, 4096)` **before**
+`lr1110_system_calibrate()`. Then `set_tx errors=0x0000`, `irq=0x4` (TXDONE),
+`beacon seq=N` logs, no freeze.
+
+### 3. Radio SPI @ 8 MHz intermittently wedges the nRF52840 SPIM
+Lowering `spi-max-frequency` **8 MHz → 2 MHz** on both boards markedly reduced
+the intermittent transfer-hang freezes.
+
+### 4. Resilience: SoC watchdog
+`wdt0` armed in `main()` (20 s), fed each main-loop iteration. Any radio-driver
+lockup now auto-resets instead of hanging forever. Also a great live diagnostic:
+count re-enumerations in `dmesg` to measure freeze rate.
+
+### 5. `wait_busy()` had no timeout (both drivers)
+`lr1110_hal.c` `wait_busy()` and `zephyr/drivers/lora/sx126x.c`
+`SX126xWaitOnBusy()` spun forever if the radio BUSY pin stuck high. Added a
+500 ms deadline + hard radio reset. (Necessary but not sufficient on its own.)
+
+---
+
+## Things that did NOT work / were wrong turns
+
+- **Autosuspend was NOT the connectivity-loss cause.** Both devices read
+  `runtime_status=active`. The T-Echo (`power/control=on`, never suspended)
+  still went silent. Autosuspend *does* drop the T1000-E's deferred logs
+  (making it *look* dead), but the watchdog later proved main was alive. USB
+  autosuspend reverts to `auto` on every re-enumeration (needs a udev rule or
+  `echo on | sudo tee …/power/control` to persist; sudo needs a password here).
+- **`CONFIG_LOG_MODE_IMMEDIATE=y`** to catch the last log before a freeze:
+  deadlocked USB enumeration (synchronous logging re-enters the USB stack during
+  bring-up) → board wouldn't enumerate (`-110`), needed double-tap recovery.
+  Don't use immediate logging with a USB-CDC console on these boards.
+- **Disable-in-ISR / re-enable-after DIO9 storm fix**: did not stop the freeze
+  (freeze wasn't a GPIO interrupt storm).
+- **Converting TX (then RX) to SPI polling instead of the DIO9 interrupt**:
+  good change (kept), but did **not** by itself stop the freeze.
+- **TCXO voltage sweep**: swept all 8 supply voltages (1.6–3.3 V); **every one**
+  gave the same `0x0020` HF_XOSC_START at calibration time. So the residual
+  `0x0020` is a benign timing artifact (TCXO is up by `set_tx` time); voltage is
+  not the lever, and increasing the TCXO startup timeout (328 → 4096 steps)
+  didn't clear it either.
+- **Reducing SPI poll frequency** (1 ms → 10/20 ms): did not reduce the
+  port-open freeze (it isn't poll-volume driven).
+- **Shrinking the deferred-log burst**: `CONFIG_LOG_BUFFER_SIZE` is already 1024;
+  the port-open burst is small, so it isn't a volume problem.
+
+---
+
+## The remaining freeze — fully characterized
+
+Controlled A/B test (measured via `dmesg` re-enumeration counts):
+- **Headless (no USB port open): 0 reboots** over 60 s on both boards.
+- **Host holding the USB-CDC port open: ~2–3 watchdog-recovered reboots/min.**
+
+Mechanism: main blocks **forever inside a radio SPI transaction** (Zephyr's nRF
+SPIM sync API waits `K_FOREVER` on DMA-done) when **USB-CDC EasyDMA contends
+with the radio SPIM EasyDMA**. It only triggers while a host is actively
+attached over USB. The work queue stays alive (1200-bps touch still works),
+confirming a main-thread-only hang, not a full lockup.
+
+**To eliminate (not just recover) — the next-mile plan:**
+- Bound the radio SPI: async SPI (`spi_transceive_signal`) + `k_poll` timeout so
+  a stuck transfer returns an error instead of blocking main; reset the SPIM on
+  timeout.
+- Pair with a heartbeat-fed watchdog (feeder thread + freshness check) for ~3 s
+  recovery instead of 20 s.
+- Investigate nRF52840 USB + SPIM EasyDMA bus-arbitration (buffer placement /
+  known anomalies).
+
+---
+
+## Reference: known-good commands
+
+```bash
+# Reflash T1000-E (device running LICHEN):
+python3 -c "import serial,time; s=serial.Serial(); s.port='/dev/serial/by-id/usb-LICHEN_Project_LICHEN_Node_891FA3226B7B0D14-if00'; s.baudrate=1200; s.dtr=False; s.open(); time.sleep(0.3); s.close()"
+sleep 3
+DFU=$(ls /dev/serial/by-id/*Seeed_Studio_T1000-E_*-if00)
+adafruit-nrfutil dfu serial --package /tmp/t1000e_combined_dfu.zip -p "$DFU" -b 115200 --singlebank
+
+# T-Echo UF2 fallback (serial DFU wedged):
+python3 zephyr/scripts/build/uf2conv.py -c -b 0x26000 -f 0xADA52840 /tmp/t_echo_combined.bin -o /tmp/t_echo.uf2
+udisksctl mount -b /dev/sda && cp /tmp/t_echo.uf2 /media/$USER/TECHOBOOT/ && sync
+
+# Measure freeze rate (re-enumerations = watchdog resets):
+dmesg | grep -c "1-1.6: new full-speed"   # T1000-E hub
+```
+
+Serial numbers seen this session: T1000-E `891FA3226B7B0D14`, T-Echo
+`2BE0BCC87606D748` (USB hubs `1-1.6` and `1-1.7` respectively).
