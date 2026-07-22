@@ -1,0 +1,1 @@
+{"id":"019f8b48-6cf8-7408-92fc-2e36386bcbf9","issue_id":"project-LICHEN-gs3a","event_type":"closed","actor":"AI Agent","old_value":"","new_value":"Removed dead length check (always true after sig len validation)","created_at":"2026-07-22T19:23:27.352264971Z"}
