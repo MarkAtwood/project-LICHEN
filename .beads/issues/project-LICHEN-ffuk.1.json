@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-ffuk.1",
+  "title": "Fix uninitialized variables (P3 codereview)",
+  "description": "Address all instances of uninitialized variables flagged in codereview passes. Fix completely across the codebase. File findings as beads with tag codereview. Do not close parent until 3 clean passes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:17:13.022741501Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:17:13.022741501Z",
+  "labels": [
+    "codereview",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ffuk.1",
+      "depends_on_id": "project-LICHEN-ffuk",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:17:13.155446274Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}

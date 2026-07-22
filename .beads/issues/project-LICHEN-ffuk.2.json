@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-ffuk.2",
+  "title": "Fix integer truncation issues (P3 codereview)",
+  "description": "Address all truncation warnings and potential data loss from implicit casts flagged in codereview. Fix completely. Use beads for all findings tagged codereview.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:17:13.086282552Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:17:13.086282552Z",
+  "labels": [
+    "codereview",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ffuk.2",
+      "depends_on_id": "project-LICHEN-ffuk",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:17:13.219730311Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
