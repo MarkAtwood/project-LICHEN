@@ -1,0 +1,7 @@
+{
+  "id": "1784748954769045253-1",
+  "issue_id": "project-LICHEN-v2tg",
+  "author": "AI Agent",
+  "text": "retransmit() intentionally treats short bitmaps by assuming unmentioned positions as missing (per code comment). Longer bitmap is silently ignored. This is defensive but not a functional bug. Human: decide if adding warning log is worth the complexity in constrained Python impl.",
+  "created_at": "2026-07-22T19:35:54.769045253Z"
+}
