@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-izi1",
+  "title": "[codereview-pass1] WiFi Kconfig for Heltec V3 uses generic CONFIG_WIFI=y but may miss espressif-specific ESP_WIFI_* options for STA mode on ESP32-S3 (legacy CONFIG_ESP32_WIFI_STA not defined in current HAL)",
+  "description": "lichen/apps/gateway/boards/heltec_wifi_lora32_v3_esp32s3_procpu.conf:77: CONFIG_WIFI=y / CONFIG_WIFI_NM=y ; check against drivers/wifi/esp32 and hal/espressif/components/esp_wifi/Kconfig for proper STA enablement. West build may warn on unresolved symbols or suboptimal defaults. discovered-from:project-LICHEN-ros5",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:18:51.100092054Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:18:51.100092054Z"
+}
