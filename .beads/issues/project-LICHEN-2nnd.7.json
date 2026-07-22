@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-2nnd.7",
+  "title": "Visualization with D3 backend CoAP",
+  "description": "Implement live mesh visualization frontend using D3.js with backend data feed via CoAP from gateways. Update 2nnd.2 accordingly.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:51:44.101347383Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:44.101347383Z",
+  "labels": [
+    "demo",
+    "milestone",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-2nnd.7",
+      "depends_on_id": "project-LICHEN-2nnd",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:51:44.214590894Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
