@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-msqb",
+  "title": "P3 codereview: rx_valid_until_sfn note should explicitly reference beacon.sfn field definition from 09-packets-timing.md:443 and link to RFC1982 example",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T19:01:51.722522732Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:01:51.722522732Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-msqb",
+      "depends_on_id": "project-LICHEN-95n5",
+      "type": "blocks",
+      "created_at": "2026-07-22T19:01:51.875906608Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
