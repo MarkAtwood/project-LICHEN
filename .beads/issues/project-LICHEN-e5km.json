@@ -2,10 +2,14 @@
   "id": "project-LICHEN-e5km",
   "title": "Fix 5 critical bugs in SenML, RPL DODAG, source routing, LOADng gradients, and LLSec signing",
   "description": "Epic to track fixes for project-LICHEN-wimj (SenML RFC8428 multiple values validation), project-LICHEN-s82x (DodagState lowest_rank reset on version/unjoined), project-LICHEN-s4qr (advance_source_route SRH copy instead of mutate), project-LICHEN-yz4p (GradientEntry seq_num freshness check), project-LICHEN-yvk7 (include LLSec byte in signing data). Must use parallel explore subagents, read-before-edit, add only validation/checks/copies/resets/signing, preserve exact style/tests/vectors/output. 3 codereview passes per bug on correctness/security/edge cases. Full test suite + doctor before closing. No test changes, no weakening, no scope creep.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:15.19642551Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:15.19642551Z"
+  "updated_at": "2026-07-22T17:58:29.005670433Z",
+  "started_at": "2026-07-22T17:58:29.005670433Z",
+  "lease_expires_at": "2026-07-22T18:03:29.005670433Z",
+  "heartbeat_at": "2026-07-22T17:58:29.005670433Z"
 }
