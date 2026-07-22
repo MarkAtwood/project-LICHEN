@@ -7,5 +7,15 @@
   "issue_type": "bug",
   "created_at": "2026-07-22T18:25:53.077305997Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:25:53.077305997Z"
+  "updated_at": "2026-07-22T18:25:53.077305997Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-goxo",
+      "depends_on_id": "project-LICHEN-r7h4.12",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:25:53.24218172Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
 }
