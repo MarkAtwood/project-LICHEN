@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-r0uc",
+  "title": "[codereview] hkdf_expand counter increment safety",
+  "description": "lichen/subsys/lichen/oscore/hkdf.c:100: uint16_t counter used with post-increment in buf[buf_len++] = (uint8_t)counter++. Although bounds check prevents \u003e255 iterations, post-increment means counter reaches 256. Consider pre-increment or uint8_t with explicit comment (but no comments allowed). Also, add static_assert or check for counter overflow. P4 style/defensive. Tagged codereview. Depends on project-LICHEN-7yu8",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T19:07:50.73160748Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:07:50.73160748Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r0uc",
+      "depends_on_id": "project-LICHEN-7yu8",
+      "type": "blocks",
+      "created_at": "2026-07-22T19:07:50.859026395Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
