@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-2nnd.5.1",
+  "title": "[codereview] Add full simulator integration to conference_mesh_demo",
+  "description": "The demo test has a TODO for integrating with rust/lichen-embassy/src/sim.rs and Python simulator for 500 node TDMA/GPS sync and SenML position sharing. This must be implemented before closing parent.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:19.192693998Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:19.192693998Z",
+  "labels": [
+    "codereview",
+    "demo",
+    "milestone",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-2nnd.5.1",
+      "depends_on_id": "project-LICHEN-2nnd.5",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:51:19.321793964Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
