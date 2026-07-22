@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-da2q.11.8",
+  "title": "HUMAN: Expand 2a.5 Desync Recovery State Machine FSM for CCP-11",
+  "description": "spec/02a-coordinated-capacity.md has [STUB] for Desync Recovery State Machine (states UNJOINED/JOINED/DRIFT/RECOVER, transitions on RPL version change, epoch drift, multi-root conflict, timers, integration with select_channel fallback to CH0, wall_clock_valid, SFN reset). Current pseudocode used for channel_select/desync fallback. Provide full normative FSM, table, test vectors in ccp16-desync.json or update before Zephyr/Rust/Python impls. Follow previous CCP patterns (pseudocode first, vectors, interop tests). Tag human,ccp,da2q.11 --json",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:01:13.199092048Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:01:13.199092048Z",
+  "labels": [
+    "human",
+    "ccp",
+    "phy",
+    "scalability",
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-da2q.11.8",
+      "depends_on_id": "project-LICHEN-da2q.11",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:01:13.328153701Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
