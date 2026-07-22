@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-ffuk.4",
+  "title": "Fix test helper functions (P3 codereview)",
+  "description": "Improve or fix all test helper functions flagged in codereview passes for correctness, completeness, or maintainability. Fix all issues found. Tag all findings codereview. P4 treated as real work.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:17:19.183544511Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:17:19.183544511Z",
+  "labels": [
+    "codereview",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ffuk.4",
+      "depends_on_id": "project-LICHEN-ffuk",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:17:19.319363113Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
