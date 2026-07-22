@@ -13,7 +13,8 @@
   "labels": [
     "spec",
     "phy",
-    "scalability"
+    "scalability",
+    "human"
   ],
   "dependencies": [
     {
