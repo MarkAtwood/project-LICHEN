@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-i2db",
+  "title": "[codereview-1] P2: COAP_RESOURCE_DEFINE uses 'lichen_coap' instead of 'lichen_coap_server' in coap_*.c files (coap_msg.c, coap_keys.c, coap_config.c, coap_location.c, coap_dtn.c, coap_status.c?)",
+  "description": "Resources not registering to the COAP_SERVICE_DEFINE(lichen_coap_server). Change all to use lichen_coap_server to match service and linker section. Discovered during coap_server handler fix per 5ky0. Also affects tests if any use the old name.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:16:48.038396563Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:16:48.038396563Z"
+}
