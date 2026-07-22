@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-p12e",
   "title": "Implement WiFi station mode for Heltec V3 gateway",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:11:57.097857225Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:11:57.097857225Z",
+  "updated_at": "2026-07-22T18:12:36.803596654Z",
+  "started_at": "2026-07-22T18:12:36.803596654Z",
+  "lease_expires_at": "2026-07-22T18:17:36.803596654Z",
+  "heartbeat_at": "2026-07-22T18:12:36.803596654Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-p12e",
