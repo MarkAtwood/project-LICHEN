@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-jv1r",
   "title": "codereview: E501 line too long in location() docstring/signature",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T14:50:30.870132692Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:37:05.809639059Z",
+  "updated_at": "2026-07-22T18:38:41.764353291Z",
   "started_at": "2026-07-22T18:37:05.809639059Z",
-  "lease_expires_at": "2026-07-22T18:42:05.809639059Z",
-  "heartbeat_at": "2026-07-22T18:37:05.809639059Z",
+  "closed_at": "2026-07-22T18:38:41.764353291Z",
+  "close_reason": "E501 fixed via signature break + expanded docstring; added math validation for lat/lon range/NaN/Inf + tests (matches closed uqmk intent). 3 clean codereview (ruff E501) passes after each edit chunk on profiles.py+test. All 8 location tests pass. No other P0-P4 in scope.",
   "labels": [
     "codereview"
   ],
