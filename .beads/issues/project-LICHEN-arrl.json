@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-arrl",
   "title": "codereview: flash-t_echo.sh lacks parallel batch support for 10-hub setup (50 devices)",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T17:51:11.378374937Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:54:10.781732447Z",
+  "updated_at": "2026-07-22T17:55:07.555296355Z",
   "started_at": "2026-07-22T17:54:10.781732447Z",
-  "lease_expires_at": "2026-07-22T17:59:10.781732447Z",
-  "heartbeat_at": "2026-07-22T17:54:10.781732447Z",
+  "closed_at": "2026-07-22T17:55:07.555296355Z",
+  "close_reason": "Added xargs -P 10 batch support to flash-t_echo.sh:78 for 10-hub parallel flashing without altering DFU core logic; used independent oracle from adafruit-nrfutil output",
   "labels": [
     "codereview"
   ],
