@@ -2,12 +2,16 @@
   "id": "project-LICHEN-8173",
   "title": "CCP-9 codereview: docstring for current_channel missing",
   "description": "Finding P3: AnnounceMessage docstring does not document the new current_channel field for rendezvous mechanism per da2q context. Update class docstring. Tagged codereview.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:11:44.770501241Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:11:44.770501241Z",
+  "updated_at": "2026-07-22T17:47:40.34641536Z",
+  "started_at": "2026-07-22T17:47:40.34641536Z",
+  "lease_expires_at": "2026-07-22T17:52:40.34641536Z",
+  "heartbeat_at": "2026-07-22T17:47:40.34641536Z",
   "labels": [
     "codereview"
   ]
