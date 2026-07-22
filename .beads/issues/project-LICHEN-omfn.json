@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-omfn",
   "title": "codereview-2: New LCI callbacks not initialized in kiss_transport_init(); potential NULL deref",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:25:56.717636135Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:32:03.142036235Z",
+  "updated_at": "2026-07-22T18:34:18.884985325Z",
   "started_at": "2026-07-22T18:32:03.142036235Z",
-  "lease_expires_at": "2026-07-22T18:37:03.142036235Z",
-  "heartbeat_at": "2026-07-22T18:32:03.142036235Z",
+  "closed_at": "2026-07-22T18:34:18.884985325Z",
+  "close_reason": "Explicit config field initialization in kiss_transport_init:528 prevents uninitialized LCI callbacks and NULL deref. Updated copy to per-field assignment. Tests in lichen/tests/kiss_transport/src/main.c:393 pass. 3 codereview passes clean (P0-P2 fixed, no new issues). Gates: west build native_sim + ZTEST passed.",
   "labels": [
     "codereview"
   ],
