@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-5273.1",
+  "title": "codereview pass 1: duplicate CONFIG_LICHEN_ADAPTIVE_SF_ENABLED and DEFAULT_SF after adding to main Kconfig",
+  "description": "Kconfig now defines the symbols in lichen/Kconfig, link/Kconfig and routing/Kconfig. This will trigger Kconfig 'multiple definition' warnings. Should remove from sub-Kconfigs and add 'depends on LICHEN_ADAPTIVE_SF_ENABLED' or equivalent where needed. P1 finding. Tagged codereview.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:08:41.543495279Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:08:41.543495279Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-5273.1",
+      "depends_on_id": "project-LICHEN-5273",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:08:41.656735402Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
