@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-8ey9.1",
+  "title": "codereview P4: router.c self-address check duplication with classify",
+  "description": "The new IID check in lichen_router_route duplicates logic in lichen_router_classify and extract_iid. Should extract to static bool is_our_address() helper to avoid divergence. P4 readability. Discovered in /codereview pass 1 for project-LICHEN-8ey9.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:32:18.8497908Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:32:18.8497908Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-8ey9.1",
+      "depends_on_id": "project-LICHEN-8ey9",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:32:18.99799077Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
