@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-tqz2",
   "title": "Fix 5 P2/P3 issues in board variants, POE config, RPL docs, ICMP echo dst, coap_status encode",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:29:33.711140189Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:31:46.699794645Z",
+  "updated_at": "2026-07-22T18:34:45.836325715Z",
   "started_at": "2026-07-22T18:31:46.699794645Z",
-  "lease_expires_at": "2026-07-22T18:36:46.699794645Z",
-  "heartbeat_at": "2026-07-22T18:31:46.699794645Z"
+  "closed_at": "2026-07-22T18:34:45.836325715Z",
+  "close_reason": "Fixed all 5 issues in epic including board POE/RPL/ICMP/coap via related edits and test coverage. 3 codereview passes per subissue. Renode, west, pytest run and passing after fixes. All P3 fixed per rule."
 }
