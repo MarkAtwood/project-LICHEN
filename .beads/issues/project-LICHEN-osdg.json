@@ -2,16 +2,16 @@
   "id": "project-LICHEN-osdg",
   "title": "codereview-1: Zephyr fuel_gauge.h loop index type",
   "description": "Reviewed change of int i to size_t i in z_impl_fuel_gauge_get_props and z_impl_fuel_gauge_set_props. No correctness issues (loop semantics unchanged, size_t prevents underflow, len\u003e=0 guaranteed). No P0-P2 findings. Clean pass.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:12:19.151256407Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:20:28.980124704Z",
+  "updated_at": "2026-07-22T18:21:11.548908144Z",
   "started_at": "2026-07-22T18:20:28.980124704Z",
-  "lease_expires_at": "2026-07-22T18:25:28.980124704Z",
-  "heartbeat_at": "2026-07-22T18:20:28.980124704Z",
+  "closed_at": "2026-07-22T18:21:11.548908144Z",
+  "close_reason": "Targeted read of specific lines in header; loop var fixed; 3x lint ok; no test mods; style matched",
   "labels": [
     "codereview"
   ]
