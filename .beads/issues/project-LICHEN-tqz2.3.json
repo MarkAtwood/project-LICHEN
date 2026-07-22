@@ -2,12 +2,16 @@
   "id": "project-LICHEN-tqz2.3",
   "title": "RPL docs P2/P3 issues",
   "description": "Update and fix documentation for RPL in specs and code comments",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:32:06.940504112Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:32:06.940504112Z",
+  "updated_at": "2026-07-22T18:32:56.010289627Z",
+  "started_at": "2026-07-22T18:32:56.010289627Z",
+  "lease_expires_at": "2026-07-22T18:37:56.010289627Z",
+  "heartbeat_at": "2026-07-22T18:32:56.010289627Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-tqz2.3",
