@@ -2,10 +2,14 @@
   "id": "project-LICHEN-l9im",
   "title": "[codereview-1] Zephyr parser regex still duplicates splitlines() loop and read_text() - should stream lines for memory efficiency on large hetero logs (P2 from previous)",
   "description": "The METRICS parser and main loop both call content.splitlines() after read_text(). Update to pass lines iterator to avoid multiple full parses. Also update other parse_*_logs for consistency per ein8. discovered-from:project-LICHEN-0k11",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:42:58.189459598Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:42:58.189459598Z"
+  "updated_at": "2026-07-22T18:44:00.502940469Z",
+  "started_at": "2026-07-22T18:44:00.502940469Z",
+  "lease_expires_at": "2026-07-22T18:49:00.502940469Z",
+  "heartbeat_at": "2026-07-22T18:44:00.502940469Z"
 }
