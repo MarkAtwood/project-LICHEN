@@ -2,10 +2,14 @@
   "id": "project-LICHEN-q8dt",
   "title": "[codereview-P2] slip_transport: k_thread_create has no error check",
   "description": "lichen/subsys/lichen/transport/slip_transport.c:671\\n\\nk_thread_create(\u0026s_rx_thread, ...) is called without capturing or checking its return value. Per Zephyr docs, it returns thread ID or negative errno on failure (e.g. -ENOMEM for stack). This can lead to silent failure of RX thread, causing is_ready true but no RX processing. Should be:\\n\\nint ret = k_thread_create(...);\\nif (ret \u003c 0) {\\n    LOG_ERR(\"Failed to create SLIP RX thread: %d\", ret);\\n    return ret;\\n}\\n\\nFix as real work per task. Discovered in codereview pass 1.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T19:02:29.595481973Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:02:29.595481973Z"
+  "updated_at": "2026-07-22T19:02:39.924337011Z",
+  "started_at": "2026-07-22T19:02:39.924337011Z",
+  "lease_expires_at": "2026-07-22T19:07:39.924337011Z",
+  "heartbeat_at": "2026-07-22T19:02:39.924337011Z"
 }
