@@ -2,10 +2,14 @@
   "id": "project-LICHEN-gwqp",
   "title": "[kimi-review] 41df0fa: [SEVERITY: medium] If `std` is not a default feature (or isn",
   "description": "Commit: 41df0fa31\nMessage: fix(lichen-schc): enable std feature for fragmentation integration test\n\nFinding: [SEVERITY: medium] If `std` is not a default feature (or isn't declared in `[features]` at all), `cargo test` will now **silently skip** the fragmentation test target entirely — the commit's claim that \"all 12 tests pass",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:59:00.057367467Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:59:00.057367467Z"
+  "updated_at": "2026-07-22T17:59:43.655627105Z",
+  "started_at": "2026-07-22T17:59:43.655627105Z",
+  "lease_expires_at": "2026-07-22T18:04:43.655627105Z",
+  "heartbeat_at": "2026-07-22T17:59:43.655627105Z"
 }
