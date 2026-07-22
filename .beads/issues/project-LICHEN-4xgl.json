@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-4xgl",
+  "title": "codereview: hard-coded /home/frosty paths in build-t_echo.sh and flash-t_echo.sh break EC2 Zephyr builder env (must source /mnt/lichen-zephyr/env.sh instead)",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:55:34.536097359Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:55:34.536097359Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-4xgl",
+      "depends_on_id": "project-LICHEN-2nnd.8",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:55:34.656380948Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-4xgl",
+      "depends_on_id": "project-LICHEN-bww8",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:55:34.767253415Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
