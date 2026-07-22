@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-ckf8",
+  "title": "[codereview-2] Updated Zephyr regex misses some possible log formats like 'Send hash=' without colon or 'RECV:' variants (P4 readability/robustness)",
+  "description": "The new regex requires 'Send: hash' exactly (with colon) or 'Recv hash'. Zephyr LOG_INF may use 'Send hash=...' or other variants from lora_ping or other samples. Make regex more flexible while keeping specificity e.g. r'(?i)(?:Send|TX).*?hash' with word boundary. discovered-from:project-LICHEN-0k11",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:43:03.080117643Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:03.080117643Z"
+}

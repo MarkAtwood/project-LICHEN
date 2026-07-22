@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-vcb5",
+  "title": "[codereview-3] No unit test or real log test added for new Zephyr parser (P3 test coverage). Test with real logs mandatory per task.",
+  "description": "Add test with sample Zephyr log containing both good packet lines ([TX] hash=, METRICS) and bad false-positive line ('Sender initialized, receiver registered') to verify no overcounting. Use tempfile for real test. discovered-from:project-LICHEN-0k11",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:43:03.050890946Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:03.050890946Z"
+}
