@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-125v",
+  "title": "codereview pass 3/3: tun.rs send() style and tokio",
+  "description": "General subagent review pass 3/3. Full match to bead description (removed partial loop, atomic single write+try_io+partial error, IPV6_MIN_MTU const, \u003e1500 InvalidInput check). Mimics async tokio libc style exactly. All tests independent, no test changes. Clippy/fmt clean. No P0-P2 remaining after prior fixes. Clean review.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:43:49.395330411Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:43:49.395330411Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-125v",
+      "depends_on_id": "project-LICHEN-a0sx",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T19:43:49.518720928Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
