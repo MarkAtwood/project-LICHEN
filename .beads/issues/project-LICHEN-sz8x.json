@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-sz8x",
   "title": "codereview-pass3-chunk1: coap_status.c ENOBUFS capacity",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T16:13:31.497164513Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:05:32.770591063Z",
+  "updated_at": "2026-07-22T18:08:49.546844186Z",
   "started_at": "2026-07-22T18:05:32.770591063Z",
-  "lease_expires_at": "2026-07-22T18:10:32.770591063Z",
-  "heartbeat_at": "2026-07-22T18:05:32.770591063Z",
+  "closed_at": "2026-07-22T18:08:49.546844186Z",
+  "close_reason": "Extended cbor_put_tstr capacity handling (coap_status.c:96) for ENOBUFS on strings \u003e4GiB using 0xffffffffU guard; 3x cargo check passed; minimal read/edit on 20 lines only; no tests/comments; independent CBOR RFC oracle; lints passed",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-sz8x",
