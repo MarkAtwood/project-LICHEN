@@ -2,14 +2,16 @@
   "id": "project-LICHEN-d3w7",
   "title": "[codereview-P0] hash_32 uses magic numbers without comment linking to FNV-1a spec or test/vectors",
   "description": "The _hash_32 impl matches C but should reference RFC or test vector file. Also, 'LICHEN' seed (0x4c494348) is mentioned in docstring but not used in call. P0 security consistency.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:13:07.280364241Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:49.790767877Z",
+  "updated_at": "2026-07-22T18:53:45.732184482Z",
   "started_at": "2026-07-22T18:15:02.404292461Z",
+  "lease_expires_at": "2026-07-22T18:58:45.732184482Z",
+  "heartbeat_at": "2026-07-22T18:53:45.732184482Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-d3w7",
