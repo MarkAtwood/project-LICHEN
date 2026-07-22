@@ -1,13 +1,17 @@
 {
   "id": "project-LICHEN-ffuk",
   "title": "Fix 5 P3 codereview bugs (uninit vars, truncation, test helpers, stack VLA, Y2K38)",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "epic",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:13:37.598863842Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:13:37.598863842Z",
+  "updated_at": "2026-07-22T19:15:14.161212138Z",
+  "started_at": "2026-07-22T19:15:14.161212138Z",
+  "lease_expires_at": "2026-07-22T19:20:14.161212138Z",
+  "heartbeat_at": "2026-07-22T19:15:14.161212138Z",
   "labels": [
     "review"
   ]
