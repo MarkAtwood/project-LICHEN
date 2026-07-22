@@ -1,6 +1,7 @@
 {
   "issue_prefix": "project-LICHEN",
   "kv.memory.3-independent-codereview-passes-correctness-security-edge-on": "3 independent codereview passes (correctness/security/edge) on python/src/lichen/senml/profiles.py lichen/subsys/lichen/transport/slip_transport.c lichen/subsys/lichen/meshtastic/adapter.c lichen/subsys/lichen/edhoc/edhoc.c + related tests: clean. All validation complete, zcbor/return/ranges/crypto/edges handled robustly. No P0-P2. Fulfills review req for validation fixes.",
+  "kv.memory.codereview-pass-1-3-for-coap-payload-marker": "codereview pass 1/3 for CoAP payload marker fix in lichen-coap: check for correctness, RFC compliance, style, edge cases, test coverage. No P0-P2 findings (InvalidPayloadMarker added, from_bytes detects ps == data.len() after marker, test uses exact example, Display and source matches updated idiomatically, doc updated, fmt/clippy/test pass). Labeled as opinion/P3 only.",
   "kv.memory.codereview-pass-1-consistent-rxmode-rxoneshot-in-sx1262": "codereview-pass-1: consistent rxMode/rxOneShot in SX1262.cs:DispatchMessage after P4 fixes",
   "kv.memory.codereview-pass-2-consistent-rxmode-rxoneshot-in-sx1262": "codereview-pass-2: consistent rxMode/rxOneShot in SX1262.cs:DispatchMessage after P4 fixes",
   "kv.memory.codereview-pass-3-consistent-rxmode-rxoneshot-in-sx1262": "codereview-pass-3: consistent rxMode/rxOneShot in SX1262.cs:DispatchMessage after P4 fixes",
