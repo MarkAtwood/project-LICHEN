@@ -2,11 +2,15 @@
   "id": "project-LICHEN-j36t",
   "title": "codereview-pass-3: missing Y2K38 tests for time subsystem",
   "description": "Reviewed tests in lichen/tests/* for time (puck_location, hal, gateway_status). No tests for Y2K38/2038 rollover, 32-bit time_t edge cases, or post-2038 behavior despite saturation tests using UINT32_MAX. Completeness gap for the time fix.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:20:09.157079629Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:20:09.157079629Z"
+  "updated_at": "2026-07-22T19:20:29.73513045Z",
+  "started_at": "2026-07-22T19:20:29.73513045Z",
+  "lease_expires_at": "2026-07-22T19:25:29.73513045Z",
+  "heartbeat_at": "2026-07-22T19:20:29.73513045Z"
 }
