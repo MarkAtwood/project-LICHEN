@@ -2,14 +2,14 @@
   "id": "project-LICHEN-93ex",
   "title": "[CODEREVIEW-7] Kconfig PoE",
   "description": "lichen/boards/elecrow/thinknode_m7/Kconfig.defconfig:8 - LICHEN_POE Kconfig option added but no corresponding implementation in power subsys or drivers. Needs Kconfig dependency on regulator or ADC.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:45.94465762Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:21:53.664289729Z",
+  "updated_at": "2026-07-22T18:23:37.298245501Z",
   "started_at": "2026-07-22T18:21:53.664289729Z",
-  "lease_expires_at": "2026-07-22T18:26:53.664289729Z",
-  "heartbeat_at": "2026-07-22T18:21:53.664289729Z"
+  "closed_at": "2026-07-22T18:23:37.298245501Z",
+  "close_reason": "Added LICHEN_HAS_POE to hal/Kconfig with proper deps; fixed t_deck Kconfig selects for LVGL/DISPLAY/ST7789V/INPUT/GPIO_KEYS; updated build-t1000e.sh to source env.sh removing hardcoded paths. 3 codereview passes complete (Kconfig style, deps, build gate). Gates: build-t1000e + west passed."
 }
