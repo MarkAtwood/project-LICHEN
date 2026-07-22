@@ -2,12 +2,16 @@
   "id": "project-LICHEN-87an",
   "title": "[codereview-3] parse_python_logs now streams but rust/zephyr parsers still load full file with read_text",
   "description": "Logical chunk 1 complete (python parser updated to use open/for line in f). Review pass 1: rust and zephyr parsers have identical memory bug (read_text + multiple splitlines). P1 safety. Also P4 duplication of parsing logic across 3 functions - extract common _parse_log_stream helper. codereview-tagged bead. Fix all P4.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:43:15.548008746Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:43:15.548008746Z",
+  "updated_at": "2026-07-22T18:44:23.365582848Z",
+  "started_at": "2026-07-22T18:44:23.365582848Z",
+  "lease_expires_at": "2026-07-22T18:49:23.365582848Z",
+  "heartbeat_at": "2026-07-22T18:44:23.365582848Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-87an",
