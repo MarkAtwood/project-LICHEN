@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-fxke",
+  "title": "codereview-pass1: project-LICHEN-35ks NaN/Inf validation",
+  "description": "Added math.isfinite checks for alt/course/speed in _parse_xml_pli per bead. Clear ValueError raised. Test with invalid XML succeeds for nan/inf. P4: consider extracting float validation helper like the sim/api.py P4 suggests. Labeled codereview.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "created_at": "2026-07-22T18:47:53.816878445Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:53.816878445Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-fxke",
+      "depends_on_id": "project-LICHEN-35ks",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:47:53.992280054Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
