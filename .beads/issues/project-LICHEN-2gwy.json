@@ -2,12 +2,16 @@
   "id": "project-LICHEN-2gwy",
   "title": "codereview: test_rx_ax25 now has explicit hw_cmd_cb=NULL for full LCI struct",
   "description": "Explicitly set all fields in kiss_transport_config including hw_cmd_cb to prevent any implicit zeroing ambiguity. P4 readability.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "chore",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:34:12.530328225Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:34:12.530328225Z",
+  "updated_at": "2026-07-22T18:41:59.599895036Z",
+  "started_at": "2026-07-22T18:41:59.599895036Z",
+  "lease_expires_at": "2026-07-22T18:46:59.599895036Z",
+  "heartbeat_at": "2026-07-22T18:41:59.599895036Z",
   "labels": [
     "codereview"
   ]
