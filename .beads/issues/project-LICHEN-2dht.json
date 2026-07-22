@@ -2,14 +2,14 @@
   "id": "project-LICHEN-2dht",
   "title": "[codereview] ipv6_addr.c: inconsistent logging prefix in lichen_eui64_to_iid and lichen_pubkey_to_iid",
   "description": "LOG_ERR messages still use 'ipv6_addr:' instead of module name 'lichen_ipv6:'. Matches the pattern in new function. Discovered during first codereview pass after fixing new function. tagged codereview",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T17:47:25.367212146Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:48:20.723205448Z",
+  "updated_at": "2026-07-22T17:48:38.030453005Z",
   "started_at": "2026-07-22T17:48:20.723205448Z",
-  "lease_expires_at": "2026-07-22T17:53:20.723205448Z",
-  "heartbeat_at": "2026-07-22T17:48:20.723205448Z"
+  "closed_at": "2026-07-22T17:48:38.030453005Z",
+  "close_reason": "Fixed as part of main issue"
 }
