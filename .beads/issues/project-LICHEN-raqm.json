@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-raqm",
+  "title": "[codereview-P2] advance_to calls may not process all RX in BARRIER_SYNC mode",
+  "description": "The 5 advance_to( +1s ) calls in conference test may not be sufficient or correct for BARRIER_SYNC TimeMode. Reference simulation.py for proper barrier sync usage in scale tests. May need sim.step() or full event processing loop. test_scale.py:372",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:59:42.958031756Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:59:42.958031756Z",
+  "labels": [
+    "codereview"
+  ]
+}
