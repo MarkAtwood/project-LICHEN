@@ -2,12 +2,16 @@
   "id": "project-LICHEN-5vzb",
   "title": "codereview: driver does not report input events",
   "description": "lilygo_tdeck_keyboard.c only does I2C probe in init but does not set up polling thread, report keys via input_report_key/input_sync, or handle matrix scan for TCA8418-like chip. No actual keyboard functionality. P0 critical. Must fix before next review pass. discovered-from:project-LICHEN-zonh.3",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:19:11.291320875Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:19:11.291320875Z",
+  "updated_at": "2026-07-22T18:20:18.633438659Z",
+  "started_at": "2026-07-22T18:20:18.633438659Z",
+  "lease_expires_at": "2026-07-22T18:25:18.633438659Z",
+  "heartbeat_at": "2026-07-22T18:20:18.633438659Z",
   "labels": [
     "codereview"
   ]
