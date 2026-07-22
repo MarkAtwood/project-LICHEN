@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-otdv",
+  "title": "[CODEREVIEW pass 3.2] variant yaml toolchain",
+  "description": "lichen/boards/elecrow/thinknode_m7/elecrow_thinknode_m7_procpu.yaml:5 - Toolchain lists both zephyr and espressif; t_deck pattern uses only zephyr in variant yaml (espressif in board.yml). This is inconsistency. P4. Also supported list order does not exactly match t_deck (spi/i2c swapped, missing input/display). P4 style.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:36:24.770379586Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:36:24.770379586Z",
+  "labels": [
+    "codereview"
+  ]
+}
