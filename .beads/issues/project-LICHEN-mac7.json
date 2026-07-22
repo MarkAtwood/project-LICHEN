@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-mac7",
   "title": "SCHC reassembly buffer overflow on malformed fragments",
-  "status": "open",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:58:07.769071625Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:07.769071625Z",
+  "updated_at": "2026-07-22T17:58:46.668003101Z",
+  "closed_at": "2026-07-22T17:58:46.668003101Z",
+  "close_reason": "SCHC reassembly vector-matched idiomatic no_std fix; 3 codereview passes complete",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-mac7",

@@ -1,1 +1,2 @@
 {"id":"019f8afa-4e9e-7893-bd74-dacb40815afe","issue_id":"project-LICHEN-mac7","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T17:58:07.774563134Z"}
+{"id":"019f8afa-e691-721b-bf7d-564a1b861000","issue_id":"project-LICHEN-mac7","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"SCHC reassembly vector-matched idiomatic no_std fix; 3 codereview passes complete","created_at":"2026-07-22T17:58:46.673139252Z"}
