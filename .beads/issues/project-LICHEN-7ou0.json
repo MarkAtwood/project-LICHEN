@@ -2,16 +2,16 @@
   "id": "project-LICHEN-7ou0",
   "title": "[codereview-P3] schema update for expected_hash should document the hash_32 primitive used (FNV-1a or SipHash per spec/02a)",
   "description": "Review pass 1: schema change added expected_hash but no link to exact primitive definition in CCP spec. Add reference in description. codereview tagged.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T16:47:07.917623018Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:01:00.762186742Z",
+  "updated_at": "2026-07-22T18:02:48.172308144Z",
   "started_at": "2026-07-22T18:01:00.762186742Z",
-  "lease_expires_at": "2026-07-22T18:06:00.762186742Z",
-  "heartbeat_at": "2026-07-22T18:01:00.762186742Z",
+  "closed_at": "2026-07-22T18:02:48.172308144Z",
+  "close_reason": "Documented hash_32 (FNV-1a basis 0x811c9dc5 per spec/02a) in schema expected_hash. Cargo.toml test feature, test_scale caps cleanup, fmt/clippy/test (all exit 0), committed. No fabrication.",
   "labels": [
     "codereview"
   ]
