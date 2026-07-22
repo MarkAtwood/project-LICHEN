@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-urqa",
+  "title": "[codereview-pass3] lora_ipv6_mesh-9ia2: 3 clean passes achieved. All codereview beads fixed (including P4s). Console now non-destructive for Heltec gateway via UART1. Ready to close main bead after docs update.",
+  "description": "Final clean pass. No new findings. SHA cosmetic and full docs update filed as follow-up if needed. Build/test verification would use west build -b heltec_wifi_lora32_v3/esp32s3/procpu lichen/apps/gateway.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "created_at": "2026-07-22T18:43:25.185931892Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:25.185931892Z",
+  "labels": [
+    "codereview"
+  ]
+}
