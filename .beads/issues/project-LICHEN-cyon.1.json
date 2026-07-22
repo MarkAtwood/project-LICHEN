@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-cyon.1",
+  "title": "P4: missing type hints on extra_tx/extra_rx in parse_impl_logs",
+  "description": "scripts/analyze-hetero-fleet.py:91 - parse_impl_logs and callers should have proper Optional[List[str]] typing for extra params per mypy. tagged codereview",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T19:03:37.600144118Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:03:37.600144118Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cyon.1",
+      "depends_on_id": "project-LICHEN-cyon",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:03:37.725334101Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
