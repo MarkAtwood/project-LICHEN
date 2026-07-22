@@ -2,12 +2,16 @@
   "id": "project-LICHEN-tqz2.5.1",
   "title": "[codereview] coap_status.c: conversion warnings in encode functions",
   "description": "lichen/subsys/lichen/coap/coap_status.c:267 and multiple lines show -Wconversion warnings for int to uint8_t and size_t to uint16_t. This is P3 (build cleanliness) and potential truncation bug for large payloads. Tag: codereview. Fix by adding explicit casts or size checks.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:33:09.169575867Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:33:09.169575867Z",
+  "updated_at": "2026-07-22T18:33:31.334282265Z",
+  "started_at": "2026-07-22T18:33:31.334282265Z",
+  "lease_expires_at": "2026-07-22T18:38:31.334282265Z",
+  "heartbeat_at": "2026-07-22T18:33:31.334282265Z",
   "labels": [
     "codereview"
   ],
