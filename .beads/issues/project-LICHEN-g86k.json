@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-g86k",
+  "title": "[codereview] Zephyr parser fallback duplicates file open for legacy parse",
+  "description": "scripts/analyze-hetero-fleet.py:178 - fallback with open() after telemetry consumes iterator duplicates I/O and risks inconsistent state on large logs. Use single pass combining parsers or lines list with memory guard. tagged codereview",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:47:14.257740453Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:14.257740453Z"
+}
