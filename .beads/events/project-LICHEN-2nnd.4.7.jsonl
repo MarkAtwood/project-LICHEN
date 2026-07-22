@@ -5,3 +5,4 @@
 {"id":"019f8af1-3cd5-7990-8377-3d3bb978a7f0","issue_id":"project-LICHEN-2nnd.4.7","event_type":"label_added","actor":"ec2-user","comment":"Added label: apps","created_at":"2026-07-22T17:48:13.397627171Z"}
 {"id":"019f8af1-3cd7-7110-a581-48ab6b69c59c","issue_id":"project-LICHEN-2nnd.4.7","event_type":"label_added","actor":"ec2-user","comment":"Added label: milestone","created_at":"2026-07-22T17:48:13.399070035Z"}
 {"id":"019f8af1-3cd8-75c3-947a-055280decca0","issue_id":"project-LICHEN-2nnd.4.7","event_type":"label_added","actor":"ec2-user","comment":"Added label: scalability","created_at":"2026-07-22T17:48:13.400378103Z"}
+{"id":"019f8af1-bec6-746b-aebc-9fc23c52cb9c","issue_id":"project-LICHEN-2nnd.4.7","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Human bead filed for out-of-scope web/app dashboard components (confessions, find my hacker, web visualization).","created_at":"2026-07-22T17:48:46.662290573Z"}
