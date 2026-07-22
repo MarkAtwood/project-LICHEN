@@ -15,7 +15,8 @@
     "phy",
     "protocol",
     "scalability",
-    "spec"
+    "spec",
+    "human"
   ],
   "dependencies": [
     {
