@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-86fu",
+  "title": "codereview-pass1: case sensitivity and streaming iterator inconsistency fixed, dead code removed, style aligned in parse_legacy_logs",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:43:53.944929385Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:53.944929385Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-86fu",
+      "depends_on_id": "project-LICHEN-jjyh",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:43:54.068527073Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
