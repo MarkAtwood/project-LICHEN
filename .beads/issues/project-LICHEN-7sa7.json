@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-7sa7",
+  "title": "[codereview] EDHOC A_3 fix in C initiator missed updating related TH_4 comment and context_3",
+  "description": "P2: The A_3 external_aad now includes CRED_I but comments and other MAC_3 context_3 may need alignment for full RFC compliance. Also check if EAD_3 support is needed.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:14:04.423547467Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:14:04.423547467Z",
+  "labels": [
+    "codereview"
+  ]
+}
