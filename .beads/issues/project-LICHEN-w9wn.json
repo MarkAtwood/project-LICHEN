@@ -2,14 +2,14 @@
   "id": "project-LICHEN-w9wn",
   "title": "[codereview-3/3] conf file missing comment on why UART_INTERRUPT_DRIVEN for ESP32-S3 bench",
   "description": "CONFIG_UART_INTERRUPT_DRIVEN=y added without explaining it is required for Zephyr shell on UART1 (vs polling). P3. Add comment referencing Zephyr UART docs. This completes pass 3; no P0-P2 after fixes.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:48:43.274592077Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:49:40.000258186Z",
+  "updated_at": "2026-07-22T18:53:02.212563914Z",
   "started_at": "2026-07-22T18:49:40.000258186Z",
-  "lease_expires_at": "2026-07-22T18:54:40.000258186Z",
-  "heartbeat_at": "2026-07-22T18:49:40.000258186Z"
+  "closed_at": "2026-07-22T18:53:02.212563914Z",
+  "close_reason": "Added UART_INTERRUPT_DRIVEN comment for ESP32-S3 shell (Zephyr UART driver req for shell backend); fixed heltec_uart1_console Kconfig ref in overlay; IPv6 payload check in slip validate to prevent overflow; mutex/ctx copy in all BLE callbacks + deinit ordering (om93/3lt3/hnay); DAO-ACK codec/handler/retransmit+backoff+K-flag in rpl (iwj9/vnyt/sjkp) with independent RFC oracle; 3 codereview passes; west/cargo/pytest PASS; idiomatic C no dead code existing mutex patterns; scoped to conf/overlay/slip/ble/rpl"
 }
