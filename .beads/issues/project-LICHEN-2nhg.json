@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-2nhg",
+  "title": "Codereview batch fix for 5 board support issues",
+  "description": "Batch fixes for pinctrl, Kconfig, DTS, bindings per review loop. Link 5 ready tasks. Follow minimal fix, no comments, idiomatic Rust/C/Zephyr. No git.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "created_at": "2026-07-22T18:22:06.1546647Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:22:06.1546647Z"
+}
