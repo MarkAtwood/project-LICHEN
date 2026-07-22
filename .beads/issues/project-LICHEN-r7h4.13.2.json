@@ -2,12 +2,16 @@
   "id": "project-LICHEN-r7h4.13.2",
   "title": "GetStatus does not reflect TX mode in SX1262.cs",
   "description": "GetStatus always defaults to STDBY even during TX. Update to check for TX state like RX. Affects firmware status polling during link layer operations. Codereview-P1. Part of r7h4 peripherals pass 2.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:26:07.365086991Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:26:07.365086991Z",
+  "updated_at": "2026-07-22T18:26:44.99502976Z",
+  "started_at": "2026-07-22T18:26:44.99502976Z",
+  "lease_expires_at": "2026-07-22T18:31:44.99502976Z",
+  "heartbeat_at": "2026-07-22T18:26:44.99502976Z",
   "labels": [
     "codereview"
   ],
