@@ -2,12 +2,14 @@
   "id": "project-LICHEN-afcn",
   "title": "[codereview-pass2 P4] coap_dtn.c: missing file header and SenML base_name",
   "description": "coap_dtn.c lacks SPDX and doc comment (compare coap_location.c:1-14). deaddrop_get uses NULL base_name in pack_init; per spec/appendix-senml.md and location pattern should include urn:dev:mac:...: for attribution. Add build_base_name helper (even if duplicate for now). discovered-from:project-LICHEN-92oj",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "created_at": "2026-07-22T18:36:11.703305289Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:36:11.703305289Z",
+  "updated_at": "2026-07-22T18:37:37.05848852Z",
+  "closed_at": "2026-07-22T18:37:37.05848852Z",
+  "close_reason": "Fixed: added file header/doc, base_name support via helper and encode func.",
   "labels": [
     "codereview"
   ]
