@@ -19,8 +19,7 @@
     "zephyr",
     "implementation",
     "phy",
-    "scalability",
-    "human"
+    "scalability"
   ],
   "dependencies": [
     {
