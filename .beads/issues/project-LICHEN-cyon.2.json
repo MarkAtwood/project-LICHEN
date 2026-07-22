@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-cyon.2",
+  "title": "P3: double file open in parse_impl_logs for legacy fallback defeats single-pass streaming",
+  "description": "scripts/analyze-hetero-fleet.py:109 - two with open() blocks. For true streaming on multi-GB logs without list materialization, use single pass with separate telemetry/legacy stats objects and choose at end. tagged codereview",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T19:04:25.487729342Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:04:25.487729342Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cyon.2",
+      "depends_on_id": "project-LICHEN-cyon",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:04:25.620782118Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
