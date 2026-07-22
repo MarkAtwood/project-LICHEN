@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-19f6",
+  "title": "[codereview-pass3] P4: inconsistent |drift| notation in FSM table should use math delimiters or 'absolute drift'",
+  "description": "spec/02a-coordinated-capacity.md:149,150 use |drift| without consistent LaTeX or prose. For IETF markdown, prefer 'absolute value of drift' or $ |drift| $. Also P4: rejoin_timeout and beacon_miss_threshold should be defined in Appendix A constants table. Fix all P4 per task. discovered-from:project-LICHEN-ttam",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "created_at": "2026-07-22T18:30:58.183231053Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:30:58.183231053Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-19f6",
+      "depends_on_id": "project-LICHEN-ttam",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:30:58.320920669Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
