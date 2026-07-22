@@ -2,14 +2,14 @@
   "id": "project-LICHEN-5f9c",
   "title": "codereview: nrf52840_lichen.repl and t_echo/rak4631 .resc do not include or wire NRF52840_BLE peripheral",
   "description": "Add include for BLE.cs in resc files. Override radio in repl files following USBD pattern. Wire IRQ to nvic@1. Required for Meshtastic board BLE/LCI support per bead project-LICHEN-r7h4.11.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:26:33.724459278Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:26:35.734927111Z",
+  "updated_at": "2026-07-22T18:27:10.662913153Z",
   "started_at": "2026-07-22T18:26:35.734927111Z",
-  "lease_expires_at": "2026-07-22T18:31:35.734927111Z",
-  "heartbeat_at": "2026-07-22T18:26:35.734927111Z"
+  "closed_at": "2026-07-22T18:27:10.662913153Z",
+  "close_reason": "Added BLE.cs include to t_echo.resc and rak4631.resc. Wired radio override in both .repl files (and nrf52840_lichen.repl). Follows USBD pattern, supports LCI/KISS. Second logical chunk complete."
 }
