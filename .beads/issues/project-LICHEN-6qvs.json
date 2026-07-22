@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-6qvs",
+  "title": "[codereview] P4: GPIO21/GPIO22 choice for UART1 should be validated against Heltec V3 schematics/pinout diagram and confirmed not conflicting with SX1262 DIOs or future OLED. Add comment with rationale and reference to docs/bench-operations.md update planned.",
+  "description": "Pin selection is reasonable but lacks verification against full pinmux table. Alternative pins like GPIO4/5 or GPIO19/20 might be better if 21/22 are used for other functions in some variants. Flag as P4 but fix per instructions.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "created_at": "2026-07-22T18:43:00.071871409Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:00.071871409Z",
+  "labels": [
+    "codereview"
+  ]
+}
