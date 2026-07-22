@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-7z1t",
+  "title": "[codereview-pass1-2] P4: Module doc could reference ccp16-desync.json and update dodag module import notes",
+  "description": "Second independent review pass. lib.rs now links to ccp_load_balancing but should also note ccp16-desync.json for desynchronization edge cases in TDMA. Minor P4: update other lichen-rpl modules if they export re-exports. No correctness issues found. codereview label.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:31:21.144106472Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:31:21.144106472Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-7z1t",
+      "depends_on_id": "project-LICHEN-4ok1",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:31:21.270683344Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
