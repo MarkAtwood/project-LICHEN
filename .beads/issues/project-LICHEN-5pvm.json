@@ -2,12 +2,14 @@
   "id": "project-LICHEN-5pvm",
   "title": "codereview-pass3-robustness: SFN delta pseudocode should explicitly require wrapping_sub or unsigned semantics in all languages",
   "description": "In spec/02a-coordinated-capacity.md:127 the C example uses unsigned subtraction which is correct for mod 2^32. Rust equivalent must use .wrapping_sub(u32). Python % operator or \u0026 0xffffffff. Add explicit note for all 3 impl languages per test vector discipline. Cross-ref RFC 1982 more precisely. IETF style requires normative language for computation. File as P2 robustness. Also fix any P4 wording. Parent project-LICHEN-ttam",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:30:43.525381041Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:30:43.525381041Z",
+  "updated_at": "2026-07-22T18:31:22.660598614Z",
+  "closed_at": "2026-07-22T18:31:22.660598614Z",
+  "close_reason": "Fixed in spec/02a-coordinated-capacity.md:127-140 with explicit Rust/Python semantics, RFC 1982 cross-ref, 3 impl test vector note. Addressed P4 wording. 3 complete codereview passes (robustness, FSM/init, notation) completed with all findings (incl P4) fixed. IETF style consistent. bd ready --limit 5 run.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-5pvm",
