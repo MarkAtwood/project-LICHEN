@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-82rq",
+  "title": "[codereview-3] EDHOC A_3 C fix introduced potential stack pressure with larger a_3[96]; verify on STM32WL",
+  "description": "P3: Buffer increased from 64 to 96 bytes in two functions. On constrained STM32WL (64KB RAM), this is acceptable but should be reviewed for stack usage in full node init. P4: No EAD_3 support yet (optional per spec).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:14:15.430440279Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:14:15.430440279Z",
+  "labels": [
+    "codereview"
+  ]
+}
