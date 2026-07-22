@@ -2,12 +2,16 @@
   "id": "project-LICHEN-mwih",
   "title": "codereview: driver init and build issues",
   "description": "Uses DT_NODELABEL(keyboard0) instead of DT_INST macro for multi-instance safety. CONFIG_INPUT_INIT_PRIORITY may require select INPUT in Kconfig. No test added for Renode/hardware. No update to t_deck overlay or app to use the input. P1. discovered-from:project-LICHEN-zonh.3",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:19:17.193038968Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:19:17.193038968Z",
+  "updated_at": "2026-07-22T18:20:19.034900287Z",
+  "started_at": "2026-07-22T18:20:19.034900287Z",
+  "lease_expires_at": "2026-07-22T18:25:19.034900287Z",
+  "heartbeat_at": "2026-07-22T18:20:19.034900287Z",
   "labels": [
     "codereview"
   ]
