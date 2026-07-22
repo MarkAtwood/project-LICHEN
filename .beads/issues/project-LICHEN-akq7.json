@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-akq7",
+  "title": "[CODEREVIEW-6] Kconfig.defconfig uses incorrect BOARD_ symbol for ESP32-S3 variants",
+  "description": "lichen/boards/elecrow/thinknode_m7/Kconfig.defconfig:3 - if BOARD_ELECROW_THINKNODE_M7 does not match BOARD_ELECROW_THINKNODE_M7_ESP32S3_PROCPU set by board.yml cpucluster variant. Heap and LICHEN_POE defaults not applied. See heltec_wifi_lora32_v3/Kconfig.defconfig for pattern. Priority correctness P1",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:27:57.384701364Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:27:57.384701364Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-akq7",
+      "depends_on_id": "project-LICHEN-5t67",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:27:57.502950989Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
