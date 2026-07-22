@@ -2,12 +2,16 @@
   "id": "project-LICHEN-8lfb",
   "title": "[codereview] hkdf.c mixes tinycrypt and monocypher without Kconfig guard",
   "description": "lichen/subsys/lichen/oscore/hkdf.c:17 includes \u003cmonocypher.h\u003e for crypto_wipe but the subsystem may use different crypto backend. See related beads project-LICHEN-9nrr. Also, TC_CRYPTO_SUCCESS and TC_SHA256_DIGEST_SIZE from tinycrypt. Ensure consistent with oscore Kconfig. P3 correctness. File as codereview. Depends on project-LICHEN-7yu8",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T19:08:02.167919158Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:08:02.167919158Z",
+  "updated_at": "2026-07-22T19:11:40.576331539Z",
+  "started_at": "2026-07-22T19:11:40.576331539Z",
+  "lease_expires_at": "2026-07-22T19:16:40.576331539Z",
+  "heartbeat_at": "2026-07-22T19:11:40.576331539Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-8lfb",
