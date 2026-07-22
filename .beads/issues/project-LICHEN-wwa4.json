@@ -2,15 +2,15 @@
   "id": "project-LICHEN-wwa4",
   "title": "Fix no_std RNG usage in lichen-oscore EDHOC",
   "description": "EdhocInitiator::new and EdhocResponder::new at ~lines 312 and 752 currently use rand_core::OsRng which ties to getrandom/std. Analyze usage, update to accept generic RngCore + CryptoRng param for idiomatic no_std support. Update tests, Cargo.toml features, docs. Check integration points in lichen-link, lichen-rpl, lichen-node.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:27:56.550208692Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:30:19.553620303Z",
+  "updated_at": "2026-07-22T19:39:01.752716856Z",
   "started_at": "2026-07-22T19:30:19.553620303Z",
-  "lease_expires_at": "2026-07-22T19:35:19.553620303Z",
-  "heartbeat_at": "2026-07-22T19:30:19.553620303Z"
+  "closed_at": "2026-07-22T19:39:01.752716856Z",
+  "close_reason": "Completed all child tasks: generic RNG constructors, test updates, Cargo.toml no_std fixes. Tests and checks pass. No further integration changes required at this time."
 }
