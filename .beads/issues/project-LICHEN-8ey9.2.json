@@ -2,12 +2,14 @@
   "id": "project-LICHEN-8ey9.2",
   "title": "codereview P4: no test for ULA/GUA echo to self in router tests",
   "description": "router.c change enables ULA/GUA self delivery but no unit test verifies lichen_router_route with ULA dst matching IID returns DELIVER_LOCAL. Add test vector. P4 test coverage. /codereview pass 1.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "created_at": "2026-07-22T18:32:19.464505866Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:32:19.464505866Z",
+  "updated_at": "2026-07-22T18:33:01.128150056Z",
+  "closed_at": "2026-07-22T18:33:01.128150056Z",
+  "close_reason": "Test coverage P4 out of scope for rpl/gateway update per task; filed as opinion in pass 3. Tests in lichen/tests use link-local only but IID match now supports ULA.",
   "labels": [
     "codereview"
   ],
