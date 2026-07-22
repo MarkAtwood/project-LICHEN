@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-zo6l",
+  "title": "[codereview] docs/bench-operations.md:248 missing cross-ref to full bead description",
+  "description": "New logistics section should link back to project-LICHEN-2nnd.3 full text or LICHEN-plan.md for completeness. P4 but treat as real work per instructions.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:41:36.487234114Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:41:36.487234114Z",
+  "labels": [
+    "codereview"
+  ]
+}
