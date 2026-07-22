@@ -45,11 +45,11 @@ Slot ID MUST be computed as:
 slot_id = (crc32_ieee(eui64, 8) ^ epoch) % num_slots
 ```
 
-using `crc32_ieee` (see appendix-design-rationale.md:388, lichen/subsys/schc/schc.c:90). This fixes prior inconsistency between crc16 (SMP/Meshtastic legacy) and hash_32 in CCP-15.8.3 pseudocode (`spec/02a-coordinated-capacity.md:41`). The XOR with epoch ensures time-varying slots to prevent persistent collisions. All impls MUST match ccp16.json vectors exactly.
+using `crc32_ieee` (see appendix-design-rationale.md:388). This fixes prior inconsistency between crc16 (SMP/Meshtastic legacy) and hash_32 in CCP-15.8.3 pseudocode. The XOR with epoch ensures time-varying slots to prevent persistent collisions. All implementations MUST match the test vectors in test/vectors/ccp16.json exactly.
 
 For SFN (superframe number, a u32 epoch counter) wrap-around, all nodes MUST compute using unsigned 32-bit arithmetic (modulo 0x100000000). The time-provider (see `docs/firmware-time-provider.md`) is the canonical source: SFN/epoch updates MUST pass epoch_floor validation, set `wall_clock_valid`, and respect stratum before adoption. RPL version changes or desync MUST reset SFN relative to the new root per the FSM in Section 2a.5. This integrates with `lichen_rpl_dodag_init()` ordering.
 
-Delta = (current_sfn - last_sfn) using uint32_t subtraction ensures correct wrap behavior. 
+Delta = (current_sfn - last_sfn) using uint32_t subtraction ensures correct wrap behavior per RFC 1982.
 
 Edge case example (0xFFFFFFFF boundary):
 ```
@@ -57,11 +57,17 @@ last_sfn = 0xFFFFFFFFu;
 current_sfn = 0x00000002u;
 delta = current_sfn - last_sfn;  /* = 3 in unsigned 32-bit arithmetic */
 ```
-This MUST be treated as advancement of 3 slots. Signed arithmetic would yield a large negative value, breaking desync detection and slot scheduling. Test vectors in ccp16.json MUST cover this and similar boundaries.
+Python equivalent (P3 range note: inputs treated as uint32 (0 <= x < 2**32); Python unlimited int yields negative without mask - see test_vectors.py validator for ccp16 desync_on_sfn_wrap):
+```python
+last_sfn = 0xffffffff
+current_sfn = 0x00000002
+delta = (current_sfn - last_sfn) & 0xffffffff  # uint32 mask
+```
+This MUST be treated as advancement of 3 slots. Signed arithmetic would yield negative, breaking desync and scheduling. Test vectors in ccp16.json and test_vectors.py MUST cover boundaries. Cross-ref ccp16-desync.json:desync_on_sfn_wrap.
 
 A node MUST only transmit in its assigned slot. Slot duration = max_airtime(current_SF) + 100 ms guard. The link layer MUST enforce via `lichen_link_set_slot()` and `tdma_tx_allowed()` (see lichen/subsys/lichen/link: implementation).
 
-(This completes logical chunk 2: modulo 0xFFFFFFFF edge case example and delta calculation.)
+(This completes logical chunk: Python SFN delta example range note.)
 
 ## 2a.3. Channel Agility and Adaptive SF
 
