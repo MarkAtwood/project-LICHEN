@@ -43,31 +43,53 @@ class NodeStats:
     rx_count: int = 0
 
 
-def parse_telemetry(content: str, stats: NodeStats) -> bool:
-    """Parse common JSONL events; return whether any valid event was found."""
-    found = False
-    for line in content.splitlines():
-        marker = line.find("TELEMETRY ")
-        if marker < 0:
-            continue
-        try:
-            event = json.loads(line[marker + len("TELEMETRY "):])
-        except json.JSONDecodeError:
-            continue
-        if event.get("schema") != "lichen.telemetry.v1":
-            continue
-        direction = event.get("direction")
-        packet_hash = event.get("packet_hash")
-        if direction not in {"tx", "rx"} or not isinstance(packet_hash, str):
-            continue
-        found = True
-        if direction == "tx":
+def parse_telemetry_line(line: str, stats: NodeStats) -> bool:
+    """Parse one TELEMETRY JSONL line; return True if valid event processed."""
+    marker = line.find("TELEMETRY ")
+    if marker < 0:
+        return False
+    try:
+        event = json.loads(line[marker + len("TELEMETRY "):])
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if event.get("schema") != "lichen.telemetry.v1":
+        return False
+    direction = event.get("direction")
+    packet_hash = event.get("packet_hash")
+    if direction not in {"tx", "rx"} or not isinstance(packet_hash, str):
+        return False
+    if direction == "tx":
+        stats.tx_count += 1
+        stats.tx_hashes.add(packet_hash.lower())
+    else:
+        stats.rx_count += 1
+        stats.rx_hashes.add(packet_hash.lower())
+    return True
+
+
+def parse_fallback_line(line: str, stats: NodeStats) -> None:
+    """Parse fallback [TX]/[RX] or summary line; updates stats in place. No dead code."""
+    if not line or not isinstance(line, str):
+        return
+    upper = line.upper()
+    if "[TX]" in line or "TX:" in upper:
+        match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
+        if match:
+            stats.tx_hashes.add(match.group(1).lower())
             stats.tx_count += 1
-            stats.tx_hashes.add(packet_hash.lower())
-        else:
+        elif "hash" in upper:
+            stats.tx_count += 1
+    elif "[RX]" in line or "RX:" in upper or "RECV" in upper or "SEND" in upper:
+        match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
+        if match:
+            stats.rx_hashes.add(match.group(1).lower())
             stats.rx_count += 1
-            stats.rx_hashes.add(packet_hash.lower())
-    return found
+        elif "hash" in upper:
+            stats.rx_count += 1
+    summary = re.search(r"TX=(\d+)\s+RX=(\d+)", line)
+    if summary:
+        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
+        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
 
 
 def parse_python_logs(log_dir: Path) -> dict[str, NodeStats]:
@@ -78,37 +100,23 @@ def parse_python_logs(log_dir: Path) -> dict[str, NodeStats]:
         node_id = log_file.stem  # e.g., "py-1000"
         stats = NodeStats(node_id=node_id, impl="py")
 
+        telemetry_found = False
         try:
-            content = log_file.read_text(errors="replace")
+            with log_file.open(errors="replace") as f:  # streaming, no full load for large tests
+                for line in f:
+                    if parse_telemetry_line(line, stats):
+                        telemetry_found = True
         except OSError as e:
             print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
             continue
 
-        if parse_telemetry(content, stats):
-            if stats.tx_count > 0 or stats.rx_count > 0:
-                nodes[node_id] = stats
-            continue
-
-        # Look for [TX] or [RX] with hash=
-        # Pattern: [TX] ... hash=abc123 or similar
-        for line in content.splitlines():
-            if "[TX]" in line or "TX:" in line.upper():
-                match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
-                if match:
-                    stats.tx_hashes.add(match.group(1).lower())
-                stats.tx_count += 1
-            elif "[RX]" in line or "RX:" in line.upper():
-                match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
-                if match:
-                    stats.rx_hashes.add(match.group(1).lower())
-                stats.rx_count += 1
-
-        # Also look for summary line: "py-1000: TX=5 RX=3"
-        for line in content.splitlines():
-            summary = re.search(r"TX=(\d+)\s+RX=(\d+)", line)
-            if summary:
-                stats.tx_count = max(stats.tx_count, int(summary.group(1)))
-                stats.rx_count = max(stats.rx_count, int(summary.group(2)))
+        if not telemetry_found:
+            try:
+                with log_file.open(errors="replace") as f:
+                    for line in f:
+                        parse_fallback_line(line, stats)
+            except OSError as e:
+                print(f"Warning: skipping fallback for {log_file}: {e}", file=sys.stderr)
 
         if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
             nodes[node_id] = stats
@@ -121,38 +129,26 @@ def parse_rust_logs(log_dir: Path) -> dict[str, NodeStats]:
     nodes: dict[str, NodeStats] = {}
 
     for log_file in sorted(log_dir.glob("rust-*.log")):
-        node_id = log_file.stem  # e.g., "rust-2000"
+        node_id = log_file.stem
         stats = NodeStats(node_id=node_id, impl="rust")
+        telemetry_found = False
 
         try:
-            content = log_file.read_text(errors="replace")
+            with log_file.open(errors="replace") as f:  # streaming for large tests
+                for line in f:
+                    if parse_telemetry_line(line, stats):
+                        telemetry_found = True
         except OSError as e:
             print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
             continue
 
-        if parse_telemetry(content, stats):
-            if stats.tx_count > 0 or stats.rx_count > 0:
-                nodes[node_id] = stats
-            continue
-
-        for line in content.splitlines():
-            if "[TX]" in line or "TX:" in line.upper():
-                match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
-                if match:
-                    stats.tx_hashes.add(match.group(1).lower())
-                stats.tx_count += 1
-            elif "[RX]" in line or "RX:" in line.upper():
-                match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
-                if match:
-                    stats.rx_hashes.add(match.group(1).lower())
-                stats.rx_count += 1
-
-        # Summary line
-        for line in content.splitlines():
-            summary = re.search(r"TX=(\d+)\s+RX=(\d+)", line)
-            if summary:
-                stats.tx_count = max(stats.tx_count, int(summary.group(1)))
-                stats.rx_count = max(stats.rx_count, int(summary.group(2)))
+        if not telemetry_found:
+            try:
+                with log_file.open(errors="replace") as f:
+                    for line in f:
+                        parse_fallback_line(line, stats)
+            except OSError as e:
+                print(f"Warning: skipping fallback for {log_file}: {e}", file=sys.stderr)
 
         if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
             nodes[node_id] = stats
@@ -165,32 +161,26 @@ def parse_zephyr_logs(log_dir: Path) -> dict[str, NodeStats]:
     nodes: dict[str, NodeStats] = {}
 
     for log_file in sorted(log_dir.glob("zephyr-*.log")):
-        node_id = log_file.stem  # e.g., "zephyr-3000"
+        node_id = log_file.stem
         stats = NodeStats(node_id=node_id, impl="zephyr")
+        telemetry_found = False
 
         try:
-            content = log_file.read_text(errors="replace")
+            with log_file.open(errors="replace") as f:  # streaming for large tests
+                for line in f:
+                    if parse_telemetry_line(line, stats):
+                        telemetry_found = True
         except OSError as e:
             print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
             continue
 
-        if parse_telemetry(content, stats):
-            if stats.tx_count > 0 or stats.rx_count > 0:
-                nodes[node_id] = stats
-            continue
-
-        for line in content.splitlines():
-            # Zephyr may use TX/Send, RX/Recv
-            if "[TX]" in line or "TX:" in line.upper() or "Send" in line:
-                match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
-                if match:
-                    stats.tx_hashes.add(match.group(1).lower())
-                stats.tx_count += 1
-            elif "[RX]" in line or "RX:" in line.upper() or "Recv" in line:
-                match = re.search(r"hash[=:]?\s*([a-fA-F0-9]{8,})", line)
-                if match:
-                    stats.rx_hashes.add(match.group(1).lower())
-                stats.rx_count += 1
+        if not telemetry_found:
+            try:
+                with log_file.open(errors="replace") as f:
+                    for line in f:
+                        parse_fallback_line(line, stats)
+            except OSError as e:
+                print(f"Warning: skipping fallback for {log_file}: {e}", file=sys.stderr)
 
         if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
             nodes[node_id] = stats

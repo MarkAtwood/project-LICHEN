@@ -32,8 +32,13 @@ class SerialRadio:
         self._reader_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
-        """Open serial connection and start reader."""
-        self._serial = serial.Serial(self.port, self.baudrate, timeout=0.1)
+        """Open serial with no-reset flag to avoid CP2102 auto-reset on Heltec gateway/console ports. Follows smp-flash.py/recover.sh pattern."""
+        self._serial = serial.serial_for_url(
+            self.port, baudrate=self.baudrate, timeout=0.1, do_not_open=True
+        )
+        self._serial.dtr = False
+        self._serial.rts = False
+        self._serial.open()
         self._reader_task = asyncio.create_task(self._reader_loop())
 
         # Wait for ready
