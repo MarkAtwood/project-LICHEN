@@ -2,14 +2,14 @@
   "id": "project-LICHEN-u369",
   "title": "codereview P4: missing broadcast node validation in info_node_num",
   "description": "The function in lichen/subsys/lichen/meshtastic/codec.c:541 does not check for MESHTASTIC_BROADCAST_NODE (0xffffffffU). write_user generates the ID string without additional sanitization. Per task, treat P4 as real work and fix. Discovered-from:project-LICHEN-zmrg",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "chore",
   "assignee": "AI Agent",
   "created_at": "2026-07-22T19:07:54.500828599Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:18:19.500762636Z",
+  "updated_at": "2026-07-22T19:18:38.410271165Z",
   "started_at": "2026-07-22T19:18:19.500762636Z",
-  "lease_expires_at": "2026-07-22T19:23:19.500762636Z",
-  "heartbeat_at": "2026-07-22T19:18:19.500762636Z"
+  "closed_at": "2026-07-22T19:18:38.410271165Z",
+  "close_reason": "Fixed as part of codec update above"
 }
