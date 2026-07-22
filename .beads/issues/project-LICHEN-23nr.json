@@ -2,16 +2,16 @@
   "id": "project-LICHEN-23nr",
   "title": "codereview-pass2.6: 04-network.md addressing",
   "description": "Pass 3 (Robustness): Removed all ULA/GUA layered model references in this chunk. New single-primary-address model simplifies routing, eliminates scope selection bugs. Isolated mesh and multi-BR behavior preserved via Yggdrasil. P4 opinion: add diagram of LICHEN-on-Yggdrasil tree metaphor from parent epic. No open questions left in this section. file:spec/04-network.md:10 discovered-from:project-LICHEN-zt3c.14",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T15:10:46.396164071Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:37:05.477292756Z",
+  "updated_at": "2026-07-22T18:37:21.906172202Z",
   "started_at": "2026-07-22T18:37:05.477292756Z",
-  "lease_expires_at": "2026-07-22T18:42:05.477292756Z",
-  "heartbeat_at": "2026-07-22T18:37:05.477292756Z",
+  "closed_at": "2026-07-22T18:37:21.906172202Z",
+  "close_reason": "3 codereview passes complete: unified Ed25519 refs to 06-security.md:109 added, PIO line refs to rules.py:272 and 03-adaptation.md:184 inserted, mermaid diagram added for P4, all findings fixed including P4 per rule, no open codereview beads for spec files",
   "labels": [
     "codereview"
   ]
