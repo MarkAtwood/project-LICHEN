@@ -2,12 +2,16 @@
   "id": "project-LICHEN-7jqi",
   "title": "codereview: fix NodeMetrics dataclass field for _PACKET_HASH_SET_MAX_SIZE",
   "description": "The _PACKET_HASH_SET_MAX_SIZE uses field(default=..., repr=False) which causes 'unexpected keyword' errors during pytest collection across 36 test files (likely due to dataclass init signature changes). Change to ClassVar[int] = 10000. discovered-from:project-LICHEN-pj99",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:38:08.131696554Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:38:08.131696554Z",
+  "updated_at": "2026-07-22T18:39:12.178448421Z",
+  "started_at": "2026-07-22T18:39:12.178448421Z",
+  "lease_expires_at": "2026-07-22T18:44:12.178448421Z",
+  "heartbeat_at": "2026-07-22T18:39:12.178448421Z",
   "labels": [
     "codereview"
   ]
