@@ -2,11 +2,13 @@
   "id": "project-LICHEN-sexz",
   "title": "P4: codereview finding in edhoc.rs A_3 construction",
   "description": "Duplicated code for building A_3 (the Encrypt0 structure with TH_3 || CRED ext_aad) in process_message_2 (initiator) and process_message_3 (responder). Extract to helper fn build_a3_aad(th3, cred) to ensure identical AAD in both directions and simplify unit testing. This is real work per workflow rule even if P4.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:24:26.834479261Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:24:26.834479261Z"
+  "updated_at": "2026-07-22T19:26:43.614734821Z",
+  "closed_at": "2026-07-22T19:26:43.614734821Z",
+  "close_reason": "Extracted build_a3 helper, updated both call sites, added unit test for A_3 construction matching Python CBOR. Fixed clippy empty_line_after_doc_comments (P4 treated as real). 3 clean passes (clippy+test) with no new findings. Main bead q75x ready for closure after reviews."
 }
