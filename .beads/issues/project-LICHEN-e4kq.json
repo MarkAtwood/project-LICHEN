@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-e4kq",
   "title": "[codereview-2] WiFi backhaul: check for missing NET_IF and IPv6 RA handling in border router mode",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:12:35.217824226Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:16:11.798299634Z",
+  "updated_at": "2026-07-22T18:19:38.322073994Z",
   "started_at": "2026-07-22T18:16:11.798299634Z",
-  "lease_expires_at": "2026-07-22T18:21:11.798299634Z",
-  "heartbeat_at": "2026-07-22T18:16:11.798299634Z",
+  "closed_at": "2026-07-22T18:19:38.322073994Z",
+  "close_reason": "Fixed: NET_IF_MAX_IPV6_COUNT=3 + NET_IPV6_ND_RA=y + RPL_ROOT for BR prefix delegation in WiFi gateways (e4kq,tnok). West tdeck build passes. 2/3 codereview.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-e4kq",
