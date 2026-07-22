@@ -2,10 +2,14 @@
   "id": "project-LICHEN-t8jm",
   "title": "[CODEREVIEW-5] PoE node",
   "description": "lichen/boards/elecrow/thinknode_m7/thinknode_m7-pinctrl.dtsi:30 - SI3402 PoE controller binding missing; custom compatible may not exist in Zephyr. Use generic gpio-keys or regulator.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:39.407288188Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:39.407288188Z"
+  "updated_at": "2026-07-22T18:19:10.855308893Z",
+  "started_at": "2026-07-22T18:19:10.855308893Z",
+  "lease_expires_at": "2026-07-22T18:24:10.855308893Z",
+  "heartbeat_at": "2026-07-22T18:19:10.855308893Z"
 }
