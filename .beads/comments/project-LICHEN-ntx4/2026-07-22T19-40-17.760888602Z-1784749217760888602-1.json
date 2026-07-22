@@ -1,0 +1,7 @@
+{
+  "id": "1784749217760888602-1",
+  "issue_id": "project-LICHEN-ntx4",
+  "author": "AI Agent",
+  "text": "Escalating to human: ACK.to_bytes bitmap encoding vs RFC 8724 8.3.3 is a protocol design choice for LICHEN SCHC profile (explicit n vs bit-packed). Requires spec clarification before code change. Not a clear bug.",
+  "created_at": "2026-07-22T19:40:17.760888602Z"
+}
