@@ -2,11 +2,15 @@
   "id": "project-LICHEN-gqex",
   "title": "IPv6 hop limit=0 forwarding + ICMP Time Exceeded",
   "description": "loadng decrements to 0 but core IPv6 forwarding and node.rs lack full RFC 8200 handling (no Time Exceeded on expiry, possible loops if not decremented everywhere). Check recent lichen-ipv6 edits.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:35:38.618084964Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:35:38.618084964Z"
+  "updated_at": "2026-07-22T19:35:49.56711405Z",
+  "started_at": "2026-07-22T19:35:49.56711405Z",
+  "lease_expires_at": "2026-07-22T19:40:49.56711405Z",
+  "heartbeat_at": "2026-07-22T19:35:49.56711405Z"
 }
