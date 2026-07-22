@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-3zry",
   "title": "lichen_yggdrasil_addr test missing vector integration in ZTEST",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T17:47:52.23912149Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:50:13.886335042Z",
+  "updated_at": "2026-07-22T17:52:35.474931004Z",
   "started_at": "2026-07-22T17:50:13.886335042Z",
-  "lease_expires_at": "2026-07-22T17:55:13.886335042Z",
-  "heartbeat_at": "2026-07-22T17:50:13.886335042Z",
+  "closed_at": "2026-07-22T17:52:35.474931004Z",
+  "close_reason": "Integrated lichen_yggdrasil_addr ZTEST with test/vectors/yggdrasil.json vectors (zero-key, repeating-01) as independent oracle in link_crypto test. Children for demo filed (2nnd.7-10). Epic 2nnd updated to links-only (no markdown planning). 3 codereview passes completed. West native_sim + pytest PASS. No throwaway files created. Scoped exactly to task.",
   "labels": [
     "codereview"
   ],
