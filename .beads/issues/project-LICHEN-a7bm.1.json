@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-a7bm.1",
+  "title": "Implement continuous scheduling for merge loop via bd formula or cron wrapper",
+  "description": "Ensure the loop runs continuously. Either create bd formula/mol or a wrapper script that restarts the loop, integrates with /do-beads. Avoid stopping existing merge process for other workers.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T20:01:23.214605Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T20:01:23.214605Z"
+}
