@@ -2,15 +2,15 @@
   "id": "project-LICHEN-14mr",
   "title": "to_dict() exposes mutable internal errors list by reference",
   "description": "## Location\npython/src/lichen/sim/metrics.py:85\n\n## Description\nThe to_dict() method returns self.errors directly without copying, while sets are safely converted via sorted(). If a caller modifies the returned dictionary's 'errors' entry (e.g., d['errors'].append('x') or d['errors'].clear()), it mutates the NodeMetrics' internal state, violating encapsulation.\n\n## Failure Scenario\nCaller does `d = node.metrics.to_dict(); d['errors'].clear()` to sanitize output before logging. This silently clears all errors from the live NodeMetrics instance, corrupting future diagnostics.\n\n## Category\ncorrectness",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-13T04:16:39.333558Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:40:53.683516914Z",
+  "updated_at": "2026-07-22T18:42:18.676737655Z",
   "started_at": "2026-07-22T18:40:53.683516914Z",
-  "lease_expires_at": "2026-07-22T18:45:53.683516914Z",
-  "heartbeat_at": "2026-07-22T18:40:53.683516914Z"
+  "closed_at": "2026-07-22T18:42:18.676737655Z",
+  "close_reason": "to_dict now uses .copy() for errors list. All 3 Python beads fixed together. 3x codereview passes clean, no new P0-P2. "
 }
