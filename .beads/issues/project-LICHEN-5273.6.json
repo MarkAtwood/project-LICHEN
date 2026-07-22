@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-5273.6",
+  "title": "codereview clean pass 3: full context and spec alignment",
+  "description": "Cross-checked against parent zrh2.2 description, AGENTS.md init graph, gradient struct size note (~6 bytes), and spec 2a CCP adaptive SF. All consistent. No remaining issues or bikeshed. 3 clean passes achieved. Tagged codereview.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:09:47.550812556Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:09:47.550812556Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-5273.6",
+      "depends_on_id": "project-LICHEN-5273",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:09:47.664312007Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
