@@ -2,14 +2,14 @@
   "id": "project-LICHEN-mi3t",
   "title": "[codereview-pass1] parse_legacy_logs regex too permissive for Zephyr logs",
   "description": "scripts/analyze-hetero-fleet.py:72 - re.search only looks for 8+ hex after hash= but Zephyr may have full 16byte hashes or prefixed with 0x; no specific Zephyr pattern. tagged codereview",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:47:43.502353322Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:55:35.875137132Z",
+  "updated_at": "2026-07-22T18:57:04.490861863Z",
   "started_at": "2026-07-22T18:55:35.875137132Z",
-  "lease_expires_at": "2026-07-22T19:00:35.875137132Z",
-  "heartbeat_at": "2026-07-22T18:55:35.875137132Z"
+  "closed_at": "2026-07-22T18:57:04.490861863Z",
+  "close_reason": "Updated zephyr regex for 0x prefix and 16-byte hashes; ruff clean, follows no-oracles violation"
 }
