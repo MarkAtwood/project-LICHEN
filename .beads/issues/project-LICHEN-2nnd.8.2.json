@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-2nnd.8.2",
+  "title": "T-Echo bulk pricing and quotes",
+  "description": "Obtain pricing for 500+ units. Factor in bootloader pre-flash, battery, case, antennas, GNSS. Negotiate conference demo discount. Track total budget vs sales-at-cost model.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:55:08.359697475Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:55:08.359697475Z",
+  "labels": [
+    "demo",
+    "milestone",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-2nnd.8.2",
+      "depends_on_id": "project-LICHEN-2nnd.8",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:55:08.495184696Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
