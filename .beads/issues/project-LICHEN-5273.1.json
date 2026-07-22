@@ -11,7 +11,8 @@
   "closed_at": "2026-07-22T18:09:27.758670469Z",
   "close_reason": "Fixed by consolidating Kconfig definitions into lichen/subsys/lichen/Kconfig, removing duplicates from link/ and routing/, adding depends on LICHEN, and updating help text for consistency with spec and zrh2.2. Duplicates eliminated, dependencies corrected.",
   "labels": [
-    "codereview"
+    "codereview",
+    "human"
   ],
   "dependencies": [
     {
