@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-wdef",
+  "title": "P4: No neighbor eviction stats or expire method",
+  "description": "Unlike pending_queue (has pending_evicted_dests) and ForwardingBuffer (has stats), neighbor LRU has no eviction counter or dtn-like expire_old for timeout. Add _neighbor_evicted: int = 0 and optional timeout based cleanup method. Fix all P4s before closing ug8i. discovered-from:project-LICHEN-ug8i",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:48:47.294780472Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:48:47.294780472Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wdef",
+      "depends_on_id": "project-LICHEN-ug8i",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:48:47.432327936Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
