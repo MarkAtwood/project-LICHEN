@@ -2,12 +2,16 @@
   "id": "project-LICHEN-4224",
   "title": "[CODEREVIEW] board.yml missing SPDX header and comments",
   "description": "lichen/boards/elecrow/thinknode_m7/board.yml:1 - All other LICHEN board files have SPDX-License-Identifier and FileCopyrightText. Add them to follow conventions. P3 style.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:31:52.949462526Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:31:52.949462526Z",
+  "updated_at": "2026-07-22T18:32:03.331047674Z",
+  "started_at": "2026-07-22T18:32:03.331047674Z",
+  "lease_expires_at": "2026-07-22T18:37:03.331047674Z",
+  "heartbeat_at": "2026-07-22T18:32:03.331047674Z",
   "labels": [
     "codereview"
   ],
