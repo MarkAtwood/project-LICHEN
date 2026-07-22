@@ -2,12 +2,16 @@
   "id": "project-LICHEN-d7x3",
   "title": "[codereview-pass1-chunk1] lookup_route method lacks full documentation and error handling for non-root case",
   "description": "Doc comment should specify 'root only' per lookup_route impl. Non-root returns None always but not documented. P3 style. discovered-from:project-LICHEN-3k6w.3",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T15:44:40.802190801Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T15:44:40.802190801Z",
+  "updated_at": "2026-07-22T18:32:15.43766602Z",
+  "started_at": "2026-07-22T18:32:15.43766602Z",
+  "lease_expires_at": "2026-07-22T18:37:15.43766602Z",
+  "heartbeat_at": "2026-07-22T18:32:15.43766602Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-d7x3",
