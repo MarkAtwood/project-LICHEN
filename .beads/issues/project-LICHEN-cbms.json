@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-cbms",
+  "title": "Process and merge worker12-batch",
+  "description": "List new commits from /mnt/lichen-zephyr/work/project-LICHEN-worker12 vs wip/checkpoint-20260715, link commits to beads (8lfb,likj,vmtw,y6qb,8idy,okz5 etc), cherry-pick range to main, resolve conflicts in all affected files (coap,rpl,schc,link,gateway,spec), run 3 full codereview passes per review-myoss/rusty/do-beads loop, update relevant beads with \"Merged: \u003cnewhash\u003e\". Report summary only.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "epic",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:58:15.912995441Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:58:15.912995441Z"
+}
