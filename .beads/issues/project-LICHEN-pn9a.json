@@ -2,11 +2,15 @@
   "id": "project-LICHEN-pn9a",
   "title": "IPv6 decrement_hop_limit does not fully follow RFC 8200 forwarding semantics",
   "description": "Method returns Some with hop_limit=0 for input=1 (RFC requires decrement then discard if zero). Caller must additionally check !=0 after. Similar method in loadng.rs returns 0. P1 correctness. See lichen-ipv6/src/lib.rs:365.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:35:21.342741801Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:35:21.342741801Z"
+  "updated_at": "2026-07-22T19:35:36.682379849Z",
+  "started_at": "2026-07-22T19:35:36.682379849Z",
+  "lease_expires_at": "2026-07-22T19:40:36.682379849Z",
+  "heartbeat_at": "2026-07-22T19:35:36.682379849Z"
 }
