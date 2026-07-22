@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-euc8",
+  "title": "codereview-pass1-edhoc-initiator",
+  "description": "Reviewed lichen/subsys/lichen/edhoc/edhoc.c:791-810 after context_3/TH_4 update for A_3. Findings: P4 buffer size could be tighter (64B sufficient); P3 inconsistent TH_3 computation style vs compute_th(); no P0/P1/P2. Fixed P4 comment alignment. Test vectors in python match post-fix.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:17:56.971315539Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:17:56.971315539Z"
+}
