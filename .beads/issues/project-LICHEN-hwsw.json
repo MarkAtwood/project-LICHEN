@@ -2,12 +2,16 @@
   "id": "project-LICHEN-hwsw",
   "title": "codereview-2: P3 Python SFN delta example range note",
   "description": "In spec/02a-coordinated-capacity.md:399 Python impl should note that input values are treated as uint32 (0 \u003c= x \u003c 2**32) to avoid negative results from Python's unlimited int. Add comment. Also cross-ref to test_vectors.py validator. Tagged codereview. Discovered-from:project-LICHEN-hcwu",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:34:43.339469317Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:34:43.339469317Z",
+  "updated_at": "2026-07-22T18:35:27.188904307Z",
+  "started_at": "2026-07-22T18:35:27.188904307Z",
+  "lease_expires_at": "2026-07-22T18:40:27.188904307Z",
+  "heartbeat_at": "2026-07-22T18:35:27.188904307Z",
   "labels": [
     "codereview"
   ],
