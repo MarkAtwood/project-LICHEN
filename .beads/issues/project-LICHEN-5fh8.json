@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-5fh8",
   "title": "codereview: is_local_mesh now uses Ipv6Addr::is_yggdrasil but test_gateway uses NodeId with 0x02 prefix",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T17:48:02.44869223Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:48:02.44869223Z",
+  "updated_at": "2026-07-22T17:48:26.377000683Z",
+  "closed_at": "2026-07-22T17:48:26.377000683Z",
+  "close_reason": "Fixed: is_local_mesh updated to use Ipv6Addr::is_yggdrasil(); import added; cargo check passed; tests use compatible 02xx NodeId; 3 codereview passes completed with all P1-P3 fixed",
   "labels": [
     "codereview"
   ],
