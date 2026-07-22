@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-8u6x",
   "title": "P4 codereview: rx_valid_until_sfn note uses inline code instead of pseudocode block",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T19:01:48.92078093Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:01:48.92078093Z",
+  "updated_at": "2026-07-22T19:01:56.802928712Z",
+  "started_at": "2026-07-22T19:01:56.802928712Z",
+  "lease_expires_at": "2026-07-22T19:06:56.802928712Z",
+  "heartbeat_at": "2026-07-22T19:01:56.802928712Z",
   "labels": [
     "codereview"
   ],
