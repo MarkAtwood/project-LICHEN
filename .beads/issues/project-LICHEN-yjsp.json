@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-yjsp",
+  "title": "TUI pytest collection errors block verification of exception handler fix",
+  "description": "pytest -q python/tests/ fails with 66 collection errors due to TypeError on | operator in type hints across tests and src. Prevents independent oracle testing of the native.py changes. Python env should satisfy requires-python\u003e=3.11 per pyproject.toml. Discovered during run for project-LICHEN-8r0b.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:46:02.937704597Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:46:02.937704597Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-yjsp",
+      "depends_on_id": "project-LICHEN-8r0b",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T19:46:03.060372177Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
