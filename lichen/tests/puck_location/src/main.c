@@ -146,7 +146,7 @@ ZTEST(puck_location, test_gnss_utc_at_or_above_build_epoch_establishes_time)
 
 	zassert_true(time.wall_clock_valid);
 	zassert_true(time.unix_time_valid);
-	zassert_equal(time.unix_time, 1711065605U);
+	zassert_equal(time.unix_time, 1711065605ULL);
 	zassert_true(time.source_class_valid);
 	zassert_equal(time.source_class, LICHEN_HAL_TIME_SOURCE_GNSS);
 	zassert_str_equal(time.source_name, "gnss0");
@@ -176,7 +176,7 @@ ZTEST(puck_location, test_no_fix_does_not_refresh_prior_gnss_time)
 	zassert_ok(lichen_hal_time_snapshot_get(&time));
 
 	zassert_true(time.wall_clock_valid);
-	zassert_equal(time.unix_time, 1711065606U);
+	zassert_equal(time.unix_time, 1711065606ULL);
 	zassert_true(time.age_seconds_valid);
 	zassert_equal(time.age_seconds, 6U);
 	zassert_equal(time.source_class, LICHEN_HAL_TIME_SOURCE_GNSS);

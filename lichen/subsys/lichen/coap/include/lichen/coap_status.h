@@ -73,7 +73,7 @@ struct lichen_coap_dodag_state {
  */
 struct lichen_coap_time_state {
 	bool wall_clock_valid;
-	uint32_t unix_time;       /**< Unix timestamp (valid if wall_clock_valid) */
+	uint64_t unix_time;       /**< Unix timestamp (valid if wall_clock_valid) */
 	const char *source_class; /**< "gnss", "network", "local-client", etc. */
 	const char *source_name;  /**< Human-readable source name */
 	uint32_t age_s;           /**< Seconds since last time sample */
