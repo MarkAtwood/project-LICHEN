@@ -1,10 +1,14 @@
 {
   "id": "project-LICHEN-axr3",
   "title": "Parallel fix of 5 distinct ready bug beads from codereview (Kconfig, CoAP, RPL)",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:21.615552994Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:21.615552994Z"
+  "updated_at": "2026-07-22T18:19:08.060771434Z",
+  "started_at": "2026-07-22T18:19:08.060771434Z",
+  "lease_expires_at": "2026-07-22T18:24:08.060771434Z",
+  "heartbeat_at": "2026-07-22T18:19:08.060771434Z"
 }
