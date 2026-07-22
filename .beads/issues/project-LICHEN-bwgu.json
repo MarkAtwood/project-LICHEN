@@ -2,10 +2,14 @@
   "id": "project-LICHEN-bwgu",
   "title": "Fix 5 small parsing/guard bug beads under parallel explore+codereview workflow",
   "description": "Group 5 distinct small ready bug beads for minimal idiomatic fixes with checks/guards/resets/strict parsing per spec/drafts/test/vectors. Parallel subagents for explore (filename intent/dir/spec/drafts/vectors/adjacent), claim/read/fix per bead. 3 parallel codereview (correctness/security/edge) per bead using beads for findings only. No comments, no test changes, vector-identical. Run pytest/cargo/clippy/fmt/ruff/doctor after each. Close all after clean passes. Beads only, no git.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:14:54.57622686Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:14:54.57622686Z"
+  "updated_at": "2026-07-22T18:15:11.96699039Z",
+  "started_at": "2026-07-22T18:15:11.96699039Z",
+  "lease_expires_at": "2026-07-22T18:20:11.96699039Z",
+  "heartbeat_at": "2026-07-22T18:15:11.96699039Z"
 }
