@@ -1,0 +1,13 @@
+{
+  "id": "project-LICHEN-ros5",
+  "title": "[codereview-pass1] heltec conf: WiFi Kconfig names may not match ESP32-S3 Zephyr driver (CONFIG_ESP32_WIFI_STA vs espressif specific); verify with west build. P2 correctness. discovered-from:project-LICHEN-p12e",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:14:01.156975483Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:14:01.156975483Z",
+  "labels": [
+    "codereview"
+  ]
+}
