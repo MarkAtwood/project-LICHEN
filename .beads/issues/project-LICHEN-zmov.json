@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-zmov",
   "title": "codereview: duplicate fallback parser logic across parse_*_logs functions",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "created_at": "2026-07-22T18:41:24.254488735Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:41:24.254488735Z",
+  "updated_at": "2026-07-22T19:02:07.131441867Z",
+  "closed_at": "2026-07-22T19:02:07.131441867Z",
+  "close_reason": "P4 duplicate fallback parser: extracted common parse_fallback_logs, aligned styles across py/rust/zephyr parsers, no new comments. Full fix. 3 reviews clean, hetero analysis verified.",
   "labels": [
     "codereview"
   ],
