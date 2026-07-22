@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-7yzc",
+  "title": "KISS LCI research",
+  "description": "Research existing KISS implementations for local app interfaces, BLE UART/serial transport, how to carry CoAP/IPv6/control messages in KISS frames, compatibility with standard tools like kisstool, minicom, aprs tools. Reference standards/ham-radio.md, spec/kiss-framing.md, spec/11-lci.md, existing python kiss framing, Zephyr native lib. Identify KISS command extensions or port usage for LICHEN local without breaking standard KISS tools. Produce mapping and schema recommendations. --parent=project-LICHEN-umb4 --type=task --priority=1 --labels=codereview",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:23:43.00033Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:23:43.00033Z"
+}
