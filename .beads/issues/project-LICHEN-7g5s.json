@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-7g5s",
+  "title": "[codereview-P1] _hash_32 added to secure.py but should be in lichen.crypto.util or oscore.py for reuse across modules",
+  "description": "Code convention: utility hash functions belong in crypto/ not coap/secure.py. This duplicates the one in test/vectors/generate.py. Violates 'use existing libraries and utilities' rule. P1 for maintainability.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:13:07.429728948Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:13:07.429728948Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-7g5s",
+      "depends_on_id": "project-LICHEN-whr4.2",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:13:07.560534507Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
