@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-q1dm",
+  "title": "P3 codereview: integer truncation in rf_health.rs Q16.16 to u16",
+  "description": "Found during codereview pass 1: potential truncation in fixed point conversion. File as codereview tag. P3.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:20:13.496698998Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:20:13.496698998Z",
+  "labels": [
+    "codereview"
+  ]
+}
