@@ -2,12 +2,16 @@
   "id": "project-LICHEN-i1rn",
   "title": "RPL root in gateway: missing Trickle timer drive and DIO TX integration with L2",
   "description": "The gateway_rpl_init calls lichen_rpl_dodag_init_root but does not init or drive lichen_trickle for periodic DIOs as root per RFC 6550 and rpl_trickle.h. No L2 callback for routing TX priority or SCHC rule for RPL. Per spec section on RPL and AGENTS.md phase 4. Discovered-from:project-LICHEN-t4in",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:16:56.615999899Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:16:56.615999899Z",
+  "updated_at": "2026-07-22T18:19:53.424206306Z",
+  "started_at": "2026-07-22T18:19:53.424206306Z",
+  "lease_expires_at": "2026-07-22T18:24:53.424206306Z",
+  "heartbeat_at": "2026-07-22T18:19:53.424206306Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-i1rn",
