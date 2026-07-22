@@ -1,1 +1,2 @@
 {"id":"019f8b44-79a7-744b-a878-dfe8df1064f4","issue_id":"project-LICHEN-zbk4","event_type":"created","actor":"AI Agent","old_value":"","new_value":"","created_at":"2026-07-22T19:19:08.455282233Z"}
+{"id":"019f8b45-9c83-7cc5-9b38-c3e8a4bcb50f","issue_id":"project-LICHEN-zbk4","event_type":"closed","actor":"AI Agent","old_value":"","new_value":"Fixed TH_3 in both initiator and responder to use compute_th with CIPHERTEXT instead of plaintext and proper CBOR. All codereview findings resolved.","created_at":"2026-07-22T19:20:22.915838087Z"}
