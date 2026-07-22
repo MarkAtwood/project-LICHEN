@@ -2,12 +2,14 @@
   "id": "project-LICHEN-ikvp",
   "title": "[codereview-P4] hardware matrix T-Deck row should note I2C overlay requirement",
   "description": "Updated matrix mentions driver but not that i2c0 status=disabled requires explicit overlay to enable keyboard/trackball. Add note. P4. From project-LICHEN-vo1y.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:58:17.341810092Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:58:17.341810092Z",
+  "updated_at": "2026-07-22T18:58:31.881186907Z",
+  "closed_at": "2026-07-22T18:58:31.881186907Z",
+  "close_reason": "Matrix updated with explicit overlay note",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-ikvp",
