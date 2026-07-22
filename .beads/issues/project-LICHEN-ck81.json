@@ -2,12 +2,16 @@
   "id": "project-LICHEN-ck81",
   "title": "Truncated test_500_node_conference method after edit",
   "description": "The replacement string cut off the roaming, remove_node, metrics export, and assertions. This causes incomplete test and likely test failure. P0 bug introduced. Fix by restoring full logic with improvements. Codereview pass #1.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:53.534395694Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:53.534395694Z",
+  "updated_at": "2026-07-22T17:59:29.147047369Z",
+  "started_at": "2026-07-22T17:59:29.147047369Z",
+  "lease_expires_at": "2026-07-22T18:04:29.147047369Z",
+  "heartbeat_at": "2026-07-22T17:59:29.147047369Z",
   "labels": [
     "codereview"
   ],

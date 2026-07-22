@@ -2,12 +2,16 @@
   "id": "project-LICHEN-c4w0",
   "title": "[codereview-3] No backbone simulation for gateway coordination yet",
   "description": "Multi-gateway requires simulated backbone (reliable low-latency links between gateways for slot negotiation, handoff messages). Medium class is LoRa only. Add Backbone class or extend Medium. P1 for core model. Tagged codereview. Discovered-from:project-LICHEN-mugl.2",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:42.19828928Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:42.19828928Z",
+  "updated_at": "2026-07-22T17:59:29.259424884Z",
+  "started_at": "2026-07-22T17:59:29.259424884Z",
+  "lease_expires_at": "2026-07-22T18:04:29.259424884Z",
+  "heartbeat_at": "2026-07-22T17:59:29.259424884Z",
   "labels": [
     "codereview"
   ]
