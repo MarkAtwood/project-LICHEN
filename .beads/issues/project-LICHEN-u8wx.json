@@ -2,15 +2,15 @@
   "id": "project-LICHEN-u8wx",
   "title": "[epic] ELECROW ThinkNode M6 solar relay support",
   "description": "ELECROW ThinkNode M6: nRF52840 + LoRa (chip TBD) + GPS + 6W solar + 7000mAh. Outdoor relay/border router node. Need to identify LoRa chip (SX1262 vs LR1110), GPS chip, pin mapping. If LR1110, blocked by iw00.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "epic",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-10T22:33:39.164546Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:10:44.191072478Z",
+  "updated_at": "2026-07-22T18:13:57.317721197Z",
   "started_at": "2026-07-22T18:10:44.191072478Z",
-  "lease_expires_at": "2026-07-22T18:15:44.191072478Z",
-  "heartbeat_at": "2026-07-22T18:10:44.191072478Z"
+  "closed_at": "2026-07-22T18:13:57.317721197Z",
+  "close_reason": "Completed LR1110 Zephyr driver extension (init/config/TX/RX/CAD per Semtech lib+manual), board defs+validation for ThinkNode M3/M6+T1000-E, renode sim/Kconfig/tests. 3 codereview passes, west build PASS on targets. Scoped to driver/boards/tests. Independent test vectors. All closed."
 }
