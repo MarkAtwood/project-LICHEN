@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-nk7r",
+  "title": "[codereview-P2] Conference test bypasses radio layer and medium stress testing",
+  "description": "The new test_500_node_conference only uses sim.add_node/remove_node/set_position but does not exercise the radio propagation, collisions, SCHC, or RPL in dense conference setting. Stress test incomplete. See python/tests/sim/test_scale.py:340. Add transmissions using SimRadio or sim.start_transmission for some nodes. Reference test_topology_scenarios.py:100 for pattern. Also add random.seed(42) for reproducibility.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:55:55.895996616Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:55:55.895996616Z",
+  "labels": [
+    "codereview"
+  ]
+}
