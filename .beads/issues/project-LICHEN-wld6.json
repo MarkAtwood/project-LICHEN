@@ -2,12 +2,16 @@
   "id": "project-LICHEN-wld6",
   "title": "[codereview-P0] Test may fail due to missing imports or fixture usage",
   "description": "The test uses SimulatorServer, Simulation but may require from pathlib import Path and import json if using export. Also, server param not used but fixture starts node server which may conflict with 500 nodes if not cleaned. Run test to validate. Priority P0 until verified. Reference test_scale.py fixture.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:56:01.397683744Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:56:01.397683744Z",
+  "updated_at": "2026-07-22T17:56:09.723784832Z",
+  "started_at": "2026-07-22T17:56:09.723784832Z",
+  "lease_expires_at": "2026-07-22T18:01:09.723784832Z",
+  "heartbeat_at": "2026-07-22T17:56:09.723784832Z",
   "labels": [
     "codereview"
   ],
