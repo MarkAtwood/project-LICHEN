@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-equm",
+  "title": "codereview-P1: missing trickle timer start in Router::new_root and L2 DIO TX",
+  "description": "RPL root in gateway missing Trickle timer drive. File as codereview tagged. Discovered-from:project-LICHEN-i1rn",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:21:25.732284056Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:21:25.732284056Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-equm",
+      "depends_on_id": "project-LICHEN-i1rn",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:21:25.872463858Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
