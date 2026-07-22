@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-10po",
+  "title": "[CODEREVIEW-6] Undefined LICHEN_POE config in defconfig",
+  "description": "lichen/boards/elecrow/thinknode_m7/Kconfig.defconfig:9 - config LICHEN_POE not declared in any Kconfig (unlike LICHEN_HAS_PMIC in subsys/lichen/hal/Kconfig:58). DTS uses pmic0 alias for poe0 and board Kconfig selects LICHEN_HAS_PMIC. Remove or define properly. P2 correctness.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:28:00.89105306Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:28:00.89105306Z",
+  "labels": [
+    "codereview"
+  ]
+}
