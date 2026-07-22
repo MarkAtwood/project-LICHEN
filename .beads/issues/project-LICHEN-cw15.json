@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-cw15",
+  "title": "[codereview-1] Missing /partial/mesh-stats endpoint and handler for 500-node dashboard",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:31.989817177Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:31.989817177Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cw15",
+      "depends_on_id": "project-LICHEN-2nnd.2",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:51:32.104128499Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
