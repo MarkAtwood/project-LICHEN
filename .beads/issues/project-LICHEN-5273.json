@@ -1,16 +1,14 @@
 {
   "id": "project-LICHEN-5273",
   "title": "codereview: missing CONFIG_LICHEN_ADAPTIVE_SF_ENABLED in lichen/subsys/lichen/Kconfig",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:02:17.5621898Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:03:32.700262372Z",
+  "updated_at": "2026-07-22T18:08:21.790256274Z",
   "started_at": "2026-07-22T18:03:13.007873823Z",
-  "closed_at": "2026-07-22T18:03:32.700262372Z",
-  "close_reason": "Added CONFIG_LICHEN_ADAPTIVE_SF_ENABLED and CONFIG_LICHEN_DEFAULT_SF to link/Kconfig with appropriate defaults and help text. Updated dependent feature description alignment. Verified with bd ready.",
   "labels": [
     "codereview"
   ],
