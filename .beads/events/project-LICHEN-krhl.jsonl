@@ -1,3 +1,4 @@
 {"id":"019f8b18-a1a6-734c-909f-da5524c4cfc6","issue_id":"project-LICHEN-krhl","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:31:15.110217086Z"}
 {"id":"019f8b18-a1a9-7c96-9fb2-01c35398519f","issue_id":"project-LICHEN-krhl","event_type":"label_added","actor":"ec2-user","comment":"Added label: codereview","created_at":"2026-07-22T18:31:15.113825716Z"}
 {"id":"019f8b18-a1ad-70fa-b09a-ce300c2137d7","issue_id":"project-LICHEN-krhl","event_type":"label_added","actor":"ec2-user","comment":"Added label: opinion","created_at":"2026-07-22T18:31:15.117064578Z"}
+{"id":"019f8b18-cdc1-7a7d-a4de-3589a5c9889c","issue_id":"project-LICHEN-krhl","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"reset_test_state now covers LCI counts","created_at":"2026-07-22T18:31:26.401688381Z"}
