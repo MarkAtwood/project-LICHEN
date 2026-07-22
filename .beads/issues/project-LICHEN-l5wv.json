@@ -2,12 +2,16 @@
   "id": "project-LICHEN-l5wv",
   "title": "[codereview] hkdf.c still contains forbidden comments",
   "description": "lichen/subsys/lichen/oscore/hkdf.c:4-10,24-26,36,66-69,90-96,98: Multiple /* */ and doxygen comments remain after partial cleanup. Per AGENTS.md code style: DO NOT ADD ANY COMMENTS unless asked. No Dead Code rule prohibits them. P4 but treat as real work. Remove all non-SPDX comments.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "AI Agent",
   "created_at": "2026-07-22T19:07:38.188042606Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:07:38.188042606Z",
+  "updated_at": "2026-07-22T19:18:18.708023357Z",
+  "started_at": "2026-07-22T19:18:18.708023357Z",
+  "lease_expires_at": "2026-07-22T19:23:18.708023357Z",
+  "heartbeat_at": "2026-07-22T19:18:18.708023357Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-l5wv",
