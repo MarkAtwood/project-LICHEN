@@ -1,0 +1,7 @@
+{
+  "id": "1784749222927393495-1",
+  "issue_id": "project-LICHEN-w1i0",
+  "author": "AI Agent",
+  "text": "Escalating to human: _is_global() using 2000::/3 is per RFC 4291 global unicast. Rule asymmetry is known trade-off for SCHC in mesh context. Spec decision needed on prefix assumptions.",
+  "created_at": "2026-07-22T19:40:22.927393495Z"
+}
