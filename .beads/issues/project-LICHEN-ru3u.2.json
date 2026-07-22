@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-ru3u.2",
+  "title": "codereview-pass1: test_cmd_txdelay update",
+  "description": "Reviewed test_cmd_txdelay after adding get_test_config() helper and frames assertion. Findings: P2 - other tests (persistence, slottime, rx_*) still duplicate config; must update all for consistency. P3 - helper lacks doxygen comment. P4 - function name 'get_test_config' could be 'test_config' for brevity; hw_cmd_cb=NULL explicit is good but verify in init. All fixed in next chunk. Tagged codereview. Parent project-LICHEN-ru3u",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:34:15.169368024Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:34:15.169368024Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ru3u.2",
+      "depends_on_id": "project-LICHEN-ru3u",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:34:15.294248578Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
