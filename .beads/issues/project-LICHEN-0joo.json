@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-0joo",
+  "title": "codereview-P4: has_decoded/has_encrypted var names could be more specific",
+  "description": "In lichen/subsys/lichen/meshtastic/adapter.c:817 after edit, bool names are ok but per C style in file (e.g. has_from), could be has_mesh_decoded and has_mesh_encrypted for clarity in context of MeshPacket oneof. P4 readability. Fix by renaming.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T19:07:51.999115353Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:07:51.999115353Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-0joo",
+      "depends_on_id": "project-LICHEN-pmks",
+      "type": "blocks",
+      "created_at": "2026-07-22T19:07:52.126199339Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-0joo",
+      "depends_on_id": "project-LICHEN-e4so",
+      "type": "blocks",
+      "created_at": "2026-07-22T19:07:52.24824324Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
