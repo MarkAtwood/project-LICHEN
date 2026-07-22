@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-zrni",
   "title": "codereview pass 3 P4: pending_queue should track stats like forwarding_buffer (evictions, dest count)",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:47:29.971818176Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:47:29.971818176Z",
+  "updated_at": "2026-07-22T18:48:46.940717499Z",
+  "closed_at": "2026-07-22T18:48:46.940717499Z",
+  "close_reason": "Added pending_evicted_dests and pending_accepted stats with increments",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-zrni",

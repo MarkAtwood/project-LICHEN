@@ -1,1 +1,2 @@
 {"id":"019f8b27-81b9-7d05-83e7-29f92694b255","issue_id":"project-LICHEN-zrni","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:47:29.97785452Z"}
+{"id":"019f8b28-ae62-701d-95ff-6471e4cc7916","issue_id":"project-LICHEN-zrni","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Added pending_evicted_dests and pending_accepted stats with increments","created_at":"2026-07-22T18:48:46.946008514Z"}
