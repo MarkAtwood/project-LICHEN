@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-b2vb",
+  "title": "Add RollcallResource to support conference demo roll calls with SenML position data",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:55:00.263908006Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:55:00.263908006Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-b2vb",
+      "depends_on_id": "project-LICHEN-2nnd.6",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:55:00.376893915Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
