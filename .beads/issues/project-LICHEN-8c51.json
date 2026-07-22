@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-8c51",
+  "title": "codereview-1: as_uint change should include dedicated test for \u003e4 byte truncation case per RFC robustness",
+  "description": "Add test in codec.rs tests to verify as_uint([0x01,0x02,0x03,0x04,0x05]) == 0x02030405",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:47:07.163269968Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:07.163269968Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-8c51",
+      "depends_on_id": "project-LICHEN-xql4",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:47:07.294798993Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
