@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-pm1w",
+  "title": "[codereview-2] Missing add_gateway method and gateway registration logic",
+  "description": "simulation.py lacks add_gateway() parallel to add_node(). Gateways need special init for coordination params (slot_range, backbone_id). Must update __init__ docstring too. Tagged codereview. Discovered-from:project-LICHEN-mugl.2",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:58:42.197739662Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:58:42.197739662Z",
+  "labels": [
+    "codereview"
+  ]
+}
