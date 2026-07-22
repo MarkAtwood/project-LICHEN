@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-szub.1",
+  "title": "P0: Hardcoded conference bounds instead of conference_area var in roaming validation",
+  "description": "Validation uses magic numbers 0\u003c=x\u003c=150 0\u003c=y\u003c=100 but conference_area=(0.0,150.0,0.0,100.0) defined earlier; risks desync if area changes. Use conference_area tuple for bounds check. Discovered in codereview pass 1 on test_scale.py edit. Fix before closing szub.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:03:13.683350847Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:03:13.683350847Z",
+  "labels": [
+    "codereview",
+    "human"
+  ]
+}
