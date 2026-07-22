@@ -28,18 +28,20 @@ use heapless::Deque;
 
 pub const WINDOW_MS: u64 = 3_600_000;
 pub const DEFAULT_DUTY_PERMILLE: u16 = 10;
-pub const REGION_EU: u8 = 0;
-pub const REGION_US: u8 = 1;
-pub const REGION_AS: u8 = 2;
+pub const HIGH_DENSITY_DUTY_PERMILLE: u16 = 5;
+pub const LOW_DENSITY_DUTY_PERMILLE: u16 = 20;
 
-/// Compute MAX_TX_MS from given duty_permille (replaces hardcoded DEFAULT usage
-/// per codereview qsr0 after density constants added).
-pub const fn max_tx_ms_for(duty_permille: u16) -> u32 {
-    (WINDOW_MS as u32 / 1000) * (duty_permille as u32)
+pub const MAX_TX_MS: u32 = (WINDOW_MS as u32 / 1000) * (DEFAULT_DUTY_PERMILLE as u32);
+
+pub fn adaptive_duty_permille(density: u8, base_permille: u16) -> u16 {
+    if density > 8 {
+        HIGH_DENSITY_DUTY_PERMILLE
+    } else if density < 3 {
+        LOW_DENSITY_DUTY_PERMILLE
+    } else {
+        base_permille
+    }
 }
-
-/// Maximum TX time allowed per window at default duty cycle.
-pub const MAX_TX_MS: u32 = max_tx_ms_for(DEFAULT_DUTY_PERMILLE);
 
 /// A transmission record: (timestamp_ms, duration_ms).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -111,8 +113,8 @@ impl<const N: usize> DutyCycleTracker<N> {
         }
     }
 
-    pub fn set_from_density(&mut self, density: u8, region: u8) {
-        self.duty_permille = adaptive_duty_permille(density, region);
+    pub fn update_adaptive_limit(&mut self, density: u8, base_permille: u16) {
+        self.duty_permille = adaptive_duty_permille(density, base_permille);
     }
 
     /// Record a transmission.

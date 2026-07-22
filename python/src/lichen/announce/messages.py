@@ -1,14 +1,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Announce message codec (spec section 9.2).
+"""Announce message codec (spec section 9.2 + CCP-9).
 
-Wire format includes rx_channel (byte 3 after hop_count) for CCP-9
-rendezvous. Fixed size 94 bytes base.
+Wire format (updated for CCP-9 rendezvous):
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | Type=ANN  | Flags     | Hop Count   | Seq Num               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                    Originator IID (8 bytes)                   |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                    Public Key (32 bytes)                      |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                    Signature (48 bytes)                       |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | rx_channel (u8) | Optional: App Data (variable)         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-Why sign IID+pubkey+seq_num+rx_channel+app_data: security-relevant
-fields (binds RX channel to signer per CCP-9). Hop count NOT signed
-(relays increment it).
+Total: 94 bytes minimum (1+1+1+2+8+32+48+1). rx_channel signed per CCP-9.
 """
+
 
 from __future__ import annotations
 
@@ -26,7 +35,8 @@ SIGNATURE_LENGTH = 48
 # Why 15: Spec section 9.4. Limits propagation to prevent infinite flooding.
 MAX_ANNOUNCE_HOPS = 15
 
-_FIXED_LENGTH = 1 + 1 + 1 + 1 + 2 + 8 + 32 + 48
+# Fixed portion: type(1)+flags(1)+hop(1)+seq(2)+iid(8)+pubkey(32)+sig(48)+rx_ch(1) per CCP-9
+_FIXED_LENGTH = 1 + 1 + 1 + 2 + 8 + 32 + 48 + 1
 
 
 class AnnounceError(Exception):
@@ -57,9 +67,8 @@ class AnnounceMessage:
         hop_count: How many hops this announce has traveled.
             Why NOT signed: Each relay increments it. If signed, relays couldn't
             update it without breaking the signature.
-        rx_channel: u8 RX channel for CCP-9 rendezvous (0-15).
-            Why included in signed_data(): Binds RX channel to signer
-            (prevents tampering per CCP-9). Matches Rust.
+        rx_channel: Preferred RX channel for rendezvous (0-7 per CCP-9). Matches Rust/C structs.
+            Used for rendezvous per CCP-9; signed in signed_data() to prevent tampering.
         signature: 48-byte Schnorr signature over signed_data().
             Why 48: Schnorr48 spec (16-byte truncated challenge + 32-byte response).
         app_data: Optional application data (node name, capabilities).
@@ -67,6 +76,7 @@ class AnnounceMessage:
         flags: Reserved for future use.
             Why: Forward compatibility. Must be 0 for now.
     """
+
 
     originator_iid: bytes
     pubkey: bytes
@@ -89,8 +99,10 @@ class AnnounceMessage:
             raise AnnounceError(f"seq_num out of range: {self.seq_num}")
         if not 0 <= self.hop_count <= 0xFF:
             raise AnnounceError(f"hop_count out of range: {self.hop_count}")
-        if not 0 <= self.rx_channel <= 15:
-            raise AnnounceError(f"rx_channel out of range: {self.rx_channel}")
+        if not 0 <= self.rx_channel <= 7:
+            raise AnnounceError(
+                f"rx_channel must be 0-7 for CCP-9, got {self.rx_channel}"
+            )
         if not 0 <= self.flags <= 0xFF:
             raise AnnounceError(f"flags out of range: {self.flags}")
         if self.signature and len(self.signature) != SIGNATURE_LENGTH:
@@ -100,21 +112,38 @@ class AnnounceMessage:
             )
 
     def signed_data(self) -> bytes:
-        """Bytes signed by Schnorr48 signature.
+        """Data covered by the signature (spec 9.2 + CCP-9).
 
-        Why this exact composition: originator_iid + pubkey + seq_num (BE) +
-        rx_channel + app_data. rx_channel inclusion binds the CCP-9
-        announced RX channel to the signer (tamper-proof per security review).
-        hop_count deliberately omitted (relays must increment it).
+        Concatenation (exact order for bit-exact interop):
+            originator_iid (8B) + pubkey (32B) + seq_num (u16 BE, 2B) +
+            rx_channel (u8, 1B per CCP-9) + app_data (variable)
+
+        rx_channel inclusion binds the announced rendezvous RX channel
+        against tampering (CCP-9). Value 0=CH0 control/fallback.
+
+        Why these fields: Security-relevant; must not be modifiable by relays.
+        - originator_iid, pubkey: identity binding/TOFU
+        - seq_num: anti-replay
+        - rx_channel: rendezvous channel pinning
+        - app_data: authenticated payload
+
+        Why NOT hop_count: incremented by relays.
+        Why NOT flags/signature: not part of signed content.
+
+        Returns:
+            bytes: exact input to schnorr48_sign/verify.
         """
         return (
             self.originator_iid
             + self.pubkey
             + self.seq_num.to_bytes(2, "big")
-            + bytes([self.rx_channel])
+            + self.rx_channel.to_bytes(1, "big")
             + self.app_data
         )
 
+
+    def to_bytes(self) -> bytes:
+        """Serialize to wire format (CCP-9 includes rx_channel after sig).
 
     def to_bytes(self) -> bytes:
         if len(self.signature) != SIGNATURE_LENGTH:
@@ -126,11 +155,23 @@ class AnnounceMessage:
             + self.originator_iid
             + self.pubkey
             + self.signature
+            + bytes([self.rx_channel])
             + self.app_data
         )
 
     @classmethod
     def from_bytes(cls, data: bytes) -> AnnounceMessage:
+        """Parse from wire format (CCP-9 rx_channel at offset 93).
+
+        Args:
+            data: Raw bytes from the network.
+
+        Returns:
+            Parsed AnnounceMessage.
+
+        Raises:
+            AnnounceError: If the data is truncated or has wrong type.
+        """
         if len(data) < _FIXED_LENGTH:
             raise AnnounceError(
                 f"announce message too short: {len(data)} bytes, need {_FIXED_LENGTH}"
@@ -142,12 +183,12 @@ class AnnounceMessage:
 
         flags = data[1]
         hop_count = data[2]
-        rx_channel = data[3]
-        seq_num = int.from_bytes(data[4:6], "big")
-        originator_iid = data[6:14]
-        pubkey = data[14:46]
-        signature = data[46:94]
-        app_data = data[94:]
+        seq_num = int.from_bytes(data[3:5], "big")
+        originator_iid = data[5:13]
+        pubkey = data[13:45]
+        signature = data[45:93]
+        rx_channel = data[93]
+        app_data = data[94:]  # after channel byte
 
         return cls(
             originator_iid=originator_iid,

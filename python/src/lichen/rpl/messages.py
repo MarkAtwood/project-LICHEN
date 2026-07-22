@@ -23,6 +23,15 @@ generic :class:`RplOption` values and built out by the DODAG state machine.
 LICHEN uses RPLInstanceID 0 and Non-Storing mode (MOP=1) per spec B.2.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import IntEnum
+from typing import Union
+from ipaddress import IPv6Address
+
+from lichen.ipv6.icmpv6 import Icmpv6Message
+
 RPL_ICMPV6_TYPE = 155
 DIO_BASE_LENGTH = 24
 DODAGID_LENGTH = 16
@@ -287,6 +296,8 @@ class DAOAck:
             options=_parse_options(data[offset:]),
         )
 
+
+RplMessage = Union[DIS, DIO, DAO, DAOAck]
 
 _CODE_BY_TYPE = {
     DIS: RplCode.DIS,

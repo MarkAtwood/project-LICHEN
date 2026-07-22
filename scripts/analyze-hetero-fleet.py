@@ -17,6 +17,7 @@ import json
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -33,175 +34,101 @@ class NodeStats:
     rx_count: int = 0
 
 
-# Compiled regex for robust hash extraction: requires delimiter, bounded length, word boundary.
-# Addresses greedy matching, optional delimiter false positives, and case variations.
-HASH_RE = re.compile(r"hash[:=]\s*([0-9a-f]{8,32})\b", re.IGNORECASE)
+def parse_telemetry(lines: Iterable[str], stats: NodeStats) -> bool:
+    """Parse common JSONL events from lines iterable; return whether any valid event was found.
+    Uses streaming to avoid loading entire large log files into memory.
+    """
+    found = False
+    for line in lines:
+        marker = line.find("TELEMETRY ")
+        if marker < 0:
+            continue
+        try:
+            event = json.loads(line[marker + len("TELEMETRY "):])
+        except json.JSONDecodeError:
+            continue
+        if event.get("schema") != "lichen.telemetry.v1":
+            continue
+        direction = event.get("direction")
+        packet_hash = event.get("packet_hash")
+        if direction not in {"tx", "rx"} or not isinstance(packet_hash, str):
+            continue
+        found = True
+        if direction == "tx":
+            stats.tx_count += 1
+            stats.tx_hashes.add(packet_hash.lower())
+        else:
+            stats.rx_count += 1
+            stats.rx_hashes.add(packet_hash.lower())
+    return found
 
 
-def parse_telemetry_line(line: str, stats: NodeStats) -> bool:
-    """Parse a single JSONL telemetry line; return True if valid event processed."""
-    marker = line.find("TELEMETRY ")
-    if marker < 0:
-        return False
-    try:
-        event = json.loads(line[marker + len("TELEMETRY ") :])
-    except json.JSONDecodeError:
-        return False
-    if event.get("schema") != "lichen.telemetry.v1":
-        return False
-    direction = event.get("direction")
-    packet_hash = event.get("packet_hash")
-    if direction not in {"tx", "rx"} or not isinstance(packet_hash, str):
-        return False
-    if direction == "tx":
-        stats.tx_count += 1
-        stats.tx_hashes.add(packet_hash.lower())
-    else:
-        stats.rx_count += 1
-        stats.rx_hashes.add(packet_hash.lower())
-    return True
+def parse_legacy_logs(lines: Iterable[str], stats: NodeStats, extra_tx: list[str] | None = None, extra_rx: list[str] | None = None) -> None:
+    if extra_tx is None:
+        extra_tx = []
+    if extra_rx is None:
+        extra_rx = []
+    tx_markers = ["[TX]", "TX:", "TX="] + [x.upper() for x in extra_tx]
+    rx_markers = ["[RX]", "RX:", "RX="] + [x.upper() for x in extra_rx]
+    hash_re = re.compile(r"hash[=:]?\s*(?:0x)?([a-fA-F0-9]{8,})")
+    summary_re = re.compile(r"TX=(\d+)\s+RX=(\d+)", re.IGNORECASE)
+    for line in lines:
+        line_upper = line.upper()
+        if any(m in line_upper for m in tx_markers):
+            match = hash_re.search(line)
+            if match:
+                stats.tx_hashes.add(match.group(1).lower())
+            stats.tx_count += 1
+        elif any(m in line_upper for m in rx_markers):
+            match = hash_re.search(line)
+            if match:
+                stats.rx_hashes.add(match.group(1).lower())
+            stats.rx_count += 1
+        summary = summary_re.search(line)
+        if summary:
+            stats.tx_count = max(stats.tx_count, int(summary.group(1)))
+            stats.rx_count = max(stats.rx_count, int(summary.group(2)))
+
+
+def parse_impl_logs(
+    log_dir: Path, glob_pattern: str, impl: str, extra_tx: list[str] | None = None, extra_rx: list[str] | None = None
+) -> dict[str, NodeStats]:
+    nodes: dict[str, NodeStats] = {}
+
+    for log_file in sorted(log_dir.glob(glob_pattern)):
+        node_id = log_file.stem
+        stats = NodeStats(node_id=node_id, impl=impl)
+
+        telemetry_found = False
+        try:
+            with log_file.open(encoding="utf-8", errors="replace") as f:
+                if parse_telemetry(f, stats):
+                    if stats.tx_count > 0 or stats.rx_count > 0:
+                        nodes[node_id] = stats
+                    continue
+        except OSError as e:
+            print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
+            continue
+
+        with log_file.open(encoding="utf-8", errors="replace") as f:
+            parse_legacy_logs(f, stats, extra_tx, extra_rx)
+
+        if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
+            nodes[node_id] = stats
+
+    return nodes
 
 
 def parse_python_logs(log_dir: Path) -> dict[str, NodeStats]:
-    """Parse py-*.log files streaming line-by-line to avoid memory exhaustion on GB logs. Uses consistent .upper() TX/RX detection with specific '[TX]'/'TX:' context."""
-    nodes: dict[str, NodeStats] = {}
-
-    for log_file in sorted(log_dir.glob("py-*.log")):
-        node_id = log_file.stem
-        stats = NodeStats(node_id=node_id, impl="py")
-
-        telemetry_found = False
-        try:
-            with log_file.open(encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if parse_telemetry_line(line, stats):
-                        continue  # telemetry takes precedence for this line
-                    upper = line.upper()
-                    # Consistent case-insensitive with specific context to reduce false positives
-                    if " [TX]" in upper or "TX:" in upper:
-                        match = HASH_RE.search(line)
-                        if match:
-                            stats.tx_hashes.add(match.group(1).lower())
-                        stats.tx_count += 1
-                    elif " [RX]" in upper or "RX:" in upper:
-                        match = HASH_RE.search(line)
-                        if match:
-                            stats.rx_hashes.add(match.group(1).lower())
-                        stats.rx_count += 1
-                    # Summary can be in any line
-                    summary = re.search(r"TX=(\d+)\s+RX=(\d+)", line, re.IGNORECASE)
-                    if summary:
-                        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
-                        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
-                if (
-                    stats.tx_count > 0
-                    or stats.rx_count > 0
-                    or stats.tx_hashes
-                    or stats.rx_hashes
-                ):
-                    nodes[node_id] = stats
-        except OSError as e:
-            print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
-            continue
-
-    return nodes
+    return parse_impl_logs(log_dir, "py-*.log", "py")
 
 
 def parse_rust_logs(log_dir: Path) -> dict[str, NodeStats]:
-    """Parse rust-*.log files streaming line-by-line. Consistent case-insensitive TX/RX using .upper() and specific ' [TX]'/'TX:' context."""
-    nodes: dict[str, NodeStats] = {}
-
-    for log_file in sorted(log_dir.glob("rust-*.log")):
-        node_id = log_file.stem
-        stats = NodeStats(node_id=node_id, impl="rust")
-        telemetry_found = False
-
-        try:
-            with log_file.open(encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if parse_telemetry_line(line, stats):
-                        continue
-                    upper = line.upper()
-                    if " [TX]" in upper or "TX:" in upper:
-                        match = HASH_RE.search(line)
-                        if match:
-                            stats.tx_hashes.add(match.group(1).lower())
-                        stats.tx_count += 1
-                    elif " [RX]" in upper or "RX:" in upper:
-                        match = HASH_RE.search(line)
-                        if match:
-                            stats.rx_hashes.add(match.group(1).lower())
-                        stats.rx_count += 1
-                    summary = re.search(r"TX=(\d+)\s+RX=(\d+)", line, re.IGNORECASE)
-                    if summary:
-                        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
-                        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
-                if (
-                    stats.tx_count > 0
-                    or stats.rx_count > 0
-                    or stats.tx_hashes
-                    or stats.rx_hashes
-                ):
-                    nodes[node_id] = stats
-        except OSError as e:
-            print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
-            continue
-
-    return nodes
+    return parse_impl_logs(log_dir, "rust-*.log", "rust")
 
 
 def parse_zephyr_logs(log_dir: Path) -> dict[str, NodeStats]:
-    """Parse zephyr-*.log files streaming line-by-line. TX/RX detection made specific with colon/context for 'Send'/'Recv' to avoid false positives in errors/queues/status."""
-    nodes: dict[str, NodeStats] = {}
-
-    for log_file in sorted(log_dir.glob("zephyr-*.log")):
-        node_id = log_file.stem
-        stats = NodeStats(node_id=node_id, impl="zephyr")
-        telemetry_found = False
-
-        try:
-            with log_file.open(encoding="utf-8", errors="replace") as f:
-                for line in f:
-                    if parse_telemetry_line(line, stats):
-                        continue
-                    upper = line.upper()
-                    # More specific for Zephyr: require colon or hash context for Send/Recv to avoid false positives
-                    if (
-                        " [TX]" in upper
-                        or "TX:" in upper
-                        or "SEND:" in upper
-                        or ("SEND" in upper and "HASH" in upper)
-                    ):
-                        match = HASH_RE.search(line)
-                        if match:
-                            stats.tx_hashes.add(match.group(1).lower())
-                        stats.tx_count += 1
-                    elif (
-                        " [RX]" in upper
-                        or "RX:" in upper
-                        or "RECV:" in upper
-                        or ("RECV" in upper and "HASH" in upper)
-                    ):
-                        match = HASH_RE.search(line)
-                        if match:
-                            stats.rx_hashes.add(match.group(1).lower())
-                        stats.rx_count += 1
-                    summary = re.search(r"TX=(\d+)\s+RX=(\d+)", line, re.IGNORECASE)
-                    if summary:
-                        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
-                        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
-                if (
-                    stats.tx_count > 0
-                    or stats.rx_count > 0
-                    or stats.tx_hashes
-                    or stats.rx_hashes
-                ):
-                    nodes[node_id] = stats
-        except OSError as e:
-            print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
-            continue
-
-    return nodes
+    return parse_impl_logs(log_dir, "zephyr-*.log", "zephyr", ["Send"], ["Recv"])
 
 
 def find_missing_packets(

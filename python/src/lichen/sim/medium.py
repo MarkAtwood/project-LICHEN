@@ -40,10 +40,11 @@ class RxCandidate:
 class Medium:
     """Radio medium that tracks transmissions and handles propagation.
 
-    The medium models the shared radio channel, tracking all active
-    transmissions and computing received signal strengths based on
-    distance and propagation characteristics. It handles collision
-    detection with capture effect.
+    Supports multi-channel operation with independent collision/propagation
+    oracles per channel. RX uses rendezvous logic: get_rx_candidates and
+    detect_activity only consider TX on the expected hop channel (computed
+    from SFN/time via synchronized_hop_channel). start_tx tags TX with
+    channel.
 
     Attributes:
         propagation: The propagation model used for path loss calculations.
@@ -74,13 +75,13 @@ class Medium:
         tx_power_dbm: int,
         position: tuple[float, float, float],
         time_us: int,
-        frequency_hz: int = 915_000_000,
+        channel: int = 0,
     ) -> Transmission:
-        """Start a new transmission.
+        """Start a new transmission on specified channel.
 
         Creates a Transmission object with calculated end time based on
-        payload length, adds it to the active transmissions list, and
-        stores the transmitter position.
+        payload length, adds it to the active transmissions list (per-channel
+        independent oracle), and stores the transmitter position.
 
         Args:
             node_id: ID of the transmitting node.
@@ -88,7 +89,8 @@ class Medium:
             tx_power_dbm: Transmit power in dBm.
             position: (x, y, z) position of the transmitter in meters.
             time_us: Current simulation time in microseconds.
-            frequency_hz: Carrier frequency for this TX.
+            channel: Channel index (default 0). Supports multi-channel and
+                rendezvous (RX only matches this channel).
 
         Returns:
             The created Transmission object.
@@ -100,7 +102,7 @@ class Medium:
             tx_power_dbm=tx_power_dbm,
             start_time_us=time_us,
             end_time_us=time_us + duration_us,
-            frequency_hz=frequency_hz,
+            channel=channel,
         )
         self._active_transmissions.append(tx)
         self._tx_positions[tx.id] = position
@@ -139,27 +141,32 @@ class Medium:
         rx_node_id: str,
         rx_position: tuple[float, float, float],
         time_us: int,
-        rx_frequency_hz: int | None = None,
+        channel: int = 0,
     ) -> list[RxCandidate]:
-        """Get all decodable transmissions for a receiver.
+        """Get all decodable transmissions for a receiver on given channel.
 
-        For each active transmission (excluding transmissions from the
-        receiver itself), calculates distance, RSSI, and SNR. Only
-        includes transmissions that can be decoded based on sensitivity.
+        Implements rendezvous: only considers transmissions on the expected
+        hop channel (computed from SFN/time via synchronized_hop_channel).
+        Provides independent oracle for collision/propagation per channel.
+
+        For each active transmission on matching channel (excluding self),
+        calculates distance, RSSI, and SNR. Only includes decodable ones.
 
         Args:
             rx_node_id: ID of the receiving node.
             rx_position: (x, y, z) position of the receiver in meters.
             time_us: Current simulation time in microseconds.
-            rx_frequency_hz: Optional frequency filter for rendezvous.
+            channel: Expected hop channel for rendezvous (default 0).
 
         Returns:
             List of RxCandidate objects for decodable transmissions.
         """
         candidates: list[RxCandidate] = []
-        active = self.get_active_transmissions(time_us)
-        if rx_frequency_hz is not None:
-            active = [tx for tx in active if tx.frequency_hz == rx_frequency_hz]
+        active = [
+            tx
+            for tx in self.get_active_transmissions(time_us)
+            if tx.channel == channel
+        ]
 
         for tx in active:
             if tx.source_node_id == rx_node_id:
@@ -230,27 +237,30 @@ class Medium:
         position: tuple[float, float, float],
         time_us: int,
         sensitivity_dbm: float = SENSITIVITY_DEFAULT,
-        rx_frequency_hz: int | None = None,
+        channel: int = 0,
     ) -> bool:
-        """Detect if any transmission is active and detectable at a position.
+        """Detect if any transmission is active and detectable at a position
+        on the specified channel.
 
-        This implements Channel Activity Detection (CAD). Returns True if any
-        active transmission produces a received power above the sensitivity
-        threshold at the given position.
+        Implements per-channel CAD for multi-channel support and rendezvous.
+        Only considers transmissions on the expected hop channel. Independent
+        oracle per channel.
 
         Args:
             position: (x, y, z) position of the detector in meters.
             time_us: Current simulation time in microseconds.
             sensitivity_dbm: Receiver sensitivity threshold in dBm.
                 Defaults to SF10 sensitivity (-132 dBm).
-            rx_frequency_hz: Optional frequency filter for rendezvous.
+            channel: Channel for CAD (default 0, matches rendezvous hop).
 
         Returns:
             True if channel activity is detected, False otherwise.
         """
-        active = self.get_active_transmissions(time_us)
-        if rx_frequency_hz is not None:
-            active = [tx for tx in active if tx.frequency_hz == rx_frequency_hz]
+        active = [
+            tx
+            for tx in self.get_active_transmissions(time_us)
+            if tx.channel == channel
+        ]
 
         for tx in active:
             tx_pos = self._tx_positions.get(tx.id)

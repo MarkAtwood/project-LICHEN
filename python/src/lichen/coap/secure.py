@@ -309,17 +309,23 @@ class SecureDatagramChannel(DatagramChannel):
             remote = LichenRemote(source)
             msg = Message.decode(data, remote)
             msg.direction = Direction.INCOMING
+
+            # Check for OSCORE option (option number 9)
+            # Use 'oscore' attribute (aiocoap >= 0.4 naming)
             has_oscore = msg.opt.oscore is not None
 
             if has_oscore:
+                # OSCORE protected - unprotect it (uses the INCOMING direction)
                 plaintext = await self._unprotect(msg, source)
                 if plaintext is not None and self._receiver is not None:
                     self._receiver(plaintext, source)
             elif source in self._edhoc_active_peers:
                 # EDHOC in progress with this peer - allow plaintext
                 # (EDHOC responses are not OSCORE-protected)
-                logger.debug("Allowing plaintext from %s (EDHOC in progress)", source)
-                # Dispatch to EDHOC channel for response matching
+                logger.debug(
+                    "Allowing plaintext from %s (EDHOC in progress)", source
+                )
+                # Dispatch to EDHOC channel for response matching (raw bytes to avoid double-decode)
                 if self._edhoc_channel is not None:
                     self._edhoc_channel.dispatch(data, source)
             elif self._require_oscore:
