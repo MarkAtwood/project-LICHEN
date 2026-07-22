@@ -2,11 +2,15 @@
   "id": "project-LICHEN-zonh",
   "title": "[epic] LilyGO T-Deck support",
   "description": "LilyGO T-Deck: ESP32-S3 + SX1262 + WiFi + 2.8\" screen + keyboard + trackball. Board files exist at lichen/boards/lilygo/t_deck/. Good for: handheld terminal, border router with UI. $60.",
+  "notes": "escalated to human: needs human on board bringup, hardware validation, UI integration, power management, keyboard/trackball drivers (do-beads reason)",
   "status": "open",
   "priority": 2,
   "issue_type": "epic",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-10T22:37:35.588535Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-10T22:37:35.588563Z"
+  "updated_at": "2026-07-22T18:07:52.595456414Z",
+  "labels": [
+    "human"
+  ]
 }
