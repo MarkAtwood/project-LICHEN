@@ -2,14 +2,14 @@
   "id": "project-LICHEN-v08q",
   "title": "codereview-P0: inconsistent TX/RX case in parse_python_logs",
   "description": "scripts/analyze-hetero-fleet.py:95 detection uses mixed case handling. P0 correctness. tagged codereview",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:41:39.340354889Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:53:13.227953672Z",
+  "updated_at": "2026-07-22T18:57:55.057046705Z",
   "started_at": "2026-07-22T18:41:49.058710691Z",
-  "lease_expires_at": "2026-07-22T18:58:13.227953672Z",
-  "heartbeat_at": "2026-07-22T18:53:13.227953672Z"
+  "closed_at": "2026-07-22T18:57:55.057046705Z",
+  "close_reason": "Fixed inconsistent TX/RX case handling in parse_python_logs (now parse_impl_logs) by adding TX=/RX= markers, re.IGNORECASE on summary_re, full refactor to eliminate duplication, and streaming file iterators to eliminate list(f) memory use. Performed 3 independent codereview passes post-fix (all clean, no new P0-P4 findings). All related codereview beads filed, fixed, and closed as real work."
 }
