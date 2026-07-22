@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-5273.3",
+  "title": "codereview pass 3: new configs in main Kconfig should depend on LICHEN",
+  "description": "The added LICHEN_ADAPTIVE_SF_ENABLED and LICHEN_DEFAULT_SF in lichen/subsys/lichen/Kconfig lack 'depends on LICHEN'. Should add it to scope them under the menuconfig. Also update help texts to be consistent with existing ones and reference spec. P2. Tagged codereview.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:08:45.528985947Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:08:45.528985947Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-5273.3",
+      "depends_on_id": "project-LICHEN-5273",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:08:45.647517613Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
