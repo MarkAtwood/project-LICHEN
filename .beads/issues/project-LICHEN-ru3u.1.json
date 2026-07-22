@@ -2,12 +2,16 @@
   "id": "project-LICHEN-ru3u.1",
   "title": "test_cmd_txdelay and cmd tests duplicate config struct",
   "description": "The test_cmd_txdelay, test_cmd_persistence, test_cmd_slottime, test_rx_ax25, test_rx_raw all inline the same kiss_transport_config with all LCI callbacks. This is duplication and risks inconsistency if LCI cbs change. Extract to helper test_config() function. Priority P2 as it affects maintainability. Tag: codereview",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:33:52.170009807Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:33:52.170009807Z",
+  "updated_at": "2026-07-22T18:34:05.847519215Z",
+  "started_at": "2026-07-22T18:34:05.847519215Z",
+  "lease_expires_at": "2026-07-22T18:39:05.847519215Z",
+  "heartbeat_at": "2026-07-22T18:34:05.847519215Z",
   "labels": [
     "codereview"
   ],
