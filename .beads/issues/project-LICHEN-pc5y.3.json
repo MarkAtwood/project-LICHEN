@@ -2,13 +2,15 @@
   "id": "project-LICHEN-pc5y.3",
   "title": "codereview pass 3: inconsistency with coap_key_store full error",
   "description": "coap_keys.c uses -ENOMEM for key store full (CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES), while app_identity now uses -ENOSPC for peer table. Either standardize on one (prefer -ENOSPC for capacity), update coap_keys docs/tests/find_free_slot_locked, or add comment explaining difference. This is P4 but per instructions treat as real work. Related to project-LICHEN-m356 TOFU review. Tag: codereview. Parent: project-LICHEN-pc5y",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:24:00.997203215Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:24:00.997203215Z",
+  "updated_at": "2026-07-22T19:25:08.733360071Z",
+  "closed_at": "2026-07-22T19:25:08.733360071Z",
+  "close_reason": "Fixed all codereview findings including test update, header docs, comment sync, coap_keys consistency to -ENOSPC for table-full errors, handler update. 3 review passes completed with all P0-P4 addressed.",
   "labels": [
     "codereview"
   ],
