@@ -2,12 +2,16 @@
   "id": "project-LICHEN-0vjg",
   "title": "[codereview-2] heltec_uart1_console.overlay: CONFIG_SERIAL=y already in defconfig but overlay should reference or add Kconfig fragment if shell requires extra",
   "description": "The overlay sets chosen for console/shell-uart but task specified CONFIG_SERIAL=y explicitly. Defconfig already sets it and UART_CONSOLE. P3. Also, verify build succeeded on EC2. Per RULE fix P4 too. Add to a .conf fragment if needed for full shell.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:49:21.529178645Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:49:21.529178645Z",
+  "updated_at": "2026-07-22T18:49:39.876395013Z",
+  "started_at": "2026-07-22T18:49:39.876395013Z",
+  "lease_expires_at": "2026-07-22T18:54:39.876395013Z",
+  "heartbeat_at": "2026-07-22T18:49:39.876395013Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-0vjg",
