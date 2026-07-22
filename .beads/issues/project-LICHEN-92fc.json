@@ -2,10 +2,14 @@
   "id": "project-LICHEN-92fc",
   "title": "[CODEREVIEW-2] ThinkNode M7 Kconfig PoE",
   "description": "lichen/boards/elecrow/thinknode_m7/thinknode_m7_procpu.dts:45 - Missing dedicated Kconfig for POE support and Ethernet RMII. Add CONFIG_ETHERNET and power monitoring options.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:31.297092839Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:31.297092839Z"
+  "updated_at": "2026-07-22T18:22:00.936162085Z",
+  "started_at": "2026-07-22T18:22:00.936162085Z",
+  "lease_expires_at": "2026-07-22T18:27:00.936162085Z",
+  "heartbeat_at": "2026-07-22T18:22:00.936162085Z"
 }
