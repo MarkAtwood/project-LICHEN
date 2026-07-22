@@ -1,0 +1,7 @@
+{
+  "id": "1784749102863173689-1",
+  "issue_id": "project-LICHEN-ntx4",
+  "author": "AI Agent",
+  "text": "Ambiguous which format to follow: LICHEN draft uses simplified RuleID | W | Bitmap (1=missing); RFC uses W | C bit with compressed bitmap only on C=0 and implicit size from Rule. Current code is hybrid with extra length byte. Recommendation: Follow LICHEN draft for this project as primary spec. Escalate for confirmation before changing wire format (affects interop with Zephyr C impl and test vectors).",
+  "created_at": "2026-07-22T19:38:22.863173689Z"
+}
