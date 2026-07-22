@@ -2,12 +2,14 @@
   "id": "project-LICHEN-ok7y",
   "title": "[codereview-pass2] coap_dtn.c: deaddrop_get still mixes lichen_coap_respond pattern",
   "description": "Even after edit, some error paths or style doesn't fully match location.c's use of lichen_coap_senml_respond exclusively for SenML. Also P4: missing SPDX header and file doc comment like coap_location.c:1-14. File:lichen/subsys/lichen/coap/coap_dtn.c:123. discovered-from:project-LICHEN-92oj",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:36:04.085594935Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:36:04.085594935Z",
+  "updated_at": "2026-07-22T18:37:35.603925454Z",
+  "closed_at": "2026-07-22T18:37:35.603925454Z",
+  "close_reason": "Fixed in second chunk: added SPDX, defines, build_base_name, senml_encode_dtn_count helper (uses senml_encode pattern), updated deaddrop_get to location.c style with base_name and lichen_coap_senml_respond. All P4 addressed.",
   "labels": [
     "codereview"
   ]
