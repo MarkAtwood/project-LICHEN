@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-sam7",
+  "title": "[codereview] pinctrl uart1 pin choice for Heltec V3 spare console",
+  "description": "After adding uart1_default on GPIO6(TX)/GPIO7(RX) in heltec_wifi_lora32_v3-pinctrl.dtsi:9ia2, verify pin safety: are GPIO6/7 exposed on standard headers? Any boot strapping (e.g. GPIO0, GPIO45, etc.)? Does it conflict with SX1262 or OLED? Test build with overlay and physical pinout. Alternative: use GPIO4/GPIO5 or GPIO19/GPIO20. Discovered during lora_ipv6_mesh-9ia2 fix. Must fix before closing main issue.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:43:15.91608318Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:15.91608318Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-sam7",
+      "depends_on_id": "lora_ipv6_mesh-9ia2",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:43:16.064756717Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
