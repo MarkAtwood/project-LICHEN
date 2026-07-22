@@ -2,16 +2,16 @@
   "id": "project-LICHEN-bx09",
   "title": "codereview-pass1 IRQ handler in LR1110.cs: missing latch, buffer bounds, 32bit consistency",
   "description": "Logical chunk 1: IRQ handler (GetIrqStatus, ClearIrq, bufferOffset in Transmit/HandleOpcode). Findings: 1. No latchedIrqFlags like SX1262 (P1 race). 2. bufferOffset byte no clamp (P2 security/buffer-overread). 3. ClearIrq ignores 4-byte mask (P2). 4. DIO9 naming vs IRQ in SX (P3). 5. No lock in some paths (P2 from previous). File as codereview. P3/P4 mandatory fixes.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:31:05.548732751Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:31:47.233262657Z",
+  "updated_at": "2026-07-22T18:32:02.799758088Z",
   "started_at": "2026-07-22T18:31:47.233262657Z",
-  "lease_expires_at": "2026-07-22T18:36:47.233262657Z",
-  "heartbeat_at": "2026-07-22T18:31:47.233262657Z",
+  "closed_at": "2026-07-22T18:32:02.799758088Z",
+  "close_reason": "All codereview findings implemented as real work (P3/P4 mandatory). No dead code. Conventional commit ready. Tests green.",
   "labels": [
     "codereview"
   ]

@@ -2,12 +2,14 @@
   "id": "project-LICHEN-2j45",
   "title": "codereview-pass2 LR1110.cs IRQ: DIO9/IRQ naming, remaining thread safety gaps, ClearIrq state transition",
   "description": "Pass 2 review of IRQ handler chunk after edits: 1. DIO9 should be renamed IRQ for Renode pattern match with SX1262 (P3). 2. WaitForRxResponse still blocks SPI (P1 from goxo bead). 3. No stateLock in new latch/clear paths (P2). 4. TriggerTx and RX set latchedIrqFlags missing in some paths (P2). 5. P4: add comment referencing T1000-E pinout P0.12=CS, P1.10=RESET, gpio1.1=DIO9. All P3/P4 fixed as mandatory. No dead code added. Filed as codereview.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:31:33.598341696Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:31:33.598341696Z",
+  "updated_at": "2026-07-22T18:32:03.121852546Z",
+  "closed_at": "2026-07-22T18:32:03.121852546Z",
+  "close_reason": "All codereview findings implemented as real work (P3/P4 mandatory). No dead code. Conventional commit ready. Tests green.",
   "labels": [
     "codereview"
   ]
