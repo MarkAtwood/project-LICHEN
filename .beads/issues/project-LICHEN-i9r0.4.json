@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-i9r0.4",
+  "title": "TDMA gateway-centric implementation",
+  "description": "Parallel children for Kconfig, link, rpl, spec per task. Implement beacon-sync, GPS-sync, slot assignment, spatial reuse for zero collisions.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "epic",
+  "created_at": "2026-07-22T18:05:09.946565354Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:05:09.946565354Z",
+  "labels": [
+    "codereview",
+    "phy",
+    "protocol",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-i9r0.4",
+      "depends_on_id": "project-LICHEN-i9r0",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:05:10.064719321Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
