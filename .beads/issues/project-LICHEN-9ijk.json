@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-9ijk",
+  "title": "[codereview-pass2] propagation.py: missing blank lines after docstring sections (D413)",
+  "description": "Multiple methods and class docstring miss blank line after Raises/Returns/Example sections per numpy/google style. Affects class docstring after Raises, path_loss, received_power, snr, can_decode, max_range. Also D203/D211 conflict warning. P4 style. File: python/src/lichen/sim/propagation.py",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:47:43.595452385Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:43.595452385Z",
+  "labels": [
+    "codereview"
+  ]
+}
