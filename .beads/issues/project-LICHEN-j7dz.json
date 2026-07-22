@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-j7dz",
+  "title": "codereview pass 3 on m276: clean",
+  "description": "Third review pass. No findings. 3 clean passes achieved. Invariants preserved, no dead code added, follows C style and Zephyr assert convention.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:14:24.141484779Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:14:24.141484779Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-j7dz",
+      "depends_on_id": "project-LICHEN-m276",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T19:14:24.276096814Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
