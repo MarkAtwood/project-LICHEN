@@ -9,7 +9,8 @@
   "created_by": "ec2-user",
   "updated_at": "2026-07-22T17:58:56.517749951Z",
   "labels": [
-    "codereview"
+    "codereview",
+    "human"
   ],
   "dependencies": [
     {
