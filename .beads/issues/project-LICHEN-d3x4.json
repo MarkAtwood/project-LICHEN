@@ -1,11 +1,15 @@
 {
   "id": "project-LICHEN-d3x4",
   "title": "codereview-pass2 for project-LICHEN-vmtw: use adapter-\u003etx_buf and fix sizeof calls",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "epic",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:17:16.251500068Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:17:16.251500068Z"
+  "updated_at": "2026-07-22T19:18:32.931029651Z",
+  "started_at": "2026-07-22T19:18:32.931029651Z",
+  "lease_expires_at": "2026-07-22T19:23:32.931029651Z",
+  "heartbeat_at": "2026-07-22T19:18:32.931029651Z"
 }
