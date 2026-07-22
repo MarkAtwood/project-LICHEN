@@ -2,12 +2,16 @@
   "id": "project-LICHEN-hntm",
   "title": "[CODEREVIEW pass 3.1] thinknode_m7_procpu.yaml identifier update",
   "description": "lichen/boards/elecrow/thinknode_m7/elecrow_thinknode_m7_procpu.yaml:1 - Updated identifier to thinknode_m7/esp32s3/procpu to match t_deck pattern. Verified with bd show. Still needs full supported list and toolchain cleanup for completeness. P4 style consistency with t_deck_esp32s3_procpu.yaml:1.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:36:20.322365618Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:36:20.322365618Z",
+  "updated_at": "2026-07-22T18:39:12.406622761Z",
+  "started_at": "2026-07-22T18:39:12.406622761Z",
+  "lease_expires_at": "2026-07-22T18:44:12.406622761Z",
+  "heartbeat_at": "2026-07-22T18:39:12.406622761Z",
   "labels": [
     "codereview"
   ]
