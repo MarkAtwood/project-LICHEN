@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-nour",
+  "title": "codereview: lilygo,tdeck-keyboard binding include path",
+  "description": "zephyr,input.yaml may not be the correct include; standard Zephyr input drivers use zephyr,input-device.yaml or gpio-keys pattern. Verify by building with the driver. Also, binding should specify required properties like interrupts if used. P2 finding. Add to all 3 review passes until fixed.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:18:38.537983719Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:18:38.537983719Z",
+  "labels": [
+    "codereview"
+  ]
+}
