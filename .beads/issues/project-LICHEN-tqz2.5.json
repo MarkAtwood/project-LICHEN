@@ -2,12 +2,16 @@
   "id": "project-LICHEN-tqz2.5",
   "title": "coap_status encode P2/P3 issues",
   "description": "Fix encoding of coap_status in relevant CoAP response handling",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:32:10.596295008Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:32:10.596295008Z",
+  "updated_at": "2026-07-22T18:32:48.527232315Z",
+  "started_at": "2026-07-22T18:32:48.527232315Z",
+  "lease_expires_at": "2026-07-22T18:37:48.527232315Z",
+  "heartbeat_at": "2026-07-22T18:32:48.527232315Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-tqz2.5",
