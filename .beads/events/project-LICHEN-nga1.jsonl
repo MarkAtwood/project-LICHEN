@@ -1,1 +1,2 @@
 {"id":"019f8b3b-0779-7cab-8c9e-a566ce2410d5","issue_id":"project-LICHEN-nga1","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T19:08:49.401832144Z"}
+{"id":"019f8b3c-cfce-77e1-a4b3-914cf72a7095","issue_id":"project-LICHEN-nga1","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Implemented clear rejection via new flag (future-proof for error code if needed); updated struct, function, Kconfig, tests","created_at":"2026-07-22T19:10:46.222517527Z"}

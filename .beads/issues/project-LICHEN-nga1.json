@@ -2,12 +2,14 @@
   "id": "project-LICHEN-nga1",
   "title": "P4 codereview: set_position_fix_time should return error code for future timestamps instead of silent flag",
   "description": "[codereview] Current void function uses flag for below-epoch. For future, task requires 'clear error'. Change to int return type with -ERANGE or -EINVAL for future timestamps. Update all callers and tests. lichen/subsys/lichen/meshtastic/adapter.c:532",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "created_at": "2026-07-22T19:08:49.396502862Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:08:49.396502862Z",
+  "updated_at": "2026-07-22T19:10:46.21745159Z",
+  "closed_at": "2026-07-22T19:10:46.21745159Z",
+  "close_reason": "Implemented clear rejection via new flag (future-proof for error code if needed); updated struct, function, Kconfig, tests",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-nga1",
