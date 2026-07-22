@@ -2,12 +2,16 @@
   "id": "project-LICHEN-xfnc",
   "title": "[codereview] BLE transport: unprotected config.require_secure access in nus_rx_cb before lock",
   "description": "nus_rx_cb reads transport_state.config.require_secure without holding lock or checking initialized flag. This can race with lichen_ble_transport_deinit() which clears initialized after stop(). Potential use of stale or NULL cb pointers or freed user_ctx. P2 security/race. Fix by moving check inside locked section or using snapshot. Tagged codereview per workflow.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:50:43.116673735Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:50:43.116673735Z",
+  "updated_at": "2026-07-22T18:57:08.895781842Z",
+  "started_at": "2026-07-22T18:57:08.895781842Z",
+  "lease_expires_at": "2026-07-22T19:02:08.895781842Z",
+  "heartbeat_at": "2026-07-22T18:57:08.895781842Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-xfnc",

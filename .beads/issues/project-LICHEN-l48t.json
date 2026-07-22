@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-l48t",
   "title": "SLIP framing state machine fails to reset on ESC in IDLE",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:07.992625515Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:54.003090895Z",
+  "updated_at": "2026-07-22T18:57:08.451066554Z",
+  "started_at": "2026-07-22T18:57:08.451066554Z",
+  "lease_expires_at": "2026-07-22T19:02:08.451066554Z",
+  "heartbeat_at": "2026-07-22T18:57:08.451066554Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-l48t",

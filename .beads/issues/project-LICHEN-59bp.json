@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-59bp",
+  "title": "P2: Inconsistent rxMode access in DispatchMessage for continuous RX",
+  "description": "RX_PACKET always sets rxMode=false even for continuous mode (timeout=0xFFFFFF). This breaks multiple-packet RX in continuous mode. The one-shot RX contract needs rxOneShot flag to only clear rxMode on packet for one-shot SetRx/PollRx (r7h4.6). Add rxOneShot bool, set in SendRxEnter based on timeout, condition the rxMode=false in DispatchMessage and RX_TIMEOUT. Document contract in comments. Use stateLock consistently. Tagged codereview.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:57:08.765215176Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:57:08.765215176Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-59bp",
+      "depends_on_id": "project-LICHEN-r7h4.13.1",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:57:08.91423776Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
