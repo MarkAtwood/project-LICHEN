@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-i9r0.1.1",
+  "title": "codereview-1: TDMA beacon format lacks exact wire format and MIC coverage details (P1 correctness)",
+  "description": "The added TDMA_BEACON type 0x16 needs full packet diagram like in 02-physical-link.md. Signature coverage of bitmap and load_factor must be normative. Add to test vectors. Tag: codereview",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:03:04.774835374Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:03:04.774835374Z",
+  "labels": [
+    "codereview",
+    "phy",
+    "protocol",
+    "scalability",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-i9r0.1.1",
+      "depends_on_id": "project-LICHEN-i9r0.1",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:03:04.901778081Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
