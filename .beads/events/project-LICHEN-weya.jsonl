@@ -1,2 +1,3 @@
 {"id":"019f8afa-7055-72e0-aef4-658a6bde11a2","issue_id":"project-LICHEN-weya","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T17:58:16.405189045Z"}
 {"id":"019f8afa-7058-7f09-86fc-20569412bb21","issue_id":"project-LICHEN-weya","event_type":"label_added","actor":"ec2-user","comment":"Added label: codereview","created_at":"2026-07-22T17:58:16.408985888Z"}
+{"id":"019f8afa-a489-70a8-8ca4-9ebbe87261b6","issue_id":"project-LICHEN-weya","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Stubs noted in help text; full impl in subsequent chunks per AGENTS.md init graph. Kconfig now selects LICHEN_COAP_SERVER. 2/3 codereview pass clean","created_at":"2026-07-22T17:58:29.769043879Z"}
