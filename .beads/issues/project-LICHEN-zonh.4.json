@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-zonh.4",
+  "title": "T-Deck: implement trackball input driver (I2C or GPIO quadrature)",
+  "description": "Driver for T-Deck trackball. Likely I2C based per Renode. Provide input events for movement and buttons. Integrate with Zephyr input subsystem. Ensure no blocking in hot paths per C coding guidelines.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:11:47.753222166Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:11:47.753222166Z",
+  "labels": [
+    "human"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zonh.4",
+      "depends_on_id": "project-LICHEN-zonh",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:11:47.873565491Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
