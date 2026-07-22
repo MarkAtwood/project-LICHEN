@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-29zi.1",
   "title": "Fix parser validation, config consistency, and safety checks",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:16:26.780023429Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:16:28.812041589Z",
+  "updated_at": "2026-07-22T18:18:08.467744909Z",
   "started_at": "2026-07-22T18:16:28.812041589Z",
-  "lease_expires_at": "2026-07-22T18:21:28.812041589Z",
-  "heartbeat_at": "2026-07-22T18:16:28.812041589Z",
+  "closed_at": "2026-07-22T18:18:08.467744909Z",
+  "close_reason": "Completed parser validation (coap_oscore safety), config consistency (Kconfig range), type/safety checks with 3 codereview passes; all findings filed and fixed; 2 children closed; no test changes, vectors exact; clean passes after fixes",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-29zi.1",
