@@ -2,10 +2,14 @@
   "id": "project-LICHEN-a1d7",
   "title": "[CODEREVIEW-8] Board registration",
   "description": "lichen/boards/elecrow/thinknode_m7/Kconfig.defconfig:1 - Missing board.yml, board.cmake, Kconfig.sysbuild to register the new board with Zephyr and west build system.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:46.245805893Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:46.245805893Z"
+  "updated_at": "2026-07-22T18:19:09.484926006Z",
+  "started_at": "2026-07-22T18:19:09.484926006Z",
+  "lease_expires_at": "2026-07-22T18:24:09.484926006Z",
+  "heartbeat_at": "2026-07-22T18:19:09.484926006Z"
 }
