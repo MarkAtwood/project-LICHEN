@@ -1,3 +1,4 @@
 {"id":"019f8b17-794a-7969-babc-a686471bbda5","issue_id":"project-LICHEN-8agv","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:29:59.242617749Z"}
 {"id":"019f8b17-794f-7c16-b8fe-d3978215c0c0","issue_id":"project-LICHEN-8agv","event_type":"label_added","actor":"ec2-user","comment":"Added label: codereview","created_at":"2026-07-22T18:29:59.247793174Z"}
 {"id":"019f8b17-7954-76c4-a55e-fd27ad055971","issue_id":"project-LICHEN-8agv","event_type":"label_added","actor":"ec2-user","comment":"Added label: opinion","created_at":"2026-07-22T18:29:59.252444524Z"}
+{"id":"019f8b18-0ccd-7369-8ca7-955d0095c260","issue_id":"project-LICHEN-8agv","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Fixed: updated table to use SenML-CBOR format per LCI spec for consistency","created_at":"2026-07-22T18:30:37.005224829Z"}
