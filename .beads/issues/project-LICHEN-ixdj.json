@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-ixdj",
+  "title": "[codereview-P2] Conference test lacks radio stress",
+  "description": "The test_500_node_conference in test_scale.py:337 only uses sim.add_node, set_position, remove_node. It bypasses the radio layer, medium simulation, collision detection, SCHC fragmentation, and RPL. For a true 500-node conference stress test with high collision rates, must add multiple start_transmission() calls with realistic payloads (announces, CoAP, SenML) and validate metrics (collisions, delivery rate, PER). Reference: test_medium.py and test_topology_scenarios.py:100+. random.seed(42) is good for repro.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:59:02.687238924Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:59:02.687238924Z",
+  "labels": [
+    "codereview"
+  ]
+}
