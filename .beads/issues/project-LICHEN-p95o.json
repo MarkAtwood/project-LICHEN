@@ -2,12 +2,16 @@
   "id": "project-LICHEN-p95o",
   "title": "[codereview] bench-operations.md Heltec section needs full rewrite for non-destructive console",
   "description": "Current docs/bench-operations.md:65 references the reset-destructive behavior (lora_ipv6_mesh-9ia2). After implementing overlay + external UART, rewrite the port-safety rule, add subsection §2.x 'Non-destructive Heltec console monitoring' with build command using DTC_OVERLAY_FILE pointing to overlay snippet, pinout diagram for GPIO6/7, test procedure (python serial open with dtr=rts=False, check uptime !=0 in logs, no reset), and update CDC map if needed. Also address the ROM-loader SHA-256 warning. All findings must be fixed. Discovered-from lora_ipv6_mesh-9ia2.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:43:25.798558622Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:43:25.798558622Z",
+  "updated_at": "2026-07-22T18:44:23.915886891Z",
+  "started_at": "2026-07-22T18:44:23.915886891Z",
+  "lease_expires_at": "2026-07-22T18:49:23.915886891Z",
+  "heartbeat_at": "2026-07-22T18:44:23.915886891Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-p95o",
