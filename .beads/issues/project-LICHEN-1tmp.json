@@ -2,12 +2,14 @@
   "id": "project-LICHEN-1tmp",
   "title": "[codereview-P4] Test uses str(metrics) check instead of proper attribute access",
   "description": "The metrics validation uses string check for 'collisions'. Should use proper API from Metrics class (see simulation.py:176). Update to metrics.collision_count \u003e 0 or similar after verifying structure. This is polish but follows thorough codereview. test_scale.py:400",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:59:55.103218769Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:59:55.103218769Z",
+  "updated_at": "2026-07-22T18:00:12.972250085Z",
+  "closed_at": "2026-07-22T18:00:12.972250085Z",
+  "close_reason": "Fixed with direct metrics.collisions and collision_rate properties from Metrics class. 3 clean codereview passes achieved with no remaining P0-P2 findings in test_scale.py. Main bead project-LICHEN-ev77 now eligible for close after verification.",
   "labels": [
     "codereview"
   ]
