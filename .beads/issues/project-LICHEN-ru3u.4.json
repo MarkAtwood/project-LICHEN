@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-ru3u.4",
+  "title": "codereview-pass3: P4 style and completeness in cmd tests",
+  "description": "P4 findings treated as real work: 1. Add check for stats.rx_commands incremented in cmd test (currently untested). 2. Update comment to note 10ms units explicitly. 3. Ensure all tests updated with helper in this pass. 4. No dead code, good. After fixes, expect clean pass. Tagged codereview. Do not close main bead until 3 clean. Parent project-LICHEN-ru3u",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:34:21.380488951Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:34:21.380488951Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ru3u.4",
+      "depends_on_id": "project-LICHEN-ru3u",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:34:21.513451341Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

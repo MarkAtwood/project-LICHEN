@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-ru3u.3",
+  "title": "codereview-pass2: kiss test init completeness",
+  "description": "Reviewed init in test_cmd_txdelay and related. Finding P3: init called repeatedly with EALREADY path; test_reset handles params but config copy only happens on first init. If callbacks changed, would be incomplete. Suggestion: add kiss_transport_test_reset() that also allows re-config or document. P4: zassert_true for init ret could be more specific zassert_true(ret == 0 || ret == -EALREADY). P4: frame var could be const. Treat as real: update comments and asserts. Tagged codereview. Parent: project-LICHEN-ru3u",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:34:21.371406521Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:34:21.371406521Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ru3u.3",
+      "depends_on_id": "project-LICHEN-ru3u",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:34:21.491792016Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
