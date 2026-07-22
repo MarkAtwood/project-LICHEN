@@ -2,16 +2,16 @@
   "id": "project-LICHEN-2guf",
   "title": "[codereview] handle_text in gateway copies pointer without ensuring lifetime",
   "description": "lichen/apps/gateway/src/meshtastic_adapter.c:131 sets event.payload = packet-\u003epayload without copying. Although message_contract does memcpy later, this relies on synchronous call and mutex. Better to copy at packet_info level. P4 treated as real work. Tag: codereview",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T19:08:49.7408974Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:10:14.35106469Z",
+  "updated_at": "2026-07-22T19:10:32.406055856Z",
   "started_at": "2026-07-22T19:10:14.35106469Z",
-  "lease_expires_at": "2026-07-22T19:15:14.35106469Z",
-  "heartbeat_at": "2026-07-22T19:10:14.35106469Z",
+  "closed_at": "2026-07-22T19:10:32.406055856Z",
+  "close_reason": "Fixed indirectly by packet_info copy; gateway handle_text now receives stable pointer from packet buf. P4 fixed as real work per task.",
   "labels": [
     "codereview"
   ]
