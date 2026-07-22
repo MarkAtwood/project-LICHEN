@@ -2,10 +2,14 @@
   "id": "project-LICHEN-30u7",
   "title": "codereview P4: ternary in info_node_num reduces readability",
   "description": "lichen/subsys/lichen/meshtastic/codec.c:542 uses complex ternary. Prefer if for clarity and to easily add more conditions like broadcast check. Per task fix all P4. discovered-from:project-LICHEN-zmrg",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "chore",
+  "assignee": "AI Agent",
   "created_at": "2026-07-22T19:08:02.616906634Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:08:02.616906634Z"
+  "updated_at": "2026-07-22T19:18:19.882751896Z",
+  "started_at": "2026-07-22T19:18:19.882751896Z",
+  "lease_expires_at": "2026-07-22T19:23:19.882751896Z",
+  "heartbeat_at": "2026-07-22T19:18:19.882751896Z"
 }
