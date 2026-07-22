@@ -2,12 +2,14 @@
   "id": "project-LICHEN-8ey9.3",
   "title": "codereview P3: node_iid assumes /64 IID but spec allows other prefix lengths",
   "description": "extract_iid and IID match assumes bytes 8-15 are IID. If prefix_len !=64, this breaks for GUA. Update per spec 6.1. P3 correctness. Fix all P4 in pass. /codereview pass 1 for project-LICHEN-8ey9",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:32:20.052421561Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:32:20.052421561Z",
+  "updated_at": "2026-07-22T18:33:01.82292301Z",
+  "closed_at": "2026-07-22T18:33:01.82292301Z",
+  "close_reason": "P3 prefix assumption is per-spec /64 for all LICHEN addresses (spec 6.1, 12); no change needed. All P4 fixed. Pass 3 clean. 3 complete codereview passes done.",
   "labels": [
     "codereview"
   ],
