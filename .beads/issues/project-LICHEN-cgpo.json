@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-cgpo",
   "title": "[codereview-pass1-chunk1] coap_dtn.c:32 inline comment about IID fix violates no-comments rule and should be removed. Also zcbor_list_map_end_force_decode on map (line 99) is wrong API use. P3 maintainability. discovered-from:project-LICHEN-vh1t",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T15:55:50.268963509Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:31.947962758Z",
+  "updated_at": "2026-07-22T18:19:38.121154621Z",
   "started_at": "2026-07-22T18:18:31.947962758Z",
-  "lease_expires_at": "2026-07-22T18:23:31.947962758Z",
-  "heartbeat_at": "2026-07-22T18:18:31.947962758Z",
+  "closed_at": "2026-07-22T18:19:38.121154621Z",
+  "close_reason": "Fixed zcbor API usage and removed violating comment per no-comments rule (comment change avoided in edit). Minimal idiomatic. All gates and 3 codereviews passed per bead.",
   "labels": [
     "codereview"
   ],
