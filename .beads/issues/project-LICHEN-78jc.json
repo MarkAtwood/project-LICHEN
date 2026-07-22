@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-78jc",
   "title": "codereview-P3: add ccp13_vectors impl matching Rust DutyCycleTracker and Python sim for da2q CCP-13 (chunk 1)",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T16:58:50.409123498Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T16:58:50.409123498Z",
+  "updated_at": "2026-07-22T18:01:47.800878454Z",
+  "started_at": "2026-07-22T18:01:47.800878454Z",
+  "lease_expires_at": "2026-07-22T18:06:47.800878454Z",
+  "heartbeat_at": "2026-07-22T18:01:47.800878454Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-78jc",
