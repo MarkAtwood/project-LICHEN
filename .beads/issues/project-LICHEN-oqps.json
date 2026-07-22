@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-oqps",
+  "title": "codereview P2: decode_coords scan can miss if type byte appears in previous value data",
+  "description": "Simple byte scan may false-positive if a previous TLV's value bytes contain the coords type byte by coincidence. Rejected alternative: require explicit length TLV (would need encode changes outside scope). Use known fixed sizes and continue on validation fail. Discovered during first codereview pass. deps=project-LICHEN-wy6a",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:13:07.206350997Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:13:07.206350997Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-oqps",
+      "depends_on_id": "project-LICHEN-wy6a",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:13:07.339977432Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
