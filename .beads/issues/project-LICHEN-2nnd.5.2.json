@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-2nnd.5.2",
+  "title": "[codereview-P2] Fix variable naming in test_conference_mesh_demo",
+  "description": "NUM_NODES should be num_nodes per PEP8/ruff N806. Also expand the demo to actually simulate multiple nodes and SenML encoding for conference position sharing and messaging as per 12-apps.md and appendix-senml.md. Reference: python/tests/test_ultracode_demo.py:5",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:24.807028462Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:24.807028462Z",
+  "labels": [
+    "codereview",
+    "demo",
+    "milestone",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-2nnd.5.2",
+      "depends_on_id": "project-LICHEN-2nnd.5",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:51:24.922831671Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
