@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-wwa4.3",
+  "title": "Update Cargo.toml and integration points for no_std RNG in EDHOC",
+  "description": "Adjust rand_core dep and features. Check lichen-link, lichen-node for RNG passing.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:34:30.064140591Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:34:30.064140591Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wwa4.3",
+      "depends_on_id": "project-LICHEN-wwa4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:34:30.21934868Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
