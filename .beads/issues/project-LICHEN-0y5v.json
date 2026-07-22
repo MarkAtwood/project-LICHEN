@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-0y5v",
+  "title": "[codereview-pass1] Test does not verify router.lookup_route behavior explicitly",
+  "description": "The new yggdrasil_remote_address_not_local_mesh test relies on implicit default router state returning None. Add explicit mock or check to make test more robust. This is a P2 correctness issue from codereview. Fix before closing bead project-LICHEN-zt3c.5. Tag: codereview",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:52.443597284Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:52.443597284Z",
+  "labels": [
+    "codereview"
+  ]
+}
