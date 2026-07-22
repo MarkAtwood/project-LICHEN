@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-ap49",
+  "title": "[codereview-pass3] LR1110.cs edge cases",
+  "description": "Pass 3: Blocking WaitForRxResponse() will deadlock nRF52840 SPI during RX (as fixed in SX1262 readerThread). RX_PACKET parsing assumes exact format from sim (payload+ rssi+snr). GNSS opcode stubs log but don't integrate with GPS.cs or AG3335. Add StartReader/DispatchMessage/ReaderLoop methods. No lock in Transmit for Idle state. Fix all before next chunk.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:26:01.737972216Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:26:01.737972216Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ap49",
+      "depends_on_id": "project-LICHEN-r7h4.12",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:01.904500823Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

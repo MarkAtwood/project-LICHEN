@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-t8yf",
+  "title": "[codereview-pass2] LR1110.cs security/IRQ",
+  "description": "Pass 2: DIO9 vs IRQ naming. LR1110 uses 32-bit IRQ flags but current code mixes with SX1262 16-bit logic. ClearIrq and GetIrqStatus need latching like SX1262. No bounds checking on bufferOffset. T1000-E pinout (P1.10 RESET, P0.12 CS, DIO9 on gpio1.1) matches repl but confirm no Busy conflict with other peripherals. codereview tag.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:26:01.717918206Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:26:01.717918206Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-t8yf",
+      "depends_on_id": "project-LICHEN-r7h4.12",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:01.869277656Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
