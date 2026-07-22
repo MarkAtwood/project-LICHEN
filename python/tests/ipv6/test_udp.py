@@ -8,7 +8,7 @@ from ipaddress import IPv6Address
 
 import pytest
 
-from lichen.ipv6.udp import UdpDatagram, UdpError, udp_checksum
+from lichen.ipv6.udp import UDP_HEADER_LENGTH, UdpDatagram, UdpError, udp_checksum
 
 SRC = IPv6Address("fe80::1")
 DST = IPv6Address("fe80::2")
@@ -69,3 +69,9 @@ def test_from_bytes_rejects_length_mismatch() -> None:
 def test_port_range_validated() -> None:
     with pytest.raises(UdpError):
         UdpDatagram(0x10000, 1, b"").to_bytes(SRC, DST)
+
+
+def test_payload_too_large_raises_udp_error() -> None:
+    max_payload = 0xFFFF - UDP_HEADER_LENGTH
+    with pytest.raises(UdpError, match="payload too large"):
+        UdpDatagram(1, 2, b"x" * (max_payload + 1)).to_bytes(SRC, DST)
