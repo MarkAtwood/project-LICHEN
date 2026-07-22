@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-mcyv",
+  "title": "codereview: check for overflow in encode_serial_frame tests",
+  "description": "Ensure tests cover the new BUILD_ASSERT path. tagged codereview",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:13:36.558769263Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:13:36.558769263Z"
+}
