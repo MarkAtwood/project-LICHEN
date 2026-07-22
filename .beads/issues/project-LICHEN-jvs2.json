@@ -2,17 +2,15 @@
   "id": "project-LICHEN-jvs2",
   "title": "[codereview] EDHOC A_3 fix requires consistent changes in Rust and Python impls",
   "description": "P1: Triple implementation discipline requires updating lichen-oscore/src/edhoc.rs (2 places) and python/src/lichen/crypto/edhoc.py to prevent interop failure on A_3 AAD. Use same ext_aad = TH_3 || CRED.",
-  "status": "closed",
+  "status": "open",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:14:04.408475725Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:15:22.57259109Z",
+  "updated_at": "2026-07-22T19:17:15.694779259Z",
   "started_at": "2026-07-22T19:15:12.882633309Z",
-  "closed_at": "2026-07-22T19:15:22.57259109Z",
-  "close_reason": "Fixed in A_3 updates to C/Rust/Python; all P1-P4 addressed per codereview workflow",
   "labels": [
     "codereview"
   ]
