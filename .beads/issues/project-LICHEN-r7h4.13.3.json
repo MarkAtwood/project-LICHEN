@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-r7h4.13.3",
+  "title": "Magic numbers and missing enums in SX1262.cs opcode handling",
+  "description": "Hardcoded opcode values (0x82 for SetRx, 0x83 SetTx, 0x0E WriteBuffer, IRQ masks 0x0002 etc) and state machine without enum for radio opcodes. Reduces maintainability and error-proneness. Add const or enum per Renode C# conventions in other peripherals. Codereview-P2 readability. r7h4 pass 3.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:26:10.994347424Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:26:10.994347424Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r7h4.13.3",
+      "depends_on_id": "project-LICHEN-r7h4.13",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:26:11.173149325Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
