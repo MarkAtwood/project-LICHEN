@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-r6zz",
+  "title": "codereview: flash-t_echo.sh missing --bulk flag and find_all_ports function",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:51:03.805433561Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:03.805433561Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r6zz",
+      "depends_on_id": "project-LICHEN-2nnd.1",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:51:03.919239517Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
