@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-o9br",
+  "title": "codereview-P2: hardcoded now_ms=0 in gateway forward_mesh_to_upstream breaks trickle timing",
+  "description": "codereview finding. Use real monotonic time. Fix all before closing main bead. tagged codereview",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:21:34.575267939Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:21:34.575267939Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-o9br",
+      "depends_on_id": "project-LICHEN-i1rn",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:21:34.714519601Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
