@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-m60x",
+  "title": "[CODEREVIEW-6] board.yml cpuclusters structure may prevent board registration",
+  "description": "lichen/boards/elecrow/thinknode_m7/board.yml:6 - cpuclusters list with nested variants using name esp32s3_procpu does not follow standard board.yml pattern (see zephyr/boards/luatos/esp32s3_luatos_core/board.yml or nordic/nrf5340dk/board.yml which use variants: list with cpucluster field). Causes 'west boards' to omit elecrow_thinknode_m7. P1 correctness. Also missing vendor: elecrow.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:28:04.790634038Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:28:04.790634038Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-m60x",
+      "depends_on_id": "project-LICHEN-5t67",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:28:04.919603577Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
