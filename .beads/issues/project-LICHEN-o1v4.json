@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-o1v4",
   "title": "[codereview-3] DTS update incomplete: poe0 node at line 46 still uses placeholder fixed-regulator; Ethernet RMII pinctrl and phy node missing for LAN8720",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:24:05.889528371Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:24:05.889528371Z",
+  "updated_at": "2026-07-22T18:25:12.275418005Z",
+  "started_at": "2026-07-22T18:25:12.275418005Z",
+  "lease_expires_at": "2026-07-22T18:30:12.275418005Z",
+  "heartbeat_at": "2026-07-22T18:25:12.275418005Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-o1v4",

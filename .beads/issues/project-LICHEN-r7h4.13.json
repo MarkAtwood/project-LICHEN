@@ -2,12 +2,16 @@
   "id": "project-LICHEN-r7h4.13",
   "title": "Fix and enhance SX1262.cs C# peripheral for SX126x on nRF52840",
   "description": "Address RX not working (PollRx one-shot at SetRx - r7h4.6), CS deassert state reset, easyDMA FinishTransmission, RX buffer handling, IRQ timing, sim bridge robustness. Add support for more opcodes if needed. Use fleet AMI for multi-node testing. 3 codereview passes mandatory, fix all findings as codereview beads. Do not close epic until clean.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:24:16.623022091Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:24:16.623022091Z",
+  "updated_at": "2026-07-22T18:25:12.117626377Z",
+  "started_at": "2026-07-22T18:25:12.117626377Z",
+  "lease_expires_at": "2026-07-22T18:30:12.117626377Z",
+  "heartbeat_at": "2026-07-22T18:25:12.117626377Z",
   "labels": [
     "codereview"
   ],
