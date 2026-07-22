@@ -2,12 +2,16 @@
   "id": "project-LICHEN-zky2",
   "title": "P3: GetStatus does not reflect rxMode under lock (related to one-shot PollRx r7h4.6)",
   "description": "GetStatus always returns 0x22. Update to check rxMode under stateLock and return appropriate mode byte (0x52 for RX if rxMode, else 0x22 for STDBY_RC). This was partially addressed in parent but race remains without consistent lock. Codereview finding. Tagged codereview.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:57:53.634366044Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:57:53.634366044Z",
+  "updated_at": "2026-07-22T18:58:44.357790058Z",
+  "started_at": "2026-07-22T18:58:44.357790058Z",
+  "lease_expires_at": "2026-07-22T19:03:44.357790058Z",
+  "heartbeat_at": "2026-07-22T18:58:44.357790058Z",
   "labels": [
     "codereview"
   ],
