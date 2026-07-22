@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-r7h4.15",
+  "title": "codereview pass 2: KISS transport test build failure on aarch64",
+  "description": "native_sim build fails with CONFIG_64BIT mismatch on ARM64 host. KISS test prj.conf does not set 64BIT. P1 correctness. Tag: codereview",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:27:58.4358633Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:27:58.4358633Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r7h4.15",
+      "depends_on_id": "project-LICHEN-r7h4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:27:58.552494078Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
