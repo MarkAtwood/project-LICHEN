@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-cjb2",
+  "title": "codereview-pass2: compact_cot.py",
+  "description": "No P0-P2 findings. Style consistent with existing range checks. Test coverage for invalid XML added implicitly via manual test. Fixed related P4 duplication pattern by centralizing error style. Pass 2 clean.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "created_at": "2026-07-22T18:47:54.351592383Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:54.351592383Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cjb2",
+      "depends_on_id": "project-LICHEN-35ks",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:47:54.506557144Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
