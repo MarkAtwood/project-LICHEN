@@ -2,12 +2,16 @@
   "id": "project-LICHEN-cemd",
   "title": "[codereview-3] slip_transport: missing IPv6 extension header and next-header validation in validate_ipv6_packet",
   "description": "P4: Current validation only checks version and total length. Per IPv6 spec, should also verify next header is valid (e.g. not 0 or reserved) or at least basic sanity on first extension if present. Though not causing overflow, it's incomplete validation that could allow malformed packets. Discovered in codereview pass 3. Treat as real work and fix.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:51:05.820156326Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:05.820156326Z",
+  "updated_at": "2026-07-22T18:51:32.899964793Z",
+  "started_at": "2026-07-22T18:51:32.899964793Z",
+  "lease_expires_at": "2026-07-22T18:56:32.899964793Z",
+  "heartbeat_at": "2026-07-22T18:51:32.899964793Z",
   "labels": [
     "codereview"
   ]
