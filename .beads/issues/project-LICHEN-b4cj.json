@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-b4cj",
   "title": "[codereview-3] Kconfig additions: ensure no stack overflow on ESP32-S3 with added NET_ configs; test build required",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:12:36.968140343Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:12:59.08821725Z",
+  "updated_at": "2026-07-22T18:14:12.357343342Z",
   "started_at": "2026-07-22T18:12:59.08821725Z",
-  "lease_expires_at": "2026-07-22T18:17:59.08821725Z",
-  "heartbeat_at": "2026-07-22T18:12:59.08821725Z",
+  "closed_at": "2026-07-22T18:14:12.357343342Z",
+  "close_reason": "Escalated large protocol/design to human; fixed Kconfig stack=8192 in t_deck_esp32s3_procpu_defconfig for ESP32-S3 NET configs (minimal edit, west+rust verified, 3 codereview passes complete)",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-b4cj",
