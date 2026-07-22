@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-goxo",
+  "title": "[codereview-pass1] LR1110.cs thread safety",
+  "description": "After first chunk (locks in Reset/Finish/Sim* properties): Transmit(), HandleOpcode(), TriggerTx(), SendRxEnter() still access state/opcode without stateLock in many places. Missing using System.Threading; readerThread not started. GNSS stubs incomplete for T1000-E integration. File as codereview. Depends on project-LICHEN-r7h4.12",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:25:53.077305997Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:25:53.077305997Z"
+}
