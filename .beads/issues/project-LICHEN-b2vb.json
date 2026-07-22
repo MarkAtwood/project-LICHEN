@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-b2vb",
   "title": "Add RollcallResource to support conference demo roll calls with SenML position data",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T17:55:00.263908006Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:55:02.646180527Z",
+  "updated_at": "2026-07-22T17:56:34.858609984Z",
   "started_at": "2026-07-22T17:55:02.646180527Z",
-  "lease_expires_at": "2026-07-22T18:00:02.646180527Z",
-  "heartbeat_at": "2026-07-22T17:55:02.646180527Z",
+  "closed_at": "2026-07-22T17:56:34.858609984Z",
+  "close_reason": "Implemented RollcallResource + integration into build_site using LCI/SenML for conference demo (messaging/presence/rollcall/position). Fixed all 3 codereview beads (7hxo,91n2,5g1z) with 3 clean passes after lint(ruff)/typecheck(mypy) and spec compliance. No new findings.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-b2vb",
