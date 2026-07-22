@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-sgcd",
+  "title": "codereview pass 2/3: tun.rs send() MTU validation",
+  "description": "General subagent review pass 2/3. Confirmed no dead code, doc comment restored, follows exact bead spec for send(), atomic enforced by partial error, independent test oracle via existing tests pass. P2: hardcoded 1500 in check vs const 1280.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:43:44.419443167Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:43:44.419443167Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-sgcd",
+      "depends_on_id": "project-LICHEN-a0sx",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T19:43:44.543812285Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
