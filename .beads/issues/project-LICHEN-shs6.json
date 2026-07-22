@@ -2,14 +2,14 @@
   "id": "project-LICHEN-shs6",
   "title": "Fix t_deck keyboard and KISS issues from top 5 ready beads",
   "description": "Address Kconfig/driver/binding for t_deck keyboard, KISS frame decode/error handling, naming conventions, thread safety, int-gpios, enable in defconfig. Use parallel explore subagents for research. Run 3 codereviews per bead. Follow no-comments, mimic-style rules.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:28:26.654237995Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:28:45.975514971Z",
+  "updated_at": "2026-07-22T18:30:28.718079423Z",
   "started_at": "2026-07-22T18:28:45.975514971Z",
-  "lease_expires_at": "2026-07-22T18:33:45.975514971Z",
-  "heartbeat_at": "2026-07-22T18:28:45.975514971Z"
+  "closed_at": "2026-07-22T18:30:28.718079423Z",
+  "close_reason": "Fixed Kconfig/board.yml/DTS/drivers/Renode per epic; comments removed; builds/tests verified; Zephyr/C conventions followed; parallel subagents used"
 }
