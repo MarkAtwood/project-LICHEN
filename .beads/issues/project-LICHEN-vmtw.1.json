@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-vmtw.1",
+  "title": "[codereview-pass1] tx_buf addition increases RAM usage by up to 176 bytes per adapter instance",
+  "description": "The new tx_buf[LICHEN_MESHCORE_FRAME_MAX] in struct lichen_meshcore_adapter adds permanent allocation. Document this in Kconfig help text and consider if static per-adapter is acceptable or if a shared pool / smaller buffer is better for STM32WL. P4 readability/maintainability.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:14:25.8641298Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:14:25.8641298Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-vmtw.1",
+      "depends_on_id": "project-LICHEN-vmtw",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:14:26.000513504Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
