@@ -2,16 +2,16 @@
   "id": "project-LICHEN-b6gm",
   "title": "[codereview-P4] spec/02a-coordinated-capacity.md: new rx_valid_until_sfn text has no test vector cross-ref",
   "description": "All CCP mechanisms must reference ccp9-rendezvous.json. Add 'See test/vectors/ccp9-rendezvous.json for exact vectors.' P4 polish per workflow rule.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:54:45.904452887Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:55:34.848679476Z",
+  "updated_at": "2026-07-22T18:57:03.111949161Z",
   "started_at": "2026-07-22T18:55:34.848679476Z",
-  "lease_expires_at": "2026-07-22T19:00:34.848679476Z",
-  "heartbeat_at": "2026-07-22T18:55:34.848679476Z",
+  "closed_at": "2026-07-22T18:57:03.111949161Z",
+  "close_reason": "Added ccp9-rendezvous.json cross-ref per LICHEN test vector oracle rules; no comments added",
   "labels": [
     "codereview"
   ]
