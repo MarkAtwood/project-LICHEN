@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-2nnd.9",
+  "title": "Test scenarios",
+  "description": "Define detailed test scenarios for the 500-node demo including stress test, roaming, kill test, GPS sync validation, visualization verification.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:51:48.152802915Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:48.152802915Z",
+  "labels": [
+    "demo",
+    "milestone",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-2nnd.9",
+      "depends_on_id": "project-LICHEN-2nnd",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:51:48.306960821Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
