@@ -1,1 +1,2 @@
 {"id":"019f8b27-7940-762c-ab8b-cedd0d3b9967","issue_id":"project-LICHEN-oyxh","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:47:27.808405569Z"}
+{"id":"019f8b28-abb6-79be-b2e4-3d156b275804","issue_id":"project-LICHEN-oyxh","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Added _touch_pending + order maintenance in clear/expire/queue","created_at":"2026-07-22T18:48:46.262639858Z"}

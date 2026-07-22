@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-oyxh",
   "title": "codereview pass 2 P4: missing _touch_pending_dest helper and order maintenance in clear/expire methods",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:47:27.80290889Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:47:27.80290889Z",
+  "updated_at": "2026-07-22T18:48:46.257092673Z",
+  "closed_at": "2026-07-22T18:48:46.257092673Z",
+  "close_reason": "Added _touch_pending + order maintenance in clear/expire/queue",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-oyxh",
