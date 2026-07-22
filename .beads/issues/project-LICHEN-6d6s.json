@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-6d6s",
+  "title": "codereview: t_deck trackball GPIO pins in comment should cross-ref exact BOARD_TBOX_* defines from utilities.h",
+  "description": "P3: The comment lists GPIO numbers but not the full context from LilyGO utilities.h (BOARD_TBOX_G0*). Add precise reference or define aliases. codereview tag. From project-LICHEN-hzvh.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:25:28.899132266Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:25:28.899132266Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-6d6s",
+      "depends_on_id": "project-LICHEN-hzvh",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:25:29.075667045Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
