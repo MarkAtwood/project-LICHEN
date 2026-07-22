@@ -2,10 +2,14 @@
   "id": "project-LICHEN-gnzy",
   "title": "umb4.2-mapping: Meshtastic-style mapping for KISS LCI",
   "description": "Define mapping from KISS frames to LICHEN local CoAP/IPv6/control actions and vice versa. Specify which KISS CMD/port carries IPv6 datagrams for LCI, which for control (config, status, keys), error mapping. Ensure compatibility with existing tools. Produce table similar to t2hn mapping. --parent=project-LICHEN-umb4 --type=task --priority=2 --labels=app-interface,kiss,zephyr,codereview",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:23:50.790175339Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:23:50.790175339Z"
+  "updated_at": "2026-07-22T18:24:20.865342964Z",
+  "started_at": "2026-07-22T18:24:20.865342964Z",
+  "lease_expires_at": "2026-07-22T18:29:20.865342964Z",
+  "heartbeat_at": "2026-07-22T18:24:20.865342964Z"
 }
