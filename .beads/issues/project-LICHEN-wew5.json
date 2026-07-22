@@ -2,12 +2,16 @@
   "id": "project-LICHEN-wew5",
   "title": "codereview: missing polling and key mapping in driver",
   "description": "Implementation lacks k_thread for periodic I2C reads from keyboard registers (0x03 for status on TCA8418), keycode to INPUT_KEY_* mapping (arrows, enter, numbers from T-Deck layout), and input_sync calls. Renode stub will need update for functional test. P0. discovered-from:project-LICHEN-zonh.3",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:19:14.669725465Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:19:14.669725465Z",
+  "updated_at": "2026-07-22T18:20:18.245679437Z",
+  "started_at": "2026-07-22T18:20:18.245679437Z",
+  "lease_expires_at": "2026-07-22T18:25:18.245679437Z",
+  "heartbeat_at": "2026-07-22T18:20:18.245679437Z",
   "labels": [
     "codereview"
   ]
