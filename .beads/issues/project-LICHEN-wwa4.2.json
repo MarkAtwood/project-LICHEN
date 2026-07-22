@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-wwa4.2",
+  "title": "Update tests and lib.rs docs for new RNG API in lichen-oscore",
+  "description": "Update all test calls to provide a test RNG (e.g. MockRng or OsRng in std tests). Update module docs and examples.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:34:29.57331492Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:34:29.57331492Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wwa4.2",
+      "depends_on_id": "project-LICHEN-wwa4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:34:29.706577944Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
