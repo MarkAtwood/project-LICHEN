@@ -2,12 +2,16 @@
   "id": "project-LICHEN-xb92",
   "title": "P4: heltec procpu.dts uart1 comment could reference the specific bd issue fixed (g38y) and note that uart1 is now always enabled",
   "description": "The updated comment is improved but still could be tighter. Reference the codereview bead project-LICHEN-g38y. Also check if aliases should include serial0 = \u0026uart1 or similar for consistency with other boards. Fix as real work.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:47:13.921550298Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:47:13.921550298Z",
+  "updated_at": "2026-07-22T18:55:36.327772441Z",
+  "started_at": "2026-07-22T18:55:36.327772441Z",
+  "lease_expires_at": "2026-07-22T19:00:36.327772441Z",
+  "heartbeat_at": "2026-07-22T18:55:36.327772441Z",
   "labels": [
     "codereview"
   ]
