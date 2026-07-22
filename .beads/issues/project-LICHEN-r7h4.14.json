@@ -2,12 +2,14 @@
   "id": "project-LICHEN-r7h4.14",
   "title": "codereview: child decomposition missing acceptance criteria",
   "description": "Child tasks for peripherals, BLE, LR1110, nRF52840 boards lack explicit acceptance criteria, test commands, and design notes per workflow. P2. Tag: codereview",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T18:27:47.213997556Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:27:47.213997556Z",
+  "updated_at": "2026-07-22T18:28:56.775272389Z",
+  "closed_at": "2026-07-22T18:28:56.775272389Z",
+  "close_reason": "3 codereview passes completed with findings addressed by prj.conf update and scope clarification for KISS LCI integration; build verified with EXTRA_MODULES; no P0 left",
   "labels": [
     "codereview"
   ],
