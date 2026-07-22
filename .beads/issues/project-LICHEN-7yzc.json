@@ -3,14 +3,14 @@
   "title": "umb4.1-research: KISS protocol research for LCI CoAP/IPv6/control",
   "description": "Research KISS framing adaptations for carrying IPv6 packets, CoAP messages, and LICHEN control commands over BLE UART/serial. Study spec/kiss-framing.md, standards/ham-radio.md, docs/kiss-aprs-bridge.md, spec/11-lci.md (SLIP vs KISS), existing lichen/lib/native/native.c framing, Python KISS in python/src/lichen/interface/kiss/. Identify how to avoid breaking standard KISS tools (no silent extensions to CMD byte). Document recommended port numbers, command usage for local traffic, escape rules, MTU. Output recommendations for schema and mapping.",
   "notes": "Research complete: KISS uses FEND 0xC0, CMD byte (port\u003c\u003c4 | cmd), escaped data, FEND. Escaping identical to SLIP. For LCI local CoAP/IPv6, recommended: CMD=0x00 (port 0 data) for IPv6 packets to match LCI SLIP semantics; use port 1 (0x10) for raw control/CoAP CBOR if needed. Avoid new CMD values to maintain tool compatibility. BLE GATT for KISS can reuse or extend the existing LCI service with KISS mode flag in capabilities. Zephyr native.c legacy framing (0xC1+len) is distinct; ble_uart.c SLIP is closest for extension. Python kiss/framing.py is reference impl. Mapping: data frames -\u003e ble_ingress IPv6; SetHardware (0x60) for control like config queries. Error: invalid CMD or overflow -\u003e log and drop (no silent fail). Uncertain: exact CoAP vs full IPv6 in payload for KISS (LCI prefers IPv6). Rejected full replacement of SLIP because LCI spec is SLIP; KISS as optional mode. Next: implement decode in ble_uart.c",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:23:43.00033Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:25:14.526649005Z",
+  "updated_at": "2026-07-22T18:25:17.697541857Z",
   "started_at": "2026-07-22T18:23:50.924891314Z",
-  "lease_expires_at": "2026-07-22T18:28:50.924891314Z",
-  "heartbeat_at": "2026-07-22T18:23:50.924891314Z"
+  "closed_at": "2026-07-22T18:25:17.697541857Z",
+  "close_reason": "fixed KISS LCI research notes 3 codereview passes"
 }
