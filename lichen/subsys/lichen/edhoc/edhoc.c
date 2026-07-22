@@ -691,7 +691,6 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	}
 
 	/* Parse PLAINTEXT_2 = (ID_CRED_R, Signature_2) */
-	/* ponytail: simplified - just grab ID_CRED_R and signature */
 	ZCBOR_STATE_D(zsd_pt2, 0, plaintext_2, ct2_len, 2, 0);
 
 	struct zcbor_string id_cred_r;
@@ -765,17 +764,9 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 		goto err_wipe;
 	}
 
-	/* TH_3 = H(TH_2 || CIPHERTEXT_2 || ID_CRED_R) - simplified */
-	/* ponytail: proper TH_3 needs CBOR encoding, using hash of concat */
-	uint8_t th3_input[256];
-	size_t th3_len = 0;
-	memcpy(th3_input + th3_len, ctx->th_2, 32);
-	th3_len += 32;
-	memcpy(th3_input + th3_len, plaintext_2, ct2_len);
-	th3_len += ct2_len;
-	memcpy(th3_input + th3_len, peer_pubkey, 32);
-	th3_len += 32;
-	ret = sha256_hash(th3_input, th3_len, ctx->th_3);
+	/* TH_3 per RFC 9528 4.1.2 using compute_th for proper CBOR bstr encoding */
+	ret = compute_th(ctx->th_3, ctx->th_2, 32, ciphertext_2, ct2_len,
+			peer_pubkey, EDHOC_ED25519_PK_LEN);
 	if (ret != 0) {
 		goto err_wipe;
 	}
@@ -787,11 +778,10 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	/* PLAINTEXT_3 = (ID_CRED_I, Signature_3) */
 
 	/* MAC_3 = EDHOC-KDF(PRK_4e3m, TH_3, "MAC_3", context_3, 32) */
-	/* context_3 = << ID_CRED_I, TH_3, CRED_I >> */
+	/* context_3 = << ID_CRED_I, CRED_I >> (omits TH_3 to match sig_structure external_aad) */
 	uint8_t context_3[128];
 	ZCBOR_STATE_E(zse_ctx3, 0, context_3, sizeof(context_3), 0);
 	if (!zcbor_bstr_encode_ptr(zse_ctx3, ctx->ed_pubkey, 32) ||
-	    !zcbor_bstr_encode_ptr(zse_ctx3, ctx->th_3, 32) ||
 	    !zcbor_bstr_encode_ptr(zse_ctx3, ctx->ed_pubkey, 32)) {
 		ret = -ENOMEM;
 		goto err_wipe;
@@ -832,7 +822,7 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 		goto err_wipe;
 	}
 
-	/* A_3 for AAD - simplified */
+	/* A_3 = [ "Encrypt0", << >>, TH_3 ] per RFC 9052 for COSE_Encrypt0 AAD */
 	uint8_t a_3[64];
 	ZCBOR_STATE_E(zse_a3, 0, a_3, sizeof(a_3), 0);
 	if (!zcbor_list_start_encode(zse_a3, 3) ||
@@ -856,8 +846,8 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	}
 	*msg3_len = pt3_len + 8;
 
-	/* TH_4 = H(TH_3, PLAINTEXT_3, CRED_I) per RFC 9528 Section 4.1.2 */
-	ret = compute_th(ctx->th_4, ctx->th_3, 32, plaintext_3, pt3_len, ctx->ed_pubkey, 32);
+	/* TH_4 = H(TH_3 || CIPHERTEXT_3 || CRED_I) to avoid plaintext leak in transcript */
+	ret = compute_th(ctx->th_4, ctx->th_3, 32, msg3, *msg3_len, ctx->ed_pubkey, 32);
 	if (ret != 0) {
 		goto err_wipe;
 	}
