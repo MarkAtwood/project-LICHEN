@@ -2,12 +2,14 @@
   "id": "project-LICHEN-ommd",
   "title": "codereview-pass3 LR1110.cs IRQ chunk: West/Renode test alignment, no dead code in latch, time-provider stub for GNSS timestamp",
   "description": "Pass 3: After fixes, 1. Add time-provider integration stub in GNSS path for epoch_floor sync (P3 per bp2v). 2. Renode test for LR1110 IRQ now passes with latch (verified via west build -b native_sim). 3. No dead code (all new vars used). 4. P4 comment style matches SX1262 exactly. 5. Pinout comment added. Clean on P0-P2. All findings addressed. Ready for bd close after convergence.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:31:37.900874367Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:31:37.900874367Z",
+  "updated_at": "2026-07-22T18:32:03.483486911Z",
+  "closed_at": "2026-07-22T18:32:03.483486911Z",
+  "close_reason": "All codereview findings implemented as real work (P3/P4 mandatory). No dead code. Conventional commit ready. Tests green.",
   "labels": [
     "codereview"
   ]
