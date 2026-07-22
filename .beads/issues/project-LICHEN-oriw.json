@@ -2,12 +2,14 @@
   "id": "project-LICHEN-oriw",
   "title": "[codereview-pass3] propagation.py: dead commented code and missing trailing commas",
   "description": "max_range has 3 lines of commented-out math derivation (ERA001 - violates no dead code rule). Also COM812 missing trailing comma in can_decode and max_range function defs. These are P4 style/consistency issues. Fix by removing comments (move to docstring if useful) and adding commas. Also update tests if needed but scope limited to propagation.py. File: python/src/lichen/sim/propagation.py:144,167,182-184",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:47:47.687013026Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:47:47.687013026Z",
+  "updated_at": "2026-07-22T18:48:49.644776556Z",
+  "closed_at": "2026-07-22T18:48:49.644776556Z",
+  "close_reason": "Fixed all P4 codereview findings (f-strings in exceptions, docstring blank lines, dead code, trailing commas, D204) in propagation.py as part of validation task. Lint now clean, tests pass.",
   "labels": [
     "codereview"
   ]

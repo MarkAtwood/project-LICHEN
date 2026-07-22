@@ -2,12 +2,14 @@
   "id": "project-LICHEN-3h2j",
   "title": "[codereview-pass1] propagation.py: f-string literals in ValueError messages (EM102, TRY003)",
   "description": "The __post_init__ and path_loss methods use f-strings directly in raise ValueError(...). Linter requires assigning message to variable first for security/best practice (even though not user controlled). Also applies to existing distance error. P4 maintainability. File: python/src/lichen/sim/propagation.py:87,89,105",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:47:43.132756758Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:47:43.132756758Z",
+  "updated_at": "2026-07-22T18:48:49.141137102Z",
+  "closed_at": "2026-07-22T18:48:49.141137102Z",
+  "close_reason": "Fixed all P4 codereview findings (f-strings in exceptions, docstring blank lines, dead code, trailing commas, D204) in propagation.py as part of validation task. Lint now clean, tests pass.",
   "labels": [
     "codereview"
   ]
