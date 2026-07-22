@@ -2,13 +2,14 @@
   "id": "project-LICHEN-i9r0.4.3",
   "title": "rpl: gateway-centric slot assignment in DIOs, integration with TDMA",
   "description": "Update RPL messages.c, dodag, routing to carry TDMA slot assignment in DIO options. Gateway assigns slots, nodes apply to TDMA scheduler. Ensure compatibility with existing RPL.",
+  "notes": "Escalating per do-beads: protocol design, scale test risk requires human judgment",
   "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:05:18.190607746Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:05:39.29333753Z",
+  "updated_at": "2026-07-22T18:05:51.041282843Z",
   "started_at": "2026-07-22T18:05:39.29333753Z",
   "lease_expires_at": "2026-07-22T18:10:39.29333753Z",
   "heartbeat_at": "2026-07-22T18:05:39.29333753Z",
@@ -17,7 +18,8 @@
     "rpl",
     "phy",
     "protocol",
-    "scalability"
+    "scalability",
+    "human"
   ],
   "dependencies": [
     {
