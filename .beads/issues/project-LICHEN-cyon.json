@@ -3,16 +3,16 @@
   "title": "codereview-P3: parse_impl_logs still materializes full log to list[str] defeating streaming intent",
   "description": "scripts/analyze-hetero-fleet.py:107 lines = list(f) loads entire (potentially multi-GB) log into memory before parse_telemetry or legacy. The memory bead project-LICHEN-ix7m and parse_telemetry docstring emphasize streaming. Use a generator or process in single pass without full materialization. tagged codereview",
   "notes": "codereview pass 3 (robustness): single-pass intent achieved via iterator (no list[f]), double-open only on legacy fallback (rare for telemetry logs). No races, no leaks. 3 clean passes achieved. All findings fixed including P4s as real work.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:57:07.670697476Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:04:49.412399624Z",
+  "updated_at": "2026-07-22T19:04:50.040987269Z",
   "started_at": "2026-07-22T19:01:57.19901235Z",
-  "lease_expires_at": "2026-07-22T19:06:57.19901235Z",
-  "heartbeat_at": "2026-07-22T19:01:57.19901235Z",
+  "closed_at": "2026-07-22T19:04:50.040987269Z",
+  "close_reason": "3 clean codereview passes completed. parse_impl_logs now avoids full log materialization to list[str]. Fixed all codereview beads.",
   "labels": [
     "codereview"
   ]
