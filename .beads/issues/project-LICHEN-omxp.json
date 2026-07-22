@@ -2,12 +2,16 @@
   "id": "project-LICHEN-omxp",
   "title": "codereview-1: SFN delta section P2 test vector refs incomplete",
   "description": "After first edit chunk to SFN modulo section in spec/02a-coordinated-capacity.md:376+, remaining references to nonexistent test/vectors/sfn-delta.json persist at top-level (line ~29, 364, 505). Update all to point to ccp16-desync.json:desync_on_sfn_wrap and ccp_load_balancing.json. Also P4: inconsistent spacing in 'delta=1' vs 'delta = 1'; use RFC 1982 full citation. Tagged codereview. Discovered-from:project-LICHEN-hcwu",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:33:35.458291715Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:33:35.458291715Z",
+  "updated_at": "2026-07-22T18:33:55.753187104Z",
+  "started_at": "2026-07-22T18:33:55.753187104Z",
+  "lease_expires_at": "2026-07-22T18:38:55.753187104Z",
+  "heartbeat_at": "2026-07-22T18:33:55.753187104Z",
   "labels": [
     "codereview"
   ],
