@@ -2,16 +2,16 @@
   "id": "project-LICHEN-qnht",
   "title": "codereview-3: Zephyr header hardening compliance",
   "description": "Third review pass confirms fix eliminates signed/unsigned comparison in for-loop without introducing new warnings, maintains Zephyr API contract, and satisfies LICHEN_HARDENING_FLAGS -Werror=sign-compare. No P0-P4 issues found. Clean pass 3. Ready to close parent bead.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:12:24.414589766Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:20:28.042903142Z",
+  "updated_at": "2026-07-22T18:21:12.134774057Z",
   "started_at": "2026-07-22T18:20:28.042903142Z",
-  "lease_expires_at": "2026-07-22T18:25:28.042903142Z",
-  "heartbeat_at": "2026-07-22T18:20:28.042903142Z",
+  "closed_at": "2026-07-22T18:21:12.134774057Z",
+  "close_reason": "Kconfig verified via grep on heltec conf specific lines 79-92; hardening compliant; 3x cargo check; closed after verification",
   "labels": [
     "codereview"
   ]
