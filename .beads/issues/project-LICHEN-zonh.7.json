@@ -2,12 +2,16 @@
   "id": "project-LICHEN-zonh.7",
   "title": "Codereview pass for project-LICHEN-zonh T-Deck board updates",
   "description": "3 review passes over board file updates for keyboard/trackball/UI. File all findings here. Close only after 3 consecutive clean passes per task instructions.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:13:56.369338038Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:13:56.369338038Z",
+  "updated_at": "2026-07-22T18:16:04.633526855Z",
+  "started_at": "2026-07-22T18:16:04.633526855Z",
+  "lease_expires_at": "2026-07-22T18:21:04.633526855Z",
+  "heartbeat_at": "2026-07-22T18:16:04.633526855Z",
   "labels": [
     "codereview",
     "human"
