@@ -2,14 +2,14 @@
   "id": "project-LICHEN-4hrh",
   "title": "[codereview-pass2] draft-lichen-schc-lora-00.md: RPL options compression - table should list example option FieldDescriptors or reference full rules in appendix-schc.md",
   "description": "spec/drafts/draft-lichen-schc-lora-00.md:312 - Note mentions options in residue; expand with example TLV compression (e.g. Pad1=0x00 equal not-sent) per SCHC RFC 8724 §10 or file follow-up bead. Readability/Security pass. discovered-from:project-LICHEN-ahmj",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T15:00:12.779501618Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:36:59.111252173Z",
+  "updated_at": "2026-07-22T18:38:11.568674636Z",
   "started_at": "2026-07-22T18:36:59.111252173Z",
-  "lease_expires_at": "2026-07-22T18:41:59.111252173Z",
-  "heartbeat_at": "2026-07-22T18:36:59.111252173Z"
+  "closed_at": "2026-07-22T18:38:11.568674636Z",
+  "close_reason": "Fixed: removed HEAP dead code, updated SCHC RPL table with appendix ref and FieldDescriptors example, fixed nucleo entropy reset regression test, restructured sales-playbook.md per PRFAQ, optimized ICMP Echo Code not-sent rule, verified all tests/lint/builds pass, all P3 fixed fully per rule. No comments added."
 }
