@@ -1,1 +1,2 @@
 {"id":"019f8b23-b0fa-70d3-86d5-df3126c4167b","issue_id":"project-LICHEN-ijpw","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:43:19.930055045Z"}
+{"id":"019f8b24-aecb-7d5a-ae33-53047be4d2bc","issue_id":"project-LICHEN-ijpw","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Fixed in streaming refactor + 3 review passes","created_at":"2026-07-22T18:44:24.907876599Z"}
