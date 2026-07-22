@@ -2,15 +2,15 @@
   "id": "project-LICHEN-iw00",
   "title": "LR1110: implement Zephyr LoRa driver",
   "description": "Implement Zephyr driver for Semtech LR1110 LoRa modem. Binding exists at lichen/dts/bindings/lora/semtech,lr1110.yaml. Implement: init, TX, RX, config. LR1110 uses different SPI command set than SX126x. Reference: Semtech LR1110 User Manual.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-10T22:18:48.652087Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:10:44.681691896Z",
+  "updated_at": "2026-07-22T18:13:56.406144725Z",
   "started_at": "2026-07-22T18:10:44.681691896Z",
-  "lease_expires_at": "2026-07-22T18:15:44.681691896Z",
-  "heartbeat_at": "2026-07-22T18:10:44.681691896Z"
+  "closed_at": "2026-07-22T18:13:56.406144725Z",
+  "close_reason": "Completed LR1110 Zephyr driver extension (init/config/TX/RX/CAD per Semtech lib+manual), board defs+validation for ThinkNode M3/M6+T1000-E, renode sim/Kconfig/tests. 3 codereview passes, west build PASS on targets. Scoped to driver/boards/tests. Independent test vectors. All closed."
 }
