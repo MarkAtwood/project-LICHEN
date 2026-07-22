@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-phtq",
+  "title": "[codereview-P3] No test for CoAP request across Yggdrasil meshes in integration tests",
+  "description": "Test case 2 in the bead requires CoAP GET across meshes. Current coap tests are single mesh. Needs extension to test_cross_mesh_yggdrasil. Tag: codereview",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:32.740658897Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:32.740658897Z",
+  "labels": [
+    "codereview"
+  ]
+}

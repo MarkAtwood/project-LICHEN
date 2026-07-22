@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-zn69",
+  "title": "[codereview-P1] Yggdrasil address derivation not tested in cross-mesh context in gateway tests",
+  "description": "Existing tests in lichen-gateway use only link-local. Add test for 02xx addresses in is_local_mesh to cover cross-mesh routing decision. Per spec/05-routing.md. Tag: codereview",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:32.715790872Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:32.715790872Z",
+  "labels": [
+    "codereview"
+  ]
+}
