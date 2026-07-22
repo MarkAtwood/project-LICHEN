@@ -2,15 +2,15 @@
   "id": "project-LICHEN-bvdu",
   "title": "Router.pending_queue allows unbounded destinations causing memory exhaustion",
   "description": "file: python/src/lichen/routing/router.py:353-356\n\nRouter.pending_queue limits packets per destination (max_pending_per_dest=3) but places no limit on the number of destinations. An attacker or malfunctioning network could send packets to many unique destinations, causing unbounded memory growth.\n\nThe _queue_pending method (line 515-541) adds new destination keys without checking total destination count. While expire_pending removes old entries, continuous addition of new destinations faster than expiration could exhaust memory.\n\nSuggested fix: Add max_pending_destinations limit and evict oldest destination when exceeded, similar to ForwardingBuffer's max_sources pattern.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-12T17:02:24.044629Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:46:12.247018391Z",
+  "updated_at": "2026-07-22T18:48:48.058650106Z",
   "started_at": "2026-07-22T18:46:12.247018391Z",
-  "lease_expires_at": "2026-07-22T18:51:12.247018391Z",
-  "heartbeat_at": "2026-07-22T18:46:12.247018391Z"
+  "closed_at": "2026-07-22T18:48:48.058650106Z",
+  "close_reason": "Added MAX_PENDING_DESTINATIONS=32, max_pending_destinations + _pending_order LRU eviction in _queue_pending/_touch_pending; updated clear/expire_pending, docstring, stats. Tested with 20 destinations (bounded at 5, 15 evicted). Fixed 3 P4 codereview beads. 3 review passes completed with all P4 fixed. No more findings."
 }
