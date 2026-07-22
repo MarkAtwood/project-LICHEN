@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-7b9w",
+  "title": "codereview pass 1: long lines, type annotations, unused vars in router and tests",
+  "description": "Findings from ruff/mypy after chunk: E501 long if in _queue_pending (fixed by breaking lines), F841 unused d2/d3 in test (fixed by using in asserts), pre-existing mypy in clear_pending (fixed by if-in-pop), P4 excessive Why comments (cleaned per no-comments rule). All fixed. Tagged codereview. parent=ug8i bvdu",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:53:58.50207318Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:53:58.50207318Z",
+  "labels": [
+    "codereview"
+  ]
+}
