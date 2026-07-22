@@ -1,0 +1,7 @@
+{
+  "id": "1784748955592233459-1",
+  "issue_id": "project-LICHEN-dl7g",
+  "author": "AI Agent",
+  "text": "mapping_bits()=0 for len=1 is mathematically correct (log2(1)=0) and works in codec (read(0)/write(0,index=0)). Equivalent to NOT_SENT but uses mapping machinery. Design note rather than bug; changing would require rule updates and test vector changes. Human decision on preferred representation for single-value fields.",
+  "created_at": "2026-07-22T19:35:55.592233459Z"
+}
