@@ -1,1 +1,2 @@
 {"id":"019f8afa-4f7e-71d0-97d1-9509dcfc64fa","issue_id":"project-LICHEN-l48t","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T17:58:07.998119871Z"}
+{"id":"019f8afa-e865-7814-a9eb-8bb6214b4093","issue_id":"project-LICHEN-l48t","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"SLIP framing bug fixed per codereview; C11 idiomatic; no test changes","created_at":"2026-07-22T17:58:47.141530706Z"}
