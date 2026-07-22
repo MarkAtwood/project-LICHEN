@@ -5,3 +5,4 @@
 {"id":"019f6c2a-1518-72de-9872-8d055fb8dbae","issue_id":"project-LICHEN-zrh2.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: implementation","created_at":"2026-07-16T18:22:05.080188Z"}
 {"id":"019f6c2a-151a-757a-8419-5f7532c49520","issue_id":"project-LICHEN-zrh2.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: phy","created_at":"2026-07-16T18:22:05.082359Z"}
 {"id":"019f6c2a-151c-762a-8324-3a040744ce6a","issue_id":"project-LICHEN-zrh2.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: scalability","created_at":"2026-07-16T18:22:05.084404Z"}
+{"id":"019f8afc-bd79-717b-8953-130819fc6d09","issue_id":"project-LICHEN-zrh2.2","event_type":"label_added","actor":"ec2-user","comment":"Added label: human","created_at":"2026-07-22T18:00:47.225098923Z"}
