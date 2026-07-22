@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-4gvj",
+  "title": "codereview P4: Router docstring does not document max_pending_destinations or _pending_order",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:47:24.809673731Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:24.809673731Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-4gvj",
+      "depends_on_id": "project-LICHEN-bvdu",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:47:24.940624516Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
