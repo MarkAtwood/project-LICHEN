@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-i2lb",
+  "title": "codereview-pass1-edhoc-initiator TH calc and context_3",
+  "description": "In edhoc_initiator_process_msg2: TH_3 uses plaintext_2 instead of CIPHERTEXT_2; context_3 includes TH_3 causing MAC/sig_structure mismatch per pass2; TH_4 uses PLAINTEXT_3 instead of CIPHERTEXT_3 per pass2 finding (plaintext leak in transcript); many 'ponytail:' dead comments violate no-dead-code rule. P2 correctness, P3 maintainability. Tag codereview. Must fix all P0-P4.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:25:41.822290105Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:25:41.822290105Z",
+  "labels": [
+    "codereview"
+  ]
+}
