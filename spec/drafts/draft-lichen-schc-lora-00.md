@@ -139,116 +139,27 @@ Rule IDs are 8 bits (1 byte):
 
 ### 4.2. Rule 0: Link-Local IPv6 + UDP + CoAP
 
-Most common case for intra-mesh traffic.
+See appendix-schc.md:A.1 (Rule Set) and A.2 (CoAP Compression) for authoritative tables. Matches LINK_LOCAL_COAP_RULE in rust/lichen-schc/src/rules.rs:62 and python/src/lichen/schc/rules.py:244. Compressed size ~4-6 bytes (Rule ID + hop limit + 16B IIDs + CoAP residue). OSCORE rules 5/6 (RFC 8613) use analogous structure with OSCORE option (#9) in residue.
 
-**Rule Definition:** (matches spec/03-adaptation.md:5.5 and appendix-schc.md)
+### 4.3. Remaining Rules and CoAP/OSCORE Compression
 
-| Field | TV | MO | CDA |
-|-------|----|----|-----|
-| IPv6.Version | 6 | equal | not-sent |
-| IPv6.TrafficClass | 0 | equal | not-sent |
-| IPv6.FlowLabel | 0 | equal | not-sent |
-| IPv6.PayloadLength | - | ignore | compute |
-| IPv6.NextHeader | 17 | equal | not-sent |
-| IPv6.HopLimit | 64 | ignore | not-sent |
-| IPv6.SrcPrefix | fe80::/64 | equal | not-sent |
-| IPv6.SrcIID | - | equal | not-sent (L2 derived) |
-| IPv6.DstPrefix | fe80::/64 | equal | not-sent |
-| IPv6.DstIID | - | equal | not-sent (L2 derived) |
-| UDP.SrcPort | 5683 | MSB(12) | LSB(4) |
-| UDP.DstPort | 5683 | MSB(12) | LSB(4) |
-| UDP.Length | - | ignore | compute |
-| UDP.Checksum | - | ignore | compute |
+All rules (including global IPv6 rule 1, ICMPv6 rule 2, RPL rules 3/4, uncompressed rule 255, MQTT-SN, and OSCORE rules 5/6) are defined in appendix-schc.md:A.1-A.3 and implemented in rust/lichen-schc/src/rules.rs and python/src/lichen/schc/rules.py (RPL_DIO_RULE at rules.py:272). See also spec/03-adaptation.md and test/vectors/. No duplication; appendix is single source of truth.
 
-**Compressed size:** 4-6 bytes (Rule ID + 4-bit port residues)
+### 4.4. RPL Option Compression Proposal (Aligned)
 
-### 4.3. Rule 1: Global IPv6 + UDP + CoAP
+RPL DIO/DAO options (RFC6550 §6.7) use SCHC MATCH_MAPPING (rules.py:32 MO.MATCH_MAPPING, FieldDescriptor.mapping tuple, CDA.MAPPING_SENT, mapping_bits()=(len(mapping)-1).bit_length() at rules.py:81; RFC8724 §7.4). For PIO (type=3 per RFC6550 §6.7.1):
 
-For traffic using ULA or GUA addresses.
+**Mapping table (common RPL options per RFC6550):**
+- 0x01: Pad1
+- 0x02: PadN
+- 0x03: PIO
+- 0x04: Route Information
+- 0x05: DODAG Configuration
+- 0x07: RPL Target
 
-**Rule Definition:** (aligned with appendix-schc.md and 03-adaptation.md:5.5)
+6 values → 3-bit index ( (6-1).bit_length() = 3 ). Type field: 8→3 bits reduction. Length for PIO=30 can be NOT_SENT or matched. Extends RPL_DIO_RULE without breaking base 8-byte size (options in residue only when present). Rust MatchMapping (rules.rs:15, context.rs:74) to be completed to match. Size calc verified against Python codec.
 
-| Field | TV | MO | CDA |
-|-------|----|----|-----|
-| IPv6.Version | 6 | equal | not-sent |
-| IPv6.TrafficClass | 0 | equal | not-sent |
-| IPv6.FlowLabel | 0 | equal | not-sent |
-| IPv6.PayloadLength | - | ignore | compute |
-| IPv6.NextHeader | 17 | equal | not-sent |
-| IPv6.HopLimit | 64 | ignore | not-sent |
-| IPv6.SrcPrefix | mesh_prefix/64 | equal | not-sent |
-| IPv6.SrcIID | - | equal | not-sent (L2 derived) |
-| IPv6.DstPrefix | - | ignore | value-sent (64 bits) |
-| IPv6.DstIID | - | ignore | value-sent (64 bits) |
-| UDP.SrcPort | 5683 | MSB(12) | LSB(4) |
-| UDP.DstPort | 5683 | MSB(12) | LSB(4) |
-| UDP.Length | - | ignore | compute |
-| UDP.Checksum | - | ignore | compute |
-
-**Compressed size:** 12-14 bytes
-
-### 4.4. Rule 2: ICMPv6 Echo
-
-For diagnostic and reachability testing.
-
-**Rule Definition:** (aligned to appendix-schc.md)
-
-| Field | TV | MO | CDA |
-|-------|----|----|-----|
-| IPv6.Version | 6 | equal | not-sent |
-| IPv6.TrafficClass | 0 | equal | not-sent |
-| IPv6.FlowLabel | 0 | equal | not-sent |
-| IPv6.PayloadLength | - | ignore | compute |
-| IPv6.NextHeader | 58 | equal | not-sent |
-| IPv6.HopLimit | 64 | ignore | not-sent |
-| IPv6.SrcPrefix | fe80::/64 | equal | not-sent |
-| IPv6.SrcIID | - | equal | not-sent (L2) |
-| IPv6.DstPrefix | fe80::/64 | equal | not-sent |
-| IPv6.DstIID | - | equal | not-sent (L2) |
-| ICMPv6.Type | 128 or 129 | equal | not-sent |
-| ICMPv6.Code | 0 | equal | not-sent |
-| ICMPv6.Checksum | - | ignore | compute |
-
-**Compressed size:** 3 bytes
-
-### 4.5. Rule 3: RPL DIO (link-local)
-
-For DODAG formation and maintenance.
-
-**Rule Definition:** (aligned with appendix-schc.md)
-
-| Field | TV | MO | CDA |
-|-------|----|----|-----|
-| IPv6.Version | 6 | equal | not-sent |
-| IPv6.NextHeader | 58 | equal | not-sent |
-| ICMPv6.Type | 155 | equal | not-sent |
-| RPL options | specific | MSB/LSB | compressed |
-
-**Compressed size:** 8 bytes
-
-### 4.6. Rule 4: RPL DAO (routable multi-hop)
-
-Uses routable ULA source (fd00::/8 from DODAG) for end-to-end source preservation across relays (per RPL and security specs). Link-local forbidden for forwarded DAO.
-
-**Compressed size:** 6 bytes
-
-### 4.7. Rules 5-6: OSCORE-protected CoAP
-
-Rule 5: Link-local IPv6 + UDP + OSCORE (matches LINK_LOCAL_OSCORE_RULE)
-
-Rule 6: Global IPv6 + UDP + OSCORE (matches GLOBAL_OSCORE_RULE)
-
-Uses base fields from Rules 0/1 with additional OSCORE option compression. Encrypted payload travels as tail.
-
-**Compressed size:** ~20+ bytes residue + tail (Rule 5); ~40+ bytes residue + tail (Rule 6)
-
-### 4.8. Rule 255: No Compression (Fallback)
-
-When no rule matches, for version mismatch, or interoperability fallback. All implementations MUST support Rule 255 (see spec/03-adaptation.md:5.7 for details).
-
-### 4.9. CoAP Compression
-
-See Appendix A for the CoAP compression table (Version, Type, TKL, Code, MID, Token using standard CDA from RFC 8824). CoAP compression is OPTIONAL.
+See appendix-schc.md for updated tables.
 
 ## 5. Fragmentation Profile
 
@@ -257,9 +168,10 @@ See Appendix A for the CoAP compression table (Version, Type, TKL, Code, MID, To
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
 | Mode | ACK-on-Error | Minimize ACK overhead |
-| FCN size | 6 bits | 63 fragments per window |
-| DTAG size | 0 bits | Single packet in flight |
-| Window size | 1 bit | 2 windows max |
+| M (window bits) | 1 | W field size |
+| N (FCN bits) | 6 | 63 possible FCN values (All-1 = 0b111111) |
+| T (DTAG bits) | 0 | Single datagram in flight per context |
+| WINDOW_SIZE | 32 | Practical tiles per window (configurable) |
 | Tile size | L2 MTU - header | Maximize per-fragment payload |
 | Retransmission timer | 10 seconds | LoRa latency tolerance |
 | Max retries | 3 | Balance reliability/efficiency |

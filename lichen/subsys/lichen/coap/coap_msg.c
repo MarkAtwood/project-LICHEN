@@ -572,9 +572,10 @@ int lichen_msg_sent_id_get(struct coap_resource *resource,
 		id_buf[id_len] = '\0';
 
 		char *endptr;
+		errno = 0;
 		unsigned long val = strtoul(id_buf, &endptr, 10);
 
-		if (*endptr != '\0' || val > UINT32_MAX) {
+		if (errno == ERANGE || endptr == id_buf || *endptr != '\0' || val > UINT32_MAX) {
 			return coap_respond(resource, request, addr, addr_len,
 					    COAP_RESPONSE_CODE_NOT_FOUND, NULL, 0);
 		}
@@ -807,8 +808,9 @@ bad_request:
 /* --------------------------------------------------------------------------
  * CoAP resource definitions
  *
- * These are conditionally compiled and reference the lichen_coap service
- * which must be defined by the application (e.g., gateway).
+ * Register to lichen_coap_server service (standalone node) or application-provided
+ * lichen_coap service (e.g. gateway). Updated per codereview to use lichen_coap_server
+ * for node consistency with COAP_SERVICE_DEFINE and linker section.
  * -------------------------------------------------------------------------- */
 
 #if IS_ENABLED(CONFIG_LICHEN_COAP_MSG)

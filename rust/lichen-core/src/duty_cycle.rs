@@ -32,20 +32,14 @@ pub const REGION_EU: u8 = 0;
 pub const REGION_US: u8 = 1;
 pub const REGION_AS: u8 = 2;
 
-pub fn adaptive_duty_permille(density: u8, region: u8) -> u16 {
-    let base = match region {
-        REGION_EU => 10,
-        REGION_US => 1000,
-        _ => DEFAULT_DUTY_PERMILLE,
-    };
-    if density > 8 {
-        if base > 1 { base / 2 } else { 1 }
-    } else if density < 3 {
-        (base * 2).min(1000)
-    } else {
-        base
-    }
+/// Compute MAX_TX_MS from given duty_permille (replaces hardcoded DEFAULT usage
+/// per codereview qsr0 after density constants added).
+pub const fn max_tx_ms_for(duty_permille: u16) -> u32 {
+    (WINDOW_MS as u32 / 1000) * (duty_permille as u32)
 }
+
+/// Maximum TX time allowed per window at default duty cycle.
+pub const MAX_TX_MS: u32 = max_tx_ms_for(DEFAULT_DUTY_PERMILLE);
 
 /// A transmission record: (timestamp_ms, duration_ms).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,9 +160,10 @@ impl<const N: usize> DutyCycleTracker<N> {
         total
     }
 
+    /// Calculate max TX time in milliseconds based on current duty_permille.
     #[inline]
     pub fn max_tx_ms(&self) -> u32 {
-        (WINDOW_MS as u32 / 1000) * (self.duty_permille as u32)
+        max_tx_ms_for(self.duty_permille)
     }
 
     /// Returns remaining TX budget in milliseconds for the current window.

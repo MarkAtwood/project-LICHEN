@@ -158,10 +158,10 @@ class SimRadio:
                 else:
                     raise SimRadioError(f"Unexpected response to REGISTER: 0x{msg_type:02x}")
             except BaseException:
-                # Close stream on any error during registration
                 if self._stream is not None:
-                    await self._stream.aclose()
+                    stream = self._stream
                     self._stream = None
+                    await stream.aclose()
                 raise
 
     async def reconnect(self) -> None:
@@ -202,7 +202,7 @@ class SimRadio:
         msg_type = get_message_type(response)
 
         if msg_type == MSG_TX_DONE:
-            packet_hash = hashlib.sha256(payload).hexdigest()[:16]
+            packet_hash = hashlib.sha256(payload).digest()[:16].hex()
             logger.info(
                 "tx",
                 node_id=self._node_id,
@@ -212,7 +212,7 @@ class SimRadio:
             )
             return True
         elif msg_type == MSG_TX_FAIL:
-            packet_hash = hashlib.sha256(payload).hexdigest()[:16]
+            packet_hash = hashlib.sha256(payload).digest()[:16].hex()
             logger.warning(
                 "tx_fail",
                 node_id=self._node_id,
@@ -255,7 +255,7 @@ class SimRadio:
 
         if msg_type == MSG_RX_PACKET:
             payload, rssi, snr = decode_rx_packet(response[1:])
-            packet_hash = hashlib.sha256(payload).hexdigest()[:16]
+            packet_hash = hashlib.sha256(payload).digest()[:16].hex()
             logger.info(
                 "rx",
                 node_id=self._node_id,

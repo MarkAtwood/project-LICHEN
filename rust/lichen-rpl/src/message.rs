@@ -334,8 +334,9 @@ impl RplTarget {
 
 // ── Transit Information option (type 6) ──────────────────────────────────────
 
-/// Transit Information option (RFC 6550 6.7.8). E flag (bit 7 of first data
-/// byte) indicates whether Parent Address is present; LICHEN always uses E=1.
+/// Transit Information — carries the parent address in a DAO (RFC 6550 6.7.8).
+///
+/// E flag (0x80 in data[0]) indicates parent address present; LICHEN always uses it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransitInfo {
     pub path_control: u8,
@@ -351,6 +352,7 @@ impl TransitInfo {
         if data.len() < Self::DATA_LEN {
             return Err(TooShort::new(Self::DATA_LEN, data.len()).into());
         }
+        // data[0] = E flag (0x80 when parent present); ignored here per current contract
         // SAFETY: length check above ensures data.len() >= DATA_LEN (20),
         // so 4..20 is within bounds and exactly 16 bytes. E flag (data[0] bit 7)
         // is asserted by caller tests per aligned E/Parent contract.
@@ -369,7 +371,7 @@ impl TransitInfo {
         }
         out[0] = OPT_TRANSIT_INFO;
         out[1] = Self::DATA_LEN as u8;
-        out[2] = 0x80; // E=1 (parent address present) per RFC 6550 6.7.8, aligned with Python
+        out[2] = 0x80; // E flag set (parent address present, per RFC 6550 6.7.8 + vectors)
         out[3] = self.path_control;
         out[4] = self.path_sequence;
         out[5] = self.path_lifetime;
@@ -603,13 +605,17 @@ mod tests {
         let n = ti.write_to(&mut buf).unwrap();
         assert_eq!(buf[0], OPT_TRANSIT_INFO);
         assert_eq!(buf[1], 20);
-        assert_eq!(buf[2], 0x80); // E=1 parent present
+        assert_eq!(buf[2], 0x80); // E flag for parent address
         assert_eq!(buf[3], 0); // path_control
         assert_eq!(buf[4], 3); // path_sequence
         assert_eq!(buf[5], 255); // path_lifetime
         assert_eq!(&buf[6..22], &parent);
 
         let decoded = TransitInfo::from_bytes(&buf[2..n]).unwrap();
+        assert_eq!(decoded.path_control, 0);
+        assert_eq!(decoded.path_sequence, 3);
+        assert_eq!(decoded.path_lifetime, 255);
+        assert_eq!(decoded.parent_address, parent);
         assert_eq!(decoded, ti);
     }
 
