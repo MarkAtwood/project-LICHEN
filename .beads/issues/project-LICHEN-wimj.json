@@ -12,5 +12,15 @@
   "updated_at": "2026-07-22T17:58:19.062209591Z",
   "started_at": "2026-07-22T17:58:19.062209591Z",
   "lease_expires_at": "2026-07-22T18:03:19.062209591Z",
-  "heartbeat_at": "2026-07-22T17:58:19.062209591Z"
+  "heartbeat_at": "2026-07-22T17:58:19.062209591Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wimj",
+      "depends_on_id": "project-LICHEN-e5km",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:58:31.717803852Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
 }
