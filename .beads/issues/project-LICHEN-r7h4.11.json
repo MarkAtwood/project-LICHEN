@@ -2,12 +2,16 @@
   "id": "project-LICHEN-r7h4.11",
   "title": "BLE peripheral for Renode",
   "description": "Implement or refine BLE.cs peripheral for nRF52840 Meshtastic boards in Renode. Ensure compatibility with LICHEN BLE KISS or LCI. Follow patterns in peripherals/BLE.cs and nrf52840_lichen support files. West build, Renode test validation. No dead code.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:23:50.609103646Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:23:50.609103646Z",
+  "updated_at": "2026-07-22T18:24:17.643526883Z",
+  "started_at": "2026-07-22T18:24:17.643526883Z",
+  "lease_expires_at": "2026-07-22T18:29:17.643526883Z",
+  "heartbeat_at": "2026-07-22T18:24:17.643526883Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-r7h4.11",
