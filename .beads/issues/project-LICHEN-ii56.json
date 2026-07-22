@@ -1,0 +1,13 @@
+{
+  "id": "project-LICHEN-ii56",
+  "title": "[codereview-pass2] heltec conf: added WiFi backhaul but no SSID/PSK config or connection code yet; incomplete for STA mode. P1. discovered-from:project-LICHEN-p12e",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:14:01.440902506Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:14:01.440902506Z",
+  "labels": [
+    "codereview"
+  ]
+}
