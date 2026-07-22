@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-79rl",
+  "title": "codereview-P2: contrived 1.5x factor in avg_in \u003e avg_out*1.5 oracle for roaming rx; violates test integrity rules. Use distance-based independent oracle from propagation model instead",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:04:04.206429906Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:04:04.206429906Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-79rl",
+      "depends_on_id": "project-LICHEN-8oar",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:04:04.334330756Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-79rl",
+      "depends_on_id": "project-LICHEN-3f3x",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:04:04.466733929Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

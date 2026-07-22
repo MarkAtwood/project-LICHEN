@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-5ymw",
+  "title": "codereview-P1: no backbone/gateway coordination test in conference; add_gateway call missing realistic CoAP/DIO for RPL verification after moves (c4w0, wznf)",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:04:04.335704767Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:04:04.335704767Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-5ymw",
+      "depends_on_id": "project-LICHEN-8oar",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:04:04.469278168Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
