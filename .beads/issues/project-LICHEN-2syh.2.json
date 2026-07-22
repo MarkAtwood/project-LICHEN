@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-2syh.2",
+  "title": "Unconditional lora_l2.h include and missing string.h for memcpy in gateway_rpl_init",
+  "description": "Codereview pass 2: build may fail without LICHEN_L2; derivation should prefer primary 02xx addr from key derivation per 04-network.md and Rust. Also update coap_status callback to sync dodag fields for consistency with lichen_coap_encode_status_cbor dodag map. Tagged codereview. Fix all before closing parent.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:23:24.065969893Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:23:24.065969893Z",
+  "labels": [
+    "codereview"
+  ]
+}
