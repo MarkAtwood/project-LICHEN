@@ -2,12 +2,16 @@
   "id": "project-LICHEN-i7lr",
   "title": "codereview P2: similar scan needed for decode_congestion, decode_dtn_* to be consistent",
   "description": "Only coords updated in first chunk. All decode funcs must support concatenated to fully fix the bug. Update them next. deps=project-LICHEN-wy6a",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:13:11.863538023Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:13:11.863538023Z",
+  "updated_at": "2026-07-22T19:01:44.75379211Z",
+  "started_at": "2026-07-22T19:01:44.75379211Z",
+  "lease_expires_at": "2026-07-22T19:06:44.75379211Z",
+  "heartbeat_at": "2026-07-22T19:01:44.75379211Z",
   "labels": [
     "codereview"
   ],
