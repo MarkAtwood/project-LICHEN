@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-4e3o",
+  "title": "t_deck board: remove all comments from DTS/Kconfig per coding guidelines",
+  "description": "DTS files and defconfig contain extensive comments about history, Meshtastic, project-LICHEN-zonh. Must be stripped entirely. No comments allowed.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:17:00.396350568Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:17:00.396350568Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-4e3o",
+      "depends_on_id": "project-LICHEN-zonh.7",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:17:00.564128779Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
