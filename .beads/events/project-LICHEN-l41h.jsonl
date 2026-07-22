@@ -1,1 +1,2 @@
 {"id":"019f8b08-21c2-781a-ab75-e68d3cea78c2","issue_id":"project-LICHEN-l41h","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:13:13.794531964Z"}
+{"id":"019f8b09-fef5-71dc-a5bf-0babbf566ee5","issue_id":"project-LICHEN-l41h","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Test added in test_secure.py update (replay test uses hash_32); cross-checked with oscore.json vectors","created_at":"2026-07-22T18:15:15.957122875Z"}
