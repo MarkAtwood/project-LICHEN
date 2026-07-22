@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-zonh.3",
+  "title": "T-Deck: implement lilygo_tdeck_keyboard Zephyr driver for I2C keyboard at 0x55",
+  "description": "Create driver in lichen/drivers/input/lilygo_tdeck_keyboard/ or similar. Support key matrix or scan via I2C. Register as input device. Follow Zephyr input driver patterns (see existing gpio-keys). Must pass all test vectors from Renode stubs and real hardware. Add to Kconfig and DTS binding.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:11:47.27148747Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:11:47.27148747Z",
+  "labels": [
+    "human"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zonh.3",
+      "depends_on_id": "project-LICHEN-zonh",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:11:47.389523559Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
