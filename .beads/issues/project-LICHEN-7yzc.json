@@ -1,11 +1,16 @@
 {
   "id": "project-LICHEN-7yzc",
-  "title": "KISS LCI research",
-  "description": "Research existing KISS implementations for local app interfaces, BLE UART/serial transport, how to carry CoAP/IPv6/control messages in KISS frames, compatibility with standard tools like kisstool, minicom, aprs tools. Reference standards/ham-radio.md, spec/kiss-framing.md, spec/11-lci.md, existing python kiss framing, Zephyr native lib. Identify KISS command extensions or port usage for LICHEN local without breaking standard KISS tools. Produce mapping and schema recommendations. --parent=project-LICHEN-umb4 --type=task --priority=1 --labels=codereview",
-  "status": "open",
-  "priority": 2,
+  "title": "umb4.1-research: KISS protocol research for LCI CoAP/IPv6/control",
+  "description": "Research KISS framing adaptations for carrying IPv6 packets, CoAP messages, and LICHEN control commands over BLE UART/serial. Study spec/kiss-framing.md, standards/ham-radio.md, docs/kiss-aprs-bridge.md, spec/11-lci.md (SLIP vs KISS), existing lichen/lib/native/native.c framing, Python KISS in python/src/lichen/interface/kiss/. Identify how to avoid breaking standard KISS tools (no silent extensions to CMD byte). Document recommended port numbers, command usage for local traffic, escape rules, MTU. Output recommendations for schema and mapping.",
+  "notes": "Parallel subagent research delegated. Follow workflow-rule-every-small-code-generation-or-fix with 3 codereviews per chunk.",
+  "status": "in_progress",
+  "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:23:43.00033Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:23:43.00033Z"
+  "updated_at": "2026-07-22T18:23:50.962890633Z",
+  "started_at": "2026-07-22T18:23:50.924891314Z",
+  "lease_expires_at": "2026-07-22T18:28:50.924891314Z",
+  "heartbeat_at": "2026-07-22T18:23:50.924891314Z"
 }
