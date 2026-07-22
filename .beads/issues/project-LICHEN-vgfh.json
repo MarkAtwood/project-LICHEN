@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-vgfh",
+  "title": "codereview: zephyr parser uses case-sensitive 'Send'/'Recv' while others use upper()",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:41:24.29320099Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:41:24.29320099Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-vgfh",
+      "depends_on_id": "project-LICHEN-jjyh",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:41:24.43904938Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

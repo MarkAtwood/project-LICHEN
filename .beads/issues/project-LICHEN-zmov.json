@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-zmov",
+  "title": "codereview: duplicate fallback parser logic across parse_*_logs functions",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:41:24.254488735Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:41:24.254488735Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zmov",
+      "depends_on_id": "project-LICHEN-jjyh",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:41:24.383677396Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
