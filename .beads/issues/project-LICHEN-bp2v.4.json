@@ -2,12 +2,14 @@
   "id": "project-LICHEN-bp2v.4",
   "title": "codereview-pass3-clean",
   "description": "Clean pass 3: No P0-P2 findings. All codereview issues for time-provider ref integration (epoch_floor independence, precise cross-refs to firmware-time-provider.md:22,56-59 and 09-packets-timing.md) fixed. Spec updated in 02a-coordinated-capacity.md with normative language matching test vectors and triple-impl discipline. Security/robustness P3 fully addressed. Ready to close parent project-LICHEN-bp2v. Tagged codereview.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "created_at": "2026-07-22T18:30:18.096421047Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:30:18.096421047Z",
+  "updated_at": "2026-07-22T18:30:18.903413298Z",
+  "closed_at": "2026-07-22T18:30:18.903413298Z",
+  "close_reason": "Clean pass - no findings",
   "labels": [
     "codereview"
   ],
