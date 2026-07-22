@@ -2,12 +2,14 @@
   "id": "project-LICHEN-x8nc",
   "title": "[codereview-P3] Added TX stress but metrics assertion too weak",
   "description": "After adding start_transmission and advance_to in test_500_node_conference, the metrics assert is generic. Should check for collision_count or tx_count \u003e0 in metrics to verify stress occurred. Also add check for PER in dense scenario. test_scale.py:380",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:59:40.008831212Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:59:40.008831212Z",
+  "updated_at": "2026-07-22T18:00:10.303111245Z",
+  "closed_at": "2026-07-22T18:00:10.303111245Z",
+  "close_reason": "Metrics validation strengthened with explicit tx_count, collisions, collision_rate asserts. All codereview addressed.",
   "labels": [
     "codereview"
   ]

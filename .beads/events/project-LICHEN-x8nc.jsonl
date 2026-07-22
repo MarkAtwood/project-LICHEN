@@ -1,2 +1,3 @@
 {"id":"019f8afb-b6ed-7d9c-9326-34d10047d9d6","issue_id":"project-LICHEN-x8nc","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T17:59:40.013893738Z"}
 {"id":"019f8afb-b6f1-7854-a3a3-ba07a6971213","issue_id":"project-LICHEN-x8nc","event_type":"label_added","actor":"ec2-user","comment":"Added label: codereview","created_at":"2026-07-22T17:59:40.017546843Z"}
+{"id":"019f8afc-2d44-7629-8e82-0b432b43a7f9","issue_id":"project-LICHEN-x8nc","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Metrics validation strengthened with explicit tx_count, collisions, collision_rate asserts. All codereview addressed.","created_at":"2026-07-22T18:00:10.308404632Z"}
