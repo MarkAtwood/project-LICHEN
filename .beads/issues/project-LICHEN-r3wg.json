@@ -2,12 +2,16 @@
   "id": "project-LICHEN-r3wg",
   "title": "[codereview] memset in parse_packet now zeros extra 200B payload_buf - performance impact on hot path",
   "description": "parse_packet:815 does memset(info, 0, sizeof(*info)); with new payload_buf[200] this zeros 256+ bytes on every packet parse (hot path for text). Consider zeroing only needed fields or using designated initializer. P4 fixed as real work. Tag: codereview",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T19:09:16.682000396Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:09:16.682000396Z",
+  "updated_at": "2026-07-22T19:10:14.183000572Z",
+  "started_at": "2026-07-22T19:10:14.183000572Z",
+  "lease_expires_at": "2026-07-22T19:15:14.183000572Z",
+  "heartbeat_at": "2026-07-22T19:10:14.183000572Z",
   "labels": [
     "codereview"
   ]
