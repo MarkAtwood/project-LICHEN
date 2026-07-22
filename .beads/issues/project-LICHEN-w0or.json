@@ -2,12 +2,16 @@
   "id": "project-LICHEN-w0or",
   "title": "[codereview] packet_info pointer to stream_buf lacks strong lifetime warning",
   "description": "The comment in lichen/subsys/lichen/meshtastic/include/lichen/meshtastic/adapter.h:92-96 is insufficiently strong about the dangers of pointer escape in interrupt or async contexts. Should explicitly warn that storing the pointer or any async use after callback return will lead to data corruption on next frame. Tag: codereview",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T19:08:44.725671128Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:08:44.725671128Z",
+  "updated_at": "2026-07-22T19:09:19.470648613Z",
+  "started_at": "2026-07-22T19:09:19.470648613Z",
+  "lease_expires_at": "2026-07-22T19:14:19.470648613Z",
+  "heartbeat_at": "2026-07-22T19:09:19.470648613Z",
   "labels": [
     "codereview"
   ]
