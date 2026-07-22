@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-0lb5",
+  "title": "codereview-edge: 29zi fixes",
+  "description": "Edge cases pass: max values, zero lengths, invalid protobuf fields, array full, large payloads all handled by new validations/resets. Clean convergence.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:12:35.985502196Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:12:35.985502196Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-0lb5",
+      "depends_on_id": "project-LICHEN-29zi",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:12:36.109241206Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
