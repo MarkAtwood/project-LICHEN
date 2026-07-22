@@ -1,15 +1,15 @@
 {
   "id": "project-LICHEN-d3x4",
   "title": "codereview-pass2 for project-LICHEN-vmtw: use adapter-\u003etx_buf and fix sizeof calls",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "epic",
   "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:17:16.251500068Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:18:32.931029651Z",
+  "updated_at": "2026-07-22T19:29:05.49498647Z",
   "started_at": "2026-07-22T19:18:32.931029651Z",
-  "lease_expires_at": "2026-07-22T19:23:32.931029651Z",
-  "heartbeat_at": "2026-07-22T19:18:32.931029651Z"
+  "closed_at": "2026-07-22T19:29:05.49498647Z",
+  "close_reason": "adapter tx_buf + sizeof fixed; COAP_RESOURCE_DEFINE updated per ownership; uint32_t-\u003euint64_t for all unix timestamps; 3 codereview passes per logical chunk with all P0-P4 findings filed+fixed as codereview beads; west build coap + edhoc/oscore/timestamp tests clean; conventional commit; no dead code"
 }
