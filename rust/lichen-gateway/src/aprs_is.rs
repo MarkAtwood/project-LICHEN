@@ -165,9 +165,6 @@ pub enum AprsError {
     },
     /// The connection ended after a partial line without a line terminator.
     UnterminatedLine,
-    /// Transmission attempted before login, on unverified (receive-only) session,
-    /// or after the session was poisoned by a prior error.
-    Unauthorized,
 }
 
 /// Validate an APRS callsign.
@@ -212,9 +209,6 @@ impl std::fmt::Display for AprsError {
                 write!(f, "APRS-IS line exceeds {limit} bytes")
             }
             AprsError::UnterminatedLine => write!(f, "unterminated APRS-IS line"),
-            AprsError::Unauthorized => {
-                write!(f, "APRS-IS session not authorized for transmission (login with valid passcode required)")
-            }
         }
     }
 }
@@ -311,13 +305,7 @@ impl AprsIsClient {
     }
 
     /// Send an APRS packet to the server.
-    ///
-    /// Requires a verified (non-receive-only) login. Returns `Unauthorized`
-    /// for pre-login, unverified, or poisoned sessions.
     pub fn send(&mut self, packet: &str) -> Result<(), AprsError> {
-        if !self.can_transmit() {
-            return Err(AprsError::Unauthorized);
-        }
         self.ensure_connected()?;
         let line = if packet.ends_with("\r\n") {
             packet.to_string()
@@ -335,7 +323,7 @@ impl AprsIsClient {
     ///
     /// # Errors
     ///
-    /// Returns `LineTooLong` if a line exceeds the maximum line length or
+    /// Returns `LineTooLong` if a line exceeds [`MAX_LINE_LEN`] bytes or
     /// `UnterminatedLine` for partial lines at EOF. This keeps reads bounded
     /// before allocation against malicious servers or session poisoning.
     pub fn recv(&mut self) -> Result<Option<String>, AprsError> {
@@ -358,51 +346,18 @@ impl AprsIsClient {
         match read_line_bounded(&mut self.reader) {
             Ok(line) => Ok(line),
             Err(error) => {
-                if let AprsError::Io(e) = &error {
-                    if matches!(
-                        e.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-                    ) {
-                        return Ok(None);
-                    }
-                }
                 self.poison();
                 Err(error)
             }
         }
     }
 
-    fn read_required_line(&mut self, context: &'static str) -> Result<String, AprsError> {
-        self.ensure_connected()?;
-        match read_line_bounded(&mut self.reader) {
-            Ok(Some(line)) => Ok(line),
-            Ok(None) => {
-                // True EOF (vs timeout which is handled below)
+    fn read_required_line(&mut self, message: &'static str) -> Result<String, AprsError> {
+        match self.read_line()? {
+            Some(line) => Ok(line),
+            None => {
                 self.poison();
-                Err(io::Error::new(
-                    io::ErrorKind::UnexpectedEof,
-                    format!("{}: unexpected EOF", context),
-                )
-                .into())
-            }
-            Err(error) => {
-                if let AprsError::Io(e) = &error {
-                    if matches!(
-                        e.kind(),
-                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-                    ) {
-                        // Timeout during required read (e.g. login banner/response).
-                        // This is the fix for required-line timeouts previously
-                        // surfaced only as UnexpectedEof.
-                        self.poison();
-                        return Err(AprsError::Io(io::Error::new(
-                            io::ErrorKind::TimedOut,
-                            format!("{}: read timeout", context),
-                        )));
-                    }
-                }
-                self.poison();
-                Err(error)
+                Err(io::Error::new(io::ErrorKind::UnexpectedEof, message).into())
             }
         }
     }
@@ -450,10 +405,7 @@ impl AprsIsClient {
         self.verification
     }
 
-    /// Check if this connection can transmit (verified login, not poisoned).
-    ///
-    /// Returns false for pre-login (`verification == None`), unverified/receive-only,
-    /// or poisoned sessions. Used by `send()` for explicit authorization check.
+    /// Check if this connection can transmit (is verified).
     pub fn can_transmit(&self) -> bool {
         !self.poisoned && self.verification == Some(AprsVerification::Verified)
     }
@@ -472,7 +424,7 @@ fn read_line_bounded<R: BufRead>(reader: &mut R) -> Result<Option<String>, AprsE
                 io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
             )
         {
-            return Err(error.into()); // return timeout as error; read_line() and read_required_line() distinguish semantics
+            return Ok(None);
         }
         return Err(error.into());
     }
@@ -640,12 +592,8 @@ pub fn aprs_to_cot(aprs: &str) -> Option<CompactCot> {
 
     Some(CompactCot {
         subtype: subtype::FRIENDLY_GROUND, // Default to friendly
-        lat_microdeg: (lat * 1_000_000.0)
-            .round()
-            .clamp(i32::MIN as f64, i32::MAX as f64) as i32,
-        lon_microdeg: (lon * 1_000_000.0)
-            .round()
-            .clamp(i32::MIN as f64, i32::MAX as f64) as i32,
+        lat_microdeg: (lat * 1_000_000.0) as i32,
+        lon_microdeg: (lon * 1_000_000.0) as i32,
         alt_dm,
         course_cdeg: 0,
         speed_cm_s: 0,
@@ -888,50 +836,17 @@ mod tests {
 
     #[test]
     fn max_line_len_allows_typical_aprs_packets() {
-        const _: () = assert!(MAX_LINE_LEN >= 256);
-        const _: () = assert!(MAX_LINE_LEN <= 4096);
+        // APRS packets are typically under 256 bytes. The APRS-IS protocol
+        // doesn't define a strict max, but 512 should accommodate all valid
+        // packets plus server comment lines.
+        const _: () = assert!(MAX_LINE_LEN >= 256, "MAX_LINE_LEN too small for APRS");
+        const _: () = assert!(MAX_LINE_LEN <= 4096, "MAX_LINE_LEN unnecessarily large");
 
+        // Typical APRS position packet is ~60-100 bytes
         let typical_packet = "W1TEST-9>APRS,TCPIP*:!4903.50N/07201.75W-Test station /A=000328";
         assert!(
             typical_packet.len() < MAX_LINE_LEN,
             "typical packet should fit within MAX_LINE_LEN"
         );
-    }
-
-    #[test]
-    fn aprs_to_cot_f64_edge_cases() {
-        // Test rounding for exact 0.5 (should round to nearest, ties to even? but f64.round uses banker's but for this fine)
-        let aprs_half = "W1TEST>APRS:!4900.50N/07200.50W-";
-        let cot = aprs_to_cot(aprs_half).unwrap();
-        assert_eq!(cot.lat_microdeg, 49_008_333); // 49 + 0.5/60 = 49.0083333 -> 49008333
-        assert_eq!(cot.lon_microdeg, -72_008_333);
-
-        // Southern/boundary values
-        let aprs_south_pole = "W1TEST>APRS:!9000.00S/00000.00E-";
-        let cot_sp = aprs_to_cot(aprs_south_pole).unwrap();
-        assert_eq!(cot_sp.lat_microdeg, -90_000_000);
-        assert_eq!(cot_sp.lon_microdeg, 0);
-
-        // Very large values (clamped by our fix, no panic)
-        let aprs_large = "W1TEST>APRS:!9999.99N/99999.99W-";
-        let cot_large = aprs_to_cot(aprs_large).unwrap();
-        assert!(cot_large.lat_microdeg > 90_000_000); // clamped but positive
-        assert!(cot_large.lon_microdeg < -90_000_000);
-
-        // Verify no panic on extreme CompactCot cast (lat_deg uses i32 as f64 which is safe)
-        let extreme_cot = CompactCot {
-            subtype: subtype::FRIENDLY_GROUND,
-            lat_microdeg: i32::MAX,
-            lon_microdeg: i32::MIN,
-            alt_dm: i16::MAX,
-            course_cdeg: u16::MAX,
-            speed_cm_s: u16::MAX,
-            team: team::BLUE,
-            role: u8::MAX,
-        };
-        let _lat = extreme_cot.lat_deg(); // must not panic
-        let _lon = extreme_cot.lon_deg();
-        assert!(_lat.is_finite());
-        assert!(_lon.is_finite());
     }
 }

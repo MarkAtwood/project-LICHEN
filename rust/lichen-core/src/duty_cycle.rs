@@ -28,18 +28,26 @@ use heapless::Deque;
 
 pub const WINDOW_MS: u64 = 3_600_000;
 pub const DEFAULT_DUTY_PERMILLE: u16 = 10;
-pub const HIGH_DENSITY_DUTY_PERMILLE: u16 = 5;
-pub const LOW_DENSITY_DUTY_PERMILLE: u16 = 20;
+pub const REGION_EU: u8 = 0;
+pub const REGION_US: u8 = 1;
+pub const REGION_AS: u8 = 2;
 
-pub const MAX_TX_MS: u32 = (WINDOW_MS as u32 / 1000) * (DEFAULT_DUTY_PERMILLE as u32);
-
-pub fn adaptive_duty_permille(density: u8, base_permille: u16) -> u16 {
+pub fn adaptive_duty_permille(density: u8, region: u8) -> u16 {
+    let base = match region {
+        REGION_EU => 10,
+        REGION_US => 1000,
+        _ => DEFAULT_DUTY_PERMILLE,
+    };
     if density > 8 {
-        HIGH_DENSITY_DUTY_PERMILLE
+        if base > 1 {
+            base / 2
+        } else {
+            1
+        }
     } else if density < 3 {
-        LOW_DENSITY_DUTY_PERMILLE
+        (base * 2).min(1000)
     } else {
-        base_permille
+        base
     }
 }
 
@@ -113,8 +121,8 @@ impl<const N: usize> DutyCycleTracker<N> {
         }
     }
 
-    pub fn update_adaptive_limit(&mut self, density: u8, base_permille: u16) {
-        self.duty_permille = adaptive_duty_permille(density, base_permille);
+    pub fn set_from_density(&mut self, density: u8, region: u8) {
+        self.duty_permille = adaptive_duty_permille(density, region);
     }
 
     /// Record a transmission.
@@ -162,10 +170,9 @@ impl<const N: usize> DutyCycleTracker<N> {
         total
     }
 
-    /// Calculate max TX time in milliseconds based on current duty_permille.
     #[inline]
     pub fn max_tx_ms(&self) -> u32 {
-        max_tx_ms_for(self.duty_permille)
+        (WINDOW_MS as u32 / 1000) * (self.duty_permille as u32)
     }
 
     /// Returns remaining TX budget in milliseconds for the current window.
@@ -311,7 +318,10 @@ mod tests {
         tracker.record_tx(0, 200);
 
         // Just before window ends, record is still counted
-        assert_eq!(tracker.remaining_ms(WINDOW_MS - 1), tracker.max_tx_ms() - 200);
+        assert_eq!(
+            tracker.remaining_ms(WINDOW_MS - 1),
+            tracker.max_tx_ms() - 200
+        );
 
         // After window, record ages out (record ends at 200ms, ages out at WINDOW_MS + 200)
         assert_eq!(tracker.remaining_ms(WINDOW_MS + 201), tracker.max_tx_ms());
@@ -525,7 +535,10 @@ mod tests {
         assert_eq!(WINDOW_MS, 3_600_000);
         assert_eq!(DEFAULT_DUTY_PERMILLE, 10);
         let tracker: DutyCycleTracker<64> = DutyCycleTracker::new();
-        assert_eq!(tracker.max_tx_ms(), (WINDOW_MS as u32 / 1000) * (DEFAULT_DUTY_PERMILLE as u32));
+        assert_eq!(
+            tracker.max_tx_ms(),
+            (WINDOW_MS as u32 / 1000) * (DEFAULT_DUTY_PERMILLE as u32)
+        );
     }
 
     #[test]
