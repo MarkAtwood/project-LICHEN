@@ -2,12 +2,16 @@
   "id": "project-LICHEN-okz5",
   "title": "[CODEREVIEW-6 pass 2] board.yml variant naming and structure",
   "description": "lichen/boards/elecrow/thinknode_m7/board.yml:8 - variant name esp32s3_procpu with board name elecrow_thinknode_m7 may not match dts file thinknode_m7_procpu.dts. Standard is to use name: thinknode_m7 with vendor: elecrow and variant name procpu. P2.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:28:20.163388017Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:28:20.163388017Z",
+  "updated_at": "2026-07-22T18:29:26.50856564Z",
+  "started_at": "2026-07-22T18:29:26.50856564Z",
+  "lease_expires_at": "2026-07-22T18:34:26.50856564Z",
+  "heartbeat_at": "2026-07-22T18:29:26.50856564Z",
   "labels": [
     "codereview"
   ],
