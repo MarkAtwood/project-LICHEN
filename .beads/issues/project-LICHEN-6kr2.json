@@ -2,11 +2,15 @@
   "id": "project-LICHEN-6kr2",
   "title": "codereview-pass3-edhoc-initiator",
   "description": "Pass 3: Robustness - NULL b3 in compute_th verified safe; err_wipe path updated implicitly. All P4 fixed across 3 passes. Ready for close after verification.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:17:57.560126259Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:17:57.560126259Z"
+  "updated_at": "2026-07-22T19:18:50.099934702Z",
+  "started_at": "2026-07-22T19:18:50.099934702Z",
+  "lease_expires_at": "2026-07-22T19:23:50.099934702Z",
+  "heartbeat_at": "2026-07-22T19:18:50.099934702Z"
 }
