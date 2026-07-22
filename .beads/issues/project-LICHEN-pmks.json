@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-pmks",
+  "title": "codereview-P3: parse_packet oneof validation for MeshPacket.decoded/encrypted",
+  "description": "Missing check in lichen/subsys/lichen/meshtastic/adapter.c:879 for mutual exclusivity of decoded and encrypted fields (protobuf oneof). Current implementation allows last field to win, which can be used for smuggling or bypass. Should set kind=MALFORMED and increment malformed_count if both present. Test at lichen/tests/meshtastic_adapter/src/main.c:2641 expects unsupported instead. This is P3 correctness issue per review criteria.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T19:07:40.253837277Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:07:40.253837277Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-pmks",
+      "depends_on_id": "project-LICHEN-e4so",
+      "type": "blocks",
+      "created_at": "2026-07-22T19:07:40.382615321Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
