@@ -2,12 +2,16 @@
   "id": "project-LICHEN-r7h4.12",
   "title": "LR1110 peripheral emulation",
   "description": "Update LR1110.cs for full LoRa/GNSS emulation in Renode. Integrate with lichen-sim for nRF52840 + LR1110 boards like T1000-E. Address pinouts, SPI, DIO. HUMAN if board pinout unclear. Follow existing LR1110.cs and SX1262 patterns.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:23:51.537288244Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:23:51.537288244Z",
+  "updated_at": "2026-07-22T18:24:14.894952864Z",
+  "started_at": "2026-07-22T18:24:14.894952864Z",
+  "lease_expires_at": "2026-07-22T18:29:14.894952864Z",
+  "heartbeat_at": "2026-07-22T18:24:14.894952864Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-r7h4.12",
