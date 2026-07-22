@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-cw15",
   "title": "[codereview-1] Missing /partial/mesh-stats endpoint and handler for 500-node dashboard",
-  "status": "open",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:51:31.989817177Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:51:31.989817177Z",
+  "updated_at": "2026-07-22T17:53:09.891082135Z",
+  "closed_at": "2026-07-22T17:53:09.891082135Z",
+  "close_reason": "All codereview findings fixed in dashboard implementation (D3 topology, spectrum canvas, stats for 500-node live mesh viz). 3 review passes completed with clean final passes after lint fixes. Main bead project-LICHEN-2nnd.2 remains open per instructions.",
   "labels": [
     "codereview"
   ],
