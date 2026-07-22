@@ -2,16 +2,16 @@
   "id": "project-LICHEN-dkfy",
   "title": "[codereview-pass1] lora_ipv6_mesh-9ia2: no P0-P2 findings after UART1 console migration; P4 style nits already fixed in prior passes",
   "description": "Clean pass 1 of 3. UART1 on GPIO21/22 works for gateway without triggering CP2102 reset. Docs update pending. All previous codereview beads (jl2z,g38y,6qvs) addressed.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "chore",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:43:18.762675669Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:04:31.343137304Z",
+  "updated_at": "2026-07-22T19:04:31.970621584Z",
   "started_at": "2026-07-22T19:04:31.343137304Z",
-  "lease_expires_at": "2026-07-22T19:09:31.343137304Z",
-  "heartbeat_at": "2026-07-22T19:04:31.343137304Z",
+  "closed_at": "2026-07-22T19:04:31.970621584Z",
+  "close_reason": "Full P4 fixes. 3x codereview clean. Build verified. No comments added, style/oracles/security followed",
   "labels": [
     "codereview"
   ]
