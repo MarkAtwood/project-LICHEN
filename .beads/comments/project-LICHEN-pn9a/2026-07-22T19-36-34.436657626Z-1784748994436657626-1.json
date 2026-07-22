@@ -1,0 +1,7 @@
+{
+  "id": "1784748994436657626-1",
+  "issue_id": "project-LICHEN-pn9a",
+  "author": "AI Agent",
+  "text": "Uncertain: no decrement_hop_limit method found at lichen-ipv6/src/lib.rs:365 (now UdpHeader). Similar logic only in lichen-core/src/loadng.rs:with_decremented_hop_limit which returns None only on original==0 and test expects Some(0). Per RFC 8200 §3, forwarding must decrement then discard+send ICMP Time Exceeded if result==0. Recommendation: add ipv6::forwarding::decrement_hop_limit that returns Option and handles ICMP. Escalating to human for spec clarification on exact API.",
+  "created_at": "2026-07-22T19:36:34.436657626Z"
+}
