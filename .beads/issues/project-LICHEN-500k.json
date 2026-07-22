@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-500k",
+  "title": "HUMAN: Confirm exact PoE pinout, SI3402 PG pin, Ethernet RMII pins, and PHY type for Elecrow ThinkNode M7",
+  "description": "ThinkNode M7 PoE details in thinknode_m7_procpu.dts:15-11 and pinctrl are partially clarified (SI3402, GPIO21 PG) but Ethernet PHY (LAN8720?) RMII pin mapping and whether ETH is supported or just PoE PD for power is ambiguous without schematics. Per task, tag HUMAN with question before further DTS changes. Blocking accurate matrix/spec update for border-router PoE support. Reference project-LICHEN-hzvh.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:54:14.262067297Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:54:14.262067297Z",
+  "labels": [
+    "human",
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-500k",
+      "depends_on_id": "project-LICHEN-hzvh",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:54:14.435872519Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
