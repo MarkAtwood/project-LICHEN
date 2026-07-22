@@ -1,0 +1,7 @@
+{
+  "id": "1784748948507299365-1",
+  "issue_id": "project-LICHEN-ntx4",
+  "author": "AI Agent",
+  "text": "Ambiguous whether to change ACK format to strict RFC 8724 8.3.3 bit-packing (no length byte, conditional bitmap). Current impl works for LICHEN test vectors and Python/C interop. Requires spec clarification on SCHC fragmentation profile before changing. Human decision needed on exact wire format.",
+  "created_at": "2026-07-22T19:35:48.507299365Z"
+}
