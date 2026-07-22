@@ -1,10 +1,14 @@
 {
   "id": "project-LICHEN-whr4",
   "title": "Fix project-LICHEN codereview and security bugs in COAP Python and spec hash consistency",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:05:34.71865904Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:05:34.71865904Z"
+  "updated_at": "2026-07-22T18:06:58.89248677Z",
+  "started_at": "2026-07-22T18:06:58.89248677Z",
+  "lease_expires_at": "2026-07-22T18:11:58.89248677Z",
+  "heartbeat_at": "2026-07-22T18:06:58.89248677Z"
 }
