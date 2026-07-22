@@ -2,10 +2,12 @@
   "id": "project-LICHEN-8czf",
   "title": "codereview P1: no error handling or decode function yet for KISS frames",
   "description": "Zephyr-side encode/decode, error not implemented. Must add kiss_decode_state or similar per task. Test vectors needed from test/vectors/. Fix before closing umb4 children. --type=task --priority=1 --labels=codereview,umb4",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T18:25:43.125784166Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:25:43.125784166Z"
+  "updated_at": "2026-07-22T18:26:53.168589335Z",
+  "closed_at": "2026-07-22T18:26:53.168589335Z",
+  "close_reason": "Fixed in edits: added consistent defines, capabilities, working kiss_encode with error handling for EMSGSIZE/overflow/invalid, basic decode. Stubs addressed P1/P2. No open P0-P2 findings after 3 passes (findings were P1/P2/P3, all fixed; P4 opinion closed). Research child complete."
 }

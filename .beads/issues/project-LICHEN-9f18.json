@@ -2,10 +2,12 @@
   "id": "project-LICHEN-9f18",
   "title": "codereview P3: naming of KISS_CMD_* should follow existing style (uppercase with KISS_ prefix consistent)",
   "description": "Existing defines use SLIP_ prefix; new ones mix KISS_CMD_DATA. Make consistent as KISS_CMD_DATA_PORT0. Minor but for 3-pass clean. --type=task --priority=3 --labels=codereview,umb4,opinion",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T18:25:42.789273756Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:25:42.789273756Z"
+  "updated_at": "2026-07-22T18:26:52.915243738Z",
+  "closed_at": "2026-07-22T18:26:52.915243738Z",
+  "close_reason": "Fixed in edits: added consistent defines, capabilities, working kiss_encode with error handling for EMSGSIZE/overflow/invalid, basic decode. Stubs addressed P1/P2. No open P0-P2 findings after 3 passes (findings were P1/P2/P3, all fixed; P4 opinion closed). Research child complete."
 }
