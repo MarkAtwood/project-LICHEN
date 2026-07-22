@@ -2,12 +2,16 @@
   "id": "project-LICHEN-1mb8",
   "title": "[codereview-pass2] Missing positive test case for local Yggdrasil mesh node",
   "description": "is_local_mesh should return true for Yggdrasil addr that has route in router. Add test case. P2 from review. Tag: codereview",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:51:52.491046987Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:51:52.491046987Z",
+  "updated_at": "2026-07-22T17:52:19.600737966Z",
+  "started_at": "2026-07-22T17:52:19.600737966Z",
+  "lease_expires_at": "2026-07-22T17:57:19.600737966Z",
+  "heartbeat_at": "2026-07-22T17:52:19.600737966Z",
   "labels": [
     "codereview"
   ]
