@@ -2,16 +2,14 @@
   "id": "project-LICHEN-jc8i",
   "title": "codereview-pass2: draft-lichen-schc-lora-00.md:185 new text has awkward abbreviation rules.py:MATCH_MAPPING and missing PIO example FieldDescriptors as required by original bead",
   "description": "P3 readability: Add explicit FieldDescriptor examples and update line refs to current code. Reference appendix-schc.md fully. P4: missing SPDX in edit? No, doc has it at top. Fix all.",
-  "status": "closed",
+  "status": "open",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:38:46.284330819Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:40:18.415087675Z",
+  "updated_at": "2026-07-22T18:41:25.921497688Z",
   "started_at": "2026-07-22T18:39:41.988796496Z",
-  "closed_at": "2026-07-22T18:40:18.415087675Z",
-  "close_reason": "Completed as part of codereview sweep on draft-lichen-schc-lora-00.md. 3 clean passes: no P0-P2, all P3/P4 fixed including TOC, dates, TODOs, refs, line numbers, PIO examples, table consistency, remnant text. No new findings in final passes.",
   "labels": [
     "codereview"
   ],
