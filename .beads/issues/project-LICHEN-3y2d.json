@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-3y2d",
+  "title": "[codereview-P3] ThinkNode M7 PoE note lacks exact pin numbers",
+  "description": "Spec appendix-border-router.md PoE note is generic. For industrial hardware, specify exact RJ45 pins (e.g. passive PoE on 4/5/7/8) or vendor part number if known. P3 for hardware accuracy. From project-LICHEN-vo1y.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:58:16.955201893Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:58:16.955201893Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-3y2d",
+      "depends_on_id": "project-LICHEN-vo1y",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:58:17.082931399Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
