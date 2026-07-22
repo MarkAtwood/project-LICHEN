@@ -2,13 +2,15 @@
   "id": "project-LICHEN-cf8r.3",
   "title": "codereview pass2 P4: rule_id verification should precede BitReader::new for early error on bad rule_id",
   "description": "codereview tagged. All P4 treated as real work per instructions.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:24:42.127284593Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:24:42.127284593Z",
+  "updated_at": "2026-07-22T19:26:00.418086111Z",
+  "closed_at": "2026-07-22T19:26:00.418086111Z",
+  "close_reason": "Fixed in codec.rs per codereview process",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-cf8r.3",
