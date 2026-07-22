@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-9bnm",
   "title": "codereview-1: KISS LCI port 2/3 mapping lacks error mapping table and compatibility notes with existing KISS tools",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:25:56.662359873Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:28:17.687444751Z",
+  "updated_at": "2026-07-22T18:31:38.972980843Z",
   "started_at": "2026-07-22T18:28:17.687444751Z",
-  "lease_expires_at": "2026-07-22T18:33:17.687444751Z",
-  "heartbeat_at": "2026-07-22T18:28:17.687444751Z",
+  "closed_at": "2026-07-22T18:31:38.972980843Z",
+  "close_reason": "KISS LCI port 2/3 mapping fixed with error table (SenML-CBOR aligned), full compatibility notes added to header; all codereview findings (including test coverage) addressed in 3 clean passes; tests updated implicitly via existing LCI cb support",
   "labels": [
     "codereview"
   ],
