@@ -2,12 +2,14 @@
   "id": "project-LICHEN-7hxo",
   "title": "[codereview] RollcallResource uses undefined BAD_REQUEST in some paths and missing asyncio import check",
   "description": "In render_post and render_get, BAD_REQUEST is used but import is under aiocoap. Also, get_running_loop() requires import asyncio which is present but review for thread safety in demo. Tag: codereview",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:55:18.104995028Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:55:18.104995028Z",
+  "updated_at": "2026-07-22T17:56:40.899298935Z",
+  "closed_at": "2026-07-22T17:56:40.899298935Z",
+  "close_reason": "All codereview findings fixed in 3 clean passes after edits, ruff, mypy. Conference demo resources now complete with LCI+SenML support for rollcall, position, etc.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-7hxo",
