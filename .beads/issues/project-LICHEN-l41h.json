@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-l41h",
+  "title": "[codereview-P2] New _hash_32 lacks unit test and vector cross-check with test/vectors/oscore.json or generate.py",
+  "description": "Per test integrity rules, must have independent oracle (e.g. match C impl output or test vectors). No test added yet. Also, no doc for how it prevents replay (nonce vs seq). P2 for test coverage.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:13:13.790389225Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:13:13.790389225Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-l41h",
+      "depends_on_id": "project-LICHEN-whr4.2",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:13:13.91466765Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
