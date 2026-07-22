@@ -2,10 +2,14 @@
   "id": "project-LICHEN-3vtl",
   "title": "codereview: BLE.cs header does not mention LICHEN BLE KISS/LCI, Meshtastic nRF52840 boards, Renode validation or no-dead-code rule",
   "description": "Update header to match USBD.cs style with specific requirements from bead project-LICHEN-r7h4.11. Current 'ponytail' note is outdated.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:26:02.143265579Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:26:02.143265579Z"
+  "updated_at": "2026-07-22T18:26:18.394285798Z",
+  "started_at": "2026-07-22T18:26:18.394285798Z",
+  "lease_expires_at": "2026-07-22T18:31:18.394285798Z",
+  "heartbeat_at": "2026-07-22T18:26:18.394285798Z"
 }
