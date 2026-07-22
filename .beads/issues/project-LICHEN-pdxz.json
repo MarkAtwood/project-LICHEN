@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-pdxz",
+  "title": "codereview-2: as_uint doc comment should reference the exact RFC section for integer option length limit",
+  "description": "RFC 7252 Section 3.2 specifies the integer encoding. Update doc to link it precisely. Also, add test case in existing test.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:47:15.764177783Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:47:15.764177783Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-pdxz",
+      "depends_on_id": "project-LICHEN-xql4",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:47:15.892278628Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
