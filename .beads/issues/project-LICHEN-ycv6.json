@@ -2,12 +2,16 @@
   "id": "project-LICHEN-ycv6",
   "title": "[codereview-pass2] analyze-hetero-fleet.py missing packet report counts per-sender not per-unique-hash",
   "description": "With all-senders tracking, len(missing) now counts every sender of a missing hash (e.g. 2 senders = 2 missing entries). Update report text and grouping to use unique hashes while still listing all senders (P4 accuracy in summary). discovered-from:project-LICHEN-eqyl",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:42:40.730905093Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:42:40.730905093Z",
+  "updated_at": "2026-07-22T18:43:25.892531342Z",
+  "started_at": "2026-07-22T18:43:25.892531342Z",
+  "lease_expires_at": "2026-07-22T18:48:25.892531342Z",
+  "heartbeat_at": "2026-07-22T18:43:25.892531342Z",
   "labels": [
     "codereview"
   ]
