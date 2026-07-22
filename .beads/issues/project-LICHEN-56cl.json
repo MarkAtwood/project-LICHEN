@@ -12,5 +12,15 @@
   "updated_at": "2026-07-22T19:13:44.449911118Z",
   "started_at": "2026-07-22T19:13:44.449911118Z",
   "lease_expires_at": "2026-07-22T19:18:44.449911118Z",
-  "heartbeat_at": "2026-07-22T19:13:44.449911118Z"
+  "heartbeat_at": "2026-07-22T19:13:44.449911118Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-56cl",
+      "depends_on_id": "project-LICHEN-ffuk",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:13:45.171637771Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
 }
