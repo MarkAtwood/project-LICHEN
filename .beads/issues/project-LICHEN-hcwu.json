@@ -2,12 +2,16 @@
   "id": "project-LICHEN-hcwu",
   "title": "SFN delta robustness pass-4 in spec",
   "description": "Claimed as follow-up to project-LICHEN-5pvm. Fix SFN delta calculation robustness per RFC 1982, add explicit Python semantics, update all test vector cross-refs (sfn-delta.json does not exist; use ccp16-desync.json desync_on_sfn_wrap and ccp_load_balancing.json), improve IETF normative language. After every logical chunk of edits to spec/02a-coordinated-capacity.md run codereview 3x by filing beads tagged 'codereview'. Fix ALL findings P0-P4 as real work. Do not close main bead until 3 consecutive clean review passes with no new findings. End with bd ready | head -5. Parent: project-LICHEN-5pvm",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:33:04.344744433Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:33:04.344744433Z",
+  "updated_at": "2026-07-22T18:33:06.046785356Z",
+  "started_at": "2026-07-22T18:33:06.046785356Z",
+  "lease_expires_at": "2026-07-22T18:38:06.046785356Z",
+  "heartbeat_at": "2026-07-22T18:33:06.046785356Z",
   "labels": [
     "codereview",
     "robustness"
