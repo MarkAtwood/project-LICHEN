@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-arx7",
+  "title": "codereview: No integration with smp-flash.py for post-flash QA verification in bulk mode",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:51:11.366821285Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:11.366821285Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-arx7",
+      "depends_on_id": "project-LICHEN-r6zz",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:51:11.486596723Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
