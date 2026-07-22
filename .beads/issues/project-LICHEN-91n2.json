@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-91n2",
+  "title": "[codereview] RollcallResource render_get does not handle uri_path correctly for /rollcall/{id} and SenML should use lichen.senml.codec.pack instead of raw list",
+  "description": "The uri_path check is brittle; better to use resource mounting for /rollcall/{id}. SenML example should use the SenML profiles and pack() for consistency with other resources and spec Appendix F. Tag: codereview",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:55:20.304420151Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:55:20.304420151Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-91n2",
+      "depends_on_id": "project-LICHEN-b2vb",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:55:20.432993061Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
