@@ -40,15 +40,16 @@ RPL control: link-local for single-hop; 02xx for multi-hop routability.
 
 ### 6.2. Interface Identifier (IID) Derivation
 
-IID is the lower 64 bits of the cryptographically derived value from the node's Ed25519 keypair (exact algorithm, truncation, and U/L bit clear in 06-security.md:109 "unified Ed25519 derivation (no-ULA model)" and test/vectors/). Ensures binding between identity, signatures, OSCORE contexts, and both addresses.
+See [03-addressing.md](03-addressing.md) for full definition of human-readable node address and IID derivation.
 
-**Formats:**
-- Link-local: `fe80::[IID]` (always available, control plane)
-- Primary: `02xx::[IID]` (Yggdrasil-derived global, data plane and multi-hop)
+Primary method (preferred, used by all implementations):
+```
+IID = SHA-256(Ed25519_pubkey)[0:8] with U/L bit cleared (iid[0] &= 0b11111101)
+```
 
-**Human-readable short address:** Crockford Base32 of IID (13 chars with dashes): e.g. `KCVN-MRPX-QWERT`. See 12.3, `02-physical-link.md:215`, test/vectors/ for derivation (`hash_32(EUI-64,0)` with collision/DAD rules), vectors, and short address assignment.
+Legacy fallback from EUI-64 or short address for compatibility (see addressing spec).
 
-**Stable IIDs only** (no RFC 4941/7217 temporaries). Root election by lowest IID. EUI-64 used only for link layer per `02-physical-link.md:101`. Full consistency with 6.1 DAO model and 06-security.md.
+**Stable IIDs only.** The pubkey-derived IID provides cryptographic binding. See 03-addressing.md for human-readable Base32 format, collision analysis, and test vectors.
 
 ### 6.3. Multicast and Broadcast
 

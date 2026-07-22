@@ -11,18 +11,29 @@ Usage::
     from lichen.senml.profiles import location, battery, temperature
     from lichen.senml.codec import pack
 
-    records = [
-        *location(lat=48.2049, lon=16.3710, alt=158.0),
-        *battery(voltage_v=3.85, percent=72.0),
-        temperature(23.4),
-    ]
+    records = [*location(48.2, 16.4), *battery(percent=72.0), temperature(23.4)]
     payload = pack(records)
 """
 
 from __future__ import annotations
 
-import math
-
+from lichen.constants import (
+    SENML_BATTERY_CHARGING,
+    SENML_BATTERY_MV,
+    SENML_BATTERY_PCT,
+    SENML_BATTERY_UNIT_MV,
+    SENML_BATTERY_UNIT_PCT,
+    SENML_LOCATION_ALT,
+    SENML_LOCATION_HEADING,
+    SENML_LOCATION_LAT,
+    SENML_LOCATION_LON,
+    SENML_LOCATION_SPEED,
+    SENML_LOCATION_UNIT_DEG,
+    SENML_LOCATION_UNIT_M,
+    SENML_LOCATION_UNIT_MS,
+    SENML_TELEMETRY_TEMP,
+    SENML_TELEMETRY_UNIT_CEL,
+)
 from lichen.senml.codec import SenmlRecord
 
 # ---------------------------------------------------------------------------
@@ -30,47 +41,13 @@ from lichen.senml.codec import SenmlRecord
 # ---------------------------------------------------------------------------
 
 
-def location(
-    lat: float,
-    lon: float,
-    alt: float | None = None,
-    speed: float | None = None,
-) -> list[SenmlRecord]:
-    """Geographic position SenML per RFC 8428 for /position crowd map.
-
-    Validates WGS-84 lat/lon. Units: lat/lon=deg, alt=m, speed=m/s.
-
-    Args:
-        lat: Latitude [-90, 90].
-        lon: Longitude [-180, 180].
-        alt: Optional altitude in meters.
-        speed: Optional speed in m/s.
-
-    Returns:
-        List of 2-4 SenmlRecord.
-
-    Raises:
-        ValueError: For invalid lat/lon.
-    """
-    if (
-        math.isnan(lat)
-        or math.isnan(lon)
-        or math.isinf(lat)
-        or math.isinf(lon)
-    ):
-        raise ValueError("lat/lon cannot be NaN or Inf")
-    if not (-90.0 <= lat <= 90.0):
-        raise ValueError(f"lat {lat} out of range [-90, 90]")
-    if not (-180.0 <= lon <= 180.0):
-        raise ValueError(f"lon {lon} out of range [-180, 180]")
+def location(lat: float, lon: float, alt: float | None = None) -> list[SenmlRecord]:
     records = [
-        SenmlRecord(n="lat", u="lat", v=lat),
-        SenmlRecord(n="lon", u="lon", v=lon),
+        SenmlRecord(n=SENML_LOCATION_LAT, u=SENML_LOCATION_UNIT_DEG, v=lat),
+        SenmlRecord(n=SENML_LOCATION_LON, u=SENML_LOCATION_UNIT_DEG, v=lon),
     ]
     if alt is not None:
-        records.append(SenmlRecord(n="alt", u="m", v=alt))
-    if speed is not None:
-        records.append(SenmlRecord(n="speed", u="m/s", v=speed))
+        records.append(SenmlRecord(n=SENML_LOCATION_ALT, u=SENML_LOCATION_UNIT_M, v=alt))
     return records
 
 
@@ -79,21 +56,12 @@ def location(
 # ---------------------------------------------------------------------------
 
 
-def battery(voltage_v: float | None = None, percent: float | None = None) -> list[SenmlRecord]:
-    """Battery state as SenML records.
-
-    Args:
-        voltage_v: Terminal voltage in volts (unit "V"), or None to omit.
-        percent:   State of charge 0-100 % (unit "%EL"), or None to omit.
-
-    Returns:
-        List of 0-2 SenML records.  Pass at least one of the arguments.
-    """
+def battery(percent: float | None = None, mv: float | None = None) -> list[SenmlRecord]:
     records = []
-    if voltage_v is not None:
-        records.append(SenmlRecord(n="voltage", u="V", v=voltage_v))
     if percent is not None:
-        records.append(SenmlRecord(n="battery", u="%EL", v=percent))
+        records.append(SenmlRecord(n=SENML_BATTERY_PCT, u=SENML_BATTERY_UNIT_PCT, v=percent))
+    if mv is not None:
+        records.append(SenmlRecord(n=SENML_BATTERY_MV, u=SENML_BATTERY_UNIT_MV, v=mv))
     return records
 
 
@@ -103,15 +71,7 @@ def battery(voltage_v: float | None = None, percent: float | None = None) -> lis
 
 
 def temperature(celsius: float) -> SenmlRecord:
-    """Ambient temperature (unit "Cel" per RFC 8428 Table 12).
-
-    Args:
-        celsius: Temperature in degrees Celsius.
-
-    Returns:
-        A single SenML record.
-    """
-    return SenmlRecord(n="temperature", u="Cel", v=celsius)
+    return SenmlRecord(n=SENML_TELEMETRY_TEMP, u=SENML_TELEMETRY_UNIT_CEL, v=celsius)
 
 
 def humidity(percent_rh: float) -> SenmlRecord:

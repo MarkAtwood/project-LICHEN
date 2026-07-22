@@ -3,20 +3,19 @@
 use serde::Deserialize;
 use std::{fs, io, path::Path};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct Config {
     pub mesh: MeshConfig,
     pub ipv6: Ipv6Config,
     pub rpl: RplConfig,
     #[serde(default)]
     pub yggdrasil: YggdrasilConfig,
-    #[serde(default)]
-    pub backhaul: BackhaulConfig,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct MeshConfig {
     /// Serial device connected to the LoRa puck, e.g. `/dev/ttyACM0`.
+    #[serde(default = "default_mesh_interface")]
     pub interface: String,
     /// Baud rate for the SLIP serial link (typically unused for USB CDC, kept for hardware UART).
     #[serde(default = "default_baud")]
@@ -26,15 +25,17 @@ pub struct MeshConfig {
     pub sim_addr: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct Ipv6Config {
-    /// ULA or GUA prefix delegated to the mesh, e.g. `"fd00:lichen:1::/48"`.
+    /// 02xx::/7 from LICHEN Ed25519 (gateway: external yggdrasil daemon on RPi/Linux w/ TUN, yggdrasil.conf peering+privkey+systemd+subnet-advertise-mesh-02xx; embedded: lite/proxy).
+    #[serde(default = "default_ipv6_prefix")]
     pub prefix: String,
     /// Upstream interface for internet connectivity, e.g. `"eth0"`.
+    #[serde(default = "default_upstream")]
     pub upstream: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct RplConfig {
     #[serde(default = "default_instance_id")]
     pub instance_id: u8,
@@ -43,28 +44,20 @@ pub struct RplConfig {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct BackhaulConfig {
-    #[serde(default = "default_backhaul_kind")]
-    pub kind: String,
-    #[serde(default = "default_backhaul_interface")]
-    pub interface: String,
-}
-
-#[derive(Debug, Deserialize, Default)]
 pub struct YggdrasilConfig {
-    /// List of Yggdrasil peers (tcp://host:port).
+    /// Peering endpoints (e.g. tcp://ygg.mkg20001.io:80). Key from LICHEN identity.
     #[serde(default)]
     pub peers: Vec<String>,
-    /// Whether to enable public peering.
-    #[serde(default = "default_true")]
-    pub public_peering: bool,
-    /// Path to yggdrasil binary (default: /usr/bin/yggdrasil).
-    #[serde(default = "default_ygg_binary")]
-    pub binary: String,
+    /// Path to yggdrasil.conf (auto-generated with peering + identity key if absent).
+    #[serde(default)]
+    pub conf: Option<String>,
 }
 
 fn default_baud() -> u32 {
     115_200
+}
+fn default_mesh_interface() -> String {
+    "sim".to_string()
 }
 fn default_instance_id() -> u8 {
     1
@@ -72,17 +65,11 @@ fn default_instance_id() -> u8 {
 fn default_mop() -> String {
     "non-storing".to_string()
 }
-fn default_true() -> bool {
-    true
+fn default_ipv6_prefix() -> String {
+    "0202::/16".to_string()
 }
-fn default_ygg_binary() -> String {
-    "/usr/bin/yggdrasil".to_string()
-}
-fn default_backhaul_kind() -> String {
-    "tun".to_string()
-}
-fn default_backhaul_interface() -> String {
-    "lichen0".to_string()
+fn default_upstream() -> String {
+    "lo".to_string()
 }
 
 impl Config {
@@ -101,15 +88,17 @@ impl Config {
                 sim_addr: Some("127.0.0.1:4444".to_string()),
             },
             ipv6: Ipv6Config {
-                prefix: "fd00:1::/48".to_string(),
+                prefix: "0202::/16".to_string(),
                 upstream: "lo".to_string(),
             },
             rpl: RplConfig {
                 instance_id: 1,
                 mode: "non-storing".to_string(),
             },
-            yggdrasil: YggdrasilConfig::default(),
-            backhaul: BackhaulConfig::default(),
+            yggdrasil: YggdrasilConfig {
+                peers: vec!["tcp://ygg.mkg20001.io:80".to_string()],
+                conf: Some("/etc/lichen/yggdrasil.conf".to_string()),
+            },
         }
     }
 }

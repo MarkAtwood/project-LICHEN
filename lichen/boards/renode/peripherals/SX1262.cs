@@ -13,9 +13,10 @@
 //   0x1E ReadBuffer(offset) -> data... - read from RX buffer
 //   0x83 SetTx(timeout) - trigger transmit
 //   0x82 SetRx(timeout) - enter receive mode
-//   0xC0 GetStatus -> status byte
-//   0x17 GetIrqStatus -> IRQ flags
-//   0x02 ClearIrqStatus(flags)
+  //   0xC0 GetStatus -> status byte
+  //   0x12 GetIrqStatus -> IRQ flags
+  //   0x02 ClearIrqStatus(flags)
+
 
 using System;
 using System.Net.Sockets;
@@ -462,7 +463,7 @@ namespace Antmicro.Renode.Peripherals.Wireless
             lock (stateLock)
             {
                 rxMode = true;
-                rxOneShot = oneShot;
+                rxOneShot = timeoutUs != 0xFFFFFFFF;
             }
             this.Log(LogLevel.Debug, "RX_ENTER: timeout={0}us oneShot={1}", timeoutUs == 0xFFFFFFFF ? "continuous" : timeoutUs.ToString(), oneShot);
 
@@ -663,10 +664,7 @@ namespace Antmicro.Renode.Peripherals.Wireless
                             rxMode = false;
                             rxOneShot = false;
                         }
-                        // one-shot contract: clear rxMode and rxOneShot only on first packet for PollRx/SetRx(finite timeout);
-                        // continuous (0xFFFFFF timeout, rxOneShot=false) keeps rxMode=true for multiple packets.
-                        // All accesses under stateLock to eliminate rxMode/stateLock race with SPI/reader/CS paths.
-                        this.Log(LogLevel.Debug, "RX_PACKET {0} bytes (async) oneShot={1}", rxLen, rxOneShot);
+                        this.Log(LogLevel.Debug, "RX_PACKET {0} bytes (async)", rxLen);
                         irqFlags |= 0x0002; // RxDone
                         IRQ.Set(true);
                         break;

@@ -75,13 +75,14 @@ class Medium:
         tx_power_dbm: int,
         position: tuple[float, float, float],
         time_us: int,
-        channel: int = 0,
+        frequency_hz: int = 915_000_000,
     ) -> Transmission:
         """Start a new transmission on specified channel.
 
         Creates a Transmission object with calculated end time based on
-        payload length, adds it to the active transmissions list (per-channel
-        independent oracle), and stores the transmitter position.
+        payload length, adds it to the active transmissions list, and
+        stores the transmitter position. frequency_hz explicit for CCP-9
+        rendezvous vs control/data channels (vs None default in RX for compat).
 
         Args:
             node_id: ID of the transmitting node.
@@ -89,8 +90,7 @@ class Medium:
             tx_power_dbm: Transmit power in dBm.
             position: (x, y, z) position of the transmitter in meters.
             time_us: Current simulation time in microseconds.
-            channel: Channel index (default 0). Supports multi-channel and
-                rendezvous (RX only matches this channel).
+            frequency_hz: Carrier frequency in Hz. Explicit per spec CCP-9.
 
         Returns:
             The created Transmission object.
@@ -102,7 +102,7 @@ class Medium:
             tx_power_dbm=tx_power_dbm,
             start_time_us=time_us,
             end_time_us=time_us + duration_us,
-            channel=channel,
+            frequency_hz=frequency_hz,
         )
         self._active_transmissions.append(tx)
         self._tx_positions[tx.id] = position
@@ -141,22 +141,22 @@ class Medium:
         rx_node_id: str,
         rx_position: tuple[float, float, float],
         time_us: int,
-        channel: int = 0,
+        rx_frequency_hz: int | None = None,
     ) -> list[RxCandidate]:
         """Get all decodable transmissions for a receiver on given channel.
 
-        Implements rendezvous: only considers transmissions on the expected
-        hop channel (computed from SFN/time via synchronized_hop_channel).
-        Provides independent oracle for collision/propagation per channel.
-
-        For each active transmission on matching channel (excluding self),
-        calculates distance, RSSI, and SNR. Only includes decodable ones.
+        For each active transmission (excluding self or frequency mismatch),
+        calculates distance, RSSI, and SNR. Supports explicit rx_frequency_hz
+        for CCP-9 rendezvous/data channel distinction (None = all frequencies
+        for compat; callers MUST compute via hash(SFN, EUI) per spec for
+        rendezvous).
 
         Args:
             rx_node_id: ID of the receiving node.
             rx_position: (x, y, z) position of the receiver in meters.
             time_us: Current simulation time in microseconds.
-            channel: Expected hop channel for rendezvous (default 0).
+            rx_frequency_hz: Specific frequency to listen on (for CAD/rendezvous).
+                If None, matches any TX frequency.
 
         Returns:
             List of RxCandidate objects for decodable transmissions.
@@ -170,6 +170,8 @@ class Medium:
 
         for tx in active:
             if tx.source_node_id == rx_node_id:
+                continue
+            if rx_frequency_hz is not None and tx.frequency_hz != rx_frequency_hz:
                 continue
 
             tx_pos = self._tx_positions.get(tx.id)
@@ -237,21 +239,21 @@ class Medium:
         position: tuple[float, float, float],
         time_us: int,
         sensitivity_dbm: float = SENSITIVITY_DEFAULT,
-        channel: int = 0,
+        rx_frequency_hz: int | None = None,
     ) -> bool:
         """Detect if any transmission is active and detectable at a position
         on the specified channel.
 
-        Implements per-channel CAD for multi-channel support and rendezvous.
-        Only considers transmissions on the expected hop channel. Independent
-        oracle per channel.
+        Implements CAD, updated for CCP-9 rendezvous: filters by rx_frequency_hz
+        if provided (explicit control vs data/rendezvous channel per spec).
 
         Args:
             position: (x, y, z) position of the detector in meters.
             time_us: Current simulation time in microseconds.
             sensitivity_dbm: Receiver sensitivity threshold in dBm.
                 Defaults to SF10 sensitivity (-132 dBm).
-            channel: Channel for CAD (default 0, matches rendezvous hop).
+            rx_frequency_hz: If provided, only consider TX on this frequency
+                for rendezvous/CAD. None matches any (explicit in callers).
 
         Returns:
             True if channel activity is detected, False otherwise.
@@ -263,6 +265,8 @@ class Medium:
         ]
 
         for tx in active:
+            if rx_frequency_hz is not None and tx.frequency_hz != rx_frequency_hz:
+                continue
             tx_pos = self._tx_positions.get(tx.id)
             if tx_pos is None:
                 continue

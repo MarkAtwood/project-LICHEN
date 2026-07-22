@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Union
 from ipaddress import IPv6Address
+from typing import Union
 
 from lichen.ipv6.icmpv6 import Icmpv6Message
 

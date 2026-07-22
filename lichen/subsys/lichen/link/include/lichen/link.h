@@ -72,6 +72,10 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
  /** Schnorr-48 signature length in bytes */
 #define LICHEN_SIG_LEN 48
 
+#define LICHEN_TDMA_GUARD_MS 50
+#define LICHEN_TDMA_SLOT_MS 250
+struct lichen_tdma_slot {uint8_t id;uint8_t assigned;uint32_t next;};
+
 /** Maximum destination address length (EUI-64) */
 #define LICHEN_ADDR_MAX 8
 
@@ -327,7 +331,7 @@ int lichen_link_rx(struct lichen_link_rx_ctx *_Nonnull ctx,
 		   uint8_t *_Nonnull out_ipv6, size_t *_Nonnull out_len,
 		   uint8_t *_Nonnull src_eui64);
 
-uint32_t lichen_hash_32(uint32_t sfn, uint64_t key);
+int lichen_tdma_init(struct lichen_tdma_slot *_Nonnull s);
 
 #ifdef __cplusplus
 }

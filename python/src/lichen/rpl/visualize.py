@@ -18,11 +18,12 @@ the evolving DODAG during a run.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Optional
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-Topology = dict[str, str | None]
+Topology = dict[str, Optional[str]]
 
 
 def topology_from_states(states: Mapping[str, DodagState]) -> Topology:

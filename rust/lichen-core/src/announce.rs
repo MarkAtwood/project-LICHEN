@@ -26,19 +26,19 @@ pub const SIGNATURE_LENGTH: usize = 48;
 /// Maximum hop count (spec 9.4).
 pub const MAX_ANNOUNCE_HOPS: u8 = 15;
 
-/// Fixed portion length before app_data (includes rx_channel per CCP-9).
-const FIXED_LENGTH: usize = 1 + 1 + 1 + 2 + 8 + 32 + 48 + 1;
+const FIXED_LENGTH: usize = 1 + 1 + 1 + 2 + 1 + 8 + 32 + 48;
 
 use crate::error::{BufferTooSmall, TooShort};
 
-/// Announce message parse/serialize error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AnnounceError {
     TooShort(TooShort),
     WrongType(u8),
     BufferTooSmall(BufferTooSmall),
-    InvalidChannel(u8),
+    InvalidChannel,
+    NotSigned,
+    HopCountExceeded,
 }
 
 impl core::fmt::Display for AnnounceError {
@@ -47,9 +47,9 @@ impl core::fmt::Display for AnnounceError {
             Self::TooShort(e) => write!(f, "announce {}", e),
             Self::WrongType(t) => write!(f, "wrong announce type: {}", t),
             Self::BufferTooSmall(e) => write!(f, "announce {}", e),
-            Self::InvalidChannel(c) => {
-                write!(f, "invalid rx_channel: {} (must be 0-7 per CCP-9)", c)
-            }
+            Self::InvalidChannel => write!(f, "invalid channel (must be 0-15)"),
+            Self::NotSigned => write!(f, "announce not signed"),
+            Self::HopCountExceeded => write!(f, "hop count exceeded"),
         }
     }
 }
@@ -76,9 +76,6 @@ impl From<BufferTooSmall> for AnnounceError {
     }
 }
 
-/// A parsed announce message (CCP-9 updated).
-///
-/// References slices from the original buffer to avoid allocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Announce<'a> {
     pub originator_iid: &'a [u8; 8],
@@ -92,7 +89,6 @@ pub struct Announce<'a> {
 }
 
 impl<'a> Announce<'a> {
-    /// Parse from wire format (CCP-9: rx_channel at offset 93).
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, AnnounceError> {
         if data.len() < FIXED_LENGTH {
             return Err(TooShort::new(FIXED_LENGTH, data.len()).into());
@@ -100,15 +96,14 @@ impl<'a> Announce<'a> {
         if data[0] != ANNOUNCE_TYPE {
             return Err(AnnounceError::WrongType(data[0]));
         }
-
-        // ponytail: unwrap safe, bounds checked above
-        let originator_iid = data[5..13].try_into().unwrap();
-        let pubkey = data[13..45].try_into().unwrap();
-        let signature = data[45..93].try_into().unwrap();
-        let rx_channel = data[93];
-        if rx_channel >= 8 {
-            return Err(AnnounceError::InvalidChannel(rx_channel));
+        let rx_channel = data[5];
+        if rx_channel > 15 {
+            return Err(AnnounceError::InvalidChannel);
         }
+
+        let originator_iid = data[6..14].try_into().unwrap();
+        let pubkey = data[14..46].try_into().unwrap();
+        let signature = data[46..94].try_into().unwrap();
 
         Ok(Self {
             flags: data[1],
@@ -122,15 +117,10 @@ impl<'a> Announce<'a> {
         })
     }
 
-    /// Data covered by signature (IID + pubkey + seq_num + rx_channel + app_data).
-    ///
-    /// Hop count is NOT signed because relays must increment it.
-    /// rx_channel IS signed (CCP-9) to prevent rendezvous tampering.
     pub fn signed_data_len(&self) -> usize {
         8 + 32 + 2 + 1 + self.app_data.len()
     }
 
-    /// Write signed data to buffer. Returns bytes written.
     pub fn write_signed_data(&self, out: &mut [u8]) -> Result<usize, AnnounceError> {
         let len = self.signed_data_len();
         if out.len() < len {
@@ -144,13 +134,11 @@ impl<'a> Announce<'a> {
         Ok(len)
     }
 
-    /// Whether this announce should be relayed (hop_count < MAX).
     pub fn should_relay(&self) -> bool {
         self.hop_count < MAX_ANNOUNCE_HOPS
     }
 }
 
-/// Builder for creating announce messages (CCP-9 updated).
 #[derive(Debug)]
 pub struct AnnounceBuilder<'a> {
     pub originator_iid: &'a [u8; 8],
@@ -164,10 +152,9 @@ pub struct AnnounceBuilder<'a> {
 }
 
 impl<'a> AnnounceBuilder<'a> {
-    /// Serialize to wire format. Returns bytes written.
     pub fn write_to(&self, out: &mut [u8]) -> Result<usize, AnnounceError> {
-        if self.rx_channel >= 8 {
-            return Err(AnnounceError::InvalidChannel(self.rx_channel));
+        if self.rx_channel > 15 {
+            return Err(AnnounceError::InvalidChannel);
         }
         let total = FIXED_LENGTH + self.app_data.len();
         if out.len() < total {
@@ -178,10 +165,10 @@ impl<'a> AnnounceBuilder<'a> {
         out[1] = self.flags;
         out[2] = self.hop_count;
         out[3..5].copy_from_slice(&self.seq_num.to_be_bytes());
-        out[5..13].copy_from_slice(self.originator_iid);
-        out[13..45].copy_from_slice(self.pubkey);
-        out[45..93].copy_from_slice(self.signature);
-        out[93] = self.rx_channel;
+        out[5] = self.rx_channel;
+        out[6..14].copy_from_slice(self.originator_iid);
+        out[14..46].copy_from_slice(self.pubkey);
+        out[46..94].copy_from_slice(self.signature);
         out[94..total].copy_from_slice(self.app_data);
 
         Ok(total)
@@ -195,16 +182,13 @@ mod tests {
     fn make_announce() -> [u8; 94] {
         let mut buf = [0u8; 94];
         buf[0] = ANNOUNCE_TYPE;
-        buf[1] = 0; // flags
-        buf[2] = 3; // hop_count
-        buf[3] = 0x12; // seq_num high
-        buf[4] = 0x34; // seq_num low
-                       // iid at 5..13
-        buf[5] = 0x02;
-        buf[12] = 0x01;
-        // pubkey at 13..45 (all zeros ok for test)
-        // signature at 45..93 (all zeros ok for test)
-        buf[93] = 2; // rx_channel per CCP-9 test vectors
+        buf[1] = 0;
+        buf[2] = 3;
+        buf[3] = 0x12;
+        buf[4] = 0x34;
+        buf[5] = 0;
+        buf[6] = 0x02;
+        buf[13] = 0x01;
         buf
     }
 

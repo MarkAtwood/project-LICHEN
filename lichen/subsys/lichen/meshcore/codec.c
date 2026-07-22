@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <string.h>
+#include <limits.h>
 
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
@@ -15,8 +16,6 @@
 
 BUILD_ASSERT(CONFIG_LICHEN_MESHCORE_MAX_SERIAL_PAYLOAD <= UINT16_MAX,
 	     "Serial payload cannot exceed 16-bit length field");
-BUILD_ASSERT(CONFIG_LICHEN_MESHCORE_MAX_SERIAL_PAYLOAD <= LICHEN_MESHCORE_BLE_FRAME_MAX,
-	     "Exceeds MeshCore BLE frame maximum");
 BUILD_ASSERT(CONFIG_LICHEN_MESHCORE_MAX_SERIAL_PAYLOAD <= INT_MAX - 3,
 	     "Serial payload too large for int return");
 

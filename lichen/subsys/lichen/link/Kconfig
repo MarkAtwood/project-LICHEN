@@ -99,29 +99,8 @@ config LICHEN_LINK_EPOCH_TEST_HOOKS
 	  persist-and-advance behavior. Testing only.
 
 config LICHEN_TDMA
-	bool "TDMA scheduling"
+	bool "TDMA slot management"
 	depends on LICHEN_LINK
-	depends on LICHEN_RPL
-	select LICHEN_RPL
-	default y if LICHEN_LINK_CCP16_LOAD_BALANCING
-	help
-	  TDMA slot management for CCP-16. Uses struct LICHEN_TDMA_Slot
-	  in link.h:50 (16B: id+pad[3]+start_time_ms+owner_eui64[8];
-	  BUILD_ASSERT confirms size). lichen_tdma_init() AFTER
-	  lichen_link_init() + lichen_link_load_key() but BEFORE
-	  oscore_init() per AGENTS.md dependency graph (line 190) and
-	  lichen_node_init() example. Prevents use-before-init crashes
-	  or zeroed signatures. Required by CCP-16.
-
-config LICHEN_CCP5_COORD_NEGOTIATION
-	bool "CCP-5 coordination mechanism negotiation (da2q)"
-	depends on LICHEN_LINK
-	help
-	  Enable CCP-16 congestion control point load metric and rebalancing for
-	  TDMA slot assignment at DEFCON-scale densities. See DEFCON density
-	  notes in project-LICHEN-2nnd (500-node mesh at hacker conferences),
-	  adaptive SF thresholds from project-LICHEN-zrh2, and independent
-	  mathematical oracles in test/vectors/ccp_load_balancing.json. Critical
-	  for high-density operation where simple ALOHA fails.
+	default y
 
 endif # LICHEN_LINK

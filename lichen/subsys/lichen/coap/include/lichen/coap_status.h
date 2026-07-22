@@ -24,6 +24,17 @@ extern "C" {
 #define CONFIG_LICHEN_COAP_STATUS_MAX_ROUTES 8
 #endif
 
+#ifndef CONFIG_LICHEN_COAP_STATUS_MAX_TXQ
+#define CONFIG_LICHEN_COAP_STATUS_MAX_TXQ 8
+#endif
+
+#ifndef CONFIG_LICHEN_COAP_STATUS_MAX_FWD
+#define CONFIG_LICHEN_COAP_STATUS_MAX_FWD 16
+#endif
+
+/**
+ * @brief Radio statistics for /status endpoint
+ */
 struct lichen_coap_radio_stats {
 	uint32_t rx_packets;
 	uint32_t tx_packets;

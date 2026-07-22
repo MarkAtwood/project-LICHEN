@@ -21,6 +21,9 @@ pub mod routing;
 pub mod trickle;
 
 #[cfg(feature = "std")]
+pub use routing::RouteTarget;
+
+#[cfg(feature = "std")]
 extern crate std;
 
 /// FNV-1a 32-bit hash used for CCP-16 rendezvous and TDMA slotting.

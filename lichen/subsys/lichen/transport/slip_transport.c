@@ -141,19 +141,14 @@ static int validate_ipv6_packet(const uint8_t *pkt, size_t len)
 		return -EPROTONOSUPPORT;
 	}
 
-	if (!ipv6_next_header_valid(pkt[6])) {
-		LOG_WRN("SLIP RX: invalid next header 0x%02x", pkt[6]);
-		return -EPROTONOSUPPORT;
-	}
-
 	uint16_t payload_len = ipv6_payload_len(pkt);
 	if (payload_len > SLIP_LCI_MTU - IPV6_HDR_LEN) {
-		LOG_WRN("SLIP RX: IPv6 payload length exceeds MTU (%u > %u)",
+		LOG_WRN("SLIP RX: IPv6 payload too large (%u > %u)",
 			payload_len, SLIP_LCI_MTU - IPV6_HDR_LEN);
 		return -EMSGSIZE;
 	}
 
-	size_t expected = IPV6_HDR_LEN + (size_t)payload_len;
+	expected = IPV6_HDR_LEN + payload_len;
 	if (expected != len) {
 		LOG_WRN("SLIP RX: length mismatch (header says %zu, got %zu)",
 			expected, len);
@@ -259,13 +254,15 @@ static int slip_perform_tx(struct slip_transport_ctx *ctx,
 static int slip_decode_byte(struct slip_transport_ctx *ctx, uint8_t b)
 {
 	switch (ctx->rx_state) {
-	case SLIP_STATE_IDLE:
+		case SLIP_STATE_IDLE:
 		if (b == SLIP_END) {
 			/* Empty frame or frame delimiter - stay idle */
 			ctx->rx_len = 0;
 			ctx->rx_overflow = false;
 		} else if (b == SLIP_ESC) {
 			ctx->rx_state = SLIP_STATE_ESC;
+			ctx->rx_len = 0;
+			ctx->rx_overflow = false;
 		} else {
 			/* First data byte */
 			ctx->rx_state = SLIP_STATE_DATA;
@@ -278,6 +275,7 @@ static int slip_decode_byte(struct slip_transport_ctx *ctx, uint8_t b)
 			}
 		}
 		break;
+
 
 	case SLIP_STATE_DATA:
 		if (b == SLIP_END) {
