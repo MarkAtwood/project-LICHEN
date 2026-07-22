@@ -2,7 +2,7 @@
   "id": "project-LICHEN-7uwm",
   "title": "gradient.c: Unused variable oldest_time in find_lru",
   "description": "File: lichen/subsys/lichen/routing/gradient.c\nLines: 82-104\n\nIn find_lru():\n\n    static struct lichen_gradient_entry *find_lru(struct lichen_gradient_table *table)\n    {\n        struct lichen_gradient_entry *lru = NULL;\n        uint32_t oldest_time = 0xFFFFFFFF;  // \u003c-- initialized but never read\n\n        for (size_t i = 0; i \u003c CONFIG_LICHEN_ROUTING_GRADIENT_MAX_ENTRIES; i++) {\n            ...\n            if (lru == NULL || (int32_t)(e-\u003elast_used_ms - lru-\u003elast_used_ms) \u003c 0) {\n                lru = e;\n                oldest_time = e-\u003elast_used_ms;  // \u003c-- assigned but never used\n            }\n        }\n        return lru;\n    }\n\nThe variable oldest_time is assigned but never read. The comparison correctly uses lru-\u003elast_used_ms directly. This is dead code that should be removed for clarity.",
-  "notes": "Merged from worker4: 61aa4f2ef (worker changes preferred in conflicts)",
+  "notes": "Merged via worker9-batch loop at 624091d65",
   "status": "closed",
   "priority": 3,
   "issue_type": "bug",
@@ -10,7 +10,7 @@
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-12T06:49:52.074242Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T19:58:54.590247811Z",
+  "updated_at": "2026-07-22T20:02:17.045864243Z",
   "started_at": "2026-07-22T19:04:18.896599605Z",
   "closed_at": "2026-07-22T19:08:09.082879247Z",
   "close_reason": "Fixed as real P3 work per RULE: removed dead oldest_time code+comments, added NULL checks, explicit return check+partial handling, invalid varint now errors. 3 codereview passes completed via test runs. West/cargo/pytest all PASS. No dead code. Idiomatic C. Independent test vectors used for parse."
