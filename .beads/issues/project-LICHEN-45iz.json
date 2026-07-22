@@ -2,15 +2,15 @@
   "id": "project-LICHEN-45iz",
   "title": "to_dict leaks mutable reference to errors list",
   "description": "## Location\npython/src/lichen/sim/metrics.py:85\n\n## Description\nThe to_dict() method returns a direct reference to self.errors rather than a copy. Unlike the set fields (packet_hashes_sent, packet_hashes_received, unique_peers) which are converted to new sorted lists, the errors list is included directly. Any caller that modifies the returned dictionary's errors key will corrupt the internal NodeMetrics state.\n\n## Failure Scenario\nCaller receives metrics dict via `d = node.metrics.to_dict()`, then calls `d['errors'].clear()` or `d['errors'].append('extra')`. The internal self.errors list is modified, corrupting the metrics for all future reads and serializations.\n\n## Category\ncorrectness",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-13T04:16:35.053988Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:41:08.580438022Z",
+  "updated_at": "2026-07-22T18:42:51.581411074Z",
   "started_at": "2026-07-22T18:41:08.580438022Z",
-  "lease_expires_at": "2026-07-22T18:46:08.580438022Z",
-  "heartbeat_at": "2026-07-22T18:41:08.580438022Z"
+  "closed_at": "2026-07-22T18:42:51.581411074Z",
+  "close_reason": "Fixed to_dict() mutable errors list leak (duplicate of 14mr). Now returns copy. All metrics tests and validation pass. 3 codereview passes complete with no remaining P0-P2 issues."
 }
