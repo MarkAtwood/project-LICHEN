@@ -2,10 +2,14 @@
   "id": "project-LICHEN-kbrb",
   "title": "Fix 5 fresh ready beads per AGENTS.md review workflow",
   "description": "Select 5 new beads excluding listed priors. Claim, use explore subagents for analysis per rules, implement fixes following LICHEN/Zephyr/Rust conventions (no dead code, no comments, exact test vectors, security), run codereview 3x per bead filing only real P0-P2 as new beads, verify all lints/builds/tests, close with precise reasons. Parallel subagents where possible. No dolt push. Final output only status summary.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:50:52.488979315Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:50:52.488979315Z"
+  "updated_at": "2026-07-22T17:52:47.579470365Z",
+  "started_at": "2026-07-22T17:52:47.579470365Z",
+  "lease_expires_at": "2026-07-22T17:57:47.579470365Z",
+  "heartbeat_at": "2026-07-22T17:52:47.579470365Z"
 }
