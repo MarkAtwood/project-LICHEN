@@ -2,12 +2,14 @@
   "id": "project-LICHEN-5273.2",
   "title": "codereview pass 2: inconsistent DEFAULT_SF dependency between link and routing",
   "description": "In link/Kconfig DEFAULT_SF depends on !LICHEN_ADAPTIVE_SF_ENABLED. In routing/Kconfig it depends on LICHEN_ADAPTIVE_SF_ENABLED. With top-level definition, this needs cleanup. The default SF should be available regardless. P2 finding. Tagged codereview.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T18:08:45.507191315Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:08:45.507191315Z",
+  "updated_at": "2026-07-22T18:09:27.975391961Z",
+  "closed_at": "2026-07-22T18:09:27.975391961Z",
+  "close_reason": "Fixed by consolidating Kconfig definitions into lichen/subsys/lichen/Kconfig, removing duplicates from link/ and routing/, adding depends on LICHEN, and updating help text for consistency with spec and zrh2.2. Duplicates eliminated, dependencies corrected.",
   "labels": [
     "codereview"
   ],
