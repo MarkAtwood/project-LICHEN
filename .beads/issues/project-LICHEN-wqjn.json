@@ -2,15 +2,15 @@
   "id": "project-LICHEN-wqjn",
   "title": "Fix 5 P3 codereview bugs (senml/codec/app_identity/rust validation)",
   "description": "Select top 5 ready P3s (kiab,mqoh,0bb7,sciu,2jco). Fix unhandled CBOR, UDP checksum, redundant strlen, name length validation, memset redundancy per codereview. Use 3 independent subagent codereview passes (correctness/security/edges). Update tests/vectors, ensure no test weakening. Scope: senml.rs, codec.rs, app_identity.rs/c.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "epic",
   "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:22:23.047715008Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:24:39.068363621Z",
+  "updated_at": "2026-07-22T19:26:09.89773533Z",
   "started_at": "2026-07-22T19:24:39.068363621Z",
-  "lease_expires_at": "2026-07-22T19:29:39.068363621Z",
-  "heartbeat_at": "2026-07-22T19:24:39.068363621Z"
+  "closed_at": "2026-07-22T19:26:09.89773533Z",
+  "close_reason": "Fixed per codereview: cbor.rs indefinite-\u003eNotImplemented + name concat len check (kiab/sciu), codec.rs finalize zero-\u003e0xFFFF (mqoh), app_identity.c copy_string single strlen + removed redundant memset (0bb7/2jco). 3 subagent passes (explore+2 general reviews), cargo test -p lichen-senml/schc pass, no test weakening, RustCrypto/C conventions followed. Epic complete."
 }
