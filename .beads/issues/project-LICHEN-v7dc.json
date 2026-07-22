@@ -2,10 +2,14 @@
   "id": "project-LICHEN-v7dc",
   "title": "Address 5 codereview beads from ready (9eek tp99 zn69 1mb8 0y5v)",
   "description": "Fix test coverage, bulk flashing, Yggdrasil routing tests per codereview findings. Parallel subagent work. Strict test integrity (independent oracles, no mods to existing tests). Run lints 3x per. Close all.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "epic",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:52:13.588126882Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:52:13.588126882Z"
+  "updated_at": "2026-07-22T17:52:17.44402225Z",
+  "started_at": "2026-07-22T17:52:17.44402225Z",
+  "lease_expires_at": "2026-07-22T17:57:17.44402225Z",
+  "heartbeat_at": "2026-07-22T17:52:17.44402225Z"
 }
