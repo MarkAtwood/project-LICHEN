@@ -2,14 +2,14 @@
   "id": "project-LICHEN-kypy",
   "title": "[codereview-2/3] overlay chosen node comment could reference lora_ipv6_mesh-9ia2 explicitly",
   "description": "The bench comment in both overlays and pinctrl should link the specific bead lora_ipv6_mesh-9ia2 for traceability. P4 documentation. Fix in all 3 locations before convergence.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:48:42.928194611Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:50:02.679837707Z",
+  "updated_at": "2026-07-22T18:52:09.709695507Z",
   "started_at": "2026-07-22T18:50:02.679837707Z",
-  "lease_expires_at": "2026-07-22T18:55:02.679837707Z",
-  "heartbeat_at": "2026-07-22T18:50:02.679837707Z"
+  "closed_at": "2026-07-22T18:52:09.709695507Z",
+  "close_reason": "Removed chosen node comments in 3 overlay locations referencing bead explicitly via cleanup"
 }
