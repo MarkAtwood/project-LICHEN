@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-bex2",
+  "title": "[codereview] parse_data does not copy payload from stream_buf",
+  "description": "In lichen/subsys/lichen/meshtastic/adapter.c:771, info-\u003epayload = payload directly aliases the protobuf cursor into the stream_buf. This allows pointer to escape the documented validity window. Should memcpy to a stable buffer in packet_info. P3 but treat as real work per task. Tag: codereview",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T19:08:49.24483524Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:08:49.24483524Z",
+  "labels": [
+    "codereview"
+  ]
+}
