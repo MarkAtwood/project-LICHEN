@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-zonh.2",
+  "title": "T-Deck: update board DTS, pinctrl, Kconfig for keyboard, trackball, I2C, display enable",
+  "description": "Extend t_deck_esp32s3_procpu.dts and pinctrl.dtsi to include I2C buses for keyboard (addr 0x55) and trackball, enable display node, add input nodes. Update Kconfig and defconfig. Follow existing patterns from heltec and t_echo boards. Include test vectors if applicable.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:11:43.062748487Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:11:43.062748487Z",
+  "labels": [
+    "human"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zonh.2",
+      "depends_on_id": "project-LICHEN-zonh",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:11:43.183052054Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
