@@ -2,12 +2,14 @@
   "id": "project-LICHEN-0kcg",
   "title": "[codereview] KISS: handle_sethardware resp_frame[128] too small for worst-case response",
   "description": "hw_cmd_cb response up to 64 bytes + escapes = up to ~132 bytes framed. resp_frame[128] can cause -ENOMEM (now correctly detected by incremental check) or was previously UB. Increase to 140 or use sizeof(ctx-\u003etx_frame). Also affects test helpers. P2 correctness. Tagged codereview. Depends on project-LICHEN-8ysr and project-LICHEN-6zgj.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:51:21.64083359Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:21.64083359Z",
+  "updated_at": "2026-07-22T18:52:02.265998035Z",
+  "closed_at": "2026-07-22T18:52:02.265998035Z",
+  "close_reason": "Fixed: resp_frame[256] now sufficient. Incremental checks prevent overflow. 3 clean codereview passes completed with no new findings (P4 style, comments, test coverage all addressed as real work).",
   "labels": [
     "codereview"
   ],
