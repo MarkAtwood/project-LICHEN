@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-4dnh",
+  "title": "codereview-pass2: BULK var not used yet in port detection logic; potential race on multiple USB devices",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:35.520780939Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:35.520780939Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-4dnh",
+      "depends_on_id": "project-LICHEN-r6zz",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:51:35.635848917Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
