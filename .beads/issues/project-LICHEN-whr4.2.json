@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-whr4.2",
+  "title": "[CODEREVIEW1] security: missing OSCORE replay protection in Python coap/secure.py",
+  "description": "python/src/lichen/coap/secure.py:400-450 - OSCORE context does not enforce replay window or nonce uniqueness per RFC8613 §4.1 and spec/06-security. Potential replay attacks on CoAP observes. Add nonce check using hash_32(LICHEN) for sequence. Update test_secure.py. File as codereview P0.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:09:56.150905507Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:09:56.150905507Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-whr4.2",
+      "depends_on_id": "project-LICHEN-whr4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:09:56.261304228Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
