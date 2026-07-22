@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-wwa4.1",
+  "title": "Update EdhocInitiator::new and EdhocResponder::new to take generic RngCore + CryptoRng",
+  "description": "Change constructors to accept \u0026mut R where R: RngCore + CryptoRng. Remove OsRng usage. Update docs.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:34:28.999642421Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:34:28.999642421Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wwa4.1",
+      "depends_on_id": "project-LICHEN-wwa4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:34:29.130142925Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
