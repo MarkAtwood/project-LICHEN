@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-ix7m.1.2",
+  "title": "codereview-P3-pass1: duplicate parsing logic across parse_*_logs",
+  "description": "P3: parse_python_logs, parse_rust_logs, parse_zephyr_logs have nearly identical fallback TX/RX regex and summary parsing (lines 94-114, 138-158, 182-196). Violates DRY. Extract to shared parse_fallback_lines(lines, stats). Also parse_telemetry duplicated in 3 places. After fix, verify with large test that memory stays O(line size). File as codereview.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:42:36.54737031Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:42:36.54737031Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ix7m.1.2",
+      "depends_on_id": "project-LICHEN-ix7m.1",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:42:36.692608412Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
