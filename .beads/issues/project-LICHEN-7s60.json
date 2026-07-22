@@ -1,0 +1,13 @@
+{
+  "id": "project-LICHEN-7s60",
+  "title": "codereview: LCI test coverage missing in kiss_transport test configs",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:30:27.948666339Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:30:27.948666339Z",
+  "labels": [
+    "codereview"
+  ]
+}
