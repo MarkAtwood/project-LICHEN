@@ -2,12 +2,16 @@
   "id": "project-LICHEN-0lsd",
   "title": "P2: gateway heltec overlay has \u0026uart1 nested inside / {} with redundant status=okay after base DTS now enables uart1",
   "description": "The overlay syntax puts \u0026uart1 { status = \"okay\"; }; inside the root / { chosen... ; \u0026uart1... }; block. This is non-standard DTS and now redundant. Should be top-level \u0026uart1 or removed entirely. Also update comment. Treat P2 as real work per codereview policy.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:47:09.032154458Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:47:09.032154458Z",
+  "updated_at": "2026-07-22T18:47:52.663888321Z",
+  "started_at": "2026-07-22T18:47:52.663888321Z",
+  "lease_expires_at": "2026-07-22T18:52:52.663888321Z",
+  "heartbeat_at": "2026-07-22T18:47:52.663888321Z",
   "labels": [
     "codereview"
   ]
