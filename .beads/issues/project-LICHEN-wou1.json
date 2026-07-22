@@ -2,12 +2,16 @@
   "id": "project-LICHEN-wou1",
   "title": "codereview: Add I2C pinctrl group for keyboard in t_deck-pinctrl.dtsi to match clarification",
   "description": "P2: The DTS comment now clarifies I2C pins but pinctrl.dtsi lacks i2c0_default for SDA18/SCL8. This could lead to wrong DTS later. codereview tagged. Linked to hzvh.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:25:32.067754774Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:25:32.067754774Z",
+  "updated_at": "2026-07-22T18:27:05.892517247Z",
+  "started_at": "2026-07-22T18:27:05.892517247Z",
+  "lease_expires_at": "2026-07-22T18:32:05.892517247Z",
+  "heartbeat_at": "2026-07-22T18:27:05.892517247Z",
   "labels": [
     "codereview"
   ],

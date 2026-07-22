@@ -2,12 +2,16 @@
   "id": "project-LICHEN-53zg",
   "title": "codereview: t_deck DTS keyboard comment uses 'pending' without linking to specific bead for driver compatible",
   "description": "P2: Exact Zephyr compatible string for the I2C keyboard slave at 0x55 is uncertain (no standard driver; custom needed?). File as codereview tag. Linked from project-LICHEN-hzvh.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:25:25.450915372Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:25:25.450915372Z",
+  "updated_at": "2026-07-22T18:27:05.903976993Z",
+  "started_at": "2026-07-22T18:27:05.903976993Z",
+  "lease_expires_at": "2026-07-22T18:32:05.903976993Z",
+  "heartbeat_at": "2026-07-22T18:27:05.903976993Z",
   "labels": [
     "codereview"
   ],
