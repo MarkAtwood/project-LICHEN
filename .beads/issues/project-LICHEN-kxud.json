@@ -2,12 +2,14 @@
   "id": "project-LICHEN-kxud",
   "title": "[codereview-pass2 P4] coap_dtn.c deaddrop_get buffer too small",
   "description": "Uses 64 byte senml buffer; location.c uses 128 for base+records (LOCATION_SENML_MAX). SenML with base_name could exceed. Update to 128 and add #define like location. File:lichen/subsys/lichen/coap/coap_dtn.c:125. P4 style/consistency. discovered-from:project-LICHEN-92oj",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "created_at": "2026-07-22T18:36:11.673631375Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:36:11.673631375Z",
+  "updated_at": "2026-07-22T18:37:36.377963921Z",
+  "closed_at": "2026-07-22T18:37:36.377963921Z",
+  "close_reason": "Fixed: buffer now DEADDROP_SENML_MAX=128, uses senml_encode_dtn_count.",
   "labels": [
     "codereview"
   ]
