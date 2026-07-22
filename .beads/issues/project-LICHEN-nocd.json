@@ -2,10 +2,14 @@
   "id": "project-LICHEN-nocd",
   "title": "codereview P4: write_user does not validate generated ID length or content",
   "description": "After generating id[10] in lichen/subsys/lichen/meshtastic/codec.c:589, no assert or check that it is valid printable ID before pb_write_string_field. Though hex ensures it, explicit validation is better for robustness. Fix per task. discovered-from:project-LICHEN-zmrg",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "chore",
+  "assignee": "AI Agent",
   "created_at": "2026-07-22T19:08:02.65892449Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:08:02.65892449Z"
+  "updated_at": "2026-07-22T19:18:20.280564866Z",
+  "started_at": "2026-07-22T19:18:20.280564866Z",
+  "lease_expires_at": "2026-07-22T19:23:20.280564866Z",
+  "heartbeat_at": "2026-07-22T19:18:20.280564866Z"
 }
