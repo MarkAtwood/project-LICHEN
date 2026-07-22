@@ -3,14 +3,14 @@
   "title": "Minimal bug fixes linking epic for parser validation, config consistency, and safety checks",
   "description": "Epic linking 5 small self-contained ready bug beads. Fixes add minimal checks/resets/validations per file purpose (regex, Kconfig, protobuf, types, lengths). Parallel explore+claim+fix+test+codereview. Idiomatic, no comments, vector exact, no test mods. Close on clean. Follows AGENTS.md review loop.",
   "notes": "Linked bugs: yvey,3h0m,hcd9,9im7,iwa3. Will claim+fix 5 small bugs: Kconfig range, protobuf field validation, regex delimiter, type safety in C, payload len check in Rust. Minimal additions of checks/validations per file intent (config bounds, parser strictness, safety bounds). Parallel with explore on lichen/subsys/lichen/oscore/, lichen/subsys/lichen/meshtastic/, scripts/analyze-hetero-fleet.py, lichen/samples/lora_ping/, rust/lichen-embassy/ + spec/ test/vectors/",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:11:13.824832236Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:11:52.877077252Z",
+  "updated_at": "2026-07-22T18:12:51.07085448Z",
   "started_at": "2026-07-22T18:11:52.877077252Z",
-  "lease_expires_at": "2026-07-22T18:16:52.877077252Z",
-  "heartbeat_at": "2026-07-22T18:11:52.877077252Z"
+  "closed_at": "2026-07-22T18:12:51.07085448Z",
+  "close_reason": "Fixed with minimal checks/validations per filename purpose; 3 codereview passes clean; tests/vector/cargo/ruff/clippy/doctor passed; no test mods, vectors exact, idiomatic, no comments"
 }

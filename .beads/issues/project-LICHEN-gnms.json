@@ -2,12 +2,14 @@
   "id": "project-LICHEN-gnms",
   "title": "codereview-security: 29zi fixes",
   "description": "Security pass: checks prevent invalid states, overflow, truncation, invalid fields, false parses. No new attack surface, follows AGENTS.md. Clean.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "created_at": "2026-07-22T18:12:35.5673976Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:12:35.5673976Z",
+  "updated_at": "2026-07-22T18:12:51.525379876Z",
+  "closed_at": "2026-07-22T18:12:51.525379876Z",
+  "close_reason": "Fixed with minimal checks/validations per filename purpose; 3 codereview passes clean; tests/vector/cargo/ruff/clippy/doctor passed; no test mods, vectors exact, idiomatic, no comments",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-gnms",
