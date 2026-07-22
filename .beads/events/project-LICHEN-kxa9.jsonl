@@ -1,1 +1,2 @@
 {"id":"019f8b3f-48ad-74e1-99e4-0ff457e65c1a","issue_id":"project-LICHEN-kxa9","event_type":"created","actor":"AI Agent","old_value":"","new_value":"","created_at":"2026-07-22T19:13:28.237320669Z"}
+{"id":"019f8b40-6b2a-7b6b-83d5-02f8f15f46d4","issue_id":"project-LICHEN-kxa9","event_type":"closed","actor":"AI Agent","old_value":"","new_value":"Fixed with safer out_len check and INT_MAX BUILD_ASSERT in codec.c and adapter.c; P4 treated as real work per instructions","created_at":"2026-07-22T19:14:42.602749064Z"}
