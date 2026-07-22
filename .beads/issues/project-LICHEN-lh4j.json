@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-lh4j",
+  "title": "Remaining broad except Exception in TUI native.py and app.py",
+  "description": "After fixing the 3 loops in native.py per project-LICHEN-8r0b, 15+ other except Exception as exc: remain in python/src/lichen/tui/native.py (lines ~1627 to 2495) and app.py. These may also swallow critical errors like KeyboardInterrupt. Should apply consistent BaseException + re-raise pattern project-wide for TUI. Independent oracle: Python exception hierarchy docs recommend against bare except Exception for system signals.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:45:56.335477858Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:45:56.335477858Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-lh4j",
+      "depends_on_id": "project-LICHEN-8r0b",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T19:45:56.459207975Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
