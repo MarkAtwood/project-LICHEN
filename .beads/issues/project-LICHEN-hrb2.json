@@ -2,13 +2,15 @@
   "id": "project-LICHEN-hrb2",
   "title": "codereview general subagent pass 3/3: gateway.rs SCHC buffer",
   "description": "Final general subagent review pass 3/3 of fix for project-LICHEN-hhny. All criteria met: larger configurable-style buffer via named const (mimics file's constant usage for MTU assumptions without comments), precise error matching on BufferTooSmall variant from the schc codec, no dead code added, edits confined to target file. Reviews confirm convergence with only priority 4 findings across passes. Tests, clippy, and type checks successful. No high priority issues remain.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:42:01.804238681Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:42:01.804238681Z",
+  "updated_at": "2026-07-22T19:42:04.470937533Z",
+  "closed_at": "2026-07-22T19:42:04.470937533Z",
+  "close_reason": "Closed",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-hrb2",
