@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-zubu",
+  "title": "[CODEREVIEW] Missing LVGL input DT nodes for t_deck keyboard/trackball",
+  "description": "lichen/boards/lilygo/t_deck/t_deck_esp32s3_procpu.dts:110 - Trackball node is incomplete gpio-keys; no zephyr,lvgl-keypad-input or zephyr,lvgl-pointer-input nodes linked to keyboard0/trackball0. UI integration broken. Review pass 1.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:24:39.795970356Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:24:39.795970356Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zubu",
+      "depends_on_id": "project-LICHEN-1qlb",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:24:39.972918781Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
