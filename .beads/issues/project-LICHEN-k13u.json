@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-k13u",
+  "title": "codereview: missing end-to-end border router test for ping6 forwarding",
+  "description": "No integration test exercises full path: mesh node -\u003e SCHC -\u003e gateway -\u003e TUN -\u003e kernel IPv6 -\u003e ping to internet and back. Add test using lichen-sim + mock TUN or packet capture. P0 for this bead project-LICHEN-p2y5.6. Tagged codereview.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:47:42.553282161Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:47:42.553282161Z",
+  "labels": [
+    "codereview",
+    "gateway",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-k13u",
+      "depends_on_id": "project-LICHEN-p2y5.6",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:47:42.68045627Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
