@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-thwq",
+  "title": "[codereview] P4: enqueue_next_pending tx_buf usage could race if called concurrently",
+  "description": "lichen/subsys/lichen/meshcore/adapter.c:380 - tx_buf[0] write assumes exclusive access to tx_buf. If multiple threads or ISR call enqueue_next_pending, corruption possible. Though current callers are serialized via LCI, document or add lock. Tagged codereview. Discovered-from:project-LICHEN-d3x4",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:18:50.325649182Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:18:50.325649182Z"
+}

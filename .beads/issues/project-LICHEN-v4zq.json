@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-v4zq",
+  "title": "codereview pass #1: test helpers still ignore positive codes in submit_location_with_bridge and clear_network_location",
+  "description": "In lichen/subsys/lichen/app_interface/app_interface.c:477 and :528, the test hook does  before returning injected ret from lichen_app_interface_test_fail_next_*. Positive codes (\u003e0) are ignored and real HAL path executes. This was supposed to be fixed per project-LICHEN-520s. Other items (uninit, truncation validation via CBOR count patch+break, BUILD_ASSERT for VLA/stack in coap_keys.c:605, Y2K38 comments in app_interface.h:134 and :162) appear correctly addressed. No new bugs in core logic or missed edges in reviewed files+tests. P2 correctness.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:18:50.214170849Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:18:50.214170849Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-v4zq",
+      "depends_on_id": "project-LICHEN-520s",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T19:18:50.359755999Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
