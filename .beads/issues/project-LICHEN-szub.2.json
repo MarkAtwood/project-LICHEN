@@ -2,12 +2,14 @@
   "id": "project-LICHEN-szub.2",
   "title": "P2: Roaming nodes overlap with TX nodes biasing rx_count validation",
   "description": "Current roam range(20) overlaps with TX loop range(min(50,n_nodes)) so out nodes include many transmitters whose rx may be affected differently. Use non-overlapping indices e.g. range(100,120) for out, range(120,140) for in-roam to isolate propagation effect. Also 1.5x threshold arbitrary; validate avg_out near 0 for far positions. Codereview pass 2 for project-LICHEN-szub.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T18:03:32.954649895Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:03:32.954649895Z",
+  "updated_at": "2026-07-22T18:04:16.844933021Z",
+  "closed_at": "2026-07-22T18:04:16.844933021Z",
+  "close_reason": "All fixes applied to test_scale.py: non-overlapping roam indices (100-140), conference_area bounds used, rx_count==0 validation for far nodes + unique_peers check. Addresses P0/P2/P3.",
   "labels": [
     "codereview",
     "human"

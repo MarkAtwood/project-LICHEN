@@ -2,12 +2,14 @@
   "id": "project-LICHEN-szub.3",
   "title": "P3: Validation should also check unique_peers or per-metrics export consistency for roaming nodes",
   "description": "Beyond rx_count, validate that out-of-area nodes have fewer unique_peers in their NodeMetrics after roaming, or load the exported JSON and cross-check. Improves coverage of propagation impact. Codereview pass 3.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "created_at": "2026-07-22T18:03:40.756994801Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:03:40.756994801Z",
+  "updated_at": "2026-07-22T18:04:17.062922283Z",
+  "closed_at": "2026-07-22T18:04:17.062922283Z",
+  "close_reason": "All fixes applied to test_scale.py: non-overlapping roam indices (100-140), conference_area bounds used, rx_count==0 validation for far nodes + unique_peers check. Addresses P0/P2/P3.",
   "labels": [
     "codereview",
     "human"
