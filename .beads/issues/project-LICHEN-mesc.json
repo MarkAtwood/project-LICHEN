@@ -2,14 +2,14 @@
   "id": "project-LICHEN-mesc",
   "title": "[codereview] KISS transport: stats struct has extra indentation",
   "description": "In lichen/subsys/lichen/transport/include/lichen/transport/kiss_transport.h:143 the struct kiss_transport_stats declaration has leading whitespace making it appear nested. P4 style issue. Fix by removing leading whitespace. Tagged codereview per task. Parent: project-LICHEN-dphw",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:51:00.131624662Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:02.683243734Z",
+  "updated_at": "2026-07-22T18:51:33.081418778Z",
   "started_at": "2026-07-22T18:51:02.683243734Z",
-  "lease_expires_at": "2026-07-22T18:56:02.683243734Z",
-  "heartbeat_at": "2026-07-22T18:51:02.683243734Z"
+  "closed_at": "2026-07-22T18:51:33.081418778Z",
+  "close_reason": "Fixed stats struct indentation (P4 treated as real work). Performed 3 /codereview passes after the edit; all passes clean with no new findings filed. All codereview beads fixed. Main bead project-LICHEN-dphw remains as instructed until 3 clean passes confirmed."
 }
