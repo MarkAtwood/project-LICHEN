@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-ix7m.1",
+  "title": "codereview-P3: log reader full file load",
+  "description": "P3: scripts/analyze-hetero-fleet.py:53,82,128,172 use read_text() loading full (potentially multi-GB) log into memory before splitlines(). Risks OOM on large fleet tests. Fix: refactor parse_*_logs to stream with  . Update parse_telemetry to accept iterable[str]. Merge duplicate TX/RX parsing logic into shared helper to reduce code duplication (current 3 near-identical blocks). Add large-log test that generates 100MB+ file and verifies no \u003e50MB peak memory. Follows 'no dead code' and streaming patterns from other scripts. After fix run 3 codereviews.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:42:10.74679263Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:42:10.74679263Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ix7m.1",
+      "depends_on_id": "project-LICHEN-ix7m",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:42:10.890474254Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
