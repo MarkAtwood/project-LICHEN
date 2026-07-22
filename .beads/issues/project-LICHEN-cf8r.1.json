@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-cf8r.1",
+  "title": "codereview P3: decompress_mqtt_sn should take rule_id param like decompress_coap to verify consistency",
+  "description": "The decompress_coap takes rule_id to decide address mode. decompress_mqtt_sn does not, violating consistency. Add param and verify at start of fn. Tag: codereview",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:24:28.132640066Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:24:28.132640066Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cf8r.1",
+      "depends_on_id": "project-LICHEN-cf8r",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:24:28.25826758Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
