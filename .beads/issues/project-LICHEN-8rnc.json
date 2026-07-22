@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-8rnc",
+  "title": "codereview-correctness: 29zi fixes",
+  "description": "Correctness pass on added checks in Kconfig, adapter.c, main.c, sim.rs, analyze script. All validations match file purpose (bounds, field nums, counts, lengths, parsing). Vector exactness preserved. No test mods.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:12:35.236162778Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:12:35.236162778Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-8rnc",
+      "depends_on_id": "project-LICHEN-29zi",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:12:35.362412529Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
