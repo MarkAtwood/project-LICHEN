@@ -18,8 +18,32 @@ use crate::message::{
 };
 
 #[cfg(feature = "std")]
-use crate::lollipop_is_newer;
+/// RFC 6550 Section 9.1: Lollipop sequence comparison for DAO sequence.
+///
+/// Values 0-127 are the linear region (restart); 128-255 are circular (normal).
+/// Returns true if `new_seq` is newer than `old_seq`.
+const LOLLIPOP_CIRCULAR_BIT: u8 = 128;
+#[cfg(feature = "std")]
+const LOLLIPOP_SEQUENCE_WINDOW: u8 = 16;
 
+#[cfg(feature = "std")]
+fn seq_is_newer(new_seq: u8, old_seq: u8) -> bool {
+    match (
+        new_seq < LOLLIPOP_CIRCULAR_BIT,
+        old_seq < LOLLIPOP_CIRCULAR_BIT,
+    ) {
+        // Both in linear region (0-127): simple comparison
+        (true, true) => new_seq > old_seq,
+        // Both in circular region (128-255): modular comparison with window
+        (false, false) => {
+            let diff = new_seq.wrapping_sub(old_seq) & 0x7F;
+            diff > 0 && diff <= LOLLIPOP_SEQUENCE_WINDOW
+        }
+        // Mixed: linear (restart) is always newer than circular
+        (true, false) => true,
+        (false, true) => false,
+    }
+}
 #[cfg(feature = "std")]
 use lichen_core::error::{BufferTooSmall, TooShort};
 
@@ -190,17 +214,6 @@ impl RoutingTable {
     }
 
     pub fn add_route(&mut self, target: [u8; 16], path: &[[u8; 16]]) {
-        let mut seen = HashSet::new();
-        let mut deduped_path = Vec::with_capacity(path.len());
-        for &addr in path {
-            if seen.insert(addr) {
-                deduped_path.push(addr);
-            }
-        }
-        if !deduped_path.contains(&target) {
-            deduped_path.push(target);
-        }
-        let path = deduped_path.as_slice();
         match self.routes.get_mut(&target) {
             Some(entry) if entry.state != RouteEntryState::Expired => {
                 entry
@@ -351,7 +364,7 @@ impl DaoManager {
         };
         // SECURITY: Reject stale DAO sequences to prevent replay attacks
         if let Some(&last_seq) = self.dao_seq_map.get(&target) {
-            if !lollipop_is_newer(dao.dao_sequence, last_seq) {
+            if !seq_is_newer(dao.dao_sequence, last_seq) {
                 return false;
             }
         }
@@ -361,7 +374,7 @@ impl DaoManager {
         true
     }
 
-    pub fn extract_edge(&self, dao_bytes: &[u8]) -> Option<([u8; 16], [u8; 16])> {
+    fn extract_edge(&self, dao_bytes: &[u8]) -> Option<([u8; 16], [u8; 16])> {
         let options = Dao::options_tail(dao_bytes);
         let mut target: Option<[u8; 16]> = None;
         let mut parent: Option<[u8; 16]> = None;
@@ -382,7 +395,7 @@ impl DaoManager {
         Some((target?, parent?))
     }
 
-    pub fn rebuild_routes(&mut self) {
+    fn rebuild_routes(&mut self) {
         let targets: Vec<[u8; 16]> = self.parent_map.keys().copied().collect();
         for target in targets {
             if let Some(path) = self.assemble_path(target) {
@@ -652,27 +665,27 @@ mod tests {
         // Linear region: 0-127, Circular region: 128-255
 
         // Linear region: simple comparison
-        assert!(super::lollipop_is_newer(1, 0));
-        assert!(super::lollipop_is_newer(127, 0));
-        assert!(!super::lollipop_is_newer(0, 1));
+        assert!(super::seq_is_newer(1, 0));
+        assert!(super::seq_is_newer(127, 0));
+        assert!(!super::seq_is_newer(0, 1));
 
         // Circular region: modular comparison with sequence window
-        assert!(super::lollipop_is_newer(129, 128));
-        assert!(super::lollipop_is_newer(144, 128)); // diff=16, within window
-        assert!(!super::lollipop_is_newer(145, 128)); // diff=17, outside window
-        assert!(super::lollipop_is_newer(255, 254));
-        assert!(super::lollipop_is_newer(128, 255)); // wraps around within circular
+        assert!(super::seq_is_newer(129, 128));
+        assert!(super::seq_is_newer(144, 128)); // diff=16, within window
+        assert!(!super::seq_is_newer(145, 128)); // diff=17, outside window
+        assert!(super::seq_is_newer(255, 254));
+        assert!(super::seq_is_newer(128, 255)); // wraps around within circular
 
         // Mixed: linear (restart) is always newer than circular
-        assert!(super::lollipop_is_newer(0, 255));
-        assert!(super::lollipop_is_newer(0, 128));
-        assert!(super::lollipop_is_newer(127, 200));
-        assert!(super::lollipop_is_newer(127, 128)); // key bug case from bead
-        assert!(!super::lollipop_is_newer(200, 127)); // circular not newer than linear
-        assert!(!super::lollipop_is_newer(128, 127)); // circular not newer than linear
+        assert!(super::seq_is_newer(0, 255));
+        assert!(super::seq_is_newer(0, 128));
+        assert!(super::seq_is_newer(127, 200));
+        assert!(super::seq_is_newer(127, 128)); // key bug case from bead
+        assert!(!super::seq_is_newer(200, 127)); // circular not newer than linear
+        assert!(!super::seq_is_newer(128, 127)); // circular not newer than linear
 
         // Same sequence is not newer
-        assert!(!super::lollipop_is_newer(100, 100));
-        assert!(!super::lollipop_is_newer(200, 200));
+        assert!(!super::seq_is_newer(100, 100));
+        assert!(!super::seq_is_newer(200, 200));
     }
 }
