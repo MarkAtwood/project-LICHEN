@@ -2,16 +2,16 @@
   "id": "project-LICHEN-z20g",
   "title": "codereview-pass2.1: 05-routing.md address table update",
   "description": "Pass 1 (Correctness): Updated classification table for no-ULA model. Verified table now matches parent zt3c notes on 02xx primary address, link-local control-plane restriction, and Yggdrasil forwarding. No logic errors in new rows. P3: consider adding explicit Ed25519 derivation reference to 06-security.md here. file:spec/05-routing.md:49",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T15:10:27.50513209Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:34:56.156679301Z",
+  "updated_at": "2026-07-22T18:35:19.87301762Z",
   "started_at": "2026-07-22T18:34:56.156679301Z",
-  "lease_expires_at": "2026-07-22T18:39:56.156679301Z",
-  "heartbeat_at": "2026-07-22T18:34:56.156679301Z",
+  "closed_at": "2026-07-22T18:35:19.87301762Z",
+  "close_reason": "Updated address table with Ed25519 ref in spec/05-routing.md:52 per codereview, minimal change",
   "labels": [
     "codereview"
   ]
