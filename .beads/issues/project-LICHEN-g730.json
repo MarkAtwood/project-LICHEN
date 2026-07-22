@@ -1,0 +1,37 @@
+{
+  "id": "project-LICHEN-g730",
+  "title": "[codereview] uart1 enablement and build test for Heltec bench overlay",
+  "description": "For lora_ipv6_mesh-9ia2 fix: after pinctrl addition, need overlay snippet or file for setting chosen{zephyr,console=\u0026uart1; zephyr,shell-uart=\u0026uart1;}, \u0026uart1{status='okay'; current-speed=\u003c115200\u003e; pinctrl-0=\u003c\u0026uart1_default\u003e; pinctrl-names='default';}, and ensure CONFIG_SERIAL=y CONFIG_UART_CONSOLE=n? or keep. Add to defconfig or conf if needed. Test build with west build ... -D DTC_OVERLAY_FILE=... . Verify no reset on port open using python -m serial.tools.list_ports and serial.Serial(port, 115200, dtr=False, rts=False). Use EC2 for Zephyr build if local SDK issue. Fix ALL before closing any related bead. 3 codereview passes required per workflow rule.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:43:38.611254477Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:38.611254477Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-g730",
+      "depends_on_id": "lora_ipv6_mesh-9ia2",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:43:38.754899405Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-g730",
+      "depends_on_id": "project-LICHEN-sam7",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:43:38.926790667Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-g730",
+      "depends_on_id": "project-LICHEN-p95o",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:43:39.076446639Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
