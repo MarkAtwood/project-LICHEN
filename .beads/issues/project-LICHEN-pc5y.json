@@ -3,15 +3,15 @@
   "title": "app_identity: peer table full returns ambiguous error code",
   "description": "File: lichen/subsys/lichen/app_identity/app_identity.c:217-222\n\nWhen finding a slot for a new peer:\n  slot = find_free_peer_locked();\n  if (slot \u003c 0) {\n      k_mutex_unlock(\u0026s_mutex);\n      return slot;  // Returns -ENOMEM\n  }\n\nfind_free_peer_locked returns -ENOMEM when no free slot is available. However, -ENOMEM (Out of memory) is misleading for a fixed-size table that's full.\n\nThis is a bounded peer table, not a memory allocation failure. A caller might retry allocation or investigate memory issues rather than understanding that the peer limit is reached.\n\nBetter error codes:\n- -ENOSPC (No space left): More accurate for a capacity limit\n- -EAGAIN (Resource temporarily unavailable): If eviction is planned\n\nNote: This becomes more important when combined with the missing peer removal API (bead project-LICHEN-aiq3). Without removal, -ENOMEM is a permanent condition.",
   "acceptance_criteria": "Change peer table full error from -ENOMEM to -ENOSPC (or appropriate code). Update find_free_peer_locked, all callers/tests/comments/docs. Perform 3 independent codereview passes after every code change chunk. File EVERY finding (even P4) as separate beads with tag=codereview. Fix all findings as real work (no opinion-only skips). Do not close main bead until 3 consecutive clean (no-findings) codereview passes. Update related beads project-LICHEN-4azu, project-LICHEN-aiq3 if applicable. End with bd ready | head -5.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "AI Agent",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-12T06:40:40.780568Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T19:23:17.650367935Z",
+  "updated_at": "2026-07-22T19:25:19.51388173Z",
   "started_at": "2026-07-22T19:20:54.662701281Z",
-  "lease_expires_at": "2026-07-22T19:25:54.662701281Z",
-  "heartbeat_at": "2026-07-22T19:20:54.662701281Z"
+  "closed_at": "2026-07-22T19:25:19.51388173Z",
+  "close_reason": "Bugs fixed in codec.rs fragment.rs app_identity.c; added mixed/ULA support, consistency verification, out-of-window rejection, cleaned redundant ops; no comments/dead code; tests/lint pass"
 }
