@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-cbv4",
   "title": "Simulation shutdown leaks pending transmissions",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:10.679604612Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:57:08.297937322Z",
+  "updated_at": "2026-07-22T18:59:03.320370882Z",
   "started_at": "2026-07-22T18:57:08.297937322Z",
-  "lease_expires_at": "2026-07-22T19:02:08.297937322Z",
-  "heartbeat_at": "2026-07-22T18:57:08.297937322Z",
+  "closed_at": "2026-07-22T18:59:03.320370882Z",
+  "close_reason": "Fixed: updated docs pinouts for t_deck I2C/trackball/PoE; closed resources in Python sim shutdown; reset SLIP state on ESC in IDLE; added bounds checks to SCHC reassembly to prevent buffer overflow on malformed fragments; fixed test imports/fixture and cleanup for scale tests. Edits to Python sim, C SLIP/SCHC, tests, md. No comments added. Verified with pytest, renode sim, west build -t run. All P0 critical closed.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-cbv4",
