@@ -122,51 +122,21 @@ int lichen_pubkey_to_iid(const uint8_t *pubkey, uint8_t *iid)
      * "locally-administered" status. The Python implementation in
      * lichen/crypto/identity.py uses the same approach (clear, not flip).
      */
-    iid[0] &= ~UL_BIT;  /* Clear U/L bit */
+    iid[0] &= ~UL_BIT;
 
 cleanup:
-    /* SECURITY: Zero hash on all paths (sha_state zeroed by helper) */
     secure_zero(hash, sizeof(hash));
     return ret;
 }
 
-int lichen_pubkey_to_human_address(const uint8_t *pubkey,
-                                   char *buf, size_t buflen)
-{
-    if (pubkey == NULL || buf == NULL || buflen < 16) {
-        LOG_ERR("ipv6_addr: pubkey_to_human_address failed (NULL or small buf)");
-        return -EINVAL;
-    }
-
-    uint8_t hash[TC_SHA256_DIGEST_SIZE];
-    int ret = lichen_sha256(pubkey, LICHEN_ED25519_PUBKEY_LEN, hash);
-    if (ret != 0) {
-        LOG_ERR("ipv6_addr: pubkey_to_human_address failed (SHA-256 error %d)", ret);
-        goto cleanup;
-    }
-
-    uint64_t num = 0;
-    for (size_t i = 0; i < 8; i++) {
-        num = (num << 8) | hash[i];
-    }
-
-    char temp[13];
-    for (int i = 12; i >= 0; i--) {
-        temp[i] = CROCKFORD_ALPHABET[num % 32];
-        num /= 32;
-    }
-
-    /* Format: XXXX-XXXX-XXXXX (13 chars + 2 dashes + NUL = 16) */
-    memcpy(buf, temp, 4);
-    buf[4] = '-';
-    memcpy(buf + 5, temp + 4, 4);
-    buf[9] = '-';
-    memcpy(buf + 10, temp + 8, 5);
-    buf[15] = '\0';
-
-cleanup:
+int lichen_eui_from_ed25519(const uint8_t *pubkey, uint8_t *eui) {
+    uint8_t hash[64];
+    if (pubkey == NULL || eui == NULL) return -EINVAL;
+    lichen_sha512(hash, pubkey, 32);
+    memcpy(eui, hash, 8);
+    eui[0] = (eui[0] & 0xfe) | 0x02;
     secure_zero(hash, sizeof(hash));
-    return ret;
+    return 0;
 }
 
 int lichen_make_link_local(const uint8_t *iid, struct in6_addr *addr)

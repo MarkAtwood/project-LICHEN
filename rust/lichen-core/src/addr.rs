@@ -3,6 +3,7 @@
 // Re-export Addr from lichen-ipv6 as Ipv6Addr for backward compatibility.
 // This eliminates the duplicate type definition while preserving the API.
 pub use lichen_ipv6::Addr as Ipv6Addr;
+use sha2::{Digest, Sha512};
 
 /// A 64-bit node identifier (EUI-64 derived from the radio hardware address).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -27,19 +28,12 @@ impl NodeId {
         self.addr_with_prefix(prefix)
     }
 
-    /// Derive NodeId from an IPv6 address by extracting its IID (low 64 bits)
-    /// and reversing the modified EUI-64 U/L bit (XOR 0x02 on first IID byte).
-    ///
-    /// **Codereview fix**: Now uses `Ipv6Addr::iid()` (centralized extraction)
-    /// instead of assuming bytes 8-15 directly. Explicitly documents that
-    /// callers (RPL DAO targets, gateway routes) guarantee link-local/ULA/GUA
-    /// address with standard /64 IID. No runtime check added to avoid no_std
-    /// overhead; validation is caller's responsibility per current design.
-    pub fn from_ipv6(addr: &[u8; 16]) -> Self {
-        let ipv6 = Ipv6Addr(*addr);
-        let mut eui = ipv6.iid();
-        eui[0] ^= 0x02;
-        NodeId(eui)
+    pub fn ygg_addr_from_pubkey(pubkey: &[u8; 32]) -> Ipv6Addr {
+        let hash = Sha512::digest(pubkey);
+        let mut addr = [0u8; 16];
+        addr[0] = 0x02;
+        addr[1..9].copy_from_slice(&hash[0..8]);
+        Ipv6Addr(addr)
     }
 
     fn addr_with_prefix(&self, prefix: [u8; 8]) -> Ipv6Addr {
