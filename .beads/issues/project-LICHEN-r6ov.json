@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-r6ov",
+  "title": "[codereview-pass3-round2] Robustness: Packet count bumped to 32 but no corresponding stack size adjustment for WiFi RX path or WiFi task pinning (ESP_WIFI_TASK_PINNED_TO_CORE); may still OOM on dual radio. Also update firmware/bridge-zephyr/boards/heltec...conf for consistency",
+  "description": "lichen/apps/gateway/boards/heltec_wifi_lora32_v3_esp32s3_procpu.conf:94-95 and related stacks at lines 43,60. West build test pending. Also check puck conf and firmware/bridge-zephyr version. discovered-from:project-LICHEN-ros5",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:19:16.555634476Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:19:16.555634476Z"
+}
