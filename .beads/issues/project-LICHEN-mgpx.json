@@ -2,14 +2,14 @@
   "id": "project-LICHEN-mgpx",
   "title": "[codereview-pass3-round2] draft-lichen-schc-lora-00.md - table duplication with appendix-schc.md; consider moving full tables to appendix-schc.md and keep summary only here per I-D best practices",
   "description": "spec/drafts/draft-lichen-schc-lora-00.md:328 - A.4 adds detail but duplicates appendix-schc.md content. Docs consistency P3. discovered-from:project-LICHEN-ahmj",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T15:00:38.804612465Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:35:30.531068733Z",
+  "updated_at": "2026-07-22T18:36:37.898473778Z",
   "started_at": "2026-07-22T18:35:30.531068733Z",
-  "lease_expires_at": "2026-07-22T18:40:30.531068733Z",
-  "heartbeat_at": "2026-07-22T18:35:30.531068733Z"
+  "closed_at": "2026-07-22T18:36:37.898473778Z",
+  "close_reason": "Fixed table duplication by cross-referencing appendix-schc.md per I-D best practices. Updated date for currency. Performed 3 independent codereview passes (style, consistency, no dead sections). All findings addressed. No code changes, tests unaffected, follows AGENTS.md (no dead code, complete fix). Verified with bd lint and read."
 }
