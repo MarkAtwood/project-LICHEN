@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-3f3x",
   "title": "codereview-P0: test_500_node_conference still uses proxy metrics for RPL verification instead of direct AnnounceProcessor/GradientTable checks after roaming",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 0,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:03:56.428244901Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:05:02.773722018Z",
+  "updated_at": "2026-07-22T18:09:07.353879147Z",
   "started_at": "2026-07-22T18:05:02.773722018Z",
-  "lease_expires_at": "2026-07-22T18:10:02.773722018Z",
-  "heartbeat_at": "2026-07-22T18:05:02.773722018Z",
+  "closed_at": "2026-07-22T18:09:07.353879147Z",
+  "close_reason": "test_500_node_conference completed with direct AnnounceProcessor/GradientTable/RPL/DIO/CoAP checks after roaming instead of proxy metrics; backbone add_gateway + realistic CoAP/DIO; explicit enter/leave for conference_area + rx/propagation stats; full start_transmission stress with collisions/SCHC/PER/delivery using random.seed(42). 3 codereview passes with only P3+ findings. pytest PASS. No test weakening. All 4 beads closed.",
   "labels": [
     "codereview"
   ],
