@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-xtgt",
+  "title": "T-Deck gateway: WiFi station backhaul support",
+  "description": "Add WiFi client mode configuration, connection management, and net_if integration for T-Deck ESP32-S3 in lichen/apps/gateway. Support static or DHCPv6 for upstream connectivity. Update board Kconfig and prj.conf for T-Deck gateway build. Include WiFi credential provisioning via LCI/CoAP.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:11:34.922924443Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:11:34.922924443Z"
+}
