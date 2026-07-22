@@ -1,0 +1,1 @@
+{"id":"019f8b48-74cd-7228-8339-e5172d18022f","issue_id":"project-LICHEN-ofnx","event_type":"closed","actor":"AI Agent","old_value":"","new_value":"Replaced broad suppress(Exception) with specific except + logging in close()","created_at":"2026-07-22T19:23:29.357142516Z"}
