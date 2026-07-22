@@ -1,0 +1,7 @@
+{
+  "id": "1784748949390472131-1",
+  "issue_id": "project-LICHEN-w1i0",
+  "author": "AI Agent",
+  "text": "GLOBAL address matching using 2000::/3 is per RFC 4291 but includes deprecated subranges; global compression is documented as full-address in headers.py. Design choice for LICHEN deployment context. Human review for whether to tighten prefix or add rule variants.",
+  "created_at": "2026-07-22T19:35:49.390472131Z"
+}
