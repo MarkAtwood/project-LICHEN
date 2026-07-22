@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-q8up",
+  "title": "[codereview] docs/bench-operations.md:259 grammar in post-event sentence",
+  "description": "Future: nodes report back, global map? should be declarative. P4 finding.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:41:37.206894195Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:41:37.206894195Z",
+  "labels": [
+    "codereview"
+  ]
+}
