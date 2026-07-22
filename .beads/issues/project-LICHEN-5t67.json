@@ -2,10 +2,14 @@
   "id": "project-LICHEN-5t67",
   "title": "[CODEREVIEW-6] board Kconfig",
   "description": "No Kconfig.defconfig or board.yml yet for thinknode_m7. Board not registered with Zephyr build system.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:39.698650775Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:39.698650775Z"
+  "updated_at": "2026-07-22T18:21:56.613143989Z",
+  "started_at": "2026-07-22T18:21:56.613143989Z",
+  "lease_expires_at": "2026-07-22T18:26:56.613143989Z",
+  "heartbeat_at": "2026-07-22T18:21:56.613143989Z"
 }
