@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-bwwk",
+  "title": "codereview: input driver skeleton missing",
+  "description": "After adding Kconfig/CMakeLists and binding, the C driver implementation lilygo_tdeck_keyboard.c is still missing. Must follow Zephyr input patterns exactly (no comments, use existing patterns from gpio_keys or similar I2C input drivers). Must handle I2C at 0x55 without crashing on Renode stub. P1 until implemented. discovered-from:project-LICHEN-zonh.3",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:18:46.497577756Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:18:46.497577756Z",
+  "labels": [
+    "codereview"
+  ]
+}
