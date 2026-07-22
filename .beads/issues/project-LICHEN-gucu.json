@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-gucu",
+  "title": "Beads/git commit failures on .beads tmp and index.lock during AI agent workflow",
+  "description": "bd update/close fails with git index.lock or missing tmp files during auto-commit of .beads JSON. Occurred multiple times despite rm of locks. Other modified files in rust/ suggest previous incomplete sessions. Test collection for pytest also fails with type | operator errors despite requires-python \u003e=3.11 and future annotations. Needs human review of git state, beads setup, and Python env for tests. Prioritize P0 as it blocks all AI agent work on beads.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:43:23.818165139Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:43:23.818165139Z"
+}
