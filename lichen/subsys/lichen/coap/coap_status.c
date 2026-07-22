@@ -8,6 +8,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
+#include <zephyr/net/net_ip.h>
 #include <errno.h>
 
 #include <lichen/coap_status.h>
@@ -218,19 +219,12 @@ static void cbor_put_int(struct cbor_ctx *ctx, int32_t value)
 	}
 }
 
-static int format_ipv6(const uint8_t addr[16], char *buf, size_t buf_size)
+int lichen_coap_format_ipv6(const uint8_t *addr, char *buf, size_t buf_size)
 {
-	int r = snprintf(buf, buf_size,
-			"%02x%02x:%02x%02x:%02x%02x:%02x%02x:"
-			"%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-			addr[0], addr[1], addr[2], addr[3],
-			addr[4], addr[5], addr[6], addr[7],
-			addr[8], addr[9], addr[10], addr[11],
-			addr[12], addr[13], addr[14], addr[15]);
-	if (r < 0 || (size_t)r >= buf_size) {
+	if (net_addr_ntop(AF_INET6, addr, buf, buf_size) == NULL) {
 		return -ENOBUFS;
 	}
-	return r;
+	return 0;
 }
 
 static const char *trust_level_str(enum lichen_coap_trust_level trust)
@@ -247,14 +241,12 @@ static const char *trust_level_str(enum lichen_coap_trust_level trust)
 	}
 }
 
-/* ── CBOR encoders ─────────────────────────────────────────────────────────── */
-
 size_t lichen_coap_encode_status_cbor(uint8_t *buf, size_t buf_size,
 				      const struct lichen_coap_node_status *status)
 {
 	struct cbor_ctx ctx;
 	uint8_t map_count;
-	char ipv6_buf[40];
+	char ipv6_buf[48];
 
 	if (buf == NULL || status == NULL || buf_size == 0) {
 		return 0;
@@ -329,7 +321,7 @@ size_t lichen_coap_encode_status_cbor(uint8_t *buf, size_t buf_size,
 
 	if (status->dodag.has_parent) {
 		cbor_put_key(&ctx, "parent");
-		if (format_ipv6(status->dodag.parent, ipv6_buf, sizeof(ipv6_buf)) < 0) {
+		if (lichen_coap_format_ipv6(status->dodag.parent, ipv6_buf, sizeof(ipv6_buf)) < 0) {
 			ctx.overflow = true;
 			return 0;
 		}
@@ -338,7 +330,7 @@ size_t lichen_coap_encode_status_cbor(uint8_t *buf, size_t buf_size,
 
 	if (status->dodag.has_root) {
 		cbor_put_key(&ctx, "root");
-		if (format_ipv6(status->dodag.root, ipv6_buf, sizeof(ipv6_buf)) < 0) {
+		if (lichen_coap_format_ipv6(status->dodag.root, ipv6_buf, sizeof(ipv6_buf)) < 0) {
 			ctx.overflow = true;
 			return 0;
 		}
@@ -384,7 +376,7 @@ size_t lichen_coap_encode_neighbors_cbor(uint8_t *buf, size_t buf_size,
 					 size_t count)
 {
 	struct cbor_ctx ctx;
-	char ipv6_buf[40];
+	char ipv6_buf[48];
 
 	if (buf == NULL || buf_size == 0) {
 		return 0;
@@ -412,7 +404,7 @@ size_t lichen_coap_encode_neighbors_cbor(uint8_t *buf, size_t buf_size,
 		cbor_put_map_header(&ctx, 6);
 
 		cbor_put_key(&ctx, "addr");
-		if (format_ipv6(n->addr, ipv6_buf, sizeof(ipv6_buf)) < 0) {
+		if (lichen_coap_format_ipv6(n->addr, ipv6_buf, sizeof(ipv6_buf)) < 0) {
 			ctx.overflow = true;
 			return 0;
 		}
@@ -447,7 +439,7 @@ size_t lichen_coap_encode_routes_cbor(uint8_t *buf, size_t buf_size,
 				      const uint8_t *default_route)
 {
 	struct cbor_ctx ctx;
-	char ipv6_buf[40];
+	char ipv6_buf[48];
 	char prefix_buf[48];
 	uint16_t map_count = 1;
 
@@ -481,7 +473,10 @@ size_t lichen_coap_encode_routes_cbor(uint8_t *buf, size_t buf_size,
 			cbor_put_map_header(&ctx, 4);
 
 			cbor_put_key(&ctx, "prefix");
-			format_ipv6(r->prefix, ipv6_buf, sizeof(ipv6_buf));
+			if (lichen_coap_format_ipv6(r->prefix, ipv6_buf, sizeof(ipv6_buf)) < 0) {
+				ctx.overflow = true;
+				return 0;
+			}
 			int pr = snprintf(prefix_buf, sizeof(prefix_buf), "%s/%u", ipv6_buf, r->prefix_len);
 			if (pr < 0 || (size_t)pr >= sizeof(prefix_buf)) {
 				ctx.overflow = true;
@@ -490,7 +485,7 @@ size_t lichen_coap_encode_routes_cbor(uint8_t *buf, size_t buf_size,
 			cbor_put_tstr(&ctx, prefix_buf);
 
 			cbor_put_key(&ctx, "via");
-			if (format_ipv6(r->via, ipv6_buf, sizeof(ipv6_buf)) < 0) {
+			if (lichen_coap_format_ipv6(r->via, ipv6_buf, sizeof(ipv6_buf)) < 0) {
 				ctx.overflow = true;
 				return 0;
 			}
@@ -506,7 +501,7 @@ size_t lichen_coap_encode_routes_cbor(uint8_t *buf, size_t buf_size,
 
 	if (default_route) {
 		cbor_put_key(&ctx, "default_route");
-		if (format_ipv6(default_route, ipv6_buf, sizeof(ipv6_buf)) < 0) {
+		if (lichen_coap_format_ipv6(default_route, ipv6_buf, sizeof(ipv6_buf)) < 0) {
 			ctx.overflow = true;
 			return 0;
 		}
