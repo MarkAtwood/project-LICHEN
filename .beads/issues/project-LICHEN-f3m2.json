@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-f3m2",
+  "title": "codereview-3: P4 IETF citation and backtick consistency",
+  "description": "spec/02a-coordinated-capacity.md: P4 readability - use '[RFC1982]' for citation on first use, consistent backticks for code/file names, ensure no 'mod' in backticks if not code. Fix all P4 per instructions. Tagged codereview. Discovered-from:project-LICHEN-hcwu",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:34:43.346142254Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:34:43.346142254Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-f3m2",
+      "depends_on_id": "project-LICHEN-hcwu",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:34:43.470902504Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
