@@ -7,5 +7,15 @@
   "issue_type": "task",
   "created_at": "2026-07-22T18:11:42.473049988Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:11:42.473049988Z"
+  "updated_at": "2026-07-22T18:11:42.473049988Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ntga",
+      "depends_on_id": "project-LICHEN-d959",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:11:59.544029498Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
 }
