@@ -2,12 +2,16 @@
   "id": "project-LICHEN-4gqg",
   "title": "[CODEREVIEW-6 pass 3] Missing vendor in board.yml and no variant yaml files",
   "description": "lichen/boards/elecrow/thinknode_m7/board.yml:2 - lacks vendor: elecrow line present in other boards. No *procpu.yaml and *appcpu.yaml files like in heltec and t_deck boards for full registration with twister/west. This may explain why west boards does not list it. P2 registration issue.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:28:23.240383921Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:28:23.240383921Z",
+  "updated_at": "2026-07-22T18:28:55.717268334Z",
+  "started_at": "2026-07-22T18:28:55.717268334Z",
+  "lease_expires_at": "2026-07-22T18:33:55.717268334Z",
+  "heartbeat_at": "2026-07-22T18:28:55.717268334Z",
   "labels": [
     "codereview"
   ],
