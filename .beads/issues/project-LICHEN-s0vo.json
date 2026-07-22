@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-s0vo",
+  "title": "Merge worker11 P3/P4 codereview batch fixes from 3a5390de7",
+  "description": "Integrate non-bd commit from worker11-batch branch. Identify all changes, associate with existing P3/P4 beads for coap/rpl/schc/python/rust. Cherry-pick equivalent fixes resolving all conflicts by full review. Perform 3 independent codereview passes on all touched code. Fix ALL issues discovered (P0-P4). Update all bead notes with post-merge hashes. Run full quality gates. Per review-loop and workflow-rule-every-small-code-generation-or-fix. Do not weaken tests.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:58:01.977611125Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:58:01.977611125Z"
+}
