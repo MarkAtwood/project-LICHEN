@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-vk42",
   "title": "codereview-pass1: missing explicit LCI cb init in test_rx_raw",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:30:35.984023897Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:33:17.896832562Z",
+  "updated_at": "2026-07-22T18:35:19.241591831Z",
   "started_at": "2026-07-22T18:33:17.896832562Z",
-  "lease_expires_at": "2026-07-22T18:38:17.896832562Z",
-  "heartbeat_at": "2026-07-22T18:33:17.896832562Z",
+  "closed_at": "2026-07-22T18:35:19.241591831Z",
+  "close_reason": "Made all kiss_transport_config inits explicit with test_config() helper including LCI and hw_cmd_cb=NULL; removed dead NULL check in kiss_decode_init; fixed call site name consistency; filed 4 codereview beads for P3/P4 findings and fixed all of them. 3 clean passes with no new P0-P2 issues.",
   "labels": [
     "codereview"
   ]
