@@ -2,12 +2,16 @@
   "id": "project-LICHEN-sye3",
   "title": "[codereview-pass1] analyze-hetero-fleet.py: defaultdict annotation should use DefaultDict[str, list] from collections.abc for precision",
   "description": "The hash_to_senders and sent_hashes use defaultdict but annotated as dict. Import from collections.abc import DefaultDict and update type hints (P4 typing precision). discovered-from:project-LICHEN-eqyl",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:42:35.603488793Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:42:35.603488793Z",
+  "updated_at": "2026-07-22T18:43:25.329375889Z",
+  "started_at": "2026-07-22T18:43:25.329375889Z",
+  "lease_expires_at": "2026-07-22T18:48:25.329375889Z",
+  "heartbeat_at": "2026-07-22T18:43:25.329375889Z",
   "labels": [
     "codereview"
   ]
