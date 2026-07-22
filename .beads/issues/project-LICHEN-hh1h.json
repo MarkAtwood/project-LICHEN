@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-hh1h",
+  "title": "[codereview-P4] pinctrl comment should reference exact Heltec V3 schematic version and pinmux macro validation",
+  "description": "The new uart1_default comment mentions 'per schematics in comments' but does not cite the exact Heltec schematic rev or verify that UART1_TX_GPIO21 maps correctly in esp32s3-pinctrl.h. P4 style/traceability. Discovered-from project-LICHEN-g730. Fix before any close.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:48:06.11037672Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:48:06.11037672Z"
+}
