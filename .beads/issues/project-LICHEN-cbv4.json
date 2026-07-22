@@ -1,14 +1,12 @@
 {
   "id": "project-LICHEN-cbv4",
   "title": "Simulation shutdown leaks pending transmissions",
-  "status": "closed",
+  "status": "open",
   "priority": 0,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:58:10.679604612Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:50.350417066Z",
-  "closed_at": "2026-07-22T17:58:50.350417066Z",
-  "close_reason": "High-impact bug fixed: vector matching, idiomatic no_std/C11, 3 parallel codereview passes, quality gates, bd doctor clean; no test changes",
+  "updated_at": "2026-07-22T18:51:53.582869883Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-cbv4",
