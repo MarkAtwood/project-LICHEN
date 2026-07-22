@@ -2,12 +2,16 @@
   "id": "project-LICHEN-wuzm",
   "title": "[codereview-1] _gateways dict should track additional coordination state",
   "description": "After adding _gateways tracking in simulation.py:129, observed that SimNode alone insufficient for multi-gateway model (needs slot_map, backbone_status, owned_nodes, negotiation_state). This is P2 as it affects scalability test scenarios. Tagged codereview. Discovered-from:project-LICHEN-mugl.2",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:27.899278235Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:27.899278235Z",
+  "updated_at": "2026-07-22T17:59:45.761971994Z",
+  "started_at": "2026-07-22T17:59:45.761971994Z",
+  "lease_expires_at": "2026-07-22T18:04:45.761971994Z",
+  "heartbeat_at": "2026-07-22T17:59:45.761971994Z",
   "labels": [
     "codereview"
   ]

@@ -2,12 +2,16 @@
   "id": "project-LICHEN-ptpg",
   "title": "test_conference_mesh uses hardcoded 500 nodes ignoring SCALE_NODES env",
   "description": "SCALE_NODES env var is defined but test_500_node_conference hardcodes n_nodes=500. Should respect env for flexibility in CI/AWS runs. P2. Discovered in codereview pass 1.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T17:58:21.069154698Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:58:21.069154698Z",
+  "updated_at": "2026-07-22T17:59:45.814941363Z",
+  "started_at": "2026-07-22T17:59:45.814941363Z",
+  "lease_expires_at": "2026-07-22T18:04:45.814941363Z",
+  "heartbeat_at": "2026-07-22T17:59:45.814941363Z",
   "labels": [
     "codereview"
   ],
