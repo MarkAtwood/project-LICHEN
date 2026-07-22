@@ -2,15 +2,15 @@
   "id": "project-LICHEN-aujc",
   "title": "Trickle timer reset() doesn't update _lowest_rank tracking analogue",
   "description": "File: python/src/lichen/rpl/trickle.py:95-103\n\nThe reset() method resets the interval but preserves the _generation counter behavior. However, a subtle issue exists: if reset() is called while in the middle of a run() loop, the timer state may be inconsistent.\n\n```python\ndef reset(self, now: int = 0) -\u003e None:\n    if self.interval != self.imin:\n        self.interval = self.imin\n        self._begin_interval(now)\n```\n\nThe guard `if self.interval != self.imin` prevents a reset when already at minimum interval. But RFC 6206 Section 4.2 (rule 6) says:\n\u003e If I is equal to Imin when Trickle hears an inconsistency, Trickle does nothing.\n\nThis is correct. However, the issue is that reset(0) uses a default now=0, which would set interval_start=0 regardless of actual time. If called with now=0 but the actual time is, say, 5000ms, the transmit_time calculation would be wrong:\n\n```python\nself.transmit_time = now + int(half + self._rng() * half)\n# transmit_time = 0 + int(...) = some small value\n# But current time is 5000, so transmit was in the \"past\"\n```\n\nThis could cause immediate transmission in run()'s sleep logic:\n```python\nawait sleep(max(0, self.transmit_time - now_fn()))\n# max(0, small_value - 5000) = max(0, negative) = 0\n```\n\nThe fix is to always require the current time when calling reset().",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "AI Agent",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-12T06:25:24.087904Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T19:39:57.227454999Z",
+  "updated_at": "2026-07-22T19:43:51.011354467Z",
   "started_at": "2026-07-22T19:39:57.227454999Z",
-  "lease_expires_at": "2026-07-22T19:44:57.227454999Z",
-  "heartbeat_at": "2026-07-22T19:39:57.227454999Z"
+  "closed_at": "2026-07-22T19:43:51.011354467Z",
+  "close_reason": "Fixed per bead description; used cached size, normalized SRH/RESERVED fields, added evicted stat, required now param on reset; tests pass; 3 review passes (correctness: underflow prevented, validation added, stats complete, time correct, compliance; idioms: no_std n/a but Python clean, no dead code, immutable where possible; edge: segments_left=0, non-zero reserved, eviction with count=0, reset at imin, mutable payload); no similar issues found in Rust equiv or other from_bytes; full pre-push on lichen-rpl lichen-core"
 }
