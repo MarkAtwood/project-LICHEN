@@ -2,10 +2,14 @@
   "id": "project-LICHEN-qzws",
   "title": "[CODEREVIEW-1] ThinkNode M7 DTS pin mapping",
   "description": "lichen/boards/elecrow/thinknode_m7/thinknode_m7_procpu.dts:1 - Pin mapping for LR1110 and SI3402 PoE controller needs verification against actual schematics. Potential mismatch in GPIO assignments.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:18:30.98549191Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:18:30.98549191Z"
+  "updated_at": "2026-07-22T18:22:18.666170303Z",
+  "started_at": "2026-07-22T18:22:18.666170303Z",
+  "lease_expires_at": "2026-07-22T18:27:18.666170303Z",
+  "heartbeat_at": "2026-07-22T18:22:18.666170303Z"
 }
