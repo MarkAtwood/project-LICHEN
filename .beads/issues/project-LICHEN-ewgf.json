@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-ewgf",
+  "title": "[codereview-3] Spectrum view and packet flow animation missing from dashboard",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:34.705356882Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:34.705356882Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ewgf",
+      "depends_on_id": "project-LICHEN-2nnd.2",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:51:34.819453933Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
