@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-b4cj",
+  "title": "[codereview-3] Kconfig additions: ensure no stack overflow on ESP32-S3 with added NET_ configs; test build required",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:12:36.968140343Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:12:36.968140343Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-b4cj",
+      "depends_on_id": "project-LICHEN-p12e",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:12:37.108306818Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
