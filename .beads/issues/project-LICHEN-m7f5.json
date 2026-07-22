@@ -2,15 +2,15 @@
   "id": "project-LICHEN-m7f5",
   "title": "Unbounded growth of errors list",
   "description": "## Location\npython/src/lichen/sim/metrics.py:36\n\n## Description\nThe errors list grows without bound as record_error() is called. Unlike packet hashes (bounded by unique packets), repeated error conditions can generate many identical error messages, causing unbounded list growth.\n\n## Failure Scenario\nA node has a persistent configuration error that triggers record_error() on every RX attempt. Over a long simulation, millions of error strings accumulate, exhausting memory with redundant data.\n\n## Category\nsafety",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-13T04:16:42.257767Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:40:55.680570802Z",
+  "updated_at": "2026-07-22T18:42:17.069582465Z",
   "started_at": "2026-07-22T18:40:55.680570802Z",
-  "lease_expires_at": "2026-07-22T18:45:55.680570802Z",
-  "heartbeat_at": "2026-07-22T18:40:55.680570802Z"
+  "closed_at": "2026-07-22T18:42:17.069582465Z",
+  "close_reason": "Added _MAX_ERRORS=1000 + len check in record_error(), .copy() in to_dict() in python/src/lichen/sim/metrics.py:37,81,95. Bounds errors list, prevents mutation. Ruff passed. "
 }
