@@ -1,0 +1,16 @@
+identifier: thinknode_m7/esp32s3/procpu
+name: ThinkNode M7 PROCPU
+type: mcu
+arch: xtensa
+toolchain:
+  - zephyr
+supported:
+  - gpio
+  - uart
+  - spi
+  - counter
+  - watchdog
+  - entropy
+  - bluetooth
+  - lora
+vendor: elecrow

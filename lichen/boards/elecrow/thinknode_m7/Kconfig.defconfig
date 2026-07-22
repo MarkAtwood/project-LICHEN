@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+if BOARD_THINKNODE_M7_ESP32S3_PROCPU
+
+config HEAP_MEM_POOL_ADD_SIZE_BOARD
+	int
+	default 65535 if WIFI && BT
+	default 51200 if WIFI
+	default 40960 if BT
+	default 4096
+
+config LICHEN_POE
+	default y
+
+config LICHEN_HAS_PMIC
+	default y
+
+endif # BOARD_THINKNODE_M7_ESP32S3_PROCPU
