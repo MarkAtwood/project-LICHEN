@@ -2,11 +2,15 @@
   "id": "project-LICHEN-yhip",
   "title": "Fix cbor_put_tstr length encoding for \u003e65535 and prevent buffer overflows in coap files",
   "description": "Examine and fix all cbor_put_tstr in coap_status.c, coap_keys.c, coap_msg.c per C guidelines. Add rejection for strings \u003e65535 bytes. Ensure buffer safety. Do 3 code review passes. Test and close.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "bug",
+  "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:14:12.509800476Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:14:12.509800476Z"
+  "updated_at": "2026-07-22T19:14:14.894589248Z",
+  "started_at": "2026-07-22T19:14:14.894589248Z",
+  "lease_expires_at": "2026-07-22T19:19:14.894589248Z",
+  "heartbeat_at": "2026-07-22T19:14:14.894589248Z"
 }
