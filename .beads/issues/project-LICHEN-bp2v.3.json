@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-bp2v.3",
+  "title": "codereview-2: clarify MAX_SFN_DELTA constant source",
+  "description": "P4 opinion: MAX_SFN_DELTA not defined in this spec section; should cross-ref to 09-packets-timing.md or test vector. Not security critical but improves readability. Tag: codereview. Pass 2 of project-LICHEN-bp2v.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:29:37.419203105Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:29:37.419203105Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-bp2v.3",
+      "depends_on_id": "project-LICHEN-bp2v",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:29:37.571229467Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
