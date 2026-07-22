@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-fpjz",
+  "title": "[codereview-pass2/3] senml.h: senml_encode_deaddrop decl added matching temperature pattern; P4 consistency: add LICHEN_WARN_UNUSED_RESULT to all encode_* convenience funcs for API contract",
+  "description": "After adding decl for deaddrop (to fix undefined reference in coap_dtn.c), review found that only senml_encode_cbor has the warn_unused attribute. The 3 convenience encoders (location, battery, temperature, and now deaddrop) return important length-or-error and should warn if unused. This is P4 style/consistency per AGENTS.md coding guidelines. Fix in senml.h only per task scope. Matches location pattern in convenience section. discovered-from:project-LICHEN-joq7",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:35:57.925585711Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:35:57.925585711Z"
+}
