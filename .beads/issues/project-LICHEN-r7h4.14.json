@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-r7h4.14",
+  "title": "codereview: child decomposition missing acceptance criteria",
+  "description": "Child tasks for peripherals, BLE, LR1110, nRF52840 boards lack explicit acceptance criteria, test commands, and design notes per workflow. P2. Tag: codereview",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:27:47.213997556Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:27:47.213997556Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r7h4.14",
+      "depends_on_id": "project-LICHEN-r7h4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:27:47.332224456Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
