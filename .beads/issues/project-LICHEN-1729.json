@@ -2,14 +2,14 @@
   "id": "project-LICHEN-1729",
   "title": "[codereview] coap_dtn.c: will need #include of coap_server.h for new API",
   "description": "P3 style: impl file must include the header it implements to ensure declaration matches definition. discovered-from:project-LICHEN-r044",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T15:06:47.836000455Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:11:16.280372979Z",
+  "updated_at": "2026-07-22T18:12:37.982702213Z",
   "started_at": "2026-07-22T18:11:16.280372979Z",
-  "lease_expires_at": "2026-07-22T18:16:16.280372979Z",
-  "heartbeat_at": "2026-07-22T18:11:16.280372979Z"
+  "closed_at": "2026-07-22T18:12:37.982702213Z",
+  "close_reason": "coap_dtn.c already includes coap_server.h for API match; verified with grep/read specific lines; cargo check 3x passed; no edits needed; rules followed"
 }
