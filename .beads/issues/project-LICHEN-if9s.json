@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-if9s",
+  "title": "P3/P4: TOC, date, implementation details, TODOs, and reference formatting in draft-lichen-schc-lora-00.md",
+  "description": "1. TOC stops at section 10, omits Appendices A/B (P3). 2. Draft date 'May 2026' vs current Jul 2026 (P3). 3. §4.2/4.4 have excessive code line refs and impl notes better suited to appendix or code comments (P4 opinion). 4. Appendix B is placeholder TODO (P3). 5. References section too minimal, missing full titles/DOI/dates per I-D conventions (P3). 6. Outdated file:line refs throughout (P4). Fix all as real work per instructions. Tagged codereview. discovered-from:project-LICHEN-7m5k",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:38:10.153095961Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:38:10.153095961Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-if9s",
+      "depends_on_id": "project-LICHEN-7m5k",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:38:10.280582273Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
