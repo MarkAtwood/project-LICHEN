@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-5qt2",
+  "title": "[codereview2] Kconfig help text and dependencies incomplete per spec mugl.1",
+  "description": "Help text should reference spec/08-gateway-coordination.md (even if merged), mention both federation modes explicitly, add prompt text for mode. Depends on LICHEN_COAP_SERVER or the modular one. Tag: codereview",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:58:16.586392066Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:58:16.586392066Z",
+  "labels": [
+    "codereview"
+  ]
+}
