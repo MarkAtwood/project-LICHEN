@@ -1,1 +1,2 @@
 {"id":"019f8b28-8ff9-7bfa-bb4a-d1399ea6daf2","issue_id":"project-LICHEN-l7zu","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T18:48:39.16178701Z"}
+{"id":"019f8b2a-a0a6-7292-bacb-5069a99d8f63","issue_id":"project-LICHEN-l7zu","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Fixed in main implementation and docs per RULE (all priorities including P4).","created_at":"2026-07-22T18:50:54.502169891Z"}

@@ -2,12 +2,14 @@
   "id": "project-LICHEN-l7zu",
   "title": "[codereview-1] compact_cot.py: isfinite checks should also guard lat/lon floats for consistency with NaN behavior",
   "description": "Although range checks catch NaN for lat/lon (False), explicit math.isfinite() after float() would make validation uniform and error message clearer. P4 readability/consistency. Scope limited but per 'fix ALL' and RULE, file it. Fix by adding checks.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:48:39.155983795Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:48:39.155983795Z",
+  "updated_at": "2026-07-22T18:50:54.497693174Z",
+  "closed_at": "2026-07-22T18:50:54.497693174Z",
+  "close_reason": "Fixed in main implementation and docs per RULE (all priorities including P4).",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-l7zu",
