@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-i9r0.4.4",
+  "title": "spec: update for gateway-centric TDMA (beacon-sync, GPS-sync, spatial reuse, zero collisions)",
+  "description": "Expand spec/02a-coordinated-capacity.md and 02-physical-link.md with full TDMA frame, beacon format, slot assignment protocol, GPS mode, spatial reuse rules, test vectors. Align with Kconfig/C/Rust. Fix all inconsistencies.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:05:18.37083206Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:05:18.37083206Z",
+  "labels": [
+    "codereview",
+    "spec",
+    "phy",
+    "protocol",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-i9r0.4.4",
+      "depends_on_id": "project-LICHEN-i9r0.4",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:05:18.526490756Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
