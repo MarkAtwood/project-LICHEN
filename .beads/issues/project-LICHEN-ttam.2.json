@@ -2,12 +2,14 @@
   "id": "project-LICHEN-ttam.2",
   "title": "codereview-pass2: missing update to Rust pseudocode and test vector cross-refs in SFN section",
   "description": "After fixing C example for project-LICHEN-ttam, the Rust fn calculate_sfn_delta should explicitly mention .wrapping_sub for boundary clarity. Also, update 'See test/vectors/sfn-delta.json' to reference specific boundary test case name if present in JSON. The new text should mention cross-impl test requirement more prominently per triple-impl discipline. Filed as codereview. Parent: project-LICHEN-ttam.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "created_at": "2026-07-22T18:29:42.49972326Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:29:42.49972326Z",
+  "updated_at": "2026-07-22T18:30:31.659253765Z",
+  "closed_at": "2026-07-22T18:30:31.659253765Z",
+  "close_reason": "Updated Rust example, test vector cross-ref, and triple-impl note",
   "labels": [
     "codereview",
     "robustness"
