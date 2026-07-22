@@ -2,14 +2,14 @@
   "id": "project-LICHEN-zvsx",
   "title": "Add upper bound and skew detection to Meshtastic position timestamp validation",
   "description": "Implement the requirements from gv4z: add upper bound and skew detection against current time in set_position_fix_time in lichen/subsys/lichen/meshtastic/adapter.c. Reject future timestamps with clear error. Must cover C/Zephyr/meshtastic and all tests. Follow strict codereview process with 3 passes after every logical chunk, filing all findings (including P4) as codereview-tagged beads. Do not close gv4z or epic until 3 clean passes with no open findings. Explore adapter.c first.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T19:07:45.28724329Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:08:03.150393671Z",
+  "updated_at": "2026-07-22T19:10:58.609192082Z",
   "started_at": "2026-07-22T19:08:03.150393671Z",
-  "lease_expires_at": "2026-07-22T19:13:03.150393671Z",
-  "heartbeat_at": "2026-07-22T19:08:03.150393671Z"
+  "closed_at": "2026-07-22T19:10:58.609192082Z",
+  "close_reason": "Epic completed with all subtasks and codereview passes clean after fixes"
 }
