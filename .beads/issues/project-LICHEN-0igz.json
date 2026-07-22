@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-0igz",
+  "title": "[CODEREVIEW pass 2] Kconfig.defconfig if condition",
+  "description": "lichen/boards/elecrow/thinknode_m7/Kconfig.defconfig:3 - if uses BOARD_THINKNODE_M7_ESP32S3_PROCPU but board name may generate different symbol. Verify with west build. P2. Also added LICHEN_POE but no test in hal/tests. P3.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:32:46.715216781Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:32:46.715216781Z",
+  "labels": [
+    "codereview"
+  ]
+}
