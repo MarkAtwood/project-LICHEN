@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-aelj",
   "title": "codereview: missing LCI callbacks in config struct and init",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:25:40.178702499Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:28:17.687286708Z",
+  "updated_at": "2026-07-22T18:31:27.04017092Z",
   "started_at": "2026-07-22T18:28:17.687286708Z",
-  "lease_expires_at": "2026-07-22T18:33:17.687286708Z",
-  "heartbeat_at": "2026-07-22T18:28:17.687286708Z",
+  "closed_at": "2026-07-22T18:31:27.04017092Z",
+  "close_reason": "LCI callbacks added to all kiss_transport_config initializers and test init paths; 3 clean codereview passes completed with all findings filed+fixed as codereview beads; tests updated for coverage",
   "labels": [
     "codereview"
   ],
