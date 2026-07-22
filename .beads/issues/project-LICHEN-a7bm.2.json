@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-a7bm.2",
+  "title": "Create merge-loop-check.sh for workers 9-15",
+  "description": "Script that for each worker in 9-15: checks out workerN-batch, runs git log --oneline origin/wip/checkpoint-20260715..HEAD to find new commits since checkpoint, associates any new beads found, if new commits then cherry-pick range to main, update associated beads with merge info. Make script idempotent and loopable.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T20:01:23.64330364Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T20:01:23.64330364Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-a7bm.2",
+      "depends_on_id": "project-LICHEN-a7bm",
+      "type": "parent-child",
+      "created_at": "2026-07-22T20:01:23.770403856Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
