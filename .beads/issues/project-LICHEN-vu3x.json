@@ -2,13 +2,15 @@
   "id": "project-LICHEN-vu3x",
   "title": "P4: responder context_3 still includes TH_3 after initiator fix",
   "description": "The context_3 construction in edhoc_responder_process_message_3 also uses TH_3 in the middle. Should be aligned for consistency with updated initiator and RFC. Discovered during codereview pass 1 of project-LICHEN-7sa7. tagged codereview",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:18:57.197982914Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:18:57.197982914Z",
+  "updated_at": "2026-07-22T19:20:20.668919Z",
+  "closed_at": "2026-07-22T19:20:20.668919Z",
+  "close_reason": "Fixed context_3 in responder and aligned with initiator per RFC. Updated all TH_* computations to use proper compute_th with CIPHERTEXT_* and correct inputs. 3 codereview passes completed with all P4 findings addressed and fixed.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-vu3x",
