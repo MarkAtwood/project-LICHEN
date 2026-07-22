@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-52zf",
   "title": "P4 codereview pass2: Note could reference exact line in 09-packets-timing.md for on_sfn_wrap pseudocode",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T19:02:10.57207361Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:02:12.85070794Z",
+  "updated_at": "2026-07-22T19:02:48.825829771Z",
   "started_at": "2026-07-22T19:02:12.85070794Z",
-  "lease_expires_at": "2026-07-22T19:07:12.85070794Z",
-  "heartbeat_at": "2026-07-22T19:02:12.85070794Z",
+  "closed_at": "2026-07-22T19:02:48.825829771Z",
+  "close_reason": "Fixed in main edit pass",
   "labels": [
     "codereview"
   ],
