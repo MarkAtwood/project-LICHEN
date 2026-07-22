@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-w7cl",
+  "title": "codereview pass 2: neighbor eviction shared state and test coords validation",
+  "description": "P3: used len(_neighbor_order) for shared max across coords/queue dicts (fixed test failure). P4: test coords must avoid null island (updated test values). No open findings after fixes. codereview tag.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:54:04.132836429Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:54:04.132836429Z",
+  "labels": [
+    "codereview"
+  ]
+}
