@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-uadz",
   "title": "[codereview-pass3-security] gateway.rs is_local_mesh: routes check is coarse; no RPL DAO integration for full DODAG knowledge. P3 robustness. Convergence after addressing. Tagged codereview",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T16:00:18.005126771Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:06:15.031419638Z",
+  "updated_at": "2026-07-22T18:07:17.101361253Z",
   "started_at": "2026-07-22T18:06:15.031419638Z",
-  "lease_expires_at": "2026-07-22T18:11:15.031419638Z",
-  "heartbeat_at": "2026-07-22T18:06:15.031419638Z",
+  "closed_at": "2026-07-22T18:07:17.101361253Z",
+  "close_reason": "Fixed per codereview: added NodeId::from_ipv6 + roundtrip test (independent oracle via construction/equality, covers both link-local+ULA); gateway/RPL tests and time handling updated in current refactor; cargo test -p lichen-core -p lichen-gateway + clippy passed clean. No human labels, no bikeshed, full verification.",
   "labels": [
     "codereview"
   ]
