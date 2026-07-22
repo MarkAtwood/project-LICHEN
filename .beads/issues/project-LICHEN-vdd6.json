@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-vdd6",
+  "title": "[codereview-pass3-robustness] P3: desync FSM does not explicitly address interaction with lichen_tdma_init() order or has_key flag before signing in ACQUIRING",
+  "description": "Per AGENTS.md init graph and common pitfalls in lichen/subsys/lichen/link_ctx.h:50. FSM table should note that in ACQUIRING/SYNCED, link key load MUST be verified before beacon signature check. Add normative step. File as robustness finding. discovered-from:project-LICHEN-ttam",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:30:58.734627509Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:30:58.734627509Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-vdd6",
+      "depends_on_id": "project-LICHEN-ttam",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:30:58.870609055Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
