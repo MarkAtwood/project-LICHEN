@@ -2,12 +2,14 @@
   "id": "project-LICHEN-pwh7",
   "title": "F401: unused TYPE_CHECKING import in python/src/lichen/crypto/identity.py",
   "description": "Codereview finding from 3 passes on identity.py after removing empty TYPE_CHECKING block. Matches the yggdrasil derivation cleanup per spec 8.6 and Rust. Fix by removing unused import.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "created_at": "2026-07-22T17:45:22.245106158Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:45:22.245106158Z",
+  "updated_at": "2026-07-22T17:45:32.902230726Z",
+  "closed_at": "2026-07-22T17:45:32.902230726Z",
+  "close_reason": "Removed unused TYPE_CHECKING import; 3 clean ruff passes achieved on identity.py matching Rust yggdrasil_addr_from_pubkey and spec 8.6",
   "labels": [
     "codereview"
   ]
