@@ -2,13 +2,15 @@
   "id": "project-LICHEN-1wp9",
   "title": "codereview general subagent pass 2/3: gateway.rs SCHC buffer",
   "description": "General subagent review pass 2/3 for project-LICHEN-hhny. Confirmed no truncation risk for IPv6 packets \u003e1500B as buffer now uses MAX_IPV6_MTU const (4096). Explicit match on tuple variant SchcError::BufferTooSmall(_) follows Rust idiom and existing match arms in file. No changes needed in lichen-schc. Linting and tests verified clean for targeted crates. Only opinion-level style notes (not filed as high-pri). No P0-P2 issues.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:41:56.749593489Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:41:56.749593489Z",
+  "updated_at": "2026-07-22T19:41:58.972633082Z",
+  "closed_at": "2026-07-22T19:41:58.972633082Z",
+  "close_reason": "Closed",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-1wp9",
