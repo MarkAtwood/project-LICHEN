@@ -2,12 +2,16 @@
   "id": "project-LICHEN-afbk.1",
   "title": "RPi LoRa HAT driver integration",
   "description": "Implement or adapt lora-phy or new Linux driver for RAK2287/SX130x or common HAT (SPI SX126x/SX127x). Support raw LoRa frames for LICHEN link layer. Include test vectors and interop with embedded nodes.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:10:55.656153515Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:10:55.656153515Z",
+  "updated_at": "2026-07-22T18:11:51.933181464Z",
+  "started_at": "2026-07-22T18:11:51.933181464Z",
+  "lease_expires_at": "2026-07-22T18:16:51.933181464Z",
+  "heartbeat_at": "2026-07-22T18:11:51.933181464Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-afbk.1",
