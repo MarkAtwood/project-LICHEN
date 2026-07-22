@@ -2,13 +2,15 @@
   "id": "project-LICHEN-4yrl",
   "title": "[codereview-2] codec.c BUILD_ASSERTs should reference BLE_FRAME_MAX for full coupling",
   "description": "codec.c has its own BUILD_ASSERT for MAX_SERIAL_PAYLOAD \u003c= UINT16_MAX. To fully couple with the new LICHEN_MESHCORE_BLE_FRAME_MAX and Kconfig, add BUILD_ASSERT(CONFIG_LICHEN_MESHCORE_MAX_SERIAL_PAYLOAD \u003c= LICHEN_MESHCORE_BLE_FRAME_MAX, \"Exceeds MeshCore BLE limit\"); P4 consistency across meshcore files. Discovered in second codereview pass.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:19:49.920216169Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:19:49.920216169Z",
+  "updated_at": "2026-07-22T19:20:07.361952473Z",
+  "closed_at": "2026-07-22T19:20:07.361952473Z",
+  "close_reason": "Fixed via added LICHEN_MESHCORE_BLE_FRAME_MAX constant, updated Kconfig documentation, explicit include, BUILD_ASSERT coupling in adapter.c and codec.c. Completed 3 codereview passes (2 with P4 findings filed+fixed as real work, 3rd clean with no new issues). All per task instructions and workflow-rule-every-small-code-generation-or-fix.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-4yrl",
