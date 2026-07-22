@@ -183,7 +183,7 @@ pub enum FrameError {
     SignedEncryptedUnsupported,
     TrailingBytes,
     FrameTooLarge,
-    BufferTooSmall,
+    BufferTooSmall(BufferTooSmall),
 }
 
 impl core::fmt::Display for FrameError {
@@ -202,7 +202,7 @@ impl core::fmt::Display for FrameError {
             }
             Self::TrailingBytes => write!(f, "trailing bytes after frame"),
             Self::FrameTooLarge => write!(f, "frame too large"),
-            Self::BufferTooSmall => write!(f, "buffer too small"),
+            Self::BufferTooSmall(e) => write!(f, "frame {}", e),
         }
     }
 }
@@ -272,10 +272,6 @@ impl<'a> LichenFrame<'a> {
         v
     }
 
-    /// Serialize the frame into `buf`, returning the number of bytes written.
-    ///
-    /// Returns `FrameError::FrameTooLarge` if body > 254 bytes.
-    /// Returns `FrameError::BufferTooSmall` if the provided buffer is too small.
     pub fn write_to(&self, buf: &mut [u8]) -> Result<usize, FrameError> {
         if self.signature.is_present() && self.encryption.is_encrypted() {
             return Err(FrameError::SignedEncryptedUnsupported);
@@ -297,7 +293,7 @@ impl<'a> LichenFrame<'a> {
         }
         let total = 1 + body_len;
         if buf.len() < total {
-            return Err(FrameError::BufferTooSmall);
+            return Err(BufferTooSmall::new(total, buf.len()).into());
         }
         buf[0] = body_len as u8;
         buf[1] = self.llsec_byte();
@@ -555,6 +551,32 @@ mod tests {
             frame.write_to(&mut [0; 64]),
             Err(FrameError::SignatureMicMismatch)
         );
+
+        let frame = LichenFrame {
+            epoch: 0,
+            seqnum: LinkSeqNum::new(0),
+            dst_addr: &[],
+            payload: &[0; 252],
+            mic: &[],
+            addr_mode: AddrMode::None,
+            mic_length: MicLength::Bits32,
+            signature: Signature::Absent,
+            encryption: Encryption::Plaintext,
+        };
+        assert_eq!(frame.write_to(&mut [0; 300]), Err(FrameError::FrameTooLarge));
+
+        let frame = LichenFrame {
+            epoch: 0,
+            seqnum: LinkSeqNum::new(0),
+            dst_addr: &[],
+            payload: &[],
+            mic: &[],
+            addr_mode: AddrMode::None,
+            mic_length: MicLength::Bits32,
+            signature: Signature::Absent,
+            encryption: Encryption::Plaintext,
+        };
+        assert!(matches!(frame.write_to(&mut [0; 4]), Err(FrameError::BufferTooSmall(_))));
     }
 
     #[test]
