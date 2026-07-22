@@ -2,12 +2,16 @@
   "id": "project-LICHEN-lihv",
   "title": "[codereview-pass3] draft-lichen-schc-lora-00.md:166 MATCH_MAPPING phrasing",
   "description": "P3 readability: sentence still uses awkward 'MATCH_MAPPING on option Type (per rules.py and rules.rs)'. Per original jc8i bead, expand with full operator explanation, update refs to current rules.rs:15 / rules.py:32, add explicit PIO FieldDescriptor example, full cross-ref to appendix-schc.md:A.1 + test/vectors/schc_compression.json. discovered-from:project-LICHEN-jc8i",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:42:13.728877259Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:42:13.728877259Z",
+  "updated_at": "2026-07-22T18:42:35.190523902Z",
+  "started_at": "2026-07-22T18:42:35.190523902Z",
+  "lease_expires_at": "2026-07-22T18:47:35.190523902Z",
+  "heartbeat_at": "2026-07-22T18:42:35.190523902Z",
   "labels": [
     "codereview"
   ],
