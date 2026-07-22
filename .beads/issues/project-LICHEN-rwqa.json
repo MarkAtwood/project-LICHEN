@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-rwqa",
+  "title": "codereview P3: decode_coords lacks unit test for concatenated TLV case",
+  "description": "New scan logic not covered by existing announce_coords.json vectors (which are single-type). Add test in generate.py or processor tests? P3 as test coverage. deps=project-LICHEN-wy6a",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:13:11.342295756Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:13:11.342295756Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-rwqa",
+      "depends_on_id": "project-LICHEN-wy6a",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:13:11.471234877Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
