@@ -470,7 +470,7 @@ static int submit_location_with_bridge(
 	ret = s_test_next_location_submit_ret;
 	s_test_next_location_submit_ret = 0;
 	k_mutex_unlock(&s_mutex);
-	if (ret < 0) {
+	if (ret != 0) {
 		return ret;
 	}
 #endif
@@ -521,7 +521,7 @@ int lichen_app_interface_clear_network_location(void)
 	ret = s_test_next_clear_network_ret;
 	s_test_next_clear_network_ret = 0;
 	k_mutex_unlock(&s_mutex);
-	if (ret < 0) {
+	if (ret != 0) {
 		return ret;
 	}
 #endif
@@ -628,14 +628,16 @@ void lichen_app_interface_test_reset(void)
 void lichen_app_interface_test_fail_next_location_submit(int ret)
 {
 	k_mutex_lock(&s_mutex, K_FOREVER);
-	s_test_next_location_submit_ret = ret < 0 ? ret : 0;
+	s_test_next_location_submit_ret = ret;
 	k_mutex_unlock(&s_mutex);
 }
+
 
 void lichen_app_interface_test_fail_next_clear_network(int ret)
 {
 	k_mutex_lock(&s_mutex, K_FOREVER);
-	s_test_next_clear_network_ret = ret < 0 ? ret : 0;
+	s_test_next_clear_network_ret = ret;
 	k_mutex_unlock(&s_mutex);
 }
+
 #endif

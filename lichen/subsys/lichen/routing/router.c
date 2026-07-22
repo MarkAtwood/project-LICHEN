@@ -269,10 +269,10 @@ int lichen_router_route(struct lichen_router *router,
 	case LICHEN_ADDR_YGGDRASIL:
 	case LICHEN_ADDR_EXTERNAL:
 		return route_external(router, result);
+	default:
+		result->decision = LICHEN_ROUTE_DROP;
+		return 0;
 	}
-
-	result->decision = LICHEN_ROUTE_DROP;
-	return 0;
 }
 
 int lichen_router_queue_pending(struct lichen_router *router,

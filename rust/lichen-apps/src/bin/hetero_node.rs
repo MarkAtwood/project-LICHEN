@@ -40,18 +40,6 @@ impl NodeMetrics {
             packet_hashes_received: HashSet::new(),
         }
     }
-
-    fn record_hash_sent(&mut self, h: [u8; 16]) {
-        if self.packet_hashes_sent.len() < 10000 {
-            self.packet_hashes_sent.insert(h);
-        }
-    }
-
-    fn record_hash_received(&mut self, h: [u8; 16]) {
-        if self.packet_hashes_received.len() < 10000 {
-            self.packet_hashes_received.insert(h);
-        }
-    }
 }
 
 fn main() {
@@ -105,13 +93,6 @@ fn main() {
     let mut seq_num = 0u16;
     let mut buf = [0u8; 256];
 
-    let packet_hash = |payload: &[u8]| {
-        let digest = Sha256::digest(payload);
-        let mut h = [0u8; 16];
-        h.copy_from_slice(&digest[..16]);
-        h
-    };
-
     let emit = |event: &str,
                 payload: &[u8],
                 status: &str,
@@ -120,8 +101,7 @@ fn main() {
                 peer_id: Option<String>,
                 rssi: Option<i32>,
                 snr: Option<i32>| {
-        let h_bytes = packet_hash(payload);
-        let h = hex::encode(h_bytes);
+        let hash = format!("{:x}", Sha256::digest(payload));
         println!(
             "TELEMETRY {}",
             serde_json::json!({
@@ -130,8 +110,8 @@ fn main() {
                 "ts_us": ts_us,
                 "node_id": format!("rust-{}", node_id),
                 "impl": "rust",
-                "tx_id": h.clone(),
-                "packet_hash": h,
+                "tx_id": hash[..16].to_string(),
+                "packet_hash": hash[..16].to_string(),
                 "direction": if event.starts_with("tx") { "tx" } else { "rx" },
                 "peer_id": peer_id,
                 "payload_len": payload.len(),
@@ -162,7 +142,11 @@ fn main() {
             Ok(()) => {
                 metrics.tx_count += 1;
                 metrics.tx_bytes += announce.len() as u64;
-                metrics.record_hash_sent(packet_hash(&announce));
+                let hash = Sha256::digest(&announce);
+                let hash_prefix: [u8; 16] = hash[..16].try_into().unwrap();
+                if metrics.packet_hashes_sent.len() < 10000 {
+                    metrics.packet_hashes_sent.insert(hash_prefix);
+                }
                 emit(
                     "tx",
                     &announce,
@@ -176,7 +160,9 @@ fn main() {
                 seq_num = seq_num.wrapping_add(1);
             }
             Err(e) => {
-                metrics.errors.push(format!("TX error: {:?}", e));
+                if metrics.errors.len() < 100 {
+                    metrics.errors.push(format!("TX error: {:?}", e));
+                }
                 eprintln!("rust-{}: TX error: {:?}", node_id, e);
             }
         }
@@ -189,7 +175,12 @@ fn main() {
                 Ok(Some(pkt)) => {
                     metrics.rx_count += 1;
                     metrics.rx_bytes += pkt.len as u64;
-                    metrics.record_hash_received(packet_hash(&buf[..pkt.len]));
+
+                    let hash = Sha256::digest(&buf[..pkt.len]);
+                    let hash_prefix: [u8; 16] = hash[..16].try_into().unwrap();
+                    if metrics.packet_hashes_received.len() < 10000 {
+                        metrics.packet_hashes_received.insert(hash_prefix);
+                    }
                     let peer_id = if pkt.len > 12 && buf[0] == 0x15 && buf[1] == 0x01 {
                         Some(buf[5..13].iter().map(|b| format!("{b:02x}")).collect())
                     } else {
@@ -232,7 +223,9 @@ fn main() {
                 }
                 Ok(None) => {} // timeout
                 Err(e) => {
-                    metrics.errors.push(format!("RX error: {:?}", e));
+                    if metrics.errors.len() < 100 {
+                        metrics.errors.push(format!("RX error: {:?}", e));
+                    }
                     eprintln!("rust-{}: RX error: {:?}", node_id, e);
                 }
             }
@@ -242,15 +235,13 @@ fn main() {
         std::thread::sleep(Duration::from_millis(8000 + (node_id as u64 % 4000)));
     }
 
+    // Final stats (legacy format for compatibility)
     println!(
         "rust-{}: TX={} RX={}",
         node_id, metrics.tx_count, metrics.rx_count
     );
 
-    let mut sent: Vec<String> = metrics.packet_hashes_sent.into_iter().map(hex::encode).collect();
-    sent.sort_unstable();
-    let mut received: Vec<String> = metrics.packet_hashes_received.into_iter().map(hex::encode).collect();
-    received.sort_unstable();
+    // Export metrics as JSON
     let metrics_json = serde_json::json!({
         "node_id": node_id,
         "tx_count": metrics.tx_count,
@@ -259,8 +250,8 @@ fn main() {
         "rx_bytes": metrics.rx_bytes,
         "unique_peers": metrics.unique_peers.len(),
         "errors": metrics.errors.len(),
-        "packet_hashes_sent": sent,
-        "packet_hashes_received": received,
+        "hashes_sent": metrics.packet_hashes_sent.len(),
+        "hashes_received": metrics.packet_hashes_received.len(),
     });
     println!("METRICS:{}", serde_json::to_string(&metrics_json).unwrap());
 }

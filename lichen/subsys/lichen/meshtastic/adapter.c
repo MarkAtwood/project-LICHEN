@@ -359,13 +359,12 @@ static int pb_read_varint(struct pb_cursor *cur, uint64_t *value)
 	return -EINVAL;
 }
 
-#define PB_MAX_FIELD_NUMBER 536870911ULL
 static int pb_read_key(struct pb_cursor *cur, uint32_t *field, uint32_t *wire_type)
 {
 	uint64_t key;
 	int ret = pb_read_varint(cur, &key);
 
-	if (ret < 0 || (key >> 3) == 0U || (key >> 3) > PB_MAX_FIELD_NUMBER) {
+	if (ret < 0 || (key >> 3) == 0U || (key >> 3) > UINT32_MAX) {
 		return -EINVAL;
 	}
 
@@ -530,28 +529,19 @@ static bool valid_position_e7(int32_t latitude_e7, int32_t longitude_e7)
 	       longitude_e7 >= -1800000000 && longitude_e7 <= 1800000000;
 }
 
-#define LICHEN_MESHTASTIC_POSITION_MAX_FUTURE_SKEW CONFIG_LICHEN_MESHTASTIC_POSITION_MAX_FUTURE_SKEW
-
 static void set_position_fix_time(
 	struct lichen_meshtastic_position_snapshot *position, uint32_t unix_time)
 {
 	position->effective_epoch_floor =
 		(uint32_t)CONFIG_LICHEN_MESHTASTIC_POSITION_EPOCH_FLOOR_UNIX;
-	position->fix_time_rejected_below_epoch_floor = false;
-	position->fix_time_rejected_future = false;
 	if (unix_time < position->effective_epoch_floor) {
 		position->fix_time_rejected_below_epoch_floor = true;
 		position->fix_time_unix_valid = false;
 		position->fix_time_unix = 0U;
 		return;
 	}
-	if (unix_time > position->effective_epoch_floor + LICHEN_MESHTASTIC_POSITION_MAX_FUTURE_SKEW) {
-		position->fix_time_rejected_future = true;
-		position->fix_time_unix_valid = false;
-		position->fix_time_unix = 0U;
-		return;
-	}
 
+	position->fix_time_rejected_below_epoch_floor = false;
 	position->fix_time_unix = unix_time;
 	position->fix_time_unix_valid = true;
 }
@@ -649,20 +639,22 @@ static int parse_position_payload(
 			position->gps_accuracy_mm_valid = true;
 			break;
 		case POSITION_SATS_IN_VIEW_FIELD:
-			if (wt != PB_WT_VARINT || pb_read_varint(&cur, &v) < 0 ||
-			    v > UINT8_MAX) {
+			if (wt != PB_WT_VARINT || pb_read_varint(&cur, &v) < 0) {
 				return -EINVAL;
 			}
-			position->satellites = (uint8_t)v;
-			position->satellites_valid = true;
+			if (v <= UINT8_MAX) {
+				position->satellites = (uint8_t)v;
+				position->satellites_valid = true;
+			}
 			break;
 		case POSITION_PRECISION_BITS_FIELD:
-			if (wt != PB_WT_VARINT || pb_read_varint(&cur, &v) < 0 ||
-			    v > UINT8_MAX) {
+			if (wt != PB_WT_VARINT || pb_read_varint(&cur, &v) < 0) {
 				return -EINVAL;
 			}
-			position->precision_bits = (uint8_t)v;
-			position->precision_bits_valid = true;
+			if (v <= UINT8_MAX) {
+				position->precision_bits = (uint8_t)v;
+				position->precision_bits_valid = true;
+			}
 			break;
 		default:
 			if (pb_skip_value(&cur, wt) < 0) {
@@ -682,17 +674,12 @@ static int parse_position_payload(
 
 static bool admin_payload_variant_field(uint32_t field)
 {
-	/* Current Meshtastic AdminMessage.payload_variant fields. Field 101 is
-	 * session_passkey context, not a oneof arm; unknown future fields must
-	 * be skipped rather than overriding a previous known oneof arm.
-	 */
 	return (field >= 1U && field <= 8U) ||
 	       (field >= 10U && field <= 27U) ||
 	       (field >= 32U && field <= 49U) ||
 	       (field >= 64U && field <= 67U) ||
 	       (field >= 94U && field <= 100U) ||
-	       (field >= ADMIN_OTA_REQUEST_FIELD &&
-		field <= ADMIN_LOCKDOWN_AUTH_FIELD);
+	       (field >= 102U && field <= 104U);
 }
 
 static bool parse_admin_payload(const uint8_t *payload, size_t len,
@@ -700,6 +687,10 @@ static bool parse_admin_payload(const uint8_t *payload, size_t len,
 {
 	struct pb_cursor cur = { .buf = payload, .len = len };
 
+	if (payload == NULL || len == 0U) {
+		*kind = LICHEN_MESHTASTIC_ADAPTER_PACKET_MALFORMED;
+		return false;
+	}
 	*kind = LICHEN_MESHTASTIC_ADAPTER_PACKET_UNSUPPORTED;
 
 	while (cur.pos < cur.len) {
@@ -776,17 +767,8 @@ static int parse_data(const uint8_t *data, size_t len,
 			    pb_read_len_value(&cur, &payload, &payload_len) < 0) {
 				return -EINVAL;
 			}
-			if (payload_len > sizeof(info->payload_buf)) {
-				info->payload = NULL;
-				info->payload_len = 0U;
-			} else if (payload_len > 0U) {
-				memcpy(info->payload_buf, payload, payload_len);
-				info->payload = info->payload_buf;
-				info->payload_len = payload_len;
-			} else {
-				info->payload = NULL;
-				info->payload_len = 0U;
-			}
+			info->payload = payload;
+			info->payload_len = payload_len;
 			break;
 		default:
 			if (pb_skip_value(&cur, wt) < 0) {
@@ -811,8 +793,7 @@ static int parse_data(const uint8_t *data, size_t len,
 						LICHEN_MESHTASTIC_ADAPTER_PACKET_POSITION_APP;
 				}
 			} else if (info->portnum == MESHTASTIC_PORTNUM_ADMIN_APP) {
-			if (info->payload == NULL ||
-			    !parse_admin_payload(info->payload, info->payload_len,
+			if (!parse_admin_payload(info->payload, info->payload_len,
 						 &info->kind)) {
 				info->kind = LICHEN_MESHTASTIC_ADAPTER_PACKET_MALFORMED;
 			}
@@ -828,10 +809,8 @@ static int parse_packet(const uint8_t *packet, size_t len,
 			struct lichen_meshtastic_adapter_packet_info *info)
 {
 	struct pb_cursor cur = { .buf = packet, .len = len };
-	bool has_decoded_field = false;
-	bool has_encrypted_field = false;
 
-	*info = (struct lichen_meshtastic_adapter_packet_info){0};
+	memset(info, 0, sizeof(*info));
 
 	while (cur.pos < cur.len) {
 		uint32_t field;
@@ -903,24 +882,16 @@ static int parse_packet(const uint8_t *packet, size_t len,
 			if (parse_data(data, data_len, info) < 0) {
 				return -EINVAL;
 			}
-			has_decoded_field = true;
-			if (has_encrypted_field) {
-				info->kind = LICHEN_MESHTASTIC_ADAPTER_PACKET_MALFORMED;
-			}
 			break;
 		case MESH_PACKET_ENCRYPTED_FIELD:
 			if (wt != PB_WT_LEN ||
 			    pb_read_len_value(&cur, &data, &data_len) < 0) {
 				return -EINVAL;
 			}
-			has_encrypted_field = true;
 			info->kind = LICHEN_MESHTASTIC_ADAPTER_PACKET_UNSUPPORTED;
 			info->portnum = 0U;
 			info->payload = NULL;
 			info->payload_len = 0U;
-			if (has_decoded_field) {
-				info->kind = LICHEN_MESHTASTIC_ADAPTER_PACKET_MALFORMED;
-			}
 			break;
 		default:
 			if (pb_skip_value(&cur, wt) < 0) {
@@ -988,6 +959,8 @@ static bool resolve_text_destination(
 	struct lichen_meshtastic_local_info info;
 	struct nodedb_peer_state peers;
 	int ret;
+
+	packet->has_to_peer = false;
 
 	if (!packet->has_to) {
 		return false;
@@ -1111,8 +1084,10 @@ static void sort_peers_by_eui64(struct nodedb_peer_state *state)
 static void sanitize_peer_snapshot(struct lichen_meshtastic_peer_snapshot *peer)
 {
 	if (peer->has_long_name) {
-		peer->long_name[sizeof(peer->long_name) - 1U] = '\0';
-		if (peer->long_name[0] == '\0') {
+		if (sizeof(peer->long_name) > 0U) {
+			peer->long_name[sizeof(peer->long_name) - 1U] = '\0';
+		}
+		if (sizeof(peer->long_name) > 0U && peer->long_name[0] == '\0') {
 			peer->has_long_name = false;
 		}
 	}
@@ -1239,6 +1214,7 @@ static int queue_status(struct lichen_meshtastic_adapter *adapter, uint32_t res,
 		.maxlen = adapter->ops.queue_maxlen,
 		.has_res = true,
 	};
+	uint8_t buf[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
 	int ret;
 
 	if (packet != NULL && packet->has_id) {
@@ -1254,24 +1230,25 @@ static int queue_status(struct lichen_meshtastic_adapter *adapter, uint32_t res,
 		status.free--;
 	}
 
-	ret = lichen_meshtastic_encode_from_radio_queue_status(&status, adapter->tx_buf,
-							       sizeof(adapter->tx_buf));
+	ret = lichen_meshtastic_encode_from_radio_queue_status(&status, buf,
+							       sizeof(buf));
 	if (ret < 0) {
 		return ret;
 	}
 
-	return enqueue(adapter, adapter->tx_buf, (size_t)ret);
+	return enqueue(adapter, buf, (size_t)ret);
 }
 
 static int config_complete(struct lichen_meshtastic_adapter *adapter, uint32_t nonce)
 {
-	int ret = lichen_meshtastic_encode_from_radio_config_complete(nonce, adapter->tx_buf,
-								      sizeof(adapter->tx_buf));
+	uint8_t buf[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
+	int ret = lichen_meshtastic_encode_from_radio_config_complete(nonce, buf,
+								      sizeof(buf));
 
 	if (ret < 0) {
 		return ret;
 	}
-	return enqueue(adapter, adapter->tx_buf, (size_t)ret);
+	return enqueue(adapter, buf, (size_t)ret);
 }
 
 static bool starts_with_lichen_brand(const char *value)
@@ -1368,13 +1345,14 @@ static int enqueue_payload(struct lichen_meshtastic_adapter *adapter,
 			   enum lichen_meshtastic_from_radio_message message,
 			   const uint8_t *payload, size_t payload_len)
 {
+	uint8_t buf[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
 	int ret = lichen_meshtastic_encode_from_radio_message(
-		message, payload, payload_len, adapter->tx_buf, sizeof(adapter->tx_buf));
+		message, payload, payload_len, buf, sizeof(buf));
 
 	if (ret < 0) {
 		return ret;
 	}
-	return enqueue(adapter, adapter->tx_buf, (size_t)ret);
+	return enqueue(adapter, buf, (size_t)ret);
 }
 
 static int enqueue_static_sync(struct lichen_meshtastic_adapter *adapter,
@@ -1382,75 +1360,52 @@ static int enqueue_static_sync(struct lichen_meshtastic_adapter *adapter,
 {
 	uint8_t payload[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
 	int ret;
-	int enqueue_ret;
+	int enq;
 
 	ret = lichen_meshtastic_encode_my_info_payload(info, payload,
 						       sizeof(payload));
-	if (ret < 0) {
-		return ret;
-	}
-	enqueue_ret = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_MY_INFO,
-				       payload, (size_t)ret);
-	if (enqueue_ret < 0) {
-		return enqueue_ret;
+	if (ret < 0 || (enq = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_MY_INFO,
+				       payload, (size_t)ret)) < 0) {
+		return ret < 0 ? ret : enq;
 	}
 
 	ret = lichen_meshtastic_encode_metadata_payload(info, payload,
 							sizeof(payload));
-	if (ret < 0) {
-		return ret;
-	}
-	enqueue_ret = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_METADATA,
-				       payload, (size_t)ret);
-	if (enqueue_ret < 0) {
-		return enqueue_ret;
+	if (ret < 0 || (enq = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_METADATA,
+				       payload, (size_t)ret)) < 0) {
+		return ret < 0 ? ret : enq;
 	}
 
 	ret = lichen_meshtastic_encode_region_presets_payload(info, payload,
 							      sizeof(payload));
-	if (ret < 0) {
-		return ret;
-	}
-	enqueue_ret = enqueue_payload(adapter,
+	if (ret < 0 || (enq = enqueue_payload(adapter,
 				       LICHEN_MESHTASTIC_FROM_RADIO_REGION_PRESETS,
-				       payload, (size_t)ret);
-	if (enqueue_ret < 0) {
-		return enqueue_ret;
+				       payload, (size_t)ret)) < 0) {
+		return ret < 0 ? ret : enq;
 	}
 
 	ret = lichen_meshtastic_encode_channel_payload(info, payload, sizeof(payload));
-	if (ret < 0) {
-		return ret;
-	}
-	enqueue_ret = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_CHANNEL,
-				       payload, (size_t)ret);
-	if (enqueue_ret < 0) {
-		return enqueue_ret;
+	if (ret < 0 || (enq = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_CHANNEL,
+				       payload, (size_t)ret)) < 0) {
+		return ret < 0 ? ret : enq;
 	}
 
 	for (size_t i = 0U; i < ARRAY_SIZE(s_config_sections); i++) {
 		ret = lichen_meshtastic_encode_config_section_payload(
 			s_config_sections[i], info, payload, sizeof(payload));
-		if (ret < 0) {
-			return ret;
-		}
-		enqueue_ret = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_CONFIG,
-				    payload, (size_t)ret);
-		if (enqueue_ret < 0) {
-			return enqueue_ret;
+		if (ret < 0 ||
+		    (enq = enqueue_payload(adapter, LICHEN_MESHTASTIC_FROM_RADIO_CONFIG,
+				    payload, (size_t)ret)) < 0) {
+			return ret < 0 ? ret : enq;
 		}
 	}
 
 	ret = lichen_meshtastic_encode_module_config_payload(info, payload,
 							     sizeof(payload));
-	if (ret < 0) {
-		return ret;
-	}
-	enqueue_ret = enqueue_payload(adapter,
+	if (ret < 0 || (enq = enqueue_payload(adapter,
 				       LICHEN_MESHTASTIC_FROM_RADIO_MODULE_CONFIG,
-				       payload, (size_t)ret);
-	if (enqueue_ret < 0) {
-		return enqueue_ret;
+				       payload, (size_t)ret)) < 0) {
+		return ret < 0 ? ret : enq;
 	}
 
 	return 0;
@@ -1625,8 +1580,7 @@ static int dispatch_want_config(struct lichen_meshtastic_adapter *adapter,
 	if (ret < 0) {
 		return ret;
 	}
-	ret = config_complete(adapter, nonce);
-	return ret;
+	return config_complete(adapter, nonce);
 }
 
 static int dispatch_packet(struct lichen_meshtastic_adapter *adapter,
@@ -1718,6 +1672,7 @@ int lichen_meshtastic_adapter_emit_text(
 {
 	struct lichen_meshtastic_text_packet packet;
 	uint8_t mesh_packet[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
+	uint8_t from_radio[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
 	uint32_t from_radio_id;
 	int ret;
 
@@ -1754,12 +1709,12 @@ int lichen_meshtastic_adapter_emit_text(
 	ret = lichen_meshtastic_encode_from_radio_packet(from_radio_id,
 							 mesh_packet,
 							 (size_t)ret,
-							 adapter->tx_buf,
-							 sizeof(adapter->tx_buf));
+							 from_radio,
+							 sizeof(from_radio));
 	if (ret < 0) {
 		return ret;
 	}
-	ret = enqueue(adapter, adapter->tx_buf, (size_t)ret);
+	ret = enqueue(adapter, from_radio, (size_t)ret);
 	if (ret < 0) {
 		return ret;
 	}
@@ -1775,6 +1730,7 @@ int lichen_meshtastic_adapter_emit_status(
 {
 	struct lichen_meshtastic_routing_packet packet;
 	uint8_t mesh_packet[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
+	uint8_t from_radio[LICHEN_MESHTASTIC_FROM_RADIO_MAX];
 	uint32_t from_radio_id;
 	int ret;
 
@@ -1806,12 +1762,12 @@ int lichen_meshtastic_adapter_emit_status(
 	ret = lichen_meshtastic_encode_from_radio_packet(from_radio_id,
 							 mesh_packet,
 							 (size_t)ret,
-							 adapter->tx_buf,
-							 sizeof(adapter->tx_buf));
+							 from_radio,
+							 sizeof(from_radio));
 	if (ret < 0) {
 		return ret;
 	}
-	ret = enqueue(adapter, adapter->tx_buf, (size_t)ret);
+	ret = enqueue(adapter, from_radio, (size_t)ret);
 	if (ret < 0) {
 		return ret;
 	}
