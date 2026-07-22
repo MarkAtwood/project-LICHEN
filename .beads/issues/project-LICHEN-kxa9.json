@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-kxa9",
+  "title": "codereview: safer length check in lichen_meshcore_encode_serial_frame to prevent potential wraparound in comparison",
+  "description": "The condition  can theoretically wrap if payload_len \u003e SIZE_MAX-3 on 32-bit size_t. Although the preceding MAX_SERIAL_PAYLOAD guard and new INT_MAX assert make it impossible, for defensive coding change to . This is P4 but per instructions treat as real work. tagged codereview",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:13:28.231805256Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:13:28.231805256Z"
+}
