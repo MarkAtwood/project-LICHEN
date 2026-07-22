@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-jxno",
+  "title": "[codereview-pass2] Security: Heltec V3 WiFi STA Kconfig lacks explicit WPA3/PMF or credential hardening for border router backhaul; TOFU or key pinning not configured in conf",
+  "description": "lichen/apps/gateway/boards/heltec_wifi_lora32_v3_esp32s3_procpu.conf:77 and main.c WiFi init path. espressif driver defaults may allow weak auth. Check against spec/06-security.md for mesh trust model extension to WiFi uplink. discovered-from:project-LICHEN-ros5",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:18:53.994822162Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:18:53.994822162Z"
+}
