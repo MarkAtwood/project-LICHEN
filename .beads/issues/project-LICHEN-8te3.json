@@ -1,0 +1,53 @@
+{
+  "id": "project-LICHEN-8te3",
+  "title": "TDeck UI Renode Ethernet LVGL epic",
+  "description": "Links project-LICHEN-o1dn zubu r7h4.13 o1v4 8gnp for minimal driver/DT/SX1262/DTS/conf fixes per codereview. Use beads only.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "epic",
+  "created_at": "2026-07-22T18:26:31.695271593Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:26:31.695271593Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-8te3",
+      "depends_on_id": "project-LICHEN-o1dn",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:31.833259504Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-8te3",
+      "depends_on_id": "project-LICHEN-zubu",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:31.951291834Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-8te3",
+      "depends_on_id": "project-LICHEN-r7h4.13",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:32.067058939Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-8te3",
+      "depends_on_id": "project-LICHEN-o1v4",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:32.187736027Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-8te3",
+      "depends_on_id": "project-LICHEN-8gnp",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:26:32.315909692Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
