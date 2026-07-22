@@ -2,16 +2,16 @@
   "id": "project-LICHEN-bl4s",
   "title": "[codereview-P4] packet_info payload_buf size limited to TEXT_PAYLOAD_MAX but unsupported packets may exceed",
   "description": "After adding payload_buf[LICHEN_MESHTASTIC_TEXT_PAYLOAD_MAX] in adapter.h:102, parse_data:771 will truncate or ignore larger payloads. For unsupported or admin, may lose data. Should use MIN(payload_len, sizeof(payload_buf)) and document. P4 as real work per instructions. Tag: codereview",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T19:09:06.914603264Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:10:14.329042959Z",
+  "updated_at": "2026-07-22T19:12:42.070269486Z",
   "started_at": "2026-07-22T19:10:14.329042959Z",
-  "lease_expires_at": "2026-07-22T19:15:14.329042959Z",
-  "heartbeat_at": "2026-07-22T19:10:14.329042959Z",
+  "closed_at": "2026-07-22T19:12:42.070269486Z",
+  "close_reason": "Fixed completely: parsing, error, tests, validation, no dead code/comments. All tests pass.",
   "labels": [
     "codereview"
   ]
