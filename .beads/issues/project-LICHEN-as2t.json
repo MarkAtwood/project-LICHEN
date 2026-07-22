@@ -2,12 +2,16 @@
   "id": "project-LICHEN-as2t",
   "title": "[codereview] P4: safe_invoke_conn_cb does not snapshot state for security_changed_cb consistency",
   "description": "Helper snapshots only cb/ctx but security_changed passes transport_state.state read outside lock. Could see inconsistent state. Treat P4 as real work per instructions. Update helper or snapshot state too. Tagged codereview.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:51:28.439053503Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:28.439053503Z",
+  "updated_at": "2026-07-22T18:59:18.947817468Z",
+  "started_at": "2026-07-22T18:59:18.947817468Z",
+  "lease_expires_at": "2026-07-22T19:04:18.947817468Z",
+  "heartbeat_at": "2026-07-22T18:59:18.947817468Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-as2t",
