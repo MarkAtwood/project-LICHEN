@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-klcq",
+  "title": "P4 codereview: Added note lacks test vector cross-ref to ccp_load_balancing.json or new vector for validity check",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T19:01:52.08979655Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T19:01:52.08979655Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-klcq",
+      "depends_on_id": "project-LICHEN-95n5",
+      "type": "blocks",
+      "created_at": "2026-07-22T19:01:52.255230491Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
