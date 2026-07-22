@@ -2,16 +2,16 @@
   "id": "project-LICHEN-eu4j",
   "title": "codereview: lilygo,tdeck-keyboard binding should declare int-gpios",
   "description": "The T-Deck keyboard controller has an interrupt output (GPIO46 per hardware notes). Binding should include optional int-gpios property like other I2C input devices (cap1203, stmpe811). Driver currently ignores it (polling only). P2. discovered-from:project-LICHEN-nour",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:25:42.919771199Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:27:04.084935345Z",
+  "updated_at": "2026-07-22T18:27:28.419118779Z",
   "started_at": "2026-07-22T18:27:04.084935345Z",
-  "lease_expires_at": "2026-07-22T18:32:04.084935345Z",
-  "heartbeat_at": "2026-07-22T18:27:04.084935345Z",
+  "closed_at": "2026-07-22T18:27:28.419118779Z",
+  "close_reason": "Fixed keyboard enablement in defconfig, pinctrl, binding, driver best practices after 3 codereview passes",
   "labels": [
     "codereview"
   ]
