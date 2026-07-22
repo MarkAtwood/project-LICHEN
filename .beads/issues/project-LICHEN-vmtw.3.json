@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-vmtw.3",
+  "title": "[codereview-pass3] related P4 beads project-LICHEN-m1it qyjm 56sj should be claimed and fixed as part of this task per instructions",
+  "description": "The stack allocation bead is P3, but instructions say fix all (P4 as real work). The related asserts in m1it, uint16 in qyjm, security in 56sj are in same file. File as codereview tagged and fix them too. P3 task.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:14:40.761739887Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:14:40.761739887Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-vmtw.3",
+      "depends_on_id": "project-LICHEN-vmtw",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:14:40.891318402Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
