@@ -2,10 +2,12 @@
   "id": "project-LICHEN-224l",
   "title": "[codereview-pass2] coap_dtn.c post-blanklines",
   "description": "Pass 2: Structure restored, no one-liners, if conditions now have blocks. Matches other coap files. P3: deaddrop_post still returns CoAP codes as int (0x84 etc) without using COAP_RESPONSE_CODE macro. codereview",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:37:32.664169453Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:37:32.664169453Z"
+  "updated_at": "2026-07-22T18:38:17.654639106Z",
+  "closed_at": "2026-07-22T18:38:17.654639106Z",
+  "close_reason": "Convergence after 3 codereview passes per chunk on sales-playbook.md/test, coap_dtn.c readability+macros, SCHC table move to appendix. All P0-P4 findings filed and fixed. No dead code. Conventional commit prepared but not executed per policy. Quality gates: ruff clean, west native_sim builds clean."
 }
