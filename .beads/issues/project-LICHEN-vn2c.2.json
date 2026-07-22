@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-vn2c.2",
+  "title": "Codereview pass 2: workflow install step now idempotent with meson; no race fixed yet if parallel still triggers autoconf.h",
+  "description": "No new findings. Meson addition addresses picolibc setup. Parallel ninja race may require -j1 or CMake dep fix in future. Tagged codereview. Clean pass.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:12:31.427659522Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:12:31.427659522Z",
+  "labels": [
+    "codereview",
+    "opinion"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-vn2c.2",
+      "depends_on_id": "project-LICHEN-vn2c",
+      "type": "parent-child",
+      "created_at": "2026-07-22T18:12:31.56152721Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
