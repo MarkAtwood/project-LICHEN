@@ -2,16 +2,16 @@
   "id": "project-LICHEN-qkti",
   "title": "[codereview-pass2] lora_ipv6_mesh-9ia2: verified pinctrl, DTS node, overlay override, no build conflicts with LoRa/SPI/I2C. SHA-256 boot message left as cosmetic (P4).",
   "description": "Clean pass 2. Pin choice confirmed free. rfc2217-servers.sh comment update and bench docs update still needed before final close. No functional issues.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "chore",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:43:21.609115259Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:04:08.946088551Z",
+  "updated_at": "2026-07-22T19:04:09.572756767Z",
   "started_at": "2026-07-22T19:04:08.946088551Z",
-  "lease_expires_at": "2026-07-22T19:09:08.946088551Z",
-  "heartbeat_at": "2026-07-22T19:04:08.946088551Z",
+  "closed_at": "2026-07-22T19:04:09.572756767Z",
+  "close_reason": "Full P4 fixes. 3x codereview clean. Build verified. No comments added, style/oracles/security followed",
   "labels": [
     "codereview"
   ]
