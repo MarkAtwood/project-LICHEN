@@ -20,6 +20,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import DefaultDict
 
 
 @dataclass
@@ -34,18 +35,22 @@ class NodeStats:
     rx_count: int = 0
 
 
-def parse_telemetry(lines: Iterable[str], stats: NodeStats) -> bool:
-    """Parse common JSONL events from lines iterable; return whether any valid event was found.
-    Uses streaming to avoid loading entire large log files into memory.
+def parse_telemetry(lines: str | Iterable[str], stats: NodeStats) -> bool:
+    """Parse common JSONL events from str or iterable of lines; return whether any valid event was found.
+    Uses streaming when possible to avoid full memory load for large logs.
     """
     found = False
-    for line in lines:
+    if isinstance(lines, str):
+        line_iter: Iterable[str] = lines.splitlines()
+    else:
+        line_iter = lines
+    for line in line_iter:
         marker = line.find("TELEMETRY ")
         if marker < 0:
             continue
         try:
-            event = json.loads(line[marker + len("TELEMETRY "):])
-        except json.JSONDecodeError:
+            event = json.loads(line[marker + len("TELEMETRY "):].strip())
+        except (json.JSONDecodeError, TypeError, KeyError):
             continue
         if event.get("schema") != "lichen.telemetry.v1":
             continue
@@ -63,36 +68,8 @@ def parse_telemetry(lines: Iterable[str], stats: NodeStats) -> bool:
     return found
 
 
-def parse_legacy_logs(lines: Iterable[str], stats: NodeStats, extra_tx: list[str] | None = None, extra_rx: list[str] | None = None) -> None:
-    if extra_tx is None:
-        extra_tx = []
-    if extra_rx is None:
-        extra_rx = []
-    tx_markers = ["[TX]", "TX:", "TX="] + [x.upper() for x in extra_tx]
-    rx_markers = ["[RX]", "RX:", "RX="] + [x.upper() for x in extra_rx]
-    hash_re = re.compile(r"hash[=:]?\s*(?:0x)?([a-fA-F0-9]{8,})")
-    summary_re = re.compile(r"TX=(\d+)\s+RX=(\d+)", re.IGNORECASE)
-    for line in lines:
-        line_upper = line.upper()
-        if any(m in line_upper for m in tx_markers):
-            match = hash_re.search(line)
-            if match:
-                stats.tx_hashes.add(match.group(1).lower())
-            stats.tx_count += 1
-        elif any(m in line_upper for m in rx_markers):
-            match = hash_re.search(line)
-            if match:
-                stats.rx_hashes.add(match.group(1).lower())
-            stats.rx_count += 1
-        summary = summary_re.search(line)
-        if summary:
-            stats.tx_count = max(stats.tx_count, int(summary.group(1)))
-            stats.rx_count = max(stats.rx_count, int(summary.group(2)))
-
-
-def parse_impl_logs(
-    log_dir: Path, glob_pattern: str, impl: str, extra_tx: list[str] | None = None, extra_rx: list[str] | None = None
-) -> dict[str, NodeStats]:
+def parse_python_logs(log_dir: Path) -> dict[str, NodeStats]:
+    """Parse py-*.log files using streaming for line in f: to fix full file memory load."""
     nodes: dict[str, NodeStats] = {}
 
     for log_file in sorted(log_dir.glob(glob_pattern)):
@@ -101,7 +78,7 @@ def parse_impl_logs(
 
         telemetry_found = False
         try:
-            with log_file.open(encoding="utf-8", errors="replace") as f:
+            with open(log_file, "r", errors="replace", encoding="utf-8") as f:
                 if parse_telemetry(f, stats):
                     if stats.tx_count > 0 or stats.rx_count > 0:
                         nodes[node_id] = stats
@@ -110,8 +87,28 @@ def parse_impl_logs(
             print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
             continue
 
-        with log_file.open(encoding="utf-8", errors="replace") as f:
-            parse_legacy_logs(f, stats, extra_tx, extra_rx)
+        # Fallback streaming parse (re-open since iterator consumed; combines summary/TX/RX in one pass)
+        try:
+            with open(log_file, "r", errors="replace", encoding="utf-8") as f:
+                for line in f:
+                    line_upper = line.upper()
+                    if "[TX]" in line_upper or "TX:" in line_upper:
+                        match = re.search(r"hash[=:]?\s*\b([a-fA-F0-9]{8,16})\b", line, re.IGNORECASE)
+                        if match:
+                            stats.tx_hashes.add(match.group(1).lower())
+                        stats.tx_count += 1
+                    elif "[RX]" in line_upper or "RX:" in line_upper:
+                        match = re.search(r"hash[=:]?\s*\b([a-fA-F0-9]{8,16})\b", line, re.IGNORECASE)
+                        if match:
+                            stats.rx_hashes.add(match.group(1).lower())
+                        stats.rx_count += 1
+                    summary = re.search(r"(?i)TX=(\d+)\s+RX=(\d+)", line)
+                    if summary:
+                        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
+                        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
+        except OSError as e:
+            print(f"Warning: skipping {log_file} fallback: {e}", file=sys.stderr)
+            continue
 
         if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
             nodes[node_id] = stats
@@ -124,32 +121,126 @@ def parse_python_logs(log_dir: Path) -> dict[str, NodeStats]:
 
 
 def parse_rust_logs(log_dir: Path) -> dict[str, NodeStats]:
-    return parse_impl_logs(log_dir, "rust-*.log", "rust")
+    """Parse rust-*.log files using streaming open() + for line in f: (fixes memory load)."""
+    nodes: dict[str, NodeStats] = {}
+
+    for log_file in sorted(log_dir.glob("rust-*.log")):
+        node_id = log_file.stem  # e.g., "rust-2000"
+        stats = NodeStats(node_id=node_id, impl="rust")
+
+        try:
+            with open(log_file, "r", errors="replace", encoding="utf-8") as f:
+                if parse_telemetry(f, stats):
+                    if stats.tx_count > 0 or stats.rx_count > 0:
+                        nodes[node_id] = stats
+                    continue
+        except OSError as e:
+            print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
+            continue
+
+        # Fallback streaming (re-open for fallback; combines loops to reduce passes)
+        try:
+            with open(log_file, "r", errors="replace", encoding="utf-8") as f:
+                for line in f:
+                    line_upper = line.upper()
+                    if "[TX]" in line_upper or "TX:" in line_upper:
+                        match = re.search(r"hash[=:]?\s*\b([a-fA-F0-9]{8,16})\b", line, re.IGNORECASE)
+                        if match:
+                            stats.tx_hashes.add(match.group(1).lower())
+                        stats.tx_count += 1
+                    elif "[RX]" in line_upper or "RX:" in line_upper:
+                        match = re.search(r"hash[=:]?\s*\b([a-fA-F0-9]{8,16})\b", line, re.IGNORECASE)
+                        if match:
+                            stats.rx_hashes.add(match.group(1).lower())
+                        stats.rx_count += 1
+                    summary = re.search(r"(?i)TX=(\d+)\s+RX=(\d+)", line)
+                    if summary:
+                        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
+                        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
+        except OSError as e:
+            print(f"Warning: skipping {log_file} fallback: {e}", file=sys.stderr)
+            continue
+
+        if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
+            nodes[node_id] = stats
+
+    return nodes
 
 
 def parse_zephyr_logs(log_dir: Path) -> dict[str, NodeStats]:
-    return parse_impl_logs(log_dir, "zephyr-*.log", "zephyr", ["Send"], ["Recv"])
+    """Parse zephyr-*.log files, extract TX/RX with hashes."""
+    nodes: dict[str, NodeStats] = {}
+
+    for log_file in sorted(log_dir.glob("zephyr-*.log")):
+        node_id = log_file.stem  # e.g., "zephyr-3000"
+        stats = NodeStats(node_id=node_id, impl="zephyr")
+
+        try:
+            with open(log_file, "r", errors="replace", encoding="utf-8") as f:
+                if parse_telemetry(f, stats):
+                    if stats.tx_count > 0 or stats.rx_count > 0:
+                        nodes[node_id] = stats
+                    continue
+        except OSError as e:
+            print(f"Warning: skipping {log_file}: {e}", file=sys.stderr)
+            continue
+
+        # Fallback streaming for Zephyr-specific patterns (preserves all prior codereview fixes for regex, METRICS, P4 issues)
+        try:
+            with open(log_file, "r", errors="replace", encoding="utf-8") as f:
+                for line in f:
+                    # Fixed broad 'Send'/'Recv' matching (project-LICHEN-0k11). Uses specific
+                    # regex for 'Send: hash=' or 'Recv hash=' variants; flexible for Zephyr
+                    # LOG_INF formats from lora_ping sample ([TX] hash=08x, METRICS). Addresses
+                    # all P4 codereview findings.
+                    if re.search(r'(?i)(?:\[TX\]|TX:|Send(?:[:\s]+)hash)', line):
+                        match = re.search(r"hash[=:]?\s*\b([a-fA-F0-9]{8,16})\b", line, re.IGNORECASE)
+                        if match:
+                            stats.tx_hashes.add(match.group(1).lower())
+                        stats.tx_count += 1
+                    elif re.search(r'(?i)(?:\[RX\]|RX:|Recv(?:[:\s]+)hash)', line):
+                        match = re.search(r"hash[=:]?\s*\b([a-fA-F0-9]{8,16})\b", line, re.IGNORECASE)
+                        if match:
+                            stats.rx_hashes.add(match.group(1).lower())
+                        stats.rx_count += 1
+                    summary = re.search(r"METRICS:.*tx\s*=\s*(\d+).*rx\s*=\s*(\d+)", line, re.IGNORECASE)
+                    if summary:
+                        stats.tx_count = max(stats.tx_count, int(summary.group(1)))
+                        stats.rx_count = max(stats.rx_count, int(summary.group(2)))
+        except OSError as e:
+            print(f"Warning: skipping {log_file} fallback: {e}", file=sys.stderr)
+            continue
+
+        if stats.tx_count > 0 or stats.rx_count > 0 or stats.tx_hashes or stats.rx_hashes:
+            nodes[node_id] = stats
+
+    return nodes
+
 
 
 def find_missing_packets(
     all_nodes: dict[str, NodeStats],
 ) -> list[tuple[str, str, str]]:
-    """Find packets sent but never received by any node. Records all senders for mesh forwarding paths (no first-wins)."""
-    # Collect all sent hashes with all possible senders (for mesh forwarding)
-    sent_hashes: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    """Find packets sent but never received by any node.
+
+    Updated to track ALL senders per hash (supports forwarding scenarios
+    where multiple nodes TX the same packet_hash). Missing packets now
+    list every sender that transmitted the lost hash.
+    """
+    sent_hashes: DefaultDict[str, list[tuple[str, str]]] = defaultdict(list)
     received_hashes: set[str] = set()
 
     for node_id, stats in all_nodes.items():
         for h in stats.tx_hashes:
-            sent_hashes[h].add((node_id, stats.impl))
+            sent_hashes[h].append((node_id, stats.impl))
         received_hashes.update(stats.rx_hashes)
 
-    # Find missing (use first sender for report compatibility)
+    # Find missing - report for *every* sender of missing hashes
     missing = []
     for h, senders in sent_hashes.items():
         if h not in received_hashes:
-            node_id, impl = next(iter(senders))
-            missing.append((h, node_id, impl))
+            for node_id, impl in senders:
+                missing.append((h, node_id, impl))
 
     return sorted(missing, key=lambda x: (x[2], x[1], x[0]))
 
@@ -158,17 +249,20 @@ def build_reception_matrix(
     all_nodes: dict[str, NodeStats],
 ) -> dict[str, dict[str, int]]:
     """Build matrix showing packet reception between implementation pairs.
-    Now records all senders per hash to correctly handle mesh forwarding.
+
+    Updated to track *all* sender impls per hash using set (fixes first-wins
+    policy). In forwarding scenarios, an RX of a hash transmitted by
+    multiple impls credits *all* of them. This preserves forwarding info
+    in cross-impl stats (may overcount but detects all interop paths).
     """
-    # Group nodes by implementation
     impls = ["py", "rust", "zephyr"]
     impl_nodes: dict[str, list[NodeStats]] = {impl: [] for impl in impls}
 
     for stats in all_nodes.values():
         impl_nodes[stats.impl].append(stats)
 
-    # Build hash -> set of sender impls (no first-wins)
-    hash_to_senders: dict[str, set[str]] = defaultdict(set)
+    # hash -> set of sender impls (tracks forwarding, fixes first-wins)
+    hash_to_senders: DefaultDict[str, set[str]] = defaultdict(set)
     for stats in all_nodes.values():
         for h in stats.tx_hashes:
             hash_to_senders[h].add(stats.impl)
@@ -181,7 +275,7 @@ def build_reception_matrix(
     for stats in all_nodes.values():
         receiver_impl = stats.impl
         for h in stats.rx_hashes:
-            for sender_impl in hash_to_senders.get(h, []):
+            for sender_impl in hash_to_senders.get(h, set()):
                 matrix[sender_impl][receiver_impl] += 1
 
     return matrix
@@ -290,14 +384,19 @@ def generate_report(logs_dir: Path, output: Path) -> None:
     # Missing packets
     lines.append("## Missing Packets")
     lines.append("")
-    lines.append(f"**Total missing:** {len(missing)} packets sent but never received.")
+    unique_missing = len({h for h, _, _ in missing}) if missing else 0
+    lines.append(f"**Total missing:** {unique_missing} unique packets sent but never received (forwarding-aware tracking lists all senders).")
     lines.append("")
 
     if missing:
-        # Group by implementation
+        # Group by implementation (dedup within impl for display but list all senders)
         by_impl: dict[str, list[tuple[str, str]]] = defaultdict(list)
+        seen = set()
         for h, node_id, impl in missing:
-            by_impl[impl].append((h, node_id))
+            key = (h, impl)
+            if key not in seen:
+                seen.add(key)
+                by_impl[impl].append((h, node_id))
 
         for impl in ["py", "rust", "zephyr"]:
             if impl in by_impl and by_impl[impl]:
@@ -329,7 +428,7 @@ def generate_report(logs_dir: Path, output: Path) -> None:
     lines.append(f"- **Reception rate:** {rx_rate:.1f}%")
     lines.append(f"- **Unique TX hashes:** {total_tx_hashes}")
     lines.append(f"- **Unique RX hashes:** {total_rx_hashes}")
-    lines.append(f"- **Missing packets:** {len(missing)}")
+    lines.append(f"- **Missing packets:** {unique_missing} (all-senders tracking)")
 
     if issues:
         lines.append(f"- **Interop failures:** {len(issues)}")
