@@ -1,0 +1,11 @@
+{
+  "id": "project-LICHEN-7tdn",
+  "title": "[CODEREVIEW-9] DTS lora node",
+  "description": "lichen/boards/elecrow/thinknode_m7/thinknode_m7_procpu.dts:30 - \u0026lora0 node referenced but not defined in DTS or pinctrl. Incomplete LR1110 integration matching semtech,lr1110 binding.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:18:46.565480491Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:18:46.565480491Z"
+}
