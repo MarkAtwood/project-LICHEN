@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-0hfd",
   "title": "codereview pass 1: KISS header table good but .c file dispatch comment outdated and lacks cross-ref to new error table",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:29:55.774644961Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:29:55.774644961Z",
+  "updated_at": "2026-07-22T18:30:16.142096363Z",
+  "started_at": "2026-07-22T18:30:16.142096363Z",
+  "lease_expires_at": "2026-07-22T18:35:16.142096363Z",
+  "heartbeat_at": "2026-07-22T18:30:16.142096363Z",
   "labels": [
     "codereview"
   ],
