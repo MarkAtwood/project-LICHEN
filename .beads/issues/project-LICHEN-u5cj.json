@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-u5cj",
+  "title": "[codereview-3] P4: Inconsistent logging levels (LOG_ERR vs LOG_WRN for callback failures), missing static for some functions, magic numbers in key_get CBOR encoding, no test coverage for error paths in coap_server handlers. Also check tests/ for coap. Fix all P4 per RULE.",
+  "description": "Style, docs, test gaps found in coap_*.c review passes. All must be fixed before closing any codereview beads. Parallel exploration showed similar patterns in coap_status.c, coap_config.c, coap_keys.c.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:16:55.611209942Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:16:55.611209942Z"
+}
