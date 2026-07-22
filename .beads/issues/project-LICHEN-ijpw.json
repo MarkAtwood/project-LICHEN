@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-ijpw",
+  "title": "[codereview-5] P4: duplicate summary and TX/RX parsing logic in fallback and across parsers",
+  "description": "Review pass 3: The fallback loop combines summary and TX/RX but the 3 parse_ * functions have near-identical code. Should refactor to single streaming parser function taking impl-specific patterns. This is P4 maintainability. No P0-P3 in this chunk but full 3 passes required before closing ix7m. codereview-tagged bead.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:43:19.926896482Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:19.926896482Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ijpw",
+      "depends_on_id": "project-LICHEN-ix7m",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:43:20.076664551Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

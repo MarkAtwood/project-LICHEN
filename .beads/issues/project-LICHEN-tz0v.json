@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-tz0v",
+  "title": "[codereview-4] P4: parse_telemetry docstring and error handling improvements needed",
+  "description": "Review pass 2 after streaming chunk: parse_telemetry union type 'str | Iterable[str]' requires Python 3.10+; use typing.Union for compatibility. Added KeyError but json dict access is safe. P4 style/compatibility. Also test with large log as per task. codereview-tagged. Fix all P4.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:43:19.887175996Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:43:19.887175996Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-tz0v",
+      "depends_on_id": "project-LICHEN-ix7m",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:43:20.053325272Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
