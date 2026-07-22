@@ -2,12 +2,16 @@
   "id": "project-LICHEN-nbvv",
   "title": "codereview P4: repeated config struct init across 5 tests in kiss test",
   "description": "The 5 ZTESTs that call kiss_transport_init duplicate the full config literal. Consider a static const or before_each fixture for DRY. P4.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "chore",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:34:20.7771641Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:34:20.7771641Z",
+  "updated_at": "2026-07-22T18:41:59.103213081Z",
+  "started_at": "2026-07-22T18:41:59.103213081Z",
+  "lease_expires_at": "2026-07-22T18:46:59.103213081Z",
+  "heartbeat_at": "2026-07-22T18:41:59.103213081Z",
   "labels": [
     "codereview"
   ]
