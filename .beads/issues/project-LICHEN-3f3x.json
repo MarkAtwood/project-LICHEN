@@ -1,12 +1,16 @@
 {
   "id": "project-LICHEN-3f3x",
   "title": "codereview-P0: test_500_node_conference still uses proxy metrics for RPL verification instead of direct AnnounceProcessor/GradientTable checks after roaming",
-  "status": "open",
+  "status": "in_progress",
   "priority": 0,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:03:56.428244901Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:03:56.428244901Z",
+  "updated_at": "2026-07-22T18:05:02.773722018Z",
+  "started_at": "2026-07-22T18:05:02.773722018Z",
+  "lease_expires_at": "2026-07-22T18:10:02.773722018Z",
+  "heartbeat_at": "2026-07-22T18:05:02.773722018Z",
   "labels": [
     "codereview"
   ],
