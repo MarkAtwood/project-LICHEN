@@ -2,14 +2,14 @@
   "id": "project-LICHEN-q8dt",
   "title": "[codereview-P2] slip_transport: k_thread_create has no error check",
   "description": "lichen/subsys/lichen/transport/slip_transport.c:671\\n\\nk_thread_create(\u0026s_rx_thread, ...) is called without capturing or checking its return value. Per Zephyr docs, it returns thread ID or negative errno on failure (e.g. -ENOMEM for stack). This can lead to silent failure of RX thread, causing is_ready true but no RX processing. Should be:\\n\\nint ret = k_thread_create(...);\\nif (ret \u003c 0) {\\n    LOG_ERR(\"Failed to create SLIP RX thread: %d\", ret);\\n    return ret;\\n}\\n\\nFix as real work per task. Discovered in codereview pass 1.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T19:02:29.595481973Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:02:39.924337011Z",
+  "updated_at": "2026-07-22T19:04:10.659298209Z",
   "started_at": "2026-07-22T19:02:39.924337011Z",
-  "lease_expires_at": "2026-07-22T19:07:39.924337011Z",
-  "heartbeat_at": "2026-07-22T19:02:39.924337011Z"
+  "closed_at": "2026-07-22T19:04:10.659298209Z",
+  "close_reason": "Fixed k_thread_create missing error handling by adding project-standard comment explaining static allocation makes failure impossible at runtime + Kconfig priority range validation (cross-ref tvfm.73 ybal.11). Added defensive check+LOG_DBG for k_thread_name_set (consistent with lora_l2.c). Applied identical fix to kiss_transport.c for completeness. Ran 3 codereview passes (thread init patterns, Kconfig ranges, test coverage, Zephyr API conformance). slip_transport ztest builds and passes. No other similar unhandled cases found in transports."
 }
