@@ -12,5 +12,15 @@
   "updated_at": "2026-07-22T17:50:56.227964246Z",
   "started_at": "2026-07-22T17:50:56.227964246Z",
   "lease_expires_at": "2026-07-22T17:55:56.227964246Z",
-  "heartbeat_at": "2026-07-22T17:50:56.227964246Z"
+  "heartbeat_at": "2026-07-22T17:50:56.227964246Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-t8lx",
+      "depends_on_id": "project-LICHEN-atwe",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:51:09.561779902Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
 }
