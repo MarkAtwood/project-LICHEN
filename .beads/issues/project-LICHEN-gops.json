@@ -2,12 +2,16 @@
   "id": "project-LICHEN-gops",
   "title": "[codereview-1] validate_ipv6_packet: payload bounds check prevents overflow",
   "description": "After edit to slip_transport.c:141-157: Added explicit uint16_t payload_len check against SLIP_LCI_MTU - IPV6_HDR_LEN before computing expected. This eliminates any possibility of integer overflow in the addition (even if size_t were 16-bit). Updated error to be more specific. P4 finding treated as real work per instructions. Verified no wrap in (size_t) cast. Test coverage via existing ZTEST in lichen/tests/slip_transport/src/main.c:191.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:51:00.727331351Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:00.727331351Z",
+  "updated_at": "2026-07-22T18:51:31.861808158Z",
+  "started_at": "2026-07-22T18:51:31.861808158Z",
+  "lease_expires_at": "2026-07-22T18:56:31.861808158Z",
+  "heartbeat_at": "2026-07-22T18:51:31.861808158Z",
   "labels": [
     "codereview"
   ]
