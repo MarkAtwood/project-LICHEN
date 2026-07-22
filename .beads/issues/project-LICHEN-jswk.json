@@ -2,10 +2,14 @@
   "id": "project-LICHEN-jswk",
   "title": "codereview-P1: detection func case sensitivity",
   "description": "scripts/analyze-hetero-fleet.py:94-104 mixed [TX] case-sensitive vs TX:.upper(). P1. tagged codereview",
-  "status": "open",
+  "status": "in_progress",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:41:46.027819548Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:41:46.027819548Z"
+  "updated_at": "2026-07-22T18:41:49.526577108Z",
+  "started_at": "2026-07-22T18:41:49.526577108Z",
+  "lease_expires_at": "2026-07-22T18:46:49.526577108Z",
+  "heartbeat_at": "2026-07-22T18:41:49.526577108Z"
 }
