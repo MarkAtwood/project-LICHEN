@@ -1,0 +1,14 @@
+{
+  "id": "project-LICHEN-xh4p",
+  "title": "[codereview-P2] Cross-mesh test missing simulation of Yggdrasil backbone peering between two gateways",
+  "description": "The test description in project-LICHEN-zt3c.5 requires two separate simulator instances connected via Yggdrasil. Current sim/test_simulation.py does not have multi-mesh Yggdrasil support. Add mock Yggdrasil tunnel or use real yggdrasil binary in test env. Tag: codereview",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:51:25.615445899Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:25.615445899Z",
+  "labels": [
+    "codereview"
+  ]
+}
