@@ -2,12 +2,16 @@
   "id": "project-LICHEN-kj64",
   "title": "[codereview-P4] python/src/lichen/announce/messages.py: class docstring missing rx_valid_until_sfn description matching Rust/C",
   "description": "Docstring for AnnounceMessage must document the new field, why after seq_num, and validity semantics per spec update. P4 per 'fix all P4' rule. File after Python parser chunk.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 4,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:55:54.889784017Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:55:54.889784017Z",
+  "updated_at": "2026-07-22T18:59:18.385178863Z",
+  "started_at": "2026-07-22T18:59:18.385178863Z",
+  "lease_expires_at": "2026-07-22T19:04:18.385178863Z",
+  "heartbeat_at": "2026-07-22T18:59:18.385178863Z",
   "labels": [
     "codereview"
   ]
