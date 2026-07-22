@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-ugr5",
+  "title": "t_deck: trackball0 node incomplete - missing reg property and I2C binding details",
+  "description": "In t_deck_esp32s3_procpu.dts under \u0026i2c0, trackball0 lacks reg=\u003c0x??\u003e; and full device tree properties. Keyboard has reg but trackball does not. This will cause DT binding or driver init failures. UI/trackball support broken.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:17:04.721020633Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:17:04.721020633Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ugr5",
+      "depends_on_id": "project-LICHEN-zonh.7",
+      "type": "blocks",
+      "created_at": "2026-07-22T18:17:04.874704963Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
