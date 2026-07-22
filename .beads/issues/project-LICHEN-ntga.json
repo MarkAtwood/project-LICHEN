@@ -2,12 +2,16 @@
   "id": "project-LICHEN-ntga",
   "title": "T-Deck gateway: NAT64 for IPv4 upstream compatibility",
   "description": "Implement or enable NAT64 (perhaps using Zephyr's lwIP NAT64 or custom) to allow mesh IPv6 nodes to reach IPv4 internet via the WiFi backhaul. Configure DNS64 if possible. Add to lichen/apps/gateway and relevant subsys. Test with synthetic IPv4-only destinations.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:11:42.473049988Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:11:42.473049988Z",
+  "updated_at": "2026-07-22T18:16:12.018650517Z",
+  "started_at": "2026-07-22T18:16:12.018650517Z",
+  "lease_expires_at": "2026-07-22T18:21:12.018650517Z",
+  "heartbeat_at": "2026-07-22T18:16:12.018650517Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-ntga",
