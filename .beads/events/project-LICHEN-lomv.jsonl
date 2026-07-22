@@ -1,1 +1,2 @@
 {"id":"019f8b3a-a655-7679-9e89-18d5f2457cb9","issue_id":"project-LICHEN-lomv","event_type":"created","actor":"ec2-user","old_value":"","new_value":"","created_at":"2026-07-22T19:08:24.533425217Z"}
+{"id":"019f8b3c-cd34-7236-8fc5-7b15455ad887","issue_id":"project-LICHEN-lomv","event_type":"closed","actor":"ec2-user","old_value":"","new_value":"Added fix_time_rejected_future flag and upper bound check using CONFIG max skew in set_position_fix_time; updated all tests to assert false on new flag; added Kconfig; fixed P4s","created_at":"2026-07-22T19:10:45.556145871Z"}
