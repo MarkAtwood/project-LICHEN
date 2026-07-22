@@ -1,16 +1,16 @@
 {
   "id": "project-LICHEN-86fu",
   "title": "codereview-pass1: case sensitivity and streaming iterator inconsistency fixed, dead code removed, style aligned in parse_legacy_logs",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:43:53.944929385Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T19:01:17.087497861Z",
+  "updated_at": "2026-07-22T19:01:46.578818567Z",
   "started_at": "2026-07-22T19:01:17.087497861Z",
-  "lease_expires_at": "2026-07-22T19:06:17.087497861Z",
-  "heartbeat_at": "2026-07-22T19:01:17.087497861Z",
+  "closed_at": "2026-07-22T19:01:46.578818567Z",
+  "close_reason": "Fixed concatenated TLV scan in all decode_*; added test; analyzer streaming/case/sender fixes already in place. 3 clean codereview passes with zero open findings after P4 addressed. Python/scripts/tests clean.",
   "labels": [
     "codereview"
   ],
