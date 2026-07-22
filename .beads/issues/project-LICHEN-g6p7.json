@@ -2,10 +2,14 @@
   "id": "project-LICHEN-g6p7",
   "title": "[codereview-2] pass 2: T-Deck gateway conf - confirmed NET_TC_TX_COUNT=1 prevents workqueue deadlock on TX-done, stacks prevent overflow in Ed25519+SCHC path (bd r002 reference)",
   "description": "Pass 2 review: security and stack analysis. The added 8192 byte TX stack is critical for Monocypher on Xtensa. No new issues. The persist block now includes all deps so Kconfig selects properly. RX1 delay=100ms matches bench observation for LR1110 turnaround.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:17:23.973377894Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:17:23.973377894Z"
+  "updated_at": "2026-07-22T18:26:45.544589012Z",
+  "started_at": "2026-07-22T18:26:45.544589012Z",
+  "lease_expires_at": "2026-07-22T18:31:45.544589012Z",
+  "heartbeat_at": "2026-07-22T18:26:45.544589012Z"
 }
