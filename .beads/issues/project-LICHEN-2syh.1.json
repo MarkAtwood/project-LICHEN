@@ -2,12 +2,16 @@
   "id": "project-LICHEN-2syh.1",
   "title": "RPL root status_cbor uses hardcoded instead of s_dodag after init",
   "description": "Codereview pass 1: status_get/notify and encode still had some hardcodes before edits; dodag_id derivation uses link-local but spec 4-network.md prefers primary 02xx address for root DODAGID to match Rust new_root(). File as codereview tag. Fix: update derivation to use primary addr.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T18:23:19.324636538Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:23:19.324636538Z",
+  "updated_at": "2026-07-22T18:24:08.742253814Z",
+  "started_at": "2026-07-22T18:24:08.742253814Z",
+  "lease_expires_at": "2026-07-22T18:29:08.742253814Z",
+  "heartbeat_at": "2026-07-22T18:24:08.742253814Z",
   "labels": [
     "codereview"
   ],
