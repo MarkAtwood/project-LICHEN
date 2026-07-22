@@ -2,12 +2,16 @@
   "id": "project-LICHEN-2l32",
   "title": "codereview-pass3-chunk1-density-rationale",
   "description": "Pass 2/3: verified consistency with appendix-design-rationale.md:285, adaptive_sf_select pseudocode, and test vectors. Clean.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "ec2-user",
   "created_at": "2026-07-22T16:46:54.983514301Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T16:46:54.983514301Z",
+  "updated_at": "2026-07-22T18:12:07.299252778Z",
+  "started_at": "2026-07-22T18:12:07.299252778Z",
+  "lease_expires_at": "2026-07-22T18:17:07.299252778Z",
+  "heartbeat_at": "2026-07-22T18:12:07.299252778Z",
   "labels": [
     "codereview"
   ]
