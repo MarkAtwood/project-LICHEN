@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-cf8r.2",
+  "title": "codereview pass1 P4: use of UnknownRuleId for rule mismatch in decompress_mqtt_sn may not be idiomatic; consider NoMatchingRule or new variant (but scope limits to codec.rs)",
+  "description": "codereview tagged. Fix as real work even P4.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T19:24:41.498433793Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-22T19:24:41.498433793Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cf8r.2",
+      "depends_on_id": "project-LICHEN-cf8r",
+      "type": "parent-child",
+      "created_at": "2026-07-22T19:24:41.623981878Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
