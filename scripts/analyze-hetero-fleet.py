@@ -195,14 +195,14 @@ def find_missing_packets(
 
     Returns list of (hash, sender_node_id, sender_impl).
     """
-    # Collect all sent hashes with sender info
+    # Collect all sent hashes with sender info; last-wins preserves forwarding node
+    # (follows existing detection by attributing final TX to forwarder)
     sent_hashes: dict[str, tuple[str, str]] = {}  # hash -> (node_id, impl)
     received_hashes: set[str] = set()
 
     for node_id, stats in all_nodes.items():
         for h in stats.tx_hashes:
-            if h not in sent_hashes:
-                sent_hashes[h] = (node_id, stats.impl)
+            sent_hashes[h] = (node_id, stats.impl)  # last-wins for forwarding
         received_hashes.update(stats.rx_hashes)
 
     # Find missing
@@ -231,12 +231,12 @@ def build_reception_matrix(
     for stats in all_nodes.values():
         impl_nodes[stats.impl].append(stats)
 
-    # Build hash -> sender impl mapping
+    # Build hash -> sender impl mapping; last-wins preserves forwarding info
+    # (changed from first-wins per bead eqyl; follows detection order in logs)
     hash_to_sender: dict[str, str] = {}
     for stats in all_nodes.values():
         for h in stats.tx_hashes:
-            if h not in hash_to_sender:
-                hash_to_sender[h] = stats.impl
+            hash_to_sender[h] = stats.impl  # last TX wins for forwarder
 
     # Count reception by sender impl -> receiver impl
     matrix: dict[str, dict[str, int]] = {
