@@ -30,6 +30,16 @@ See lichen/subsys/lichen/rpl_dodag.h: lichen_rpl_dodag_init(), rust/rpl/ for cur
 
 MRHOF per RFC 6719 tuned for LoRa ETX.
 
+## B.4. CCP-16 Load Balancing Extensions
+
+See `rust/lichen-rpl/src/lib.rs` and `test/vectors/ccp_load_balancing.json` for:
+- TDMA slot computation via `hash_32(sfn, key)`
+- Adaptive SF and density metrics in DIO options
+- Multi-channel rendezvous via `compute_rendezvous_channel`
+- CoordinationMechanism enum for hash/scheduled/announce-driven modes
+
+Python reference impl is authoritative. All changes validated against vectors.
+
 ---
 
 

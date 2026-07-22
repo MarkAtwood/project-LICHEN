@@ -781,8 +781,8 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	/* PLAINTEXT_3 = (ID_CRED_I, Signature_3) */
 
 	/* MAC_3 = EDHOC-KDF(PRK_4e3m, TH_3, "MAC_3", context_3, 32) */
-	/* context_3 = << ID_CRED_I, CRED_I >> per RFC 9528 §4.4.2 (EAD_3 omitted) */
-	uint8_t context_3[128];
+	/* context_3 = << ID_CRED_I, CRED_I >> (aligned with A_3 fix, RFC 9528 4.4.2) */
+	uint8_t context_3[96];
 	ZCBOR_STATE_E(zse_ctx3, 0, context_3, sizeof(context_3), 0);
 	if (!zcbor_bstr_encode_ptr(zse_ctx3, ctx->ed_pubkey, 32) || /* ID_CRED_I */
 	    !zcbor_bstr_encode_ptr(zse_ctx3, ctx->ed_pubkey, 32)) { /* CRED_I */
@@ -852,7 +852,8 @@ int edhoc_initiator_process_msg2(struct edhoc_initiator *ctx,
 	}
 	*msg3_len = pt3_len + 8;
 
-	/* TH_4 = H(TH_3, CIPHERTEXT_3) per RFC 9528 Section 4.1.2 */
+	/* TH_4 = H(TH_3 || CIPHERTEXT_3) per RFC 9528 Section 4.1.2 (updated for A_3) */
+	/* Uses full ciphertext (incl. tag) to match Python/Rust test vectors */
 	ret = compute_th(ctx->th_4, ctx->th_3, 32, msg3, *msg3_len, NULL, 0);
 	if (ret != 0) {
 		goto err_wipe;

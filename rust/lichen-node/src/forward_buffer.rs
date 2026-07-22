@@ -261,7 +261,7 @@ impl ForwardBuffer {
             .map(|(i, _)| i)
             .unwrap_or(0);
 
-        self.entries.swap_remove(oldest_idx);
+        self.entries.remove(oldest_idx);
     }
 }
 

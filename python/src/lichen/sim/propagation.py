@@ -75,6 +75,7 @@ class PropagationModel:
         >>> model = PropagationModel()
         >>> model.received_power(tx_power_dbm=14.0, distance_m=100.0)
         -72.41  # approximate, depends on parameters
+
     """
 
     pl0_dbm: float = 32.44
@@ -83,15 +84,18 @@ class PropagationModel:
     noise_floor_dbm: float = -120.0
 
     def __post_init__(self) -> None:
-        """Validate model parameters after dataclass initialization.
+        """Validate that n and d0_m are positive.
 
-        Ensures n > 0 and d0_m > 0 to prevent division by zero in
-        path_loss() and max_range().
+        Raises:
+            ValueError: If n <= 0 or d0_m <= 0.
+
         """
         if self.n <= 0:
-            raise ValueError(f"Path loss exponent n must be positive, got {self.n}")
+            msg = f"Path loss exponent n must be positive, got {self.n}"
+            raise ValueError(msg)
         if self.d0_m <= 0:
-            raise ValueError(f"Reference distance d0_m must be positive, got {self.d0_m}")
+            msg = f"Reference distance d0_m must be positive, got {self.d0_m}"
+            raise ValueError(msg)
 
     def path_loss(self, distance_m: float) -> float:
         """Calculate path loss at a given distance.
@@ -105,9 +109,11 @@ class PropagationModel:
 
         Raises:
             ValueError: If distance_m <= 0.
+
         """
         if distance_m <= 0:
-            raise ValueError(f"Distance must be positive, got {distance_m}")
+            msg = f"Distance must be positive, got {distance_m}"
+            raise ValueError(msg)
 
         if distance_m <= self.d0_m:
             return self.pl0_dbm
@@ -126,6 +132,7 @@ class PropagationModel:
 
         Raises:
             ValueError: If distance_m <= 0.
+
         """
         return tx_power_dbm - self.path_loss(distance_m)
 
@@ -141,12 +148,17 @@ class PropagationModel:
 
         Raises:
             ValueError: If distance_m <= 0.
+
         """
         rx_power = self.received_power(tx_power_dbm, distance_m)
         return rx_power - self.noise_floor_dbm
 
     def can_decode(
-        self, tx_power_dbm: float, distance_m: float, *, sensitivity_dbm: float = SENSITIVITY_SF10
+        self,
+        tx_power_dbm: float,
+        distance_m: float,
+        *,
+        sensitivity_dbm: float = SENSITIVITY_SF10,
     ) -> bool:
         """Check if a signal can be decoded at a given distance.
 
@@ -164,15 +176,23 @@ class PropagationModel:
 
         Raises:
             ValueError: If distance_m <= 0.
+
         """
         rx_power = self.received_power(tx_power_dbm, distance_m)
         return rx_power >= sensitivity_dbm
 
-    def max_range(self, tx_power_dbm: float, *, sensitivity_dbm: float = SENSITIVITY_SF10) -> float:
+    def max_range(
+        self,
+        tx_power_dbm: float,
+        *,
+        sensitivity_dbm: float = SENSITIVITY_SF10,
+    ) -> float:
         """Calculate the maximum communication range.
 
         Finds the distance at which received power equals the sensitivity
         threshold.
+
+        Formula: d = d0 * 10**((tx_power - pl0 - sensitivity) / (10*n))
 
         Args:
             tx_power_dbm: Transmit power in dBm.
@@ -181,9 +201,7 @@ class PropagationModel:
 
         Returns:
             Maximum range in meters.
+
         """
-        # Solve for d: sensitivity = tx_power - pl0 - 10*n*log10(d/d0)
-        # 10*n*log10(d/d0) = tx_power - pl0 - sensitivity
-        # d = d0 * 10^((tx_power - pl0 - sensitivity) / (10*n))
         exponent = (tx_power_dbm - self.pl0_dbm - sensitivity_dbm) / (10.0 * self.n)
         return self.d0_m * math.pow(10.0, exponent)

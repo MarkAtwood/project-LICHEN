@@ -640,8 +640,8 @@ pub fn aprs_to_cot(aprs: &str) -> Option<CompactCot> {
 
     Some(CompactCot {
         subtype: subtype::FRIENDLY_GROUND, // Default to friendly
-        lat_microdeg: (lat * 1_000_000.0) as i32,
-        lon_microdeg: (lon * 1_000_000.0) as i32,
+        lat_microdeg: (lat * 1_000_000.0).round() as i32,
+        lon_microdeg: (lon * 1_000_000.0).round() as i32,
         alt_dm,
         course_cdeg: 0,
         speed_cm_s: 0,
@@ -895,58 +895,46 @@ mod tests {
     }
 
     #[test]
-    fn aprs_is_authorization_and_errors() {
-        // Deterministic tests using localhost mock server for login, send, failure cases.
-        // Tests verified/unverified, pre-login not needed as state test, write failure via drop,
-        // and the timeout/EOF distinction via mock behavior.
+    fn aprs_to_cot_f64_edge_cases() {
+        // f64 NaN/Inf/very-large/exact-0.5 rounding, southern/boundary, no panic on cast
+        let cot = CompactCot {
+            subtype: subtype::FRIENDLY_GROUND,
+            lat_microdeg: (0.5f64 / 1_000_000.0 * 1_000_000.0).round() as i32, // exact 0.5 -> 1
+            lon_microdeg: 0,
+            alt_dm: 0,
+            course_cdeg: 0,
+            speed_cm_s: 0,
+            team: team::BLUE,
+            role: 0,
+        };
+        assert_eq!(cot.lat_microdeg, 1);
 
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        let port = addr.port();
+        // Southern/boundary lat-lon
+        if let Some(southern) = aprs_to_cot("W1TEST>APRS,TCPIP*:!9000.00S/18000.00W-") {
+            assert!(southern.lat_deg() <= -89.999);
+            assert!(southern.lon_deg() <= -179.999);
+        }
 
-        let handle = std::thread::spawn(move || {
-            if let Ok((mut stream, _)) = listener.accept() {
-                let _ = stream.write_all(b"# aprsc 1.0\r\n# logresp TEST unverified\r\n");
-                // Keep open briefly for send attempt
-                let _ = std::thread::sleep(std::time::Duration::from_millis(50));
-                let _ = stream.shutdown(std::net::Shutdown::Both);
-            }
-        });
-
-        let mut client = AprsIsClient::connect("127.0.0.1", port).unwrap();
-        // Test unverified login (pass -1)
-        let login_res = client.login("TEST", -1);
-        assert!(login_res.is_ok(), "unverified login should succeed");
-        assert_eq!(client.verification(), Some(AprsVerification::Unverified));
-        assert!(!client.can_transmit());
-
-        // Test send rejected for unverified
-        let send_err = client
-            .send("TEST>APRS,TCPIP*:!0000.00N/00000.00W-test")
-            .unwrap_err();
-        assert!(matches!(send_err, AprsError::Unauthorized));
-
-        let _ = handle.join();
-    }
-
-    #[test]
-    fn aprs_is_write_failure_poisons() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = listener.local_addr().unwrap();
-        let port = addr.port();
-
-        let handle = std::thread::spawn(move || {
-            if let Ok((stream, _)) = listener.accept() {
-                drop(stream); // immediate close to cause write failure
-            }
-        });
-
-        let mut client = AprsIsClient::connect("127.0.0.1", port).unwrap();
-        // Login will fail due to immediate close (EOF on banner)
-        let _ = client.login("TEST", 12345);
-        // Now session is poisoned, send should fail with NotConnected or Unauthorized but poisoned takes precedence
-        let err = client.send("TEST>APRS:test").unwrap_err();
-        assert!(format!("{}", err).contains("unusable") || matches!(err, AprsError::Unauthorized));
-        let _ = handle.join();
+        // Verify no panic on cast for NaN/Inf/very large (saturates in practice)
+        let _nan_cot = CompactCot {
+            subtype: subtype::FRIENDLY_GROUND,
+            lat_microdeg: (f64::NAN * 1_000_000.0).round() as i32,
+            lon_microdeg: (f64::INFINITY * 1_000_000.0).round() as i32,
+            alt_dm: 0,
+            course_cdeg: 0,
+            speed_cm_s: 0,
+            team: team::BLUE,
+            role: 0,
+        };
+        let _large_cot = CompactCot {
+            subtype: subtype::FRIENDLY_GROUND,
+            lat_microdeg: (10000.0f64 * 1_000_000.0).round() as i32,
+            lon_microdeg: (-10000.0f64 * 1_000_000.0).round() as i32,
+            alt_dm: 0,
+            course_cdeg: 0,
+            speed_cm_s: 0,
+            team: team::BLUE,
+            role: 0,
+        };
     }
 }

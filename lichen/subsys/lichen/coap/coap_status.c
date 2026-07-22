@@ -41,7 +41,7 @@ static inline bool cbor_check_space(struct cbor_ctx *ctx, size_t n)
 	return true;
 }
 
-static void cbor_put_map_header(struct cbor_ctx *ctx, uint16_t count)
+static void cbor_put_map_header(struct cbor_ctx *ctx, size_t count)
 {
 	if (count > 0xffffU) {
 		ctx->overflow = true;
@@ -63,7 +63,7 @@ static void cbor_put_map_header(struct cbor_ctx *ctx, uint16_t count)
 	}
 }
 
-static void cbor_put_array_header(struct cbor_ctx *ctx, uint16_t count)
+static void cbor_put_array_header(struct cbor_ctx *ctx, size_t count)
 {
 	if (count > 0xffffU) {
 		ctx->overflow = true;
@@ -90,7 +90,7 @@ static void cbor_put_tstr(struct cbor_ctx *ctx, const char *value)
 	size_t len = value ? strlen(value) : 0;
 	size_t header_len;
 
-	if (len > 0xffffffffU) {
+	if (len > UINT32_MAX) {
 		ctx->overflow = true;
 		return;
 	}
@@ -115,13 +115,13 @@ static void cbor_put_tstr(struct cbor_ctx *ctx, const char *value)
 		ctx->buf[ctx->off++] = (uint8_t)len;
 	} else if (len <= UINT16_MAX) {
 		ctx->buf[ctx->off++] = 0x79;
-		ctx->buf[ctx->off++] = (uint8_t)(len >> 8);
+		ctx->buf[ctx->off++] = (uint8_t)((uint32_t)len >> 8);
 		ctx->buf[ctx->off++] = (uint8_t)(len & 0xffU);
 	} else {
 		ctx->buf[ctx->off++] = 0x7a;
-		ctx->buf[ctx->off++] = (uint8_t)(len >> 24);
-		ctx->buf[ctx->off++] = (uint8_t)(len >> 16);
-		ctx->buf[ctx->off++] = (uint8_t)(len >> 8);
+		ctx->buf[ctx->off++] = (uint8_t)((uint32_t)len >> 24);
+		ctx->buf[ctx->off++] = (uint8_t)((uint32_t)len >> 16);
+		ctx->buf[ctx->off++] = (uint8_t)((uint32_t)len >> 8);
 		ctx->buf[ctx->off++] = (uint8_t)(len & 0xffU);
 	}
 	if (len > 0) {
@@ -189,7 +189,7 @@ static void cbor_put_int(struct cbor_ctx *ctx, int32_t value)
 		return;
 	}
 
-	encoded = (uint32_t)(-1LL - (int64_t)value);
+	encoded = ~((uint32_t)value);
 
 	if (encoded < 24U) {
 		needed = 1;
@@ -255,7 +255,7 @@ size_t lichen_coap_encode_status_cbor(uint8_t *buf, size_t buf_size,
 				      const struct lichen_coap_node_status *status)
 {
 	struct cbor_ctx ctx;
-	uint8_t map_count = 9U;
+	size_t map_count;
 	char ipv6_buf[40];
 
 	if (buf == NULL || status == NULL || buf_size == 0) {
@@ -269,11 +269,13 @@ size_t lichen_coap_encode_status_cbor(uint8_t *buf, size_t buf_size,
 		}
 		map_count++;
 	}
-	if (status->battery_mv_valid) {
-		if (map_count >= 255U) {
-			return 0;
-		}
-		map_count++;
+
+	map_count = 9;
+	if (status->battery_pct_valid) map_count++;
+	if (status->battery_mv_valid) map_count++;
+	if (map_count > 0xff) {
+		ctx.overflow = true;
+		return 0;
 	}
 	cbor_put_map_header(&ctx, map_count);
 	if (ctx.overflow) return 0;
@@ -434,43 +436,35 @@ size_t lichen_coap_encode_neighbors_cbor(uint8_t *buf, size_t buf_size, const st
 	if (ctx.overflow) return 0;
 	if (neighbors == NULL || count == 0) {
 		cbor_put_array_header(&ctx, 0);
-		if (ctx.overflow) return 0;
-		return ctx.off;
-	}
-	cbor_put_array_header(&ctx, count);
-	if (ctx.overflow) return 0;
-	for (size_t i = 0; i < count; i++) {
-		const struct lichen_coap_neighbor *n = &neighbors[i];
-		cbor_put_map_header(&ctx, 6);
-		if (ctx.overflow) return 0;
-		cbor_put_key(&ctx, "addr");
-		if (ctx.overflow) return 0;
-		if (format_ipv6(n->addr, ipv6_buf, sizeof(ipv6_buf)) < 0) {
-			ctx.overflow = true;
-			return 0;
+	} else if (count > 0xffff) {
+		ctx.overflow = true;
+	} else {
+		cbor_put_array_header(&ctx, count);
+
+		for (size_t i = 0; i < count; i++) {
+			const struct lichen_coap_neighbor *n = &neighbors[i];
+
+			cbor_put_map_header(&ctx, 6);
+
+			cbor_put_key(&ctx, "addr");
+			format_ipv6(n->addr, ipv6_buf, sizeof(ipv6_buf));
+			cbor_put_tstr(&ctx, ipv6_buf);
+
+			cbor_put_key(&ctx, "rssi_dbm");
+			cbor_put_int(&ctx, n->rssi_dbm);
+
+			cbor_put_key(&ctx, "snr_db");
+			cbor_put_int(&ctx, n->snr_db_x10);
+
+			cbor_put_key(&ctx, "etx");
+			cbor_put_uint(&ctx, n->etx_x10);
+
+			cbor_put_key(&ctx, "last_seen_s");
+			cbor_put_uint(&ctx, n->last_seen_s);
+
+			cbor_put_key(&ctx, "trust");
+			cbor_put_tstr(&ctx, trust_level_str(n->trust));
 		}
-		cbor_put_tstr(&ctx, ipv6_buf);
-		if (ctx.overflow) return 0;
-		cbor_put_key(&ctx, "rssi_dbm");
-		if (ctx.overflow) return 0;
-		cbor_put_int(&ctx, n->rssi_dbm);
-		if (ctx.overflow) return 0;
-		cbor_put_key(&ctx, "snr_db");
-		if (ctx.overflow) return 0;
-		cbor_put_int(&ctx, n->snr_db_x10);
-		if (ctx.overflow) return 0;
-		cbor_put_key(&ctx, "etx");
-		if (ctx.overflow) return 0;
-		cbor_put_uint(&ctx, n->etx_x10);
-		if (ctx.overflow) return 0;
-		cbor_put_key(&ctx, "last_seen_s");
-		if (ctx.overflow) return 0;
-		cbor_put_uint(&ctx, n->last_seen_s);
-		if (ctx.overflow) return 0;
-		cbor_put_key(&ctx, "trust");
-		if (ctx.overflow) return 0;
-		cbor_put_tstr(&ctx, trust_level_str(n->trust));
-		if (ctx.overflow) return 0;
 	}
 	if (ctx.overflow) return 0;
 	return ctx.off;
@@ -481,8 +475,12 @@ size_t lichen_coap_encode_routes_cbor(uint8_t *buf, size_t buf_size, const struc
 	struct cbor_ctx ctx;
 	char ipv6_buf[40];
 	char prefix_buf[48];
-	uint16_t map_count = 1;
-	if (buf == NULL || buf_size == 0 || count > CONFIG_LICHEN_COAP_STATUS_MAX_ROUTES || count > 255U) return 0;
+	size_t map_count = 1;
+
+	if (buf == NULL || buf_size == 0) {
+		return 0;
+	}
+
 	cbor_ctx_init(&ctx, buf, buf_size);
 	map_count += default_route ? 1U : 0U;
 	if (map_count > 255U) return 0;
@@ -492,10 +490,11 @@ size_t lichen_coap_encode_routes_cbor(uint8_t *buf, size_t buf_size, const struc
 	if (ctx.overflow) return 0;
 	if (routes == NULL || count == 0) {
 		cbor_put_array_header(&ctx, 0);
-		if (ctx.overflow) return 0;
+	} else if (count > 0xffff) {
+		ctx.overflow = true;
 	} else {
 		cbor_put_array_header(&ctx, count);
-		if (ctx.overflow) return 0;
+
 		for (size_t i = 0; i < count; i++) {
 			const struct lichen_coap_route *r = &routes[i];
 			cbor_put_map_header(&ctx, 4);
