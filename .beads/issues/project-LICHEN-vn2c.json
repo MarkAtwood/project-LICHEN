@@ -2,15 +2,15 @@
   "id": "project-LICHEN-vn2c",
   "title": "EC2 native_sim/native/64 picolibc build broken on aarch64",
   "description": "The EC2 instance i-04b202fa2d3dcfa8f (aarch64 Amazon Linux) has broken picolibc builds for native_sim/native/64 targets. Errors include picolibc.h not found, autoconf.h race conditions, limits.h include_next failures. Root cause: parallel ninja race with header generation or missing toolchain setup for picolibc on ARM64 host. Use GitHub Actions CI (x86_64) for native_sim builds instead.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "assignee": "ec2-user",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-12T05:40:15.17086Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-22T18:08:45.635631809Z",
+  "updated_at": "2026-07-22T18:12:49.141715141Z",
   "started_at": "2026-07-22T18:08:45.635631809Z",
-  "lease_expires_at": "2026-07-22T18:13:45.635631809Z",
-  "heartbeat_at": "2026-07-22T18:08:45.635631809Z"
+  "closed_at": "2026-07-22T18:12:49.141715141Z",
+  "close_reason": "Meson added to EC2 ARM64 workflow deps; 3 codereview passes (1 finding fixed, 2 clean) completed with all issues resolved; picolibc.h, autoconf.h, limits.h errors addressed for native_sim/native/64 on aarch64"
 }
