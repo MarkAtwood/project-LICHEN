@@ -236,11 +236,6 @@ class DaoManager:
         return target, parent
 
     def _rebuild_routes(self) -> None:
-        """Rebuild the routing table from the parent map using add_route.
-
-        Uses RoutingTable.clear() (no direct _routes mutation). Skips targets
-        that cannot be routed (incomplete chain, loop, or root self-route).
-        """
         self.routing_table.clear()
         for target in self._parent_map:
             path = self._assemble_path(target)

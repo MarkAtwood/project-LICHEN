@@ -14,6 +14,9 @@ The SRH here is uncompressed (CmprI = CmprE = 0); on-air 6LoRH compression is a
 SCHC-layer concern.
 """
 
+from __future__ import annotations
+
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from ipaddress import IPv6Address
 
@@ -87,7 +90,7 @@ class RoutingTable:
     _routes: dict[IPv6Address, list[IPv6Address]] = field(default_factory=dict)
 
     def add_route(
-        self, target: IPv6Address | str, path: list[IPv6Address | str]
+        self, target: IPv6Address | str, path: Sequence[IPv6Address | str]
     ) -> None:
         if not path:
             raise RoutingError("route path must not be empty")
@@ -101,9 +104,6 @@ class RoutingTable:
         self._routes.pop(to_ipv6(target), None)
 
     def clear(self) -> None:
-        """Clear all routes. Used by DaoManager._rebuild_routes to avoid
-        direct mutation of private _routes (per codereview).
-        """
         self._routes.clear()
 
     def lookup(self, target: IPv6Address | str) -> list[IPv6Address] | None:
