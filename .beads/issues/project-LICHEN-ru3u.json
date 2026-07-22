@@ -1,0 +1,13 @@
+{
+  "id": "project-LICHEN-ru3u",
+  "title": "codereview-pass2: test_cmd_txdelay config lacks LCI cbs; init incomplete",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T18:30:42.076300739Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:30:42.076300739Z",
+  "labels": [
+    "codereview"
+  ]
+}
