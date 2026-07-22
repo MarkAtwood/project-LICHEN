@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-8agv",
+  "title": "codereview pass 2: new error table uses CBOR but LCI spec prefers SenML-CBOR for status; consider alignment",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "created_at": "2026-07-22T18:29:59.23848427Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T18:29:59.23848427Z",
+  "labels": [
+    "codereview",
+    "opinion"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-8agv",
+      "depends_on_id": "project-LICHEN-9bnm",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T18:29:59.391928149Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
