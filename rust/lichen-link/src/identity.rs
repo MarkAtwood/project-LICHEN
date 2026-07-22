@@ -21,7 +21,7 @@ pub fn hash_32(data: &[u8]) -> u32 {
 
 /// Derive a link-local IID from an Ed25519 public key.
 ///
-/// IID = SHA-256(pubkey)[0:8] with the U/L bit (bit 1 of byte 0) cleared.
+/// IID = SHA-256(pubkey)\[0:8\] with the U/L bit (bit 1 of byte 0) cleared.
 /// RFC 4291 §2.5.1 — locally-administered identifier.
 ///
 /// # Panics

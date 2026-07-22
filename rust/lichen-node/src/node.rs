@@ -44,8 +44,11 @@ pub enum RplEvent {
     None,
     /// DIO received, trickle should be reset if inconsistent.
     DioReceived { inconsistent: bool },
-    /// DAO received (root only).
-    DaoReceived { route_updated: bool },
+    /// DAO received (root only). `target` is parsed RPL Target option (consistent with routing table).
+    DaoReceived {
+        target: [u8; 16],
+        route_updated: bool,
+    },
     /// DIS received, should send DIO.
     DisReceived,
 }
@@ -283,7 +286,7 @@ impl RplNode {
                 // Handle ping
                 let mut dst_bytes = [0u8; 16];
                 dst_bytes.copy_from_slice(&pkt[field::DST_OFFSET..IPV6_HEADER_LEN]);
-                if dst_bytes == self.node.node_id.link_local_addr().0 {
+                if dst_bytes[8..] == self.node.node_id.0 {
                     let mut reply_ipv6 = [0u8; 256];
                     let reply_ipv6_len = self.node.reply_echo_ipv6(pkt, &mut reply_ipv6);
                     let reply_len = wrap_compressed_reply(&reply_ipv6[..reply_ipv6_len], reply);
@@ -313,19 +316,15 @@ impl RplNode {
                             return (0, RplEvent::None);
                         }
                         let dao_bytes = &pkt[body_offset..n];
-                        let route_updated = self.router.process_dao(dao_bytes);
-                        if route_updated {
-                            if let Some((target, _)) = self.router.dao_manager.extract_edge(dao_bytes) {
-                                let mut s_iid = [0u8; 8]; s_iid.copy_from_slice(&sender_addr[8..16]);
-                                let mut t_iid = [0u8; 8]; t_iid.copy_from_slice(&target[8..16]);
-                                assert_eq!(s_iid, t_iid, "DAO sender_addr IID must match parsed Target");
-                                if let Some(path) = self.router.lookup_route(&target) {
-                                    let path_vec: std::vec::Vec<[u8; 16]> = path.to_vec();
-                                    self.router.add_route(target, &path_vec);
-                                }
-                            }
-                        }
-                        return (0, RplEvent::DaoReceived { route_updated });
+                        let target = self.router.process_dao(dao_bytes);
+                        let route_updated = target.is_some();
+                        return (
+                            0,
+                            RplEvent::DaoReceived {
+                                target: target.unwrap_or(sender_addr),
+                                route_updated,
+                            },
+                        );
                     }
                     rpl_code::DIS => {
                         return (0, RplEvent::DisReceived);
@@ -357,6 +356,11 @@ impl RplNode {
     /// Check if this node is the DODAG root.
     pub fn is_root(&self) -> bool {
         self.router.is_root()
+    }
+
+    /// Look up route path for destination (root DAO table).
+    pub fn lookup_route(&self, dst: &[u8; 16]) -> Option<&[[u8; 16]]> {
+        self.router.lookup_route(dst)
     }
 
     /// Get current rank.

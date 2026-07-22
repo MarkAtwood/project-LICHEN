@@ -21,6 +21,7 @@ LoRa Chirp Spread Spectrum (CSS) as implemented by Semtech SX126x and SX127x.
 | Coding Rate | CR | 4/5 | Minimal FEC overhead |
 | Preamble | - | 8 symbols | Standard LoRa |
 | Sync Word | SYNC | 0x34 | Distinct from Meshtastic (0x2B) |
+| Hop Sequence | - | SFN-seeded PRNG | CCP-12 synchronized hopping (see 02a-coordinated-capacity.md §2a.8); GPS optional |
 | CRC | - | Enabled | Hardware CRC |
 
 ### 3.3. Frequency Bands
@@ -201,8 +202,8 @@ Address 0x0000 reserved (broadcast). Range 0xFFF0-0xFFFF reserved. Short address
 
 Nodes self-assign using hash-based allocation with DAD (CCP-15.8.3: consistent hash_32 with LICHEN key per python/src/lichen/crypto/identity.py:hash_32 and 02a-coordinated-capacity.md, never CRC16):
 
-1. **Compute candidate:** `short_addr = (hash_32(EUI-64, 0) & 0xFFFE) | 0x0001` (ensure non-zero; hash_32 = SipHash-2-4)
-2. **DAD probe:** Broadcast 5 DAD requests with exponential jitter (initial 0-500ms, double on retry)
+1. **Compute candidate:** `short_addr = (hash_32(0, EUI64_as_u64) & 0xFFFE) | 0x0001` (ensure non-zero; use updated link-layer hash_32(sfn, key) from CCP-15.8.3 / §2a.7.1 for consistency)
+2. **DAD probe:** Broadcast 3 DAD requests with random jitter (0-500ms between)
    ```
    DAD Request:
      Type: DAD_PROBE

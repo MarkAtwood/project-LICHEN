@@ -45,16 +45,14 @@ def route_packet(dst):
     return forward_to_default_gateway_or_yggdrasil(dst)
 ```
 
-**Address classification (simplified):**
+**Address classification (new model - no ULA, Ed25519-derived primary addresses):**
 
 | Address Type | Classification | Routing |
 |--------------|----------------|---------|
-| Link-local (fe80::/10) | Direct neighbor/control | Send to neighbor (no routing) |
-| 02xx::/7 | Local mesh peer (gradient/RPL) | Gradient or LOADng or RPL |
-| 02xx::/7 | Remote (not in local mesh) | Forward to gateway for Yggdrasil |
-| Other | Off-mesh | Gateway/Yggdrasil |
-
-Local preference for 02xx addresses eliminates previous ULA/GUA complexity (unified Ed25519 derivation per 06-security.md:109). Gateways run Yggdrasil with the same Ed25519 key for unified identity.
+| Link-local (fe80::/10) | Control plane only (NDP, RPL DIO/DAO) | Direct neighbor |
+| Ed25519-derived (02xx::/7) in local mesh (RPL DODAG) | Mesh peer | RPL (non-storing) or gradient |
+| Ed25519-derived not in local mesh | Off-mesh | Forward via gateway to Yggdrasil |
+| Unknown | Off-mesh | Forward to border router / Yggdrasil |
 
 ### 7.3. Conformance Requirements
 
@@ -166,7 +164,7 @@ announce because SCHC global CoAP also uses rule ID `0x01`.
 
 ```
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Type=ANN  | Flags     | Hop Count   | Seq Num | rx_valid_until_sfn (2) |
+| Type=0x01 | Flags | Hop Cnt | Rx Ch | Seq Num               |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                    Originator IID (8 bytes)                   |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -178,18 +176,18 @@ announce because SCHC global CoAP also uses rule ID `0x01`.
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-Total: ~94 bytes minimum (rx_valid_until_sfn adds 2 bytes; human decision on format noted).
+Total: 94 bytes minimum (includes current_channel for CCP-9 rendezvous; see 02a.3).
 
 **Fields:**
-- **Type:** Announce message identifier
-- **Flags:** Reserved
-- **Hop Count:** Incremented at each relay
-- **Seq Num:** Monotonic, detects duplicates and freshness
-- **rx_valid_until_sfn:** SFN until which RX window/announce is valid (human decision on format noted; included in signed_data per link spec)
+- **Type:** Announce message identifier (0x01)
+- **Flags:** Reserved for future use (MUST be 0)
+- **Hop Count:** Incremented at each relay (NOT signed)
+- **Current Channel:** u8 preferred RX channel for CCP-9 rendezvous (wire byte 3 after hop_count; MUST be 0-15; included in signed_data() at offset 42 after seq_num; value from local scheduler's current RX state per 02a-coordinated-capacity.md §2a.3 and §2a.7; default=0 for control channel)
+- **Seq Num:** Monotonic 16-bit, detects duplicates and freshness
 - **Originator IID:** 8-byte Interface Identifier of announcer
 - **Public Key:** Ed25519 public key (32 bytes)
-- **Signature:** Schnorr signature over signed_data (reference signed_data definition only; independent of impls)
-- **App Data:** Optional application data (node name, capabilities, etc.)
+- **Signature:** Schnorr-48 signature over signed_data() = originator_iid (8B) + pubkey (32B) + seq_num (2B BE) + current_channel (1B) + app_data
+- **App Data:** Optional application data (node name, capabilities, etc. per §9.7)
 
 ### 9.3. Announce Processing
 

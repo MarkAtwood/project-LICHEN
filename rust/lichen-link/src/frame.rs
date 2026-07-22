@@ -244,7 +244,7 @@ impl From<BufferTooSmall> for FrameError {
 /// from `from_bytes()` should be treated as untrusted input.
 ///
 /// Payload is stored as a reference to avoid heap allocation in `no_std`
-/// contexts. Use [`LichenFrameBuf`] for an owned variant (future work).
+/// contexts. Use `LichenFrameBuf` (future work) for an owned variant.
 #[derive(Debug, PartialEq, Eq)]
 pub struct LichenFrame<'a> {
     pub epoch: u8,

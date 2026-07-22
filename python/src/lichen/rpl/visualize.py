@@ -16,10 +16,11 @@ the evolving DODAG during a run.
 """
 
 from collections.abc import Mapping
+from typing import Dict, Optional
 
 from lichen.rpl.dodag import DodagState
 
-Topology = dict[str, Optional[str]]
+Topology = Dict[str, Optional[str]]
 
 
 def topology_from_states(states: Mapping[str, DodagState]) -> Topology:

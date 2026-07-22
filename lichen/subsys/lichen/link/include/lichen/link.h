@@ -54,6 +54,10 @@ extern "C" {
 
 /** Maximum LICHEN frame payload size (LoRa SF10 255B - overhead) */
 #define LICHEN_MAX_PAYLOAD 200
+#define GUARD_TIME_MS 50
+#define SLOT_DURATION_MS 250
+struct LICHEN_TDMA_Slot { uint8_t id; uint8_t pad[3]; uint32_t start_time_ms; uint8_t owner_eui64[8]; };
+BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 16);
 
 /** Schnorr-48 signature length in bytes */
 #define LICHEN_SIG_LEN 48
@@ -77,6 +81,19 @@ enum lichen_addr_mode {
 enum lichen_mic_len {
 	LICHEN_MIC_32 = 0,  /**< Compatibility value; unsigned frames have no MIC */
 	LICHEN_MIC_64 = 1,  /**< Compatibility value; unsigned frames have no MIC */
+};
+
+/**
+ * @brief Coordination mechanisms per CCP-5 (da2q context)
+ *
+ * Priority order for negotiation: scheduled > hash_based > announce_driven > fallback
+ * Matches ccp9-rendezvous.json test vectors.
+ */
+enum lichen_coordination_mechanism {
+	LICHEN_COORD_HASH_BASED = 0,
+	LICHEN_COORD_SCHEDULED = 1,
+	LICHEN_COORD_ANNOUNCE_DRIVEN = 2,
+	LICHEN_COORD_FALLBACK = 3,
 };
 
 /** Legacy MIC length constant; not a current wire MIC length */
@@ -291,30 +308,7 @@ int lichen_link_rx(struct lichen_link_rx_ctx *_Nonnull ctx,
 		   uint8_t *_Nonnull out_ipv6, size_t *_Nonnull out_len,
 		   uint8_t *_Nonnull src_eui64);
 
-/* ─── TDMA (CCP-16 load balancing) ──────────────────────────────────────── */
-
-#ifdef CONFIG_LICHEN_TDMA
-/**
- * @brief TDMA slot for collision-free scheduling (20 bytes exact for ARM).
- */
-struct lichen_tdma_slot {
-	uint32_t start_time_us;  /**< Slot start time in microseconds */
-	uint16_t duration_ms;    /**< Slot duration */
-	uint8_t slot_id;         /**< Slot identifier */
-	uint8_t flags;           /**< Scheduling flags */
-	uint8_t owner_eui64[8];  /**< Owning node's EUI-64 */
-	uint8_t padding[4];      /**< Explicit padding for alignment */
-};
-
-BUILD_ASSERT(sizeof(struct lichen_tdma_slot) == 20,
-	     "lichen_tdma_slot must be exactly 20 bytes (Zephyr ARM targets)");
-
-/**
- * @brief Initialize TDMA subsystem (call after lichen_link_load_key(),
- * before oscore_init() per AGENTS.md dependency graph).
- */
-int lichen_tdma_init(struct lichen_link_ctx *_Nonnull link_ctx);
-#endif /* CONFIG_LICHEN_TDMA */
+uint32_t lichen_hash_32(uint32_t sfn, uint64_t key);
 
 #ifdef __cplusplus
 }

@@ -1,7 +1,8 @@
 //! RF health metrics tracking for LICHEN nodes.
 //!
-//! Tracks packet statistics, signal quality (RSSI/SNR), and packet loss rates
-//! using fixed-point arithmetic for no_std compatibility.
+//! Tracks packet statistics, signal quality (RSSI/SNR with EMA alpha=1/4 for CCP-15
+//! interference response), and packet loss rates using fixed-point arithmetic for
+//! no_std compatibility.
 //!
 //! # Fixed-Point Representation
 //!
@@ -14,9 +15,8 @@
 /// Fixed-point scale factor (2^16 = 65536).
 const FP_SCALE: i32 = 1 << 16;
 
-/// EMA shift for alpha = 1/4 per CCP-15 (faster interference response).
-/// Used in both RssiStats and SnrStats to avoid magic numbers and ensure
-/// identical convergence behavior.
+/// EMA shift for fixed-point division (alpha = 1/4 = 2^-2).
+/// Chosen for faster response to changing interference conditions per CCP-15.
 const EMA_ALPHA_SHIFT: u32 = 2;
 
 /// RF health metrics aggregator.
@@ -102,7 +102,8 @@ impl RfHealthMetrics {
 
 /// RSSI (Received Signal Strength Indicator) statistics.
 ///
-/// Tracks min, max, and rolling average of RSSI values in dBm.
+/// Tracks min, max, and EMA (alpha=1/4) rolling average of RSSI values in dBm.
+/// Faster alpha supports CCP-15 interference detection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RssiStats {
     /// Minimum RSSI observed (dBm).
@@ -143,10 +144,10 @@ impl RssiStats {
         if self.count == 0 {
             self.avg_fp = rssi_fp;
         } else {
-            // EMA: avg = avg + alpha * (sample - avg); alpha=1/4 via EMA_ALPHA_SHIFT
-            // per CCP-15 for faster response to interference (da2q.15.2.1)
+            // EMA: avg = avg + alpha * (sample - avg) with alpha=1/4 for fast interference response (CCP-15)
+            // In fixed-point: avg = avg + (sample - avg) >> EMA_ALPHA_SHIFT
             let diff = rssi_fp - self.avg_fp;
-            self.avg_fp += diff >> EMA_ALPHA_SHIFT;
+            self.avg_fp = self.avg_fp.saturating_add(diff >> EMA_ALPHA_SHIFT);
         }
         self.count = self.count.saturating_add(1);
     }
@@ -159,8 +160,7 @@ impl RssiStats {
         if self.count == 0 {
             None
         } else {
-            // Convert from Q16.16 to integer (truncate toward negative infinity)
-            Some((self.avg_fp >> 16) as i16)
+            Some(((self.avg_fp + (1 << 15)) >> 16) as i16)
         }
     }
 
@@ -185,7 +185,8 @@ impl RssiStats {
 
 /// SNR (Signal-to-Noise Ratio) statistics.
 ///
-/// Tracks min, max, and rolling average of SNR values in dB.
+/// Tracks min, max, and EMA (alpha=1/4) rolling average of SNR values in dB.
+/// Faster alpha supports CCP-15 interference detection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SnrStats {
     /// Minimum SNR observed (dB).
@@ -226,10 +227,10 @@ impl SnrStats {
         if self.count == 0 {
             self.avg_fp = snr_fp;
         } else {
-            // EMA: avg = avg + alpha * (sample - avg); alpha=1/4 via EMA_ALPHA_SHIFT
-            // per CCP-15 for faster response to interference (da2q.15.2.1)
+            // EMA: avg = avg + alpha * (sample - avg) with alpha=1/4 for fast interference response (CCP-15)
+            // In fixed-point: avg = avg + (sample - avg) >> EMA_ALPHA_SHIFT
             let diff = snr_fp - self.avg_fp;
-            self.avg_fp += diff >> EMA_ALPHA_SHIFT;
+            self.avg_fp = self.avg_fp.saturating_add(diff >> EMA_ALPHA_SHIFT);
         }
         self.count = self.count.saturating_add(1);
     }
@@ -242,7 +243,7 @@ impl SnrStats {
         if self.count == 0 {
             None
         } else {
-            Some((self.avg_fp >> 16) as i8)
+            Some(((self.avg_fp + (1 << 15)) >> 16) as i8)
         }
     }
 
@@ -411,8 +412,10 @@ mod tests {
         stats.update(-80);
         assert_eq!(stats.avg(), Some(-80));
 
-        // Parametrized for alpha=1/4 (EMA_ALPHA_SHIFT=2): -80 + (20>>2) = -75
+        // Second sample: EMA with alpha=1/4 (faster response for CCP-15 interference metrics)
+        // new_avg = -80 + (1/4) * 20 = -80 + 5 = -75
         stats.update(-60);
+        // The avg should move toward -60
         assert_eq!(stats.avg(), Some(-75));
     }
 
@@ -544,19 +547,15 @@ mod tests {
 
     #[test]
     fn ema_convergence() {
-        // EMA should converge toward repeated values
+        // EMA (alpha=1/4) should converge toward repeated values
         let mut stats = RssiStats::new();
         stats.update(-80);
         // Feed many samples of -60
         for _ in 0..100 {
             stats.update(-60);
         }
-        // Should be very close to -60 now
+        // With alpha=1/4 reaches -61 or -60 after 100 samples
         let avg = stats.avg().unwrap();
-        assert!(
-            (-62..=-60).contains(&avg),
-            "avg was {} after convergence",
-            avg
-        );
+        assert!((-61..=-60).contains(&avg), "avg was {}", avg);
     }
 }

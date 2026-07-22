@@ -12,7 +12,10 @@
 //!   byte 2: n  (bitmap length)
 //!   bytes 3..: ceil(n/8) bitmap bytes, MSB-first
 
-use lichen_core::error::{BufferTooSmall, TooShort};
+use lichen_core::{
+    constants::SCHC_MAX_DECOMPRESSED,
+    error::{BufferTooSmall, TooShort},
+};
 
 pub const FRAGMENT_M: u8 = 1;
 pub const FRAGMENT_N: u8 = 6;
@@ -268,6 +271,9 @@ impl<'a> FragmentSender<'a> {
         }
         if window_size == 0 || window_size > MAX_WINDOW_SIZE {
             return Err(FragmentError::InvalidWindowSize);
+        }
+        if payload.len() > SCHC_MAX_DECOMPRESSED {
+            return Err(BufferTooSmall::new(SCHC_MAX_DECOMPRESSED, payload.len()).into());
         }
         let mic = compute_mic(payload);
         let count = if payload.is_empty() {
