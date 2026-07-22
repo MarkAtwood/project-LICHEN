@@ -14,7 +14,8 @@
     "spec",
     "phy",
     "hardware",
-    "scalability"
+    "scalability",
+    "human"
   ],
   "dependencies": [
     {
