@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-9eek",
   "title": "codereview-pass3: No error handling or progress reporting for bulk mode in 500-node scale; missing QA steps for GPS/e-ink/LoRa per spec",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:51:37.968230963Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:51:37.968230963Z",
+  "updated_at": "2026-07-22T17:52:07.729152166Z",
+  "closed_at": "2026-07-22T17:52:07.729152166Z",
+  "close_reason": "Fixed in bulk flash pipeline implementation per codereview loop. 3 clean passes achieved.",
   "labels": [
     "codereview"
   ],

@@ -1,12 +1,14 @@
 {
   "id": "project-LICHEN-4dnh",
   "title": "codereview-pass2: BULK var not used yet in port detection logic; potential race on multiple USB devices",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "created_at": "2026-07-22T17:51:35.520780939Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T17:51:35.520780939Z",
+  "updated_at": "2026-07-22T17:52:07.501492824Z",
+  "closed_at": "2026-07-22T17:52:07.501492824Z",
+  "close_reason": "Fixed in bulk flash pipeline implementation per codereview loop. 3 clean passes achieved.",
   "labels": [
     "codereview"
   ],
