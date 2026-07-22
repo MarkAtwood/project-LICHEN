@@ -2,16 +2,16 @@
   "id": "project-LICHEN-oo93",
   "title": "[codereview-2] slip_transport.c: duplicate send logic between slip_iface_send and slip_transport_send",
   "description": "P3: The two send functions have nearly identical code for encoding, stats, error handling and UART transmit. This is a maintenance risk (see similar double-unlock bug in 3ck4). Should factor into common helper like static int slip_send_common(...). Discovered during codereview of IPv6 length fix. File as real work.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:51:00.750204281Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:51:32.146291021Z",
+  "updated_at": "2026-07-22T18:53:46.955783953Z",
   "started_at": "2026-07-22T18:51:32.146291021Z",
-  "lease_expires_at": "2026-07-22T18:56:32.146291021Z",
-  "heartbeat_at": "2026-07-22T18:51:32.146291021Z",
+  "closed_at": "2026-07-22T18:53:46.955783953Z",
+  "close_reason": "Refactored duplicate send logic into slip_perform_tx eliminating double-unlock and maintenance issues; integrated into both send paths",
   "labels": [
     "codereview"
   ]
