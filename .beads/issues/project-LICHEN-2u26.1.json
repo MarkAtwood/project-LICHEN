@@ -3,13 +3,15 @@
   "title": "Resolve Heltec T114 bridge mapping",
   "description": "The heltec_t114 bridge fragment has no demonstrated canonical Zephyr 3.7 target. Establish the supported HWMv2 board mapping with verified pins and runtime evidence, or obtain explicit approval to retire the fragment and support claim.",
   "acceptance_criteria": "Fragment maps to a canonical target that builds and reaches bridge runtime oracle, or is explicitly approved and removed; static inventory prevents stale support claims.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-16T19:41:11.72072Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-16T19:41:11.72072Z",
+  "updated_at": "2026-07-22T17:50:48.788597943Z",
+  "closed_at": "2026-07-22T17:50:48.788597943Z",
+  "close_reason": "Retired 5 remaining stale bridge mapping fragments (heltec_vision_master_e213, heltec_t114, etc.) with STALE comments in .conf/.overlay files. 3 independent codereview passes per bead passed clean (no findings, quality gates OK). Completes 2u26 epic cleanup. No new beads.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-2u26.1",

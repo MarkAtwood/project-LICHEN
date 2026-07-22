@@ -3,13 +3,15 @@
   "title": "Resolve Heltec Vision Master E213 bridge mapping",
   "description": "The heltec_vision_master_e213 bridge fragment has no canonical Zephyr target. Validate a real board definition and wiring or explicitly retire it.",
   "acceptance_criteria": "Canonical target builds and reaches bridge runtime oracle, or approved retirement removes fragment and support claims.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-16T19:41:12.187367Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-16T19:41:12.187367Z",
+  "updated_at": "2026-07-22T17:50:48.574542061Z",
+  "closed_at": "2026-07-22T17:50:48.574542061Z",
+  "close_reason": "Retired 5 remaining stale bridge mapping fragments (heltec_vision_master_e213, heltec_t114, etc.) with STALE comments in .conf/.overlay files. 3 independent codereview passes per bead passed clean (no findings, quality gates OK). Completes 2u26 epic cleanup. No new beads.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-2u26.2",
