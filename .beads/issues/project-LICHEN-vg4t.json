@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-vg4t",
+  "title": "codereview P1: inter-mesh Yggdrasil forwarding lacks MTU adjustment per spec MTU considerations in zt3c.3",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "created_at": "2026-07-22T17:48:08.497953731Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:48:08.497953731Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-vg4t",
+      "depends_on_id": "project-LICHEN-zt3c.3",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T17:48:08.620107818Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
