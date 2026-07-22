@@ -2,16 +2,16 @@
   "id": "project-LICHEN-g38y",
   "title": "[codereview] P3: uart1 node not enabled in heltec_wifi_lora32_v3_procpu.dts; chosen override alone insufficient without \u0026uart1 { status = \"okay\"; ... } in board or overlay",
   "description": "The pinctrl addition is good but without the uart1 node definition and status=okay in the DTS (or gateway overlay), the console change will fail to build or run. This is a functional gap for the Heltec bug fix. Also add to aliases if needed. Fix as real work even if P3.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "ec2-user",
   "created_at": "2026-07-22T18:42:56.436507384Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:44:27.073166681Z",
+  "updated_at": "2026-07-22T18:46:15.705197909Z",
   "started_at": "2026-07-22T18:44:27.073166681Z",
-  "lease_expires_at": "2026-07-22T18:49:27.073166681Z",
-  "heartbeat_at": "2026-07-22T18:44:27.073166681Z",
+  "closed_at": "2026-07-22T18:46:15.705197909Z",
+  "close_reason": "uart1 enabled with status=okay + alias; pinctrl already correct; comment pruned per no-comments rule; pytest + ruff + build tests pass; 3 codereview passes (myoss/rusty/do-beads) yielded 0 P0-P2",
   "labels": [
     "codereview"
   ]
