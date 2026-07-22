@@ -2,15 +2,15 @@
   "id": "project-LICHEN-gdyd",
   "title": "codereview-pass-3: gateway_config truncation test misses -ENAMETOOLONG coverage",
   "description": "The test_decode_rejects_invalid_manual_source_name_bytes only checks -EINVAL for bad bytes. Does not test new length-based -ENAMETOOLONG for source_name. Edge case incomplete for the fix.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-22T19:20:06.109638929Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-07-22T19:20:28.814331493Z",
+  "updated_at": "2026-07-22T19:27:19.643251816Z",
   "started_at": "2026-07-22T19:20:28.814331493Z",
-  "lease_expires_at": "2026-07-22T19:25:28.814331493Z",
-  "heartbeat_at": "2026-07-22T19:20:28.814331493Z"
+  "closed_at": "2026-07-22T19:27:19.643251816Z",
+  "close_reason": "Fixed gateway_config truncation test and decoder to include -ENAMETOOLONG coverage for oversize source_name (split check in decode_manual_location:342, added too_long test case). Fixed 2 codereview beads (missing include, struct init). 3 clean review passes completed with all P0-P4 addressed. No more real issues."
 }
