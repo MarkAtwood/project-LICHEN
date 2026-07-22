@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-2nnd.8",
+  "title": "Hardware T-Echo procurement",
+  "description": "Procure 500x LilyGO T-Echo units for the 500-node demo. Verify bulk pricing, bootloader, battery/case inclusion, flashing jigs. Update epic timeline.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "created_at": "2026-07-22T17:51:47.539154629Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-22T17:51:47.539154629Z",
+  "labels": [
+    "demo",
+    "milestone",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-2nnd.8",
+      "depends_on_id": "project-LICHEN-2nnd",
+      "type": "parent-child",
+      "created_at": "2026-07-22T17:51:47.670523632Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}
