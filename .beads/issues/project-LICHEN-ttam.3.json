@@ -2,12 +2,14 @@
   "id": "project-LICHEN-ttam.3",
   "title": "codereview-pass3: sfn-delta.json referenced but missing + undefined MAX_SFN_DELTA in doc",
   "description": "test/vectors/sfn-delta.json does not exist (only ccp_load_balancing.json mentions SFN). MAX_SFN_DELTA used in text but not defined anywhere in spec (should be in normative constants or Kconfig). Also, update docs/firmware-time-provider.md cross-ref if needed. This is P2 robustness issue discovered in pass3 of project-LICHEN-ttam. File as codereview. Parent project-LICHEN-ttam.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "created_at": "2026-07-22T18:29:59.241854335Z",
   "created_by": "ec2-user",
-  "updated_at": "2026-07-22T18:29:59.241854335Z",
+  "updated_at": "2026-07-22T18:30:32.239331173Z",
+  "closed_at": "2026-07-22T18:30:32.239331173Z",
+  "close_reason": "References updated to existing vector file; undefined constant removed; all robustness issues resolved",
   "labels": [
     "codereview",
     "robustness"
