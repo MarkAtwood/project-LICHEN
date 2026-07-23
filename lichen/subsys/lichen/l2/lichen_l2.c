@@ -2459,7 +2459,8 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 #else
 	/* No LICHEN link layer - treat as raw IPv6 */
 	if (len > sizeof(rx_ipv6_buf)) {
-		LOG_WRN("lichen_l2: RX packet too large (%zu bytes)", len);
+		LOG_WRN("lichen_l2: RX packet too large (%zu bytes, max %zu)", len,
+			sizeof(rx_ipv6_buf));
 		k_mutex_unlock(&rx_mutex);
 		return;
 	}
