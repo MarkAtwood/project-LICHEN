@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.23",
+  "title": "C rejects AddrMode ELIDED (0b11); Python and Rust accept (spec OPTIONAL)",
+  "description": "C frame.c:63-66 (parse) and :121-124 (write) return -EINVAL for LICHEN_ADDR_ELIDED. Python frame.py:36,45 (ELIDED=3, addr_len 0, tested at test_frame.py:71) and Rust frame.rs:64,74 accept it. draft-01:162 calls elided OPTIONAL; no TX path in any implementation emits it today, but it is a wire-level accept/reject differential: a future elided-mode frame would be dropped by C nodes only. Fix: either implement ELIDED in C parse/write or remove it from Python/Rust and the spec.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:05:24.333575659Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:05:24.333575659Z",
+  "labels": [
+    "parity",
+    "link",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.23",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:05:24.479311345Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
