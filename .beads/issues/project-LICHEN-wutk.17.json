@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.17",
+  "title": "No rt/obs discovery metadata on LCI resources",
+  "description": "spec/11-lci.md §17.5.1: /.well-known/core must list \u003c/config\u003e;rt='config', \u003c/status\u003e;rt='status';obs, \u003c/keys\u003e;rt='keystore', etc. None of the new COAP_RESOURCE_DEFINEs (coap_config.c, coap_keys.c, coap_status.c) set metadata, so no rt/ct/obs attributes are advertised (gateway has CONFIG_COAP_SERVER_WELL_KNOWN_CORE=y). VERIFY: legacy coap_server.c advertises wrong values (rt='lichen.config', /key, /neighbors) — reconcile the two servers. Fix: attach coap_core_metadata with the spec rt values and obs on /status, /status/neighbors.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:27.515309547Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:27.515309547Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.17",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:27.6686803Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
