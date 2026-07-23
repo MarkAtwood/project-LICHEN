@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.25",
+  "title": "SCHC link-local scope check: Python fe80::/64 vs Rust/C fe80::/10 (+ Rust/C round-trip self-corruption)",
+  "description": "Python headers.py:57-58 _is_link_local requires top 64 bits == fe80::/64. Rust codec.rs:150-152 / headers.rs:123-125 and C schc.c:159-162 check fe80::/10. For addresses inside fe80::/10 but outside fe80::/64 (reserved per RFC 4291): Python -\u003e rule 255; Rust/C -\u003e rule 0/2/3/4 and then CORRUPT THEMSELVES on round-trip since decompress hardcodes the fe80:: prefix (Rust codec.rs:29, C schc.c:963-965). Rust and C are in parity with each other (identical wrong behavior); Python is self-consistent. Low practical severity (such addresses are invalid) but input-dependent behavioral divergence. Fix: converge on fe80::/10 with a decompress-side guard, or fe80::/64 everywhere.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:05:45.763523682Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:05:45.763523682Z",
+  "labels": [
+    "parity",
+    "schc",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.25",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:05:45.927096669Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
