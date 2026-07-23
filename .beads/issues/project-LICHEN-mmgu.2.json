@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.2",
+  "title": "[security] C schnorr48_verify: no identity/small-order/canonical pubkey validation - signature forgery under TOFU",
+  "description": "lichen/subsys/lichen/link/schnorr48.c:135-194 schnorr48_verify() delegates all point validation to crypto_eddsa_recover_r (crypto/monocypher.c:2990-3005), which checks only on-curve (square-root check) and s \u003c L. No identity, no small-order/torsion, no non-canonical encoding check. Python (python/src/lichen/crypto/schnorr48.py:129-130) uses crypto_core_ed25519_is_valid_point(pubkey); Rust (rust/lichen-link/src/schnorr.rs:117-120) requires !is_identity() \u0026\u0026 is_torsion_free(). Empirically verified: a forgery under the identity pubkey (pick s=r, e=H(r*B || A_identity || msg)[:16]; verification computes R'=s*B - e*A = r*B and the challenge matches) is ACCEPTED by C, rejected by Python and Rust. In LICHEN's TOFU trust model keys come from peers (announce/first-contact), so an attacker who enrolls an identity or 8-torsion 'pubkey' can thereafter forge frames as that peer. Compounding gap: the C test suite (lichen/tests/schnorr48/main.c:150-186) omits exactly the validation-strength vectors from test/vectors/schnorr48.json (identity pubkey, low-order 8-torsion pubkey, non-canonical s, zero s, truncated) - those vectors pass in C only via equation failure, masking the gap. Fix: reject identity/small-order/non-canonical pubkeys in schnorr48_verify (e.g. ge_has_small_order + identity check + canonical encoding check before recover_r), and add the omitted vectors to the C suite (cross-ref the vector-consumption bead).",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:59:20.673544569Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:59:20.673544569Z",
+  "labels": [
+    "parity",
+    "security",
+    "link",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.2",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:59:20.822395534Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
