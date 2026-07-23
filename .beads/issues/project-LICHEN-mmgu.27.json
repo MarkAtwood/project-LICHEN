@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.27",
+  "title": "MQTT-SN SCHC rule disposition: Rust-only rule 7 (unregistered), spec says rule 2 (collides), Python/C have none",
+  "description": "Rust codec.rs:458-528 compress_mqtt_sn (tried BEFORE CoAP) and :754-806 decompress use rule byte 7; lichen-core/src/constants.rs:36 RULE_MQTT_SN=7 with comment 'Future use; not in constants.toml yet' - constants.toml [schc.rule_id] has no rule 7. Python: no MQTT-SN rule (registry 0-6,64-66); C: none. Stale Rust comments say 'Rule 5' for MQTT-SN (codec.rs:458,1054) - 5 is OSCORE. Spec 03-adaptation.md 5.5 defines 'Rule 2: Link-local IPv6 + UDP + MQTT-SN' colliding with ICMPv6 Echo everywhere. Impact: Rust-\u003ePython/C MQTT-SN rejected (ValueError / SCHC_ERR_UNKNOWN_RULE_ID); C-\u003eRust works accidentally via rule 0/1. DECISION NEEDED: register rule 7 in constants.toml + implement in Python/C, relocate, or drop; fix spec 5.5 and stale comments. Note latent collision: Python reserves building-block rules 64-66 (rules.py:117-158) which Rust/C could someday allocate differently - register those IDs too.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:06:09.30517586Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:06:09.30517586Z",
+  "labels": [
+    "parity",
+    "schc",
+    "mqtt-sn",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.27",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:06:09.451888908Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
