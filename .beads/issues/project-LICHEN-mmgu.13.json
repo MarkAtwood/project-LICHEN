@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.13",
+  "title": "C OSCORE cannot produce/consume response-with-own-PIV (RFC C.8 shape) - no protected Observe notifications",
+  "description": "oscore_protect_response hardcodes an empty OSCORE option (oscore.c:1861 opt={0}) and oscore_unprotect_response explicitly ignores the response OSCORE option (oscore.c:1889-1890 '(void)oscore_opt'). So the Zephyr node can neither send nor process responses carrying their own Partial IV - i.e. no OSCORE-protected Observe notifications (each notification needs a fresh PIV). Rust has include_piv support; Python/aiocoap handles both shapes. Fix: thread an include_piv/seq path into protect_response and parse the response option in unprotect_response, then verify against RFC C.8 vectors.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:01:34.765267012Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:01:34.765267012Z",
+  "labels": [
+    "parity",
+    "oscore",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.13",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:01:34.928316133Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
