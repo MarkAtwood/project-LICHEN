@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.7",
+  "title": "RPL DODAGVersionNumber: Python plain mod-256 vs Rust/C RFC 6550 lollipop - rejoin divergence",
+  "description": "python/src/lichen/rpl/dodag.py:42-52 implements plain modular arithmetic (diff=(new-old)%256; return 0 \u003c diff \u003c 128); its docstring CLAIMS RFC 6550 Section 7.2 lollipop semantics but does not implement them. Rust (rust/lichen-rpl/src/dodag.rs:32-48) and C (lichen/subsys/lichen/rpl/dodag.c:36-59) implement the real lollipop: linear region 0-127 (simple compare), circular region 128-255 (mod-128, window 16), linear always newer than circular. Concrete divergent verdicts: new=200,old=100 -\u003e Python newer, Rust/C not newer; new=200,old=150 -\u003e Python newer, Rust/C not (diff 50 \u003e 16); new=100,old=200 -\u003e Python not newer, Rust/C newer. Any version transition crossing the 127/128 boundary makes the Python oracle disagree with both compiled stacks on whether to rejoin the DODAG - corrupts any Python-driven cross-impl test of version handling. Fix Python to the lollipop (Rust/C are the reference); add cross-region version vectors to test/vectors/rpl_messages.json.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:00:19.065306166Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:00:19.065306166Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "python",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.7",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:00:19.221440681Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
