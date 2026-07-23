@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.10",
+  "title": "No access control on PUT /config or /config/radio",
+  "description": "lichen/subsys/lichen/coap/coap_config.c:668,747. spec/11-lci.md §17.6.3: PUT /config is Admin-level; §17.6.2 calls for OSCORE on sensitive operations. No access check at all — any mesh peer can change node name/role and radio params (freq_mhz, sf, sync_word, tx_power_dbm), remotely partitioning or hijacking the node's radio. Fix: apply the (fixed) local-admin gate to all config writes.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:23.30480424Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:23.30480424Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.10",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:23.467356938Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
