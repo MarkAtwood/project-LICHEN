@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.36",
+  "title": "Rust/Python Meshtastic bridge port-set mismatch",
+  "description": "rust/lichen-meshtastic/src/bridge.rs:272-322 and lib.rs:16-17 implement IP_TUNNEL_APP (portnum 33) encapsulation of LICHEN IPv6 with hop_limit 3; Python translate.py:32-46 PortNum enum has no IP_TUNNEL_APP — Python logs 'Unknown portnum 33' and drops, so the two bridges cannot interoperate on tunneled packets. Also note spec/07-transport-app.md:92 rationale: 'Meshtastic RF handled at BLE compatibility layer, not mesh transport... tunneling buys nothing — the radios don't interoperate anyway.' VERIFY scope: if BLE-local only, hop_limit=3/tunnel framing is misleading; if RF tunneling is intended it contradicts the stated design. Fix: align both implementations on one port set and document whether IPv6-over-Meshtastic is sanctioned.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:38.74887372Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:38.74887372Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.36",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:38.888997863Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
