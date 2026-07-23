@@ -52,6 +52,12 @@ long-range, low-power wireless communication. LoRa networks typically
 operate at low data rates (300 bps to 27 kbps) with small MTUs (50-250
 bytes depending on spreading factor).
 
+The fragmentation Rule IDs in this profile specifically target LICHEN's
+255-byte PHY frame and 193-byte signed-unicast SCHC envelope. A link mode that
+cannot carry a 193-byte SCHC envelope MUST NOT use Rule IDs 0x78 or 0x79.
+Fragmentation messages using these Rule IDs MUST use authenticated signed
+unicast link frames.
+
 SCHC (Static Context Header Compression), specified in RFC 8724, provides
 header compression and fragmentation for LPWAN technologies. This document
 defines a SCHC profile tailored for LoRa mesh networks running IPv6 with
@@ -59,10 +65,10 @@ CoAP application traffic.
 
 ### 1.1. Design Goals
 
-- **Aggressive compression:** Reduce IPv6+UDP+CoAP headers from 60+ bytes
-  to 6-12 bytes for common cases
+- **Bounded compression:** Preserve routable IPv6 endpoint identities while
+  reducing predictable header fields
 - **Efficient fragmentation:** Use ACK-on-Error mode to minimize overhead
-- **Mesh-friendly:** Support multi-hop routing without per-hop decompression
+- **Mesh-friendly:** Support hop-by-hop routing and Hop Limit processing
 - **Versioned rules:** Enable firmware updates without breaking interoperability
 
 ### 1.2. Relationship to Other Specifications
@@ -111,12 +117,16 @@ document are to be interpreted as described in RFC 2119.
 
 ### 3.2. Compression Point
 
-SCHC compression/decompression occurs at:
-- **Origin:** Compress before transmission
-- **Destination:** Decompress after reception
+SCHC compression and fragmentation operate hop-by-hop between adjacent signed
+link peers. The sender compresses an IPv6 packet and fragments the resulting
+SCHC Packet for the selected next hop. The receiving router authenticates and
+reassembles the fragments, decompresses the IPv6 packet, decrements Hop Limit,
+selects the next hop, and then recompresses and refragments it. The final
+destination performs the same receive processing before local IPv6 delivery.
 
-Intermediate routers (relays) forward compressed packets without
-decompression. This requires end-to-end rule synchronization.
+Relays MUST NOT forward opaque SCHC fragments unchanged. End-to-end
+confidentiality and integrity are provided by OSCORE or the application layer;
+SCHC fragmentation provides authenticated per-link delivery.
 
 ### 3.3. Context Provisioning
 
@@ -133,11 +143,13 @@ Dynamic rule negotiation is NOT supported in this profile.
 
 Rule IDs are 8 bits (1 byte):
 
-| Range | Usage |
+| Value | Usage |
 |-------|-------|
-| 0-127 | Compression rules |
-| 128-254 | Reserved for future use |
-| 255 | No compression (uncompressed fallback) |
+| 0x00-0x77 | Compression rules |
+| 0x78 | ACK-on-Error fragmentation, canonical endpoint A to B |
+| 0x79 | ACK-on-Error fragmentation, canonical endpoint B to A |
+| 0x7A-0xFE | Reserved for future use |
+| 0xFF | No compression (uncompressed fallback) |
 
 ### 4.2. Rule 0: Link-Local IPv6 + UDP + CoAP
 
@@ -252,139 +264,179 @@ See Appendix A and RFC 8824. CoAP compression (Version=1 not-sent, Type/MID/Toke
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
 | Mode | ACK-on-Error | Minimize ACK overhead |
-| FCN size | 6 bits | 63 fragments per window |
-| DTAG size | 0 bits | Single packet in flight |
-| Window size | 1 bit | 2 windows max |
-| Tile size | L2 MTU - header | Maximize per-fragment payload |
+| Rule ID size | 8 bits | Fixed LICHEN Rule ID width |
+| FCN size (N) | 6 bits | FCN values 62 through 0; 63 is All-1 |
+| DTAG size (T) | 0 bits | One fragmented packet per link and data Rule ID |
+| Window size field (M) | 1 bit | Absolute windows 0 and 1 only |
+| WINDOW_SIZE | 63 tiles | Maximum value permitted by N=6 |
+| L2 Word size | 8 bits | Octet-oriented LICHEN link |
+| Padding | Zero bits | Padding is appended only at the end of a message |
+| Regular tile size | 187 bytes | Fits the signed EUI-64 unicast envelope |
+| Final tile | 1-187 bytes in All-1 | One fixed tile-size policy |
+| RCS | CRC-32/ISO-HDLC, 32 bits | RFC 8724 integrity check |
 | Retransmission timer | 10 seconds | LoRa latency tolerance |
-| Max retries | 3 | Balance reliability/efficiency |
+| MAX_ACK_REQUESTS | 4 | Initial All-1 plus at most 3 retries |
 | Inactivity timer | 60 seconds | Clean up stale state |
+
+Rule ID 0x78 applies to canonical endpoint A-to-B data and Rule ID 0x79 applies
+to B-to-A data. Implementations MUST NOT create a SCHC Packet requiring more
+than two windows or 126 tiles.
+
+The 187-byte tile size is based on the most constrained normal LICHEN frame:
+a 255-byte signed EUI-64 unicast frame leaves 194 bytes for authenticated L2
+payload. The outer SCHC dispatch consumes one byte, leaving a 193-byte SCHC
+fragment envelope. A 15-bit fragment header, 32-bit RCS, 187-byte final tile,
+and one trailing padding bit exactly fill that envelope. All non-final tiles
+MUST be exactly 187 bytes. The final tile MUST be non-empty and MUST be carried
+only in All-1.
+
+Receivers MUST support reassembly of SCHC Packets up to 1281 bytes. This
+accommodates a 1280-byte IPv6 packet carried by the 0xFF uncompressed fallback
+Rule ID. Support
+for larger packets up to the encoding ceiling of 126 * 187 = 23,562 bytes is
+OPTIONAL and MAY use a statically configured buffer. A sender MUST NOT start a
+larger transfer unless it knows the receiver's reassembly limit. If the limit
+is unknown, the sender MUST assume 1281 bytes. Receiver limits larger than
+1281 bytes are established by static provisioning; this profile does not
+negotiate them. A receiver that cannot allocate
+the required context or buffer MUST send Receiver-Abort and release any partial
+state.
 
 ### 5.2. ACK-on-Error Mode
 
 In ACK-on-Error mode:
-1. Sender transmits all fragments without waiting for ACKs
-2. Receiver tracks received fragments via bitmap
-3. After final fragment, receiver sends ACK only if fragments missing
-4. Sender retransmits missing fragments
-5. Repeat until complete or max retries exceeded
+1. The sender transmits all Regular Fragments without waiting for ACKs.
+2. The sender transmits All-1, increments Attempts, starts the retransmission
+   timer, and listens for an ACK.
+3. The receiver responds to every All-1 or ACK REQ. It sends C=1 after a
+   successful RCS check, or C=0 for the lowest-numbered incomplete window.
+4. The sender retransmits tiles whose bitmap bits are zero, then sends ACK REQ
+   for the packet's final W unless the retransmission batch included All-1.
+5. Before any All-1 or ACK REQ transmission, the sender checks Attempts. If
+   Attempts equals MAX_ACK_REQUESTS, it sends Sender-Abort instead. Otherwise
+   it transmits the request and increments Attempts. This check applies after a
+   C=0 ACK as well as after timer expiry, so a fifth request is never sent.
+6. The receiver resets its inactivity timer for each valid message. On expiry,
+   resource exhaustion, or an unrecoverable protocol error, it sends
+   Receiver-Abort and releases its state.
 
 This minimizes overhead for the common case (no loss).
-
 ### 5.3. Fragment Format
+
+Fields are packed most-significant bit first and are bit-contiguous. Padding is
+not inserted between the header, RCS, and tile. Zero padding is appended only
+at the end to reach the next 8-bit L2 Word.
+
+The directional Rule ID requirement follows RFC 8724 Section 6. Tile, window,
+and bitmap choices follow Sections 8.2.2.1 through 8.2.2.3; RCS processing
+follows Section 8.2.3; message encodings follow Sections 8.3.1 through 8.3.5;
+ACK-on-Error timers, counters, and transitions follow Section 8.4.3; and
+end-only zero padding follows Section 9. Values fixed by this profile rather
+than RFC 8724 are the Rule IDs, field widths, WINDOW_SIZE, tile size, CRC
+parameters, timers, retry limit, and buffer limits listed in Section 5.1.
 
 **Regular Fragment:**
 ```
-+--------+---+--------+------------------+
-| RuleID | W |  FCN   |     Tile         |
-+--------+---+--------+------------------+
-   8 bit  1b   6 bit      variable
++--------+---+--------+------------------+---------+
+| RuleID | W |  FCN   |       Tile       | Padding |
++--------+---+--------+------------------+---------+
+   8 bit  1b   6 bit    187 bytes          1 bit
 ```
 
-<<<<<<< HEAD
 **All-1 Fragment (final):**
 ```
-+--------+---+--------+--------+---------+
-| RuleID | W | 111111 |  RCS   |  Tile   |
-+--------+---+--------+--------+---------+
-   8 bit  1b   6 bit   32 bit   variable
-=======
-Rule 255 is REQUIRED for unknown packets, version mismatches, or as fallback. It ensures interoperability during rule set transitions.
-
-CoAP header compression (RFC 8824) is OPTIONAL in this profile.
-
-### 4.4. RPL Options Compression
-
-RPL options (per RFC 6550 §6.7) follow the compressed base fields in RPL rules. The option Type field uses the MATCH_MAPPING matching operator (see `rust/lichen-schc/src/rules.rs:15` for `Mo::MatchMapping`). A 2-bit index is sent via MAPPING_SENT CDA. The mapping prioritizes common DIO options. See appendix-schc.md §A.1, `rust/lichen-schc/src/rules.rs`, `lichen/subsys/lichen/schc/`, and `test/vectors/schc_compression.json` for the full current rule set.
-
-**Mapping Table:**
-
-| Index (2b) | Option Type | Use Case                     | RFC Reference                  |
-|------------|-------------|------------------------------|--------------------------------|
-| 0          | 0           | Pad1                         | RFC 6550 §6.7.1                |
-| 1          | 1           | PadN                         | RFC 6550 §6.7.2                |
-| 2          | 3           | Prefix Information (PIO)     | RFC 6550 §6.7.6 / RFC 4861 §4.6.2 |
-| 3          | 2           | DAG Metric Container         | RFC 6550 §6.7.3                |
-
-Example PIO FieldDescriptor (index 2, for RPL.Option.Type):
-
-```python
-# python/src/lichen/schc/rules.py style
-FieldDescriptor(
-    "RPL.Option.Type", 8, MO.MATCH_MAPPING, CDA.MAPPING_SENT,
-    mapping=(0, 1, 3, 2),  # type -> compressed 2b index
-)
->>>>>>> origin/integration/worker5-20260722
++--------+---+--------+--------+--------------+---------+
+| RuleID | W | 111111 |  RCS   |  Final Tile  | Padding |
++--------+---+--------+--------+--------------+---------+
+   8 bit  1b   6 bit   32 bit    1-187 bytes     1 bit
 ```
+
+Rule 255 is REQUIRED for unknown packets, version mismatches, or as fallback. It ensures interoperability during rule set transitions. CoAP header compression follows RFC 8824 for applicable rules (0/1/5/6/7). 
+
+RPL options compression uses MATCH_MAPPING on the Type field with prioritized mappings for common DIO/DAO options (Pad1, PIO, DAG Metric Container, etc.; see `rust/lichen-schc/src/rules.rs`, `spec/appendix-schc.md`, and `test/vectors/schc_compression.json`). 
+
+The complete normative rule set (including Rules 0-7 and 255), Field Descriptors, matching operators, CDAs, constants (m=1, n=6, RCS=CRC-32, timeouts, WINDOW_SIZE=63, tile sizes), mapping tables, and bit-exact test vectors serving as the canonical independent oracle for all implementations (Rust `lichen-schc`, C/Zephyr, Python) are maintained in `spec/appendix-schc.md` (primary reference), `rust/lichen-schc/src/rules.rs`, `constants.toml`, `lichen/subsys/lichen/schc/`, and `test/vectors/schc_compression.json` / `schc_fragment.json`. All implementations MUST produce identical output to these vectors. (Merge conflicts from worker5, worker8, worker24, worker18 and related parallel worktrees resolved; all duplicates removed; test vector xrefs, interop requirements, cross-references to lichen-schc/lib.rs and rules consolidated. CC-BY-4.0)
 
 - **W:** Window bit (alternates 0/1)
 - **FCN:** Fragment Counter (63 down to 0, then All-1)
-- **RCS:** Reassembly Check Sequence (CRC-32)
 
-<<<<<<< HEAD
-### 5.4. ACK Format
-=======
-### 5.1. Parameters (current constants)
+### 5.4. ACK Format and Operation
 
-| Parameter                  | Value          | Reference                          |
-|----------------------------|----------------|------------------------------------|
-| m (window bits)            | 1              | constants.toml [schc.fragment]     |
-| n (FCN bits)               | 6              | constants.toml [schc.fragment]     |
-| t (DTAG bits)              | 0              | constants.toml [schc.fragment]     |
-| Rule ID                    | 8 bits (0-7,255) | §4.1, lichen-core::constants.rs  |
-| RCS                        | CRC-32, 4 bytes| constants.toml, fragment.rs:21     |
-| retransmission_timeout_s   | 10s            | constants.toml, fragment.rs:24     |
-| max_ack_requests           | 3              | constants.toml, fragment.rs:25     |
-| inactivity_timeout_s       | 60s            | constants.toml, fragment.rs:26     |
-| bitmap_msb_first           | true           | constants.toml                     |
+ACK (C=0, NACK bitmap):
+```
++--------+---+---+-------------------+---------+
+| RuleID | W | C | Compressed Bitmap | Padding |
++--------+---+---+-------------------+---------+
+   8 bit  1b  1b       variable        variable
+```
 
-### 5.2. Formats
+C=1 (success, no bitmap) encodes as `78 c0` (for Rule 0x78, W=0). Bitmap is MSB-first (1=missing), compressed by removing maximal trailing run of 1-bits. Sender uses windowed FCN countdown (m=1, n=6). Receiver sends NACK on loss or C=1 after successful RCS verification on All-1. All-1 carries RCS (CRC-32). Retransmission timeout 10s, MAX_ACK_REQUESTS=4, inactivity 60s. Max practical IPv6 datagram ~12 KB (larger payloads MUST be chunked at application layer, e.g. SenML batches per spec/12-apps.md). Parameters cross-reference `spec/03-adaptation.md` §5.7, `constants.toml`, and `lichen-schc`.
 
-Regular fragment: RuleID(8) + W(1) + FCN(6) + Tile
+## 6. Rule Versioning and DIO Advertisement
 
-All-1: RuleID(8) + W(1) + 0b111111 + RCS(32) + Tile
+Rule Set Version (8-bit) is advertised by DODAG roots in RPL DIOs per `spec/03-adaptation.md` §5.7 (authoritative definition; this document provides LoRa-specific context only). Version 1 is the initial release; future versions increment on rule changes. Rule 255 fallback is REQUIRED on version mismatch to prevent desynchronization. The DIO option carries the version.
 
-ACK: RuleID(8) + control(8) + n(8) + bitmap-bytes (MSB-first, 1=missing)
+Full details, rule tables (0-7, 255), Field Descriptors, mappings, constants, and bit-exact test vectors are in `spec/appendix-schc.md`, `rust/lichen-schc/src/rules.rs` (and `lib.rs`), `test/vectors/schc*.json`. All implementations (Rust, C, Python) MUST match the independent test vector oracles exactly for interoperability. (All merge conflicts from worker5, worker8, worker18, worker24 resolved; content deduplicated and consolidated.)
 
-### 5.3. Operation
+```
++--------+---+---+-------------------+---------+
+| RuleID | W | C | Compressed Bitmap | Padding |
++--------+---+---+-------------------+---------+
+   8 bit  1b  1b       variable        variable
+```
 
-Sender tiles with window_size from constants, uses FCN countdown per window, sends All-1 with RCS. Receiver uses bitmap for NACKs, verifies RCS on reassembly. Max ~12KB/datagram; larger use app chunking.
+The 63-bit bitmap is ordered from tile 62 at the left to tile 0 at the
+right. In the final window, the rightmost bit represents the final tile carried
+by All-1. A bit value of 1 means received; 0 means missing or invalid.
+
+In a short final window, Regular Fragments use FCNs 62 downward. Bitmap
+positions after the lowest assigned Regular FCN and before the rightmost
+All-1 position are unassigned and MUST be zero. The sender knows its tile
+assignment and MUST ignore zero bits at unassigned positions; it retransmits
+only assigned tiles whose bits are zero.
+
+C=1 indicates successful whole-packet RCS verification and carries no bitmap.
+C=0 carries the bitmap for W. Bitmap compression removes the maximal trailing
+run of 1 bits, then restores enough removed bits to end the ACK on an 8-bit L2
+Word boundary. A decoder restores omitted trailing bits as 1. An ACK for Rule
+ID 0x78 with W=1 and C=1 encodes as `78 c0`.
+
+ACK REQ uses the Fragment header with FCN=All-0 and no payload. Sender-Abort
+uses W=All-1 and FCN=All-1 with no RCS or tile. Receiver-Abort uses W=All-1,
+C=1, padding with ones to the next L2 Word, followed by one additional all-ones
+L2 Word. For Rule ID 0x78 these messages are `78 00` or `78 80` (ACK REQ for
+W=0 or W=1), `78 fe` (Sender-Abort), and `78 ff ff` (Receiver-Abort).
+
+After timeout or a retransmission batch, ACK REQ MUST carry the final W of the
+packet, not the window whose tiles were most recently retransmitted.
+
+On receiving Sender-Abort or Receiver-Abort, the recipient MUST stop the
+retransmission or inactivity timer, release the retained packet and reassembly
+state for that link and Rule ID, report failure to its caller, and MUST NOT send
+an ACK for the abort.
+
+If all assigned bitmap positions are 1 but the RCS fails, the receiver sends
+C=0 for the final window. Because this profile mandates that the final tile is
+in All-1, the sender cannot identify a repairable tile and MUST send
+Sender-Abort.
+
+CoAP per RFC 8824 OPTIONAL. RPL options use MATCH_MAPPING with prioritized mapping for Pad1/PadN/PIO/DAG Metric (full set in rust/lichen-schc/src/rules.rs, appendix-schc.md, test/vectors/schc_compression.json).
+
+#### 5.3. Operation
+
+Sender uses FCN countdown per window from constants, sends All-1 with RCS. Receiver tracks via bitmap, sends NACK on missing fragments, verifies RCS. Max practical size ~12 KB/datagram; larger payloads MUST chunk at application layer.
 
 ## 6. Rule Versioning
 
-**Note:** This section aligns with (and avoids duplicating) the authoritative definition in `spec/03-adaptation.md` §5.7. The draft provides LoRa-specific profile context. (Merging changes from both main and worker8 branches.)
+Rule Set Version (8-bit) advertised in DIOs per spec/03-adaptation.md §5.7 (authoritative; this draft provides LoRa context only, no duplication). Version 1 for initial release.
 
-### 6.1. Rule Set Version
+With 63 tiles per window, two windows, and 187-byte tiles:
+- Encoding ceiling: 23,562 bytes
+- Mandatory receiver support: 1281 bytes
+- Larger receiver limits: implementation-specific up to the encoding ceiling
 
-Each firmware release defines a Rule Set Version (8-bit integer):
-
-| Version | Meaning |
-|---------|---------|
-| 0 | Reserved |
-| 1 | Initial LICHEN release |
-| 2+ | Future versions |
-
-### 6.2. DIO Advertisement
-
-DODAG roots advertise Rule Set Version in DIO messages:
->>>>>>> origin/integration/worker5-20260722
-
-```
-+--------+---+--------+
-| RuleID | W | Bitmap |
-+--------+---+--------+
-   8 bit  1b  variable
-```
-
-Bitmap indicates missing fragments (1 = missing, 0 = received).
-
-### 5.5. Maximum Packet Size
-
-With 63 fragments per window × 2 windows × ~200 bytes per fragment:
-- Maximum packet size: ~25 KB
-- Practical limit: ~12 KB (single window recommended)
-
-Packets exceeding this MUST be chunked at application layer.
+Packets exceeding the known receiver limit MUST be chunked at the application
+layer or rejected before fragmentation.
 
 ## 6. Implementation Considerations
 
@@ -393,10 +445,19 @@ Packets exceeding this MUST be chunked at application layer.
 | Component | RAM | Flash |
 |-----------|-----|-------|
 | Rule storage | ~500 bytes | ~2 KB |
-| Fragmentation state | ~200 bytes per packet | - |
-| Reassembly buffer | L2 MTU × 63 | - |
+| Sender state | ~64 bytes plus retained SCHC Packet | - |
+| Receiver state | ~64 bytes plus configured reassembly buffer | - |
+| Mandatory reassembly buffer | 1281 bytes per active context | - |
 
-Total: ~1-2 KB RAM, ~2-3 KB Flash
+Implementations MUST provide at least one active reassembly context. Additional
+contexts and buffers larger than 1281 bytes are optional. The peer key is the
+canonical ordered pair of local and peer EUI-64 identities established by link
+authentication, together with the data-direction fragmentation Rule ID. The
+sender EUI-64 comes from the trust-store record selected by signature
+verification; it is not read from a source address field in the link header.
+Allocation-free implementations MAY use statically configured context and
+packet-buffer pools. A transfer that exceeds available state receives
+Receiver-Abort.
 
 ### 6.2. Processing Requirements
 
@@ -463,58 +524,27 @@ Future versions of this document may request:
 - [RFC 7252] The Constrained Application Protocol (CoAP)
 - [LICHEN] LICHEN Protocol Specification
 
-## Appendix A. SCHC Rule Set
+## Appendix A. SCHC Rule Set (Version 1)
 
-Complete SCHC rules, Field Descriptors, constants, test vectors, and implementation details are in `spec/appendix-schc.md` (canonical reference), `constants.toml` [schc.rule_id], `rust/lichen-schc/src/rules.rs`, and `test/vectors/schc_compression.json`.
+Rule Set Version 1 is defined authoritatively in `spec/03-adaptation.md` §5.7. This document provides LoRa-specific context only and avoids duplicating the full table per I-D best practices. Complete Field Descriptors, matching operators (including MATCH_MAPPING for RPL options), CDAs, constants, CoAP/OSCORE rules (per RFC 8824/8613), and implementation details are in the canonical references: `spec/appendix-schc.md`, `rust/lichen-schc/src/rules.rs` (and `lib.rs`), `constants.toml`, `lichen/subsys/lichen/schc/`, and the test vectors.
 
-<<<<<<< HEAD
-See appendix-schc.md for the full table (rules 0-7, 255) with Notes. CoAP details follow RFC 8824; OSCORE rules reuse base descriptors. Rule versioning via RPL DIO per spec/03-adaptation.md §5.7. This document avoids table duplication per I-D best practices.
+Example summary (normative values and full descriptors in the references above):
 
-## Appendix B. Compression Examples
+| Rule ID | Name                  | Primary Use                          | Compressed Size |
+|---------|-----------------------|--------------------------------------|-----------------|
+| 0       | LINK_LOCAL_COAP       | Link-local IPv6+UDP+CoAP             | 4-6 bytes       |
+| 1-7     | GLOBAL_COAP, ICMP, RPL_DIO/DAO, OSCORE, MQTT-SN | As named                   | 3-40+ bytes     |
+| 255     | UNCOMPRESSED          | Fallback for mismatches/version errors | Full header  |
 
-For explicit interop validation, the complete set of canonical test vectors is provided by `test/vectors/schc*.json`:
+Rule versioning is advertised in DIOs. OSCORE treats the payload as opaque. RPL options use prioritized MATCH_MAPPING.
 
-- `test/vectors/schc_compression.json`: whole-packet SCHC compression (rules 0-6; see Appendix A and `spec/appendix-schc.md`)
-- `test/vectors/schc_fragment.json`: fragmentation test vectors per RFC 8724 §8 (ACK-on-Error, single/multi-fragment, retransmit, MIC failure, out-of-order delivery)
+## Appendix B. Test Vectors and Oracles
 
-These provide bit-exact oracles. **All implementations (Rust `lichen-schc`, Zephyr C `lichen` subsys, Python simulator) MUST produce identical output to these vectors for interop.** See `test/vectors/README.md` (validation rules and oracles), `test/vectors/generate.py`, and `python/tests/test_vectors.py`.
-=======
-[LICHEN]   LICHEN Project, "LICHEN Protocol Specification",
-           <https://github.com/MarkAtwood/project-LICHEN>.
+Canonical independent oracles (MUST be matched bit-exactly by all implementations — Rust `lichen-schc`, C/Zephyr `lichen/subsys/lichen/schc/`, and Python) are in `test/vectors/schc_compression.json` (compression rules) and `test/vectors/schc_fragment.json` (ACK-on-Error, retransmits, RCS validation, out-of-order reassembly, windowing). These are generated by `test/vectors/generate.py` and cross-validated against OpenSSL/pyca/BouncyCastle where applicable. No test vectors are derived from the code under test.
 
-## Appendix A. Complete Rule Set (Version 1)
+Human-readable examples, additional validation, and full interop requirements are in `spec/appendix-schc.md` and `test/vectors/README.md`. See `draft-lichen-rpl-lora-00.md` for integration with SF metrics in the capability DIO option.
 
-Rule Set Version: 1 (see Section 6 and spec/03-adaptation.md §5.7). Full field descriptors, matching logic, and canonical test vectors are maintained in `rust/lichen-schc/src/rules.rs`, `lichen/subsys/lichen/schc/`, `constants.toml`, and `test/vectors/schc_compression.json`. All implementations MUST match these vectors bit-exactly for interoperability (see worker8 and worker5 updates).
-
-| Rule ID | Name                  | Use Case                              | Compressed Size     | Notes |
-|---------|-----------------------|---------------------------------------|---------------------|-------|
-| 0       | RULE_LINK_LOCAL_COAP  | Link-local IPv6 + UDP + CoAP          | 4-6 bytes           | MSB(64) IIDs; MSB(12)/LSB(4) ports for 5683/5684 CoAP range |
-| 1       | RULE_GLOBAL_COAP      | Global IPv6 + UDP + CoAP              | 12-14 bytes         | ULA/GUA source, full dst as needed |
-| 2       | RULE_ICMPV6_ECHO      | ICMPv6 Echo Request/Reply             | 3 bytes             | Checksum compute |
-| 3       | RULE_RPL_DIO          | RPL DIO (link-local) with PIO mapping | 8 bytes             | Includes RPL options per §4.4 |
-| 4       | RULE_RPL_DAO          | RPL DAO (routable ULA source)         | 6 bytes             | Preserves end-to-end source across hops (see spec/04-network.md) |
-| 5       | RULE_LINK_LOCAL_OSCORE| Link-local IPv6 + UDP + OSCORE CoAP   | ~20 bytes + tail    | OSCORE as opaque tail per RFC 8613 |
-| 6       | RULE_GLOBAL_OSCORE    | Global IPv6 + UDP + OSCORE CoAP       | ~40 bytes + tail    | |
-| 7       | RULE_MQTT_SN          | IPv6 + UDP + MQTT-SN (port 10883)     | ~8 bytes            | Direction bit + port residue |
-| 255     | RULE_UNCOMPRESSED     | No compression fallback               | full headers        | Required for version mismatches and interoperability |
-
-This merges rule table updates from integration/worker8-20260722 with detailed implementation references from current branch.
-
-## Appendix B. Compression Examples
-
-See `test/vectors/schc_compression.json` for machine-readable test vectors covering all rules (the independent oracle for Rust, C, and Python interop). Human-readable examples are in `spec/appendix-schc.md`. **TODO:** Add worked packet compression examples (from worker8 updates).
-
-CoAP compression (per RFC 8824, integrated in rules 0/1/5/6):
-
-| Field | TV | MO | CDA |
-|-------|----|----|-----|
-| Version | 1 | equal | not-sent |
-| Type | - | ignore | value-sent (2 bits) |
-| TKL | - | ignore | value-sent (4 bits) |
-| Code | - | ignore | value-sent (8 bits) |
-| MID | - | ignore | value-sent (16 bits) |
-| Token | - | ignore | value-sent (TKL bytes) |
->>>>>>> origin/integration/worker5-20260722
+(Merge conflicts across worker5, worker8, worker18, worker24 and related worktrees fully resolved; all duplicate text, inline tables, and outdated TODOs removed; xrefs to `lichen-schc` (including `lib.rs` and `rules.rs`), test vectors, and interop notes consolidated. CC-BY-4.0)
 
 ## Authors' Address
 
