@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.11",
+  "title": "Zephyr coap_status.c handlers are dead code; Observe notify is a stub",
+  "description": "Commit 49632f1115 ('/status + Observe') landed library-only code: coap_status.c exports const struct coap_resource lichen_coap_status_resource etc. (lines 710-724) but NOTHING registers them - no reference outside coap_status.c anywhere under lichen/. The file's own comment admits const resources 'cannot track observers', and lichen_coap_status_notify()/..._neighbors_notify() (lines 746-762) only LOG_DBG - they never call coap_resource_notify(), so Observe notifications can never fire. Contrast: coap_keys.c/coap_config.c use COAP_RESOURCE_DEFINE(..., lichen_coap, ...) which links them into the gateway service. Net: no app serves /status, /status/neighbors, /status/routes from this module; tests pass regardless. Fix: register the resources on the lichen_coap service (or delete the module), and wire notify to coap_resource_notify with proper observer tracking.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:01:11.584534422Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:01:11.584534422Z",
+  "labels": [
+    "parity",
+    "lci",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.11",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:01:11.756028189Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
