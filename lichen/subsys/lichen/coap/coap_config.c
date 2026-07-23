@@ -430,7 +430,7 @@ int lichen_config_decode_radio_cbor(const uint8_t *buf, size_t len,
 			if (val.len >= 2 && val.len <= 10 && val.value[0] == '0' &&
 			    (val.value[1] == 'x' || val.value[1] == 'X')) {
 				size_t hex_len = val.len - 2;
-				if (hex_len > 4) {
+				if (hex_len > 8) {
 					(void)zcbor_list_map_end_force_decode(state);
 					return -EINVAL;
 				}
@@ -845,21 +845,21 @@ static int config_identity_get(struct coap_resource *resource,
 #if IS_ENABLED(CONFIG_LICHEN_COAP_CONFIG)
 
 static const char * const config_path[] = { "config", NULL };
-COAP_RESOURCE_DEFINE(lichen_config, lichen_coap_server, {
+COAP_RESOURCE_DEFINE(lichen_config, lichen_coap, {
 	.get  = config_get,
 	.put  = config_put,
 	.path = config_path,
 });
 
 static const char * const config_radio_path[] = { "config", "radio", NULL };
-COAP_RESOURCE_DEFINE(lichen_config_radio, lichen_coap_server, {
+COAP_RESOURCE_DEFINE(lichen_config_radio, lichen_coap, {
 	.get  = config_radio_get,
 	.put  = config_radio_put,
 	.path = config_radio_path,
 });
 
 static const char * const config_identity_path[] = { "config", "identity", NULL };
-COAP_RESOURCE_DEFINE(lichen_config_identity, lichen_coap_server, {
+COAP_RESOURCE_DEFINE(lichen_config_identity, lichen_coap, {
 	.get  = config_identity_get,
 	.path = config_identity_path,
 });
