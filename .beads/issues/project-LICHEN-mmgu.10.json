@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.10",
+  "title": "Zephyr gateway: duplicate /config registered on one CoAP service (spec schema vs gateway schema)",
+  "description": "lichen/apps/gateway defines a gateway-specific /config schema ({tx_power_dbm, manual_location{...}}, apps/gateway/src/config_cbor.c, handlers at main.c:459-510) AND the spec-schema coap_config.c lichen_config resource is also linked into the same lichen_coap service (COAP_RESOURCE_DEFINE in coap_config.c:829-834; gateway prj.conf sets CONFIG_LICHEN_COAP_CONFIG=y; service at apps/gateway/src/main.c:504-517). Two handlers for /config on one service - which wins is registration-order dependent. DECISION NEEDED: rename the gateway-specific path (e.g. /gateway/config) or drop CONFIG_LICHEN_COAP_CONFIG from the gateway build.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:01:10.944850256Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:01:10.944850256Z",
+  "labels": [
+    "parity",
+    "lci",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.10",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:01:11.093899914Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
