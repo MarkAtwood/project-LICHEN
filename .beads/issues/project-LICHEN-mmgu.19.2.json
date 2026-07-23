@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.19.2",
+  "title": "Spec reconciliation: SCHC documents (03-adaptation 5.5, appendix-schc, draft-lichen-schc-lora-00) vs implementations",
+  "description": "The spec corpus describes a profile no implementation emits: (1) 03-adaptation.md 5.5: 2-byte rule 0, deviid IIDs, MSB(12)/LSB(4) ports, and MQTT-SN = RULE 2 which collides with rule 2 = ICMPv6 Echo in all implementations + constants.toml. (2) appendix-schc.md A.1: no rules 5/6. (3) draft-lichen-schc-lora-00 4/Appendix A: deviid, HopLimit not-sent, ff02::1a DIO rule, sizes 2/10/41/2 bytes - all diverge from the mutually-consistent implementations + constants.toml + vectors (rules 0-4, 1-byte rule ID). Impl docstrings already admit 'correct but larger than spec A.1 sizes'. (4) The draft's RPL rule 3 assumes multicast dst ff02::1a, but all three impls only match UNICAST link-local RPL - real RPL DIOs to ff02::1a fall to rule 255 everywhere (consistent gap, spec mismatch; decide: add multicast RPL matching or fix the draft). (5) draft 5.4 fragment ACK bitmap polarity says 1=missing,0=received; ALL implementations use 1=received. Presumably re-baseline the specs to the implementations, but that is a human call.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:04:13.923952871Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:04:13.923952871Z",
+  "labels": [
+    "parity",
+    "spec",
+    "schc",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.19.2",
+      "depends_on_id": "project-LICHEN-mmgu.19",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:04:14.070236609Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
