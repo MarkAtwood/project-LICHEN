@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.9",
+  "title": "is_local_admin grants admin to any link-local peer",
+  "description": "lichen/subsys/lichen/coap/coap_keys.c:834-858. spec/11-lci.md §17.6.3: Admin level (DELETE /keys, PUT /config) is determined by transport (USB = admin, BLE = standard). is_local_admin() returns true for ANY IPv6 link-local source (net_ipv6_is_ll_addr) — all LICHEN mesh peers use fe80::/10 link-local (spec §6.1), so any mesh peer is admin. Defeats the TOFU pinning the code implements: a peer can DELETE /keys/{iid} then re-PUT its own pubkey with trust=verified. No interface/scope check, no OSCORE despite §17.6.2. Verified by reviewer + lead. Fix: check receiving interface (sin6_scope_id / net_pkt_iface) against the LCI transport, or require an OSCORE admin context; do not infer locality from source address.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:22.668839748Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:22.668839748Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.9",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:22.812301209Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
