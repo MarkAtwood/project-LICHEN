@@ -91,24 +91,24 @@ impl Gateway {
         self.routes.insert(addr, node_id);
     }
 
-    /// Process RPL control frames from the mesh. Returns (reply_len, event).
-    /// `reply_len > 0` means a control-plane reply (e.g. echo, future DIO) was
-    /// written to the buffer and should be queued for transmission.
-    pub fn handle_frame_rpl(
-        &mut self,
-        l2_payload: &[u8],
-        reply: &mut [u8],
-        now_ms: u32,
-    ) -> (usize, RplEvent) {
-        self.rpl.handle_frame_rpl(l2_payload, reply, now_ms)
+    pub fn process_rpl(&mut self, frame: &[u8], now_ms: u32) -> (Option<Vec<u8>>, RplEvent) {
+        let mut reply = vec![0u8; 512];
+        let (reply_len, event) = self.rpl.handle_frame_rpl(frame, &mut reply, now_ms);
+        let reply_opt = if reply_len > 0 {
+            reply.truncate(reply_len);
+            Some(reply)
+        } else {
+            None
+        };
+        (reply_opt, event)
     }
 
     /// Returns true if the IPv6 destination is local to our mesh (link-local,
     /// ULA, or in our routing table). Prevents echoing local traffic to TUN.
     pub fn is_local_mesh(&self, dst: &[u8; 16]) -> bool {
         self.routes.contains_key(dst)
-            || (dst[0] == 0xfe && dst[1] == 0x80) // fe80:: link-local
-            || dst[0] == 0xfd // fd00:: ULA
+            || (dst[0] == 0xfe && dst[1] == 0x80)
+            || dst[0] == 0xfd
     }
 }
 
