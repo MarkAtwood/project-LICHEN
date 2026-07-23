@@ -752,6 +752,7 @@ class Simulation:
                 payload, rssi, snr, tx_id, source_node_id = result
                 on_packet = node.rx_callbacks[0]
 
+                self._metrics.record_reception(node_id, tx_id, self._current_time_us)
                 self._observers.notify(
                     "on_rx_success",
                     sim_id=self._id,
@@ -859,11 +860,14 @@ class Simulation:
                     "snr": int(candidate.snr),
                     "time_us": self._current_time_us,
                     "from_node_id": tx.source_node_id,
-                    "node_state": node.state.name,
-                    "queue_size": len(self._event_queue),
-                    "candidate_count": len(candidates),
-                    "pending_rx_timeouts": len(self._pending_rx_timeouts),
                 }
+                if self._debug_enabled:
+                    rx_log.update(
+                        node_state=node.state.name,
+                        queue_size=len(self._event_queue),
+                        candidate_count=len(candidates),
+                        pending_rx_timeouts=len(self._pending_rx_timeouts),
+                    )
                 self._debug_log("rx_success", **rx_log)
                 return (
                     tx.payload,
