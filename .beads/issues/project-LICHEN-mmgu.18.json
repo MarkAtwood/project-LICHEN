@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.18",
+  "title": "Rust and C test suites do not consume canonical test/vectors JSON (drift-invisible hardcoding)",
+  "description": "Pattern across every domain: Python reads test/vectors/*.json directly (python/tests/test_vectors.py, runs in CI ci.yml:44); Rust and C transcribe the same values into hardcoded test literals (C's SCHC copy is explicitly sourced second-generation 'from rust/lichen-schc/src/codec.rs'). Editing a JSON vector fails no Rust/C CI job, so drift is invisible. Children cover each vector file plus the missing vector files. Project rule: all implementations MUST produce identical output for test/vectors/ - that requires actually loading them (or a codegen step with CI diff check).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:02:42.340964058Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:02:42.340964058Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "testing",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.18",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:02:42.483580173Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
