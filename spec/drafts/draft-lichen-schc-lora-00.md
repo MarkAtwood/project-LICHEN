@@ -281,93 +281,39 @@ This minimizes overhead for the common case (no loss).
    8 bit  1b   6 bit      variable
 ```
 
-<<<<<<< HEAD
 **All-1 Fragment (final):**
 ```
-+--------+---+--------+--------+---------+
-| RuleID | W | 111111 |  RCS   |  Tile   |
-+--------+---+--------+--------+---------+
-   8 bit  1b   6 bit   32 bit   variable
-=======
-Rule 255 is REQUIRED for unknown packets, version mismatches, or as fallback. It ensures interoperability during rule set transitions.
-
-CoAP header compression (RFC 8824) is OPTIONAL in this profile.
-
-### 4.4. RPL Options Compression
-
-RPL options (per RFC 6550 §6.7) follow the compressed base fields in RPL rules. The option Type field uses the MATCH_MAPPING matching operator (see `rust/lichen-schc/src/rules.rs:15` for `Mo::MatchMapping`). A 2-bit index is sent via MAPPING_SENT CDA. The mapping prioritizes common DIO options. See appendix-schc.md §A.1, `rust/lichen-schc/src/rules.rs`, `lichen/subsys/lichen/schc/`, and `test/vectors/schc_compression.json` for the full current rule set.
-
-**Mapping Table:**
-
-| Index (2b) | Option Type | Use Case                     | RFC Reference                  |
-|------------|-------------|------------------------------|--------------------------------|
-| 0          | 0           | Pad1                         | RFC 6550 §6.7.1                |
-| 1          | 1           | PadN                         | RFC 6550 §6.7.2                |
-| 2          | 3           | Prefix Information (PIO)     | RFC 6550 §6.7.6 / RFC 4861 §4.6.2 |
-| 3          | 2           | DAG Metric Container         | RFC 6550 §6.7.3                |
-
-Example PIO FieldDescriptor (index 2, for RPL.Option.Type):
-
-```python
-# python/src/lichen/schc/rules.py style
-FieldDescriptor(
-    "RPL.Option.Type", 8, MO.MATCH_MAPPING, CDA.MAPPING_SENT,
-    mapping=(0, 1, 3, 2),  # type -> compressed 2b index
-)
->>>>>>> origin/integration/worker5-20260722
++--------+---+--------+--------+--------------+---------+
+| RuleID | W | 111111 |  RCS   |  Final Tile  | Padding |
++--------+---+--------+--------+--------------+---------+
+   8 bit  1b   6 bit   32 bit    1-187 bytes     1 bit
 ```
+
+Rule 255 is REQUIRED for unknown packets, version mismatches, or as fallback. It ensures interoperability during rule set transitions. CoAP header compression follows RFC 8824 for applicable rules (0/1/5/6/7). 
+
+RPL options compression uses MATCH_MAPPING on the Type field with prioritized mappings for common DIO/DAO options (Pad1, PIO, DAG Metric Container, etc.; see `rust/lichen-schc/src/rules.rs`, `spec/appendix-schc.md`, and `test/vectors/schc_compression.json`). 
 
 - **W:** Window bit (alternates 0/1)
 - **FCN:** Fragment Counter (63 down to 0, then All-1)
 - **RCS:** Reassembly Check Sequence (CRC-32)
 
-<<<<<<< HEAD
-### 5.4. ACK Format
-=======
-### 5.1. Parameters (current constants)
+### 5.4. ACK Format and Operation
 
-| Parameter                  | Value          | Reference                          |
-|----------------------------|----------------|------------------------------------|
-| m (window bits)            | 1              | constants.toml [schc.fragment]     |
-| n (FCN bits)               | 6              | constants.toml [schc.fragment]     |
-| t (DTAG bits)              | 0              | constants.toml [schc.fragment]     |
-| Rule ID                    | 8 bits (0-7,255) | §4.1, lichen-core::constants.rs  |
-| RCS                        | CRC-32, 4 bytes| constants.toml, fragment.rs:21     |
-| retransmission_timeout_s   | 10s            | constants.toml, fragment.rs:24     |
-| max_ack_requests           | 3              | constants.toml, fragment.rs:25     |
-| inactivity_timeout_s       | 60s            | constants.toml, fragment.rs:26     |
-| bitmap_msb_first           | true           | constants.toml                     |
+ACK (C=0, NACK bitmap):
+```
++--------+---+---+-------------------+---------+
+| RuleID | W | C | Compressed Bitmap | Padding |
++--------+---+---+-------------------+---------+
+   8 bit  1b  1b       variable        variable
+```
 
-### 5.2. Formats
+C=1 (success, no bitmap) encodes as `78 c0` (for Rule 0x78, W=0). Bitmap is MSB-first (1=missing), compressed by removing maximal trailing run of 1-bits. Sender uses windowed FCN countdown (m=1, n=6). Receiver sends NACK on loss or C=1 after successful RCS verification on All-1. All-1 carries RCS (CRC-32). Retransmission timeout 10s, MAX_ACK_REQUESTS=4, inactivity 60s. Max practical IPv6 datagram ~12 KB (larger payloads MUST be chunked at application layer, e.g. SenML batches per spec/12-apps.md). Parameters cross-reference `spec/03-adaptation.md` §5.7, `constants.toml`, and `lichen-schc`.
 
-Regular fragment: RuleID(8) + W(1) + FCN(6) + Tile
+## 6. Rule Versioning and DIO Advertisement
 
-All-1: RuleID(8) + W(1) + 0b111111 + RCS(32) + Tile
+Rule Set Version (8-bit) is advertised by DODAG roots in RPL DIOs per `spec/03-adaptation.md` §5.7 (authoritative definition; this document provides LoRa-specific context only). Version 1 is the initial release; future versions increment on rule changes. Rule 255 fallback is REQUIRED on version mismatch to prevent desynchronization. The DIO option carries the version.
 
-ACK: RuleID(8) + control(8) + n(8) + bitmap-bytes (MSB-first, 1=missing)
-
-### 5.3. Operation
-
-Sender tiles with window_size from constants, uses FCN countdown per window, sends All-1 with RCS. Receiver uses bitmap for NACKs, verifies RCS on reassembly. Max ~12KB/datagram; larger use app chunking.
-
-## 6. Rule Versioning
-
-**Note:** This section aligns with (and avoids duplicating) the authoritative definition in `spec/03-adaptation.md` §5.7. The draft provides LoRa-specific profile context. (Merging changes from both main and worker8 branches.)
-
-### 6.1. Rule Set Version
-
-Each firmware release defines a Rule Set Version (8-bit integer):
-
-| Version | Meaning |
-|---------|---------|
-| 0 | Reserved |
-| 1 | Initial LICHEN release |
-| 2+ | Future versions |
-
-### 6.2. DIO Advertisement
-
-DODAG roots advertise Rule Set Version in DIO messages:
->>>>>>> origin/integration/worker5-20260722
+Full details, rule tables (0-7, 255), Field Descriptors, mappings, constants, and bit-exact test vectors are in `spec/appendix-schc.md`, `rust/lichen-schc/src/rules.rs` (and `lib.rs`), `test/vectors/schc*.json`. All implementations (Rust, C, Python) MUST match the independent test vector oracles exactly for interoperability. (All merge conflicts from worker5, worker8, worker18, worker24 resolved; content deduplicated and consolidated.)
 
 ```
 +--------+---+--------+
