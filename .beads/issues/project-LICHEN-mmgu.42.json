@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.42",
+  "title": "Compact-CoT: no Zephyr C implementation (spec defines it as a mesh wire format on port 5681)",
+  "description": "Python (compact_cot.py) and Rust (lichen-core/src/compact_cot.rs) implement the full format, byte-identical against all 16 compact_cot.json vectors. Zephyr C: zero hits for compact_cot/PLI across lichen/**/*.c,h. Spec 07-transport-app.md 10.1.1 defines it as a mesh wire format on UDP port 5681 (constants.rs:19, 03-adaptation.md:129), so embedded nodes cannot currently originate or consume CoT PLI/chat. Genuine gap, not by-design. Fix: port the encoder/decoder to C (or rule it gateway-only and amend the spec), and add C vector tests.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:09:00.930705334Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:09:00.930705334Z",
+  "labels": [
+    "parity",
+    "compact-cot",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.42",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:09:01.076355837Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
