@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.28",
+  "title": "Rust has two divergent internal SCHC APIs (headers.rs/context.rs unused parallel profile API)",
+  "description": "Production Rust code (lichen-node node.rs:15, stack.rs:24, lichen-gateway gateway.rs:9) uses codec::compress/decompress (hardcoded dispatch, MQTT-SN rule 7, no OSCORE). headers.rs/context.rs (added by 1dbe31a7ed) are a parallel profile API only re-exported (lib.rs:24-28) and UNUSED - its DEFAULT_PROFILES lacks OSCORE while rules.rs declares rules 0-7 with EMPTY field slices (rules.rs:59-96); headers.rs does no OSCORE detection and its compress side is never exercised. Two APIs that disagree about the rule set is a maintenance trap: a contributor fixing 'SCHC' may edit the dead one. Fix: delete the unused API (per No Dead Code rule) or make codec.rs delegate to it after completing it (incl. OSCORE profiles per mmgu.4).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:06:28.152157267Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:06:28.152157267Z",
+  "labels": [
+    "parity",
+    "schc",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.28",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:06:28.309832209Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
