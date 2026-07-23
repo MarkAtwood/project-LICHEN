@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.13",
+  "title": "pubkey_fingerprint is truncated base64, not SHA-256",
+  "description": "lichen/subsys/lichen/coap/coap_config.c:489-499 (compute_pubkey_fingerprint). spec/11-lci.md §17.5.2: pubkey_fingerprint = 'SHA256:xY7...'. Code emits 'SHA256:' + base64(first 12 bytes of the pubkey) with no hash computed. A client verifying the node key against an independently computed SHA-256 (as coap_keys.c:299 correctly does) gets a mismatch; a non-cryptographic value is presented as a security identifier. Fix: use the real SHA-256 already present in coap_keys.c (share the helper).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:25.157402271Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:25.157402271Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.13",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:25.299434461Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
