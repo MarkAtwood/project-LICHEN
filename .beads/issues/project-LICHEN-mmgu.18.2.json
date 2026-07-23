@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.18.2",
+  "title": "schc_compression.json consumed by Python only; C copy is second-generation from Rust hardcode",
+  "description": "Python test_vectors.py:86,120-127 reads the JSON (CI). Rust hardcodes the same 5 vectors at codec.rs:957-1015 (content verified identical today). C hardcodes at lichen/tests/schc/main.c:107-175 with an explicit provenance comment 'from rust/lichen-schc/src/codec.rs' - a second-generation transcription. Zero vector coverage for rules 5/6 anywhere post-26da5423a2, and zero fragmentation vectors in any implementation. (origin/main has rust/lichen-schc/tests/shared_vectors.rs loading the JSON but expects format_version==2, incompatible with this tree's v1 file - resolve on merge.) Fix: JSON loaders in Rust+C; regenerate rule-5/6 vectors once mmgu.3/mmgu.4 land; add fragmentation vectors per mmgu.5.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:03:13.706510605Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:03:13.706510605Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "schc",
+    "review",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.18.2",
+      "depends_on_id": "project-LICHEN-mmgu.18",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:03:13.861534521Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
