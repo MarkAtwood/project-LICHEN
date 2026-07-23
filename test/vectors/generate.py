@@ -23,8 +23,8 @@ from lichen.ipv6.packet import IPv6Header, NextHeader
 from lichen.ipv6.udp import UdpDatagram
 from lichen.link.frame import AddrMode, LichenFrame, MicLength
 from lichen.rpl.messages import DAO, DIO, to_icmpv6
-from lichen.schc.headers import compress_packet
 from lichen.schc.fragment import FragmentSender, compute_mic
+from lichen.schc.headers import compress_packet
 
 VECTORS_DIR = Path(__file__).resolve().parent
 FORMAT_VERSION = 2
@@ -379,7 +379,7 @@ def schc_vectors() -> list[dict]:
 
 def l2_payload_vectors() -> list[dict]:
     schc_global = next(v for v in schc_vectors() if v["name"] == "coap_global")
-    announce_min = bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF]) + bytes(8 + 32 + 48)  # rx_valid_until_sfn=0xFFFF (human decision on format noted)
+    announce_min = bytes([0x01, 0x00, 0x00, 0x00, 0x01]) + bytes(88)
     schc_body = bytes.fromhex(schc_global["compressed"])
     return [
         {
@@ -1636,14 +1636,14 @@ def schc_fragment_vectors() -> list[dict]:
     ) -> dict:
         packet = bytes.fromhex(packet_hex)
         sender = FragmentSender(
-            payload=packet, rule_id=42, tile_size=tile_size, window_size=window_size
+            payload=packet, rule_id=0x78, tile_size=tile_size, window_size=window_size
         )
         fragments = [f.to_bytes().hex() for f in sender.all_fragments()]
         mic = compute_mic(packet).hex()
         return {
             "name": name,
             "description": extra.pop("description", f"{name.replace('_', ' ').title()}."),
-            "rule_id": 42,
+            "rule_id": 0x78,
             "packet": packet_hex,
             "fragments": fragments,
             "mode": mode,
@@ -1661,6 +1661,7 @@ def schc_fragment_vectors() -> list[dict]:
         _vector(
             "multi_fragment",
             "1011121320212223",
+            tile_size=4,
             description="Multi-fragment + window (RFC 8.3).",
         ),
         _vector(
@@ -1686,10 +1687,10 @@ def ccp_load_balancing_vectors() -> list[dict]:
     return [
         {
             "name": "tdma_slot_assignment_static_hash",
-            "description": "Static slot from EUI-64 hash_32 (crc32_ieee) mod num_slots per TDMA spec (CCP-15.8.3, project-LICHEN-d17f).",
+            "description": "Static slot from EUI-64 hash_32(FNV-1a32) mod num_slots per TDMA spec (CCP-15.8.3, project-LICHEN-eirg).",
             "eui64_hex": "0011223344556677",
             "num_slots": 16,
-            "expected_slot": 7,
+            "expected_slot": 13,
         },
         {
             "name": "guard_time_boundary_sf10",
@@ -1819,6 +1820,7 @@ def ccp15_vectors() -> list[dict]:
 
 
 def rpl_messages_vectors() -> list[dict]:
+
     # Independent hardcoded from RFC 6550 §6.3, §6.4. No use of lichen.rpl.messages.
     return [
         {
@@ -1849,8 +1851,9 @@ def main() -> None:
     )
     _write(
         "link_frame.json",
-        "LICHEN link-layer frame vectors (spec section 4). 'fields' are the "
-        "frame inputs; 'encoded' is LichenFrame(**fields).to_bytes().",
+        "LICHEN link-layer frame vectors (spec section 4). Complete frames are "
+        "at most 255 bytes (LENGTH at most 254). 'fields' are the frame inputs; "
+        "'encoded' is LichenFrame(**fields).to_bytes().",
         frame_vectors(),
     )
     _write(
@@ -1898,6 +1901,17 @@ def main() -> None:
         "RPL messages (DIO/DAO per RFC 6550) with hardcoded independent vectors from spec.",
         rpl_messages_vectors(),
     )
+    _write(
+        "meshtastic_app_compat.json",
+        "Meshtastic app-compat BLE protobuf exchange vectors. 'encoded' is one raw GATT value unless the vector explicitly expects rejection. Matches protobufs baseline (ToRadio/FromRadio tolerance).",
+        meshtastic_app_compat_vectors(),
+    )
+    _write(
+        "meshcore_app_compat.json",
+        "MeshCore app-compat byte-command vectors. 'encoded' is one raw MeshCore inner frame for BLE unless transport.framing states serial 0x3c/0x3e length framing. Matches firmware/python baselines.",
+        meshcore_app_compat_vectors(),
+    )
+
 
 if __name__ == "__main__":
     main()
