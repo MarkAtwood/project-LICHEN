@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.26",
+  "title": "Python SCHC cannot transmit non-CoAP UDP (raises SchcError in production path); Rust/C compress it as CoAP",
+  "description": "Python whole-packet profiles match any UDP packet \u003e= 4 payload bytes (headers.py:192-206, no CoAP version check), then codec.compress enforces CoAP.version EQUAL 1 (codec.py:143-144) and RAISES SchcError. compress_packet (headers.py:491-497) has no exception fallback and the production caller is unprotected (python/src/lichen/node.py:484). Rust (codec.rs:269-323) and C (schc.c:736-806) extract type/tkl/code/MID from whatever bytes are present and emit rule 0/1 - round-trips fine (fields are pure residue passthrough), so C\u003c-\u003eRust interop works even for non-CoAP UDP. Consequence: Python cannot originate MQTT-SN or any non-CoAP UDP application at all; a Python node crashes on such traffic while Rust/C nodes forward it. Fix: add SchcError-\u003erule-255 fallback in Python compress_packet (and guard node.py), or implement MQTT-SN rules in Python.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:06:08.735286918Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:06:08.735286918Z",
+  "labels": [
+    "parity",
+    "schc",
+    "python",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.26",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:06:08.876890724Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
