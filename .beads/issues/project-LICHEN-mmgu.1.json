@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.1",
+  "title": "[security] C OSCORE compute_nonce violates RFC 8613 layout (S at byte 6, Sender ID overlaps PIV)",
+  "description": "lichen/subsys/lichen/oscore/oscore.c compute_nonce() (lines 1165-1205) builds the AES-CCM nonce incorrectly for any non-empty sender ID: (1) OSCORE_NONCE_S_POS=6 (oscore/include/lichen/oscore.h:105) writes the ID-length byte at nonce byte 6; RFC 8613 Section 5.2 places S at byte 0. (2) Sender ID is right-aligned ending at byte 12 (start = OSCORE_NONCE_LEN - sender_id_len, oscore.c:1187) so the ID field overlaps the PIV field (PIV also ends at byte 12) - ID bytes XOR on top of PIV bytes. The header comment (oscore.c:529-535) documents the misreading ('7th byte overlaps'). Empirically verified against RFC 8613 test vectors: C.4 (empty sender ID) accidentally MATCHES (bug masked when id_len==0); C.5 (sender_id=0x00): C-construction nonce be35ae297d2dADe9... vs RFC bf35ae297d2dACe9... - ciphertext DIFFERS; C.8 (own-PIV response, ID 0x01): ID XORs into byte 12 on top of PIV - DIFFERS. Consequence: the Zephyr node cannot interop with Python (aiocoap, verified correct), Rust (once 2auf.48.3 fixed), or any RFC-conformant peer for any context with non-empty sender/recipient IDs - i.e. all real EDHOC-derived contexts. Fix: S at byte 0, ID left-padded into bytes 1..6, PIV left-padded into bytes 7..12, then XOR common_iv. Land RFC C.4-C.8 vectors as C tests in the same change (no C test currently calls oscore_protect_request at all). Distinct from 2auf.48.3 which is Rust-scoped.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:58:51.739371153Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:58:51.739371153Z",
+  "labels": [
+    "parity",
+    "security",
+    "oscore",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.1",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:58:51.898345049Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
