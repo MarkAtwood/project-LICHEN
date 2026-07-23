@@ -27,7 +27,7 @@ int lichen_rpl_root_init(struct lichen_rpl_root *root, const uint8_t *dodag_id, 
 			   CONFIG_LICHEN_RPL_TRICKLE_K);
 	lichen_trickle_start(&root->trickle, 0, 0);
 	memcpy(root->prefix, dodag_id, 16);
-	root->prefix_len = 64;
+	root->prefix_len = 128;
 	return 0;
 }
 
@@ -35,7 +35,10 @@ void lichen_rpl_root_tick(struct lichen_rpl_root *root, uint32_t now)
 {
 	struct lichen_trickle_event ev;
 	lichen_trickle_next_event(&root->trickle, &ev);
-	if (ev.type == LICHEN_TRICKLE_TRANSMIT && lichen_trickle_fire_transmit(&root->trickle)) {
+	if (ev.type == LICHEN_TRICKLE_TRANSMIT) {
+		lichen_trickle_fire_transmit(&root->trickle);
+	} else if (ev.type == LICHEN_TRICKLE_EXPIRE) {
+		lichen_trickle_expire(&root->trickle, now, 0);
 	}
 }
 
@@ -54,7 +57,7 @@ int lichen_rpl_root_set_prefix(struct lichen_rpl_root *root, const uint8_t *pref
 	if (root == NULL || prefix == NULL || len > 128) return -EINVAL;
 	memcpy(root->prefix, prefix, 16);
 	root->prefix_len = len;
-	if (len == 128 || len == 64) {
+	if (len >= 64) {
 		memcpy(root->dodag.dodag_id, prefix, 16);
 		memcpy(root->dao_manager.dodag_id, prefix, 16);
 	}
