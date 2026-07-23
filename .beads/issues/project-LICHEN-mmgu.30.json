@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.30",
+  "title": "Rust RPL root retains stale routes (rebuild only adds); installs empty path for target==root",
+  "description": "rust/lichen-rpl/src/routing.rs:384-391 DaoManager::rebuild_routes only adds/refreshes; a route whose chain just became incomplete/looped STAYS installed. Python _rebuild_routes (dao.py:182-187) clears the whole table and re-adds only complete paths; C rebuild_routes (routing.c:520-540) removes each target's route before re-assembling. Related: target==root yields an empty path - Rust installs Some([]) (routing.rs:396-416,208-219), Python skips [], C rejects path_len==0 (routing.c:197-199). Net: the Rust root forwards down paths the other two would have torn down - stale downward routes in Non-Storing mode. Fix: clear-and-rebuild semantics in Rust + skip/reject empty paths.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:06:46.675067183Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:06:46.675067183Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.30",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:06:46.831275654Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
