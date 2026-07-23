@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.38",
+  "title": "SLIP decode error-recovery diverges; Python/Rust RX buffers unbounded (C bounded at 1280)",
+  "description": "Encode is in-parity (RFC 1055 END/ESC/ESC_END/ESC_ESC identical in all three). Decode diverges on identical noisy input: ESC+invalid byte - Python StreamDecoder silently DROPS the byte (codec.py:97-117), C slip_decode_byte APPENDS raw byte + error stat (slip_transport.c:212-279), Rust appends raw byte (slip.rs:58-66). ESC+END(0xC0): Python drops END, frames MERGE; C appends 0xC0 as payload, frames merge (corruption); Rust TERMINATES the frame (best resync). Max frame: Python UNBOUNDED bytearray, Rust unbounded Vec (slip.rs:301-303) - memory-DoS on a noisy/malicious serial line; C bounded 1280 (SLIP_LCI_MTU) with overflow discard + stats. Also Python is internally inconsistent: strict one-shot decode() raises on bad escape while its StreamDecoder drops. RFC 1055 is silent on error recovery, so this is pure cross-impl divergence. Fix: standardize on the Rust behavior (terminate on ESC+END, drop+stat invalid escapes) across all three; bound Py/Rust buffers at 1280; add SLIP golden vectors (mmgu.18.6).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:08:13.585253197Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:08:13.585253197Z",
+  "labels": [
+    "parity",
+    "slip",
+    "lci",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.38",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:08:13.744397033Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
