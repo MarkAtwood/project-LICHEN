@@ -2,6 +2,7 @@
   "id": "project-LICHEN-yu2d",
   "title": "CRITICAL: build_oscore_aad missing request_piv bytes copy",
   "description": "File: lichen/subsys/lichen/oscore/oscore.c\nLines: 375-385\n\nThe build_oscore_aad function writes the CBOR bstr header for request_piv but NEVER copies the actual PIV bytes. Compare with request_kid handling (lines 358-369) which correctly copies the bytes after the header.\n\nCurrent code (broken):\n```c\n/* request_piv: bstr (RFC 8613 Section 5.4, fourth element) */\nif (request_piv_len \u003c= 23) {\n    inner[inner_off++] = 0x40 | (uint8_t)request_piv_len;\n} else {\n    return -1;\n}\n/* MISSING: memcpy of request_piv bytes! */\n/* options: empty bstr ... */\ninner[inner_off++] = 0x40;\n```\n\nThis causes incorrect AAD computation for ALL OSCORE messages, meaning:\n1. Encryption produces wrong ciphertext\n2. Decryption verification fails against correctly-implementing peers\n3. Security guarantees are broken (AAD binds PIV to ciphertext)\n\nFix: Add the memcpy after the header, like request_kid:\n```c\nif (request_piv_len \u003e 0) {\n    if (inner_off + request_piv_len \u003e sizeof(inner)) {\n        return -1;\n    }\n    memcpy(inner + inner_off, request_piv, request_piv_len);\n    inner_off += request_piv_len;\n}\n```",
+  "notes": "2026-07-23 cross-impl review VERDICT: the uncommitted working-tree fix (oscore.c:380-386) is CORRECT - request_piv is appended after the already-present CBOR bstr header 0x40|len (lines 375-379), proper bstr in correct aad_array position 4. Verified byte-exact against RFC 8613 Appendix C.4 (AAD 8368456e63727970743040488501810a40411440 and ciphertext 612f1092f1776f1c1668b3825e reproduced from the fixed C algorithm), Rust build_aad_cbor (lib.rs:947-956), and aiocoap. The added request_piv NULL check in oscore_unprotect_response (:1900-1904) is sound C-specific hardening. HOWEVER the fix is necessary-not-sufficient for interop: C compute_nonce is still non-RFC for non-empty sender IDs (new P0 bead project-LICHEN-mmgu.1), and no C test calls oscore_protect_request (mmgu.18.4). Recommend: commit this fix + land RFC C.4-C.8 C tests in the same change, then close.",
   "status": "open",
   "priority": 0,
   "issue_type": "bug",
@@ -9,7 +10,7 @@
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-12T06:49:44.106215Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-12T16:14:00.250592Z",
+  "updated_at": "2026-07-23T19:09:55.561527907Z",
   "closed_at": "2026-07-12T16:14:00.250592Z",
   "close_reason": "Fixed: Added missing memcpy of request_piv bytes after CBOR bstr header in build_oscore_aad. The code now correctly copies PIV bytes to the AAD buffer, matching the request_kid pattern. This fixes incorrect AAD computation that would cause encryption/decryption failures with correctly-implementing OSCORE peers."
 }
