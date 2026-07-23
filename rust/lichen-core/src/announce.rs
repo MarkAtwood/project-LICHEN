@@ -46,9 +46,7 @@ impl core::fmt::Display for AnnounceError {
             Self::TooShort(e) => write!(f, "announce {}", e),
             Self::WrongType(t) => write!(f, "wrong announce type: {}", t),
             Self::BufferTooSmall(e) => write!(f, "announce {}", e),
-            Self::InvalidChannel(c) => {
-                write!(f, "invalid rx_channel: {} (must be 0-7 per CCP-9)", c)
-            }
+            Self::InvalidChannel(c) => write!(f, "invalid rx_channel: {}", c),
         }
     }
 }
@@ -91,7 +89,6 @@ pub struct Announce<'a> {
 }
 
 impl<'a> Announce<'a> {
-    /// Parse from wire format (CCP-9: rx_channel at offset 93).
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, AnnounceError> {
         if data.len() < FIXED_LENGTH {
             return Err(TooShort::new(FIXED_LENGTH, data.len()).into());
@@ -99,20 +96,13 @@ impl<'a> Announce<'a> {
         if data[0] != ANNOUNCE_TYPE {
             return Err(AnnounceError::WrongType(data[0]));
         }
-        let rx_channel = data[5];
-        if rx_channel > 15 {
-            return Err(AnnounceError::InvalidChannel(rx_channel));
-        }
-
-        // ponytail: unwrap safe, bounds checked above
-        let originator_iid = data[5..13].try_into().unwrap();
-        let pubkey = data[13..45].try_into().unwrap();
-        let signature = data[45..93].try_into().unwrap();
         let rx_channel = data[93];
         if rx_channel >= 8 {
             return Err(AnnounceError::InvalidChannel(rx_channel));
         }
-
+        let originator_iid = data[5..13].try_into().unwrap();
+        let pubkey = data[13..45].try_into().unwrap();
+        let signature = data[45..93].try_into().unwrap();
         Ok(Self {
             flags: data[1],
             hop_count: data[2],
@@ -256,16 +246,6 @@ mod tests {
     #[test]
     fn invalid_channel() {
         let mut wire = make_announce();
-<<<<<<< HEAD
-        wire[5] = 16;
-=======
-        wire[21] = 16; // current_channel > 15
->>>>>>> origin/integration/worker8-20260722
-        assert_eq!(
-            Announce::from_bytes(&wire),
-            Err(AnnounceError::InvalidChannel(16))
-        );
-<<<<<<< HEAD
         wire[93] = 8;
         assert_eq!(
             Announce::from_bytes(&wire),
@@ -287,8 +267,6 @@ mod tests {
             builder.write_to(&mut out),
             Err(AnnounceError::InvalidChannel(9))
         );
-=======
->>>>>>> origin/integration/worker8-20260722
     }
 
     #[test]
