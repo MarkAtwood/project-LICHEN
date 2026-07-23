@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.9",
+  "title": "LCI resources and payload schemas diverge across spec 17.5 / Zephyr / Python / Rust",
+  "description": "Spec 17.5 is implemented conformantly only by new Zephyr modules (coap_status.c, coap_keys.c, coap_config.c). Divergences: (1) Python /status returns {iid,pubkey,state,peers,gradients,announce_seq,uptime,firmware} (node.py:539-561) sharing ZERO keys with the spec schema {uptime_s,battery_pct,battery_mv,mem_free_kb,time,dodag,radio} that Zephyr lichen_coap_encode_status_cbor implements; Python /status is NOT observable though spec marks obs. (2) Python /config={receive_timeout_ms,announce_interval_ms} vs spec {name,role,radio,identity} (Zephyr conforms). (3) Python has no /keys, /status/neighbors, /status/routes, /config/radio, /config/identity (has legacy /key, /neighbors). (4) Rust node has no LCI-grade resources at all: /config is JSON text {\"interval\":60} with no CBOR content-format (dispatch.rs:312-313), /sensors placeholder JSON (not SenML), .well-known/core lacks rt/ct attributes; Rust gateway exposes none. (5) rt attributes: spec rt=\"status\"/\"config\" vs Python/Zephyr-old rt=\"lichen.status\" etc.; Zephyr-new exports no discovery metadata. (6) Python /proxy exists (with SSRF guard) but not in Zephyr/Rust. /key payload IS in parity (Python resources.py:811-828 == Zephyr-old coap_server.c:271-329). Error codes for shared subset consistent (4.00/2.04/2.02/4.04). DECISION NEEDED: spec 17.5 calls itself the authoritative native contract, making Python/Rust non-conformant - but changing Python breaks client/lci.py and the TUI. Converge schemas + resource sets, or explicitly version the contract. Relates f4xg.4 (proxy deviation only).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:00:50.146611535Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:00:50.146611535Z",
+  "labels": [
+    "parity",
+    "lci",
+    "coap",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.9",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:00:50.314997156Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
