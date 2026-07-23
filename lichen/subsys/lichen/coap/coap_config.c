@@ -68,20 +68,26 @@ LOG_MODULE_REGISTER(lichen_coap_config, CONFIG_LICHEN_COAP_CONFIG_LOG_LEVEL);
 
 /* Provider registration */
 static const struct lichen_config_provider *s_provider;
+static K_MUTEX_DEFINE(s_provider_mutex);
 
 int lichen_coap_config_register(const struct lichen_config_provider *provider)
 {
 	if (provider == NULL) {
 		return -EINVAL;
 	}
+	k_mutex_lock(&s_provider_mutex, K_FOREVER);
 	s_provider = provider;
+	k_mutex_unlock(&s_provider_mutex);
 	LOG_INF("Config provider registered");
 	return 0;
 }
 
 const struct lichen_config_provider *lichen_coap_config_provider_get(void)
 {
-	return s_provider;
+	k_mutex_lock(&s_provider_mutex, K_FOREVER);
+	const struct lichen_config_provider *p = s_provider;
+	k_mutex_unlock(&s_provider_mutex);
+	return p;
 }
 
 /* CBOR encoding helpers - use zcbor_tstr_put_term for keys since they are
@@ -570,8 +576,8 @@ size_t lichen_config_encode_identity_cbor(uint8_t *buf, size_t buf_size,
 		return 0;
 	}
 
-	if (identity->ygg[0] != '\0') {
-		if (!put_tstr_kv(state, KEY_PRIMARY, identity->ygg)) {
+	if (identity->primary[0] != '\0') {
+		if (!put_tstr_kv(state, KEY_PRIMARY, identity->primary)) {
 			return 0;
 		}
 	} else {
@@ -697,12 +703,14 @@ static int config_put(struct coap_resource *resource,
 				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
 	}
 
+	/* Get current config for partial update */
 	ret = s_provider->node_get(&node_cfg);
 	if (ret < 0) {
 		return coap_respond(resource, request, addr, addr_len,
 				    COAP_RESPONSE_CODE_INTERNAL_ERROR, NULL, 0);
 	}
 
+	/* Decode update (merges with current values) */
 	ret = lichen_config_decode_node_cbor(payload, payload_len, &node_cfg);
 	if (ret < 0) {
 		LOG_WRN("Invalid config CBOR");
@@ -710,6 +718,7 @@ static int config_put(struct coap_resource *resource,
 				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
 	}
 
+	/* Apply update */
 	ret = s_provider->node_set(&node_cfg);
 	if (ret < 0) {
 		LOG_WRN("Config validation failed: %d", ret);
