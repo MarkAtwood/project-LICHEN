@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.37",
+  "title": "Rust SourceRoutingHeader::from_bytes missing segments_left \u003c= addresses.len() check",
+  "description": "rust/lichen-rpl/src/routing.rs:84-104 never validates segments_left against the parsed address count; Python routing.py:64-65 and C routing.c:139-144 both reject that malformed case. A malformed SRH accepted by Rust is dropped by Python/C (parser differential; also potential out-of-bounds index when Rust later advances). Fix: add the bound check.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:07:52.388088471Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:07:52.388088471Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.37",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:07:52.557942963Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
