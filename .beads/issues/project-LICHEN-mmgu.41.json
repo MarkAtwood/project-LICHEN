@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.41",
+  "title": "RPL feature asymmetries: DAO-ACK/DIS/SRH-advance Python-only; No-Path DAO C-only; Python Node and Zephyr have no integrated RPL",
+  "description": "Feature matrix: DAO-ACK codec + build_dao_ack + K-flag-triggered ACK exist only in Python (messages.py:241-285, dao.py:135-155); Rust constant only (node.rs:30, received DAO-ACKs fall into _=\u003e{}); C constant only. DIS: Python codec only (messages.py:107-123); Rust emits DisReceived event without parsing; C nothing. Source-route insert/advance (RFC 8200 4.4): Python only (routing.py:118-180); Rust/C have SRH wire codecs but no forwarding helpers; rust/lichen-gateway has no downward forwarding/SRH at all. No-Path DAO (lifetime=0) + route-lifetime expiry: C only (routing.c:596-604,633-702); Python ignores path_lifetime; Rust parses but ignores. Integration: Zephyr RPL is DEAD CODE in-tree (messages.c/dodag.c/routing.c referenced only by each other; the gateway rpl_root.c exists only on unmerged worker branches - tracked tqv9/b7vk); Python Node (node.py) has NO RPL integration (library-only); only Rust has an integrated node (RplNode). Consequence: DODAG formation cannot currently happen outside Rust; DAO-ACK reliability semantics differ by which stack the root runs. Adjacent to et78.1/et78.2.x (MUST checks) - new aspect: the helpers don't exist to be checked. Decide target feature set per stack and close the gaps.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:08:42.086117413Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:08:42.086117413Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.41",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:08:42.237404544Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
