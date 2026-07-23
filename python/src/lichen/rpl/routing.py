@@ -23,6 +23,7 @@ SCHC-layer concern.
 """
 
 ROUTING_TYPE_SOURCE_ROUTE = 3
+MAX_ROUTE_HOPS = 8
 _SRH_FIELDS_LENGTH = 6  # routing_type, segments_left, CmprI/E, 3-byte pad/reserved
 
 

@@ -314,9 +314,8 @@ class DaoManager:
                 f"DAO DODAG ID {dao.dodag_id} != {self.dodag_id}"
             )
 
-        target, parent = self._extract_edge(dao)
-        self._parent_map[target] = parent
-        self._rebuild_routes()
+        now = self.clock()
+        return self.process_dao_at(dao, now)
 
     def process_dao_at(self, dao: DAO, now_seconds: float) -> DAOAck | None:
         """Validate and atomically apply a DAO at a deterministic monotonic time."""
