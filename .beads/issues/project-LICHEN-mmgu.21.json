@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.21",
+  "title": "Replay window size: Python 32 vs Rust/C 64 (spec 02 says 32, draft-01 says minimum 64)",
+  "description": "Python replay.py:34 WINDOW_SIZE=32 (test asserts the constant stays 32); Rust replay.rs:30-44 and C replay.h:55-59 use 64-slot bitmaps. spec/02-physical-link.md 4.4 receiver state says 32-bit bitmap; draft-lichen-link-01:221-222 says minimum 64, SHOULD be 128. Python follows the old spec and is below the new draft's MUST-minimum. At reorder depths 33-64 Python drops frames Rust/C accept. Fix: pick 64 (draft), update Python + spec 02.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:05:03.361895042Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:05:03.361895042Z",
+  "labels": [
+    "parity",
+    "link",
+    "replay",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.21",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:05:03.531605854Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
