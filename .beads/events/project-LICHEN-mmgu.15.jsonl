@@ -1,0 +1,5 @@
+{"id":"019f905b-2ea7-7218-ac17-d192973d4d4c","issue_id":"project-LICHEN-mmgu.15","event_type":"created","actor":"AI Agent","old_value":"","new_value":"","created_at":"2026-07-23T19:02:02.663137826Z"}
+{"id":"019f905b-2eaa-756c-8b67-2868db6cab98","issue_id":"project-LICHEN-mmgu.15","event_type":"label_added","actor":"AI Agent","comment":"Added label: parity","created_at":"2026-07-23T19:02:02.666355828Z"}
+{"id":"019f905b-2ead-7402-8e2b-e6b6ac159488","issue_id":"project-LICHEN-mmgu.15","event_type":"label_added","actor":"AI Agent","comment":"Added label: senml","created_at":"2026-07-23T19:02:02.669262993Z"}
+{"id":"019f905b-2eb0-7210-99e8-8972239a83fc","issue_id":"project-LICHEN-mmgu.15","event_type":"label_added","actor":"AI Agent","comment":"Added label: spec","created_at":"2026-07-23T19:02:02.672135629Z"}
+{"id":"019f905b-2eb2-7e36-9e7d-23fd29c13190","issue_id":"project-LICHEN-mmgu.15","event_type":"label_added","actor":"AI Agent","comment":"Added label: review","created_at":"2026-07-23T19:02:02.674931598Z"}

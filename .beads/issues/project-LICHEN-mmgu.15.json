@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.15",
+  "title": "SenML profile names/units diverge three ways (spec appendix-senml.md vs Python profiles.py vs C senml.c)",
+  "description": "Per spec/appendix-senml.md comparison: Battery - spec 'pct' u='%RH' (:67,75, itself wrong unit) / Python 'voltage' u='V' + 'battery' u='%EL' (profiles.py:71-73) / C 'pct' u='%' (senml.c:353-354, deliberate deviation). Temperature - spec 'temp' / Python 'temperature' (:91) / C 'temp' (:384). Humidity - spec 'rh' / Python 'rel-humidity' (:103) / C not implemented. Pressure - spec 'press' / Python 'pressure' / C none. IMU - spec ax/ay/az,gx/gy/gz / Python accel-x/y/z,gyro-x/y/z (:133-151) / C none. Air quality - spec co2,voc / Python 'CO2','voc-index' no unit (:169-181) / C none. Location - spec u='lat'/'lon' (RFC 8428 registered units, :38-39) / Python+C u='deg' (senml.c:321-326 comment claims RFC 8428 says 'deg' - it does not). A consumer matching spec profiles will not recognize Python records and vice versa. Fix requires an owner decision: correct the spec (%RH-\u003e%EL or %, long vs short names), then align all encoders; add senml.json vectors (see missing-vectors bead).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:02:02.659758475Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:02:02.659758475Z",
+  "labels": [
+    "parity",
+    "senml",
+    "spec",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.15",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:02:02.828600625Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
