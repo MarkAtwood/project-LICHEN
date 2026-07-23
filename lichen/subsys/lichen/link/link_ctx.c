@@ -639,16 +639,17 @@ uint32_t lichen_hash_32(const uint8_t *data, size_t len)
 	return hash;
 }
 
-uint8_t lichen_tdma_compute_slot(const uint8_t eui64[8], uint32_t epoch, uint8_t num_slots)
+uint8_t lichen_select_channel(const uint8_t eui64[8], uint32_t sfn,
+			      uint8_t density, uint8_t n_channels)
 {
-	if (num_slots == 0) num_slots = 8;
-	uint8_t buf[8];
-	memcpy(buf, eui64, 8);
-	uint32_t e = epoch;
-	for (size_t i = 0; i < 8; i++) {
-		buf[i] ^= (uint8_t)e;
-		e >>= 8;
-	}
-	uint32_t h = lichen_hash_32(buf, 8);
-	return (uint8_t)(h % num_slots);
+	if (density > 8) return 0;
+	uint8_t data[12];
+	memcpy(data, eui64, 8);
+	data[8] = (uint8_t)(sfn & 0xff);
+	data[9] = (uint8_t)((sfn >> 8) & 0xff);
+	data[10] = (uint8_t)((sfn >> 16) & 0xff);
+	data[11] = (uint8_t)((sfn >> 24) & 0xff);
+	uint32_t h = lichen_hash_32(data, 12);
+	if (n_channels < 3) n_channels = 3;
+	return 1 + (uint8_t)(h % n_channels);
 }

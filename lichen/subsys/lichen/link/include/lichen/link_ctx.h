@@ -329,6 +329,21 @@ int lichen_identity_ygg_addr_from_ed25519(const uint8_t *pubkey,
 
 int lichen_coordination_negotiate(struct lichen_link_ctx *_Nonnull ctx);
 
+/**
+ * @brief SelectChannel per spec/02a-coordinated-capacity.md:120.
+ *
+ * Returns a synchronized hopping channel (1..=n_channels) or 0 when
+ * density > 8.
+ *
+ * @param eui64      8-byte EUI-64 address (big-endian/natural order)
+ * @param sfn        Superframe number (epoch in spec terms), LE u32 on wire
+ * @param density    Node density; >8 forces channel 0 (control)
+ * @param n_channels Number of available channels (clamped to minimum 3)
+ * @return Channel number 0..n_channels (0 = control channel)
+ */
+uint8_t lichen_select_channel(const uint8_t eui64[8], uint32_t sfn,
+			      uint8_t density, uint8_t n_channels);
+
 #ifdef __cplusplus
 }
 #endif
