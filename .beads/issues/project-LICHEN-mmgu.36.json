@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.36",
+  "title": "Gradient table key: C 8-byte IID vs Python/Rust 16-byte address (same-IID destinations collapse in C)",
+  "description": "Python gradient.py:117-124 and Rust gradient.rs:149-153 key gradient entries by full 16-byte IPv6 address; C gradient.c:56-60 (fed by router.c:162-169) keys by 8-byte IID. Same-IID/different-prefix destinations (e.g. link-local vs ULA forms of the same node) collapse into one entry only in C - route-metric leakage across scopes. Fix: key C by full address (or define IID-keying as canonical and make Py/Rust match - recommend full-address).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:07:51.767137343Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:07:51.767137343Z",
+  "labels": [
+    "parity",
+    "routing",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.36",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:07:51.921400222Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
