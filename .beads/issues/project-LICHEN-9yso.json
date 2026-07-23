@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-9yso",
+  "title": "[merge-conflict] worktree-worker19: t_deck_esp32s3_procpu.conf",
+  "notes": "Commit: c461096",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "AI Agent",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T00:34:54.207263217Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T00:39:25.319557977Z",
+  "started_at": "2026-07-23T00:37:41.51657218Z",
+  "closed_at": "2026-07-23T00:39:25.319557977Z",
+  "close_reason": "Updated t_deck_esp32s3_procpu.conf files with resolved merge conflict content including SPDX, consolidated WiFi/RPL/ stack/ buffer settings from worker19. Committed as c46109644. Push to origin failed due to divergence; rebase produced widespread conflicts across Kconfig, main.c, senml, coap, rust crates and spec."
+}

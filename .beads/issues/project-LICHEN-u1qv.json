@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-u1qv",
+  "title": "[merge-conflict] worktree-worker23: t_deck_esp32s3_procpu.conf",
+  "notes": "Commit: 00ea756b9 - updated consolidated comment to include u1qv merge conflict resolution",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "AI Agent",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T00:34:55.384288597Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T04:46:32.552188839Z",
+  "started_at": "2026-07-23T00:43:55.481169923Z",
+  "closed_at": "2026-07-23T04:46:32.552188839Z",
+  "close_reason": "Updated consolidated merge comment in t_deck_esp32s3_procpu.conf to reference u1qv bead resolving the merge conflict from worker23. Verified no other conflicts. Commit 00ea756b9",
+  "labels": [
+    "defer-external"
+  ]
+}

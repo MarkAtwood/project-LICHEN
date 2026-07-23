@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-ffav",
+  "title": "Implement lichen_hash_32 as FNV-1a32",
+  "description": "Add lichen_hash_32 function using FNV-1a32 that exactly matches all test vectors in test/vectors/. No_std, heapless compatible.",
+  "notes": "Commit: ebb6ec1e3",
+  "status": "closed",
+  "priority": 0,
+  "issue_type": "task",
+  "assignee": "AI Agent",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T23:55:34.535132827Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T00:14:10.016386345Z",
+  "started_at": "2026-07-23T00:10:55.636428291Z",
+  "closed_at": "2026-07-23T00:14:10.016386345Z",
+  "close_reason": "Implemented lichen_hash_32 as FNV-1a32 in lichen-core; matches test vectors; no_std/heapless; committed ebb6ec1e3",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-ffav",
+      "depends_on_id": "project-LICHEN-l3j5",
+      "type": "blocks",
+      "created_at": "2026-07-22T23:55:34.663197189Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}

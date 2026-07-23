@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-2y4e",
+  "title": "[merge-conflict] worktree-worker20: Kconfig",
+  "notes": "Commit: 8c5895f7e",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "AI Agent",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T23:42:12.44057193Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T04:50:47.66068382Z",
+  "started_at": "2026-07-23T03:39:25.698356036Z",
+  "closed_at": "2026-07-23T04:50:47.66068382Z",
+  "close_reason": "Resolved Kconfig merge conflict from worker20 by updating resolution comment with stale bead ref cleanup for adaptive SF, CCA, TDMA, multi-channel; committed and pushed 59541f269 (notes per query used 8c5895f7e). Verified with ruff-equivalent and git clean. No dead code.",
+  "labels": [
+    "defer-external"
+  ]
+}

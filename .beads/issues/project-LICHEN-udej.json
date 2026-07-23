@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-udej",
+  "title": "[codereview-pass3] coap_dtn.c DTN init order",
+  "description": "Init order matches subsystem graph per AGENTS.md. Tests pass after OSCORE addition using oscore_ctx. P4 opinion.",
+  "notes": "Commit: a53aa77",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "task",
+  "assignee": "AI Agent",
+  "created_at": "2026-07-22T15:08:27.832243859Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-23T04:24:37.830872992Z",
+  "started_at": "2026-07-23T04:22:22.373378263Z",
+  "closed_at": "2026-07-23T04:24:37.830872992Z",
+  "close_reason": "DTN init now follows subsystem graph in lichen_coap_dtn_init(); register calls it first then does provider/DTN setup; removed all comments per coding rules; verified with build and python DTN tests",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-udej",
+      "depends_on_id": "project-LICHEN-88rm",
+      "type": "discovered-from",
+      "created_at": "2026-07-22T15:08:27.925135338Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

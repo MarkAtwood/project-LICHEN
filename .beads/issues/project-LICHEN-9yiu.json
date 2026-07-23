@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-9yiu",
+  "title": "[merge-conflict] worktree-worker1: heltec_wireless_tracker.overlay",
+  "notes": "Commit: 5b122cd",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "AI Agent",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-22T23:41:02.188080186Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T04:18:32.041325287Z",
+  "started_at": "2026-07-23T03:45:51.232278257Z",
+  "closed_at": "2026-07-23T04:18:32.041325287Z",
+  "close_reason": "Cleaned dead bead references from STALE comment in heltec_wireless_tracker.overlay per no-dead-code rule, AGENTS.md, and project-LICHEN-2u26.4. Matches clean pattern from other retired fragments."
+}

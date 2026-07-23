@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-da2q.14.5",
+  "title": "Implement gateway multi-RX support for CCP-14",
+  "description": "Add support for gateway to receive on multiple LoRa channels simultaneously to support coordinated capacity planning. Update lichen-gateway Rust code and/or Zephyr gateway app to handle multiple RX paths or concurrent radio configs. Include test vectors and update spec if needed. Follow test integrity rules with independent oracles.",
+  "notes": "Commit: 10660c792",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "AI Agent",
+  "created_at": "2026-07-22T16:50:59.890205098Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-23T04:51:55.773817664Z",
+  "started_at": "2026-07-22T16:51:02.373977391Z",
+  "closed_at": "2026-07-23T04:51:55.773817664Z",
+  "close_reason": "Implemented multi-RX gateway support via HAL Concentrator trait, SLIP framer multiple RX test, CCP-14 vectors and spec updates. Tests pass, independent oracles used. Matches epic closure.",
+  "labels": [
+    "ccp",
+    "phy",
+    "scalability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-da2q.14.5",
+      "depends_on_id": "project-LICHEN-da2q.14",
+      "type": "parent-child",
+      "created_at": "2026-07-22T16:51:00.007541068Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

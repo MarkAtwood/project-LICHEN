@@ -5,8 +5,12 @@
   "status": "open",
   "priority": 2,
   "issue_type": "task",
+  "assignee": "AI Agent",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-10T22:18:48.652087Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-07-10T22:18:48.652295Z"
+  "updated_at": "2026-07-22T20:25:06.047133507Z",
+  "started_at": "2026-07-22T20:25:06.047133507Z",
+  "lease_expires_at": "2026-07-22T20:30:06.047133507Z",
+  "heartbeat_at": "2026-07-22T20:25:06.047133507Z"
 }

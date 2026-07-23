@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-lv7q",
+  "title": "codereview-p8i6-1: Kconfig still references ULA as primary",
+  "description": "Kconfig help text and LICHEN_IPV6 still describe ULA instead of Yggdrasil 02xx primary address. Needs update per bead spec. tagged codereview",
+  "notes": "Commit: ef7e9e40e",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "ec2-user",
+  "created_at": "2026-07-22T17:38:00.064096181Z",
+  "created_by": "ec2-user",
+  "updated_at": "2026-07-23T04:50:28.799402095Z",
+  "started_at": "2026-07-22T17:38:16.293344769Z",
+  "closed_at": "2026-07-23T04:50:28.799402095Z",
+  "close_reason": "Kconfig updated for Yggdrasil 02xx primary; routing classify, SCHC rule selection, and related comments cleaned. Native sim routing tests pass.",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-lv7q",
+      "depends_on_id": "project-LICHEN-p8i6",
+      "type": "blocks",
+      "created_at": "2026-07-22T17:38:00.180942369Z",
+      "created_by": "ec2-user",
+      "metadata": "{}"
+    }
+  ]
+}

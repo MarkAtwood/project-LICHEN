@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-xilx",
+  "title": "[merge-conflict] worktree-worker18: heltec_wifi_lora32_v3_esp32s3_procpu.conf",
+  "notes": "Commit: ad8ae8221",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "AI Agent",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T00:42:20.30718192Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T01:45:33.653813379Z",
+  "started_at": "2026-07-23T01:44:25.415217647Z",
+  "closed_at": "2026-07-23T01:45:33.653813379Z",
+  "close_reason": "Closed"
+}
