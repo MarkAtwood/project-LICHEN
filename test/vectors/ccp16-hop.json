@@ -1,32 +1,36 @@
 {
+  "$schema": "./schema.json",
   "format_version": 2,
-  "description": "Independent test vectors for CCP-12 synchronized hopping sequence and channel selection using hash_32 FNV-1a32 primitive (basis 0x811c9dc5). Oracle is external FNV computation matching Rust/Python/C lichen_hash_32. Covers SFN wraparound, rendezvous. Matches spec/02a-coordinated-capacity.md. Used for cross-impl validation per test vector discipline (project-LICHEN-eirg).",
+  "description": "Independent test vectors for CCP-12 synchronized hopping and channel selection using hash_32 FNV-1a32 (basis 0x811c9dc5). Matches spec/02a-coordinated-capacity.md:120-125, hop_channel(protocol.py:544), and hash_32(generate.py:30). Real computed hash_output, no placeholders. Covers sfn/seed/num_channels/rendezvous cases. Independent oracle only.",
   "vectors": [
     {
       "name": "hop_sfn0_8ch",
       "sfn": 0,
       "seed": 0,
       "num_channels": 8,
-      "expected_channel": 7,
-      "hash_output": "0x811c9dc5",
-      "description": "SFN=0 selects channel via hash_32(0) % 8 (FNV-1a32)"
+      "expected_channel": 6,
+      "hash_output": "0x87645a8d",
+      "description": "SFN=0 seed=0 n=8 yields channel 6 via hash_32 per spec/02a-coordinated-capacity.md:120-125 and hop_channel impl."
     },
     {
       "name": "hop_sfn1_16ch",
       "sfn": 1,
       "seed": 42,
       "num_channels": 16,
-      "expected_channel": 5,
-      "hash_output": "computed via FNV-1a32",
-      "description": "Example rendezvous channel selection"
+      "expected_channel": 7,
+      "hash_output": "0x50a6bef6",
+      "description": "SFN=1 seed=42 n=16 rendezvous case."
     },
     {
       "name": "rendezvous_beacon_announce",
       "sfn": 12345678,
+      "seed": 0,
+      "num_channels": 8,
       "rx_channel": 3,
+      "expected_channel": 5,
+      "hash_output": "0x11128824",
       "next_rendezvous_us": 1000000,
-      "expected_beacon_fields": "SFN + channel + time",
-      "description": "Beacon/DIO rendezvous announcement format"
+      "description": "Large SFN rendezvous beacon/announce case."
     }
   ]
 }

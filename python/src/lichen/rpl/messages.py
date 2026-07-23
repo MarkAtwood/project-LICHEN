@@ -7,6 +7,7 @@ from enum import IntEnum
 from ipaddress import IPv6Address
 
 from lichen.ipv6.icmpv6 import Icmpv6Message
+from typing import Union
 
 """RPL control message codecs (RFC 6550, spec section 8).
 
@@ -329,7 +330,7 @@ class DAOAck:
         )
 
 
-RplMessage = DIS | DIO | DAO | DAOAck
+RplMessage = Union[DIS, DIO, DAO, DAOAck]
 
 _CODE_BY_TYPE = {
     DIS: RplCode.DIS,

@@ -46,6 +46,7 @@ sys.path.insert(0, str(VECTORS_DIR))
 from generate import (  # noqa: E402
     announce_coords_vectors,
     ccp9_vectors,
+    ccp_hop_vectors,
     frame_vectors,
     hash_32,
     l2_payload_vectors,
@@ -469,6 +470,11 @@ def test_meshcore_app_compat_vectors_match_generator() -> None:
 def test_ccp9_vectors_match_generator() -> None:
     doc = _load("ccp9.json")
     assert doc["vectors"] == ccp9_vectors()
+
+
+def test_ccp16_hop_vectors_match_generator() -> None:
+    doc = _load("ccp16-hop.json")
+    assert doc["vectors"] == ccp_hop_vectors()
 
 
 def _ccp16_cases():

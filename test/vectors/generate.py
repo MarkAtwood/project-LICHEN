@@ -1941,6 +1941,44 @@ def ccp13_vectors() -> list[dict]:
     ]
 
 
+def ccp_hop_vectors() -> list[dict]:
+    eui = bytes.fromhex("0011223344556677")
+    def _hop_hash(sfn: int, seed: int = 0) -> int:
+        data = eui + ((sfn + seed) & 0xffffffff).to_bytes(4, "little")
+        return hash_32(data)
+    return [
+        {
+            "name": "hop_sfn0_8ch",
+            "sfn": 0,
+            "seed": 0,
+            "num_channels": 8,
+            "expected_channel": 6,
+            "hash_output": hex(_hop_hash(0, 0)),
+            "description": "SFN=0 seed=0 n=8 yields channel 6 via hash_32 per spec/02a-coordinated-capacity.md:120-125 and hop_channel impl.",
+        },
+        {
+            "name": "hop_sfn1_16ch",
+            "sfn": 1,
+            "seed": 42,
+            "num_channels": 16,
+            "expected_channel": 7,
+            "hash_output": hex(_hop_hash(1, 42)),
+            "description": "SFN=1 seed=42 n=16 rendezvous case.",
+        },
+        {
+            "name": "rendezvous_beacon_announce",
+            "sfn": 12345678,
+            "seed": 0,
+            "num_channels": 8,
+            "rx_channel": 3,
+            "expected_channel": 5,
+            "hash_output": hex(_hop_hash(12345678, 0)),
+            "next_rendezvous_us": 1000000,
+            "description": "Large SFN rendezvous beacon/announce case.",
+        },
+    ]
+
+
 def rpl_messages_vectors() -> list[dict]:
 
     # Independent hardcoded from RFC 6550 §6.3, §6.4. No use of lichen.rpl.messages.
@@ -2007,6 +2045,11 @@ def main() -> None:
         "ccp16.json",
         "CCP-16 synchronized hopping and desync vectors with now_ts and select_channel_timing test per project-LICHEN-rs2q. Uses input/output for ccp_vector schema.",
         ccp16_vectors(),
+    )
+    _write(
+        "ccp16-hop.json",
+        "Independent test vectors for CCP-12 synchronized hopping and channel selection using hash_32 FNV-1a32 (basis 0x811c9dc5). Matches spec/02a-coordinated-capacity.md:120-125, hop_channel(protocol.py:544), and hash_32(generate.py:30). Real computed hash_output, no placeholders. Covers sfn/seed/num_channels/rendezvous cases. Independent oracle only.",
+        ccp_hop_vectors(),
     )
     _write(
         "ccp9.json",
