@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.18.4",
+  "title": "oscore.json: protection vectors consumed by NO implementation; Rust key_derivation is symmetry-only; C has no crypto vectors",
+  "description": "Python tests/crypto/test_oscore_vectors.py consumes key_derivation (full expected-value checks) and replay; its roundtrip test only checks key symmetry - never protects/unprotects, never touches request_protection/response_protection. Rust lichen-oscore/tests/vectors.rs: roundtrip is protect-\u003eunprotect self-oracle (the anti-pattern that let 2auf.48.3 survive), key_derivation checks symmetry only (never compares expected sender_key/recipient_key/common_iv, lines 234-281) and SKIPS all id_context vectors (:251); request/response protection types never filtered for. Zephyr C lichen/tests/oscore: context lifecycle/NVM mocks only - NO test calls oscore_protect_request/unprotect anywhere (grep-verified), so the mmgu.1 nonce bug and the yu2d AAD fix are both untestable by the current C suite. This gap is what hid two P0 nonce bugs. Fix: wire RFC C.4-C.8 protect/unprotect vectors into all three suites (after fixing the vector fields per mmgu.12), make Rust key_derivation compare expected values incl. id_context, add C crypto tests. The repo's own grind prompt (.claude/prompts/grind-remaining.md:107-113) already lists 'Add missing vector loaders'.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:03:44.041105617Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:03:44.041105617Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "oscore",
+    "review",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.18.4",
+      "depends_on_id": "project-LICHEN-mmgu.18",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:03:44.186003784Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
