@@ -13,7 +13,7 @@
         "$schema": {"type": "string"},
         "name": {"type": "string"},
         "spec": {"type": "string"},
-        "vector_type": {"type": "string", "enum": ["rpl_route_state", "dao_origin_signature"]},
+        "vector_type": {"type": "string", "enum": ["rpl_route_state", "dao_origin_signature", "prefix_dao_routing"]},
         "oracle": {"type": "object"},
         "oracle_provenance": {"type": "object"},
         "sequence_relations": {"type": "array"},
@@ -42,7 +42,8 @@
               {"$ref": "#/definitions/schnorr48_vector"},
               {"$ref": "#/definitions/hash_32_vector"},
               {"$ref": "#/definitions/ccp_load_balancing_vector"},
-              {"$ref": "#/definitions/ipv6_malformed_vector"}
+              {"$ref": "#/definitions/ipv6_malformed_vector"},
+              {"$ref": "#/definitions/prefix_dao_routing_vector"}
             ]
           }
         }
@@ -98,7 +99,8 @@
           {"$ref": "#/definitions/compact_cot_vector"},
           {"$ref": "#/definitions/schnorr48_vector"},
           {"$ref": "#/definitions/hash_32_vector"},
-          {"$ref": "#/definitions/ccp_load_balancing_vector"}
+          {"$ref": "#/definitions/ccp_load_balancing_vector"},
+          {"$ref": "#/definitions/prefix_dao_routing_vector"}
         ]
       },
       "description": "v2 bare array root (used by ccp16-desync.json for desync test vectors)"
@@ -1250,6 +1252,39 @@
             "oracle_provenance": {"type": "object"},
             "vectors": {
               "items": {"$ref": "#/definitions/dao_origin_signature_vector"}
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "prefix_dao_routing_vector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "event": {"type": "string", "enum": ["dao", "expire"]},
+        "now_seconds": {"type": "integer"},
+        "dao_hex": {"$ref": "#/definitions/hex"},
+        "dao_sequence": {"type": "integer"},
+        "flags": {"type": "integer"},
+        "reserved": {"type": "integer"},
+        "options": {"type": "array"},
+        "before": {"type": "object"},
+        "expected": {"type": "object"},
+        "coverage": {"type": "string"}
+      }
+    },
+    "prefix_dao_routing_document": {
+      "allOf": [
+        {"$ref": "#/definitions/document_base"},
+        {
+          "properties": {
+            "vector_type": {"const": "prefix_dao_routing"},
+            "oracle": {"type": "object"},
+            "vectors": {
+              "items": {"$ref": "#/definitions/prefix_dao_routing_vector"}
             }
           },
           "additionalProperties": false

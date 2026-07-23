@@ -23,6 +23,7 @@ Language-neutral conformance vectors for the LICHEN protocol using **format_vers
 | `ccp16-desync.json` | CCP-16 desync transitions, SFN wrap, multi-root conflict, clock drift recovery using bare array root (v2 schema). Independent oracles from spec 02a and 09-packets-timing.md. |
 | `ccp9.json` | CCP-9 rendezvous mechanisms (rx_channel scheduling, CH0 control fallback for unknown peers, synchronized_hop_channel(CCP-12) override of announce rendezvous, announce channel field parse/roundtrip in L2 payload). Independent mathematical oracles from spec/02a-coordinated-capacity.md §CCP-9, da2q multi-channel context, and python/src/lichen/sim/medium.py. Matches ccp9_vectors() in generate.py. |
 | `deaddrop.json` | /deaddrop DTN store-and-forward (POST/GET, OSCORE-wrapped, SenML payloads). Independent RFC 7252/8613/8428 oracles aligned with oscore.json. No code-under-test oracle.
+| `prefix_dao_routing.json` | Prefix DAO routing vectors: /0, /32, /48, /64, /127, /128 target codec, noncanonical host bits, overlap/LPM, grouped transits, replay, expiry, withdrawal, multiparent, capacity, owner path, SRH destination preservation.
 
 All byte strings are lowercase hex (possibly empty). Schema validation and independent oracles used in tests.
 
