@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.33",
+  "title": "Spec ambiguity: signature field order vs MIC",
+  "description": "spec/kiss-framing.md §3.3 diagram orders fields '...Payload, MIC, [Signature]' (signature after MIC), but implementations serialize signature appended to payload, BEFORE MIC (python link_layer.py:256 signed_payload = payload + signature; frame.py:135-141 ... + payload + mic). spec/02 §4.1 does not depict the signature field, so kiss-framing.md is the only document asserting an order and it contradicts the code. VERIFY which is authoritative; correct the diagram or the serialization (and any dissectors).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:37.015858221Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:37.015858221Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.33",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:37.158193705Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
