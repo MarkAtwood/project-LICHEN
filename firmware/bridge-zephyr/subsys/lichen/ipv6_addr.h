@@ -35,6 +35,10 @@ extern "C" {
  * Zephyr net_ip.h), but there is no universal guard macro. Duplicate
  * definitions cause compile errors; missing definitions also break the build.
  *
+ * This detection is inherently fragile and best-effort. It covers the platforms
+ * we currently target (Linux glibc, BSD/macOS, Zephyr). New platforms or libc
+ * implementations may need their own guard macro added to the cascade below.
+ *
  * Detection cascade (checked in order, first match wins):
  *
  *   Priority  Check                         Action           When to use
