@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 /*
- * RETIRED: Seeed XIAO ESP32-S3 + Wio-SX1262 (project-LICHEN-2u26.*, m5m1.8 audit, 7qaj, 80ju, irj9).
+ * RETIRED: Seeed XIAO ESP32-S3 + Wio-SX1262 (projects-LICHEN-2u26.*, m5m1.8 audit, 7qaj, 80ju, irj9).
  * No canonical Zephyr board or composite shield; xiao_s3_wio_sx1262 not a valid -b target.
  * Classified FAIL; support removed. Retain fragment for reference only. See docs/firmware-board-capability-matrix.md.
  * Proxies: heltec_wifi_lora32_v3_esp32s3_procpu or t1000_e_nrf52840.
