@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.20",
+  "title": "Replay protection: epoch-boundary semantics differ (Rust strict per-epoch vs Python/C 24-bit counter window)",
+  "description": "Rust link_layer.rs:242-256: epoch_diff \u003c 0 -\u003e reject (strict per-epoch window, reset on epoch advance; test old_epoch_rejected locks it in). Python replay.py:97-127 and C replay.c:56-148: single 24-bit counter (epoch\u003c\u003c16)|seqnum with half-space arithmetic - a previous-epoch frame within the window of the high-water mark is ACCEPTED once (Python test_epoch_boundary_reordering_accepted locks the opposite behavior in). At seqnum wrap (0xFFFF-\u003eepoch+1), legitimately reordered tail frames of the old epoch are delivered by Python/C and dropped by Rust. The spec contradicts itself (spec 02 acceptance table 'Epoch \u003c LastEpoch -\u003e Reject' vs its own 24-bit-counter data model) - ruling needed, then align. Also note replay-state keying differs: C keys windows by EUI-64, Python/Rust by pubkey - after same-EUI key rotation C keeps the window, Python/Rust reset it (interacts with ow1e.57 first-packet acceptance). Distinct from ow1e.57 (first-packet) and 0li1.74/e220/e60z (tx-side wrap).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:05:02.778592481Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:05:02.778592481Z",
+  "labels": [
+    "parity",
+    "link",
+    "replay",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.20",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:05:02.920559388Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
