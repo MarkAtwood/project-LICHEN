@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.18.3",
+  "title": "rpl_messages.json consumed by Python only; hand-authored (no generator); Python validator has vacuous option_type==4 branch",
+  "description": "Only python/tests/test_vectors.py:554-677 consumes rpl_messages.json. No Rust consumer (lichen-rpl/tests/mesh_formation.rs is hand-coded scenarios); no C consumer at all (no RPL codec tests under lichen/tests/ - only trickle/). test/vectors/generate.py does NOT generate this file (hand-authored per bead cdmc) - no oracle regeneration path. Worse: the Python validator has no option_type==4 branch (test_vectors.py:636-653 handles only types 5 and 6) so opt_dodag_config_default executes ZERO assertions and passes vacuously; dio_with_options/dao_with_options assert only option type codes, not field contents. The one vector guarding the DODAG Configuration encoding (whose defaults are wrong per mmgu.8) is effectively unvalidated. Fix: add the option_type==4 assertions, add generate.py support, add Rust+C consumers. Relates hnyw.2.2.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:03:14.293072141Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:03:14.293072141Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "rpl",
+    "review",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.18.3",
+      "depends_on_id": "project-LICHEN-mmgu.18",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:03:14.440680972Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
