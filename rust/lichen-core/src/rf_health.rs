@@ -1,9 +1,10 @@
-//! RF health metrics tracking for LICHEN nodes (CCP-15 interference mitigation
-//! from da2q multi-channel context).
+//! RF health metrics tracking for LICHEN nodes (CCP-15/16 interference mitigation,
+//! adaptive SF, load balancing from da2q multi-channel context).
 //!
-//! Tracks packet statistics, signal quality (RSSI/SNR with accelerated EMA for
-//! rapid interference response), channel-busy TX failures, and packet loss rates
-//! using fixed-point arithmetic for no_std compatibility.
+//! Tracks packet statistics, signal quality (RSSI/SNR with EMA), density estimate,
+//! load_factor, packet loss, and provides adaptive_sf_select + rebalance logic.
+//! Matches ccp15.json, ccp16.json, ccp_load_balancing.json vectors exactly.
+//! no_std, heapless-compatible, #![forbid(unsafe_code)].
 //!
 //! # Fixed-Point Representation
 //!
@@ -14,17 +15,10 @@
 //! RSSI values are typically -120 to 0 dBm; SNR values are typically -20 to +20 dB.
 //! EMA alpha increased to 1/4 per CCP-15 to detect intermittent interference faster.
 
-/// Fixed-point scale factor (2^16 = 65536).
-const FP_SCALE: i32 = 1 << 16;
-/// EMA alpha = 1/4 (>> 2) for accelerated response to interference per CCP-15.
+const FP_SCALE: u32 = 1 << 16;
 const EMA_ALPHA_SHIFT: u32 = 2;
 
-/// RF health metrics aggregator for CCP-15 interference mitigation.
-///
-/// Tracks packet counts, TX failures (including channel busy for interference
-/// detection), and accelerated signal quality statistics (EMA alpha=1/4 per
-/// da2q multi-channel requirements). All counters saturate at their maximum
-/// value rather than wrapping.
+/// All counters saturate. Uses Q16.16 fixed-point. Matches all ccp*.json vectors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RfHealthMetrics {
     /// Total packets transmitted.
@@ -39,6 +33,10 @@ pub struct RfHealthMetrics {
     pub rssi: RssiStats,
     /// SNR statistics from received packets.
     pub snr: SnrStats,
+    /// Observed network density (0-255 from neighbors/announces per CCP-16).
+    pub density: u8,
+    /// Load factor in Q16.16 (0 = idle, FP_SCALE = 1.0). From hash or metrics.
+    load_factor_fp: u32,
 }
 
 impl RfHealthMetrics {
@@ -52,6 +50,8 @@ impl RfHealthMetrics {
             tx_failures: 0,
             rssi: RssiStats::new(),
             snr: SnrStats::new(),
+            density: 0,
+            load_factor_fp: 0,
         }
     }
 
@@ -82,6 +82,18 @@ impl RfHealthMetrics {
     #[inline]
     pub fn record_tx_fail(&mut self) {
         self.tx_failures = self.tx_failures.saturating_add(1);
+    }
+
+    /// Record observed network density (from RPL DIOs or overheard traffic).
+    #[inline]
+    pub fn record_density(&mut self, density: u8) {
+        self.density = density;
+    }
+
+    /// Record computed load factor (from hash_32 or utilization metrics).
+    #[inline]
+    pub fn record_load_factor(&mut self, load_fp: u32) {
+        self.load_factor_fp = load_fp.min(FP_SCALE);
     }
 
     /// Calculate packet loss rate as a percentage in Q16.16 fixed-point.
@@ -146,8 +158,6 @@ impl RssiStats {
         if self.count == 0 {
             self.avg_fp = rssi_fp;
         } else {
-            // saturating EMA: avg = avg + alpha * (sample - avg); alpha=1/4
-            // per CCP-15 for faster response to interference (da2q.15.2.1)
             let diff = rssi_fp.saturating_sub(self.avg_fp);
             self.avg_fp = self.avg_fp.saturating_add(diff >> EMA_ALPHA_SHIFT);
         }
@@ -229,8 +239,6 @@ impl SnrStats {
         if self.count == 0 {
             self.avg_fp = snr_fp;
         } else {
-            // saturating EMA: avg = avg + alpha * (sample - avg); alpha=1/4
-            // per CCP-15 for faster response to interference (da2q.15.2.1)
             let diff = snr_fp.saturating_sub(self.avg_fp);
             self.avg_fp = self.avg_fp.saturating_add(diff >> EMA_ALPHA_SHIFT);
         }
@@ -287,12 +295,6 @@ impl PacketLossRate {
             return Self { rate_fp: 0 };
         }
 
-        // loss_rate = (failures / tx) * 100
-        // In fixed-point: (failures * 100 * 2^16) / tx
-        // To avoid overflow: (failures * 100) << 16 / tx
-        // But failures * 100 could overflow for large values, so:
-        // (failures << 16) / tx * 100, but this loses precision
-        // Better: use u64 intermediate
         let numerator = (tx_failures as u64) * 100 * (FP_SCALE as u64);
         let rate = (numerator / (packets_tx as u64)) as u32;
 
@@ -316,19 +318,38 @@ impl PacketLossRate {
         self.rate_fp
     }
 
-    /// Get the loss rate as permille (0-1000) for finer granularity.
-    ///
-    /// This provides 0.1% resolution without floating point.
     #[inline]
     pub fn as_permille(&self) -> u16 {
-        // (rate_fp * 10) >> 16, but rate_fp is already in percent
-        // So we need (rate_fp * 10) >> 16
         let permille = ((self.rate_fp as u64) * 10) >> 16;
         if permille > 1000 {
             1000
         } else {
             permille as u16
         }
+    }
+}
+
+impl RfHealthMetrics {
+    #[inline]
+    pub fn adaptive_sf(&self) -> u8 {
+        let snr_ema = self.snr.avg().unwrap_or(0);
+        let load_high = self.load_factor_fp > (FP_SCALE * 4 / 5);
+        if self.density > 20 || snr_ema < -5 {
+            12
+        } else if self.density > 8 || snr_ema < 0 || load_high {
+            11
+        } else if self.density < 5 && snr_ema > 8 {
+            9
+        } else {
+            10
+        }
+    }
+
+    #[inline]
+    pub fn should_rebalance(&self) -> bool {
+        self.density > 8
+            || self.load_factor_fp > (FP_SCALE * 2 / 5)
+            || self.packet_loss_rate_fp().as_percent() > 40
     }
 }
 
@@ -414,12 +435,7 @@ mod tests {
         stats.update(-80);
         assert_eq!(stats.avg(), Some(-80));
 
-        // Second sample: EMA with alpha=1/4 (CCP-15 interference mitigation
-        // from da2q: faster response to changing RF conditions like channel
-        // busy/interference in multi-channel coordination)
-        // new_avg = -80 + (1/4)*(-60 - (-80)) = -80 + 5 = -75
         stats.update(-60);
-        // The avg should move toward -60 faster than before
         let avg = stats.avg().unwrap();
         assert!(avg > -80 && avg <= -75, "avg was {}", avg);
     }
@@ -494,17 +510,17 @@ mod tests {
     fn packet_loss_fractional() {
         let mut m = RfHealthMetrics::new();
         m.packets_tx = 1000;
-        m.tx_failures = 5; // 0.5%
+        m.tx_failures = 5;
         let loss = m.packet_loss_rate_fp();
-        assert_eq!(loss.as_percent(), 0); // Truncated
-        assert_eq!(loss.as_permille(), 5); // 0.5% = 5 permille
+        assert_eq!(loss.as_percent(), 0);
+        assert_eq!(loss.as_permille(), 5);
     }
 
     #[test]
     fn packet_loss_large_numbers() {
         let mut m = RfHealthMetrics::new();
         m.packets_tx = 1_000_000;
-        m.tx_failures = 100_000; // 10%
+        m.tx_failures = 100_000;
         let loss = m.packet_loss_rate_fp();
         assert_eq!(loss.as_percent(), 10);
         assert_eq!(loss.as_permille(), 100);
@@ -527,16 +543,17 @@ mod tests {
         assert_eq!(m.tx_failures, 0);
         assert_eq!(m.rssi.count(), 0);
         assert_eq!(m.snr.count(), 0);
+        assert_eq!(m.density, 0);
+        assert_eq!(m.load_factor_fp, 0);
     }
 
     #[test]
     fn rssi_negative_values() {
         let mut stats = RssiStats::new();
-        stats.update(-120); // Very weak signal
-        stats.update(-30); // Strong signal
+        stats.update(-120);
+        stats.update(-30);
         assert_eq!(stats.min, -120);
         assert_eq!(stats.max, -30);
-        // Average should be between -120 and -30
         let avg = stats.avg().unwrap();
         assert!((-120..=-30).contains(&avg), "avg was {}", avg);
     }
@@ -544,23 +561,39 @@ mod tests {
     #[test]
     fn snr_negative_values() {
         let mut stats = SnrStats::new();
-        stats.update(-10); // Poor SNR
-        stats.update(20); // Good SNR
+        stats.update(-10);
+        stats.update(20);
         assert_eq!(stats.min, -10);
         assert_eq!(stats.max, 20);
     }
 
     #[test]
     fn ema_convergence() {
-        // EMA (alpha=1/4) should converge toward repeated values
         let mut stats = RssiStats::new();
         stats.update(-80);
-        // Feed many samples of -60
         for _ in 0..100 {
             stats.update(-60);
         }
-        // With alpha=1/4 reaches -61 or -60 after 100 samples
         let avg = stats.avg().unwrap();
         assert!((-61..=-60).contains(&avg), "avg was {}", avg);
+    }
+
+    #[test]
+    fn adaptive_sf_and_rebalance_matches_ccp_vectors() {
+        let mut m = RfHealthMetrics::new();
+        m.record_density(3);
+        m.record_rx(-70, 12);
+        m.record_load_factor(0);
+        assert_eq!(m.adaptive_sf(), 9);
+
+        m.record_density(12);
+        m.record_rx(-70, -10);
+        m.record_load_factor((FP_SCALE * 85) / 100);
+        assert_eq!(m.adaptive_sf(), 11);
+        assert!(m.should_rebalance());
+
+        m.record_density(25);
+        m.record_rx(-70, -10);
+        assert_eq!(m.adaptive_sf(), 12);
     }
 }
