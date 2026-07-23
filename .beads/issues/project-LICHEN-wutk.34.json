@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.34",
+  "title": "Rust Meshtastic bridge flips U/L bit vs canonical IID",
+  "description": "rust/lichen-meshtastic/src/address.rs:193-199 (iid_to_link_local) and 162-165 (ipv6_to_meshtastic). Canonical LICHEN derivation (rust/lichen-link/src/identity.rs:21-27, python identity.py:118-130): IID = SHA-256(pubkey)[..8] with U/L bit cleared, embedded into addresses AS-IS (python node.py:191-194,593). address.rs derives the same IID then flips ^0x02 when forming the address, and flips again before map lookup — for the same pubkey the Rust bridge computes fe80::(IID|0x02...) while the Python node's real address is fe80::(IID\u0026~0x02...). Latent (no external callers yet). Fix: VERIFY the canonical address-formation rule repo-wide; if embed-as-is is canonical, drop the ^0x02 in both functions.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:37.586866166Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:37.586866166Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.34",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:37.725424934Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
