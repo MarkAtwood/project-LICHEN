@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.40",
+  "title": "OSCORE option parsing divergence: reserved-bit laxity (C+Rust), k=0 trailing bytes (C rejects/Rust accepts), id_context unusable in C and Rust",
+  "description": "(1) Reserved bits: RFC 8613 6.1 requires bits 5-7 (0xE0) zero; C checks only 0x80 (oscore.c:1028); Rust only 0x80 (lib.rs:719, inside 2auf.48.3 scope); aiocoap checks 0xC0 + treats 0x20 as group flag. C-side laxity untracked. (2) Trailing bytes with k=0: C REJECTS (oscore.c:1074-1076); Rust silently accepts and discards (lib.rs:750-758). A C node rejects some messages a Rust node accepts. (3) id_context: Python fully supports (C.3/C.6 vectors pass); C has struct fields but NO API to set them - oscore_ctx_create derives keys with ctx-\u003eid_context right after memset (oscore.c:589-621), always empty; Rust Context::new takes no id_context at all (vectors test skips those). C.3/C.6-style contexts impossible in C and Rust. Fix all three; wire the id_context vectors once support exists.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:08:41.5209782Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:08:41.5209782Z",
+  "labels": [
+    "parity",
+    "oscore",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.40",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:08:41.663598368Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
