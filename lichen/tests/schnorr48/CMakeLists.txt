@@ -27,3 +27,6 @@ target_compile_definitions(schnorr48_test PRIVATE
 
 # Enable warnings
 target_compile_options(schnorr48_test PRIVATE -Wall -Wextra -Werror)
+
+include(CTest)
+add_test(NAME schnorr48 COMMAND schnorr48_test)
