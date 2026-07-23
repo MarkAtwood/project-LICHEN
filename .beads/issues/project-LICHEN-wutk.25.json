@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.25",
+  "title": "Spec 06 §8.3 signing pseudocode contradicts verification",
+  "description": "spec/06-security.md:44-48: signing pseudocode says e = H(R||pubkey||msg) with comment 'full 256-bit hash', then s = r + e*privkey — but its own verification block (:55) recovers R' with the zero-extended TRUNCATED e. If signing used the full 256-bit e no signature would ever verify. draft-lichen-schnorr-00 §4.2 (e_scalar = e || zeros(16)) and all implementations use the truncated e. Editorial fix: amend §8.3 to show e_scalar = e[0:16] || zeros(16).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:32.354807092Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:32.354807092Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.25",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:32.514938355Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
