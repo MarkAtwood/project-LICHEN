@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.6",
+  "title": "Link MIC policy three-way split: Python/Rust zero-MIC frames rejected by C RX - one-way interop failure",
+  "description": "Python TX hardcodes PLACEHOLDER_MIC=bytes(4) (link_layer.py:54) and RX accepts any MIC (stub, :61-81, tracked ow1e.23); Rust TX hardcodes mic=[0u8;4] (link_layer.rs:387) and RX performs NO MIC verification (:397-474); C is the only implementation that computes/verifies a real MIC: AES-CCM-64 when a link key exists (lichen_link_tx.c:200-220), else CRC32-IEEE only if CONFIG_LICHEN_LINK_INSECURE_CRC32_MIC=y, else TX FAILS (:221-254). C RX verify_mic (lichen_link_rx.c:74-154,:297-303) runs for every non-encrypted frame: 8-byte MIC on non-encrypted frames rejected; 4-byte MIC requires CRC32 config AND must match crc32(body). Confirmed consequence: Python/Rust signed frames (zero MIC) are rejected by C in default config AND with CRC32 config enabled (crc32(body) != 0). Reverse direction works (C CRC32 frames pass Py stub / Rust no-check). ONE-WAY INTEROP FAILURE on signed traffic. Additionally the E=1 AES-CCM link-encryption path exists only in C (crypto/aes_ccm.c); Python/Rust have no decryption path and drop E=1 frames. Root cause is a spec hole: draft-lichen-link-01 never defines what the MIC field CONTAINS (CRC32? AES-CCM tag? zeros?) - see spec-reconciliation child. Fix requires: (1) normative spec answer for MIC contents, (2) converge all three on it, (3) until then, align accept policies so signed Python/Rust frames are deliverable to C nodes. Relates: ow1e.23 (Python stub), q3iy.37 (C accepting CRC32-only - the inverse direction).",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:00:18.492261086Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:00:18.492261086Z",
+  "labels": [
+    "parity",
+    "security",
+    "link",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.6",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:00:18.640735269Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
