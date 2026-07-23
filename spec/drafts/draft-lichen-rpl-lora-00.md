@@ -393,13 +393,7 @@ Provides time synchronization for replay protection.
 
 Advertises node congestion for routing decisions.
 
-<<<<<<< HEAD
-**ASSIGNED_SF and RF Metrics Option (CCP-16):** MUST be carried in RPL DIO options per CCP-16. Nodes MUST compute TX_SF via pseudocode in physical-link:3.4 and 02a:2a.3. Includes per-neighbor EMA, density, utilization. Test vectors ccp16.json MUST validate interop.
-=======
-**Adaptive SF Recommendation:**
-
-The DAG Metric Container MUST include current SF per-neighbor EMA-derived recommendation per CCP-16 in spec/02a-coordinated-capacity.md section 4.2. Thresholds and EMA update are normative there. DIOs on control channel provide the announcement. RX scanning on CH0 is REQUIRED.
->>>>>>> origin/integration/worker11-20260722
+**ASSIGNED_SF / Adaptive SF Recommendation (CCP-16):** The DAG Metric Container MUST include current per-neighbor SF recommendation derived from EMA per CCP-16 in spec/02a-coordinated-capacity.md §2a.3. Nodes MUST compute the TX_SF using the adaptive_sf_select pseudocode from physical-link:3.4 and 02a-coordinated-capacity.md:2a.3.2 (with normative thresholds, density rules, load_factor override, and snr_ema_update). Includes per-neighbor EMA, density, utilization, and load_factor. DIOs on the control channel (CH0) provide the announcement. All nodes MUST perform RX scanning on CH0. Test vectors in ccp16.json MUST validate interop with independent oracles.
 
 ### 9.3. Prefix Information Option
 

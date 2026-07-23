@@ -73,16 +73,20 @@ Data channels are selected via select_channel (normative pseudocode below, cross
 
 ```
 function select_channel(ctx, metrics, t):
-    IF (metrics.density > 8) OR (NOT ctx.wall_clock_valid) THEN
-        RETURN 0   // control CH0 for high density or desync (per vectors[1,3])
+    IF metrics.density > 8 THEN
+        RETURN 0
+    IF NOT ctx.wall_clock_valid THEN
+        RETURN 0
     hash = fnv1a32( (ctx.eui64 XOR t XOR ctx.epoch) )
-    n = ctx.num_data_channels IF ctx.num_data_channels > 0 ELSE 3
+    n = 3
+    IF ctx.num_data_channels > 0 THEN
+        n = ctx.num_data_channels
     RETURN 1 + (hash MOD n)
 
 function now():
-    RETURN current_sfn()   // from time-provider; unsigned modular arithmetic per 2a.2
+    RETURN current_sfn()
 ```
-Note: All operators are spelled out (OR, NOT, MOD, XOR) for language-agnostic IETF compatibility. No Rust 'or', no C types or structs, no dead code. now() and t parameter use unsigned u32 modular arithmetic per 2a.2; blacklist_until[] timer comparisons (in extended channel agility) MUST use `((now_ts - blacklist_until[ch]) & 0xFFFFFFFFu)` or equivalent uint32_t subtraction to correctly handle wrap-around without underflow. Cross-ref draft-lichen-tdma and Section 2a.2.
+Note: Pure IF-THEN-ELSE form with spelled-out operators (NOT, MOD, XOR) per IETF pseudocode style. No OR. No Rust 'or', no C types or structs, no dead code. now() and t use unsigned u32 modular arithmetic per 2a.2. blacklist_until[] timer comparisons MUST use uint32_t subtraction to handle wrap-around. Cross-ref draft-lichen-tdma and Section 2a.2.
 
 ### Density Rules Rationale (logical chunk: rationale paragraph - updated)
 
@@ -94,18 +98,23 @@ Updates MUST be propagated in RPL metric container. Root optimizer uses reported
 
 ```
 function adaptive_sf_select(density, snr_db, load_factor, t):
-    snr_ema = ema_update(previous_ema, snr_db, t)  // alpha=0.1 over 300s window; exact match to vectors
-    IF (density > 8) OR (snr_ema < 0) OR (load_factor > 0.8) THEN
+    snr_ema = ema_update(previous_ema, snr_db, t)
+    IF density > 8 THEN
         RETURN 11
-    ELSE IF (density < 5) AND (snr_ema > 8.0) THEN
+    IF snr_ema < 0 THEN
+        RETURN 11
+    IF load_factor > 0.8 THEN
+        RETURN 11
+    IF density < 5 AND snr_ema > 8.0 THEN
         RETURN 9
-    ELSE IF (density > 20) OR (snr_ema < -5.0) THEN
+    IF density > 20 THEN
         RETURN 12
-    ELSE
-        RETURN 10
+    IF snr_ema < -5.0 THEN
+        RETURN 12
+    RETURN 10
 ```
 
-Per-SF SNR thresholds (normative, for ema_update fallback): SF9: >8dB, SF10: >0dB, SF11: >-5dB, SF12: any. Matches all ccp16.json vectors[0-4]. No dead code; all paths exercised by test vectors. Defines ema_update, select_channel, now() per prior beads.
+Per-SF SNR thresholds (normative): SF9: >8dB, SF10: >0dB, SF11: >-5dB, SF12: any. Matches all ccp16.json vectors. No dead code; all paths exercised by test vectors. Defines ema_update, select_channel, now() per prior beads.
 
 ## 2a.4. Time Synchronization
 
