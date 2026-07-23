@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.29",
+  "title": "KISS bridge TX emits L2 frames without dispatch byte",
+  "description": "python/src/lichen/interface/kiss/bridge.py:155-201,399. spec/02-physical-link.md §4.1: the first byte of the authenticated inner payload is a dispatch value (only 0x14=SCHC, 0x15=routing defined; constants.toml [l2.payload_dispatch]). Every KISS-originated L2 frame violates this: APRS acks b'\\x06'+msg_id, rejects b'\\x7f\\x15'+msg_id, messages b'\\x02'+..., port-1 raw host bytes verbatim. LinkLayer.send() places payload verbatim — no dispatch prepended. Worst case: host-supplied bytes beginning 0x15 0x01 are parsed by receivers as a routing Announce; 0x14... gets SCHC-decompressed. Pre-existing but in scope. Fix: allocate a dispatch value for raw/KISS application payloads in spec/02 §4.1 + constants.toml, or wrap APRS traffic in SCHC/IPv6 (spec/07 reserves mesh port 5686 for APRS-IS).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:34.694463301Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:34.694463301Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.29",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:34.843642002Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
