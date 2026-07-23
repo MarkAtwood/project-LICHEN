@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.8",
+  "title": "Trickle parameters four-way split: canonical 4096ms vs Rust 256ms vs C 1000ms vs advertised dio_int_min=3 (8ms)",
+  "description": "Canonical: constants.toml:56-60 and spec/appendix-rpl.md:36 = imin 4096ms, doublings 8, k 10. Python constants.py:52-54 matches. Rust lichen-node/src/routing.rs:201,215: TrickleTimer::new(256, 8, 10) - 16x faster than canonical. C lichen/subsys/lichen/rpl/Kconfig:40-54: default 1000ms. Worse: the on-wire advertised DODAG Configuration option defaults (Rust message.rs:235, C messages.c:183, vector opt_dodag_config_default) use dio_int_min=3 = 8ms - matching NONE of the runtimes nor the spec (spec-conformant would be dio_int_min=12). So every node advertises a Trickle regime no node runs, and the three runtimes disagree 16x apart. Complements et78.3.2 (Zephyr MUST checks) with the concrete numeric split. Fix: converge runtimes on 4096/8/10 (or redefine canonical), fix advertised dio_int_min in all three codecs + regenerate the vector.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:00:49.561052486Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:00:49.561052486Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.8",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:00:49.714320396Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
