@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.19.1",
+  "title": "Spec reconciliation: link-layer documents (draft-lichen-link-01, spec/02) vs implementations",
+  "description": "Contradictions needing a ruling: (1) spec/02-physical-link.md:83 ASCII art puts E at bit 7 / S at bit 6, contradicting its own table (:90-91) and draft-01 (S=5,E=6,R=7); all three implementations follow the table/draft. (2) draft-01:192-193 'When S=0, the MIC field is absent' - all three implementations AND all four canonical vectors keep MIC present on the wire. (3) draft-01:181-184 says the signature covers LENGTH||LLSec||EPO||SEQ||DST||PLD; all three implementations sign only EPO||SEQ||DST||PLD(inner) - uniform deviation; if deliberate, correct the draft; if not, three implementations must change in lockstep + add composition vector. (4) draft-01:236-238 epoch-jump acceptance bound [prev,prev+4] is unenforced everywhere (Py/C accept +127 via 24-bit half-space, Rust +127 via i8 half-space). (5) draft-01:103-104 says PLD MUST be \u003e= 2 bytes but the canonical signed_encrypted vector has a 1-byte payload. (6) draft-01 MicLength table caps MIC at 4/8 bytes yet 4.1 says MIC 'contains a truncated Schnorr signature' per a draft defining 48-byte signatures; in reality the 48-byte sig rides in PLD and the MIC field's CONTENTS (CRC32? AES-CCM tag? zeros?) are specified nowhere - the root cause of the MIC three-way split (mmgu.6). (7) AGENTS.md 'Key Technical Decisions' still says 'Ed25519 truncated signatures (32 bytes)' - stale relative to the 48-byte Schnorr resolution. Each: fix spec or fix code-in-lockstep.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:04:13.359497051Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:04:13.359497051Z",
+  "labels": [
+    "parity",
+    "spec",
+    "link",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.19.1",
+      "depends_on_id": "project-LICHEN-mmgu.19",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:04:13.500743607Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
