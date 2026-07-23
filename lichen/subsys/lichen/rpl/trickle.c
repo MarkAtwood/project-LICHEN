@@ -5,7 +5,8 @@
  * @file trickle.c
  * @brief Trickle timer (RFC 6206) implementation
  *
- * Ported from rust/lichen-rpl/src/trickle.rs
+ * Aligned reset() guard with Rust and Python (project-LICHEN-67ca).
+ * Ported from rust/lichen-rpl/src/trickle.rs with consistent init edge case.
  */
 
 #include <lichen/rpl_trickle.h>
@@ -26,7 +27,7 @@ static uint32_t sat_mul_u32(uint32_t a, uint32_t b)
 	return result > UINT32_MAX ? UINT32_MAX : (uint32_t)result;
 }
 
-/* Internal: begin a new interval */
+/* Internal: begin a new interval (RFC 6206 §4.1: t uniform in [I/2, I)) */
 static void begin_interval(struct lichen_trickle *t,
 			   uint32_t now,
 			   uint32_t rand_offset)
@@ -35,9 +36,12 @@ static void begin_interval(struct lichen_trickle *t,
 	t->counter = 0;
 	t->transmitted = false;
 
-	uint32_t half = t->interval / 2;
-	/* transmit_time is uniform in [now + half, now + interval) */
-	uint32_t offset = (half > 0) ? (rand_offset % half) : 0;
+	/* Per RFC 6206 §4.2: t uniform in [I/2, I). Use (interval+1)/2 to avoid
+	 * off-by-one bias in integer division; range = I - half. Worker23 fix
+	 * (project-LICHEN-verh). */
+	uint32_t half = (t->interval + 1u) / 2u;
+	uint32_t range = t->interval - half;
+	uint32_t offset = (range > 0) ? (rand_offset % range) : 0;
 	t->transmit_time = sat_add_u32(sat_add_u32(now, half), offset);
 }
 
@@ -46,6 +50,9 @@ void lichen_trickle_init(struct lichen_trickle *t,
 			 uint32_t imax_doublings,
 			 uint32_t k)
 {
+	if (t == NULL) {
+		return;
+	}
 	if (imin_ms == 0) {
 		imin_ms = 1;
 	}
@@ -72,12 +79,18 @@ void lichen_trickle_start(struct lichen_trickle *t,
 			  uint32_t now,
 			  uint32_t rand_offset)
 {
+	if (t == NULL) {
+		return;
+	}
 	t->interval = t->imin;
 	begin_interval(t, now, rand_offset);
 }
 
 bool lichen_trickle_fire_transmit(struct lichen_trickle *t)
 {
+	if (t == NULL) {
+		return false;
+	}
 	t->transmitted = true;
 	return lichen_trickle_should_transmit(t);
 }
@@ -86,24 +99,33 @@ void lichen_trickle_expire(struct lichen_trickle *t,
 			   uint32_t now,
 			   uint32_t rand_offset)
 {
+	if (t == NULL) {
+		return;
+	}
 	uint32_t doubled = sat_mul_u32(t->interval, 2);
 	t->interval = (doubled < t->max_interval) ? doubled : t->max_interval;
 	begin_interval(t, now, rand_offset);
 }
-
 void lichen_trickle_reset(struct lichen_trickle *t,
 			  uint32_t now,
 			  uint32_t rand_offset)
 {
-	if (t->interval != t->imin) {
+	if (t == NULL) {
+		return;
+	}
+	if (t->transmit_time == 0 || t->interval != t->imin) {
 		t->interval = t->imin;
 		begin_interval(t, now, rand_offset);
 	}
 }
 
+
 void lichen_trickle_next_event(const struct lichen_trickle *t,
 			       struct lichen_trickle_event *out)
 {
+	if (t == NULL || out == NULL) {
+		return;
+	}
 	if (!t->transmitted) {
 		out->type = LICHEN_TRICKLE_TRANSMIT;
 		out->at_ms = t->transmit_time;
