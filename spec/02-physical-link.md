@@ -35,7 +35,7 @@ LoRa Chirp Spread Spectrum (CSS) as implemented by Semtech SX126x and SX127x.
 
 **Coordination Methods** (see CCP-9 in 02a-coordinated-capacity.md)
 
-- Hash-based (stateless): `data_ch = 1 + (hash(src_iid ^ dst_iid) mod (N_CHANNELS - 1))`
+- Hash-based (stateless): `data_ch = 1 + (lichen_hash_32(src_iid ^ dst_iid) mod (N_CHANNELS - 1))` where `lichen_hash_32` is FNV-1a32 (basis `0x811c9dc5`; see `hash_32.json` vectors) and `N_CHANNELS` is the number of channels in the regional plan (Kconfig `CONFIG_LICHEN_N_CHANNELS`, default 8)
 - Rendezvous: Announce includes `rx_channel`; sender uses announced (TOFU pinning)
 - Gateway-assigned: DIO carries channel for load balancing (MRHOF variant)
 
