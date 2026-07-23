@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.18.6",
+  "title": "Missing canonical vector files: senml, SCHC fragmentation, signed-frame composition, SLIP golden, SRH",
+  "description": "Formats with cross-impl divergence risk and NO oracle file: (1) senml.json - the format family with the worst divergence (mmgu.14/.15) has no arbiter; (2) schc_fragment.json - three incompatible C/Python/Rust fragment formats (mmgu.5); (3) signed-frame composition vector - all three sign epoch||seqnum(BE)||dst_addr||inner_payload (Python link_layer.py:174-206, Rust schnorr.rs:186-194, C schnorr48.c:290-297), agreeing today but nothing in CI would catch drift, and the draft says the signed data should include LENGTH||LLSec (spec-reconciliation child); (4) SLIP golden vectors - three SLIP implementations, no shared encode/decode vectors; (5) SRH (source routing header) insert/advance vectors - Python-only implementation with an ordering convention that must be pinned before Rust/C add theirs. Generate from the Python oracle after the relevant semantics beads are decided.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:03:45.221839727Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:03:45.221839727Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "review",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.18.6",
+      "depends_on_id": "project-LICHEN-mmgu.18",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:03:45.396232303Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
