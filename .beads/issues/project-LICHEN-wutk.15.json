@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.15",
+  "title": "Observe registration response missing Observe option",
+  "description": "lichen/subsys/lichen/coap/coap_status.c:396-434. spec/11-lci.md §17.1 principle 5 (push via Observe, RFC 7641); RFC 7641 §4.1: a successful Observe registration response MUST carry the Observe option. Handler registers the observer via coap_resource_parse_observe() but the 2.05 response never appends COAP_OPTION_OBSERVE, so standards-based clients treat registration as failed. Fix: when parse_observe registers, append the Observe option with resource-\u003eage (as the notify path already does).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:26.324962498Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:26.324962498Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.15",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:26.486066413Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
