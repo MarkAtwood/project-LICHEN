@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.31",
+  "title": "DAO first sequence number: C=0 vs Python/Rust=1 (wire-visible, interacts with replay caches)",
+  "description": "C lichen_rpl_dao_manager_build_dao (routing.c:310-313): use-then-increment -\u003e first DAO dao_sequence=0 (comment explicitly intends this). Python dao.py:111 and Rust routing.rs:304: increment-then-use -\u003e first DAO dao_sequence=1. Wire-visible on the first DAO; interacts with sequence-based replay caches (Rust root's lollipop DAOSequence check rejects a replayed seq-1 DAO from Python/Rust; a C node's seq-0 DAO sits outside that window convention). RFC 6550 doesn't fix a starting value - pick one for LICHEN and align all three.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:06:47.278178763Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:06:47.278178763Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.31",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:06:47.455553641Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
