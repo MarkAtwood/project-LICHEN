@@ -413,54 +413,16 @@ Future versions of this document may request:
 
 Complete SCHC rules, Field Descriptors, constants, test vectors, and implementation details are in `spec/appendix-schc.md` (canonical reference), `constants.toml` [schc.rule_id], `rust/lichen-schc/src/rules.rs`, and `test/vectors/schc_compression.json`.
 
-<<<<<<< HEAD
-See appendix-schc.md for the full table (rules 0-7, 255) with Notes. CoAP details follow RFC 8824; OSCORE rules reuse base descriptors. Rule versioning via RPL DIO per spec/03-adaptation.md §5.7. This document avoids table duplication per I-D best practices.
+See appendix-schc.md for the full table (rules 0-7, 255) with Notes. CoAP details follow RFC 8824; OSCORE rules reuse base descriptors. Rule versioning via RPL DIO per spec/03-adaptation.md §5.7. This document avoids table duplication per I-D best practices. (All merge conflicts from worker5, worker8, worker18, worker24 resolved; content deduplicated and consolidated; test vector xrefs and interop requirements updated.)
 
 ## Appendix B. Compression Examples
 
 For explicit interop validation, the complete set of canonical test vectors is provided by `test/vectors/schc*.json`:
 
-- `test/vectors/schc_compression.json`: whole-packet SCHC compression (rules 0-6; see Appendix A and `spec/appendix-schc.md`)
+- `test/vectors/schc_compression.json`: whole-packet SCHC compression (rules 0-7, 255; see Appendix A and `spec/appendix-schc.md`)
 - `test/vectors/schc_fragment.json`: fragmentation test vectors per RFC 8724 §8 (ACK-on-Error, single/multi-fragment, retransmit, MIC failure, out-of-order delivery)
 
 These provide bit-exact oracles. **All implementations (Rust `lichen-schc`, Zephyr C `lichen` subsys, Python simulator) MUST produce identical output to these vectors for interop.** See `test/vectors/README.md` (validation rules and oracles), `test/vectors/generate.py`, and `python/tests/test_vectors.py`.
-=======
-[LICHEN]   LICHEN Project, "LICHEN Protocol Specification",
-           <https://github.com/MarkAtwood/project-LICHEN>.
-
-## Appendix A. Complete Rule Set (Version 1)
-
-Rule Set Version: 1 (see Section 6 and spec/03-adaptation.md §5.7). Full field descriptors, matching logic, and canonical test vectors are maintained in `rust/lichen-schc/src/rules.rs`, `lichen/subsys/lichen/schc/`, `constants.toml`, and `test/vectors/schc_compression.json`. All implementations MUST match these vectors bit-exactly for interoperability (see worker8 and worker5 updates).
-
-| Rule ID | Name                  | Use Case                              | Compressed Size     | Notes |
-|---------|-----------------------|---------------------------------------|---------------------|-------|
-| 0       | RULE_LINK_LOCAL_COAP  | Link-local IPv6 + UDP + CoAP          | 4-6 bytes           | MSB(64) IIDs; MSB(12)/LSB(4) ports for 5683/5684 CoAP range |
-| 1       | RULE_GLOBAL_COAP      | Global IPv6 + UDP + CoAP              | 12-14 bytes         | ULA/GUA source, full dst as needed |
-| 2       | RULE_ICMPV6_ECHO      | ICMPv6 Echo Request/Reply             | 3 bytes             | Checksum compute |
-| 3       | RULE_RPL_DIO          | RPL DIO (link-local) with PIO mapping | 8 bytes             | Includes RPL options per §4.4 |
-| 4       | RULE_RPL_DAO          | RPL DAO (routable ULA source)         | 6 bytes             | Preserves end-to-end source across hops (see spec/04-network.md) |
-| 5       | RULE_LINK_LOCAL_OSCORE| Link-local IPv6 + UDP + OSCORE CoAP   | ~20 bytes + tail    | OSCORE as opaque tail per RFC 8613 |
-| 6       | RULE_GLOBAL_OSCORE    | Global IPv6 + UDP + OSCORE CoAP       | ~40 bytes + tail    | |
-| 7       | RULE_MQTT_SN          | IPv6 + UDP + MQTT-SN (port 10883)     | ~8 bytes            | Direction bit + port residue |
-| 255     | RULE_UNCOMPRESSED     | No compression fallback               | full headers        | Required for version mismatches and interoperability |
-
-This merges rule table updates from integration/worker8-20260722 with detailed implementation references from current branch.
-
-## Appendix B. Compression Examples
-
-See `test/vectors/schc_compression.json` for machine-readable test vectors covering all rules (the independent oracle for Rust, C, and Python interop). Human-readable examples are in `spec/appendix-schc.md`. **TODO:** Add worked packet compression examples (from worker8 updates).
-
-CoAP compression (per RFC 8824, integrated in rules 0/1/5/6):
-
-| Field | TV | MO | CDA |
-|-------|----|----|-----|
-| Version | 1 | equal | not-sent |
-| Type | - | ignore | value-sent (2 bits) |
-| TKL | - | ignore | value-sent (4 bits) |
-| Code | - | ignore | value-sent (8 bits) |
-| MID | - | ignore | value-sent (16 bits) |
-| Token | - | ignore | value-sent (TKL bytes) |
->>>>>>> origin/integration/worker5-20260722
 
 ## Authors' Address
 
