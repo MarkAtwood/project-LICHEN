@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.18.5",
+  "title": "l2_payload.json / announce_coords.json / compact_cot.json: Python-only or mirrored consumption",
+  "description": "l2_payload.json: only Python consumes (test_vectors.py:97-100,130-142); Rust (lichen-core/src/l2_payload.rs) and C (l2_payload.h) semantics match the vectors exactly but tests don't read the JSON. announce_coords.json: only Python consumes (:109-112,174-185); C mirrors the Seattle e7 pair in meshtastic_gateway_adapter main.c:1524; Rust decode-only self-made values. compact_cot.json: Python direct, Rust transcribed mirror (compact_cot.rs:549-902), NO C implementation exists (see mmgu compact-cot bead). Low-risk but same drift-invisibility pattern. Fix: loaders or codegen checks in Rust/C.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:03:44.614771266Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:03:44.614771266Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "review",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.18.5",
+      "depends_on_id": "project-LICHEN-mmgu.18",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:03:44.769746555Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
