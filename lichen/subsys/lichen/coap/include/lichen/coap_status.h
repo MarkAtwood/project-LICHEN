@@ -191,19 +191,6 @@ struct lichen_coap_status_config {
 int lichen_coap_status_init(const struct lichen_coap_status_config *config);
 
 /**
- * @brief Trigger status update notification to observers
- *
- * Call this when status changes significantly (battery level change,
- * DODAG state change, etc.) to push updates to Observe clients.
- */
-void lichen_coap_status_notify(void);
-
-/**
- * @brief Trigger neighbor table notification to observers
- */
-void lichen_coap_status_neighbors_notify(void);
-
-/**
  * @brief Encode node status to CBOR
  *
  * @param[out] buf Output buffer
