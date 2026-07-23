@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.32",
+  "title": "Routing/SCHC payloads synthesized as APRS text",
+  "description": "python/src/lichen/interface/kiss/bridge.py:377-382. spec/kiss-framing.md §3.2 (port 0 = APRS data). _is_l2_routing_payload() is defined but never called, so mesh routing announces (0x15 0x01) and SCHC packets (0x14...) received via _on_link_rx are formatted as APRS text and pushed to the TNC app as garbage messages. Pre-existing. Fix: use the helper (and classify_l2_payload) to filter non-application payloads before APRS synthesis.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:36.43639283Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:36.43639283Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.32",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:36.582572981Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
