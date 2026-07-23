@@ -37,7 +37,7 @@ LOG_MODULE_REGISTER(lichen_coap_keys, CONFIG_LICHEN_COAP_KEYS_LOG_LEVEL);
 #ifndef CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES
 #define CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES 16
 #endif
-BUILD_ASSERT(CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES <= 16, "CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES >16 risks stack overflow in encode_keys_list_cbor (project-LICHEN-vw14)");
+BUILD_ASSERT(CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES <= 16, "CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES >16 risks stack overflow in encode_keys_list_cbor");
 
 /* CBOR content-format code */
 #define CBOR_CONTENT_FORMAT 60
@@ -710,7 +710,7 @@ static size_t encode_key_single_cbor(const struct lichen_key_entry *entry,
 	char last_str[24];
 
 	if (entry == NULL || buf == NULL || buf_size < 100) {
-		return 0; /* prevents underflow in offset checks (project-LICHEN-byge) */
+		return 0; /* prevents underflow in offset checks */
 	}
 
 	lichen_key_iid_to_str(entry->iid, iid_str, sizeof(iid_str));
