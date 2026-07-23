@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.31",
+  "title": "KISS RETURN exits KISS mode; spec says stay permanently",
+  "description": "python/src/lichen/interface/kiss/handler.py:172-177 (with 111-112). spec/kiss-framing.md §4.3 Return (15): 'LICHEN stays in KISS mode permanently... Accept these silently... but take no action.' _handle_return sets _exited = True, after which handle() silently drops ALL subsequent frames — the exact action the spec forbids. Pre-existing. Fix: accept and ignore RETURN (optionally invoke on_exit as notification only); keep processing frames.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:35.861549672Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:35.861549672Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.31",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:36.007073365Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
