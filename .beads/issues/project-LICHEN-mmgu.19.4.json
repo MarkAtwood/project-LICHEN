@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.19.4",
+  "title": "Spec reconciliation: app-layer documents (appendix-senml units, compact_cot length typo, C comment accuracy)",
+  "description": "(1) appendix-senml.md:67,75 uses '%RH' (relative humidity) for battery state-of-charge - wrong unit; IANA-registered is '%EL'; C chose '%'. Pick one (drives mmgu.15). (2) appendix-senml.md:38-39 uses RFC 8428 registered units 'lat'/'lon'; Python and C emit 'deg'; C senml.c:321-326 comment claims RFC 8428 says 'deg' - it does not. (3) 07-transport-app.md:156 says PLI is '18 bytes'; both implementations and compact_cot.json agree on 17 (discrepancy already documented in compact_cot.json:3) - fix the spec text. (4) C test comment lichen/tests/senml/main.c:57-62 claims cbor2 produces float32 - it produces float64; fix comment when mmgu.14 is decided.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:04:37.533263562Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:04:37.533263562Z",
+  "labels": [
+    "parity",
+    "spec",
+    "senml",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.19.4",
+      "depends_on_id": "project-LICHEN-mmgu.19",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:04:37.7024971Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
