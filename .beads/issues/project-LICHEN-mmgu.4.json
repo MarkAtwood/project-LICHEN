@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.4",
+  "title": "Rust SCHC missing OSCORE rules 5/6 (added to Python+C in a6c3323f94, Rust never got them)",
+  "description": "rust/lichen-schc/src/codec.rs:830-849 dispatches all UDP traffic to rules 0/1 (or MQTT-SN); no OSCORE detection. Decompress rejects rules 5/6 (codec.rs:900-916 UnknownRuleId). headers.rs:862-869 DEFAULT_PROFILES has no OSCORE profiles (comment admits 'OSCORE profiles should be inserted before CoAP profiles if supported'). Python implements both rules+profiles tried first (rules.py:299-306, headers.py:259-292,478-488); C implements both tried first (schc.c:1439-1453, with the rule-5 bug tracked separately). Commit a6c3323f94 touched python rules.py/headers.py, C schc.c, rust/lichen-oscore - but NOT rust/lichen-schc. Impact: one identical link-local OSCORE packet compresses to 05+25B (Python), 05+41B (C), 00+25B (Rust); Rust nodes reject all Python/C OSCORE traffic. Still missing on origin/main. Fix: port OSCORE detection (TKL\u003e8 reject, extended delta 13/14, early exit past option 9 - algorithm in Python headers.py:65-141 / C schc.c:322-402) and rules 5/6 into Rust, add shared vectors.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:59:51.07691026Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:59:51.07691026Z",
+  "labels": [
+    "parity",
+    "schc",
+    "oscore",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.4",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:59:51.219535394Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
