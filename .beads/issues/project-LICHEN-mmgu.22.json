@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.22",
+  "title": "S=0 (unsigned) frame acceptance matrix diverges: C low-level accepts with CRC32 MIC + no replay; Python/Rust reject all",
+  "description": "Python link_layer.py:426-428 rejects ALL unsigned frames ('policy requires signatures'); Rust link_layer.rs:400-404 LinkRxError::Unsigned; C low-level lichen_link_rx ACCEPTS unsigned frames if MIC policy passes (CRC32 config + match) and gives them NO replay protection (replay_eligible = signature_present || encrypted, lichen_link_rx.c:327; commit_replay skips :196-197). The C L2 production path now rejects unsigned up front (l2/lichen_l2.c:604-606) - the 9-byte puck neighbor beacon is the sole CRC32-only acceptance, log-only, never routed (lichen_l2.c:2277-2304). NOTE for q3iy.37: its cited peer_pubkey=NULL-then-accept flow has been hardened since filing; residual surface is the explicit low-level lichen_link_rx API plus the beacon path. A broadcast unsigned frame is processed by C's low-level RX (no replay window) but dropped by Python/Rust. Decide the policy (recommend: signatures mandatory at every layer, beacon exception documented) and align.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:05:23.75518058Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:05:23.75518058Z",
+  "labels": [
+    "parity",
+    "link",
+    "security",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.22",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:05:23.897157407Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
