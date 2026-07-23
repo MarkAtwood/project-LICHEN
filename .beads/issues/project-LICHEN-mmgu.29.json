@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.29",
+  "title": "Rust SCHC ACK parser zero-fills truncated bitmap instead of rejecting (Python/C reject)",
+  "description": "rust/lichen-schc/src/fragment.rs:230-232 zero-fills a truncated ACK bitmap body; Python fragment.py:131-134 and C subsys/schc/schc.c:470-471 reject truncated bitmaps. A short ACK that Python/C would drop is accepted-with-zeros by Rust - zeros mean 'all tiles missing' in 1=received polarity, causing spurious retransmission in mixed networks (once fragmentation interop is fixed per mmgu.5). Fix: return an error on truncated bitmap.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:06:28.734251104Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:06:28.734251104Z",
+  "labels": [
+    "parity",
+    "schc",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.29",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:06:28.899001739Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
