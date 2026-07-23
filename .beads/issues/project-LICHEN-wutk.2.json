@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.2",
+  "title": "KISS decoder completes garbage frame after decode error",
+  "description": "lichen/subsys/lichen/transport/kiss_transport.c:104-110,119-124,140-145. After -EILSEQ (invalid escape) or -EOVERFLOW (oversized frame) the decoder sets in_frame=false and returns; the NEXT non-FEND byte hits the implicit-start path and becomes a fabricated CMD byte, remaining bytes of the malformed frame accumulate as DATA, and the malformed frame's own closing FEND completes and dispatches this garbage as a valid frame. Spurious frames reach AX.25/raw callbacks; a garbage cmd nibble can silently overwrite TxDelay/Persistence/SlotTime. spec/kiss-framing.md §1.1 frame definition; both reference impls discard until closing FEND (Rust test_reader_invalid_escape_does_not_stick, Python KissReader). Fix: on decode error enter discard-until-FEND state and clear has_cmd.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:18.601410963Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:18.601410963Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.2",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:18.75793208Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
