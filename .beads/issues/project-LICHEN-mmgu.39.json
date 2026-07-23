@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.39",
+  "title": "Rust CoAP client uses hardcoded token 'LICH' for every request",
+  "description": "rust/lichen-coap/src/client.rs:81: every request uses the fixed 4-byte token 'LICH' (0x4c494348). Python/aiocoap randomizes per request; the C client delegates to Zephyr's coap_client (random tokens). With concurrent outstanding requests the Rust client cannot disambiguate responses by token; tokens are also predictable (weakens the token's role as a spoofing barrier on off-path responses). Module docs call it CLI/TUI-grade, hence P2. Fix: random per-request tokens + match responses on (token, source).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:08:14.214288637Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:08:14.214288637Z",
+  "labels": [
+    "parity",
+    "coap",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.39",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:08:14.387020879Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
