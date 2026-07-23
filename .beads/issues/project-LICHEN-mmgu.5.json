@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.5",
+  "title": "SCHC fragmentation: C wire format incompatible with Python/Rust on 4 axes - converge and add vectors",
+  "description": "Python (fragment.py) and Rust (fragment.rs) are mutually wire-compatible; C's generic engine (lichen/subsys/schc/schc.c, independent lineage) differs on every axis: (1) MIC placement in All-1 frag: Py/Rust header+MIC+tile vs C header+tile+MIC (:322-327,:636); (2) W field: Py/Rust 1 bit at bit 6 vs C 2 bits at bits 7-6 (SCHC_DEFAULT_WINDOW_BITS 2); (3) window schedule: Py/Rust 7 tiles FCN 6..0 vs C 63 tiles FCN 62..0; (4) ACK format: Py/Rust [rule,(W\u003c\u003c6)|complete,len,bitmap MSB-first] vs C [rule,(dtag\u003c\u003cw)|window,complete-byte,bitmap LSB-first]. Spec draft-lichen-schc-lora-00 5.1/5.3 sides with Python/Rust on W width and MIC placement, but 5.4 bitmap polarity (1=missing) matches NO implementation (all use 1=received). NOTE: origin/main rewrote the C engine AGAIN to RFC-8724-style 15-bit bit-packed header - a third format, still != Python/Rust. No shared fragmentation vectors exist anywhere; fragmentation is not wired into any production path yet, so this is latent but certain to bite on first fragmented interop. DECISION NEEDED: pick one canonical format (recommend Python/Rust byte-aligned per draft), fix draft 5.4 polarity text, port to C, add test/vectors/schc_fragment.json consumed by all three. Also: C reassembly 64-tile cap, exact tile_size requirement, and SCHC_ERR_NO_MATCHING_RULE on gaps differ from Py/Rust store-by-index + NACK behavior.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:59:51.66438681Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:59:51.66438681Z",
+  "labels": [
+    "parity",
+    "schc",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.5",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:59:51.841257177Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
