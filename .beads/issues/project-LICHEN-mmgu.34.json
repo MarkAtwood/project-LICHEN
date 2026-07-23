@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.34",
+  "title": "RPL edge-case semantics cluster: hysteresis off-by-one, ETX rounding, rank overflow, first-DIO stale version",
+  "description": "Four small divergences: (1) Hysteresis boundary: Python dodag.py:189-192 and Rust dodag.rs:254-264 keep current parent iff improvement \u003c 192 (switch at exactly 192); C dodag.c:246-257 keeps iff best_cost+192 \u003e= cur_cost (STAYS at exactly 192) - one-point parent-selection divergence at the threshold. (2) ETX math: C fixed-point truncation (etx*mhri)/256 (dodag.c:74) vs Python round() banker's (dodag.py:73) vs Rust f32 .round() half-away (dodag.rs:92) - half-integer products round differently. (3) Rank overflow: Python rank is unbounded int - _admissible rejects cost \u003e= 0xFFFF (dodag.py:166-168) but a selected rank \u003e 65535 makes DIO.to_bytes RAISE (messages.py:150-151); Rust/C saturate at u16 (dodag.rs:91-98, dodag.c:72-77) with no explicit infinite-cost rejection, so a saturated 0xFFFF candidate can be admissible where Python would reject it. (4) Unjoined first-DIO: Python (dodag.py:140) and C (dodag.c:295-297) adopt any version unconditionally; Rust (dodag.rs:184-189) adopts only if newer (stale-version first DIO ignored). Fix all four to one convention (recommend C's boundary for stability? - needs decision; integer truncation everywhere for ETX; explicit infinite-cost reject; adopt-if-newer).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:07:33.770942847Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:07:33.770942847Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.34",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:07:33.923381021Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
