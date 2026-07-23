@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.24",
+  "title": "SCHC malformed-packet (declared vs actual length) behavior diverges three ways",
+  "description": "Same malformed input, three outcomes: C lichen_schc_compress hard-validates IPv6 payload length == actual and UDP length == actual (schc.c:554-577, enforced :1514-1517) returning SCHC_ERR_NO_MATCHING_RULE (error, NO output, no 255 fallback; enshrined by tests main.c:287-339). Python headers.py:202 only checks len(raw) \u003c 40+payload_length: declared\u003eactual -\u003e no profile matches -\u003e rule 255 fallback; declared\u003cactual -\u003e UdpDatagram.from_bytes raises UdpError (uncaught, not a fallback) or silently TRUNCATES the tail (headers.py:210). Rust: no declared-length validation anywhere (codec.rs:269-323, headers.rs:308-327) - compresses actual bytes. Wire-presence AND wire-content divergence. DECISION NEEDED: the wire contract for malformed input (C's strictness is safest but creates asymmetric-send vs Python's 255 fallback).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:05:45.157291773Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:05:45.157291773Z",
+  "labels": [
+    "parity",
+    "schc",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.24",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:05:45.297908526Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
