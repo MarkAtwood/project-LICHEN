@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.3",
+  "title": "KISS decoder accepts pre-FEND garbage as a frame",
+  "description": "lichen/subsys/lichen/transport/kiss_transport.c:104-110. spec/kiss-framing.md §1.1: a frame is FEND|CMD|DATA|FEND; bytes before any FEND are not within a frame. Code opens an implicit frame on any non-FEND byte and dispatches it when the first real FEND arrives (consuming that FEND as terminator). UART boot noise is delivered to upper layers with a fabricated cmd byte. Both reference impls skip leading non-FEND bytes. Fix: only FEND opens a frame.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:19.203551362Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:19.203551362Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.3",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:19.350666123Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
