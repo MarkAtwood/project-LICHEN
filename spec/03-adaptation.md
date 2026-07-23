@@ -189,7 +189,7 @@ Version increments when rules are added, removed, or modified.
 | 2 | RFC 8724 fragmentation profile defined in Section 5.6 |
 | 3+ | Future versions |
 
-**DIO Rule Version Option (Type TBD):** PIO proposal for RPL options (incl. potential PIO) at python/src/lichen/schc/rules.py:262, spec/drafts/draft-lichen-schc-lora-00.md:228 (table/calc) and 03-adaptation.md:184 (cross-ref 04-network.md:52 no-PIO in no-ULA model per 06-security.md:128).
+**DIO Rule Version Option (Type TBD):** PIO proposal for RPL options (incl. potential PIO) at python/src/lichen/schc/rules.py:324, spec/drafts/draft-lichen-schc-lora-00.md:248 (table/calc) and appendix-schc.md:54 (cross-ref 06-security.md:139 no-PIO in no-ULA model per 05-routing.md:172).
 
 DODAG roots advertise their rule set version in DIO messages:
 

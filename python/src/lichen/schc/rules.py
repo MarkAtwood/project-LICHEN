@@ -321,8 +321,8 @@ LINK_LOCAL_ICMPV6_ECHO_RULE = Rule(
 )
 
 # Rule 3: RPL DIO base object (RFC 6550 6.3) over link-local ICMPv6.
-# PIO (type=3) handled via match-mapping in draft-lichen-schc-lora-00.md:228
-# (updated ref from old 272; see PIO details in spec for LICHEN lifetimes).
+# PIO (type=3) handled via match-mapping in draft-lichen-schc-lora-00.md:248
+# (updated ref from old 272; see PIO spec at appendix-schc.md:54).
 _DIO_BASE_FIELDS = (
     FieldDescriptor("RPL.instance", 8, MO.IGNORE, CDA.VALUE_SENT),
     FieldDescriptor("RPL.version", 8, MO.IGNORE, CDA.VALUE_SENT),
