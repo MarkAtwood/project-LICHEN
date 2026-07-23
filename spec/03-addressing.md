@@ -3,7 +3,6 @@
 
 # 3. Addressing
 
-<<<<<<< HEAD
 LICHEN nodes have a stable cryptographic identity based on an Ed25519 keypair. The human-readable node address provides a memorable, collision-resistant name for nodes.
 
 ## Human-Readable Node Address
