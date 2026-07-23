@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.44",
+  "title": "C SCHC test suites absent from CI on this branch (no testcase.yaml for lichen/tests/schc)",
+  "description": "lichen/tests/schc/ is a standalone CMake project with NO testcase.yaml; ci.yml twisters only lichen/tests/meshtastic_codec (ci.yml:194). lichen/tests/schc_generic/ (Twister) is also not in CI on this branch. So the C SCHC suite - the only C-side guard for rules 0-4 wire output - never runs in CI; regressions like the rule-5 fall-through (mmgu.3) had no chance of being caught. Fix: add testcase.yaml + wire into the twister CI matrix.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:09:18.931436715Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:09:18.931436715Z",
+  "labels": [
+    "parity",
+    "schc",
+    "ci",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.44",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:09:19.07734645Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
