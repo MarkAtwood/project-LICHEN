@@ -35,10 +35,9 @@ config LICHEN_ADAPTIVE_SF_ENABLED
 	help
 	  Enable dynamic selection of LoRa spreading factor per neighbor based on
 	  SNR measurements and density signals from CCP16. Improves network
-	  capacity in dense deployments. See project-LICHEN-zrh2.2 and
-	  spec/appendix-design-rationale.md. When disabled, falls back to
+	  capacity in dense deployments. See spec/appendix-design-rationale.md.
+	  When disabled, falls back to
 	  CONFIG_LICHEN_DEFAULT_SF.
-
 
 config LICHEN_DEFAULT_SF
 	int "Default spreading factor (when adaptive SF disabled)"
@@ -49,6 +48,11 @@ config LICHEN_DEFAULT_SF
 	  Default SF for transmissions when adaptive SF is not enabled.
 	  SF7 = highest bitrate/shortest range; SF12 = lowest bitrate/longest range.
 	  Must match regional regulations and link budget.
+
+config LICHEN_DUTY_CYCLE
+	bool "Duty cycle tracker (CCP-13)"
+	default y
+	depends on LICHEN
 
 endif # LICHEN
 
