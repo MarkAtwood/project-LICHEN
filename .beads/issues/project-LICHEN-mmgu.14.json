@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.14",
+  "title": "SenML value encoding: C emits float32, Python/Rust emit float64 (plus bt/t int vs float)",
+  "description": "C lichen/subsys/lichen/senml/senml.c:228 zcbor_float32_put -\u003e CBOR 0xfa (5 bytes); Python codec.py:128 via cbor2 -\u003e 0xfb float64 (9 bytes, verified empirically); Rust lichen-senml/src/cbor.rs:112-120 always 0xfb. Same class: C encodes bt as CBOR uint (:203) and t as int32 (:249); Python bt float64 when float-typed; Rust base_time/time always float64. Decoders tolerate all forms so this is an ENCODE-side byte-parity break, violating the project rule that all implementations produce identical output. Compounding: the C test golden vector (lichen/tests/senml/main.c:57-62) expects 02 fa 41c80000 with a comment claiming cbor2 produces float32 - it does not; no senml.json vector file exists to arbitrate. DECISION NEEDED: canonical numeric encoding (recommend float64 everywhere, or define per-profile integer/float32 forms), then align encoders and add test/vectors/senml.json consumed by all three. Note: Rust Record is also a field subset of Python's (no bu/bv/bs/bver/s/ut/vd; decoder silently drops them, cbor.rs:494-496) - lossy if they ever appear; C is encoder-only and returns -ENOTSUP for vs/vd.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:02:02.078184318Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:02:02.078184318Z",
+  "labels": [
+    "parity",
+    "senml",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.14",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:02:02.228062308Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
