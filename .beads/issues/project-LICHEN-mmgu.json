@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-mmgu",
+  "title": "Cross-implementation parity review 2026-07-23 (Python/Rust/Zephyr)",
+  "description": "Consolidated findings from the 2026-07-23 cross-implementation reviewer pass over Python (python/src/lichen), Rust (rust/), Zephyr C (lichen/subsys/lichen), against test/vectors/*.json and spec/. Five-domain review: link+schnorr48, SCHC, RPL+routing, OSCORE/CoAP/LCI/SLIP, app-layer formats. All findings empirically verified with file:line evidence. NOTE: this worktree (HEAD c4e190f879) is 22025 commits behind origin/main (merge-base 936600c332); findings describe the checked-out tree and flag where origin/main already differs.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "epic",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:58:20.092409371Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:58:20.092409371Z",
+  "labels": [
+    "parity",
+    "review"
+  ]
+}
