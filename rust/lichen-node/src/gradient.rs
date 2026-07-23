@@ -89,7 +89,8 @@ pub struct GradientEntry {
 impl GradientEntry {
     /// Compare sequence numbers per RFC 1982 (serial number arithmetic).
     /// Returns Ordering::Greater if `a` is newer than `b`.
-    fn seq_cmp(a: u16, b: u16) -> Ordering {
+    /// Public so callers can use the same freshness logic.
+    pub fn seq_cmp(a: u16, b: u16) -> Ordering {
         if a == b {
             return Ordering::Equal;
         }
@@ -101,29 +102,36 @@ impl GradientEntry {
         }
     }
 
+    /// Returns true if `new_seq` is fresher than `old_seq` (RFC 1982).
+    /// Semantically equivalent to `seq_cmp(new_seq, old_seq) == Greater`.
+    #[inline]
+    pub fn is_seq_fresher(new_seq: u16, old_seq: u16) -> bool {
+        Self::seq_cmp(new_seq, old_seq) == Ordering::Greater
+    }
+
     /// Rank for replacement comparison (higher is better).
     /// Priority → seq_num (RFC 1982) → fewer hops.
-    fn rank(&self) -> (u8, u16, i16) {
-        // seq_num comparison via RFC 1982 handled separately
+    /// NOTE: seq_num is NOT included in the tuple to avoid naive integer
+    /// comparison that breaks on wrap-around. Use should_replace() instead.
+    fn rank(&self) -> (u8, i16) {
         (
             self.source.priority(),
-            self.seq_num,
             -(self.hop_count as i16),
         )
     }
 
     /// Returns true if `self` should replace `other`.
     pub fn should_replace(&self, other: &Self) -> bool {
-        let (s_pri, s_seq, s_hops) = self.rank();
-        let (o_pri, o_seq, o_hops) = other.rank();
+        let s_pri = self.source.priority();
+        let o_pri = other.source.priority();
 
         if s_pri != o_pri {
             return s_pri > o_pri;
         }
-        match Self::seq_cmp(s_seq, o_seq) {
+        match Self::seq_cmp(self.seq_num, other.seq_num) {
             Ordering::Greater => true,
             Ordering::Less => false,
-            Ordering::Equal => s_hops > o_hops, // fewer hops = higher value
+            Ordering::Equal => self.hop_count < other.hop_count, // fewer hops = better
         }
     }
 }

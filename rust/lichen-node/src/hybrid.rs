@@ -18,7 +18,7 @@ use crate::gradient::{
     GeoCoords, GradientEntry, GradientSource, GradientTable, GRADIENT_TIMEOUT_MS,
 };
 #[cfg(feature = "std")]
-use lichen_core::loadng::{Idle, RouteDiscovery, Rreq, Searching};
+use lichen_core::loadng::{Idle, RouteDiscovery, Rreq, Searching, MAX_HOP_LIMIT};
 
 /// Classification of IPv6 destination address (spec 7.2 table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -392,6 +392,8 @@ impl HybridRouter {
     }
 
     /// Handle LOADng RREP received. Installs gradient and returns pending packets.
+    /// Returns empty vec and does NOT install gradient if hop_count or seq_num
+    /// are out of valid range (defensive bounds check).
     pub fn on_rrep_received(
         &mut self,
         dst: [u8; 16],
@@ -400,6 +402,10 @@ impl HybridRouter {
         seq_num: u16,
         now_ms: u32,
     ) -> Vec<PendingPacket> {
+        // Bounds validation (defensive, aligns with loadng.rs codec checks)
+        if hop_count > MAX_HOP_LIMIT {
+            return Vec::new();
+        }
         // Install gradient entry
         let entry = GradientEntry {
             destination: dst,

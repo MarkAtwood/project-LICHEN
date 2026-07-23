@@ -52,6 +52,8 @@ pub enum LoadngError {
         to: RouteDiscoveryState,
     },
     InvalidDiscoveryReply,
+    /// A field value failed bounds validation (name, value, min, max).
+    InvalidField(&'static str, u16, u16, u16),
 }
 
 impl core::fmt::Display for LoadngError {
@@ -68,6 +70,13 @@ impl core::fmt::Display for LoadngError {
                 )
             }
             Self::InvalidDiscoveryReply => write!(f, "invalid LOADng discovery reply"),
+            Self::InvalidField(name, val, min, max) => {
+                write!(
+                    f,
+                    "invalid LOADng field {}: value {} out of range [{}, {}]",
+                    name, val, min, max
+                )
+            }
         }
     }
 }
@@ -305,10 +314,15 @@ impl Rreq {
         if data.len() < RREQ_RREP_LEN {
             return Err(TooShort::new(RREQ_RREP_LEN, data.len()).into());
         }
+        let hop_limit = data[1];
+        if hop_limit > MAX_HOP_LIMIT {
+            return Err(LoadngError::InvalidField("hop_limit", hop_limit as u16, 0, MAX_HOP_LIMIT as u16));
+        }
+        let seq_num = u16::from_be_bytes([data[2], data[3]]);
         Ok(Self {
             flags: data[0],
-            hop_limit: data[1],
-            seq_num: u16::from_be_bytes([data[2], data[3]]),
+            hop_limit,
+            seq_num,
             originator: Ipv6Addr(data[4..20].try_into().unwrap()),
             destination: Ipv6Addr(data[20..36].try_into().unwrap()),
         })
@@ -356,10 +370,15 @@ impl Rrep {
         if data.len() < RREQ_RREP_LEN {
             return Err(TooShort::new(RREQ_RREP_LEN, data.len()).into());
         }
+        let hop_count = data[1];
+        if hop_count > MAX_HOP_LIMIT {
+            return Err(LoadngError::InvalidField("hop_count", hop_count as u16, 0, MAX_HOP_LIMIT as u16));
+        }
+        let seq_num = u16::from_be_bytes([data[2], data[3]]);
         Ok(Self {
             flags: data[0],
-            hop_count: data[1],
-            seq_num: u16::from_be_bytes([data[2], data[3]]),
+            hop_count,
+            seq_num,
             originator: Ipv6Addr(data[4..20].try_into().unwrap()),
             destination: Ipv6Addr(data[20..36].try_into().unwrap()),
         })
