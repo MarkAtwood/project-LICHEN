@@ -672,7 +672,7 @@ int lichen_lora_l2_init(void)
     }
     lora_data.rx_callback = NULL;
     lora_data.rx_callback_user_data = NULL;
-    lora_data.cca_enabled = IS_ENABLED(CONFIG_LICHEN_LORA_CCA_ENABLE);
+    lora_data.cca_enabled = IS_ENABLED(CONFIG_LICHEN_LORA_CCA);
     lora_data.current_channel = 0;
 #if IS_ENABLED(CONFIG_LICHEN_DUTY_CYCLE)
     lichen_duty_cycle_init(&lora_data.duty, LICHEN_DUTY_CYCLE_DEFAULT_PERMILLE);
