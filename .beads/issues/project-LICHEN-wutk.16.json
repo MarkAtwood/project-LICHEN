@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.16",
+  "title": "Duplicate /config resource on gateway CoAP service",
+  "description": "lichen/subsys/lichen/coap/coap_config.c:830 vs apps/gateway/src/main.c:506. Two resources with path 'config' register on the same lichen_coap service when CONFIG_LICHEN_COAP_CONFIG=y (gateway prj.conf:32): the spec §17.5.2 schema (name/role/radio/identity) and the gateway's own non-spec schema (tx_power, manual location). Which wins is link-order dependent. Compounding: lichen_coap_config_register() is never called anywhere, so if the spec handler wins it always answers 4.04. Fix: delete or rename the gateway-local /config; register a real provider in the app.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:26.918699563Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:26.918699563Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.16",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:27.087727673Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
