@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-mmgu.3",
+  "title": "SCHC rule 5 (link-local OSCORE): C sends 128-bit addresses, Python sends 64-bit IIDs - silent corruption",
+  "description": "Python rule 5 (LINK_LOCAL_OSCORE_RULE, python/src/lichen/schc/rules.py:299-302) is rule 0's format under a different ID: 64-bit IID residue, 25-byte residue. C keys the link-local shortcut on SCHC_RULE_LINK_LOCAL_COAP (0) only: compress schc.c:782 (rule 5 falls into the 128-bit else branch, 41-byte residue), decompress schc.c:944 (min_residue 41 for rule 5) and :959-976 (IID reconstruction only for rule 0). Rust does not implement rule 5 at all (separate bead). Impact: Python-to-C rule-5 datagrams are dropped (SCHC_ERR_TOO_SHORT) or SILENTLY CORRUPTED (C reads ports/CoAP fields out of the middle of Python's addresses, then recomputes a valid UDP checksum over the garbage); C-to-Python mis-slices residue/tail. Nothing catches this: C tests cover only rules 0-4, and the only rule-5/6 vectors were removed by 26da5423a2 without replacement. NOTE: already FIXED on origin/main (schc.c:801,976 use rule_id == LINK_LOCAL_COAP || rule_id == LINK_LOCAL_OSCORE) - this branch (22025 commits behind) needs the port/merge. Also regenerate correct rule-5/6 vectors and wire them into all three suites.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:59:21.29415556Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:59:21.29415556Z",
+  "labels": [
+    "parity",
+    "schc",
+    "oscore",
+    "zephyr",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.3",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:59:21.460954892Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
