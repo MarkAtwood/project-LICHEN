@@ -1,23 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 """Tests for announce message codec.
-
-Why these tests: Announce messages are the primary routing mechanism for active
-nodes. Bugs here mean:
-- Malformed messages rejected by receivers (routing failure)
-- Wrong signed_data() = signature verification fails
-- Hop count not incremented = infinite flooding
-- seq_num wrong = stale announces accepted or fresh ones rejected
-
-Test categories:
-1. Construction and validation
-2. Serialization round-trip
-3. signed_data() correctness
-4. Hop count management
-5. Error cases
 """
 
 import pytest
+import json
+import subprocess
+from pathlib import Path
 
 from lichen.announce.messages import (
     ANNOUNCE_TYPE,
@@ -26,14 +15,13 @@ from lichen.announce.messages import (
     AnnounceError,
     AnnounceMessage,
 )
+from lichen.l2_payload import L2PayloadKind, classify_l2_payload, l2_payload_body
 
 
-class TestAnnounceConstruction:
-    """Tests for AnnounceMessage construction and validation."""
+VECTORS_DIR = Path(__file__).resolve().parents[3] / "test" / "vectors"
 
     def test_valid_minimal_announce(self):
         """A valid announce with minimum required fields."""
-        # Why test: Baseline - a properly constructed message should work.
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -51,7 +39,6 @@ class TestAnnounceConstruction:
 
     def test_valid_announce_with_app_data(self):
         """Announce with optional app_data field."""
-        # Why test: app_data is optional but must be handled correctly.
         app_data = b"node-name:alice"
         msg = AnnounceMessage(
             originator_iid=bytes(8),
@@ -65,7 +52,6 @@ class TestAnnounceConstruction:
 
     def test_rejects_wrong_iid_length(self):
         """IID must be exactly 8 bytes."""
-        # Why test: IID is a fixed-size field. Wrong length = parsing failure.
         with pytest.raises(AnnounceError, match="originator_iid must be 8 bytes"):
             AnnounceMessage(
                 originator_iid=bytes(7),  # Too short
@@ -82,7 +68,6 @@ class TestAnnounceConstruction:
 
     def test_rejects_wrong_pubkey_length(self):
         """Pubkey must be exactly 32 bytes."""
-        # Why test: Ed25519 pubkeys are 32 bytes. Wrong length = crypto failure.
         with pytest.raises(AnnounceError, match="pubkey must be 32 bytes"):
             AnnounceMessage(
                 originator_iid=bytes(8),
@@ -92,7 +77,6 @@ class TestAnnounceConstruction:
 
     def test_rejects_seq_num_out_of_range(self):
         """seq_num must fit in 16 bits."""
-        # Why test: Wire format uses 2 bytes. Overflow = wrong seq on wire.
         with pytest.raises(AnnounceError, match="seq_num out of range"):
             AnnounceMessage(
                 originator_iid=bytes(8),
@@ -109,7 +93,6 @@ class TestAnnounceConstruction:
 
     def test_rejects_hop_count_out_of_range(self):
         """hop_count must fit in 8 bits."""
-        # Why test: Wire format uses 1 byte. Overflow = wrong hop on wire.
         with pytest.raises(AnnounceError, match="hop_count out of range"):
             AnnounceMessage(
                 originator_iid=bytes(8),
@@ -120,7 +103,6 @@ class TestAnnounceConstruction:
 
     def test_rejects_wrong_signature_length(self):
         """Signature must be 0 (unsigned) or 48 bytes (signed)."""
-        # Why test: Schnorr48 signatures are exactly 48 bytes.
         with pytest.raises(AnnounceError, match="signature must be 0 or 48"):
             AnnounceMessage(
                 originator_iid=bytes(8),
@@ -131,7 +113,6 @@ class TestAnnounceConstruction:
 
     def test_allows_empty_signature_for_construction(self):
         """Empty signature allowed during construction (before signing)."""
-        # Why test: Caller builds message, computes signed_data(), then signs.
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -175,26 +156,24 @@ class TestSignedData:
         signed = msg.signed_data()
         assert signed[40:42] == bytes([0x12, 0x34])
 
-    def test_signed_data_includes_rx_channel_at_offset(self):
+    def test_signed_data_includes_current_channel_at_offset(self):
         msg = AnnounceMessage(
             originator_iid=b"\x01\x02\x03\x04\x05\x06\x07\x08",
             pubkey=b"\x00" * 32,
             seq_num=0x1234,
-            rx_channel=0x0a,
+            current_channel=5,
         )
         signed = msg.signed_data()
         expected = (
             b"\x01\x02\x03\x04\x05\x06\x07\x08"
             + b"\x00" * 32
             + b"\x12\x34"
-            + b"\x0a"
+            + b"\x05"
         )
         assert signed == expected
-        assert signed[42] == 0x0a
+        assert signed[42] == 5
 
     def test_signed_data_includes_app_data(self):
-        """signed_data() includes app_data."""
-        # Why test: App data must be authenticated to prevent injection.
         app_data = b"capabilities:sensor,relay"
         msg = AnnounceMessage(
             originator_iid=bytes(8),
@@ -237,12 +216,12 @@ class TestSignedData:
         )
         assert msg1.signed_data() == msg2.signed_data()
 
-    def test_signed_data_includes_rx_channel(self):
+    def test_signed_data_includes_current_channel(self):
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
             seq_num=0,
-            rx_channel=5,
+            current_channel=5,
         )
         signed = msg.signed_data()
         assert signed[42:43] == bytes([5])
@@ -318,10 +297,10 @@ class TestSerialization:
             pubkey=bytes(32),
             seq_num=0xABCD,
             signature=bytes(SIGNATURE_LENGTH),
-            rx_channel=0,
+            current_channel=0,
         )
         wire = msg.to_bytes()
-        assert wire[4:6] == bytes([0xAB, 0xCD])
+        assert wire[3:5] == bytes([0xAB, 0xCD])
 
     def test_to_bytes_rejects_unsigned(self):
         msg = AnnounceMessage(
@@ -329,21 +308,19 @@ class TestSerialization:
             pubkey=bytes(32),
             seq_num=0,
             signature=b"",
-            rx_channel=0,
+            current_channel=0,
         )
         with pytest.raises(AnnounceError, match="cannot serialize unsigned"):
             msg.to_bytes()
 
     def test_from_bytes_rejects_truncated(self):
         """Rejects data shorter than fixed portion."""
-        # Why test: Truncated messages are malformed. _FIXED_LENGTH=94 for CCP-9.
         with pytest.raises(AnnounceError, match="too short"):
-            AnnounceMessage.from_bytes(bytes(50))  # Less than 94 bytes
+            AnnounceMessage.from_bytes(bytes(50))
 
     def test_from_bytes_rejects_wrong_type(self):
         """Rejects messages with wrong type byte."""
-        # Why test: Type byte identifies announce vs other messages.
-        wire = bytes([0xFF]) + bytes(93)  # 94 bytes total, enough for length check
+        wire = bytes([0xFF]) + bytes(92)
         with pytest.raises(AnnounceError, match="wrong message type"):
             AnnounceMessage.from_bytes(wire)
 
@@ -353,7 +330,6 @@ class TestHopCount:
 
     def test_with_incremented_hop_count(self):
         """with_incremented_hop_count() returns new message with hop+1."""
-        # Why test: Relays must increment hop count before forwarding.
         original = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -372,7 +348,6 @@ class TestHopCount:
 
     def test_with_incremented_rejects_at_max(self):
         """Cannot increment beyond MAX_ANNOUNCE_HOPS."""
-        # Why test: Prevents infinite flooding in the mesh.
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -385,7 +360,6 @@ class TestHopCount:
 
     def test_should_relay_true_below_max(self):
         """should_relay() returns True when hop_count < MAX."""
-        # Why test: Messages below limit should propagate.
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -397,7 +371,6 @@ class TestHopCount:
 
     def test_should_relay_false_at_max(self):
         """should_relay() returns False when hop_count == MAX."""
-        # Why test: Messages at limit should not be forwarded.
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -409,8 +382,6 @@ class TestHopCount:
 
     def test_should_relay_false_above_max(self):
         """should_relay() returns False when hop_count > MAX."""
-        # Why test: Messages somehow above limit should definitely not relay.
-        # This shouldn't happen in practice but defensive check is good.
         msg = AnnounceMessage(
             originator_iid=bytes(8),
             pubkey=bytes(32),
@@ -423,35 +394,23 @@ class TestHopCount:
 
 class TestKnownVectors:
     def test_known_wire_format(self):
-        """Verify exact wire format for a known message (CCP-9 with rx_channel)."""
-        # Why test: Catch accidental changes to wire format. rx_channel at end per Python impl.
         msg = AnnounceMessage(
             originator_iid=bytes([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
             pubkey=bytes([0xAA] * 32),
             seq_num=0x1234,
             hop_count=3,
-            flags=0,
+            flags=7,
             signature=bytes([0xBB] * SIGNATURE_LENGTH),
             app_data=b"",
-            rx_channel=7,
+            current_channel=7,
         )
         wire = msg.to_bytes()
 
-        # Check header
-        assert wire[0] == ANNOUNCE_TYPE  # type
-        assert wire[1] == 0  # flags
-        assert wire[2] == 3  # hop_count
-        assert wire[3:5] == bytes([0x12, 0x34])  # seq_num
-
-        # Check IID position
+        assert wire[0] == ANNOUNCE_TYPE
+        assert wire[1] == 7
+        assert wire[2] == 3
+        assert wire[3:5] == bytes([0x12, 0x34])
         assert wire[5:13] == bytes([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08])
-
-        # Check pubkey position
         assert wire[13:45] == bytes([0xAA] * 32)
-
-        # Check signature position
         assert wire[45:93] == bytes([0xBB] * SIGNATURE_LENGTH)
-
-        # rx_channel after signature per to_bytes/from_bytes (CCP-9)
-        assert len(wire) == 94
-        assert wire[93] == 5
+        assert len(wire) == 93
