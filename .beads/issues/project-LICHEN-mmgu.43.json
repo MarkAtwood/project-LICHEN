@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.43",
+  "title": "Rust announce GeoCoords::from_app_data lacks e7 range validation (Python/C reject out-of-range)",
+  "description": "rust/lichen-node/src/gradient.rs:57-67 accepts any i32 (lat raw INT32_MAX -\u003e 214.7 degrees). Python announce/coords.py:85-88 returns None out-of-range; C apps/gateway/src/network_location.c:35-38,363 returns -EINVAL with identical bounds (+-900000000 / +-1800000000). Robustness consistency, not a wire break. Also stale doc comment at gradient.rs:55 says '(Type 0x01, 8 bytes)' - the wire record is 9 bytes (type + BE int32 lat_e7 + BE int32 lon_e7). Fix: add the same bounds check + correct the comment.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:09:01.49834583Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:09:01.49834583Z",
+  "labels": [
+    "parity",
+    "announce",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.43",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:09:01.65105205Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
