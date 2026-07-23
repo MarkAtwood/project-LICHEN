@@ -23,8 +23,10 @@
 #include <zephyr/net/coap_service.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_ip.h>
+#include <zcbor_decode.h>
 
 #include <lichen/coap_keys.h>
+#include <lichen/coap_server.h>
 #include <lichen/transport/slip_transport.h>
 
 #ifdef CONFIG_TINYCRYPT_SHA256
@@ -34,6 +36,7 @@
 
 LOG_MODULE_REGISTER(lichen_coap_keys, CONFIG_LICHEN_COAP_KEYS_LOG_LEVEL);
 
+/* Maximum keys to store */
 #ifndef CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES
 #define CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES 16
 #endif
@@ -62,15 +65,23 @@ static void cbor_put_map_header(uint8_t *buf, size_t *off, uint8_t count)
 
 static void cbor_put_tstr(uint8_t *buf, size_t *off, const char *value)
 {
-	size_t len = strlen(value);
-
+	size_t len = value ? strlen(value) : 0;
+	if (len > 0xffffffffU) {
+		len = 0xffffffffU;
+	}
 	if (len < 24U) {
 		buf[(*off)++] = 0x60U | (uint8_t)len;
 	} else if (len <= UINT8_MAX) {
 		buf[(*off)++] = 0x78;
 		buf[(*off)++] = (uint8_t)len;
-	} else {
+	} else if (len <= 0xffffU) {
 		buf[(*off)++] = 0x79;
+		buf[(*off)++] = (uint8_t)(len >> 8);
+		buf[(*off)++] = (uint8_t)(len & 0xffU);
+	} else {
+		buf[(*off)++] = 0x7a;
+		buf[(*off)++] = (uint8_t)(len >> 24);
+		buf[(*off)++] = (uint8_t)(len >> 16);
 		buf[(*off)++] = (uint8_t)(len >> 8);
 		buf[(*off)++] = (uint8_t)(len & 0xffU);
 	}
@@ -295,12 +306,13 @@ int lichen_key_pubkey_fingerprint(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKE
 	size_t b64_len = base64_encode(hash, sizeof(hash), buf + 7, buf_len - 7);
 
 	if (b64_len == 0) {
+		memset(hash, 0, sizeof(hash));
 		return -ENOMEM;
 	}
 
+	memset(hash, 0, sizeof(hash));
 	return 7 + (int)b64_len;
 #else
-	/* Fallback: truncated hex of pubkey (not a real fingerprint) */
 	memcpy(buf, "SHA256:", 7);
 	size_t pos = 7;
 
@@ -316,15 +328,17 @@ int lichen_key_pubkey_fingerprint(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKE
 #endif
 }
 
-int lichen_key_pubkey_to_iid(const uint8_t pubkey[LICHEN_KEY_PUBKEY_LEN],
-			     uint8_t iid[LICHEN_KEY_IID_LEN])
+int lichen_key_pubkey_to_iid(const uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKEY_LEN],
+			     uint8_t iid[_Nonnull LICHEN_KEY_IID_LEN])
 {
 	if (pubkey == NULL || iid == NULL) {
 		return -EINVAL;
 	}
+
 #ifdef CONFIG_TINYCRYPT_SHA256
 	struct tc_sha256_state_struct sha_state;
 	uint8_t hash[32];
+
 	if (tc_sha256_init(&sha_state) != TC_CRYPTO_SUCCESS) {
 		return -EIO;
 	}
@@ -334,32 +348,50 @@ int lichen_key_pubkey_to_iid(const uint8_t pubkey[LICHEN_KEY_PUBKEY_LEN],
 	if (tc_sha256_final(hash, &sha_state) != TC_CRYPTO_SUCCESS) {
 		return -EIO;
 	}
+
+	/* IID = SHA-256(pubkey)[0:8] with U/L bit cleared (bit 1 = 0x02)
+	 * per RFC 4291 (locally-administered) and LICHEN spec.
+	 * Matches _pubkey_to_iid() in Python and lichen_pubkey_to_iid() in ipv6_addr.c.
+	 * This enables unified identity across LCI, mesh, and backbone.
+	 */
 	memcpy(iid, hash, LICHEN_KEY_IID_LEN);
-	iid[0] &= ~0x02U;
-	memset(hash, 0, sizeof(hash));
+	iid[0] &= ~0x02U;  /* Clear U/L bit */
+	memset(hash, 0, sizeof(hash));  /* scrub sensitive material */
+
 	return 0;
 #else
-	memcpy(iid, pubkey, LICHEN_KEY_IID_LEN);
-	iid[0] &= ~0x02U;
-	return 0;
+	/* Fallback without crypto (insecure, test-only) */
+		memcpy(iid, pubkey, LICHEN_KEY_IID_LEN);
+		iid[0] &= ~0x02U;
+		return 0;
 #endif
+
+}
+
+static int key_ct_compare(const uint8_t *a, const uint8_t *b, size_t len)
+{
+	volatile uint8_t diff = 0U;
+	for (size_t i = 0; i < len; i++) {
+		diff |= a[i] ^ b[i];
+	}
+	return diff;
 }
 
 /* --------------------------------------------------------------------------
  * Key store implementation
- * --------------------------------------------------------------------------
- */
+ * -------------------------------------------------------------------------- */
 
 static int find_key_locked(const uint8_t iid[_Nonnull LICHEN_KEY_IID_LEN])
 {
 	for (int i = 0; i < CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES; i++) {
 		if (s_keys[i].valid &&
-		    memcmp(s_keys[i].iid, iid, LICHEN_KEY_IID_LEN) == 0) {
+		    key_ct_compare(s_keys[i].iid, iid, LICHEN_KEY_IID_LEN) == 0) {
 			return i;
 		}
 	}
 	return -ENOENT;
 }
+
 static int find_free_slot_locked(void)
 {
 	for (int i = 0; i < CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES; i++) {
@@ -395,7 +427,7 @@ int lichen_key_store_put(const uint8_t iid[_Nonnull LICHEN_KEY_IID_LEN],
 		 * SECURITY: TOFU key pinning - existing keys cannot have their
 		 * pubkey changed. Reject if pubkey differs.
 		 */
-		if (memcmp(s_keys[slot].pubkey, pubkey, LICHEN_KEY_PUBKEY_LEN) != 0) {
+		if (key_ct_compare(s_keys[slot].pubkey, pubkey, LICHEN_KEY_PUBKEY_LEN) != 0) {
 			k_mutex_unlock(&s_mutex);
 			LOG_WRN("Key update rejected: pubkey mismatch (TOFU violation)");
 			return -EEXIST;
@@ -482,7 +514,8 @@ size_t lichen_key_store_count(void)
 	return count;
 }
 
-size_t lichen_key_store_list(struct lichen_key_entry *entries, size_t max_entries)
+size_t lichen_key_store_list(struct lichen_key_entry *_Nonnull entries,
+			     size_t max_entries)
 {
 	size_t count = 0;
 
@@ -695,7 +728,7 @@ static size_t encode_keys_list_cbor(uint8_t *buf, size_t buf_size)
 }
 
 #ifdef CONFIG_LICHEN_COAP_KEYS_TEST_HOOKS
-size_t lichen_key_store_test_encode_list(uint8_t *buf, size_t buf_size)
+size_t lichen_key_store_test_encode_list(uint8_t *_Nonnull buf, size_t buf_size)
 {
 	return encode_keys_list_cbor(buf, buf_size);
 }
@@ -741,14 +774,6 @@ static size_t encode_key_single_cbor(const struct lichen_key_entry *entry,
 	return off;
 }
 
-/* --------------------------------------------------------------------------
- * CBOR payload decoding for PUT
- * -------------------------------------------------------------------------- */
-
-/*
- * Minimal CBOR decoder for PUT /keys/{iid} payload.
- * Expected format: { "pubkey": "<base64>", "trust": "<trust>" }
- */
 static int decode_key_put_cbor(const uint8_t *payload, size_t payload_len,
 			       uint8_t pubkey[_Nonnull LICHEN_KEY_PUBKEY_LEN],
 			       enum lichen_key_trust *_Nonnull trust)
@@ -757,173 +782,52 @@ static int decode_key_put_cbor(const uint8_t *payload, size_t payload_len,
 		return -EINVAL;
 	}
 
-	/*
-	 * Parse CBOR map header (major type 5).
-	 * CBOR encoding for maps:
-	 *   0xa0-0xb7: Small map with 0-23 items (count in lower 5 bits)
-	 *   0xb8 NN:   Map with 1-byte length (up to 255 items)
-	 *   0xb9 NNNN: Map with 2-byte length (big-endian)
-	 *   0xba NNNNNNNN: Map with 4-byte length (big-endian)
-	 *   0xbf:      Indefinite-length map (not supported - requires break code)
-	 *
-	 * For key management, we limit map_count to 32 entries max.
-	 */
-	uint8_t first_byte = payload[0];
-	uint8_t major_type = first_byte >> 5;
-	uint8_t additional_info = first_byte & 0x1f;
-	size_t map_count;
-	size_t pos;
+	ZCBOR_STATE_D(state, 4, payload, payload_len, 1, 0);
 
-	if (major_type != 5) {
-		/* Not a map */
+	if (!zcbor_map_start_decode(state)) {
 		return -EINVAL;
 	}
 
-	if (additional_info < 24) {
-		/* Small map: count is in lower 5 bits */
-		map_count = additional_info;
-		pos = 1;
-	} else if (additional_info == 24 && payload_len > 1) {
-		/* 1-byte length */
-		map_count = payload[1];
-		pos = 2;
-	} else if (additional_info == 25 && payload_len > 2) {
-		/* 2-byte length (big-endian) */
-		map_count = ((size_t)payload[1] << 8) | payload[2];
-		pos = 3;
-	} else if (additional_info == 26 && payload_len > 4) {
-		/* 4-byte length (big-endian) */
-		map_count = ((size_t)payload[1] << 24) | ((size_t)payload[2] << 16) |
-			    ((size_t)payload[3] << 8) | payload[4];
-		pos = 5;
-	} else {
-		/* 8-byte length (27), indefinite-length (31), or reserved: not supported */
-		return -EINVAL;
-	}
-
-	/* Sanity check: key management payloads should not have huge maps */
-	if (map_count > 32) {
-		return -EINVAL;
-	}
 	bool has_pubkey = false;
-	bool has_trust = false;
+	*trust = LICHEN_KEY_TRUST_VERIFIED;
 
-	*trust = LICHEN_KEY_TRUST_VERIFIED; /* default for manual add */
+	while (!zcbor_array_at_end(state)) {
+		struct zcbor_string key;
 
-	for (size_t i = 0; i < map_count && pos < payload_len; i++) {
-		/* Read key (text string) */
-		uint8_t key_type = payload[pos];
-		size_t key_len;
-		const char *key_str;
-
-		if ((key_type & 0xe0) == 0x60) {
-			key_len = key_type & 0x1f;
-			pos++;
-		} else if (key_type == 0x78 && pos + 1 < payload_len) {
-			key_len = payload[pos + 1];
-			pos += 2;
-		} else {
+		if (!zcbor_tstr_decode(state, &key)) {
+			(void)zcbor_list_map_end_force_decode(state);
 			return -EINVAL;
 		}
 
-		if (pos + key_len > payload_len) {
-			return -EINVAL;
-		}
-		key_str = (const char *)&payload[pos];
-		pos += key_len;
-
-		/* Bounds check before reading value type */
-		if (pos >= payload_len) {
-			return -EINVAL;
-		}
-
-		/* Read value */
-		uint8_t val_type = payload[pos];
-		size_t val_len;
-		const uint8_t *val_data;
-
-		if ((val_type & 0xe0) == 0x60) {
-			/* Text string */
-			val_len = val_type & 0x1f;
-			pos++;
-		} else if (val_type == 0x78 && pos + 1 < payload_len) {
-			val_len = payload[pos + 1];
-			pos += 2;
-		} else {
-			/* Skip other CBOR types by advancing pos past the value */
-			uint8_t major = (val_type >> 5) & 0x07;
-			uint8_t info = val_type & 0x1f;
-
-			pos++; /* advance past the initial byte */
-
-			if (major == 0 || major == 1) {
-				/* Unsigned or negative integer */
-				if (info < 24) {
-					/* value is inline, no extra bytes */
-				} else if (info == 24) {
-					pos += 1;
-				} else if (info == 25) {
-					pos += 2;
-				} else if (info == 26) {
-					pos += 4;
-				} else if (info == 27) {
-					pos += 8;
-				} else {
-					return -EINVAL;
-				}
-			} else if (major == 2) {
-				/* Byte string - skip header + data */
-				size_t bstr_len;
-
-				if (info < 24) {
-					bstr_len = info;
-				} else if (info == 24 && pos < payload_len) {
-					bstr_len = payload[pos];
-					pos++;
-				} else {
-					return -EINVAL;
-				}
-				pos += bstr_len;
-			} else if (major == 7) {
-				/* Simple values: false(20), true(21), null(22), undefined(23) */
-				if (info < 24) {
-					/* value is inline, no extra bytes */
-				} else {
-					return -EINVAL;
-				}
-			} else {
-				/* Arrays, maps, tags - not expected in key PUT payload */
+		if (key.len == 6 && memcmp(key.value, "pubkey", 6) == 0) {
+			struct zcbor_string val;
+			if (!zcbor_tstr_decode(state, &val) || val.len == 0) {
+				(void)zcbor_list_map_end_force_decode(state);
 				return -EINVAL;
 			}
-
-			if (pos > payload_len) {
-				return -EINVAL;
-			}
-			continue;
-		}
-
-		if (pos + val_len > payload_len) {
-			return -EINVAL;
-		}
-		val_data = &payload[pos];
-		pos += val_len;
-
-		/* Process known keys */
-		if (key_len == 6 && memcmp(key_str, "pubkey", 6) == 0) {
-			/* Decode base64 pubkey */
-			int dec_len = base64_decode((const char *)val_data, val_len,
+			int dec_len = base64_decode((const char *)val.value, val.len,
 						    pubkey, LICHEN_KEY_PUBKEY_LEN);
 			if (dec_len != LICHEN_KEY_PUBKEY_LEN) {
+				(void)zcbor_list_map_end_force_decode(state);
 				return -EINVAL;
 			}
 			has_pubkey = true;
-		} else if (key_len == 5 && memcmp(key_str, "trust", 5) == 0) {
-			*trust = str_to_trust((const char *)val_data, val_len);
-			has_trust = true;
+		} else if (key.len == 5 && memcmp(key.value, "trust", 5) == 0) {
+			struct zcbor_string val;
+			if (!zcbor_tstr_decode(state, &val) || val.len == 0) {
+				(void)zcbor_list_map_end_force_decode(state);
+				return -EINVAL;
+			}
+			*trust = str_to_trust((const char *)val.value, val.len);
+		} else {
+			if (!zcbor_any_skip(state, NULL)) {
+				(void)zcbor_list_map_end_force_decode(state);
+				return -EINVAL;
+			}
 		}
 	}
 
-	if (!has_pubkey) {
+	if (!zcbor_map_end_decode(state) || !has_pubkey) {
 		return -EINVAL;
 	}
 
@@ -992,49 +896,6 @@ static bool is_local_admin(const struct sockaddr *addr, socklen_t addr_len)
 	return false;
 }
 
-/* --------------------------------------------------------------------------
- * CoAP response helper
- * -------------------------------------------------------------------------- */
-
-static int coap_respond(struct coap_resource *resource,
-			struct coap_packet *request,
-			struct sockaddr *addr, socklen_t addr_len,
-			uint8_t resp_code,
-			const uint8_t *payload, size_t payload_len)
-{
-	uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
-	struct coap_packet resp;
-	uint8_t token[COAP_TOKEN_MAX_LEN];
-	uint8_t tkl = coap_header_get_token(request, token);
-	uint8_t type = (coap_header_get_type(request) == COAP_TYPE_CON)
-		       ? COAP_TYPE_ACK : COAP_TYPE_NON_CON;
-	int ret;
-
-	ret = coap_packet_init(&resp, buf, sizeof(buf), COAP_VERSION_1,
-			       type, tkl, token, resp_code,
-			       coap_header_get_id(request));
-	if (ret < 0) {
-		return ret;
-	}
-
-	if (payload && payload_len > 0) {
-		ret = coap_append_option_int(&resp, COAP_OPTION_CONTENT_FORMAT,
-					     CBOR_CONTENT_FORMAT);
-		if (ret < 0) {
-			return ret;
-		}
-		ret = coap_packet_append_payload_marker(&resp);
-		if (ret < 0) {
-			return ret;
-		}
-		ret = coap_packet_append_payload(&resp, payload, payload_len);
-		if (ret < 0) {
-			return ret;
-		}
-	}
-
-	return coap_resource_send(resource, &resp, addr, addr_len, NULL);
-}
 
 /* --------------------------------------------------------------------------
  * CoAP resource handlers
@@ -1051,12 +912,12 @@ static int keys_list_get(struct coap_resource *resource,
 	size_t len = encode_keys_list_cbor(cbor_buf, sizeof(cbor_buf));
 
 	if (len == 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_INTERNAL_ERROR, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
 	}
 
-	return coap_respond(resource, request, addr, addr_len,
-			    COAP_RESPONSE_CODE_CONTENT, cbor_buf, len);
+	return lichen_coap_respond(resource, request, addr, addr_len,
+			    COAP_RESPONSE_CODE_CONTENT, CBOR_CONTENT_FORMAT, cbor_buf, len);
 }
 
 /*
@@ -1074,48 +935,45 @@ static int keys_single_get(struct coap_resource *resource,
 	size_t len;
 	int ret;
 
-	/* Get URI path options */
 	opt_count = coap_find_options(request, COAP_OPTION_URI_PATH, options, ARRAY_SIZE(options));
 	if (opt_count < 2) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
-	/* Parse IID from second path component */
 	char iid_str[LICHEN_KEY_IID_STR_LEN];
 
 	if (options[1].len >= LICHEN_KEY_IID_STR_LEN) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 	memcpy(iid_str, options[1].value, options[1].len);
 	iid_str[options[1].len] = '\0';
 
 	ret = lichen_key_str_to_iid(iid_str, iid);
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
-	/* Look up key */
 	ret = lichen_key_store_get(iid, &entry);
 	if (ret == -ENOENT) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_NOT_FOUND, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_NOT_FOUND, 0, NULL, 0);
 	}
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_INTERNAL_ERROR, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
 	}
 
 	len = encode_key_single_cbor(&entry, cbor_buf, sizeof(cbor_buf));
 	if (len == 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_INTERNAL_ERROR, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
 	}
 
-	return coap_respond(resource, request, addr, addr_len,
-			    COAP_RESPONSE_CODE_CONTENT, cbor_buf, len);
+	return lichen_coap_respond(resource, request, addr, addr_len,
+			    COAP_RESPONSE_CODE_CONTENT, CBOR_CONTENT_FORMAT, cbor_buf, len);
 }
 
 /*
@@ -1137,70 +995,64 @@ static int keys_single_put(struct coap_resource *resource,
 	/* SECURITY: Require local admin access for write operations */
 	if (!is_local_admin(addr, addr_len)) {
 		LOG_WRN("PUT /keys rejected: not local admin");
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_UNAUTHORIZED, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
 	}
 
-	/* Get URI path options */
 	opt_count = coap_find_options(request, COAP_OPTION_URI_PATH, options, ARRAY_SIZE(options));
 	if (opt_count < 2) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
-	/* Parse IID from second path component */
 	char iid_str[LICHEN_KEY_IID_STR_LEN];
 
 	if (options[1].len >= LICHEN_KEY_IID_STR_LEN) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 	memcpy(iid_str, options[1].value, options[1].len);
 	iid_str[options[1].len] = '\0';
 
 	ret = lichen_key_str_to_iid(iid_str, iid);
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
 	/* Parse payload */
 	payload = coap_packet_get_payload(request, &payload_len);
 	if (payload == NULL || payload_len == 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
 	ret = decode_key_put_cbor(payload, payload_len, pubkey, &trust);
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
 	/* Store key */
 	ret = lichen_key_store_put(iid, pubkey, trust);
 	if (ret == -EEXIST) {
-		/* TOFU violation */
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_CONFLICT, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_CONFLICT, 0, NULL, 0);
 	}
 	if (ret == -ENOMEM) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE, 0, NULL, 0);
 	}
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_INTERNAL_ERROR, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
 	}
 
 	LOG_INF("Key added/updated for IID %s", iid_str);
-	return coap_respond(resource, request, addr, addr_len,
-			    COAP_RESPONSE_CODE_CHANGED, NULL, 0);
+	return lichen_coap_respond(resource, request, addr, addr_len,
+			    COAP_RESPONSE_CODE_CHANGED, 0, NULL, 0);
 }
 
-/*
- * DELETE /keys/{iid} - Remove key (requires admin)
- */
 static int keys_single_delete(struct coap_resource *resource,
 			      struct coap_packet *request,
 			      struct sockaddr *addr, socklen_t addr_len)
@@ -1210,50 +1062,46 @@ static int keys_single_delete(struct coap_resource *resource,
 	uint8_t iid[LICHEN_KEY_IID_LEN];
 	int ret;
 
-	/* SECURITY: Require local admin access for write operations */
 	if (!is_local_admin(addr, addr_len)) {
 		LOG_WRN("DELETE /keys rejected: not local admin");
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_UNAUTHORIZED, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
 	}
 
-	/* Get URI path options */
 	opt_count = coap_find_options(request, COAP_OPTION_URI_PATH, options, ARRAY_SIZE(options));
 	if (opt_count < 2) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
-	/* Parse IID from second path component */
 	char iid_str[LICHEN_KEY_IID_STR_LEN];
 
 	if (options[1].len >= LICHEN_KEY_IID_STR_LEN) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 	memcpy(iid_str, options[1].value, options[1].len);
 	iid_str[options[1].len] = '\0';
 
 	ret = lichen_key_str_to_iid(iid_str, iid);
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_BAD_REQUEST, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
 
-	/* Delete key */
 	ret = lichen_key_store_delete(iid);
 	if (ret == -ENOENT) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_NOT_FOUND, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_NOT_FOUND, 0, NULL, 0);
 	}
 	if (ret < 0) {
-		return coap_respond(resource, request, addr, addr_len,
-				    COAP_RESPONSE_CODE_INTERNAL_ERROR, NULL, 0);
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
 	}
 
 	LOG_INF("Key deleted for IID %s", iid_str);
-	return coap_respond(resource, request, addr, addr_len,
-			    COAP_RESPONSE_CODE_DELETED, NULL, 0);
+	return lichen_coap_respond(resource, request, addr, addr_len,
+			    COAP_RESPONSE_CODE_DELETED, 0, NULL, 0);
 }
 
 /* --------------------------------------------------------------------------
@@ -1281,3 +1129,4 @@ COAP_RESOURCE_DEFINE(keys_single, lichen_coap_server, {
 });
 
 #endif /* CONFIG_LICHEN_COAP_KEYS */
+
