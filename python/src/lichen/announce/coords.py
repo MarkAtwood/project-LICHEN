@@ -211,3 +211,41 @@ def decode_dtn_pending(app_data: bytes) -> list[bytes] | None:
     return None
 
 
+HEADER_TYPE_OPPORTUNISTIC = 0x05
+MAX_OPPORTUNISTIC_CANDIDATES = 4
+OPPORTUNISTIC_SLOT_TIME_MS = 100
+
+
+def encode_opportunistic_forwarders(iids: list[bytes]) -> bytes:
+    if len(iids) > MAX_OPPORTUNISTIC_CANDIDATES:
+        raise ValueError(f"too many forwarders: {len(iids)} (max {MAX_OPPORTUNISTIC_CANDIDATES})")
+    for i, iid in enumerate(iids):
+        if len(iid) != 8:
+            raise ValueError(f"IID {i} has length {len(iid)}, expected 8")
+    return bytes([HEADER_TYPE_OPPORTUNISTIC, len(iids)]) + b"".join(iids)
+
+
+def decode_opportunistic_forwarders(data: bytes) -> list[bytes] | None:
+    i = 0
+    while i + 2 <= len(data):
+        if data[i] == HEADER_TYPE_OPPORTUNISTIC:
+            count = data[i + 1]
+            if count > MAX_OPPORTUNISTIC_CANDIDATES:
+                return None
+            expected_len = 2 + count * 8
+            if len(data) - i != expected_len:
+                return None
+            iids = []
+            for j in range(count):
+                start = i + 2 + j * 8
+                iids.append(data[start : start + 8])
+            return iids
+        i += 1
+    return None
+
+
+def opportunistic_wait_time_ms(rank: int) -> int:
+    if rank < 0:
+        raise ValueError("rank must be non-negative")
+    return rank * OPPORTUNISTIC_SLOT_TIME_MS
+
