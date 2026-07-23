@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.19",
+  "title": "Spec/implementation reconciliation: link, SCHC, RPL, SenML documents contradict each other and the code",
+  "description": "The spec corpus contradicts itself and the (mutually-consistent) implementations in ~15 places. Children per document area. Each item needs a human ruling: fix the spec OR fix the code (if code, all three implementations in lockstep + new vectors). Until resolved, implementers porting from spec text will produce non-interoperable nodes.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:02:42.917489787Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:02:42.917489787Z",
+  "labels": [
+    "parity",
+    "spec",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.19",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:02:43.070119191Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
