@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.32",
+  "title": "DAO processing guards disjoint + multi-target extraction three-way (same DAO bytes install different edges)",
+  "description": "Guards: Rust checks lollipop DAOSequence replay per target (routing.rs:351-357) but NO rpl_instance_id/dodag_id check; C does NO sequence check (replays accepted) but rejects mismatched instance/DODAG ID (routing.c:583-586); Python has NEITHER (dao.py:123-137). A replayed stale DAO: rejected by Rust, accepted by C and Python. A foreign-DODAG DAO: rejected by C, accepted by Rust and Python. Multi-target extraction: Python _extract_edge (dao.py:166-180) raises DaoError (rejects entire DAO); Rust extract_edge (routing.rs:363-382): LAST target wins, LAST transit wins, any option order; C extract_edge (routing.c:382-411): FIRST Target-\u003eTransit pair wins, requires target to precede transit. Same DAO bytes install three different parent edges. New aspect beyond tracked 2auf.44.3/.5. Fix: define the guard set (both checks) and multi-target semantics in the spec, then align all three.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:07:06.805004316Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:07:06.805004316Z",
+  "labels": [
+    "parity",
+    "rpl",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.32",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:07:06.959297803Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
