@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.16",
+  "title": "Rust frame parser tolerates trailing garbage after LENGTH-declared body (Python/C reject)",
+  "description": "rust/lichen-link/src/frame.rs:299-307 data.get(1..expected_total) slices out the declared body and silently ignores bytes past it. Python frame.py:159-163 requires len(body)==length; C frame.c:51-53 requires frame_len == len-1. Empirically: broadcast_min vector + 'ff' appended -\u003e Python reject, C reject, Rust ACCEPTS (signature still verifies because it covers only declared fields - signed-frame malleability). Bounded by LoRa PHY length on-air, but matters at raw byte transports (SLIP/KISS/IPC feeders) where a corrupted stream could append bytes. Fix: require exact length match in Rust parse.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:02:22.911444814Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:02:22.911444814Z",
+  "labels": [
+    "parity",
+    "link",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.16",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:02:23.065961342Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
