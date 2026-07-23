@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.12",
+  "title": "test/vectors/oscore.json: wrong oscore_option values in 3 of 4 protection vectors (verified against RFC 8613)",
+  "description": "Checked against the RFC 8613 text (Appendix C): (1) rfc8613_c5_request_protection_no_salt: vector oscore_option '09140000' - RFC C.5 option value is '091400' (3 bytes); extra trailing 00. aiocoap produces 091400 and its ciphertext matches the vector, so the FIELD is wrong, not the implementations. (2) rfc8613_c7_response_protection: vector '90' - RFC C.7 option value is EMPTY (0 bytes); 0x90 is the CoAP option HEADER byte (delta=9,len=0) from the full message hex, not the value. (3) rfc8613_c8_response_with_partial_iv: vector '920100' - RFC C.8 value is '0100'; 0x92 is again the option header. Also C.8 says sender_seq 256 where the RFC says 0 - inconsistent decoration (the effective request_piv/ciphertext match the RFC). Ciphertexts in all vectors DO match the RFC. Currently dormant because NO implementation consumes the request/response protection vectors (see vector-consumption bead) - the first team to wire them in will fail spuriously or codify wrong expectations. Fix the file (C.5 '091400', C.7 '', C.8 '0100', reconcile C.8 sender_seq) and define in schema.json whether oscore_option holds the bare value or header+value.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:01:34.190813343Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:01:34.190813343Z",
+  "labels": [
+    "parity",
+    "vectors",
+    "oscore",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.12",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:01:34.331800718Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
