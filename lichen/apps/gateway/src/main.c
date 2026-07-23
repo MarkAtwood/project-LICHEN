@@ -623,23 +623,15 @@ int main(void)
 	LOG_INF("LICHEN gateway starting");
 
 #if IS_ENABLED(CONFIG_LICHEN_L2)
-	/*
-	 * When LICHEN L2 is enabled, the L2 layer handles LoRa initialization
-	 * and RX automatically via NET_DEVICE_INIT. The L2 interface will be
-	 * available to the IPv6 stack for sending/receiving packets over LoRa.
-	 */
 	LOG_INF("LICHEN L2 enabled - LoRa handled by network stack");
-
 #if IS_ENABLED(CONFIG_LICHEN_L2_DEV_PROVISIONING)
-	/* SECURITY: bench-only fixed key + static peer; see Kconfig warning. */
-	{
-		int prov = lichen_l2_dev_provision(NULL);
-
-		if (prov != 0) {
-			LOG_ERR("L2 dev provisioning failed: %d", prov);
-		}
+	int prov = lichen_l2_dev_provision(NULL);
+	if (prov != 0) {
+		LOG_ERR("L2 dev provisioning failed: %d", prov);
 	}
 #endif
+	lichen_l2_publish_app_identity("gateway", NULL);
+	lichen_coap_client_init();
 #elif LICHEN_GATEWAY_HAS_LORA
 	int ret;
 
