@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.45",
+  "title": "Rust frame write_to performs no field-consistency validation (Python/C enforce)",
+  "description": "rust/lichen-link/src/frame.rs:259-283 writes whatever mic/dst_addr slices are given; nothing checks mic.len() == mic_length.mic_len() or dst_addr.len() == addr_mode.addr_len(). A mismatched frame serializes with an LLSec that doesn't describe the body and does not round-trip through Rust's own parser. Python frame.py:101-115 (_validate enforces both); C frame.c:131-136 (mic_len vs mic_length check, address length derived from mode). No current caller violates it (build_frame uses constant 4-byte MIC + derived addr mode) - robustness gap only. Fix: return an error on inconsistent fields.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:09:19.500437106Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:09:19.500437106Z",
+  "labels": [
+    "parity",
+    "link",
+    "rust",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.45",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:09:19.645991459Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
