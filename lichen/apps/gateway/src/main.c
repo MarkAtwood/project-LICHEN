@@ -293,13 +293,9 @@ static int status_get(struct coap_resource *resource,
 	 * a half-duplex node switching its radio from TX (the GET it just sent)
 	 * to RX. The gateway answers within <1 ms, so without a gap the reply
 	 * lands during the puck's TX->RX turnaround and is missed — confirmed on
-	 * the T1000-E (LR1110), which never received its own replies. Wait, like
-	 * LoRaWAN Class-A RX1, so the reply arrives after the puck is listening.
-	 * The T-Echo (SX1262) turns around fast enough not to need it, but the
-	 * delay is harmless for it.
+	 * the T1000-E (LR1110). Wait like LoRaWAN Class-A RX1 window.
+	 * The T-Echo turns around fast enough; delay is harmless.
 	 */
-	/* Compile-time guard: with the default 0, K_MSEC(0) -> MAX(0, 0) trips
-	 * bugprone-branch-clone, so drop the call entirely when disabled. */
 #if CONFIG_LICHEN_GATEWAY_RX1_DELAY_MS > 0
 	k_sleep(K_MSEC(CONFIG_LICHEN_GATEWAY_RX1_DELAY_MS));
 #endif
@@ -625,7 +621,13 @@ int main(void)
 #if IS_ENABLED(CONFIG_LICHEN_L2)
 	LOG_INF("LICHEN L2 enabled - LoRa handled by network stack");
 #if IS_ENABLED(CONFIG_LICHEN_L2_DEV_PROVISIONING)
-	int prov = lichen_l2_dev_provision(NULL);
+	int prov = -EAGAIN;
+	for (int i = 0; i < 50 && prov == -EAGAIN; i++) {
+		prov = lichen_l2_dev_provision(NULL);
+		if (prov == -EAGAIN) {
+			k_sleep(K_MSEC(100));
+		}
+	}
 	if (prov != 0) {
 		LOG_ERR("L2 dev provisioning failed: %d", prov);
 	}
@@ -677,6 +679,13 @@ int main(void)
 	 * CONFIG_NET_SLIP_TAP).  native_sim uses the lichen-sim driver
 	 * instead.  No app-level init required in either case. */
 
+	/* Common message contract for BLE adapters (idempotent) */
+#if defined(CONFIG_LORA_LICHEN_MESHTASTIC_BLE) || defined(CONFIG_LORA_LICHEN_MESHCORE_BLE)
+	if (gateway_message_contract_init() < 0) {
+		LOG_WRN("Message contract init failed — BLE apps unavailable");
+	}
+#endif
+
 	/* BLE UART (NUS) — optional, enabled on boards with a BLE radio */
 #ifdef CONFIG_LORA_LICHEN_BLE
 	if (ble_uart_init() < 0) {
@@ -686,9 +695,7 @@ int main(void)
 
 	/* Meshtastic-compatible BLE GATT — optional app compatibility surface */
 #ifdef CONFIG_LORA_LICHEN_MESHTASTIC_BLE
-	if (gateway_message_contract_init() < 0) {
-		LOG_WRN("Message contract init failed — Meshtastic app unavailable");
-	} else if (ble_meshtastic_init() < 0) {
+	if (ble_meshtastic_init() < 0) {
 		LOG_WRN("Meshtastic BLE init failed — Meshtastic app unavailable");
 	} else if (gateway_meshtastic_adapter_init() < 0) {
 		LOG_WRN("Meshtastic adapter init failed — Meshtastic app unavailable");
@@ -701,9 +708,7 @@ int main(void)
 	    gateway_identity_publish_self() < 0) {
 		LOG_WRN("MeshCore app identity using degraded SELF_INFO until key is published");
 	}
-	if (gateway_message_contract_init() < 0) {
-		LOG_WRN("Message contract init failed — MeshCore app unavailable");
-	} else if (ble_meshcore_init() < 0) {
+	if (ble_meshcore_init() < 0) {
 		LOG_WRN("MeshCore BLE init failed — MeshCore app unavailable");
 	} else if (gateway_meshcore_adapter_init() < 0) {
 		LOG_WRN("MeshCore adapter init failed — MeshCore app unavailable");
