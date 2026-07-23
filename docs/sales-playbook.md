@@ -13,15 +13,15 @@
 - Open licensing: CC-BY-4.0 docs, GPL-3.0 code (source offered with every sale).
 
 ## Demo and Pricing
-Demo: Boot sequence, CoAP /status via LCI, RPL mesh formation, SenML position sharing, range test with adaptive SF. Pricing: $75 single / $65 bulk (includes hardware, case, battery, firmware, source offer per GPL). Use Square/crypto/cash; track with inventory scripts and Beads.
+Demo: Boot sequence, CoAP /status via LCI, RPL mesh formation, SenML position sharing, range test with adaptive SF. Pricing: $75 single / $65 bulk (includes hardware, case, battery, firmware, source offer per GPL). Use Square/crypto/cash; track with inventory scripts and Beads. Packaging with QR to repo. Post-event: GitHub Sponsors, storefront. License note: always offer source.
 
 ## FAQ
-(See resolved key sections below for details on specs.)
+**Q: Meshtastic comparison?** LICHEN is incompatible by design (different sync word 0x34, real IPv6 vs proprietary node IDs, full standards stack). Superior scaling, internet gateway, and test-vector validated interop.
 
-**Q: Meshtastic comparison?** LICHEN is incompatible by design (different sync word 0x34, real IPv6, full stack). Superior scaling and standards.
+**Q: Commercial/GPL?** Commercial use allowed if source offered with every distribution (USB/QR/repo link) per GPL-3.0. No proprietary forks.
 
-**Q: Commercial/GPL?** Allowed with source offer.
+**Q: Scale and testing?** Validated at 500 nodes with independent oracles in test/vectors/; CCP-9, adaptive SF via EMA/density rules, multi-root desync recovery, sub-1% loss with 4 gateways. See spec/02a-coordinated-capacity.md.
 
-**Q: Scale and testing?** 500-node validated with independent test vector oracles; CCP gates passed in simulator.
+**Q: How to participate?** Reflash existing Meshtastic hardware, run local mesh, contribute to specs/code on GitHub, join next event.
 
 **What is a PRFAQ?** A PRFAQ (Press Release / FAQ) is an Amazon-originated product planning technique. It starts with a fictional press release written as if the product has already launched successfully, forcing clarity on customer benefit and desired outcome. The FAQ section then anticipates hard internal and external questions. Writing the press release first ensures the team aligns on what success looks like before committing to implementation.
