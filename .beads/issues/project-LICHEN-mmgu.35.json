@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.35",
+  "title": "Routing queue policies diverge: forward-buffer eviction/dequeue/expiry, pending-discovery bounds, DTN buffer model",
+  "description": "Forward buffer (constants agree 8 sources x 2 packets): eviction when a new source arrives at capacity - Python evicts entire LRU source's packets (router.py:208-219), C evicts entire oldest source slot (router.c:809-820), Rust evicts only the single globally-oldest packet (forward_buffer.rs:126-131). Dequeue order: Python per-source FIFO; Rust global (priority, then oldest); C global oldest-first, no priority. Expiry edge: Python drops at deadline \u003c= now; Rust only strictly past deadline; C fixed per-packet age vs constant. Pending-discovery: C has global cap MAX_PENDING=8 with global oldest-eviction plus per-dest 3 (router.c:271-328); Python (router.py:532-540) and Rust (hybrid.rs:301-313) bound per-dest only - total unbounded; expiry at age \u003e= timeout (Py/Rust) vs \u003e timeout (C). DTN buffer: Python/Rust byte-bounded with evict-to-fit and reject-expired-at-insert (router.py:645-682, routing.rs:508-541); C slot-count bounded, no insert-time expiry, disabled by default (router.c:623-752, Kconfig default 0). Same offered load =\u003e different retention/drop behavior per implementation. Define one policy set in spec 05-routing and align.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:07:34.374690746Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:07:34.374690746Z",
+  "labels": [
+    "parity",
+    "routing",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.35",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:07:34.551406753Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
