@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-mmgu.19.3",
+  "title": "Spec reconciliation: RPL/network documents (appendix-rpl B.1, 04-network, SRH ordering, hop-limit)",
+  "description": "(1) spec/appendix-rpl.md:18 rank formula says Rank = (PathETX * 128) + MinHopRankIncrease; all three implementations use etx * MinHopRankIncrease (= etx*256). Impls mutually consistent; spec is the outlier - which is canonical? (2) SRH address ordering: Python's insert/advance stores addresses in FORWARD order with next hop at addresses[len-segments_left] and performs no RFC 8200 swap (routing.py:118-180); RFC 6554/8754 use the reversed list. Python-only today - when Rust/C add insert/advance, which convention is LICHEN's profile? Needs a normative answer + SRH test vector before a second implementation lands. (3) Hop-limit decrement on unicast forwarding: RFC 8200 requires it; spec 04-network.md:178-258 mandates it only for broadcast relay; all three stacks currently omit it for unicast. Intent? (4) Trickle canonical values: see mmgu.8 - the spec values (4096/8/10) match no runtime and the advertised dio_int_min=3 matches nothing; pick one regime.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:04:36.941167983Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:04:36.941167983Z",
+  "labels": [
+    "parity",
+    "spec",
+    "rpl",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.19.3",
+      "depends_on_id": "project-LICHEN-mmgu.19",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:04:37.082629663Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
