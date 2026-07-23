@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-wutk.4",
+  "title": "KISS zero-length frames never dispatched",
+  "description": "lichen/subsys/lichen/transport/kiss_transport.c:91 + lichen/tests/kiss_transport/src/main.c:300-318. spec/kiss-framing.md §1.1 defines DATA as 0-N bytes and §4.3 requires Return (0x0F, no payload) be accepted silently. Code requires ctx-\u003elen \u003e 0 to complete a frame, so a cmd-only frame is never dispatched and the Return path can never execute. The test test_decode_cmd_only enshrines the deviation with a false 'per spec' comment — spec says no such thing. Fix: complete frames on in_frame \u0026\u0026 has_cmd regardless of len; fix test and comment.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T18:25:19.786488011Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T18:25:19.786488011Z",
+  "labels": [
+    "spec-compliance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.4",
+      "depends_on_id": "project-LICHEN-wutk",
+      "type": "parent-child",
+      "created_at": "2026-07-23T18:25:19.926115791Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
