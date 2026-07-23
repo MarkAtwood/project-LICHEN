@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-mmgu.33",
+  "title": "GPSR fallback ordering in mesh-local routing: Rust GPSR-first vs Python GPSR-if-no-LOADng vs C never",
+  "description": "Python router.py:478-486: GPSR only when loadng is None. Rust lichen-node/src/hybrid.rs:246-250: GPSR tried BEFORE queueing for LOADng, always. C routing/router.c:177-192: GPSR never invoked in the route path ('ponytail' comment :188); result QUEUE (LOADng) else DROP. Identical packet + state yields FORWARD (Rust) vs QUEUE (Python) vs DROP (C). Landed coordinated in 6913dc3529, drifted since. Decide the fallback policy (position-based forwarding preference vs route-request queueing) and align.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "agent@lichen-project.dev",
+  "created_at": "2026-07-23T19:07:07.383084551Z",
+  "created_by": "AI Agent",
+  "updated_at": "2026-07-23T19:07:07.383084551Z",
+  "labels": [
+    "parity",
+    "routing",
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mmgu.33",
+      "depends_on_id": "project-LICHEN-mmgu",
+      "type": "parent-child",
+      "created_at": "2026-07-23T19:07:07.535693007Z",
+      "created_by": "AI Agent",
+      "metadata": "{}"
+    }
+  ]
+}
