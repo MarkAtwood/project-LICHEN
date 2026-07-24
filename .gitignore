@@ -34,4 +34,5 @@ lichen/build/
 build_*/
 twister-out*/
 build-*/
+build-provenance-*.log
 
