@@ -967,6 +967,9 @@ int lichen_native_deinit(void)
 
 	k_mutex_unlock(&s_init_mutex);
 	LOG_INF("native deinit complete");
+	if (join_ret != 0) {
+		return -ECANCELED;
+	}
 	return 0;
 }
 

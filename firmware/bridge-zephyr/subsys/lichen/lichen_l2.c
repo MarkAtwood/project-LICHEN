@@ -1348,7 +1348,13 @@ static int lichen_l2_enable(struct net_if *iface, bool state)
 		k_mutex_unlock(&rx_mutex);
 		k_mutex_unlock(&tx_mutex);
 #endif
-		return ret;
+		/*
+		 * ret is only assigned in the enable branch; returning it here
+		 * was uninitialized-stack garbage. An aborted RX thread
+		 * (-ECANCELED) was recovered via deinit above, so it is
+		 * success; any other stop() failure propagates.
+		 */
+		return (ret == -ECANCELED) ? 0 : ret;
 	}
 }
 
