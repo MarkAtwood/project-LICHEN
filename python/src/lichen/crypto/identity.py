@@ -183,8 +183,8 @@ def iid_to_human_address(iid: bytes) -> str:
 def yggdrasil_address(pubkey: bytes) -> IPv6Address:
     """Derive Yggdrasil 02xx::/7 address from Ed25519 pubkey.
 
-    Matches Rust `yggdrasil_addr_from_pubkey` and spec/06-security.md:152
-    (section 8.6 derivation): addr[0]=0x02, addr[1:8]=SHA-512(pubkey)[0:7],
+    Matches Rust `ygg_addr_from_pubkey` (rust/lichen-core/src/addr.rs) and
+    spec/06-security.md §8.5 derivation: addr[0]=0x02, addr[1:8]=SHA-512(pubkey)[0:7],
     addr[8:16]=IID from _pubkey_to_iid (MUST bind lower 64 bits to prevent
     key substitution). See test/vectors/yggdrasil-derivation.json.
     """
