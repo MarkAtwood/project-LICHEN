@@ -645,8 +645,14 @@ static size_t encode_iso8601_timestamp(uint32_t unix_time, char *buf, size_t buf
 	uint32_t days = unix_time / 86400;
 	uint32_t secs = unix_time % 86400;
 	uint16_t year = 1970;
-	uint8_t month = 1;
-	uint8_t day = 1;
+	/*
+	 * Fallback date if the month loop below ever falls through (days
+	 * remaining at or beyond the end of the computed year): clamp to
+	 * Dec 31 so the emitted timestamp is always a valid date set in
+	 * code, never an invariant-dependent or garbage value.
+	 */
+	uint8_t month = 12;
+	uint8_t day = 31;
 
 	static const uint16_t days_in_month[] = {
 		31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
