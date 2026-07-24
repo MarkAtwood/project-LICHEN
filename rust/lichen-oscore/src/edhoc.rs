@@ -1596,9 +1596,9 @@ mod tests {
         let th_2 = hex!("c6405c154c567466ab1df20369500e540e9f14bd3a796a0652cae66c9061688d");
         assert_eq!(transcript_2(&g_y, &message_1).unwrap(), th_2);
 
-        let prk_2e = hex!("e998b69d67c5856ceb6812f20590d0cd55ab25e24bf53348f35915883e94b694");
+        let prk_2e = hex!("d584ac2e5dad5a77d14b53ebe72ef1d5daa8860d399373bf2c240afa7ba804da");
         let keystream_2 = hex!(
-            "980ec0809061cb78fc48b4fc7a0bdbfefe1ddb8d14e5893f16adb48161c8c09bfb6b907eafd9689b3b50ccc2951659d625e1b292a0525af6eb8dd8da53fe0e9dbee89ddcfbda6ae4063e5050e6e98ca82818"
+            "bbcacc62ed972f736871540c7ec7885ec4c1f20b2f8d354631c26b355306f8545bdc6a9c52b6b11a40bf8f464e78cc1e57def5ea7a941e430fce2716b3bf404d07c506955548ad688e37924b054c8535ae1f"
         );
         assert_eq!(
             edhoc_kdf(&prk_2e, &th_2, "KEYSTREAM_2", &[], 82)
@@ -1664,23 +1664,23 @@ mod tests {
             "RFC 9529 Message 2 failed: {verified_message_3:?}"
         );
 
-        let prk_out = hex!("99a837cbc76dcc12ca9756a70d9a2044e7097311828fcce9a20e678810186134");
+        let prk_out = hex!("b2c5f5a4c76d8d7f9f0140d1f65da8215f41000190652c5ed6094f2f83b79a69");
         assert_eq!(
             edhoc_kdf(&prk_2e, &th_4, "PRK_out", &[], 32).unwrap().as_slice(),
             prk_out
         );
-        let prk_exporter = hex!("f8ad34b1f865e09ac008dd4cc4155930ef2d705c46cab0be207ce32d7f377d41");
+        let prk_exporter = hex!("dceb63a42956725cccffd330a7b63d2a192dfa1a183ae468504633b58f6b3f8c");
         assert_eq!(
             edhoc_kdf(&prk_out, &th_4, "10", &[], 32).unwrap().as_slice(),
             prk_exporter
         );
         assert_eq!(
             edhoc_kdf(&prk_exporter, &th_4, "0", &[], 16).unwrap().as_slice(),
-            &hex!("7ced998c60c324cd0936eea02c4584a4")
+            &hex!("5212b18f48af5946d26c3104bf55ddef")
         );
         assert_eq!(
             edhoc_kdf(&prk_exporter, &th_4, "1", &[], 8).unwrap().as_slice(),
-            &hex!("307b26d9b44cfde9")
+            &hex!("bf4054ca95990efa")
         );
 
         let context = export_context(&prk_2e, &th_4, &[0x18], &[0x2d]).unwrap();
