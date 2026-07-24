@@ -288,7 +288,7 @@ def build_from_radio_response(data: bytes) -> bytes:
     """
     if len(data) > 0xFFFF:
         raise GattError(f"Message too large for header: {len(data)}")
-    header = struct.pack("<HBB", len(data), 0, 0)  # len_lo, len_hi, reserved, reserved
+    header = struct.pack("<HBB", len(data), 0, 0)  # 16-bit LE length + 2 reserved bytes
     return header + data
 
 
