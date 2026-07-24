@@ -709,14 +709,12 @@ int slip_transport_init(void)
 		ctx->uart_dev = NULL;
 	}
 
-	k_tid_t tid = k_thread_create(&s_rx_thread, s_rx_stack, K_THREAD_STACK_SIZEOF(s_rx_stack),
+	/* k_thread_create() returns the thread pointer passed in (first arg).
+	 * It cannot fail at runtime - thread/stack resources are sized at build time.
+	 * Invalid priorities are rejected at build time by Kconfig validation. */
+	k_thread_create(&s_rx_thread, s_rx_stack, K_THREAD_STACK_SIZEOF(s_rx_stack),
 			slip_rx_thread_fn, ctx, NULL, NULL,
 			RX_THREAD_PRIORITY, 0, K_NO_WAIT);
-	if (tid == NULL) {
-		k_mutex_unlock(&s_init_mutex);
-		LOG_ERR("slip_transport: k_thread_create failed");
-		return -ENOMEM;
-	}
 	k_thread_name_set(&s_rx_thread, "slip_rx");
 
 	ctx->initialized = true;
