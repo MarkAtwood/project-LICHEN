@@ -414,11 +414,9 @@ fn encode_tstr<const N: usize>(
 /// TH_2 = H(G_Y || H(message_1)) per RFC 9528 / test vectors.
 fn transcript_2(g_y: &[u8], msg1: &[u8]) -> Result<[u8; 32], EdhocError> {
     let h_msg1 = compute_th(msg1);
-    let mut buf = heapless::Vec::<u8, 64>::new();
-    buf.extend_err(g_y)
-        .map_err(|_| EdhocError::BufferTooSmall)?;
-    buf.extend_err(&h_msg1)
-        .map_err(|_| EdhocError::BufferTooSmall)?;
+    let mut buf = heapless::Vec::<u8, 128>::new();
+    encode_bstr(&mut buf, g_y)?;
+    encode_bstr(&mut buf, &h_msg1)?;
     Ok(compute_th(&buf))
 }
 
@@ -1582,12 +1580,12 @@ mod tests {
         assert_eq!(initiator.create_message_1().unwrap().as_slice(), message_1);
 
         let g_y = hex!("dc88d2d51da5ed67fc4616356bc8ca74ef9ebe8b387e623a360ba480b9b29d1c");
-        let th_2 = hex!("c1d8c6ee4eeb1672d7fcbb44f8d811419739b79b852fce03f527eacdaf6633c4");
+        let th_2 = hex!("2f54167907f6977bc19a701f7868feb4a318275864fb94a130c0997a907c2726");
         assert_eq!(transcript_2(&g_y, &message_1).unwrap(), th_2);
 
-        let prk_2e = hex!("e998b69d67c5856ceb6812f20590d0cd55ab25e24bf53348f35915883e94b694");
+        let prk_2e = hex!("80a461e9fb5d000d69eb32415d1f2cdc2170f8e62a6db247f4437cb7569d0934");
         let keystream_2 = hex!(
-            "c8419a8f1cae45674cf4c7ba021a110538c7fa2639ae70f316e8c3c34a0faf5dbf68cf835ec76f8f532fda302c647b303f02397f72710d072bd962118e35c6fe6d3f0a46a4160fba02a12eeec59e54135c3d"
+            "849ca27774bf39cb979f33e7ff97d7ff73c6879843752d57b5f674921fb9454cc4b5c795159e3dc450806b691f98497ca1e75da52f09ff2d9da3ea772ccad880f92f1433437944f0c1ec7ce750f206ea4611"
         );
         assert_eq!(
             edhoc_kdf(&prk_2e, &th_2, "KEYSTREAM_2", &[], 82)
@@ -1604,12 +1602,12 @@ mod tests {
         assert_eq!(&g_y_ciphertext[..32], &g_y);
 
         let plaintext_2 = hex!(
-            "4118a11822822e4879f2a41b510c1f9b5840c3b5bd44d1e44a085c03d3aede4e1e6c11c572a1968cc3629b505f98c681608d3d1de793d1c40eb5dd5d89acf1966aea07022b48cdc99870ebc40374e8fa6e09"
+            "38df8dad084d0e985a6921a8ea7be9cbb79e84855177ac523c5db4db10199cf6482e94a68074b6c2a5e54524e45be94f489f48fc358eff66ee9217ff170f3e52a8a2fe3cabcbe42a2a12724827e2c9edab9e"
         );
         let credential_r = hex!(
             "58f13081ee3081a1a003020102020462319ec4300506032b6570301d311b301906035504030c124544484f4320526f6f742045643235353139301e170d3232303331363038323433365a170d3239313233313233303030305a30223120301e06035504030c174544484f4320526573706f6e6465722045643235353139302a300506032b6570032100a1db47b95184854ad12a0c1a354e418aace33aa0f2c662c00b3ac55de92f9359300506032b6570034100b723bc01eab0928e8b2b6c98de19cc3823d46e7d6987b032478fecfaf14537a1af14cc8be829c6b73044101837eb4abc949565d86dce51cfae52ab82c152cb02"
         );
-        let th_3 = hex!("093c4bed6f1f679d7ef8c6dada0f631b75cf19d8a6eea88b2a5ac1a9fb9e5986");
+        let th_3 = hex!("44831dd0bc974afb9cae47adc6704487305a819f40af0f8f4d94ec72bf37dd22");
         assert_eq!(
             transcript_3(&th_2, &plaintext_2, &credential_r).unwrap(),
             th_3
