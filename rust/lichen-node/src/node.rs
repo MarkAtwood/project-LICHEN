@@ -485,7 +485,7 @@ impl RplNode {
                                     &dio,
                                     dio_bytes,
                                     sender_addr,
-                                    0,
+                                    i8::MIN,
                                     now_ms,
                                 ),
                             };
