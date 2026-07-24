@@ -313,7 +313,7 @@ int lichen_link_copy_identity(const struct lichen_link_ctx *_Nonnull ctx,
 /**
  * @brief Derive 16-byte Yggdrasil address from Ed25519 public key
  *
- * Consistent with Rust yggdrasil_addr_from_pubkey and spec/04-network.md:
+ * Consistent with Rust ygg_addr_from_pubkey and spec/04-network.md:
  * - byte 0 = 0x02 (Yggdrasil 0200::/7 range)
  * - bytes 1-7 = SHA-512(pubkey)[0:7]
  * - bytes 8-15 = IID derived from pubkey (ensures IID matches node's primary address)

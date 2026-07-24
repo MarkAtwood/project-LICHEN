@@ -364,7 +364,7 @@ ZTEST(link_crypto, test_derived_node_keys_authenticate_cross_node)
 ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 {
 	/* Uses test/vectors/yggdrasil-derivation.json vectors (first two).
-	 * Matches Rust lichen-link::identity::yggdrasil_addr_from_pubkey,
+	 * Matches Rust lichen-core::addr::ygg_addr_from_pubkey,
 	 * C lichen_identity_ygg_addr_from_ed25519 oracle, and Python.
 	 * Tests the lichen_yggdrasil_addr wrapper (project-LICHEN-gp7u). */
 	static const uint8_t vec1_pubkey[32] = {
