@@ -61,6 +61,9 @@ class FragmentReceiver:
         self.window_size = window_size
         self.max_size = max_size
         self._tiles: dict[tuple[int, int], bytes] = {}
+        # Monotonic absolute window counter; the wire W bit (frag.window)
+        # alternates 0/1 per window.  _abs_window() maps W bit + context
+        # to this absolute number.
         self._current_window = 0
         self._completed_windows: set[int] = set()
         self._all1_seen = False
