@@ -33,7 +33,7 @@ use tokio::{
     sync::mpsc,
     time::{interval, sleep, Duration},
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 use tracing_subscriber::{fmt, EnvFilter};
 
 #[cfg(target_os = "linux")]
@@ -88,7 +88,7 @@ async fn main() {
         match Config::from_file(path) {
             Ok(c) => c,
             Err(e) => {
-                error!("{e}");
+                error!(error = %e, "config parse failed");
                 std::process::exit(1);
             }
         }
@@ -97,7 +97,7 @@ async fn main() {
     };
 
     let node_id = parse_node_id(&args.node_id).unwrap_or_else(|e| {
-        error!("invalid --node-id: {e}");
+        error!(error = %e, "invalid --node-id");
         std::process::exit(1);
     });
 
@@ -112,7 +112,7 @@ async fn main() {
     let mut storage = match FileStorage::new(storage_path) {
         Ok(s) => s,
         Err(e) => {
-            error!("storage init failed: {}", e);
+            error!(error = %e, "storage init failed");
             std::process::exit(1);
         }
     };
@@ -123,7 +123,7 @@ async fn main() {
             let mut f = match std::fs::File::open("/dev/urandom") {
                 Ok(f) => f,
                 Err(e) => {
-                    error!("cannot open urandom: {}", e);
+                    error!(error = %e, "cannot open urandom");
                     std::process::exit(1);
                 }
             };
@@ -135,7 +135,7 @@ async fn main() {
     };
     let id = Identity::from_seed(seed);
     if id.iid != node_id.0 {
-        error!("configured root IID does not match persisted identity; fail closed");
+        error!(expected_iid = %node_id, actual_iid = %id.iid, "configured root IID does not match persisted identity; fail closed");
         std::process::exit(1);
     }
     let epoch = load_epoch(&storage).unwrap_or(128);
@@ -165,7 +165,11 @@ async fn main() {
         "lichend starting"
     );
     if config.rpl.mode != "non-storing" || config.rpl.instance_id != 1 {
-        error!("unsupported RPL instance/MOP");
+        error!(
+            mode = %config.rpl.mode,
+            instance_id = config.rpl.instance_id,
+            "unsupported RPL instance/MOP"
+        );
         std::process::exit(1);
     }
 
@@ -178,13 +182,13 @@ async fn main() {
         match TunDevice::open("lichen0") {
             Ok(dev) => {
                 if let Err(e) = lichen_gateway::tun::configure("lichen0", &config.ipv6.prefix) {
-                    error!("TUN configure: {e} (try running as root or with CAP_NET_ADMIN)");
+                    error!(error = %e, "TUN configure failed (try running as root or with CAP_NET_ADMIN)");
                     std::process::exit(1);
                 }
                 Some(dev)
             }
             Err(e) => {
-                error!("TUN open: {e} (try running as root or with CAP_NET_ADMIN)");
+                error!(error = %e, "TUN open failed (try running as root or with CAP_NET_ADMIN)");
                 std::process::exit(1);
             }
         }
@@ -279,14 +283,14 @@ where
             // Drain all pending TX frames before the next RX window.
             while let Ok(frame) = tx_recv.try_recv() {
                 match sim.transmit(&frame).await {
-                    Ok(airtime_us) => info!(airtime_us, "TX done"),
-                    Err(e) => warn!("TX failed: {e}"),
+                    Ok(airtime_us) => debug!(airtime_us, frame_len = frame.len(), "TX done"),
+                    Err(e) => warn!(error = %e, "TX failed"),
                 }
             }
             // Listen for an incoming frame with a short timeout.
             match sim.receive(50).await {
                 Ok(Some((payload, rssi, snr))) => {
-                    info!(len = payload.len(), rssi, snr, "RX frame");
+                    debug!(len = payload.len(), rssi, snr, "RX frame");
                     if rx_send.send(payload).await.is_err() {
                         break; // gateway task dropped rx_recv → shutting down
                     }
@@ -301,8 +305,8 @@ where
         // Final drain of any pending TX frames on shutdown (prevents lost transmissions).
         while let Ok(frame) = tx_recv.try_recv() {
             match sim.transmit(&frame).await {
-                Ok(airtime_us) => info!(airtime_us, "TX done (shutdown drain)"),
-                Err(e) => warn!("shutdown TX failed: {e}"),
+                Ok(airtime_us) => debug!(airtime_us, "TX done (shutdown drain)"),
+                Err(e) => warn!(error = %e, "shutdown TX failed"),
             }
         }
     });
@@ -328,15 +332,15 @@ where
                                 Err(mpsc::error::TrySendError::Full(_)) => {
                                     warn!("TX channel full, dropping reply packet");
                                 }
-                                Err(mpsc::error::TrySendError::Closed(_)) => {
-                                    error!("sim task exited, cannot send reply packets");
+                                Err(mpsc::error::TrySendError::Closed(reason)) => {
+                                    error!(error = %reason, "sim task exited, cannot send reply packets");
                                     break;
                                 }
                             }
                         }
                     }
                     None => {
-                        error!("sim task exited, cannot receive inbound packets");
+                        error!("sim task channel closed, cannot receive inbound packets");
                         break;
                     }
                 }
@@ -353,14 +357,14 @@ where
                                 Err(mpsc::error::TrySendError::Full(_)) => {
                                     warn!("TX channel full, dropping outbound packet");
                                 }
-                                Err(mpsc::error::TrySendError::Closed(_)) => {
-                                    error!("sim task exited, cannot send outbound packets");
+                                Err(mpsc::error::TrySendError::Closed(reason)) => {
+                                    error!(error = %reason, "sim task exited, cannot send outbound packets");
                                     break;
                                 }
                             }
                         }
                     }
-                    Err(e) => { error!("TUN recv: {e}"); break; }
+                    Err(e) => { error!(error = %e, "TUN recv failed"); break; }
                 }
             }
             _ = signal::ctrl_c() => {
@@ -379,7 +383,7 @@ where
             info!("sim_task completed");
         }
         _ = sleep(Duration::from_secs(5)) => {
-            warn!("sim_task did not finish in time, aborting");
+            warn!(abort_timeout_s = 5, "sim_task did not finish in time, aborting");
             sim_task.abort();
             let _ = sim_task.await;
         }
@@ -406,7 +410,7 @@ where
     let mut tty = match tokio_serial::SerialStream::open(&tokio_serial::new(interface, baud)) {
         Ok(p) => p,
         Err(e) => {
-            error!("cannot open {interface}: {e}");
+            error!(error = %e, iface = interface, "cannot open serial port");
             return;
         }
     };
@@ -434,12 +438,12 @@ where
                         for packet in packets {
                             if let Some(to_tx) = forward_mesh_to_upstream(gw, &packet, &tun).await {
                                 if let Err(e) = slip.queue_send(&to_tx) {
-                                    warn!("SLIP queue full, dropping reply packet: {e}");
+                                    warn!(error = %e, "SLIP queue full, dropping reply packet");
                                 }
                             }
                         }
                     }
-                    Err(e) => { error!("serial read: {e}"); break; }
+                    Err(e) => { error!(error = %e, "serial read failed"); break; }
                 }
             }
             result = async { match &tun {
@@ -450,11 +454,11 @@ where
                     Ok(n) => {
                         if let Some(schc) = gw.upstream_to_mesh(&tun_buf[..n]) {
                             if let Err(e) = slip.queue_send(&schc) {
-                                warn!("SLIP queue full, dropping packet: {e}");
+                                warn!(error = %e, "SLIP queue full, dropping packet");
                             }
                         }
                     }
-                    Err(e) => { error!("TUN recv: {e}"); break; }
+                    Err(e) => { error!(error = %e, "TUN recv failed"); break; }
                 }
             }
             _ = signal::ctrl_c() => {
@@ -465,21 +469,23 @@ where
 
         while let Ok(Some(n)) = slip.try_get_tx(&mut tx_buf) {
             if let Err(e) = tty.write_all(&tx_buf[..n]).await {
-                error!("serial write: {e}");
+                error!(error = %e, "serial write failed");
                 return;
             }
         }
     }
 }
 
+#[instrument(skip(gw, tun), fields(frame_len = frame.len(), latency_us = 0u64))]
 async fn forward_mesh_to_upstream<T: TunLike>(
     gw: &mut Gateway,
     frame: &[u8],
     tun: &Option<T>,
 ) -> Option<Vec<u8>> {
+    let start = Instant::now();
     let now_ms = {
-        let start = START_TIME.get_or_init(Instant::now);
-        start.elapsed().as_millis() as u64
+        let start_epoch = START_TIME.get_or_init(Instant::now);
+        start_epoch.elapsed().as_millis() as u64
     };
     let (reply_opt, event) = gw.process_rpl(frame, now_ms);
     if let RplEvent::DaoReceived {
@@ -488,8 +494,11 @@ async fn forward_mesh_to_upstream<T: TunLike>(
     {
         info!("DAO event: route updated");
     }
+    let latency_us = start.elapsed().as_micros() as u64;
+    tracing::Span::current().record("latency_us", latency_us);
+
     if let Some(reply) = reply_opt {
-        info!(len = reply.len(), "mesh reply ready for SLIP TX queue");
+        debug!(len = reply.len(), "mesh reply ready for SLIP TX queue");
         Some(reply)
     } else if let Some(ipv6) = gw.mesh_to_upstream(frame) {
         let mut dst = [0u8; 16];
@@ -501,7 +510,7 @@ async fn forward_mesh_to_upstream<T: TunLike>(
         }
         if let Some(t) = tun {
             if let Err(e) = t.send_pkt(&ipv6).await {
-                error!("TUN write: {e}");
+                error!(error = %e, pkt_len = ipv6.len(), "TUN write failed");
             }
         }
         None
@@ -580,7 +589,7 @@ where
                 if let Ok(n) = result {
                     if let Some(schc) = gw.upstream_to_mesh(&tun_buf[..n]) {
                         tx_queue.push_back(schc);
-                        info!(len = schc.len(), "hat TX queued");
+                        debug!(len = schc.len(), "hat TX queued");
                     }
                 }
             }
@@ -591,9 +600,9 @@ where
         }
         while let Some(payload) = tx_queue.pop_front() {
             if let Err(e) = conc.transmit(&payload).await {
-                warn!("concentrator transmit failed: {:?}", e);
+                warn!(error = %e, "concentrator transmit failed");
             } else {
-                info!(len = payload.len(), "hat TX");
+                debug!(len = payload.len(), "hat TX");
             }
         }
     }
