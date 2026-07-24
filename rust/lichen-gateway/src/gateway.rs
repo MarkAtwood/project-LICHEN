@@ -14,7 +14,7 @@ use lichen_node::{
 };
 use lichen_rpl::routing::SourceRoutingHeader;
 use lichen_schc::codec::{compress, decompress, SchcError};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 #[derive(Debug)]
 pub struct Gateway {
@@ -36,9 +36,14 @@ impl Gateway {
     ///
     /// Returns the raw IPv6 packet to inject into the upstream TUN device, or
     /// `None` if decompression fails or the result is not a valid IPv6 packet.
+    #[instrument(skip(self, l2_payload), fields(l2_len = l2_payload.len()))]
     pub fn mesh_to_upstream(&mut self, l2_payload: &[u8]) -> Option<Vec<u8>> {
         if classify_l2_payload(l2_payload) != L2PayloadKind::Schc {
-            warn!("non-SCHC L2 payload received on upstream gateway path");
+            warn!(
+                l2_len = l2_payload.len(),
+                kind = ?classify_l2_payload(l2_payload),
+                "non-SCHC L2 payload received on upstream gateway path"
+            );
             return None;
         }
 
@@ -51,7 +56,7 @@ impl Gateway {
                     return None;
                 }
                 let payload_len = u16::from_be_bytes([out[4], out[5]]);
-                info!(payload_len, "mesh → upstream");
+                debug!(payload_len, "mesh → upstream");
                 Some(out)
             }
             Err(SchcError::BufferTooSmall(e)) => {
@@ -67,7 +72,7 @@ impl Gateway {
                 None
             }
             Err(e) => {
-                warn!("SCHC decompress: {e:?}");
+                warn!(error = %e, "SCHC decompress failed");
                 None
             }
         }
@@ -80,6 +85,7 @@ impl Gateway {
     /// for in buffers and SCHC rules (see lichen-schc and SCHC profile in
     /// spec/drafts/draft-lichen-schc-lora-00.md). Returns the compressed
     /// frame to send via SLIP, or `None` on error.
+    #[instrument(skip(self, ipv6_packet), fields(pkt_len = ipv6_packet.len()))]
     pub fn upstream_to_mesh(&mut self, ipv6_packet: &[u8]) -> Option<Vec<u8>> {
         if ipv6_packet.len() < 40 || ipv6_packet[0] >> 4 != 6 {
             warn!(
@@ -98,11 +104,11 @@ impl Gateway {
             match compress(ipv6_packet, &mut out[1..]) {
                 Ok(n) => {
                     out.truncate(n + 1);
-                    info!(compressed_len = n + 1, "upstream → mesh");
+                    debug!(compressed_len = n + 1, "upstream → mesh");
                     Some(out)
                 }
                 Err(e) => {
-                    warn!("SCHC compress: {e:?}");
+                    warn!(error = %e, "SCHC compress failed");
                     None
                 }
             }
@@ -189,11 +195,11 @@ impl Gateway {
         match compress(&to_compress, &mut out[1..]) {
             Ok(n) => {
                 out.truncate(n + 1);
-                info!(compressed_len = n + 1, "mesh → mesh");
+                debug!(compressed_len = n + 1, "mesh → mesh");
                 Some(out)
             }
             Err(e) => {
-                warn!("SCHC compress mesh_to_mesh: {e:?}");
+                warn!(error = %e, "SCHC compress mesh_to_mesh failed");
                 None
             }
         }
