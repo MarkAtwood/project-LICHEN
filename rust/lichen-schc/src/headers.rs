@@ -991,8 +991,7 @@ impl PacketProfile for RplDaoProfile {
             icmp_len as u16,
             NEXT_HEADER_ICMPV6,
             hop_limit,
-            traffic_class,
-            flow_label,
+            (traffic_class, flow_label),
             &src,
             &dst,
         );
