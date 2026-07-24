@@ -28,6 +28,21 @@ rsource "rpl/Kconfig"
 rsource "routing/Kconfig"
 rsource "transport/Kconfig"
 
+config LICHEN_INSECURE_DEBUG
+	bool "INSECURE: enable dev/test stubs with insecure key handling"
+	default n
+	help
+	  DANGER: Master opt-in for development/test stub code paths that
+	  handle key material insecurely (stub key derivation that reuses
+	  or weakens keys, fixed publicly-known dev keys). Builds with
+	  this option enabled provide NO real cryptographic security and
+	  log loud warnings about insecure keys at runtime.
+
+	  This option exists ONLY for host-based unit tests and bench
+	  development builds. Never enable it in production firmware:
+	  doing so may expose key material and allows anyone to forge
+	  frames.
+
 config LICHEN_ADAPTIVE_SF_ENABLED
 	bool "Adaptive spreading factor selection (per-neighbor SNR/CCP16)"
 	default y

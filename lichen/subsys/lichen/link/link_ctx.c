@@ -25,6 +25,19 @@
 #include "monocypher-ed25519.h"
 #endif
 
+/*
+ * SECURITY: Without Monocypher this file falls back to INSECURE dev/test
+ * stub key handling (raw seed reuse as the private key, XOR seed
+ * derivation, fixed pubkey) that provides no real cryptographic security
+ * and puts trivially-derivable key material on the link. The stubs exist
+ * only for host-based dev/test builds that explicitly opt in via
+ * CONFIG_LICHEN_INSECURE_DEBUG. Fail the build otherwise so stub key
+ * handling can never ship accidentally.
+ */
+#if !defined(CONFIG_LICHEN_CRYPTO_MONOCYPHER) && !defined(CONFIG_LICHEN_INSECURE_DEBUG)
+#error "LICHEN link layer without CONFIG_LICHEN_CRYPTO_MONOCYPHER uses INSECURE stub key handling. Enable CONFIG_LICHEN_CRYPTO_MONOCYPHER for production, or define CONFIG_LICHEN_INSECURE_DEBUG to opt in to the insecure dev/test stubs."
+#endif
+
 /* ─── Logging ─────────────────────────────────────────────────────────────── */
 
 #ifdef __ZEPHYR__
@@ -249,9 +262,10 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx,
 #ifdef CONFIG_LICHEN_LINK_SCHNORR
 #error "CONFIG_LICHEN_LINK_SCHNORR requires CONFIG_LICHEN_CRYPTO_MONOCYPHER for secure key derivation"
 #endif
-	/* Stub for builds without Monocypher - NOT FOR PRODUCTION */
+	/* Stub for CONFIG_LICHEN_INSECURE_DEBUG builds without Monocypher -
+	 * NOT FOR PRODUCTION */
 	if (!stub_warned_load_key) {
-		LOG_WRN("INSECURE: using stub lichen_link_load_key - NOT FOR PRODUCTION\n");
+		LOG_WRN("INSECURE: CONFIG_LICHEN_INSECURE_DEBUG stub lichen_link_load_key in use - keys are NOT secure, NOT FOR PRODUCTION\n");
 		stub_warned_load_key = true;
 	}
 	memcpy(new_sk, seed, sizeof(new_sk));
@@ -330,9 +344,9 @@ int lichen_link_derive_seed(const uint8_t base_seed[LICHEN_SEED_LEN],
 	memcpy(out_seed, hash, LICHEN_SEED_LEN);
 	crypto_wipe(hash, sizeof(hash));
 #else
-	/* Stub for builds without Monocypher - NOT FOR PRODUCTION.
-	 * XOR the EUI-64 into the seed so distinct nodes still get
-	 * distinct (but trivially related) seeds. */
+	/* Stub for CONFIG_LICHEN_INSECURE_DEBUG builds without Monocypher -
+	 * NOT FOR PRODUCTION. XOR the EUI-64 into the seed so distinct
+	 * nodes still get distinct (but trivially related) seeds. */
 	memcpy(out_seed, base_seed, LICHEN_SEED_LEN);
 	for (size_t i = 0; i < LICHEN_EUI64_LEN; i++) {
 		out_seed[i] ^= eui64[i];
