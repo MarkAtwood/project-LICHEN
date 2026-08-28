@@ -146,28 +146,12 @@ ZTEST(schc_generic, test_fallback_length_overflow_regressions)
 static void assert_delivered(struct schc_reassembler *receiver,
 			     const uint8_t *expected, size_t expected_len)
 {
-	/* Matches schc_fragment.json:single_fragment and multi_fragment vectors.
-	 * Independent oracle from RFC 8724; all 3 impls (Python/Rust/C) interop on these. */
-	const uint8_t packet[] = {
-		0x10, 0x11, 0x12, 0x13,
-		0x20, 0x21, 0x22, 0x23,
-		0x30, 0x31,
-	};
-	struct schc_fragmenter fragmenter;
-	struct schc_fragmenter_config config = {
-		.rule_id = TEST_RULE_ID,
-		.window_bits = 2,
-		.fcn_bits = 3,
-		.tile_size = 4,
-		.mtu = 6,
-		.direction = SCHC_FRAGMENT_UPLINK,
-		.mode = SCHC_FRAGMENT_NO_ACK,
-	};
-	uint8_t out[8];
+	const uint8_t *delivered;
+	size_t delivered_len;
 
-	zassert_ok(schc_reassembler_packet(receiver, &packet, &packet_len));
-	zassert_equal(packet_len, expected_len);
-	zassert_mem_equal(packet, expected, expected_len);
+	zassert_ok(schc_reassembler_packet(receiver, &delivered, &delivered_len));
+	zassert_equal(delivered_len, expected_len);
+	zassert_mem_equal(delivered, expected, expected_len);
 }
 
 static void check_literal_fragments(
