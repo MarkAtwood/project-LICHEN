@@ -1,0 +1,38 @@
+# Union merge for append-only config files
+# Two agents adding different options = both kept, no conflict
+Kconfig merge=union
+**/Kconfig merge=union
+
+# Union merge for host test main.c files
+# Host tests (non-Zephyr) typically have main.c files where multiple agents
+# may add test functions independently. Union merge keeps both additions,
+# reducing spurious conflicts in parallel development.
+#
+# WARNING: Union merge on C files can produce invalid code if two agents add
+# the same function name or conflicting declarations. The build will catch
+# this - compilation errors after merge indicate manual resolution is needed.
+lichen/tests/*/main.c merge=union
+
+# Union merge for Rust module declarations
+# lib.rs and mod.rs contain sorted `pub mod foo;` lines - union merge keeps
+# both additions when agents add different modules in parallel.
+# Duplicate mod declarations = cargo build fails loud (correct behavior).
+rust/*/src/lib.rs merge=union
+**/mod.rs merge=union
+
+# Union merge for Python __init__.py files
+# Multiple agents adding different imports = both kept, no conflict
+**/__init__.py merge=union
+
+# Union merge for Zephyr prj.conf files
+# prj.conf is append-only config (CONFIG_FOO=y lines) - safe for union merge.
+# Two agents enabling different options = both kept, no conflict.
+**/prj.conf merge=union
+
+# Union merge for CMakeLists.txt files
+# WARNING: Riskier than other union-merge targets. Union merge can produce
+# invalid CMake if agents add conflicting content (e.g., duplicate targets,
+# incompatible commands). However, for the common case of sorted source lists
+# (target_sources with multiple .c files), union merge works well.
+# CMake configure errors after merge indicate manual resolution is needed.
+**/CMakeLists.txt merge=union

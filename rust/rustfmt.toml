@@ -1,0 +1,6 @@
+# One import per line - prevents merge conflicts when agents add independent imports
+# Requires nightly rustfmt: cargo +nightly fmt
+imports_granularity = "Item"
+
+# Keep imports sorted for deterministic diffs
+reorder_imports = true
