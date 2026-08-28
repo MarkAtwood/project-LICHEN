@@ -60,3 +60,7 @@ CMakeFiles/
 build-test/
 build-exit-*.txt
 build-tsan/
+artifacts-*.txt
+
+# Test caches
+.hypothesis/
