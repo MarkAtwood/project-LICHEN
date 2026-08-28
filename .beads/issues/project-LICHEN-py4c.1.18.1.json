@@ -30,8 +30,7 @@
     "python",
     "test",
     "tui",
-    "zephyr",
-    "needs-linux"
+    "zephyr"
   ],
   "dependencies": [
     {
