@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-rc0k.7",
+  "title": "Add create_group_invitation() signing function and verify_group_invitation() validation function with all spec steps (IID check, expiry, signature, nonce) to group_invitation_cose.py (~80 LOC)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:52:57.870255Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:52:57.870255Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rc0k.7",
+      "depends_on_id": "project-LICHEN-worker6-rc0k",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:52:58.432421Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

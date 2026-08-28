@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-q2y3.8",
+  "title": "Merge .1 + .7: Delete dead RetransmitIter struct and impl (lines 3282-3307) - ~5 LOC deletion",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:44:46.380489Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:44:46.380489Z",
+  "labels": [
+    "review"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-q2y3.8",
+      "depends_on_id": "project-LICHEN-worker6-q2y3",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:44:47.517751Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

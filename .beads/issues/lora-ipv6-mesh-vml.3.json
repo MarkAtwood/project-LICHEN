@@ -1,0 +1,21 @@
+{
+  "id": "lora-ipv6-mesh-vml.3",
+  "title": "Group operations subcommands (list groups, join/leave, send to group) - ~80 LOC",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:54:04.492197Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:54:04.492197Z",
+  "dependencies": [
+    {
+      "issue_id": "lora-ipv6-mesh-vml.3",
+      "depends_on_id": "lora-ipv6-mesh-vml",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:54:04.986037Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

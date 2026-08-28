@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-oeg6.4",
+  "title": "If integrate: Add missing Cargo deps aes, ccm, hkdf, zeroize (~15 LOC)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:48:54.382852Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:48:54.382852Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oeg6.4",
+      "depends_on_id": "project-LICHEN-worker6-oeg6",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:48:54.890763Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-86j5.5",
+  "title": "Implement /keys CRUD tests: GET /keys collection, PUT /keys/\u003cfingerprint\u003e, DELETE /keys/\u003cfingerprint\u003e per spec 17.5.5 (~60 LOC)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:53:10.674439Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:53:10.674439Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-86j5.5",
+      "depends_on_id": "project-LICHEN-86j5",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:53:11.526985Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

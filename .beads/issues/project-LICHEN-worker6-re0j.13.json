@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-re0j.13",
+  "title": "project-LICHEN-worker6-re0j.6: Hardware-in-the-Loop Integration (EPIC)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:45:57.938848Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:45:57.938848Z",
+  "labels": [
+    "blocked:hardware",
+    "renode"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-re0j.13",
+      "depends_on_id": "project-LICHEN-worker6-re0j",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:45:58.589997Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

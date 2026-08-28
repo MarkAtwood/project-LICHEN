@@ -13,7 +13,8 @@
   "close_reason": "Added stub CCA in lichen_link_tx.c:142, updated trait+impls in lichen-hal and lichen-embassy/sim, expanded ccp15.json with 7 vectors matching spec CCP-15; cargo check passed",
   "labels": [
     "codereview",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {

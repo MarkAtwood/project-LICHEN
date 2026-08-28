@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-r4sn.10",
+  "title": "Add multi-channel RX packet dispatcher in gateway - ~50 LOC",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:46:56.406094Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:46:56.406094Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r4sn.10",
+      "depends_on_id": "project-LICHEN-r4sn",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:46:56.888411Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

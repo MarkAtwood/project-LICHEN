@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-r4sn.8",
+  "title": "Wire UDP forwarder client to SX1302Concentrator trait implementation - ~70 LOC",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:46:53.014892Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:46:53.014892Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-r4sn.8",
+      "depends_on_id": "project-LICHEN-r4sn",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:46:53.547148Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

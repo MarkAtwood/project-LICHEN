@@ -1,0 +1,21 @@
+{
+  "id": "lora-ipv6-mesh-o9l.10",
+  "title": "Rollback protection: Define monotonic anti-rollback counter in persistent storage, A/B slot management, version comparison rules, counter update atomicity (~60 LOC)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:55:17.358198Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:55:17.358198Z",
+  "dependencies": [
+    {
+      "issue_id": "lora-ipv6-mesh-o9l.10",
+      "depends_on_id": "lora-ipv6-mesh-o9l",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:55:17.828446Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

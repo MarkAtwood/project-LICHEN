@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-rc0k.9",
+  "title": "Update groups_invite.py CoAP resource to detect and parse COSE_Sign1 format, add per-inviter nonce replay ledger, integrate verification (~60 LOC)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T14:53:01.667222Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T14:53:01.667222Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rc0k.9",
+      "depends_on_id": "project-LICHEN-worker6-rc0k",
+      "type": "parent-child",
+      "created_at": "2026-08-28T14:53:02.32295Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
