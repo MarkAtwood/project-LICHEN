@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-nkc6",
+  "title": "(review) Wave-3 batch codereview pending: rangetest observe gate, slot-coord fixes, group_oscore epochs, oscore fallback",
+  "description": "Per the beads-worker loop, wave-3 changes need the 3-perspective batch review (correctness/security/robustness) before sign-off. Scope: commits f88629bdac + 750fed2ed7 (rangetest observe-authz gate + test nits), 5ffd34b7fe + 80458a82f6 + 3cee68dbb0 (slot-coord Kconfig dep, #error backstop, 4.03 mapping), 1ee62b6a51 + 2f2010b3f0 (group_oscore wrap-coherent epoch contract + retention), d7c40b1916 (oscore respond fallback + new coap_oscore_fallback suite), 1c41da83c9 + 928d53370f (nwjl decomposition, beads only). Review focus: (a) the cyclic-distance epoch metric in group_oscore.py for boundary correctness at 1..0xFFFFFFFF; (b) observe-gate placement vs the 16zc/wr8j gate interactions (both fire on the same GET handler); (c) oscore fallback retry-with-empty-payload path (can a failed protect of a real response mask as success with the empty 5.00?); (d) Kconfig dep chain (KEYS-\u003eSLIP) side effects. Findings -\u003e bd create. Note: agents self-verified with negative tests where cheap (ir24 #error proven live, wmf0 both configs, twister 13/13 + 6/6 + 20/20, pytest 19+161+6 suites).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T19:44:58.732803Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T19:44:58.732803Z"
+}
