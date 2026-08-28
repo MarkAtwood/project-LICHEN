@@ -1,1 +1,2 @@
 {"id":"01a03a17-41f7-7497-8144-4429886406b0","issue_id":"project-LICHEN-worker6-svrn","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-25T18:03:17.879301Z"}
+{"id":"01a04901-637e-7318-a9f8-0a7e7833726e","issue_id":"project-LICHEN-worker6-svrn","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate of f4z7.3, same work verified: python/tests/test_ccp4_regional_channel_plans.py covers the vector file, tests pass.","created_at":"2026-08-28T15:33:42.910204Z"}

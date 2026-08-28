@@ -1,1 +1,2 @@
 {"id":"01a03a17-3b78-7db3-ae38-c9ff97ec05d1","issue_id":"project-LICHEN-worker6-8nr7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-25T18:03:16.216898Z"}
+{"id":"01a04901-2882-767c-afa4-d196ddbab003","issue_id":"project-LICHEN-worker6-8nr7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate of f4z7.1, same work verified: python/tests/test_vector_consumers_lci.py covers all four vector files, tests pass.","created_at":"2026-08-28T15:33:27.810426Z"}
