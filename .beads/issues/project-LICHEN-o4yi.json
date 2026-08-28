@@ -16,7 +16,8 @@
   "close_reason": "Reconciled under project-LICHEN-io1k: stale selectors fixed, native32/x86 builder classified under evidence-needed but inventory updated, T1000-E physical BLOCKED (no device), selectors/docs/matrix/classifications (WIN build, FAIL sim where applicable, BLOCKED physical) complete. All fragments classified. Epic children closed.",
   "labels": [
     "evidence-needed",
-    "zephyr"
+    "zephyr",
+    "needs-linux"
   ],
   "dependencies": [
     {
