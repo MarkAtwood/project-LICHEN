@@ -151,7 +151,7 @@ fn hex_to_array<const N: usize>(hex: &str) -> [u8; N] {
     let len = bytes.len();
     bytes
         .try_into()
-        .expect(&format!("hex_to_array: expected {} bytes, got {}", N, len))
+        .unwrap_or_else(|_| panic!("hex_to_array: expected {} bytes, got {}", N, len))
 }
 
 #[test]

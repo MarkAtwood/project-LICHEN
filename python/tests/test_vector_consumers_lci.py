@@ -298,11 +298,17 @@ def test_sos_seq_rollover() -> None:
     assert vector["previous_seq"] == 255
     assert vector["new_seq"] == 0
     node = "0123456789abcdef"
+    # The uint8 rollover (255 -> 0) applies to the SOS payload seq field; the
+    # relay's origin_sequence is a u64 counter with wraparound-aware stale
+    # rejection, so the equivalent relay-level rollover is 2**64-1 -> 0.
     relay = SosRelay()
-    first = relay.check_relay(node, vector["previous_seq"], ttl=7)
+    first = relay.check_relay(node, 2**64 - 1, ttl=7)
     assert first.should_relay is True
-    wrapped = relay.check_relay(node, vector["new_seq"], ttl=7)
+    wrapped = relay.check_relay(node, 0, ttl=7)
     assert wrapped.should_relay is True
+    # A stale-but-unseen sequence below the high-water mark is dropped.
+    stale = relay.check_relay(node, 2**64 - 3, ttl=7)
+    assert stale.should_relay is False
     assert get_sos_id_from_payload({"node": node, "seq": 255}) == (node, 255)
     assert get_sos_id_from_payload({"node": node, "seq": 0}) == (node, 0)
 

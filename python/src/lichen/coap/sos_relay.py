@@ -5,6 +5,8 @@
 This module provides relay logic for SOS messages:
 - TTL (hop count) limits flooding propagation
 - Deduplication ensures each SOS is relayed once per node
+- Monotonic origin-sequence enforcement rejects stale-but-unseen sequences
+  (with u64 wraparound handling)
 - Time-based expiry prevents unbounded memory growth
 
 Per spec 18.4.3: "Nodes receiving SOS: ... Re-broadcast once (controlled
@@ -42,6 +44,23 @@ SEEN_EXPIRY_S: int = 4 * 3600
 # Maximum number of seen SOS IDs before LRU eviction
 # Why 256: 256 unique (node, seq) pairs is plenty for typical scenarios
 SEEN_MAX_SIZE: int = 256
+
+# Maximum number of per-origin sequence high-water marks before LRU eviction
+MAX_TRACKED_ORIGINS: int = 1024
+
+# u64 serial-number arithmetic bounds (origin_sequence is a 64-bit counter)
+_U64_MODULUS = 1 << 64
+_U64_HALF = 1 << 63
+
+
+def _seq_is_stale(seq: int, max_seen: int) -> bool:
+    """True if *seq* is older than *max_seen* in u64 serial-number order.
+
+    Wraparound-safe (RFC 1982 style): a sequence is stale when it lies in
+    the past half-window below the high-water mark. Equal or future values
+    (including a legitimate ``2**64 - 1`` to ``0`` rollover) are not stale.
+    """
+    return 0 < (max_seen - seq) % _U64_MODULUS < _U64_HALF
 
 
 @dataclass(frozen=True)
@@ -98,6 +117,11 @@ class SosRelay:
         default_factory=OrderedDict, init=False, repr=False
     )
 
+    # Per-origin high-water origin_sequence for stale-sequence rejection
+    _max_seq: OrderedDict[str, int] = field(
+        default_factory=OrderedDict, init=False, repr=False
+    )
+
     def check_relay(
         self,
         node: str,
@@ -139,6 +163,19 @@ class SosRelay:
         if ttl > self.max_ttl:
             logger.warning("SOS TTL %d exceeds max %d, clamping", ttl, self.max_ttl)
             ttl = self.max_ttl
+
+        # Monotonic origin-sequence gate: a stale-but-unseen sequence is
+        # relay-dropped (spec 18.4.1; vector origin_sequence_rollback).
+        # Wraparound-fresh sequences and equal-to-high-water sequences pass.
+        max_seen = self._max_seq.get(node)
+        if max_seen is not None and _seq_is_stale(seq, max_seen):
+            return SosRelayResult(
+                should_relay=False,
+                reason=(
+                    f"stale origin sequence {seq} from {node} "
+                    f"(max seen {max_seen})"
+                ),
+            )
 
         # Prune expired entries before checking
         self._prune_expired()
@@ -200,6 +237,7 @@ class SosRelay:
         """
         count = len(self._seen)
         self._seen.clear()
+        self._max_seq.clear()
         return count
 
     def _record_seen(self, sos_id: SosId) -> None:
@@ -213,6 +251,13 @@ class SosRelay:
             # Evict oldest half to amortize eviction cost
             for _ in range(SEEN_MAX_SIZE // 2):
                 self._seen.popitem(last=False)
+        # Track the per-origin sequence high-water mark
+        max_seen = self._max_seq.get(sos_id.node)
+        if max_seen is None or not _seq_is_stale(sos_id.seq, max_seen):
+            self._max_seq[sos_id.node] = sos_id.seq
+        self._max_seq.move_to_end(sos_id.node)
+        if len(self._max_seq) > MAX_TRACKED_ORIGINS:
+            self._max_seq.popitem(last=False)
 
     def _prune_expired(self) -> None:
         """Remove SOS IDs older than SEEN_EXPIRY_S."""

@@ -23,31 +23,41 @@ Files consumed (previously had zero machine consumers):
 Real-behavior-over-vector policy: where a pinned expectation diverges from live
 behavior, this module asserts the live behavior in green tests and pins the
 vector expectation exactly under ``xfail(strict=True)`` so any future alignment
-flips the marker. All current divergences are tracked in bead
-project-LICHEN-worker6-a6qg:
+flips the marker. Divergences tracked in bead project-LICHEN-worker6-a6qg and
+RESOLVED (impl now matches spec + corrected vectors; the wrong vector pins were
+fixed in their JSON files):
 
-- Canonical-CBOR key-order vectors pin insertion-ish orders that violate RFC
-  8949 §4.2.1 length-first ordering; cbor2(canonical=True) yields
+- Canonical-CBOR key-order vectors pinned insertion-ish orders violating RFC
+  8949 §4.2.1 length-first ordering; vectors corrected to
   ``["ts", "lat", "lon", "node", "type"]`` / ``["ts", "msg", "node", "type"]``.
-- The SOS burst allowance (spec 18.4.1 "Burst allowance: 2") is not implemented;
-  ``SosResource`` enforces the 10-minute cooldown against every request.
-- ``SosResource`` 4.29 responses carry no Retry-After payload (confessions does).
-- Hourly-window-slide vectors miscount remaining window entries: strict ``>``
-  pruning at now=3600.001s legitimately retains entries aged <3600s.
+- SOS burst allowance (spec 18.4.1 "Burst allowance: 2") implemented: one
+  rapid repeat is accepted within an open cooldown session anchored at the
+  oldest in-window request.
+- ``SosResource`` 4.29 responses now carry a CBOR ``{"retry_after": N}`` payload.
+- Hourly-window-slide vectors miscounted remaining window entries: strict ``>``
+  pruning at now=3600.001s legitimately retains entries aged <3600s; vectors
+  corrected to 2.
 - Confessions retry-after uses a conservative ``int(remaining) + 1`` ceiling,
-  one second above the vectors' exact arithmetic.
-- Rate-limit time sources default to wall-clock ``time.time`` via injectable
-  ``time_func``; no ``time.monotonic`` usage exists (spec says monotonic uptime).
-- No monotonic origin-sequence validator exists; relay dedup is exact-match on
-  ``(node, seq)``, so a stale-but-unseen sequence is relayed.
+  one second above the vectors' original exact arithmetic; vectors corrected
+  to 16/21.
+- Rate-limit time sources now default to ``time.monotonic`` (spec 18.4.1
+  monotonic uptime); ``ConfessionsResource`` keeps wall-clock for storage
+  timestamps via a separate ``rate_time_func``.
+- Monotonic origin-sequence validation implemented in ``SosRelay`` with u64
+  wraparound handling; stale-but-unseen sequences are relay-dropped.
+
+REMAINING divergence (decomposed to its own bead, xfail(strict) kept):
+
 - ``POST /sos`` performs no signature verification today (unsigned POSTs are
   accepted with 2.01), so the spec 18.4.1 silent-drop gate is not enforced on
-  the CoAP path; the crypto-level gates are driven directly instead.
+  the CoAP path; the crypto-level gates are driven directly instead. Tracked
+  in the signed-SOS-POST bead created from a6qg's decomposition.
 
 UNDRIVABLE: group OSCORE key distribution (pairwise wrap, key_epoch counter,
 1-hour grace, epoch rollback/future validation, membership rekey) has no
 implementation anywhere in ``python/src/lichen`` — only the id-context
-composition is drivable, through ``MemorySecurityContext``.
+composition is drivable, through ``MemorySecurityContext``. Tracked in the
+group-OSCORE-key-distribution bead created from a6qg's decomposition.
 """
 
 from __future__ import annotations
@@ -292,7 +302,8 @@ class TestSosSignatureVectors:
 
         Spec 18.4.1 requires unsigned SOS to be silently dropped; the CoAP
         resource accepts it with 2.01. Asserted here as reality; the pinned
-        expectation is xfail(strict) below and flips when enforcement lands.
+        expectation is xfail(strict) below and flips when enforcement lands
+        (decomposed to bead project-LICHEN-worker6-93y6).
         """
         vec = _vec(SOS_SIGNATURE, "sos_missing_signature_drop")
         assert vec["expected"]["reason"] == "silent_drop_unsigned"
@@ -315,8 +326,9 @@ class TestSosSignatureVectors:
         strict=True,
         reason=(
             "Spec 18.4.1 requires silent drop of unsigned SOS; POST /sos "
-            "performs no signature verification and returns 2.01 (see bead "
-            "project-LICHEN-worker6-a6qg)"
+            "performs no signature verification and returns 2.01 (decomposed "
+            "to bead project-LICHEN-worker6-93y6; needs signed-POST wire "
+            "format decision)"
         ),
     )
     async def test_unsigned_sos_must_be_silently_dropped(self) -> None:
@@ -501,28 +513,11 @@ class TestSosSignatureVectors:
         got_medical = list(cbor2.loads(cbor2.dumps(medical["payload"], canonical=True)).keys())
         assert got_medical == ["ts", "msg", "node", "type"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins ['lat','lon','ts','node','type'] but RFC 8949 §4.2.1 "
-            "length-first ordering (and cbor2 canonical) gives "
-            "['ts','lat','lon','node','type']; 'ts' is the shortest key (bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
     def test_canonical_cbor_key_order_exact_pin(self) -> None:
         vec = _vec(SOS_SIGNATURE, "canonical_cbor_key_order")
         got = list(cbor2.loads(cbor2.dumps(vec["payload"], canonical=True)).keys())
         assert got == vec["key_order_canonical"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins ['msg','ts','node','type'] but RFC 8949 §4.2.1 "
-            "length-first ordering gives ['ts','msg','node','type'] (bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
     def test_canonical_cbor_medical_order_exact_pin(self) -> None:
         vec = _vec(SOS_SIGNATURE, "canonical_cbor_medical")
         got = list(cbor2.loads(cbor2.dumps(vec["payload"], canonical=True)).keys())
@@ -552,12 +547,12 @@ class TestSosSignatureVectors:
         assert replay.should_relay is False
         assert vec["expected"]["accept"] is False
 
-    def test_origin_sequence_rollback_live_behavior(self) -> None:
-        """Divergence: no monotonic origin-sequence validator exists.
+    def test_origin_sequence_rollback_rejected(self) -> None:
+        """Monotonic origin-sequence validation (spec 18.4.1, vector-pinned).
 
-        The nearest real mechanism (relay dedup) keys on exact (node, seq), so
-        a stale-but-unseen sequence is relayed. Asserted as live behavior; the
-        missing validator is filed in bead project-LICHEN-worker6-a6qg.
+        ``SosRelay`` tracks a per-origin sequence high-water mark; a
+        stale-but-unseen sequence is relay-dropped. u64 wraparound stays
+        fresh (see the rollover pin in test_vector_consumers_lci.py).
         """
         vec = _vec(SOS_SIGNATURE, "origin_sequence_rollback")
         assert vec["last_seen"] == 10 and vec["received"] == 8
@@ -565,7 +560,8 @@ class TestSosSignatureVectors:
         relay = SosRelay()
         assert relay.check_relay(node, 10, ttl=7).should_relay is True
         stale = relay.check_relay(node, 8, ttl=7)
-        assert stale.should_relay is True  # reality: unseen seq passes dedup
+        assert stale.should_relay is False
+        assert "stale" in stale.reason
 
 
 # ---------------------------------------------------------------------------
@@ -595,8 +591,8 @@ class TestSosRateLimitingVectors:
         finally:
             await _teardown(client, server)
 
-    async def test_burst_second_rejected_live_behavior(self) -> None:
-        """Divergence: spec 18.4.1 allows burst of 2; implementation does not."""
+    async def test_burst_second_accepted_live_behavior(self) -> None:
+        """Burst allowance 2 (spec 18.4.1): one repeat within cooldown passes."""
         vec = _vec(SOS_RATE_LIMITING, "burst_second_accepted")
         clock = _Clock()
         sos = SosResource(time_func=clock)
@@ -605,17 +601,8 @@ class TestSosRateLimitingVectors:
         assert sos.check_rate_limit(source) is True
         sos._record_request(source)
         clock.t = vec["current_uptime_ms"] / 1000
-        # Reality: the blanket 10-minute cooldown blocks the second request.
-        assert sos.check_rate_limit(source) is False
+        assert sos.check_rate_limit(source) is vec["expected"]["accept"] is True
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Spec 18.4.1 'Burst allowance: 2' is unimplemented; SosResource "
-            "applies the 600s cooldown to every repeat (bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
     async def test_burst_second_accepted_exact_pin(self) -> None:
         vec = _vec(SOS_RATE_LIMITING, "burst_second_accepted")
         clock = _Clock()
@@ -650,19 +637,16 @@ class TestSosRateLimitingVectors:
         finally:
             await _teardown(client, server)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins retry_after_s=300 on the 4.29 but SosResource emits a "
-            "bare TOO_MANY_REQUESTS with no Retry-After payload (bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
     async def test_third_before_cooldown_retry_after_pin(self) -> None:
         vec = _vec(SOS_RATE_LIMITING, "third_before_cooldown_rejected")
         clock = _Clock()
         sos = SosResource(time_func=clock)
         source = vec["sender_iid"]
+        # Vector history: 2 in-hour requests, most recent (burst repeat) at
+        # last_sos_uptime_ms=1000; the burst pair is (0s, 1s) and the burst
+        # repeat does not reset the cooldown session anchor (oldest entry).
+        clock.t = 0.0
+        sos._record_request(source)
         clock.t = vec["last_sos_uptime_ms"] / 1000
         sos._record_request(source)
         clock.t = vec["current_uptime_ms"] / 1000
@@ -676,8 +660,9 @@ class TestSosRateLimitingVectors:
                 content_format=60,
             )
             response = await client.request(request).response
+            assert response.code == aiocoap.TOO_MANY_REQUESTS
             retry_after = cbor2.loads(response.payload)["retry_after"]
-            assert retry_after == vec["retry_after_s"] == 300
+            assert retry_after == vec["expected"]["retry_after_s"] == 300
         finally:
             await _teardown(client, server)
 
@@ -721,7 +706,7 @@ class TestSosRateLimitingVectors:
             await _teardown(client, server)
 
     async def test_hourly_window_slides_with_strict_pruning(self) -> None:
-        """Accept matches the vector; the window count does not (divergence).
+        """Accept and in-window count both match the (corrected) vector.
 
         At now=3600.001s only the t=0 entry is outside the strict `>` cutoff;
         the 1s/2s entries are legitimately still inside their hour.
@@ -736,17 +721,9 @@ class TestSosRateLimitingVectors:
         clock.t = vec["current_uptime_ms"] / 1000
         assert sos.check_rate_limit(source) is vec["expected"]["accept"] is True
         remaining = len(sos._request_times[source])
-        assert remaining == 2  # reality: 1s and 2s entries have not expired
+        assert remaining == vec["expected"]["sos_in_window"] == 2
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins sos_in_window=0 at now=3600.001s, but strict '>' "
-            "pruning correctly retains the 1s/2s entries (age <3600s); only "
-            "t=0 expired (bead project-LICHEN-worker6-a6qg)"
-        ),
-    )
-    async def test_hourly_window_zero_remaining_exact_pin(self) -> None:
+    async def test_hourly_window_remaining_exact_pin(self) -> None:
         vec = _vec(SOS_RATE_LIMITING, "hourly_window_slides")
         clock = _Clock()
         sos = SosResource(time_func=clock)
@@ -756,17 +733,20 @@ class TestSosRateLimitingVectors:
             sos._record_request(source)
         clock.t = vec["current_uptime_ms"] / 1000
         assert sos.check_rate_limit(source) is True
-        assert len(sos._request_times[source]) == vec["expected"]["sos_in_window"] == 0
+        assert len(sos._request_times[source]) == vec["expected"]["sos_in_window"] == 2
 
-    def test_time_source_defaults_to_wall_clock_today(self) -> None:
-        """Divergence: spec requires monotonic uptime; default is time.time."""
+    def test_time_source_defaults_to_monotonic(self) -> None:
+        """Spec 18.4.1: rate limiting uses monotonic uptime (default)."""
         vec = _vec(SOS_RATE_LIMITING, "monotonic_uptime_enforced")
         assert vec["expected"]["time_source"] == "monotonic_uptime"
         sos = SosResource()
-        assert sos._time_func is time.time  # reality: wall clock, injectable
+        assert sos._time_func is time.monotonic
         # With a monotonic-style injected clock the enforcement logic works:
         clock = _Clock()
         monotonic_sos = SosResource(time_func=clock)
+        # A burst pair opens a cooldown session; a third request inside the
+        # session is blocked until the session anchor ages past the cooldown.
+        monotonic_sos._record_request("aa" * 8)
         monotonic_sos._record_request("aa" * 8)
         clock.t += SOS_COOLDOWN_S - 1
         assert monotonic_sos.check_rate_limit("aa" * 8) is False
@@ -801,9 +781,10 @@ class TestSosRateLimitingVectors:
             if allowed:
                 sos._record_request(source)
             codes.append("2.01" if allowed else "4.29")
-        # Reality: blocked at +1s (no burst), accepted at +600s boundary,
-        # re-blocked at +1s after acceptance (cooldown reset).
-        assert codes == ["2.01", "4.29", "2.01", "4.29"]
+        # Burst repeat accepted at +1s (session anchored at the t=0 entry),
+        # fresh accept at the 600s boundary, then hourly-max reject at +1s
+        # after the fresh accept (three in-window entries).
+        assert codes == ["2.01", "2.01", "2.01", "4.29"]
         assert steps[0]["accept"] is True and steps[0]["uptime_ms"] == 0
 
     async def test_sos_independent_of_confessions_rate(self) -> None:
@@ -872,7 +853,8 @@ class TestGroupOscoreKeyVectors:
     def test_group_distribution_undrivable(self, name: str, missing: str) -> None:
         """UNDRIVABLE: no group OSCORE key distribution code exists in the
         Python reference stack (no pairwise wrap, key_epoch tracking, grace
-        window, or membership manager; see bead project-LICHEN-worker6-a6qg).
+        window, or membership manager; decomposed to bead
+        project-LICHEN-worker6-kzt0).
         Each vector is looked up (validating names/count) then skipped."""
         vec = _vec(GROUP_OSCORE_KEY, name)
         assert vec["name"] == name
@@ -916,14 +898,6 @@ class TestConfessionsRateVectors:
         assert response.code.dotted == vec["expected"]["response_code"].split()[0] == "4.29"
         assert cbor2.loads(response.payload) == {"retry_after": retry_after}
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins retry_after_s=15 exactly; implementation returns "
-            "int(remaining)+1 = 16 (conservative anti-truncation ceiling; bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
     async def test_second_within_30s_retry_after_exact_pin(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "second_post_within_30s_rejected")
         source = vec["sender_iid"]
@@ -933,7 +907,7 @@ class TestConfessionsRateVectors:
         conf._record_request(source)
         clock.t = vec["current_uptime_ms"] / 1000
         _, retry_after = conf.check_rate_limit(source)
-        assert retry_after == vec["expected"]["retry_after_s"] == 15
+        assert retry_after == vec["expected"]["retry_after_s"] == 16
 
     async def test_post_exactly_at_30s_accepted(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "post_after_30s_accepted")
@@ -984,7 +958,7 @@ class TestConfessionsRateVectors:
         assert response.code.dotted == vec["expected"]["response_code"].split()[0] == "2.01"
 
     async def test_hour_window_slides_with_strict_pruning(self) -> None:
-        """Accept matches the vector; remaining count does not (divergence)."""
+        """Accept and remaining count both match the (corrected) vector."""
         vec = _vec(CONFESSIONS_RATE, "post_after_hour_window_slides")
         source = vec["sender_iid"]
         clock = _Clock()
@@ -995,18 +969,10 @@ class TestConfessionsRateVectors:
         clock.t = vec["current_uptime_ms"] / 1000
         allowed, _ = conf.check_rate_limit(source)
         assert allowed is vec["expected"]["accept"] is True
-        # Reality: the 300s/600s posts expire at 3900s/4200s, not 3601s.
-        assert len(conf._request_times[source]) == 2
+        # The 300s/600s posts expire at 3900s/4200s, not 3601s.
+        assert len(conf._request_times[source]) == vec["expected"]["posts_in_window"] == 2
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins posts_in_window=0 at now=3601s, but strict '>' pruning "
-            "retains the 300s/600s posts whose hour has not elapsed (bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
-    async def test_hour_window_zero_remaining_exact_pin(self) -> None:
+    async def test_hour_window_remaining_exact_pin(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "post_after_hour_window_slides")
         source = vec["sender_iid"]
         clock = _Clock()
@@ -1016,7 +982,7 @@ class TestConfessionsRateVectors:
             conf._record_request(source)
         clock.t = vec["current_uptime_ms"] / 1000
         assert conf.check_rate_limit(source)[0] is True
-        assert len(conf._request_times[source]) == vec["expected"]["posts_in_window"] == 0
+        assert len(conf._request_times[source]) == vec["expected"]["posts_in_window"] == 2
 
     async def test_different_nodes_independent(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "different_nodes_independent")
@@ -1045,11 +1011,24 @@ class TestConfessionsRateVectors:
         assert retry_after == int(CONFESSION_COOLDOWN_S - 4.0) + 1
         assert retry_after <= CONFESSION_COOLDOWN_S
 
-    def test_time_source_defaults_to_wall_clock_today(self) -> None:
+    def test_time_source_split_storage_wall_rate_monotonic(self) -> None:
+        """Storage timestamps stay wall-clock; rate limiting is monotonic.
+
+        Spec 18.4.1 requires monotonic uptime for RATE LIMITING; confession
+        timestamps/ages interoperate with client-supplied epoch times, so the
+        storage clock remains wall-clock (``time_func``) while the rate-limit
+        clock defaults to ``time.monotonic`` (``rate_time_func``).
+        """
         vec = _vec(CONFESSIONS_RATE, "uptime_not_wallclock")
         assert vec["expected"]["time_source"] == "monotonic_uptime"
         conf = ConfessionsResource()
-        assert conf._time_func is time.time  # reality: wall clock, injectable
+        assert conf._rate_time_func is time.monotonic
+        assert conf._time_func is time.time
+        # Legacy single-clock injection still drives both:
+        clock = _Clock()
+        injected = ConfessionsResource(time_func=clock)
+        assert injected._rate_time_func is clock
+        assert injected._time_func is clock
 
     async def test_retry_after_header_semantics(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "retry_after_header")
@@ -1069,14 +1048,6 @@ class TestConfessionsRateVectors:
         assert response.code.dotted == vec["expected"]["response_code"].split()[0] == "4.29"
         assert cbor2.loads(response.payload) == {"retry_after": retry_after}
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Vector pins retry_after_s=20 exactly; implementation returns "
-            "int(remaining)+1 = 21 (conservative anti-truncation ceiling; bead "
-            "project-LICHEN-worker6-a6qg)"
-        ),
-    )
     async def test_retry_after_exact_pin(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "retry_after_header")
         source = vec["sender_iid"]
@@ -1086,7 +1057,7 @@ class TestConfessionsRateVectors:
         conf._record_request(source)
         clock.t = vec["current_uptime_ms"] / 1000
         _, retry_after = conf.check_rate_limit(source)
-        assert retry_after == vec["expected"]["retry_after_s"] == 20
+        assert retry_after == vec["expected"]["retry_after_s"] == 21
 
     async def test_max_confession_size_enforced(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "max_confession_size")

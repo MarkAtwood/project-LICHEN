@@ -69,17 +69,28 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
         *,
         is_border_router: bool = False,
         time_func: Any = None,
+        rate_time_func: Any = None,
     ) -> None:
         """Initialize confessions resource.
 
         Args:
             is_border_router: If True, use larger 8KB storage; else 2KB.
             time_func: Optional callable returning current time (for testing).
+                       Drives storage expiry and confession timestamps.
+            rate_time_func: Optional callable for rate limiting. Spec 18.4.1
+                       requires monotonic uptime for rate limiting, so this
+                       defaults to time.monotonic; passing ``time_func``
+                       alone overrides it for backwards compatibility.
         """
         super().__init__()
         self._is_border_router = is_border_router
         self._storage_limit = CONFESSION_STORAGE_BR if is_border_router else CONFESSION_STORAGE_LEAF
         self._time_func = time_func if time_func is not None else time.time
+        self._rate_time_func = (
+            rate_time_func
+            if rate_time_func is not None
+            else (time_func if time_func is not None else time.monotonic)
+        )
         # Confessions storage: list of (id, content_dict, size_bytes, expire_time)
         self._confessions: list[dict[str, Any]] = []
         self._total_size = 0
@@ -106,7 +117,7 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
         """Remove request timestamps older than 1 hour for the given source."""
         if source_hex not in self._request_times:
             return
-        now = self._time_func()
+        now = self._rate_time_func()
         cutoff = now - 3600  # 1 hour
         self._request_times[source_hex] = [
             ts for ts in self._request_times[source_hex] if ts > cutoff
@@ -123,7 +134,7 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
             retry_after_seconds is the time until next request is allowed.
         """
         self._prune_old_requests(source_hex)
-        now = self._time_func()
+        now = self._rate_time_func()
 
         if source_hex not in self._request_times:
             return (True, 0)
@@ -146,7 +157,7 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
 
     def _record_request(self, source_hex: str) -> None:
         """Record a successful request timestamp for rate limiting."""
-        now = self._time_func()
+        now = self._rate_time_func()
         if source_hex not in self._request_times:
             self._request_times[source_hex] = []
         self._request_times[source_hex].append(now)
@@ -181,7 +192,7 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
         self._prune_old_requests(source_hex)
         timestamps = self._request_times.get(source_hex, [])
         remaining = CONFESSION_HOURLY_MAX - len(timestamps)
-        now = self._time_func()
+        now = self._rate_time_func()
 
         if not timestamps:
             reset_s = 3600

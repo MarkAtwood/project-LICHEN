@@ -43,9 +43,12 @@ class SosResource(resource.ObservableResource):
     application layer driving :meth:`retrigger`; the resource itself only
     tracks state and notifies on changes.
 
-    Rate limiting: each source node is limited to 3 requests per hour with a
-    minimum 10-minute cooldown between requests. This prevents SOS flooding
-    while allowing legitimate emergency use.
+    Rate limiting per spec/12-apps.md 18.4.1: each source is limited to
+    3 requests per hour with a 10-minute cooldown between cooldown sessions.
+    "Burst allowance: 2" permits one rapid repeat within an open cooldown
+    session; the session anchor is the oldest in-window request, so a burst
+    repeat does not postpone the cooldown. Rate limiting uses monotonic
+    uptime so enforcement works without wall-clock sync.
     """
 
     def __init__(self, time_func: Any = None) -> None:
@@ -53,13 +56,14 @@ class SosResource(resource.ObservableResource):
 
         Args:
             time_func: Optional callable returning current time (for testing).
-                       Defaults to time.time.
+                       Defaults to time.monotonic (spec 18.4.1 requires
+                       monotonic uptime for rate limiting).
         """
         super().__init__()
         self._active = False
         self._from: str | None = None
         self._t: float | None = None
-        self._time_func = time_func if time_func is not None else time.time
+        self._time_func = time_func if time_func is not None else time.monotonic
         # Per-source rate limiting: maps source hex -> list of request timestamps
         self._request_times: dict[str, list[float]] = {}
 
@@ -80,20 +84,43 @@ class SosResource(resource.ObservableResource):
 
         Returns True if request is allowed, False if rate-limited.
 
-        Rate limits:
-        - 10-minute cooldown between requests from same source
+        Rate limits per spec 18.4.1:
         - Maximum 3 requests per hour from same source
+        - 10-minute cooldown per cooldown session, where the session anchor
+          is the oldest in-window request (a burst repeat does not reset it)
+        - Burst allowance 2: one rapid repeat is accepted while a cooldown
+          session is open (i.e. exactly one prior in-window request)
         """
         self._prune_old_requests(source_hex)
-        if source_hex not in self._request_times:
+        timestamps = self._request_times.get(source_hex)
+        if not timestamps:
             return True
-        timestamps = self._request_times[source_hex]
-        now = self._time_func()
-        # Check cooldown: most recent request must be > 10 min ago
-        if timestamps and (now - timestamps[-1]) < SOS_COOLDOWN_S:
+        # Hourly max: 3 requests in the last hour
+        if len(timestamps) >= SOS_HOURLY_MAX:
             return False
-        # Check hourly max: must have fewer than 3 requests in last hour
-        return len(timestamps) < SOS_HOURLY_MAX
+        now = self._time_func()
+        # Cooldown session anchor: oldest in-window request
+        elapsed = now - min(timestamps)
+        if elapsed >= SOS_COOLDOWN_S:
+            return True
+        # Within an open cooldown session: burst allowance permits one repeat
+        return len(timestamps) == 1
+
+    def retry_after_s(self, source_hex: str) -> int:
+        """Seconds until the binding rate limit lifts (for 4.29 responses).
+
+        Callers invoke this only after :meth:`check_rate_limit` returned
+        False for *source_hex*.
+        """
+        now = self._time_func()
+        timestamps = self._request_times.get(source_hex)
+        if not timestamps:
+            return SOS_COOLDOWN_S
+        remaining = 3600 - (now - min(timestamps))
+        if len(timestamps) >= SOS_HOURLY_MAX:
+            return max(0, int(remaining))
+        # Cooldown session: lifts when the session anchor ages past 600 s
+        return max(0, int(SOS_COOLDOWN_S - (now - min(timestamps))))
 
     def _record_request(self, source_hex: str) -> None:
         """Record a successful request timestamp for rate limiting."""
@@ -160,7 +187,11 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.BAD_REQUEST)
         # Check rate limit before activating
         if not self.check_rate_limit(from_hex):
-            return Message(code=aiocoap.TOO_MANY_REQUESTS)
+            # 4.29 with CBOR Retry-After details (spec 18.4.1 rate limiting)
+            retry = Message(code=aiocoap.TOO_MANY_REQUESTS)
+            retry.payload = cbor2.dumps({"retry_after": self.retry_after_s(from_hex)})
+            retry.opt.content_format = CBOR
+            return retry
         self._record_request(from_hex)
         self.activate(bytes.fromhex(from_hex), timestamp)
         return Message(code=CREATED)

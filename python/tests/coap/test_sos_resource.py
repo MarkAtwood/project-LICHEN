@@ -252,16 +252,20 @@ class TestSosRateLimiting:
         sos = SosResource()
         assert sos.check_rate_limit(_EUI.hex()) is True
 
-    def test_request_within_cooldown_blocked(self) -> None:
-        """Request within 10-minute cooldown should be blocked."""
+    def test_burst_repeat_allowed_third_blocked(self) -> None:
+        """Spec 18.4.1 burst allowance 2: one repeat within the cooldown
+        session passes; a third before the cooldown lifts is blocked."""
         current_time = _T0
         sos = SosResource(time_func=lambda: current_time)
         # First request allowed
         assert sos.check_rate_limit(_EUI.hex()) is True
         sos._record_request(_EUI.hex())
-        # Request 5 minutes later should be blocked (within 10min cooldown)
+        # Burst repeat 5 minutes later is allowed (one repeat per session)
         current_time = _T0 + 300  # 5 minutes
         sos._time_func = lambda: current_time
+        assert sos.check_rate_limit(_EUI.hex()) is True
+        sos._record_request(_EUI.hex())
+        # A third request while the session is still open is blocked
         assert sos.check_rate_limit(_EUI.hex()) is False
 
     def test_request_after_cooldown_allowed(self) -> None:
@@ -315,7 +319,9 @@ class TestSosRateLimiting:
         sos._record_request(source_a)
         # Source B should still be allowed immediately
         assert sos.check_rate_limit(source_b) is True
-        # Source A should be blocked (within cooldown)
+        # Source A used its burst repeat already: a third request while the
+        # cooldown session is open is blocked
+        sos._record_request(source_a)
         assert sos.check_rate_limit(source_a) is False
 
     async def test_post_rate_limited_returns_too_many_requests(self) -> None:
@@ -334,7 +340,12 @@ class TestSosRateLimiting:
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
             assert resp.code == aiocoap.CREATED
-            # Second POST within cooldown should be rate limited
+            # Second POST within cooldown is the burst repeat: still accepted
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.CREATED
+            # Third POST while the cooldown session is open: rate limited
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
