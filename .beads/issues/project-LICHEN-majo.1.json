@@ -15,7 +15,8 @@
   "close_reason": "Already fixed",
   "labels": [
     "codereview",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
