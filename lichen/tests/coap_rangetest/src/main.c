@@ -564,6 +564,84 @@ ZTEST(coap_rangetest, test_observe_registered_only_on_success) {
 		     "Observe=1 must deregister");
 }
 
+ZTEST(coap_rangetest, test_get_interval_requires_authz) {
+	struct coap_packet request = {0};
+	struct coap_packet observe_request = {0};
+	uint8_t pkt_buf[64];
+	struct coap_resource resource = {0};
+	struct coap_packet plain_request = {0};
+	struct sockaddr_in6 peer = {.sin6_family = AF_INET6};
+	const struct rangetest_vector *valid = find_vector(
+		"rangetest_get_interval_valid");
+	int ret;
+
+	/* Unauthenticated GET with an interval_ms body: 4.01 and the
+	 * interval must stay at the default. */
+	init_provider();
+	zassert_equal(lichen_rangetest_interval_ms(),
+		      LICHEN_RANGETEST_DEFAULT_INTERVAL_MS);
+	oscore_protected = false;
+	admin_result = false;
+	arm_vector(valid);
+	invoke_vector(valid, &resource, &request,
+		      (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED,
+		      "unprotected non-admin interval GET must be 4.01, "
+		      "got 0x%02x",
+		      response_code);
+	zassert_equal(lichen_rangetest_interval_ms(),
+		      LICHEN_RANGETEST_DEFAULT_INTERVAL_MS,
+		      "4.01 must not change s_interval_ms");
+
+	/* Same request carrying Observe: the 4.01 fires before RFC 7641
+	 * registration, so no observer slot is consumed. */
+	ret = build_observe_request(&observe_request, pkt_buf, sizeof(pkt_buf),
+				    0U);
+	zassert_ok(ret, "packet init");
+	request_payload = valid->body;
+	request_payload_len = valid->body_len;
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &observe_request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED,
+		      "observe + interval body must be 4.01 pre-auth");
+	zassert_true(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		     "4.01 must not consume an observer slot");
+
+	/* Local-admin plain GET with the interval body: allowed and the
+	 * interval is set. */
+	oscore_protected = false;
+	admin_result = true;
+	invoke_vector(valid, &resource, &request,
+		      (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_equal(lichen_rangetest_interval_ms(), 1000U,
+		      "authorized interval body must set s_interval_ms");
+
+	/* OSCORE-protected GET with the interval body: allowed too. */
+	init_provider();
+	oscore_protected = true;
+	admin_result = false;
+	invoke_vector(valid, &resource, &request,
+		      (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_equal(lichen_rangetest_interval_ms(), 1000U,
+		      "protected interval body must set s_interval_ms");
+
+	/* Plain unauthenticated GET without a body stays public: 2.05 and
+	 * the interval is untouched. */
+	oscore_protected = false;
+	admin_result = false;
+	request_payload = NULL;
+	request_payload_len = 0U;
+	invoke_vector(find_vector("rangetest_get_default"), &resource,
+		      &plain_request, (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_equal(lichen_rangetest_interval_ms(), 1000U,
+		      "public GET must not change the interval");
+}
+
 ZTEST(coap_rangetest, test_skip_item_rejects_wrapping_map_argument) {
 	/* Unknown-key value is a map with an 8-byte argument of 2^63:
 	 * doubling it would wrap to 0 and make the container look empty,

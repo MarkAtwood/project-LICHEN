@@ -806,6 +806,16 @@ int lichen_rangetest_get_handler(struct coap_resource *resource,
 			resource, request, addr, addr_len, &oscore,
 			COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
 	}
+	/* A GET carrying an interval_ms body reconfigures the continuous
+	 * test (spec 18.7.3) and is gated like a mutation; a plain GET
+	 * stays publicly readable per spec 18.7. */
+	if (interval.has_interval_ms && !oscore.is_protected &&
+	    !lichen_coap_is_local_admin(addr, addr_len)) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_UNAUTHORIZED,
+						    0, NULL, 0);
+	}
 	if (interval.has_interval_ms) {
 		k_mutex_lock(&s_mutex, K_FOREVER);
 		s_interval_ms = interval.interval_ms;
