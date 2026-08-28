@@ -1,0 +1,7 @@
+{
+  "id": "1787937752933520000-1",
+  "issue_id": "project-LICHEN-253m",
+  "author": "Mark Atwood",
+  "text": "Worker-wave note: children .8/.9/.10 carry defer-external + hardware labels and require the RAK2287 concentrator on the bench - they keep resurfacing at the top of the ready queue and getting claimed/unclaimed by code-only worker waves. Skipping by id until hardware is present.",
+  "created_at": "2026-08-28T17:22:32.93352Z"
+}

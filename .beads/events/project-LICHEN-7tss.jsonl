@@ -1,1 +1,0 @@
-{"id": "019f8c33-9b64-702e-b23a-c7ff7ac442ad", "issue_id": "project-LICHEN-7tss", "event_type": "closed", "actor": "AI Agent", "old_value": "", "new_value": "Added max_payload validation in to_bytes(); raises UdpError for >65527 byte payloads (prevents OverflowError). Test passes.", "created_at": "2026-07-22T23:40:20.196012639Z"}

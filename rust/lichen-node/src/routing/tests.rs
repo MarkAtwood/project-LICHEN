@@ -743,8 +743,8 @@ fn unsupported_mop_and_ocp_are_rejected_without_mutation() {
 fn spoofed_dao_target_is_rejected_before_replay_state_changes() {
     let root_addr = link_local(1);
     let target = test_origin(2);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao(root_addr);
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao(root_addr.into());
     let mut root = Router::new_root(root_addr);
 
     assert!(!root.process_dao_at_ms(&dao, target, link_local(3), 0));
@@ -759,10 +759,10 @@ fn aggregated_dao_uses_parent_for_packet_source_group() {
     let first_target = ula(2);
     let packet_source = ula(3);
     let source_parent = ula(2);
-    let mut first = DaoManager::new(first_target, RPL_INSTANCE_ID, root_addr);
-    let mut second = DaoManager::new(packet_source, RPL_INSTANCE_ID, root_addr);
-    let mut dao = first.build_dao(root_addr);
-    let second_dao = second.build_dao(source_parent);
+    let mut first = DaoManager::new(first_target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let mut second = DaoManager::new(packet_source.into(), RPL_INSTANCE_ID, root_addr.into());
+    let mut dao = first.build_dao(root_addr.into());
+    let second_dao = second.build_dao(source_parent.into());
     let _parsed = Dao::from_bytes(&second_dao).unwrap();
     dao.extend_from_slice(Dao::options_tail(&second_dao));
 
@@ -777,8 +777,8 @@ fn dao_helper_returns_every_parent_for_source_group() {
     let root_addr = ula(1);
     let packet_source = ula(2);
     let alternate_parent = ula(3);
-    let mut sender = DaoManager::new(packet_source, RPL_INSTANCE_ID, root_addr);
-    let mut dao = sender.build_dao(root_addr);
+    let mut sender = DaoManager::new(packet_source.into(), RPL_INSTANCE_ID, root_addr.into());
+    let mut dao = sender.build_dao(root_addr.into());
     let transit = TransitInfo {
         external: false,
         path_control: 1,
@@ -801,10 +801,10 @@ fn processing_dao_expires_routes_with_active_lifetime_unit() {
     let root_addr = link_local(1);
     let first_target = test_origin(2);
     let second_target = test_origin(3);
-    let mut first = DaoManager::new(first_target, RPL_INSTANCE_ID, root_addr);
-    let mut second = DaoManager::new(second_target, RPL_INSTANCE_ID, root_addr);
-    let first_dao = first.build_dao_with_lifetime(root_addr, 1);
-    let second_dao = second.build_dao(root_addr);
+    let mut first = DaoManager::new(first_target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let mut second = DaoManager::new(second_target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let first_dao = first.build_dao_with_lifetime(root_addr.into(), 1);
+    let second_dao = second.build_dao(root_addr.into());
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(10));
 
@@ -819,9 +819,9 @@ fn processing_dao_expires_routes_with_active_lifetime_unit() {
 fn exact_dao_at_expiry_reports_accepted_update() {
     let root_addr = link_local(1);
     let target = test_origin(2);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao_with_lifetime(root_addr, 1);
-    let exact = sender.build_dao_copy_with_lifetime(root_addr, 1).unwrap();
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
+    let exact = sender.build_dao_copy_with_lifetime(root_addr.into(), 1).unwrap();
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(1));
 
@@ -836,8 +836,8 @@ fn exact_dao_at_expiry_reports_accepted_update() {
 fn finite_route_expires_during_idle_lookup_and_timer() {
     let root_addr = link_local(1);
     let target = test_origin(2);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao_with_lifetime(root_addr, 1);
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(1));
 
@@ -851,8 +851,8 @@ fn finite_route_expires_during_idle_lookup_and_timer() {
 fn maintenance_expires_idle_route_at_boundary_without_changing_trickle() {
     let root_addr = link_local(1);
     let target = test_origin(2);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao_with_lifetime(root_addr, 1);
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(1));
     assert!(root.process_dao_at_ms(&dao, target, target, 1_000));
@@ -883,8 +883,8 @@ fn dao_clock_expires_across_u32_boundary() {
     const WRAP: u64 = 0x1_0000_0000;
     let root_addr = link_local(1);
     let target = test_origin(2);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao_with_lifetime(root_addr, 1);
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(1));
 
@@ -898,8 +898,8 @@ fn dao_clock_expires_after_half_range_gap() {
     const HALF: u64 = 0x8000_0000;
     let root_addr = link_local(1);
     let target = test_origin(2);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao_with_lifetime(root_addr, 1);
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(1));
 
@@ -913,22 +913,22 @@ fn dao_is_rejected_when_no_future_deadline_is_representable() {
     let root_addr = link_local(1);
     let target = test_origin(2);
     let infinite_target = test_origin(3);
-    let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-    let mut infinite = DaoManager::new(infinite_target, RPL_INSTANCE_ID, root_addr);
-    let dao = sender.build_dao_with_lifetime(root_addr, 1);
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let mut infinite = DaoManager::new(infinite_target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
     let mut root = Router::new_root(root_addr);
 
     assert!(!root.process_dao_at_ms(&dao, target, target, u64::MAX - 1_000));
     assert!(root.lookup_route(&target).is_none());
     assert!(root.process_dao_at_ms(
-        &infinite.build_dao(root_addr),
+        &infinite.build_dao(root_addr.into()),
         infinite_target,
         infinite_target,
         u64::MAX,
     ));
     assert!(root.lookup_route(&infinite_target).is_some());
     assert!(root.process_dao_at_ms(
-        &infinite.build_dao_with_lifetime(root_addr, 0),
+        &infinite.build_dao_with_lifetime(root_addr.into(), 0),
         infinite_target,
         infinite_target,
         u64::MAX,
@@ -1551,8 +1551,8 @@ fn signed_dao(
     sequence: u64,
 ) -> ([u8; 16], Vec<u8>) {
     let origin = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-    let mut manager = DaoManager::new(origin, RPL_INSTANCE_ID, dodag);
-    let unsigned = manager.build_dao(parent);
+    let mut manager = DaoManager::new(origin.into(), RPL_INSTANCE_ID, dodag.into());
+    let unsigned = manager.build_dao(parent.into());
     let link = LinkLayer::new(identity.clone());
     let wire = sign_dao(&unsigned, origin, dodag, sequence, &link).unwrap();
     (origin, wire)

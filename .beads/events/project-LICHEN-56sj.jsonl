@@ -1,1 +1,0 @@
-{"id": "019f8b77-ada2-7bca-bf29-2659033d75f8", "issue_id": "project-LICHEN-56sj", "event_type": "closed", "actor": "AI Agent", "old_value": "", "new_value": "Payload length bounds-checked before memcpy; commit 7f85d1d69", "created_at": "2026-07-22T20:15:04.098773553Z"}

@@ -33,6 +33,8 @@ pub use crate::verify::{
 };
 
 #[cfg(feature = "std")]
+use core::net::Ipv6Addr;
+#[cfg(feature = "std")]
 use std::{
     collections::{HashMap, HashSet},
     vec,
@@ -168,7 +170,7 @@ pub enum DaoDiagnosticDisposition {
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DaoDiagnosticCandidate {
-    pub parent: [u8; 16],
+    pub parent: Ipv6Addr,
     pub external: bool,
     pub path_control: u8,
     pub path_lifetime: u8,
@@ -180,9 +182,9 @@ pub struct DaoDiagnosticCandidate {
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DaoDiagnosticSelectedCandidate {
-    pub parent: [u8; 16],
+    pub parent: Ipv6Addr,
     pub preference_subfield: u8,
-    pub path: Vec<[u8; 16]>,
+    pub path: Vec<Ipv6Addr>,
 }
 
 #[doc(hidden)]
@@ -190,9 +192,9 @@ pub struct DaoDiagnosticSelectedCandidate {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DaoDiagnosticTarget {
     pub prefix_length: u8,
-    pub prefix: [u8; 16],
+    pub prefix: Ipv6Addr,
     pub descriptor: Option<u32>,
-    pub sequence_authority: [u8; 16],
+    pub sequence_authority: Ipv6Addr,
     pub path_sequence: u8,
     pub disposition: DaoDiagnosticDisposition,
     pub candidates: Vec<DaoDiagnosticCandidate>,
@@ -236,8 +238,8 @@ const FRESHNESS_TOMBSTONE_RETENTION_SECONDS: u64 = 60 * 60;
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct DaoUpdate {
-    target: [u8; 16],
-    parent: [u8; 16],
+    target: Ipv6Addr,
+    parent: Ipv6Addr,
     path_control: u8,
     path_sequence: u8,
     path_lifetime: u8,
@@ -247,7 +249,7 @@ struct DaoUpdate {
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct DaoCandidate {
-    parent: [u8; 16],
+    parent: Ipv6Addr,
     path_control: u8,
     path_lifetime: u8,
 }
@@ -296,26 +298,26 @@ struct DaoTiming {
 #[cfg(feature = "std")]
 #[derive(Debug)]
 pub struct DaoManager {
-    node_address: [u8; 16],
+    node_address: Ipv6Addr,
     is_root: bool,
     rpl_instance_id: u8,
-    dodag_id: [u8; 16],
+    dodag_id: Ipv6Addr,
     routing_table: RoutingTable,
     dao_sequence: u8,
     path_sequence: u8,
-    last_built_dao: Option<([u8; 16], u8)>,
-    parent_map: HashMap<[u8; 16], Vec<[u8; 16]>>,
-    edge_expiry: HashMap<([u8; 16], [u8; 16]), Option<u64>>,
-    origin_seq_map: HashMap<[u8; 16], Freshness>,
-    path_seq_map: HashMap<[u8; 16], Freshness>,
-    candidate_map: HashMap<[u8; 16], Vec<DaoCandidate>>,
-    descriptor_map: HashMap<[u8; 16], Option<u32>>,
+    last_built_dao: Option<(Ipv6Addr, u8)>,
+    parent_map: HashMap<Ipv6Addr, Vec<Ipv6Addr>>,
+    edge_expiry: HashMap<(Ipv6Addr, Ipv6Addr), Option<u64>>,
+    origin_seq_map: HashMap<Ipv6Addr, Freshness>,
+    path_seq_map: HashMap<Ipv6Addr, Freshness>,
+    candidate_map: HashMap<Ipv6Addr, Vec<DaoCandidate>>,
+    descriptor_map: HashMap<Ipv6Addr, Option<u32>>,
     origin_high_water: HighWaterMap,
 }
 
 #[cfg(feature = "std")]
 impl DaoManager {
-    pub fn new(node_address: [u8; 16], rpl_instance_id: u8, dodag_id: [u8; 16]) -> Self {
+    pub fn new(node_address: Ipv6Addr, rpl_instance_id: u8, dodag_id: Ipv6Addr) -> Self {
         Self {
             node_address,
             is_root: false,
@@ -335,7 +337,7 @@ impl DaoManager {
         }
     }
 
-    fn as_root(node_address: [u8; 16], rpl_instance_id: u8, dodag_id: [u8; 16]) -> Self {
+    fn as_root(node_address: Ipv6Addr, rpl_instance_id: u8, dodag_id: Ipv6Addr) -> Self {
         let mut m = Self::new(node_address, rpl_instance_id, dodag_id);
         m.is_root = true;
         m
@@ -363,9 +365,9 @@ impl DaoManager {
 
     pub fn provision_root<S: NonVolatile>(
         storage: &mut S,
-        node_address: [u8; 16],
+        node_address: Ipv6Addr,
         rpl_instance_id: u8,
-        dodag_id: [u8; 16],
+        dodag_id: Ipv6Addr,
     ) -> Result<(Self, DaoRxState), DaoProvisionError<S::Error>> {
         match Self::open_root(storage, node_address, rpl_instance_id, dodag_id) {
             Ok(_) => {
@@ -381,9 +383,9 @@ impl DaoManager {
         }
         let mut payload = [0u8; HIGH_WATER_HEADER_LEN];
         encode_high_water(
-            node_address,
+            node_address.octets(),
             rpl_instance_id,
-            dodag_id,
+            dodag_id.octets(),
             &HashMap::new(),
             &mut payload,
         )
@@ -403,9 +405,9 @@ impl DaoManager {
 
     pub fn open_root<S: NonVolatile>(
         storage: &S,
-        node_address: [u8; 16],
+        node_address: Ipv6Addr,
         rpl_instance_id: u8,
-        dodag_id: [u8; 16],
+        dodag_id: Ipv6Addr,
     ) -> Result<(Self, DaoRxState), DaoPersistentOpenError<S::Error>> {
         let mut a = vec![0u8; HIGH_WATER_PAYLOAD_LEN + SLOT_OVERHEAD];
         let mut b = vec![0u8; HIGH_WATER_PAYLOAD_LEN + SLOT_OVERHEAD];
@@ -423,9 +425,9 @@ impl DaoManager {
         if persisted.len() < HIGH_WATER_HEADER_LEN {
             return Err(DaoPersistentOpenError::Corrupt);
         }
-        if persisted[..16] != node_address
+        if persisted[..16] != node_address.octets()
             || persisted[16] != rpl_instance_id
-            || persisted[17..HIGH_WATER_SCOPE_LEN] != dodag_id
+            || persisted[17..HIGH_WATER_SCOPE_LEN] != dodag_id.octets()
         {
             return Err(DaoPersistentOpenError::ScopeMismatch);
         }
@@ -515,7 +517,11 @@ impl DaoManager {
         }
 
         let dao = verified.envelope.dao.clone();
-        if !Self::has_exact_origin_target(&dao, verified.envelope.unsigned_bytes, verified.origin) {
+        if !Self::has_exact_origin_target(
+            &dao,
+            verified.envelope.unsigned_bytes,
+            Ipv6Addr::from(verified.origin),
+        ) {
             return Err(DaoProcessError::RouteRejected);
         }
         let Some((updates, update_count)) =
@@ -534,7 +540,7 @@ impl DaoManager {
         if !Self::sender_is_authorized(
             &updates,
             update_count,
-            verified.origin,
+            Ipv6Addr::from(verified.origin),
             self.node_address,
             authenticated_sender_iid,
         ) {
@@ -546,7 +552,7 @@ impl DaoManager {
                 dao,
                 updates,
                 update_count,
-                verified.origin,
+                Ipv6Addr::from(verified.origin),
                 skip_dao_sequence_check,
                 DaoTiming {
                     now_seconds: timing.now_seconds,
@@ -568,9 +574,9 @@ impl DaoManager {
             .insert(verified.public_key, (verified.signed_dao_sha256, sequence));
         let mut payload = vec![0u8; HIGH_WATER_PAYLOAD_LEN];
         let len = encode_high_water(
-            self.node_address,
+            self.node_address.octets(),
             self.rpl_instance_id,
-            self.dodag_id,
+            self.dodag_id.octets(),
             &proposed.origin_high_water,
             &mut payload,
         )
@@ -592,11 +598,12 @@ impl DaoManager {
     fn sender_is_authorized(
         updates: &[Option<DaoUpdate>; MAX_DAO_UPDATES],
         update_count: usize,
-        origin: [u8; 16],
-        root: [u8; 16],
+        origin: Ipv6Addr,
+        root: Ipv6Addr,
         sender_iid: [u8; 8],
     ) -> bool {
-        let link_local_origin = origin[0] == 0xfe && origin[1] & 0xc0 == 0x80;
+        let origin_octets = origin.octets();
+        let link_local_origin = origin_octets[0] == 0xfe && origin_octets[1] & 0xc0 == 0x80;
         let mut found_origin = false;
         for update in updates[..update_count].iter().flatten() {
             if update.target != origin {
@@ -604,17 +611,18 @@ impl DaoManager {
             }
             found_origin = true;
             if link_local_origin {
-                let canonical_link_local_parent = update.parent[0] == 0xfe
-                    && update.parent[1] == 0x80
-                    && update.parent[2..8] == [0; 6];
+                let parent_octets = update.parent.octets();
+                let canonical_link_local_parent = parent_octets[0] == 0xfe
+                    && parent_octets[1] == 0x80
+                    && parent_octets[2..8] == [0; 6];
                 if !canonical_link_local_parent {
                     return false;
                 }
-                if update.parent[8..] == root[8..] {
-                    if origin[8..] != sender_iid {
+                if parent_octets[8..] == root.octets()[8..] {
+                    if origin_octets[8..] != sender_iid {
                         return false;
                     }
-                } else if update.parent[8..] != sender_iid {
+                } else if parent_octets[8..] != sender_iid {
                     return false;
                 }
             }
@@ -622,7 +630,7 @@ impl DaoManager {
         found_origin
     }
 
-    fn has_exact_origin_target(_dao: &Dao, dao_bytes: &[u8], origin: [u8; 16]) -> bool {
+    fn has_exact_origin_target(_dao: &Dao, dao_bytes: &[u8], origin: Ipv6Addr) -> bool {
         let mut target = None;
         for option in OptionIter::new(Dao::options_tail(dao_bytes)) {
             let Ok(option) = option else {
@@ -638,7 +646,7 @@ impl DaoManager {
                 target = Some(parsed);
             }
         }
-        target.is_some_and(|target| target.prefix_len == 128 && target.prefix == origin)
+        target.is_some_and(|target| target.prefix_len == 128 && target.prefix == origin.octets())
     }
 
     pub fn routing_table(&self) -> &RoutingTable {
@@ -651,9 +659,9 @@ impl DaoManager {
 
     #[doc(hidden)]
     pub fn diagnostic_root(
-        node_address: [u8; 16],
+        node_address: Ipv6Addr,
         rpl_instance_id: u8,
-        dodag_id: [u8; 16],
+        dodag_id: Ipv6Addr,
     ) -> Self {
         Self::as_root(node_address, rpl_instance_id, dodag_id)
     }
@@ -662,7 +670,7 @@ impl DaoManager {
     pub fn process_route_state_diagnostic(
         &mut self,
         dao_bytes: &[u8],
-        sequence_authority: [u8; 16],
+        sequence_authority: Ipv6Addr,
         timing: DaoProcessTiming,
         limits: DaoDiagnosticLimits,
     ) -> Result<bool, DaoDiagnosticError> {
@@ -699,7 +707,7 @@ impl DaoManager {
     #[doc(hidden)]
     pub fn route_state_diagnostic(
         &self,
-        sequence_authority: [u8; 16],
+        sequence_authority: Ipv6Addr,
         lifetime_unit_seconds: u64,
     ) -> Vec<DaoDiagnosticTarget> {
         let mut targets: Vec<_> = self
@@ -737,11 +745,11 @@ impl DaoManager {
                     })
                     .collect::<Option<Vec<_>>>()?;
                 let selected_candidate = if disposition == DaoDiagnosticDisposition::Active {
-                    self.routing_table.lookup(target).and_then(|path| {
+                    self.routing_table.lookup(&target.octets()).and_then(|path| {
                         let parent = if path.len() == 1 {
                             self.node_address
                         } else {
-                            path[path.len() - 2]
+                            Ipv6Addr::from(path[path.len() - 2])
                         };
                         let candidate = self
                             .candidate_map
@@ -752,7 +760,7 @@ impl DaoManager {
                             parent,
                             preference_subfield: Self::path_control_rank(candidate.path_control)?
                                 + 1,
-                            path: path.to_vec(),
+                            path: path.iter().map(|hop| Ipv6Addr::from(*hop)).collect(),
                         })
                     })
                 } else {
@@ -777,12 +785,12 @@ impl DaoManager {
     /// Build a DAO advertising this node with `parent_addr` as transit.
     ///
     /// Returns the encoded bytes: DAO base + RPL Target option + Transit Info option.
-    pub fn build_dao(&mut self, parent_addr: [u8; 16]) -> Vec<u8> {
+    pub fn build_dao(&mut self, parent_addr: Ipv6Addr) -> Vec<u8> {
         self.build_dao_with_lifetime(parent_addr, 255)
     }
 
     /// Build a DAO with an explicit Path Lifetime; zero creates a No-Path DAO.
-    pub fn build_dao_with_lifetime(&mut self, parent_addr: [u8; 16], path_lifetime: u8) -> Vec<u8> {
+    pub fn build_dao_with_lifetime(&mut self, parent_addr: Ipv6Addr, path_lifetime: u8) -> Vec<u8> {
         self.dao_sequence = increment_lollipop(self.dao_sequence);
         self.path_sequence = increment_lollipop(self.path_sequence);
         let wire = self.build_dao_inner(parent_addr, path_lifetime);
@@ -794,7 +802,7 @@ impl DaoManager {
     /// Path Sequence. The DAOSequence still advances so root replay checks remain valid.
     pub fn build_dao_copy_with_lifetime(
         &mut self,
-        parent_addr: [u8; 16],
+        parent_addr: Ipv6Addr,
         path_lifetime: u8,
     ) -> Option<Vec<u8>> {
         if self.last_built_dao != Some((parent_addr, path_lifetime)) {
@@ -804,13 +812,13 @@ impl DaoManager {
         Some(self.build_dao_inner(parent_addr, path_lifetime))
     }
 
-    fn build_dao_inner(&self, parent_addr: [u8; 16], path_lifetime: u8) -> Vec<u8> {
+    fn build_dao_inner(&self, parent_addr: Ipv6Addr, path_lifetime: u8) -> Vec<u8> {
         let dao = Dao {
             rpl_instance_id: self.rpl_instance_id,
             ack_requested: false,
             flags: 0,
             dao_sequence: self.dao_sequence,
-            dodag_id: Some(self.dodag_id),
+            dodag_id: Some(self.dodag_id.octets()),
         };
 
         let mut buf = [0u8; 64]; // DAO(20) + Target(20) + TransitInfo(22) = 62
@@ -820,7 +828,7 @@ impl DaoManager {
 
         let target = RplTarget {
             prefix_len: 128,
-            prefix: self.node_address,
+            prefix: self.node_address.octets(),
         };
         let mut tmp = [0u8; 24];
         let n = target
@@ -834,7 +842,7 @@ impl DaoManager {
             path_control: 0x80,
             path_sequence: self.path_sequence,
             path_lifetime,
-            parent_address: parent_addr,
+            parent_address: parent_addr.octets(),
         };
         pos += transit
             .write_to(&mut buf[pos..])
@@ -889,7 +897,7 @@ impl DaoManager {
     pub fn process_dao_at(
         &mut self,
         dao_bytes: &[u8],
-        origin: [u8; 16],
+        origin: Ipv6Addr,
         now_seconds: u64,
         lifetime_unit_seconds: u64,
     ) -> bool {
@@ -941,7 +949,7 @@ impl DaoManager {
         dao: Dao,
         updates: [Option<DaoUpdate>; MAX_DAO_UPDATES],
         update_count: usize,
-        origin: [u8; 16],
+        origin: Ipv6Addr,
         skip_dao_sequence_check: bool,
         timing: DaoTiming,
         limits: DaoStateLimits,
@@ -959,7 +967,7 @@ impl DaoManager {
         if dao.rpl_instance_id != self.rpl_instance_id
             || dao
                 .dodag_id
-                .is_some_and(|dodag_id| dodag_id != [0u8; 16] && dodag_id != self.dodag_id)
+                .is_some_and(|dodag_id| dodag_id != [0u8; 16] && dodag_id != self.dodag_id.octets())
         {
             return Err(());
         }
@@ -986,7 +994,7 @@ impl DaoManager {
             !parents.is_empty()
         });
 
-        let mut incoming_candidates: HashMap<[u8; 16], Vec<DaoCandidate>> = HashMap::new();
+        let mut incoming_candidates: HashMap<Ipv6Addr, Vec<DaoCandidate>> = HashMap::new();
         let mut incoming_descriptors = HashMap::new();
         for update in updates[..update_count].iter().flatten() {
             if incoming_descriptors
@@ -1024,7 +1032,7 @@ impl DaoManager {
             return Err(());
         }
 
-        let incoming_targets: HashSet<[u8; 16]> = incoming_candidates.keys().copied().collect();
+        let incoming_targets: HashSet<Ipv6Addr> = incoming_candidates.keys().copied().collect();
         let mut changed_targets = HashSet::new();
         for (target, candidates) in &incoming_candidates {
             let sequence = updates[..update_count]
@@ -1198,8 +1206,8 @@ impl DaoManager {
     }
 
     fn target_active_until(
-        target: [u8; 16],
-        expiry: &HashMap<([u8; 16], [u8; 16]), Option<u64>>,
+        target: Ipv6Addr,
+        expiry: &HashMap<(Ipv6Addr, Ipv6Addr), Option<u64>>,
         fallback: u64,
     ) -> Option<u64> {
         // ponytail: fallback is the withdrawal time; without it, withdrawn routes would use epoch 0
@@ -1219,10 +1227,10 @@ impl DaoManager {
     }
 
     fn make_freshness_room(
-        map: &mut HashMap<[u8; 16], Freshness>,
+        map: &mut HashMap<Ipv6Addr, Freshness>,
         limit: usize,
         now_seconds: u64,
-        protected: &HashSet<[u8; 16]>,
+        protected: &HashSet<Ipv6Addr>,
     ) -> bool {
         if map.len() < limit {
             return true;
@@ -1278,7 +1286,7 @@ impl DaoManager {
                     if parsed.prefix_len != 128 || target_count == MAX_DAO_UPDATES {
                         return None;
                     }
-                    targets[target_count] = Some(parsed.prefix);
+                    targets[target_count] = Some(Ipv6Addr::from(parsed.prefix));
                     target_count += 1;
                     descriptor_allowed = true;
                 }
@@ -1341,7 +1349,7 @@ impl DaoManager {
     fn finish_group(
         updates: &mut [Option<DaoUpdate>; MAX_DAO_UPDATES],
         update_count: &mut usize,
-        targets: &[Option<[u8; 16]>; MAX_DAO_UPDATES],
+        targets: &[Option<Ipv6Addr>; MAX_DAO_UPDATES],
         descriptors: &[Option<u32>; MAX_DAO_UPDATES],
         target_count: usize,
         transits: &[Option<TransitInfo>; MAX_DAO_UPDATES],
@@ -1365,7 +1373,7 @@ impl DaoManager {
             for transit in transits[..transit_count].iter().flatten() {
                 updates[*update_count] = Some(DaoUpdate {
                     target: *target,
-                    parent: transit.parent_address,
+                    parent: Ipv6Addr::from(transit.parent_address),
                     path_control: transit.path_control,
                     path_sequence: transit.path_sequence,
                     path_lifetime: transit.path_lifetime,
@@ -1378,13 +1386,13 @@ impl DaoManager {
     }
 
     fn assemble_path_checked(
-        root: [u8; 16],
-        parent_map: &HashMap<[u8; 16], Vec<[u8; 16]>>,
-        candidate_map: &HashMap<[u8; 16], Vec<DaoCandidate>>,
-        target: [u8; 16],
-    ) -> Result<Option<Vec<[u8; 16]>>, ()> {
-        let mut chain: Vec<[u8; 16]> = Vec::new();
-        let mut visited: HashSet<[u8; 16]> = HashSet::new();
+        root: Ipv6Addr,
+        parent_map: &HashMap<Ipv6Addr, Vec<Ipv6Addr>>,
+        candidate_map: &HashMap<Ipv6Addr, Vec<DaoCandidate>>,
+        target: Ipv6Addr,
+    ) -> Result<Option<Vec<Ipv6Addr>>, ()> {
+        let mut chain: Vec<Ipv6Addr> = Vec::new();
+        let mut visited: HashSet<Ipv6Addr> = HashSet::new();
         if !Self::assemble_path_from(
             root,
             parent_map,
@@ -1400,14 +1408,16 @@ impl DaoManager {
     }
 
     fn assemble_path_from(
-        root: [u8; 16],
-        parent_map: &HashMap<[u8; 16], Vec<[u8; 16]>>,
-        candidate_map: &HashMap<[u8; 16], Vec<DaoCandidate>>,
-        node: [u8; 16],
-        chain: &mut Vec<[u8; 16]>,
-        visited: &mut HashSet<[u8; 16]>,
+        root: Ipv6Addr,
+        parent_map: &HashMap<Ipv6Addr, Vec<Ipv6Addr>>,
+        candidate_map: &HashMap<Ipv6Addr, Vec<DaoCandidate>>,
+        node: Ipv6Addr,
+        chain: &mut Vec<Ipv6Addr>,
+        visited: &mut HashSet<Ipv6Addr>,
     ) -> Result<bool, ()> {
-        if node == root || (Self::is_canonical_link_local(&node) && node[8..] == root[8..]) {
+        if node == root
+            || (Self::is_canonical_link_local(&node) && node.octets()[8..] == root.octets()[8..])
+        {
             return Ok(true);
         }
         let node = if parent_map.contains_key(&node) {
@@ -1420,7 +1430,7 @@ impl DaoManager {
             let mut aliases = parent_map
                 .keys()
                 .copied()
-                .filter(|candidate| candidate[8..] == node[8..]);
+                .filter(|candidate| candidate.octets()[8..] == node.octets()[8..]);
             let Some(alias) = aliases.next() else {
                 return Ok(false);
             };
@@ -1486,8 +1496,9 @@ impl DaoManager {
         Ok(true)
     }
 
-    fn is_canonical_link_local(address: &[u8; 16]) -> bool {
-        address[0] == 0xfe && address[1] == 0x80 && address[2..8].iter().all(|byte| *byte == 0)
+    fn is_canonical_link_local(address: &Ipv6Addr) -> bool {
+        let octets = address.octets();
+        octets[0] == 0xfe && octets[1] == 0x80 && octets[2..8].iter().all(|byte| *byte == 0)
     }
 
     fn path_control_rank(path_control: u8) -> Option<u8> {
@@ -1499,7 +1510,7 @@ impl DaoManager {
             .map(|rank| rank as u8)
     }
 
-    fn contains_cycle(parent_map: &HashMap<[u8; 16], Vec<[u8; 16]>>) -> bool {
+    fn contains_cycle(parent_map: &HashMap<Ipv6Addr, Vec<Ipv6Addr>>) -> bool {
         let mut visited = HashSet::new();
         let mut stack = HashSet::new();
         for node in parent_map.keys() {
@@ -1511,10 +1522,10 @@ impl DaoManager {
     }
 
     fn has_cycle_from(
-        node: [u8; 16],
-        parent_map: &HashMap<[u8; 16], Vec<[u8; 16]>>,
-        visited: &mut HashSet<[u8; 16]>,
-        stack: &mut HashSet<[u8; 16]>,
+        node: Ipv6Addr,
+        parent_map: &HashMap<Ipv6Addr, Vec<Ipv6Addr>>,
+        visited: &mut HashSet<Ipv6Addr>,
+        stack: &mut HashSet<Ipv6Addr>,
     ) -> bool {
         if stack.contains(&node) {
             return true;
@@ -1536,11 +1547,11 @@ impl DaoManager {
     }
 
     fn rebuilt_routes(
-        root: [u8; 16],
-        parent_map: &HashMap<[u8; 16], Vec<[u8; 16]>>,
-        candidate_map: &HashMap<[u8; 16], Vec<DaoCandidate>>,
+        root: Ipv6Addr,
+        parent_map: &HashMap<Ipv6Addr, Vec<Ipv6Addr>>,
+        candidate_map: &HashMap<Ipv6Addr, Vec<DaoCandidate>>,
         existing: &RoutingTable,
-        _changed_targets: &HashSet<[u8; 16]>,
+        _changed_targets: &HashSet<Ipv6Addr>,
     ) -> Option<RoutingTable> {
         let mut routes = RoutingTable::new();
         // Copy prefix routes
@@ -1562,10 +1573,12 @@ impl DaoManager {
                     if routes.routes.len() >= MAX_ROUTES {
                         return None;
                     }
-                    routes
-                        .routes
-                        .insert(RouteTarget::host(*target), RouteEntry::fresh(&path));
-                    routes.rpl_managed_hosts.insert(*target);
+                    let octets: Vec<[u8; 16]> = path.iter().map(Ipv6Addr::octets).collect();
+                    routes.routes.insert(
+                        RouteTarget::host(target.octets()),
+                        RouteEntry::fresh(&octets),
+                    );
+                    routes.rpl_managed_hosts.insert(target.octets());
                 }
                 Ok(None) => {}
                 Err(()) => return None,
