@@ -31,3 +31,10 @@ Rules:
 - If stuck on a bead for >5 minutes, unclaim and move on
 - Decompose rather than wrestle with complex beads
 - Other workers are running - don't hog all the beads
+
+Coordination:
+- Multiple agents (workers + interactive sessions) share this repo
+- Beads is the coordination mechanism - always check bd ready before starting
+- If a bead is claimed, skip it - someone else is working on it
+- Commit frequently so others see your progress
+- Don't modify files another agent is actively working on (check git status across worktrees if unsure)

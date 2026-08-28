@@ -46,12 +46,16 @@ for i in $(seq 1 $NUM_WORKERS); do
         { echo "Failed to create worktree $i"; continue; }
     fi
 
+    # Copy prompt to worktree so worker can find it
+    cp "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/" 2>/dev/null || \
+        mkdir -p "$WORKTREE/scripts" && cp "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
+
     # Launch opencode in background with auto-approve
     echo "Launching worker $i in $WORKTREE"
     (
         cd "$WORKTREE"
         export BEADS_AGENT_ACTOR="opencode-worker-$i"
-        opencode run --auto --dir "$WORKTREE" "$(cat "$PROMPT_FILE")" 2>&1 | tee "$WORKTREE/worker.log"
+        opencode run --auto --dir "$WORKTREE" "$(cat "$WORKTREE/scripts/beads-worker-full.txt")" 2>&1 | tee "$WORKTREE/worker.log"
     ) &
 
     # Small delay to stagger startup
