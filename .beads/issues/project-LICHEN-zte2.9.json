@@ -19,8 +19,7 @@
     "location",
     "network-source",
     "owner-reserved",
-    "zephyr",
-    "needs-linux"
+    "zephyr"
   ],
   "dependencies": [
     {
