@@ -19,7 +19,8 @@
     "meshcore",
     "meshtastic",
     "owner-reserved",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
