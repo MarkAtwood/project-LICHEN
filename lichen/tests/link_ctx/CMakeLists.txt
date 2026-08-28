@@ -9,6 +9,8 @@ find_package(Threads REQUIRED)
 add_executable(link_ctx_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/csma.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/link_cca.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/link_ctx.c
 )
 set_target_properties(link_ctx_test PROPERTIES
@@ -22,6 +24,7 @@ target_include_directories(link_ctx_test PRIVATE
 )
 target_compile_definitions(link_ctx_test PRIVATE
   CONFIG_LICHEN_LINK_MAX_NEIGHBORS=16
+  CONFIG_LICHEN_LINK_CCA=1
 )
 target_compile_options(link_ctx_test PRIVATE -Wall -Wextra -Werror)
 if(APPLE)

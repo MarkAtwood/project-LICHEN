@@ -118,6 +118,108 @@ ZTEST(link_crypto, test_signed_encrypted_tx_is_rejected)
 	lichen_link_cleanup(&tx);
 }
 
+/* --- CCA gate wiring in lichen_link_tx (CCP-15, project-LICHEN-i0t6) --- */
+
+struct cca_probe_fake {
+	unsigned cad_calls;
+	bool busy;
+};
+
+static int cca_probe_rng(void *user, uint32_t *value)
+{
+	ARG_UNUSED(user);
+
+	*value = 0U;
+	return 0;
+}
+
+static int cca_probe_cad(void *user, uint8_t timeout_symbols,
+			 bool *channel_busy)
+{
+	struct cca_probe_fake *fake = user;
+
+	ARG_UNUSED(timeout_symbols);
+
+	fake->cad_calls++;
+	*channel_busy = fake->busy;
+	return 0;
+}
+
+/* Signing key only: the CCA gate must run before the -EPROTONOSUPPORT
+ * link-key rejection is even reachable, so this context skips
+ * lichen_link_load_link_key(). */
+static void init_signing_ctx(struct lichen_link_ctx *tx)
+{
+	int ret;
+
+	ret = lichen_link_init(tx, test_eui64);
+	zassert_equal(ret, 0, "link init failed: %d", ret);
+
+	ret = lichen_link_load_key(tx, test_seed);
+	zassert_equal(ret, 0, "signing key load failed: %d", ret);
+}
+
+ZTEST(link_crypto, test_cca_busy_probe_blocks_tx)
+{
+	struct lichen_link_ctx tx;
+	struct lichen_link_cca_ops ops;
+	struct cca_probe_fake fake;
+	uint8_t frame[160];
+	size_t frame_len = sizeof(frame);
+	int ret;
+
+	init_signing_ctx(&tx);
+	fake.cad_calls = 0U;
+	fake.busy = true;
+	ops.rng = cca_probe_rng;
+	ops.cad = cca_probe_cad;
+	ops.user = &fake;
+	ret = lichen_link_set_cca_ops(&tx, &ops);
+	zassert_equal(ret, 0, "CCA ops install failed: %d", ret);
+
+	ret = lichen_link_tx(&tx, test_ipv6, sizeof(test_ipv6), NULL,
+			     frame, &frame_len);
+	zassert_equal(ret, -EBUSY,
+		      "busy CAD must suppress TX with -EBUSY, got %d", ret);
+	zassert_equal(fake.cad_calls, 1U,
+		      "busy TX must consume exactly one CAD probe");
+	zassert_equal(tx.csma.phase, LICHEN_CSMA_BACKOFF,
+		      "busy CAD must leave the contention cycle open");
+
+	lichen_link_cleanup(&tx);
+}
+
+ZTEST(link_crypto, test_cca_clear_probe_permits_tx)
+{
+	struct lichen_link_ctx tx;
+	struct lichen_link_cca_ops ops;
+	struct cca_probe_fake fake;
+	uint8_t frame[160];
+	size_t frame_len = sizeof(frame);
+	int ret;
+
+	init_signing_ctx(&tx);
+	fake.cad_calls = 0U;
+	fake.busy = false;
+	ops.rng = cca_probe_rng;
+	ops.cad = cca_probe_cad;
+	ops.user = &fake;
+	ret = lichen_link_set_cca_ops(&tx, &ops);
+	zassert_equal(ret, 0, "CCA ops install failed: %d", ret);
+
+	ret = lichen_link_tx(&tx, test_ipv6, sizeof(test_ipv6), NULL,
+			     frame, &frame_len);
+	zassert_equal(ret, 0, "clear CAD must permit TX, got %d", ret);
+	zassert_equal(fake.cad_calls, 1U,
+		      "clear TX must consume exactly one CAD probe");
+	zassert_true(frame_len > 0 && frame_len <= sizeof(frame),
+		     "clear TX must produce a frame");
+	zassert_equal(tx.csma.phase, LICHEN_CSMA_IDLE,
+		      "clear CAD must close the contention cycle");
+
+	lichen_link_cleanup(&tx);
+}
+
 ZTEST(link_crypto, test_frame_accepts_elided_address)
 {
 	struct lichen_frame frame = { 0 };

@@ -1,6 +1,9 @@
 //! DAO TX/RX state, admission control persistence.
 //!
 //! Durable state for DAO sending (TX), receiving (RX), and origin admission.
+//!
+//! DTX2, DRX2, and DAD1 are provisional, unshipped scope-bound formats. There
+//! is intentionally no migration between format versions.
 
 #[cfg(feature = "std")]
 use std::{
@@ -693,4 +696,228 @@ pub(crate) fn decode_high_water(data: &[u8]) -> Option<HighWaterMap> {
         }
     }
     Some(map)
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+#[cfg(all(test, feature = "std"))]
+mod tests {
+    use super::*;
+    use crate::routing::DaoManager;
+    use lichen_hal::storage::{mem::MemStorage, provision_redundant, update_redundant};
+
+    const INSTANCE: u8 = 7;
+
+    fn node() -> [u8; 16] {
+        let mut address = [0u8; 16];
+        address[15] = 1;
+        address
+    }
+
+    fn dodag() -> [u8; 16] {
+        let mut dodag_id = [0u8; 16];
+        dodag_id[0] = 0xfd;
+        dodag_id[15] = 1;
+        dodag_id
+    }
+
+    fn origin_key(index: u8) -> [u8; 32] {
+        let mut key = [0u8; 32];
+        key[0] = 0xa1;
+        key[31] = index;
+        key
+    }
+
+    fn sample_map() -> HighWaterMap {
+        let mut map = HighWaterMap::new();
+        map.insert(origin_key(1), (origin_key(2), 41));
+        map.insert(origin_key(3), (origin_key(4), u64::MAX));
+        map
+    }
+
+    /// DRX2 payload head: node, instance, DODAGID, entry count.
+    fn scoped_header(count: u16) -> Vec<u8> {
+        let mut payload = vec![0u8; HIGH_WATER_HEADER_LEN];
+        payload[..16].copy_from_slice(&node());
+        payload[16] = INSTANCE;
+        payload[17..HIGH_WATER_SCOPE_LEN].copy_from_slice(&dodag());
+        payload[HIGH_WATER_SCOPE_LEN..HIGH_WATER_HEADER_LEN].copy_from_slice(&count.to_be_bytes());
+        payload
+    }
+
+    /// Persist `map` through the same DRX2 record path `DaoManager` uses.
+    fn persist_map(storage: &mut MemStorage, rx_state: &mut DaoRxState, map: &HighWaterMap) {
+        let mut payload = vec![0u8; HIGH_WATER_PAYLOAD_LEN];
+        let len = encode_high_water(node(), INSTANCE, dodag(), map, &mut payload).unwrap();
+        let mut record = vec![0u8; HIGH_WATER_PAYLOAD_LEN + SLOT_OVERHEAD];
+        rx_state.current = update_redundant(
+            storage,
+            DAO_RX_KEYS,
+            DAO_RX_MAGIC,
+            rx_state.current,
+            &payload[..len],
+            &mut record,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn high_water_payload_roundtrips_bit_exact() {
+        let map = sample_map();
+        let mut payload = vec![0u8; HIGH_WATER_PAYLOAD_LEN];
+        let len = encode_high_water(node(), INSTANCE, dodag(), &map, &mut payload).unwrap();
+        let decoded = decode_high_water(&payload[..len]).unwrap();
+        let mut reencoded = vec![0u8; HIGH_WATER_PAYLOAD_LEN];
+        let reencoded_len =
+            encode_high_water(node(), INSTANCE, dodag(), &decoded, &mut reencoded).unwrap();
+        assert_eq!(&reencoded[..reencoded_len], &payload[..len]);
+
+        // Scope head binds the record to node, instance, and DODAGID.
+        assert_eq!(&payload[..16], &node()[..]);
+        assert_eq!(payload[16], INSTANCE);
+        assert_eq!(&payload[17..HIGH_WATER_SCOPE_LEN], &dodag()[..]);
+        assert_eq!(
+            &payload[HIGH_WATER_SCOPE_LEN..HIGH_WATER_HEADER_LEN],
+            &2u16.to_be_bytes()[..]
+        );
+    }
+
+    #[test]
+    fn drx2_record_round_trips_scope_and_high_water() {
+        let map = sample_map();
+        let mut storage = MemStorage::new();
+        let (_, mut rx_state) =
+            DaoManager::provision_root(&mut storage, node(), INSTANCE, dodag()).unwrap();
+        let (fresh, _) = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap();
+        assert!(fresh.origin_high_water().is_empty());
+
+        persist_map(&mut storage, &mut rx_state, &map);
+
+        // Both redundant slots carry DRX2 framing with slot version 1.
+        for key in DAO_RX_KEYS {
+            let raw = storage.raw(key).unwrap();
+            assert_eq!(&raw[..4], &DAO_RX_MAGIC[..]);
+            assert_eq!(raw[4], 1);
+        }
+
+        let (manager, _) = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap();
+        let snapshot = manager.origin_high_water();
+        assert_eq!(snapshot.len(), map.len());
+        for entry in &snapshot {
+            let expected = map.get(&entry.public_key).unwrap();
+            assert_eq!(entry.origin_sequence, expected.1);
+            assert_eq!(entry.signed_dao_sha256, expected.0);
+        }
+    }
+
+    #[test]
+    fn old_format_and_wrong_magic_records_fail_closed() {
+        // DRX1 (predecessor receive format) and the TX-side DTX2 magic must
+        // never open as receive state; there is no migration by design.
+        for magic in [*b"DRX1", DAO_TX_MAGIC] {
+            let mut storage = MemStorage::new();
+            let mut record = vec![0u8; HIGH_WATER_PAYLOAD_LEN + SLOT_OVERHEAD];
+            provision_redundant(&mut storage, DAO_RX_KEYS, magic, &[], &mut record).unwrap();
+            let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+            assert_eq!(error, DaoPersistentOpenError::Corrupt);
+        }
+    }
+
+    #[test]
+    fn unversioned_drx2_record_fails_closed() {
+        let mut storage = MemStorage::new();
+        DaoManager::provision_root(&mut storage, node(), INSTANCE, dodag()).unwrap();
+        let mut raw = storage.raw(DAO_RX_KEYS[0]).unwrap().to_vec();
+        raw[4] = 0;
+        storage.set_raw(DAO_RX_KEYS[0], &raw);
+        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        assert_eq!(error, DaoPersistentOpenError::Corrupt);
+    }
+
+    #[test]
+    fn garbage_and_short_records_fail_closed() {
+        let mut storage = MemStorage::new();
+        storage.set_raw(DAO_RX_KEYS[0], &[0xff; 64]);
+        storage.set_raw(DAO_RX_KEYS[1], &[0x00; 10]);
+        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        assert_eq!(error, DaoPersistentOpenError::Corrupt);
+    }
+
+    #[test]
+    fn absent_record_reports_missing_without_fabricating_state() {
+        let storage = MemStorage::new();
+        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        assert_eq!(error, DaoPersistentOpenError::Missing);
+    }
+
+    #[test]
+    fn well_framed_drx2_with_malformed_payload_fails_closed() {
+        // Correct scope head, but a zero origin sequence is never valid state.
+        let mut payload = scoped_header(1);
+        payload.extend_from_slice(&[0u8; HIGH_WATER_ENTRY_LEN]);
+        let mut storage = MemStorage::new();
+        let mut record = vec![0u8; payload.len() + SLOT_OVERHEAD];
+        provision_redundant(
+            &mut storage,
+            DAO_RX_KEYS,
+            DAO_RX_MAGIC,
+            &payload,
+            &mut record,
+        )
+        .unwrap();
+        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        assert_eq!(error, DaoPersistentOpenError::Corrupt);
+    }
+
+    #[test]
+    fn malformed_high_water_payloads_fail_closed() {
+        assert!(decode_high_water(&[]).is_none());
+        assert!(decode_high_water(&[0u8; HIGH_WATER_HEADER_LEN - 1]).is_none());
+
+        // Entry count beyond the payload length.
+        let mut short = scoped_header(1);
+        short.extend_from_slice(&[0u8; HIGH_WATER_ENTRY_LEN - 1]);
+        assert!(decode_high_water(&short).is_none());
+
+        // Zero sequence is never valid state.
+        let mut zeroed = scoped_header(1);
+        zeroed.extend_from_slice(&[0u8; HIGH_WATER_ENTRY_LEN]);
+        assert!(decode_high_water(&zeroed).is_none());
+
+        // Duplicate origins cannot appear twice in one record.
+        let mut duplicate = scoped_header(2);
+        duplicate.extend_from_slice(&origin_key(1));
+        duplicate.extend_from_slice(&1u64.to_be_bytes());
+        duplicate.extend_from_slice(&origin_key(2));
+        duplicate.extend_from_slice(&origin_key(1));
+        duplicate.extend_from_slice(&2u64.to_be_bytes());
+        duplicate.extend_from_slice(&origin_key(2));
+        assert!(decode_high_water(&duplicate).is_none());
+
+        // A valid empty record decodes.
+        assert!(decode_high_water(&scoped_header(0)).is_some());
+    }
+
+    #[test]
+    fn scope_change_invalidates_record() {
+        let map = sample_map();
+        let mut storage = MemStorage::new();
+        let (_, mut rx_state) =
+            DaoManager::provision_root(&mut storage, node(), INSTANCE, dodag()).unwrap();
+        persist_map(&mut storage, &mut rx_state, &map);
+
+        let mut other_dodag = dodag();
+        other_dodag[15] = 2;
+        let mut other_node = node();
+        other_node[15] = 2;
+
+        let errors = [
+            DaoManager::open_root(&storage, node(), INSTANCE, other_dodag).unwrap_err(),
+            DaoManager::open_root(&storage, node(), INSTANCE + 1, dodag()).unwrap_err(),
+            DaoManager::open_root(&storage, other_node, INSTANCE, dodag()).unwrap_err(),
+        ];
+        for error in errors {
+            assert_eq!(error, DaoPersistentOpenError::ScopeMismatch);
+        }
+    }
 }

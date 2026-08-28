@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-po7m",
+  "title": "[review] wave-3 P3 bundle: CCA gate polish + test coverage + SX1262 cosmetics",
+  "description": "P3 bundle from wave-3 review: (1) link_cca.c: cancel race misclassified - cad_begin can return positive CANCELLED which passes the if (cca \u003c 0) check -\u003e run real CAD post-cancel and surface -EIO instead of -ECANCELED; acquire() handles it (csma.c:313-315), gate should too. (2) link_cca.c TOCTOU one-liner: snapshot struct lichen_link_cca_ops ops = ctx-\u003ecca_ops at gate entry, use snapshot (defends cleanup race, documented contract today). (3) CONFIG_LICHEN_LINK_CCA=n silently ignores a registered probe - set_cca_ops doc should say so (or reject registration when gate disabled). (4) doc line: concurrent TX on one ctx can surface -EPROTO instead of documented -EBUSY (Kconfig help says -EBUSY; gate is outside seq_lock, 5-step csma sequence not atomic) - align doc or contract. (5) test coverage: add positive-cad_status probe test (would have caught P1), cancel-during-gate test, assert backoff_exponent unchanged at exhaustion (ccp15 vector 3 pins it: 5-\u003e5), assert nonce/seq unchanged after -EBUSY (gate-before-nonce property currently only code order). (6) link_ctx Kconfig exhaustion-latch: impl intentionally opens a FRESH cycle after RETRY_EXHAUSTED on next busy (csma.c:103-107) where spec 02a 10.5 step 2 would re-emit exhausted frozen - file/record the decision in spec 02a (one normative sentence) so it cannot be fixed accidentally in one place. (7) persistence.rs degraded redundancy is silent when one slot corrupt - consider surfacing/repairing on open. (8) SX1262.cs: latchedIrqFlags read without stateLock in GetIrqStatus (:244,249) contradicts stated invariant (:897); catch (Exception e) logs only e.Message (NRE gives empty message) -\u003e e.ToString(); optionally rename cca rng cb to jitter_rng.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:26:44.818087Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:26:44.818087Z",
+  "labels": [
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-po7m",
+      "depends_on_id": "project-LICHEN-gue0",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T16:26:46.783931Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ zephyr_library_sources(
   identity_addr.c
   lichen_link_rx.c
   lichen_link_tx.c
+  link_cca.c
   link_ctx.c
   replay.c
   tx_queue.c

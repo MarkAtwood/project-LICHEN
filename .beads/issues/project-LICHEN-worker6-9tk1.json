@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-9tk1",
+  "title": "[review] extracted SX1262.cs: oversize length prefix permanently kills reader while socket looks Connected (node silently deaf)",
+  "description": "P2 (pre-existing, inside reviewed ReaderLoop scope). .extraction/renode-lora-peripherals/peripherals/sx126x/SX1262.cs:801 ReadMessage returns null for len \u003e 1024; ReaderLoop treats null as peer-closed and breaks (:707-709) WITHOUT closing the socket; EnsureConnected sees socket.Connected==true (:629) and never restarts a reader -\u003e TX_DONE/RX_PACKET/RX_TIMEOUT never dispatched again until peripheral reset. One corrupted 4-byte header bricks RX. Fix: treat oversize as protocol fault: log + Disconnect() (forces reconnect + fresh reader) instead of returning null as EOF; same for peer-close path: close the socket before break (:795,801,808).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:26:35.15995Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:26:35.15995Z",
+  "labels": [
+    "renode"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9tk1",
+      "depends_on_id": "project-LICHEN-636h",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T16:26:38.310346Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

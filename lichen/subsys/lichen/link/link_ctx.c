@@ -184,6 +184,12 @@ int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
 #endif
 
 	lichen_csma_init(&ctx->csma);
+	/* No CCA probe until lichen_link_set_cca_ops() installs one: a
+	 * stack-allocated context must never enter lichen_link_tx() with
+	 * garbage probe pointers (the gate passes fail-open when unregistered). */
+	ctx->cca_ops.rng = NULL;
+	ctx->cca_ops.cad = NULL;
+	ctx->cca_ops.user = NULL;
 
 	memcpy(ctx->eui64, eui64, LICHEN_EUI64_LEN);
 	memset(ctx->ed25519_sk, 0, LICHEN_SK_LEN);
@@ -585,6 +591,12 @@ void lichen_link_cleanup(struct lichen_link_ctx *ctx)
 	}
 
 	lichen_csma_cancel(&ctx->csma);
+	/* Drop any registered CCA probe with the rest of the context state so
+	 * callbacks owned by a torn-down integration cannot be invoked after
+	 * cleanup. */
+	ctx->cca_ops.rng = NULL;
+	ctx->cca_ops.cad = NULL;
+	ctx->cca_ops.user = NULL;
 	int locked = seq_lock(ctx);
 
 	secure_wipe(ctx->ed25519_sk, LICHEN_SK_LEN);

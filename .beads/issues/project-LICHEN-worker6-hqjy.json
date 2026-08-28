@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-hqjy",
+  "title": "Fix Python EDHOC OSCORE role mapping (RFC 9528 Table 14)",
+  "description": "python/src/lichen/crypto/edhoc.py exports OSCORE sender_id = C_I; RFC 9528 Appendix A.1 Table 14 requires initiator Sender ID = C_R. Rust implementation is correct. This makes the pre-existing rust/lichen-oscore/tests/vectors.rs test_edhoc_exported_context_matches_vectors fail under --features edhoc, and the incorrect mapping is baked into test/vectors/edhoc.json. Fix: Python initiator export uses C_R as sender_id / C_I as recipient_id, regenerate edhoc.json, correct the vectors.rs expectation stays as-is (it asserts RFC-correct), update python tests. Discovered-from: project-LICHEN-worker6-l1qw.6.8.9 cross-validation work 2026-08-28.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:26:41.062506Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:26:41.062506Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hqjy",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.6.8.9",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T16:26:42.798486Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

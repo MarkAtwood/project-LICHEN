@@ -712,7 +712,14 @@ namespace Antmicro.Renode.Peripherals.Wireless
                 {
                     continue;
                 }
-                DispatchMessage(resp);
+                try
+                {
+                    DispatchMessage(resp);
+                }
+                catch (Exception e)
+                {
+                    this.Log(LogLevel.Error, "DispatchMessage failed: {0}", e.Message);
+                }
             }
         }
 
@@ -747,12 +754,13 @@ namespace Antmicro.Renode.Peripherals.Wireless
                         Array.Copy(resp, 3, rxBuffer, 0, rxLen);
                         rxRssi = (short)ReadLE16(resp, payloadEnd);
                         rxSnr = (short)ReadLE16(resp, payloadEnd + 2);
+                        var wasOneShot = rxOneShot;
                         if (rxOneShot)
                         {
                             rxMode = false;
                             rxOneShot = false;
                         }
-                        this.Log(LogLevel.Debug, "RX_PACKET {0} bytes (async) oneShot={1}", rxLen, rxOneShot);
+                        this.Log(LogLevel.Debug, "RX_PACKET {0} bytes (async) oneShot={1}", rxLen, wasOneShot);
                         irqFlags |= 0x0002; // RxDone
                         IRQ.Set(true);
                         break;

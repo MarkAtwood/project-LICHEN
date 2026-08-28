@@ -173,6 +173,18 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 		return -ENOMEM;
 	}
 
+	/* CCP-15 (spec/02a-coordinated-capacity.md 2a.10.5): CAD once per
+	 * transmit opportunity, before any TX state (nonce) is consumed.
+	 * The probe is injected per context (lichen_link_set_cca_ops()); the
+	 * dependency-free link layer must not call the radio L2 directly
+	 * (project-LICHEN-i0t6). Fail-open pass-through when unregistered:
+	 * the enforcing CSMA/CA for the Zephyr net path runs at the radio
+	 * boundary (lichen_lora_l2_tx(), CONFIG_LICHEN_LORA_CCA). */
+	int cca_err = lichen_link_cca_gate(ctx);
+	if (cca_err != 0) {
+		return cca_err;
+	}
+
 	/* Allocate nonce only after preflight (fixes duplicate next_tx bug). */
 	int seq_err = lichen_link_next_tx(ctx, &epoch, &seqnum);
 	if (seq_err != 0) {
@@ -295,6 +307,14 @@ int lichen_link_relay_raw(struct lichen_link_ctx *ctx,
 	}
 	if (1 + frame_body_len > *out_len) {
 		return -ENOMEM;
+	}
+
+	/* CCP-15 CCA gate: a relayed frame is a scheduled transmission too
+	 * (2a.10.5), gated identically to lichen_link_tx() before the nonce
+	 * is consumed. See the gate comment there for the layering rules. */
+	int cca_err = lichen_link_cca_gate(ctx);
+	if (cca_err != 0) {
+		return cca_err;
 	}
 
 	/* Allocate nonce only after preflight */

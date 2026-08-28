@@ -64,6 +64,30 @@ extern "C" {
 #endif
 
 /**
+ * @brief Injected CCA probe operations for the link-layer TX gate (CCP-15).
+ *
+ * spec/02a-coordinated-capacity.md 2a.10.5 requires one CAD (Channel
+ * Activity Detection) sample per transmit opportunity with the result fed
+ * to CcaUpdate. The link layer is dependency-free: it never sleeps and
+ * never touches a radio directly, so the platform integration injects the
+ * probe via lichen_link_set_cca_ops(). Both callbacks receive @p user as
+ * their first argument.
+ */
+struct lichen_link_cca_ops {
+	/** CSPRNG callback (required): fills @p value, returns 0 or <0. Used
+	 *  only to derive the next contention window after a busy CAD. */
+	lichen_csma_rng_fn _Nullable rng;
+	/** CAD probe callback (required): performs one CAD sample of
+	 *  LICHEN_CSMA_CAD_TIMEOUT_SYMBOLS symbols. Sets *@p channel_busy
+	 *  (initialized true: a neglectful probe fails closed) and returns
+	 *  0, -ETIMEDOUT, or a negative driver error. May block inside the
+	 *  platform integration (e.g. under the L2 modem mutex). */
+	lichen_csma_cad_fn _Nullable cad;
+	/** Opaque argument passed to both callbacks. */
+	void *_Nullable user;
+};
+
+/**
  * @brief LICHEN link layer context
  *
  * Holds the node's identity and cryptographic material for the link layer.
@@ -86,6 +110,7 @@ struct lichen_link_ctx {
 	pthread_mutex_t seq_lock; /**< Protects TX epoch/sequence allocation */
 #endif
 	struct lichen_csma csma; /**< Per-context CAD/backoff state */
+	struct lichen_link_cca_ops cca_ops; /**< Injected pre-TX CCA probe; see lichen_link_set_cca_ops() */
 #ifdef CONFIG_LICHEN_TDMA
 	/* Per-context TDMA schedule state (spec/02a §2a.2 slot mapping).
 	 * lichen_link_tx() consults and lazily initializes this instance;
@@ -328,6 +353,57 @@ int lichen_link_load_link_key(struct lichen_link_ctx *_Nonnull ctx,
  * @param[in,out] ctx Link context to clean up (may be NULL, no-op)
  */
 void lichen_link_cleanup(struct lichen_link_ctx *_Nullable ctx);
+
+/**
+ * @brief Install or clear the per-context pre-TX CCA probe (CCP-15).
+ *
+ * When ops are installed, lichen_link_tx() and lichen_link_relay_raw()
+ * run one CAD sample per transmit opportunity through
+ * lichen_link_cca_gate() and fail closed (-EBUSY) while the channel is
+ * busy or the contention budget is exhausted; contention state accumulates
+ * in ctx->csma per test/vectors/ccp15.json category `cca`.
+ *
+ * When no probe is registered the gate passes unconditionally: the
+ * enforcing fail-closed CSMA/CA for the Zephyr net path runs at the radio
+ * boundary (lichen_lora_l2_tx() -> lichen_csma_acquire(), gated by
+ * CONFIG_LICHEN_LORA_CCA) under the modem mutex, so an unregistered link
+ * probe cannot bypass CCA there. Register a probe only from an integration
+ * that owns radio access for its lichen_link_tx() callers.
+ *
+ * Thread safety: same contract as lichen_link_load_key() — the caller must
+ * synchronize against concurrent lichen_link_tx() on the same context.
+ * lichen_link_cleanup() clears the ops.
+ *
+ * @param[in,out] ctx Link context to update (may be NULL, rejected)
+ * @param[in]     ops Operations to install, or NULL to clear the probe
+ *
+ * @return 0 on success (installed or cleared), -EINVAL if ctx is NULL or
+ *         ops installs only one of rng/cad (a partial probe cannot be
+ *         executed fail-closed)
+ */
+int lichen_link_set_cca_ops(struct lichen_link_ctx *_Nullable ctx,
+			    const struct lichen_link_cca_ops *_Nullable ops);
+
+/**
+ * @brief Run the pre-TX CCA gate for one transmit opportunity (CCP-15).
+ *
+ * Performs one CAD sample via the registered probe and feeds the result to
+ * the CcaUpdate state machine in ctx->csma (lichen_csma_cad_begin()/
+ * lichen_csma_cad_complete()): a clear channel resets contention state and
+ * returns 0 with the machine back in IDLE; a busy or timed-out CAD advances
+ * BackoffExp/Retries, leaves the cycle open in BACKOFF, and returns -EBUSY;
+ * a driver error propagates fail-closed. Never sleeps — the
+ * inter-opportunity backoff belongs to the caller's retry policy.
+ *
+ * Called internally by lichen_link_tx() and lichen_link_relay_raw()
+ * before any TX state (nonce) is consumed. Returns 0 immediately when no
+ * probe is registered (fail-open; see lichen_link_set_cca_ops()).
+ *
+ * @param[in,out] ctx Link context holding the probe and contention state
+ *
+ * @return 0 when transmission may proceed, otherwise a negative errno
+ */
+int lichen_link_cca_gate(struct lichen_link_ctx *_Nonnull ctx);
 
 /**
  * @brief Atomically copy public identity data from a link context.

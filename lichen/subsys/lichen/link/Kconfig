@@ -123,6 +123,28 @@ config LICHEN_LINK_COORDINATION
 	  lichen_coordination_negotiate() which selects among hash-based,
 	  scheduled, announce-driven, and fallback mechanisms.
 
+config LICHEN_LINK_CCA
+	bool "Link-layer CCA gate before frame TX (CCP-15)"
+	depends on LICHEN_LINK
+	default y
+	help
+	  Gate lichen_link_tx() and lichen_link_relay_raw() on one CAD (CCA)
+	  sample per transmit opportunity, per
+	  spec/02a-coordinated-capacity.md 2a.10.5: the boolean result feeds
+	  the CcaUpdate state machine (BackoffExp/Retries in the per-context
+	  lichen_csma instance) and TX fails closed (-EBUSY) while the channel
+	  is busy or the contention budget is exhausted. State transitions
+	  MUST match test/vectors/ccp15.json category `cca`.
+	  The probe is injected per context via lichen_link_set_cca_ops()
+	  because the link layer is dependency-free and must not call the
+	  radio L2 directly (project-LICHEN-i0t6). With no probe registered
+	  the gate passes and contention handling stays with the
+	  radio-boundary CSMA (CONFIG_LICHEN_LORA_CCA in the L2 Kconfig),
+	  which holds the modem mutex and performs the bounded backoff
+	  acquisition; RSSI threshold tuning remains
+	  CONFIG_LICHEN_LORA_CCA_THRESHOLD_DBM on the L2 side (drivers expose
+	  CAD, not an idle-channel RSSI getter).
+
 config LICHEN_LINK_CCP16_LOAD_BALANCING
 	bool "CCP16 density-aware load balancing"
 	depends on LICHEN_RPL

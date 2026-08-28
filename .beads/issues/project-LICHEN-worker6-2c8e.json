@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-2c8e",
+  "title": "[review] CCA gate ignores lichen_csma_tx_complete result; TX_ALLOWED can strand after concurrent cancel/lock",
+  "description": "P2, wave-3 review. link_cca.c:111 does (void)lichen_csma_tx_complete(\u0026ctx-\u003ecsma, 0); return 0. If tx_complete returns -EBUSY (csma lock held by concurrent snapshot/TX) phase stays TX_ALLOWED -\u003e all future gate calls -EALREADY -\u003e -EPROTO wedge (same class as the positive-cad_status P1). If cancel was requested tx_complete returns CANCELLED (positive) and the gate still returns 0, authorizing TX after cancellation. Fix: check the result; on failure lichen_csma_reset(\u0026ctx-\u003ecsma) or map CANCELLED -\u003e -ECANCELED. Add test if cheap (cancel during gate).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:26:29.489768Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:26:29.489768Z",
+  "labels": [
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2c8e",
+      "depends_on_id": "project-LICHEN-gue0",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T16:26:32.732446Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
