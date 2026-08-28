@@ -642,6 +642,95 @@ ZTEST(coap_rangetest, test_get_interval_requires_authz) {
 		      "public GET must not change the interval");
 }
 
+ZTEST(coap_rangetest, test_observe_registration_requires_authz) {
+	struct coap_packet request;
+	uint8_t pkt_buf[64];
+	struct coap_packet plain_request = {0};
+	struct sockaddr_in6 peer = {.sin6_family = AF_INET6};
+	int ret;
+
+	init_provider();
+	oscore_protected = false;
+	admin_result = false;
+	request_payload = NULL;
+	request_payload_len = 0U;
+
+	/* Unauthenticated Observe GET: 4.01 and no observer slot.  The
+	 * observer pool is bounded and never evicts and each update
+	 * notifies every observer, so registration is an authz boundary
+	 * (RFC 7641 4.1 server-side refusal). */
+	ret = build_observe_request(&request, pkt_buf, sizeof(pkt_buf), 0U);
+	zassert_ok(ret, "packet init");
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED,
+		      "unauth observe-GET must be 4.01, got 0x%02x",
+		      response_code);
+	zassert_equal(response_payload_len, 0U,
+		      "4.01 must not emit a SenML response");
+	zassert_true(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		     "4.01 must not register an observer");
+
+	/* Public plain GET without Observe stays readable: 2.05, still
+	 * no registration. */
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &plain_request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_true(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		     "public plain GET must not register an observer");
+
+	/* OSCORE-protected mesh peer: Observe GET registers. */
+	oscore_protected = true;
+	admin_result = false;
+	ret = build_observe_request(&request, pkt_buf, sizeof(pkt_buf), 0U);
+	zassert_ok(ret, "packet init");
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_false(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		      "protected observe-GET must register");
+
+	/* Protected cancellation still works past the gate. */
+	ret = build_observe_request(&request, pkt_buf, sizeof(pkt_buf), 1U);
+	zassert_ok(ret, "packet init");
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_true(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		     "Observe=1 must deregister");
+
+	/* Local-admin plain Observe GET registers too. */
+	oscore_protected = false;
+	admin_result = true;
+	ret = build_observe_request(&request, pkt_buf, sizeof(pkt_buf), 0U);
+	zassert_ok(ret, "packet init");
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_false(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		      "local-admin observe-GET must register");
+
+	/* Cleanup: leave the shared observer pool empty for the other
+	 * tests in the suite. */
+	ret = build_observe_request(&request, pkt_buf, sizeof(pkt_buf), 1U);
+	zassert_ok(ret, "packet init");
+	ret = lichen_rangetest_get_handler(OBS_PROBE_RESOURCE, &request,
+					   (struct sockaddr *)&peer,
+					   sizeof(peer));
+	zassert_ok(ret, "handler");
+	zassert_true(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
+		     "cleanup must leave no observer");
+}
+
 ZTEST(coap_rangetest, test_skip_item_rejects_wrapping_map_argument) {
 	/* Unknown-key value is a map with an 8-byte argument of 2^63:
 	 * doubling it would wrap to 0 and make the container look empty,

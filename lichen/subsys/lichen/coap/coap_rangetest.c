@@ -832,8 +832,21 @@ int lichen_rangetest_get_handler(struct coap_resource *resource,
 	}
 	/* RFC 7641: only register the observer once the request is fully
 	 * validated and the response is guaranteed; a 4.00/5.03 must not
-	 * consume an observer slot. */
+	 * consume an observer slot.  Registration is also an authz
+	 * boundary: the observer pool is bounded and never evicts, and
+	 * every continuous-test update sends one notification per
+	 * observer, so an unauthenticated Observe GET must be refused
+	 * (RFC 7641 4.1 server-side refusal) instead of being allowed to
+	 * exhaust slots and amplify transmissions.  A public plain GET
+	 * without Observe stays readable per spec 17.6.3/18.7. */
 	if (observe_count == 1) {
+		if (!oscore.is_protected &&
+		    !lichen_coap_is_local_admin(addr, addr_len)) {
+			return coap_oscore_respond_resource(
+				resource, request, addr, addr_len, &oscore,
+				COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL,
+				0);
+		}
 		ret = coap_resource_parse_observe(resource, request, addr);
 		if (ret < 0) {
 			return coap_oscore_respond_resource(
