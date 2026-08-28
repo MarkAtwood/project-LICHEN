@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-m5l6",
+  "title": "Group OSCORE: epoch/key manager module",
+  "description": "Child of project-LICHEN-worker6-9mkj. New module in python/src/lichen: group key state = {group_id, key_epoch u32 (monotonic, wraps at 4294967295), current master_secret, previous epoch+key with rekey timestamp}. Validation: message epoch \u003c current -\u003e reject (rollback), epoch \u003e current+1 unknown-future -\u003e reject. Drives vectors key_epoch_increment, epoch_rollback_reject, epoch_future_reject.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:49:10.064663Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:52:31.067178Z",
+  "started_at": "2026-08-28T15:50:57.871548Z",
+  "closed_at": "2026-08-28T15:52:31.067178Z",
+  "close_reason": "Duplicate of 9mkj.1 (same epoch/key manager scope), created by a retry after a dep-conflict error.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-m5l6",
+      "depends_on_id": "project-LICHEN-worker6-9mkj",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:49:18.83397Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

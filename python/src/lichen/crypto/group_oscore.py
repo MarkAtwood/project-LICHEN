@@ -85,6 +85,15 @@ class GroupKeyMaterial:
     key: bytes
     created_s: float
 
+    def __repr__(self) -> str:
+        return (
+            f"GroupKeyMaterial(epoch={self.epoch}, "
+            f"key=<redacted {len(self.key)} bytes>, "
+            f"created_s={self.created_s!r})"
+        )
+
+    __str__ = __repr__
+
 
 class GroupKeyManager:
     """Distributes and rotates a group key among authenticated members.
@@ -205,6 +214,15 @@ class GroupKeyManager:
     def remove_member(self, iid: str) -> None:
         """Remove a member. They keep access only until the next rekey."""
         self.members.pop(iid, None)
+
+    def __repr__(self) -> str:
+        return (
+            f"GroupKeyManager(group_id={self.group_id.hex()}, "
+            f"epoch={self.epoch}, members={len(self.members)}, "
+            f"previous_retained={len(self._previous)})"
+        )
+
+    __str__ = __repr__
 
 
 def pairwise_wrap(group_key: bytes, member_ed25519_pubkey: bytes) -> bytes:
