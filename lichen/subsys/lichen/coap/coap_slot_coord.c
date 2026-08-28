@@ -1030,7 +1030,9 @@ static int slots_post(struct coap_resource *resource,
 		    result == LICHEN_CLAIM_REJECT_INVALID_SIG) {
 			return 0;
 		}
-		uint8_t code = COAP_RESPONSE_CODE_BAD_REQUEST;
+		/* spec/08 GCP-6.5: validation failures (invalid slots, expired)
+		 * respond 4.03 Forbidden; only conflicts override to 4.09. */
+		uint8_t code = COAP_RESPONSE_CODE_FORBIDDEN;
 		if (result == LICHEN_CLAIM_REJECT_CONFLICT) {
 			code = COAP_RESPONSE_CODE_CONFLICT;
 		}
