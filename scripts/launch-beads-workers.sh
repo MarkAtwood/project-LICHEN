@@ -46,6 +46,12 @@ for i in $(seq 1 $NUM_WORKERS); do
         { echo "Failed to create worktree $i"; continue; }
     fi
 
+    # Symlink .beads to main repo (shared coordination)
+    if [ ! -L "$WORKTREE/.beads" ]; then
+        rm -rf "$WORKTREE/.beads" 2>/dev/null
+        ln -s "$REPO_ROOT/.beads" "$WORKTREE/.beads"
+    fi
+
     # Copy prompt to worktree so worker can find it
     cp "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/" 2>/dev/null || \
         mkdir -p "$WORKTREE/scripts" && cp "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
