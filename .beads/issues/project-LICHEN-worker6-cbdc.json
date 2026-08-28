@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-cbdc",
+  "title": "Group OSCORE key distribution (spec 18.8.5, a6qg gap 6)",
+  "description": "Group OSCORE key distribution is entirely absent from python/src/lichen. Implement per spec 18.8.5 and vector group_oscore_key.json: pairwise wrap of group key, key_epoch counter, 1-hour grace window, epoch rollback/future rejection, membership rekey. 9/10 vectors currently UNDRIVABLE (pytest.skip with reason); only id_context composition drivable via MemorySecurityContext. After implementation, flip skips to real tests driven by the vector file.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:36:13.292141Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:36:13.292141Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cbdc",
+      "depends_on_id": "project-LICHEN-worker6-a6qg",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T15:36:26.385267Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

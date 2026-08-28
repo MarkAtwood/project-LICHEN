@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-pqfk",
+  "title": "Harden SOS/Confessions resources per spec 18.4 (a6qg gaps 1-5)",
+  "description": "Implement in python/src/lichen: (1) POST /sos must verify Schnorr48 origin signature and silently drop unsigned/invalid (spec/12-apps.md 18.4.1); wire verify_sos_origin() into SosResource POST path. (2) Burst allowance of 2 SOS within cooldown window (spec table 'Burst allowance: 2') — SosResource.check_rate_limit currently rejects 2nd SOS at +1s. (3) 4.29 responses must embed retry_after CBOR payload ({retry_after: 300} for SOS per vector). (4) Rate-limiting must use monotonic time source in production wiring (SosResource and ConfessionsResource default to wall-clock time.time; time_func injectable but production passes none). (5) Add monotonic origin-sequence validator for SOS origin signatures — SosRelay dedups exact (node,seq) only; stale-but-unseen origin sequences must be rejected (vector origin_sequence_rollback expects reject). After each fix, flip the corresponding xfail(strict) pins in python/tests/coap/test_security_app_vector_consumers.py and remove markers once green.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:35:53.199906Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:35:53.199906Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pqfk",
+      "depends_on_id": "project-LICHEN-worker6-a6qg",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T15:36:03.259939Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
