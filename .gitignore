@@ -47,3 +47,13 @@ build-logs*/
 twister-out*/
 *.rlib
 opencode.json
+
+# Build artifacts
+build/
+build_*/
+*.o
+*.a
+*.so
+*.dylib
+CMakeCache.txt
+CMakeFiles/
