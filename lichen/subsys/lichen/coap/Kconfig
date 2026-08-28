@@ -324,7 +324,7 @@ config LICHEN_COAP_DEADDROP_LOG_LEVEL
 config LICHEN_COAP_SLOT_COORD
 	bool "Enable Slot Coordination (GCP-6)"
 	depends on LICHEN_COAP_SERVER
-	depends on LICHEN_SCHNORR48
+	depends on LICHEN_LINK_SCHNORR
 	default n
 	help
 	  Enable GCP-6 Slot Coordination protocol per spec/08-gateway-coordination.md

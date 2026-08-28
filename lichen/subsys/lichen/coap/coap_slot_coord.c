@@ -26,6 +26,7 @@
 
 #include <lichen/coap_slot_coord.h>
 #include <lichen/coap_server.h>
+#include <lichen/coap_oscore.h>
 #include <lichen/coap_keys.h>
 #include <lichen/schnorr48.h>
 
@@ -974,51 +975,81 @@ static int slots_post(struct coap_resource *resource,
 		      struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
 {
+	struct coap_oscore_unprotect_result oscore;
+	struct lichen_slot_claim claim;
+	struct lichen_slot_grant grant;
 	const uint8_t *payload;
 	uint16_t payload_len;
+	int ret;
 
-	payload = coap_packet_get_payload(request, &payload_len);
+	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+						     addr_len, COAP_METHOD_POST,
+						     &oscore);
+	if (ret != 0) {
+		return ret;
+	}
+
+	/* GCP-6.4: "All CoAP messages use OSCORE." Local-admin (LCI) callers
+	 * are the only transport exception, per the house dispatch gate. */
+	if (!oscore.is_protected &&
+	    !lichen_coap_is_local_admin(addr, addr_len)) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_UNAUTHORIZED,
+						    0, NULL, 0);
+	}
+
+	payload = oscore.payload;
+	payload_len = oscore.payload_len;
 	if (payload == NULL || payload_len == 0) {
-		return lichen_coap_respond(resource, request, addr, addr_len,
-					   COAP_RESPONSE_CODE_BAD_REQUEST,
-					   0, NULL, 0);
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_BAD_REQUEST,
+						    0, NULL, 0);
 	}
 
 	/* Decode claim */
-	struct lichen_slot_claim claim;
-	int ret = lichen_slot_coord_decode_claim(payload, payload_len, &claim);
+	ret = lichen_slot_coord_decode_claim(payload, payload_len, &claim);
 	if (ret < 0) {
 		LOG_WRN("Failed to decode slot claim: %d", ret);
-		return lichen_coap_respond(resource, request, addr, addr_len,
-					   COAP_RESPONSE_CODE_BAD_REQUEST,
-					   0, NULL, 0);
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_BAD_REQUEST,
+						    0, NULL, 0);
 	}
 
 	/* Process claim */
-	struct lichen_slot_grant grant;
 	enum lichen_claim_result result = lichen_slot_coord_process_claim(&s_ctx, &claim, &grant);
 
 	if (result != LICHEN_CLAIM_ACCEPTED) {
+		/* GCP-6.3: Claims with invalid or missing signatures MUST be
+		 * silently discarded. Return 0 without responding. */
+		if (result == LICHEN_CLAIM_REJECT_NO_SIG ||
+		    result == LICHEN_CLAIM_REJECT_INVALID_SIG) {
+			return 0;
+		}
 		uint8_t code = COAP_RESPONSE_CODE_BAD_REQUEST;
 		if (result == LICHEN_CLAIM_REJECT_CONFLICT) {
 			code = COAP_RESPONSE_CODE_CONFLICT;
 		}
-		return lichen_coap_respond(resource, request, addr, addr_len,
-					   code, 0, NULL, 0);
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    code, 0, NULL, 0);
 	}
 
 	/* Encode grant response */
 	static uint8_t resp_buf[128];
 	ret = lichen_slot_coord_encode_grant(&grant, resp_buf, sizeof(resp_buf));
 	if (ret < 0) {
-		return lichen_coap_respond(resource, request, addr, addr_len,
-					   COAP_RESPONSE_CODE_INTERNAL_ERROR,
-					   0, NULL, 0);
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_INTERNAL_ERROR,
+						    0, NULL, 0);
 	}
 
-	return lichen_coap_respond(resource, request, addr, addr_len,
-				   COAP_RESPONSE_CODE_CREATED,
-				   CBOR_CONTENT_FORMAT, resp_buf, ret);
+	return coap_oscore_respond_resource(resource, request, addr, addr_len,
+					    &oscore, COAP_RESPONSE_CODE_CREATED,
+					    CBOR_CONTENT_FORMAT, resp_buf, ret);
 }
 
 static int info_get(struct coap_resource *resource,
