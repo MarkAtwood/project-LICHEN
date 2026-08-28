@@ -11,14 +11,31 @@ Contract highlights (operative contract is the vector file):
 
 - Pairwise wrap: unique ciphertext per member pubkey
   (X25519 ECDH + HKDF-SHA256 + ChaCha20-Poly1305-IETF).
-- ``key_epoch``: monotonic u32 counter, incremented on every rekey;
-  wraps after ``0xFFFFFFFF``.
+- ``key_epoch``: monotonic u32 counter over the cyclic epoch space
+  1..``EPOCH_WRAP``; it wraps after ``0xFFFFFFFF`` (the successor of the
+  maximum epoch is 1 -- a new wrap generation, never a rollback).
+- Two predicates encode one acceptance policy (spec 18.8.2):
+
+  - :meth:`GroupKeyManager.validate_epoch` is *accept-for-processing*: a
+    structural, wrap-aware gate on the epoch stamped on a message. It
+    accepts the current epoch, the immediate successor (a peer may rekey
+    before we do), and the immediate predecessor while we still hold that
+    material inside its grace window; the old key_epoch is rejected only
+    *after* the 1-hour grace period.
+  - :meth:`GroupKeyManager.key_valid_at` is *use-authorization*: whether a
+    specific key material may be used at a given time. Current material
+    (identified by identity, not epoch-number equality -- numbers recur
+    after a wrap) is always valid; other held material is valid within its
+    grace window; material the manager does not hold is never authorized.
+
 - OSCORE context isolation: ``id_context = group_id || key_epoch(u32 BE)``.
-- Grace window: after a rekey the previous key stays valid for one hour
-  (strict expiry), so stragglers can still decrypt in-flight traffic.
-- Epoch validation: messages stamped with an epoch below the current one are
-  rejected (rollback/replay); epochs more than one above the current one are
-  rejected (unknown future key).
+  Epoch numbers recur across wrap generations; the unqualified encoding is
+  safe because key material is never reused for a recurring epoch number --
+  :meth:`GroupKeyManager.rekey` enforces this (raises on reuse).
+- Grace window and bounded retention: after a rekey the previous key stays
+  valid for one hour (strict expiry) so stragglers can decrypt in-flight
+  traffic; each rekey drops held material whose grace window has expired
+  and zeroizes dropped mutable (``bytearray``) key buffers where practical.
 - Membership: rekey distributes to current members only (removed members get
   no new key material but can still decrypt the previous key during grace);
   newly added members receive only the current key, never historical ones.
@@ -116,9 +133,7 @@ class GroupKeyManager:
     ) -> None:
         self.group_id = group_id
         self._time_func = time_func if time_func is not None else time.monotonic
-        self._current = GroupKeyMaterial(
-            epoch=1, key=group_key, created_s=self._time_func()
-        )
+        self._current = GroupKeyMaterial(epoch=1, key=group_key, created_s=self._time_func())
         self._previous: list[GroupKeyMaterial] = []
         self.members: dict[str, bytes] = dict(members or {})
 
@@ -130,39 +145,109 @@ class GroupKeyManager:
         return self._current.epoch
 
     def oscore_id_context(self, epoch: int | None = None) -> bytes:
-        """OSCORE id_context: ``group_id || key_epoch`` (u32 big-endian)."""
+        """OSCORE id_context: ``group_id || key_epoch`` (u32 big-endian).
+
+        The encoding is not qualified by wrap generation (the vector file
+        pins ``group_id || key_epoch``); it stays collision-safe across
+        wraps because :meth:`rekey` enforces that key material is never
+        reused for a recurring epoch number.
+        """
         e = self._current.epoch if epoch is None else epoch
         return self.group_id + struct.pack(">I", e)
 
+    def _epoch_distance(self, message_epoch: int) -> int:
+        """Signed wrap-aware distance from the current to *message_epoch*.
+
+        Measured on the cyclic epoch space (``EPOCH_WRAP`` values, since
+        epochs start at 1 and 0 is never assigned): ``+1`` is the successor
+        (``EPOCH_WRAP`` wraps to 1), ``-1`` the predecessor. For the small
+        windows this protocol uses this is equivalent to comparing
+        wrap-generation-qualified values.
+        """
+        distance = (message_epoch - self._current.epoch) % EPOCH_WRAP
+        if distance > EPOCH_WRAP // 2:
+            distance -= EPOCH_WRAP
+        return distance
+
     def validate_epoch(self, message_epoch: int) -> tuple[bool, str]:
-        """Validate an incoming message epoch against the current one.
+        """Accept-for-processing gate for an incoming message epoch.
+
+        One half of the acceptance policy (see module docstring): this
+        predicate decides structurally which epochs are processable;
+        :meth:`key_valid_at` separately authorizes use of a specific
+        material at a given time.
+
+        Epochs are compared by signed distance on the cyclic epoch space,
+        so after a wrap the new epoch 1 is the *successor* of ``0xFFFFFFFF``,
+        not a rollback.
+
+        Accepted:
+
+        - the current epoch and the immediate successor (a peer may have
+          rekeyed before us; the successor key may not be held yet);
+        - the immediate predecessor while we still hold its material inside
+          the grace window (spec 18.8.2: the old key_epoch is rejected only
+          *after* the 1-hour grace period). A predecessor we never held
+          (e.g. we joined after that rekey), or whose grace has expired,
+          is ``epoch_rollback``.
 
         Returns ``(accept, reason)``; reasons mirror the vector names:
-        ``epoch_rollback`` for anything below the current epoch,
-        ``future_epoch_unknown`` for anything more than one above.
+        ``epoch_rollback`` for anything behind the grace candidate,
+        ``future_epoch_unknown`` for anything more than one ahead.
         """
-        if message_epoch < self._current.epoch:
+        if message_epoch < 1:
             return False, "epoch_rollback"
-        if message_epoch > self._current.epoch + 1:
+        if message_epoch > EPOCH_WRAP:
             return False, "future_epoch_unknown"
-        return True, "ok"
+        distance = self._epoch_distance(message_epoch)
+        if distance == 0 or distance == 1:
+            return True, "ok"
+        if distance == -1:
+            # Grace candidate (spec 18.8.2): accepted only while we still
+            # hold the material and its grace window is open.
+            material = self.key_for_epoch(message_epoch)
+            if material is not None and self.key_valid_at(material):
+                return True, "ok"
+            return False, "epoch_rollback"
+        if distance > 1:
+            return False, "future_epoch_unknown"
+        return False, "epoch_rollback"
 
     # -- key validity / grace -----------------------------------------------
 
     def key_valid_at(self, material: GroupKeyMaterial, now_s: float | None = None) -> bool:
-        """Whether *material* may still be used at *now_s*.
+        """Whether *material* may still be used at *now_s* (use-authorization).
 
-        The current key is always valid; superseded keys remain valid until
-        their grace window expires (strictly, per the 3600001 ms vector).
+        The other half of the acceptance policy: :meth:`validate_epoch`
+        gates which epochs are processable; this predicate authorizes a
+        specific material.
+
+        Authorization is scoped to material this manager holds and is by
+        *identity*, never epoch-number equality -- epoch numbers recur
+        after a wrap, and a foreign object with a matching number must not
+        inherit current status. The current material is always valid;
+        superseded held material remains valid until its grace window
+        expires (strictly, per the 3600001 ms vector). Material the manager
+        does not hold is never authorized.
         """
         if now_s is None:
             now_s = self._time_func()
-        if material.epoch == self._current.epoch:
+        if material is self._current:
             return True
-        return now_s - material.created_s <= GRACE_PERIOD_S
+        if any(held is material for held in self._previous):
+            return now_s - material.created_s <= GRACE_PERIOD_S
+        return False
 
     def key_for_epoch(self, epoch: int) -> GroupKeyMaterial | None:
-        """Return key material for *epoch* if we ever held it."""
+        """Return held key material for *epoch*, or ``None``.
+
+        Resolution is by epoch number over the material this manager holds
+        (current first, then superseded, newest first). ``rekey`` drops
+        retained entries whose epoch number would collide with a wrapped
+        epoch, so numbers are unambiguous within the held set; numbers do
+        recur across wrap generations, so use-authorization
+        (:meth:`key_valid_at`) is still required before using the result.
+        """
         if self._current.epoch == epoch:
             return self._current
         for material in reversed(self._previous):
@@ -189,12 +274,35 @@ class GroupKeyManager:
 
         Removed members are excluded automatically (forward secrecy on
         removal); they can still decrypt the previous key during grace.
+
+        Wrap handling: rotating past ``EPOCH_WRAP`` starts a new wrap
+        generation at epoch 1. Retained material whose epoch number would
+        collide with the wrapped epoch is dropped (it would shadow the new
+        current in :meth:`key_for_epoch`), and an enforced never-reuse
+        invariant refuses key material byte-identical to retained material
+        from an earlier generation -- reusing material for a recurring
+        epoch number would reuse OSCORE nonces (full plaintext recovery).
+
+        Raises:
+            RuntimeError: If *new_key* duplicates retained material across
+                a wrap generation (never-reuse invariant).
         """
         if new_key is None:
             new_key = bindings.randombytes(16)
+        wrapping = self._current.epoch == EPOCH_WRAP
+        new_epoch = 1 if wrapping else self._current.epoch + 1
+        if wrapping:
+            for held in self._previous:
+                if held.epoch == new_epoch and hmac.compare_digest(held.key, new_key):
+                    raise RuntimeError(
+                        "group key material reused across wrap generations: "
+                        f"epoch {new_epoch} would recur with identical key "
+                        "(OSCORE nonce reuse)"
+                    )
+            self._previous = [held for held in self._previous if held.epoch != new_epoch]
         self._previous.append(self._current)
         self._current = GroupKeyMaterial(
-            epoch=(1 if self._current.epoch == EPOCH_WRAP else self._current.epoch + 1),
+            epoch=new_epoch,
             key=new_key,
             created_s=self._time_func(),
         )
@@ -238,9 +346,7 @@ def pairwise_wrap(group_key: bytes, member_ed25519_pubkey: bytes) -> bytes:
         ValueError: If the member key cannot be converted to Curve25519.
     """
     member_x_pub = _to_x25519_public(member_ed25519_pubkey)
-    eph_seed = hkdf_sha256(
-        group_key, salt=b"LICHEN-GROUP-WRAP-v1", info=_WRAP_INFO + member_x_pub
-    )
+    eph_seed = hkdf_sha256(group_key, salt=b"LICHEN-GROUP-WRAP-v1", info=_WRAP_INFO + member_x_pub)
     eph_pub = bindings.crypto_scalarmult_base(eph_seed)
     shared = bindings.crypto_scalarmult(eph_seed, member_x_pub)
     kek = hkdf_sha256(shared, salt=eph_pub + member_x_pub, info=_WRAP_INFO)
