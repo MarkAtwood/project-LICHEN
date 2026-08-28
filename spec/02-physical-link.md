@@ -64,7 +64,7 @@ Different LoRa spreading factors are quasi-orthogonal. SF7 and SF12 transmission
   LICHEN RPL option registry in `09-packets-timing.md`. This is not an IANA
   assignment. Gateway tracks per-SF node counts and assigns least-loaded SF
   for load balance. Nodes **MUST** use assigned SF for all TX after joining.
-- Stateless hash-based (fallback): `assigned_sf = 7 + (hash_32(IID) mod 6)`. Uses consistent `hash_32` (FNV-1a32 per project-LICHEN-eirg) from CCP-15.8.3; short-address DAD instead uses the CRC32-IEEE seed-mixing construction in Section 4.5.
+- Stateless hash-based (fallback): `assigned_sf = 7 + (hash_32(IID) mod 6)`. Uses consistent `hash_32` (FNV-1a32 per project-LICHEN-eirg) from CCP-15.8.3; short-address DAD also uses FNV-1a32 (Section 4.5).
 - Join-based: Nodes join on SF10 (common ground). Gateway assigns via DIO or join response; node switches post-assignment.
 - Nodes without explicit assignment **MUST** use SF10 (backwards compatibility with all existing nodes).
 
@@ -399,27 +399,27 @@ be established. No time synchronization is required.
 
 When Duplicate Address Detection (DAD) indicates a collision on a 16-bit short
 address, the node recomputes a candidate using seed mixing rather than choosing
-a random address. Short-address DAD uses reflected CRC32-IEEE/ISO-HDLC with
-polynomial `0xEDB88320` (the reflected form of `0x04C11DB7`) and update value
-`0x4348454E`, the low 32 bits of the historical ASCII-LICHEN initializer
-`0x4C494348454E`. Before processing, the update value is XORed with
-`0xFFFFFFFF`; each input octet is processed least-significant bit first; the
-final register is XORed with `0xFFFFFFFF`. This is equivalent to
-`binascii.crc32(data, 0x4348454E)`. This CRC construction is distinct from the
-FNV-1a32 `hash_32` used for channel and slot selection.
+a random address. Short-address DAD uses FNV-1a32 with the standard basis
+`0x811C9DC5` and prime `0x01000193`, the same `hash_32` used for channel and
+slot selection.
 
 ```pseudocode
+fn fnv1a32(data: &[u8]) -> u32
+    hash = 0x811C9DC5
+    for byte in data:
+        hash ^= byte
+        hash = hash.wrapping_mul(0x01000193)
+    return hash
+
 fn derive_short_addr(eui64: [u8; 8]) -> u16
-    hash = crc32_ieee(eui64, initial: 0x4348454E)
-    return hash & 0xFFFF
+    return fnv1a32(eui64) & 0xFFFF
 
 fn derive_short_addr_with_seed(eui64: [u8; 8], seed: u32) -> u16
     // XOR the seed into the last 4 bytes of EUI-64 before hashing.
     // This produces a different but deterministic address per seed.
     mixed: [u8; 8] = eui64
     mixed[4..8] ^= seed.to_le_bytes()
-    hash = crc32_ieee(mixed, initial: 0x4348454E)
-    return hash & 0xFFFF
+    return fnv1a32(mixed) & 0xFFFF
 
 fn dad_retry(eui64: [u8; 8], existing_addrs: Set<u16>) -> Option<u16>
     addr = derive_short_addr(eui64)
@@ -433,10 +433,7 @@ fn dad_retry(eui64: [u8; 8], existing_addrs: Set<u16>) -> Option<u16>
     return None  // collision space exhausted (256/65536 ≈ 0.4%)
 ```
 
-Implementations MUST match `test/vectors/short_addr_dad.json` and
-`test/vectors/dad_hash_clarification.json`. The FNV-1a32 comparison values in
-those artifacts are negative interop oracles and MUST NOT be used as DAD
-addresses.
+Implementations MUST match `test/vectors/short_addr_dad.json`.
 
 ---
 

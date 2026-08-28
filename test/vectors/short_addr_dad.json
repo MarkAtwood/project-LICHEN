@@ -1,6 +1,6 @@
 {
   "format_version": 2,
-  "description": "Short address assignment vectors (spec 02-physical-link.md 4.5, 04-network.md 12.3). Includes crc32_ieee derivation with LICHEN key 0x4c494348454e truncated to 0x4348454e, seed-mixing DAD retry, incremental +1 mod 0xffef fallback, jitter, RFC 4862 Neighbor Solicitation/Advertisement exchange, coordinator DAO-ACK, transition, and collision detection. Rust, Python, and Zephyr must match exactly.",
+  "description": "Short address assignment vectors (spec 02-physical-link.md 4.5). Uses FNV-1a32 with basis 0x811c9dc5. Legacy CRC32 values retained for migration reference only.",
   "vectors": [
     {
       "name": "derive_0011223344556677",
@@ -16,13 +16,12 @@
         102,
         119
       ],
-      "crc32_init": "0x4348454e",
-      "derived": 1390,
-      "derived_hex": "0x56e",
+      "derived": 7101,
+      "derived_hex": "0x1bbd",
       "crc16_candidate": 23807,
       "crc16_hex": "0x5cff",
-      "fnv1a_low16": 7101,
-      "fnv1a_low16_hex": "0x1bbd"
+      "crc32_derived": 1390,
+      "crc32_derived_hex": "0x56e"
     },
     {
       "name": "derive_0102030405060708",
@@ -38,13 +37,12 @@
         7,
         8
       ],
-      "crc32_init": "0x4348454e",
-      "derived": 43100,
-      "derived_hex": "0xa85c",
+      "derived": 26509,
+      "derived_hex": "0x678d",
       "crc16_candidate": 18322,
       "crc16_hex": "0x4792",
-      "fnv1a_low16": 26509,
-      "fnv1a_low16_hex": "0x678d"
+      "crc32_derived": 43100,
+      "crc32_derived_hex": "0xa85c"
     },
     {
       "name": "derive_aabbccddeeff0011",
@@ -60,13 +58,12 @@
         0,
         17
       ],
-      "crc32_init": "0x4348454e",
-      "derived": 22749,
-      "derived_hex": "0x58dd",
+      "derived": 8125,
+      "derived_hex": "0x1fbd",
       "crc16_candidate": 55160,
       "crc16_hex": "0xd778",
-      "fnv1a_low16": 8125,
-      "fnv1a_low16_hex": "0x1fbd"
+      "crc32_derived": 22749,
+      "crc32_derived_hex": "0x58dd"
     },
     {
       "name": "derive_0000000000000000",
@@ -82,13 +79,12 @@
         0,
         0
       ],
-      "crc32_init": "0x4348454e",
-      "derived": 65520,
-      "derived_hex": "0xfff0",
+      "derived": 29029,
+      "derived_hex": "0x7165",
       "crc16_candidate": 12606,
       "crc16_hex": "0x313e",
-      "fnv1a_low16": 29029,
-      "fnv1a_low16_hex": "0x7165"
+      "crc32_derived": 65520,
+      "crc32_derived_hex": "0xfff0"
     },
     {
       "name": "derive_ffffffffffffffff",
@@ -104,13 +100,12 @@
         255,
         255
       ],
-      "crc32_init": "0x4348454e",
-      "derived": 65413,
-      "derived_hex": "0xff85",
+      "derived": 2653,
+      "derived_hex": "0xa5d",
       "crc16_candidate": 38879,
       "crc16_hex": "0x97df",
-      "fnv1a_low16": 2653,
-      "fnv1a_low16_hex": "0xa5d"
+      "crc32_derived": 65413,
+      "crc32_derived_hex": "0xff85"
     },
     {
       "name": "derive_0200000000000001",
@@ -126,13 +121,12 @@
         0,
         1
       ],
-      "crc32_init": "0x4348454e",
-      "derived": 51227,
-      "derived_hex": "0xc81b",
+      "derived": 11796,
+      "derived_hex": "0x2e14",
       "crc16_candidate": 44729,
       "crc16_hex": "0xaeb9",
-      "fnv1a_low16": 11796,
-      "fnv1a_low16_hex": "0x2e14"
+      "crc32_derived": 51227,
+      "crc32_derived_hex": "0xc81b"
     },
     {
       "name": "seed_mixing_0011223344556677",

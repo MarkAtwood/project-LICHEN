@@ -2,14 +2,14 @@
   "$schema": "./schema.json",
   "format_version": 2,
   "vector_type": "dad_hash_clarification",
-  "description": "DAD (Duplicate Address Detection) hash algorithm clarification vectors. Spec section 4.5 contains two conflicting pseudocode blocks: one uses crc32_ieee(key=0x4c494348454e), the other uses fnv1a32(basis=0x811c9dc5). This file documents the authoritative resolution and provides test vectors for both algorithms to ensure implementations use the correct one.",
+  "description": "DAD (Duplicate Address Detection) hash algorithm clarification vectors. FNV-1a32 is the authoritative algorithm per spec 02-physical-link.md section 4.5. CRC32 vectors retained for migration reference only.",
   "oracle_provenance": "Independent implementation of both hash algorithms. CRC32-IEEE uses polynomial 0x04C11DB7 with initial value truncated from 0x4c494348454e to 0x4348454e (32-bit). FNV-1a32 uses basis 0x811c9dc5 and prime 0x01000193.",
   "spec_reference": "spec/02-physical-link.md section 4.5 - DAD Retry Strategy",
   "resolution": {
-    "authoritative_algorithm": "crc32_ieee",
-    "initial_value": "0x4348454e",
-    "initial_value_source": "ASCII 'LICHEN' (0x4c494348454e) truncated to 32 bits",
-    "note": "The fnv1a32 pseudocode in section 4.5 appears to be a copy-paste error from the channel selection algorithm in section 02a. Short address derivation uses CRC32-IEEE per the existing short_addr_dad.json vectors which are the authoritative source."
+    "authoritative_algorithm": "fnv1a32",
+    "basis": "0x811c9dc5",
+    "prime": "0x01000193",
+    "note": "FNV-1a32 is simpler, has better distribution for this use case, and matches the hash_32 used elsewhere in the spec. CRC32-IEEE was a historical artifact that has been removed."
   },
   "vectors": [
     {
@@ -17,7 +17,16 @@
       "description": "Short address derivation using crc32_ieee (authoritative)",
       "algorithm": "crc32_ieee",
       "eui64": "0011223344556677",
-      "eui64_bytes": [0, 17, 34, 51, 68, 85, 102, 119],
+      "eui64_bytes": [
+        0,
+        17,
+        34,
+        51,
+        68,
+        85,
+        102,
+        119
+      ],
       "crc32_init": "0x4348454e",
       "full_crc32": "0x0000056e",
       "derived_addr": 1390,
@@ -28,7 +37,16 @@
       "description": "Short address derivation using fnv1a32 (NOT authoritative, for comparison only)",
       "algorithm": "fnv1a32",
       "eui64": "0011223344556677",
-      "eui64_bytes": [0, 17, 34, 51, 68, 85, 102, 119],
+      "eui64_bytes": [
+        0,
+        17,
+        34,
+        51,
+        68,
+        85,
+        102,
+        119
+      ],
       "fnv_basis": "0x811c9dc5",
       "fnv_prime": "0x01000193",
       "full_fnv": "0x373e1bbd",
@@ -41,7 +59,16 @@
       "description": "Second test EUI using crc32_ieee",
       "algorithm": "crc32_ieee",
       "eui64": "0102030405060708",
-      "eui64_bytes": [1, 2, 3, 4, 5, 6, 7, 8],
+      "eui64_bytes": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
       "crc32_init": "0x4348454e",
       "derived_addr": 43100,
       "derived_hex": "0xa85c"
