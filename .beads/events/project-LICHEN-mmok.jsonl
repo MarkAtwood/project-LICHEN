@@ -3,3 +3,4 @@
 {"id":"01a0319c-687a-75ff-a321-5b572b9db93b","issue_id":"project-LICHEN-mmok","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-24T02:32:09.082394Z"}
 {"id":"01a045da-d733-7e82-baed-1c5c6b58752c","issue_id":"project-LICHEN-mmok","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: needs-linux","created_at":"2026-08-28T00:52:44.979952Z"}
 {"id":"01a048f1-faaa-7a19-a27f-3e4e0381f30c","issue_id":"project-LICHEN-mmok","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: needs-linux","created_at":"2026-08-28T15:16:53.034662Z"}
+{"id":"01a048f2-0169-73b9-89f6-cee760b7da4b","issue_id":"project-LICHEN-mmok","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T15:16:54.761245Z"}
