@@ -1,0 +1,7 @@
+{
+  "id": "1787939809565045000-1",
+  "issue_id": "project-LICHEN-worker6-cejm",
+  "author": "Mark Atwood",
+  "text": "Fixed in commit f88629bdac (fix(coap): gate rangetest observe registration). The GET handler now requires oscore.is_protected || lichen_coap_is_local_admin() when observe_count == 1, refusing 4.01 via coap_oscore_respond_resource before coap_resource_parse_observe; plain GET without Observe remains publicly readable (spec 17.6.3/18.7). New ztest test_observe_registration_requires_authz covers unauth observe-GET 4.01 + no observer slot, authed (OSCORE and local-admin) observe-GET registers, protected Observe=1 cancellation still works. Evidence: twister qemu_x86/atom (local Zephyr 4.1.0 workspace, SDK 0.16.8) 1/1 configurations passed, 13/13 test cases passed, 0 failed/errored (outdir /Volumes/Attic/tmp/twister-observe/twister.json). Sibling overlap: project-LICHEN-worker6-l1qw.9.11.2 (Observe registration limits) remains open and covers pool-size bounding across observable resources; this bead only closes the unauthenticated-registration vector.",
+  "created_at": "2026-08-28T17:56:49.565045Z"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-5kv6",
+  "title": "Rust: reformat imports to one-per-line baseline",
+  "description": "Run cargo +nightly fmt across all Rust crates to establish a one-import-per-line baseline.\n\n## Why\nrust/rustfmt.toml now has imports_granularity = \"Item\" which splits grouped imports (use foo::{a, b, c}) into separate lines. This reduces merge conflicts when multiple agents add imports to the same file - each addition lands on its own line instead of contesting a shared brace-group.\n\n## What changes\nEvery .rs file with grouped imports will be reformatted. Example:\n```rust\n// Before\nuse std::{collections::HashMap, sync::Arc, fmt};\n\n// After\nuse std::collections::HashMap;\nuse std::fmt;\nuse std::sync::Arc;\n```\n\n## Scope estimate\n- ~20 crates in rust/\n- Diff will touch most .rs files (noisy but mechanical)\n- Zero semantic change - purely formatting\n\n## Steps\n1. Verify nightly toolchain: rustup show\n2. Install if needed: rustup install nightly\n3. Run formatter: cd rust \u0026\u0026 cargo +nightly fmt\n4. Verify build: cargo build --all-targets\n5. Verify tests: cargo test\n6. Single commit: \"style(rust): reformat imports to one-per-line\"\n\n## Risks\n- None if tests pass - formatting only\n- Conflicts with any in-flight Rust branches (coordinate timing)\n\n## When to do\n- Before starting parallel agent work on Rust code\n- Or: accept gradual migration as files are touched",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T17:52:03.70307Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T17:52:03.70307Z"
+}

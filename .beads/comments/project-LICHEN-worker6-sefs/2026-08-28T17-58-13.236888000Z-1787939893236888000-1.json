@@ -1,0 +1,7 @@
+{
+  "id": "1787939893236888000-1",
+  "issue_id": "project-LICHEN-worker6-sefs",
+  "author": "Mark Atwood",
+  "text": "Fixed in commit 750fed2ed7 (test(coap): rangetest suite assert hygiene). Dropped the vacuous zassert_equal(lichen_rangetest_seq(), 0U, \"4.01 must not mutate\") in test_post_requires_oscore_or_local_admin: the POST handler never mutates s_seq (only lichen_rangetest_update() does), so the assert could not fail even with the gate deleted. Added response_payload_len == 0 asserts to both 4.01 branches of test_get_interval_requires_authz (interval-body GET and observe+interval GET), matching the POST authz test. Evidence: twister qemu_x86/atom 1/1 configurations passed, 13/13 test cases passed, 0 failed/errored (outdir /Volumes/Attic/tmp/twister-observe/twister.json).",
+  "created_at": "2026-08-28T17:58:13.236888Z"
+}
