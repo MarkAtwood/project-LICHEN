@@ -1,3 +1,6 @@
+//! Tests against shared test vectors from test/vectors/root_authorization.json
+#![cfg(feature = "schnorr")]
+
 use std::{fs, path::Path};
 
 use lichen_link::{keys::PublicKey, schnorr};

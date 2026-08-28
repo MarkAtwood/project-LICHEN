@@ -31,6 +31,7 @@ pub mod pps;
 pub mod routing;
 pub mod srh;
 pub mod table;
+pub mod time_option;
 pub mod time_stratum;
 pub mod trickle;
 pub mod verify;

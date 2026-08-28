@@ -18,7 +18,7 @@
 #include <lichen/coap_oscore.h>
 #include <lichen/coap_server.h>
 #include <lichen/hal.h>
-#include <lichen/lora_l2.h>
+#include <lichen/l2/lora_l2.h>
 #include <lichen/senml.h>
 
 LOG_MODULE_REGISTER(lichen_coap_location,

@@ -1096,6 +1096,7 @@ class TestConfessionsRateVectors:
         assert retry_after <= CONFESSION_COOLDOWN_S
 
     def test_time_source_defaults_to_monotonic_uptime(self) -> None:
+        """Spec 18.10.3: rate limiting uses monotonic uptime, not wall clock."""
         vec = _vec(CONFESSIONS_RATE, "uptime_not_wallclock")
         assert vec["expected"]["time_source"] == "monotonic_uptime"
         conf = ConfessionsResource()

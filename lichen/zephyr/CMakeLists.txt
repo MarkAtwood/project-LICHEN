@@ -156,6 +156,9 @@ endif()
 # Public module headers (for example <lichen/lichen_log.h>) are shared by
 # multiple subsystems and drivers, so expose them before creating targets.
 zephyr_include_directories(${CMAKE_CURRENT_LIST_DIR}/../include)
+# Map the lichen/ prefix to subsys/lichen so qualified includes of the form
+# #include <lichen/...> resolve module-wide (e.g. lichen/l2/ipv6_addr.h).
+zephyr_include_directories(${CMAKE_CURRENT_LIST_DIR}/../subsys)
 
 add_subdirectory(../drivers drivers)
 add_subdirectory(../lib lib)
