@@ -11,7 +11,8 @@
   "labels": [
     "c",
     "linklayer",
-    "defer-external"
+    "defer-external",
+    "local-ok"
   ],
   "dependencies": [
     {
