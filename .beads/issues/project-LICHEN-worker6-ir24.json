@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-ir24",
   "title": "slot-coord: #ifdef CONFIG_LICHEN_LINK_SCHNORR can silently compile out claim verification (fail-open backstop missing)",
   "description": "coap_slot_coord.c:306-339: signature verification sits inside #ifdef CONFIG_LICHEN_LINK_SCHNORR; if that guard ever decouples from the Kconfig dep, claims with has_signature=true are accepted unverified. The new Kconfig dependency guarantees coupling today but nothing enforces it. The codebase's own pattern for must-never-build-without-crypto is #error (link/schnorr48.c:222-223, link_ctx.c:268-269). Fix: #else + #error (or BUILD_ASSERT) so regression is a build failure.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:03.060159Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:15:03.060159Z"
+  "updated_at": "2026-08-28T17:16:35.895595Z",
+  "started_at": "2026-08-28T17:16:35.895595Z",
+  "lease_expires_at": "2026-08-28T17:21:35.895595Z",
+  "heartbeat_at": "2026-08-28T17:16:35.895595Z"
 }

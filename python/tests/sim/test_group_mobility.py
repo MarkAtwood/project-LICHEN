@@ -169,6 +169,25 @@ class TestGroupMobility:
 
         assert m0.position == (pattern._center[0], pattern._center[1], 0.0)
 
+    def test_stationary_group_holds_position_through_long_pause(self) -> None:
+        pattern = GroupMobility(
+            area_bounds=(0, 100, 0, 100),
+            speed_m_s=10.0,
+            pause_time_us=3_600_000_000_000,
+            seed=42,
+            group_size=3,
+        )
+        members = make_group_members(3, (50.0, 50.0, 0.0))
+        for member in members:
+            pattern.add_member(member)
+
+        pattern.step(members[0], dt_us=60_000_000)
+        initial = [member.position for member in members]
+        for _ in range(10):
+            pattern.step(members[0], dt_us=60_000_000)
+
+        assert [member.position for member in members] == initial
+
     def test_z_coordinate_propagates_to_members(self) -> None:
         pattern = GroupMobility(
             area_bounds=(0, 100, 0, 100),

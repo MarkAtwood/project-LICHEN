@@ -669,6 +669,29 @@ class RPGM(MobilityPattern):
             member.set_position(cx + ox, cy + oy, self.z)
 
 
+_GRID_EPSILON = 1e-9
+
+
+class GridDirection(Enum):
+    """Cardinal movement directions along a Manhattan grid.
+
+    Values are (di, dj) grid-index steps. Member order matches the
+    historical candidate scan order so that the first direction draw
+    from a fresh pattern consumes the RNG identically to the original
+    unfiltered implementation.
+    """
+
+    RIGHT = (1, 0)
+    LEFT = (-1, 0)
+    UP = (0, 1)
+    DOWN = (0, -1)
+
+    def reverse(self) -> GridDirection:
+        """Return the opposite direction."""
+        di, dj = self.value
+        return GridDirection((-di, -dj))
+
+
 @dataclass
 class ManhattanGrid(MobilityPattern):
     """Manhattan grid mobility pattern.
@@ -677,6 +700,9 @@ class ManhattanGrid(MobilityPattern):
     (min_x, min_y) with configurable spacing_m, advancing at constant
     speed and choosing a random new direction at each intersection
     (grid point). Movement is always along one grid axis at a time.
+    The reverse of the current direction is excluded from the choice
+    unless no other direction is available (dead end), in which case
+    the node performs a forced U-turn.
 
     On the first step() the node is snapped onto the nearest grid point
     (initial placement on grid); snap_to_grid() exposes the same
@@ -684,34 +710,59 @@ class ManhattanGrid(MobilityPattern):
     (min_x + i * spacing_m, min_y + j * spacing_m) for all indices
     that fit inside area_bounds.
 
+    After arriving at an intersection the node pauses for
+    pause_time_us with probability pause_probability before picking
+    its next direction. Pauses use a fixed duration, matching the
+    RandomWaypoint convention of a single fixed pause_time_us;
+    random-within-range durations are intentionally not modeled. The
+    default pause_probability of 0.0 disables pausing entirely and
+    draws no randomness, preserving no-pause trajectories exactly.
+
     Attributes:
         area_bounds: (min_x, max_x, min_y, max_y) in meters.
         spacing_m: Distance between adjacent grid lines in meters.
         speed_m_s: Movement speed in meters per second.
+        pause_time_us: Fixed pause duration at each intersection in
+            microseconds.
+        pause_probability: Probability of pausing at each intersection,
+            between 0.0 (never pause, the default) and 1.0 (always
+            pause).
         seed: Random seed for reproducibility (None for random).
         z: Fixed altitude in meters (nodes stay at this height).
 
     Raises:
-        ValueError: If speed_m_s <= 0, spacing_m <= 0, or area_bounds
-            min/max are inverted.
+        ValueError: If speed_m_s <= 0, spacing_m <= 0, pause_time_us
+            < 0, pause_probability is outside [0.0, 1.0], or
+            area_bounds min/max are inverted.
     """
 
     area_bounds: tuple[float, float, float, float]
     spacing_m: float = 10.0
     speed_m_s: float = 1.0
+    pause_time_us: int = 5_000_000
+    pause_probability: float = 0.0
     seed: int | None = None
     z: float = 0.0
 
     # Internal state
     _rng: random.Random = field(init=False, repr=False)
+    _state: WaypointState = field(init=False, default=WaypointState.MOVING)
     _current: tuple[int, int] | None = field(init=False, default=None)
     _target_cell: tuple[int, int] | None = field(init=False, default=None)
+    _direction: GridDirection | None = field(init=False, default=None)
+    _pause_remaining_us: int = field(init=False, default=0)
 
     def __post_init__(self) -> None:
         if self.spacing_m <= 0:
             raise ValueError(f"spacing_m must be > 0, got {self.spacing_m}")
         if self.speed_m_s <= 0:
             raise ValueError(f"speed_m_s must be > 0, got {self.speed_m_s}")
+        if self.pause_time_us < 0:
+            raise ValueError(f"pause_time_us must be >= 0, got {self.pause_time_us}")
+        if not 0.0 <= self.pause_probability <= 1.0:
+            raise ValueError(
+                f"pause_probability must be between 0.0 and 1.0, got {self.pause_probability}"
+            )
         min_x, max_x, min_y, max_y = self.area_bounds
         if min_x >= max_x or min_y >= max_y:
             raise ValueError(f"area_bounds must have min < max, got {self.area_bounds}")
@@ -719,8 +770,11 @@ class ManhattanGrid(MobilityPattern):
 
     def _init_state(self) -> None:
         self._rng = random.Random(self.seed)
+        self._state = WaypointState.MOVING
         self._current = None
         self._target_cell = None
+        self._direction = None
+        self._pause_remaining_us = 0
 
     def reset(self) -> None:
         """Reset pattern to initial state."""
@@ -741,14 +795,41 @@ class ManhattanGrid(MobilityPattern):
             self._axis_value(self._snap_axis_index(y, 1), 1),
         )
 
+    def detect_intersection(self, x: float, y: float) -> bool:
+        """Check whether a position lies on a grid intersection.
+
+        A position is at an intersection when both coordinates sit on
+        grid lines, i.e. it coincides with a grid point. A position on
+        only one grid line (mid-segment along the other axis) is not an
+        intersection.
+
+        Args:
+            x: X coordinate in meters.
+            y: Y coordinate in meters.
+
+        Returns:
+            True if (x, y) lies on both an x and a y grid line (within
+            floating point tolerance), False otherwise.
+        """
+        return self._on_grid_line(x, 0) and self._on_grid_line(y, 1)
+
+    def _on_grid_line(self, value: float, axis: int) -> bool:
+        """Return True if value lies on a grid line along axis."""
+        lo = self.area_bounds[2 * axis]
+        k = (value - lo) / self.spacing_m
+        return abs(k - round(k)) * self.spacing_m <= _GRID_EPSILON
+
     def step(self, node: SimNode, dt_us: int) -> None:
         """Advance the node along grid lines by dt_us microseconds.
 
         On the first call the node is snapped onto the nearest grid
         point. The node then moves linearly toward the next grid point
-        along one axis, picking a random new direction at each
-        intersection it reaches. On a degenerate grid (a single grid
-        point) the node stays where it is.
+        along one axis. On arriving at an intersection it may pause for
+        pause_time_us with probability pause_probability, then picks a
+        random new direction that is not the reverse of its current
+        direction unless no other direction is available. On a
+        degenerate grid (a single grid point) the node stays where it
+        is.
 
         Args:
             node: The SimNode to move.
@@ -762,6 +843,9 @@ class ManhattanGrid(MobilityPattern):
 
         remaining_us = dt_us
         while remaining_us > 0:
+            if self._state == WaypointState.PAUSED:
+                remaining_us = self._handle_paused(remaining_us)
+                continue
             if self._target_cell is None:
                 self._pick_next_cell()
                 if self._target_cell is None:
@@ -783,10 +867,43 @@ class ManhattanGrid(MobilityPattern):
                 self._current = (ti, tj)
                 self._target_cell = None
                 remaining_us -= time_used_us
+                self._maybe_start_pause(tx, ty)
             else:
                 ratio = max_distance / distance
                 node.set_position(x + dx * ratio, y + dy * ratio, self.z)
                 return
+
+    def _handle_paused(self, remaining_us: int) -> int:
+        """Handle pause state, returns remaining time after state change."""
+        if self._pause_remaining_us > 0:
+            if remaining_us <= self._pause_remaining_us:
+                self._pause_remaining_us -= remaining_us
+                return 0
+            remaining_us -= self._pause_remaining_us
+            self._pause_remaining_us = 0
+
+        self._state = WaypointState.MOVING
+        return remaining_us
+
+    def _maybe_start_pause(self, x: float, y: float) -> None:
+        """Start a pause at an intersection if the pause coin fires.
+
+        Draws the Bernoulli coin only when pause_probability is > 0.0,
+        so the default configuration consumes no extra RNG draws and
+        reproduces the no-pause trajectories exactly. A zero-length
+        pause duration never enters the PAUSED state, which keeps every
+        PAUSED visit carrying a strictly positive remaining duration.
+        """
+        if self.pause_probability <= 0.0:
+            return
+        if not self.detect_intersection(x, y):
+            return
+        if self._rng.random() >= self.pause_probability:
+            return
+        if self.pause_time_us <= 0:
+            return
+        self._state = WaypointState.PAUSED
+        self._pause_remaining_us = self.pause_time_us
 
     def _grid_size(self, axis: int) -> int:
         """Return the maximum grid index along axis (0=x, 1=y)."""
@@ -804,19 +921,34 @@ class ManhattanGrid(MobilityPattern):
         return self.area_bounds[2 * axis] + index * self.spacing_m
 
     def _pick_next_cell(self) -> None:
-        """Choose a random adjacent grid cell as the next movement target."""
+        """Choose a random adjacent grid cell as the next movement target.
+
+        The reverse of the current direction is excluded from the draw
+        when another in-bounds direction exists, so nodes never double
+        back over the leg they just traversed. When the reverse is the
+        only candidate (dead end) a forced U-turn is performed.
+        """
         if self._current is None:
             return
         ci, cj = self._current
         candidates = []
-        for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for direction in GridDirection:
+            di, dj = direction.value
             ni, nj = ci + di, cj + dj
             if 0 <= ni <= self._grid_size(0) and 0 <= nj <= self._grid_size(1):
-                candidates.append((ni, nj))
+                candidates.append(direction)
         if not candidates:
             self._target_cell = None
             return
-        self._target_cell = self._rng.choice(candidates)
+        if self._direction is not None:
+            reverse = self._direction.reverse()
+            forward = [d for d in candidates if d is not reverse]
+            if forward:
+                candidates = forward
+        chosen = self._rng.choice(candidates)
+        self._direction = chosen
+        di, dj = chosen.value
+        self._target_cell = (ci + di, cj + dj)
 
 
 @dataclass

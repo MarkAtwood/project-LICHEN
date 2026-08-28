@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-g7nr",
   "title": "group_oscore: _previous retains every historical key forever (forward-secrecy gap)",
   "description": "python/src/lichen/crypto/group_oscore.py:122,195,164-171: rekey() appends to _previous and nothing purges it; key_valid_at only gates use past the grace window while the material stays in memory (and key_for_epoch does a growing linear scan). A single memory compromise of the controller retroactively exposes all past group traffic keys, contradicting the module's forward-secrecy framing and the docstring's 'previous epoch+key' (singular) design. Fix: after rekey, drop entries whose created_s + GRACE_PERIOD_S \u003c now and zeroize where practical.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:01.769957Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:15:01.769957Z"
+  "updated_at": "2026-08-28T17:16:40.855327Z",
+  "started_at": "2026-08-28T17:16:40.855327Z",
+  "lease_expires_at": "2026-08-28T17:21:40.855327Z",
+  "heartbeat_at": "2026-08-28T17:16:40.855327Z"
 }

@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-cejm",
   "title": "rangetest: unauthenticated Observe registration still possible on public plain GET",
   "description": "coap_rangetest.c:836-844: the 16zc/wr8j gates cover only the interval-body mutation; a plain GET without body with Observe:0 still reaches coap_resource_parse_observe. Zephyr's observer pool is bounded and never evicts (coap_server.c:640-680, -ENOMEM when full), and each lichen_rangetest_update() sends one NON notification per registered observer (:880-899) — so any mesh member can exhaust observer slots (authorized observers get 5.03) and multiply every continuous-test transmission by the observer count for as long as the bogus observers persist. Fix: require is_protected || is_local_admin when observe_count == 1 before registration (public plain GET without Observe stays readable per 17.6.3/18.7), per RFC 7641 4.1 server-side refusal. Extend the twister suite (observe test exists). Policy note: this applies to ALL observable resources; file siblings after this one proves the pattern.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:14:45.883219Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:14:45.883219Z"
+  "updated_at": "2026-08-28T17:16:31.17709Z",
+  "started_at": "2026-08-28T17:16:31.17709Z",
+  "lease_expires_at": "2026-08-28T17:21:31.17709Z",
+  "heartbeat_at": "2026-08-28T17:16:31.17709Z"
 }

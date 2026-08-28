@@ -1,0 +1,7 @@
+{
+  "id": "1787937674801930000-1",
+  "issue_id": "project-LICHEN-worker6-e1ct",
+  "author": "Mark Atwood",
+  "text": "Wave-4 review addendum: ManhattanGrid speed_m_s=NaN also passes constructor (bare comparison, mobility.py:758) and poisons positions via ratio math (:872-873) - ensure the fix's test matrix includes speed_m_s AND spacing_m for ManhattanGrid specifically, not just the other patterns.",
+  "created_at": "2026-08-28T17:21:14.80193Z"
+}

@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-sefs",
   "title": "rangetest tests: dead seq assert and missing 4.01 payload-length assert",
   "description": "lichen/tests/coap_rangetest/src/main.c:266: zassert_equal(lichen_rangetest_seq(), 0U, \"4.01 must not mutate\") cannot fail even with the gate deleted — the POST handler never mutates s_seq (only lichen_rangetest_update does). Drop it or comment it honestly. Also the GET authz test's 4.01 branches do not assert response_payload_len == 0 while the POST test does — a payload-leaking 4.01 in the GET path would go unnoticed; add the assert for symmetry.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:07.139263Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:15:07.139263Z"
+  "updated_at": "2026-08-28T17:16:33.010076Z",
+  "started_at": "2026-08-28T17:16:33.010076Z",
+  "lease_expires_at": "2026-08-28T17:21:33.010076Z",
+  "heartbeat_at": "2026-08-28T17:16:33.010076Z"
 }

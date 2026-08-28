@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-j2tg",
   "title": "slot-coord: non-conflict validation failures return 4.00 where GCP-6.5 says 4.03",
   "description": "coap_slot_coord.c:1031 maps LICHEN_CLAIM_REJECT_INVALID_SLOTS -\u003e 4.00; spec/08:198 says 'On validation failure (signature invalid, expired, etc.), respond 4.03 Forbidden'. The next spec sentence overrides only for invalid/missing sigs; conflict -\u003e 4.09 is done correctly. Pre-existing mapping, but the authz commit rewrote every reject path and the natural alignment moment is now (bundle with the signature-coverage work). Note: the enum has no expired rejection despite valid_until existing in grants.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:04.137623Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:15:04.137623Z"
+  "updated_at": "2026-08-28T17:16:37.30977Z",
+  "started_at": "2026-08-28T17:16:37.30977Z",
+  "lease_expires_at": "2026-08-28T17:21:37.30977Z",
+  "heartbeat_at": "2026-08-28T17:16:37.30977Z"
 }

@@ -1,0 +1,7 @@
+{
+  "id": "1787937675959595000-1",
+  "issue_id": "project-LICHEN-worker6-yhou",
+  "author": "Mark Atwood",
+  "text": "Wave-4 review addendum: ManhattanGrid-specific instance - re-attach (attach/detach with no reset) to a different node moves it in a straight OFF-GRID line toward a stale target, violating axis-lock (mobility.py:838-842, 973-982; verified empirically). Base class docstring says reattachment requires reset() but nothing enforces it - include manager-level enforcement or reset-on-reattach in scope.",
+  "created_at": "2026-08-28T17:21:15.959595Z"
+}
