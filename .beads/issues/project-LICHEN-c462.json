@@ -13,7 +13,8 @@
   "labels": [
     "defer-external",
     "blocked:hardware",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
