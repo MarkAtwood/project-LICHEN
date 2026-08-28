@@ -13,6 +13,7 @@
   "closed_at": "2026-07-22T15:03:17.821561152Z",
   "close_reason": "Changed **markdown** to plain INIT ORDER (CRITICAL): and RATE LIMIT \u0026 DTN: headers to match SECURITY: style in same file",
   "labels": [
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ]
 }
