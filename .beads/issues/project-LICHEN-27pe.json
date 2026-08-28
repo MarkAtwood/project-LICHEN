@@ -13,7 +13,8 @@
   "closed_at": "2026-07-25T01:27:11.749763358Z",
   "close_reason": "Closed",
   "labels": [
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
