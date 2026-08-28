@@ -1,0 +1,521 @@
+
+---
+events:
+  -
+    kind: "find_package-v1"
+    backtrace:
+      - "/mnt/lichen-zephyr/work/zephyr/cmake/modules/zephyr_default.cmake:28 (find_package)"
+      - "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:66 (include)"
+      - "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:92 (include_boilerplate)"
+      - "CMakeLists.txt:4 (find_package)"
+    name: "ZephyrBuildConfiguration"
+    configs:
+      -
+        filename: "ZephyrBuild.cps"
+        kind: "cps"
+      -
+        filename: "zephyrbuild.cps"
+        kind: "cps"
+      -
+        filename: "ZephyrBuildConfig.cmake"
+        kind: "cmake"
+      -
+        filename: "zephyrbuild-config.cmake"
+        kind: "cmake"
+    version_request:
+      exact: false
+    settings:
+      required: "optional"
+      quiet: true
+      global: false
+      policy_scope: false
+      bypass_provider: false
+      names:
+        - "ZephyrBuild"
+      search_paths:
+        - "/mnt/lichen-zephyr/work/zephyr/../*"
+      path_suffixes:
+        - ""
+      paths:
+        CMAKE_FIND_USE_CMAKE_PATH: true
+        CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+        CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: false
+        CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: false
+        CMAKE_FIND_USE_INSTALL_PREFIX: true
+        CMAKE_FIND_USE_PACKAGE_ROOT_PATH: true
+        CMAKE_FIND_USE_CMAKE_PACKAGE_REGISTRY: false
+        CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY: false
+        CMAKE_FIND_ROOT_PATH_MODE: "BOTH"
+    candidates:
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/lib/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/lib/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/share/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/share/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/modules/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/modules/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/modules/lib/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/modules/lib/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/modules/share/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/modules/share/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/bootloader/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/bootloader/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/bootloader/lib/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/bootloader/lib/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/bootloader/share/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/bootloader/share/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/.west/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/.west/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/.west/lib/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/.west/lib/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/.west/share/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/.west/share/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/tools/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/tools/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/tools/lib/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/tools/lib/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/tools/share/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/tools/share/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/cmake/ZephyrBuildConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/cmake/zephyrbuild-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/lib/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/lib/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/cps/ZephyrBuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/cps/zephyrbuild.cps"
+        mode: "cps"
+        reason: "no_exist"
+    found: null
+    search_context:
+      ENV{PATH}:
+        - "/mnt/lichen-zephyr/node/bin"
+        - "/mnt/lichen-zephyr/local-bin"
+        - "/mnt/lichen-zephyr/cargo/bin"
+        - "/usr/local/bin"
+        - "/mnt/lichen-zephyr/venv/bin"
+        - "/home/ec2-user/.local/bin"
+        - "/home/ec2-user/bin"
+        - "/usr/local/bin"
+        - "/usr/bin"
+        - "/usr/local/sbin"
+        - "/usr/sbin"
+  -
+    kind: "find_package-v1"
+    backtrace:
+      - "/mnt/lichen-zephyr/work/zephyr/cmake/modules/zephyr_default.cmake:41 (find_package)"
+      - "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:66 (include)"
+      - "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:92 (include_boilerplate)"
+      - "CMakeLists.txt:4 (find_package)"
+    name: "ZephyrAppConfiguration"
+    configs:
+      -
+        filename: "ZephyrApp.cps"
+        kind: "cps"
+      -
+        filename: "zephyrapp.cps"
+        kind: "cps"
+      -
+        filename: "ZephyrAppConfig.cmake"
+        kind: "cmake"
+      -
+        filename: "zephyrapp-config.cmake"
+        kind: "cmake"
+    version_request:
+      exact: false
+    settings:
+      required: "optional"
+      quiet: true
+      global: false
+      policy_scope: false
+      bypass_provider: false
+      names:
+        - "ZephyrApp"
+      search_paths:
+        - "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr"
+      path_suffixes:
+        - ""
+      paths:
+        CMAKE_FIND_USE_CMAKE_PATH: true
+        CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+        CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: false
+        CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: false
+        CMAKE_FIND_USE_INSTALL_PREFIX: true
+        CMAKE_FIND_USE_PACKAGE_ROOT_PATH: true
+        CMAKE_FIND_USE_CMAKE_PACKAGE_REGISTRY: false
+        CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY: false
+        CMAKE_FIND_ROOT_PATH_MODE: "BOTH"
+    candidates:
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/ZephyrAppConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/zephyrapp-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/lib/cps/ZephyrApp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/lib/cps/zephyrapp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/share/cps/ZephyrApp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/share/cps/zephyrapp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/ZephyrAppConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/zephyrapp-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/lib/cps/ZephyrApp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/lib/cps/zephyrapp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/share/cps/ZephyrApp.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/share/cps/zephyrapp.cps"
+        mode: "cps"
+        reason: "no_exist"
+    found: null
+    search_context:
+      ENV{PATH}:
+        - "/mnt/lichen-zephyr/node/bin"
+        - "/mnt/lichen-zephyr/local-bin"
+        - "/mnt/lichen-zephyr/cargo/bin"
+        - "/usr/local/bin"
+        - "/mnt/lichen-zephyr/venv/bin"
+        - "/home/ec2-user/.local/bin"
+        - "/home/ec2-user/bin"
+        - "/usr/local/bin"
+        - "/usr/bin"
+        - "/usr/local/sbin"
+        - "/usr/sbin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/mnt/lichen-zephyr/work/zephyr/cmake/modules/ccache.cmake:10 (find_program)"
+      - "/mnt/lichen-zephyr/work/zephyr/cmake/modules/zephyr_default.cmake:132 (include)"
+      - "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:66 (include)"
+      - "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake:92 (include_boilerplate)"
+      - "CMakeLists.txt:4 (find_package)"
+    mode: "program"
+    variable: "CCACHE_FOUND"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "ccache"
+    candidate_directories:
+      - "/mnt/lichen-zephyr/node/bin/"
+      - "/mnt/lichen-zephyr/local-bin/"
+      - "/mnt/lichen-zephyr/cargo/bin/"
+      - "/usr/local/bin/"
+      - "/mnt/lichen-zephyr/venv/bin/"
+      - "/home/ec2-user/.local/bin/"
+      - "/home/ec2-user/bin/"
+      - "/usr/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/sbin/"
+    searched_directories:
+      - "/mnt/lichen-zephyr/node/bin/ccache"
+      - "/mnt/lichen-zephyr/local-bin/ccache"
+      - "/mnt/lichen-zephyr/cargo/bin/ccache"
+      - "/usr/local/bin/ccache"
+      - "/mnt/lichen-zephyr/venv/bin/ccache"
+      - "/home/ec2-user/.local/bin/ccache"
+      - "/home/ec2-user/bin/ccache"
+      - "/usr/bin/ccache"
+      - "/usr/local/sbin/ccache"
+      - "/usr/sbin/ccache"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/mnt/lichen-zephyr/node/bin"
+        - "/mnt/lichen-zephyr/local-bin"
+        - "/mnt/lichen-zephyr/cargo/bin"
+        - "/usr/local/bin"
+        - "/mnt/lichen-zephyr/venv/bin"
+        - "/home/ec2-user/.local/bin"
+        - "/home/ec2-user/bin"
+        - "/usr/local/bin"
+        - "/usr/bin"
+        - "/usr/local/sbin"
+        - "/usr/sbin"
+  -
+    kind: "find_package-v1"
+    backtrace:
+      - "CMakeLists.txt:4 (find_package)"
+    name: "Zephyr"
+    configs:
+      -
+        filename: "Zephyr.cps"
+        kind: "cps"
+      -
+        filename: "zephyr.cps"
+        kind: "cps"
+      -
+        filename: "ZephyrConfig.cmake"
+        kind: "cmake"
+      -
+        filename: "zephyr-config.cmake"
+        kind: "cmake"
+    version_request:
+      exact: false
+    settings:
+      required: "required_explicit"
+      quiet: false
+      global: false
+      policy_scope: true
+      bypass_provider: false
+      hints:
+        - "/mnt/lichen-zephyr/work/zephyr"
+      names:
+        - "Zephyr"
+      path_suffixes:
+        - ""
+      paths:
+        CMAKE_FIND_USE_CMAKE_PATH: true
+        CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+        CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+        CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+        CMAKE_FIND_USE_INSTALL_PREFIX: true
+        CMAKE_FIND_USE_PACKAGE_ROOT_PATH: true
+        CMAKE_FIND_USE_CMAKE_PACKAGE_REGISTRY: true
+        CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY: true
+        CMAKE_FIND_ROOT_PATH_MODE: "BOTH"
+    candidates:
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/ZephyrConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/zephyr-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/lib/cps/Zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/lib/cps/zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/share/cps/Zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/workspace/firmware/bridge-zephyr/build/CMakeFiles/pkgRedirects/share/cps/zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/ZephyrConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/zephyr-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/cmake/ZephyrConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/cmake/zephyr-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/lib/cps/Zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/lib/cps/zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/cps/Zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/cps/zephyr.cps"
+        mode: "cps"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/zephyrunittest-package/ZephyrConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/zephyrunittest-package/zephyr-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/ZephyrConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/zephyr-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/zephyrunittest-package/cmake/ZephyrConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "/mnt/lichen-zephyr/work/zephyr/share/zephyrunittest-package/cmake/zephyr-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+    found:
+      path: "/mnt/lichen-zephyr/work/zephyr/share/zephyr-package/cmake/ZephyrConfig.cmake"
+      mode: "config"
+      version: "3.7.0"
+    search_context:
+      ENV{PATH}:
+        - "/mnt/lichen-zephyr/node/bin"
+        - "/mnt/lichen-zephyr/local-bin"
+        - "/mnt/lichen-zephyr/cargo/bin"
+        - "/usr/local/bin"
+        - "/mnt/lichen-zephyr/venv/bin"
+        - "/home/ec2-user/.local/bin"
+        - "/home/ec2-user/bin"
+        - "/usr/local/bin"
+        - "/usr/bin"
+        - "/usr/local/sbin"
+        - "/usr/sbin"
+...
