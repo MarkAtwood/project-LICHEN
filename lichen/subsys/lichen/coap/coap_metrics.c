@@ -11,8 +11,8 @@
 
 #include <lichen/senml.h>
 #include <lichen/coap_server.h>
-#include <lichen/lora_l2.h>
-#include <lichen/lichen_l2.h>
+#include <lichen/l2/lora_l2.h>
+#include <lichen/l2/lichen_l2.h>
 
 LOG_MODULE_REGISTER(lichen_coap_metrics, CONFIG_LICHEN_COAP_METRICS_LOG_LEVEL);
 

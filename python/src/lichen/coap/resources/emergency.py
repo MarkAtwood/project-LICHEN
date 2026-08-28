@@ -44,8 +44,11 @@ class SosResource(resource.ObservableResource):
     tracks state and notifies on changes.
 
     Rate limiting: each source node is limited to 3 requests per hour with a
-    minimum 10-minute cooldown between requests. This prevents SOS flooding
-    while allowing legitimate emergency use.
+    minimum 10-minute cooldown between requests (burst allowance 2). This
+    prevents SOS flooding while allowing legitimate emergency use.
+
+    Rate limiting uses monotonic uptime (``time.monotonic``) by default per
+    spec 18.4.1, so enforcement works even when wall-clock is unavailable.
     """
 
     def __init__(self, time_func: Any = None) -> None:
@@ -53,13 +56,13 @@ class SosResource(resource.ObservableResource):
 
         Args:
             time_func: Optional callable returning current time (for testing).
-                       Defaults to time.time.
+                       Defaults to time.monotonic (monotonic uptime).
         """
         super().__init__()
         self._active = False
         self._from: str | None = None
         self._t: float | None = None
-        self._time_func = time_func if time_func is not None else time.time
+        self._time_func = time_func if time_func is not None else time.monotonic
         # Per-source rate limiting: maps source hex -> list of request timestamps
         self._request_times: dict[str, list[float]] = {}
 

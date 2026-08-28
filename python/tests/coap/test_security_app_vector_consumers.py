@@ -36,8 +36,8 @@ project-LICHEN-worker6-a6qg:
   pruning at now=3600.001s legitimately retains entries aged <3600s.
 - Confessions retry-after uses a conservative ``int(remaining) + 1`` ceiling,
   one second above the vectors' exact arithmetic.
-- Rate-limit time sources default to wall-clock ``time.time`` via injectable
-  ``time_func``; no ``time.monotonic`` usage exists (spec says monotonic uptime).
+- Rate-limit time sources default to monotonic uptime (``time.monotonic``,
+  spec 18.4.1/18.10.3) via injectable ``time_func``; tests inject a fake clock.
 - No monotonic origin-sequence validator exists; relay dedup is exact-match on
   ``(node, seq)``, so a stale-but-unseen sequence is relayed.
 - ``POST /sos`` performs no signature verification today (unsigned POSTs are
@@ -758,12 +758,12 @@ class TestSosRateLimitingVectors:
         assert sos.check_rate_limit(source) is True
         assert len(sos._request_times[source]) == vec["expected"]["sos_in_window"] == 0
 
-    def test_time_source_defaults_to_wall_clock_today(self) -> None:
-        """Divergence: spec requires monotonic uptime; default is time.time."""
+    def test_time_source_defaults_to_monotonic_uptime(self) -> None:
+        """Spec 18.4.1: rate limiting uses monotonic uptime, not wall clock."""
         vec = _vec(SOS_RATE_LIMITING, "monotonic_uptime_enforced")
         assert vec["expected"]["time_source"] == "monotonic_uptime"
         sos = SosResource()
-        assert sos._time_func is time.time  # reality: wall clock, injectable
+        assert sos._time_func is time.monotonic
         # With a monotonic-style injected clock the enforcement logic works:
         clock = _Clock()
         monotonic_sos = SosResource(time_func=clock)
@@ -1045,11 +1045,12 @@ class TestConfessionsRateVectors:
         assert retry_after == int(CONFESSION_COOLDOWN_S - 4.0) + 1
         assert retry_after <= CONFESSION_COOLDOWN_S
 
-    def test_time_source_defaults_to_wall_clock_today(self) -> None:
+    def test_time_source_defaults_to_monotonic_uptime(self) -> None:
+        """Spec 18.10.3: rate limiting uses monotonic uptime, not wall clock."""
         vec = _vec(CONFESSIONS_RATE, "uptime_not_wallclock")
         assert vec["expected"]["time_source"] == "monotonic_uptime"
         conf = ConfessionsResource()
-        assert conf._time_func is time.time  # reality: wall clock, injectable
+        assert conf._time_func is time.monotonic
 
     async def test_retry_after_header_semantics(self) -> None:
         vec = _vec(CONFESSIONS_RATE, "retry_after_header")

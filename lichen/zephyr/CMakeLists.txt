@@ -109,6 +109,10 @@ if(CMAKE_C_COMPILER_ID STREQUAL "Clang")
   endif()
 endif()
 
+# Map the lichen/ prefix to subsys/lichen so qualified includes of the form
+# #include <lichen/...> resolve module-wide (e.g. lichen/l2/ipv6_addr.h).
+zephyr_include_directories(${CMAKE_CURRENT_LIST_DIR}/../subsys)
+
 add_subdirectory(../drivers drivers)
 add_subdirectory(../lib lib)
 add_subdirectory(../subsys subsys)

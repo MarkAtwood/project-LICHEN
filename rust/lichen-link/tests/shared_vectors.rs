@@ -764,6 +764,7 @@ struct EpochColdBootExample {
 }
 
 /// 24-bit logical replay counter: (epoch << 16) | seqnum, unsigned ordering.
+#[cfg(all(feature = "schnorr", feature = "std"))]
 fn epoch_counter(epoch: u8, seqnum: u16) -> u32 {
     (u32::from(epoch) << 16) | u32::from(seqnum)
 }

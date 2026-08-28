@@ -87,11 +87,12 @@ class SosRelay:
 
     Attributes:
         max_ttl: Maximum allowed TTL value.
-        time_func: Callable returning current time (for testing).
+        time_func: Callable returning current time (for testing). Defaults to
+            time.monotonic (monotonic uptime per spec 18.4.1).
     """
 
     max_ttl: int = DEFAULT_MAX_TTL
-    time_func: Callable[[], float] = field(default_factory=lambda: time.time)
+    time_func: Callable[[], float] = field(default_factory=lambda: time.monotonic)
 
     # Maps SosId -> timestamp when first seen (OrderedDict for LRU eviction)
     _seen: OrderedDict[SosId, float] = field(
