@@ -531,6 +531,8 @@ class TestSosBurstOverCoap:
             assert resp.code == aiocoap.TOO_MANY_REQUESTS
             retry_after = cbor2.loads(resp.payload)["retry_after"]
             assert retry_after == int(SOS_COOLDOWN_S)
+            # Max-Age mirrors the CBOR retry_after (spec 07 section 10.2.3).
+            assert resp.opt.max_age == retry_after
         finally:
             await client.shutdown()
             await server.shutdown()

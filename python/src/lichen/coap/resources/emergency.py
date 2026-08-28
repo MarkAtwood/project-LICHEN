@@ -232,11 +232,7 @@ class SosResource(resource.ObservableResource):
         # pubkey (32 B) and the wire origin signature (8 B seq + 48 B sig).
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
-        if (
-            not isinstance(pubkey, bytes)
-            or len(pubkey) != 32
-            or not isinstance(sig_blob, bytes)
-        ):
+        if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
             return Message(code=aiocoap.UNAUTHORIZED)
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
@@ -267,6 +263,9 @@ class SosResource(resource.ObservableResource):
             msg = Message(code=aiocoap.TOO_MANY_REQUESTS)
             msg.payload = cbor2.dumps({"retry_after": retry_after})
             msg.opt.content_format = CBOR
+            # Match ConfessionsResource / congestion_service_unavailable:
+            # always set Max-Age to match retry_after (spec 07 section 10.2.3).
+            msg.opt.max_age = retry_after
             return msg
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self._record_request(source_key)
@@ -295,11 +294,7 @@ class SosResource(resource.ObservableResource):
         # SECURITY: Require origin-signature envelope
         pubkey = body.get("pubkey")
         sig_blob = body.get("sig")
-        if (
-            not isinstance(pubkey, bytes)
-            or len(pubkey) != 32
-            or not isinstance(sig_blob, bytes)
-        ):
+        if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
             return Message(code=aiocoap.UNAUTHORIZED)
         try:
             origin_sig = SosOriginSignature.from_bytes(sig_blob)
