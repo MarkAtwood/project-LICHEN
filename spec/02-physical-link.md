@@ -265,6 +265,43 @@ allocate replay, trust, routing, or fragmentation state before verification.
 For a key-derived local identity, the wire EUI-64 is obtained from the
 key-derived IPv6 IID by toggling the RFC 4291 universal/local bit exactly once.
 
+**Key Selection Policy (TOFU):**
+
+Receivers MUST resolve the signer public key using SIID-indexed Trust On First
+Use (TOFU) semantics:
+
+1. **Lookup:** Use SIID as an index into the local trust store. If no entry
+   exists for this SIID, proceed to step 3.
+
+2. **Verify with pinned key:** If an entry exists, verify the frame transcript
+   against the pinned public key. If verification succeeds, accept. If
+   verification fails, MUST reject the frame (do not fall back to trial
+   verification or key substitution).
+
+3. **First contact (no pinned key):** If the SIID has no trust-store entry,
+   the receiver MAY attempt trial verification against provisioned or
+   announced candidate keys. If exactly one candidate verifies, the receiver
+   SHOULD pin that (SIID, public key) binding in the trust store. If zero or
+   multiple candidates verify, reject the frame.
+
+4. **Key mismatch:** A frame whose SIID matches a pinned entry but whose
+   signature verifies under a DIFFERENT key MUST be rejected. This prevents
+   key substitution attacks where an attacker replays a valid signature with
+   a forged SIID.
+
+5. **Eviction:** Trust-store entries MAY be evicted per local policy (LRU,
+   timeout, explicit removal). Eviction of a pinned (SIID, key) binding MUST
+   also invalidate all replay state for that signer.
+
+Implementations on constrained devices MAY use constant-time trial verification
+over a bounded peer table when the trust store is small, but MUST still enforce
+the pin-on-first-verified-contact and reject-on-mismatch rules above.
+
+Relay nodes that re-sign frames (see 4.6) populate their own SIID and sign with
+their own key. A downstream receiver pins the relay's (SIID, key) binding, not
+the origin's. End-to-end origin authentication, when required, uses the DAO
+Origin Signature profile at the application layer (see spec/06-security.md).
+
 ### 4.3. Addressing Modes
 
 | Mode | Size | Description |
