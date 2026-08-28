@@ -8,7 +8,11 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T16:27:08.652825Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T16:27:08.652825Z",
+  "updated_at": "2026-08-28T16:31:13.751215Z",
+  "started_at": "2026-08-28T16:28:23.569413Z",
+  "labels": [
+    "human"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-hri9",

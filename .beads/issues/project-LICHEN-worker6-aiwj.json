@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-aiwj",
+  "title": "Strengthen OSCORE parity fixture tests (P3 review findings)",
+  "description": "Five P3 findings from wave-1 codereview of the 6.8.9 parity work: (1) fixture pins only the protect direction — add a tamper-rejection vector (modified ciphertext/tag must fail to decrypt) derived from the EDHOC context. (2) Python drift-guard compares oracle to its own fixture (not an independent oracle) — chain anchors bottom out in Python; document or add an external anchor (e.g. RFC 8613 appendix vector). (3) rust context_parity.rs test truncates vector decoded_timestamp u64-\u003eu32 with as u32 — assert range first so fixture drift fails loudly. (4) generator + python test couple to private ctx._construct_nonce — a refactor breaks them; prefer a stable public path or pin with a comment. (5) generate_oscore_context_parity.py patches os.urandom but secrets.token_bytes binds os.urandom at import — harmless today (echo_recovery not in fixture) but any future field derived via secrets makes regeneration silently nondeterministic; patch secrets.token_bytes too.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:54:07.666754Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:54:07.666754Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-aiwj",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.6.8.9",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T16:54:15.405873Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

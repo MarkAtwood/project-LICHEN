@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-tdkw",
+  "title": "Harden rust/lichen-rpl time_option.rs API (P3 review findings)",
+  "description": "Three P3 findings from wave-1 codereview of rust/lichen-rpl/src/time_option.rs: (1) from_option_data cannot verify the option type byte — any 6-byte payload with data[0] in 0..4 and data[1]==0 is silently accepted if a caller skips checking OptionIter raw.opt_type (Python's path revalidates the full 8 bytes incl. type; time_sync.py:755); consider a checked entry point or documented caller contract. (2) pub stratum/pub timestamp allow struct-literal construction violating the NoSync=\u003ezero-timestamp invariant — all sinks re-validate so serialization is safe, but a consumer reading .timestamp directly can ingest an invariant-violating value; consider private fields + accessors. (3) from_bytes and from_option_data duplicate reserved/stratum/NoSync validation — from_bytes should delegate via \u0026data[2..8] so invariants live in one place.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:53:56.116779Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:53:56.116779Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tdkw",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.8.11.5.5",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T16:54:07.599462Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-9mkj",
   "title": "Group OSCORE key distribution (spec 18.8.5)",
   "description": "Gap 6 of a6qg: group OSCORE key distribution entirely absent from python/src/lichen (no pairwise wrap, no key_epoch counter, no 1-hour grace window, no epoch rollback/future rejection, no membership rekey). 9/10 vectors in test/vectors/group_oscore_key.json UNDRIVABLE (skipped in test_security_app_vector_consumers.py). Spec: RFC 9203 group OSCORE; GET /groups/\u003cid\u003e/key CBOR {key_id, algorithm, expires}; key delivery only over existing pairwise OSCORE (EDHOC-established); rekey on removal: new master_secret, increment key_epoch, distribute via pairwise OSCORE, old epoch rejected after 1-hour grace. Decomposed into child beads; close this epic when all children + the vector consumer bead are done.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T15:48:34.263089Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T15:48:34.263089Z",
+  "updated_at": "2026-08-28T16:57:27.063761Z",
+  "closed_at": "2026-08-28T16:57:27.063761Z",
+  "close_reason": "All children closed: full Group OSCORE key distribution (spec 18.8.5) implemented on main (crypto/group_oscore.py + groups_collection.py, commit 14b79538b3), verified on main @164468c700 (full suite 11808 passed, group vectors green). This epic was created from a6qg gap 6; main landed the work independently.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-9mkj",

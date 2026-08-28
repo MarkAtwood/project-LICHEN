@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-5tb1",
+  "title": "Group wrap: add byte-exact external-oracle fixture for ECDH-ES+A128KW",
+  "description": "Correctness review finding on worker6-9mkj.2. Shipped tests are contract-level only (uniqueness, algorithm string, round-trip); the key_pairwise_wrap vector is symbolic (pubkey_alice/unique_for_alice), so a derivation bug (wrong SuppPubInfo units, missing u32 length prefix, wrong AlgorithmID) would pass all tests while silently breaking cross-impl interop. Current code verified RFC-correct by independent hand-construction (SP 800-56A ConcatKDF + RFC 3394 AES-KW). Fix: add one byte-exact fixture from an external source (RFC 8037 A.4 ECDH-ES+A128KW example, or value computed offline with an independent JWE implementation) asserting the wrapped blob and 40-byte length for 32-byte secret / 24 for 16-byte. Also assert len(wrapped_key)==40 in round-trip tests.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T17:03:03.260476Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T17:07:52.408103Z",
+  "started_at": "2026-08-28T17:07:52.408103Z",
+  "lease_expires_at": "2026-08-28T17:12:52.408103Z",
+  "heartbeat_at": "2026-08-28T17:07:52.408103Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5tb1",
+      "depends_on_id": "project-LICHEN-worker6-9mkj.2",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T17:03:05.388964Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

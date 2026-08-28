@@ -1,0 +1,7 @@
+{
+  "id": "1787934481726506000-1",
+  "issue_id": "project-LICHEN-worker6-6fxd",
+  "author": "Mark Atwood",
+  "text": "Precondition check: sibling gate-fix children NOT all landed (16zc CLOSED, wr8j CLOSED, 2hte IN_PROGRESS by another owner, gskf OPEN, l9hb OPEN). Per this bead's own instruction ('run ONLY after...'), review deferred. Unclaiming; re-check sibling statuses before claiming.",
+  "created_at": "2026-08-28T16:28:01.726506Z"
+}

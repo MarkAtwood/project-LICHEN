@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-9mkj.4",
   "title": "Group OSCORE: 1-hour rekey grace window",
   "description": "Child of project-LICHEN-worker6-9mkj. After rekey, old key_epoch remains valid for 1 hour (spec 18.8.2 lines 1119-1124), then rejected. Drives vectors grace_period_1hr (old_key_valid at t=1800000ms) and grace_period_expired (invalid at t=3600001ms).",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T15:52:54.432676Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T16:11:39.549581Z",
+  "updated_at": "2026-08-28T16:57:08.357247Z",
   "started_at": "2026-08-28T16:08:51.246841Z",
+  "closed_at": "2026-08-28T16:57:08.357247Z",
+  "close_reason": "Implemented on main: python/src/lichen/crypto/group_oscore.py (GroupKeyManager: epoch validate incl rollback/future, key_valid_at grace window, rekey, add/remove member; pairwise_wrap/pairwise_unwrap ECDH) + resources/groups_collection.py; consumer skips removed; group vectors green. Verified on main @164468c700: full python suite 11808 passed.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-9mkj.4",

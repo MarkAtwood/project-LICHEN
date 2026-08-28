@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-2r42",
+  "title": "Group epoch: default to monotonic clock and bound negative grace delta",
+  "description": "Security+correctness review findings on worker6-9mkj.1. (a) group_oscore_epoch.py:50-51,171 default time_ms_func is time.time(); a stepped/rewound wall clock makes now-rekey_time negative and the grace check accepts the old key indefinitely (rewind) or expires it early (forward step). Default for an elapsed-time security window should be time.monotonic_ns()//10**6, or at minimum clamp negative elapsed with a doc note. (b) group_oscore_epoch.py:171 now - rekey_time \u003c= GRACE has no lower bound: clock set arbitrarily far back keeps previous key valid indefinitely (bounded blast radius: only immediately-previous epoch; rollback/future rejected regardless). Fix: require now_ms \u003e= rekey_time or bound the negative delta; pick one behavior and document. Injectable clock for vectors remains legitimate trusted-caller flexibility.",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T17:03:37.398513Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T17:08:08.872057Z",
+  "started_at": "2026-08-28T17:08:08.872057Z",
+  "lease_expires_at": "2026-08-28T17:13:08.872057Z",
+  "heartbeat_at": "2026-08-28T17:08:08.872057Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2r42",
+      "depends_on_id": "project-LICHEN-worker6-9mkj.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T17:03:38.240257Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-wjlr",
+  "title": "POST /sensors/location returns 4.05, vector consumer expects 4.04",
+  "description": "Pre-existing failure found during qpux verification (not caused by qpux work; qpux agent ran the suite unchanged). python/tests/coap/test_lci_auth.py:286 - LCI observable /sensors/location returns 4.05 Method Not Allowed for POST while the test/vector expects 4.04 Not Found. Determine the correct semantics (observable resources vs method dispatch order in the LCI CoAP server) and make the vector-driven test pass without weakening it. File: python/tests/coap/test_lci_auth.py:286.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T17:04:28.133342Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T17:04:28.133342Z"
+}

@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-9mkj.2",
   "title": "Group OSCORE: pairwise key wrap (ECDH-ES+A128KW)",
   "description": "Child of project-LICHEN-worker6-9mkj. Wrap group master_secret per member with ECDH-ES+A128KW (vector key_pairwise_wrap: member_pubkeys -\u003e wrapped keys, wrap_algorithm ECDH-ES+A128KW or HPKE). Distribution only over existing pairwise OSCORE contexts, never plaintext (spec 18.8.2 line 1064). Drives vector key_pairwise_wrap.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T15:50:51.171215Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T16:11:35.238303Z",
+  "updated_at": "2026-08-28T16:57:01.967177Z",
   "started_at": "2026-08-28T16:08:46.311498Z",
+  "closed_at": "2026-08-28T16:57:01.967177Z",
+  "close_reason": "Implemented on main: python/src/lichen/crypto/group_oscore.py (GroupKeyManager: epoch validate incl rollback/future, key_valid_at grace window, rekey, add/remove member; pairwise_wrap/pairwise_unwrap ECDH) + resources/groups_collection.py; consumer skips removed; group vectors green. Verified on main @164468c700: full python suite 11808 passed.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-9mkj.2",
