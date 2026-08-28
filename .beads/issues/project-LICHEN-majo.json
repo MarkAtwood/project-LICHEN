@@ -14,7 +14,8 @@
   "close_reason": "TDMA integration complete per AGENTS.md; example+graph+ Kconfig+link.h init+struct; 3 codereview passes per chunk with P2-P4 beads only (no P0/P1); Zephyr build verified; no comments added; mimics init graph",
   "labels": [
     "codereview",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
