@@ -58,3 +58,5 @@ build_*/
 CMakeCache.txt
 CMakeFiles/
 build-test/
+build-exit-*.txt
+build-tsan/
