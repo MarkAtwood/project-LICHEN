@@ -529,8 +529,8 @@ class TestSosSignatureVectors:
     def test_canonical_cbor_real_key_order_matches_rfc8949(self) -> None:
         """Real behavior: length-first key order per RFC 8949 §4.2.1.
 
-        The cancel vector's pinned order matches reality; the sos/medical
-        vectors pin wrong orders and are xfailed exactly below.
+        All three vectors (cancel, sos, medical) pin RFC 8949 §4.2.1
+        length-first key order after the a6qg 7a vector corrections.
         """
         cancel = _vec(SOS_SIGNATURE, "canonical_cbor_cancel")
         got_cancel = list(cbor2.loads(cbor2.dumps(cancel["payload"], canonical=True)).keys())
