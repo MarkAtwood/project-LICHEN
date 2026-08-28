@@ -19,7 +19,8 @@
     "location",
     "network-source",
     "owner-reserved",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
