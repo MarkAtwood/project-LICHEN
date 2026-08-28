@@ -336,6 +336,8 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 			return LICHEN_CLAIM_REJECT_INVALID_SIG;
 		}
 	}
+#else
+#error "slot-coord requires LICHEN_LINK_SCHNORR: claim verification must never be compiled out (fail-open backstop)"
 #endif
 
 	k_mutex_lock(&s_coord_lock, K_FOREVER);
