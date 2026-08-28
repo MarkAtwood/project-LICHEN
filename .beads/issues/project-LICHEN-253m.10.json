@@ -12,7 +12,8 @@
     "c",
     "hal",
     "lora",
-    "defer-external"
+    "defer-external",
+    "local-ok"
   ],
   "dependencies": [
     {
