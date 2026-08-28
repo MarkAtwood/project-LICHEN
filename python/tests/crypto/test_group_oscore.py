@@ -179,6 +179,41 @@ class TestWrapCoherentSemantics:
         assert mgr.oscore_id_context() == GROUP_ID + (1).to_bytes(4, "big")
 
 
+class TestPreviousRetention:
+    """Bounded retention of superseded keys (forward secrecy)."""
+
+    def test_purge_drops_expired_previous_after_rekey(self) -> None:
+        """After grace elapses on the injected clock, rekey drops it.
+
+        The epoch-2 material sits exactly on its grace boundary at the
+        second rekey (strict ``<`` expiry), so it is retained while the
+        older epoch-1 material is gone.
+        """
+        clock = _Clock()
+        mgr = _manager(time_func=clock)
+        first = mgr.key_for_epoch(1)
+        clock.t += 60.0
+        mgr.rekey(b"\x02" * 16)
+        assert mgr.key_for_epoch(1) is first  # inside grace: retained
+        clock.t += GRACE_PERIOD_S
+        mgr.rekey(b"\x03" * 16)
+        assert mgr.key_for_epoch(1) is None
+        assert all(held is not first for held in mgr._previous)
+        assert mgr.key_for_epoch(2) is not None  # boundary: still authorized
+
+    def test_purge_zeroizes_mutable_key_buffers(self) -> None:
+        """Dropped bytearray key material is overwritten with zeros."""
+        clock = _Clock()
+        mgr = _manager(time_func=clock)
+        buffer = bytearray(b"\xab" * 16)
+        mgr._previous.append(
+            GroupKeyMaterial(epoch=9, key=buffer, created_s=clock.t - GRACE_PERIOD_S - 1.0)
+        )
+        mgr.rekey(b"\x02" * 16)
+        assert buffer == bytearray(16)
+        assert mgr.key_for_epoch(9) is None
+
+
 class TestEpochValidation:
     def test_rollback_rejected_matches_vector(self) -> None:
         """Vector ``epoch_rollback_reject``: epoch < current is rejected."""

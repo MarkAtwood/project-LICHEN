@@ -96,10 +96,15 @@ def _to_x25519_private(ed25519_scalar: bytes) -> bytes:
 
 @dataclass(frozen=True)
 class GroupKeyMaterial:
-    """A group key bound to its epoch."""
+    """A group key bound to its epoch.
+
+    ``key`` may be a mutable ``bytearray``; ``rekey`` zeroizes the buffer of
+    dropped material on purge (``bytes`` keys are immutable and cannot be
+    scrubbed).
+    """
 
     epoch: int
-    key: bytes
+    key: bytes | bytearray
     created_s: float
 
     def __repr__(self) -> str:
@@ -286,9 +291,15 @@ class GroupKeyManager:
         Raises:
             RuntimeError: If *new_key* duplicates retained material across
                 a wrap generation (never-reuse invariant).
+
+        Retention is bounded: material whose grace window expired before
+        *now* is dropped here, and collision-dropped wrap entries are
+        zeroized, so a memory compromise of the controller cannot
+        retroactively expose traffic keys older than the grace window.
         """
         if new_key is None:
             new_key = bindings.randombytes(16)
+        now = self._time_func()
         wrapping = self._current.epoch == EPOCH_WRAP
         new_epoch = 1 if wrapping else self._current.epoch + 1
         if wrapping:
@@ -299,14 +310,49 @@ class GroupKeyManager:
                         f"epoch {new_epoch} would recur with identical key "
                         "(OSCORE nonce reuse)"
                     )
-            self._previous = [held for held in self._previous if held.epoch != new_epoch]
+            kept = []
+            for held in self._previous:
+                if held.epoch == new_epoch:
+                    self._zeroize(held)
+                else:
+                    kept.append(held)
+            self._previous = kept
         self._previous.append(self._current)
         self._current = GroupKeyMaterial(
             epoch=new_epoch,
             key=new_key,
-            created_s=self._time_func(),
+            created_s=now,
         )
+        self._purge_expired(now)
         return self.distribute_current()
+
+    def _purge_expired(self, now_s: float) -> None:
+        """Drop held material whose grace window expired before *now_s*.
+
+        The boundary is strict (drop iff ``created_s + GRACE_PERIOD_S <
+        now_s``), matching :meth:`key_valid_at` (valid iff
+        ``now - created_s <= GRACE_PERIOD_S``): material is retained
+        exactly as long as it is still authorized.
+        """
+        kept = []
+        for held in self._previous:
+            if held.created_s + GRACE_PERIOD_S < now_s:
+                self._zeroize(held)
+            else:
+                kept.append(held)
+        self._previous = kept
+
+    @staticmethod
+    def _zeroize(material: GroupKeyMaterial) -> None:
+        """Best-effort scrub of a dropped key buffer.
+
+        Mutable (``bytearray``) keys are overwritten in place; ``bytes``
+        keys are immutable and cannot be scrubbed.
+        """
+        key = material.key
+        if isinstance(key, bytearray):
+            for index in range(len(key)):
+                key[index] = 0
 
     # -- membership -----------------------------------------------------------
 
