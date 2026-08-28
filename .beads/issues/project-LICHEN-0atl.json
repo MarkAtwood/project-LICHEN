@@ -13,7 +13,8 @@
   "close_reason": "fixed in capacity pass2 edits; review pass complete",
   "labels": [
     "codereview",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
