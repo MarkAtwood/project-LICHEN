@@ -23,8 +23,7 @@
     "owner-reserved",
     "status",
     "test",
-    "zephyr",
-    "needs-linux"
+    "zephyr"
   ],
   "dependencies": [
     {
