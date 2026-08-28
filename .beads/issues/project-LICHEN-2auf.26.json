@@ -16,7 +16,8 @@
   "labels": [
     "owner-reserved",
     "zephyr",
-    "blocked:hardware"
+    "blocked:hardware",
+    "local-ok"
   ],
   "dependencies": [
     {
