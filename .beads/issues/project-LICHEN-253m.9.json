@@ -12,7 +12,8 @@
     "c",
     "hal",
     "hardware",
-    "defer-external"
+    "defer-external",
+    "local-ok"
   ],
   "dependencies": [
     {
