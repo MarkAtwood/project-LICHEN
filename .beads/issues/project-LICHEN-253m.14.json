@@ -1,13 +1,14 @@
 {
   "id": "project-LICHEN-253m.14",
   "title": "Packet transmission path",
-  "status": "open",
+  "status": "deferred",
   "priority": 1,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T04:49:03.923303Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T04:49:03.923303Z",
+  "updated_at": "2026-08-28T23:32:31.641411Z",
+  "started_at": "2026-08-28T23:31:53.028603Z",
   "labels": [
     "c",
     "linklayer",
