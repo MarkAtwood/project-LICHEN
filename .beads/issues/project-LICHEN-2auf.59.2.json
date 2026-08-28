@@ -19,7 +19,8 @@
     "aws",
     "validation",
     "human",
-    "zephyr"
+    "zephyr",
+    "needs-linux"
   ],
   "dependencies": [
     {
