@@ -16,7 +16,8 @@
     "codereview",
     "ccp",
     "spec",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
