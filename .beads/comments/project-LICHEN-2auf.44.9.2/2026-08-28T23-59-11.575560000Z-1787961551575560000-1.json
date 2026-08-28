@@ -1,0 +1,7 @@
+{
+  "id": "1787961551575560000-1",
+  "issue_id": "project-LICHEN-2auf.44.9.2",
+  "author": "Mark Atwood",
+  "text": "CORRECTION to my assessment comment above: the children it references by placeholder ID were minted as:\n  gap 1 (C fail-open ingest)  -\u003e project-LICHEN-worker6-zemq (P1 bug)\n  gap 2 (Rust in-flight gate) -\u003e project-LICHEN-worker6-i3m9 (P1 task)\n  gap 3 (Python wiring)       -\u003e project-LICHEN-worker6-a5yl (P2 task)\n  gap 4 (CoAP delivery)       -\u003e project-LICHEN-worker6-kwa3 (P2 feature)\n  gap 5 (vectors)             -\u003e project-LICHEN-worker6-iq6t (P2 task)\nClosing this bead as decomposed; the landed unit this session is rust/lichen-rpl/tests/dao_prefix_authorization.rs.",
+  "created_at": "2026-08-28T23:59:11.57556Z"
+}

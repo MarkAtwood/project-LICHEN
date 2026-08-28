@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-xdez",
+  "title": "Remove redundant test_hash.c at repo root",
+  "description": "Standalone test file at repo root duplicates coverage in lichen/tests/util/.\n\n## File\n`./test_hash.c` - tests lichen_hash_32 with manual main()\n\n## Already covered by\n`lichen/tests/util/main.c` - ZTEST(lichen_util, test_lichen_hash_32) tests the same function with the same vectors:\n- hash_32(NULL, 0) = 0x811c9dc5\n- hash_32(\"test\", 4) = 0xafd071e5  \n- hash_32(zeros, 32) = 0x0b2ae445\n\n## Action\n1. Verify lichen/tests/util covers the same cases\n2. Delete test_hash.c\n3. Check if anything references it (Makefile, CI, etc)",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T23:43:09.779938Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T23:43:09.779938Z"
+}

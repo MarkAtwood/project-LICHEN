@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-a5yl",
+  "title": "Python: wire delegation_tokens into root DAO validation per spec 8.7.2",
+  "description": "python/src/lichen/crypto/delegation_tokens.py (COSE_Sign1 create/verify/scope, spec 18.8.6) exists but nothing consumes it. python/src/lichen/rpl/dao_manager.py validates DAOs (validate_and_process_dao_wire_at) and enforces the .44.7 self-/128 profile only (dao_manager.py:869-886: multiple_target, target_mismatch); there is no delegation cache and no sub-/128 target path. Implement spec 8.7.2 root-validation steps: on DAO Target prefix != origin /128, lookup delegation for (target_prefix, target_prefix_len); reject expired/missing/E-flag-mismatched delegations before route or replay mutation; cache keyed by (prefix, prefix_len) with delegation_seq monotonicity. Keep /0 denied (spec 8.7.1: only exact ::/0 delegation ever authorizes, reserved for generalized-profile work). Add table-driven allow/deny tests mirroring rust/lichen-rpl/tests/dao_prefix_authorization.rs (self /128 allow, foreign /128 deny, /0 deny, broad undelegated deny, delegated allow once cache is seeded). Decomposed from project-LICHEN-2auf.44.9.2.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T23:58:47.172954Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T23:58:47.172954Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-a5yl",
+      "depends_on_id": "project-LICHEN-2auf.44.9.2",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T23:58:48.971621Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-p4im",
+  "title": "Migrate Zephyr tests from manual main() to ztest",
+  "description": "9 Zephyr tests still use manual main() instead of ztest macros. Migrate them for:\n- Consistent test framework across Zephyr tests\n- Better failure output (assertion location, not just exit code)\n- Eliminated merge conflict bottleneck in main()\n\n## Reference\n- lichen/tests/util/ — already uses ztest (template)\n- link_ctx Criterion migration shows the pattern (but for host tests)\n\n## Tests to migrate\n1. asn_sfn\n2. coap_codec\n3. drift_bound\n4. hal_reset_unavailable\n5. meshtastic_adapter_layout\n6. pps\n7. regional_duty_cycle\n8. routing_dispatch\n9. rpl_dao_timing (already has #ifdef CONFIG_ZTEST dual-mode, just needs cleanup)",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T23:39:42.790772Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T23:39:42.790772Z"
+}

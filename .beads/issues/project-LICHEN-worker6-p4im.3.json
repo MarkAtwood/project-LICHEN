@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-p4im.3",
+  "title": "ztest: migrate drift_bound",
+  "description": "Migrate lichen/tests/drift_bound/ from manual main() to ztest macros.\n\n## Steps\n1. Replace `#include \u003cstdio.h\u003e` etc with `#include \u003czephyr/ztest.h\u003e`\n2. Convert `static int test_foo(void) { ... return failed; }` to `ZTEST(suite, test_foo) { ... zassert_*(...); }`\n3. Delete main() and add `ZTEST_SUITE(drift_bound, NULL, NULL, NULL, NULL, NULL);`\n4. Build: west build -b native_sim lichen/tests/drift_bound\n5. Run: west build -t run\n\n## Reference\nSee lichen/tests/util/main.c for ztest pattern.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T23:39:52.603755Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T23:39:52.603755Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p4im.3",
+      "depends_on_id": "project-LICHEN-worker6-p4im",
+      "type": "parent-child",
+      "created_at": "2026-08-28T23:39:52.813687Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

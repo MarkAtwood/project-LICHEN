@@ -1,1 +1,2 @@
 {"id":"01a048fe-d84d-7e67-a1da-b4bc1a69d246","issue_id":"project-LICHEN-worker6-1zh2","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T15:30:56.205945Z"}
+{"id":"01a04ac6-ed00-7ce4-ab06-ce9a9eaa639c","issue_id":"project-LICHEN-worker6-1zh2","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Normative TOFU key-selection policy added to spec/02-physical-link.md 4.2 in commit 439c12e041.","created_at":"2026-08-28T23:49:05.920846Z"}
