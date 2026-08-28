@@ -24,13 +24,17 @@ Known divergences (real behavior asserted; tracked in beads):
   both shapes, so both are exercised.
 - ``sos_node_format`` positive examples use colon-hex IPv6 notation, while
   ``SosResource``/``SosRelay`` require 16-char hex EUI-64 node identifiers.
+- ``sos_lat_lon_range`` out-of-range handling ("clamp_or_reject"): the
+  range contract (lat [-90, 90], lon [-180, 180]) is enforced by the GPSR
+  coordinate validator (``lichen.routing.router._validate_coords`` via
+  ``gpsr_forward``), not by the CoAP resources — SosResource ignores
+  lat/lon on POST entirely and CheckInResource checks finiteness only, so
+  out-of-range SOS coordinates are neither clamped nor rejected there.
 
 Undrivable cases (no Python enforcement surface; not fabricated):
 
 - ``sos_type_validation`` unknown-type handling ("reject_or_log_unknown"):
   SosResource deliberately tolerates non-"sos" type values.
-- ``sos_lat_lon_range`` out-of-range handling ("clamp_or_reject"): no
-  range check exists; CheckInResource validates finiteness only.
 - ``coap_transport`` "prefer_non" CON/NON selection policy and
   "gateway_translation" external-leg strings: prose policy with no code
   surface; only the port membership is machine-checkable.
@@ -82,6 +86,7 @@ from lichen.coap.sos_origin import (
 from lichen.coap.sos_relay import SosRelay, get_sos_id_from_payload
 from lichen.constants import PORT_MQTT_SN, SCHC_FRAGMENT_M, SCHC_FRAGMENT_N
 from lichen.crypto.schnorr48 import derive_keypair
+from lichen.routing.router import _validate_coords
 from lichen.schc.fragment import MAX_PACKET_SIZE, MAX_SCHC_PACKET, TILE_SIZE, WINDOW_SIZE
 from lichen.schc.rules import MO, UDP_PORT_RULE
 from lichen.slip.codec import StreamDecoder
@@ -338,6 +343,44 @@ async def test_sos_ts_semantics() -> None:
     missing_ts = {"type": "sos", "node": "0123456789abcdef"}
     response = await fresh.render_post(Message(code=POST, payload=cbor2.dumps(missing_ts)))
     assert response.code == BAD_REQUEST
+
+
+async def test_sos_lat_lon_range_gpsr_enforcement() -> None:
+    """Vector's coordinate ranges are enforced by GPSR, not by the CoAP resources.
+
+    ``out_of_range_handling: "clamp_or_reject"`` is implemented as reject in
+    the routing layer: ``lichen.routing.router._validate_coords`` (used by
+    ``gpsr_forward``) applies exactly the vector's lat [-90, 90] and
+    lon [-180, 180] bounds and rejects non-finite values. The CoAP resources
+    do not: SosResource ignores lat/lon on POST (neither clamped nor
+    rejected) and CheckInResource validates finiteness only. Both real
+    behaviors are asserted here; the SOS half is a documented divergence.
+    """
+    vector = _case("sos_cbor.json", "sos_lat_lon_range")
+    assert vector["lat_range"] == {"min": -90.0, "max": 90.0}
+    assert vector["lon_range"] == {"min": -180.0, "max": 180.0}
+    assert vector["expected"]["out_of_range_handling"] == "clamp_or_reject"
+
+    assert _validate_coords(37.774929, -122.419416)
+    assert _validate_coords(90.0, 180.0)
+    assert _validate_coords(-90.0, -180.0)
+    assert not _validate_coords(90.1, 0.0)
+    assert not _validate_coords(-90.1, 0.0)
+    assert not _validate_coords(0.0, 180.1)
+    assert not _validate_coords(0.0, -180.1)
+    assert not _validate_coords(float("nan"), 0.0)
+    assert not _validate_coords(float("inf"), 0.0)
+
+    resource = SosResource()
+    out_of_range = {
+        "type": "sos",
+        "node": "0123456789abcdef",
+        "ts": 1716742800,
+        "lat": 999.0,
+        "lon": -999.0,
+    }
+    response = await resource.render_post(Message(code=POST, payload=cbor2.dumps(out_of_range)))
+    assert response.code == CREATED
 
 
 # ---------------------------------------------------------------------------

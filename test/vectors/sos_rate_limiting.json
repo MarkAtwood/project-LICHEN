@@ -84,8 +84,8 @@
       "current_uptime_ms": 3600001,
       "expected": {
         "accept": true,
-        "sos_in_window": 0,
-        "reason": "all_expired_from_window"
+        "sos_in_window": 2,
+        "reason": "only_uptime_0_expired_from_window"
       }
     },
     {

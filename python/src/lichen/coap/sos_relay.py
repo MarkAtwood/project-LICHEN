@@ -5,6 +5,7 @@
 This module provides relay logic for SOS messages:
 - TTL (hop count) limits flooding propagation
 - Deduplication ensures each SOS is relayed once per node
+- Monotonic origin-sequence validation rejects stale (rolled-back) sequences
 - Time-based expiry prevents unbounded memory growth
 
 Per spec 18.4.3: "Nodes receiving SOS: ... Re-broadcast once (controlled
@@ -13,7 +14,8 @@ flooding, TTL-limited)"
 Per spec 18.4.6: "Relay duty: All nodes relay SOS (once per SOS ID)"
 
 SOS ID is defined as (originating node, sequence number). A node that has
-already relayed a given SOS ID silently drops subsequent copies.
+already relayed a given SOS ID silently drops subsequent copies, and a
+sequence at or below the highest seen from that node is rejected as stale.
 """
 
 from __future__ import annotations
@@ -94,9 +96,7 @@ class SosRelay:
     time_func: Callable[[], float] = field(default_factory=lambda: time.time)
 
     # Maps SosId -> timestamp when first seen (OrderedDict for LRU eviction)
-    _seen: OrderedDict[SosId, float] = field(
-        default_factory=OrderedDict, init=False, repr=False
-    )
+    _seen: OrderedDict[SosId, float] = field(default_factory=OrderedDict, init=False, repr=False)
 
     def check_relay(
         self,
@@ -149,6 +149,17 @@ class SosRelay:
             return SosRelayResult(
                 should_relay=False,
                 reason=f"already relayed SOS from {node} seq={seq}",
+            )
+
+        # Monotonic origin-sequence gate: a sequence at or below the highest
+        # seen from this node is stale (rollback) and is not relayed. Sequence
+        # 0 is a cycle rollover (sos_seq_rollover: 255 -> 0) and restarts the
+        # window; exact replays are already caught by the dedup check above.
+        seen_seqs = [sid.seq for sid in self._seen if sid.node == node]
+        if seen_seqs and seq != 0 and seq <= max(seen_seqs):
+            return SosRelayResult(
+                should_relay=False,
+                reason=(f"stale origin sequence {seq} from {node} (highest seen {max(seen_seqs)})"),
             )
 
         # Record this SOS as seen
@@ -219,9 +230,7 @@ class SosRelay:
         now = self.time_func()
         cutoff = now - SEEN_EXPIRY_S
         # Iterate over a copy of keys since we're modifying during iteration
-        expired = [
-            sos_id for sos_id, timestamp in self._seen.items() if timestamp < cutoff
-        ]
+        expired = [sos_id for sos_id, timestamp in self._seen.items() if timestamp < cutoff]
         for sos_id in expired:
             del self._seen[sos_id]
         if expired:

@@ -75,11 +75,12 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
         Args:
             is_border_router: If True, use larger 8KB storage; else 2KB.
             time_func: Optional callable returning current time (for testing).
+                       Defaults to time.monotonic.
         """
         super().__init__()
         self._is_border_router = is_border_router
         self._storage_limit = CONFESSION_STORAGE_BR if is_border_router else CONFESSION_STORAGE_LEAF
-        self._time_func = time_func if time_func is not None else time.time
+        self._time_func = time_func if time_func is not None else time.monotonic
         # Confessions storage: list of (id, content_dict, size_bytes, expire_time)
         self._confessions: list[dict[str, Any]] = []
         self._total_size = 0
@@ -167,9 +168,7 @@ class ConfessionsResource(resource.ObservableResource, resource.PathCapable):
                     return parts[3].lower()
         return None
 
-    def _extract_field(
-        self, records: list[SenmlRecord], name: str, value_type: str = "vs"
-    ) -> Any:
+    def _extract_field(self, records: list[SenmlRecord], name: str, value_type: str = "vs") -> Any:
         """Extract a field value from SenML records by name."""
         for rec in records:
             if rec.n == name:

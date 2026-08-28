@@ -14,6 +14,12 @@ from aiocoap import CHANGED, CONTENT, CREATED, Message, resource
 
 from lichen.coap.resources.base import CBOR
 from lichen.coap.resources.cbor_validation import _decode_single_cbor
+from lichen.coap.sos_origin import (
+    SosOriginSignature,
+    canonicalize_sos_payload,
+    verify_sos_origin,
+)
+from lichen.crypto.identity import yggdrasil_address
 
 MAX_ROLLCALLS = 256
 MAX_ROLLCALL_TIMEOUT_S = 7 * 86400
@@ -22,6 +28,13 @@ MAX_CHECKINS = 256  # Maximum stored check-ins
 # SOS rate limiting per spec (per-source limits)
 SOS_COOLDOWN_S = 600  # 10-minute minimum between requests from same source
 SOS_HOURLY_MAX = 3  # Maximum 3 requests per hour from same source
+SOS_BURST_ALLOWANCE = 2  # Spec 18.4.1 "Burst allowance: 2" — rapid updates to the same SOS
+# Burst window: how soon after the cycle's first SOS an update still counts as
+# rapid. Matches the 30 s active-SOS position-beacon cadence (spec 18.4.6).
+SOS_BURST_WINDOW_S = 30
+
+# Body fields carrying the origin signature; excluded from the signed core.
+_SOS_ORIGIN_SIG_FIELDS = ("seq", "origin_sig", "pubkey")
 
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
@@ -43,8 +56,16 @@ class SosResource(resource.ObservableResource):
     application layer driving :meth:`retrigger`; the resource itself only
     tracks state and notifies on changes.
 
+    Origin authentication (spec 18.4.1): network-originated POSTs using the
+    mesh payload format MUST carry a valid Schnorr48 origin signature
+    (``seq`` + ``origin_sig`` + ``pubkey`` fields, the key deriving to the
+    claimed node IID); unsigned or invalid requests are dropped without
+    activating. Legacy ``{"from","t"}`` bodies are the local administrative
+    activation path and are exempt.
+
     Rate limiting: each source node is limited to 3 requests per hour with a
-    minimum 10-minute cooldown between requests. This prevents SOS flooding
+    10-minute cooldown per cycle and a burst allowance of 2 (one rapid update
+    to the same SOS inside the cooldown window). This prevents SOS flooding
     while allowing legitimate emergency use.
     """
 
@@ -53,15 +74,18 @@ class SosResource(resource.ObservableResource):
 
         Args:
             time_func: Optional callable returning current time (for testing).
-                       Defaults to time.time.
+                       Defaults to time.monotonic.
         """
         super().__init__()
         self._active = False
         self._from: str | None = None
         self._t: float | None = None
-        self._time_func = time_func if time_func is not None else time.time
+        self._time_func = time_func if time_func is not None else time.monotonic
         # Per-source rate limiting: maps source hex -> list of request timestamps
         self._request_times: dict[str, list[float]] = {}
+        # Per-source cooldown-cycle anchor: the first request of the current
+        # cycle. Burst updates inside a cycle do not reset the cooldown clock.
+        self._cycle_start: dict[str, float] = {}
 
     def _prune_old_requests(self, source_hex: str) -> None:
         """Remove request timestamps older than 1 hour for the given source."""
@@ -74,14 +98,17 @@ class SosResource(resource.ObservableResource):
         ]
         if not self._request_times[source_hex]:
             del self._request_times[source_hex]
+            self._cycle_start.pop(source_hex, None)
 
     def check_rate_limit(self, source_hex: str) -> bool:
         """Check if source is within rate limits.
 
         Returns True if request is allowed, False if rate-limited.
 
-        Rate limits:
-        - 10-minute cooldown between requests from same source
+        Rate limits (spec 18.4.1):
+        - 10-minute cooldown per cycle, anchored at the cycle's first request
+        - Burst allowance of 2: one rapid update (within SOS_BURST_WINDOW_S of
+          the cycle start) is accepted before the cooldown applies
         - Maximum 3 requests per hour from same source
         """
         self._prune_old_requests(source_hex)
@@ -89,8 +116,14 @@ class SosResource(resource.ObservableResource):
             return True
         timestamps = self._request_times[source_hex]
         now = self._time_func()
-        # Check cooldown: most recent request must be > 10 min ago
-        if timestamps and (now - timestamps[-1]) < SOS_COOLDOWN_S:
+        cycle_start = self._cycle_start.get(source_hex, timestamps[0])
+        elapsed = now - cycle_start
+        # Burst allowance: a rapid update to the same SOS is accepted inside
+        # the cooldown window. A same-instant repeat (elapsed == 0) is a
+        # duplicate transmission, not an update.
+        if 0 < elapsed < SOS_BURST_WINDOW_S and len(timestamps) < SOS_BURST_ALLOWANCE:
+            return True
+        if elapsed < SOS_COOLDOWN_S:
             return False
         # Check hourly max: must have fewer than 3 requests in last hour
         return len(timestamps) < SOS_HOURLY_MAX
@@ -100,7 +133,27 @@ class SosResource(resource.ObservableResource):
         now = self._time_func()
         if source_hex not in self._request_times:
             self._request_times[source_hex] = []
+            self._cycle_start[source_hex] = now
+        elif now - self._cycle_start[source_hex] >= SOS_COOLDOWN_S:
+            # A request accepted after the cooldown elapsed starts a new
+            # cooldown cycle; burst updates do not reset the clock.
+            self._cycle_start[source_hex] = now
         self._request_times[source_hex].append(now)
+
+    def _retry_after(self, source_hex: str) -> int:
+        """Seconds until the source's next SOS can be accepted."""
+        timestamps = self._request_times.get(source_hex)
+        if not timestamps:
+            return 0
+        now = self._time_func()
+        cycle_start = self._cycle_start.get(source_hex, timestamps[0])
+        elapsed = now - cycle_start
+        if elapsed < SOS_COOLDOWN_S:
+            # Charge the in-flight second before crediting the remaining wait
+            # (same anti-truncation direction as ConfessionsResource's int()+1).
+            return max(SOS_COOLDOWN_S - (int(elapsed) + 1), 0)
+        oldest_in_window = timestamps[0]
+        return max(int(3600 - (now - oldest_in_window)) + 1, 0)
 
     def _state_payload(self) -> bytes:
         return cbor2.dumps({"active": self._active, "from": self._from, "t": self._t})
@@ -160,10 +213,50 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.BAD_REQUEST)
         # Check rate limit before activating
         if not self.check_rate_limit(from_hex):
-            return Message(code=aiocoap.TOO_MANY_REQUESTS)
+            msg = Message(code=aiocoap.TOO_MANY_REQUESTS)
+            # aiocoap doesn't have direct Retry-After support, encode in payload
+            msg.payload = cbor2.dumps({"retry_after": self._retry_after(from_hex)})
+            msg.opt.content_format = CBOR
+            return msg
+        # Spec 18.4.1: mesh-originated SOS (spec payload format) must carry a
+        # valid Schnorr48 origin signature; unsigned or invalid requests are
+        # dropped without activating. Legacy {"from","t"} bodies are the local
+        # administrative activation path and are exempt, as are in-process
+        # callers (remote is None) using the embedding application's own
+        # control path.
+        needs_origin_sig = request.remote is not None and "from" not in body
+        if needs_origin_sig and not self._verify_origin_signature(body, from_hex):
+            return Message(code=aiocoap.UNAUTHORIZED)
         self._record_request(from_hex)
         self.activate(bytes.fromhex(from_hex), timestamp)
         return Message(code=CREATED)
+
+    @staticmethod
+    def _verify_origin_signature(body: dict[str, Any], from_hex: str) -> bool:
+        """Verify the Schnorr48 origin signature fields of a mesh SOS body."""
+        seq = body.get("seq")
+        origin_sig = body.get("origin_sig")
+        pubkey = body.get("pubkey")
+        if (
+            isinstance(seq, bool)
+            or not isinstance(seq, int)
+            or not 0 <= seq <= 0xFFFFFFFFFFFFFFFF
+            or not isinstance(origin_sig, (bytes, bytearray))
+            or len(origin_sig) != 48
+            or not isinstance(pubkey, (bytes, bytearray))
+            or len(pubkey) != 32
+        ):
+            return False
+        pubkey = bytes(pubkey)
+        origin_addr = yggdrasil_address(pubkey)
+        if origin_addr.packed[8:].hex() != from_hex.lower():
+            # The signing key must derive to the claimed node IID.
+            return False
+        core = {k: v for k, v in body.items() if k not in _SOS_ORIGIN_SIG_FIELDS}
+        signature = SosOriginSignature(origin_sequence=seq, signature=bytes(origin_sig))
+        return verify_sos_origin(
+            pubkey, origin_addr.packed, canonicalize_sos_payload(core), signature
+        )
 
     async def render_delete(self, request: Message) -> Message:
         self.cancel()

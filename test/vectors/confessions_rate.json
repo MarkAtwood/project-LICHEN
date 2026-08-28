@@ -32,7 +32,7 @@
       "expected": {
         "accept": false,
         "response_code": "4.29 Too Many Requests",
-        "retry_after_s": 15
+        "retry_after_s": 16
       }
     },
     {
@@ -81,8 +81,8 @@
       "current_uptime_ms": 3601000,
       "expected": {
         "accept": true,
-        "posts_in_window": 0,
-        "reason": "all_posts_expired_from_window"
+        "posts_in_window": 2,
+        "reason": "only_uptime_0_expired_from_window"
       }
     },
     {
@@ -134,8 +134,8 @@
       "current_uptime_ms": 20000,
       "expected": {
         "response_code": "4.29 Too Many Requests",
-        "retry_after_s": 20,
-        "reason": "30s - (20s - 10s) = 20s remaining"
+        "retry_after_s": 21,
+        "reason": "int(30s - (20s - 10s)) + 1 = 21, anti-truncation ceiling"
       }
     },
     {

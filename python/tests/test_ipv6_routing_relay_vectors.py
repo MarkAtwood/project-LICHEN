@@ -730,3 +730,30 @@ def test_announce_beyond_max_hops_documented_divergence() -> None:
     assert result.should_relay is False
     assert result.reject_reason is AnnounceRejectReason.HOP_LIMIT_EXCEEDED
     assert processor.gradient_table.entries() == []
+
+
+def test_announce_self_announce_documented_divergence() -> None:
+    """Pin current behavior for undrivable vector first_announce_from_self.
+
+    The vector expects an announce whose originator equals the receiver
+    (receiver_iid == originator_iid) to be dropped with reason self_announce.
+    Neither AnnounceProcessor.process() nor Node._process_announce() takes a
+    receiver identity into account (no self_announce reason exists in
+    AnnounceRejectReason), so a self-originated announce is accepted and
+    relayed like any other. This documents the gap tracked in beads; it MUST
+    be inverted once a receiver-side self-announce filter exists.
+    """
+    vector = next(
+        v
+        for v in _load("announce_relay.json")["vectors"]["edge_cases"]
+        if v["name"] == "first_announce_from_self"
+    )
+    assert vector["receiver_iid"] == vector["announce"]["originator_iid"]
+    identity = _identity(SEED_A)
+    signed = _sign(identity, vector["announce"]["seq_num"], vector["announce"]["hop_count"])
+    processor = _processor()
+    result = processor.process(signed, FROM_NEIGHBOR, now_ms=1000)
+    assert result.accepted is True
+    assert result.should_relay is True
+    assert result.reject_reason is None
+    assert processor.get_relay_message(signed) is not None
