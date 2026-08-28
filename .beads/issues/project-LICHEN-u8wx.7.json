@@ -11,7 +11,8 @@
   "labels": [
     "zephyr",
     "c",
-    "defer-external"
+    "defer-external",
+    "local-ok"
   ],
   "dependencies": [
     {
