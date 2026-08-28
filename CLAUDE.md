@@ -218,12 +218,10 @@ export PATH="/Volumes/Attic/Developer/cmake-3.31.3-macos-universal/CMake.app/Con
 
 SDK 0.16.8 is at `/Volumes/Attic/zephyr-sdk-0.16.8`; compatible CMake 3.31.3 is
 at `/Volumes/Attic/Developer/cmake-3.31.3-macos-universal/CMake.app/Contents/bin`
-(Homebrew CMake 4.4 is incompatible). The shared west
-workspace (`/Volumes/Attic/Developer/zephyr-workspace`) is Zephyr **4.1.0**;
-LICHEN pins **v3.7.0**. Do not reinitialize that workspace. `native_sim` on
-macOS is unreliable -- use host CMake tests, or the AWS EBS builder for
-pinned v3.7.0 / Linux `native_sim`. Unique build dir per bead; never `/tmp`.
-Hardware ports: `docs/bench-operations.md`.
+(Homebrew CMake 4.4 is incompatible). The shared west workspace and LICHEN both
+use Zephyr **v4.1.0**. Do not reinitialize that workspace. `native_sim` on
+macOS is unreliable -- use host CMake tests, or Linux for `native_sim`/twister.
+Unique build dir per bead; never `/tmp`. Hardware ports: `docs/bench-operations.md`.
 
 ### 9. AWS EC2 Access and Safety
 
