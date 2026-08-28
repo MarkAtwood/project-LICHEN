@@ -19,7 +19,8 @@
     "messaging",
     "owner-reserved",
     "testing",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
