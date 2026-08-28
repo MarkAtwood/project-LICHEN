@@ -17,7 +17,8 @@
   "labels": [
     "aws",
     "validation",
-    "zephyr"
+    "zephyr",
+    "needs-linux"
   ],
   "dependencies": [
     {
