@@ -24,6 +24,7 @@
 #include <zephyr/net/coap_service.h>
 
 #include <lichen/coap_oscore.h>
+#include <lichen/coap_server.h>
 
 #define RANGETEST_SENML_CBOR_MAX 192U
 /* Traceroute worst case: map(1) + "hops"(5) + array(1) + 8 x 83 bytes per
@@ -741,6 +742,16 @@ int lichen_rangetest_post_handler(struct coap_resource *resource,
 		resource, request, addr, addr_len, COAP_METHOD_POST, &oscore);
 	if (ret != 0) {
 		return ret;
+	}
+	/* POST /diag/rangetest triggers extended radio transmissions
+	 * (spec 18.7.2): OSCORE-protected mesh peers and the local admin
+	 * client only (spec/06-security.md 8.8, spec/11-lci.md 17.6.3). */
+	if (!oscore.is_protected &&
+	    !lichen_coap_is_local_admin(addr, addr_len)) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_UNAUTHORIZED,
+						    0, NULL, 0);
 	}
 	ret = lichen_rangetest_request_decode(oscore.payload,
 					      oscore.payload_len, &req);

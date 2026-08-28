@@ -45,6 +45,11 @@ static uint16_t response_cf;
 static uint8_t response_payload[1024];
 static size_t response_payload_len;
 
+/* Authz knobs: does the mock adapter report the request as OSCORE
+ * protected, and does the peer address count as local admin? */
+static bool oscore_protected;
+static bool admin_result;
+
 int coap_oscore_unprotect_resource_request(
 	struct coap_resource *resource, struct coap_packet *request,
 	struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
@@ -56,9 +61,18 @@ int coap_oscore_unprotect_resource_request(
 	ARG_UNUSED(addr_len);
 	ARG_UNUSED(expected_method);
 	memset(result, 0, sizeof(*result));
+	result->is_protected = oscore_protected;
 	result->payload = (uint8_t *)request_payload;
 	result->payload_len = (uint16_t)request_payload_len;
 	return 0;
+}
+
+bool lichen_coap_is_local_admin(const struct sockaddr *addr,
+				socklen_t addr_len)
+{
+	ARG_UNUSED(addr);
+	ARG_UNUSED(addr_len);
+	return admin_result;
 }
 
 int coap_oscore_respond_resource(
@@ -125,6 +139,10 @@ static void init_provider(void)
 	response_code = 0U;
 	response_cf = 0U;
 	response_payload_len = 0U;
+	/* Vector tests exercise the authorized paths; the authz gate tests
+	 * override these knobs explicitly. */
+	oscore_protected = true;
+	admin_result = true;
 	zassert_ok(lichen_rangetest_init(&config));
 }
 
@@ -225,6 +243,45 @@ ZTEST(coap_rangetest, test_post_vectors_do_not_mutate_state) {
 			      "%s: POST must not advance state seq",
 			      vector->name);
 	}
+}
+
+ZTEST(coap_rangetest, test_post_requires_oscore_or_local_admin) {
+	struct coap_resource resource = {0};
+	struct coap_packet request = {0};
+	struct sockaddr_in6 peer = {.sin6_family = AF_INET6};
+	const struct rangetest_vector *valid = find_vector(
+		"rangetest_post_seq_payload_count");
+
+	/* Unprotected non-admin mesh peer: 4.01 before any decode or
+	 * transmission work. */
+	init_provider();
+	oscore_protected = false;
+	admin_result = false;
+	arm_vector(valid);
+	invoke_vector(valid, &resource, &request,
+		      (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED,
+		      "unprotected non-admin POST must be 4.01, got 0x%02x",
+		      response_code);
+	zassert_equal(response_payload_len, 0U,
+		      "4.01 must not emit a SenML response");
+	zassert_equal(lichen_rangetest_seq(), 0U, "4.01 must not mutate");
+
+	/* OSCORE-protected mesh peer is allowed without local admin. */
+	oscore_protected = true;
+	admin_result = false;
+	invoke_vector(valid, &resource, &request,
+		      (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_equal(response_cf, LICHEN_RANGETEST_CF_SENML_CBOR);
+
+	/* Plain request from the local admin client is allowed. */
+	oscore_protected = false;
+	admin_result = true;
+	invoke_vector(valid, &resource, &request,
+		      (const struct sockaddr *)&peer);
+	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+	zassert_equal(response_cf, LICHEN_RANGETEST_CF_SENML_CBOR);
 }
 
 ZTEST(coap_rangetest, test_request_decode_matches_oracle_verdicts) {
