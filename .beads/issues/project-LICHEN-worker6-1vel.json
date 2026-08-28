@@ -12,7 +12,8 @@
   "updated_at": "2026-08-28T03:35:50.265588Z",
   "started_at": "2026-07-24T16:14:58.771049155Z",
   "labels": [
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
