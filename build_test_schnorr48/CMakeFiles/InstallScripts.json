@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/mnt/lichen-zephyr/work/project-LICHEN-worker6/build_test_schnorr48/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
