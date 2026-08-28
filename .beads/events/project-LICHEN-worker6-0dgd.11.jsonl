@@ -2,3 +2,4 @@
 {"id":"01a0319d-668e-7098-92d4-0d9fd20fff5e","issue_id":"project-LICHEN-worker6-0dgd.11","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-24T02:33:14.126039Z"}
 {"id":"01a045db-203a-787f-a9e2-56b9422761d7","issue_id":"project-LICHEN-worker6-0dgd.11","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: needs-linux","created_at":"2026-08-28T00:53:03.674558Z"}
 {"id":"01a048f1-dbae-7b81-9271-abadbc803a69","issue_id":"project-LICHEN-worker6-0dgd.11","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: needs-linux","created_at":"2026-08-28T15:16:45.102754Z"}
+{"id":"01a048f1-e340-73bd-b74e-73fe527eea79","issue_id":"project-LICHEN-worker6-0dgd.11","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T15:16:47.040245Z"}
