@@ -325,6 +325,12 @@ config LICHEN_COAP_SLOT_COORD
 	bool "Enable Slot Coordination (GCP-6)"
 	depends on LICHEN_COAP_SERVER
 	depends on LICHEN_LINK_SCHNORR
+	# process_claim() calls lichen_key_store_get() to fetch the gateway
+	# public key for Schnorr48 verification; that symbol exists only under
+	# LICHEN_COAP_KEYS (coap_keys_store.c). depends, not select: KEYS itself
+	# depends on LICHEN_SLIP_TRANSPORT, and a select here would re-expose the
+	# bd a2a2 link failure when SLIP is off.
+	depends on LICHEN_COAP_KEYS
 	default n
 	help
 	  Enable GCP-6 Slot Coordination protocol per spec/08-gateway-coordination.md
