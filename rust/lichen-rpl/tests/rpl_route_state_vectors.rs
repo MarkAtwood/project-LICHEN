@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
+use core::net::Ipv6Addr;
 use lichen_rpl::message::{Dao, OptionIter, TransitInfo, OPT_TRANSIT_INFO};
 use lichen_rpl::routing::{
     DaoDiagnosticDisposition, DaoDiagnosticLimits, DaoDiagnosticTarget, DaoManager,
@@ -46,8 +47,8 @@ fn snapshot(targets: Vec<DaoDiagnosticTarget>) -> Value {
                 .find(|candidate| candidate.parent == selected.parent)?;
             Some(json!({
                 "prefix_length": target.prefix_length,
-                "prefix": hex(&target.prefix),
-                "path": selected.path.iter().map(|hop| hex(hop)).collect::<Vec<_>>(),
+                "prefix": hex(&target.prefix.octets()),
+                "path": selected.path.iter().map(|hop| hex(&hop.octets())).collect::<Vec<_>>(),
                 "path_lifetime": candidate.path_lifetime,
                 "installed_at": candidate.installed_at,
                 "expires_at": candidate.expires_at,
@@ -67,7 +68,7 @@ fn snapshot(targets: Vec<DaoDiagnosticTarget>) -> Value {
                 .into_iter()
                 .map(|candidate| {
                     json!({
-                        "parent": hex(&candidate.parent),
+                        "parent": hex(&candidate.parent.octets()),
                         "external": candidate.external,
                         "path_control": candidate.path_control,
                         "path_lifetime": candidate.path_lifetime,
@@ -78,16 +79,16 @@ fn snapshot(targets: Vec<DaoDiagnosticTarget>) -> Value {
                 .collect();
             let selected_candidate = target.selected_candidate.map(|selected| {
                 json!({
-                    "parent": hex(&selected.parent),
+                    "parent": hex(&selected.parent.octets()),
                     "preference_subfield": selected.preference_subfield,
-                    "path": selected.path.iter().map(|hop| hex(hop)).collect::<Vec<_>>(),
+                    "path": selected.path.iter().map(|hop| hex(&hop.octets())).collect::<Vec<_>>(),
                 })
             });
             json!({
                 "prefix_length": target.prefix_length,
-                "prefix": hex(&target.prefix),
+                "prefix": hex(&target.prefix.octets()),
                 "descriptor": target.descriptor,
-                "sequence_authority": hex(&target.sequence_authority),
+                "sequence_authority": hex(&target.sequence_authority.octets()),
                 "path_sequence": target.path_sequence,
                 "disposition": disposition,
                 "candidates": candidates,
@@ -183,11 +184,12 @@ fn canonical_route_state_vectors_match_production_manager() {
             lifetime_unit_seconds,
             max_deadline_seconds: u64::MAX,
         };
-        let mut relation_manager = DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
+        let mut relation_manager =
+            DaoManager::diagnostic_root(Ipv6Addr::from(dodag_id), rpl_instance_id, dodag_id.into());
         relation_manager
             .process_route_state_diagnostic(
                 &route_dao(1, current, target, parent),
-                sequence_authority,
+                sequence_authority.into(),
                 timing,
                 limits,
             )
@@ -195,7 +197,7 @@ fn canonical_route_state_vectors_match_production_manager() {
 
         let result = relation_manager.process_route_state_diagnostic(
             &route_dao(2, incoming, target, parent),
-            sequence_authority,
+            sequence_authority.into(),
             timing,
             limits,
         );
@@ -205,8 +207,8 @@ fn canonical_route_state_vectors_match_production_manager() {
             "stale" | "incomparable" => assert!(result.is_err(), "{name}"),
             expected => panic!("{name}: unknown sequence relation {expected}"),
         }
-        let state =
-            relation_manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds);
+        let state = relation_manager
+            .route_state_diagnostic(sequence_authority.into(), lifetime_unit_seconds);
         assert_eq!(state.len(), 1, "{name}");
         assert_eq!(
             state[0].path_sequence,
@@ -219,7 +221,11 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut tx_manager = DaoManager::new(sequence_authority, rpl_instance_id, dodag_id);
+    let mut tx_manager = DaoManager::new(
+        Ipv6Addr::from(sequence_authority),
+        rpl_instance_id,
+        dodag_id.into(),
+    );
     let mut last_logical_lifetime = None;
     for transition in document["tx_sequence_transitions"].as_array().unwrap() {
         let name = transition["name"].as_str().unwrap();
@@ -228,14 +234,14 @@ fn canonical_route_state_vectors_match_production_manager() {
         let (wire, encoded_lifetime) = if advance_path_sequence {
             last_logical_lifetime = Some(path_lifetime);
             (
-                tx_manager.build_dao_with_lifetime(dodag_id, path_lifetime),
+                tx_manager.build_dao_with_lifetime(dodag_id.into(), path_lifetime),
                 path_lifetime,
             )
         } else {
             let exact_lifetime = last_logical_lifetime.unwrap();
             (
                 tx_manager
-                    .build_dao_copy_with_lifetime(dodag_id, exact_lifetime)
+                    .build_dao_copy_with_lifetime(dodag_id.into(), exact_lifetime)
                     .unwrap(),
                 exact_lifetime,
             )
@@ -282,12 +288,19 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut manager = DaoManager::diagnostic_root(dodag_id, rpl_instance_id, dodag_id);
+    let mut manager = DaoManager::diagnostic_root(
+        Ipv6Addr::from(dodag_id),
+        rpl_instance_id,
+        dodag_id.into(),
+    );
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();
         assert_eq!(
-            snapshot(manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)),
+            snapshot(manager.route_state_diagnostic(
+                sequence_authority.into(),
+                lifetime_unit_seconds
+            )),
             vector["before"],
             "{name}: before snapshot"
         );
@@ -298,7 +311,7 @@ fn canonical_route_state_vectors_match_production_manager() {
             let dao = hex_bytes(vector["dao_hex"].as_str().unwrap());
             match manager.process_route_state_diagnostic(
                 &dao,
-                sequence_authority,
+                sequence_authority.into(),
                 DaoProcessTiming {
                     now_seconds,
                     lifetime_unit_seconds,
@@ -327,7 +340,10 @@ fn canonical_route_state_vectors_match_production_manager() {
             "{name}: reason must be a canonical diagnostic string"
         );
         assert_eq!(
-            snapshot(manager.route_state_diagnostic(sequence_authority, lifetime_unit_seconds)),
+            snapshot(manager.route_state_diagnostic(
+                sequence_authority.into(),
+                lifetime_unit_seconds
+            )),
             vector["expected"]["state"],
             "{name}: expected snapshot"
         );
@@ -352,21 +368,26 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         max_candidates_per_target: 2,
         max_candidates: 2,
     };
-    let mut manager = DaoManager::diagnostic_root(root, 0, root);
+    let mut manager = DaoManager::diagnostic_root(Ipv6Addr::from(root), 0, root.into());
     manager
-        .process_route_state_diagnostic(&route_dao(1, 1, target, root), authority, timing, limits)
+        .process_route_state_diagnostic(
+            &route_dao(1, 1, target, root),
+            authority.into(),
+            timing,
+            limits,
+        )
         .unwrap();
-    let before = manager.route_state_diagnostic(authority, timing.lifetime_unit_seconds);
+    let before = manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds);
     let route_before = manager.routing_table().lookup(&target).unwrap().to_vec();
     let mut malformed = vec![0, 0, 0, 2, 5, 18, 0, 128];
     malformed.extend_from_slice(&target);
     malformed.extend_from_slice(&[OPT_TRANSIT_INFO, 0]);
 
     assert!(manager
-        .process_route_state_diagnostic(&malformed, authority, timing, limits)
+        .process_route_state_diagnostic(&malformed, authority.into(), timing, limits)
         .is_err());
     assert_eq!(
-        manager.route_state_diagnostic(authority, timing.lifetime_unit_seconds),
+        manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds),
         before
     );
     assert_eq!(

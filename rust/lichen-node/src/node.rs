@@ -1276,8 +1276,12 @@ mod tests {
             .unwrap();
             wire
         };
-        let mut sender = lichen_rpl::routing::DaoManager::new(origin, RPL_INSTANCE_ID, root_addr);
-        let first_unsigned = sender.build_dao_with_lifetime(root_addr, 10);
+        let mut sender = lichen_rpl::routing::DaoManager::new(
+            core::net::Ipv6Addr::from(origin),
+            RPL_INSTANCE_ID,
+            core::net::Ipv6Addr::from(root_addr),
+        );
+        let first_unsigned = sender.build_dao_with_lifetime(root_addr.into(), 10);
         let first = sign(&first_unsigned, 1);
         assert_eq!(
             root.handle_dao(
@@ -1326,12 +1330,15 @@ mod tests {
             router: Router::new_root(root_addr),
         };
         assert!(root.router.set_dao_lifetime_unit(1));
-        let mut first =
-            lichen_rpl::routing::DaoManager::new(first_addr, RPL_INSTANCE_ID, root_addr);
+        let mut first = lichen_rpl::routing::DaoManager::new(
+            core::net::Ipv6Addr::from(first_addr),
+            RPL_INSTANCE_ID,
+            core::net::Ipv6Addr::from(root_addr),
+        );
         let first_packet = l2_dao_packet(
             first_addr,
             root_addr,
-            &first.build_dao_with_lifetime(root_addr, 1),
+            &first.build_dao_with_lifetime(root_addr.into(), 1),
         );
 
         assert_eq!(
@@ -1382,9 +1389,12 @@ mod tests {
         dio.write_to(&mut dio_bytes).unwrap();
         assert!(parent.router.process_dio(&dio, &dio_bytes, root_addr, 0, 0));
 
-        let mut leaf_daos =
-            lichen_rpl::routing::DaoManager::new(leaf_addr, RPL_INSTANCE_ID, root_addr);
-        let dao = leaf_daos.build_dao(parent_addr);
+        let mut leaf_daos = lichen_rpl::routing::DaoManager::new(
+            core::net::Ipv6Addr::from(leaf_addr),
+            RPL_INSTANCE_ID,
+            core::net::Ipv6Addr::from(root_addr),
+        );
+        let dao = leaf_daos.build_dao(parent_addr.into());
         let packet = l2_dao_packet(leaf_addr, root_addr, &dao);
 
         assert_eq!(

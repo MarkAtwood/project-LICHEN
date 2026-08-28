@@ -1,6 +1,7 @@
 //! RPL Router state machine.
 
 extern crate std;
+use core::net::Ipv6Addr;
 use std::vec::Vec;
 
 use lichen_core::constants::RPL_INSTANCE_ID;
@@ -191,7 +192,11 @@ impl Router {
         Self {
             dodag: DodagState::new(RPL_INSTANCE_ID, dodag_id, 0),
             trickle: trickle_from_config(&dodag_config).expect("default Trickle config is valid"),
-            dao_manager: DaoManager::new(node_addr, RPL_INSTANCE_ID, dodag_id),
+            dao_manager: DaoManager::new(
+                Ipv6Addr::from(node_addr),
+                RPL_INSTANCE_ID,
+                Ipv6Addr::from(dodag_id),
+            ),
             neighbors: NeighborTable::new(),
             dodag_id,
             dodag_config,
@@ -254,8 +259,12 @@ impl Router {
         storage: &mut S,
         node_addr: [u8; 16],
     ) -> Result<(Self, DaoRxState), DaoProvisionError<S::Error>> {
-        let (manager, state) =
-            DaoManager::provision_root(storage, node_addr, RPL_INSTANCE_ID, node_addr)?;
+        let (manager, state) = DaoManager::provision_root(
+            storage,
+            Ipv6Addr::from(node_addr),
+            RPL_INSTANCE_ID,
+            node_addr.into(),
+        )?;
         let router = Self::root_with_manager(node_addr, DodagConfig::default(), manager)
             .expect("default DODAG config is valid");
         Ok((router, state))
@@ -265,8 +274,12 @@ impl Router {
         storage: &S,
         node_addr: [u8; 16],
     ) -> Result<(Self, DaoRxState), DaoPersistentOpenError<S::Error>> {
-        let (manager, state) =
-            DaoManager::open_root(storage, node_addr, RPL_INSTANCE_ID, node_addr)?;
+        let (manager, state) = DaoManager::open_root(
+            storage,
+            Ipv6Addr::from(node_addr),
+            RPL_INSTANCE_ID,
+            node_addr.into(),
+        )?;
         let router = Self::root_with_manager(node_addr, DodagConfig::default(), manager)
             .expect("default DODAG config is valid");
         Ok((router, state))
@@ -284,8 +297,13 @@ impl Router {
             return None;
         }
         let mut storage = lichen_hal::storage::mem::MemStorage::new();
-        let (manager, state) =
-            DaoManager::provision_root(&mut storage, node_addr, RPL_INSTANCE_ID, node_addr).ok()?;
+        let (manager, state) = DaoManager::provision_root(
+            &mut storage,
+            Ipv6Addr::from(node_addr),
+            RPL_INSTANCE_ID,
+            node_addr.into(),
+        )
+        .ok()?;
         let dao_admission =
             DaoAdmissionState::provision(&mut storage, node_addr, RPL_INSTANCE_ID, node_addr)
                 .ok()?;
@@ -749,7 +767,7 @@ impl Router {
     pub(crate) fn build_dao(&mut self) -> Vec<u8> {
         if let Some(parent) = self.dodag.preferred_parent {
             self.dao_manager
-                .build_dao_with_lifetime(parent, self.dodag_config.def_lifetime)
+                .build_dao_with_lifetime(parent.into(), self.dodag_config.def_lifetime)
         } else {
             Vec::new()
         }
@@ -781,7 +799,7 @@ impl Router {
         let sequence = tx_state.reserve_next(storage)?;
         let unsigned = self
             .dao_manager
-            .build_dao_with_lifetime(parent, self.dodag_config.def_lifetime);
+            .build_dao_with_lifetime(parent.into(), self.dodag_config.def_lifetime);
         let wire = sign_dao(&unsigned, origin_ipv6, self.dodag_id, sequence, link)
             .ok_or(DaoTxError::Encoding)?;
         tx_state.finalize_signed(storage, sequence, &wire)?;

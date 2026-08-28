@@ -420,8 +420,8 @@ mod tests {
         let mut target = [0u8; 16];
         target[..2].copy_from_slice(&[0xfe, 0x80]);
         target[8..].copy_from_slice(&identity.iid);
-        let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-        let dao = sender.build_dao_with_lifetime(root_addr, 1);
+        let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+        let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
         assert!(node.router.set_dao_lifetime_unit(1));
         assert!(node.router.process_dao_at_ms(&dao, target, target, 1_000));
         let mut runtime = RplRuntime::new(RplRuntimeConfig::new(1_000, 10_000).unwrap(), 1_000);

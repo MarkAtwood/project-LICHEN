@@ -19,6 +19,8 @@ Drives the real lichen Python implementation through every vector case in:
 - ``test/vectors/ccp9-rendezvous.json`` (content-overlapping twin; consolidation
   is a flagged human call, so both are consumed) via the same rendezvous and
   TDMA scheduler surfaces.
+- ``test/vectors/ccp_slot_hash_carry.json`` via :func:`lichen.timing.sfn.slot_for`
+  and :func:`lichen.ccp.slot_hash` (wrapping-u32 sum before non-power-of-two moduli).
 
 Known divergences (real behavior asserted; tracked in beads):
 
@@ -71,6 +73,7 @@ import pytest
 
 from lichen.announce.messages import AnnounceMessage
 from lichen.ccp import select_channel as ccp_select_channel
+from lichen.ccp import slot_hash
 from lichen.l2_payload import L2PayloadKind, classify_l2_payload, l2_payload_body
 from lichen.link.channel import (
     GnssHopConfig,
@@ -91,7 +94,7 @@ from lichen.link.slot_coordination import (
 from lichen.sim.tdma import TDMAScheduler
 from lichen.sim.tdma import synchronized_hop_channel as sim_synchronized_hop_channel
 from lichen.time_provider import SimulatedTimeProvider
-from lichen.timing.sfn import DesyncFSM, DesyncState, sfn_delta
+from lichen.timing.sfn import DesyncFSM, DesyncState, sfn_delta, slot_for
 
 VECTORS_DIR = Path(__file__).resolve().parents[2] / "test" / "vectors"
 
@@ -118,6 +121,7 @@ CCP16_HOP = "ccp16-hop.json"
 CCP16_DESYNC = "ccp16-desync.json"
 CCP9_UNDERSCORE = "ccp9_rendezvous.json"
 CCP9_HYPHEN = "ccp9-rendezvous.json"
+CARRY_HASH = "ccp_slot_hash_carry.json"
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +536,28 @@ def test_hyphen_fallback_control_channel() -> None:
 
 
 # ---------------------------------------------------------------------------
+# ccp_slot_hash_carry.json — u32-carry slot assignment via slot_for/slot_hash
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name,vector", _cases(CARRY_HASH))
+def test_ccp_slot_hash_carry_wraps_u32_sum_before_modulus(name: str, vector: dict) -> None:
+    eui64 = bytes.fromhex(vector["eui64_hex"])
+    sfn, num_slots = vector["sfn"], vector["num_slots"]
+    assert slot_for(eui64, sfn, num_slots) == vector["expected_slot"], f"slot_for drift: {name}"
+    assert slot_hash(eui64, sfn, num_slots) == vector["expected_slot"], f"slot_hash drift: {name}"
+
+
+def test_ccp_slot_hash_carry_vectors_discriminate_wrapping() -> None:
+    """Vector integrity: every case carries and the unwrapped sum picks the pinned wrong slot."""
+    for name, vector in _cases(CARRY_HASH):
+        unwrapped_sum = int(vector["expected_hash_32"], 16) + vector["sfn"]
+        assert unwrapped_sum >= 2**32, name
+        assert unwrapped_sum % vector["num_slots"] == vector["unwrapped_wrong_slot"], name
+        assert vector["unwrapped_wrong_slot"] != vector["expected_slot"], name
+
+
+# ---------------------------------------------------------------------------
 # Guard: every vector in each file is accounted for by this module
 # ---------------------------------------------------------------------------
 
@@ -543,6 +569,7 @@ class TestAllVectorsAccountedFor:
         CCP16_DESYNC: 4,
         CCP9_UNDERSCORE: 4,
         CCP9_HYPHEN: 4,
+        CARRY_HASH: 8,
     }
 
     @pytest.mark.parametrize("filename", sorted(EXPECTED_COUNTS))

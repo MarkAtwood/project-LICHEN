@@ -1031,6 +1031,45 @@ mod tests {
         );
     }
 
+    #[test]
+    fn transit_info_canonical_vector_form() {
+        // Exact Transit body from test/vectors/dao_origin_signature.json
+        // "valid_d1_self_128": flags=0x00 (E=0), path_control=0x80.
+        let mut parent = [0u8; 16];
+        parent[0] = 0xfe;
+        parent[1] = 0x80;
+        parent[15] = 0x01;
+
+        let ti = TransitInfo {
+            path_control: 0x80,
+            path_sequence: 0xf1,
+            path_lifetime: 0xff,
+            parent_address: parent,
+        };
+        let mut expected = [0u8; 22];
+        expected[0] = OPT_TRANSIT_INFO;
+        expected[1] = 20;
+        expected[2] = 0; // E=0; Parent presence conveyed by length 20
+        expected[3] = 0x80;
+        expected[4] = 0xf1;
+        expected[5] = 0xff;
+        expected[6..22].copy_from_slice(&parent);
+
+        let mut buf = [0u8; 24];
+        let n = ti.write_to(&mut buf).unwrap();
+        assert_eq!(&buf[..n], &expected[..]);
+
+        let decoded = TransitInfo::from_bytes(&buf[2..n]).unwrap();
+        assert_eq!(decoded, ti);
+
+        let mut e_flag = expected[2..].to_vec();
+        e_flag[0] = 0x80;
+        assert_eq!(
+            TransitInfo::from_bytes(&e_flag),
+            Err(RplError::InvalidOption)
+        );
+    }
+
     // ── DODAG Configuration option ────────────────────────────────────────────
 
     #[test]
