@@ -16,7 +16,8 @@
     "gateway",
     "global",
     "networking",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
