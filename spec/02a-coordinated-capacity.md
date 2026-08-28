@@ -650,6 +650,32 @@ Parameters marked **proposed** are not yet present in implementation constant fi
 | DENSITY_RSSI_BONUS_DBM | -90 | **proposed** | 2a.10.3 |
 | INTERFERENCE_ESCAPE_TENTHS | 1000 | **proposed** | 2a.10.4 |
 
+### 2a.10.7. Hash Function Byte Ordering
+
+All uses of FNV-1a32 (`hash_32`) in LICHEN MUST follow these normative rules:
+
+1. **Byte order:** Multi-byte inputs are serialized in network byte order
+   (big-endian) before hashing. EUI-64 and IPv6 addresses are already in
+   network byte order on the wire; integer fields (SFN, epoch) are converted
+   to big-endian before concatenation.
+
+2. **Identifier width:** Hash the full identifier, never a truncation:
+   - EUI-64: 8 bytes
+   - DODAG ID (RPL): 16 bytes (full 128-bit IPv6 address)
+   - IPv6 IID: 8 bytes
+
+3. **Concatenation order:** When hashing multiple fields, the pseudocode in
+   this spec (SelectChannel, SlotHash) defines the exact concatenation order.
+   Implementations MUST NOT reorder fields.
+
+4. **Test vectors:** All implementations MUST match `test/vectors/hash_32.json`
+   exactly. The vectors include edge cases for each identifier type and byte
+   order validation.
+
+Rationale: Without explicit byte-order rules, implementations on little-endian
+and big-endian machines would produce different hashes for the same logical
+identifier, breaking interoperability.
+
 ## Implementation Status
 
 - Python simulator, Rust gateway, Zephyr `lichen/subsys/lichen` validate against `test/vectors/ccp16.json`, `ccp_tdma.json`, `link_frame.json`, `l2_payload.json`.
