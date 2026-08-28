@@ -15,6 +15,7 @@
   "labels": [
     "codereview",
     "opinion",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ]
 }
