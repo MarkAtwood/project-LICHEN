@@ -23,6 +23,7 @@ pub mod persistence;
 pub mod routing;
 pub mod srh;
 pub mod table;
+pub mod time_option;
 pub mod trickle;
 pub mod verify;
 
