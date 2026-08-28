@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-6ffc",
+  "title": "(tests) slot-claim dispatch authz + replay tests",
+  "description": "Tests bead for children worker6-2hte (dispatch gate) and worker6-gskf (replay). There is NO existing slot_coord host test dir (lichen/tests has no coap_slot_coord*), so create lichen/tests/coap_slot_coord_authz following lichen/tests/coap_config layout, reusing the Schnorr48 fixtures from test/vectors/schnorr48.json for signed claims. ACCEPTANCE: (1) unprotected non-admin claim POST -\u003e 4.01 and gateway table unchanged; (2) protected valid signed claim -\u003e grant encoded, state mutated as today; (3) protected INVALID signature -\u003e silently discarded (no response body change, no grant), GCP-6.3; (4) unprotected-from-admin path still processed; (5) replay: same valid signed claim delivered twice -\u003e second occurrence does not re-mutate allocation (oracle: expected grant sequence per test/vectors + Rust SlotClaimVerifier semantics, NOT the C code under test); (6) concurrent-claim conflict still resolves lowest-IID-wins. Run via the standard host CMake test recipe (cmake \u0026\u0026 ctest --output-on-failure).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:41:38.451435Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:41:38.451435Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6ffc",
+      "depends_on_id": "project-LICHEN-6mij",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:42:05.875327Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

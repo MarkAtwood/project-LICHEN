@@ -1,0 +1,7 @@
+{
+  "id": "1787931922526629000-1",
+  "issue_id": "project-LICHEN-worker6-7dyd",
+  "author": "Mark Atwood",
+  "text": "API fix verified present in tree (assert_delivered() on borrowed-view API, obsolete config fields/enums removed; prior pinned build compile 101/101 recorded in notes). Blocker gz30 is CLOSED: schc.h now TILE_SIZE=179/126 tiles/22,554 (verified locally), so the 4 canonical runtime failures (187 vs 179 tiles) should be resolved. REMAINING: pinned Zephyr v3.7 native_sim runtime run of all generated v2 scenarios requires the AWS builder (same session as the gz30 child bead's validation run). Do not re-implement; only run pinned validation, then close. Unclaiming so an AWS-enabled session can pick it up.",
+  "created_at": "2026-08-28T15:45:22.526629Z"
+}

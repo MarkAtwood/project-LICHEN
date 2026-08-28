@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-fbrw",
+  "title": "Vectors: fix provably-wrong pins in sos_signature/sos_rate_limiting/confessions_rate",
+  "description": "Gaps 7a/7b/7c of a6qg - generator bugs in hand-curated vectors, not impl bugs. 7a: sos_signature.json canonical_cbor_key_order pins [lat,lon,ts,node,type] and canonical_cbor_medical pins [msg,ts,...]; RFC 8949 s4.2.1 length-first order is ts-first ([ts,lat,lon,...] / [ts,msg,...]); cancel vector correct. 7b: sos_rate_limiting.json hourly_window_slides pins sos_in_window=0 at now=3600.001s and post_after_hour_window_slides pins posts_in_window=0 at now=3601s: strict \u003e pruning correctly retains entries younger than 3600s, real count is 2 in both. 7c: confessions_rate.json pins retry_after_s=15 and =20 exactly; ConfessionsResource returns int(remaining)+1 (=16/=21), deliberate anti-truncation ceiling. Fix the JSON pins, flip the 6 corresponding xfail(strict) tests, keep test_vectors.py + vector-count guard + Rust consumers (rust/lichen-link/tests/sos_origin_vectors.rs, sos_cbor_vectors.rs) green.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:48:14.16449Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:48:14.16449Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fbrw",
+      "depends_on_id": "project-LICHEN-worker6-a6qg",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T15:48:15.656302Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,17 +1,17 @@
 {
   "id": "project-LICHEN-7m19",
   "title": "Port non-blocking reader thread, locks, and rxOneShot from LICHEN SX1262.cs into extracted standalone version",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 0,
   "issue_type": "task",
   "assignee": "Mark Atwood",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-23T04:06:23.247935386Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-08-28T15:21:39.338273Z",
+  "updated_at": "2026-08-28T15:28:41.887865Z",
   "started_at": "2026-07-23T04:06:25.019557962Z",
-  "lease_expires_at": "2026-08-28T15:26:39.338273Z",
-  "heartbeat_at": "2026-08-28T15:21:39.338273Z",
+  "closed_at": "2026-08-28T15:28:41.887865Z",
+  "close_reason": "Verified done via extracted .extraction/renode-lora-peripherals/peripherals/sx126x/SX1262.cs (904 lines), member-level diffed against lichen/boards/renode/peripherals/SX1262.cs: readerThread+StartReader+ReaderLoop+DispatchMessage (non-blocking background RX, all socket reads off SPI thread); stateLock/connectionLock/writeLock present and applied on every state mutation (Reset, FinishTransmission, Transmit read paths, OnGPIO-\u003eReset/FinishTransmission, EnterRxModeBridge incl. error paths, TriggerTx, ExitRxMode, setters, DispatchMessage); rxOneShot with full one-shot contract (set in EnterRxMode, cleared on packet/timeout/SetTx/SetStandby); latchedIrqFlags latched under stateLock in 0x12 handler; loopbackMode preserved (constructor param, Loopback property, TriggerTxLoopback/EnterRxModeLoopback). Fixed 2 parity gaps vs reference: DispatchMessage try/catch in ReaderLoop (prevented silent reader death) and wasOneShot log capture. CAVEAT: compilation NOT verified on this host - no dotnet/mono/mcs/csc installed (environment gap); compile+Renode test.resc smoke test tracked in project-LICHEN-worker6-184j. Fulfilled by child epic project-LICHEN-636h.3.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-7m19",

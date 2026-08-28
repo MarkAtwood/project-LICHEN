@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-vv1b",
+  "title": "(authz) handoff_post error paths bypass coap_oscore_respond_resource",
+  "description": "AUDIT (epic 6mij decomposition): handoff_post (lichen/subsys/lichen/coap/coap_handoff.c:996-1063) correctly rejects unprotected requests (4.01 at :1011-1016) and answers success via coap_oscore_respond_resource (:1060), BUT its error paths respond with PLAIN lichen_coap_respond instead: bad-request at :1018-1022, decode-fail at :1030-1033, process-fail at :1040-1043, encode-fail at :1051-1054. A request that passed unprotect (OSCORE-protected) then receives an UNPROTECTED 4.00/5.00 error, leaking status detail in clear text on the mesh and breaking the RFC 8613 expectation that responses to protected requests are protected (house pattern: coap_config.c:921-925 responds protected on the same error class). spec/08-gateway-coordination.md:119 'All CoAP messages use OSCORE'. FIX: route the four error paths through coap_oscore_respond_resource(resource, request, addr, addr_len, \u0026oscore, code, CBOR_CONTENT_FORMAT, NULL, 0) (payload only where one exists). Keep the 4.01-for-unprotected path plain (no ctx available). This file is separate from the helper migration (worker6-l9hb) because handoff is OSCORE-mandatory, not is_protected||local_admin; note that in the helper design. ACCEPTANCE: (1) all error responses to a protected request arrive OSCORE-protected; (2) 4.01 for unprotected requests unchanged; (3) extend any existing handoff test or add a minimal one asserting the protected-error path; (4) no change to lichen_handoff_process_request semantics.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:44:13.407179Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:44:13.407179Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vv1b",
+      "depends_on_id": "project-LICHEN-6mij",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:44:40.505244Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

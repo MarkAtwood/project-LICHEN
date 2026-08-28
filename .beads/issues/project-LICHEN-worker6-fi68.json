@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-fi68",
+  "title": "SOS: enforce origin signature verification (silent drop)",
+  "description": "Gap 1 of a6qg: POST /sos performs NO signature verification (spec/12-apps.md 18.4.1). verify_sos_origin() in python/src/lichen/coap/sos_origin.py has zero production callers. Wire verification into SosResource.render_post incl TOFU via TrustStore. Flip xfail(strict) test_unsigned_sos_must_be_silently_dropped; update green doc test test_unsigned_sos_accepted_by_resource_today.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:47:20.932497Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:47:20.932497Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fi68",
+      "depends_on_id": "project-LICHEN-worker6-a6qg",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T15:47:25.591258Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

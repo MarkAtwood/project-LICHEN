@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2hte",
+  "title": "(authz) Add dispatch-boundary auth to POST /.well-known/lichen-gw/slots (slot claims)",
+  "description": "AUDIT (epic 6mij decomposition): slots_post (lichen/subsys/lichen/coap/coap_slot_coord.c:973-1022) has NO transport/auth gate at dispatch: no coap_oscore_unprotect_resource_request(), no lichen_coap_is_local_admin(), no rate limit. It mutates coordinator gateway/slot state via lichen_slot_coord_process_claim() (coap_slot_coord.c:289). Mitigation today is object-level only: Schnorr48 signature verify per GCP-6.3 (coap_slot_coord.c:298-334, spec/08-gateway-coordination.md:104) - keep that. But spec/08-gateway-coordination.md:119 states 'All CoAP messages use OSCORE', and epic policy requires the dispatch boundary gate. FIX: add coap_oscore_unprotect_resource_request(resource, request, addr, addr_len, COAP_METHOD_POST, \u0026oscore) + house pattern 4.01 ('!oscore.is_protected \u0026\u0026 !lichen_coap_is_local_admin') BEFORE payload parse; respond via coap_oscore_respond_resource. Preserve GCP-6.3 silent-discard semantics for signature failures (invalid sig = no response, distinct from transport 4.01). NOTE: Kconfig LICHEN_COAP_SLOT_COORD_RESOURCE (lichen/subsys/lichen/coap/Kconfig:337) defaults y, so the endpoint is live whenever slot coordination is on. ACCEPTANCE: (1) unprotected non-admin claim POST -\u003e 4.01, state untouched; (2) OSCORE-protected claim with valid sig -\u003e grant/2.01 as today; (3) OSCORE-protected claim with invalid sig -\u003e silently discarded (no grant), GCP-6.3; (4) plain local-admin claim still processed; (5) decode/process paths unchanged.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:37:33.971019Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:37:33.971019Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2hte",
+      "depends_on_id": "project-LICHEN-6mij",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:38:04.450165Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

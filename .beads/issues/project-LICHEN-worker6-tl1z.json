@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-tl1z",
+  "title": "(doc) Kconfig LICHEN_COAP_KEYS help contradicts spec 17.6.3 and coap_keys.c on BLE admin",
+  "description": "AUDIT (epic 6mij decomposition): lichen/subsys/lichen/coap/Kconfig:233-234 says 'SECURITY: Write operations require local admin access (loopback or BLE LCI interface).' but the implementation lichen_coap_is_local_admin (lichen/subsys/lichen/coap/coap_keys.c:51-98) accepts ONLY loopback or link-local whose sin6_scope_id matches slip_transport_iface_get() - there is no BLE interface check. spec/11-lci.md:724 (17.6.3): 'Access level determined by transport (e.g., USB = admin, BLE = standard).' - BLE is NOT admin, so the CODE is right and the Kconfig help is wrong. A BLE LCI transport exists (lichen/subsys/lichen/transport/ble_ipsp_transport.c) making the doc claim actively misleading to deployers. FIX: rewrite the Kconfig help to match spec 17.6.3 and the code (loopback or SLIP LCI interface; BLE = standard access level), and mirror the wording in coap_keys.c:11-14 file header if needed. Also audit other help texts for the same claim. ACCEPTANCE: (1) Kconfig text matches spec/11-lci.md 17.6.3; (2) no behavioral change; (3) grep for 'BLE LCI' across lichen/ shows no remaining admin-claiming text.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:43:30.603397Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:43:30.603397Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tl1z",
+      "depends_on_id": "project-LICHEN-6mij",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:43:45.756101Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

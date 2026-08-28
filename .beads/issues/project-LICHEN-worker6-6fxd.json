@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-6fxd",
+  "title": "(review) Final 3-perspective security review of CoAP authz framework",
+  "description": "Closing security review for epic 6mij - run ONLY after the gate fixes and enforcement migration land (children worker6-16zc, worker6-wr8j, worker6-2hte, worker6-gskf, worker6-l9hb) so the review sees final code. Three passes, each filed as its own review bead under this epic with file:line evidence: PASS 1 CORRECTNESS - every mutating handler answers the full matrix (protected/unprotected x admin/non-admin x Kconfig on/off); helper returns payloads only from result-\u003eplainbuf (no stack-pointer leaks, cf. worker6-w1pp); method mismatches -\u003e 4.05 (coap_oscore.c:78-80); no handler double-responds. PASS 2 SECURITY - no new fail-open paths: grep all coap_oscore_unprotect_resource_request call sites and verify each is followed by the gate before any state mutation or payload use (include deaddrop_get read path, spec/11-lci.md 17.5.8 'GET MAY be public' noted as accepted); verify keys PUT/DELETE remain admin-ONLY (stricter than house OR, spec 17.6.3); verify slots retains GCP-6.3 silent-discard alongside the dispatch gate; verify replay posture decision (worker6-gskf) is implemented and tested; verify no auth bypass via malformed URI path / wildcard resource overlap (keys '+' wildcard, coap_keys.c:538). PASS 3 ROBUSTNESS - error paths of newly gated handlers respond via coap_oscore_respond_resource (no plain errors to protected peers, cf. worker6-vv1b); mutex/state invariants of s_interval_ms (coap_rangetest.c:799-801) and slot tables hold under gated concurrent requests; no unbounded logging of attacker-controlled bytes; buffers sized for worst-case payloads. ACCEPTANCE: (1) 3 review beads filed; (2) all P0-P3 findings from them fixed or filed as children; (3) zero new findings on a repeat pass (convergence); (4) verdict recorded on this issue.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:45:05.008321Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:45:05.008321Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6fxd",
+      "depends_on_id": "project-LICHEN-6mij",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:45:22.52409Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
