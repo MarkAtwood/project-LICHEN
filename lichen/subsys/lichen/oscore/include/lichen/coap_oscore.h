@@ -88,7 +88,21 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
  * @brief Send an OSCORE-protected response for a resource request.
  *
  * Handles the common OSCORE response protection pattern. When the request
- * was not OSCORE-protected, calls lichen_coap_respond() instead.
+ * was not OSCORE-protected, calls lichen_coap_respond() instead (plain
+ * requests legitimately receive a cleartext response).
+ *
+ * When the request WAS OSCORE-protected the response is protected too: on
+ * protect failure the helper retries once with a protected empty 5.00
+ * INTERNAL_ERROR through the same context and request correlation. If that
+ * retry also fails (consumed correlation, undersized buffers), the response
+ * is dropped silently and OSCORE_ERR_CONTEXT_STALE is returned — a protected
+ * request is never answered in cleartext (no downgrade). A dropped response
+ * is the safe failure mode: the client's retransmission/timeout handles the
+ * loss. A protected request with no usable context or correlation is also
+ * dropped silently. OSCORE_ERR_CONTEXT_STALE (-EAGAIN) is used for every
+ * silent drop: the CoAP server framework translates -EPERM/-ENOENT handler
+ * returns into cleartext 4.05/4.04 replies, which must never happen for a
+ * protected request.
  *
  * @param[in] resource    CoAP resource
  * @param[in] request     Original CoAP request
@@ -99,7 +113,8 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
  * @param[in] content_format Content-format (0 for none)
  * @param[in] payload     Response payload (may be NULL)
  * @param[in] payload_len Payload length
- * @return 0 on success, negative error code on failure
+ * @return 0 on success, OSCORE_ERR_CONTEXT_STALE on silent drop (nothing
+ *         sent), another negative error code on failure
  */
 int coap_oscore_respond_resource(struct coap_resource *resource,
 				 struct coap_packet *request,
@@ -194,7 +209,10 @@ int coap_oscore_send_unauthorized(struct coap_resource *_Nonnull resource,
  * @brief Build and send an OSCORE-protected CoAP response
  *
  * Convenience wrapper around coap_oscore_protect_response + coap_resource_send.
- * Falls back to an unprotected 5.00 response on protect failure.
+ * On protect failure, retries once with a protected empty 5.00 INTERNAL_ERROR
+ * through the same context; if that also fails, the response is dropped
+ * silently (negative return, nothing sent). Never replies in cleartext: the
+ * client's retransmission/timeout handles a dropped response.
  *
  * @param[in] resource    CoAP resource
  * @param[in] request     Original CoAP request
@@ -207,7 +225,7 @@ int coap_oscore_send_unauthorized(struct coap_resource *_Nonnull resource,
  * @return 0 on success, negative error code on failure
  */
 int lichen_coap_oscore_respond(struct coap_resource *_Nonnull resource,
-			       struct coap_packet *_Nonnull request,
+			       const struct coap_packet *_Nonnull request,
 			       struct sockaddr *_Nonnull addr, socklen_t addr_len,
 			       struct oscore_ctx *_Nonnull ctx,
 			       const uint8_t *_Nonnull piv, size_t piv_len,

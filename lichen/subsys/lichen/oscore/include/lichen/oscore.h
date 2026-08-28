@@ -632,13 +632,12 @@ int oscore_option_build(const struct oscore_option *_Nonnull option,
  *   AEAD primitive itself faults, partial bytes may land in ciphertext.)
  *
  * Caller surfacing: on any error the in-tree callers
- * (coap_oscore_respond_resource(), lichen_coap_oscore_respond()) fall back
- * to an UNPROTECTED, empty 5.00 INTERNAL_ERROR reply. That fallback is the
- * documented, acceptable behavior: the unprotected error carries no
- * application payload, so nothing protected is degraded, and a caller
- * contract violation such as piv_len == 0 surfaces only as this empty
- * error reply. Callers that prefer stricter handling may surface the error
- * instead of replying.
+ * (coap_oscore_respond_resource(), lichen_coap_oscore_respond()) retry once
+ * with an empty 5.00 INTERNAL_ERROR through the same context and request
+ * correlation; if that retry also fails, they drop the response silently
+ * (OSCORE_ERR_CONTEXT_STALE, nothing sent). A protected request never
+ * receives a cleartext reply: dropping is the safe failure mode, and the
+ * client's retransmission/timeout handles the loss.
  *
  * @param[in]     ctx          Security context
  * @param[in]     request_piv  Partial IV from request (canonical, non-empty)

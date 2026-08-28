@@ -96,17 +96,50 @@ int coap_oscore_respond_resource(struct coap_resource *resource,
 				 const uint8_t *payload, size_t payload_len)
 {
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
-	if (result->is_protected && result->ctx != NULL && result->piv_len > 0) {
+	if (result->is_protected) {
 		uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 		struct coap_packet resp;
-		int ret = coap_oscore_protect_response(result->ctx, result->piv,
-						       result->piv_len, request,
-						       resp_code, payload, payload_len,
-						       &resp, buf, sizeof(buf));
+		int ret;
+
+		/*
+		 * A protected request must never receive a cleartext reply
+		 * (that would be a downgrade). Without a usable context or
+		 * request correlation no response can be protected, so drop
+		 * it silently; the client's retransmission/timeout handles
+		 * the loss. OSCORE_ERR_CONTEXT_STALE (-EAGAIN) is used for
+		 * every silent drop because the CoAP server framework
+		 * translates -EPERM/-ENOENT handler returns into cleartext
+		 * 4.05/4.04 replies — that must not happen here.
+		 */
+		if (result->ctx == NULL || result->piv_len == 0) {
+			LOG_ERR("OSCORE response dropped: ctx=%p piv_len=%zu",
+				(const void *)result->ctx, result->piv_len);
+			return OSCORE_ERR_CONTEXT_STALE;
+		}
+
+		ret = coap_oscore_protect_response(result->ctx, result->piv,
+						   result->piv_len, request,
+						   resp_code, payload, payload_len,
+						   &resp, buf, sizeof(buf));
 		if (ret < 0) {
-			return lichen_coap_respond(resource, request, addr, addr_len,
-						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						   0, NULL, 0);
+			/*
+			 * Protect failed. Never fall back to cleartext for a
+			 * protected request. Retry once with an empty 5.00
+			 * through the same context; if that also fails (e.g.
+			 * consumed correlation, undersized buffers), drop the
+			 * response silently — the client's
+			 * retransmission/timeout handles the loss.
+			 */
+			LOG_ERR("OSCORE protect_response failed (%d), retrying empty 5.00", ret);
+			ret = coap_oscore_protect_response(result->ctx, result->piv,
+							   result->piv_len, request,
+							   COAP_RESPONSE_CODE_INTERNAL_ERROR,
+							   NULL, 0, &resp, buf, sizeof(buf));
+			if (ret < 0) {
+				LOG_ERR("OSCORE empty 5.00 protect failed (%d), dropping response",
+					ret);
+				return OSCORE_ERR_CONTEXT_STALE;
+			}
 		}
 		return coap_resource_send(resource, &resp, addr, addr_len, NULL);
 	}
@@ -292,7 +325,7 @@ int coap_oscore_protect_response(struct oscore_ctx *ctx,
 }
 
 int lichen_coap_oscore_respond(struct coap_resource *resource,
-			       struct coap_packet *request,
+			       const struct coap_packet *request,
 			       struct sockaddr *addr, socklen_t addr_len,
 			       struct oscore_ctx *ctx,
 			       const uint8_t *piv, size_t piv_len,
@@ -303,17 +336,22 @@ int lichen_coap_oscore_respond(struct coap_resource *resource,
 	int ret = coap_oscore_protect_response(ctx, piv, piv_len, request, code,
 					       NULL, 0, &resp, buf, sizeof(buf));
 	if (ret < 0) {
-		uint8_t errbuf[32];
-		struct coap_packet err_resp;
-		uint8_t token[COAP_TOKEN_MAX_LEN];
-		uint8_t tkl = coap_header_get_token(request, token);
-		uint8_t type = (coap_header_get_type(request) == COAP_TYPE_CON)
-			       ? COAP_TYPE_ACK : COAP_TYPE_NON_CON;
-		(void)coap_packet_init(&err_resp, errbuf, (uint16_t)sizeof(errbuf),
-				       COAP_VERSION_1, type, tkl, token,
-				       COAP_RESPONSE_CODE_INTERNAL_ERROR,
-				       coap_header_get_id(request));
-		return coap_resource_send(resource, &err_resp, addr, addr_len, NULL);
+		/*
+		 * Protect failed. Never fall back to cleartext on a protected
+		 * exchange. Retry once with an empty 5.00 through the same
+		 * context; if that also fails, drop the response silently —
+		 * the client's retransmission/timeout handles the loss.
+		 * OSCORE_ERR_CONTEXT_STALE (-EAGAIN) avoids the CoAP server
+		 * framework's -EPERM/-ENOENT cleartext translations.
+		 */
+		LOG_ERR("OSCORE protect_response failed (%d), retrying empty 5.00", ret);
+		ret = coap_oscore_protect_response(ctx, piv, piv_len, request,
+						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
+						   NULL, 0, &resp, buf, sizeof(buf));
+		if (ret < 0) {
+			LOG_ERR("OSCORE empty 5.00 protect failed (%d), dropping response", ret);
+			return OSCORE_ERR_CONTEXT_STALE;
+		}
 	}
 	return coap_resource_send(resource, &resp, addr, addr_len, NULL);
 }
