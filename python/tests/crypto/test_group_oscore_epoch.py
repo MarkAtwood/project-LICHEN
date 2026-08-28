@@ -104,7 +104,10 @@ class TestGracePeriod:
         assert new_status is EpochStatus.CURRENT
         if expected["old_key_valid"]:
             assert old_status is EpochStatus.PREVIOUS
-            assert mgr.master_secret_for_epoch(vec["old_epoch"], now_ms=vec["test_time_ms"]) == SECRET_A
+            assert (
+                mgr.master_secret_for_epoch(vec["old_epoch"], now_ms=vec["test_time_ms"])
+                == SECRET_A
+            )
         else:
             assert old_status is EpochStatus.GRACE_EXPIRED
             assert old_status.value == expected["reason"]

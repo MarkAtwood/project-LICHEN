@@ -209,7 +209,9 @@ class GroupEpochManager:
             return EpochStatus.FUTURE
         return EpochStatus.ROLLBACK
 
-    def master_secret_for_epoch(self, message_epoch: int, *, now_ms: int | None = None) -> bytes | None:
+    def master_secret_for_epoch(
+        self, message_epoch: int, *, now_ms: int | None = None
+    ) -> bytes | None:
         """Return the master secret to process a message with, or None.
 
         Resolves the current key for CURRENT and the previous key for
