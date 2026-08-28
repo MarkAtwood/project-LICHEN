@@ -12,7 +12,8 @@
     "c",
     "hal",
     "timing",
-    "defer-external"
+    "defer-external",
+    "local-ok"
   ],
   "dependencies": [
     {
