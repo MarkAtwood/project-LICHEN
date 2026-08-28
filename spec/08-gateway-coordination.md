@@ -132,12 +132,18 @@ Content-Format: application/cose; cose-type="cose-sign1" (TBD)
 OSCORE: <gateway pairwise context>
 
 COSE_Sign1 = [
-  h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
   {4: h'<gateway-iid>'},  ; unprotected: {kid: claiming gateway 8-byte IID}
   h'<payload>',           ; see Payload below
   h'<48-byte signature>'  ; Schnorr48 signature
 ]
 ```
+
+The protected header is a bstr wrapping the canonical CBOR encoding of
+`{1: -65537}` (map bytes `a1 01 3a 00 01 00 00`; the leading `0x47` is the
+bstr length prefix). The value -65536 (as encoded in `h'a10139ffff'`) is a
+decoy: per validation step 4, a claim whose protected header algorithm is
+not -65537 MUST be rejected.
 
 **Payload Structure (CBOR map):**
 
@@ -148,7 +154,8 @@ COSE_Sign1 = [
   3: <0|1>,               ; mode: 0=interleaved, 1=contiguous (per 6.2)
   4: <unix timestamp>,    ; expiry: uint, claim valid until
   5: h'<8-byte IID>',     ; gateway_iid: binds claim to this gateway
-  6: <uint>               ; claim_seq: monotonic sequence number
+  6: <uint>,              ; claim_seq: monotonic sequence number
+  7: <uint>               ; ordinal: claiming gateway's ordinal position (per 6.2)
 }
 ```
 
@@ -162,6 +169,21 @@ Integer keys minimize payload size. The payload is the serialized CBOR map.
 | 4 | expiry | uint | Unix timestamp, claim expires after |
 | 5 | gateway_iid | bstr(8) | Claiming gateway's IID |
 | 6 | claim_seq | uint | Monotonic claim sequence |
+| 7 | ordinal | uint | Claiming gateway's ordinal position (interleaved mode, per 6.2) |
+
+Receivers consume `ordinal` for interleaved slot assignment (GCP-6.2) and pass
+it to slot registration (e.g. `lichen_slot_coord_register_gateway()`). The
+fields `gateway_count` and `slot_start` are sender-local bookkeeping (present
+only in internal claim structs); they are NOT payload keys, have no receiver
+consumer, and implementations MUST NOT add them to the payload.
+
+**On-air size:** A COSE_Sign1 slot claim is ~110 bytes typical (4 slots) and
+~220 bytes at the 60-slot cap (`CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS`, 60,
+lichen/subsys/lichen/coap/include/lichen/coap_slot_coord.h). A 255-byte LoRa
+PHY payload (spec/02a, TDMA slot limits) leaves only ~25-45 bytes for
+CoAP+OSCORE+SCHC overhead, so 60-slot claims do not reliably fit on LoRa.
+Claims sent over LoRa SHOULD cap at ~40 slots (~180 bytes); larger allocations
+use the backbone transport (GCP-4.1).
 
 **Signature Computation (COSE_Sign1):**
 
@@ -196,7 +218,10 @@ On receiving slot claim POST:
 11. If conflict unresolved: respond 4.09 Conflict with winning gateway's claim
 
 On validation failure (signature invalid, expired, etc.), respond 4.03 Forbidden.
-Claims with invalid or missing signatures MUST be silently discarded per GCP-6.3.
+Replay (claim_seq gate, step 8), expiry (step 7), and invalid-slot (step 9)
+failures each respond 4.03 Forbidden per the above. Claims with invalid or
+missing signatures MUST be silently discarded per GCP-6.3: the handler returns
+0 and sends no CoAP response, logging a WARN (rate-limited) for diagnostics.
 
 **Conflict Resolution Integration (GCP-6.3):**
 
@@ -217,7 +242,21 @@ each claim. This prevents replay of stale claims after restart.
 |-------|----------|
 | Gateway boot | Load claim_seq from NVS; if missing, initialize to 0 |
 | Before claim | Increment claim_seq; persist to NVS; then sign and send |
-| Receive claim | Reject if claim_seq <= cached value for that gateway |
+| Receive claim | Persist new high-water (keyed by gateway IID) BEFORE applying; reject if claim_seq <= cached value for that gateway |
+
+The table above is written from the claiming gateway's perspective, but the
+receiving coordinator's cache is subject to the same persistence requirement:
+the receiving coordinator MUST also persist, per claiming gateway (keyed by
+the gateway's IID), the highest accepted `claim_seq` as a high-water mark in
+non-volatile storage. On receipt, a claim whose `claim_seq` is less than or
+equal to the cached high-water mark for that gateway MUST be rejected
+(validation step 8). The new high-water mark MUST be persisted BEFORE the
+claim is applied to the local slot table. Persist-first ordering means a
+crash between apply and persist can only cost a sequence number: the
+surviving cached value forces the legitimate sender to increment per the
+"Before claim" row above. Persisting after applying would instead reopen the
+replay window, allowing a replayed claim to overwrite live slot state after
+a restart.
 
 **Security Considerations:**
 
