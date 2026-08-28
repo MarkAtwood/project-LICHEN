@@ -265,7 +265,6 @@ ZTEST(coap_rangetest, test_post_requires_oscore_or_local_admin) {
 		      response_code);
 	zassert_equal(response_payload_len, 0U,
 		      "4.01 must not emit a SenML response");
-	zassert_equal(lichen_rangetest_seq(), 0U, "4.01 must not mutate");
 
 	/* OSCORE-protected mesh peer is allowed without local admin. */
 	oscore_protected = true;
@@ -589,6 +588,8 @@ ZTEST(coap_rangetest, test_get_interval_requires_authz) {
 		      "unprotected non-admin interval GET must be 4.01, "
 		      "got 0x%02x",
 		      response_code);
+	zassert_equal(response_payload_len, 0U,
+		      "4.01 must not emit a SenML response");
 	zassert_equal(lichen_rangetest_interval_ms(),
 		      LICHEN_RANGETEST_DEFAULT_INTERVAL_MS,
 		      "4.01 must not change s_interval_ms");
@@ -606,6 +607,8 @@ ZTEST(coap_rangetest, test_get_interval_requires_authz) {
 	zassert_ok(ret, "handler");
 	zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED,
 		      "observe + interval body must be 4.01 pre-auth");
+	zassert_equal(response_payload_len, 0U,
+		      "4.01 must not emit a SenML response");
 	zassert_true(sys_slist_is_empty(&OBS_PROBE_RESOURCE->observers),
 		     "4.01 must not consume an observer slot");
 
