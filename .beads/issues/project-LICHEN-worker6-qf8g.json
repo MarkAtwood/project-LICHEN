@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-qf8g",
+  "title": "[review] EDHOC CID decode maps negative ints two's-complement, contradicting RFC 9528 3.3.2 encode side (roundtrip break)",
+  "description": "P2, found during gt6u fix. ENCODE now per RFC 9528 3.3.2: byte h'21' transports as int -2 (wire 0x21). But DECODE maps wire int 0x20-0x37 two's-complement: wire 0x21 decodes to h'FE' (255-2), not h'21'. Per RFC 3.3.3 (0xFF -\u003e 0x41FF) and 3.3.2, wire int -2 must mean byte string h'21' - so encode(h'21')=0x21 but decode(0x21)=h'FE': roundtrip breaks and cross-endpoint handshakes diverge whenever a CID byte is in 0x20-0x37. Unobservable today (all current CIDs \u003c= 0x17 or multi-byte) but latent interop break. Fix: Python _validate_connection_id int branch (n\u003c0 -\u003e byte 0x1F-n... verify: -1 -\u003e 0x20 =\u003e byte 0x20, -24 -\u003e 0x37) and Rust external-crate parse_identifier 0x20-0x37 branch (cbor.rs:110); also responder.rs:263-275 inline msg1 C_I parse rejects negative-int and 0x58+ bstr forms. Add roundtrip tests: bytes 0x00..0xFF encode-\u003edecode identity for 1-byte CIDs.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T20:00:58.281087Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T20:00:58.281087Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qf8g",
+      "depends_on_id": "project-LICHEN-worker6-gt6u",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T20:00:58.451494Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

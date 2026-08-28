@@ -200,17 +200,20 @@ def _x25519_shared_secret(my_sk: bytes, their_pk: bytes) -> bytes:
 
 
 def _encode_connection_id(c_x: bytes) -> bytes:
-    """Encode connection identifier for CBOR.
+    """Encode a connection identifier for transport (RFC 9528 Section 3.3.2).
 
-    RFC 9528: Connection IDs are bstr. Empty bstr encoded as h''.
-    One-byte values -24..23 can use int encoding for compactness.
+    A byte string that coincides with a one-byte CBOR encoding of an integer
+    (single byte 0x00-0x17 -> uint 0..23, 0x20-0x37 -> negative -24..-1) MUST
+    be represented by that integer; other byte strings stay bstr, including
+    the empty byte string (h'' -> 0x40). E.g. 0x21 -> 0x21, 0x0D -> 0x0D,
+    0x18 -> 0x4118, 0x38 -> 0x4138.
     """
     if len(c_x) == 1:
         val = c_x[0]
-        if val <= 23:
+        if val <= 0x17:
             return cbor2.dumps(val)
-        if val >= 232:  # -24 in two's complement
-            return cbor2.dumps(val - 256)
+        if 0x20 <= val <= 0x37:
+            return cbor2.dumps(0x1F - val)
     return cbor2.dumps(c_x)
 
 
@@ -408,11 +411,17 @@ class EdhocInitiator:
                 raise ValueError("only EDHOC SIGN_SIGN is supported")
             c_i = _validate_connection_id(self.c_i, "C_I")
             ead = _validate_bytes(ead_1, "EAD_1")
-            # RFC 9528: METHOD is the authentication method directly (0-3)
-            msg1_content = [int(self.method), SUITE_0, self._eph_pk, c_i]
+            # RFC 9528: METHOD is the authentication method directly (0-3);
+            # C_I uses the Section 3.3.2 identifier transport encoding.
+            msg1_parts = [
+                cbor2.dumps(int(self.method)),
+                cbor2.dumps(SUITE_0),
+                cbor2.dumps(self._eph_pk),
+                _encode_connection_id(c_i),
+            ]
             if ead:
-                msg1_content.append(ead)
-            msg1 = b"".join(cbor2.dumps(item) for item in msg1_content)
+                msg1_parts.append(cbor2.dumps(ead))
+            msg1 = b"".join(msg1_parts)
         except Exception as exc:
             self._fail()
             if isinstance(exc, ValueError):

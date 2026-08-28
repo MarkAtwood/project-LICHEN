@@ -13,16 +13,16 @@
     "rng_fill_byte": "42"
   },
   "context": {
-    "master_secret": "91c74423a954df9b36051fe6badb7d59",
-    "master_salt": "7544cef4e9bae298",
-    "sender_id": "00",
-    "recipient_id": "01",
+    "master_secret": "889434b3a74d9bf3d251951923490286",
+    "master_salt": "df8d00a86e16c5e2",
+    "sender_id": "01",
+    "recipient_id": "00",
     "id_context": null
   },
   "derived_keys": {
-    "sender_key": "9ba13ce125ee1d589a53701e10b5c8a8",
-    "recipient_key": "c365a5fe08cfc6dbc0594b7026b57dd8",
-    "common_iv": "7edef438c686146e7758361f50"
+    "sender_key": "b43d69475094ce5bbb904cbd7b76d8fc",
+    "recipient_key": "92ee242dcadaddd744dade55f00a787e",
+    "common_iv": "07931f707f2b2cddeeef198b62"
   },
   "request_protection": {
     "sequence": 0,
@@ -30,9 +30,9 @@
     "options": "",
     "payload": "4544484f432d4f53434f52452d43524f53532d504152495459",
     "expected": {
-      "nonce": "7fdef438c686146e7758361f50",
-      "ciphertext": "44bb6583db8975944db2a08b5e7a235e1ddc1285685b9b56ec24fcfdb3743c531d4e77",
-      "oscore_option": "090000"
+      "nonce": "06931f707f2b2cdceeef198b62",
+      "ciphertext": "8fb49f499937b334862f6576e4f33d6a95d26d2772f7901ad274731ea1506d69f90b6a",
+      "oscore_option": "090001"
     }
   }
 }

@@ -167,34 +167,17 @@ fn test_derived_context_protects_like_python_oracle() {
     );
 }
 
-/// Layer 2 (requires the `edhoc` feature): EDHOC handshake profile status.
+/// Layer 2 (requires the `edhoc` feature): EDHOC export parity.
 ///
-/// Cross-validation against the Python oracle (this crate's parity goal)
-/// found the two EDHOC implementations diverge and cannot interoperate:
-///
-/// 1. OSCORE role mapping: RFC 9528 Appendix A.1 Table 14 requires the
-///    Initiator's OSCORE Sender ID to be C_R. The Rust export follows the
-///    RFC (sender_id = C_R); python/src/lichen/crypto/edhoc.py exports
-///    sender_id = C_I (RFC-incorrect; also baked into edhoc.json's
-///    oscore_sender_id/oscore_recipient_id fields).
-/// 2. Signature scheme: the Rust `edhoc-schnorr48` profile signs with
-///    LICHEN Schnorr48 (48 bytes, draft-lichen-schnorr-00) while the Python
-///    oracle signs with RFC 9528 Ed25519 (64 bytes).
-/// 3. Credential encoding: Rust CCS `{1:1, -1:6, -2:pk}` (COSE crv=6
-///    Ed25519) vs Python `{1:1, -1:1, -2:pk, -3:null}` (crv label 1, EC2
-///    style 4-entry map — invalid for an OKP key).
-///
-/// Signatures and credentials are part of the transcript
-/// (TH_3/TH_4 -> PRK_exporter -> master_secret), so for identical seeds the
-/// two implementations necessarily export different OSCORE master material
-/// and cannot parse each other's Message 2/3.
-///
-/// This test pins the known divergence. If the profiles are ever aligned,
-/// these assertions fail — regenerate oscore_context_parity.json and
-/// replace this canary with byte-equality checks.
+/// The profile divergences previously pinned here (OSCORE role mapping per
+/// RFC 9528 Appendix A.1 Table 14, the Schnorr48 signature scheme, and the
+/// COSE_Key CCS credential encoding) have been resolved on both sides.
+/// Running the handshake with the fixture's seeds and RNG must now export
+/// the Python oracle's master material and connection IDs byte-for-byte
+/// (RFC 9528 Section 7.2.1 parity).
 #[cfg(feature = "edhoc")]
 #[test]
-fn test_edhoc_profile_divergence_is_pinned() {
+fn test_edhoc_export_matches_python_oracle() {
     use lichen_oscore::{EdhocInitiator, EdhocResponder};
     use rand_core::{CryptoRng, RngCore};
 
@@ -247,32 +230,24 @@ fn test_edhoc_profile_divergence_is_pinned() {
 
     let exported = initiator.export_oscore().expect("export_oscore");
 
-    // Divergence 1 (canary): Rust maps the OSCORE roles per RFC 9528 Table 14
-    // (initiator Sender ID = C_R), i.e. swapped relative to the fixture's
-    // Python-oracle mapping (fixture sender_id = C_I). If the sides ever
-    // converge, this fails and the fixture must be regenerated.
+    assert_eq!(
+        exported.master_secret(),
+        &hex_to_array16(&fixture.context.master_secret),
+        "Rust EDHOC export diverges from the Python oracle master_secret"
+    );
+    assert_eq!(
+        exported.master_salt(),
+        hex_to_bytes(&fixture.context.master_salt),
+        "Rust EDHOC export diverges from the Python oracle master_salt"
+    );
     assert_eq!(
         exported.sender_id(),
-        hex_to_bytes(&fixture.context.recipient_id),
-        "Rust initiator Sender ID is no longer C_R; the documented \
-         RFC 9528 Table 14 role-mapping divergence from the Python oracle \
-         has changed — regenerate oscore_context_parity.json"
+        hex_to_bytes(&fixture.context.sender_id),
+        "Rust initiator Sender ID must match the Python oracle sender_id (C_R)"
     );
     assert_eq!(
         exported.recipient_id(),
-        hex_to_bytes(&fixture.context.sender_id),
-        "Rust initiator Recipient ID is no longer C_I — regenerate \
-         oscore_context_parity.json"
-    );
-
-    // Divergence 2+3 (canary): Schnorr48/CCS-profile master material must
-    // differ from the Python Ed25519/COSE_Key-profile oracle.
-    assert_ne!(
-        exported.master_secret(),
-        &hex_to_array16(&fixture.context.master_secret),
-        "Rust EDHOC export unexpectedly matches the Python oracle; the \
-         signature/credential profile divergence documented above has been \
-         resolved — regenerate oscore_context_parity.json and flip this \
-         canary into a byte-equality assertion"
+        hex_to_bytes(&fixture.context.recipient_id),
+        "Rust initiator Recipient ID must match the Python oracle recipient_id (C_I)"
     );
 }
