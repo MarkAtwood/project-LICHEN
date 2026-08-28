@@ -1,0 +1,7 @@
+{
+  "id": "1787933001906930000-1",
+  "issue_id": "project-LICHEN-worker6-m5l6",
+  "author": "Mark Atwood",
+  "text": "Work verified and delta-completed in commit 14b79538b3 (feat(python): group oscore redaction + epoch tests). Module python/src/lichen/crypto/group_oscore.py (GroupKeyManager/GroupKeyMaterial, committed earlier in e293ef93b2) had the full spec'd surface but leaked raw key bytes via the default dataclass repr; added redacted __repr__/__str__ to both classes. New python/tests/crypto/test_group_oscore.py: 12 tests, 12 passed. Vectors key_epoch_increment, epoch_rollback_reject, epoch_future_reject consumed as oracle from test/vectors/group_oscore_key.json (they exist). Wrap note: successor of epoch 0xFFFFFFFF is 1 (epoch space starts at 1), not 0.",
+  "created_at": "2026-08-28T16:03:21.90693Z"
+}
