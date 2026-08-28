@@ -19,8 +19,7 @@
     "hal",
     "owner-reserved",
     "partner-handoff",
-    "zephyr",
-    "needs-linux"
+    "zephyr"
   ],
   "dependencies": [
     {
