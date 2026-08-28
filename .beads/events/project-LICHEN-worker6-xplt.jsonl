@@ -2,3 +2,4 @@
 {"id":"01a03f55-24ce-727c-9879-b98c498090e8","issue_id":"project-LICHEN-worker6-xplt","event_type":"label_added","actor":"grok","comment":"Added label: zephyr","created_at":"2026-08-26T18:28:59.726165Z"}
 {"id":"01a03f55-24d6-7704-a6f4-d01379c0d1cf","issue_id":"project-LICHEN-worker6-xplt","event_type":"label_added","actor":"grok","comment":"Added label: c","created_at":"2026-08-26T18:28:59.73446Z"}
 {"id":"01a045db-7780-75b1-8934-c0e113e2400d","issue_id":"project-LICHEN-worker6-xplt","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: needs-linux","created_at":"2026-08-28T00:53:26.016373Z"}
+{"id":"01a048f2-d563-70f2-982a-4604e6fd8058","issue_id":"project-LICHEN-worker6-xplt","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"wont-fix","created_at":"2026-08-28T15:17:49.027063Z"}
