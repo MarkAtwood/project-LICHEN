@@ -1,0 +1,7 @@
+{
+  "id": "1787960680114437000-1",
+  "issue_id": "project-LICHEN-worker6-nwjl.1",
+  "author": "Mark Atwood",
+  "text": "Commit hash: 341e6cf78b (fix(spec): GCP-6.5 slot-claim text errors). Independent post-close verification of the landed spec/08 diff: cbor2 decodes :135 example 47A1013A00010000 (bstr content a1013a00010000 = canonical {1: -65537}, canonical re-encode identical) and a full COSE_Sign1 built per the example serializes element 1 to exactly those bytes; decoy a10139ffff -\u003e {1: -65536} (reject path) confirmed; payload keys 1-7 present in :158/:172 with sender-local gateway_count/slot_start note at :174-178; sizes recomputed 105 B (4 slots) / 199 B (60-slot cap, canonical-minimal; ~220 upper-range per close reason) so 60-slot + 25-45 B headers straddles the 255 B PHY limit and the ~40-slot LoRa SHOULD cap (:185) holds; step refs 4/7/8/9 verified against the validation list; Sig_structure/signing-input block untouched. 5brg follow-up (GCP-7.1 :295/:334 same decoy hex) already tracked.",
+  "created_at": "2026-08-28T23:44:40.114437Z"
+}
