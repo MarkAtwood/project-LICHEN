@@ -1,1 +1,0 @@
-{"id": "019f8c28-fae7-7878-b3d8-e16ca0a770fe", "issue_id": "project-LICHEN-5802", "event_type": "closed", "actor": "AI Agent", "old_value": "", "new_value": "Explicit length check added to reply_echo_ipv6 (already present in current main). Defense-in-depth against short ICMPv6 packets. git show confirms fix at node.rs:138.", "created_at": "2026-07-22T23:28:43.751556351Z"}

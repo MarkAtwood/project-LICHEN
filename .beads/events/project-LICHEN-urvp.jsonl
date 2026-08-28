@@ -1,1 +1,0 @@
-{"id": "019f8c33-e935-728c-9256-7e48b43a92e1", "issue_id": "project-LICHEN-urvp", "event_type": "closed", "actor": "AI Agent", "old_value": "", "new_value": "Fixed test to use independent RFC 8200 wire-format reference vector for IPv6 header serialization/parsing oracle", "created_at": "2026-07-22T23:40:40.11716751Z"}

@@ -1,2 +1,0 @@
-{"id":"01a03a16-9411-76e5-910c-9cd0f1d14625","issue_id":"project-LICHEN-worker6-f4z7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-25T18:02:33.361454Z"}
-{"id":"01a04902-12d0-7ba8-adf8-09c6a65d9b5c","issue_id":"project-LICHEN-worker6-f4z7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"All 3 children closed with verification; every listed vector file (incl. senml_location via tests/coap/test_senml_location_vectors.py, 22 passed) now has machine consumers.","created_at":"2026-08-28T15:34:27.792765Z"}
