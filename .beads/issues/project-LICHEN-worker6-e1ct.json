@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-e1ct",
+  "title": "Mobility patterns: NaN/inf configs pass validation and poison positions",
+  "description": "All validation uses bare comparisons which are False for NaN: speed_m_s=.nan -\u003e every position becomes (nan,nan) silently (mobility.py:442/646); NaN/inf area_bounds -\u003e NaN center via inf*0 in ratio math (:256-277, :528-538); ManhattanGrid spacing_m=.nan or inf bounds raises ValueError/OverflowError from _grid_size inside step() (:794) instead of the constructor, violating the construct-time-rejection contract. Fix: math.isfinite() checks in all four pattern constructors; compute grid extent at construction. Tests: .nan/.inf rejection for every config field.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:58:04.583595Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:58:04.583595Z"
+}

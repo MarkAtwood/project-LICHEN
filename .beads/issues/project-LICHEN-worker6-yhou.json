@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-yhou",
+  "title": "Mobility API hardening: negative dt validation and pattern-instance aliasing",
+  "description": "(a) step(dt_us\u003c0) unvalidated: GroupMobility._update_jitter pushes _jitter_elapsed_us negative, max_step goes negative moving members AWAY from targets, and ZeroDivisionError possible on zero-magnitude jitter (mobility.py:379-400); validate dt_us\u003e=0 like the runner clamp. (b) One-pattern-instance-per-group is documented but unenforced: MobilityManager.attach silently aliases, double-stepping a shared group pattern (mobility.py:200-203, :839). Add instance-attach guard or explicit error. Tests for both.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:58:34.128011Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:58:34.128011Z"
+}

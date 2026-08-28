@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-u415",
+  "title": "Register group mobility patterns in scenario DSL registry",
+  "description": "MOBILITY_PATTERNS (scenario.py:252) only registers random_waypoint; the new GroupMobility (jitter), RPGM, and ManhattanGrid classes are public API but unreachable from YAML mobility events. Register names (e.g. group_waypoint, rpgm, manhattan_grid), pass params through, and add parse/exec tests mirroring the random_waypoint ones. Also document per-group seed derivation or add duplicate-seed guard to avoid correlated lockstep groups.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:58:35.111703Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:58:35.111703Z"
+}

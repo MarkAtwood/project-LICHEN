@@ -352,3 +352,199 @@ class TestGroupMobilityManager:
 
         assert removed is pattern
         assert manager.get_pattern("node-0") is None
+
+
+class TestGroupMobilityJitter:
+    """Tests for GroupMobility offset jitter."""
+
+    # Golden trajectories generated from the pre-jitter GroupMobility
+    # implementation (git 4921cfd8f4) with the exact configs below.
+    GOLDEN_PAUSE0 = [
+        (516.8991967707072, 442.42902512111766, 0.0),
+        (536.8991967707072, 442.42902512111766, 0.0),
+        (496.89919677070725, 442.42902512111766, 0.0),
+    ]
+    GOLDEN_PAUSE1M = [
+        (501.68991967707063, 494.24290251211187, 0.0),
+        (521.6899196770706, 494.24290251211187, 0.0),
+        (481.68991967707063, 494.24290251211187, 0.0),
+    ]
+
+    def make_jittered_group(
+        self, jitter_m: float, jitter_update_us: int, seed: int = 42
+    ) -> tuple[GroupMobility, list[SimNode]]:
+        pattern = GroupMobility(
+            area_bounds=(0, 1000, 0, 1000),
+            speed_m_s=10.0,
+            pause_time_us=0,
+            seed=seed,
+            group_size=3,
+            group_radius_m=20.0,
+            jitter_m=jitter_m,
+            jitter_update_us=jitter_update_us,
+        )
+        members = make_group_members(3, (500.0, 500.0, 0.0))
+        for member in members:
+            pattern.add_member(member)
+        return pattern, members
+
+    def test_jitter_off_reproduces_pre_change_trajectory(self) -> None:
+        """jitter_m=0.0 must be trajectory-identical to pre-jitter GroupMobility."""
+        for pause_time_us, dt_us, golden in (
+            (0, 1_000_000, self.GOLDEN_PAUSE0),
+            (1_000_000, 100_000, self.GOLDEN_PAUSE1M),
+        ):
+            pattern = GroupMobility(
+                area_bounds=(0, 1000, 0, 1000),
+                speed_m_s=10.0,
+                pause_time_us=pause_time_us,
+                seed=42,
+                group_size=3,
+                group_radius_m=20.0,
+            )
+            members = make_group_members(3, (500.0, 500.0, 0.0))
+            for member in members:
+                pattern.add_member(member)
+
+            for _ in range(6):
+                pattern.step(members[0], dt_us=dt_us)
+
+            for member, expected in zip(members, golden, strict=True):
+                assert member.position[0] == pytest.approx(expected[0], abs=1e-9)
+                assert member.position[1] == pytest.approx(expected[1], abs=1e-9)
+                assert member.position[2] == expected[2]
+
+    def test_jitter_changes_trajectory(self) -> None:
+        pattern, members = self.make_jittered_group(jitter_m=10.0, jitter_update_us=500_000)
+
+        for _ in range(6):
+            pattern.step(members[0], dt_us=1_000_000)
+
+        # Same seed, same waypoints, but jitter displaces members off the ring
+        assert members[0].position[0] != pytest.approx(
+            self.GOLDEN_PAUSE0[0][0], abs=1e-6
+        ) or members[0].position[1] != pytest.approx(self.GOLDEN_PAUSE0[0][1], abs=1e-6)
+
+    def test_jitter_displacement_bounded(self) -> None:
+        jitter_m = 5.0
+        pattern, members = self.make_jittered_group(jitter_m=jitter_m, jitter_update_us=500_000)
+        base_offsets = [(0.0, 0.0), (20.0, 0.0), (-20.0, 0.0)]
+
+        for _ in range(200):
+            pattern.step(members[0], dt_us=100_000)
+            assert pattern._center is not None
+            for member, (ox, oy) in zip(members, base_offsets, strict=True):
+                dx = member.position[0] - pattern._center[0] - ox
+                dy = member.position[1] - pattern._center[1] - oy
+                assert math.hypot(dx, dy) <= jitter_m + 1e-9
+
+    def test_jitter_transitions_are_smooth(self) -> None:
+        jitter_m = 8.0
+        dt_us = 100_000
+        jitter_update_us = 500_000
+        pattern, members = self.make_jittered_group(
+            jitter_m=jitter_m, jitter_update_us=jitter_update_us
+        )
+        base_offsets = [(0.0, 0.0), (20.0, 0.0), (-20.0, 0.0)]
+        max_step = jitter_m * dt_us / jitter_update_us
+
+        def displacements() -> list[tuple[float, float]]:
+            assert pattern._center is not None
+            return [
+                (
+                    m.position[0] - pattern._center[0] - ox,
+                    m.position[1] - pattern._center[1] - oy,
+                )
+                for m, (ox, oy) in zip(members, base_offsets, strict=True)
+            ]
+
+        for _ in range(50):
+            pattern.step(members[0], dt_us=dt_us)
+            before = displacements()
+            pattern.step(members[0], dt_us=dt_us)
+            after = displacements()
+            for (bx, by), (ax, ay) in zip(before, after, strict=True):
+                assert math.hypot(ax - bx, ay - by) <= max_step + 1e-9
+
+    def test_jitter_maintains_cohesion(self) -> None:
+        group_radius_m = 20.0
+        jitter_m = 5.0
+        pattern, members = self.make_jittered_group(jitter_m=jitter_m, jitter_update_us=500_000)
+        max_spread = 2 * (group_radius_m + jitter_m)
+
+        for _ in range(100):
+            pattern.step(members[0], dt_us=100_000)
+            for i in range(len(members)):
+                for j in range(i + 1, len(members)):
+                    dist = math.hypot(
+                        members[i].position[0] - members[j].position[0],
+                        members[i].position[1] - members[j].position[1],
+                    )
+                    assert dist <= max_spread + 1e-9
+
+    def test_jitter_members_stay_within_bounds(self) -> None:
+        bounds = (0, 100, 0, 100)
+        pattern = GroupMobility(
+            area_bounds=bounds,
+            speed_m_s=1000.0,
+            pause_time_us=0,
+            seed=12345,
+            group_size=3,
+            group_radius_m=10.0,
+            jitter_m=5.0,
+            jitter_update_us=500_000,
+        )
+        members = make_group_members(3, (50.0, 50.0, 0.0))
+        for member in members:
+            pattern.add_member(member)
+
+        for _ in range(100):
+            pattern.step(members[0], dt_us=100_000)
+            for member in members:
+                x, y, _ = member.position
+                assert bounds[0] <= x <= bounds[1]
+                assert bounds[2] <= y <= bounds[3]
+
+    def test_jitter_validation(self) -> None:
+        with pytest.raises(ValueError, match="jitter_m"):
+            GroupMobility(area_bounds=(0, 100, 0, 100), jitter_m=-1.0)
+        with pytest.raises(ValueError, match="jitter_update_us"):
+            GroupMobility(area_bounds=(0, 100, 0, 100), jitter_update_us=0)
+        with pytest.raises(ValueError, match="jitter_update_us"):
+            GroupMobility(area_bounds=(0, 100, 0, 100), jitter_update_us=-5)
+        # radius 45 + jitter 10 -> diameter 110 exceeds the 100m area
+        with pytest.raises(ValueError, match="too large"):
+            GroupMobility(area_bounds=(0, 100, 0, 100), group_radius_m=45.0, jitter_m=10.0)
+        # radius 45 + jitter 5 -> diameter exactly 100 fits
+        GroupMobility(area_bounds=(0, 100, 0, 100), group_radius_m=45.0, jitter_m=5.0)
+
+    def test_jitter_determinism(self) -> None:
+        pattern1, members1 = self.make_jittered_group(jitter_m=5.0, jitter_update_us=500_000)
+        pattern2, members2 = self.make_jittered_group(jitter_m=5.0, jitter_update_us=500_000)
+
+        for _ in range(20):
+            pattern1.step(members1[0], dt_us=100_000)
+            pattern2.step(members2[0], dt_us=100_000)
+
+        for m1, m2 in zip(members1, members2, strict=True):
+            assert m1.position == m2.position
+
+    def test_jitter_update_frequency_controls_transition_rate(self) -> None:
+        jitter_m = 10.0
+        dt_us = 100_000
+        # Update interval far longer than the test horizon: members only
+        # glide a tiny fraction of the way toward their initial target.
+        pattern, members = self.make_jittered_group(
+            jitter_m=jitter_m, jitter_update_us=1_000_000_000
+        )
+        base_offsets = [(0.0, 0.0), (20.0, 0.0), (-20.0, 0.0)]
+        max_total = jitter_m * (10 * dt_us) / 1_000_000_000
+
+        for _ in range(10):
+            pattern.step(members[0], dt_us=dt_us)
+
+        assert pattern._center is not None
+        for member, (ox, oy) in zip(members, base_offsets, strict=True):
+            dx = member.position[0] - pattern._center[0] - ox
+            dy = member.position[1] - pattern._center[1] - oy
+            assert 0.0 < math.hypot(dx, dy) <= max_total + 1e-12

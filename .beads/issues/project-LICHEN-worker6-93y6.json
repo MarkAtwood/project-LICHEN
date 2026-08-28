@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-93y6",
+  "title": "Enforce origin-signature verification on POST /sos (silent drop)",
+  "description": "Decomposed from project-LICHEN-worker6-a6qg gap 1. Spec 12-apps.md 18.4.1: SOS MUST carry a valid link-layer origin signature; unsigned/invalid are silently dropped. verify_sos_origin()/SosOriginSignature (lichen.coap.sos_origin) exist with zero production callers; SosResource.render_post accepts unsigned {node,ts} bodies with 2.01. The xfail(strict) pin lives in python/tests/coap/test_security_app_vector_consumers.py::test_unsigned_sos_must_be_silently_dropped (asserts unsuccessful response). DESIGN DECISION NEEDED (owner): the signed POST wire format — spec 18.4.3's local-POST example body has no signature fields; proposal: body gains 'pubkey' (32B bstr) + 'origin_sig' (56B bstr = seq||sig per SosOriginSignature.to_bytes), verify via verify_sos_origin(pub, fe80::IID(pub), canonicalize_sos_payload(body-minus-sig-fields), sig); missing/invalid -\u003e reject without activating or recording rate-limit state. Enforcement ripples: ~10 green tests across test_security_app_vector_consumers.py and test_sos_resource.py POST unsigned bodies and expect 2.01/4.29 — they must switch to signed bodies with derived keypairs (fixed hex IIDs like 0011223344556677 do not correspond to any keypair). Also check relay path wiring (SosRelay gate) and lichen-apps/rust parity.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T16:03:04.724537Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T16:03:04.724537Z"
+}

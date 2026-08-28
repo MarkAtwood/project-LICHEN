@@ -150,8 +150,10 @@ from lichen.sim.hybrid import (
 )
 from lichen.sim.mobility import (
     GroupMobility,
+    ManhattanGrid,
     MobilityManager,
     MobilityPattern,
+    RPGM,
     RandomWaypoint,
 )
 from lichen.sim.node import NodeState, SimNode
@@ -260,8 +262,10 @@ __all__ = [
     "create_hybrid_topology",
     # Mobility
     "GroupMobility",
+    "ManhattanGrid",
     "MobilityManager",
     "MobilityPattern",
+    "RPGM",
     "RandomWaypoint",
     # Topology
     "NodePosition",

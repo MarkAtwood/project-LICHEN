@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-ujo2",
+  "title": "Group OSCORE: pairwise key wrap (ECDH-ES+A128KW)",
+  "description": "Child of project-LICHEN-worker6-9mkj. Wrap group master_secret per member with ECDH-ES+A128KW (vector key_pairwise_wrap: member_pubkeys -\u003e wrapped keys, wrap_algorithm ECDH-ES+A128KW or HPKE). Distribution only over existing pairwise OSCORE contexts, never plaintext (spec 18.8.2 line 1064). Drives vector key_pairwise_wrap.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:49:38.680546Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:52:36.090571Z",
+  "closed_at": "2026-08-28T15:52:36.090571Z",
+  "close_reason": "Duplicate of 9mkj.2 (same pairwise wrap scope), created by a retry after a dep-conflict error.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ujo2",
+      "depends_on_id": "project-LICHEN-worker6-9mkj",
+      "type": "parent-child",
+      "created_at": "2026-08-28T15:49:47.392121Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
