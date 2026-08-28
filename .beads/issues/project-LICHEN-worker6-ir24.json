@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-ir24",
   "title": "slot-coord: #ifdef CONFIG_LICHEN_LINK_SCHNORR can silently compile out claim verification (fail-open backstop missing)",
   "description": "coap_slot_coord.c:306-339: signature verification sits inside #ifdef CONFIG_LICHEN_LINK_SCHNORR; if that guard ever decouples from the Kconfig dep, claims with has_signature=true are accepted unverified. The new Kconfig dependency guarantees coupling today but nothing enforces it. The codebase's own pattern for must-never-build-without-crypto is #error (link/schnorr48.c:222-223, link_ctx.c:268-269). Fix: #else + #error (or BUILD_ASSERT) so regression is a build failure.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:03.060159Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:16:35.895595Z",
+  "updated_at": "2026-08-28T18:30:45.144459Z",
   "started_at": "2026-08-28T17:16:35.895595Z",
-  "lease_expires_at": "2026-08-28T17:21:35.895595Z",
-  "heartbeat_at": "2026-08-28T17:16:35.895595Z"
+  "closed_at": "2026-08-28T18:30:45.144459Z",
+  "close_reason": "coap_slot_coord.c:339-343: added #else + #error backstop after the CONFIG_LICHEN_LINK_SCHNORR verification block, following the house pattern (link/schnorr48.c:222-223, link_ctx.c:268-269). Message: 'slot-coord requires LICHEN_LINK_SCHNORR: claim verification must never be compiled out (fail-open backstop)'. Commit 80458a82f6. EVIDENCE: (1) Negative test - compiled the module target with CONFIG_LICHEN_LINK_SCHNORR stripped from a patched autoconf.h (-imacros substitution, otherwise identical flags): compile fails at coap_slot_coord.c:340 with exactly the #error message; regression is now a build failure, not silent fail-open. (2) Positive config: with the Kconfig chain enabled (bead wmf0 build) the guard compiles as before and my hunk contributes zero diagnostics in the A/B vs HEAD. (3) Lint profile parity with a corroborating side effect: cppcheck analyzes two preprocessor configs; in the SCHNORR-undefined config HEAD reported the pre-existing uninitvar iid_hex (proving cppcheck really did analyze the verify-compiled-out code), and my #error makes that config un-analyzable so that HEAD-only finding legitimately disappears; in the only real build config (SCHNORR=y) finding sets are identical (17 misc-use-internal-linkage + 2 bugprone-branch-clone + 1 uninitvar + 1 pre-existing zephyr/kernel.h-not-found)."
 }

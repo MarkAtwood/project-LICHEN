@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-j2tg",
   "title": "slot-coord: non-conflict validation failures return 4.00 where GCP-6.5 says 4.03",
   "description": "coap_slot_coord.c:1031 maps LICHEN_CLAIM_REJECT_INVALID_SLOTS -\u003e 4.00; spec/08:198 says 'On validation failure (signature invalid, expired, etc.), respond 4.03 Forbidden'. The next spec sentence overrides only for invalid/missing sigs; conflict -\u003e 4.09 is done correctly. Pre-existing mapping, but the authz commit rewrote every reject path and the natural alignment moment is now (bundle with the signature-coverage work). Note: the enum has no expired rejection despite valid_until existing in grants.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:04.137623Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:16:37.30977Z",
+  "updated_at": "2026-08-28T18:30:45.563954Z",
   "started_at": "2026-08-28T17:16:37.30977Z",
-  "lease_expires_at": "2026-08-28T17:21:37.30977Z",
-  "heartbeat_at": "2026-08-28T17:16:37.30977Z"
+  "closed_at": "2026-08-28T18:30:45.563954Z",
+  "close_reason": "coap_slot_coord.c slots_post: LICHEN_CLAIM_REJECT_INVALID_SLOTS now maps to COAP_RESPONSE_CODE_FORBIDDEN (4.03) per spec/08-gateway-coordination.md:198 GCP-6.5 'On validation failure (signature invalid, expired, etc.), respond 4.03 Forbidden'. Comment cites GCP-6.5. Commit 3cee68dbb0. Unchanged by design: REJECT_NO_SIG/INVALID_SIG still return 0 with no response (GCP-6.3 silent discard, authz commit ef3d291b3d); REJECT_CONFLICT still 4.09. NOTE (also in commit msg): enum lichen_claim_result has no expired-rejection value despite valid_until existing in grants - claim expiry is unimplemented in C; tracked by signature-coverage bead project-LICHEN-worker6-nwjl, bundle the new enum + expiry check there. EVIDENCE: covered by the wmf0/ir24 verification - module-aware gcc A/B vs HEAD shows zero diagnostics in this hunk (errors at 1075/1160/1180/1199 are pre-existing 4.1.0 drift, identical in HEAD modulo +4 line shift); lint finding sets identical in the real build config; COAP_RESPONSE_CODE_FORBIDDEN is already used by coap_config.c/coap_msg.c so the constant is available."
 }
