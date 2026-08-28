@@ -57,3 +57,4 @@ build_*/
 *.dylib
 CMakeCache.txt
 CMakeFiles/
+build-test/
