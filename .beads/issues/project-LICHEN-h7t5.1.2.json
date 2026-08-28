@@ -19,7 +19,8 @@
     "hal",
     "owner-reserved",
     "partner-handoff",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
