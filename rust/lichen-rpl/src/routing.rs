@@ -22,10 +22,9 @@ pub use crate::persistence::{
 };
 #[cfg(feature = "std")]
 pub use crate::srh::{SourceRoutingHeader, MAX_ROUTE_HOPS};
-pub use crate::table::RouteTarget;
 #[cfg(feature = "std")]
 pub use crate::table::{
-    InvalidRouteEntryTransition, RouteEntry, RouteEntryState, RoutingTable, MAX_ROUTES,
+    InvalidRouteEntryTransition, RouteEntry, RouteEntryState, RouteTarget, RoutingTable, MAX_ROUTES,
 };
 #[cfg(feature = "std")]
 pub use crate::verify::{
@@ -460,11 +459,10 @@ impl DaoManager {
         )
     }
 
-    /// Process a signature-verified DAO while retaining RFC DAOSequence freshness.
+    /// Process a signature-verified DAO while retaining RFC lollipop freshness.
     ///
-    /// Path Sequence freshness is always enforced independently of the authenticated
-    /// 64-bit origin sequence. This stricter compatibility mode additionally checks
-    /// the eight-bit DAOSequence.
+    /// This stricter component mode is for compatibility paths that do not treat
+    /// the authenticated 64-bit origin sequence as route/path freshness authority.
     pub fn process_signature_verified_with_lollipop<S: NonVolatile>(
         &mut self,
         verified: &SignatureVerifiedDao<'_>,
@@ -553,6 +551,7 @@ impl DaoManager {
                 updates,
                 update_count,
                 Ipv6Addr::from(verified.origin),
+                skip_dao_sequence_check,
                 skip_dao_sequence_check,
                 DaoTiming {
                     now_seconds: timing.now_seconds,
@@ -690,6 +689,7 @@ impl DaoManager {
             update_count,
             sequence_authority,
             true,
+            false,
             DaoTiming {
                 now_seconds: timing.now_seconds,
                 lifetime_unit_seconds: timing.lifetime_unit_seconds,
@@ -838,7 +838,6 @@ impl DaoManager {
         pos += n;
 
         let transit = TransitInfo {
-            external: false,
             path_control: 0x80,
             path_sequence: self.path_sequence,
             path_lifetime,
@@ -879,6 +878,7 @@ impl DaoManager {
             update_count,
             origin,
             false,
+            false,
             DaoTiming {
                 now_seconds: 0,
                 lifetime_unit_seconds: DEFAULT_LIFETIME_UNIT_SECONDS,
@@ -916,6 +916,7 @@ impl DaoManager {
             update_count,
             origin,
             false,
+            false,
             DaoTiming {
                 now_seconds,
                 lifetime_unit_seconds,
@@ -951,6 +952,7 @@ impl DaoManager {
         update_count: usize,
         origin: Ipv6Addr,
         skip_dao_sequence_check: bool,
+        skip_path_sequence_check: bool,
         timing: DaoTiming,
         limits: DaoStateLimits,
     ) -> Result<bool, ()> {
@@ -1053,9 +1055,12 @@ impl DaoManager {
                     // origin_sequence authority, mutation at equal path_sequence is invalid.
                     return Err(());
                 }
-                // Origin replay and Path Sequence protect different state. A fresh signed
-                // origin counter cannot authorize an older or incomparable Path Sequence.
-                if !seq_is_newer(sequence, last.sequence) {
+                // Older path_sequence: only reject if lollipop-authoritative. With 64-bit
+                // authority (skip_path_sequence_check=true), the origin_sequence already
+                // guarantees freshness so lollipop wraparound from lost sends cannot strand
+                // updates. This is the key fix for the "twenty lost sends" scenario where
+                // the 16-step lollipop window would falsely reject fresh updates.
+                if !skip_path_sequence_check && !seq_is_newer(sequence, last.sequence) {
                     return Err(());
                 }
                 if let Some(parents) = proposed_parents.remove(target) {
@@ -1305,10 +1310,6 @@ impl DaoManager {
                         return None;
                     }
                     let parsed = TransitInfo::from_bytes(opt.data).ok()?;
-                    // The current node-owned /128 profile does not admit E=1.
-                    if parsed.external {
-                        return None;
-                    }
                     if transits[..transit_count].iter().flatten().any(|first| {
                         first.path_sequence != parsed.path_sequence
                             || first.path_lifetime != parsed.path_lifetime

@@ -1,18 +1,16 @@
 {
   "id": "project-LICHEN-worker6-c4m7",
   "title": "[review] CCA gate: positive cad_status from a misbehaving probe permanently wedges TX on the context",
-  "description": "P1, found in wave-3 review of gue0 work. link_cca.c:93-98 passes the probe's return straight to lichen_csma_cad_complete; csma.c:151 rejects cad_status\u003e0 with -EINVAL BEFORE csma_try_lock, stranding the machine in LICHEN_CSMA_CAD. Every later gate call: start -\u003e -EALREADY, cad_begin -\u003e -EPROTO (phase != BACKOFF) -\u003e -EPROTO forever, no self-recovery (needs lichen_csma_reset/cleanup). Sibling caller lichen_csma_acquire already defends by clamping (csma.c:323-325); the gate forgot. Sign-convention bugs in C driver wrappers are realistic. Fix: clamp before cad_complete (if cad_status \u003e 0, cad_status = -EIO, mirroring csma.c:323-325) and/or validate inside cad_complete under the lock. Add the missing test: probe returning positive status must fail CLOSED and NOT wedge (subsequent clear-channel TX succeeds).",
-  "status": "in_progress",
+  "description": "P1, found in wave-3 review of gue0 work. link_cca.c:93-98 passes the probe's return straight to lichen_csma_cad_complete; csma.c:151 rejects cad_status>0 with -EINVAL BEFORE csma_try_lock, stranding the machine in LICHEN_CSMA_CAD. Every later gate call: start -> -EALREADY, cad_begin -> -EPROTO (phase != BACKOFF) -> -EPROTO forever, no self-recovery (needs lichen_csma_reset/cleanup). Sibling caller lichen_csma_acquire already defends by clamping (csma.c:323-325); the gate forgot. Sign-convention bugs in C driver wrappers are realistic. Fix: clamp before cad_complete (if cad_status > 0, cad_status = -EIO, mirroring csma.c:323-325) and/or validate inside cad_complete under the lock. Add the missing test: probe returning positive status must fail CLOSED and NOT wedge (subsequent clear-channel TX succeeds).",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T16:26:23.431588Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T16:28:39.999685Z",
+  "updated_at": "2026-08-28T17:41:29.540200Z",
   "started_at": "2026-08-28T16:28:39.999685Z",
-  "lease_expires_at": "2026-08-28T16:33:39.999685Z",
-  "heartbeat_at": "2026-08-28T16:28:39.999685Z",
   "labels": [
     "local-ok"
   ],
@@ -25,5 +23,7 @@
       "created_by": "Mark Atwood",
       "metadata": "{}"
     }
-  ]
+  ],
+  "closed_at": "2026-08-28T17:41:29.540200Z",
+  "close_reason": "Fixed via in-lock validation (preferred approach): csma.c cad_complete no longer rejects cad_status>0 pre-lock; positive status now fails closed under the lock (phase=ERROR, last_error=-EIO, return -EIO) so no caller can strand the machine in LICHEN_CSMA_CAD. Only other callers verified safe: acquire clamps already, tests/csma passes 0/negative. Contract documented in csma.h. Test added: lichen/tests/link_ctx/main.c test_cca_gate_positive_cad_status_fails_closed_not_wedged (probe returns 7: gate -EIO + phase ERROR fail-closed; then clear probe gates 0 + phase IDLE, no wedge; rng_calls==0 cad_calls==2). Negative-checked: pre-fix code restored -> new test exits 9 (fails); with fix all pass. Evidence: link_ctx ctest 1/1 PASS, tests/csma ctest 1/1 PASS, cppcheck clean on link_cca.c (clang-tidy include-path failure is the known env gap), west qemu_x86 link_crypto PROJECT EXECUTION SUCCESSFUL 20 PASS / 0 FAIL (log /Volumes/Attic/tmp/w4-cca-run.log). Sibling P2 2c8e fixed too; discovered lora_l2_tx.c:354 variant filed as project-LICHEN-worker6-k2v9."
 }
