@@ -19,8 +19,7 @@
     "messaging",
     "owner-reserved",
     "testing",
-    "zephyr",
-    "needs-linux"
+    "zephyr"
   ],
   "dependencies": [
     {
