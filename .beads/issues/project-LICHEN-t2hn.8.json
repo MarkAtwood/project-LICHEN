@@ -20,7 +20,8 @@
     "messaging",
     "owner-reserved",
     "status",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
