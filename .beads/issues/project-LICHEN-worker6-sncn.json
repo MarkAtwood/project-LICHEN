@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-sncn",
   "title": "oscore helper: protect-response failure sends cleartext 5.00 to a protected peer",
   "description": "lichen/subsys/lichen/oscore/coap_oscore.c:106-109: if coap_oscore_protect_response fails, coap_oscore_respond_resource sends a cleartext 5.00 (token echoed) to a peer whose request was OSCORE-protected — a downgrade response on the exact paths the authz gates hardened. No payload is disclosed beyond code/token, but fix: send a protected empty 5.00 or drop silently. Pre-existing helper behavior, surfaced by the wave-2 review.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:15:05.975548Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:16:43.98573Z",
+  "updated_at": "2026-08-28T19:02:22.582559Z",
   "started_at": "2026-08-28T17:16:43.98573Z",
-  "lease_expires_at": "2026-08-28T17:21:43.98573Z",
-  "heartbeat_at": "2026-08-28T17:16:43.98573Z"
+  "closed_at": "2026-08-28T19:02:22.582559Z",
+  "close_reason": "Fixed in commit d7c40b1916. coap_oscore_respond_resource (lichen/subsys/lichen/oscore/coap_oscore.c:91) and lichen_coap_oscore_respond (coap_oscore.c:327) no longer fall back to a cleartext 5.00 on coap_oscore_protect_response failure: they retry once with a protected empty 5.00 through the same context/request correlation, and drop the response silently (OSCORE_ERR_CONTEXT_STALE, chosen because the Zephyr coap server translates -EPERM/-ENOENT returns into cleartext 4.05/4.04) if the retry also fails. Gate moved to is_protected alone: protected request with unusable ctx/piv is dropped, never answered cleartext; plain-request path unchanged. Contracts updated in coap_oscore.h and oscore.h caller-surfacing note. Evidence: new suite lichen/tests/coap_oscore_fallback 6/6 pass on qemu_x86/atom (west twister: protected roundtrip, protect-failure-\u003eprotected empty 5.00, double-failure silent drop, no-context drop, no-piv drop, plain-path cleartext preserved); oscore_persist and oscore_schc_roundtrip green on qemu_x86/atom; oscore/coap_keys/inbound_lci build failures proven pre-existing by identical HEAD-worktree parity run; cppcheck clean on both changed C files (baseline HEAD was clean, working tree clean)."
 }
