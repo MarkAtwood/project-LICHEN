@@ -23,7 +23,8 @@
     "owner-reserved",
     "status",
     "test",
-    "zephyr"
+    "zephyr",
+    "local-ok"
   ],
   "dependencies": [
     {
