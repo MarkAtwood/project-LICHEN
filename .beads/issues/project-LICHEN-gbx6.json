@@ -19,8 +19,7 @@
     "meshcore",
     "meshtastic",
     "owner-reserved",
-    "zephyr",
-    "needs-linux"
+    "zephyr"
   ],
   "dependencies": [
     {
