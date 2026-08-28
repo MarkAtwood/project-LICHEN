@@ -1,0 +1,7 @@
+{
+  "id": "1787940612489842000-1",
+  "issue_id": "project-LICHEN-worker6-mx8y",
+  "author": "Mark Atwood",
+  "text": "Coordination: design for the signature-coverage fix landed on project-LICHEN-worker6-nwjl (comment D1-D6). COSE_Sign1 envelope makes has_signature structurally redundant — do NOT add setters; the 4th COSE array element is the signature. nwjl.3 supersedes the decode-gap part of this bead (COSE-aware decode_claim) and includes the WARN rate-limited logging ask; nwjl.6 covers closure evidence. Recommend resolving this bead as superseded-by nwjl.3 when that lands.",
+  "created_at": "2026-08-28T18:10:12.489842Z"
+}
