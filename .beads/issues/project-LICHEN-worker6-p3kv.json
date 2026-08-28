@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-p3kv",
+  "title": "Cross-validation review: relay signer binding across C/Rust/Python/spec/vectors",
+  "description": "Final review pass closing the loop on the selected option. PENDING project-LICHEN-worker6-nxew (and completes after the five sibling beads). Verify: (1) each hop identifies and verifies the immediate signer independently of preserved IPv6 origin; (2) spoofing, key substitution, and multi-hop forwarding tests fail closed in ALL of C, Rust, Python; (3) spec text, frame parsers/signers, and vectors are mutually consistent; (4) replay windows remain keyed by (pubkey, key-generation), never by SIID/IPv6 source; (5) DAO-origin provenance still derives from verified upstream, never wire bytes. Acceptance: 3x codereview (correctness/security/robustness) clean or findings filed+fixed; all quality gates green on host tooling.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-28T15:33:44.31757Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-28T15:33:44.31757Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p3kv",
+      "depends_on_id": "project-LICHEN-worker6-nxew",
+      "type": "blocks",
+      "created_at": "2026-08-28T15:33:45.62416Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-p3kv",
+      "depends_on_id": "project-LICHEN-2auf.44.9.8",
+      "type": "discovered-from",
+      "created_at": "2026-08-28T15:33:46.553685Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
