@@ -11,7 +11,8 @@
   "labels": [
     "blocked:hardware",
     "renode",
-    "zephyr"
+    "zephyr",
+    "needs-linux"
   ],
   "dependencies": [
     {
