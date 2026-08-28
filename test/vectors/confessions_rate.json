@@ -26,13 +26,15 @@
       "description": "Second POST within 30 seconds is rejected.",
       "sender_iid": "0011223344556677",
       "history": [
-        {"uptime_ms": 0}
+        {
+          "uptime_ms": 0
+        }
       ],
       "current_uptime_ms": 15000,
       "expected": {
         "accept": false,
         "response_code": "4.29 Too Many Requests",
-        "retry_after_s": 15
+        "retry_after_s": 16
       }
     },
     {
@@ -40,7 +42,9 @@
       "description": "POST exactly at 30 seconds after last POST is accepted.",
       "sender_iid": "0011223344556677",
       "history": [
-        {"uptime_ms": 0}
+        {
+          "uptime_ms": 0
+        }
       ],
       "current_uptime_ms": 30000,
       "expected": {
@@ -71,18 +75,24 @@
     },
     {
       "name": "post_after_hour_window_slides",
-      "description": "Old posts outside 1-hour window no longer count.",
+      "description": "Only posts entirely outside the 1-hour window no longer count: at now=3601s the t=0 post has expired, while the 300s/600s posts are still inside their hour.",
       "sender_iid": "0011223344556677",
       "history": [
-        {"uptime_ms": 0},
-        {"uptime_ms": 300000},
-        {"uptime_ms": 600000}
+        {
+          "uptime_ms": 0
+        },
+        {
+          "uptime_ms": 300000
+        },
+        {
+          "uptime_ms": 600000
+        }
       ],
       "current_uptime_ms": 3601000,
       "expected": {
         "accept": true,
-        "posts_in_window": 0,
-        "reason": "all_posts_expired_from_window"
+        "posts_in_window": 2,
+        "reason": "only_oldest_post_expired_from_window"
       }
     },
     {
@@ -109,7 +119,9 @@
       "description": "30s limit is checked before hourly limit (stricter).",
       "sender_iid": "0011223344556677",
       "history": [
-        {"uptime_ms": 1000}
+        {
+          "uptime_ms": 1000
+        }
       ],
       "current_uptime_ms": 5000,
       "expected": {
@@ -134,8 +146,8 @@
       "current_uptime_ms": 20000,
       "expected": {
         "response_code": "4.29 Too Many Requests",
-        "retry_after_s": 20,
-        "reason": "30s - (20s - 10s) = 20s remaining"
+        "retry_after_s": 21,
+        "reason": "int(30s - (20s - 10s)) + 1 = 21s remaining (anti-truncation ceiling)"
       }
     },
     {

@@ -10,6 +10,7 @@ Additional unit tests pin spec-derived semantics the vectors do not cover
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -182,3 +183,120 @@ class TestEpochSemantics:
         mgr = make_manager(1)
         with pytest.raises(ValueError):
             mgr.rekey(b"")
+
+
+class TestDefaultClockIsMonotonic:
+    """Default time source is the monotonic clock (finding 2r42a).
+
+    Oracle: stdlib time.monotonic_ns() read directly in the test. The wall
+    clock (time.time()*1000) is epoch-anchored and can never sit within a
+    second of the monotonic clock on a running system, so a close stamp
+    pins the default to monotonic.
+    """
+
+    def test_default_clock_tracks_monotonic(self) -> None:
+        mgr = GroupEpochManager("team-alpha", SECRET_A, key_epoch=1)
+        before = time.monotonic_ns() // 10**6
+        mgr.rekey(SECRET_B)
+        after = time.monotonic_ns() // 10**6
+        assert mgr.rekey_time_ms is not None
+        assert before <= mgr.rekey_time_ms <= after
+
+    def test_default_clock_never_rejects_immediate_previous(self) -> None:
+        mgr = GroupEpochManager("team-alpha", SECRET_A, key_epoch=1)
+        mgr.rekey(SECRET_B)
+        assert mgr.validate_epoch(1) is EpochStatus.PREVIOUS
+        assert mgr.validate_epoch(2) is EpochStatus.CURRENT
+
+
+class TestGraceWindowBounded:
+    """Previous key accepted only for 0 <= elapsed <= GRACE (finding 2r42b).
+
+    A clock set before the rekey stamp must not keep the previous key alive
+    indefinitely; CURRENT and ROLLBACK/FUTURE classification are
+    time-independent and stay unaffected by clock regressions.
+    """
+
+    @staticmethod
+    def make_manager() -> GroupEpochManager:
+        mgr = make_manager(1)
+        mgr.rekey(SECRET_B, rekey_time_ms=5000)
+        return mgr
+
+    def test_previous_accepted_at_elapsed_zero(self) -> None:
+        assert self.make_manager().validate_epoch(1, now_ms=5000) is EpochStatus.PREVIOUS
+
+    def test_previous_accepted_mid_grace(self) -> None:
+        now = 5000 + GRACE_PERIOD_MS // 2
+        assert self.make_manager().validate_epoch(1, now_ms=now) is EpochStatus.PREVIOUS
+
+    def test_previous_rejected_at_grace_plus_one(self) -> None:
+        now = 5000 + GRACE_PERIOD_MS + 1
+        assert self.make_manager().validate_epoch(1, now_ms=now) is EpochStatus.GRACE_EXPIRED
+
+    def test_previous_rejected_when_now_before_rekey_stamp(self) -> None:
+        mgr = self.make_manager()
+        assert mgr.validate_epoch(1, now_ms=4999) is EpochStatus.GRACE_EXPIRED
+        assert mgr.validate_epoch(1, now_ms=0) is EpochStatus.GRACE_EXPIRED
+        assert mgr.master_secret_for_epoch(1, now_ms=4999) is None
+
+    def test_current_accepted_despite_clock_regression(self) -> None:
+        mgr = self.make_manager()
+        assert mgr.validate_epoch(2, now_ms=0) is EpochStatus.CURRENT
+        assert mgr.validate_epoch(2, now_ms=4999) is EpochStatus.CURRENT
+        assert mgr.master_secret_for_epoch(2, now_ms=0) == SECRET_B
+
+    def test_rollback_and_future_classification_time_independent(self) -> None:
+        mgr = self.make_manager()
+        stamps = (0, 4999, 5000, 5000 + GRACE_PERIOD_MS, 5000 + 10 * GRACE_PERIOD_MS)
+        for now in stamps:
+            assert mgr.validate_epoch(0, now_ms=now) is EpochStatus.ROLLBACK
+            assert mgr.validate_epoch(4, now_ms=now) is EpochStatus.FUTURE
+
+
+class TestMasterSecretTypeValidation:
+    """Non-bytes-like secrets rejected before bytes() (finding ufnx).
+
+    bytes(32) silently yields 32 zero bytes -- a catastrophic-but-quiet
+    crypto failure -- so int, str, and other non-bytes-like inputs must
+    raise ValueError in both __init__ and rekey.
+    """
+
+    @pytest.mark.parametrize("bad_secret", [32, "0123456789abcdef", 3.5, None, [1, 2, 3]])
+    def test_constructor_rejects_non_bytes(self, bad_secret: Any) -> None:
+        with pytest.raises(ValueError):
+            GroupEpochManager("team-alpha", bad_secret)
+
+    @pytest.mark.parametrize("bad_secret", [32, "0123456789abcdef", 3.5, None, [1, 2, 3]])
+    def test_rekey_rejects_non_bytes(self, bad_secret: Any) -> None:
+        mgr = make_manager(1)
+        with pytest.raises(ValueError):
+            mgr.rekey(bad_secret)
+        assert mgr.key_epoch == 1
+        assert mgr.current_master_secret == SECRET_A
+
+    def test_bytearray_accepted_and_copied(self) -> None:
+        ba = bytearray(SECRET_B)
+        mgr = GroupEpochManager("team-alpha", ba, key_epoch=1)
+        ba[0] ^= 0xFF
+        assert mgr.current_master_secret == SECRET_B
+        assert isinstance(mgr.current_master_secret, bytes)
+        ba2 = bytearray(SECRET_C)
+        mgr.rekey(ba2)
+        ba2[0] ^= 0xFF
+        assert mgr.current_master_secret == SECRET_C
+        assert isinstance(mgr.current_master_secret, bytes)
+
+    def test_memoryview_accepted(self) -> None:
+        mgr = GroupEpochManager("team-alpha", memoryview(SECRET_B), key_epoch=7)
+        assert mgr.current_master_secret == SECRET_B
+        assert isinstance(mgr.current_master_secret, bytes)
+        mgr.rekey(memoryview(SECRET_C))
+        assert mgr.current_master_secret == SECRET_C
+
+    def test_empty_bytearray_still_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            GroupEpochManager("team-alpha", bytearray())
+        mgr = make_manager(1)
+        with pytest.raises(ValueError):
+            mgr.rekey(bytearray())

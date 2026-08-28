@@ -13,9 +13,10 @@ Holds the group key state for one encrypted group:
 Incoming message epoch classification (``validate_epoch``):
 
 - epoch == current epoch: CURRENT (accepted, current key)
-- epoch == previous epoch, within the 1 hour grace window of the rekey:
-  PREVIOUS (accepted, previous key)
-- epoch == previous epoch, past the grace window: GRACE_EXPIRED (rejected)
+- epoch == previous epoch, with 0 <= elapsed <= 1 hour since the rekey
+  stamp: PREVIOUS (accepted, previous key)
+- epoch == previous epoch, past the grace window or before the rekey
+  stamp (clock regression): GRACE_EXPIRED (rejected)
 - epoch == current epoch + 1: NEXT (not rollback and not unknown future, but
   no local key exists yet -- the sender has rekeyed ahead of us; fetch the
   new key rather than treating the message as an attack)
@@ -42,13 +43,26 @@ KEY_EPOCH_WRAPS_AT = 0xFFFFFFFF
 """Largest key_epoch value; incrementing from here wraps to 0."""
 
 GRACE_PERIOD_MS = 3_600_000
-"""Old-epoch acceptance window after a rekey (1 hour, spec/12-apps.md 18.8)."""
+"""Old-epoch acceptance window after a rekey (1 hour, spec/12-apps.md 18.8).
+
+The window is the closed interval ``0 <= now - rekey_time <= GRACE_PERIOD_MS``:
+elapsed time must also be non-negative (now at or after the rekey stamp).
+"""
 
 _HALF_U32 = 0x80000000
 
 
-def _wall_time_ms() -> int:
-    return int(time.time() * 1000)
+def _monotonic_time_ms() -> int:
+    return time.monotonic_ns() // 10**6
+
+
+def _coerce_master_secret(value: bytes, name: str) -> bytes:
+    if not isinstance(value, (bytes, bytearray, memoryview)):
+        raise ValueError(
+            f"{name} must be bytes-like (bytes, bytearray, or memoryview), "
+            f"not {type(value).__name__}"
+        )
+    return bytes(value)
 
 
 class EpochStatus(enum.Enum):
@@ -79,12 +93,14 @@ class GroupEpochManager:
         master_secret: Current group master secret (non-empty bytes-like).
         key_epoch: Starting epoch, u32 range.
         time_ms_func: Millisecond clock used to stamp rekeys and to evaluate
-            the grace window when no explicit timestamp is passed. Injectable
-            for deterministic tests and for monotonic-clock deployments.
+            the grace window when no explicit timestamp is passed. Defaults
+            to the monotonic clock (``time.monotonic_ns() // 10**6``), which
+            cannot step backwards; injectable for deterministic tests and
+            for wall-clock deployments.
 
     Raises:
-        ValueError: If ``master_secret`` is empty or ``key_epoch`` is outside
-            the u32 range.
+        ValueError: If ``master_secret`` is empty or not bytes-like, or
+            ``key_epoch`` is outside the u32 range.
     """
 
     def __init__(
@@ -95,7 +111,7 @@ class GroupEpochManager:
         key_epoch: int = 0,
         time_ms_func: Callable[[], int] | None = None,
     ) -> None:
-        secret = bytes(master_secret)
+        secret = _coerce_master_secret(master_secret, "master_secret")
         if not secret:
             raise ValueError("master_secret must not be empty")
         if not 0 <= key_epoch <= KEY_EPOCH_WRAPS_AT:
@@ -104,7 +120,7 @@ class GroupEpochManager:
         self._master_secret = secret
         self._key_epoch = key_epoch
         self._previous: tuple[int, bytes, int] | None = None
-        self._time_ms_func: Callable[[], int] = time_ms_func or _wall_time_ms
+        self._time_ms_func: Callable[[], int] = time_ms_func or _monotonic_time_ms
 
     @property
     def group_id(self) -> str:
@@ -138,11 +154,15 @@ class GroupEpochManager:
         timestamp; the grace window for the old key starts here.
 
         Args:
-            new_master_secret: Replacement group master secret (non-empty).
+            new_master_secret: Replacement group master secret (non-empty
+                bytes-like).
             rekey_time_ms: Explicit rekey timestamp in milliseconds; defaults
                 to the injected clock.
+
+        Raises:
+            ValueError: If ``new_master_secret`` is empty or not bytes-like.
         """
-        secret = bytes(new_master_secret)
+        secret = _coerce_master_secret(new_master_secret, "new_master_secret")
         if not secret:
             raise ValueError("new_master_secret must not be empty")
         timestamp = rekey_time_ms if rekey_time_ms is not None else self._time_ms_func()
@@ -161,6 +181,16 @@ class GroupEpochManager:
         Returns:
             An :class:`EpochStatus` verdict; use ``.accepted`` for the plain
             accept/reject view and ``.value`` for the vector reason string.
+
+        The previous-epoch grace window is the closed interval
+        ``0 <= now - rekey_time <= GRACE_PERIOD_MS``. A clock regression
+        (``now`` earlier than the rekey stamp, e.g. a small NTP step-back
+        when a wall clock is injected or an explicit ``now_ms`` is passed)
+        falls outside that interval: the previous key is temporarily
+        rejected -- a previous-key blip -- until the clock steps forward
+        past the rekey stamp again. CURRENT messages, and ROLLBACK/FUTURE
+        classification, are time-independent and unaffected by clock
+        regressions.
         """
         if not 0 <= message_epoch <= KEY_EPOCH_WRAPS_AT:
             return EpochStatus.FUTURE
@@ -168,7 +198,8 @@ class GroupEpochManager:
             return EpochStatus.CURRENT
         if self._previous is not None and message_epoch == self._previous[0]:
             now = now_ms if now_ms is not None else self._time_ms_func()
-            if now - self._previous[2] <= GRACE_PERIOD_MS:
+            elapsed = now - self._previous[2]
+            if 0 <= elapsed <= GRACE_PERIOD_MS:
                 return EpochStatus.PREVIOUS
             return EpochStatus.GRACE_EXPIRED
         forward = (message_epoch - self._key_epoch) & KEY_EPOCH_WRAPS_AT

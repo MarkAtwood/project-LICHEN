@@ -14,14 +14,24 @@ from aiocoap import CHANGED, CONTENT, CREATED, Message, resource
 
 from lichen.coap.resources.base import CBOR
 from lichen.coap.resources.cbor_validation import _decode_single_cbor
+from lichen.coap.sos_origin import (
+    SosOriginSignature,
+    canonicalize_sos_payload,
+    verify_sos_origin,
+)
+from lichen.crypto.identity import _pubkey_to_iid
 
 MAX_ROLLCALLS = 256
 MAX_ROLLCALL_TIMEOUT_S = 7 * 86400
 MAX_CHECKINS = 256  # Maximum stored check-ins
 
-# SOS rate limiting per spec (per-source limits)
+# SOS rate limiting per spec 18.4.1 (per-source limits)
 SOS_COOLDOWN_S = 600  # 10-minute minimum between requests from same source
 SOS_HOURLY_MAX = 3  # Maximum 3 requests per hour from same source
+SOS_BURST_ALLOWANCE = 2  # Rapid-update burst size within the cooldown window
+# Burst updates ride the 30s SOS position-beacon cadence (spec 18.4.6);
+# an immediate retransmit (delta == 0) is a duplicate, not a burst update.
+SOS_BURST_WINDOW_S = 30
 
 # Valid check-in status values per spec 18.6.1
 CHECKIN_STATUS_VALUES = frozenset({"ok", "help", "delayed"})
@@ -43,9 +53,19 @@ class SosResource(resource.ObservableResource):
     application layer driving :meth:`retrigger`; the resource itself only
     tracks state and notifies on changes.
 
-    Rate limiting: each source node is limited to 3 requests per hour with a
-    minimum 10-minute cooldown between requests. This prevents SOS flooding
-    while allowing legitimate emergency use.
+    Authentication (spec 18.4.1): mesh-format POSTs (the ``node`` wire
+    format) arriving from a network peer must carry a valid SOS origin
+    signature (``sig`` + ``pubkey`` fields, verified via
+    :func:`lichen.coap.sos_origin.verify_sos_origin`); unsigned or invalid
+    messages are dropped without activating state. The legacy
+    ``{"from", "t"}`` format and in-process (LCI) callers are trusted local
+    interfaces.
+
+    Rate limiting (spec 18.4.1): each source is limited to 3 requests per
+    hour with a 10-minute cooldown measured from the start of the current
+    burst; a burst of 2 rapid updates (within :data:`SOS_BURST_WINDOW_S`)
+    is allowed. Time runs on a monotonic clock. Rate-limited requests are
+    rejected with 4.29 and a ``{"retry_after": <seconds>}`` CBOR payload.
     """
 
     def __init__(self, time_func: Any = None) -> None:
@@ -53,15 +73,17 @@ class SosResource(resource.ObservableResource):
 
         Args:
             time_func: Optional callable returning current time (for testing).
-                       Defaults to time.time.
+                       Defaults to time.monotonic (spec 18.4.1 monotonic uptime).
         """
         super().__init__()
         self._active = False
         self._from: str | None = None
         self._t: float | None = None
-        self._time_func = time_func if time_func is not None else time.time
+        self._time_func = time_func if time_func is not None else time.monotonic
         # Per-source rate limiting: maps source hex -> list of request timestamps
         self._request_times: dict[str, list[float]] = {}
+        # Per-source uptime at which the current burst (cooldown window) began
+        self._burst_start: dict[str, float] = {}
 
     def _prune_old_requests(self, source_hex: str) -> None:
         """Remove request timestamps older than 1 hour for the given source."""
@@ -75,25 +97,49 @@ class SosResource(resource.ObservableResource):
         if not self._request_times[source_hex]:
             del self._request_times[source_hex]
 
-    def check_rate_limit(self, source_hex: str) -> bool:
-        """Check if source is within rate limits.
+    def _evaluate_rate_limit(self, source_hex: str) -> tuple[bool, int]:
+        """Evaluate per-source rate limits; returns (allowed, retry_after_s).
 
-        Returns True if request is allowed, False if rate-limited.
+        Spec 18.4.1 table: 10-minute cooldown, 3/hour max, burst allowance 2.
+        The cooldown runs from the start of the current burst (per-source
+        anchor), so a burst of rapid updates does not push the next allowed
+        slot past ``burst_start + cooldown``. The second message counts
+        against the burst allowance only when it arrives within
+        :data:`SOS_BURST_WINDOW_S` of the previous one.
 
-        Rate limits:
-        - 10-minute cooldown between requests from same source
-        - Maximum 3 requests per hour from same source
+        The ``0.0`` anchor fallback treats an unknown burst start as the
+        monotonic process start (uptime origin), matching the vector-pinned
+        cooldown arithmetic; production flow always sets the anchor on the
+        first accepted request.
         """
         self._prune_old_requests(source_hex)
-        if source_hex not in self._request_times:
-            return True
-        timestamps = self._request_times[source_hex]
+        timestamps = self._request_times.get(source_hex)
         now = self._time_func()
-        # Check cooldown: most recent request must be > 10 min ago
-        if timestamps and (now - timestamps[-1]) < SOS_COOLDOWN_S:
-            return False
-        # Check hourly max: must have fewer than 3 requests in last hour
-        return len(timestamps) < SOS_HOURLY_MAX
+        if not timestamps:
+            self._burst_start[source_hex] = now
+            return (True, 0)
+        if len(timestamps) >= SOS_HOURLY_MAX:
+            return (False, max(1, int(3600 - (now - timestamps[0]))))
+        delta = now - timestamps[-1]
+        if len(timestamps) < SOS_BURST_ALLOWANCE:
+            if 0 < delta <= SOS_BURST_WINDOW_S:
+                return (True, 0)  # burst update
+            if delta < SOS_COOLDOWN_S:
+                # Single prior request: cooldown measured from it.
+                return (False, max(1, int(SOS_COOLDOWN_S - delta)))
+        remaining = SOS_COOLDOWN_S - (now - self._burst_start.get(source_hex, 0.0))
+        if remaining > 0:
+            return (False, max(1, int(remaining)))
+        self._burst_start[source_hex] = now
+        return (True, 0)
+
+    def check_rate_limit(self, source_hex: str) -> bool:
+        """Check if source is within rate limits (spec 18.4.1).
+
+        Returns True if request is allowed, False if rate-limited.
+        """
+        allowed, _ = self._evaluate_rate_limit(source_hex)
+        return allowed
 
     def _record_request(self, source_hex: str) -> None:
         """Record a successful request timestamp for rate limiting."""
@@ -158,12 +204,53 @@ class SosResource(resource.ObservableResource):
             or timestamp < 0
         ):
             return Message(code=aiocoap.BAD_REQUEST)
-        # Check rate limit before activating
-        if not self.check_rate_limit(from_hex):
-            return Message(code=aiocoap.TOO_MANY_REQUESTS)
+        # Check rate limit before activating; the 4.29 carries a
+        # {"retry_after": <s>} CBOR payload (mirrors /confessions).
+        allowed, retry_after = self._evaluate_rate_limit(from_hex)
+        if not allowed:
+            msg = Message(code=aiocoap.TOO_MANY_REQUESTS)
+            msg.payload = cbor2.dumps({"retry_after": retry_after})
+            msg.opt.content_format = CBOR
+            return msg
+        # Spec 18.4.1: mesh-format SOS from a network peer must carry a valid
+        # origin signature; unsigned/invalid messages are silently dropped
+        # (no state change). Legacy {"from", "t"} and in-process LCI callers
+        # (request.remote is None) are trusted local interfaces.
+        if "from" not in body and request.remote is not None:
+            if not self._verify_origin_signature(body, from_hex):
+                return Message(code=aiocoap.UNAUTHORIZED)
         self._record_request(from_hex)
         self.activate(bytes.fromhex(from_hex), timestamp)
         return Message(code=CREATED)
+
+    def _verify_origin_signature(self, body: dict, node_hex: str) -> bool:
+        """Verify the SOS origin signature on a mesh-format POST body.
+
+        The signed payload is the CBOR body minus the signature transport
+        fields (``sig``, ``pubkey``); the origin address is the node's
+        key-derived ``0200::``/128 (02 00 || 6 zero bytes || EUI-64 IID).
+        The pubkey must derive to the claimed node IID (trust-binding gate).
+        Any parse or type failure is a quiet False (silent drop).
+        """
+        sig = body.get("sig")
+        pubkey = body.get("pubkey")
+        if not isinstance(sig, (bytes, bytearray)) or not isinstance(
+            pubkey, (bytes, bytearray)
+        ):
+            return False
+        try:
+            origin_sig = SosOriginSignature.from_bytes(bytes(sig))
+            if len(pubkey) != 32:
+                return False
+            if _pubkey_to_iid(bytes(pubkey)) != bytes.fromhex(node_hex):
+                return False
+            signed = {k: v for k, v in body.items() if k not in ("sig", "pubkey")}
+            origin_addr = b"\x02\x00" + b"\x00" * 6 + bytes.fromhex(node_hex)
+            return verify_sos_origin(
+                bytes(pubkey), origin_addr, canonicalize_sos_payload(signed), origin_sig
+            )
+        except (ValueError, TypeError):
+            return False
 
     async def render_delete(self, request: Message) -> Message:
         self.cancel()

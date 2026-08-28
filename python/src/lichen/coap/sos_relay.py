@@ -43,6 +43,14 @@ SEEN_EXPIRY_S: int = 4 * 3600
 # Why 256: 256 unique (node, seq) pairs is plenty for typical scenarios
 SEEN_MAX_SIZE: int = 256
 
+# Origin sequence space and forward window for the monotonic origin-sequence
+# guard. The sos_seq_rollover vector pins uint8 wraparound ("Receivers must
+# handle uint8 wraparound"), so staleness is judged with serial-number
+# arithmetic (RFC 1982 style) over that space: a sequence is stale when it
+# sits more than half a space behind the last accepted one.
+SEQ_SPACE: int = 256
+SEQ_FORWARD_WINDOW: int = SEQ_SPACE // 2
+
 
 @dataclass(frozen=True)
 class SosId:
@@ -83,7 +91,10 @@ class SosRelay:
     """SOS relay handler with TTL-limited deduplication.
 
     Tracks which SOS IDs have been seen to prevent duplicate relays.
-    Enforces TTL limits to bound flood propagation.
+    Enforces TTL limits to bound flood propagation. Also enforces a
+    monotonic per-origin origin-sequence guard: a stale-but-unseen sequence
+    (one that predates the last accepted sequence for that origin) is
+    rejected, while sequence-space rollover still relays.
 
     Attributes:
         max_ttl: Maximum allowed TTL value.
@@ -97,6 +108,9 @@ class SosRelay:
     _seen: OrderedDict[SosId, float] = field(
         default_factory=OrderedDict, init=False, repr=False
     )
+
+    # Maps origin node -> last accepted origin sequence (monotonic guard)
+    _last_seq: dict[str, int] = field(default_factory=dict, init=False, repr=False)
 
     def check_relay(
         self,
@@ -151,6 +165,22 @@ class SosRelay:
                 reason=f"already relayed SOS from {node} seq={seq}",
             )
 
+        # Monotonic origin-sequence guard: reject stale-but-unseen sequences
+        # (vector origin_sequence_rollback). Serial-number arithmetic over
+        # SEQ_SPACE keeps rollover (255 -> 0) relayable. An exact repeat
+        # (forward == 0) is left to the seen-dedup above so that expired
+        # seen entries can be relayed again.
+        last_seq = self._last_seq.get(node)
+        if last_seq is not None and (seq - last_seq) % SEQ_SPACE > SEQ_FORWARD_WINDOW:
+            return SosRelayResult(
+                should_relay=False,
+                reason=(
+                    f"stale origin sequence from {node}: "
+                    f"seq={seq} predates last seen {last_seq}"
+                ),
+            )
+        self._advance_last_seq(node, seq)
+
         # Record this SOS as seen
         self._record_seen(sos_id)
 
@@ -173,6 +203,8 @@ class SosRelay:
             seq: Sequence number.
         """
         sos_id = SosId(node=node, seq=seq)
+        # Locally originated sequences are trusted to be monotonic.
+        self._advance_last_seq(node, seq)
         self._record_seen(sos_id)
 
     def is_seen(self, node: str, seq: int) -> bool:
@@ -200,7 +232,14 @@ class SosRelay:
         """
         count = len(self._seen)
         self._seen.clear()
+        self._last_seq.clear()
         return count
+
+    def _advance_last_seq(self, node: str, seq: int) -> None:
+        """Record the newest accepted origin sequence for a node (FIFO-capped)."""
+        self._last_seq[node] = seq
+        if len(self._last_seq) > SEEN_MAX_SIZE:
+            self._last_seq.pop(next(iter(self._last_seq)))
 
     def _record_seen(self, sos_id: SosId) -> None:
         """Record an SOS ID as seen with current timestamp."""
@@ -285,6 +324,8 @@ __all__ = [
     "DEFAULT_MAX_TTL",
     "SEEN_EXPIRY_S",
     "SEEN_MAX_SIZE",
+    "SEQ_FORWARD_WINDOW",
+    "SEQ_SPACE",
     "SosId",
     "SosRelay",
     "SosRelayResult",

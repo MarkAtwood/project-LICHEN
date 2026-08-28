@@ -11,6 +11,21 @@
 """
 
 from .edhoc import EdhocInitiator, EdhocResponder, OscoreContext
+from .group_oscore import (
+    EPOCH_MAX,
+    GRACE_PERIOD_MS,
+    WRAP_ALGORITHM,
+    EpochRejected,
+    GroupKeyManager,
+    GroupKeyStore,
+    GroupKeyWrapError,
+    GroupOscoreKeyError,
+    WrappedGroupKey,
+    generate_wrap_keypair,
+    group_id_context,
+    unwrap_group_key,
+    wrap_group_key,
+)
 from .identity import Identity, PeerIdentity
 from .key_persistence import (
     FileKeyStore,
@@ -57,9 +72,15 @@ __all__ = [
     "ChannelNotEstablishedError",
     "DecryptionFailedError",
     "DerivationMismatchError",
+    "EPOCH_MAX",
     "EdhocInitiator",
     "EdhocResponder",
     "FileKeyStore",
+    "GRACE_PERIOD_MS",
+    "GroupKeyManager",
+    "GroupKeyStore",
+    "GroupKeyWrapError",
+    "GroupOscoreKeyError",
     "Identity",
     "KeyMismatchError",
     "KeyPersistenceError",
@@ -83,8 +104,14 @@ __all__ = [
     "TrustStore",
     "TrustStorePersistence",
     "UnknownPeerError",
+    "WRAP_ALGORITHM",
+    "WrappedGroupKey",
     "generate_trust_vector",
+    "generate_wrap_keypair",
+    "group_id_context",
+    "unwrap_group_key",
     "verify_pubkey_derivation",
     "verify_pubkey_to_ygg_addr",
     "verify_trust_vector",
+    "wrap_group_key",
 ]
