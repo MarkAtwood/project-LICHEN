@@ -1,0 +1,7 @@
+{
+  "id": "1787960327779102000-1",
+  "issue_id": "project-LICHEN-wqaa.12",
+  "author": "Mark Atwood",
+  "text": "Technical project description drafted: docs/grant-technical-description.md - what LICHEN is (IETF stack table), why it matters (proprietary-lock-in contrast, standards argument), current state (three implementations + shared vectors + CI, link/RPL/SCHC/OSCORE done, T-Echo bring-up), the 500-node deployment proposal, and concrete outcomes (public datasets, IETF drafts, reusable runbook).",
+  "created_at": "2026-08-28T23:38:47.779102Z"
+}

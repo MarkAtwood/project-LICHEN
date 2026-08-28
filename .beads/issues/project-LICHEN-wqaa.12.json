@@ -1,13 +1,17 @@
 {
   "id": "project-LICHEN-wqaa.12",
   "title": "Write technical project description for grant applications",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T04:51:37.735134Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T04:51:37.735134Z",
+  "updated_at": "2026-08-28T23:38:48.614843Z",
+  "started_at": "2026-08-28T23:36:50.084226Z",
+  "closed_at": "2026-08-28T23:38:48.614843Z",
+  "close_reason": "Drafted docs/grant-technical-description.md (CC-BY-4.0): grant-reviewer-oriented description reusable across NLnet/ARDC/OTF applications, grounded in repo reality (18 spec chapters, 3 implementations, conformance vectors, T-Echo bring-up status).",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wqaa.12",
