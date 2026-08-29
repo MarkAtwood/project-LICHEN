@@ -161,6 +161,12 @@ enum oscore_err {
 	 * See oscore_protect_request() nvm_failed path and security comment. */
 	OSCORE_ERR_NVM_FAILED = -10,
 	OSCORE_ERR_CONTEXT_STALE = -11, /**< Context freshness check failed (RFC 8613 7.2.1) */
+	/**< A context for this durable record already exists (exclusive live
+	 * ownership). Two concurrent contexts over one record would each carry
+	 * an independent recipient replay window, letting the same
+	 * authenticated packet be accepted once per instance. Free the live
+	 * owner first (process-restart semantics). */
+	OSCORE_ERR_CONTEXT_EXISTS = -12,
 };
 
 /**
@@ -282,6 +288,13 @@ void oscore_nvm_register_callbacks(oscore_nvm_write_cb _Nullable write_cb,
  *
  * Derives sender and recipient keys from the master secret using HKDF.
  *
+ * Contexts enforce exclusive live ownership by durable record (the
+ * derivation inputs shared with the Rust ContextId: master secret, master
+ * salt, ID Context presence and bytes, sender ID - deliberately
+ * recipient-independent). Creating a second context while a record's owner
+ * is live fails with OSCORE_ERR_CONTEXT_EXISTS, so a replay window can
+ * never be duplicated. Free the live owner to reactivate a record.
+ *
  * @param[in] master_secret  16-byte master secret
  * @param[in] master_salt    Master salt (may be NULL)
  * @param[in] master_salt_len Salt length (0 if salt is NULL)
@@ -291,8 +304,9 @@ void oscore_nvm_register_callbacks(oscore_nvm_write_cb _Nullable write_cb,
  * @param[in] recipient_id_len Recipient ID length
  * @param[out] ctx           Output context pointer
  * @return 0 on success, OSCORE_ERR_INVALID_PARAM if oscore_init() has not
- *         been called or a parameter is invalid, negative error code on other
- *         failures
+ *         been called or a parameter is invalid, OSCORE_ERR_CONTEXT_EXISTS
+ *         if the record already has a live owner, negative error code on
+ *         other failures
  */
 int oscore_ctx_create(const uint8_t *_Nonnull master_secret,
 		      const uint8_t *_Nullable master_salt, size_t master_salt_len,

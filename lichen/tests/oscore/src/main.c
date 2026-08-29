@@ -1583,6 +1583,105 @@ ZTEST(oscore_ctx, test_nvm_read_failure_fallback_to_zero)
 	oscore_nvm_register_callbacks(NULL, NULL);
 }
 
+/*
+ * Exclusive live ownership (bead project-LICHEN-v0ee): a second activation
+ * of an already-owned durable record must be refused, so two concurrent
+ * receiver contexts can never carry independent replay windows for it.
+ */
+ZTEST(oscore_ctx, test_duplicate_record_creation_is_refused)
+{
+	static const uint8_t own_secret[OSCORE_KEY_LEN] = {
+		0x6c, 0x1e, 0x0d, 0x67, 0x7a, 0xd2, 0x94, 0x31,
+		0xb5, 0x09, 0xe3, 0x44, 0x58, 0xaf, 0x21, 0x86,
+	};
+	static const uint8_t own_sender[] = { 0x00 };
+	static const uint8_t own_recipient[] = { 0x01 };
+	static const uint8_t other_recipient[] = { 0x02 };
+	static const uint8_t other_sender[] = { 0x03 };
+	static const uint8_t peer_sender[] = { 0x01 };
+	static const uint8_t peer_recipient[] = { 0x00 };
+	struct oscore_ctx *receiver = NULL;
+	struct oscore_ctx *dup = NULL;
+	struct oscore_ctx *other = NULL;
+	struct oscore_ctx *peer = NULL;
+	uint8_t ciphertext[64];
+	size_t ciphertext_len = sizeof(ciphertext);
+	uint8_t oscore_opt[32];
+	size_t opt_len = sizeof(oscore_opt);
+	uint8_t code = 0;
+	uint8_t options[16];
+	size_t options_len = sizeof(options);
+	uint8_t payload[8];
+	size_t payload_len = sizeof(payload);
+
+	/* The first owner of the record is created normally. */
+	zassert_equal(oscore_ctx_create(own_secret, NULL, 0,
+					own_sender, sizeof(own_sender),
+					own_recipient, sizeof(own_recipient),
+					&receiver), OSCORE_OK);
+	zassert_not_null(receiver);
+
+	/* A second activation of the same record is refused at creation. */
+	zassert_equal(oscore_ctx_create(own_secret, NULL, 0,
+					own_sender, sizeof(own_sender),
+					own_recipient, sizeof(own_recipient),
+					&dup), OSCORE_ERR_CONTEXT_EXISTS);
+	zassert_is_null(dup);
+
+	/* The record identity mirrors the Rust ContextId and is
+	 * recipient-independent: same secret/salt/sender over a different
+	 * recipient ID is the same record and is refused too. */
+	zassert_equal(oscore_ctx_create(own_secret, NULL, 0,
+					own_sender, sizeof(own_sender),
+					other_recipient, sizeof(other_recipient),
+					&dup), OSCORE_ERR_CONTEXT_EXISTS);
+	zassert_is_null(dup);
+
+	/* A different sender ID derives a different record: allowed. */
+	zassert_equal(oscore_ctx_create(own_secret, NULL, 0,
+					other_sender, sizeof(other_sender),
+					own_recipient, sizeof(own_recipient),
+					&other), OSCORE_OK);
+	zassert_not_null(other);
+	oscore_ctx_free(other);
+
+	/* The refused duplicates must not have disturbed the live receiver's
+	 * replay window: sequence N is accepted once, then rejected. */
+	zassert_equal(oscore_ctx_create(own_secret, NULL, 0,
+					peer_sender, sizeof(peer_sender),
+					peer_recipient, sizeof(peer_recipient),
+					&peer), OSCORE_OK);
+	zassert_not_null(peer);
+	zassert_equal(oscore_ctx_set_sender_seq(peer, 1), OSCORE_OK);
+	zassert_equal(oscore_protect_request(peer, 0x01, NULL, 0, NULL, 0,
+					     ciphertext, &ciphertext_len,
+					     oscore_opt, &opt_len), OSCORE_OK);
+	zassert_equal(oscore_unprotect_request(receiver, oscore_opt, opt_len,
+					       ciphertext, ciphertext_len,
+					       &code, options, &options_len,
+					       payload, &payload_len),
+		      OSCORE_OK);
+	options_len = sizeof(options);
+	payload_len = sizeof(payload);
+	zassert_equal(oscore_unprotect_request(receiver, oscore_opt, opt_len,
+					       ciphertext, ciphertext_len,
+					       &code, options, &options_len,
+					       payload, &payload_len),
+		      OSCORE_ERR_REPLAY);
+
+	/* After the owner is released, reactivation is allowed (restart
+	 * semantics); the fresh window starts empty. */
+	oscore_ctx_free(receiver);
+	zassert_equal(oscore_ctx_create(own_secret, NULL, 0,
+					own_sender, sizeof(own_sender),
+					own_recipient, sizeof(own_recipient),
+					&receiver), OSCORE_OK);
+	zassert_not_null(receiver);
+
+	oscore_ctx_free(receiver);
+	oscore_ctx_free(peer);
+}
+
 ZTEST_SUITE(oscore_ctx, NULL, oscore_ctx_setup, oscore_ctx_before, NULL, NULL);
 
 /*

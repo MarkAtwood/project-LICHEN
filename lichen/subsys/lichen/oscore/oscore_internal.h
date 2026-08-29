@@ -34,6 +34,16 @@ struct oscore_ctx {
 	uint8_t id_context_len;                 /**< ID Context length */
 	bool has_id_context;                    /**< ID Context is present (empty differs from absent) */
 
+	/*
+	 * Durable record identity: SHA-256 over (master secret, master salt,
+	 * ID Context presence and bytes, sender ID), byte-identical to the
+	 * Rust crate's ContextId. Deliberately recipient-independent and
+	 * non-secret (preimage resistant). Computed before the stored master
+	 * secret is wiped; enforces exclusive live ownership (see
+	 * oscore_ctx_create_internal()).
+	 */
+	uint8_t record_id[OSCORE_RECORD_ID_LEN];
+
 	/* Sender context */
 	uint8_t sender_id[OSCORE_ID_MAX_LEN];   /**< Sender ID */
 	uint8_t sender_id_len;                  /**< Sender ID length */
@@ -76,6 +86,9 @@ extern oscore_nvm_read_cb s_nvm_read_cb;
 
 /* COSE Algorithm ID for AES-CCM-16-64-128 */
 #define OSCORE_ALG_AEAD 10
+
+/* Durable record identity length (SHA-256 digest, mirrors Rust ContextId) */
+#define OSCORE_RECORD_ID_LEN 32
 
 /*
  * CBOR encoding constants (RFC 8949).

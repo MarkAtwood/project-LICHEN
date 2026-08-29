@@ -17,6 +17,8 @@
 #include "oscore_internal.h"
 #include "hkdf.h"
 #include <monocypher.h>
+#include <tinycrypt/constants.h>
+#include <tinycrypt/sha256.h>
 
 LOG_MODULE_DECLARE(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
 
@@ -187,6 +189,85 @@ void oscore_nvm_register_callbacks(oscore_nvm_write_cb _Nullable write_cb,
 	k_mutex_unlock(&s_ctx_mutex);
 }
 
+/*
+ * Derive the durable record identity for a context, byte-identical to the
+ * Rust oscore crate's ContextId (derive_context_id): SHA-256 over a domain
+ * string, length-prefixed master secret and master salt, ID Context presence
+ * flag with length-prefixed bytes, and length-prefixed sender ID.
+ * Deliberately recipient-independent: contexts sharing the sender-direction
+ * derivation inputs are the same durable record (and the same sender key and
+ * nonce space). The digest is not secret (preimage resistant); it is stored
+ * so ownership can be enforced after the master secret is wiped.
+ */
+static int record_id_derive(const uint8_t *master_secret,
+			    size_t master_salt_len, const uint8_t *master_salt,
+			    bool has_id_context,
+			    const uint8_t *id_context, size_t id_context_len,
+			    const uint8_t *sender_id, size_t sender_id_len,
+			    uint8_t record_id[OSCORE_RECORD_ID_LEN])
+{
+	static const uint8_t domain[] = "LICHEN OSCORE sender context";
+	struct tc_sha256_state_struct state;
+	uint8_t prefix;
+
+	if (master_secret == NULL ||
+	    (master_salt == NULL && master_salt_len > 0) ||
+	    (id_context == NULL && has_id_context && id_context_len > 0) ||
+	    (sender_id == NULL && sender_id_len > 0)) {
+		return OSCORE_ERR_INVALID_PARAM;
+	}
+
+	if (tc_sha256_init(&state) != TC_CRYPTO_SUCCESS) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+	if (tc_sha256_update(&state, domain, sizeof(domain)) != TC_CRYPTO_SUCCESS) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+
+	prefix = (uint8_t)OSCORE_KEY_LEN;
+	if (tc_sha256_update(&state, &prefix, sizeof(prefix)) != TC_CRYPTO_SUCCESS ||
+	    tc_sha256_update(&state, master_secret, OSCORE_KEY_LEN) !=
+		    TC_CRYPTO_SUCCESS) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+
+	prefix = (uint8_t)master_salt_len;
+	if (tc_sha256_update(&state, &prefix, sizeof(prefix)) != TC_CRYPTO_SUCCESS ||
+	    (master_salt_len > 0 &&
+	     tc_sha256_update(&state, master_salt, master_salt_len) !=
+		     TC_CRYPTO_SUCCESS)) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+
+	prefix = has_id_context ? 1U : 0U;
+	if (tc_sha256_update(&state, &prefix, sizeof(prefix)) != TC_CRYPTO_SUCCESS) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+	if (has_id_context) {
+		prefix = (uint8_t)id_context_len;
+		if (tc_sha256_update(&state, &prefix, sizeof(prefix)) !=
+			    TC_CRYPTO_SUCCESS ||
+		    (id_context_len > 0 &&
+		     tc_sha256_update(&state, id_context, id_context_len) !=
+			     TC_CRYPTO_SUCCESS)) {
+			return OSCORE_ERR_KEY_DERIVATION;
+		}
+	}
+
+	prefix = (uint8_t)sender_id_len;
+	if (tc_sha256_update(&state, &prefix, sizeof(prefix)) != TC_CRYPTO_SUCCESS ||
+	    (sender_id_len > 0 &&
+	     tc_sha256_update(&state, sender_id, sender_id_len) !=
+		     TC_CRYPTO_SUCCESS)) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+
+	if (tc_sha256_final(record_id, &state) != TC_CRYPTO_SUCCESS) {
+		return OSCORE_ERR_KEY_DERIVATION;
+	}
+	return OSCORE_OK;
+}
+
 static int oscore_ctx_create_internal(const uint8_t *master_secret,
 				      const uint8_t *master_salt, size_t master_salt_len,
 				      const uint8_t *sender_id, size_t sender_id_len,
@@ -196,6 +277,7 @@ static int oscore_ctx_create_internal(const uint8_t *master_secret,
 				      struct oscore_ctx **ctx_out)
 {
 	struct oscore_ctx *ctx = NULL;
+	uint8_t record_tag[OSCORE_RECORD_ID_LEN];
 	int ret;
 	int ctx_idx;
 
@@ -264,6 +346,31 @@ static int oscore_ctx_create_internal(const uint8_t *master_secret,
 		return OSCORE_ERR_INVALID_PARAM;
 	}
 
+	/*
+	 * Exclusive live ownership: refuse a second context for a durable
+	 * record that already has a live owner. Two concurrent contexts over
+	 * one record would each carry an independent recipient replay window,
+	 * letting the same authenticated packet be accepted once per instance
+	 * (replay-window split-brain). Free the live owner to reactivate a
+	 * record (process-restart semantics).
+	 */
+	ret = record_id_derive(master_secret, master_salt_len, master_salt,
+			       has_id_context, id_context, id_context_len,
+			       sender_id, sender_id_len, record_tag);
+	if (ret != OSCORE_OK) {
+		k_mutex_unlock(&s_ctx_mutex);
+		LOG_ERR("record identity derivation failed (%d)", ret);
+		return ret;
+	}
+	for (int i = 0; i < CONFIG_LICHEN_OSCORE_MAX_CONTEXTS; i++) {
+		if (s_contexts[i].active &&
+		    crypto_verify32(s_contexts[i].record_id, record_tag) == 0) {
+			k_mutex_unlock(&s_ctx_mutex);
+			LOG_WRN("OSCORE record already has a live owner");
+			return OSCORE_ERR_CONTEXT_EXISTS;
+		}
+	}
+
 	/* Find free slot */
 	ctx_idx = -1;
 	for (int i = 0; i < CONFIG_LICHEN_OSCORE_MAX_CONTEXTS; i++) {
@@ -303,6 +410,8 @@ static int oscore_ctx_create_internal(const uint8_t *master_secret,
 		memcpy(ctx->id_context, id_context, id_context_len);
 	}
 	ctx->id_context_len = (uint8_t)id_context_len;
+	memcpy(ctx->record_id, record_tag, sizeof(ctx->record_id));
+	crypto_wipe(record_tag, sizeof(record_tag));
 
 	/* Derive Sender Key */
 	ret = derive_key(ctx->master_secret, OSCORE_KEY_LEN,
