@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-j2fx",
+  "title": "spec/08: 60-slot COSE_Sign1 size note ~10% high (measured 196-213B vs stated ~220B)",
+  "description": "spec/08-gateway-coordination.md:185 states ~110 B typical / ~220 B at the 60-slot cap for the GCP-6.5 COSE_Sign1. Measured canonical: 103-120 B at 4 slots (spec ~110 ok) and 196-213 B at 60 slots. The normative conclusion (does not reliably fit the 255-byte frame with 25-45 B CoAP+OSCORE+SCHC overhead at the cap) still holds, so precision only. Fix: '~110 B typical / ~200-215 B at the 60-slot cap'.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T01:01:34.296941Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T01:01:34.296941Z"
+}
