@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-kpqi",
+  "title": "Slot claim P3 hardening batch",
+  "description": "Small verified items from the 3-perspective review, one session: (1) register_gateway -ENOMEM at :501 ignored - seq burned, no entry, ACCEPTED returned; (2) replay-gate TOCTOU - lookup outside s_coord_lock, commit inside, concurrent same-seq claims both pass and last-write regresses high-water; move lookup+commit inside one lock or commit conditionally; (3) claim_seq wrap UINT32_MAX-\u003e0 permanently locks the gateway out - use wrap-aware compare; (4) 4.09 conflict echo can be stale - entry may change between winner capture and snapshot memcpy, take both under one lock; (5) shared static resp buffers in slots_post/slots_get/info_get/channels_get corrupt under per-transport concurrency; (6) claim-\u003emode assigned from uninitialized local on claim_dec_u8 failure (:1168-1176, UB-adjacent); (7) s_discard_count non-atomic across contexts; (8) digest computed before key lookup (:387) - wasted SHA-256 on unknown-IID floods; (9) rate limit is log-only - add admission control before decode once NV commit lands (flash-wear), and non-shortest CBOR uint encodings are accepted by the decoder (reject).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T02:12:28.868407Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T02:12:28.868407Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kpqi",
+      "depends_on_id": "project-LICHEN-worker6-nwjl.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T02:12:31.025913Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

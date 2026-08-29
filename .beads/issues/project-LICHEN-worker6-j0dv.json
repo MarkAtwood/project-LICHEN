@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-j0dv",
+  "title": "Slot claim: signer authorization/quota model needs decision; validate_interleaved unused",
+  "description": "Any pinned key-store entry can claim up to all 60 slots for its own IID; first claim never conflicts (scan sees only registered gateways); no per-gateway quota and lichen_slot_coord_validate_interleaved is never called to enforce ordinal/pattern consistency. Not a regression (pre-rewrite had the same model) and TOFU self-pinning is not mesh-reachable (key PUT is local-admin-gated), but one compromised provisioned key starves the DODAG capacity plan. Needs a spec-level decision on signer role/root-gateway authorization and quota policy (possibly human-flagged), plus calling validate_interleaved on accept.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T02:12:06.768445Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T02:12:06.768445Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-j0dv",
+      "depends_on_id": "project-LICHEN-worker6-nwjl.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T02:12:06.989105Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

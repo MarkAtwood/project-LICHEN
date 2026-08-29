@@ -1,0 +1,7 @@
+{
+  "id": "1787969551751874000-1",
+  "issue_id": "project-LICHEN-worker6-07cg",
+  "author": "Mark Atwood",
+  "text": "Wave-8 review cross-link: the COSE rewrite (nwjl.3) left the production replay gate as weak no-op hooks (coap_slot_coord.c:540-555; header comment claiming a settings backend supersedes them is inaccurate - no backend exists in-tree). Host tests interpose strong hooks so they pass; firmware is fail-open on step 8 until this lands. Also note the claim_seq high-water must be wrap-aware and the lookup/commit need a single lock window (P3s filed separately).",
+  "created_at": "2026-08-29T02:12:31.751874Z"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-oirb",
+  "title": "Slot table: overridden/expired gateway entries never evicted; conflict scan ignores expiry",
+  "description": "coap_slot_coord.c:461-462,501 - when a lower-IID claim overrides an existing entry the loser stays .valid with overlapping slots (double-booked table feeding later conflict checks); register_gateway never stores claim-\u003eexpiry into valid_until and nothing evicts, so a decommissioned gateway's allocation blocks slots indefinitely; conflict scan (:441-481) checks only .valid. Fix: evict or invalidate the overridden entry, store expiry at registration, skip/expire entries past valid_until in the conflict scan.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T02:12:04.098992Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T02:12:04.098992Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oirb",
+      "depends_on_id": "project-LICHEN-worker6-nwjl.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T02:12:06.079124Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

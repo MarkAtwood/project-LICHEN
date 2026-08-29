@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-uqke",
+  "title": "spec/08: fix decoy protected-header bytes in handoff examples",
+  "description": "spec/08-gateway-coordination.md:295,334 label h'a10139ffff' as {1: -65537}; those bytes are actually {1: -65536} (5 bytes), which the C verifier treats as the decoy. The correct {1: -65537} encoding is the 7-byte a1 01 3a 00 01 00 00. Fix the examples and any prose derived from them. Doc bug only.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T02:12:31.223644Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T02:12:31.223644Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-uqke",
+      "depends_on_id": "project-LICHEN-worker6-nwjl.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T02:12:31.420601Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
