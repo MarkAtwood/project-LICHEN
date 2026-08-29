@@ -543,7 +543,7 @@ class TestDaoOriginValidator:
         pin_table = MockPinTable({node_iid: NODE_IDENTITY.pubkey})
         validator = DaoOriginValidator(pin_table)
 
-        sig_opt = RplOption(DAO_ORIGIN_SIGNATURE_TYPE, bytes(56))
+        sig_opt = RplOption(DAO_ORIGIN_SIGNATURE_TYPE, struct.pack(">Q", 1) + bytes(48))
         dao = received_dao(
             DAO(
                 rpl_instance_id=0,
@@ -575,10 +575,12 @@ class TestDaoOriginValidator:
                 dodag_id=DODAG_ID,
                 options=[
                     RplTarget(NODE_ADDR).to_option(),
-                    RplOption(DAO_ORIGIN_SIGNATURE_TYPE, bytes(56)),  # Not final
-                    TransitInformation(ROOT_ADDR).to_option(),
-                ],
-            )
+                RplOption(
+                    DAO_ORIGIN_SIGNATURE_TYPE, struct.pack(">Q", 1) + bytes(48)
+                ),  # Not final
+                TransitInformation(ROOT_ADDR).to_option(),
+            ]
+        )
         )
 
         result = validator.validate(dao, NODE_ADDR, DODAG_ID)
@@ -1433,6 +1435,95 @@ class TestTransitFlagsSemanticStage:
 
         assert result.valid is False
         assert result.reject_reason is DaoOriginRejectReason.SEQUENCE_EQUAL_DIFFERENT_BYTES
+
+
+class TestZeroSequenceStructuralStage:
+    """Origin Sequence zero is a structural rejection (canonical reject_zero_sequence).
+
+    Per spec 05-routing.md 8.6 the Origin Sequence counter starts above zero.
+    The canonical vector classifies sequence zero at the structural stage:
+    rejected from the pre-key framing pass, before key lookup, signature
+    verification, and replay classification.
+    """
+
+    DAO_ORIGIN_VECTORS = (
+        Path(__file__).resolve().parents[3] / "test" / "vectors" / "dao_origin_signature.json"
+    )
+
+    def _vector(self, name: str) -> dict:
+        vectors = json.loads(self.DAO_ORIGIN_VECTORS.read_text())["vectors"]
+        for vector in vectors:
+            if vector["name"] == name:
+                return vector
+        raise AssertionError(f"vector {name} not found in {self.DAO_ORIGIN_VECTORS}")
+
+    def test_canonical_zero_vector_rejected_structurally_without_pin(self) -> None:
+        """Structural stage proof: an empty pin table cannot preempt zero.
+
+        If the rejection only fired after identity, an unpinned origin's
+        sequence-0 DAO would be reported ORIGIN_NOT_PINNED. The canonical
+        decision order requires ZERO_SEQUENCE from the framing pass itself.
+        """
+        vector = self._vector("reject_zero_sequence")
+        assert vector["expected"]["decision_stage"] == "structural"
+        assert vector["expected"]["reason"] == "zero_sequence"
+        source = IPv6Address(bytes.fromhex(vector["source_ipv6"]))
+        dodag = IPv6Address(bytes.fromhex(vector["effective_dodag_id"]))
+        dao = DAO.from_bytes(bytes.fromhex(vector["signed_dao"]))
+
+        validator = DaoOriginValidator(MockPinTable({}), MockReplayStore())
+
+        result = validator.validate(dao, source, dodag)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.ZERO_SEQUENCE
+
+    def test_canonical_zero_vector_rejected_structurally_with_pin(self) -> None:
+        vector = self._vector("reject_zero_sequence")
+        source = IPv6Address(bytes.fromhex(vector["source_ipv6"]))
+        dodag = IPv6Address(bytes.fromhex(vector["effective_dodag_id"]))
+        pin_table = MockPinTable({source.packed[8:]: bytes.fromhex(vector["public_key"])})
+        validator = DaoOriginValidator(pin_table, MockReplayStore())
+        dao = DAO.from_bytes(bytes.fromhex(vector["signed_dao"]))
+
+        result = validator.validate(dao, source, dodag)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.ZERO_SEQUENCE
+
+    def test_zero_sequence_dao_persists_no_floor_and_installs_no_route(self) -> None:
+        """The canonical zero vector through the production manager path."""
+        from lichen.rpl.dao_manager import DaoManager
+        from lichen.rpl.dao_types import DaoError
+
+        vector = self._vector("reject_zero_sequence")
+        wire = bytes.fromhex(vector["signed_dao"])
+        source = IPv6Address(bytes.fromhex(vector["source_ipv6"]))
+        public_key = bytes.fromhex(vector["public_key"])
+        active_dodag = IPv6Address(bytes.fromhex(vector["active_dodag_id"]))
+
+        class VectorPinTable:
+            def pinned_pubkey_for(self, _iid: bytes) -> bytes | None:
+                return public_key
+
+        persistence = MemoryPersistence()
+        validator = DaoOriginValidator(VectorPinTable(), replay_store=persistence)
+        manager = DaoManager(
+            node_address=active_dodag,
+            is_root=True,
+            rpl_instance_id=vector["effective_instance_id"],
+            dodag_id=active_dodag,
+            persistence=persistence,
+            origin_validator=validator,
+        )
+        state_before = manager.route_state_snapshot(active_dodag)
+
+        with pytest.raises(DaoError) as exc_info:
+            manager.validate_and_process_dao_wire_at(wire, source, 1.0)
+
+        assert exc_info.value.reason == "zero_sequence"
+        assert manager.route_state_snapshot(active_dodag) == state_before
+        assert persistence.load_rx_floor(public_key) is None
 
 
 class TestOriginResultInvariantEnforcement:

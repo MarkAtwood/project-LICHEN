@@ -692,8 +692,14 @@ impl GatewayInfo {
                 }
                 KEY_SUPERFRAME_EPOCH => {
                     if let Value::Integer(i) = v {
+                        // Epoch is a Unix timestamp used as u64 arithmetic
+                        // downstream; pre-epoch (negative) values are invalid
+                        // input, not something to clamp (bead
+                        // project-LICHEN-worker6-utqb).
+                        let epoch = u64::try_from(i128::from(i))
+                            .map_err(|_| ResourceError::InvalidFieldType("superframe_epoch"))?;
                         info.superframe_epoch =
-                            Some(i64::try_from(i128::from(i)).map_err(|_| {
+                            Some(i64::try_from(epoch).map_err(|_| {
                                 ResourceError::InvalidFieldType("superframe_epoch")
                             })?);
                     }
@@ -2039,9 +2045,28 @@ impl GatewayCoordinator {
             }
             occupied.sort_unstable();
             occupied.dedup();
-            let replacements =
-                slot::find_next_available(overlap.len(), &occupied, self.slots_per_superframe)
-                    .unwrap_or_default();
+            let replacements = match slot::find_next_available(
+                overlap.len(),
+                &occupied,
+                self.slots_per_superframe,
+            ) {
+                Ok(replacements) => replacements,
+                Err(_) => {
+                    let reject = Value::Map(vec![
+                        (
+                            Value::Text("status".to_string()),
+                            Value::Text("rejected".to_string()),
+                        ),
+                        (
+                            Value::Text("reason".to_string()),
+                            Value::Text("insufficient_free_slots".to_string()),
+                        ),
+                    ]);
+                    let mut payload = Vec::new();
+                    ciborium::into_writer(&reject, &mut payload).unwrap();
+                    return CoapResponse::content(payload, CONTENT_FORMAT_CBOR);
+                }
+            };
             retained.extend(
                 replacements
                     .into_iter()
@@ -2326,6 +2351,42 @@ mod tests {
         assert_eq!(decoded.federation_modes.len(), 2);
     }
 
+    /// Build a GatewayInfo CBOR map containing only the superframe epoch key
+    /// so decode hits the epoch validation before any other field checks.
+    fn gateway_info_cbor_with_epoch(epoch: Value) -> Vec<u8> {
+        let map = vec![(Value::Integer(KEY_SUPERFRAME_EPOCH.into()), epoch)];
+        let mut buf = Vec::new();
+        ciborium::into_writer(&Value::Map(map), &mut buf).expect("CBOR encoding should not fail");
+        buf
+    }
+
+    #[test]
+    fn gateway_info_rejects_negative_superframe_epoch() {
+        let payload = gateway_info_cbor_with_epoch(Value::Integer((-1720001000i64).into()));
+
+        let err = GatewayInfo::decode(&payload).unwrap_err();
+        assert_eq!(err, ResourceError::InvalidFieldType("superframe_epoch"));
+    }
+
+    #[test]
+    fn gateway_info_zero_superframe_epoch_roundtrip() {
+        let mut info = GatewayInfo::new([2u8; 16]);
+        info.superframe_epoch = Some(0);
+
+        let decoded = GatewayInfo::decode(&info.encode()).unwrap();
+
+        assert_eq!(decoded.superframe_epoch, Some(0));
+    }
+
+    #[test]
+    fn gateway_info_rejects_over_i64_superframe_epoch() {
+        // 2^63 fits CBOR's unsigned range but exceeds the i64 epoch field.
+        let payload = gateway_info_cbor_with_epoch(Value::Integer((1u64 << 63).into()));
+
+        let err = GatewayInfo::decode(&payload).unwrap_err();
+        assert_eq!(err, ResourceError::InvalidFieldType("superframe_epoch"));
+    }
+
     #[test]
     fn slot_claim_encode_decode() {
         let claim = SlotClaim::new(
@@ -2500,6 +2561,45 @@ mod tests {
             matches!(key, Value::Text(text) if text == "local_slots")
                 && matches!(value, Value::Array(slots) if slots.len() == 30)
         }));
+    }
+
+    #[test]
+    fn fully_occupied_superframe_rejects_claim_instead_of_under_allocating() {
+        let mut local_address = [0u8; 16];
+        local_address[8..].fill(0xff);
+        let mut coordinator = coordinator(local_address);
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Contiguous,
+            gateway_count: 2,
+            ordinal: 0,
+            start_slot: Some(0),
+            slot_count: Some(60),
+            owned: None,
+        };
+        let generation = coordinator.slot_replay_generation();
+
+        // Lower-IID peer claims three of our slots with no free slot left to
+        // replace them; recovery must fail closed instead of accepting the
+        // claim with missing replacements.
+        let (claim, pubkey) = signed_slot_claim([0x53; 32], vec![10, 11, 12], 1, 0);
+        let response = coordinator.handle_post_slots(&claim.encode(), true, Some(&pubkey), 1);
+        assert_eq!(response.code, 0x45); // 2.05 Content (rejection payload)
+
+        let Value::Map(fields) = ciborium::from_reader(response.payload.as_slice()).unwrap() else {
+            panic!("expected rejection response map");
+        };
+        assert!(fields.iter().any(|(key, value)| {
+            matches!(key, Value::Text(text) if text == "reason")
+                && matches!(value, Value::Text(text) if text == "insufficient_free_slots")
+        }));
+        assert_eq!(coordinator.slot_replay_generation(), generation);
+        assert!(coordinator.peer_claims.is_empty());
+        let owned = coordinator
+            .info
+            .slot_map
+            .owned_slots(coordinator.info.capabilities.max_slots);
+        assert_eq!(owned.len(), 60);
+        assert!(owned.contains(&10));
     }
 
     #[test]

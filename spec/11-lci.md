@@ -155,14 +155,23 @@ The client obtains a link-local address for the local interface:
 **Static (simple):**
 ```
 Client: fe80::2
-Node:   fe80::1
+Node:   fe80::<node IID>
 ```
 
-**EUI-64 derived:**
+**EUI-64 derived (client side):**
 ```
 Client: fe80::<IID from device MAC>
-Node:   fe80::<IID from node EUI-64>
+Node:   fe80::<node IID>
 ```
+
+`<node IID>` is always the node's key-derived IID: `IID = SHA-512(pubkey)[0:8]`
+with the U/L bit cleared (spec/04-network.md §6.2, spec/06-security.md §8.5).
+The node's wire EUI-64 is obtained from that IID by toggling the U/L bit exactly
+once (spec/02-physical-link.md §4.2); it is never the source of the IID. The
+client is a generic IPv6 host and MAY use a static address or one derived from
+its device MAC; such an IID is link-interoperability only and is not a LICHEN
+node identity. `fe80::1` in examples throughout this document is illustrative
+shorthand for the node's link-local address.
 
 The node acts as default router for the client. Client's routing table:
 

@@ -1270,17 +1270,17 @@ invalidates all outstanding invitations).
 
 #### 18.8.3. Group Multicast Addressing
 
-Per RFC 7390 and RFC 3306 (unicast-prefix-based multicast). With 02xx primary addresses, use the /64 of the 02xx prefix:
+Per RFC 7390 and RFC 3306 (unicast-prefix-based multicast). With 02xx primary addresses there is no network-wide prefix and no ULA; use the upper 64 bits of the group-owning node's self-derived primary /128 (key-derived per 06-security.md §8.5):
 
 ```
-ff35:0040:<64-bit 02xx prefix>::<16-bit group ID>
+ff35:0040:<upper 64 bits of the owner's 0200::/8 /128>::<16-bit group ID>
 ```
 
-Example: Group 1 on mesh `0200:1234:5678:9abc::/64`:
+Example: Group 1 owned by the node whose primary address begins with `0200:1234:5678:9abc`:
 ```
 ff35:0040:0200:1234:5678:9abc:0001::0001
 ```
-(See 04-network.md and 06-security.md for 02xx derivation; ff03::fc preferred for simple mesh-local groups.)
+(See 04-network.md §6.2 and 06-security.md §8.5 for 02xx derivation; ff03::fc preferred for simple mesh-local groups.)
 
 #### 18.8.4. Group Resources
 

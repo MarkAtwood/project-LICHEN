@@ -18,6 +18,16 @@ def synchronized_hop_channel(sfn: int, seed: int = 0, num_channels: int = 8) -> 
 
 @dataclass
 class SuperframeClock:
+    """Local view of superframe time.
+
+    ``base_time_us`` is the local clock reading at the moment a sync beacon
+    was received; the beacon is treated as marking the start (slot-0 boundary)
+    of the superframe whose SFN it carried.  Propagation delay is neglected by
+    the simulator.  All slot windows are anchored to this instant and recur
+    once per superframe, so a node's local time origin needs no relationship
+    to the global SFN epoch.
+    """
+
     sfn: int = 0
     base_time_us: int = 0
     drift_ppm: float = 10.0
@@ -55,6 +65,14 @@ class TDMAScheduler:
         return self.slot_duration_ms * 1000, self.guard_ms * 1000
 
     def sync_from_beacon(self, rx_time_us: int, sfn: int, assigned: int = -1) -> None:
+        """Synchronize to a beacon received at local time ``rx_time_us``.
+
+        ``rx_time_us`` is the local clock reading at beacon reception and
+        becomes the anchor: the slot-0 boundary of the superframe carrying
+        ``sfn``.  It need not be a multiple of the slot or superframe length;
+        the local time origin may be arbitrarily offset from the global SFN
+        epoch.
+        """
         if type(rx_time_us) is not int or rx_time_us < 0:
             raise ValueError("rx_time_us must be a non-negative exact integer")
         if type(sfn) is not int or not 0 <= sfn <= 0xFFFFFFFF:
@@ -74,12 +92,27 @@ class TDMAScheduler:
             self.assigned_slot = self.hash_slot(self.eui64, self.num_slots, sfn)
 
     def is_tx_allowed(self, current_time_us: int) -> bool:
+        """Return whether ``current_time_us`` falls in this node's data window.
+
+        The window is the assigned slot of the current superframe, minus the
+        trailing guard, anchored to the last beacon reception
+        (``clock.base_time_us``); it recurs once per superframe.  Times before
+        the anchor return ``False``: the scheduler grants no window it has not
+        observed a beacon for.  Unsynchronized schedulers still allow
+        transmission as a CSMA-style fallback.
+        """
         if type(current_time_us) is not int or current_time_us < 0:
             raise ValueError("current_time_us must be a non-negative exact integer")
         if self.state != TDMAState.SYNCED:
             return True
         d, guard_us = self._timing_us()
-        slot_start_us = self.clock.base_time_us + self.assigned_slot * d
+        if current_time_us < self.clock.base_time_us:
+            return False
+        superframe_us = self.num_slots * d
+        elapsed_superframes = (current_time_us - self.clock.base_time_us) // superframe_us
+        slot_start_us = (
+            self.clock.base_time_us + elapsed_superframes * superframe_us + self.assigned_slot * d
+        )
         tx_end_us = slot_start_us + d - guard_us
         return slot_start_us <= current_time_us < tx_end_us
 

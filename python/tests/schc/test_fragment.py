@@ -2400,15 +2400,18 @@ def test_tofu_capacity_rejects_active_session_saturation_until_hold_down_expires
     assert asyncio.run(newcomer_link.send(b"newcomer"))
     wire = newcomer_radio.tx_history[-1]
 
+    # Capacity exhaustion reports the dedicated CAPACITY_EXHAUSTED code
+    # (660b9bf3bf), not the pre-enum REPLAY overload. The frame is not a
+    # replay: highest() stays -1 because nothing was admitted.
     radio.queue_rx(wire)
-    assert asyncio.run(link.receive(100)) is ReceiveError.REPLAY
+    assert asyncio.run(link.receive(100)) is ReceiveError.CAPACITY_EXHAUSTED
     assert link.replay_protector.highest(newcomer.pubkey) == -1
     assert len(link._pinned_keys) == 64
 
     senders[0].cancel()
     now[0] = 59.999
     radio.queue_rx(wire)
-    assert asyncio.run(link.receive(100)) is ReceiveError.REPLAY
+    assert asyncio.run(link.receive(100)) is ReceiveError.CAPACITY_EXHAUSTED
     now[0] = 60.0
     radio.queue_rx(wire)
     admitted = asyncio.run(link.receive(100))

@@ -189,6 +189,52 @@ pub enum DioOutcome {
     Rejected,
 }
 
+/// DODAG scope an admission snapshot was sealed against: the RPL instance id
+/// and DODAG ID the evidence was validated against at admission time.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DodagScope {
+    pub rpl_instance_id: u8,
+    pub dodag_id: [u8; 16],
+}
+
+/// Link-authenticated DIO evidence sealed by [`DodagState::admit_authenticated_dio`].
+///
+/// Carries the scope snapshot the frame was admitted under so that
+/// [`DodagState::commit_admitted_dio`] can revalidate it against live DODAG
+/// state before any policy or routing commit.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug)]
+pub struct AdmittedDio {
+    scope: DodagScope,
+    dio: Dio,
+    neighbor_addr: [u8; 16],
+    signer_iid: [u8; 8],
+    signer_is_expected_root: bool,
+}
+
+/// Why an authenticated DIO frame failed admission before any state change.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DioAdmissionError {
+    /// Evidence failed peer-policy, replay, or DODAG-scope validation; the
+    /// signer's parent entries MUST be revoked.
+    PeerRevoked,
+    /// The frame is not a well-formed SCHC-carried DIO; nothing to revoke.
+    Malformed,
+}
+
+/// Commit-time fence failure: the DODAG scope changed between admission and
+/// commit, so the sealed evidence is stale and MUST NOT be applied.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DodagScopeMismatch {
+    /// Scope the evidence was sealed against.
+    pub sealed: DodagScope,
+    /// Scope current when the commit was attempted.
+    pub current: DodagScope,
+}
+
 impl ParentCandidate {
     /// Rank this node would achieve via this parent (MRHOF, spec B.1).
     #[cfg(feature = "std")]
@@ -458,8 +504,119 @@ impl DodagState {
         DioOutcome::Accepted
     }
 
+    /// Snapshot the DODAG scope admission evidence is sealed against.
+    fn scope_snapshot(&self) -> DodagScope {
+        DodagScope {
+            rpl_instance_id: self.rpl_instance_id,
+            dodag_id: self.dodag_id,
+        }
+    }
+
+    /// Seal link-authenticated DIO evidence for a later commit.
+    ///
+    /// The DODAG scope is snapshotted here, before any link or SCHC
+    /// admission work, and the parsed DIO is revalidated against that
+    /// snapshot so sealed evidence can never bind two scopes. Admission is
+    /// read-only: it mutates nothing, and every state mutation triggered by
+    /// this evidence happens later in [`Self::commit_admitted_dio`], under
+    /// exclusive access to the DODAG.
+    pub fn admit_authenticated_dio(
+        &self,
+        link: &lichen_link::link_layer::LinkLayer,
+        frame: lichen_link::link_layer::AuthenticatedFrame,
+    ) -> Result<AdmittedDio, DioAdmissionError> {
+        let scope = self.scope_snapshot();
+        let signer_iid = frame.sender().iid;
+        let expected_role =
+            if lichen_core::addr::ygg_addr_from_pubkey(frame.sender().pubkey.as_bytes())
+                == scope.dodag_id
+            {
+                lichen_schc::ExpectedDioRole::Root
+            } else {
+                lichen_schc::ExpectedDioRole::Peer
+            };
+        let peer = lichen_schc::AuthenticatedPeerSchcContext::from_authenticated_dio_frame(
+            frame,
+            scope.rpl_instance_id,
+            &scope.dodag_id,
+            1,
+            expected_role,
+        )
+        .map_err(|_| DioAdmissionError::PeerRevoked)?;
+        if !peer.allows_dodag_join() {
+            return Err(DioAdmissionError::PeerRevoked);
+        }
+        let Some(frame) = peer.authenticated_frame() else {
+            return Err(DioAdmissionError::PeerRevoked);
+        };
+        if !link.accepts_authenticated_frame(frame) {
+            return Err(DioAdmissionError::PeerRevoked);
+        }
+        if frame.payload().first().copied() != Some(lichen_core::constants::L2_DISPATCH_SCHC) {
+            return Err(DioAdmissionError::Malformed);
+        }
+        let mut ipv6 = [0u8; 512];
+        let Ok(ipv6_len) = lichen_schc::decompress(&frame.payload()[1..], &mut ipv6) else {
+            return Err(DioAdmissionError::PeerRevoked);
+        };
+        if ipv6_len < 68 {
+            return Err(DioAdmissionError::Malformed);
+        }
+        let Ok(dio) = Dio::from_bytes(&ipv6[44..ipv6_len]) else {
+            return Err(DioAdmissionError::PeerRevoked);
+        };
+        if dio.rpl_instance_id != scope.rpl_instance_id || dio.dodag_id != scope.dodag_id {
+            return Err(DioAdmissionError::Malformed);
+        }
+        let neighbor_addr = ipv6[8..24]
+            .try_into()
+            .expect("validated IPv6 header has a complete source address");
+        Ok(AdmittedDio {
+            scope,
+            dio,
+            neighbor_addr,
+            signer_iid,
+            signer_is_expected_root: matches!(expected_role, lichen_schc::ExpectedDioRole::Root),
+        })
+    }
+
+    /// Commit previously admitted DIO evidence against live DODAG state.
+    ///
+    /// Revalidation fence: the admission snapshot must still describe the
+    /// current DODAG scope, and the parsed DIO must still carry that scope,
+    /// before any policy or routing commit. A scope change between admission
+    /// and commit fails closed with [`DodagScopeMismatch`] and mutates
+    /// nothing — evidence sealed for one DODAG is never applied to another,
+    /// not even the failure-path parent revocations.
+    pub fn commit_admitted_dio(
+        &mut self,
+        admitted: AdmittedDio,
+        link_etx: f32,
+    ) -> Result<DioOutcome, DodagScopeMismatch> {
+        let current = self.scope_snapshot();
+        if current != admitted.scope
+            || admitted.dio.rpl_instance_id != current.rpl_instance_id
+            || admitted.dio.dodag_id != current.dodag_id
+        {
+            return Err(DodagScopeMismatch {
+                sealed: admitted.scope,
+                current,
+            });
+        }
+        if admitted.dio.version != self.version && !admitted.signer_is_expected_root {
+            self.remove_parents_with_iid(&admitted.signer_iid);
+            return Ok(DioOutcome::Rejected);
+        }
+        Ok(self.process_dio(&admitted.dio, admitted.neighbor_addr, link_etx))
+    }
+
     /// Admit a DIO only from the capability returned after link signature and
     /// replay validation, and only when its sole SCHC version option is v3.
+    ///
+    /// One-shot form of [`Self::admit_authenticated_dio`] plus
+    /// [`Self::commit_admitted_dio`]: the scope snapshot is taken at entry and
+    /// revalidated before the policy/routing commit, so no interleaving scope
+    /// change can leak this evidence into different routing state.
     pub fn process_authenticated_dio(
         &mut self,
         link: &lichen_link::link_layer::LinkLayer,
@@ -467,61 +624,16 @@ impl DodagState {
         link_etx: f32,
     ) -> DioOutcome {
         let signer_iid = frame.sender().iid;
-        let expected_role =
-            if lichen_core::addr::ygg_addr_from_pubkey(frame.sender().pubkey.as_bytes())
-                == self.dodag_id
-            {
-                lichen_schc::ExpectedDioRole::Root
-            } else {
-                lichen_schc::ExpectedDioRole::Peer
-            };
-        let Ok(peer) = lichen_schc::AuthenticatedPeerSchcContext::from_authenticated_dio_frame(
-            frame,
-            self.rpl_instance_id,
-            &self.dodag_id,
-            1,
-            expected_role,
-        ) else {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
-        };
-        if !peer.allows_dodag_join() {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
+        match self.admit_authenticated_dio(link, frame) {
+            Ok(admitted) => self
+                .commit_admitted_dio(admitted, link_etx)
+                .unwrap_or(DioOutcome::Rejected),
+            Err(DioAdmissionError::PeerRevoked) => {
+                self.remove_parents_with_iid(&signer_iid);
+                DioOutcome::Rejected
+            }
+            Err(DioAdmissionError::Malformed) => DioOutcome::Rejected,
         }
-        let Some(frame) = peer.authenticated_frame() else {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
-        };
-        if !link.accepts_authenticated_frame(frame) {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
-        }
-        if frame.payload().first().copied() != Some(lichen_core::constants::L2_DISPATCH_SCHC) {
-            return DioOutcome::Rejected;
-        }
-        let mut ipv6 = [0u8; 512];
-        let Ok(ipv6_len) = lichen_schc::decompress(&frame.payload()[1..], &mut ipv6) else {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
-        };
-        if ipv6_len < 68 {
-            return DioOutcome::Rejected;
-        }
-        let Ok(dio) = Dio::from_bytes(&ipv6[44..ipv6_len]) else {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
-        };
-        if dio.version != self.version
-            && !matches!(expected_role, lichen_schc::ExpectedDioRole::Root)
-        {
-            self.remove_parents_with_iid(&signer_iid);
-            return DioOutcome::Rejected;
-        }
-        let neighbor_addr = ipv6[8..24]
-            .try_into()
-            .expect("validated IPv6 header has a complete source address");
-        self.process_dio(&dio, neighbor_addr, link_etx)
     }
 
     pub fn remove_parents_with_iid(&mut self, signer_iid: &[u8; 8]) -> bool {
@@ -1463,5 +1575,245 @@ mod tests {
         assert_eq!(root.rank, ROOT_RANK);
         assert_eq!(root.preferred_parent, None);
         assert_eq!(root.parent_count(), 0);
+    }
+
+    // ---- Authenticated DIO admission fence -------------------------------
+
+    /// Build a live link-authenticated DIO frame carrying the given DODAG
+    /// scope, using the same link + SCHC machinery as production admission.
+    fn authenticated_dio_frame(
+        sender_seed: u8,
+        rpl_instance_id: u8,
+        dodag_id: &[u8; 16],
+        version: u8,
+        rank: u16,
+        seqnum: u16,
+    ) -> (
+        lichen_link::link_layer::LinkLayer,
+        lichen_link::link_layer::AuthenticatedFrame,
+    ) {
+        use lichen_link::identity::{Identity, PeerIdentity};
+        use lichen_link::keys::Seed;
+        use lichen_link::link_layer::LinkLayer;
+        use lichen_link::LinkSeqNum;
+        use std::vec;
+
+        let sender = Identity::from_seed(Seed::new([sender_seed; 32]));
+        let sender_iid = sender.iid;
+        let mut receiver = LinkLayer::new(Identity::from_seed(Seed::new([0x22; 32])));
+        receiver.add_peer(PeerIdentity::from_pubkey(sender.pubkey));
+        let sender_link = LinkLayer::new(sender);
+
+        let mut dio = vec![0u8; 24];
+        dio[0] = rpl_instance_id;
+        dio[1] = version;
+        dio[2..4].copy_from_slice(&rank.to_be_bytes());
+        dio[4] = 1 << 3; // MOP 1 (non-storing), not grounded
+        dio[8..24].copy_from_slice(dodag_id);
+        dio.extend_from_slice(&[0x13, 1, 3]); // sole SCHC rule-version option, v3
+        let mut icmp = vec![155u8, 1, 0, 0];
+        icmp.extend_from_slice(&dio);
+        let mut src = [0u8; 16];
+        src[0] = 0xfe;
+        src[1] = 0x80;
+        src[8..].copy_from_slice(&sender_iid);
+        let dst = ALL_RPL_NODES;
+        let checksum = lichen_core::checksum::upper_layer_checksum(&src, &dst, 58, &icmp);
+        icmp[2..4].copy_from_slice(&checksum.to_be_bytes());
+        let mut ipv6 = vec![0u8; 40];
+        ipv6[0] = 0x60;
+        ipv6[4..6].copy_from_slice(&(icmp.len() as u16).to_be_bytes());
+        ipv6[6] = 58;
+        ipv6[7] = 255;
+        ipv6[8..24].copy_from_slice(&src);
+        ipv6[24..40].copy_from_slice(&dst);
+        ipv6.extend_from_slice(&icmp);
+        let mut compressed = [0u8; 128];
+        let compressed_len = lichen_schc::compress(&ipv6, &mut compressed).unwrap();
+        let mut link_payload = vec![lichen_core::constants::L2_DISPATCH_SCHC];
+        link_payload.extend_from_slice(&compressed[..compressed_len]);
+        let mut wire = vec![0u8; 160];
+        let length = sender_link
+            .build_frame(1, LinkSeqNum::new(seqnum), &[], &link_payload, &mut wire)
+            .unwrap();
+        let frame = receiver.receive_frame(&wire[..length]).unwrap();
+        (receiver, frame)
+    }
+
+    fn scope(tag: u8) -> [u8; 16] {
+        let mut id = [0xfd; 16];
+        id[15] = tag;
+        id
+    }
+
+    fn signer_addr(sender_seed: u8) -> [u8; 16] {
+        use lichen_link::identity::Identity;
+        use lichen_link::keys::Seed;
+        let mut addr = [0u8; 16];
+        addr[0] = 0xfe;
+        addr[1] = 0x80;
+        addr[8..].copy_from_slice(&Identity::from_seed(Seed::new([sender_seed; 32])).iid);
+        addr
+    }
+
+    #[test]
+    fn stale_scope_evidence_is_rejected_without_state_mutation() {
+        let scope_a = scope(0x0a);
+        let scope_b = scope(0x0b);
+        let peer = signer_addr(0x11);
+        let mut node = DodagState::new(7, scope_a, 0);
+
+        // Join scope A from the peer so there is state a stale commit could
+        // corrupt.
+        let (link, join) = authenticated_dio_frame(0x11, 7, &scope_a, 0, 512, 1);
+        assert_eq!(
+            node.process_authenticated_dio(&link, join, 1.0),
+            DioOutcome::Accepted
+        );
+        assert!(node.is_joined());
+        assert_eq!(node.preferred_parent, Some(peer));
+
+        // Snapshot + seal: evidence is admitted while the scope is still A.
+        let (link, stale) = authenticated_dio_frame(0x11, 7, &scope_a, 0, 512, 2);
+        let admitted = node
+            .admit_authenticated_dio(&link, stale)
+            .expect("scope A evidence seals against scope A");
+
+        // DETERMINISTIC INTERLEAVE: the node leaves DODAG A and joins DODAG B
+        // (different instance id, DODAG ID, and version) between admission and
+        // commit; the same peer becomes a parent under B so there is state
+        // under the new scope the stale evidence could mutate.
+        node.dodag_id = scope_b;
+        node.rpl_instance_id = 9;
+        node.version = 5;
+        node.role = DodagRole::Unjoined;
+        node.rank = INFINITE_RANK;
+        node.lowest_rank = INFINITE_RANK;
+        node.preferred_parent = None;
+        node.parents.clear();
+        let b_dio = Dio {
+            rpl_instance_id: 9,
+            version: 5,
+            rank: ROOT_RANK,
+            dodag_id: scope_b,
+            ..dio(ROOT_RANK)
+        };
+        assert_eq!(
+            node.process_dio(&b_dio, peer, 1.0),
+            DioOutcome::Accepted,
+            "peer must be a live parent under scope B"
+        );
+        assert_eq!(node.parent_count(), 1);
+        assert_eq!(node.preferred_parent, Some(peer));
+        assert_eq!(node.rank, ROOT_RANK + MIN_HOP_RANK_INCREASE);
+
+        // Commit the stale scope-A evidence: the fence fails closed BEFORE
+        // the version-mismatch revocation and before any routing commit.
+        // The stale DIO advertises version 0 against the node's version 5,
+        // so an unfenced commit would revoke the peer's scope-B parents.
+        assert_eq!(
+            node.commit_admitted_dio(admitted, 1.0),
+            Err(DodagScopeMismatch {
+                sealed: DodagScope {
+                    rpl_instance_id: 7,
+                    dodag_id: scope_a,
+                },
+                current: DodagScope {
+                    rpl_instance_id: 9,
+                    dodag_id: scope_b,
+                },
+            })
+        );
+
+        // No route/policy state mutated: the scope-B parent survives.
+        assert!(node.has_parent(&peer));
+        assert_eq!(node.parent_count(), 1);
+        assert_eq!(node.preferred_parent, Some(peer));
+        assert_eq!(node.rank, ROOT_RANK + MIN_HOP_RANK_INCREASE);
+        assert_eq!(node.version, 5);
+        assert!(node.is_joined());
+    }
+
+    #[test]
+    fn instance_only_scope_change_is_caught_by_the_commit_fence() {
+        let scope_a = scope(0x0a);
+        let peer = signer_addr(0x11);
+        let mut node = DodagState::new(7, scope_a, 0);
+        let (link, join) = authenticated_dio_frame(0x11, 7, &scope_a, 0, 512, 1);
+        assert_eq!(
+            node.process_authenticated_dio(&link, join, 1.0),
+            DioOutcome::Accepted
+        );
+
+        let (link, stale) = authenticated_dio_frame(0x11, 7, &scope_a, 0, 512, 2);
+        let admitted = node
+            .admit_authenticated_dio(&link, stale)
+            .expect("evidence seals for instance 7");
+
+        // Same DODAG ID, different RPL instance id: still a different DODAG.
+        node.rpl_instance_id = 9;
+        assert_eq!(
+            node.commit_admitted_dio(admitted, 1.0),
+            Err(DodagScopeMismatch {
+                sealed: DodagScope {
+                    rpl_instance_id: 7,
+                    dodag_id: scope_a,
+                },
+                current: DodagScope {
+                    rpl_instance_id: 9,
+                    dodag_id: scope_a,
+                },
+            })
+        );
+        assert!(node.has_parent(&peer));
+        assert_eq!(node.parent_count(), 1);
+        assert_eq!(node.preferred_parent, Some(peer));
+        assert_eq!(node.rank, 768);
+        assert!(node.is_joined());
+    }
+
+    #[test]
+    fn unchanged_scope_admitted_evidence_commits_and_joins() {
+        let scope_a = scope(0x0a);
+        let peer = signer_addr(0x11);
+        let mut node = DodagState::new(7, scope_a, 0);
+
+        let (link, frame) = authenticated_dio_frame(0x11, 7, &scope_a, 0, 512, 1);
+        let admitted = node
+            .admit_authenticated_dio(&link, frame)
+            .expect("evidence seals for the current scope");
+        assert_eq!(
+            node.commit_admitted_dio(admitted, 1.0),
+            Ok(DioOutcome::Accepted)
+        );
+
+        assert!(node.is_joined());
+        assert_eq!(node.preferred_parent, Some(peer));
+        assert_eq!(node.rank, 768);
+        assert_eq!(node.version, 0);
+    }
+
+    #[test]
+    fn one_shot_admission_of_foreign_scope_frame_revokes_signer_parents() {
+        let scope_a = scope(0x0a);
+        let scope_b = scope(0x0b);
+        let peer = signer_addr(0x11);
+        let mut node = DodagState::new(7, scope_a, 0);
+        let (link, join) = authenticated_dio_frame(0x11, 7, &scope_a, 0, 512, 1);
+        assert_eq!(
+            node.process_authenticated_dio(&link, join, 1.0),
+            DioOutcome::Accepted
+        );
+
+        // A frame sealed for a different DODAG scope never parses against the
+        // node's scope; the long-standing fail-closed revocation semantics are
+        // preserved by the one-shot wrapper.
+        let (link, foreign) = authenticated_dio_frame(0x11, 7, &scope_b, 0, 512, 2);
+        assert_eq!(
+            node.process_authenticated_dio(&link, foreign, 1.0),
+            DioOutcome::Rejected
+        );
+        assert_eq!(node.parent_count(), 0);
+        assert!(!node.has_parent(&peer));
     }
 }

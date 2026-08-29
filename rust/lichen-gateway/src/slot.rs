@@ -1536,6 +1536,19 @@ mod tests {
     }
 
     #[test]
+    fn find_next_available_rejects_fully_occupied_superframe() {
+        let all_occupied: Vec<u32> = (0..15).collect();
+        assert_eq!(
+            find_next_available(1, &all_occupied, 15),
+            Err(SlotError::InsufficientSlots)
+        );
+        assert_eq!(
+            find_next_available(3, &all_occupied, 15),
+            Err(SlotError::InsufficientSlots)
+        );
+    }
+
+    #[test]
     fn superframe_timing() {
         // From vector "superframe_sync_gps_epoch"
         let gps_epoch_unix = 1720008000u64;

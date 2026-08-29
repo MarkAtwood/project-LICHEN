@@ -232,12 +232,57 @@ def test_atomic_batch_rejects_reserved_target_before_mutation(
     reserved = tmp_path / reserved_name
     sentinel = b"reserved sentinel\n"
     reserved.write_bytes(sentinel)
+    before = reserved.stat()
 
     with pytest.raises(ValueError, match="reserved names"):
         atomic_write_json_batch([(reserved, {"generation": 2})])
 
+    after = reserved.stat()
     assert reserved.read_bytes() == sentinel
+    assert (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    ) == (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
     assert list(tmp_path.iterdir()) == [reserved]
+
+
+def test_atomic_batch_rejects_reserved_name_without_touching_other_targets(
+    tmp_path: Path,
+) -> None:
+    lock = tmp_path / ".lichen-vector-batch.lock"
+    other = tmp_path / "vectors.json"
+    lock_sentinel = b"stale lock inode\n"
+    other_sentinel = b'{"generation": 1}\n'
+    lock.write_bytes(lock_sentinel)
+    other.write_bytes(other_sentinel)
+    other_before = other.stat()
+
+    with pytest.raises(ValueError, match="reserved names"):
+        atomic_write_json_batch(
+            [
+                (lock, {"generation": 2}),
+                (other, {"generation": 2}),
+            ]
+        )
+
+    other_after = other.stat()
+    assert lock.read_bytes() == lock_sentinel
+    assert other.read_bytes() == other_sentinel
+    assert (other_after.st_dev, other_after.st_ino, other_after.st_mtime_ns) == (
+        other_before.st_dev,
+        other_before.st_ino,
+        other_before.st_mtime_ns,
+    )
+    assert sorted(item.name for item in tmp_path.iterdir()) == [lock.name, other.name]
 
 
 def test_atomic_write_json_directory_open_failure_is_not_silently_accepted(
@@ -353,6 +398,78 @@ def test_rolled_back_checkpoint_makes_partial_cleanup_recoverable(
     assert json.loads(first.read_text()) == {"generation": 3}
     assert json.loads(second.read_text()) == {"generation": 3}
     assert not (tmp_path / ".lichen-vector-batch.transaction.json").exists()
+
+
+def test_crash_during_rollback_cleanup_is_recovered_by_next_writer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+    first_original = b'{"generation": 1}\n'
+    second_original = b'{"generation": 1}\n'
+    first.write_bytes(first_original)
+    second.write_bytes(second_original)
+    first_backup = atomic_json._prepare(first, first_original, 0o644)
+    second_backup = atomic_json._prepare(second, second_original, 0o644)
+    first_new = atomic_json._prepare(first, b'{"generation": 2}\n', 0o644)
+    second_new = atomic_json._prepare(second, b'{"generation": 2}\n', 0o644)
+    entries = [
+        {
+            "target": first.name,
+            "temporary": first_new.name,
+            "backup": first_backup.name,
+            "mode": 0o644,
+            "existed": True,
+        },
+        {
+            "target": second.name,
+            "temporary": second_new.name,
+            "backup": second_backup.name,
+            "mode": 0o644,
+            "existed": True,
+        },
+    ]
+    os.replace(first_new, first)
+    os.replace(second_new, second)
+    atomic_json._write_journal(
+        tmp_path / ".lichen-vector-batch.transaction.json",
+        {"version": 1, "phase": "prepared", "entries": entries},
+    )
+    real_unlink = os.unlink
+
+    def crash_on_second_backup(
+        name: os.PathLike[str] | str,
+        *,
+        dir_fd: int | None = None,
+    ) -> None:
+        if name == second_backup.name:
+            raise OSError("simulated crash during cleanup")
+        real_unlink(name, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "unlink", crash_on_second_backup)
+    with pytest.raises(OSError, match="simulated crash during cleanup"):
+        atomic_write_json_batch([(first, {"generation": 9}), (second, {"generation": 9})])
+    monkeypatch.undo()
+
+    assert first.read_bytes() == first_original
+    assert second.read_bytes() == second_original
+    assert not first_backup.exists()
+    assert second_backup.exists()
+    journal = atomic_json._read_journal(
+        tmp_path / ".lichen-vector-batch.transaction.json"
+    )
+    assert journal["phase"] == "rolled_back"
+
+    atomic_write_json_batch([(first, {"generation": 3}), (second, {"generation": 3})])
+
+    assert json.loads(first.read_text()) == {"generation": 3}
+    assert json.loads(second.read_text()) == {"generation": 3}
+    assert not first_backup.exists()
+    assert not second_backup.exists()
+    assert not (tmp_path / ".lichen-vector-batch.transaction.json").exists()
+    assert not list(tmp_path.glob(".lichen-vector-prep-*"))
+    assert _visible_files(tmp_path) == [first, second]
 
 
 @pytest.mark.parametrize(

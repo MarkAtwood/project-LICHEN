@@ -13,6 +13,26 @@ from lichen.timing.sfn import TDMA_GUARD_MS, TDMA_SLOT_MS, slot_for
 VECTORS_DIR = Path(__file__).resolve().parents[3] / "test" / "vectors"
 
 
+def _beacon_window(
+    beacon_time_us: int,
+    superframe: int,
+    slot: int,
+    num_slots: int,
+    slot_ms: int,
+    guard_ms: int,
+) -> tuple[int, int]:
+    """Independent oracle for the data window of ``slot``.
+
+    Derived only from the spec semantics defined on ``SuperframeClock``: the
+    beacon reception marks the slot-0 boundary of superframe 0, slots are
+    contiguous, and the trailing guard is excluded from transmission.  Returns
+    the half-open window ``(start, end)`` in microseconds.
+    """
+    slot_us = slot_ms * 1000
+    start = beacon_time_us + (superframe * num_slots + slot) * slot_us
+    return start, start + slot_us - guard_ms * 1000
+
+
 def test_simulator_uses_canonical_slot_hash_and_defaults() -> None:
     scheduler = TDMAScheduler()
     eui64 = bytes.fromhex("0011223344556677")
@@ -85,13 +105,15 @@ def test_invalid_slot_count_rejects_beacon_without_state_mutation(num_slots: obj
     assert scheduler.clock.last_sync_us == 0
 
 
-def test_transmit_window_excludes_trailing_guard_and_neighbors() -> None:
+@pytest.mark.parametrize("superframe", [0, 2])
+def test_transmit_window_excludes_trailing_guard_and_neighbors(superframe: int) -> None:
     scheduler = TDMAScheduler()
     scheduler.num_slots = 2
     beacon_time_us = 123_456_789
     scheduler.sync_from_beacon(beacon_time_us, 0xFFFF_FFFE, assigned=1)
-    slot_start_us = beacon_time_us + TDMA_SLOT_MS * 1000
-    guard_start_us = slot_start_us + (TDMA_SLOT_MS - TDMA_GUARD_MS) * 1000
+    slot_start_us, guard_start_us = _beacon_window(
+        beacon_time_us, superframe, 1, 2, TDMA_SLOT_MS, TDMA_GUARD_MS
+    )
     slot_end_us = slot_start_us + TDMA_SLOT_MS * 1000
 
     assert not scheduler.is_tx_allowed(slot_start_us - 1)
@@ -100,6 +122,66 @@ def test_transmit_window_excludes_trailing_guard_and_neighbors() -> None:
     assert not scheduler.is_tx_allowed(guard_start_us)
     assert not scheduler.is_tx_allowed(slot_end_us - 1)
     assert not scheduler.is_tx_allowed(slot_end_us)
+
+
+def test_tx_windows_recur_across_superframes_under_offset_clock() -> None:
+    """Local origin far from the SFN epoch: windows follow the beacon, not the SFN.
+
+    Fails against a formula that starts superframes at process-time zero
+    (``sfn * num_slots * duration``) and against one that anchors only the
+    first post-beacon superframe.
+    """
+    scheduler = TDMAScheduler()
+    scheduler.num_slots = 4
+    beacon_time_us = 987_654_321
+    scheduler.sync_from_beacon(beacon_time_us, 0xFFFF_FFF0, assigned=2)
+
+    for superframe in range(4):
+        start, end = _beacon_window(beacon_time_us, superframe, 2, 4, TDMA_SLOT_MS, TDMA_GUARD_MS)
+        assert scheduler.is_tx_allowed(start)
+        assert scheduler.is_tx_allowed((start + end) // 2)
+        assert scheduler.is_tx_allowed(end - 1)
+        assert not scheduler.is_tx_allowed(start - 1)
+        assert not scheduler.is_tx_allowed(end)
+        for other_slot in (0, 1, 3):
+            other_start, other_end = _beacon_window(
+                beacon_time_us, superframe, other_slot, 4, TDMA_SLOT_MS, TDMA_GUARD_MS
+            )
+            assert not scheduler.is_tx_allowed(other_start)
+            assert not scheduler.is_tx_allowed((other_start + other_end) // 2)
+
+    assert not scheduler.is_tx_allowed(beacon_time_us - 1)
+    assert not scheduler.is_tx_allowed(0)
+
+
+def test_beacon_rx_time_is_slot_zero_boundary_of_assigned_slot_zero() -> None:
+    scheduler = TDMAScheduler()
+    scheduler.num_slots = 3
+    beacon_time_us = 4_000_123
+    scheduler.sync_from_beacon(beacon_time_us, 42, assigned=0)
+
+    start, end = _beacon_window(beacon_time_us, 0, 0, 3, TDMA_SLOT_MS, TDMA_GUARD_MS)
+    assert start == beacon_time_us
+    assert scheduler.is_tx_allowed(beacon_time_us)
+    assert not scheduler.is_tx_allowed(end)
+    assert scheduler.is_tx_allowed(beacon_time_us + 3 * TDMA_SLOT_MS * 1000)
+
+
+@pytest.mark.parametrize(
+    ("slot_duration_ms", "guard_ms"),
+    [(100, 100), (100, 101), (100, -1), (100, True), (True, 0)],
+)
+def test_transmit_query_revalidates_timing_configuration(
+    slot_duration_ms: object,
+    guard_ms: object,
+) -> None:
+    scheduler = TDMAScheduler()
+    scheduler.sync_from_beacon(10_000, 1, assigned=0)
+    scheduler.slot_duration_ms = slot_duration_ms  # type: ignore[assignment]
+    scheduler.guard_ms = guard_ms  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        scheduler.is_tx_allowed(10_500)
 
 
 @pytest.mark.parametrize("current_time_us", [-1, True, 1.5, "1", None])

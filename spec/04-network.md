@@ -225,8 +225,8 @@ Standard ICMPv6 (RFC 4443) for:
 See Section 6.1 for single-primary model (unified Ed25519 derivation per 06-security.md §8.5 and test/vectors/yggdrasil-derivation.json). Summary:
 
 ```
-Link-local:  fe80::<IID>                    (control only)
-Primary:     02xx::[Yggdrasil-derived + IID] (all routable traffic)
+Link-local:  fe80::<IID>                                  (control only)
+Primary:     [0x02] + SHA-512(pubkey)[0:7] + IID          (0200::/8 native /128, all routable traffic)
 ```
 
 IID and full 02xx address derived from same Ed25519 pubkey (MUST: lower 64 bits of primary address == IID for binding; see 06-security.md). No ULA or layered GUA model.
@@ -235,10 +235,15 @@ IID and full 02xx address derived from same Ed25519 pubkey (MUST: lower 64 bits 
 
 | Type | Example | Routable To |
 |------|---------|-------------|
-| Link-local | fe80::0211:22ff:fe33:4455 | Direct neighbors (control) |
-| Primary (02xx) | 0201:0203:0405:0607:0211:22ff:fe33:4455 | Mesh, inter-mesh via Yggdrasil, internet |
+| Link-local | fe80::c02:a502:25b4:baaa | Direct neighbors (control) |
+| Primary (02xx) | 020e:02a5:0225:b4ba:0c02:a502:25b4:baaa | Mesh, inter-mesh via Yggdrasil, internet |
 
-Node uses link-local for control + single primary 02xx for everything else. Consistent with updated 05-routing.md and 06-security.md. Matches all test vectors.
+Examples use the canonical `rfc8032_test_public_key` vector from
+`test/vectors/ipv6-addresses.json`: IID = `SHA-512(pubkey)[0:8]` with the U/L
+bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID, and primary =
+`[0x02] + SHA-512(pubkey)[0:7] + IID` (lower 64 bits == IID). Node uses
+link-local for control + single primary 02xx for everything else. Consistent
+with updated 05-routing.md and 06-security.md. Matches all test vectors.
 
 ### 12.3. Short Address Assignment
 

@@ -135,7 +135,7 @@ When signatures are valid, nodes MUST select a single root using the following o
 
 3. **RSSI/SNR** (SHOULD): Between roots of equal DODAG Preference and stratum, the node SHOULD select the root with the highest combined RSSI and SNR (RSSI_EMA + SNR_EMA, with RSSI weighted 2:1 over SNR per EMA update).
 
-4. **EUI-64 Tiebreak** (MUST): If all above criteria are equal, the node MUST select the root with the numerically smaller link-local IID (last 8 bytes of the EUI-64, compared as unsigned big-endian integers).
+4. **EUI-64 Tiebreak** (MUST): If all above criteria are equal, the node MUST select the root with the numerically smaller link-local IID (the key-derived IID per 04-network.md §6.2 — for a key-derived identity the wire EUI-64 equals that IID with the U/L bit set, so compare the IID value itself — as an unsigned big-endian integer).
 
 ### 2a.5.3. Overlap Resolution
 

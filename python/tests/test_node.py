@@ -350,6 +350,48 @@ class TestNodeLifecycle:
         assert node._receive_task is None
         assert node.terminal_error is terminal
 
+    @pytest.mark.asyncio
+    async def test_stop_after_supervised_failure_is_prompt_and_preserves_error(self, node: Node):
+        entered = asyncio.Event()
+        fail = asyncio.Event()
+        terminal = LinkSecurityClockError("clock terminal after running")
+        adapter_stops = 0
+
+        class Adapter:
+            async def start(self) -> None:
+                return None
+
+            async def stop(self) -> None:
+                nonlocal adapter_stops
+                adapter_stops += 1
+
+        node._meshtastic_adapter = cast(Any, Adapter())
+
+        async def receive(_timeout_ms: int) -> None:
+            entered.set()
+            await fail.wait()
+            raise terminal
+
+        node.link.receive = receive  # type: ignore[method-assign]
+        await node.start()
+        await entered.wait()
+        assert node.state is NodeState.RUNNING
+
+        fail.set()
+        for _ in range(100):
+            if node.state is NodeState.STOPPED:
+                break
+            await asyncio.sleep(0.001)
+
+        assert node.state is NodeState.STOPPED
+        assert adapter_stops == 1
+        assert node.terminal_error is terminal
+
+        await asyncio.wait_for(node.stop(), timeout=5)
+        assert node.state is NodeState.STOPPED
+        assert node.terminal_error is terminal
+        assert node._receive_task is None
+
 
 class TestPeerManagement:
     """Tests for peer database management."""

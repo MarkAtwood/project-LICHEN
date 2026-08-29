@@ -306,6 +306,13 @@ class DaoOriginValidator:
                 sig_indexes.append(index)
                 if len(option.data) != DAO_ORIGIN_SIGNATURE_LENGTH:
                     return DaoOriginResult(False, DaoOriginRejectReason.SIGNATURE_INVALID_LENGTH)
+                # Spec 8.6: the Origin Sequence is a monotonic counter that starts
+                # above zero. Zero is a structural defect classified in this
+                # pre-key framing pass, before key lookup, signature verification,
+                # and replay (canonical vector reject_zero_sequence). Checked on
+                # the first sighting only, so a duplicate option still wins.
+                if len(sig_indexes) == 1 and int.from_bytes(option.data[:8], "big") == 0:
+                    return DaoOriginResult(False, DaoOriginRejectReason.ZERO_SEQUENCE)
             else:
                 return DaoOriginResult(False, DaoOriginRejectReason.MALFORMED_OPTIONS)
 
@@ -379,11 +386,6 @@ class DaoOriginValidator:
             return DaoOriginResult(
                 valid=False,
                 reject_reason=DaoOriginRejectReason.SIGNATURE_INVALID_LENGTH,
-            )
-        if origin_sig.origin_sequence == 0:
-            return DaoOriginResult(
-                valid=False,
-                reject_reason=DaoOriginRejectReason.ZERO_SEQUENCE,
             )
 
         # Step 4: Verify Schnorr48 signature

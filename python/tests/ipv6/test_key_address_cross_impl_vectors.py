@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
-from lichen.ipv6.addr import link_local_from_pubkey, native_address_from_pubkey
+from lichen.ipv6.addr import (
+    eui64_to_iid,
+    link_local_from_pubkey,
+    native_address_from_pubkey,
+    short_addr_to_iid,
+)
 
 VECTORS_DIR = Path(__file__).resolve().parents[3] / "test" / "vectors"
 
@@ -59,6 +64,52 @@ def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> Non
         assert link_local[8:] == iid == native[8:], vector["name"]
         assert native[0] == 0x02, vector["name"]
         assert iid[0] & 0x02 == 0, vector["name"]
+
+
+def test_eui_and_short_vectors_are_interop_helpers_not_identity() -> None:
+    """EUI-64 and short-address vectors are wire-interop helpers, not identities.
+
+    They carry no key-derived identity material, and the EUI-64 mapping is
+    the RFC 4291 U/L flip -- provably not the SHA-512 identity derivation.
+    """
+    document = _load("ipv6-addresses.json")
+    assert isinstance(document, dict)
+    vectors = document["vectors"]
+    assert isinstance(vectors, list)
+
+    assert {item["profile"] for item in vectors} <= {
+        "key_derived_identity",
+        "link_interoperability_only",
+    }
+    interop = [item for item in vectors if item["profile"] == "link_interoperability_only"]
+    eui_vectors = [item for item in interop if "eui64" in item]
+    short_vectors = [item for item in interop if "short_addr" in item]
+    assert len(interop) == len(eui_vectors) + len(short_vectors) == 6
+
+    for vector in eui_vectors:
+        assert "pubkey" not in vector and "native" not in vector, vector["name"]
+        eui64 = bytes.fromhex(vector["eui64"])
+        iid = bytes([eui64[0] ^ 0x02]) + eui64[1:]
+        link_local = b"\xfe\x80" + bytes(6) + iid
+
+        assert iid.hex() == vector["iid"], vector["name"]
+        assert link_local.hex() == vector["link_local_packed"], vector["name"]
+        assert str(IPv6Address(link_local)) == vector["link_local"], vector["name"]
+        assert eui64_to_iid(eui64) == iid, vector["name"]
+
+        # Interop, not identity: SHA-512 of the same octets derives a
+        # different IID than the U/L flip, so this is not key derivation.
+        digest = hashlib.sha512(eui64).digest()
+        identity_iid = bytearray(digest[:8])
+        identity_iid[0] &= 0xFD
+        assert iid != bytes(identity_iid), vector["name"]
+
+    for vector in short_vectors:
+        assert "pubkey" not in vector and "native" not in vector, vector["name"]
+        # RFC 4944 section 6 layout, computed here independently of production.
+        iid = (0x0000_00FF_FE00_0000 | vector["short_addr"]).to_bytes(8, "big")
+        assert iid.hex() == vector["iid"], vector["name"]
+        assert short_addr_to_iid(vector["short_addr"]) == iid, vector["name"]
 
 
 def test_native_corpora_agree_without_byte_reversal() -> None:

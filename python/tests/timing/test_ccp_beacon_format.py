@@ -231,3 +231,45 @@ def test_ema_vectors_are_exact_and_match_production(name: str, vector: dict) -> 
         production_float = ema_update(production_float, sample)
     assert production_q16 == expected["final_result_q16"], name
     assert production_float == expected["final_result_decimal"], name
+
+
+@pytest.mark.parametrize(
+    ("samples", "expected_steps_q16", "expected_steps_exact"),
+    [
+        (
+            (8, 12, 10, 11),
+            (131072, 294912, 385024, 468992),
+            (2.0, 4.5, 5.875, 7.15625),
+        ),
+        (
+            (-3, -7, -2, -5),
+            (-49152, -151552, -146432, -191744),
+            (-0.75, -2.3125, -2.234375, -2.92578125),
+        ),
+    ],
+)
+def test_ema_literal_recurrence_hand_computed(
+    samples: tuple[int, ...],
+    expected_steps_q16: tuple[int, ...],
+    expected_steps_exact: tuple[float, ...],
+) -> None:
+    """Literal recurrence against hardcoded hand-computed oracles.
+
+    Expected values derive from exact rational arithmetic
+    (avg + (sample - avg) / 4), independent of both the JSON file and the
+    production code. All values are dyadic rationals, so the Q16.16
+    arithmetic-shift recurrence is exact at every step:
+
+      positive: 0 -> 2 -> 4.5 -> 5.875 -> 7.15625   (Q16: 468992)
+      negative: 0 -> -0.75 -> -2.3125 -> -2.234375 -> -2.92578125
+                (Q16: -191744)
+    """
+    avg_q16 = 0
+    avg_exact = 0.0
+    for sample, want_q16, want_exact in zip(
+        samples, expected_steps_q16, expected_steps_exact, strict=True
+    ):
+        avg_q16 = ema_update_integer(avg_q16, sample * 65536)
+        avg_exact = ema_update(avg_exact, sample)
+        assert avg_q16 == want_q16, f"Q16 step for sample {sample}"
+        assert avg_exact == want_exact, f"exact step for sample {sample}"

@@ -273,7 +273,7 @@ To prevent DIS storms:
 | DAO refresh | Every 15 minutes (half the 30-minute soft-state lifetime) |
 | DAO on parent change | Immediate (with jitter 0-500ms) |
 
-**DAO Source Address Model:** DAO packets use routable ULA source (DODAG-root derived prefix) for multi-hop forwarding. Relays preserve the original IPv6 source end-to-end (see spec/04-network.md and SCHC Rule 4). This satisfies security requirements for source binding.
+**DAO Source Address Model:** DAO packets use the origin's self-derived primary 0200::/8 address as their IPv6 source for multi-hop forwarding. The source address is `[0x02] + SHA-512(pubkey)[0:7] + IID` with `IID = SHA-512(pubkey)[0:8]` and the U/L bit cleared (spec/04-network.md §6.2, spec/06-security.md §8.5); the DODAG root does not advertise any prefix and no ULA exists in this profile. Relays MUST preserve the original IPv6 source end-to-end (see spec/05-routing.md §8.6). This satisfies security requirements for source binding.
 
 ### 7.2. DAO Lifetime
 
@@ -358,7 +358,7 @@ Nodes SHOULD verify root legitimacy:
 | Option | When |
 |--------|------|
 | DODAG Configuration | Every DIO |
-| Prefix Information | When advertising prefix |
+| Prefix Information | Not sent in this profile (no root-advertised prefix; see §9.3) |
 | DAG Metric Container | When using MRHOF |
 
 ### 9.2. LICHEN-Specific Options
@@ -401,7 +401,12 @@ Advertises node congestion for routing decisions (0-3 scale per CCP).
 **Capability and Adaptive SF Option (CCP-16):** The DAG Metric Container and DIO options MUST carry ASSIGNED_SF (or current SF recommendation), per-neighbor EMA (SNR/loss), density, utilization, and load_factor per normative pseudocode in spec/02a-coordinated-capacity.md (adaptive_sf_select, ema_update, select_channel, now(), physical-link:3.4). DIOs on CH0 control channel. Selected SF signaled for TX; nodes RX on all SFs and scan on CH0. Cross-reference capability DIO option and section 4.2 in spec/02a-coordinated-capacity.md for thresholds and EMA update.
 ### 9.3. Prefix Information Option
 
-When DODAG root advertises prefix:
+In this profile the DODAG root does not advertise a prefix: node addresses are
+self-derived key-derived 0200::/8 /128s per spec/04-network.md §6.2 and
+spec/06-security.md §8.5 (see also Appendix A), and the root MUST NOT advertise
+a ULA or other mesh prefix. The option format below is retained unchanged for
+future delegated-prefix profiles (see spec/05-routing.md §8.7.1). When a future
+profile delegates a prefix and the DODAG root advertises it:
 
 ```
 +--------+--------+--------+--------+
