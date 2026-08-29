@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-sgrt",
+  "title": "Ruff format drift across 13 files in python/src/lichen/rpl/",
+  "description": "ruff 0.15.20 format --check reports 13 files in python/src/lichen/rpl/ would be reformatted (authenticated_dio.py, dao.py, dao_paths.py, dao_state.py, dao_types.py, dao_vectors.py, dis.py, dodag.py, messages.py, root_signature.py, route_table.py, routing.py, visualize.py). Verified pre-existing: present at 15a03b21b1^ (14 files) and unchanged at HEAD; the a5yl commit itself formatted dao_manager.py and delegation_tokens.py clean. Likely ruff version drift vs whatever formatted the tree originally. Touching the whole rpl/ package risks colliding with live worker sessions; coordinate before reformatting. ruff check is clean; only format is affected.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T03:28:48.443642Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T03:28:48.443642Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-sgrt",
+      "depends_on_id": "project-LICHEN-worker6-a5yl",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T03:28:50.342145Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
