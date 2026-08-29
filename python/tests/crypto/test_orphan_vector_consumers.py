@@ -122,20 +122,22 @@ class TestRootDioSignatureVectorFile:
         if name == "root_dio_signature_impersonation":
             # Vector pins dodagid_binding_valid=false: the DODAGID must derive
             # from the signer's key, not merely match a supplied DIO field.
-            # The Python verifier currently lacks that derivation check and
-            # accepts this vector (filed for a binding-check fix); the
-            # assertion below documents the gap and will fail once fixed.
             valid, error = verify_root_dio_signature(
                 sig,
                 bytes.fromhex(vector["attacker_pubkey"]),
                 current_time=0,
                 dio_dodag_id=bytes.fromhex(vector["claimed_dodag_id"]),
             )
-            assert expected["overall_valid"] is False
-            assert (valid, error) == (True, None), (
-                "verifier now rejects the impersonation; tighten this case "
-                "to expect the DODAG_ID_MISMATCH pin"
+            assert valid is expected["overall_valid"]
+            assert error == _ROOT_DIO_ERROR_MAP[expected["error"]]
+            # The binding check is unconditional: it must also fire when the
+            # dio_dodag_id cross-check parameter is omitted entirely.
+            valid_bare, error_bare = verify_root_dio_signature(
+                sig,
+                bytes.fromhex(vector["attacker_pubkey"]),
+                current_time=0,
             )
+            assert (valid_bare, error_bare) == (False, "DODAG_ID_MISMATCH")
             return
 
         valid, error = verify_root_dio_signature(

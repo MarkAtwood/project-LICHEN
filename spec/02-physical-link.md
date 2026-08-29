@@ -64,7 +64,7 @@ Different LoRa spreading factors are quasi-orthogonal. SF7 and SF12 transmission
   LICHEN RPL option registry in `09-packets-timing.md`. This is not an IANA
   assignment. Gateway tracks per-SF node counts and assigns least-loaded SF
   for load balance. Nodes **MUST** use assigned SF for all TX after joining.
-- Stateless hash-based (fallback): `assigned_sf = 7 + (hash_32(IID) mod 6)`. Uses consistent `hash_32` (FNV-1a32 per project-LICHEN-eirg) from CCP-15.8.3; short-address DAD also uses FNV-1a32 (Section 4.5).
+- Stateless hash-based (fallback): `assigned_sf = 7 + (hash_32(IID) mod 6)`. Uses consistent `hash_32` (FNV-1a32 per project-LICHEN-eirg) from CCP-15.8.3; short-address DAD uses keyed CRC-32/IEEE instead (Section 4.5).
 - Join-based: Nodes join on SF10 (common ground). Gateway assigns via DIO or join response; node switches post-assignment.
 - Nodes without explicit assignment **MUST** use SF10 (backwards compatibility with all existing nodes).
 
@@ -436,27 +436,32 @@ be established. No time synchronization is required.
 
 When Duplicate Address Detection (DAD) indicates a collision on a 16-bit short
 address, the node recomputes a candidate using seed mixing rather than choosing
-a random address. Short-address DAD uses FNV-1a32 with the standard basis
-`0x811C9DC5` and prime `0x01000193`, the same `hash_32` used for channel and
-slot selection.
+a random address. Short-address DAD uses CRC-32/IEEE (ISO-HDLC, reflected,
+poly `0xEDB88320`) keyed with the ASCII bytes of `"LICHEN"` as the initial
+value (`0x4348454E`, final XOR `0xFFFFFFFF`). The FNV-1a32 `hash_32` remains
+in use for channel and slot selection (CCP-15.8.3) only.
 
 ```pseudocode
-fn fnv1a32(data: &[u8]) -> u32
-    hash = 0x811C9DC5
+fn crc32_ieee(data: &[u8], init: u32) -> u32
+    // Reflected CRC-32/ISO-HDLC: poly 0xEDB88320, init as supplied,
+    // final XOR 0xFFFFFFFF (zlib/binascii.crc32 convention).
+    hash = init ^ 0xFFFFFFFF
     for byte in data:
         hash ^= byte
-        hash = hash.wrapping_mul(0x01000193)
-    return hash
+        for bit in 0..8:
+            if hash & 1: hash = (hash >> 1) ^ 0xEDB88320
+            else:        hash = hash >> 1
+    return hash ^ 0xFFFFFFFF
 
 fn derive_short_addr(eui64: [u8; 8]) -> u16
-    return fnv1a32(eui64) & 0xFFFF
+    return crc32_ieee(eui64, init = 0x4348454E) & 0xFFFF
 
 fn derive_short_addr_with_seed(eui64: [u8; 8], seed: u32) -> u16
-    // XOR the seed into the last 4 bytes of EUI-64 before hashing.
+    // XOR the seed (little-endian) into the last 4 bytes of EUI-64 before hashing.
     // This produces a different but deterministic address per seed.
     mixed: [u8; 8] = eui64
     mixed[4..8] ^= seed.to_le_bytes()
-    return fnv1a32(mixed) & 0xFFFF
+    return crc32_ieee(mixed, init = 0x4348454E) & 0xFFFF
 
 fn dad_retry(eui64: [u8; 8], existing_addrs: Set<u16>) -> Option<u16>
     addr = derive_short_addr(eui64)

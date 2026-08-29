@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
-from .identity import _pubkey_to_iid
+from .identity import _pubkey_to_iid, yggdrasil_address
 
 if TYPE_CHECKING:
     from .identity import Identity
@@ -304,9 +304,11 @@ def verify_root_dio_signature(
     Performs validation steps from spec section 8.10.1:
     1. Verify signature using Schnorr48 and provided pubkey
     2. Verify root_iid (kid) matches derived IID from pubkey
-    3. Verify expiry > current_time
-    4. Verify root_seq > cached_root_seq (if provided)
-    5. Verify payload fields match DIO fields (if provided)
+    3. Verify payload dodag_id equals the 0200::/8 address derived from
+       pubkey (DODAGID-to-root-key binding; rejects impersonated DODAGIDs)
+    4. Verify expiry > current_time
+    5. Verify root_seq > cached_root_seq (if provided)
+    6. Verify payload fields match DIO fields (if provided)
 
     Args:
         root_dio_sig: The Root DIO Signature to verify
@@ -328,6 +330,12 @@ def verify_root_dio_signature(
     derived_iid = _pubkey_to_iid(pubkey)
     if root_dio_sig.root_iid != derived_iid:
         return False, "IID_MISMATCH"
+
+    # Step 3: Verify DODAGID binds to the signer key: DODAGID must equal
+    # AddrForKey(pubkey) (the 0200::/8 key-derived address), per the vector
+    # oracle in test/vectors/root_dio_signature.json.
+    if payload.dodag_id != yggdrasil_address(pubkey).packed:
+        return False, "DODAG_ID_MISMATCH"
 
     # Step 1: Verify signature
     protected = _encode_protected_header()

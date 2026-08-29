@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-nwgq",
+  "title": "[review] wave-8 P3 doc nits: stale step numbers, LICHEN/CHEN prose, short_addr.py docstring rot",
+  "description": "P3 bundle from wave-8 review (all doc-level, zero behavior impact): (1) root_dio_signature.py:334 labels the new binding check 'Step 3' while :349 expiry is also 'Step 3' and :353/:357 say Step 4/5 vs docstring numbering expiry=4, seq=5, fields=6 — renumber consistently. (2) spec/02-physical-link.md:440 prose 'ASCII bytes of LICHEN as the initial value (0x4348454E)' compresses the truncation (LICHEN is 6 bytes; 0x4348454E is low 32 bits 'CHEN') — hex is authoritative and matches both impls; tweak wording to 'low 32 bits of ASCII LICHEN'. (3) python/src/lichen/link/short_addr.py:9-13 module docstring still references 'the duplicate 4.5 section ... uses fnv1a32' and :109 'for oracle parity with the stale 4.5' — both false after the wave-8 spec rewrite (4.5 is now CRC-32, no duplicate section); update or drop the stale references.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:50:52.793065Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:50:52.793065Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nwgq",
+      "depends_on_id": "project-LICHEN-worker6-k7h5",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:50:54.701433Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
