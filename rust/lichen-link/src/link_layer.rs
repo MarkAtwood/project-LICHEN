@@ -2153,4 +2153,45 @@ mod tests {
         }
         assert_eq!(rp.peers.len(), 64);
     }
+
+    // ── TOFU pin/replay coherence under LRU eviction (spec 02 §4.2 ¶5) ──
+
+    #[test]
+    fn lru_eviction_drops_pin_and_invalidates_replay() {
+        // Evicting a pinned (SIID, key) binding MUST also invalidate all
+        // replay state for that signer: the stale pin is gone and, after
+        // re-provisioning, the previously accepted frame is fresh again.
+        let alice = Identity::from_seed(Seed::new([0xE1; 32]));
+        let mut ll = make_ll(0x02);
+        ll.max_peers = NonZeroUsize::new(2).expect("non-zero");
+        ll.add_peer(PeerIdentity::from_pubkey(alice.pubkey));
+
+        let mut wire = [0u8; 256];
+        let n = LinkLayer::new(alice.clone())
+            .build_frame(1, seq(7), &[], b"pin-me", &mut wire)
+            .unwrap();
+        ll.receive_frame(&wire[..n])
+            .expect("first verified contact pins the (SIID, key) binding");
+        assert_eq!(ll.pinned_pubkey_for(&alice.iid), Some(&alice.pubkey));
+
+        // Two more peers on capacity 2: the least-recently-accessed entry is
+        // alice (her last access predates both adds), so her entry — pin and
+        // replay window — is evicted.
+        ll.add_peer(PeerIdentity::from_pubkey(pubkey_n(0xE2)));
+        ll.add_peer(PeerIdentity::from_pubkey(pubkey_n(0xE3)));
+        assert_eq!(ll.peer_auth_state(&alice.iid), PeerAuthState::Unknown);
+        assert_eq!(
+            ll.pinned_pubkey_for(&alice.iid),
+            None,
+            "LRU eviction must drop the pin with the peer entry"
+        );
+
+        // Replay state was invalidated along with the trust entry: once the
+        // signer is provisioned again, the previously accepted frame is
+        // accepted again rather than rejected as a replay.
+        ll.add_peer(PeerIdentity::from_pubkey(alice.pubkey));
+        ll.receive_frame(&wire[..n])
+            .expect("eviction must invalidate replay state for the evicted signer");
+        assert_eq!(ll.pinned_pubkey_for(&alice.iid), Some(&alice.pubkey));
+    }
 }
