@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-sdti",
+  "title": "Add file identity to lichend trust recovery errors and surface corrupt floor IO",
+  "description": "P3 (wave-4 review of worker6-taf3): lichend.rs recover_or_provision_trust_store (~:1131-1167) error strings carried over verbatim from pre-extraction code: 'committed trust provisioning artifacts are missing' does not say WHICH artifact (store lives under state_root, floor under rollback_floor_root), and the (false,true) arm uses load_generation_floor(...).unwrap_or(u64::MAX) so a corrupt/unreadable floor file is misreported as 'orphan trust floor is not the initial generation' instead of surfacing the IO error. Fail-closed either way. Fix: name the artifact+path in each error and distinguish corrupt-floor IO from wrong-generation. Apply the same clarity to the slot path (tracked concern about its pre-gate floor write is separate).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T09:28:59.043581Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T09:28:59.043581Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-sdti",
+      "depends_on_id": "project-LICHEN-worker6-taf3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T09:28:59.344746Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -2750,6 +2750,65 @@ mod tests {
     }
 
     #[test]
+    fn non_transactional_handoff_dispatch_never_strands_node() {
+        use crate::handoff::NodeRegistryEntry;
+
+        let node_addr = [
+            0x02u8, 0, 0, 0, 0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22,
+        ];
+        let mut coordinator = coordinator([0u8; 16]);
+        let payload = HandoffRequest::new(node_addr, 1).encode();
+
+        // Invariant: after every non-transactional dispatch outcome, the node
+        // is either committed with the staged address consumed, or rolled
+        // back and not busy. The compatibility entry point has no transport
+        // outcome to commit against, so every path must leave it retryable.
+
+        // Unauthenticated dispatch: never staged.
+        coordinator
+            .node_registry
+            .register(NodeRegistryEntry::new(node_addr));
+        let response = coordinator.handle_post_handoff(&payload, false);
+        assert_eq!(response.code, 0x81);
+        assert!(!coordinator.node_registry.get(&node_addr).unwrap().busy);
+
+        // Malformed payload: never staged.
+        let response = coordinator.handle_post_handoff(&[0xff], true);
+        assert_eq!(response.code, 0x80);
+        assert!(!coordinator.node_registry.get(&node_addr).unwrap().busy);
+
+        // Unknown node: rejected without staging anything.
+        let unknown_addr = [0x02u8; 16];
+        let response =
+            coordinator.handle_post_handoff(&HandoffRequest::new(unknown_addr, 1).encode(), true);
+        assert_eq!(response.code, 0x44);
+        assert!(!coordinator.node_registry.contains(&unknown_addr));
+
+        // Successful staging: rolled back, still registered, not busy.
+        let response = coordinator.handle_post_handoff(&payload, true);
+        assert_eq!(response.code, 0xa0);
+        let entry = coordinator.node_registry.get(&node_addr).unwrap();
+        assert!(!entry.busy);
+
+        // Rollback returned the node to a usable state: a later staged
+        // dispatch can still consume it.
+        let (response, staged) = coordinator.stage_post_handoff(&payload, true);
+        assert_eq!(staged, Some(node_addr));
+        assert_eq!(response.code, 0x44);
+        assert!(coordinator.commit_staged_handoff(&node_addr));
+        assert!(!coordinator.node_registry.contains(&node_addr));
+
+        // The generic dispatch route shares the same fail-closed boundary.
+        coordinator
+            .node_registry
+            .register(NodeRegistryEntry::new(node_addr));
+        let response =
+            coordinator.handle_request(CoapMethod::Post, "handoff", &payload, true, None, 0);
+        assert_eq!(response.code, 0xa0);
+        assert!(!coordinator.node_registry.get(&node_addr).unwrap().busy);
+    }
+
+    #[test]
     fn gateway_coordinator_get_nodes() {
         use crate::handoff::NodeRegistryEntry;
 

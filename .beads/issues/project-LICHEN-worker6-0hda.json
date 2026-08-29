@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-0hda",
+  "title": "Fix inaccurate gate comment and state_path annotation in new tests",
+  "description": "P4 cosmetics (wave-4 review): (1) lichend.rs first_boot_trust_partial_recovers_at_initial_generation comment says the committed-stage retry 'loads the durable state without the initial-generation gate' - the gate still executes but passes via the manifest_stage \u003e= boundary_stage disjunct; reword. (2) python/tests/announce/test_admission_recovery.py state_path fixture is annotated object instead of Path. No behavior change.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T09:28:59.818791Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T09:28:59.818791Z"
+}

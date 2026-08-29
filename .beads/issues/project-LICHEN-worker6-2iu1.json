@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2iu1",
+  "title": "Exercise post-restart announce send end-to-end in persistence tests",
+  "description": "P3 (wave-4 review of worker6-d4wr): the two failure-injection tests in python/tests/test_node.py (~:2470/2520) restart the node and verify build_announce + receiver processing but never invoke the restarted node's _send_announce(), so the post-restart reserve -\u003e write -\u003e advance-at-healed-revision path is not executed end-to-end (the anchor contract is only exercised inside _load_locked). Fix: extend both tests to drive one real send after restart and assert sequence/tx outcomes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T09:28:59.512499Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T09:28:59.512499Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2iu1",
+      "depends_on_id": "project-LICHEN-worker6-d4wr",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T09:28:59.681224Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

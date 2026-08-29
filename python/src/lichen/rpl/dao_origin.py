@@ -57,6 +57,7 @@ class DaoOriginRejectReason(Enum):
     MALFORMED_OPTIONS = auto()
     SEQUENCE_REPLAY = auto()
     SEQUENCE_EQUAL_DIFFERENT_BYTES = auto()
+    UNSUPPORTED_TRANSIT_E = auto()
 
 
 @dataclass(frozen=True)
@@ -296,6 +297,9 @@ class DaoOriginValidator:
                 if len(option.data) != 18 or option.data[0] != 0:
                     return DaoOriginResult(False, DaoOriginRejectReason.MALFORMED_OPTIONS)
             elif option.type == 6:  # Transit Information, current /128 profile
+                # Framing only here: exact Data Length 20 (spec 8.6). The E bit
+                # and reserved flag bits are route semantics and are classified
+                # after signature and replay (spec 8.7).
                 if len(option.data) != 20:
                     return DaoOriginResult(False, DaoOriginRejectReason.MALFORMED_OPTIONS)
             elif option.type == DAO_ORIGIN_SIGNATURE_TYPE:
@@ -423,6 +427,17 @@ class DaoOriginValidator:
                         )
                     # Idempotent retransmission - valid but no state change needed
                     is_fresh = False
+
+        # Detached semantic parsing (spec 8.6/8.7, step 5): the node-owned /128
+        # profile requires a zero Transit flags octet (E bit and reserved bits).
+        # Classified here, after signature and replay, so replay ordering wins
+        # over route semantics. Exact length was enforced structurally above.
+        for option in dao.options:
+            if option.type == 6 and option.data[0] != 0:
+                return DaoOriginResult(
+                    valid=False,
+                    reject_reason=DaoOriginRejectReason.UNSUPPORTED_TRANSIT_E,
+                )
 
         return DaoOriginResult(
             valid=True,

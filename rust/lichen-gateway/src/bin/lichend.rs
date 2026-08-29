@@ -290,99 +290,23 @@ async fn main() -> ExitCode {
 
     let trust_store = if provision_or_resume {
         let stage = manifest.as_ref().expect("resume manifest").stage;
-        let store_exists = trust_path.exists();
-        let floor_exists = trust_floor_path.exists();
-        if stage >= PROVISION_STAGE_TRUST && (!store_exists || !floor_exists) {
-            error!("committed trust provisioning artifacts are missing");
-            return ExitCode::FAILURE;
-        }
-        let trust = match (store_exists, floor_exists) {
-            (false, false) => match TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS) {
-                Ok(store) => store,
-                Err(error) => {
-                    error!("trust-store provisioning failed: {error}");
-                    return ExitCode::FAILURE;
-                }
-            },
-            (true, false) if stage < PROVISION_STAGE_TRUST => {
-                match TrustStore::load(&trust_path, &sealing_seed, 0, DEFAULT_MAX_TRUSTED_GATEWAYS)
-                {
-                    Ok(store) => store,
-                    Err(error) => {
-                        error!("interrupted trust-store recovery failed: {error}");
-                        return ExitCode::FAILURE;
-                    }
-                }
-            }
-            (false, true) if stage < PROVISION_STAGE_TRUST => {
-                let floor = load_generation_floor(&trust_floor_path).unwrap_or(u64::MAX);
-                let store = match TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS) {
-                    Ok(store) => store,
-                    Err(error) => {
-                        error!("trust-store provisioning failed: {error}");
-                        return ExitCode::FAILURE;
-                    }
-                };
-                if floor != store.generation() {
-                    error!("orphan trust floor is not the initial generation");
-                    return ExitCode::FAILURE;
-                }
+        match recover_or_provision_trust_store(
+            stage,
+            &manifest_path,
+            identity_pubkey,
+            &trust_path,
+            &trust_floor_path,
+            &sealing_seed,
+        ) {
+            Ok((store, next)) => {
+                manifest = Some(next);
                 store
             }
-            (true, true) => {
-                let floor = match load_generation_floor(&trust_floor_path) {
-                    Ok(floor) => floor,
-                    Err(error) => {
-                        error!("trust generation load failed: {error}");
-                        return ExitCode::FAILURE;
-                    }
-                };
-                match TrustStore::load(
-                    &trust_path,
-                    &sealing_seed,
-                    floor,
-                    DEFAULT_MAX_TRUSTED_GATEWAYS,
-                ) {
-                    Ok(store) => store,
-                    Err(error) => {
-                        error!("durable trust-store load failed: {error}");
-                        return ExitCode::FAILURE;
-                    }
-                }
-            }
-            _ => unreachable!("partial trust state handled above"),
-        };
-        if !initial_resume_state_is_valid(
-            stage,
-            PROVISION_STAGE_TRUST,
-            trust.generation(),
-            trust.entries().next().is_none(),
-        ) {
-            error!("interrupted trust state is not the initial empty generation");
-            return ExitCode::FAILURE;
-        }
-        if !store_exists {
-            if let Err(error) = trust.save_atomic(&trust_path, &sealing_seed) {
-                error!("trust-store persistence failed: {error}");
+            Err(error) => {
+                error!("{error}");
                 return ExitCode::FAILURE;
             }
         }
-        if !floor_exists {
-            if let Err(error) = save_generation_floor(&trust_floor_path, trust.generation()) {
-                error!("trust generation persistence failed: {error}");
-                return ExitCode::FAILURE;
-            }
-        }
-        let next = ProvisionManifest {
-            stage: stage.max(PROVISION_STAGE_TRUST),
-            identity_pubkey,
-        };
-        if let Err(error) = save_provision_manifest(&manifest_path, next) {
-            error!("trust provisioning commit failed: {error}");
-            return ExitCode::FAILURE;
-        }
-        manifest = Some(next);
-        trust
     } else {
         let trust_floor = match load_generation_floor(&trust_floor_path) {
             Ok(floor) => floor,
@@ -1183,6 +1107,80 @@ fn initial_resume_state_is_valid(
     is_empty: bool,
 ) -> bool {
     manifest_stage >= boundary_stage || (generation == 1 && is_empty)
+}
+
+/// Recover or provision the durable trust store during provisioning resume.
+///
+/// A store-only partial (store present, external floor missing) before the
+/// TRUST stage is legitimate only as the initial empty generation-1 store.
+/// The sealed store is validated in memory first; the floor is re-anchored
+/// and the manifest advanced only after the gate passes, so a noninitial
+/// store can never re-anchor mutable trust state.
+fn recover_or_provision_trust_store(
+    stage: u8,
+    manifest_path: &Path,
+    identity_pubkey: [u8; 32],
+    trust_path: &Path,
+    trust_floor_path: &Path,
+    sealing_seed: &[u8; 32],
+) -> Result<(TrustStore, ProvisionManifest), String> {
+    let store_exists = trust_path.exists();
+    let floor_exists = trust_floor_path.exists();
+    if stage >= PROVISION_STAGE_TRUST && (!store_exists || !floor_exists) {
+        return Err("committed trust provisioning artifacts are missing".into());
+    }
+    let trust = match (store_exists, floor_exists) {
+        (false, false) => TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS)
+            .map_err(|error| format!("trust-store provisioning failed: {error}"))?,
+        (true, false) => {
+            TrustStore::load(trust_path, sealing_seed, 0, DEFAULT_MAX_TRUSTED_GATEWAYS)
+                .map_err(|error| format!("interrupted trust-store recovery failed: {error}"))?
+        }
+        (false, true) => {
+            let floor = load_generation_floor(&trust_floor_path).unwrap_or(u64::MAX);
+            let store = TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS)
+                .map_err(|error| format!("trust-store provisioning failed: {error}"))?;
+            if floor != store.generation() {
+                return Err("orphan trust floor is not the initial generation".into());
+            }
+            store
+        }
+        (true, true) => {
+            let floor = load_generation_floor(&trust_floor_path)
+                .map_err(|error| format!("trust generation load failed: {error}"))?;
+            TrustStore::load(
+                trust_path,
+                sealing_seed,
+                floor,
+                DEFAULT_MAX_TRUSTED_GATEWAYS,
+            )
+            .map_err(|error| format!("durable trust-store load failed: {error}"))?
+        }
+    };
+    if !initial_resume_state_is_valid(
+        stage,
+        PROVISION_STAGE_TRUST,
+        trust.generation(),
+        trust.entries().next().is_none(),
+    ) {
+        return Err("interrupted trust state is not the initial empty generation".into());
+    }
+    if !store_exists {
+        trust
+            .save_atomic(trust_path, sealing_seed)
+            .map_err(|error| format!("trust-store persistence failed: {error}"))?;
+    }
+    if !floor_exists {
+        save_generation_floor(trust_floor_path, trust.generation())
+            .map_err(|error| format!("trust generation persistence failed: {error}"))?;
+    }
+    let next = ProvisionManifest {
+        stage: stage.max(PROVISION_STAGE_TRUST),
+        identity_pubkey,
+    };
+    save_provision_manifest(manifest_path, next)
+        .map_err(|error| format!("trust provisioning commit failed: {error}"))?;
+    Ok((trust, next))
 }
 
 /// Recover or provision durable slot-replay state during provisioning resume.
@@ -2066,6 +2064,107 @@ mod tests {
         .unwrap();
         assert_eq!(reloaded.slot_replay_generation(), 1);
         assert_eq!(retry_manifest.stage, PROVISION_STAGE_SLOT);
+
+        drop(root_guard);
+        drop(floor_guard);
+    }
+
+    #[test]
+    fn first_boot_trust_partial_recovers_at_initial_generation() {
+        let (root, root_guard) = create_ephemeral_state_root().unwrap();
+        let (floor_root, floor_guard) = create_ephemeral_state_root().unwrap();
+        let trust_path = root.join("gateway-trust.bin");
+        let floor_path = floor_root.join("gateway-trust.generation");
+        let manifest_path = root.join("gateway-provisioning.manifest");
+        let sealing_seed = [0x79; 32];
+        let identity_pubkey = [0xc7; 32];
+
+        let store = TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS).unwrap();
+        store.save_atomic(&trust_path, &sealing_seed).unwrap();
+
+        let (recovered, manifest) = recover_or_provision_trust_store(
+            PROVISION_STAGE_IDENTITY,
+            &manifest_path,
+            identity_pubkey,
+            &trust_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        assert_eq!(recovered.generation(), 1);
+        assert!(recovered.entries().next().is_none());
+        assert_eq!(manifest.stage, PROVISION_STAGE_TRUST);
+        assert_eq!(load_generation_floor(&floor_path).unwrap(), 1);
+        assert_eq!(
+            load_provision_manifest(&manifest_path).unwrap(),
+            Some(manifest)
+        );
+
+        // After the commit, a retry with both files present at the committed
+        // stage loads the durable state without the initial-generation gate.
+        let (reloaded, retry_manifest) = recover_or_provision_trust_store(
+            PROVISION_STAGE_TRUST,
+            &manifest_path,
+            identity_pubkey,
+            &trust_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        assert_eq!(reloaded.generation(), 1);
+        assert_eq!(retry_manifest.stage, PROVISION_STAGE_TRUST);
+
+        drop(root_guard);
+        drop(floor_guard);
+    }
+
+    #[test]
+    fn noninitial_trust_store_is_rejected_on_first_attempt_and_on_retry() {
+        let (root, root_guard) = create_ephemeral_state_root().unwrap();
+        let (floor_root, floor_guard) = create_ephemeral_state_root().unwrap();
+        let trust_path = root.join("gateway-trust.bin");
+        let floor_path = floor_root.join("gateway-trust.generation");
+        let manifest_path = root.join("gateway-provisioning.manifest");
+        let sealing_seed = [0x7a; 32];
+        let identity_pubkey = [0xd7; 32];
+
+        let mut store = TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS).unwrap();
+        store.provision_configured_peer(&[0x5c; 32]).unwrap();
+        assert!(store.generation() > 1);
+        assert!(store.entries().next().is_some());
+        store.save_atomic(&trust_path, &sealing_seed).unwrap();
+
+        let attempt = || {
+            recover_or_provision_trust_store(
+                PROVISION_STAGE_IDENTITY,
+                &manifest_path,
+                identity_pubkey,
+                &trust_path,
+                &floor_path,
+                &sealing_seed,
+            )
+        };
+
+        // First attempt: store present without its external floor. The store
+        // is validated in memory and rejected before the floor is re-anchored
+        // or the manifest is committed, so mutable trust state is never
+        // re-anchored.
+        let error = attempt().unwrap_err();
+        assert_eq!(
+            error,
+            "interrupted trust state is not the initial empty generation"
+        );
+        assert!(!floor_path.exists());
+        assert!(!manifest_path.exists());
+
+        // Retry with the same store-only partial: still rejected fail-closed.
+        let error = attempt().unwrap_err();
+        assert_eq!(
+            error,
+            "interrupted trust state is not the initial empty generation"
+        );
+        assert!(!floor_path.exists());
+        assert!(!manifest_path.exists());
 
         drop(root_guard);
         drop(floor_guard);

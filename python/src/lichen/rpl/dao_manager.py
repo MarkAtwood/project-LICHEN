@@ -77,6 +77,7 @@ _ORIGIN_REJECT_TO_REASON: dict[DaoOriginRejectReason, str] = {
     DaoOriginRejectReason.MALFORMED_OPTIONS: "malformed_option",
     DaoOriginRejectReason.SEQUENCE_REPLAY: "origin_sequence_replay",
     DaoOriginRejectReason.SEQUENCE_EQUAL_DIFFERENT_BYTES: "origin_sequence_mutation",
+    DaoOriginRejectReason.UNSUPPORTED_TRANSIT_E: "unsupported_transit_e",
 }
 _MAX_RESOURCE_CAPACITY = 65535
 # Spec 8.7.2: the delegation table MUST be bounded; recommended 64 entries.

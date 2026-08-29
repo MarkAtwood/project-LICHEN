@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-leys",
   "title": "no_std link receipt clock requires unavailable 64-bit atomics",
   "description": "rust/lichen-link/src/evidence.rs declares NEXT_CLOCK_DOMAIN as unconditional AtomicU64. Core LICHEN crates target Cortex-M-class platforms such as nRF52840/STM32WL where target_has_atomic=64 is absent, so the no_std link crate cannot compile for production targets. Use an atomic width guaranteed by the supported target profile (e.g. AtomicU32) and widen the allocated nonzero domain into ReceiptEvidence's u64 representation, preserving explicit exhaustion.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:59:58.120646Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:52.525515Z",
-  "started_at": "2026-08-24T16:00:05.630656Z"
+  "updated_at": "2026-08-29T09:23:55.729977Z",
+  "started_at": "2026-08-24T16:00:05.630656Z",
+  "closed_at": "2026-08-29T09:23:55.729977Z",
+  "close_reason": "Receipt clock-domain allocator verified on AtomicU32 (u64 widening into ReceiptEvidence, explicit exhaustion at u32::MAX, no wrap reuse). Extracted next_clock_domain() for testability; added monotonicity, exhaustion-boundary, and u32-to-u64 round-trip tests. cargo test 93 passed; clippy -D warnings clean (default + std,schnorr, incl. tests); fmt clean; cargo build --target thumbv7em-none-eabi passes with and without schnorr+alloc."
 }

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-cycr",
   "title": "Reject writes over wholly corrupt key and DAO slot state",
   "description": "FileKeyStore.store_seed and TwoSlotFilePersistence._write_to_older_slot treat two invalid slots as generation 0 even when slot paths exist and fail_closed=True. If durable state is corrupted/replaced after startup, a writer silently overwrites it as fresh and can reset acknowledged key/DAO generation instead of entering the required terminal failure. Before any write, distinguish genuinely absent slots from wholly invalid existing state, raise the typed persistence error, preserve artifacts, and add post-startup corruption regressions.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T16:50:44.30578Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:04.781063Z",
-  "started_at": "2026-08-24T16:50:51.473379Z"
+  "updated_at": "2026-08-29T09:04:19.438178Z",
+  "started_at": "2026-08-24T16:50:51.473379Z",
+  "closed_at": "2026-08-29T09:04:19.438178Z",
+  "close_reason": "Writes over wholly corrupt slot state now fail closed unconditionally. TwoSlotFilePersistence._write_to_older_slot_locked: dropped the self._fail_closed gate from the 'refusing to overwrite corrupt DAO persistence state' guard (slot paths existing but wholly invalid are terminal, not fresh; artifacts preserved). FileKeyStore: _best_slot_locked gained a for_write flag; store_seed passes for_write=True so writes over wholly invalid existing slots raise KeyPersistenceError('refusing to overwrite corrupt seed state') regardless of legacy fail_closed, while loads keep the documented legacy gate ('seed state corrupt' when fail_closed=True, None otherwise). Added post-startup corruption regression tests for TX, RX, and seed that clear the revision anchor record (stateless/lost anchor) and assert terminal failure + artifact preservation; all three verified to fail against the old code via temporary revert. Legacy-behavior note: with fail_closed=False a WRITE over wholly corrupt slots previously reset the acknowledged generation silently; it now raises (the flag remains a LOAD-time testing flag per 5w22 docs)."
 }

@@ -24,6 +24,7 @@ from typing import Any, cast
 import pytest
 
 from lichen.announce.messages import MAX_ANNOUNCE_APP_DATA, AnnounceError, AnnounceMessage
+from lichen.announce.persistence import AnnouncePersistenceError
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.crypto.schnorr48 import sign
 from lichen.gradient import (
@@ -2390,6 +2391,148 @@ async def test_two_nodes_preserve_origin_sequence_across_reboot_boundaries(
     assert receiver.announce_processor.known_originators() == [peer_identity.iid]
     route = receiver.gradient_table.lookup(yggdrasil_address(peer_identity.pubkey))
     assert route is not None and route.seq_num == second_sequence
+
+
+@pytest.mark.asyncio
+async def test_node_anchor_failure_aborts_announce_and_reservation_survives_reboot(
+    tmp_path,
+    identity: Identity,
+    peer_identity: Identity,
+) -> None:
+    class FlakyAnchor:
+        def __init__(self) -> None:
+            self.revisions: dict[bytes, int] = {}
+            self.fail_advance = False
+
+        def read(self, key: bytes) -> int | None:
+            return self.revisions.get(key)
+
+        def advance(self, key: bytes, expected: int | None, revision: int) -> None:
+            if self.fail_advance:
+                raise RuntimeError("injected anchor advance failure")
+            assert self.revisions.get(key) == expected
+            assert revision == (expected or 0) + 1
+            self.revisions[key] = revision
+
+    origin_anchor = FlakyAnchor()
+    receiver_anchor = FlakyAnchor()
+    origin_path = str(tmp_path / "origin")
+    receiver_path = str(tmp_path / "receiver")
+    origin_radio = MockRadio()
+    origin = Node(
+        identity=peer_identity,
+        radio=cast(Any, origin_radio),
+        config=NodeConfig(persist_path=origin_path),
+        persistence_revision_anchor=origin_anchor,
+        allow_persistence_bootstrap=True,
+    )
+    receiver = Node(
+        identity=identity,
+        radio=cast(Any, MockRadio()),
+        config=NodeConfig(persist_path=receiver_path),
+        persistence_revision_anchor=receiver_anchor,
+        allow_persistence_bootstrap=True,
+    )
+    sender = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    first = origin._scheduler.build_announce()
+    assert first.seq_num == 1
+    await receiver._process_announce(first.to_bytes(), sender, -80)
+
+    # Crash window: the signed state file lands, then the anchor advance fails.
+    origin_anchor.fail_advance = True
+    with pytest.raises(RuntimeError, match="seq persistence failed"):
+        await origin._scheduler._send_announce()
+    assert origin_radio.tx_history == []
+    assert origin._scheduler.get_seq_num() == 1
+
+    origin_anchor.fail_advance = False
+    restarted = Node(
+        identity=peer_identity,
+        radio=cast(Any, MockRadio()),
+        config=NodeConfig(persist_path=origin_path),
+        persistence_revision_anchor=origin_anchor,
+        allow_persistence_bootstrap=False,
+    )
+    assert restarted._announce_persistence is not None
+    assert restarted._announce_persistence.local_sequence == 2
+    second = restarted._scheduler.build_announce()
+    assert second.seq_num == 3
+    await receiver._process_announce(second.to_bytes(), sender, -80)
+    assert receiver.announce_processor.known_originators() == [peer_identity.iid]
+    route = receiver.gradient_table.lookup(yggdrasil_address(peer_identity.pubkey))
+    assert route is not None and route.seq_num == 3
+
+
+@pytest.mark.asyncio
+async def test_node_state_write_failure_aborts_announce_and_retries_cleanly_after_reboot(
+    tmp_path,
+    identity: Identity,
+    peer_identity: Identity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Anchor:
+        def __init__(self) -> None:
+            self.revisions: dict[bytes, int] = {}
+
+        def read(self, key: bytes) -> int | None:
+            return self.revisions.get(key)
+
+        def advance(self, key: bytes, expected: int | None, revision: int) -> None:
+            assert self.revisions.get(key) == expected
+            assert revision == (expected or 0) + 1
+            self.revisions[key] = revision
+
+    origin_anchor = Anchor()
+    receiver_anchor = Anchor()
+    origin_path = str(tmp_path / "origin")
+    receiver_path = str(tmp_path / "receiver")
+    origin_radio = MockRadio()
+    origin = Node(
+        identity=peer_identity,
+        radio=cast(Any, origin_radio),
+        config=NodeConfig(persist_path=origin_path),
+        persistence_revision_anchor=origin_anchor,
+        allow_persistence_bootstrap=True,
+    )
+    receiver = Node(
+        identity=identity,
+        radio=cast(Any, MockRadio()),
+        config=NodeConfig(persist_path=receiver_path),
+        persistence_revision_anchor=receiver_anchor,
+        allow_persistence_bootstrap=True,
+    )
+    sender = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    first = origin._scheduler.build_announce()
+    assert first.seq_num == 1
+    await receiver._process_announce(first.to_bytes(), sender, -80)
+
+    # Crash window: the state write itself fails, so nothing is reserved.
+    assert origin._announce_persistence is not None
+
+    def fail_write(*_args: object, **_kwargs: object) -> None:
+        raise AnnouncePersistenceError("injected state write failure")
+
+    monkeypatch.setattr(origin._announce_persistence, "_write_state", fail_write)
+    with pytest.raises(RuntimeError, match="seq persistence failed"):
+        await origin._scheduler._send_announce()
+    assert origin_radio.tx_history == []
+    assert origin._scheduler.get_seq_num() == 1
+
+    restarted = Node(
+        identity=peer_identity,
+        radio=cast(Any, MockRadio()),
+        config=NodeConfig(persist_path=origin_path),
+        persistence_revision_anchor=origin_anchor,
+        allow_persistence_bootstrap=False,
+    )
+    assert restarted._announce_persistence is not None
+    assert restarted._announce_persistence.local_sequence == 1
+    second = restarted._scheduler.build_announce()
+    assert second.seq_num == 2
+    await receiver._process_announce(second.to_bytes(), sender, -80)
+    assert receiver.announce_processor.known_originators() == [peer_identity.iid]
+    route = receiver.gradient_table.lookup(yggdrasil_address(peer_identity.pubkey))
+    assert route is not None and route.seq_num == 2
 
 
 @pytest.mark.asyncio

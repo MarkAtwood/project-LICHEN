@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import json
 import struct
 from ipaddress import IPv6Address
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +27,7 @@ from lichen.rpl.dao_origin import (
 )
 from lichen.rpl.dao_persistence import MemoryPersistence
 from lichen.rpl.dao_types import RplTarget, TransitInformation
-from lichen.rpl.messages import DAO, RplOption
+from lichen.rpl.messages import DAO, RplOption, RplOptionType
 
 # Test fixtures
 ROOT_SEED = bytes(range(32))
@@ -133,6 +135,38 @@ def make_signed_dao(
         options=options + [sig_opt],
     ).to_bytes()
     return DAO.from_bytes(wire)
+
+
+def make_signed_dao_transit_flags(
+    identity: Identity,
+    parent: IPv6Address,
+    dodag_id: IPv6Address,
+    origin_sequence: int,
+    flags_octet: int,
+) -> DAO:
+    """Build a signed DAO whose Transit flags octet is exactly flags_octet.
+
+    The production TransitInformation codec cannot emit reserved flag bits, so
+    the option is framed directly on the wire per spec 8.6 (Data Length 20).
+    """
+    target = yggdrasil_address(identity.pubkey)
+    transit = RplOption(
+        RplOptionType.TRANSIT_INFORMATION,
+        bytes([flags_octet, 0x80, 1, 255]) + parent.packed,
+    )
+    options = [RplTarget(target).to_option(), transit]
+    unsigned = DAO(rpl_instance_id=0, dao_sequence=1, dodag_id=dodag_id, options=options).to_bytes()
+    transcript = compute_signature_transcript(target, dodag_id, origin_sequence, unsigned)
+    signature = sign(identity.privkey, identity.pubkey, transcript)
+    sig_opt = RplOption(DAO_ORIGIN_SIGNATURE_TYPE, struct.pack(">Q", origin_sequence) + signature)
+    return DAO.from_bytes(
+        DAO(
+            rpl_instance_id=0,
+            dao_sequence=1,
+            dodag_id=dodag_id,
+            options=options + [sig_opt],
+        ).to_bytes()
+    )
 
 
 class TestDaoOriginSignature:
@@ -943,6 +977,7 @@ class TestConsolidatedDaoValidation:
 
         # Route should be installed
         from lichen.rpl.routing import RouteTarget
+
         routes = manager.routing_table.routes()
         assert RouteTarget.host(NODE_ADDR) in routes
 
@@ -1262,6 +1297,142 @@ class TestIdempotentRetransmissionFloorHandling:
         # Fresh DAO should commit floor
         assert len(persistence.store_rx_floor_calls) == 2
         assert persistence.store_rx_floor_calls[1][1] == 2
+
+
+class TestTransitFlagsSemanticStage:
+    """Transit flags octet (E bit and reserved bits) is a semantic rejection.
+
+    Per spec 05-routing.md 8.6-8.7 and the canonical vector
+    reject_unsupported_transit_e: the pre-key structural pass checks only the
+    exact Transit Data Length 20; a nonzero flags octet is route semantics and
+    MUST be classified after signature verification and replay, so a
+    lower-sequence signed E=1 DAO is reported as replay, not malformed.
+    """
+
+    DAO_ORIGIN_VECTORS = (
+        Path(__file__).resolve().parents[3] / "test" / "vectors" / "dao_origin_signature.json"
+    )
+
+    def _vector(self, name: str) -> dict:
+        vectors = json.loads(self.DAO_ORIGIN_VECTORS.read_text())["vectors"]
+        for vector in vectors:
+            if vector["name"] == name:
+                return vector
+        raise AssertionError(f"vector {name} not found in {self.DAO_ORIGIN_VECTORS}")
+
+    def test_fresh_e1_canonical_vector_rejected_as_semantic(self) -> None:
+        vector = self._vector("reject_unsupported_transit_e")
+        assert vector["expected"]["decision_stage"] == "semantic"
+        assert vector["expected"]["reason"] == "unsupported_transit_e"
+        source = IPv6Address(bytes.fromhex(vector["source_ipv6"]))
+        dodag = IPv6Address(bytes.fromhex(vector["effective_dodag_id"]))
+        pin_table = MockPinTable({source.packed[8:]: bytes.fromhex(vector["public_key"])})
+        validator = DaoOriginValidator(pin_table, MockReplayStore())
+        dao = DAO.from_bytes(bytes.fromhex(vector["signed_dao"]))
+
+        result = validator.validate(dao, source, dodag)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.UNSUPPORTED_TRANSIT_E
+
+    def test_fresh_e1_production_codec_rejected_as_semantic(self) -> None:
+        pin_table = MockPinTable({NODE_ADDR.packed[8:]: NODE_IDENTITY.pubkey})
+        validator = DaoOriginValidator(pin_table)
+        e1_transit = TransitInformation(
+            ROOT_ADDR, path_sequence=1, path_lifetime=255, external=True
+        ).to_option()
+        assert e1_transit.data[0] == 0x80
+        unsigned = DAO(
+            rpl_instance_id=0,
+            dao_sequence=1,
+            dodag_id=DODAG_ID,
+            options=[RplTarget(NODE_ADDR).to_option(), e1_transit],
+        ).to_bytes()
+        transcript = compute_signature_transcript(NODE_ADDR, DODAG_ID, 1, unsigned)
+        sig_opt = RplOption(
+            DAO_ORIGIN_SIGNATURE_TYPE,
+            struct.pack(">Q", 1) + sign(NODE_IDENTITY.privkey, NODE_IDENTITY.pubkey, transcript),
+        )
+        dao = DAO.from_bytes(
+            DAO(
+                rpl_instance_id=0,
+                dao_sequence=1,
+                dodag_id=DODAG_ID,
+                options=[RplTarget(NODE_ADDR).to_option(), e1_transit, sig_opt],
+            ).to_bytes()
+        )
+
+        result = validator.validate(dao, NODE_ADDR, DODAG_ID)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.UNSUPPORTED_TRANSIT_E
+
+    def test_reserved_transit_flags_rejected_as_semantic(self) -> None:
+        pin_table = MockPinTable({NODE_ADDR.packed[8:]: NODE_IDENTITY.pubkey})
+        validator = DaoOriginValidator(pin_table)
+        dao = make_signed_dao_transit_flags(
+            NODE_IDENTITY, ROOT_ADDR, DODAG_ID, origin_sequence=1, flags_octet=0x40
+        )
+
+        result = validator.validate(dao, NODE_ADDR, DODAG_ID)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.UNSUPPORTED_TRANSIT_E
+
+    def test_lower_sequence_e1_vector_rejected_as_replay_not_malformed(self) -> None:
+        """Mandatory decision order: replay classification precedes semantics.
+
+        The canonical E=1 vector re-signed one sequence below the committed
+        floor must be reported as replay, never as malformed from the
+        pre-key structural pass. Reaching the replay stage also proves the
+        re-signed transcript verified (signature precedes replay).
+        """
+        vector = self._vector("reject_unsupported_transit_e")
+        identity = Identity.from_seed(bytes.fromhex(vector["signing_seed"]))
+        pubkey = bytes.fromhex(vector["public_key"])
+        assert identity.pubkey == pubkey
+        source = IPv6Address(bytes.fromhex(vector["source_ipv6"]))
+        dodag = IPv6Address(bytes.fromhex(vector["effective_dodag_id"]))
+        pin_table = MockPinTable({source.packed[8:]: pubkey})
+        replay_store = MockReplayStore()
+        validator = DaoOriginValidator(pin_table, replay_store)
+        replay_store.set_floor(
+            pubkey, vector["sequence"], compute_dao_digest(bytes.fromhex(vector["signed_dao"]))
+        )
+
+        unsigned = bytes.fromhex(vector["unsigned_dao"])
+        lower_seq = vector["sequence"] - 1
+        transcript = compute_signature_transcript(source, dodag, lower_seq, unsigned)
+        sig_wire = (
+            bytes([DAO_ORIGIN_SIGNATURE_TYPE, DAO_ORIGIN_SIGNATURE_LENGTH])
+            + struct.pack(">Q", lower_seq)
+            + sign(identity.privkey, identity.pubkey, transcript)
+        )
+        dao = DAO.from_bytes(unsigned + sig_wire)
+
+        result = validator.validate(dao, source, dodag)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.SEQUENCE_REPLAY
+
+    def test_equal_sequence_e1_vector_rejected_as_replay_not_malformed(self) -> None:
+        """Equal-sequence E=1 bytes differing from the floor lose to replay."""
+        vector = self._vector("reject_unsupported_transit_e")
+        identity = Identity.from_seed(bytes.fromhex(vector["signing_seed"]))
+        pubkey = bytes.fromhex(vector["public_key"])
+        source = IPv6Address(bytes.fromhex(vector["source_ipv6"]))
+        dodag = IPv6Address(bytes.fromhex(vector["effective_dodag_id"]))
+        pin_table = MockPinTable({source.packed[8:]: pubkey})
+        replay_store = MockReplayStore()
+        validator = DaoOriginValidator(pin_table, replay_store)
+        valid_dao = make_signed_dao(identity, dodag, dodag, origin_sequence=vector["sequence"])
+        replay_store.set_floor(pubkey, vector["sequence"], compute_dao_digest(valid_dao.to_bytes()))
+        dao = DAO.from_bytes(bytes.fromhex(vector["signed_dao"]))
+
+        result = validator.validate(dao, source, dodag)
+
+        assert result.valid is False
+        assert result.reject_reason is DaoOriginRejectReason.SEQUENCE_EQUAL_DIFFERENT_BYTES
 
 
 class TestOriginResultInvariantEnforcement:

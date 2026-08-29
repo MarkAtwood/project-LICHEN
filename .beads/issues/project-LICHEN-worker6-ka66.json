@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-ka66",
   "title": "Fail authenticated DAO origination closed on missing or corrupt TX recovery",
   "description": "P1 correctness/protocol: DaoManager._restore_tx_state() suppresses DaoPersistenceError whenever require_crash_safety=False, even when origin_identity is configured. Public build_dao() subsequently accepts the same crash-safe/fail-closed backend and originates from sequence 1, reusing a previously acknowledged Origin Sequence after corruption. TwoSlotFilePersistence also treats deletion of both TX slots as a fresh store with no explicit bootstrap/rollback anchor, so a restart can reset authenticated origination silently. Make public authenticated origination retain a terminal recovery failure independent of the legacy test flag, distinguish explicitly authorized first bootstrap from deletion/rollback, and validate restored sequence/bytes before permitting transmit.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T17:03:51.787688Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:28:58.295824Z",
-  "started_at": "2026-08-24T17:03:56.238748Z"
+  "updated_at": "2026-08-29T09:12:40.330122Z",
+  "started_at": "2026-08-24T17:03:56.238748Z",
+  "closed_at": "2026-08-29T09:12:40.330122Z",
+  "close_reason": "Authenticated DAO origination now fails closed on missing/corrupt TX recovery independent of legacy flags, verified end to end. DaoManager._restore_tx_state already retains a terminal _tx_recovery_error whenever origin_identity is configured (independent of require_crash_safety) and validates restored state (canonical DAO byte roundtrip, DODAG context, Origin Sequence match, Schnorr48 transcript) before transmit — verified, no dao_manager changes needed (grep confirmed dao_manager is the only caller of load/store_tx_state). The remaining silent-reset hole was persistence-level and is closed by the cshj marker validation: with a stateless anchor record, deleted TX slots + pre-existing marker now raise at load AND at the crash-safe store commit, so build_dao can neither re-originate from sequence 1 nor silently rebuild deleted slot state; corrupt slots raise 'refusing to overwrite corrupt' (cycr). New manager-level regressions: parametrized delete/corrupt damage with require_crash_safety=False and a stateless anchor -\u003e build_dao raises DaoError(persistence_corrupt) and the failure is terminal on repeat; mid-session store after slot deletion fails closed (verified to fail against pre-cshj code); control test proves explicitly authorized first bootstrap on a genuinely fresh store still originates sequence 1 then 2. Note: _require_authenticated_origination already rejects fail_closed=False backends outright for public origination, so the marker-backed detection operates on fail_closed=True backends."
 }

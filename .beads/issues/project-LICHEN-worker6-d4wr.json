@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-d4wr",
   "title": "Persist the local Announce origin sequence across Node restarts",
   "description": "P1 correctness/protocol: Node constructs AnnounceScheduler with _seq_num=0 on every startup and never calls set_seq_num() or set_on_seq_change(), even when persist_path and a rollback anchor are configured. Receivers now durably restore 16-bit Announce replay floors, so a restarted origin emits sequence 1 and can be rejected for up to half the sequence space; for floors in the opposite half of the ring, the reset value can instead be misclassified as newer. Integrate crash-safe sender-sequence reservation/restoration with Node persistence, define wrap/restart behavior, and add two-Node reboot tests around low, high, and wrap boundary floors.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T17:03:30.565108Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T08:34:23.324611Z",
+  "updated_at": "2026-08-29T09:29:16.820876Z",
   "started_at": "2026-08-24T17:03:34.649033Z",
-  "lease_expires_at": "2026-08-29T08:39:23.324611Z",
-  "heartbeat_at": "2026-08-29T08:34:23.324611Z"
+  "closed_at": "2026-08-29T09:29:16.820876Z",
+  "close_reason": "Verified: integration pre-exists (node.py wires set_seq_num(persisted) + set_on_seq_change(reserve_local_sequence); scheduler reserves before in-memory adoption; wrap 0xFFFF-\u003e0). Added 2 failure-injection tests: anchor failure aborts announce, reservation survives reboot without reuse; write failure retries cleanly after reboot. 365 node+announce tests pass. End-to-end send-after-restart coverage filed as follow-up."
 }
