@@ -65,6 +65,7 @@ pub mod rf_health;
 pub mod seqnum;
 pub mod sf_assignment;
 pub mod short_addr;
+pub mod superframe;
 pub mod tdma_beacon;
 pub mod transport;
 pub mod tx_queue;

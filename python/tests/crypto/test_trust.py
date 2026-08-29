@@ -8,7 +8,7 @@ and key rotation per spec section 8.7.
 
 import inspect
 import json
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
 import pytest
@@ -870,3 +870,84 @@ class TestIdentityCollisionDetection:
 
             # Error message should mention IID for debugging
             assert alice.iid.hex() in str(exc_info.value)
+
+
+class TestTrustStoreEncapsulation:
+    """Returned entries are detached immutable views: attempted mutation
+    (attribute write, dataclasses.replace, metadata item write, caller-dict
+    aliasing) cannot alter the store's verification outcomes."""
+
+    def _store_with_alice(self):
+        store = TrustStore(auto_pin=True)
+        alice = Identity.from_seed(SEED_ALICE)
+        store.verify_or_pin(alice.pubkey, alice.iid)
+        return store, alice
+
+    def test_all_accessors_return_detached_copies(self):
+        store, alice = self._store_with_alice()
+        entry_get = store.get(alice.iid)
+        entry_verify = store.verify_peer(alice.pubkey, alice.iid)
+        entry_list = store.list_entries()[0]
+        assert entry_get is not entry_verify
+        assert entry_verify is not entry_list
+        # None of the returned objects are the store's internal objects
+        for entry in (entry_get, entry_verify, entry_list):
+            assert all(entry is not internal for internal in store._entries.values())
+
+    def test_attribute_write_on_returned_entry_raises_and_does_not_affect_store(self):
+        store, alice = self._store_with_alice()
+        entry = store.get(alice.iid)
+        with pytest.raises(FrozenInstanceError):
+            entry.revoked = True
+        with pytest.raises(FrozenInstanceError):
+            entry.pubkey = Identity.from_seed(SEED_BOB).pubkey
+        with pytest.raises(FrozenInstanceError):
+            entry.trust_level = TrustLevel.PKIX
+        # Verification outcome unchanged: still accepts Alice's key
+        assert store.verify_peer(alice.pubkey, alice.iid).pubkey == alice.pubkey
+
+    def test_replace_on_returned_entry_cannot_unrevoke_store_state(self):
+        store, alice = self._store_with_alice()
+        store.revoke(alice.iid)
+        entry = store.get(alice.iid)
+        assert entry.revoked
+        # Attacker builds an un-revoked forged entry; store is unaffected
+        forged = replace(entry, revoked=False)
+        assert not forged.revoked
+        assert store.get(alice.iid).revoked
+        # And verification still rejects the revoked peer
+        with pytest.raises(RevokedPeerError):
+            store.verify_or_pin(alice.pubkey, alice.iid)
+
+    def test_mutating_returned_metadata_raises_and_does_not_affect_store(self):
+        store, alice = self._store_with_alice()
+        store.add_trust_anchor(alice.pubkey, TrustLevel.BR_PROVISIONED,
+                               metadata={"role": "anchor"})
+        entry = store.get(alice.iid)
+        with pytest.raises(TypeError):
+            entry.metadata["role"] = "attacker"
+        with pytest.raises(TypeError):
+            del entry.metadata["role"]
+        assert store.get(alice.iid).metadata["role"] == "anchor"
+
+    def test_mutating_caller_supplied_metadata_dict_does_not_alias_store(self):
+        store = TrustStore(auto_pin=True)
+        alice = Identity.from_seed(SEED_ALICE)
+        metadata = {"role": "anchor"}
+        store.add_trust_anchor(alice.pubkey, TrustLevel.BR_PROVISIONED,
+                               metadata=metadata)
+        metadata["role"] = "attacker"
+        metadata["backdoor"] = "yes"
+        assert store.get(alice.iid).metadata == {"role": "anchor"}
+
+    def test_forge_derivation_mismatch_cannot_be_injected_via_replaced_entry(self):
+        """A forged entry failing derivation is rejected outright; the store
+        only ever accepts entries whose pubkey derives to iid/ygg_addr."""
+        store, alice = self._store_with_alice()
+        bob = Identity.from_seed(SEED_BOB)
+        with pytest.raises(ValueError):
+            replace(store.get(alice.iid), pubkey=bob.pubkey)
+        # Store still pins Alice's original key
+        assert store.get(alice.iid).pubkey == alice.pubkey
+        with pytest.raises(DerivationMismatchError):
+            store.verify_or_pin(bob.pubkey, alice.iid)

@@ -475,10 +475,7 @@ mod tests {
         ];
 
         let master = elect_time_master(&candidates).unwrap();
-        assert_eq!(
-            master.iid,
-            [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]
-        );
+        assert_eq!(master.iid, [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]);
     }
 
     #[test]
@@ -495,10 +492,7 @@ mod tests {
         }];
 
         let master = elect_time_master(&candidates).unwrap();
-        assert_eq!(
-            master.iid,
-            [0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]
-        );
+        assert_eq!(master.iid, [0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]);
     }
 
     #[test]

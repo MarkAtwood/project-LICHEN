@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-1qt2",
   "title": "Do not expose mutable TrustEntry security state to callers",
   "description": "P1 security: TrustStore.get(), verify_or_pin(), verify_peer(), add_trust_anchor(), rotate_key(), and list_entries() return the same mutable TrustEntry objects stored internally. Callers can then replace pubkey/IID/address, lower/raise trust_level, clear revoked, or mutate metadata without any derivation, authorization, rotation-signature, or persistence path; even a frozen store facade would be bypassed. Keep validated primitives private and return immutable detached views/copies, centralize all mutations behind checked methods, and add tests that attempted facade/nested metadata mutation cannot alter verification outcomes.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:56:07.275712Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:53.198006Z",
-  "started_at": "2026-08-24T15:58:01.285555Z"
+  "updated_at": "2026-08-29T11:09:50.437104Z",
+  "started_at": "2026-08-24T15:58:01.285555Z",
+  "closed_at": "2026-08-29T11:09:50.437104Z",
+  "close_reason": "Verified no hole exists: every accessor returns replace(entry) detached copies, TrustEntry is frozen with MappingProxyType-copied metadata, store mutations only via checked methods. Added 6 encapsulation regression tests pinning detached-copy identity, frozen writes, replace/revoke immunity, metadata proxy immutability, caller-dict aliasing break, forged-key rejection. 64/64 test_trust tests pass. Bead premise disproven with evidence; tests are the deliverable."
 }
