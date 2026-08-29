@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-yj0c",
+  "title": "Route node/gateway OSCORE activation through OwnershipRegistry",
+  "description": "Follow-up to project-LICHEN-v0ee (fix f4b089027c). OwnershipRegistry now enforces exclusive live ownership of directional OSCORE contexts (fail-closed AlreadyOwned on second activation). The bare Context::register_fresh/restore_existing re-exports remain callable and are still used by production activation paths: rust/lichen-node/src/secure.rs:542 register_fresh_context, rust/lichen-node/src/rpl_stack/secure.rs:24, rust/lichen-gateway/src/gateway.rs:1016. Today these are structurally single-owner (contexts.insert(peer_iid, ..) replaces, never duplicates), but routing them through OwnershipRegistry would enforce the contract at the API boundary instead of by convention. Audit note: gateway keys installs by peer_iid prefix while ownership is by ContextId; keep the existing same-prefix guard when wiring.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T03:43:25.307807Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T03:43:25.307807Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yj0c",
+      "depends_on_id": "project-LICHEN-v0ee",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T03:43:26.495062Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
