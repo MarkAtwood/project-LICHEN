@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-gqca",
+  "title": "Give StagedPrivateSeed a Drop that removes unpublished staging files",
+  "description": "P3 (wave-3 review of worker6-xyk3): lichend.rs StagedPrivateSeed has no Drop; a caller that stages but never publish()es leaks the 0600 temp seed file. Production path is stage-\u003epublish back-to-back (latent), and a post-link failure also returns Err though the seed was published (fail-closed, acceptable). Fix: implement Drop to unlink the staging path if still unpublished, and document the post-link Err-on-sync-failure semantics.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:33:04.791894Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:33:04.791894Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gqca",
+      "depends_on_id": "project-LICHEN-worker6-xyk3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:33:04.99575Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

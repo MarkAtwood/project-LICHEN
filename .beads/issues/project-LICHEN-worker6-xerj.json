@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-xerj",
+  "title": "Sweep crash-orphaned staged seed temp files at lichend boot",
+  "description": "P3, pre-existing (wave-3 review of worker6-xyk3): a kill -9 between stage_private_seed temp creation (lichend.rs ~:1500) and publish cleanup leaks a 32-byte 0600 .id.seed.*.tmp forever; no boot-time sweep exists. Fix: at startup, unlink stale .id.seed.*.tmp in the state dir before provisioning.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:33:04.378678Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:33:04.378678Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xerj",
+      "depends_on_id": "project-LICHEN-worker6-xyk3",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:33:04.569254Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

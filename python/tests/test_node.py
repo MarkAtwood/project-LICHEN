@@ -2258,6 +2258,72 @@ async def test_node_reboot_restores_announce_pin_and_reconciles_exact_origin(
 
 
 @pytest.mark.asyncio
+async def test_node_post_commit_peer_failure_restores_bounded_one_shot_permit(
+    tmp_path,
+    identity: Identity,
+    peer_identity: Identity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Anchor:
+        def __init__(self) -> None:
+            self.revisions: dict[bytes, int] = {}
+
+        def read(self, key: bytes) -> int | None:
+            return self.revisions.get(key)
+
+        def advance(self, key: bytes, expected: int | None, revision: int) -> None:
+            assert self.revisions.get(key) == expected
+            assert revision == (expected or 0) + 1
+            self.revisions[key] = revision
+
+    anchor = Anchor()
+    unsigned = AnnounceMessage(peer_identity.iid, peer_identity.pubkey, 7)
+    announce = AnnounceMessage(
+        peer_identity.iid,
+        peer_identity.pubkey,
+        7,
+        signature=sign(peer_identity.privkey, peer_identity.pubkey, unsigned.signed_data()),
+    )
+    relay_announce = announce.with_incremented_hop_count()
+    radio = MockRadio()
+    node = Node(
+        identity=identity,
+        radio=cast(Any, radio),
+        config=NodeConfig(persist_path=str(tmp_path / "node-state")),
+        persistence_revision_anchor=anchor,
+        allow_persistence_bootstrap=True,
+    )
+    destination = yggdrasil_address(peer_identity.pubkey)
+    permit = node.announce_processor._pending_reconciliation
+    add_peer = node.add_peer
+
+    def fail_peer_admission(_peer: PeerIdentity) -> None:
+        raise PeerDatabaseFullError("injected peer capacity race")
+
+    monkeypatch.setattr(node, "add_peer", fail_peer_admission)
+    await node._process_announce(relay_announce.to_bytes(), peer_identity, -80)
+    assert node.announce_processor.pinned_pubkey_for(peer_identity.iid) == peer_identity.pubkey
+    assert node.gradient_table.lookup(destination) is None
+    assert peer_identity.iid not in node.peer_db
+    assert peer_identity.iid in permit
+
+    await node._process_announce(relay_announce.to_bytes(), peer_identity, -80)
+    assert len(permit) == 1  # bounded: repeated failures restore at most one permit
+
+    monkeypatch.setattr(node, "add_peer", add_peer)
+    await node._process_announce(relay_announce.to_bytes(), peer_identity, -80)
+    assert node.gradient_table.lookup(destination) is not None
+    assert peer_identity.iid in node.peer_db
+    assert peer_identity.iid not in permit  # one-shot: consumed by re-admission
+    relayed_count = len(radio.tx_history)
+    assert relayed_count >= 1
+
+    await node._process_announce(relay_announce.to_bytes(), peer_identity, -80)
+    assert len(radio.tx_history) == relayed_count  # fail-closed without a permit
+    assert node.gradient_table.lookup(destination) is not None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("retained", "first_sequence", "second_sequence"),
     [(0, 1, 2), (0x7FFE, 0x7FFF, 0x8000), (0xFFFE, 0xFFFF, 0)],

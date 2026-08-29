@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-e2vs",
   "title": "Reject attacker-writable lichend configuration even without embedded secrets",
   "description": "Security review finding in rust/lichen-gateway/src/config.rs: Config::from_file only enforces owner/mode after detecting gateway PSK fields. A group/world-writable secret-free config can still redirect security.rollback_floor_root, mesh interfaces, or other privileged daemon behavior. Always verify ownership and reject group/other write bits; additionally require 0600-style privacy when embedded secrets are present.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T17:11:27.954075Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T07:04:22.559624Z",
+  "updated_at": "2026-08-29T08:33:25.768783Z",
   "started_at": "2026-08-24T17:11:34.606959Z",
-  "lease_expires_at": "2026-08-29T07:09:22.559624Z",
-  "heartbeat_at": "2026-08-29T07:04:22.559624Z"
+  "closed_at": "2026-08-29T08:33:25.768783Z",
+  "close_reason": "Verified: verify_config_metadata runs pre-parse unconditionally (reject group/other write; Linux owner check) and post-parse adds 0600-style privacy for secret-bearing configs. Mandated scenarios already tested; added missing 0o640 secret-free boundary pin (accepted). 10/10 pass. Ownership check stays Linux-only by design (libc dep)."
 }

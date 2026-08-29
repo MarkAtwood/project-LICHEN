@@ -405,79 +405,24 @@ async fn main() -> ExitCode {
         }
     };
 
-    let gateway_coordinator = if provision_or_resume {
-        let stage = manifest.as_ref().expect("resume manifest").stage;
-        let store_exists = slot_path.exists();
-        let floor_exists = slot_floor_path.exists();
-        if stage >= PROVISION_STAGE_SLOT && (!store_exists || !floor_exists) {
-            error!("committed slot provisioning artifacts are missing");
-            return ExitCode::FAILURE;
-        }
-        if store_exists && !floor_exists && stage < PROVISION_STAGE_SLOT {
-            if let Err(error) = save_generation_floor(&slot_floor_path, 1) {
-                error!("interrupted slot-floor recovery failed: {error}");
-                return ExitCode::FAILURE;
-            }
-        } else if !store_exists && floor_exists && stage < PROVISION_STAGE_SLOT {
-            match load_generation_floor(&slot_floor_path) {
-                Ok(1) => {}
-                Ok(_) => {
-                    error!("orphan slot floor is not the initial generation");
-                    return ExitCode::FAILURE;
-                }
-                Err(error) => {
-                    error!("orphan slot floor rejected: {error}");
-                    return ExitCode::FAILURE;
-                }
-            }
-        }
-        let coordinator_result = if slot_path.exists() {
-            GatewayCoordinator::load_persistent(
-                lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
-                60,
-                256,
-                &slot_path,
-                &slot_floor_path,
-                &sealing_seed,
-            )
-        } else {
-            GatewayCoordinator::provision_persistent(
-                lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
-                60,
-                256,
-                &slot_path,
-                &slot_floor_path,
-                &sealing_seed,
-            )
-        };
-        let coordinator = match coordinator_result {
-            Ok(coordinator) => coordinator,
-            Err(error) => {
-                error!("slot replay provisioning/recovery failed: {error}");
-                return ExitCode::FAILURE;
-            }
-        };
-        if !initial_resume_state_is_valid(
-            stage,
-            PROVISION_STAGE_SLOT,
-            coordinator.slot_replay_generation(),
-            true,
-        ) {
-            error!("interrupted slot replay state is not the initial generation");
-            return ExitCode::FAILURE;
-        }
-        let next = ProvisionManifest {
-            stage: stage.max(PROVISION_STAGE_SLOT),
+    let (gateway_coordinator, slot_manifest) = if provision_or_resume {
+        match recover_or_provision_slot_replay(
+            manifest.as_ref().expect("resume manifest").stage,
+            &manifest_path,
             identity_pubkey,
-        };
-        if let Err(error) = save_provision_manifest(&manifest_path, next) {
-            error!("slot provisioning commit failed: {error}");
-            return ExitCode::FAILURE;
+            lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
+            &slot_path,
+            &slot_floor_path,
+            &sealing_seed,
+        ) {
+            Ok((coordinator, next)) => (coordinator, Some(next)),
+            Err(error) => {
+                error!("{error}");
+                return ExitCode::FAILURE;
+            }
         }
-        manifest = Some(next);
-        coordinator
     } else {
-        match GatewayCoordinator::load_persistent(
+        let coordinator = match GatewayCoordinator::load_persistent(
             lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
             60,
             256,
@@ -490,8 +435,10 @@ async fn main() -> ExitCode {
                 error!("durable slot replay load failed: {error}");
                 return ExitCode::FAILURE;
             }
-        }
+        };
+        (coordinator, manifest)
     };
+    manifest = slot_manifest;
 
     let use_sim = use_sim_mode && !use_hat;
     let backend = if use_hat {
@@ -1238,6 +1185,67 @@ fn initial_resume_state_is_valid(
     manifest_stage >= boundary_stage || (generation == 1 && is_empty)
 }
 
+/// Recover or provision durable slot-replay state during provisioning resume.
+///
+/// Any recovery where the manifest has not committed PROVISION_STAGE_SLOT yet
+/// must land on the initial generation (first-boot partial state): a store
+/// with a higher generation cannot be a legitimate partial and is rejected
+/// before the manifest is advanced.
+fn recover_or_provision_slot_replay(
+    stage: u8,
+    manifest_path: &Path,
+    identity_pubkey: [u8; 32],
+    iid: [u8; 16],
+    slot_path: &Path,
+    slot_floor_path: &Path,
+    sealing_seed: &[u8; 32],
+) -> Result<(GatewayCoordinator, ProvisionManifest), String> {
+    let store_exists = slot_path.exists();
+    let floor_exists = slot_floor_path.exists();
+    if stage >= PROVISION_STAGE_SLOT && (!store_exists || !floor_exists) {
+        return Err("committed slot provisioning artifacts are missing".into());
+    }
+    if store_exists && !floor_exists && stage < PROVISION_STAGE_SLOT {
+        if let Err(error) = save_generation_floor(slot_floor_path, 1) {
+            return Err(format!("interrupted slot-floor recovery failed: {error}"));
+        }
+    } else if !store_exists && floor_exists && stage < PROVISION_STAGE_SLOT {
+        match load_generation_floor(slot_floor_path) {
+            Ok(1) => {}
+            Ok(_) => return Err("orphan slot floor is not the initial generation".into()),
+            Err(error) => return Err(format!("orphan slot floor rejected: {error}")),
+        }
+    }
+    let coordinator = if slot_path.exists() {
+        GatewayCoordinator::load_persistent(iid, 60, 256, slot_path, slot_floor_path, sealing_seed)
+    } else {
+        GatewayCoordinator::provision_persistent(
+            iid,
+            60,
+            256,
+            slot_path,
+            slot_floor_path,
+            sealing_seed,
+        )
+    }
+    .map_err(|error| format!("slot replay provisioning/recovery failed: {error}"))?;
+    if !initial_resume_state_is_valid(
+        stage,
+        PROVISION_STAGE_SLOT,
+        coordinator.slot_replay_generation(),
+        true,
+    ) {
+        return Err("interrupted slot replay state is not the initial generation".into());
+    }
+    let next = ProvisionManifest {
+        stage: stage.max(PROVISION_STAGE_SLOT),
+        identity_pubkey,
+    };
+    save_provision_manifest(manifest_path, next)
+        .map_err(|error| format!("slot provisioning commit failed: {error}"))?;
+    Ok((coordinator, next))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ProvisionManifest {
     stage: u8,
@@ -1448,7 +1456,18 @@ fn load_private_seed(path: &Path) -> io::Result<Option<Seed>> {
     Ok(Some(Seed::new(*bytes)))
 }
 
-fn save_private_seed(path: &Path, seed: &Seed) -> io::Result<()> {
+/// Staged identity seed: a private temp file held open until publish.
+struct StagedPrivateSeed {
+    parent: PathBuf,
+    temp_path: PathBuf,
+    file: fs::File,
+}
+
+/// Allocate a private staging file for the identity seed without publishing it.
+///
+/// The absence pre-check only fails fast; the authoritative no-replace guard
+/// is the hard_link in [`publish_private_seed`].
+fn stage_private_seed(path: &Path) -> io::Result<StagedPrivateSeed> {
     match fs::symlink_metadata(path) {
         Ok(_) => {
             return Err(io::Error::new(
@@ -1465,21 +1484,39 @@ fn save_private_seed(path: &Path, seed: &Seed) -> io::Result<()> {
     verify_private_directory(parent)?;
     let suffix = random_state_suffix()?;
     let temp_path = parent.join(format!(".id.seed.{}.tmp", hex::encode(suffix)));
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    #[cfg(target_os = "linux")]
+    options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    let file = options.open(&temp_path)?;
+    Ok(StagedPrivateSeed {
+        parent: parent.to_path_buf(),
+        temp_path,
+        file,
+    })
+}
+
+/// Publish a staged seed with atomic no-replace semantics.
+///
+/// `fs::hard_link` is link(2): it fails with AlreadyExists if `path` appeared
+/// after staging (e.g. created by a concurrent daemon), so a racing writer
+/// can never be overwritten and the caller fails closed.
+fn publish_private_seed(path: &Path, staged: StagedPrivateSeed, seed: &Seed) -> io::Result<()> {
+    let StagedPrivateSeed {
+        parent,
+        temp_path,
+        mut file,
+    } = staged;
     let result = (|| -> io::Result<()> {
-        let mut options = fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.mode(0o600);
-        #[cfg(target_os = "linux")]
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
-        let mut file = options.open(&temp_path)?;
         file.write_all(seed.as_bytes())?;
         file.sync_all()?;
         let metadata = file.metadata()?;
         verify_private_regular_file(&temp_path, &metadata, 0o600, "temporary identity seed")?;
         fs::hard_link(&temp_path, path)?;
         fs::remove_file(&temp_path)?;
-        fs::File::open(parent)?.sync_all()?;
+        fs::File::open(&parent)?.sync_all()?;
         let metadata = fs::metadata(path)?;
         verify_private_regular_file(path, &metadata, 0o600, "identity seed")
     })();
@@ -1487,6 +1524,10 @@ fn save_private_seed(path: &Path, seed: &Seed) -> io::Result<()> {
         let _ = fs::remove_file(&temp_path);
     }
     result
+}
+
+fn save_private_seed(path: &Path, seed: &Seed) -> io::Result<()> {
+    publish_private_seed(path, stage_private_seed(path)?, seed)
 }
 
 fn verify_private_regular_file(
@@ -1668,8 +1709,8 @@ mod tests {
             "lichend-gcp-floors-{}-{suffix}",
             std::process::id()
         ));
-        std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&floor_root).unwrap();
+        create_private_directory(&root).unwrap();
+        create_private_directory(&floor_root).unwrap();
         let identity = Identity::from_seed(Seed::new([0x91; 32]));
         let address = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let sealing_seed = *identity.seed.as_bytes();
@@ -1861,6 +1902,203 @@ mod tests {
             9,
             false
         ));
+    }
+
+    fn signed_slot_claim(
+        seed_bytes: [u8; 32],
+        slots: Vec<u32>,
+        superframe: u64,
+        sequence: u32,
+    ) -> (lichen_gateway::resources::SlotClaim, [u8; 32]) {
+        use lichen_gateway::resources::SlotClaim;
+        use schnorr48::{derive_keypair, sign};
+
+        let (private, public) = derive_keypair(&Seed::new(seed_bytes));
+        let pubkey = *public.as_bytes();
+        let iid = lichen_gateway::trust::iid_from_pubkey(&pubkey);
+        let transcript =
+            lichen_gateway::slot::slot_claim_transcript(&iid, &slots, superframe, sequence)
+                .unwrap();
+        let signature = sign(&private, &public, &transcript);
+        let mut claim = SlotClaim::new(iid, slots, superframe, sequence);
+        claim.signature = Some(signature);
+        (claim, pubkey)
+    }
+
+    fn provision_noninitial_slot_store(
+        address: [u8; 16],
+        slot_path: &Path,
+        floor_path: &Path,
+        sealing_seed: &[u8; 32],
+    ) -> u64 {
+        let mut coordinator = GatewayCoordinator::provision_persistent(
+            address,
+            60,
+            256,
+            slot_path,
+            floor_path,
+            sealing_seed,
+        )
+        .unwrap();
+        coordinator.info.slot_map = lichen_gateway::resources::SlotMap {
+            mode: lichen_gateway::slot::AllocationMode::Contiguous,
+            gateway_count: 2,
+            ordinal: 0,
+            start_slot: Some(0),
+            slot_count: Some(30),
+            owned: None,
+        };
+        let (claim, pubkey) = signed_slot_claim([0x52; 32], vec![10, 11], 4, 0);
+        let response = coordinator.handle_post_slots(&claim.encode(), true, Some(&pubkey), 4);
+        assert_eq!(response.code, 0x44);
+        let generation = coordinator.slot_replay_generation();
+        assert!(generation > 1);
+        generation
+    }
+
+    #[test]
+    fn noninitial_slot_store_is_rejected_on_first_attempt_and_on_retry() {
+        let (root, root_guard) = create_ephemeral_state_root().unwrap();
+        let (floor_root, floor_guard) = create_ephemeral_state_root().unwrap();
+        let slot_path = root.join("gateway-slot-replay.bin");
+        let floor_path = floor_root.join("gateway-slot-replay.generation");
+        let manifest_path = root.join("gateway-provisioning.manifest");
+        let sealing_seed = [0x77; 32];
+        let identity_pubkey = [0xa7; 32];
+        // High local IID so the claimed gateway wins the conflict tiebreak and
+        // the claim is accepted (same idiom as the coordinator tests).
+        let mut address = [0u8; 16];
+        address[8..].fill(0xff);
+
+        let generation =
+            provision_noninitial_slot_store(address, &slot_path, &floor_path, &sealing_seed);
+        assert!(generation > 1);
+        fs::remove_file(&floor_path).unwrap();
+
+        let attempt = |stage: u8| {
+            recover_or_provision_slot_replay(
+                stage,
+                &manifest_path,
+                identity_pubkey,
+                address,
+                &slot_path,
+                &floor_path,
+                &sealing_seed,
+            )
+        };
+
+        // First attempt: store present without its external floor. The floor
+        // is anchored at 1 and the store is loaded, but the noninitial
+        // generation is rejected before the manifest is committed.
+        let error = attempt(PROVISION_STAGE_TRUST).unwrap_err();
+        assert_eq!(
+            error,
+            "interrupted slot replay state is not the initial generation"
+        );
+        assert_eq!(load_generation_floor(&floor_path).unwrap(), 1);
+        assert!(!manifest_path.exists());
+
+        // Retry with both files present (the failed attempt leaves them
+        // behind): the same noninitial store must still be rejected.
+        let error = attempt(PROVISION_STAGE_TRUST).unwrap_err();
+        assert_eq!(
+            error,
+            "interrupted slot replay state is not the initial generation"
+        );
+        assert!(!manifest_path.exists());
+
+        drop(root_guard);
+        drop(floor_guard);
+    }
+
+    #[test]
+    fn first_boot_slot_partial_recovers_at_initial_generation() {
+        let (root, root_guard) = create_ephemeral_state_root().unwrap();
+        let (floor_root, floor_guard) = create_ephemeral_state_root().unwrap();
+        let slot_path = root.join("gateway-slot-replay.bin");
+        let floor_path = floor_root.join("gateway-slot-replay.generation");
+        let manifest_path = root.join("gateway-provisioning.manifest");
+        let sealing_seed = [0x78; 32];
+        let identity_pubkey = [0xb7; 32];
+        let mut address = [0u8; 16];
+        address[8..].fill(0xff);
+
+        GatewayCoordinator::provision_persistent(
+            address,
+            60,
+            256,
+            &slot_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        fs::remove_file(&floor_path).unwrap();
+
+        let (coordinator, manifest) = recover_or_provision_slot_replay(
+            PROVISION_STAGE_TRUST,
+            &manifest_path,
+            identity_pubkey,
+            address,
+            &slot_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        assert_eq!(coordinator.slot_replay_generation(), 1);
+        assert_eq!(manifest.stage, PROVISION_STAGE_SLOT);
+        assert_eq!(load_generation_floor(&floor_path).unwrap(), 1);
+        assert_eq!(
+            load_provision_manifest(&manifest_path).unwrap(),
+            Some(manifest)
+        );
+
+        // After the commit, a retry with both files present at the committed
+        // stage loads the durable state without the initial-generation gate.
+        let (reloaded, retry_manifest) = recover_or_provision_slot_replay(
+            PROVISION_STAGE_SLOT,
+            &manifest_path,
+            identity_pubkey,
+            address,
+            &slot_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        assert_eq!(reloaded.slot_replay_generation(), 1);
+        assert_eq!(retry_manifest.stage, PROVISION_STAGE_SLOT);
+
+        drop(root_guard);
+        drop(floor_guard);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn identity_seed_publish_fails_closed_when_destination_appears_concurrently() {
+        let (root, guard) = create_ephemeral_state_root().unwrap();
+        let seed_path = root.join(keys::IDENTITY_SEED);
+        let staged = stage_private_seed(&seed_path).unwrap();
+
+        // A concurrent daemon publishes the final seed between staging and
+        // publish. The no-replace link must fail closed without replacing it.
+        let rival = Seed::new([0x11; 32]);
+        fs::write(&seed_path, rival.as_bytes()).unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&seed_path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+
+        let ours = Seed::new([0x22; 32]);
+        let error = publish_private_seed(&seed_path, staged, &ours).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(load_private_seed(&seed_path).unwrap(), Some(rival));
+
+        let leftovers: Vec<_> = fs::read_dir(&root)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with(".id.seed."))
+            .collect();
+        assert!(leftovers.is_empty(), "staging temp leaked: {leftovers:?}");
+        drop(guard);
     }
 
     #[cfg(unix)]

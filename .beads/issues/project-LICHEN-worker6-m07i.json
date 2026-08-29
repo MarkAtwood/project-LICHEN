@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-m07i",
+  "title": "Validate slot store generation before writing first-boot floor",
+  "description": "P3 (wave-3 review of worker6-eni9): rust/lichen-gateway/src/bin/lichend.rs recover_or_provision_slot_replay (~:1208-1211) writes floor=1 BEFORE loading/gating the store in the store-exists/floor-missing/stage\u003cSLOT branch. On rejection the downgrade persists on disk; an operator 'unsticking' the boot wedge by deleting the manifest then takes the all-artifacts path that skips the gate and loads the noninitial store against floor 1 (anti-rollback anchor reset). Requires same-UID tampering + operator action, so P3. Fix: load and validate the store generation in memory first; only anchor the floor after the gate passes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:33:01.562043Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:33:01.562043Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-m07i",
+      "depends_on_id": "project-LICHEN-worker6-eni9",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:33:03.402563Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

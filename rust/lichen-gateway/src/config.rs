@@ -394,6 +394,7 @@ impl From<toml::de::Error> for ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static TEST_PATH: AtomicU64 = AtomicU64::new(1);
@@ -404,6 +405,23 @@ mod tests {
             std::process::id(),
             TEST_PATH.fetch_add(1, Ordering::Relaxed)
         ))
+    }
+
+    fn rendered_config_error_text(error: &ConfigError) -> String {
+        let mut text = format!("{error}{error:?}");
+        let mut source = error.source();
+        while let Some(err) = source {
+            text.push_str(&err.to_string());
+            source = err.source();
+        }
+        text
+    }
+
+    fn assert_error_hides_secrets(error: &ConfigError, secrets: &[&str]) {
+        let rendered = rendered_config_error_text(error);
+        for secret in secrets {
+            assert!(!rendered.contains(secret), "leaked: {secret}");
+        }
     }
 
     #[test]
@@ -493,6 +511,8 @@ mod tests {
         assert!(Config::from_file(&path).is_err());
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         assert!(Config::from_file(&path).is_ok());
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(Config::from_file(&path).is_ok());
         fs::remove_file(path).unwrap();
     }
 
@@ -510,22 +530,44 @@ mod tests {
         fs::remove_file(target).unwrap();
     }
 
+    #[test]
+    fn parse_error_conversion_discards_diagnostics() {
+        let secrets = [
+            "00112233445566778899aabbccddeeff",
+            "01020304",
+            "4c494348454e",
+        ];
+        let malformed = format!(
+            "[gateway_coordination]\nmode='psk'\npsk_hex='{}'\nmaster_salt_hex={}\nid_context_hex='{}'\nbroken = [\n",
+            secrets[0], secrets[1], secrets[2]
+        );
+        let error = ConfigError::from(toml::from_str::<Config>(&malformed).unwrap_err());
+        assert!(error.source().is_none());
+        assert_error_hides_secrets(&error, &secrets);
+    }
+
     #[cfg(unix)]
     #[test]
     fn parse_error_never_echoes_secret_source_text() {
         use std::os::unix::fs::PermissionsExt;
 
+        let secrets = [
+            "00112233445566778899aabbccddeeff",
+            "01020304",
+            "4c494348454e",
+        ];
         let path = config_path("parse-redaction");
-        let secret = "00112233445566778899aabbccddeeff";
         fs::write(
             &path,
-            format!("[gateway_coordination]\nmode='psk'\npsk_hex='{secret}'\ninvalid = [\n"),
+            format!(
+                "[gateway_coordination]\nmode='psk'\npsk_hex='{}'\nmaster_salt_hex='{}'\nid_context_hex='{}'\ninvalid = [\n",
+                secrets[0], secrets[1], secrets[2]
+            ),
         )
         .unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         let error = Config::from_file(&path).unwrap_err();
-        assert!(!error.to_string().contains(secret));
-        assert!(!format!("{error:?}").contains(secret));
+        assert_error_hides_secrets(&error, &secrets);
         fs::remove_file(path).unwrap();
     }
 

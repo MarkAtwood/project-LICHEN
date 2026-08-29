@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-kqbv",
+  "title": "Slot recovery gate should check store emptiness, not hardcode is_empty=true",
+  "description": "P3 (wave-3 review of worker6-eni9): lichend.rs slot recovery gate (~:1243) hardcodes is_empty=true where the trust-path equivalent (~:359) really checks entries().next().is_none(). A validly-sealed generation-1 store containing claims would be adopted and committed. Reachable only via sealing-seed (identity) compromise or coordinator bug (legit gen-1 stores are provisioned empty and every accepted claim bumps generation), so defense-in-depth only. Fix: perform the real emptiness check on the loaded verifier state.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:33:03.549936Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:33:03.549936Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kqbv",
+      "depends_on_id": "project-LICHEN-worker6-eni9",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:33:03.737344Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
