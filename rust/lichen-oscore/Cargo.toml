@@ -22,9 +22,18 @@ subtle = { version = "2", default-features = false }
 # `zeroize` (digest/zeroize) makes hasher state ZeroizeOnDrop.
 sha2 = { version = "0.11", default-features = false, features = ["zeroize"] }
 
+# Direct `zeroize`-feature pins for the AES/HMAC primitives used (transitively)
+# by the `oscore` crate. Feature unification guarantees their owned key
+# material is zeroized regardless of the `oscore` patch: `aes/zeroize` makes
+# Aes128 `ZeroizeOnDrop`; `hmac/zeroize` enables `digest/zeroize` (the
+# key-derived HMAC pad cores and tag output are `ZeroizeOnDrop` — the `Hmac`
+# wrapper itself is not marked upstream). Types are also referenced by the
+# compile-time assertions in src/zeroize_asserts.rs.
+aes = { version = "0.8", default-features = false, features = ["zeroize"] }
+hmac = { version = "0.13", default-features = false, features = ["zeroize"] }
+
 # Zeroization guarantees for owned key material (used by compile-time
-# assertions in src/zeroize_asserts.rs; also enabled on aes/hmac/sha2 via the
-# oscore crate's own dependency features).
+# assertions in src/zeroize_asserts.rs).
 zeroize = { version = "1.8", default-features = false }
 
 # Logging backends (optional, feature-gated)

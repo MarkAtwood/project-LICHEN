@@ -1,0 +1,7 @@
+{
+  "id": "1787981890387209000-1",
+  "issue_id": "project-LICHEN-worker6-jfln",
+  "author": "Mark Atwood",
+  "text": "Session checkpoint (resume after lease expiry): verified the inherited SIID-indexed implementation (option b) in lichen_l2_peer.c + lichen_l2_internal.h. Audit result: accept-set provably identical to former trial-verify (acceptance always required canonical(pubkey)==SIID==entry.eui64 via the lichen_link_rx.c:190-203 binding gate); single Schnorr-48 verify per frame; fail-closed unknown-SIID/pinned-mismatch/no-fallback; no pre-verify state allocation (replay commit only after verify, lichen_link_rx.c:370); TOFU population stays via lichen_peer_add (pin -EEXIST on key change, LRU eviction clears replay state, REPLAY_PERSIST refuses admission); constant-time trade documented at function comment + lookup site. Fixed missing CONFIG_LICHEN_CRYPTO_MONOCYPHER=1 + LICHEN_MAX_FRAME* defines in tests/l2_key_selection/CMakeLists.txt (link previously failed: undefined schnorr48_pubkey_valid). All acceptance tests pass (UBSan-only; ASan detection known-broken in test_common.cmake, not fixed per instructions): frame, replay, schnorr48, l2_key_selection 100%. lichen_link_rx.c needed no change. Not closed - orchestrator closes after wave review.",
+  "created_at": "2026-08-29T05:38:10.387209Z"
+}

@@ -14,6 +14,8 @@
 //! attribute upstream does not emit it. It is therefore pinned as `Zeroize`
 //! here, matching `src/zeroize_asserts.rs`.
 
+use aes::Aes128;
+use hmac::Hmac;
 use lichen_oscore::{Context, KeyUpdateContext};
 use sha2::Sha256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -27,6 +29,23 @@ fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
 #[test]
 fn sha256_implements_zeroize_on_drop() {
     assert_zeroize_on_drop::<Sha256>();
+}
+
+/// The AES-128 cipher state (round keys) used by AES-CCM-16-64-128 must be
+/// `ZeroizeOnDrop`, pinned by the `aes/zeroize` dependency feature.
+#[test]
+fn aes128_implements_zeroize_on_drop() {
+    assert_zeroize_on_drop::<Aes128>();
+}
+
+/// The HMAC-SHA-256 tag output inside HKDF-SHA-256 must be `ZeroizeOnDrop`,
+/// pinned by the `hmac/zeroize` dependency feature. Upstream `hmac` 0.13
+/// does not mark the `Hmac` instance type itself `ZeroizeOnDrop` (see
+/// `src/zeroize_asserts.rs`); its key-derived digest cores still zeroize
+/// transitively.
+#[test]
+fn hmac_sha256_output_implements_zeroize_on_drop() {
+    assert_zeroize_on_drop::<hmac::digest::CtOutput<Hmac<Sha256>>>();
 }
 
 /// The context must expose the `Zeroize` impl (manual wipe before an

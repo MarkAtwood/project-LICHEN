@@ -189,6 +189,14 @@ void tx_stat_result(int ret);
 /* Peer table helpers (defined in lichen_l2_peer.c) */
 struct lichen_peer_entry *peer_find_locked(const uint8_t eui64[8]);
 int peer_find_oldest_locked(void);
+/*
+ * SIID-indexed signer key selection (spec/02-physical-link.md 4.2,
+ * project-LICHEN-worker6-nxew option b): resolve the trust-store entry
+ * keyed by the frame's canonical signer EUI-64 (the wire SIID) and verify
+ * the frame with that single candidate key. Fail-closed on unknown SIID
+ * and on pinned-key mismatch; no trial verification, no pre-verify state
+ * allocation. Historical name retained (sole call site: lichen_l2_rx.c).
+ */
 int peer_try_all_pubkeys(struct lichen_link_rx_ctx *ctx,
 			 struct lichen_replay_table *replay,
 			 const uint8_t *frame, size_t frame_len,

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-yzir",
   "title": "Align Rust gateway key rotation with canonical replay-safe transcript",
   "description": "rust/lichen-gateway/src/trust.rs still signs and verifies legacy KEY_ROTATE: || new_pubkey messages. The canonical protocol requires LICHEN-KEY-ROTATION-v1 || 0x00 || old_pubkey || old_key_derived_iid || new_pubkey || rotation_sequence_be64, with a strictly increasing nonzero persisted rotation sequence. PinnedGateway and persistence currently carry no rotation sequence, so a previously valid rotation authorization can be replayed and Rust is not interoperable with the current spec/Python implementation. Update the API, transcript, durable state, and canonical vectors/tests together.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T17:35:57.650836Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:28:34.086228Z",
-  "started_at": "2026-08-24T17:36:09.08623Z"
+  "updated_at": "2026-08-29T06:13:39.561963Z",
+  "started_at": "2026-08-24T17:36:09.08623Z",
+  "closed_at": "2026-08-29T06:13:39.561963Z",
+  "close_reason": "Verified prior transcript/sequence work against Python oracle; closed remaining parity gaps: IID now derived internally in rotation transcript (spec 8.7), same-key rotation rejected (UnchangedRotationKey), v1-\u003ev2 migration test added. 43 trust tests pass; full gateway suite green except pre-existing bead-owned tunnel_auth failure."
 }

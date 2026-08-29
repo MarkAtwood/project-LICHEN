@@ -2214,9 +2214,11 @@ dependencies = [
 name = "lichen-oscore"
 version = "0.1.0"
 dependencies = [
+ "aes",
  "defmt 0.3.100",
  "heapless",
  "hex-literal",
+ "hmac",
  "log",
  "oscore",
  "rand_core",

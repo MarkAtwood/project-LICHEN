@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-kpah",
+  "title": "No direct test of production SIID key-selection function; l2_key_selection suite drives a mirror",
+  "description": "lichen/tests/l2_key_selection/main.c:195-222 drives rx_selected(), a mirror of the selection, over real frame.c/lichen_link_rx_payload primitives. peer_try_all_pubkeys itself is compiled only into Zephyr L2 objects and no Zephyr test references it (only tests/ping_l2 touches lichen_peer_add). Scenario: reintroducing trial-verify fallback inside peer_try_all_pubkeys fails no test in the repo. The suite docstring (main.c:13-14) claims the Zephyr-side peer table is exercised by Zephyr tests - that claim is not currently backed. Fix the docstring claim or add a Zephyr-side test referencing the function.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:06.735951Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:06.735951Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kpah",
+      "depends_on_id": "project-LICHEN-worker6-jfln",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:06.953058Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

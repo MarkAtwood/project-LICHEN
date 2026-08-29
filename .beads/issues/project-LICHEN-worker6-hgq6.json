@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-hgq6",
+  "title": "tunnel_auth: revoked re-post returns Revoked instead of Replay",
+  "description": "cargo test -p lichen-gateway --lib tunnel_auth::tests::revocation_root_change_expiry_and_lru_fail_closed fails deterministically at lichen-gateway/src/tunnel_auth.rs:954: after table.revoke(...), re-accepting the same root post asserts Err(TunnelAuthError::Replay) but accept_post returns Err(TunnelAuthError::Revoked). Pre-existing failure in committed code (tunnel_auth.rs last modified in 660b9bf3bf, no working-tree changes). Discovered while verifying bead project-LICHEN-worker6-5a5h; out of that bead's scope. Either the revocation check should report Replay for an already-seen post (ordering), or the test expectation needs updating after design review — do not weaken the test to pass; fix the check ordering or document the intended precedence.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T05:21:23.498002Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T05:21:23.498002Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hgq6",
+      "depends_on_id": "project-LICHEN-worker6-5a5h",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T05:21:23.795102Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

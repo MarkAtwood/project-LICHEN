@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-b79z",
+  "title": "Owner decision: confirm ham-band Part 97 operating plan vs spec-default ISM for ARDC framing",
+  "description": "docs/grant-ardc-application.md claims operation under amateur radio licenses; docs/grant-technical-description.md Physical row says unlicensed ISM bands. Reconcilable (902-928 MHz is dual-use Part 15 ISM / Part 97 33cm; Meshtastic ham-mode precedent; spec defaults to US915 ISM), but ARDC's funding rationale hinges on ham-band operation. Owner must confirm: does the 500-node deployment actually operate Part 97 with callsign ID? Then align the two docs.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:05.897758Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:05.897758Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b79z",
+      "depends_on_id": "project-LICHEN-worker6-78ma",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:06.087556Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

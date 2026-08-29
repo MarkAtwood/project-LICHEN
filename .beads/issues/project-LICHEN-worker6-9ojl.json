@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-9ojl",
+  "title": "schnorr48 stub abort()s on attacker-controlled RF input when CONFIG_LICHEN_LINK_SCHNORR=n",
+  "description": "PRE-EXISTING, found during jfln review. With CONFIG_LICHEN_LINK=y and CONFIG_LICHEN_LINK_SCHNORR=n (only way to get link layer without LICHEN_CRYPTO_MONOCYPHER; SCHNORR selects it), a frame carrying S/SI bits whose SIID matches a pinned peer reaches schnorr48_verify_frame -\u003e schnorr48_stub_abort() (lichen/subsys/lichen/crypto/schnorr48.c:231-235,565,583) -\u003e abort(): attacker-controllable crash. Wrong failure mode for untrusted input; the stub should return -EAUTH or -ENOSYS. Note the wave's SIID pre-filter narrowed this (unknown SIIDs reject before the stub), but pinned-SIID frames still abort.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:07.972674Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:07.972674Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9ojl",
+      "depends_on_id": "project-LICHEN-worker6-jfln",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:08.180808Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

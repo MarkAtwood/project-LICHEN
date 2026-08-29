@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-blb0",
+  "title": "LRU-eviction abuse surface: eviction-clears-replay and REPLAY_PERSIST refusal untested; capacity controls needed before EDHOC-driven registration",
+  "description": "peer_add is admin/dev-provisioning-only today so remote pin-flapping is unreachable, but lichen_l2_rx.c:170 commits to EDHOC/announce-driven registration, at which point an attacker controlling CONFIG_LICHEN_LINK_MAX_NEIGHBORS valid identities can fill peer+replay tables, force-evict a quiet live peer, reset its replay window, and replay captured frames into the fresh window (replay table has no LRU: replay.c:112-116 fails closed). REPLAY_PERSIST mode refuses eviction (-ENOSPC, lichen_l2_peer.c:341-347) but that refusal is untested. Spec 02 4.2 step 5 sanctions eviction semantics. Before EDHOC registration lands: per-identity admission rate limits, reserved slots, plus tests for eviction-clears-replay and persist-mode refusal.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:07.570063Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:07.570063Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-blb0",
+      "depends_on_id": "project-LICHEN-worker6-jfln",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:07.789597Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

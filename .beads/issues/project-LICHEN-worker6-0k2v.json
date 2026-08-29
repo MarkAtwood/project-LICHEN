@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-0k2v",
+  "title": "lichen-oscore provisioning.rs is orphaned dead code holding secret-bearing types",
+  "description": "rust/lichen-oscore/src/provisioning.rs declares BRProvisioningSession/NodeProvisioningSession (both hold secret key material, both have manual Drop-\u003ewipe()) but no 'mod provisioning;' exists in lib.rs, so the module never compiles. Silently dead today. Decide re-wire vs delete; if re-wired, add Zeroize/ZeroizeOnDrop impls + compile-time assertions consistent with zeroize_asserts.rs, and note it uses aes/ccm/hkdf which would need direct deps.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:06.308153Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:06.308153Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0k2v",
+      "depends_on_id": "project-LICHEN-lx0j.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:06.532679Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

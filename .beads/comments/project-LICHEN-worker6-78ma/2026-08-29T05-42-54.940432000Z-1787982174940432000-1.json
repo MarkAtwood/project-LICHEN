@@ -1,0 +1,7 @@
+{
+  "id": "1787982174940432000-1",
+  "issue_id": "project-LICHEN-worker6-78ma",
+  "author": "Mark Atwood",
+  "text": "Verified draft satisfies all 5 bead requirements (docs committed at d95fae1637, no edits needed): (1) ARDC rolling/contact@ardc.net logistics present lines 6-9 + budget-narrative funder table; (2) ham-band/ARES-RACES/education covered in 'Amateur radio alignment'; (3) PRFAQ pitch reused (companion ref + mirrored summary); (4) budget matches wqaa.11 narrative line-for-line (28.5k = 22.5+2.5+2.5+1+2) and sits under wqaa.9 258k ceiling; (5) 500-node conference framing throughout. Flagged for owner, not blockers: PRFAQ conference list (DEFCON/HOPE/CCC) is stale vs tech-description (CCC+DEFCON+EU spring) per wqaa.9 re-anchor; tech-description says 'unlicensed ISM bands' while ARDC doc claims Part 97 licensed operation (902-928 is dual-use 33cm - owner should confirm callsign-ID plan); prfaq lacks CC-BY-4.0 SPDX header. Ready for closure after wave review.",
+  "created_at": "2026-08-29T05:42:54.940432Z"
+}

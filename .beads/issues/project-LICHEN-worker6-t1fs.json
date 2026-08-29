@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-t1fs",
+  "title": "Upstream crypto crate zeroize gaps: hkdf PRK, ccm wrapper, hmac Hmac marker, oscore Context ZeroizeOnDrop",
+  "description": "Tracking bead for upstream follow-ups discovered in lx0j.1: (1) hkdf 0.13 exposes no zeroize feature - PRK buffer not type-assertable; (2) ccm 0.5 no zeroize feature - wrapper state uncovered (inner Aes128 is); (3) hmac 0.13.0 buffer_fixed! omits ZeroizeOnDrop so Hmac/HmacCore lack the marker (feature still zeroizes ipad/opad cores + CtOutput transitively); (4) patched oscore crate (/Volumes/Attic/Desktop/Projects/crates/oscore) Context uses deprecated #[zeroize(drop)] attr which emits no ZeroizeOnDrop marker - adopting derive(ZeroizeOnDrop) upstream would let us tighten assert_zeroize::\u003cContext\u003e() to assert_zeroize_on_drop. Our assertions honestly document each gap at zeroize_asserts.rs:13-37.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:09.711978Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:09.711978Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t1fs",
+      "depends_on_id": "project-LICHEN-lx0j.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:09.961387Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

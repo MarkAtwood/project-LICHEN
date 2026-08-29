@@ -27,6 +27,7 @@
 extern void tx_queue_test_set_time(uint32_t time_ms);
 extern void tx_queue_test_use_real_time(void);
 extern void tx_queue_test_fail_time(bool fail);
+extern void tx_queue_test_fail_mutex_init(bool fail);
 
 static int tests_run;
 static int tests_passed;
@@ -66,6 +67,20 @@ static int test_init_success(void)
 	ASSERT_TRUE(tx_queue_empty(&queue), "queue is empty after init");
 	ASSERT_EQ(tx_queue_count(&queue), 0, "count is 0 after init");
 
+	return 1;
+}
+
+static int test_init_mutex_failure_propagates(void)
+{
+	struct tx_queue queue;
+	int ret;
+
+	tx_queue_test_fail_mutex_init(true);
+	ret = tx_queue_init(&queue);
+	/* Reset before the assert: ASSERT_EQ returns early on mismatch. */
+	tx_queue_test_fail_mutex_init(false);
+	ASSERT_EQ(ret, -EAGAIN,
+		  "mutex init failure propagates as negative errno");
 	return 1;
 }
 
@@ -591,7 +606,6 @@ static int test_stale_deadline_not_resurrected_after_half_range(void)
 	/* Serviced exactly half a 32-bit range past the deadline: the
 	 * 32-bit signed difference wraps to "unexpired" here. */
 	tx_queue_test_set_time(2000U + UINT32_C(0x80000000));
-	out_len = sizeof(out);
 	ASSERT_EQ(tx_queue_pop(&queue, out, &out_len, NULL), -EAGAIN,
 		  "deadline plus half range does not resurrect packet");
 	ASSERT_EQ(tx_queue_stats_get(&queue, &stats), 0, "stats read succeeds");
@@ -1113,6 +1127,182 @@ static int test_concurrent_thread_safety(void)
 	return 1;
 }
 
+#define CONC_WRITERS 4
+#define CONC_READERS 3
+#define CONC_ROUNDS 2000
+#define CONC_READER_ITERS 30000
+#define CONC_PAYLOAD 16
+
+struct conc_writer_args {
+	struct tx_queue *queue;
+	unsigned int idx;   /* payload byte = writer index */
+	long pushes_ok;
+	long pops_ok;
+	long push_enobufs;
+	long push_err;
+	long pop_err;
+	long data_violations;
+};
+
+struct conc_reader_args {
+	struct tx_queue *queue;
+	long iterations;
+	long errors;
+};
+
+static void *conc_writer(void *arg)
+{
+	struct conc_writer_args *wa = arg;
+	uint8_t payload[CONC_PAYLOAD];
+	uint8_t out[TX_QUEUE_MAX_PACKET_SIZE];
+
+	memset(payload, (int)(wa->idx & 0xFFU), sizeof(payload));
+	for (int i = 0; i < CONC_ROUNDS; i++) {
+		int ret = tx_queue_push(wa->queue, payload, sizeof(payload),
+					TX_PRIORITY_NORMAL, 60000U);
+		if (ret == 0) {
+			wa->pushes_ok++;
+		} else if (ret == -ENOBUFS) {
+			wa->push_enobufs++;
+		} else {
+			wa->push_err++;
+		}
+
+		uint16_t out_len = sizeof(out);
+		ret = tx_queue_pop(wa->queue, out, &out_len, NULL);
+		if (ret == 0) {
+			wa->pops_ok++;
+			/* Payload bytes all equal the originating writer index. */
+			if (out_len != sizeof(payload) || out[0] >= CONC_WRITERS) {
+				wa->data_violations++;
+			} else {
+				for (size_t b = 1U; b < out_len; b++) {
+					if (out[b] != out[0]) {
+						wa->data_violations++;
+						break;
+					}
+				}
+			}
+		} else if (ret != -EAGAIN) {
+			wa->pop_err++;
+		}
+	}
+	return NULL;
+}
+
+static void *conc_reader(void *arg)
+{
+	struct conc_reader_args *ra = arg;
+
+	for (long i = 0; i < ra->iterations; i++) {
+		if (tx_queue_count(ra->queue) < 0) {
+			ra->errors++;
+		}
+		(void)tx_queue_empty(ra->queue);
+		struct tx_queue_stats st;
+		if (tx_queue_stats_get(ra->queue, &st) != 0) {
+			ra->errors++;
+		}
+	}
+	return NULL;
+}
+
+static int test_concurrent_readers_and_writers(void)
+{
+	struct tx_queue queue;
+	struct conc_writer_args writers[CONC_WRITERS];
+	struct conc_reader_args readers[CONC_READERS];
+	pthread_t wtids[CONC_WRITERS];
+	pthread_t rtids[CONC_READERS];
+	struct tx_queue_stats stats;
+	long pushes = 0;
+	long pops = 0;
+	long enobufs = 0;
+	long violations = 0;
+
+	memset(writers, 0, sizeof(writers));
+	memset(readers, 0, sizeof(readers));
+
+	/* Frozen test time: no expiry interference; equal priorities mean
+	 * preemption never fires, so every accounting invariant is exact. */
+	tx_queue_test_set_time(1000U);
+	ASSERT_EQ(tx_queue_init(&queue), 0, "init succeeds");
+
+	int created_writers = 0;
+	int created_readers = 0;
+	int thread_error = 0;
+
+	for (int i = 0; i < CONC_WRITERS; i++) {
+		writers[i].queue = &queue;
+		writers[i].idx = (unsigned int)i;
+		if (pthread_create(&wtids[i], NULL, conc_writer,
+				   &writers[i]) != 0) {
+			thread_error = 1;
+			break;
+		}
+		created_writers++;
+	}
+	if (thread_error == 0) {
+		for (int i = 0; i < CONC_READERS; i++) {
+			readers[i].queue = &queue;
+			readers[i].iterations = CONC_READER_ITERS;
+			if (pthread_create(&rtids[i], NULL, conc_reader,
+					   &readers[i]) != 0) {
+				thread_error = 1;
+				break;
+			}
+			created_readers++;
+		}
+	}
+	/* Join everything that was created before returning: the threads
+	 * point into this stack frame, so an early return would strand
+	 * them executing on dead stack. */
+	for (int i = 0; i < created_writers; i++) {
+		if (pthread_join(wtids[i], NULL) != 0) {
+			thread_error = 1;
+		}
+	}
+	for (int i = 0; i < created_readers; i++) {
+		if (pthread_join(rtids[i], NULL) != 0) {
+			thread_error = 1;
+		}
+	}
+	ASSERT_EQ(thread_error, 0, "worker threads start and join");
+
+	long errors = 0;
+	for (int i = 0; i < CONC_READERS; i++) {
+		errors += readers[i].errors;
+	}
+	for (int i = 0; i < CONC_WRITERS; i++) {
+		pushes += writers[i].pushes_ok;
+		pops += writers[i].pops_ok;
+		enobufs += writers[i].push_enobufs;
+		violations += writers[i].data_violations;
+		ASSERT_EQ(writers[i].push_err, 0, "no unexpected push errors");
+		ASSERT_EQ(writers[i].pop_err, 0, "no unexpected pop errors");
+	}
+	ASSERT_EQ(errors, 0, "readers only saw consistent snapshots");
+	ASSERT_EQ(violations, 0, "popped payloads intact");
+
+	ASSERT_EQ(tx_queue_stats_get(&queue, &stats), 0, "stats read succeeds");
+	ASSERT_EQ(pushes, stats.packets_queued, "successful pushes match stats");
+	ASSERT_EQ(pops, stats.packets_sent, "successful pops match stats");
+	ASSERT_EQ(enobufs, stats.packets_dropped_full,
+		  "ENOBUFS count matches backpressure stat");
+	ASSERT_EQ(stats.packets_dropped_deadline, 0,
+		  "frozen test time expires nothing");
+	ASSERT_EQ(stats.packets_preempted, 0,
+		  "equal-priority writers never preempt");
+	ASSERT_TRUE(pushes - pops == tx_queue_count(&queue),
+		    "queue holds exactly the untransmitted packets");
+	ASSERT_TRUE(pushes - pops <= TX_QUEUE_SIZE, "count within capacity");
+	ASSERT_TRUE(tx_queue_empty(&queue) == (tx_queue_count(&queue) == 0),
+		    "empty agrees with count");
+	ASSERT_EQ(tx_queue_destroy(&queue), 0, "destroy succeeds");
+
+	return 1;
+}
+
 #define RUN_TEST(fn) do { \
 	printf("  %s...", #fn); \
 	tests_run++; \
@@ -1131,6 +1321,7 @@ int main(void)
 	RUN_TEST(test_init_rejects_null);
 	RUN_TEST(test_empty_null_returns_true);
 	RUN_TEST(test_init_success);
+	RUN_TEST(test_init_mutex_failure_propagates);
 
 	printf("\nPush validation tests:\n");
 	RUN_TEST(test_push_rejects_null_queue);
@@ -1179,6 +1370,7 @@ int main(void)
 
 	printf("\nConcurrency/TSAN tests:\n");
 	RUN_TEST(test_concurrent_thread_safety);
+	RUN_TEST(test_concurrent_readers_and_writers);
 
 	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
 

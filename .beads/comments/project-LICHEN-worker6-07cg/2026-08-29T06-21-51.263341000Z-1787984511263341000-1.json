@@ -1,0 +1,7 @@
+{
+  "id": "1787984511263341000-1",
+  "issue_id": "project-LICHEN-worker6-07cg",
+  "author": "Mark Atwood",
+  "text": "Fix implemented in rust/lichen-gateway/src/resources.rs (uncommitted): (1) verified the committed atomic commit_slot_state transaction (verifier+peer_claims+owned in one sealed blob, then floor, then memory) — persisted-claim-survives-restart and write-failure-does-not-consume tests already in place; (2) found and fixed a real gap: the we-win conflict rejection committed the advanced high-water with a stale stored peer claim, failing validate_semantic_slot_state -\u003e permanent 5.00; the branch now upserts the verified claim before commit. New test rejected_conflicting_claim_moves_highwater_and_peer_claim_together (test-first, confirmed 0xa0 before fix, 0x45 after). cargo test -p lichen-gateway: all targets green except pre-existing tunnel_auth::tests::revocation_root_change_expiry_and_lru_fail_closed (Err(Revoked) vs Err(Replay), self-contained file, tracked by worker6-hgq6/t6sj/wx3f). clippy clean for the crate. Not committed, bead not closed per instructions.",
+  "created_at": "2026-08-29T06:21:51.263341Z"
+}

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-d2tz",
+  "title": "Fix test_common.cmake ASan detection broken repo-wide on Apple clang",
+  "description": "check_c_compiler_flag(\"-fsanitize=address\") in lichen/tests/cmake/test_common.cmake:48 fails on Apple clang (Xcode 26.6): the try-compile links WITHOUT the flag on the link line, ___asan_init is undefined, _has_asan caches false, and ASan is silently dropped for EVERY host test dir even though lichen_test_target() applies _san_flags to both compile and link options (lines 62-65). Verified empirically 2026-08-28: tx_queue binary without the per-test workaround links only ubsan runtime; with CMAKE_REQUIRED_LINK_OPTIONS re-check it links libclang_rt.asan_osx_dynamic.dylib. Fix once in test_common.cmake (set CMAKE_REQUIRED_LINK_OPTIONS before the check), then remove the per-test workaround in lichen/tests/tx_queue/CMakeLists.txt. COORDINATION: doing this mid-multi-agent-session flips sanitizer behavior for all concurrent test builds; latent UB in other dirs will start failing tests. Land it when no other waves are in flight.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:05.426066Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:05.426066Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-d2tz",
+      "depends_on_id": "project-LICHEN-5ku5",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:05.68448Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

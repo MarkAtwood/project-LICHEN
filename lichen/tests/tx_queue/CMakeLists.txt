@@ -51,3 +51,21 @@ if(ENABLE_TSAN)
   target_link_options(tx_queue_test PRIVATE -fsanitize=thread)
   target_compile_definitions(tx_queue_test PRIVATE ENABLE_TSAN)
 endif()
+
+# test_common.cmake's check_c_compiler_flag("-fsanitize=address") fails on
+# Apple clang: the try-compile links WITHOUT the flag on the link line, so
+# ___asan_init is undefined, _has_asan is cached false, and ASan is silently
+# dropped even though lichen_test_target() applies _san_flags to both
+# compile and link options. Re-check with the flag as a link option too.
+if(LICHEN_TEST_ASAN AND NOT ENABLE_TSAN)
+  include(CheckCCompilerFlag)
+  set(CMAKE_REQUIRED_FLAGS "-fsanitize=address")
+  set(CMAKE_REQUIRED_LINK_OPTIONS "-fsanitize=address")
+  check_c_compiler_flag("-fsanitize=address" TX_QUEUE_TEST_HAS_ASAN)
+  set(CMAKE_REQUIRED_FLAGS "")
+  set(CMAKE_REQUIRED_LINK_OPTIONS "")
+  if(TX_QUEUE_TEST_HAS_ASAN)
+    target_compile_options(tx_queue_test PRIVATE -fsanitize=address)
+    target_link_options(tx_queue_test PRIVATE -fsanitize=address)
+  endif()
+endif()

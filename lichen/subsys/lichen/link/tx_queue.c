@@ -18,6 +18,7 @@
 
 #ifdef CONFIG_TX_QUEUE_TEST_TIME
 static bool fail_test_time;
+static bool fail_mutex_init;
 #endif
 
 #ifdef __ZEPHYR__
@@ -77,6 +78,13 @@ void tx_queue_test_use_real_time(void)
 void tx_queue_test_fail_time(bool fail)
 {
 	fail_test_time = fail;
+}
+
+/* Consulted only by the POSIX init path below: k_mutex_init() on Zephyr is
+ * void and cannot fail, so the fault-injection hook is inert there. */
+void tx_queue_test_fail_mutex_init(bool fail)
+{
+	fail_mutex_init = fail;
 }
 
 static int get_now_ms(uint32_t *now_ms)
@@ -166,7 +174,7 @@ static int expire_packets_locked(struct tx_queue *queue, uint64_t now_ms64)
  * @brief Find an empty slot (caller holds lock).
  * @return Slot index, or -1 if none available
  */
-static int find_empty_slot_locked(struct tx_queue *queue)
+static int find_empty_slot_locked(const struct tx_queue *queue)
 {
 	for (int i = 0; i < TX_QUEUE_SIZE; i++) {
 		if (!queue->entries[i].valid) {
@@ -280,7 +288,15 @@ int tx_queue_init(struct tx_queue *queue)
 #ifdef __ZEPHYR__
 	k_mutex_init(&queue->lock);
 #else
-	int err = pthread_mutex_init(&queue->lock, NULL);
+	int err;
+#ifdef CONFIG_TX_QUEUE_TEST_TIME
+	if (fail_mutex_init) {
+		err = EAGAIN; /* simulated pthread_mutex_init failure */
+	} else
+#endif
+	{
+		err = pthread_mutex_init(&queue->lock, NULL);
+	}
 	if (err != 0) {
 		(void)lichen_frame_pool_destroy(&queue->pool);
 		return -err;
@@ -303,6 +319,7 @@ static int tx_queue_push_at(struct tx_queue *queue, const uint8_t *data,
 
 	lock_queue(queue);
 	ret = get_now_ms(&now_ms);
+	/* cppcheck-suppress knownConditionTrueFalse; clock_gettime can fail */
 	if (ret < 0) {
 		goto out;
 	}
@@ -451,6 +468,7 @@ int tx_queue_pop(struct tx_queue *queue, uint8_t *data, uint16_t *len,
 
 	lock_queue(queue);
 	ret = get_now_ms(&now_ms);
+	/* cppcheck-suppress knownConditionTrueFalse; clock_gettime can fail */
 	if (ret < 0) {
 		goto out;
 	}
@@ -539,13 +557,14 @@ int tx_queue_count(struct tx_queue *queue)
 	if (queue == NULL) {
 		return -EINVAL;
 	}
-	if (queue->terminal) {
-		return -EIO;
-	}
-
-	lock_queue(queue);
 
 	int count = 0;
+
+	lock_queue(queue);
+	if (queue->terminal) {
+		unlock_queue(queue);
+		return -EIO;
+	}
 	for (int i = 0; i < TX_QUEUE_SIZE; i++) {
 		if (queue->entries[i].valid) {
 			count++;
@@ -561,11 +580,13 @@ bool tx_queue_empty(struct tx_queue *queue)
 	if (queue == NULL) {
 		return true;
 	}
-	if (queue->terminal) {
-		return true;
-	}
 
 	lock_queue(queue);
+
+	if (queue->terminal) {
+		unlock_queue(queue);
+		return true;
+	}
 
 	for (int i = 0; i < TX_QUEUE_SIZE; i++) {
 		if (queue->entries[i].valid) {
@@ -583,11 +604,12 @@ int tx_queue_stats_get(struct tx_queue *queue, struct tx_queue_stats *stats)
 	if (queue == NULL || stats == NULL) {
 		return -EINVAL;
 	}
-	if (queue->terminal) {
-		return -EIO;
-	}
 
 	lock_queue(queue);
+	if (queue->terminal) {
+		unlock_queue(queue);
+		return -EIO;
+	}
 	*stats = queue->stats;
 	unlock_queue(queue);
 	return 0;

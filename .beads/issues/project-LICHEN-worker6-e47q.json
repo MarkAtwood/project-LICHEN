@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-e47q",
+  "title": "TOFU add-time pin-substitution rejection (-EEXIST on key change) untested anywhere",
+  "description": "lichen_peer_add (lichen/subsys/lichen/l2/lichen_l2_peer.c:302-322) must reject a different pubkey for an already-pinned EUI-64 with -EEXIST (constant-time crypto_verify32). No test in the repo asserts this branch (l2_key_selection's trust_pin mirror uses plain memcmp; ping_l2 adds one fixed peer). Attack: a refactor returning 0 on pubkey mismatch enables silent key substitution under a pinned SIID - precisely the spec 02 4.2 step 4 attack. Add a fail-closed host test for the add-time half (verify-time half is covered by the decoy test).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:07.166695Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:07.166695Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-e47q",
+      "depends_on_id": "project-LICHEN-worker6-jfln",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:07.382329Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

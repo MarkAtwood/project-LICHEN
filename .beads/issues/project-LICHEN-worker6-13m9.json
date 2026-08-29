@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-13m9",
+  "title": "Python root DIO verifier accepts impersonated DODAGID (no derivation binding check)",
+  "description": "Found wiring test/vectors/root_dio_signature.json into python/tests/crypto/test_orphan_vector_consumers.py. Vector root_dio_signature_impersonation pins expected={signature_valid:true, dodagid_binding_valid:false, overall_valid:false, error:dodagid_mismatch} ('Attacker pubkey does not derive to claimed DODAGID'). Python verify_root_dio_signature (python/src/lichen/crypto/root_dio_signature.py:291) only cross-checks payload.dodag_id against a supplied dio_dodag_id; it never checks that dodag_id derives from the signer pubkey/root_iid. Calling verify_root_dio_signature(sig, attacker_pubkey, current_time=0, dio_dodag_id=claimed_dodag_id) returns (True, None): the attacker-signed DIO claiming the victim DODAGID is ACCEPTED. Spec 8.10.1 binding requires dodag_id to embed/derive from the root identity (dodag_id = 0220 || root_iid || root_iid[:6]-pattern in vectors). Fix: add derivation check (reject DODAG_ID_MISMATCH when dodag_id does not bind to root_iid/pubkey), then tighten the consumer test which currently documents the gap with an assertion that fails when the fix lands. Cross-check C/Zephyr and Rust verifiers for the same gap.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T05:19:18.827683Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T05:19:18.827683Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-13m9",
+      "depends_on_id": "project-LICHEN-worker6-f4z7",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T05:19:21.522909Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

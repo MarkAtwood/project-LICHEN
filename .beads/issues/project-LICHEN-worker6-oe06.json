@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-oe06",
+  "title": "Dev-provisioned peers keyed by hwid EUI-64, not canonical SHA-512(pubkey) - SIID key selection always misses",
+  "description": "Wave review of jfln (SIID-indexed key selection) found: the new comment in lichen/subsys/lichen/l2/lichen_l2_peer.c:113-128 claims trust-store entries are keyed by canonical key-derived EUI-64, but the only in-tree populator (dev_provision_peer, lichen_l2_dev.c:62-82) keys entries by CONFIG_LICHEN_L2_DEV_PEER_EUI64 (board/hwid form), while wire SIID is SHA-512(pubkey)[0:8] | U/L. On every dev-provisioned build peer_find_locked(parsed.signer_iid) misses and ALL signed frames reject -EAUTH. Same outcome as the old trial-verify (binding gate rejected them too), so not a regression, but the wave enshrines an unenforced invariant and the new 'unknown SIID rejected' log misleads field debugging (the peer IS pinned, under a different key form). Fix options: enforce canonical keying at pin time in lichen_peer_add (SHA-512 of pubkey, memcmp vs key arg) or key dev provisioning by the canonical form. No announce/EDHOC populator exists in-tree yet.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:04.914987Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:04.914987Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-oe06",
+      "depends_on_id": "project-LICHEN-worker6-jfln",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:05.226731Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

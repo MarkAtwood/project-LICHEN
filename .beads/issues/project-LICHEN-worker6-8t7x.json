@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-8t7x",
+  "title": "C root DAO processing installs delegated sub-/128 targets as host routes, not prefix routes",
+  "description": "With the generalized prefix gate (project-LICHEN-worker6-ekcc, l327) delegated sub-/128 Targets now install end-to-end: process_dao stores the canonical snapshot and rebuild_routes inserts the canonical prefix bytes as a host-style route (lichen_rpl_routing_table_add, is_prefix=false, path ends at the prefix value). Proper semantics per spec/05-routing.md 8.7.1 ('a Target prefix is reachability information, not a hop address; its zero-filled canonical value MUST NOT be inserted into a source route') require lichen_rpl_routing_table_add_prefix with egress=origin and managed-prefix reconciliation (Rust rebuilt_routes reconciles managed prefixes; C preserve_prefix_routes only preserves). Observable gap: exact-address lookup of the canonical prefix matches, but LPM for hosts inside the prefix does not. Discovered-from: project-LICHEN-worker6-ekcc. Needs snapshot prefix_len tracking or a parallel prefix-snapshot path.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T05:59:27.948371Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T05:59:27.948371Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8t7x",
+      "depends_on_id": "project-LICHEN-worker6-ekcc",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T05:59:29.947016Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

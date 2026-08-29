@@ -5,8 +5,10 @@
  * @file lichen_l2_peer.c
  * @brief LICHEN L2 peer table management
  *
- * Contains peer_find_locked(), peer_find_oldest_locked(), peer_try_all_pubkeys(),
- * lichen_peer_add(), lichen_peer_remove(), and lichen_l2_publish_app_identity().
+ * Contains peer_find_locked(), peer_find_oldest_locked(), the SIID-indexed
+ * signer key selection in peer_try_all_pubkeys() (spec/02-physical-link.md
+ * 4.2; historical name), lichen_peer_add(), lichen_peer_remove(), and
+ * lichen_l2_publish_app_identity().
  */
 
 #include "lichen_l2_internal.h"
@@ -21,9 +23,11 @@ LOG_MODULE_DECLARE(lichen_l2, CONFIG_LICHEN_L2_LOG_LEVEL);
  *
  * Uses memcmp (not constant-time) because EUI-64 addresses are public
  * identifiers, not secrets. Peer-authenticated RX uses peer_try_all_pubkeys(),
- * which attempts lichen_link_rx() for every active peer and delays returning a
- * signature-verification success until the full peer table has been scanned, so
- * peer lookup timing does not reveal which public key matched.
+ * which resolves the signer key with the same memcmp lookup (keyed by the
+ * frame SIID, which the link layer binds to the canonical key-derived
+ * EUI-64 after verification) and then runs exactly one lichen_link_rx()
+ * Schnorr-48 verify with that candidate key. EUI-64 compare timing does
+ * not reveal secret material.
  *
  * @param eui64 8-byte peer EUI-64 address
  * @return Pointer to entry if found, NULL otherwise
@@ -79,34 +83,58 @@ int peer_find_oldest_locked(void)
 }
 
 /**
- * @brief Try all peers' pubkeys to verify a frame signature.
+ * @brief Resolve the signer key from the frame SIID and verify the frame.
  *
- * Since LICHEN frames don't include sender EUI-64 in the wire format,
- * we must try each known peer's pubkey until one verifies. This is O(n)
- * where n is the number of peers, but n is bounded by CONFIG_LICHEN_LINK_MAX_NEIGHBORS.
+ * SIID-indexed key selection per spec/02-physical-link.md 4.2 (decision
+ * project-LICHEN-worker6-nxew option b). The historical name is retained
+ * because lichen_l2_rx.c calls it; selection is no longer trial
+ * verification over the whole table. The wire SIID is the signer's
+ * canonical key-derived EUI-64 in extended form (U/L set), which is the
+ * same key the peer/TOFU cache is indexed by, so the lookup is a direct
+ * peer_find_locked() on the SIID octets followed by exactly ONE
+ * lichen_link_rx() Schnorr-48 verify with the selected candidate key.
  *
- * SECURITY: This function is the authentication boundary. Only returns success
- * if a known peer's pubkey verifies the signature.
+ * SECURITY: This function is the authentication boundary. Only returns
+ * success if the SIID-selected trust-store entry's pubkey verifies the
+ * signature. lichen_link_rx() additionally binds the authenticated SIID
+ * to the canonical EUI-64 derived from the verified key, so the SIID is
+ * a routing hint only and cannot authorize a caller-selected alias.
  *
- * THREAD SAFETY (project-LICHEN-tvfm.22): This function temporarily modifies
- * ctx->peer_pubkey and ctx->peer_eui64 during iteration, restoring the saved
- * values on error paths. This modify-then-restore pattern is safe because:
- * 1. The ctx is a local stack variable in the caller (lichen_l2_input), not
- *    shared global state. If this thread is preempted, no other code can
- *    observe the partial state.
- * 2. The caller holds rx_mutex, preventing concurrent RX operations.
- * 3. On thread abort (the only way to exit without restoration), the entire
- *    stack frame including ctx is discarded - there is no observable state
- *    corruption because the stack variable ceases to exist.
+ * CONSTANT-TIME TRADE (project-LICHEN-worker6-jfln): the former O(N)
+ * trial-verify scanned every table entry at full Schnorr-48 cost and was
+ * constant-time across the peer set. This selection replaces that with
+ * one memcmp scan over EUI-64s - public routing identifiers, not
+ * secrets, the same class of comparison peer_find_locked() already
+ * makes - and a single always-full-cost verify. No key-dependent
+ * branching or key-dependent memory access happens before verification;
+ * the candidate key is chosen purely by the public SIID, and acceptance
+ * is decided solely by that single verify.
  *
- * Context restoration note (project-LICHEN-tvfm.104): We save peer_pubkey and
- * peer_eui64 on entry and restore them on error paths. For non-auth errors,
- * this restoration is technically redundant (caller doesn't use ctx on error)
- * but maintains the invariant that ctx is unmodified on failure. This makes
- * the function contract clear: success modifies ctx, failure leaves it clean.
+ * FAIL-CLOSED (spec 4.2 steps 1/2/4): an SIID with no trust-store entry
+ * is rejected outright. Spec 4.2 step 3 first-contact trial verification
+ * cannot succeed against this table: entries are keyed by the canonical
+ * key-derived EUI-64 and lichen_link_rx() rejects any frame whose SIID
+ * is not the canonical EUI-64 of the key that verified, so scanning the
+ * remaining entries could never turn a lookup miss into an acceptance.
+ * A pinned SIID whose frame fails verification is rejected with no
+ * fallback and no key substitution.
  *
- * @param ctx        RX context (peer_pubkey will be set on success)
- * @param replay     Replay table for duplicate detection
+ * TOFU POPULATION (spec 4.2 step 3 pinning): trust-store entries are
+ * pinned out-of-band on first VERIFIED contact via lichen_peer_add()
+ * (announce/EDHOC processing or provisioning), which enforces
+ * pin-on-first-contact, rejects key changes (-EEXIST), and clears the
+ * evicted peer's replay state on LRU eviction (or refuses admission
+ * entirely under CONFIG_LICHEN_LINK_REPLAY_PERSIST). RX never allocates
+ * trust or replay state before verification succeeds.
+ *
+ * THREAD SAFETY: same contract as before - caller holds rx_mutex; the
+ * ctx is a local stack variable in the caller (lichen_l2_input). The
+ * modify-then-restore pattern is kept: success modifies ctx, failure
+ * leaves it unmodified (project-LICHEN-tvfm.104).
+ *
+ * @param ctx        RX context (peer_pubkey set to the selected key)
+ * @param replay     Replay table for duplicate detection (replay state
+ *                   is only committed after signature verification)
  * @param frame      Raw LICHEN frame bytes
  * @param frame_len  Length of frame
  * @param out_ipv6   Output buffer for decompressed IPv6 packet
@@ -125,6 +153,7 @@ int peer_try_all_pubkeys(struct lichen_link_rx_ctx *ctx,
 	const uint8_t *saved_peer_pubkey = ctx->peer_pubkey;
 	const uint8_t *saved_peer_eui64 = ctx->peer_eui64;
 	struct lichen_frame parsed;
+	struct lichen_peer_entry *peer;
 
 	/*
 	 * CRASH SAFETY (project-LICHEN-tvfm.6): If peer_table_valid is 0,
@@ -153,82 +182,53 @@ int peer_try_all_pubkeys(struct lichen_link_rx_ctx *ctx,
 	}
 
 	/*
-	 * SECURITY: Constant-time peer iteration to prevent timing side-channel.
-	 *
-	 * Always iterate through ALL peers even after finding a match. This
-	 * prevents an attacker from inferring which peer index matched based
-	 * on how quickly the function returns.
-	 *
-	 * Non-auth errors (malformed frame, replay) still abort early since
-	 * they don't leak peer identity - the frame is rejected before peer
-	 * matching completes.
-	 *
-	 * FUTURE (project-LICHEN-i1gk.76): Iteration order is deterministic
-	 * (index 0, 1, 2, ...). Cache/memory timing may still leak the matching
-	 * peer's table position via microarchitectural side channels. For
-	 * security-critical deployments, consider randomizing the iteration
-	 * start index (start = random % count, wrap around).
+	 * SECURITY (spec/02-physical-link.md 4.2): Signed frames MUST set both
+	 * S and SI and carry exactly one 8-byte signer EUI-64. lichen_frame_parse()
+	 * rejects an S/SI mismatch; this check keeps the selection independent
+	 * of parser internals.
 	 */
-	int found_idx = -1;
-
-	for (size_t i = 0; i < CONFIG_LICHEN_LINK_MAX_NEIGHBORS; i++) {
-		if (!peer_table[i].active) {
-			continue;
-		}
-
-		ctx->peer_pubkey = peer_table[i].pubkey;
-		ctx->peer_eui64 = peer_table[i].eui64;
-		*out_len = saved_out_len;
-
-		ret = lichen_link_rx(ctx, replay, frame, frame_len,
-				     out_ipv6, out_len, src_eui64);
-		if (ret == 0) {
-			if (found_idx >= 0) {
-				LOG_WRN("multiple peers verify same signature (idx %d and %zu) - duplicate keypair",
-					found_idx, i);
-			}
-			found_idx = (int)i;
-#ifdef CONFIG_LICHEN_L2_DEV_PROVISIONING
-			break;
-#else
-			continue;
-#endif
-		}
-
-		if (ret != -LICHEN_EAUTH) {
-			ctx->peer_pubkey = saved_peer_pubkey;
-			ctx->peer_eui64 = saved_peer_eui64;
-			*out_len = saved_out_len;
-			return ret;
-		}
+	if (!parsed.signer_iid_present ||
+	    parsed.signer_iid_len != LICHEN_EUI64_LEN) {
+		return -LICHEN_EAUTH;
 	}
 
-	if (found_idx >= 0) {
-		ctx->peer_pubkey = peer_table[found_idx].pubkey;
-		ctx->peer_eui64 = peer_table[found_idx].eui64;
+	/*
+	 * SECURITY: SIID-indexed lookup into the peer/TOFU cache keyed by
+	 * canonical EUI-64 (see function comment for the constant-time
+	 * trade, fail-closed policy, and TOFU population). A lookup miss
+	 * is an authentication failure: no candidate key, no trial
+	 * verification, no state allocation.
+	 */
+	peer = peer_find_locked(parsed.signer_iid);
+	if (peer == NULL) {
+		LOG_DBG("lichen_l2: RX unknown SIID ..%02x:%02x rejected",
+			parsed.signer_iid[6], parsed.signer_iid[7]);
+		ctx->peer_pubkey = saved_peer_pubkey;
+		ctx->peer_eui64 = saved_peer_eui64;
 		*out_len = saved_out_len;
-		/* Final call skips replay commit (already done in probe path) to
-		 * avoid duplicate replay_check failure. Fixes double-update and
-		 * pre-auth mutation for project-LICHEN-bbti. */
-		ret = lichen_link_rx(ctx, NULL, frame, frame_len,
-				     out_ipv6, out_len, src_eui64);
-		if (ret < 0) {
-			ctx->peer_pubkey = saved_peer_pubkey;
-			ctx->peer_eui64 = saved_peer_eui64;
-			*out_len = saved_out_len;
-			return ret;
-		}
-
-		peer_table[found_idx].last_seen = k_uptime_get();
-		LOG_DBG("lichen_l2: RX auth ok (peer ..%02x:%02x)",
-			peer_table[found_idx].eui64[6], peer_table[found_idx].eui64[7]);
-		return 0;
+		return -LICHEN_EAUTH;
 	}
 
-	ctx->peer_pubkey = saved_peer_pubkey;
-	ctx->peer_eui64 = saved_peer_eui64;
+	ctx->peer_pubkey = peer->pubkey;
+	ctx->peer_eui64 = peer->eui64;
 	*out_len = saved_out_len;
-	return -LICHEN_EAUTH;
+
+	/* Single verify with the SIID-selected pinned key. lichen_link_rx()
+	 * commits replay state only after the signature verifies, so a
+	 * rejected frame never allocates replay/trust state. */
+	ret = lichen_link_rx(ctx, replay, frame, frame_len,
+			     out_ipv6, out_len, src_eui64);
+	if (ret < 0) {
+		ctx->peer_pubkey = saved_peer_pubkey;
+		ctx->peer_eui64 = saved_peer_eui64;
+		*out_len = saved_out_len;
+		return ret;
+	}
+
+	peer->last_seen = k_uptime_get();
+	LOG_DBG("lichen_l2: RX auth ok (peer ..%02x:%02x)",
+		peer->eui64[6], peer->eui64[7]);
+	return 0;
 }
 #endif /* HAVE_LICHEN_LINK */
 

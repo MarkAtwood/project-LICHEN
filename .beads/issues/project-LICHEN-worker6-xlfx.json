@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-xlfx",
+  "title": "Guard zeroize feature-unification against oscore crate major bump",
+  "description": "rust/lichen-oscore/Cargo.toml:25-33 direct aes/hmac zeroize pins guarantee zeroization only while the oscore fork uses the same aes 0.8/hmac 0.13 majors. If oscore bumps majors, two copies coexist, unification silently breaks, and the compile-time asserts in zeroize_asserts.rs:61,68 keep passing against the now-unused versions while real cipher/HMAC state goes unzeroized. Add a cargo-deny duplicate-versions check (or CI cargo tree -d gate) or at minimum a warning comment on the assert module.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T06:28:09.310714Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T06:28:09.310714Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xlfx",
+      "depends_on_id": "project-LICHEN-lx0j.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T06:28:09.530965Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

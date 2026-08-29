@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-vrn3",
+  "title": "COSE decoders reject RFC 9052 tag-18 COSE_Sign1; vector corpora embed the tagged form",
+  "description": "Found wiring test/vectors/root_dio_signature.json and capability_announcements.json (both embed cose_sign1 as RFC 9052 tag-18-tagged CBOR). Python RootDioSignature.from_cose_sign1 and decode_cose_sign1_announcement do cbor2.loads then require isinstance(list) of len 4 - a tag-18 CBORTag raises ValueError('COSE_Sign1 must be a 4-element array'). Every cross-impl consumer must unwrap tag 18 first (see _untagged_cose_sign1 helper in python/tests/crypto/test_orphan_vector_consumers.py). Decide one side: (a) accept both tagged and untagged forms in the decoders (RFC 9052 tags COSE_Sign1 when standalone), or (b) regenerate the vector corpora untagged and document the convention. C/Zephyr decoders should be audited for the same strictness.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T05:19:37.209894Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T05:19:37.209894Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vrn3",
+      "depends_on_id": "project-LICHEN-worker6-f4z7",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T05:19:37.490838Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

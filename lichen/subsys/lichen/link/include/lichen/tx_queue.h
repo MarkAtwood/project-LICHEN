@@ -119,6 +119,11 @@ struct tx_queue_stats {
  * @brief TX queue
  *
  * Thread-safe queue for packets awaiting transmission.
+ *
+ * The lock lives inside the struct, so the read APIs (count/empty/stats_get)
+ * take a non-const pointer: const-qualified signatures would require casting
+ * the mutex's const away, which this API forbids. Every operation acquires
+ * the lock and reads return snapshots by value.
  */
 struct tx_queue {
 	struct tx_queue_entry entries[TX_QUEUE_SIZE]; /**< Queue entries */
