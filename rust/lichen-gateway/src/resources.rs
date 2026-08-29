@@ -1981,6 +1981,17 @@ impl GatewayCoordinator {
             let their_iid = *claim.gateway_iid();
 
             if slot::compare_iids(&our_iid, &their_iid) == std::cmp::Ordering::Less {
+                // The verified claim advanced the replay high-water, so the
+                // stored peer claim set must record it too; otherwise the
+                // sealed state fails semantic validation and never commits.
+                if let Some(existing) = candidate_peer_claims
+                    .iter_mut()
+                    .find(|existing| existing.gateway_iid() == claim.gateway_iid())
+                {
+                    *existing = claim;
+                } else {
+                    candidate_peer_claims.push(claim);
+                }
                 if self
                     .commit_slot_state(candidate_verifier, candidate_peer_claims, candidate_owned)
                     .is_err()
@@ -2592,6 +2603,75 @@ mod tests {
             0x45
         );
         assert!(coordinator.slot_replay_generation() > original_generation);
+        fs::remove_file(state_path).unwrap();
+        fs::remove_file(floor_path).unwrap();
+    }
+
+    #[test]
+    fn rejected_conflicting_claim_moves_highwater_and_peer_claim_together() {
+        let (state_path, floor_path) = coordinator_state_paths("reject-update");
+        let sealing_seed = [0x74; 32];
+        let mut local_address = [0u8; 16];
+        local_address[8..].fill(0x01);
+        let mut coordinator = GatewayCoordinator::provision_persistent(
+            local_address,
+            60,
+            4,
+            &state_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Contiguous,
+            gateway_count: 2,
+            ordinal: 0,
+            start_slot: Some(0),
+            slot_count: Some(30),
+            owned: None,
+        };
+        let (claim, pubkey) = signed_slot_claim([0x41; 32], vec![40, 41], 4, 0);
+        assert_eq!(
+            coordinator
+                .handle_post_slots(&claim.encode(), true, Some(&pubkey), 4)
+                .code,
+            0x44
+        );
+        let accepted_generation = coordinator.slot_replay_generation();
+
+        // The same peer re-claims into our owned slots; we win the tiebreak.
+        // The advanced high-water and its stored peer claim must commit as
+        // one transaction even though the claim itself is rejected.
+        let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
+        let response = coordinator.handle_post_slots(&conflict.encode(), true, Some(&pubkey), 4);
+        assert_eq!(response.code, 0x45); // 2.05 Content (rejection payload)
+        assert!(coordinator.slot_replay_generation() > accepted_generation);
+        assert_eq!(coordinator.peer_claims.len(), 1);
+        assert_eq!(coordinator.peer_claims[0].slots(), &[5]);
+        assert_eq!(coordinator.peer_claims[0].claim_sequence(), 1);
+        assert_eq!(coordinator.info.slot_map.owned, None);
+
+        let restored_generation = coordinator.slot_replay_generation();
+        drop(coordinator);
+        let mut restored = GatewayCoordinator::load_persistent(
+            local_address,
+            60,
+            4,
+            &state_path,
+            &floor_path,
+            &sealing_seed,
+        )
+        .unwrap();
+        assert_eq!(restored.slot_replay_generation(), restored_generation);
+        assert_eq!(restored.peer_claims.len(), 1);
+        assert_eq!(restored.peer_claims[0].slots(), &[5]);
+        assert_eq!(
+            restored
+                .handle_post_slots(&conflict.encode(), true, Some(&pubkey), 4)
+                .code,
+            0x81
+        );
+
         fs::remove_file(state_path).unwrap();
         fs::remove_file(floor_path).unwrap();
     }

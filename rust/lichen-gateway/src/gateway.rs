@@ -2115,6 +2115,21 @@ mod tests {
         assert!(gw.is_local_mesh(&node_addr));
     }
 
+    #[test]
+    fn dao_route_makes_address_outside_0202_local() {
+        let mut gw = test_gateway();
+        let node_addr = [0x02u8, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
+
+        let root_addr = gw.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
+        let path = [root_addr, node_addr];
+        gw.rpl_stack
+            .rpl_node_mut()
+            .router_mut()
+            .inject_route(node_addr, &path);
+
+        assert!(gw.is_local_mesh(&node_addr));
+    }
+
     #[tokio::test]
     async fn root_originated_downward_srh() {
         let mut gw = test_gateway();

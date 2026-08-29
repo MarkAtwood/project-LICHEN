@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-4ljo",
+  "title": "SCHC create_sender must validate key_generation like control mint",
+  "description": "P3 (wave-2 review of worker6-edbw): python/src/lichen/schc/session_manager.py create_sender (~:450) accepts key_generation=None without validation, while _issue_control_wire_unlocked now rejects None at mint. A session created with None generation turns terminal transitions into a raise-loop: at MAX_ACK_REQUESTS exhaustion or timeout the mint raises FragmentError after the ACK receipt was consumed (record.pending.pop at :798) and high_water advanced (:824/:838), leaving the record active and unabortable until idle expiry. Also leaves the fragment branch of consume_fragment_wire (:354) with the same structural None-is-None vacuity already tracked in project-LICHEN-worker6-sppu. Not reachable via production schc_handler.py (dict-indexed generations never None) - defense in depth. Fix: validate generation on session creation (reject None, exact type) and add a None-generation session test.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:01:19.693909Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:01:41.949794Z",
+  "closed_at": "2026-08-29T07:01:41.949794Z",
+  "close_reason": "Duplicate of project-LICHEN-worker6-sppu (same finding, filed by the edbw implementation agent during wave 2).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4ljo",
+      "depends_on_id": "project-LICHEN-worker6-edbw",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:01:19.920659Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-r4lu",
+  "title": "Assert pre-state in dao_route_makes_address_outside_0202_local test",
+  "description": "P3 (wave-2 review of worker6-fz2c): rust/lichen-gateway/src/gateway.rs test dao_route_makes_address_outside_0202_local (~:2115) injects a route for 0201::1 and asserts is_local_mesh == true, but never asserts !is_local_mesh BEFORE injection. If a future regression made all 02xx addresses local by default, the test would still pass. Fix: add assert!(!gw.is_local_mesh(\u0026node_addr)); before inject_route.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:01:56.783039Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:01:56.783039Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-r4lu",
+      "depends_on_id": "project-LICHEN-worker6-fz2c",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:01:56.977915Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

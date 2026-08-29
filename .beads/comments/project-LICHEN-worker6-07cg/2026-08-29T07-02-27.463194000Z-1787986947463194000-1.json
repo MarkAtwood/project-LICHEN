@@ -1,0 +1,7 @@
+{
+  "id": "1787986947463194000-1",
+  "issue_id": "project-LICHEN-worker6-07cg",
+  "author": "Mark Atwood",
+  "text": "Semantic choice for human review: the we-win conflict branch now stores the peer's rejected-but-authenticated claim, so the peer's newest announced position is treated as occupied until it re-claims. Defensible and invariant-consistent (validate_semantic_slot_state requires stored claims == verifier high-water); flag if this occupancy semantics should differ.",
+  "created_at": "2026-08-29T07:02:27.463194Z"
+}

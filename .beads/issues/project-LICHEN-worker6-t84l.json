@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-t84l",
+  "title": "Wrap announce persistence read/fstat OSError as AnnouncePersistenceError",
+  "description": "P3 (wave-2 review of worker6-r2ow): python/src/lichen/announce/persistence.py _read_state wraps only os.open; the os.read (~:278) and the NEW post-read re-fstat (~:280) can raise raw OSError (EIO/ESTALE), escaping as bare OSError instead of the method's documented failure type AnnouncePersistenceError. Callers treat both as terminal today (scheduler.py:173 wraps Exception; processor declares persistence failure terminal) so behavior is at parity, but the contract is inconsistent and the new guard added one more unwrapped syscall. Fix: wrap the read+re-fstat body (keep the finally fd close) and add an EIO-injection test asserting AnnouncePersistenceError.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:01:56.230259Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:01:56.230259Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t84l",
+      "depends_on_id": "project-LICHEN-worker6-r2ow",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:01:56.521955Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

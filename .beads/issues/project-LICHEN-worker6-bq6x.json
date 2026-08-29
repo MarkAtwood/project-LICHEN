@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-bq6x",
+  "title": "Persist generation floor temp-file wedge on same-PID retry",
+  "description": "P3, pre-existing mechanism newly reachable via the worker6-07cg conflict path (wave-2 review): rust/lichen-gateway/src/resources.rs floor write (~:1678-1687) uses create_new temp file .floor.{pid}.{G+1}.tmp with best-effort cleanup (:1704-1706). If the floor write fails after the state blob succeeded and the temp file could not be removed, a same-PID retry at the same generation fails to create the temp again, wedging commits for the process lifetime. Self-heals on restart (blob G+1 \u003e= floor G loads fine). Fix: on floor-write failure, unlink any same-generation temp file before raising, or retry with an exclusive-suffix counter; add an injected-failure test for double floor write.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:01:57.171935Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:01:57.171935Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bq6x",
+      "depends_on_id": "project-LICHEN-worker6-07cg",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:01:57.360593Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

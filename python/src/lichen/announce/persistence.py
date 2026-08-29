@@ -276,6 +276,8 @@ class AnnounceStatePersistence:
             ):
                 raise AnnouncePersistenceError("announce state file is unsafe")
             raw = os.read(descriptor, _MAX_STATE_BYTES + 1)
+            if len(raw) != info.st_size or os.fstat(descriptor).st_size != info.st_size:
+                raise AnnouncePersistenceError("announce state file changed during read")
         finally:
             os.close(descriptor)
         try:

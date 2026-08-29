@@ -236,6 +236,8 @@ class SchcSessionManager:
         self._check_identity(remote_signer_identity, field_name="remote_signer_identity")
         if type(data) is not bytes or len(data) < 2 or data[0] not in RULE_IDS:
             raise FragmentError("fragmentation control must be canonical bytes")
+        if key_generation is None:
+            raise FragmentError("fragmentation control requires a current key generation")
         expected_rule = fragmentation_rule_for_sender(
             remote_signer_identity if response else self._local_identity,
             self._local_identity if response else remote_signer_identity,
@@ -330,11 +332,13 @@ class SchcSessionManager:
             now = self._expire_all_unlocked()
             control = self._issued_controls.pop(id(wire), None)
             if control is not None:
+                current_generation = self._key_generation_lookup(control[1])
                 return (
                     control[0] is wire
                     and now < control[3]
                     and iid_to_eui64(PeerIdentity.from_pubkey(control[1]).iid) == remote_eui64
-                    and self._key_generation_lookup(control[1]) is control[2]
+                    and current_generation is not None
+                    and current_generation is control[2]
                 )
             issued = self._issued_wires.pop(id(wire), None)
             if issued is None or issued[0] is not wire:

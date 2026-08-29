@@ -428,6 +428,12 @@ mod tests {
         assert_eq!(Config::default_sim().ipv6.prefix, "0200::/8");
         let parsed: Config = toml::from_str("").unwrap();
         assert_eq!(parsed.ipv6.prefix, "0200::/8");
+        for prefix in [Config::default_sim().ipv6.prefix, parsed.ipv6.prefix] {
+            let (addr, len) = prefix.split_once('/').unwrap();
+            let octets = addr.parse::<std::net::Ipv6Addr>().unwrap().octets();
+            assert_eq!((octets[0], octets[1]), (0x02, 0x00));
+            assert_eq!(len.parse::<u8>().unwrap(), 8);
+        }
     }
 
     #[test]

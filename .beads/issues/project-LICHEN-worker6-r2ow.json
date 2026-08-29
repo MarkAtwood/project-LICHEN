@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-r2ow",
   "title": "Reject incomplete or concurrently changed atomic recovery reads",
   "description": "P1 robustness review: atomic JSON backup/journal/artifact readers issue one os.read but do not require the returned length to equal the fstat snapshot. A short read can publish a truncated rollback backup, while concurrent same-bound growth/shrink can make recovery operate on a non-snapshot. Require exact stable lengths (with max+1 growth detection) and add failure-injection tests.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T17:31:25.079749Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T04:56:02.611515Z",
+  "updated_at": "2026-08-29T07:02:18.275403Z",
   "started_at": "2026-08-24T17:31:39.1563Z",
-  "lease_expires_at": "2026-08-29T05:01:02.611515Z",
-  "heartbeat_at": "2026-08-29T04:56:02.611515Z"
+  "closed_at": "2026-08-29T07:02:18.275403Z",
+  "close_reason": "Fixed: announce/persistence.py _read_state now requires len(raw)==fstat snapshot AND post-read re-fstat unchanged. 4 failure-injection tests (short read, growth, growth-past-cap, shrink). 236 announce tests pass. Same-pattern in key_persistence/dao_persistence slots is mitigated downstream by checksum/HMAC+anchor validation and tracked for review."
 }

@@ -449,6 +449,98 @@ fn handoff_sequence_increment_vector() {
 }
 
 #[test]
+fn handoff_sequence_max_rejected_without_mutation() {
+    use lichen_gateway::handoff::NodeRegistry;
+
+    let addr = [
+        0x02, 0, 0, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+    ];
+
+    let oscore = |sender_sequence: u64| OscoreState {
+        master_secret: vec![0; 16],
+        master_salt: vec![0; 8],
+        sender_id: vec![0],
+        recipient_id: vec![1],
+        algorithm: 10,
+        hashfun: "SHA-256".into(),
+        window_size: 32,
+        id_context: None,
+        sender_sequence,
+        replay_index: 0,
+        replay_bitfield: 0,
+    };
+
+    let exhausted_cases = [
+        (
+            HandoffResponse::success(addr, u32::MAX, 0),
+            HandoffError::SequenceExhausted("dao_sequence"),
+        ),
+        (
+            HandoffResponse::success(addr, 0, u32::MAX),
+            HandoffError::SequenceExhausted("path_sequence"),
+        ),
+        (
+            HandoffResponse::success(addr, 0, 0).with_oscore(oscore(u64::MAX)),
+            HandoffError::SequenceExhausted("oscore_sender_sequence"),
+        ),
+    ];
+
+    for (response, expected_err) in exhausted_cases {
+        // Pre-register the node so a partial mutation would be visible.
+        let mut registry = NodeRegistry::new();
+        let mut existing = lichen_gateway::handoff::NodeRegistryEntry::new(addr);
+        existing.dao_sequence = 7;
+        existing.path_sequence = 7;
+        existing.oscore_state = Some(oscore(7));
+        registry.register(existing);
+
+        assert_eq!(registry.accept_handoff(&response), Err(expected_err));
+
+        // No mutation: existing entry values must be untouched.
+        let entry = registry.get(&addr).unwrap();
+        assert_eq!(entry.dao_sequence, 7);
+        assert_eq!(entry.path_sequence, 7);
+        assert_eq!(entry.oscore_state.as_ref().unwrap().sender_sequence, 7);
+    }
+}
+
+#[test]
+fn handoff_sequence_max_minus_one_advances_once() {
+    use lichen_gateway::handoff::NodeRegistry;
+
+    let addr = [
+        0x02, 0, 0, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+    ];
+
+    let oscore = OscoreState {
+        master_secret: vec![0; 16],
+        master_salt: vec![0; 8],
+        sender_id: vec![0],
+        recipient_id: vec![1],
+        algorithm: 10,
+        hashfun: "SHA-256".into(),
+        window_size: 32,
+        id_context: None,
+        sender_sequence: u64::MAX - 1,
+        replay_index: 0,
+        replay_bitfield: 0,
+    };
+
+    let response = HandoffResponse::success(addr, u32::MAX - 1, u32::MAX - 1).with_oscore(oscore);
+
+    let mut registry = NodeRegistry::new();
+    registry.accept_handoff(&response).unwrap();
+
+    let entry = registry.get(&addr).unwrap();
+    assert_eq!(entry.dao_sequence, u32::MAX);
+    assert_eq!(entry.path_sequence, u32::MAX);
+    assert_eq!(
+        entry.oscore_state.as_ref().unwrap().sender_sequence,
+        u64::MAX
+    );
+}
+
+#[test]
 fn handoff_request_invalid_not_map_vector() {
     let doc: Value = serde_json::from_str(VECTORS_JSON).expect("parse");
     let vectors = doc["vectors"].as_array().unwrap();

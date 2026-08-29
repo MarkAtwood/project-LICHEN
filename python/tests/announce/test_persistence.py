@@ -10,7 +10,11 @@ import stat
 
 import pytest
 
-from lichen.announce.persistence import AnnouncePersistenceError, AnnounceStatePersistence
+from lichen.announce.persistence import (
+    _MAX_STATE_BYTES,
+    AnnouncePersistenceError,
+    AnnounceStatePersistence,
+)
 from lichen.crypto.identity import Identity
 
 
@@ -187,3 +191,69 @@ def test_commit_rejects_nonexact_or_unbound_security_inputs(
     )
     with pytest.raises(AnnouncePersistenceError):
         persistence.commit(iid, pubkey, sequence)
+
+
+def test_short_read_fails_closed(tmp_path, monkeypatch) -> None:
+    anchor = MemoryAnchor()
+    path = tmp_path / "node-state"
+    AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=True)
+    real_read = os.read
+
+    def short_read(descriptor: int, count: int) -> bytes:
+        return real_read(descriptor, count)[:-1]
+
+    monkeypatch.setattr(os, "read", short_read)
+    with pytest.raises(AnnouncePersistenceError, match="changed during read"):
+        AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=False)
+
+
+def test_growth_between_fstat_and_read_fails_closed(tmp_path, monkeypatch) -> None:
+    anchor = MemoryAnchor()
+    path = tmp_path / "node-state"
+    AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=True)
+    state_path = tmp_path / "node-state.announce"
+    real_read = os.read
+
+    def grow_then_read(descriptor: int, count: int) -> bytes:
+        with open(state_path, "ab") as growing:
+            growing.write(b"x" * 64)
+        return real_read(descriptor, count)
+
+    monkeypatch.setattr(os, "read", grow_then_read)
+    with pytest.raises(AnnouncePersistenceError, match="changed during read"):
+        AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=False)
+
+
+def test_growth_beyond_size_cap_between_fstat_and_read_fails_closed(
+    tmp_path, monkeypatch
+) -> None:
+    anchor = MemoryAnchor()
+    path = tmp_path / "node-state"
+    AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=True)
+    state_path = tmp_path / "node-state.announce"
+    real_read = os.read
+
+    def grow_beyond_cap_then_read(descriptor: int, count: int) -> bytes:
+        with open(state_path, "ab") as growing:
+            growing.write(b"x" * _MAX_STATE_BYTES)
+        return real_read(descriptor, count)
+
+    monkeypatch.setattr(os, "read", grow_beyond_cap_then_read)
+    with pytest.raises(AnnouncePersistenceError, match="changed during read"):
+        AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=False)
+
+
+def test_shrink_between_fstat_and_read_fails_closed(tmp_path, monkeypatch) -> None:
+    anchor = MemoryAnchor()
+    path = tmp_path / "node-state"
+    AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=True)
+    state_path = tmp_path / "node-state.announce"
+    real_read = os.read
+
+    def shrink_then_read(descriptor: int, count: int) -> bytes:
+        os.truncate(state_path, 8)
+        return real_read(descriptor, count)
+
+    monkeypatch.setattr(os, "read", shrink_then_read)
+    with pytest.raises(AnnouncePersistenceError, match="changed during read"):
+        AnnounceStatePersistence(path, LOCAL, anchor, allow_bootstrap=False)
