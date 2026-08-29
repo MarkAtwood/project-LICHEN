@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-9hfe",
+  "title": "Refactor Zephyr L2 to use async LoRa API (interrupt-driven RX/TX)",
+  "description": "Replace polling rx_thread with lora_recv_async() callback. Replace blocking lora_send() with lora_send_async(). Wire CAD to CadDone interrupt.\n\n## Current (bad)\n- rx_thread loops calling blocking lora_recv() with 10ms yield sleeps\n- TX blocks in lora_send()\n- Retries use k_sleep() delays\n\n## Target (good)\n- lora_recv_async() registers callback, fires on DIO1 RX_DONE IRQ\n- lora_send_async() with TX_DONE callback\n- CAD_DONE IRQ drives CSMA state machine directly\n- No polling, no sleeps, no retries - just state + interrupts\n\n## Files\n- lichen/subsys/lichen/l2/lora_l2_rx.c (rx_thread -\u003e async callback)\n- lichen/subsys/lichen/l2/lora_l2_tx.c (blocking send -\u003e async)\n- lichen/subsys/lichen/link/csma.c (wire to CAD IRQ)\n\n## Verification\n- Existing tests pass\n- No k_sleep in hot paths\n- Radio state machine matches SX126x datasheet section 13",
+  "notes": "Scope: Zephyr C only (Rust Embassy and Python asyncio already event-driven).\n\nWhy P1:\n- Power: CPU sleeps between interrupts vs spinning in poll loops. Critical for battery nodes.\n- Responsiveness: UI/shell not blocked waiting on radio timeouts. \n- Correctness: No timing assumptions. Hardware tells you when it's ready.\n- Debuggability: State machine with clear transitions vs \"add another sleep.\"",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T03:10:43.253649Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T03:54:05.108904Z",
+  "started_at": "2026-08-29T03:48:21.975327Z",
+  "closed_at": "2026-08-29T03:54:05.108904Z",
+  "close_reason": "Decomposed into 4 P1 children (async driver API already exists in all 3 drivers, so no driver-exposure child needed; L2 refactor is ~1450 lines across rx/tx/cad + lifecycle, well over 50-line implement threshold): project-LICHEN-worker6-sb0b (RX async: rx_thread-\u003elora_recv_async, immediately ready), project-LICHEN-worker6-0lm8 (TX async: lora_send-\u003elora_send_async + TX_DONE completion, blocked by sb0b), project-LICHEN-worker6-uwip (CAD: blocking lichen_lora_cad_run -\u003e CadDone IRQ driving csma.c state machine, blocked by 0lm8), project-LICHEN-worker6-rx2w (integration sweep: no k_sleep hot paths, SX126x datasheet 13 conformance, full test run, blocked by sb0b+0lm8+uwip)."
+}

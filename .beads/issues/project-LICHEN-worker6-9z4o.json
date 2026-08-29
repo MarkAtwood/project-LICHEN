@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-9z4o",
+  "title": "C RPL: origin binding makes authorized DAOs effectively single-Target; multi-target staging paths are dead code for authorized traffic",
+  "description": "Observation from reviewing 65ca175106 (spec-consistent, no defect): dao_targets_match_origin (rpl_dao_process.c:269-299) requires every Target to byte-equal the origin and duplicates are rejected downstream, so multi-Target DAO transactions are unreachable by authorized traffic; only single-target/multi-Transit grouping remains live (test_group_cartesian_and_path_control updated accordingly). This matches spec 8.7's .44.7 exactly-one-self-/128 profile. Action: annotate the now-dead multi-target staging paths so they are not read as live protocol behavior, or note them for the .44.9 generalized-profile work.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T04:17:59.042263Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T04:17:59.042263Z"
+}

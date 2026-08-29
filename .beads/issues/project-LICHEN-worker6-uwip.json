@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-uwip",
+  "title": "L2 CAD: drive CSMA from CadDone IRQ instead of blocking lichen_lora_cad_run()",
+  "description": "Child of parent project-LICHEN-worker6-9hfe (async LoRa API refactor).\n\nScope (files): lichen/subsys/lichen/l2/lora_l2_tx.c (CAD registry + lichen_lora_cad_run() at :62), CAD handling in lichen/drivers/lora/lr1110/lr1110.c (+ lora_sim.c / lora_renode.c emulation parity IF driver-level CAD plumbing is missing), hook point consumed by lichen/subsys/lichen/link/csma.c.\n\nWork:\n1. Audit driver CAD support: check whether lr1110.c IRQ mask/status handles CadDone and whether any async CAD entry point exists (rg -n 'cad|Cad' lichen/drivers/lora/). If missing, add a driver-level async CAD API (start CAD + CadDone IRQ -\u003e callback) mirroring the send_async/recv_async pattern in the lora_driver_api struct (lr1110.c:718-720), with parity in lora_sim.c and lora_renode.c.\n2. Replace blocking lichen_lora_cad_run() (polls CAD with k_timeout_t, lora_l2_tx.c:62) with: start CAD, return; CadDone callback computes (cad_status, channel_busy) and invokes the registered lichen_lora_cad_fn callback (cad_registry at lora_l2_tx.c:30) — the existing callback contract matches lichen_csma_cad_fn consumed by csma.c:290-331.\n3. CSMA integration: lichen_csma_cad_begin()/lichen_csma_cad_complete() (csma.c:125,147) already model begin/complete transitions — wire the async CAD callback into lichen_csma_cad_complete() with LICHEN_CSMA_RESULT_CAD_BUSY/CAD_TIMEOUT outcomes (csma.c:210-211). No polling loop, no sleeps; backoff via existing state machine.\n4. Keep cad_registry thread-safe (cad_registry_mutex at lora_l2_tx.c:31); CadDone callback is ISR context — defer to workqueue if the callback contract requires thread context, document which.\n\nAcceptance: rg -n 'lichen_lora_cad_run' shows no blocking wait-loop; CAD outcomes (busy/timeout/clear) exercised in lichen/tests/csma and lichen/tests/csma_constants; sim driver demonstrates async CAD completion in a test. Depends on B (TX path owns lora_l2_tx.c; CAD gates TX channel access).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T03:53:01.452817Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T03:53:01.452817Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-uwip",
+      "depends_on_id": "project-LICHEN-worker6-0lm8",
+      "type": "blocks",
+      "created_at": "2026-08-29T03:53:02.531258Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-uwip",
+      "depends_on_id": "project-LICHEN-worker6-9hfe",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T03:53:08.865084Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
