@@ -60,6 +60,17 @@ pub use oscore::{
     PeerCredential, PendingMessage2, PendingMessage3,
 };
 
+// Exclusive live ownership of contexts by durable record.
+//
+// The bare activation methods on the re-exported `Context`
+// (`register_fresh` / `restore_existing`) remain callable and do not guard
+// against concurrent receiver contexts for the same record; route context
+// activation through [`OwnershipRegistry`] to enforce the single-owner
+// contract (a second activation fails with [`OwnershipError::AlreadyOwned`]).
+mod ownership;
+
+pub use ownership::{OwnershipError, OwnershipRegistry};
+
 // EDHOC transcript hash helpers (RFC 9528)
 #[cfg(feature = "edhoc")]
 mod transcript;
