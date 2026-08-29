@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-vrot",
+  "title": "[review] PrefixDelegations has no revocation API; 64-entry exhaustion permanent until process restart",
+  "description": "P2, wave-5 review. rust/lichen-rpl/src/routing.rs:199-248: PrefixDelegations exposes only delegate/authorizes/len/is_empty. On Err(Capacity) the only recovery is a process restart (table volatile by design). A mis-delegation to the wrong key cannot be undone without restarting the border router. Fix: add revoke(public_key, prefix_len, prefix) and optionally clear_origin(public_key); trivial against the HashMap\u003ckey, HashSet\u003c(len,prefix)\u003e\u003e layout; add tests (revoke then deny; revoke then re-delegate; revoke unknown is Ok/noop).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T00:59:29.6485Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T00:59:29.6485Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vrot",
+      "depends_on_id": "project-LICHEN-2auf.44.9.2",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T00:59:29.810617Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

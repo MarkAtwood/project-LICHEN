@@ -10,6 +10,7 @@ use lichen_rpl::routing::{
     RoutingTable, SignatureVerifiedDao, MAX_ROUTE_HOPS,
 };
 use serde_json::{json, Value};
+use std::net::Ipv6Addr;
 use std::sync::{Arc, Barrier, Mutex};
 
 const VECTORS: &str = include_str!("../../../test/vectors/rpl_route_state.json");
@@ -334,19 +335,15 @@ fn canonical_route_state_vectors_match_production_manager() {
         );
     }
 
-    let mut manager = DaoManager::diagnostic_root(
-        Ipv6Addr::from(dodag_id),
-        rpl_instance_id,
-        dodag_id.into(),
-    );
+    let mut manager =
+        DaoManager::diagnostic_root(Ipv6Addr::from(dodag_id), rpl_instance_id, dodag_id.into());
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();
         assert_eq!(
-            snapshot(manager.route_state_diagnostic(
-                sequence_authority.into(),
-                lifetime_unit_seconds
-            )),
+            snapshot(
+                manager.route_state_diagnostic(sequence_authority.into(), lifetime_unit_seconds)
+            ),
             vector["before"],
             "{name}: before snapshot"
         );
@@ -386,10 +383,9 @@ fn canonical_route_state_vectors_match_production_manager() {
             "{name}: reason must be a canonical diagnostic string"
         );
         assert_eq!(
-            snapshot(manager.route_state_diagnostic(
-                sequence_authority.into(),
-                lifetime_unit_seconds
-            )),
+            snapshot(
+                manager.route_state_diagnostic(sequence_authority.into(), lifetime_unit_seconds)
+            ),
             vector["expected"]["state"],
             "{name}: expected snapshot"
         );
@@ -444,10 +440,10 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
     let mut non_host_target = route_dao(2, 2, target, root);
     non_host_target[7] = 127;
     assert!(manager
-        .process_route_state_diagnostic(&non_host_target, authority, timing, limits)
+        .process_route_state_diagnostic(&non_host_target, authority.into(), timing, limits)
         .is_err());
     assert_eq!(
-        manager.route_state_diagnostic(authority, timing.lifetime_unit_seconds),
+        manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds),
         before
     );
     assert_eq!(
@@ -467,7 +463,7 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
     let link = LinkLayer::new(identity.clone());
     let mut storage = MemStorage::new();
     let (mut manager, mut rx_state) =
-        DaoManager::provision_root(&mut storage, root, 0, root).unwrap();
+        DaoManager::provision_root(&mut storage, root.into(), 0, root.into()).unwrap();
     let mut admission = DaoAdmissionState::provision(&mut storage, root, 0, root).unwrap();
     admission
         .admit(&mut storage, *identity.pubkey.as_bytes())
@@ -477,9 +473,9 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
         lifetime_unit_seconds: 1,
         max_deadline_seconds: u64::MAX,
     };
-    let mut sender = DaoManager::new(origin, 0, root);
+    let mut sender = DaoManager::new(origin.into(), 0, root.into());
 
-    let first_unsigned = sender.build_dao_with_lifetime(root, 10);
+    let first_unsigned = sender.build_dao_with_lifetime(root.into(), 10);
     let first_wire = signed_dao(&first_unsigned, origin, root, 1, &link);
     let first =
         SignatureVerifiedDao::verify_signature(&first_wire, origin, 0, root, Some(identity.pubkey))
@@ -495,7 +491,7 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    let first_state = manager.route_state_diagnostic(origin, 1);
+    let first_state = manager.route_state_diagnostic(origin.into(), 1);
     assert_eq!(first_state[0].path_sequence, 241);
     assert_eq!(manager.origin_high_water()[0].origin_sequence, 1);
 
@@ -520,10 +516,13 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert_eq!(manager.route_state_diagnostic(origin, 1), first_state);
+    assert_eq!(
+        manager.route_state_diagnostic(origin.into(), 1),
+        first_state
+    );
     assert_eq!(manager.origin_high_water()[0].origin_sequence, 1);
 
-    let second_unsigned = sender.build_dao_with_lifetime(root, 10);
+    let second_unsigned = sender.build_dao_with_lifetime(root.into(), 10);
     let second_wire = signed_dao(&second_unsigned, origin, root, 2, &link);
     let second = SignatureVerifiedDao::verify_signature(
         &second_wire,
@@ -547,11 +546,13 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    let second_state = manager.route_state_diagnostic(origin, 1);
+    let second_state = manager.route_state_diagnostic(origin.into(), 1);
     assert_eq!(second_state[0].path_sequence, 242);
     assert_eq!(second_state[0].candidates[0].expires_at, Some(111));
 
-    let equal_unsigned = sender.build_dao_copy_with_lifetime(root, 10).unwrap();
+    let equal_unsigned = sender
+        .build_dao_copy_with_lifetime(root.into(), 10)
+        .unwrap();
     let equal_wire = signed_dao(&equal_unsigned, origin, root, 3, &link);
     let equal =
         SignatureVerifiedDao::verify_signature(&equal_wire, origin, 0, root, Some(identity.pubkey))
@@ -570,7 +571,10 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    assert_eq!(manager.route_state_diagnostic(origin, 1), second_state);
+    assert_eq!(
+        manager.route_state_diagnostic(origin.into(), 1),
+        second_state
+    );
     assert_eq!(manager.origin_high_water()[0].origin_sequence, 3);
 
     let mut changed_equal_unsigned = equal_unsigned;
@@ -599,7 +603,10 @@ fn authenticated_new_origin_sequence_cannot_bypass_path_sequence_freshness() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert_eq!(manager.route_state_diagnostic(origin, 1), second_state);
+    assert_eq!(
+        manager.route_state_diagnostic(origin.into(), 1),
+        second_state
+    );
     assert_eq!(manager.origin_high_water()[0].origin_sequence, 3);
 }
 
@@ -624,7 +631,11 @@ fn concurrent_newer_snapshots_never_publish_a_mixed_candidate_set() {
         lifetime_unit_seconds: 1,
         max_deadline_seconds: u64::MAX,
     };
-    let manager = Arc::new(Mutex::new(DaoManager::diagnostic_root(root, 0, root)));
+    let manager = Arc::new(Mutex::new(DaoManager::diagnostic_root(
+        root.into(),
+        0,
+        root.into(),
+    )));
     let barrier = Arc::new(Barrier::new(3));
     let mut workers = Vec::new();
     for (sequence, candidate_set) in [
@@ -636,10 +647,12 @@ fn concurrent_newer_snapshots_never_publish_a_mixed_candidate_set() {
         workers.push(std::thread::spawn(move || {
             let dao = grouped_route_dao(sequence, sequence, target, &candidate_set);
             barrier.wait();
-            manager
-                .lock()
-                .unwrap()
-                .process_route_state_diagnostic(&dao, authority, timing, limits)
+            manager.lock().unwrap().process_route_state_diagnostic(
+                &dao,
+                authority.into(),
+                timing,
+                limits,
+            )
         }));
     }
     barrier.wait();
@@ -647,7 +660,10 @@ fn concurrent_newer_snapshots_never_publish_a_mixed_candidate_set() {
         let _ = worker.join().unwrap();
     }
 
-    let state = manager.lock().unwrap().route_state_diagnostic(authority, 1);
+    let state = manager
+        .lock()
+        .unwrap()
+        .route_state_diagnostic(authority.into(), 1);
     assert_eq!(state.len(), 1);
     assert_eq!(state[0].path_sequence, 2);
     assert_eq!(
@@ -656,6 +672,6 @@ fn concurrent_newer_snapshots_never_publish_a_mixed_candidate_set() {
             .iter()
             .map(|candidate| candidate.parent)
             .collect::<Vec<_>>(),
-        vec![parents[2], parents[3]]
+        vec![Ipv6Addr::from(parents[2]), Ipv6Addr::from(parents[3])]
     );
 }

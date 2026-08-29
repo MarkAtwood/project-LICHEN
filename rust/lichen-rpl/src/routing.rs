@@ -141,6 +141,126 @@ pub struct DaoProcessTiming {
     pub max_deadline_seconds: u64,
 }
 
+/// Reason an authenticated DAO origin may not advertise a Target prefix
+/// (spec/05-routing.md §8.7.2 "Root Validation of Delegated DAO").
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnauthorizedPrefixReason {
+    /// `::/0` is never authorized from DAO origins. Spec §8.7.1 reserves an
+    /// exact `::/0` delegation for generalized-prefix work; until that ships
+    /// the gate fails closed.
+    DefaultRoute,
+    /// Prefix is neither the origin's own /128 nor an exact delegation to it.
+    ForeignPrefix,
+}
+
+/// Outcome of prefix-authorization screening for one DAO.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrefixAuthorizationError {
+    /// DAO carries a truncated, oversized, or otherwise unparseable Target
+    /// option (spec/05-routing.md §8.7.1 boundary encodings).
+    MalformedTarget,
+    /// DAO advertises a prefix the authenticated origin may not advertise.
+    Unauthorized(UnauthorizedPrefixReason),
+}
+
+/// Bound on stored delegations (spec/05-routing.md §8.7.2: the delegation
+/// table MUST be bounded).
+#[cfg(feature = "std")]
+pub const MAX_PREFIX_DELEGATIONS: usize = 64;
+
+/// Rejected delegation registrations.
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrefixDelegationError {
+    /// `::/0` is never delegable; the authorization gate denies default routes.
+    DefaultRoute,
+    /// Prefix length exceeds 128 bits.
+    PrefixLength,
+    /// Delegation table is full ([`MAX_PREFIX_DELEGATIONS`]).
+    Capacity,
+}
+
+/// Explicit static prefix delegations per authenticated DAO origin
+/// (spec/05-routing.md §8.7.2).
+///
+/// Delegation is exact: a `(prefix, prefix_len)` entry authorizes only that
+/// canonical prefix, never sub-prefixes or enclosing aggregates. Entries are
+/// keyed by the origin's Ed25519 public key. Provisioning (COSE_Sign1 delivery
+/// via CoAP) and persistence are out of scope here: the table is seeded by the
+/// operator API for the process lifetime and must be re-seeded after restart.
+#[cfg(feature = "std")]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrefixDelegations {
+    delegated: HashMap<[u8; 32], HashSet<(u8, [u8; 16])>>,
+}
+
+#[cfg(feature = "std")]
+impl PrefixDelegations {
+    /// Delegate `prefix/prefix_len` to the origin holding `public_key`.
+    ///
+    /// Host bits beyond `prefix_len` are cleared, so only canonical entries
+    /// are stored. Registering an existing delegation is idempotent.
+    pub fn delegate(
+        &mut self,
+        public_key: [u8; 32],
+        prefix: Ipv6Addr,
+        prefix_len: u8,
+    ) -> Result<(), PrefixDelegationError> {
+        if prefix_len == 0 {
+            return Err(PrefixDelegationError::DefaultRoute);
+        }
+        if prefix_len > 128 {
+            return Err(PrefixDelegationError::PrefixLength);
+        }
+        let mut canonical = prefix.octets();
+        mask_prefix_bits(prefix_len, &mut canonical);
+        if self.authorizes(&public_key, prefix_len, canonical) {
+            return Ok(());
+        }
+        if self.len() >= MAX_PREFIX_DELEGATIONS {
+            return Err(PrefixDelegationError::Capacity);
+        }
+        self.delegated
+            .entry(public_key)
+            .or_default()
+            .insert((prefix_len, canonical));
+        Ok(())
+    }
+
+    /// Whether `public_key` may advertise the canonical `prefix/prefix_len`.
+    pub fn authorizes(&self, public_key: &[u8; 32], prefix_len: u8, prefix: [u8; 16]) -> bool {
+        self.delegated
+            .get(public_key)
+            .is_some_and(|set| set.contains(&(prefix_len, prefix)))
+    }
+
+    /// Number of stored delegations across all origins.
+    pub fn len(&self) -> usize {
+        self.delegated.values().map(HashSet::len).sum()
+    }
+
+    /// Whether no delegation is stored.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// Clear host bits beyond `prefix_len` in place (spec/05-routing.md §8.7.1:
+/// receivers ignore bits beyond the Prefix Length, then canonicalize).
+#[cfg(feature = "std")]
+fn mask_prefix_bits(prefix_len: u8, prefix: &mut [u8; 16]) {
+    let full = usize::from(prefix_len / 8);
+    let rem = usize::from(prefix_len % 8);
+    if rem != 0 {
+        prefix[full] &= u8::MAX << (8 - rem);
+    }
+    for byte in &mut prefix[full + usize::from(rem != 0)..] {
+        *byte = 0;
+    }
+}
+
 #[doc(hidden)]
 #[cfg(feature = "std")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -313,6 +433,7 @@ pub struct DaoManager {
     candidate_map: HashMap<Ipv6Addr, Vec<DaoCandidate>>,
     descriptor_map: HashMap<Ipv6Addr, Option<u32>>,
     origin_high_water: HighWaterMap,
+    prefix_delegations: PrefixDelegations,
 }
 
 #[cfg(feature = "std")]
@@ -334,6 +455,7 @@ impl DaoManager {
             candidate_map: HashMap::new(),
             descriptor_map: HashMap::new(),
             origin_high_water: HashMap::new(),
+            prefix_delegations: PrefixDelegations::default(),
         }
     }
 
@@ -360,6 +482,7 @@ impl DaoManager {
             candidate_map: self.candidate_map.clone(),
             descriptor_map: self.descriptor_map.clone(),
             origin_high_water: self.origin_high_water.clone(),
+            prefix_delegations: self.prefix_delegations.clone(),
         }
     }
 
@@ -517,11 +640,17 @@ impl DaoManager {
         }
 
         let dao = verified.envelope.dao.clone();
-        if !Self::has_exact_origin_target(
-            &dao,
-            verified.envelope.unsigned_bytes,
-            Ipv6Addr::from(verified.origin),
-        ) {
+        // Prefix authorization precedes any route, replay, or persistence
+        // mutation: every Target must be the origin's own /128 or an exact
+        // delegation to it (spec/05-routing.md §8.7.1-8.7.2).
+        if self
+            .authorize_dao_prefixes(
+                verified.envelope.unsigned_bytes,
+                &verified.public_key,
+                Ipv6Addr::from(verified.origin),
+            )
+            .is_err()
+        {
             return Err(DaoProcessError::RouteRejected);
         }
         let Some((updates, update_count)) =
@@ -630,23 +759,86 @@ impl DaoManager {
         found_origin
     }
 
-    fn has_exact_origin_target(_dao: &Dao, dao_bytes: &[u8], origin: Ipv6Addr) -> bool {
-        let mut target = None;
-        for option in OptionIter::new(Dao::options_tail(dao_bytes)) {
-            let Ok(option) = option else {
-                return false;
-            };
-            if option.opt_type == OPT_RPL_TARGET {
-                if target.is_some() {
-                    return false;
+    /// Authorize every RPL Target in an unsigned DAO against the verified
+    /// origin (spec/05-routing.md §8.7.1-§8.7.2).
+    ///
+    /// An authenticated origin may advertise its own canonical /128 address
+    /// without delegation and exactly the prefixes in [`Self::prefix_delegations`]
+    /// delegated to its public key. `::/0` and every other prefix fail closed.
+    /// Prefix lengths are canonicalized per §8.7.1 before the delegation
+    /// lookup, so host bits set beyond the advertised prefix length are
+    /// ignored.
+    pub fn authorize_dao_prefixes(
+        &self,
+        unsigned_dao: &[u8],
+        public_key: &[u8; 32],
+        origin: Ipv6Addr,
+    ) -> Result<(), PrefixAuthorizationError> {
+        let mut saw_target = false;
+        for option in OptionIter::new(Dao::options_tail(unsigned_dao)) {
+            let option = option.map_err(|_| PrefixAuthorizationError::MalformedTarget)?;
+            if option.opt_type != OPT_RPL_TARGET {
+                continue;
+            }
+            if option.data.len() < 2 {
+                return Err(PrefixAuthorizationError::MalformedTarget);
+            }
+            let prefix_len = option.data[1];
+            if prefix_len > 128 {
+                return Err(PrefixAuthorizationError::MalformedTarget);
+            }
+            let host_octets = usize::from(prefix_len.div_ceil(8));
+            if option.data.len() - 2 < host_octets {
+                return Err(PrefixAuthorizationError::MalformedTarget);
+            }
+            saw_target = true;
+            let mut prefix = [0u8; 16];
+            prefix[..host_octets].copy_from_slice(&option.data[2..2 + host_octets]);
+            mask_prefix_bits(prefix_len, &mut prefix);
+            let authorized = match prefix_len {
+                // `/0` is never authorized from origins (fail closed).
+                0 => {
+                    return Err(PrefixAuthorizationError::Unauthorized(
+                        UnauthorizedPrefixReason::DefaultRoute,
+                    ))
                 }
-                let Ok(parsed) = RplTarget::from_bytes(option.data) else {
-                    return false;
-                };
-                target = Some(parsed);
+                128 => prefix == origin.octets(),
+                _ => false,
+            };
+            if !authorized
+                && !self
+                    .prefix_delegations
+                    .authorizes(public_key, prefix_len, prefix)
+            {
+                return Err(PrefixAuthorizationError::Unauthorized(
+                    UnauthorizedPrefixReason::ForeignPrefix,
+                ));
             }
         }
-        target.is_some_and(|target| target.prefix_len == 128 && target.prefix == origin.octets())
+        if saw_target {
+            Ok(())
+        } else {
+            Err(PrefixAuthorizationError::MalformedTarget)
+        }
+    }
+
+    /// Prefix delegations trusted by this root for DAO target authorization.
+    ///
+    /// The table is operator-seeded and volatile; delegation provisioning is
+    /// specified separately (spec/05-routing.md §8.7.2 CoAP delivery).
+    pub fn prefix_delegations(&self) -> &PrefixDelegations {
+        &self.prefix_delegations
+    }
+
+    /// Delegate `prefix/prefix_len` to the origin holding `public_key`.
+    pub fn delegate_prefix(
+        &mut self,
+        public_key: [u8; 32],
+        prefix: Ipv6Addr,
+        prefix_len: u8,
+    ) -> Result<(), PrefixDelegationError> {
+        self.prefix_delegations
+            .delegate(public_key, prefix, prefix_len)
     }
 
     pub fn routing_table(&self) -> &RoutingTable {
@@ -745,24 +937,27 @@ impl DaoManager {
                     })
                     .collect::<Option<Vec<_>>>()?;
                 let selected_candidate = if disposition == DaoDiagnosticDisposition::Active {
-                    self.routing_table.lookup(&target.octets()).and_then(|path| {
-                        let parent = if path.len() == 1 {
-                            self.node_address
-                        } else {
-                            Ipv6Addr::from(path[path.len() - 2])
-                        };
-                        let candidate = self
-                            .candidate_map
-                            .get(target)?
-                            .iter()
-                            .find(|candidate| candidate.parent == parent)?;
-                        Some(DaoDiagnosticSelectedCandidate {
-                            parent,
-                            preference_subfield: Self::path_control_rank(candidate.path_control)?
-                                + 1,
-                            path: path.iter().map(|hop| Ipv6Addr::from(*hop)).collect(),
+                    self.routing_table
+                        .lookup(&target.octets())
+                        .and_then(|path| {
+                            let parent = if path.len() == 1 {
+                                self.node_address
+                            } else {
+                                Ipv6Addr::from(path[path.len() - 2])
+                            };
+                            let candidate = self
+                                .candidate_map
+                                .get(target)?
+                                .iter()
+                                .find(|candidate| candidate.parent == parent)?;
+                            Some(DaoDiagnosticSelectedCandidate {
+                                parent,
+                                preference_subfield: Self::path_control_rank(
+                                    candidate.path_control,
+                                )? + 1,
+                                path: path.iter().map(|hop| Ipv6Addr::from(*hop)).collect(),
+                            })
                         })
-                    })
                 } else {
                     None
                 };

@@ -787,8 +787,10 @@ mod tests {
         let map = sample_map();
         let mut storage = MemStorage::new();
         let (_, mut rx_state) =
-            DaoManager::provision_root(&mut storage, node(), INSTANCE, dodag()).unwrap();
-        let (fresh, _) = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap();
+            DaoManager::provision_root(&mut storage, node().into(), INSTANCE, dodag().into())
+                .unwrap();
+        let (fresh, _) =
+            DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into()).unwrap();
         assert!(fresh.origin_high_water().is_empty());
 
         persist_map(&mut storage, &mut rx_state, &map);
@@ -800,7 +802,8 @@ mod tests {
             assert_eq!(raw[4], 1);
         }
 
-        let (manager, _) = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap();
+        let (manager, _) =
+            DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into()).unwrap();
         let snapshot = manager.origin_high_water();
         assert_eq!(snapshot.len(), map.len());
         for entry in &snapshot {
@@ -818,7 +821,8 @@ mod tests {
             let mut storage = MemStorage::new();
             let mut record = vec![0u8; HIGH_WATER_PAYLOAD_LEN + SLOT_OVERHEAD];
             provision_redundant(&mut storage, DAO_RX_KEYS, magic, &[], &mut record).unwrap();
-            let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+            let error = DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into())
+                .unwrap_err();
             assert_eq!(error, DaoPersistentOpenError::Corrupt);
         }
     }
@@ -826,11 +830,12 @@ mod tests {
     #[test]
     fn unversioned_drx2_record_fails_closed() {
         let mut storage = MemStorage::new();
-        DaoManager::provision_root(&mut storage, node(), INSTANCE, dodag()).unwrap();
+        DaoManager::provision_root(&mut storage, node().into(), INSTANCE, dodag().into()).unwrap();
         let mut raw = storage.raw(DAO_RX_KEYS[0]).unwrap().to_vec();
         raw[4] = 0;
         storage.set_raw(DAO_RX_KEYS[0], &raw);
-        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        let error =
+            DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into()).unwrap_err();
         assert_eq!(error, DaoPersistentOpenError::Corrupt);
     }
 
@@ -839,14 +844,16 @@ mod tests {
         let mut storage = MemStorage::new();
         storage.set_raw(DAO_RX_KEYS[0], &[0xff; 64]);
         storage.set_raw(DAO_RX_KEYS[1], &[0x00; 10]);
-        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        let error =
+            DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into()).unwrap_err();
         assert_eq!(error, DaoPersistentOpenError::Corrupt);
     }
 
     #[test]
     fn absent_record_reports_missing_without_fabricating_state() {
         let storage = MemStorage::new();
-        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        let error =
+            DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into()).unwrap_err();
         assert_eq!(error, DaoPersistentOpenError::Missing);
     }
 
@@ -865,7 +872,8 @@ mod tests {
             &mut record,
         )
         .unwrap();
-        let error = DaoManager::open_root(&storage, node(), INSTANCE, dodag()).unwrap_err();
+        let error =
+            DaoManager::open_root(&storage, node().into(), INSTANCE, dodag().into()).unwrap_err();
         assert_eq!(error, DaoPersistentOpenError::Corrupt);
     }
 
@@ -903,7 +911,8 @@ mod tests {
         let map = sample_map();
         let mut storage = MemStorage::new();
         let (_, mut rx_state) =
-            DaoManager::provision_root(&mut storage, node(), INSTANCE, dodag()).unwrap();
+            DaoManager::provision_root(&mut storage, node().into(), INSTANCE, dodag().into())
+                .unwrap();
         persist_map(&mut storage, &mut rx_state, &map);
 
         let mut other_dodag = dodag();
@@ -912,9 +921,12 @@ mod tests {
         other_node[15] = 2;
 
         let errors = [
-            DaoManager::open_root(&storage, node(), INSTANCE, other_dodag).unwrap_err(),
-            DaoManager::open_root(&storage, node(), INSTANCE + 1, dodag()).unwrap_err(),
-            DaoManager::open_root(&storage, other_node, INSTANCE, dodag()).unwrap_err(),
+            DaoManager::open_root(&storage, node().into(), INSTANCE, other_dodag.into())
+                .unwrap_err(),
+            DaoManager::open_root(&storage, node().into(), INSTANCE + 1, dodag().into())
+                .unwrap_err(),
+            DaoManager::open_root(&storage, other_node.into(), INSTANCE, dodag().into())
+                .unwrap_err(),
         ];
         for error in errors {
             assert_eq!(error, DaoPersistentOpenError::ScopeMismatch);

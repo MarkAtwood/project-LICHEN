@@ -1219,6 +1219,7 @@ mod tests {
         parent[15] = 0x01;
 
         let ti = TransitInfo {
+            external: false,
             path_control: 0x80,
             path_sequence: 0xf1,
             path_lifetime: 0xff,
@@ -1242,10 +1243,10 @@ mod tests {
 
         let mut e_flag = expected[2..].to_vec();
         e_flag[0] = 0x80;
-        assert_eq!(
-            TransitInfo::from_bytes(&e_flag),
-            Err(RplError::InvalidOption)
-        );
+        // E=1 parses (spec 05 §8.7.1 external reachability); the node-owned
+        // /128 profile rejects it at the routing layer, not the parse layer.
+        let decoded_e = TransitInfo::from_bytes(&e_flag).unwrap();
+        assert!(decoded_e.external);
     }
 
     // ── DODAG Configuration option ────────────────────────────────────────────

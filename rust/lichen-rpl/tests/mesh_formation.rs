@@ -6,7 +6,6 @@
 //!   - Downward routing: root assembles source routes from DAOs
 //!   - Parent switching on link failure
 
-use core::net::Ipv6Addr;
 use lichen_hal::storage::mem::MemStorage;
 use lichen_link::{identity::Identity, keys::Seed};
 use lichen_rpl::{

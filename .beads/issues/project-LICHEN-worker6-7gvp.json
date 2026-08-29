@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-7gvp",
+  "title": "[review] E=1 TransitInfo parse relaxation: non-root nodes now forward signed E=1 DAOs (wasted airtime, uncovered behavior change)",
+  "description": "P2, wave-5 review. message.rs:1246-1249 makes E=1 parse (previously aborted parse). dao_parents_for_source (lichen-node/src/routing/router.rs:1151-1155) consumes TransitInfo without checking external; previously node.rs:597-601 refused to forward E=1 transits; now non-roots forward signed E=1 DAOs toward a root that rejects them (routing.rs:1504) - wasted airtime on LoRa, behavior change with no test. Fix: if transit.external { return None; } in dao_parents_for_source, or add a test documenting the new forwarding behavior as intended.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T00:59:29.980855Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T00:59:29.980855Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7gvp",
+      "depends_on_id": "project-LICHEN-2auf.44.9.2",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T00:59:30.135075Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

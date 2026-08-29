@@ -105,7 +105,7 @@ fn dao_rebuild_and_expiry_preserve_static_prefix_while_wire_stays_host_only() {
     let prefix = RouteTarget::new(prefix, 64).unwrap();
     let mut destination = *prefix.prefix();
     destination[15] = 99;
-    let mut manager = DaoManager::diagnostic_root(root, 0, root);
+    let mut manager = DaoManager::diagnostic_root(root.into(), 0, root.into());
     assert!(manager
         .routing_table_mut()
         .add_prefix_route(prefix, root, &[root]));
@@ -118,7 +118,7 @@ fn dao_rebuild_and_expiry_preserve_static_prefix_while_wire_stays_host_only() {
     manager
         .process_route_state_diagnostic(
             &route_dao(1, 1, 1, host, root),
-            authority,
+            authority.into(),
             timing,
             limits(),
         )
@@ -136,13 +136,13 @@ fn dao_rebuild_and_expiry_preserve_static_prefix_while_wire_stays_host_only() {
         Some([root].as_slice())
     );
 
-    let before = manager.route_state_diagnostic(authority, 2);
+    let before = manager.route_state_diagnostic(authority.into(), 2);
     let mut non_host = route_dao(2, 2, 255, host, root);
     non_host[7] = 127;
     assert!(manager
-        .process_route_state_diagnostic(&non_host, authority, timing, limits())
+        .process_route_state_diagnostic(&non_host, authority.into(), timing, limits())
         .is_err());
-    assert_eq!(manager.route_state_diagnostic(authority, 2), before);
+    assert_eq!(manager.route_state_diagnostic(authority.into(), 2), before);
     assert_eq!(
         manager.routing_table().lookup(&destination),
         Some([root].as_slice())
@@ -154,7 +154,7 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     let root = address(1);
     let host = address(2);
     let authority = address(3);
-    let mut manager = DaoManager::diagnostic_root(root, 0, root);
+    let mut manager = DaoManager::diagnostic_root(root.into(), 0, root.into());
     for index in 0..MAX_ROUTES {
         let mut prefix = [0xfd; 16];
         prefix[13..15].copy_from_slice(&(index as u16).to_be_bytes());
@@ -167,7 +167,7 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
 
     let result = manager.process_route_state_diagnostic(
         &route_dao(1, 1, 255, host, root),
-        authority,
+        authority.into(),
         DaoProcessTiming {
             now_seconds: 0,
             lifetime_unit_seconds: 1,
@@ -178,5 +178,7 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     assert!(result.is_err());
     assert_eq!(manager.routing_table().len(), MAX_ROUTES);
     assert_eq!(manager.routing_table().lookup(&host), None);
-    assert!(manager.route_state_diagnostic(authority, 1).is_empty());
+    assert!(manager
+        .route_state_diagnostic(authority.into(), 1)
+        .is_empty());
 }

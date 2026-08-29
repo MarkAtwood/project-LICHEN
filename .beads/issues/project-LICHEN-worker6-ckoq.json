@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ckoq",
+  "title": "[track] flaky EDHOC tests: 2 python coap tests fail intermittently, pass in isolation",
+  "description": "P3, noted by wave-5 agent: 2 pre-existing EDHOC tests in python/tests/coap fail in the full-suite run but pass in isolation (test-ordering/shared-state interference, possibly the fixture regeneration side effects from the C_I transport encoding change). Identify the tests, find the cross-test contamination (module-level state? shared fixture cache?), fix or mark with a documented fixture-scoping change. Do not just reorder tests to mask it.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T00:59:30.651439Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T00:59:30.651439Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ckoq",
+      "depends_on_id": "project-LICHEN-worker6-gt6u",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T00:59:30.870874Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
