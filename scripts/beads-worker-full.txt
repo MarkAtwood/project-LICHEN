@@ -33,8 +33,9 @@ Rules:
 - Other workers are running - don't hog all the beads
 
 Coordination:
-- Multiple agents (workers + interactive sessions) share this repo
-- Beads is the coordination mechanism - always check bd ready before starting
-- If a bead is claimed, skip it - someone else is working on it
-- Commit frequently so others see your progress
-- Don't modify files another agent is actively working on (check git status across worktrees if unsure)
+- Multiple agents run in the SAME directory, SAME branch, NO worktrees
+- You will collide if you edit the same file as another agent
+- Beads prevents this: each bead lists affected files, claim before touching
+- If a bead is claimed, skip it - someone else owns those files right now
+- Commit frequently so your changes are visible to others
+- If git status shows uncommitted changes you didn't make, STOP - another agent is mid-edit

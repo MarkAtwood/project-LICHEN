@@ -410,6 +410,189 @@ mod tests {
         }
     }
 
+    // Hardcoded hex literals from test/vectors/announce_signed_data.json
+    // (format_version 2). Independent oracle: PyNaCl-backed reference generator.
+    // Never derive these bytes from the Rust implementation.
+    const VECTOR_NAME: [&str; 4] = [
+        "announce_signed_data_transcript",
+        "announce_minimal_no_app_data",
+        "announce_rx_channel_7_max",
+        "announce_seq_num_boundary_max",
+    ];
+    const VECTOR_FRAME: [&str; 4] = [
+        "01030012347159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab68fb8026560205a281405ca544742aab41f72ff9ebbbcc61fd493f0a4ad7264839149ea51ca842ef1bf823c24dffa5e0ddeadbeef",
+        "01000000017159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab625e348c05c8fbd085e57ff7c615a4bd233bb00f3056e7d102850076699fbdb349c656cc7f5db68b09eaa343c8d4cb605",
+        "01070000647159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab68a2c48c664af377c420542300b4de6cb4806f1d53d1d24a6169e9c19c6123d0307cce9c507c5b3230357f5d0b2af3207",
+        "010000ffff7159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6e85c70acee77bb8a93b7236b542c26fa019a1746936f06af4b4b565fca80ec4931c80ddab51ae04cc1234c289bd64a02",
+    ];
+    const VECTOR_TRANSCRIPT: [&str; 4] = [
+        "4c494348454e2d414e4e4f554e43452d7631007159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab61234030004deadbeef",
+        "4c494348454e2d414e4e4f554e43452d7631007159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab60001000000",
+        "4c494348454e2d414e4e4f554e43452d7631007159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab60064070000",
+        "4c494348454e2d414e4e4f554e43452d7631007159bd633b2e9120207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6ffff000000",
+    ];
+    const VECTOR_SIGNATURE: [&str; 4] = [
+        "8fb8026560205a281405ca544742aab41f72ff9ebbbcc61fd493f0a4ad7264839149ea51ca842ef1bf823c24dffa5e0d",
+        "25e348c05c8fbd085e57ff7c615a4bd233bb00f3056e7d102850076699fbdb349c656cc7f5db68b09eaa343c8d4cb605",
+        "8a2c48c664af377c420542300b4de6cb4806f1d53d1d24a6169e9c19c6123d0307cce9c507c5b3230357f5d0b2af3207",
+        "e85c70acee77bb8a93b7236b542c26fa019a1746936f06af4b4b565fca80ec4931c80ddab51ae04cc1234c289bd64a02",
+    ];
+    const VECTOR_PUBKEY: &str = "207a067892821e25d770f1fba0c47c11ff4b813e54162ece9eb839e076231ab6";
+    const VECTOR_SIGNING_SEED: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn vector_oracle_key() -> (Identity, PublicKey) {
+        let seed_bytes: [u8; 32] = hex::decode(VECTOR_SIGNING_SEED)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let identity = Identity::from_seed(Seed::new(seed_bytes));
+        let pubkey_bytes: [u8; 32] = hex::decode(VECTOR_PUBKEY).unwrap().try_into().unwrap();
+        (identity, PublicKey::new(pubkey_bytes))
+    }
+
+    #[test]
+    fn hardcoded_canonical_vectors_match_production_codec_and_verifier() {
+        let (identity, pubkey) = vector_oracle_key();
+        assert_eq!(
+            identity.pubkey, pubkey,
+            "signing seed must derive the oracle public key"
+        );
+
+        for i in 0..4 {
+            let frame = hex::decode(VECTOR_FRAME[i]).unwrap();
+            let expected_transcript = hex::decode(VECTOR_TRANSCRIPT[i]).unwrap();
+            let signature: [u8; 48] = hex::decode(VECTOR_SIGNATURE[i])
+                .unwrap()
+                .try_into()
+                .unwrap();
+
+            let announce = Announce::from_bytes(&frame).unwrap();
+            let mut transcript = [0u8; 256];
+            let transcript_len = announce.write_signed_data(&mut transcript).unwrap();
+            assert_eq!(
+                &transcript[..transcript_len],
+                expected_transcript,
+                "{}",
+                VECTOR_NAME[i]
+            );
+            assert!(
+                schnorr::verify(&pubkey, &transcript[..transcript_len], &signature),
+                "{}",
+                VECTOR_NAME[i]
+            );
+        }
+    }
+
+    #[test]
+    fn hardcoded_vector_frame_accepted_by_production_processor() {
+        let frame = hex::decode(VECTOR_FRAME[0]).unwrap();
+        let announce = Announce::from_bytes(&frame).unwrap();
+        let gradient_table = GradientTable::new(64);
+        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+
+        let result = processor.process(&announce, link_local(0xAA), 1000);
+        assert!(result.accepted, "{:?}", result.reject_reason);
+        let peer = result.peer.unwrap();
+        assert_eq!(
+            peer.iid, *announce.originator_iid,
+            "peer IID must match the oracle vector IID"
+        );
+    }
+
+    /// Verify the oracle signature fails against a mutated canonical transcript.
+    fn oracle_signature_fails(mutated: &[u8]) -> bool {
+        let (_, pubkey) = vector_oracle_key();
+        let signature: [u8; 48] = hex::decode(VECTOR_SIGNATURE[0])
+            .unwrap()
+            .try_into()
+            .unwrap();
+        !schnorr::verify(&pubkey, mutated, &signature)
+    }
+
+    #[test]
+    fn oracle_signature_rejected_over_wrong_domain() {
+        let mut transcript = hex::decode(VECTOR_TRANSCRIPT[0]).unwrap();
+        assert_eq!(&transcript[..19], b"LICHEN-ANNOUNCE-v1\0");
+        transcript[18] = b'2'; // LICHEN-ANNOUNCE-v2
+        assert!(oracle_signature_fails(&transcript));
+    }
+
+    #[test]
+    fn oracle_signature_rejected_over_wrong_app_len() {
+        let mut transcript = hex::decode(VECTOR_TRANSCRIPT[0]).unwrap();
+        transcript[62] = 0x00;
+        transcript[63] = 0x05; // declared 5, actual app is 4 bytes
+        assert!(oracle_signature_fails(&transcript));
+    }
+
+    #[test]
+    fn oracle_signature_rejected_over_truncated_app() {
+        let transcript = hex::decode(VECTOR_TRANSCRIPT[0]).unwrap();
+        assert!(oracle_signature_fails(&transcript[..transcript.len() - 1]));
+    }
+
+    #[test]
+    fn oracle_signature_rejected_over_seq_endianness_flip() {
+        let mut transcript = hex::decode(VECTOR_TRANSCRIPT[0]).unwrap();
+        transcript[59] = 0x34;
+        transcript[60] = 0x12; // seq 0x1234 read little-endian
+        assert!(oracle_signature_fails(&transcript));
+    }
+
+    #[test]
+    fn oracle_signature_rejected_over_legacy_transcript_layout() {
+        // Legacy layout: IID || pubkey || seq || channel || app, with no
+        // domain separator and no app-data length. The canonical oracle
+        // signature must not verify over it, and the production builder
+        // must never emit it.
+        let canonical = hex::decode(VECTOR_TRANSCRIPT[0]).unwrap();
+        let mut legacy = Vec::with_capacity(47);
+        legacy.extend_from_slice(&canonical[19..62]); // iid || pubkey || seq || channel
+        legacy.extend_from_slice(&canonical[64..]); // app data, no length prefix
+        assert_eq!(legacy.len(), 47);
+        assert_ne!(legacy, canonical);
+        assert!(oracle_signature_fails(&legacy));
+    }
+
+    #[test]
+    fn processor_rejects_signature_over_legacy_transcript() {
+        // Canonical-only verification: an announce signed over the legacy
+        // IID||pubkey||seq||channel||app transcript is rejected (no
+        // accept-both migration path, mirroring the Python reference).
+        let (identity, _) = vector_oracle_key();
+        let canonical = hex::decode(VECTOR_TRANSCRIPT[0]).unwrap();
+        let mut legacy = Vec::with_capacity(47);
+        legacy.extend_from_slice(&canonical[19..62]);
+        legacy.extend_from_slice(&canonical[64..]);
+        let signature = sign(&identity.privkey, &identity.pubkey, &legacy);
+
+        let app_data = &canonical[64..];
+        let seq_num = u16::from_be_bytes([canonical[59], canonical[60]]);
+        let rx_channel = canonical[61];
+        let builder = AnnounceBuilder {
+            originator_iid: &identity.iid,
+            pubkey: identity.pubkey.as_bytes(),
+            seq_num,
+            hop_count: 0,
+            rx_channel,
+            signature: &signature,
+            app_data,
+        };
+        let mut buf = [0u8; 256];
+        let len = builder.write_to(&mut buf).unwrap();
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+
+        let gradient_table = GradientTable::new(64);
+        let mut processor = AnnounceProcessor::new(gradient_table, ula_prefix());
+        let result = processor.process(&announce, link_local(0xAA), 1000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::InvalidSignature)
+        );
+    }
+
     #[test]
     fn seq_gt_normal() {
         assert!(seq_gt(10, 5));

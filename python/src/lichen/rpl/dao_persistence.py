@@ -58,7 +58,10 @@ _TX_INITIALIZED_MARKER: Final[bytes] = b"LICHEN-DAO-TX-INITIALIZED-v1\n"
 _DAO_ANCHOR_DOMAIN: Final[bytes] = b"LICHEN-DAO-STATE-ANCHOR-v1\x00"
 _RX_CATALOG_MAGIC: Final[bytes] = b"DAOC"
 _RX_CATALOG_ANCHOR_KIND: Final[bytes] = b"rx-catalog"
-_MAX_RX_CATALOG_ENTRIES: Final[int] = 512
+# Aligned with the pin-table budget (_MAX_TRUST_ENTRIES in key_persistence.py):
+# the catalog must never cap out below the number of origins the trust store
+# can pin. The encoded-size bound below scales with this constant.
+_MAX_RX_CATALOG_ENTRIES: Final[int] = 10000
 # magic (4) + revision (8) + entry count (4) + entries + checksum (32)
 _RX_CATALOG_MAX_SIZE: Final[int] = 4 + 8 + 4 + 32 + _MAX_RX_CATALOG_ENTRIES * (1 + 32 + 8 + 64)
 
@@ -275,6 +278,16 @@ class TwoSlotFilePersistence(DaoPersistence):
         restoration of the catalog itself is detected. On load, a catalog
         entry without valid slot files fails closed instead of degrading to a
         first-DAO bootstrap.
+
+    TX initialization marker:
+        The first ``store_tx_state`` establishes the durable marker file
+        ``.dao_tx_initialized`` before the anchored slot transaction. Once
+        the marker exists, missing or invalid TX slot files fail closed
+        unconditionally (on load and on store, independent of the legacy
+        fail_closed flag and of allow_tx_bootstrap): a deleted slot pair must
+        never again look like a first bootstrap or reuse Origin Sequence 1.
+        Only wiping the entire store — marker, slots, and anchor record —
+        returns the backend to bootstrap-authorized first use.
     """
 
     @property
@@ -298,7 +311,17 @@ class TwoSlotFilePersistence(DaoPersistence):
         Per spec section 8.6: "Missing, corrupt, or unavailable receive state
         MUST fail closed." When fail_closed=True, load operations raise
         DaoPersistenceError on corrupt/missing state. When fail_closed=False,
-        they return None (for testing scenarios).
+        they return None (for testing scenarios) — but only for state with no
+        durable evidence of prior initialization.
+
+        Deletion/corruption detection is UNCONDITIONAL (independent of
+        fail_closed) for state backed by durable evidence: an RX key recorded
+        in the anchored floor catalog always raises when its slot files are
+        missing or invalid, and a TX store whose initialization marker exists
+        always raises when its slot files are missing or invalid. This is
+        required by spec section 8.6 and is intentional; fail_closed=False is
+        a legacy testing flag and never downgrades catalog- or marker-backed
+        detection.
 
         Production deployments requiring spec compliance MUST use fail_closed=True.
         """
@@ -317,7 +340,11 @@ class TwoSlotFilePersistence(DaoPersistence):
 
         Args:
             base_dir: Directory for persistence files.
-            fail_closed: If True, missing/corrupt state raises on load.
+            fail_closed: If True, missing/corrupt state raises on load. If
+                False (legacy testing flag), loads return None only for state
+                with no durable evidence of prior initialization; catalog-
+                recorded RX keys and TX-marker-initialized stores still raise
+                unconditionally per spec section 8.6.
 
         Raises:
             DaoPersistenceError: If base_dir exists and is a file (not a directory).
@@ -437,9 +464,13 @@ class TwoSlotFilePersistence(DaoPersistence):
             prefix=".dao-tx-marker.", suffix=".tmp", dir=self._base_dir
         )
         temporary = Path(temporary_name)
+        # Once os.fdopen takes ownership, the with-block exit closes the
+        # descriptor; closing it again here could hit a recycled fd number.
+        owned_by_stream = False
         try:
             os.fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "wb", closefd=True) as stream:
+                owned_by_stream = True
                 stream.write(_TX_INITIALIZED_MARKER)
                 stream.flush()
                 os.fsync(stream.fileno())
@@ -450,8 +481,9 @@ class TwoSlotFilePersistence(DaoPersistence):
             finally:
                 os.close(directory)
         except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(descriptor)
+            if not owned_by_stream:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
             with contextlib.suppress(OSError):
                 temporary.unlink(missing_ok=True)
             raise
@@ -480,17 +512,22 @@ class TwoSlotFilePersistence(DaoPersistence):
 
         fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
         tmp_path = Path(tmp_name)
+        # Once os.fdopen takes ownership, the with-block exit closes the
+        # descriptor; closing it again here could hit a recycled fd number.
+        owned_by_stream = False
         try:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb", closefd=True) as file:
+                owned_by_stream = True
                 file.write(slot_data)
                 file.flush()
                 os.fsync(file.fileno())
             os.replace(tmp_path, path)
             os.chmod(path, 0o600)
         except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(fd)
+            if not owned_by_stream:
+                with contextlib.suppress(OSError):
+                    os.close(fd)
             with contextlib.suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
             raise
@@ -682,16 +719,21 @@ class TwoSlotFilePersistence(DaoPersistence):
             prefix=".dao-rx-catalog.", suffix=".tmp", dir=self._base_dir
         )
         temporary = Path(temporary_name)
+        # Once os.fdopen takes ownership, the with-block exit closes the
+        # descriptor; closing it again here could hit a recycled fd number.
+        owned_by_stream = False
         try:
             os.fchmod(descriptor, 0o600)
             with os.fdopen(descriptor, "wb", closefd=True) as stream:
+                owned_by_stream = True
                 stream.write(encoded)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, self._rx_catalog_path())
         except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(descriptor)
+            if not owned_by_stream:
+                with contextlib.suppress(OSError):
+                    os.close(descriptor)
             with contextlib.suppress(OSError):
                 temporary.unlink(missing_ok=True)
             raise
@@ -793,12 +835,17 @@ class TwoSlotFilePersistence(DaoPersistence):
         anchor_key: bytes,
         *,
         allow_initial: bool,
+        initialized_marker: bool = False,
     ) -> None:
         """Write to the older slot with incremented generation.
 
         Thread-safe: uses a lock to prevent TOCTOU race where concurrent
         callers could read the same slot state, both compute the same
         "older" slot and generation, and one write would be lost.
+
+        ``initialized_marker`` records that a durable TX-initialization
+        marker pre-existed this store; combined with no recoverable anchored
+        state it proves the slot files were deleted (spec section 8.6).
         """
         with self._write_lock, self._process_lock():
             self._write_to_older_slot_locked(
@@ -808,6 +855,7 @@ class TwoSlotFilePersistence(DaoPersistence):
                 payload,
                 anchor_key,
                 allow_initial=allow_initial,
+                initialized_marker=initialized_marker,
             )
 
     def _write_to_older_slot_locked(
@@ -819,6 +867,7 @@ class TwoSlotFilePersistence(DaoPersistence):
         anchor_key: bytes,
         *,
         allow_initial: bool,
+        initialized_marker: bool = False,
     ) -> None:
         """Write to the older slot with incremented generation.
 
@@ -833,13 +882,23 @@ class TwoSlotFilePersistence(DaoPersistence):
         )
         slot0 = self._read_slot(path0)
         slot1 = self._read_slot(path1)
-        if (
-            self._fail_closed
-            and slot0 is None
-            and slot1 is None
-            and self._any_slot_exists(path0, path1)
-        ):
+        # Wholly invalid slot files that exist on disk are corrupt durable
+        # state, not a fresh store. A write here would silently reset the
+        # acknowledged generation, so this fails closed unconditionally per
+        # spec section 8.6 — the legacy fail_closed flag only governs loads
+        # of state with no durable evidence of prior initialization. The
+        # corrupt artifacts are preserved for forensics.
+        if slot0 is None and slot1 is None and self._any_slot_exists(path0, path1):
             raise DaoPersistenceError("refusing to overwrite corrupt DAO persistence state")
+
+        # A pre-existing TX-initialization marker proves a store was
+        # attempted before. With no recoverable anchored slot state and no
+        # external anchor record, the only explanation is slot deletion:
+        # reusing Origin Sequence 1 here would replay an acknowledged
+        # sequence (spec section 8.6). Bootstrap authorization does not
+        # override durable evidence of prior initialization.
+        if initialized_marker and current_result is None:
+            raise DaoPersistenceError("initialized TX state was deleted")
 
         if current_result is not None:
             if sequence < current_result[2]:
@@ -874,6 +933,10 @@ class TwoSlotFilePersistence(DaoPersistence):
             raise TypeError("dao_bytes must be immutable bytes")
         path0 = self._tx_slot_path(0)
         path1 = self._tx_slot_path(1)
+        # Capture whether the durable initialization marker pre-existed this
+        # store: if it did and no anchored slot state survives, the TX slots
+        # were deleted and the store must fail closed (spec section 8.6).
+        marker_existed = self._tx_marker_exists()
         # Establish the legacy initialization sentinel before the anchored
         # state transaction.  A marker failure therefore cannot report a
         # failed store after the slot and external rollback anchor committed.
@@ -885,6 +948,7 @@ class TwoSlotFilePersistence(DaoPersistence):
             dao_bytes,
             self._state_anchor_key(b"tx"),
             allow_initial=self._allow_tx_bootstrap,
+            initialized_marker=marker_existed,
         )
 
     def load_tx_state(self) -> TxState | None:
@@ -900,16 +964,50 @@ class TwoSlotFilePersistence(DaoPersistence):
                 missing_message="initialized TX state was deleted",
             )
         if result is None:
+            # The durable TX-initialization marker proves a store was
+            # attempted before, so missing or invalid slot files are
+            # deletion or corruption — never a fresh node. This fails closed
+            # unconditionally per spec 8.6, independent of the legacy
+            # fail_closed flag and of allow_tx_bootstrap.
+            if marker_exists:
+                if self._any_slot_exists(path0, path1):
+                    raise DaoPersistenceError("TX state corrupt")
+                raise DaoPersistenceError("initialized TX state was deleted")
             # Per spec 8.6, distinguish missing (fresh node) from corrupt:
             # - No slots exist: fresh node, return None (allowed to start fresh)
             # - Slots exist but invalid: corrupt state, fail closed if configured
-            if self._fail_closed and (self._any_slot_exists(path0, path1) or marker_exists):
+            if self._fail_closed and self._any_slot_exists(path0, path1):
                 raise DaoPersistenceError("TX state corrupt")
             return None
         _, _, sequence, payload = result
         return TxState(sequence, payload)
 
     def store_rx_floor(self, pubkey: bytes, sequence: int, dao_digest: bytes) -> None:
+        """Crash-safely commit one RX replay floor (spec section 8.6).
+
+        Commit order: the per-key slot pair and its external rollback anchor
+        first, then the catalog record, so the catalog's high-water never
+        leads the committed slots.
+
+        Failure modes:
+        - Capacity and catalog/anchor liveness are pre-checked BEFORE the
+          slot commit: those failures are deterministic and leave persistent
+          state untouched (a new origin at catalog capacity, or a catalog
+          whose anchored revision cannot be validated, never writes slots).
+        - A failure during the catalog record (e.g. ENOSPC on the catalog
+          write, or an external anchor compare-and-advance conflict) occurs
+          AFTER the slot floor is durably committed. The commit is therefore
+          INDETERMINATE at the time of the error: the raised
+          DaoPersistenceError does not imply the floor was rejected. The
+          committed slot floor remains effective and authoritative; loads
+          heal the catalog from it when the catalog can be written and fail
+          closed (preserving the committed floor) while it cannot. Recovery
+          never re-opens a replay window but may require freeing storage.
+
+        Raises:
+            DaoPersistenceError: If the pre-checks fail or the commit fails.
+            ValueError: If pubkey/sequence/dao_digest are malformed.
+        """
         if type(pubkey) is not bytes:
             raise TypeError("pubkey must be immutable bytes")
         if len(pubkey) not in (16, 32):
@@ -923,6 +1021,12 @@ class TwoSlotFilePersistence(DaoPersistence):
         path0 = self._rx_slot_path(pubkey, 0)
         path1 = self._rx_slot_path(pubkey, 1)
         with self._write_lock, self._process_lock():
+            # Pre-check catalog capacity and anchor liveness BEFORE the slot
+            # commit so a doomed store fails deterministically instead of
+            # leaving an indeterminate post-commit state.
+            _revision, entries, _expected = self._read_rx_catalog_locked()
+            if pubkey not in entries and len(entries) >= _MAX_RX_CATALOG_ENTRIES:
+                raise DaoPersistenceError("DAO RX floor catalog capacity exceeded")
             self._write_to_older_slot_locked(
                 path0,
                 path1,
@@ -992,10 +1096,14 @@ class TwoSlotFilePersistence(DaoPersistence):
         if result is None:
             if catalog_entry is not None:
                 # The anchored catalog records that this pinned key committed
-                # a floor, so missing slot files are deletion, not a first
-                # DAO. Fail closed per spec 8.6 ("Missing, corrupt, or
-                # unavailable receive state MUST fail closed") regardless of
-                # the legacy fail_closed setting.
+                # a floor, so missing or invalid slot files are deletion or
+                # corruption, not a first DAO. Fail closed per spec 8.6
+                # ("Missing, corrupt, or unavailable receive state MUST fail
+                # closed") regardless of the legacy fail_closed setting, and
+                # name the actual condition: slot files present but invalid
+                # are corruption, absent slot files are deletion.
+                if self._any_slot_exists(path0, path1):
+                    raise DaoPersistenceError(f"RX floor corrupt for pubkey {pubkey.hex()}")
                 raise DaoPersistenceError(
                     f"initialized RX floor was deleted for pubkey {pubkey.hex()}"
                 )

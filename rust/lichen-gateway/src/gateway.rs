@@ -1640,6 +1640,26 @@ mod tests {
 
     static PERSISTENT_TEST_PATH: AtomicU64 = AtomicU64::new(1);
 
+    /// Create a state directory that hardened FileStorage accepts (0700).
+    fn private_test_dir(path: &std::path::Path) {
+        std::fs::create_dir_all(path).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+    }
+
+    /// Write a raw record file the way hardened FileStorage would (0600).
+    fn write_record_raw(path: &std::path::Path, bytes: &[u8]) {
+        std::fs::write(path, bytes).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+    }
+
     fn ll(iid: u8) -> Ipv6Addr {
         Ipv6Addr([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid])
     }
@@ -1663,6 +1683,8 @@ mod tests {
             std::process::id()
         ));
         let floor_path = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_path);
         let context = Context::new(&[0x31; 16], None, None, &[1], &[2]).unwrap();
         let context_id = context.context_id();
         let state = SenderSequenceState {
@@ -1693,6 +1715,8 @@ mod tests {
             std::process::id()
         ));
         let floor_path = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_path);
         let context = Context::new(&[0x41; 16], None, None, &[1], &[2]).unwrap();
         let context_id = context.context_id();
         let sealing_seed = [0x42; 32];
@@ -1765,6 +1789,8 @@ mod tests {
             std::process::id()
         ));
         let floor_path = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_path);
         let context = Context::new(&[0x51; 16], None, None, &[1], &[2]).unwrap();
         let context_id = context.context_id();
         let sealing_seed = [0x52; 32];
@@ -1829,7 +1855,7 @@ mod tests {
             "lichen-gateway-invalid-floor-{}-{suffix}",
             std::process::id()
         ));
-        std::fs::create_dir_all(&path).unwrap();
+        private_test_dir(&path);
         let identity = Identity::from_seed(Seed::new([0x61; 32]));
         let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let coordinator = GatewayCoordinator::new_ephemeral(root, 60, 8).unwrap();
@@ -1866,8 +1892,8 @@ mod tests {
         let replay_path = path.join("gateway-slot-replay.bin");
         let replay_floor_path = floor_root.join("gateway-slot-replay.generation");
         let sealing_seed = [0x72; 32];
-        std::fs::create_dir_all(&path).unwrap();
-        std::fs::create_dir_all(&floor_root).unwrap();
+        private_test_dir(&path);
+        private_test_dir(&floor_root);
         let trust = TrustStore::new_ephemeral(8).unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             root,

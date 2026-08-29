@@ -2264,7 +2264,7 @@ def test_authenticated_malformed_fragment_aborts_without_allocating() -> None:
     ]
 
 
-def test_tofu_eviction_retires_stale_peer_policy_and_preserves_replay_floor() -> None:
+def test_tofu_eviction_retires_stale_peer_policy_and_invalidates_replay_state() -> None:
     established = [Identity.from_seed(seed.to_bytes(32, "big")) for seed in range(65, 129)]
     newcomer = Identity.from_seed(bytes([0xF1]) * 32)
     local_radio = _AckWireRadio()
@@ -2314,7 +2314,9 @@ def test_tofu_eviction_retires_stale_peer_policy_and_preserves_replay_floor() ->
     assert id(victim_context) not in local_link._schc_peer_context_issuances
     assert id(first_receipt) not in local_link._verified_receipts
     assert victim.pubkey not in local_link._key_generations
-    assert local_link.replay_protector.highest(victim.pubkey) == 0
+    # Spec 02 section 4.2 rule 5: evicting the pinned (SIID, key) binding
+    # MUST also invalidate all replay state for the evicted signer.
+    assert local_link.replay_protector.highest(victim.pubkey) == -1
     assert len(local_link._pinned_keys) == 64
     assert len(local_link._schc_peer_contexts) == 63
 
@@ -2356,12 +2358,13 @@ def test_tofu_eviction_blocker_covers_active_and_tombstoned_fragmentation() -> N
     assert manager.replacement_occupied(REMOTE_IDENTITY)
     assert any(key[1] == REMOTE_IDENTITY for key in manager._floors)
 
-    replay_floor = harness.local_link.replay_protector.highest(REMOTE_IDENTITY)
     remote_iid = PeerIdentity.from_pubkey(REMOTE_IDENTITY).iid
     harness.local_link._retire_evicted_peer_unlocked(remote_iid, REMOTE_IDENTITY)
     assert REMOTE_IDENTITY not in harness.local_link._key_generations
     assert not manager.replacement_occupied(REMOTE_IDENTITY)
-    assert harness.local_link.replay_protector.highest(REMOTE_IDENTITY) == replay_floor
+    # Spec 02 section 4.2 rule 5: eviction MUST invalidate all replay state
+    # for the evicted signer, so no high-water survives the retire.
+    assert harness.local_link.replay_protector.highest(REMOTE_IDENTITY) == -1
 
 
 def test_tofu_capacity_rejects_active_session_saturation_until_hold_down_expires() -> None:

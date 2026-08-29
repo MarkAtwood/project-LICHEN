@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-up5p",
+  "title": "Flaky timing tests fail under load: tofu_capacity hold_down, edhoc_transport handshake, edhoc_responder deadline",
+  "description": "P2 flakiness (observed 2026-08-29, machine under parallel load): (1) python/tests/schc/test_fragment.py::test_tofu_capacity_rejects_active_session_saturation_until_hold_down_expires passes in isolation but fails in some full-suite/scoped runs (hold-down timer race). (2) python/tests/coap/test_edhoc_transport.py::test_edhoc_handshake_via_coap and 3 TestEdhocResource tests in python/tests/coap/test_edhoc_responder.py (completed_m3_can_publish_after_deadline, completing_session_holds_capacity_until_finalized, close_during_completion_cancels_publication_without_success) failed one full-suite run, passed the next (wall-clock deadline dependence). Fix by injecting a fake clock / relaxing wall-clock deadlines rather than raising timeouts blindly. Full suite baseline when healthy: 12043 passed, 254 skipped, 3 xfailed.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T19:05:38.885933Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T19:05:38.885933Z"
+}

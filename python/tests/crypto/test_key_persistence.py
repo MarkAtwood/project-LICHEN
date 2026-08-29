@@ -418,6 +418,32 @@ class TestFileKeyStore:
 
         assert [slot.read_bytes() for slot in slots] == before
 
+    def test_post_startup_corrupt_slots_reject_write_without_anchor_record(self, tmp_path):
+        """A store must not reset the acknowledged seed generation over corruption.
+
+        Post-startup corruption with a revision anchor that retains no
+        record (lost/rotated) leaves the wholly invalid slot files as the
+        only durable evidence. store_seed must enter terminal failure
+        instead of treating the store as fresh (generation 1), and must
+        preserve the corrupt artifacts, regardless of the legacy fail_closed
+        flag.
+        """
+        store = FileKeyStore(tmp_path, fail_closed=False)
+        store.store_seed(SEED_ALICE)
+        slots = [tmp_path / "node_seed_0.bin", tmp_path / "node_seed_1.bin"]
+        for slot in slots:
+            if slot.exists():
+                slot.write_bytes(b"CORRUPT")
+        before = {slot.name: slot.read_bytes() for slot in slots if slot.exists()}
+        _anchor(tmp_path).states.clear()
+
+        restarted = FileKeyStore(tmp_path, fail_closed=False)
+        with pytest.raises(KeyPersistenceError, match="refusing to overwrite corrupt seed"):
+            restarted.store_seed(SEED_BOB)
+        assert {slot.name: slot.read_bytes() for slot in slots if slot.exists()} == before
+        with pytest.raises(KeyPersistenceError, match="seed state corrupt"):
+            FileKeyStore(tmp_path, fail_closed=True).load_seed()
+
     def test_fail_closed_returns_none_when_missing(self, tmp_path):
         """FileKeyStore returns None when fail_closed and no files exist."""
         store = FileKeyStore(tmp_path, fail_closed=True)

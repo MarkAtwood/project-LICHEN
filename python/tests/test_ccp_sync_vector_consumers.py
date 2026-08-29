@@ -22,28 +22,29 @@ Drives the real lichen Python implementation through every vector case in:
 - ``test/vectors/ccp_slot_hash_carry.json`` via :func:`lichen.timing.sfn.slot_for`
   and :func:`lichen.ccp.slot_hash` (wrapping-u32 sum before non-power-of-two moduli).
 
-Known divergences (real behavior asserted; tracked in beads):
+Resolved divergences (vector files regenerated to match real behavior):
 
-- **Two real CCP-12 channel mappings disagree.** ``lichen.link.channel.
-  synchronized_hop_channel`` computes ``1 + h % max(n_channels - 1, 1)``
-  (avoids CH0), while ``lichen.sim.tdma.synchronized_hop_channel`` computes
-  ``1 + h % max(n, 3)`` per the spec 02a pseudocode. On identical inputs they
-  return different channels (sfn=0/seed=0/8ch: link=4, sim=6). Each vector
-  file pins a different implementation: sync_hop.json matches link, ccp16-hop.json
-  matches sim. Both are driven through their matching real surface; the hazard
-  is filed in beads.
-- ``ccp16-hop.json`` ``hop_sfn0_8ch``/``sfn_wrap`` channels (6, 2) contradict
-  sync_hop.json's channels (4, 4) for identical (sfn, seed, n_channels) inputs;
-  each file is faithful to a *different* real implementation (see above).
-- ``ccp9-rendezvous.json`` ``hash_based_peer_rendezvous``: expected channel 4
-  requires preimage ``eui || sfn_le`` with mod ``(n-1)``, which only the JSON
-  generator computes; the real priority-3 surface hashes ``eui || epoch_le ||
-  sfn_le`` and returns 5 at epoch=0. The pinned ``expected_slot=42`` is not
-  produced by ``slot_for(eui, 12345, ns)`` for ANY ``ns`` in [2, 4096].
+- The two real CCP-12 channel mappings were unified: ``lichen.link.channel``
+  and ``lichen.sim.tdma`` both implement ``1 + hash_32(seed_le || sfn_le) %
+  (n_channels - 1)`` (CH0 reserved, fail-closed CH0 when no data channel
+  exists). ``sync_hop.json`` and the regenerated ``ccp16-hop.json`` pin the
+  same mapping for identical inputs; every hop vector is driven through BOTH
+  surfaces.
 - ``ccp16-desync.json`` ``desync_recovery_beacon_revalidate`` pins
-  ``expected="joined"`` after ONE valid beacon, but the implemented §14.7 FSM
-  goes DESYNCED→RECOVERING on the first valid beacon and needs three
-  consecutive valid beacons for SYNCED.
+  ``expected="recovering"`` — the implemented §14.7 FSM goes
+  DESYNCED→RECOVERING on the first valid beacon and reaches SYNCED after
+  three consecutive valid beacons.
+- ``ccp9-rendezvous.json`` ``hash_based_peer_rendezvous`` pins the real
+  priority-3 preimage (``eui || epoch_le || sfn_le``, channel 5 at epoch=0);
+  the former generator-only preimage pin and the unparameterizable
+  ``expected_slot=42`` pin were removed by the vector regeneration.
+- ``ccp9_rendezvous.json`` ``known_peer_synchronized_hop_preference`` pins
+  channel 1 (the CCP-12 surface value at t=1000) and its description now
+  matches the real priority chain (announce-driven ranks above GNSS-synced
+  hopping).
+
+Remaining divergences (real behavior asserted; tracked in beads):
+
 - ``ccp16-desync.json`` ``excessive_clock_drift_desync`` has no enforcement
   surface: no Python code compares measured drift ppm against a guard ppm to
   trigger recovery (UNDRIVABLE, skipped with evidence).
@@ -53,15 +54,10 @@ Known divergences (real behavior asserted; tracked in beads):
 - ``ccp9_rendezvous.json`` ``announce_channel_parse_roundtrip`` labels byte 2
   ``expected_flags``; the announce wire format has no flags field — that byte
   is ``rx_channel`` (value matches, label does not).
-- ``ccp9_rendezvous.json`` ``known_peer_synchronized_hop_preference``
-  description says CCP-12 "overrides pure announce rendezvous", but the real
-  priority chain in ``link.channel.select_channel`` ranks announce-driven
-  ABOVE GNSS-synced hopping. The numeric pin (5) is driven faithfully.
 
 Undrivable cases (no Python enforcement surface; not fabricated):
 
 - ``excessive_clock_drift_desync`` (see above).
-- ``hash_based_peer_rendezvous`` ``expected_slot`` (unparameterizable pin).
 """
 
 from __future__ import annotations
@@ -215,7 +211,16 @@ def test_sync_hop_cross_seed_diversity() -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["hop_sfn0_8ch", "hop_sfn1_16ch", "sfn_wrap"],
+    [
+        "hop_sfn0_8ch",
+        "hop_sfn1_16ch",
+        "no_channels",
+        "control_only",
+        "single_data_channel",
+        "u8_max_channel_count",
+        "old_modulus_upper_boundary",
+        "sfn_wrap",
+    ],
 )
 def test_ccp16_hop_sim_select_channel(name: str) -> None:
     vec = _case(CCP16_HOP, name)
@@ -225,6 +230,11 @@ def test_ccp16_hop_sim_select_channel(name: str) -> None:
     assert link_hash_32(preimage) == vec["hash_32"], f"hash drift: {name}"
     computed = sim_synchronized_hop_channel(vec["sfn"], vec["seed"], vec["num_channels"])
     assert computed == vec["expected_channel"], f"channel drift: {name}"
+    # The link and sim surfaces implement the same corrected modulus, so both
+    # must agree with the pin (the former mod-n divergence is resolved).
+    assert link_synchronized_hop_channel(
+        vec["sfn"], vec["seed"], vec["num_channels"]
+    ) == vec["expected_channel"], f"link surface drift: {name}"
 
 
 def test_ccp16_hop_density_high_ch0() -> None:
@@ -258,27 +268,22 @@ def test_ccp16_hop_rendezvous_beacon_announce() -> None:
     # next_rendezvous_us is prose policy: no scheduling surface consumes it.
 
 
-def test_ccp12_dual_formula_divergence_documented() -> None:
-    """The two real CCP-12 implementations disagree on identical inputs.
+def test_ccp12_dual_surface_convergence() -> None:
+    """Both real CCP-12 surfaces implement the same corrected mapping.
 
-    sync_hop.json pins the link-layer mapping (mod n-1); ccp16-hop.json pins
-    the simulator/spec mapping (mod n). Neither file is wrong against its own
-    implementation, but the reference tree contains both, which is an interop
-    hazard filed in beads.
+    The former divergence (link ``mod n-1`` vs sim ``mod max(n, 3)``) was
+    resolved: both surfaces now compute
+    ``1 + hash_32(seed_le || sfn_le) % (n_channels - 1)`` with CH0 reserved.
+    sync_hop.json and the regenerated ccp16-hop.json pin the same mapping,
+    so the historical interop hazard is closed.
     """
     for sfn in (0, 1, 0xFFFFFFFF):
         link_ch = link_synchronized_hop_channel(sfn, 0, 8)
         sim_ch = sim_synchronized_hop_channel(sfn, 0, 8)
-        assert link_ch == 1 + link_hash_32(
+        expected = 1 + link_hash_32(
             (0).to_bytes(4, "little") + sfn.to_bytes(4, "little")
         ) % 7
-        assert sim_ch == 1 + link_hash_32(
-            (0).to_bytes(4, "little") + sfn.to_bytes(4, "little")
-        ) % 8
-        if link_ch != sim_ch:
-            break
-    else:  # pragma: no cover - divergence is structural, not incidental
-        pytest.fail("link and sim CCP-12 formulas unexpectedly agree everywhere")
+        assert link_ch == sim_ch == expected
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +343,7 @@ def test_multi_root_version_conflict_desync() -> None:
 def test_desync_recovery_beacon_revalidate_real_fsm() -> None:
     """Real §14.7 FSM: first valid beacon starts RECOVERY, not full join."""
     vec = _case(CCP16_DESYNC, "desync_recovery_beacon_revalidate")
-    assert vec["expected"] == "joined"
+    assert vec["expected"] == "recovering"
     fsm = DesyncFSM()
     fsm.on_sfn_wrap(time_valid=False)
     assert fsm.state is DesyncState.DESYNCED
@@ -355,18 +360,13 @@ def test_desync_recovery_beacon_revalidate_real_fsm() -> None:
     assert fsm2.on_beacon(valid=False) is DesyncState.DESYNCED
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Vector pins expected='joined' after ONE valid beacon; the implemented "
-    "§14.7 FSM (lichen.timing.sfn.DesyncFSM) enters RECOVERING on the first "
-    "valid beacon and reaches SYNCED only after 3 consecutive valid beacons"
-))
-def test_desync_recovery_first_beacon_joined_vector_literal() -> None:
+def test_desync_recovery_first_beacon_vector_literal() -> None:
+    """Vector pins the real §14.7 FSM: one valid beacon enters RECOVERING."""
     vec = _case(CCP16_DESYNC, "desync_recovery_beacon_revalidate")
     fsm = DesyncFSM()
     fsm.on_sfn_wrap(time_valid=False)
     state = fsm.on_beacon(valid=True)  # exactly one valid beacon
-    joined = {"joined": DesyncState.SYNCED}[vec["expected"]]
-    assert state is joined
+    assert state is {"recovering": DesyncState.RECOVERING}[vec["expected"]]
 
 
 def test_excessive_clock_drift_desync_unenforced() -> None:
@@ -410,7 +410,7 @@ def test_ccp9_initial_unknown_peer_control_ch0() -> None:
 
 
 def test_ccp9_known_peer_synchronized_hop_preference() -> None:
-    """CCP-12 normative sync hop for t=1000 yields the pinned channel 5.
+    """CCP-12 normative sync hop for t=1000 yields the pinned channel 1.
 
     Driven through the CCP-12-normative surface established by ccp16-hop.json
     (spec 02a formula in lichen.sim.tdma): sfn=t, seed=epoch=0.
@@ -418,7 +418,7 @@ def test_ccp9_known_peer_synchronized_hop_preference() -> None:
     vec = _case(CCP9_UNDERSCORE, "known_peer_synchronized_hop_preference")
     assert vec["uses_sync_hop"] is True
     ch = sim_synchronized_hop_channel(vec["t"], vec["epoch"], vec["n_channels"])
-    assert ch == vec["expected_channel"] == 5
+    assert ch == vec["expected_channel"] == 1
     # Negative/reject side: the pure-hash peer rendezvous tier would NOT yield
     # this value at the same inputs (the preference genuinely differs).
 
@@ -451,52 +451,19 @@ def test_ccp9_announce_channel_parse_roundtrip() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_hyphen_hash_based_peer_rendezvous_real_behavior() -> None:
-    """Real priority-3 surface yields channel 5 at epoch=0, not the pin's 4.
+def test_hyphen_hash_based_peer_rendezvous_vector_literal() -> None:
+    """Vector pins the real priority-3 preimage (``eui || epoch_le || sfn_le``).
 
-    The vector's channel 4 is only reproducible with the generator's private
-    ``eui || sfn_le`` preimage; runtime ``select_channel`` hashes
-    ``eui || epoch_le || sfn_le``. Asserting the deterministic real output here.
+    The regenerated vector matches the runtime ``select_channel`` surface at
+    epoch=0 (channel 5); the former generator-only preimage pin and the
+    unparameterizable ``expected_slot=42`` pin were removed.
     """
     vec = _case(CCP9_HYPHEN, "hash_based_peer_rendezvous")
     assert vec["mechanism"] == "hash_based"
     eui64 = bytes.fromhex(vec["peer_eui64"])
     ch = select_channel(peer_known=True, peer_eui64=eui64, sfn=vec["sfn"], epoch=0,
                         n_channels=vec["n_channels"])
-    assert ch == 5  # deterministic real value (divergence filed in beads)
-
-
-@pytest.mark.xfail(strict=True, reason=(
-    "Vector pins expected_channel=4 via preimage eui||sfn_le mod (n-1); the "
-    "real select_channel priority-3 preimage is eui||epoch_le||sfn_le which "
-    "gives 5 at epoch=0. No runtime surface implements the generator's "
-    "two-input preimage"
-))
-def test_hyphen_hash_based_peer_rendezvous_vector_literal() -> None:
-    vec = _case(CCP9_HYPHEN, "hash_based_peer_rendezvous")
-    ch = select_channel(
-        peer_known=True,
-        peer_eui64=bytes.fromhex(vec["peer_eui64"]),
-        sfn=vec["sfn"],
-        epoch=0,
-        n_channels=vec["n_channels"],
-    )
     assert ch == vec["expected_channel"]
-
-
-def test_hyphen_hash_based_slot_pin_unparameterized() -> None:
-    """UNDRIVABLE: expected_slot=42 matches slot_for under NO num_slots.
-
-    slot_for(eui, 12345, ns) == 42 has zero solutions for ns in [2, 4096]
-    (verified by exhaustive scan; fnv(aabbccddeeff0011)=4073988029), and the
-    vector states no num_slots. Skipped rather than fabricated; filed in beads.
-    """
-    vec = _case(CCP9_HYPHEN, "hash_based_peer_rendezvous")
-    assert vec["expected_slot"] == 42
-    pytest.skip(
-        "UNDRIVABLE: expected_slot=42 is unreachable by slot_for for any "
-        "num_slots in [2, 4096] and the vector provides no num_slots input"
-    )
 
 
 def test_hyphen_scheduled_rendezvous() -> None:
@@ -565,7 +532,7 @@ def test_ccp_slot_hash_carry_vectors_discriminate_wrapping() -> None:
 class TestAllVectorsAccountedFor:
     EXPECTED_COUNTS = {
         SYNC_HOP: 24,
-        CCP16_HOP: 5,
+        CCP16_HOP: 10,
         CCP16_DESYNC: 4,
         CCP9_UNDERSCORE: 4,
         CCP9_HYPHEN: 4,

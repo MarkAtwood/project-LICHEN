@@ -302,6 +302,50 @@ class TestTwoSlotFilePersistence:
 
         assert [slot.read_bytes() for slot in slots] == before
 
+    def test_post_startup_corrupt_tx_slots_reject_write_without_anchor_record(
+        self, tmp_path: Path
+    ) -> None:
+        """A writer must not reset an acknowledged generation over corruption.
+
+        Post-startup corruption with a revision anchor that retains no
+        record (lost/rotated) leaves the wholly invalid slot files as the
+        only durable evidence. A store must enter terminal failure instead
+        of treating the store as fresh (generation 1), and must preserve the
+        corrupt artifacts.
+        """
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        persistence.store_tx_state(1, b"signed-dao-1")
+        slots = [tmp_path / "dao_tx_0.bin", tmp_path / "dao_tx_1.bin"]
+        for slot in slots:
+            if slot.exists():
+                slot.write_bytes(b"CORRUPT")
+        before = {slot.name: slot.read_bytes() for slot in slots if slot.exists()}
+        _DAO_ANCHORS[tmp_path].states.clear()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        with pytest.raises(DaoPersistenceError, match="refusing to overwrite corrupt"):
+            restarted.store_tx_state(2, b"signed-dao-2")
+        assert {slot.name: slot.read_bytes() for slot in slots if slot.exists()} == before
+        with pytest.raises(DaoPersistenceError, match="TX state corrupt"):
+            TwoSlotFilePersistence(tmp_path, fail_closed=True).load_tx_state()
+
+    def test_post_startup_corrupt_rx_slots_reject_write_without_anchor_record(
+        self, tmp_path: Path
+    ) -> None:
+        """store_rx_floor must not reset an acknowledged floor over corruption."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        persistence.store_rx_floor(TEST_PUBKEY, 5, compute_dao_digest(b"dao-5"))
+        pattern = f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"
+        for slot in tmp_path.glob(pattern):
+            slot.write_bytes(b"CORRUPT")
+        before = {slot.name: slot.read_bytes() for slot in tmp_path.glob(pattern)}
+        _DAO_ANCHORS[tmp_path].states.clear()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        with pytest.raises(DaoPersistenceError, match="refusing to overwrite corrupt"):
+            restarted.store_rx_floor(TEST_PUBKEY, 6, compute_dao_digest(b"dao-6"))
+        assert {slot.name: slot.read_bytes() for slot in tmp_path.glob(pattern)} == before
+
     def test_two_instances_cannot_rollback_an_acknowledged_replay_floor(
         self, tmp_path: Path
     ) -> None:
@@ -419,6 +463,69 @@ class TestTwoSlotFilePersistence:
         with pytest.raises(OSError):
             os.fstat(descriptors[0])
 
+    @pytest.mark.parametrize(
+        "write_call",
+        [
+            lambda p, s: s._write_slot(p / "dao_tx_0.bin", 1, 1, b"signed-dao"),
+            lambda p, s: s._write_rx_catalog_file(s._encode_rx_catalog(1, {})),
+            lambda p, s: s._ensure_tx_marker(),
+        ],
+    )
+    def test_staging_fd_not_closed_after_fdopen_ownership(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        write_call,
+    ) -> None:
+        """A failure inside the fdopen block must not close the fd a second time.
+
+        After os.fdopen takes ownership, the with-block exit closes the
+        descriptor. If the exception handler closed it again, the fd number
+        could already have been recycled by a concurrent open, closing an
+        unrelated descriptor. The handler must only close a descriptor it
+        still owns (a failure before fdopen, covered by the fchmod test
+        above, must still be closed).
+        """
+        persistence = TwoSlotFilePersistence(tmp_path)
+        captured: dict[str, int] = {}
+
+        real_mkstemp = dao_persistence_module.tempfile.mkstemp
+
+        def capture_mkstemp(*args: object, **kwargs: object):
+            descriptor, name = real_mkstemp(*args, **kwargs)  # type: ignore[arg-type]
+            captured["fd"] = descriptor
+            return descriptor, name
+
+        monkeypatch.setattr(dao_persistence_module.tempfile, "mkstemp", capture_mkstemp)
+
+        real_close = dao_persistence_module.os.close
+        handler_closes: list[int] = []
+
+        def counting_close(fd: int) -> None:
+            handler_closes.append(fd)
+            real_close(fd)
+
+        monkeypatch.setattr(dao_persistence_module.os, "close", counting_close)
+
+        real_fsync = dao_persistence_module.os.fsync
+
+        def fail_staging_fsync(fd: int) -> None:
+            if fd == captured.get("fd"):
+                raise OSError("injected staging fsync failure")
+            real_fsync(fd)
+
+        monkeypatch.setattr(dao_persistence_module.os, "fsync", fail_staging_fsync)
+
+        with pytest.raises(OSError, match="injected staging fsync failure"):
+            write_call(tmp_path, persistence)
+
+        # The staging descriptor was owned by the stream, so the exception
+        # handler must never have called os.close on it.
+        assert captured["fd"] not in handler_closes
+        # And the descriptor really is closed (by the stream's own exit).
+        with pytest.raises(OSError):
+            os.fstat(captured["fd"])
+
     def test_corrupt_newest_slot_cannot_roll_back_to_older(self, tmp_path: Path) -> None:
         """If the newest slot is corrupt, the anchor rejects the older slot.
 
@@ -474,6 +581,82 @@ class TestTwoSlotFilePersistence:
 
         with pytest.raises(DaoPersistenceError, match="deleted"):
             TwoSlotFilePersistence(tmp_path, fail_closed=False).load_tx_state()
+
+    def test_deleted_tx_slots_fail_closed_while_bootstrap_authorized(self, tmp_path: Path) -> None:
+        """Slot deletion with bootstrap still authorized must fail closed.
+
+        With a revision anchor that retains no record (lost/rotated), the
+        durable TX-initialization marker is the surviving evidence that a
+        store was attempted. Both a restart load and a new store must fail
+        closed — even with fail_closed=False and allow_tx_bootstrap=True —
+        instead of reusing Origin Sequence 1 (spec section 8.6).
+        """
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        persistence.store_tx_state(7, b"signed-dao-7")
+        assert (tmp_path / ".dao_tx_initialized").exists()
+        for slot in tmp_path.glob("dao_tx_*.bin"):
+            slot.unlink()
+        _DAO_ANCHORS[tmp_path].states.clear()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        with pytest.raises(DaoPersistenceError, match="initialized TX state was deleted"):
+            restarted.load_tx_state()
+        with pytest.raises(DaoPersistenceError, match="initialized TX state was deleted"):
+            restarted.store_tx_state(1, b"signed-dao-1")
+        with pytest.raises(DaoPersistenceError, match="initialized TX state was deleted"):
+            restarted.store_tx_state(8, b"signed-dao-8")
+
+    def test_corrupt_tx_slots_with_marker_fail_closed_while_bootstrap_authorized(
+        self, tmp_path: Path
+    ) -> None:
+        """Marker plus wholly invalid slot files is corruption, not first use."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        persistence.store_tx_state(7, b"signed-dao-7")
+        for slot in tmp_path.glob("dao_tx_*.bin"):
+            slot.write_bytes(b"CORRUPT")
+        before = {slot.name: slot.read_bytes() for slot in tmp_path.glob("dao_tx_*.bin")}
+        _DAO_ANCHORS[tmp_path].states.clear()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        with pytest.raises(DaoPersistenceError, match="TX state corrupt"):
+            restarted.load_tx_state()
+        with pytest.raises(DaoPersistenceError, match="refusing to overwrite corrupt"):
+            restarted.store_tx_state(1, b"signed-dao-1")
+        assert {slot.name: slot.read_bytes() for slot in tmp_path.glob("dao_tx_*.bin")} == before
+
+    def test_wiping_entire_tx_store_returns_to_authorized_bootstrap(self, tmp_path: Path) -> None:
+        """Only deleting marker, slots, AND anchor record is a fresh store.
+
+        This documents the boundary of the TX deletion detection: with no
+        durable evidence left at all, an explicitly authorized bootstrap is
+        indistinguishable from first use and is allowed.
+        """
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        persistence.store_tx_state(7, b"signed-dao-7")
+        (tmp_path / ".dao_tx_initialized").unlink()
+        for slot in tmp_path.glob("dao_tx_*.bin"):
+            slot.unlink()
+        _DAO_ANCHORS[tmp_path].states.clear()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=False)
+        assert restarted.load_tx_state() is None
+        restarted.store_tx_state(1, b"first-after-wipe")
+        assert restarted.load_tx_state() is not None
+        assert restarted.load_tx_state().sequence == 1
+
+    def test_missing_marker_with_valid_anchored_slots_self_heals(self, tmp_path: Path) -> None:
+        """A lost marker does not strand an intact anchored store."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        persistence.store_tx_state(7, b"signed-dao-7")
+        (tmp_path / ".dao_tx_initialized").unlink()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        state = restarted.load_tx_state()
+        assert state is not None
+        assert state.sequence == 7
+        restarted.store_tx_state(8, b"signed-dao-8")
+        assert restarted.load_tx_state().sequence == 8
+        assert (tmp_path / ".dao_tx_initialized").exists()
 
     def test_restoring_old_tx_slot_set_is_detected(self, tmp_path: Path) -> None:
         persistence = TwoSlotFilePersistence(tmp_path)
@@ -1143,6 +1326,127 @@ class TestRequireCrashSafety:
             restarted.build_dao(ROOT)
         assert error.value.reason in {"persistence_missing", "persistence_corrupt"}
 
+    @pytest.mark.parametrize("damage", ["delete", "corrupt"])
+    def test_authenticated_origination_fails_closed_after_tx_damage_with_legacy_flags(
+        self, tmp_path: Path, damage: str
+    ) -> None:
+        """Public authenticated origination never re-originate from sequence 1.
+
+        Even with require_crash_safety=False (the legacy enforcement flag) and
+        a revision anchor that retains no record across restarts, a durable
+        TX-initialization marker plus missing or invalid slot files must leave
+        a terminal recovery failure: build_dao() must not originate from
+        sequence 1 again (spec section 8.6). A fail_closed=False backend is
+        rejected outright for authenticated origination, so the marker-backed
+        detection here runs on a fail_closed=True backend.
+        """
+        identity = Identity.from_seed(bytes(range(32)))
+        first = DaoManager(
+            node_address=yggdrasil_address(identity.pubkey),
+            dodag_id=ROOT,
+            persistence=_RealTwoSlotFilePersistence(
+                tmp_path,
+                revision_anchor=MemoryStateAnchor(),
+                anchor_key=_DAO_ANCHOR_KEY,
+                allow_tx_bootstrap=True,
+                fail_closed=True,
+            ),
+            origin_identity=identity,
+            allow_tx_bootstrap=True,
+            require_crash_safety=False,
+        )
+        acknowledged = first.build_dao(ROOT)
+        assert acknowledged.options[-1].data[:8] == (1).to_bytes(8, "big")
+
+        if damage == "delete":
+            for path in tmp_path.glob("dao_tx_*.bin"):
+                path.unlink()
+        else:
+            for path in tmp_path.glob("dao_tx_*.bin"):
+                path.write_bytes(b"CORRUPT")
+
+        restarted = DaoManager(
+            node_address=yggdrasil_address(identity.pubkey),
+            dodag_id=ROOT,
+            persistence=_RealTwoSlotFilePersistence(
+                tmp_path,
+                revision_anchor=MemoryStateAnchor(),
+                anchor_key=_DAO_ANCHOR_KEY,
+                allow_tx_bootstrap=True,
+                fail_closed=True,
+            ),
+            origin_identity=identity,
+            allow_tx_bootstrap=True,
+            require_crash_safety=False,
+        )
+        with pytest.raises(DaoError) as error:
+            restarted.build_dao(ROOT)
+        assert error.value.reason == "persistence_corrupt"
+        # The recovery failure is terminal, not a one-shot fallback.
+        with pytest.raises(DaoError):
+            restarted.build_dao(ROOT)
+
+    def test_authenticated_store_after_tx_deletion_fails_closed_in_session(
+        self, tmp_path: Path
+    ) -> None:
+        """A mid-session store must not silently rebuild deleted TX state.
+
+        With the anchor record lost (stateless anchor) and both TX slots
+        deleted, the pre-existing marker is the only evidence of prior
+        initialization: the next build_dao() must fail closed at the
+        crash-safe commit instead of writing a fresh slot pair.
+        """
+        identity = Identity.from_seed(bytes(range(32)))
+        persistence = _RealTwoSlotFilePersistence(
+            tmp_path,
+            revision_anchor=MemoryStateAnchor(),
+            anchor_key=_DAO_ANCHOR_KEY,
+            allow_tx_bootstrap=True,
+            fail_closed=True,
+        )
+        manager = DaoManager(
+            node_address=yggdrasil_address(identity.pubkey),
+            dodag_id=ROOT,
+            persistence=persistence,
+            origin_identity=identity,
+            allow_tx_bootstrap=True,
+            require_crash_safety=False,
+        )
+        manager.build_dao(ROOT)
+        for path in tmp_path.glob("dao_tx_*.bin"):
+            path.unlink()
+        persistence._revision_anchor = MemoryStateAnchor()
+
+        with pytest.raises(DaoPersistenceError, match="initialized TX state was deleted"):
+            manager.build_dao(ROOT)
+
+    def test_authenticated_first_bootstrap_still_works_on_genuinely_fresh_store(
+        self, tmp_path: Path
+    ) -> None:
+        """Control: explicit bootstrap on a fresh store originates sequence 1.
+
+        The deletion/corruption detection must not strand a genuinely fresh
+        authenticated origin that was explicitly authorized to bootstrap.
+        """
+        identity = Identity.from_seed(bytes(range(32)))
+        manager = DaoManager(
+            node_address=yggdrasil_address(identity.pubkey),
+            dodag_id=ROOT,
+            persistence=_RealTwoSlotFilePersistence(
+                tmp_path,
+                revision_anchor=MemoryStateAnchor(),
+                anchor_key=_DAO_ANCHOR_KEY,
+                allow_tx_bootstrap=True,
+                fail_closed=True,
+            ),
+            origin_identity=identity,
+            allow_tx_bootstrap=True,
+            require_crash_safety=False,
+        )
+        dao = manager.build_dao(ROOT)
+        assert dao.options[-1].data[:8] == (1).to_bytes(8, "big")
+        assert manager.build_dao(ROOT).options[-1].data[:8] == (2).to_bytes(8, "big")
+
     @pytest.mark.parametrize("authorization", [1, 0, "true", object()])
     def test_authenticated_tx_bootstrap_requires_exact_boolean(
         self, tmp_path: Path, authorization: object
@@ -1467,6 +1771,24 @@ class TestRxFloorCatalog:
         with pytest.raises(DaoPersistenceError, match="initialized RX floor was deleted"):
             restarted.get_floor(TEST_PUBKEY)
 
+    def test_corrupt_rx_slots_with_catalog_entry_fail_as_corrupt(self, tmp_path: Path) -> None:
+        """Catalog-backed detection names corruption when slot files remain.
+
+        With a per-key-stateless anchor, a catalog entry plus wholly invalid
+        slot files is corruption, not deletion; the error must distinguish
+        the two instead of always reporting "deleted". Either way it fails
+        closed per spec 8.6.
+        """
+        digest = compute_dao_digest(b"catalog-entry")
+        first = self._fresh_anchor_persistence(tmp_path)
+        first.store_rx_floor(TEST_PUBKEY, 9, digest)
+        for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"):
+            path.write_bytes(b"corrupt")
+
+        restarted = self._fresh_anchor_persistence(tmp_path)
+        with pytest.raises(DaoPersistenceError, match="RX floor corrupt for pubkey"):
+            restarted.load_rx_floor(TEST_PUBKEY)
+
     def test_deleted_rx_slots_fail_closed_with_durable_anchor(self, tmp_path: Path) -> None:
         """Slot deletion is rejected even before the catalog is consulted."""
         persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
@@ -1574,6 +1896,54 @@ class TestRxFloorCatalog:
         restarted = TwoSlotFilePersistence(tmp_path, fail_closed=True)
         with pytest.raises(DaoPersistenceError, match="catalog was deleted"):
             restarted.load_rx_floor(TEST_PUBKEY)
+
+    def test_catalog_capacity_precheck_rejects_before_slot_commit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A new origin at catalog capacity fails deterministically, pre-commit.
+
+        The capacity pre-check runs before the per-key slot commit, so the
+        rejected origin leaves no slot artifacts and existing origins keep
+        committing floors at full capacity.
+        """
+        monkeypatch.setattr(dao_persistence_module, "_MAX_RX_CATALOG_ENTRIES", 2)
+        monkeypatch.setattr(dao_persistence_module, "_RX_CATALOG_MAX_SIZE", 48 + 2 * 105)
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        key_a = bytes(32)
+        key_b = bytes([1]) * 32
+        key_c = bytes([2]) * 32
+        persistence.store_rx_floor(key_a, 1, compute_dao_digest(b"a"))
+        persistence.store_rx_floor(key_b, 1, compute_dao_digest(b"b"))
+
+        with pytest.raises(DaoPersistenceError, match="capacity exceeded"):
+            persistence.store_rx_floor(key_c, 1, compute_dao_digest(b"c"))
+        assert not list(tmp_path.glob(f"dao_rx_{key_c.hex()}_*.bin"))
+
+        # Existing origins still update at capacity, and the catalog stays
+        # anchored and parseable for loads.
+        persistence.store_rx_floor(key_a, 2, compute_dao_digest(b"a2"))
+        assert persistence.get_floor(key_a) == (2, compute_dao_digest(b"a2"))
+        assert persistence.get_floor(key_b) == (1, compute_dao_digest(b"b"))
+
+    def test_catalog_anchor_liveness_precheck_rejects_before_slot_commit(
+        self, tmp_path: Path
+    ) -> None:
+        """An unverifiable catalog revision fails before any slot is written.
+
+        With the catalog anchor record lost (stateless/rotated anchor) and a
+        multi-revision catalog, the anchor-liveness pre-check fails closed
+        before the slot commit instead of committing a slot that no catalog
+        record could ever anchor.
+        """
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        persistence.store_rx_floor(bytes(32), 1, compute_dao_digest(b"a"))
+        persistence.store_rx_floor(bytes([1]) * 32, 1, compute_dao_digest(b"b"))
+        key_c = bytes([2]) * 32
+        _DAO_ANCHORS[tmp_path].states.clear()
+
+        with pytest.raises(DaoPersistenceError, match="missing its rollback anchor"):
+            persistence.store_rx_floor(key_c, 1, compute_dao_digest(b"c"))
+        assert not list(tmp_path.glob(f"dao_rx_{key_c.hex()}_*.bin"))
 
     def test_catalog_corruption_fails_closed(self, tmp_path: Path) -> None:
         """A corrupt catalog fails closed instead of downgrading protection."""

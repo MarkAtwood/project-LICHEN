@@ -304,17 +304,22 @@ class FileKeyStore(KeyStore):
         # cannot clobber or follow a predictable temporary path.
         fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
         tmp_path = Path(tmp_name)
+        # Once os.fdopen takes ownership, the with-block exit closes the
+        # descriptor; closing it again here could hit a recycled fd number.
+        owned_by_stream = False
         try:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb", closefd=True) as f:
+                owned_by_stream = True
                 f.write(slot_data)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp_path, path)
             os.chmod(path, 0o600)
         except BaseException:
-            with suppress(OSError):
-                os.close(fd)
+            if not owned_by_stream:
+                with suppress(OSError):
+                    os.close(fd)
             with suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
             raise
@@ -383,15 +388,22 @@ class FileKeyStore(KeyStore):
         generation, seed = slot
         return AnchoredState(generation, hashlib.sha256(seed).digest())
 
-    def _best_slot_locked(self) -> tuple[int, bytes] | None:
+    def _best_slot_locked(self, *, for_write: bool = False) -> tuple[int, bytes] | None:
         slot0 = self._read_slot(self._slot_path(0))
         slot1 = self._read_slot(self._slot_path(1))
         external = read_anchor(self._revision_anchor, self._anchor_key, KeyPersistenceError)
         if slot0 is None and slot1 is None:
             if external is not None:
                 raise KeyPersistenceError("initialized seed state was deleted")
-            if self._fail_closed and self._any_slot_exists():
-                raise KeyPersistenceError("seed state corrupt")
+            # Wholly invalid slot files that exist on disk are corrupt durable
+            # state, not a fresh store. A store here would silently reset the
+            # acknowledged generation, so writes fail closed unconditionally;
+            # loads keep the legacy fail_closed gate. Artifacts are preserved.
+            if self._any_slot_exists():
+                if for_write:
+                    raise KeyPersistenceError("refusing to overwrite corrupt seed state")
+                if self._fail_closed:
+                    raise KeyPersistenceError("seed state corrupt")
             if not self._allow_bootstrap:
                 raise KeyPersistenceError("seed state requires explicit bootstrap")
             return None
@@ -437,7 +449,7 @@ class FileKeyStore(KeyStore):
             path0 = self._slot_path(0)
             path1 = self._slot_path(1)
             slot1 = self._read_slot(path1)
-            current = self._best_slot_locked()
+            current = self._best_slot_locked(for_write=True)
 
             current_generation = 0 if current is None else current[0]
             if current_generation == _MAX_U32:
@@ -693,9 +705,13 @@ class TrustStorePersistence:
         fd, tmp_name = tempfile.mkstemp(prefix=".trust_store.", suffix=".tmp", dir=self._base_dir)
         tmp_path = Path(tmp_name)
         replaced = False
+        # Once os.fdopen takes ownership, the with-block exit closes the
+        # descriptor; closing it again here could hit a recycled fd number.
+        owned_by_stream = False
         try:
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb", closefd=True) as file:
+                owned_by_stream = True
                 file.write(encoded)
                 file.flush()
                 os.fsync(file.fileno())
@@ -708,8 +724,9 @@ class TrustStorePersistence:
             finally:
                 os.close(dir_fd)
         except BaseException as exc:
-            with suppress(OSError):
-                os.close(fd)
+            if not owned_by_stream:
+                with suppress(OSError):
+                    os.close(fd)
             with suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
             if replaced:

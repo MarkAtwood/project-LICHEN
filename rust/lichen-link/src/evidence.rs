@@ -8,8 +8,18 @@ use crate::{frame::AddrMode, LinkSeqNum};
 
 // Supported embedded targets guarantee 32-bit atomics, but several do not
 // provide AtomicU64. The public opaque representation remains u64 so this
-// allocation detail does not leak across protocol layers.
+// allocation detail does not leak across protocol layers. Exhaustion is
+// explicit: the counter never wraps and zero is never issued.
 static NEXT_CLOCK_DOMAIN: AtomicU32 = AtomicU32::new(1);
+
+/// Advance the process-global nonzero clock-domain counter by one step.
+///
+/// Returns `None` at `u32::MAX`: there is no successor domain, so callers
+/// report [`ReceiptClockError::DomainExhausted`] instead of reusing wrapped
+/// identifiers.
+fn next_clock_domain(current: u32) -> Option<u32> {
+    current.checked_add(1).filter(|next| *next != 0)
+}
 #[cfg(all(feature = "schnorr", feature = "std"))]
 static NEXT_PEER_KEY_GENERATION: AtomicU64 = AtomicU64::new(1);
 
@@ -183,9 +193,7 @@ impl ReceiptClock {
     /// Allocate a fresh, non-serializable-by-convention process-local domain.
     pub fn new() -> Result<Self, ReceiptClockError> {
         let domain = NEXT_CLOCK_DOMAIN
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                current.checked_add(1).filter(|next| *next != 0)
-            })
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, next_clock_domain)
             .map_err(|_| ReceiptClockError::DomainExhausted)?;
         Ok(Self {
             domain: u64::from(domain),
@@ -274,6 +282,51 @@ mod receipt_clock_tests {
             clock.next_logical(),
             Err(ReceiptClockError::ClockModeMismatch)
         );
+    }
+
+    #[test]
+    fn domain_allocation_is_strictly_monotonic() {
+        let mut previous = ReceiptClock::new()
+            .unwrap()
+            .next_logical()
+            .unwrap()
+            .clock_domain();
+        for _ in 0..8 {
+            let domain = ReceiptClock::new()
+                .unwrap()
+                .next_logical()
+                .unwrap()
+                .clock_domain();
+            assert!(
+                domain > previous,
+                "clock domains must strictly increase: {domain} <= {previous}"
+            );
+            previous = domain;
+        }
+    }
+
+    #[test]
+    fn domain_allocation_exhausts_explicitly_at_u32_max() {
+        // The zero domain is reserved and never issued.
+        assert_eq!(next_clock_domain(0), Some(1));
+        // The last valid domain is issued exactly once, then the allocator
+        // fails closed: no wraparound, no silent reuse.
+        assert_eq!(next_clock_domain(u32::MAX - 1), Some(u32::MAX));
+        assert_eq!(next_clock_domain(u32::MAX), None);
+    }
+
+    #[test]
+    fn allocated_domain_widens_losslessly_into_u64() {
+        let mut clock = ReceiptClock::new().unwrap();
+        let first = clock.observe(1).unwrap();
+        let domain = first.clock_domain();
+        assert!(
+            domain <= u64::from(u32::MAX),
+            "allocated domain must fit the 32-bit counter domain: {domain}"
+        );
+        let second = clock.observe(2).unwrap();
+        assert_eq!(second.clock_domain(), domain);
+        assert_eq!(second.elapsed_since(&first), Some(1));
     }
 }
 

@@ -459,11 +459,31 @@ pub mod mem {
 
 #[cfg(feature = "std")]
 pub mod fs {
+    //! File-backed [`NonVolatile`] with a private security-state policy.
+    //!
+    //! [`FileStorage`] holds identity seeds, replay-protection state, and
+    //! sealed records, so it applies fail-closed Unix semantics instead of
+    //! process umask defaults:
+    //!
+    //! - The state directory is created owner-only (0700). A pre-existing
+    //!   directory must already be a real, owner-only directory, or opening
+    //!   fails.
+    //! - Writes go through a uniquely named 0600 temp file opened with
+    //!   exclusive-create semantics (which refuses a pre-planted file or
+    //!   symlink at a guessed path), fsynced, verified, then atomically
+    //!   renamed into place.
+    //! - Reads verify the open file is a regular 0600 file owned by the
+    //!   effective user (Linux) and that the path still resolves to the same
+    //!   inode, refusing symlinks and group/world-readable files.
+
     extern crate std;
     use crate::NonVolatile;
     use std::fs;
-    use std::io;
+    use std::io::{self, Read, Write};
+    #[cfg(unix)]
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
     use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[derive(Debug)]
     pub struct FileStorage {
@@ -473,14 +493,26 @@ pub mod fs {
     impl FileStorage {
         pub fn new<P: AsRef<Path>>(p: P) -> io::Result<Self> {
             let d = p.as_ref().to_path_buf();
-            fs::create_dir_all(&d)?;
+            match fs::symlink_metadata(&d) {
+                Ok(_) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    create_private_dir(&d)?;
+                }
+                Err(error) => return Err(error),
+            }
+            verify_private_dir(&d)?;
             Ok(Self { dir: d })
         }
         fn key_path(&self, k: &str) -> PathBuf {
             self.dir.join(k)
         }
-        fn tmp_path(&self, k: &str) -> PathBuf {
-            self.dir.join(format!("{}.tmp", k))
+        /// Uniquely named temp path; exclusive-create opening refuses any
+        /// pre-planted file or symlink at a guessed name.
+        fn temp_path(&self, k: &str) -> PathBuf {
+            static COUNTER: AtomicU64 = AtomicU64::new(0);
+            let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+            self.dir
+                .join(format!(".{}.{}-{}.tmp", k, std::process::id(), n))
         }
     }
 
@@ -488,34 +520,132 @@ pub mod fs {
         type Error = io::Error;
         fn read(&self, key: &str, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
             let p = self.key_path(key);
-            let data = match fs::read(&p) {
-                Ok(d) => d,
+            let mut file = match fs::File::open(&p) {
+                Ok(file) => file,
                 Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
                 Err(e) => return Err(e),
             };
+            verify_private_file(&p, &file.metadata()?, "security state")?;
+            let mut data = Vec::new();
+            file.read_to_end(&mut data)?;
             let stored = data.len();
             let n = stored.min(buf.len());
             buf[..n].copy_from_slice(&data[..n]);
             Ok(Some(stored))
         }
         fn write(&mut self, key: &str, data: &[u8]) -> Result<(), Self::Error> {
-            let t = self.tmp_path(key);
-            let f = self.key_path(key);
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&t)?;
-            std::io::Write::write_all(&mut file, data)?;
-            file.sync_all()?;
-            fs::rename(t, f)?;
-            let _ = fs::File::open(&self.dir).and_then(|d| d.sync_all());
-            Ok(())
+            let final_path = self.key_path(key);
+            let temp_path = self.temp_path(key);
+            let result = (|| -> io::Result<()> {
+                let mut options = fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                options.mode(0o600);
+                let mut file = options.open(&temp_path)?;
+                #[cfg(unix)]
+                fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))?;
+                file.write_all(data)?;
+                file.sync_all()?;
+                verify_private_file(&temp_path, &file.metadata()?, "security state")?;
+                fs::rename(&temp_path, &final_path)?;
+                sync_dir(&self.dir);
+                Ok(())
+            })();
+            if result.is_err() {
+                let _ = fs::remove_file(&temp_path);
+            }
+            result
         }
         fn delete(&mut self, key: &str) -> bool {
             let p = self.key_path(key);
             fs::remove_file(p).is_ok()
         }
+    }
+
+    fn sync_dir(path: &Path) {
+        let _ = fs::File::open(path).and_then(|d| d.sync_all());
+    }
+
+    fn create_private_dir(path: &Path) -> io::Result<()> {
+        let mut builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        builder.mode(0o700);
+        if let Err(error) = builder.create(path) {
+            // A concurrent creator is acceptable; verification below decides
+            // whether the existing directory is trustworthy.
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error);
+            }
+        }
+        #[cfg(unix)]
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+        Ok(())
+    }
+
+    fn private_state_error(message: impl Into<String>) -> io::Error {
+        io::Error::new(io::ErrorKind::PermissionDenied, message.into())
+    }
+
+    /// Fail closed unless `path` is a real, owner-only directory.
+    fn verify_private_dir(path: &Path) -> io::Result<()> {
+        let metadata = fs::symlink_metadata(path)?;
+        if !metadata.file_type().is_dir() {
+            return Err(private_state_error(
+                "state directory must be a real directory, not a link or special file",
+            ));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if metadata.permissions().mode() & 0o7777 != 0o700 {
+                return Err(private_state_error(
+                    "state directory must have mode 0700",
+                ));
+            }
+        }
+        verify_effective_owner(&metadata, "state directory")
+    }
+
+    /// Fail closed unless `path` still resolves to the already-open regular
+    /// 0600 file described by `metadata` (no symlink swap, no mode drift).
+    fn verify_private_file(path: &Path, metadata: &fs::Metadata, label: &str) -> io::Result<()> {
+        if !metadata.file_type().is_file() {
+            return Err(private_state_error(format!("{label} is not a regular file")));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+            let path_metadata = fs::symlink_metadata(path)?;
+            if path_metadata.file_type().is_symlink()
+                || path_metadata.dev() != metadata.dev()
+                || path_metadata.ino() != metadata.ino()
+            {
+                return Err(private_state_error(
+                    format!("{label} path changed or is a symbolic link"),
+                ));
+            }
+            if metadata.permissions().mode() & 0o7777 != 0o600 {
+                return Err(private_state_error(format!("{label} must have mode 0600")));
+            }
+        }
+        verify_effective_owner(metadata, label)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn verify_effective_owner(metadata: &fs::Metadata, label: &str) -> io::Result<()> {
+        use std::os::unix::fs::MetadataExt;
+        let effective_uid = fs::metadata("/proc/self")?.uid();
+        if metadata.uid() != effective_uid {
+            return Err(private_state_error(format!(
+                "{label} is not owned by the effective user"
+            )));
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn verify_effective_owner(_metadata: &fs::Metadata, _label: &str) -> io::Result<()> {
+        Ok(())
     }
 }
 
@@ -523,7 +653,11 @@ pub mod fs {
 mod tests {
     use super::*;
     #[cfg(feature = "std")]
-    use fs::FileStorage;
+    use super::fs::FileStorage;
+    #[cfg(feature = "std")]
+    use std::fs;
+    #[cfg(feature = "std")]
+    use std::io;
     use mem::MemStorage;
 
     #[test]
@@ -713,20 +847,172 @@ mod tests {
         assert_eq!(storage.raw(keys[1]), Some(before_b.as_slice()));
     }
 
+    #[cfg(feature = "std")]
+    fn unique_fs_dir(label: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "lichen-hal-fs-{}-{}-{}",
+            label,
+            std::process::id(),
+            n
+        ))
+    }
+
+    #[cfg(all(unix, feature = "std"))]
+    fn make_private_dir(path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(path).unwrap();
+        std::fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+
     #[test]
     #[cfg(feature = "std")]
     fn file_storage_durable_and_preserves_on_failure() {
-        let d = std::path::Path::new("/tmp/lichen-nv-test");
-        let _ = std::fs::remove_dir_all(d);
-        std::fs::create_dir_all(d).unwrap();
-        let mut s = FileStorage::new(d).unwrap();
+        let d = unique_fs_dir("durable");
+        let mut s = FileStorage::new(&d).unwrap();
         let seed = Seed::new([0x22u8; 32]);
         save_seed(&mut s, &seed).unwrap();
         assert_eq!(load_seed(&s).unwrap(), Some(seed.clone()));
-        let s2 = FileStorage::new(d).unwrap();
+        let s2 = FileStorage::new(&d).unwrap();
         assert_eq!(load_seed(&s2).unwrap(), Some(seed));
         save_epoch(&mut s, 42).unwrap();
         assert_eq!(load_epoch(&s).unwrap(), Some(42));
-        let _ = std::fs::remove_dir_all(d);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_creates_owner_only_dir_and_private_files() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let d = unique_fs_dir("private");
+        let mut s = FileStorage::new(&d).unwrap();
+        assert_eq!(
+            fs::metadata(&d).unwrap().permissions().mode() & 0o7777,
+            0o700
+        );
+        let seed = Seed::new([0x33u8; 32]);
+        save_seed(&mut s, &seed).unwrap();
+        let seed_path = d.join(keys::IDENTITY_SEED);
+        assert_eq!(
+            fs::metadata(&seed_path).unwrap().permissions().mode() & 0o7777,
+            0o600
+        );
+        save_seed(&mut s, &Seed::new([0x34u8; 32])).unwrap();
+        assert_eq!(
+            fs::metadata(&seed_path).unwrap().permissions().mode() & 0o7777,
+            0o600
+        );
+        let leftovers = fs::read_dir(&d)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                name.starts_with('.') && name.ends_with(".tmp")
+            })
+            .count();
+        assert_eq!(leftovers, 0, "temp files leaked");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_rejects_world_readable_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let d = unique_fs_dir("open-dir");
+        fs::create_dir_all(&d).unwrap();
+        fs::set_permissions(&d, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(FileStorage::new(&d).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_rejects_symlinked_directory() {
+        use std::os::unix::fs::symlink;
+
+        let real = unique_fs_dir("real-dir");
+        make_private_dir(&real);
+        let link = unique_fs_dir("linked-dir");
+        let _ = fs::remove_file(&link);
+        symlink(&real, &link).unwrap();
+        assert!(FileStorage::new(&link).is_err());
+        let _ = std::fs::remove_dir_all(&real);
+        let _ = std::fs::remove_file(&link);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_requires_existing_parent() {
+        let d = unique_fs_dir("orphan").join("child");
+        assert!(FileStorage::new(&d).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_read_fails_closed_on_world_readable_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let d = unique_fs_dir("loose-file");
+        let mut s = FileStorage::new(&d).unwrap();
+        let seed = Seed::new([0x44u8; 32]);
+        save_seed(&mut s, &seed).unwrap();
+        let seed_path = d.join(keys::IDENTITY_SEED);
+        fs::set_permissions(&seed_path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(load_seed(&s).unwrap_err().kind() == io::ErrorKind::PermissionDenied);
+        // Overwriting heals the file: the insecure path is replaced, never read.
+        let replacement = Seed::new([0x45u8; 32]);
+        save_seed(&mut s, &replacement).unwrap();
+        assert_eq!(load_seed(&s).unwrap(), Some(replacement));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_read_rejects_symlinked_key() {
+        use std::os::unix::fs::symlink;
+
+        let d = unique_fs_dir("link-key");
+        let mut s = FileStorage::new(&d).unwrap();
+        let target = d.join("attacker-control");
+        fs::write(&target, [0x5au8; 32]).unwrap();
+        let seed_path = d.join(keys::IDENTITY_SEED);
+        symlink(&target, &seed_path).unwrap();
+        let mut buf = [0u8; 32];
+        assert!(s.read(keys::IDENTITY_SEED, &mut buf).is_err());
+        assert_eq!(fs::read(&target).unwrap(), [0x5au8; 32]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_write_replaces_symlinked_key_without_following() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let d = unique_fs_dir("link-swap");
+        let mut s = FileStorage::new(&d).unwrap();
+        let target = d.join("attacker-control");
+        fs::write(&target, [0xaau8; 32]).unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let seed_path = d.join(keys::IDENTITY_SEED);
+        symlink(&target, &seed_path).unwrap();
+        let seed = Seed::new([0x46u8; 32]);
+        save_seed(&mut s, &seed).unwrap();
+        assert_eq!(load_seed(&s).unwrap(), Some(seed));
+        let metadata = fs::symlink_metadata(&seed_path).unwrap();
+        assert!(metadata.is_file());
+        assert_eq!(metadata.permissions().mode() & 0o7777, 0o600);
+        assert_eq!(fs::read(&target).unwrap(), [0xaau8; 32]);
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
