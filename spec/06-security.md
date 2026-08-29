@@ -320,7 +320,8 @@ authorized by the holder of the previous private key.
 
 ```
 COSE_Sign1 = [
-  h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                          ; wrapper form per spec/08-gateway-coordination.md §6.5
   {4: h'<old-iid>'},      ; unprotected: {kid: old key's 8-byte IID}
   h'<payload>',           ; see Payload below
   h'<48-byte signature>'  ; Schnorr48 signature (by OLD key)
@@ -589,7 +590,8 @@ the root's Ed25519 key.
 
 ```
 COSE_Sign1 = [
-  h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                          ; wrapper form per spec/08-gateway-coordination.md §6.5
   {4: h'<root-iid>'},     ; unprotected: {kid: root 8-byte IID}
   h'<payload>',           ; see Payload below
   h'<48-byte signature>'  ; Schnorr48 signature
@@ -881,7 +883,8 @@ Content-Format: application/cose; cose-type="cose-sign1" (TBD)
 OSCORE: <announcer-root pairwise context>
 
 COSE_Sign1 = [
-  h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                          ; wrapper form per spec/08-gateway-coordination.md §6.5
   {4: h'<announcer-iid>'}, ; unprotected: {kid: announcer 8-byte IID}
   h'<payload>',           ; see Payload below
   h'<48-byte signature>'  ; Schnorr48 signature
@@ -1007,7 +1010,8 @@ verifiers when needed.
 
 ```
 COSE_Sign1 = [
-  h'a10139ffff',              ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',        ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                              ; wrapper form per spec/08-gateway-coordination.md §6.5
   {
     4: h'<issuer-iid>',       ; kid: issuer 8-byte IID
     33: [<x509-chain>]        ; x5chain: optional cert chain (RFC 9360)

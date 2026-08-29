@@ -178,7 +178,7 @@ only in internal claim structs); they are NOT payload keys, have no receiver
 consumer, and implementations MUST NOT add them to the payload.
 
 **On-air size:** A COSE_Sign1 slot claim is ~110 bytes typical (4 slots) and
-~220 bytes at the 60-slot cap (`CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS`, 60,
+~200-215 bytes at the 60-slot cap (`CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS`, 60,
 lichen/subsys/lichen/coap/include/lichen/coap_slot_coord.h). A 255-byte LoRa
 PHY payload (spec/02a, TDMA slot limits) leaves only ~25-45 bytes for
 CoAP+OSCORE+SCHC overhead, so 60-slot claims do not reliably fit on LoRa.

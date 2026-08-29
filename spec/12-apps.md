@@ -1023,7 +1023,8 @@ POST coap://[target-node]/groups/invite
 Content-Format: application/cose; cose-type="cose-sign1"
 
 COSE_Sign1 = [
-  h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                          ; wrapper form per spec/08-gateway-coordination.md §6.5
   {4: h'<inviter-iid>'},  ; unprotected: {kid: inviter 8-byte IID}
   h'<payload>',           ; see Payload below
   h'<48-byte signature>'  ; Schnorr48 signature
@@ -1065,7 +1066,8 @@ Per RFC 9052, the Sig_structure for COSE_Sign1:
 ```
 Sig_structure = [
   "Signature1",           ; context string
-  protected,              ; protected header bytes: h'a10139ffff'
+  protected,              ; protected header bytes: h'47A1013A00010000'
+                          ; (bstr-wrapped {1: -65537}; wrapper per spec/08-gateway-coordination.md §6.5)
   h'',                    ; external_aad (empty)
   payload                 ; payload bytes
 ]
@@ -1341,7 +1343,8 @@ structures signed by the delegator.
 
 ```
 COSE_Sign1 = [
-  h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+  h'47A1013A00010000',    ; protected: bstr-wrapped {1: -65537} (alg: Schnorr48-Ed25519)
+                          ; wrapper form per spec/08-gateway-coordination.md §6.5
   {4: h'<delegator-iid>'}, ; unprotected: {kid: delegator 8-byte IID}
   h'<payload>',           ; see Payload Structure below
   h'<48-byte signature>'  ; Schnorr48 signature
@@ -1387,7 +1390,8 @@ capabilities beyond one's role are rejected.
 ```
 Sig_structure = [
   "Signature1",           ; context string
-  protected,              ; protected header bytes (h'a10139ffff')
+  protected,              ; protected header bytes (h'47A1013A00010000',
+                          ;                  bstr-wrapped {1: -65537}; wrapper per spec/08-gateway-coordination.md §6.5)
   h'',                    ; external_aad (empty)
   payload                 ; payload bytes (CBOR-encoded map)
 ]

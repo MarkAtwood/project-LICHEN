@@ -2,11 +2,15 @@
   "id": "project-LICHEN-worker6-12p1",
   "title": "spec: 9 stale decoy-hex COSE_Sign1 examples in spec/05, 06, 12 emit the alg spec/08 step 4 MUST-rejects",
   "description": "Commit 341e6cf78b fixed the protected-header example in spec/08:135 (h'a10139ffff' actually encodes {1:-65536}, not the stated {1:-65537}; correct bytes h'47A1013A00010000' = bstr-wrapped canonical {1:-65537}). The same stale example remains at 9 sites in 3 sibling specs: spec/05-routing.md:518 (the 8.7.2 delegation protocol the DAO authz test exercises), spec/06-security.md:323, 592, 884, 1010, spec/12-apps.md:1026, 1068, 1344, 1390. The Python reference delegation_tokens.py:_encode_protected_header emits a1013a00010000 -\u003e on-wire bstr 47a1013a00010000, so an implementer following spec/05/06/12 literally emits the decoy alg that spec/08 step 4 says MUST be rejected — cross-impl divergence and mutual rejection by design. Fix: replace all 9 with h'47A1013A00010000' plus a one-line pointer to spec/08's wrapper paragraph (or fold into bead 5brg's scope which covers GCP-7.1's identical decoy in spec/08). Verify each with cbor2.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T01:01:34.091657Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T01:01:34.091657Z"
+  "updated_at": "2026-08-29T01:02:27.084329Z",
+  "started_at": "2026-08-29T01:02:27.084329Z",
+  "lease_expires_at": "2026-08-29T01:07:27.084329Z",
+  "heartbeat_at": "2026-08-29T01:02:27.084329Z"
 }
