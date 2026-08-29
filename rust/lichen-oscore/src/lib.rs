@@ -60,6 +60,9 @@ pub use oscore::{
     PeerCredential, PendingMessage2, PendingMessage3,
 };
 
+// Compile-time guards: owned key-material state must remain ZeroizeOnDrop.
+mod zeroize_asserts;
+
 // Exclusive live ownership of contexts by durable record.
 //
 // The bare activation methods on the re-exported `Context`
