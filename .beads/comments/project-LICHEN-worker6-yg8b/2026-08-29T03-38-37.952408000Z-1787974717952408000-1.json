@@ -1,0 +1,7 @@
+{
+  "id": "1787974717952408000-1",
+  "issue_id": "project-LICHEN-worker6-yg8b",
+  "author": "Mark Atwood",
+  "text": "VERIFICATION (independent re-run at HEAD c646a5d1): Ratified option (b) per nxew (closed 2026-08-28T23:49Z: 'Option (b) selected: TOFU key-selection'). Spec/02 quote aligned with (spec/02-physical-link.md 4.2, Key Selection Policy (TOFU), rule 5): 'Eviction: Trust-store entries MAY be evicted per local policy (LRU, timeout, explicit removal). Eviction of a pinned (SIID, key) binding MUST also invalidate all replay state for that signer.' Gates re-measured: cargo test -p lichen-link --features std,schnorr = 210 passed / 0 failed (156 lib + 52 integration incl. the 5 tests in tests/tofu_key_selection.rs + 2 doc); cargo clippy -p lichen-link --all-features --all-targets -- -D warnings clean (exit 0); cargo fmt -p lichen-link --check clean; cargo check -p lichen-link (no_std default) clean. Note: prior close reason tallied 202; exact re-run count at same tree state (no commits touched rust/lichen-link since bdc732ec6a) is 210. Correction to close record, no code change.",
+  "created_at": "2026-08-29T03:38:37.952408Z"
+}
