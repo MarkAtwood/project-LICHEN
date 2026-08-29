@@ -25,4 +25,25 @@ struct k_mutex {
 	uint32_t lock_word;
 };
 
+#define K_FOREVER (-1)
+
+static inline int k_mutex_init(struct k_mutex *mutex)
+{
+	mutex->lock_word = 0;
+	return 0;
+}
+
+static inline int k_mutex_lock(struct k_mutex *mutex, int timeout)
+{
+	(void)mutex;
+	(void)timeout;
+	return 0;
+}
+
+static inline int k_mutex_unlock(struct k_mutex *mutex)
+{
+	(void)mutex;
+	return 0;
+}
+
 #endif /* ZEPHYR_HOST_TEST_KERNEL_H_ */

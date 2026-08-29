@@ -11,11 +11,13 @@
 #ifdef LICHEN_RPL_TEST
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 /* Host tests provide lichen/tests/include/zephyr/kernel.h, a minimal stub
  * that satisfies the header's struct k_mutex member, so the real enum
  * declaration in rpl_routing.h is the single source of truth. */
 #include <lichen/rpl_routing.h>
+#include "rpl_internal.h"
 #else
 #include <stddef.h>
 #include <stdint.h>
@@ -92,7 +94,11 @@ enum lichen_rpl_sequence_relation lichen_rpl_sequence_compare(uint8_t incoming, 
 #undef LOLLIPOP_LINEAR_BASE
 #undef LOLLIPOP_SEQUENCE_WINDOW
 
-#ifndef LICHEN_RPL_TEST
+/* Manager lifecycle, DAO building, and ACK building compile on the host
+ * too: the host kernel stub provides k_mutex_init/lock/unlock, and these
+ * functions only need messages.c. lichen_rpl_dao_manager_lookup and
+ * lichen_rpl_dao_manager_route_count depend on rpl_routing_table.c and
+ * stay excluded from host builds that do not link it. */
 
 int lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
 				const uint8_t *node_address,
@@ -140,6 +146,8 @@ int lichen_rpl_dao_manager_bind_root_state(
 	return LICHEN_RPL_OK;
 }
 
+#ifndef LICHEN_RPL_TEST
+
 int lichen_rpl_dao_manager_lookup(struct lichen_rpl_dao_manager *dm,
 				  const uint8_t *target,
 				  struct lichen_rpl_route *route)
@@ -174,6 +182,8 @@ int lichen_rpl_dao_manager_route_count(struct lichen_rpl_dao_manager *dm)
 	k_mutex_unlock(&dm->lock);
 	return count;
 }
+
+#endif /* LICHEN_RPL_TEST */
 
 static int build_dao(struct lichen_rpl_dao_manager *dm,
 		     const uint8_t *parent_addr, uint8_t path_lifetime,
@@ -343,5 +353,3 @@ int lichen_rpl_dao_manager_build_dao_ack(struct lichen_rpl_dao_manager *dm,
 
 	return lichen_rpl_dao_ack_write(&ack, buf, len);
 }
-
-#endif /* LICHEN_RPL_TEST */

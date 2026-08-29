@@ -15,6 +15,7 @@ set(HOST_STUB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 add_executable(rpl_dao_sequence_test
   main.c
   ${RPL_SRC_DIR}/rpl_dao_build.c
+  ${RPL_SRC_DIR}/messages.c
 )
 
 target_include_directories(rpl_dao_sequence_test PRIVATE
@@ -24,9 +25,13 @@ target_include_directories(rpl_dao_sequence_test PRIVATE
 target_compile_definitions(rpl_dao_sequence_test PRIVATE LICHEN_RPL_TEST=1)
 # rpl_routing.h includes rpl_messages.h, which lacks _Nonnull on two pointers.
 # Apple Clang -Wnullability-completeness is fatal under this target's -Werror.
-target_compile_options(rpl_dao_sequence_test PRIVATE -Wno-nullability-completeness)
-
 lichen_test_target(rpl_dao_sequence_test)
+# rpl_routing.h includes rpl_messages.h, which lacks _Nonnull on two pointers,
+# and messages.c relies on implicit int conversions (same as the sweep target).
+target_compile_options(rpl_dao_sequence_test PRIVATE
+  -Wno-nullability-completeness
+  -Wno-implicit-int-conversion
+)
 
 # Exhaustive 65536-pair comparator sweeps against independent committed golden
 # dumps for DAO replay sequencing and DODAG version comparison.

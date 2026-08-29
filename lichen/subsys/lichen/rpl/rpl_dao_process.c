@@ -256,6 +256,53 @@ duplicate_candidate:
 			    candidates, candidate_count, path_sequence);
 }
 
+/* ── DAO origin authorization ──────────────────────────────────────────────── */
+
+/**
+ * Authorize every RPL Target against the verified DAO origin before any
+ * routing or replay mutation (spec/05-routing.md 8.7): each Target MUST be a
+ * /128 whose 16 octets equal the preserved DAO Source Address. Mirrors
+ * rust/lichen-rpl/src/routing.rs authorize_dao_prefixes() restricted to the
+ * current .44.7 host-route profile. /0 and broad prefixes fail here at the
+ * wire profile.
+ */
+static bool dao_targets_match_origin(const uint8_t *dao_bytes, size_t len,
+				     const uint8_t *origin)
+{
+	const uint8_t *opts = lichen_rpl_dao_options(dao_bytes, len);
+	size_t opts_len = lichen_rpl_dao_options_len_ex(dao_bytes, len);
+	bool saw_target = false;
+
+	if (opts == NULL || opts_len == 0) {
+		return false;
+	}
+
+	struct lichen_rpl_opt_iter it;
+	struct lichen_rpl_raw_opt opt;
+
+	lichen_rpl_opt_iter_init(&it, opts, opts_len);
+	for (;;) {
+		int ret = lichen_rpl_opt_iter_next(&it, &opt);
+
+		if (ret == 1) {
+			break;
+		}
+		if (ret != LICHEN_RPL_OK) {
+			return false;
+		}
+		if (opt.opt_type != LICHEN_RPL_OPT_RPL_TARGET) {
+			continue;
+		}
+		if (opt.data_len != LICHEN_RPL_TARGET_DATA_LEN ||
+		    opt.data[0] != 0 || opt.data[1] != 128U ||
+		    memcmp(&opt.data[2], origin, 16) != 0) {
+			return false;
+		}
+		saw_target = true;
+	}
+	return saw_target;
+}
+
 /* ── Graph validation ──────────────────────────────────────────────────────── */
 
 static const struct lichen_rpl_dao_snapshot *
@@ -559,30 +606,28 @@ bool rebuild_routes(struct lichen_rpl_dao_manager *dm)
 /**
  * Process a received DAO message and update routing table.
  *
- * SECURITY: This function does not authenticate DAO messages. The caller
- * MUST ensure DAOs are received over an authenticated channel (OSCORE or
- * link-layer authentication per LICHEN security architecture). Unauthenticated
- * DAOs enable routing poisoning attacks where an attacker claims to be the
- * parent for arbitrary targets, redirecting traffic through themselves.
- *
- * The LICHEN frame layer provides Schnorr link signatures (48B) which
- * authenticate the immediate sender. For DAO security, verify that:
- * 1. The DAO was received from an authenticated link neighbor
- * 2. The claimed target/parent relationship is plausible (e.g., target
- *    is the immediate sender, or the sender is a known router)
- *
- * RFC 6550 Section 10 defines RPL security modes, but LICHEN relies on
- * the link-layer and OSCORE for authentication instead.
+ * SECURITY: The caller MUST authenticate the DAO and pass the verified
+ * origin: the preserved DAO Source Address that owns the advertised Target
+ * (spec/05-routing.md 8.7). The LICHEN frame layer provides Schnorr link
+ * signatures (48B) which authenticate the immediate sender; OSCORE provides
+ * end-to-end origin authentication. Unauthenticated DAOs and foreign /128
+ * host routes enable routing poisoning attacks where an attacker claims to
+ * be the parent for arbitrary targets, redirecting traffic through
+ * themselves.
  *
  * @param dm         DAO manager (must be root)
  * @param dao_bytes  Raw DAO message bytes
  * @param len        Length of dao_bytes
  * @param now        Current timestamp for lifetime tracking
- * @return true if a route to the DAO target was successfully installed
+ * @param route_installed Optional output: true when a route was installed
+ * @param authenticated True once the caller authenticated the DAO origin
+ * @param origin     Verified DAO origin address (16 bytes), NULL if unknown
+ * @return APPLIED, IDEMPOTENT, or REJECTED
  */
 static enum lichen_rpl_dao_process_result process_dao(
 	struct lichen_rpl_dao_manager *dm, const uint8_t *dao_bytes, size_t len,
-	uint32_t now, bool *route_installed, bool authenticated)
+	uint32_t now, bool *route_installed, bool authenticated,
+	const uint8_t *origin)
 {
 	struct lichen_rpl_dao_stage *staged;
 	bool claimed[CONFIG_LICHEN_RPL_MAX_ROUTES] = { false };
@@ -596,7 +641,7 @@ static enum lichen_rpl_dao_process_result process_dao(
 	if (!dm->is_root || dm->root_state == NULL) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
-	if (!authenticated) {
+	if (!authenticated || origin == NULL) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	struct lichen_rpl_dao_root_state *root = dm->root_state;
@@ -611,6 +656,11 @@ static enum lichen_rpl_dao_process_result process_dao(
 	bool d_flag = (dao_bytes[1] & 0x40U) != 0;
 	if (dao.rpl_instance_id != dm->rpl_instance_id ||
 	    (d_flag && memcmp(dao.dodag_id, dm->dodag_id, 16) != 0)) {
+		return LICHEN_RPL_DAO_REJECTED;
+	}
+	/* spec/05-routing.md 8.7: every Target MUST equal the preserved DAO
+	 * Source Address; reject foreign host routes before any mutation. */
+	if (!dao_targets_match_origin(dao_bytes, len, origin)) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	if (!extract_updates(dao_bytes, len, &root->workspace, &staged_count)) {
@@ -707,7 +757,8 @@ static enum lichen_rpl_dao_process_result process_dao(
 
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
 					const uint8_t *dao_bytes, size_t len,
-					uint32_t now)
+					uint32_t now, const uint8_t *origin,
+					bool origin_authenticated)
 {
 	bool installed = false;
 
@@ -715,20 +766,23 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
 		return false;
 	}
 	k_mutex_lock(&dm->lock, K_FOREVER);
-	(void)process_dao(dm, dao_bytes, len, now, &installed, true);
+	(void)process_dao(dm, dao_bytes, len, now, &installed,
+			  origin_authenticated, origin);
 	k_mutex_unlock(&dm->lock);
 	return installed;
 }
 
 enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	struct lichen_rpl_dao_manager *dm, const uint8_t *dao_bytes, size_t len,
-	uint32_t now, uint8_t *ack_buf, size_t ack_buf_len)
+	uint32_t now, const uint8_t *origin, bool origin_authenticated,
+	uint8_t *ack_buf, size_t ack_buf_len)
 {
 	if (dm == NULL || dao_bytes == NULL) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	k_mutex_lock(&dm->lock, K_FOREVER);
-	enum lichen_rpl_dao_process_result result = process_dao(dm, dao_bytes, len, now, NULL, true);
+	enum lichen_rpl_dao_process_result result =
+		process_dao(dm, dao_bytes, len, now, NULL, origin_authenticated, origin);
 	if (result != LICHEN_RPL_DAO_REJECTED && (dao_bytes[1] & 0x80U) != 0U &&
 	    ack_buf != NULL && ack_buf_len >= 20U) {
 		if (lichen_rpl_dao_manager_build_dao_ack(dm, dao_bytes[3], 0,

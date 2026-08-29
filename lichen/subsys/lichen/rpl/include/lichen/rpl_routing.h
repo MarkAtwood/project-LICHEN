@@ -635,13 +635,13 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
 /**
  * @brief Process a received DAO on the root.
  *
- * @warning This function does NOT authenticate DAO messages. The caller
- * MUST ensure DAOs are received over an authenticated channel (OSCORE or
- * link-layer authentication). Unauthenticated DAOs enable routing poisoning
- * attacks where an attacker claims arbitrary target/parent relationships.
- * LICHEN relies on Schnorr link signatures (48B) to authenticate the
- * immediate sender; verify that the DAO source is a known authenticated
- * neighbor before calling this function.
+ * @warning The caller MUST authenticate the DAO (Schnorr link signature or
+ * OSCORE per LICHEN security architecture) and pass the verified origin: the
+ * preserved DAO Source Address that owns the advertised Target
+ * (spec/05-routing.md 8.7). Every RPL Target MUST equal @p origin; a foreign
+ * /128 host route is rejected before any route or snapshot mutation. Passing
+ * @p origin as NULL or @p origin_authenticated as false fails closed: the
+ * DAO is rejected without mutating routing state.
  *
  * @note Root processing fails closed unless caller-owned root state was bound
  * with lichen_rpl_dao_manager_bind_root_state().
@@ -650,18 +650,25 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
  * @param dao_bytes Raw DAO wire bytes (base object + options)
  * @param len       Length of DAO bytes
  * @param now       Current timestamp for lifetime tracking
+ * @param origin    Verified DAO origin address (16 bytes), NULL if unknown
+ * @param origin_authenticated True once the caller authenticated the origin
  * @return true if a route was installed, false otherwise
  */
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull dm,
 					const uint8_t *_Nonnull dao_bytes, size_t len,
-					uint32_t now);
+					uint32_t now,
+					const uint8_t *_Nullable origin,
+					bool origin_authenticated);
 
 /**
  * Process a DAO and report rejection, mutation, or exact idempotent replay.
  *
- * The caller MUST authenticate and authorize the DAO as described for
- * lichen_rpl_dao_manager_process_dao(). This blocking API is thread-context
- * only and MUST NOT be called from an ISR.
+ * The caller MUST authenticate the DAO origin exactly as described for
+ * lichen_rpl_dao_manager_process_dao(): @p origin is the preserved DAO
+ * Source Address and every RPL Target MUST equal it (spec/05-routing.md 8.7);
+ * foreign host routes are rejected before any mutation, and a NULL @p origin
+ * or false @p origin_authenticated fails closed. This blocking API is
+ * thread-context only and MUST NOT be called from an ISR.
  *
  * If ack_buf is non-NULL and ack_buf_len >= 20, and the DAO has the ACK
  * request (K) flag set and was accepted (not rejected), a DAO-ACK with
@@ -671,6 +678,7 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull 
 enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	struct lichen_rpl_dao_manager *_Nonnull dm,
 	const uint8_t *_Nonnull dao_bytes, size_t len, uint32_t now,
+	const uint8_t *_Nullable origin, bool origin_authenticated,
 	uint8_t *_Nullable ack_buf, size_t ack_buf_len);
 
 /**
