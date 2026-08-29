@@ -1,0 +1,7 @@
+{
+  "id": "1787968748341094000-1",
+  "issue_id": "project-LICHEN-worker6-nwjl.3",
+  "author": "Mark Atwood",
+  "text": "Implementation complete + host-verified: COSE_Sign1 decode/verify over full canonical-CBOR claim (protected header {1:-65537}, integer-key payload map, schnorr48_verify via lichen_key_store_get on gateway IID), sign_claim for senders, weak claim_seq hooks for sibling .4 NVS persistence, 4.03/4.09 semantics per spec. New host test lichen/tests/coap_slot_claim: 137/137 green under ASan+UBSan incl. the forgery regression (tampered slots), replay/expiry/conflict gates, ~25 structural rejects, SHA-256 FIPS KAT. Kconfig: depends on LICHEN_CCP_TIME_SYNC + select TINYCRYPT_SHA256. REMAINING: real Zephyr firmware build under pinned v3.7.0 + on-target Twister validation (AWS) before close - do not re-implement.",
+  "created_at": "2026-08-29T01:59:08.341094Z"
+}

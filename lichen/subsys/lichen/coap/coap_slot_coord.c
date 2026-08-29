@@ -10,9 +10,12 @@
  * - Slot allocation (interleaved and contiguous modes)
  * - Conflict resolution (lowest IID wins, signature validation)
  * - CoAP resources (/info, /slots, /channels)
+ * - 6.5 Slot claims as COSE_Sign1 (alg -65537, Schnorr48-Ed25519) over the
+ *   full claim payload (slots, superframe_epoch, mode, expiry, gateway_iid,
+ *   claim_seq, ordinal)
  *
- * SECURITY: All slot claims MUST be signed with Schnorr48. Claims with
- * invalid or missing signatures are silently discarded per GCP-6.3.
+ * SECURITY: All slot claims are COSE_Sign1 signed with Schnorr48. Claims
+ * with invalid or missing signatures are silently discarded per GCP-6.3.
  */
 
 #include <errno.h>
@@ -28,6 +31,7 @@
 #include <lichen/coap_server.h>
 #include <lichen/coap_oscore.h>
 #include <lichen/coap_keys.h>
+#include <lichen/link.h>
 #include <lichen/schnorr48.h>
 
 LOG_MODULE_REGISTER(lichen_slot_coord, CONFIG_LICHEN_COAP_SLOT_COORD_LOG_LEVEL);
@@ -36,18 +40,14 @@ LOG_MODULE_REGISTER(lichen_slot_coord, CONFIG_LICHEN_COAP_SLOT_COORD_LOG_LEVEL);
  * CBOR key definitions (matching test vectors)
  * -------------------------------------------------------------------------- */
 
-/* Slot claim keys (sorted by encoded length per RFC 8949 Section 4.2.1) */
-#define KEY_SLOTS           "slots"
-#define KEY_ORDINAL         "ordinal"
-#define KEY_GATEWAY_IID     "gateway_iid"
-#define KEY_GATEWAY_COUNT   "gateway_count"
-#define KEY_SUPERFRAME_ID   "superframe_id"
-#define KEY_SLOT_START      "slot_start"
-#define KEY_SLOT_COUNT      "slot_count"
-
 /* Slot grant keys */
 #define KEY_GRANTED_SLOTS   "granted_slots"
 #define KEY_VALID_UNTIL     "valid_until"
+#define KEY_SUPERFRAME_ID   "superframe_id"
+
+/* Resource response keys (string-keyed, unsigned — GET responses only) */
+#define KEY_GATEWAY_COUNT   "gateway_count"
+#define KEY_GATEWAY_IID     "gateway_iid"
 
 /* Gateway info keys */
 #define KEY_TIME_SOURCE     "time_source"
@@ -60,6 +60,33 @@ LOG_MODULE_REGISTER(lichen_slot_coord, CONFIG_LICHEN_COAP_SLOT_COORD_LOG_LEVEL);
 #define KEY_ALLOCATION_MODE "allocation_mode"
 #define KEY_ALLOCATIONS     "allocations"
 
+/* GCP-6.5 slot claim payload keys (integer, canonical order 1..7) */
+#define CLAIM_KEY_SLOTS           1
+#define CLAIM_KEY_SUPERFRAME_EPOCH 2
+#define CLAIM_KEY_MODE            3
+#define CLAIM_KEY_EXPIRY          4
+#define CLAIM_KEY_GATEWAY_IID     5
+#define CLAIM_KEY_CLAIM_SEQ       6
+#define CLAIM_KEY_ORDINAL         7
+#define CLAIM_KEY_COUNT           7
+
+/* COSE key 4 = kid (RFC 9052) */
+#define COSE_KEY_KID 4
+
+/* COSE_Sign1 element count */
+#define COSE_SIGN1_ELEMS 4
+
+/* Protected header: bstr-wrapped canonical {1: -65537} (alg
+ * Schnorr48-Ed25519). The map bytes are a1 01 3a 00 01 00 00; the value
+ * -65536 (encoded a1 01 39 ff ff) is the spec's decoy and is rejected. */
+static const uint8_t cose_protected_alg[] = {
+	0xA1, 0x01, 0x3A, 0x00, 0x01, 0x00, 0x00
+};
+
+/* Maximum COSE_Sign1 payload we will decode: bounds the Sig_structure
+ * scratch buffer. A 60-slot claim is ~165 bytes. */
+#define CLAIM_PAYLOAD_MAX 255
+
 /* CBOR content-format */
 #define CBOR_CONTENT_FORMAT 60
 
@@ -67,7 +94,9 @@ LOG_MODULE_REGISTER(lichen_slot_coord, CONFIG_LICHEN_COAP_SLOT_COORD_LOG_LEVEL);
  * Internal state
  * -------------------------------------------------------------------------- */
 
-static struct lichen_slot_coord_ctx s_ctx;
+/* Coordinator singleton backing the CoAP resource handlers. Unused when
+ * the resource handlers are compiled out (host codec/verify test builds). */
+static struct lichen_slot_coord_ctx s_ctx __attribute__((unused));
 static K_MUTEX_DEFINE(s_coord_lock);
 
 /* --------------------------------------------------------------------------
@@ -287,52 +316,91 @@ const struct lichen_slot_claim *lichen_slot_coord_resolve_conflict(
 	return claim_b;
 }
 
+/* --------------------------------------------------------------------------
+ * COSE_Sign1 signature computation and verification (GCP-6.5)
+ * -------------------------------------------------------------------------- */
+
+#ifdef CONFIG_TINYCRYPT_SHA256
+#include <tinycrypt/sha256.h>
+#include <tinycrypt/constants.h>
+#else
+/* Keep the verify-path signatures compilable without the tinycrypt
+ * headers; the Kconfig select (and the host test define) always provides
+ * the real implementation. */
+#define TC_SHA256_DIGEST_SIZE 32
+#endif
+
+/* Rate-limited WARN for silent discards (GCP-6.3): log the first event
+ * then every 32nd so a flood cannot dominate the log. */
+static uint32_t s_discard_count;
+
+static void slot_coord_log_discard(const char *reason)
+{
+	(void)reason;
+	if ((s_discard_count & 0x1FU) == 0) {
+		LOG_WRN("Discarding slot claim: %s", reason);
+	}
+	s_discard_count++;
+}
+
+/* Zephyr builds get __weak from <zephyr/kernel.h>; host builds here. */
+#ifndef __weak
+#define __weak __attribute__((weak))
+#endif
+
+static size_t claim_store_cose(struct lichen_gateway_alloc *entry,
+			       const struct lichen_slot_claim *claim);
+static int claim_compute_digest(const uint8_t *payload, size_t payload_len,
+				uint8_t digest[TC_SHA256_DIGEST_SIZE]);
+
 enum lichen_claim_result lichen_slot_coord_process_claim(
 	struct lichen_slot_coord_ctx *ctx,
 	const struct lichen_slot_claim *claim,
-	struct lichen_slot_grant *grant)
+	uint64_t now_unix,
+	struct lichen_slot_grant *grant,
+	const uint8_t **conflict_cose,
+	size_t *conflict_cose_len)
 {
 	if (ctx == NULL || claim == NULL || grant == NULL) {
 		return LICHEN_CLAIM_REJECT_INVALID_SLOTS;
 	}
 
-	/* SECURITY: Claims without signature MUST be silently discarded */
-	if (!claim->has_signature) {
-		LOG_DBG("Discarding claim without signature");
+	/* SECURITY: Claims without COSE verification material MUST be
+	 * silently discarded (structural guarantee: decode_claim always
+	 * populates these) */
+	if (claim->cose_payload == NULL || claim->cose_payload_len == 0 ||
+	    claim->cose_payload_len > CLAIM_PAYLOAD_MAX ||
+	    claim->cose_signature == NULL) {
+		LOG_DBG("Discarding claim without verification material");
 		return LICHEN_CLAIM_REJECT_NO_SIG;
 	}
 
-	/* SECURITY: Verify Schnorr48 signature on slot claim (GCP-6.3) */
+	/* SECURITY: Verify Schnorr48 signature over the full claim payload
+	 * (GCP-6.3, GCP-6.5 validation steps 2-6) */
 #ifdef CONFIG_LICHEN_LINK_SCHNORR
 	{
-		/* Fetch gateway public key from key store */
+		/* Fetch gateway public key from key store; the lookup IID is
+		 * the payload gateway_iid (decode_claim already checked it
+		 * equals the COSE kid) */
 		struct lichen_key_entry key_entry;
-		int ret = lichen_key_store_get(claim->gateway_iid, &key_entry);
-		if (ret != 0) {
-			LOG_DBG("Discarding claim: gateway key not found");
+		uint8_t digest[TC_SHA256_DIGEST_SIZE];
+		int ret = claim_compute_digest(claim->cose_payload,
+					       claim->cose_payload_len, digest);
+		if (ret < 0) {
 			return LICHEN_CLAIM_REJECT_INVALID_SIG;
 		}
 
-		/* Reconstruct signed message: SLOT_CLAIM:XX:IIIIIIIIIIIIIIII:XXXXXXXX
-		 * XX = ordinal (2 hex chars)
-		 * IIIIIIIIIIIIIIII = gateway_iid (16 hex chars)
-		 * XXXXXXXX = superframe_id (8 hex chars)
-		 */
-		char msg_buf[48];
-		int msg_len = snprintf(msg_buf, sizeof(msg_buf),
-				       "SLOT_CLAIM:%02X:", claim->ordinal);
-		for (int i = 0; i < LICHEN_IID_LEN; i++) {
-			snprintf(&msg_buf[msg_len + i * 2], 3, "%02X",
-				 claim->gateway_iid[i]);
+		ret = lichen_key_store_get(claim->gateway_iid, &key_entry);
+		if (ret != 0) {
+			slot_coord_log_discard("gateway key not found");
+			return LICHEN_CLAIM_REJECT_INVALID_SIG;
 		}
-		msg_len += LICHEN_IID_LEN * 2;
-		msg_len += snprintf(&msg_buf[msg_len], sizeof(msg_buf) - msg_len,
-				    ":%08X", claim->superframe_id);
 
-		if (!schnorr48_verify(key_entry.pubkey, (const uint8_t *)msg_buf,
-				      (size_t)msg_len, claim->signature,
+		if (!schnorr48_verify(key_entry.pubkey, digest,
+				      TC_SHA256_DIGEST_SIZE,
+				      claim->cose_signature,
 				      LICHEN_SCHNORR48_LEN)) {
-			LOG_DBG("Discarding claim: invalid signature");
+			slot_coord_log_discard("invalid signature");
 			return LICHEN_CLAIM_REJECT_INVALID_SIG;
 		}
 	}
@@ -340,9 +408,40 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 #error "slot-coord requires LICHEN_LINK_SCHNORR: claim verification must never be compiled out (fail-open backstop)"
 #endif
 
+	/* GCP-6.5 validation step 7: expiry > now */
+	if (claim->expiry <= now_unix) {
+		LOG_DBG("Claim rejected: expired");
+		return LICHEN_CLAIM_REJECT_EXPIRED;
+	}
+
+	/* GCP-6.5 validation step 8: claim_seq above cached high-water mark */
+	{
+		uint32_t cached_seq;
+		int ret = lichen_slot_claim_seq_lookup(claim->gateway_iid,
+						       &cached_seq);
+		if (ret == 0 && claim->claim_seq <= cached_seq) {
+			LOG_DBG("Claim rejected: claim_seq replay");
+			return LICHEN_CLAIM_REJECT_REPLAY;
+		}
+	}
+
+	/* Slot sanity: at least one slot, all within the superframe */
+	if (claim->slot_count == 0 ||
+	    claim->slot_count > CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS) {
+		LOG_DBG("Claim rejected: invalid slot count");
+		return LICHEN_CLAIM_REJECT_INVALID_SLOTS;
+	}
+	for (uint8_t cs = 0; cs < claim->slot_count; cs++) {
+		if (claim->slots[cs] >= ctx->superframe.slots_per_superframe) {
+			LOG_DBG("Claim rejected: slot out of range");
+			return LICHEN_CLAIM_REJECT_INVALID_SLOTS;
+		}
+	}
+
 	k_mutex_lock(&s_coord_lock, K_FOREVER);
 
-	/* Check for conflicts with existing allocations */
+	/* Check for conflicts with existing allocations (step 9) */
+	const struct lichen_gateway_alloc *winner = NULL;
 	for (int i = 0; i < CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS; i++) {
 		if (!ctx->gateways[i].valid) {
 			continue;
@@ -356,31 +455,104 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 					if (lichen_iid_compare(claim->gateway_iid,
 							       ctx->gateways[i].iid) > 0) {
 						/* Existing allocation has lower IID, reject */
-						k_mutex_unlock(&s_coord_lock);
-						LOG_DBG("Claim rejected: conflict with lower IID");
-						return LICHEN_CLAIM_REJECT_CONFLICT;
+						winner = &ctx->gateways[i];
+						break;
 					}
 					/* Claim has lower IID, will override */
 				}
 			}
+			if (winner != NULL) {
+				break;
+			}
 		}
+		if (winner != NULL) {
+			break;
+		}
+	}
+
+	if (winner != NULL) {
+		if (conflict_cose != NULL && conflict_cose_len != NULL) {
+			*conflict_cose = winner->last_claim_cose;
+			*conflict_cose_len = winner->last_claim_cose_len;
+		}
+		k_mutex_unlock(&s_coord_lock);
+		LOG_DBG("Claim rejected: conflict with lower IID");
+		return LICHEN_CLAIM_REJECT_CONFLICT;
+	}
+
+	/* Persist the new claim_seq high-water BEFORE applying the claim
+	 * (GCP-6.5 persist-first ordering) */
+	if (lichen_slot_claim_seq_commit(claim->gateway_iid,
+					 claim->claim_seq) != 0) {
+		k_mutex_unlock(&s_coord_lock);
+		LOG_WRN("Claim rejected: claim_seq persist failed");
+		return LICHEN_CLAIM_REJECT_PERSIST;
 	}
 
 	/* Accept claim and update grant */
 	memcpy(grant->granted_slots, claim->slots, claim->slot_count);
 	grant->granted_count = claim->slot_count;
 	grant->superframe_id = claim->superframe_id;
-	grant->valid_until = 0; /* Caller should set expiration */
+	grant->valid_until = claim->expiry;
 
 	/* Register the gateway allocation */
+	uint8_t gateway_count_before = ctx->gateway_count;
+
 	lichen_slot_coord_register_gateway(ctx, claim->gateway_iid, claim->ordinal,
 					   claim->slots, claim->slot_count,
 					   claim->superframe_id);
+
+	/* Store the accepted COSE_Sign1 for 4.09 Conflict payloads */
+	for (int i = 0; i < CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS; i++) {
+		if (ctx->gateways[i].valid &&
+		    memcmp(ctx->gateways[i].iid, claim->gateway_iid,
+			   LICHEN_IID_LEN) == 0) {
+			if (claim_store_cose(&ctx->gateways[i], claim) == 0) {
+				/* Cannot happen for spec-conformant claims
+				 * (bounded well below the 255-byte entry);
+				 * refuse to apply an unrecordable claim */
+				ctx->gateways[i].valid = false;
+				ctx->gateway_count = gateway_count_before;
+				k_mutex_unlock(&s_coord_lock);
+				LOG_WRN("Claim rejected: COSE too large to record");
+				return LICHEN_CLAIM_REJECT_INVALID_SLOTS;
+			}
+			break;
+		}
+	}
 
 	k_mutex_unlock(&s_coord_lock);
 	LOG_INF("Slot claim accepted");
 	return LICHEN_CLAIM_ACCEPTED;
 }
+
+/* --------------------------------------------------------------------------
+ * claim_seq high-water hooks (GCP-6.5 persistence)
+ *
+ * Weak defaults keep this child compilable without NV storage; the
+ * settings-backed replay gate supersedes them. The hooks are process-wide
+ * (keyed by gateway IID), not per lichen_slot_coord_ctx. The host test
+ * build (LICHEN_SLOT_CLAIM_TEST) omits the defaults and supplies strong
+ * definitions, so the gate logic is always exercised through real hooks.
+ * -------------------------------------------------------------------------- */
+
+#ifndef LICHEN_SLOT_CLAIM_TEST
+__weak int lichen_slot_claim_seq_lookup(const uint8_t iid[LICHEN_IID_LEN],
+					uint32_t *cached)
+{
+	(void)iid;
+	(void)cached;
+	return -ENOENT;
+}
+
+__weak int lichen_slot_claim_seq_commit(const uint8_t iid[LICHEN_IID_LEN],
+					uint32_t seq)
+{
+	(void)iid;
+	(void)seq;
+	return 0;
+}
+#endif /* !LICHEN_SLOT_CLAIM_TEST */
 
 int lichen_slot_coord_find_available(const struct lichen_slot_coord_ctx *ctx,
 				     uint8_t slot_count, uint8_t *available_slots,
@@ -496,26 +668,26 @@ static void cbor_enc_uint(struct cbor_enc_ctx *e, uint8_t major, uint64_t val)
 {
 	if (val < 24) {
 		if (!cbor_enc_check(e, 1)) return;
-		e->buf[e->off++] = (major << 5) | (uint8_t)val;
+		e->buf[e->off++] = (uint8_t)((major << 5) | (uint8_t)val);
 	} else if (val <= UINT8_MAX) {
 		if (!cbor_enc_check(e, 2)) return;
-		e->buf[e->off++] = (major << 5) | 24;
+		e->buf[e->off++] = (uint8_t)((major << 5) | 24);
 		e->buf[e->off++] = (uint8_t)val;
 	} else if (val <= UINT16_MAX) {
 		if (!cbor_enc_check(e, 3)) return;
-		e->buf[e->off++] = (major << 5) | 25;
+		e->buf[e->off++] = (uint8_t)((major << 5) | 25);
 		e->buf[e->off++] = (uint8_t)(val >> 8);
 		e->buf[e->off++] = (uint8_t)val;
 	} else if (val <= UINT32_MAX) {
 		if (!cbor_enc_check(e, 5)) return;
-		e->buf[e->off++] = (major << 5) | 26;
+		e->buf[e->off++] = (uint8_t)((major << 5) | 26);
 		e->buf[e->off++] = (uint8_t)(val >> 24);
 		e->buf[e->off++] = (uint8_t)(val >> 16);
 		e->buf[e->off++] = (uint8_t)(val >> 8);
 		e->buf[e->off++] = (uint8_t)val;
 	} else {
 		if (!cbor_enc_check(e, 9)) return;
-		e->buf[e->off++] = (major << 5) | 27;
+		e->buf[e->off++] = (uint8_t)((major << 5) | 27);
 		e->buf[e->off++] = (uint8_t)(val >> 56);
 		e->buf[e->off++] = (uint8_t)(val >> 48);
 		e->buf[e->off++] = (uint8_t)(val >> 40);
@@ -554,9 +726,107 @@ static void cbor_enc_array_header(struct cbor_enc_ctx *e, size_t count)
 	cbor_enc_uint(e, 4, count);
 }
 
+/*
+ * Build Sig_structure = ["Signature1", protected, h'', payload] (RFC 9052
+ * Section 4.4) and digest it with SHA-256 per spec/08 GCP-6.5 (house
+ * convention: capability_announcements.py,
+ * test/vectors/generate_gcp_handoff_cose_sign1.py).
+ */
+static int claim_compute_digest(const uint8_t *payload, size_t payload_len,
+				uint8_t digest[TC_SHA256_DIGEST_SIZE])
+{
+	uint8_t scratch[COSE_SIGN1_ELEMS + sizeof(cose_protected_alg) +
+			CLAIM_PAYLOAD_MAX + 16];
+	struct cbor_enc_ctx e;
+	struct tc_sha256_state_struct sha;
+
+	cbor_enc_init(&e, scratch, sizeof(scratch));
+	cbor_enc_array_header(&e, COSE_SIGN1_ELEMS);
+	cbor_enc_tstr(&e, "Signature1");
+	cbor_enc_bstr(&e, cose_protected_alg, sizeof(cose_protected_alg));
+	cbor_enc_bstr(&e, (const uint8_t *)"", 0);
+	cbor_enc_bstr(&e, payload, payload_len);
+	if (e.overflow) {
+		return -ENOBUFS;
+	}
+
+	if (tc_sha256_init(&sha) != TC_CRYPTO_SUCCESS) {
+		return -EIO;
+	}
+	if (tc_sha256_update(&sha, scratch, e.off) != TC_CRYPTO_SUCCESS) {
+		return -EIO;
+	}
+	if (tc_sha256_final(digest, &sha) != TC_CRYPTO_SUCCESS) {
+		return -EIO;
+	}
+
+	return 0;
+}
+
+/*
+ * Rebuild the accepted COSE_Sign1 [protected, {4: kid}, payload, sig] into
+ * the gateway entry for 4.09 Conflict payloads. Deterministic: the
+ * protected header is the fixed alg map and the unprotected header carries
+ * only the kid. Returns 0 if the entry buffer is too small.
+ */
+static size_t claim_store_cose(struct lichen_gateway_alloc *entry,
+			       const struct lichen_slot_claim *claim)
+{
+	struct cbor_enc_ctx e;
+
+	cbor_enc_init(&e, entry->last_claim_cose, sizeof(entry->last_claim_cose));
+	cbor_enc_array_header(&e, COSE_SIGN1_ELEMS);
+	cbor_enc_bstr(&e, cose_protected_alg, sizeof(cose_protected_alg));
+	cbor_enc_map_header(&e, 1);
+	cbor_enc_uint(&e, 0, COSE_KEY_KID);
+	cbor_enc_bstr(&e, claim->gateway_iid, LICHEN_IID_LEN);
+	cbor_enc_bstr(&e, claim->cose_payload, claim->cose_payload_len);
+	cbor_enc_bstr(&e, claim->cose_signature, LICHEN_SCHNORR48_LEN);
+	if (e.overflow) {
+		return 0;
+	}
+	entry->last_claim_cose_len = (uint8_t)e.off;
+	return e.off;
+}
+
 /* --------------------------------------------------------------------------
  * CBOR encoding
  * -------------------------------------------------------------------------- */
+
+/*
+ * Encode the spec/08 GCP-6.5 payload map: integer keys 1-7 in canonical
+ * order. gateway_count and slot_start are sender-local bookkeeping and are
+ * never emitted.
+ */
+static void claim_encode_payload(struct cbor_enc_ctx *e,
+				 const struct lichen_slot_claim *claim)
+{
+	cbor_enc_map_header(e, CLAIM_KEY_COUNT);
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_SLOTS);
+	cbor_enc_array_header(e, claim->slot_count);
+	for (uint8_t i = 0; i < claim->slot_count; i++) {
+		cbor_enc_uint(e, 0, claim->slots[i]);
+	}
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_SUPERFRAME_EPOCH);
+	cbor_enc_uint(e, 0, claim->superframe_id);
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_MODE);
+	cbor_enc_uint(e, 0, claim->mode);
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_EXPIRY);
+	cbor_enc_uint(e, 0, claim->expiry);
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_GATEWAY_IID);
+	cbor_enc_bstr(e, claim->gateway_iid, LICHEN_IID_LEN);
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_CLAIM_SEQ);
+	cbor_enc_uint(e, 0, claim->claim_seq);
+
+	cbor_enc_uint(e, 0, CLAIM_KEY_ORDINAL);
+	cbor_enc_uint(e, 0, claim->ordinal);
+}
 
 int lichen_slot_coord_encode_claim(const struct lichen_slot_claim *claim,
 				   uint8_t *buf, size_t buf_len)
@@ -568,46 +838,65 @@ int lichen_slot_coord_encode_claim(const struct lichen_slot_claim *claim,
 	struct cbor_enc_ctx e;
 	cbor_enc_init(&e, buf, buf_len);
 
-	/* Count fields: slots, ordinal, gateway_iid, gateway_count, superframe_id */
-	int count = 5;
-	if (claim->slot_start > 0) {
-		count += 2; /* slot_start, slot_count */
-	}
-
-	cbor_enc_map_header(&e, count);
-
-	/* Keys sorted by encoded length per RFC 8949 Section 4.2.1 */
-	cbor_enc_tstr(&e, KEY_SLOTS);
-	cbor_enc_array_header(&e, claim->slot_count);
-	for (uint8_t i = 0; i < claim->slot_count; i++) {
-		cbor_enc_uint(&e, 0, claim->slots[i]);
-	}
-
-	cbor_enc_tstr(&e, KEY_ORDINAL);
-	cbor_enc_uint(&e, 0, claim->ordinal);
-
-	cbor_enc_tstr(&e, KEY_GATEWAY_IID);
-	cbor_enc_bstr(&e, claim->gateway_iid, LICHEN_IID_LEN);
-
-	cbor_enc_tstr(&e, KEY_GATEWAY_COUNT);
-	cbor_enc_uint(&e, 0, claim->gateway_count);
-
-	cbor_enc_tstr(&e, KEY_SUPERFRAME_ID);
-	cbor_enc_uint(&e, 0, claim->superframe_id);
-
-	if (claim->slot_start > 0) {
-		cbor_enc_tstr(&e, KEY_SLOT_START);
-		cbor_enc_uint(&e, 0, claim->slot_start);
-
-		cbor_enc_tstr(&e, KEY_SLOT_COUNT);
-		cbor_enc_uint(&e, 0, claim->slot_count);
-	}
+	claim_encode_payload(&e, claim);
 
 	if (e.overflow) {
 		return -ENOBUFS;
 	}
 
 	return (int)e.off;
+}
+
+int lichen_slot_coord_sign_claim(const uint8_t *privkey,
+				 const uint8_t *pubkey,
+				 const struct lichen_slot_claim *claim,
+				 uint8_t *buf, size_t buf_len)
+{
+	if (privkey == NULL || pubkey == NULL || claim == NULL || buf == NULL) {
+		return -EINVAL;
+	}
+#ifdef CONFIG_TINYCRYPT_SHA256
+	/* Payload -> Sig_structure digest -> Schnorr48 signature */
+	uint8_t payload[CLAIM_PAYLOAD_MAX];
+	uint8_t digest[TC_SHA256_DIGEST_SIZE];
+	uint8_t sig[LICHEN_SCHNORR48_LEN];
+	struct cbor_enc_ctx p, e;
+	int ret;
+
+	cbor_enc_init(&p, payload, sizeof(payload));
+	claim_encode_payload(&p, claim);
+	if (p.overflow || p.off > CLAIM_PAYLOAD_MAX) {
+		return -ENOBUFS;
+	}
+
+	ret = claim_compute_digest(payload, p.off, digest);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = schnorr48_sign(privkey, pubkey, digest, TC_SHA256_DIGEST_SIZE, sig);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* COSE_Sign1 = [protected, {4: kid}, payload, sig] */
+	cbor_enc_init(&e, buf, buf_len);
+	cbor_enc_array_header(&e, COSE_SIGN1_ELEMS);
+	cbor_enc_bstr(&e, cose_protected_alg, sizeof(cose_protected_alg));
+	cbor_enc_map_header(&e, 1);
+	cbor_enc_uint(&e, 0, COSE_KEY_KID);
+	cbor_enc_bstr(&e, claim->gateway_iid, LICHEN_IID_LEN);
+	cbor_enc_bstr(&e, payload, p.off);
+	cbor_enc_bstr(&e, sig, LICHEN_SCHNORR48_LEN);
+	if (e.overflow) {
+		return -ENOBUFS;
+	}
+
+	return (int)e.off;
+#else
+#error "slot-coord requires TINYCRYPT_SHA256: claim digest must never be compiled out"
+	return -EIO;
+#endif
 }
 
 int lichen_slot_coord_encode_grant(const struct lichen_slot_grant *grant,
@@ -720,27 +1009,32 @@ static uint64_t cbor_dec_uint(struct cbor_dec_ctx *d)
 	return cbor_dec_uint_arg(d, info);
 }
 
-static size_t cbor_dec_bstr(struct cbor_dec_ctx *d, uint8_t *out, size_t max_len)
+/* Zero-copy byte string view: on success *ptr and *len reference the
+ * input buffer (valid while the input is unmodified). Returns true on
+ * success. */
+static bool cbor_dec_bstr_view(struct cbor_dec_ctx *d,
+			       const uint8_t **ptr, size_t *len)
 {
-	if (!cbor_dec_check(d, 1)) return 0;
+	if (!cbor_dec_check(d, 1)) return false;
 	uint8_t initial = d->buf[d->off++];
 	uint8_t major = initial >> 5;
 	uint8_t info = initial & 0x1f;
 
 	if (major != 2) {
 		d->error = true;
-		return 0;
+		return false;
 	}
 
-	uint64_t len = cbor_dec_uint_arg(d, info);
-	if (len > max_len || !cbor_dec_check(d, len)) {
+	uint64_t blen = cbor_dec_uint_arg(d, info);
+	if (blen > d->size || !cbor_dec_check(d, blen)) {
 		d->error = true;
-		return 0;
+		return false;
 	}
 
-	memcpy(out, &d->buf[d->off], len);
-	d->off += len;
-	return (size_t)len;
+	*ptr = &d->buf[d->off];
+	*len = (size_t)blen;
+	d->off += blen;
+	return true;
 }
 
 static size_t cbor_dec_tstr(struct cbor_dec_ctx *d, char *out, size_t max_len)
@@ -799,6 +1093,115 @@ static size_t cbor_dec_array_header(struct cbor_dec_ctx *d)
  * CBOR decoding
  * -------------------------------------------------------------------------- */
 
+/* Decode a uint that must fit uint32; marks the context and returns false
+ * on error or overflow. */
+static bool claim_dec_u32(struct cbor_dec_ctx *d, uint32_t *out)
+{
+	uint64_t v = cbor_dec_uint(d);
+
+	if (d->error || v > UINT32_MAX) {
+		d->error = true;
+		return false;
+	}
+	*out = (uint32_t)v;
+	return true;
+}
+
+/* Decode a uint that must fit uint8. */
+static bool claim_dec_u8(struct cbor_dec_ctx *d, uint8_t *out)
+{
+	uint64_t v = cbor_dec_uint(d);
+
+	if (d->error || v > UINT8_MAX) {
+		d->error = true;
+		return false;
+	}
+	*out = (uint8_t)v;
+	return true;
+}
+
+/*
+ * Decode the payload map (integer keys 1-7). All keys are required; each
+ * key, duplicate keys, and unknown keys are rejected. Requires all keys
+ * present in claim_seen on return.
+ */
+static void claim_decode_payload(struct cbor_dec_ctx *d,
+				 struct lichen_slot_claim *claim,
+				 uint8_t *claim_seen)
+{
+	size_t map_count = cbor_dec_map_header(d);
+	if (map_count == 0 || map_count > CLAIM_KEY_COUNT) {
+		d->error = true;
+		return;
+	}
+
+	for (size_t i = 0; i < map_count && !d->error; i++) {
+		uint64_t key = cbor_dec_uint(d);
+		if (d->error || key == 0 || key > CLAIM_KEY_COUNT ||
+		    (*claim_seen & (uint8_t)(1U << key)) != 0) {
+			d->error = true;
+			break;
+		}
+		*claim_seen |= (uint8_t)(1U << key);
+
+		switch (key) {
+		case CLAIM_KEY_SLOTS: {
+			size_t arr_len = cbor_dec_array_header(d);
+			if (arr_len == 0 ||
+			    arr_len > CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS) {
+				d->error = true;
+				break;
+			}
+			for (size_t j = 0; j < arr_len; j++) {
+				if (!claim_dec_u8(d, &claim->slots[j])) {
+					break;
+				}
+			}
+			if (!d->error) {
+				claim->slot_count = (uint8_t)arr_len;
+			}
+			break;
+		}
+		case CLAIM_KEY_SUPERFRAME_EPOCH:
+			(void)claim_dec_u32(d, &claim->superframe_id);
+			break;
+		case CLAIM_KEY_MODE: {
+			uint8_t mode;
+
+			if (claim_dec_u8(d, &mode) && mode > 1) {
+				d->error = true;
+				break;
+			}
+			claim->mode = mode;
+			break;
+		}
+		case CLAIM_KEY_EXPIRY:
+			(void)claim_dec_u32(d, &claim->expiry);
+			break;
+		case CLAIM_KEY_GATEWAY_IID: {
+			const uint8_t *iid;
+			size_t iid_len;
+			if (!cbor_dec_bstr_view(d, &iid, &iid_len) ||
+			    iid_len != LICHEN_IID_LEN) {
+				d->error = true;
+				break;
+			}
+			memcpy(claim->gateway_iid, iid, LICHEN_IID_LEN);
+			break;
+		}
+		case CLAIM_KEY_CLAIM_SEQ:
+			(void)claim_dec_u32(d, &claim->claim_seq);
+			break;
+		case CLAIM_KEY_ORDINAL:
+			(void)claim_dec_u8(d, &claim->ordinal);
+			break;
+		default:
+			d->error = true;
+			break;
+		}
+	}
+}
+
 int lichen_slot_coord_decode_claim(const uint8_t *buf, size_t buf_len,
 				   struct lichen_slot_claim *claim)
 {
@@ -811,46 +1214,70 @@ int lichen_slot_coord_decode_claim(const uint8_t *buf, size_t buf_len,
 	struct cbor_dec_ctx d;
 	cbor_dec_init(&d, buf, buf_len);
 
-	size_t map_count = cbor_dec_map_header(&d);
-	if (d.error) {
+	/* COSE_Sign1 = [protected bstr, unprotected map, payload bstr, sig] */
+	size_t arr_len = cbor_dec_array_header(&d);
+	if (d.error || arr_len != COSE_SIGN1_ELEMS) {
 		return -EBADMSG;
 	}
 
-	char key[32];
-	for (size_t i = 0; i < map_count && !d.error; i++) {
-		cbor_dec_tstr(&d, key, sizeof(key));
-		if (d.error) break;
-
-		if (strcmp(key, KEY_SLOTS) == 0) {
-			size_t arr_len = cbor_dec_array_header(&d);
-			if (arr_len > CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS) {
-				d.error = true;
-				break;
-			}
-			for (size_t j = 0; j < arr_len; j++) {
-				claim->slots[j] = (uint8_t)cbor_dec_uint(&d);
-			}
-			claim->slot_count = (uint8_t)arr_len;
-		} else if (strcmp(key, KEY_ORDINAL) == 0) {
-			claim->ordinal = (uint8_t)cbor_dec_uint(&d);
-		} else if (strcmp(key, KEY_GATEWAY_IID) == 0) {
-			cbor_dec_bstr(&d, claim->gateway_iid, LICHEN_IID_LEN);
-		} else if (strcmp(key, KEY_GATEWAY_COUNT) == 0) {
-			claim->gateway_count = (uint8_t)cbor_dec_uint(&d);
-		} else if (strcmp(key, KEY_SUPERFRAME_ID) == 0) {
-			claim->superframe_id = (uint32_t)cbor_dec_uint(&d);
-		} else if (strcmp(key, KEY_SLOT_START) == 0) {
-			claim->slot_start = (uint8_t)cbor_dec_uint(&d);
-		} else if (strcmp(key, KEY_SLOT_COUNT) == 0) {
-			/* Already captured in slots array count */
-			(void)cbor_dec_uint(&d);
-		} else {
-			/* Skip unknown keys */
-			d.error = true;
-		}
+	/* Element 1: protected header MUST byte-equal the canonical
+	 * {1: -65537}; the -65536 decoy (a1 01 39 ff ff) is rejected */
+	const uint8_t *protected_bytes;
+	size_t protected_len;
+	if (!cbor_dec_bstr_view(&d, &protected_bytes, &protected_len) ||
+	    protected_len != sizeof(cose_protected_alg) ||
+	    memcmp(protected_bytes, cose_protected_alg,
+		   sizeof(cose_protected_alg)) != 0) {
+		return -EBADMSG;
 	}
 
-	if (d.error) {
+	/* Element 2: unprotected header, kid only (COSE key 4, 8-byte IID) */
+	size_t u_count = cbor_dec_map_header(&d);
+	if (d.error || u_count != 1) {
+		return -EBADMSG;
+	}
+	uint64_t u_key = cbor_dec_uint(&d);
+	if (d.error || u_key != COSE_KEY_KID) {
+		return -EBADMSG;
+	}
+	const uint8_t *kid;
+	size_t kid_len;
+	if (!cbor_dec_bstr_view(&d, &kid, &kid_len) ||
+	    kid_len != LICHEN_IID_LEN) {
+		return -EBADMSG;
+	}
+
+	/* Element 3: signed payload bytes (view into buf, kept for verify) */
+	if (!cbor_dec_bstr_view(&d, &claim->cose_payload,
+				&claim->cose_payload_len) ||
+	    claim->cose_payload_len == 0 ||
+	    claim->cose_payload_len > CLAIM_PAYLOAD_MAX) {
+		return -EBADMSG;
+	}
+
+	/* Element 4: signature, exactly LICHEN_SCHNORR48_LEN bytes */
+	if (!cbor_dec_bstr_view(&d, &claim->cose_signature, &kid_len) ||
+	    kid_len != LICHEN_SCHNORR48_LEN) {
+		return -EBADMSG;
+	}
+
+	/* No trailing data */
+	if (d.off != d.size) {
+		return -EBADMSG;
+	}
+
+	/* Payload map: keys 1-7, all required, none duplicated */
+	uint8_t claim_seen = 0;
+	struct cbor_dec_ctx pd;
+	cbor_dec_init(&pd, claim->cose_payload, claim->cose_payload_len);
+	claim_decode_payload(&pd, claim, &claim_seen);
+	if (pd.error || pd.off != pd.size ||
+	    claim_seen != (uint8_t)((1U << (CLAIM_KEY_COUNT + 1)) - 2)) {
+		return -EBADMSG;
+	}
+
+	/* kid MUST equal the payload gateway_iid (spec/08 step 6) */
+	if (memcmp(kid, claim->gateway_iid, LICHEN_IID_LEN) != 0) {
 		return -EBADMSG;
 	}
 
@@ -1010,18 +1437,22 @@ static int slots_post(struct coap_resource *resource,
 						    0, NULL, 0);
 	}
 
-	/* Decode claim */
+	/* Decode claim (COSE_Sign1 per GCP-6.5). Malformed or structurally
+	 * invalid claims are silently discarded per GCP-6.3, logged at a
+	 * rate-limited WARN. */
 	ret = lichen_slot_coord_decode_claim(payload, payload_len, &claim);
 	if (ret < 0) {
-		LOG_WRN("Failed to decode slot claim: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+		slot_coord_log_discard("decode failed");
+		return 0;
 	}
 
-	/* Process claim */
-	enum lichen_claim_result result = lichen_slot_coord_process_claim(&s_ctx, &claim, &grant);
+	/* Process claim: COSE verify, expiry, claim_seq, conflicts */
+	const uint8_t *conflict_cose = NULL;
+	size_t conflict_cose_len = 0;
+	uint64_t now_unix = lichen_wall_clock_get();
+	enum lichen_claim_result result = lichen_slot_coord_process_claim(
+		&s_ctx, &claim, now_unix, &grant,
+		&conflict_cose, &conflict_cose_len);
 
 	if (result != LICHEN_CLAIM_ACCEPTED) {
 		/* GCP-6.3: Claims with invalid or missing signatures MUST be
@@ -1030,15 +1461,34 @@ static int slots_post(struct coap_resource *resource,
 		    result == LICHEN_CLAIM_REJECT_INVALID_SIG) {
 			return 0;
 		}
-		/* spec/08 GCP-6.5: validation failures (invalid slots, expired)
-		 * respond 4.03 Forbidden; only conflicts override to 4.09. */
+		/* spec/08 GCP-6.5: validation failures (invalid slots,
+		 * expired, replay, persist) respond 4.03 Forbidden; only
+		 * conflicts override to 4.09, with the winning gateway's
+		 * claim as payload. */
 		uint8_t code = COAP_RESPONSE_CODE_FORBIDDEN;
-		if (result == LICHEN_CLAIM_REJECT_CONFLICT) {
+		uint8_t conflict_buf[LICHEN_SLOT_CLAIM_COSE_MAX];
+		const uint8_t *resp_payload = NULL;
+		uint16_t resp_len = 0;
+
+		if (result == LICHEN_CLAIM_REJECT_CONFLICT &&
+		    conflict_cose != NULL && conflict_cose_len != NULL &&
+		    *conflict_cose != NULL && *conflict_cose_len > 0 &&
+		    *conflict_cose_len <= sizeof(conflict_buf)) {
+			/* Snapshot the winner's stored claim under the coord
+			 * lock: the pointer outlives process_claim's critical
+			 * section but the entry can be concurrently updated. */
 			code = COAP_RESPONSE_CODE_CONFLICT;
+			k_mutex_lock(&s_coord_lock, K_FOREVER);
+			memcpy(conflict_buf, *conflict_cose,
+			       *conflict_cose_len);
+			k_mutex_unlock(&s_coord_lock);
+			resp_payload = conflict_buf;
+			resp_len = (uint16_t)*conflict_cose_len;
 		}
 		return coap_oscore_respond_resource(resource, request, addr,
 						    addr_len, &oscore,
-						    code, 0, NULL, 0);
+						    code, 0, resp_payload,
+						    resp_len);
 	}
 
 	/* Encode grant response */
@@ -1051,8 +1501,9 @@ static int slots_post(struct coap_resource *resource,
 						    0, NULL, 0);
 	}
 
+	/* spec/08 GCP-6.5 step 10: accepted claims respond 2.04 Changed */
 	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, COAP_RESPONSE_CODE_CREATED,
+					    &oscore, COAP_RESPONSE_CODE_CHANGED,
 					    CBOR_CONTENT_FORMAT, resp_buf, ret);
 }
 

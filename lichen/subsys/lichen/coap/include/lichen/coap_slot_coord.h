@@ -11,8 +11,11 @@
  * - 6.2 Slot Allocation: Interleaved or contiguous block modes
  * - 6.3 Conflict Resolution: Lowest IID wins, signature validation
  * - 6.4 CoAP Resources: /info, /slots, /channels
+ * - 6.5 Slot Claim COSE_Sign1: Schnorr48 over the full claim payload
  *
- * SECURITY: All slot-claim messages MUST be signed with Schnorr48.
+ * SECURITY: All slot-claim messages are COSE_Sign1 (alg -65537,
+ * Schnorr48-Ed25519) covering the complete claim payload: slots,
+ * superframe_epoch, mode, expiry, gateway_iid, claim_seq, and ordinal.
  * Claims with invalid or missing signatures MUST be silently discarded.
  */
 
@@ -53,6 +56,13 @@ extern "C" {
 /** Schnorr48 signature length */
 #define LICHEN_SCHNORR48_LEN 48
 
+/** Maximum stored COSE_Sign1 slot-claim bytes per gateway entry (echoed in
+ *  4.09 Conflict responses). A spec-conformant claim (60-slot cap) is ~230
+ *  bytes, bounded by the 255-byte LoRa PHY payload. */
+#ifndef LICHEN_SLOT_CLAIM_COSE_MAX
+#define LICHEN_SLOT_CLAIM_COSE_MAX 255
+#endif
+
 /**
  * @brief Time source type for superframe synchronization
  */
@@ -83,14 +93,23 @@ enum lichen_slot_alloc_mode {
 enum lichen_claim_result {
 	/** Claim accepted */
 	LICHEN_CLAIM_ACCEPTED = 0,
-	/** Claim rejected: missing signature */
+	/** Claim struct carries no COSE verification material (not decoded
+	 *  from a COSE_Sign1); nothing produces this after decode_claim */
 	LICHEN_CLAIM_REJECT_NO_SIG = 1,
-	/** Claim rejected: invalid signature */
+	/** Claim rejected: invalid signature or unknown signer */
 	LICHEN_CLAIM_REJECT_INVALID_SIG = 2,
 	/** Claim rejected: conflict with higher priority gateway */
 	LICHEN_CLAIM_REJECT_CONFLICT = 3,
 	/** Claim rejected: invalid slot range */
 	LICHEN_CLAIM_REJECT_INVALID_SLOTS = 4,
+	/** Claim rejected: expired (spec/08 GCP-6.5 validation step 7) */
+	LICHEN_CLAIM_REJECT_EXPIRED = 5,
+	/** Claim rejected: claim_seq not above cached high-water mark
+	 *  (spec/08 GCP-6.5 validation step 8) */
+	LICHEN_CLAIM_REJECT_REPLAY = 6,
+	/** Claim rejected: claim_seq high-water persist failed; claim not
+	 *  applied (spec/08 GCP-6.5: persist before apply) */
+	LICHEN_CLAIM_REJECT_PERSIST = 7,
 };
 
 /**
@@ -103,22 +122,33 @@ struct lichen_gateway_alloc {
 	uint8_t slot_count;               /**< Number of assigned slots */
 	uint32_t superframe_id;           /**< Superframe ID when allocated */
 	uint64_t valid_until;             /**< Unix timestamp of allocation expiry */
+	uint8_t last_claim_cose[LICHEN_SLOT_CLAIM_COSE_MAX]; /**< Accepted COSE_Sign1, echoed in 4.09 */
+	uint8_t last_claim_cose_len;      /**< Length of last_claim_cose */
 	bool valid;                       /**< Entry is in use */
 };
 
 /**
  * @brief Slot claim message (POST /slots)
+ *
+ * Populated by lichen_slot_coord_decode_claim() from a spec/08 GCP-6.5
+ * COSE_Sign1. The cose_* fields point into the decode input buffer and are
+ * only valid while that buffer is unmodified (zero-copy verification
+ * material).
  */
 struct lichen_slot_claim {
-	uint8_t gateway_iid[LICHEN_IID_LEN];
-	uint8_t slots[CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS];
-	uint8_t slot_count;
-	uint32_t superframe_id;
-	uint8_t gateway_count;
-	uint8_t ordinal;
-	uint8_t slot_start;               /**< For contiguous mode */
-	uint8_t signature[LICHEN_SCHNORR48_LEN];
-	bool has_signature;
+	uint8_t gateway_iid[LICHEN_IID_LEN];  /**< Payload key 5 (== COSE kid) */
+	uint8_t slots[CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS]; /**< Payload key 1 */
+	uint8_t slot_count;                   /**< Length of slots[] */
+	uint32_t superframe_id;               /**< Payload key 2: superframe_epoch */
+	uint8_t gateway_count;                /**< Sender-local bookkeeping, not on wire */
+	uint8_t ordinal;                      /**< Payload key 7 */
+	uint8_t slot_start;                   /**< Sender-local bookkeeping, not on wire */
+	uint8_t mode;                         /**< Payload key 3: 0=interleaved, 1=contiguous */
+	uint32_t expiry;                      /**< Payload key 4: unix seconds */
+	uint32_t claim_seq;                   /**< Payload key 6: monotonic sequence */
+	const uint8_t *_Nullable cose_payload;     /**< Signed payload bytes (into decode input) */
+	size_t cose_payload_len;                   /**< Length of cose_payload */
+	const uint8_t *_Nullable cose_signature;   /**< 48-byte signature (into decode input) */
 };
 
 /**
@@ -281,22 +311,35 @@ bool lichen_slot_coord_tx_allowed(const struct lichen_slot_coord_ctx *_Nonnull c
 /**
  * @brief Process incoming slot claim.
  *
- * Per GCP-6.3:
- * - Claims with missing/invalid signatures MUST be silently discarded
- * - Overlapping claims: lowest IID wins
- * - Loser must select next available slot and re-claim
+ * Per GCP-6.3 and GCP-6.5, in order:
+ * - COSE_Sign1 verification against the signer's key-store entry
+ * - expiry > now (step 7)
+ * - claim_seq above the cached per-gateway high-water mark (step 8);
+ *   on acceptance the new high-water is committed via
+ *   lichen_slot_claim_seq_commit() BEFORE the claim is applied
+ * - conflict resolution: lowest IID wins (step 9)
  *
- * SECURITY: Signature verification is mandatory.
+ * Claims with invalid signatures or unknown signers MUST be silently
+ * discarded by the caller (LICHEN_CLAIM_REJECT_NO_SIG /
+ * LICHEN_CLAIM_REJECT_INVALID_SIG).
  *
- * @param[in]  ctx    Slot coordination context
- * @param[in]  claim  Incoming slot claim
- * @param[out] grant  Output grant response (if accepted)
+ * @param[in]  ctx       Slot coordination context
+ * @param[in]  claim     Incoming slot claim (decoded)
+ * @param[in]  now_unix  Current unix time in seconds (expiry gate, step 7)
+ * @param[out] grant     Output grant response (if accepted)
+ * @param[out] conflict_cose  Optional; on LICHEN_CLAIM_REJECT_CONFLICT set
+ *               to the winning gateway's stored COSE_Sign1 (4.09 payload).
+ *               May be NULL. Valid until the next claim is processed.
+ * @param[out] conflict_cose_len  Optional; length of *conflict_cose. May be NULL.
  * @return Claim result code
  */
 enum lichen_claim_result lichen_slot_coord_process_claim(
 	struct lichen_slot_coord_ctx *_Nonnull ctx,
 	const struct lichen_slot_claim *_Nonnull claim,
-	struct lichen_slot_grant *_Nonnull grant);
+	uint64_t now_unix,
+	struct lichen_slot_grant *_Nonnull grant,
+	const uint8_t *_Nullable *_Nullable conflict_cose,
+	size_t *_Nullable conflict_cose_len);
 
 /**
  * @brief Resolve slot conflict between two claims.
@@ -346,7 +389,13 @@ int lichen_slot_coord_register_gateway(struct lichen_slot_coord_ctx *_Nonnull ct
 				       uint8_t slot_count, uint32_t superframe_id);
 
 /**
- * @brief Encode slot claim to CBOR.
+ * @brief Encode slot claim payload to canonical CBOR.
+ *
+ * Emits the spec/08 GCP-6.5 payload map (integer keys 1-7): slots,
+ * superframe_epoch, mode, expiry, gateway_iid, claim_seq, ordinal.
+ * This is the unsigned COSE_Sign1 payload, not the full envelope; the
+ * gateway's own signed claims are produced by
+ * lichen_slot_coord_sign_claim().
  *
  * @param[in]  claim   Slot claim to encode
  * @param[out] buf     Output buffer
@@ -357,15 +406,70 @@ int lichen_slot_coord_encode_claim(const struct lichen_slot_claim *_Nonnull clai
 				   uint8_t *_Nonnull buf, size_t buf_len);
 
 /**
- * @brief Decode slot claim from CBOR.
+ * @brief Encode and sign a slot claim as a COSE_Sign1 (spec/08 GCP-6.5).
  *
- * @param[in]  buf     CBOR payload
+ * Builds the canonical payload map, the RFC 9052 Sig_structure
+ * ["Signature1", protected, h'', payload], and signs
+ * SHA-256(CBOR(Sig_structure)) with Schnorr48. The protected header is the
+ * canonical {1: -65537} (alg Schnorr48-Ed25519); the unprotected header is
+ * {4: gateway_iid} (COSE kid).
+ *
+ * @param[in]  privkey  32-byte Ed25519 private key
+ * @param[in]  pubkey   32-byte Ed25519 public key
+ * @param[in]  claim    Slot claim to encode (gateway_iid becomes the kid)
+ * @param[out] buf      Output buffer
+ * @param[in]  buf_len  Buffer size (LICHEN_SLOT_CLAIM_COSE_MAX is sufficient)
+ * @return Bytes written, or negative error code
+ */
+int lichen_slot_coord_sign_claim(const uint8_t *_Nonnull privkey,
+				 const uint8_t *_Nonnull pubkey,
+				 const struct lichen_slot_claim *_Nonnull claim,
+				 uint8_t *_Nonnull buf, size_t buf_len);
+
+/**
+ * @brief Decode slot claim from a COSE_Sign1 (spec/08 GCP-6.5).
+ *
+ * Validates the COSE_Sign1 structure: exactly four elements, protected
+ * header byte-equal to the canonical {1: -65537}, unprotected kid an 8-byte
+ * bstr equal to the payload gateway_iid, signature exactly 48 bytes, and a
+ * payload map carrying integer keys 1-7 (unknown, duplicate, or missing
+ * keys are rejected). Populates claim->cose_payload/cose_signature with
+ * pointers into buf for lichen_slot_coord_process_claim().
+ *
+ * @param[in]  buf     COSE_Sign1 payload
  * @param[in]  buf_len Payload length
  * @param[out] claim   Output claim
  * @return 0 on success, negative error code on failure
  */
 int lichen_slot_coord_decode_claim(const uint8_t *_Nonnull buf, size_t buf_len,
 				   struct lichen_slot_claim *_Nonnull claim);
+
+/**
+ * @brief Cached claim_seq high-water mark lookup for a gateway.
+ *
+ * Weak default returns -ENOENT (no cached entry). The NV-persisted
+ * implementation supersedes this (spec/08 GCP-6.5 claim_seq persistence).
+ *
+ * @param[in]  iid    Gateway IID
+ * @param[out] cached Cached high-water mark (valid when 0 is returned)
+ * @return 0 if an entry exists, -ENOENT if none
+ */
+int lichen_slot_claim_seq_lookup(const uint8_t iid[_Nonnull LICHEN_IID_LEN],
+				 uint32_t *_Nonnull cached);
+
+/**
+ * @brief Persist a new claim_seq high-water mark for a gateway.
+ *
+ * MUST be called before the claim is applied to the slot table
+ * (spec/08 GCP-6.5 persist-first ordering). Weak default is a no-op;
+ * the NV-persisted implementation supersedes this.
+ *
+ * @param[in] iid  Gateway IID
+ * @param[in] seq  New high-water mark
+ * @return 0 on success, negative error code on failure
+ */
+int lichen_slot_claim_seq_commit(const uint8_t iid[_Nonnull LICHEN_IID_LEN],
+				 uint32_t seq);
 
 /**
  * @brief Encode slot grant to CBOR.

@@ -331,14 +331,20 @@ config LICHEN_COAP_SLOT_COORD
 	# depends on LICHEN_SLIP_TRANSPORT, and a select here would re-expose the
 	# bd a2a2 link failure when SLIP is off.
 	depends on LICHEN_COAP_KEYS
+	# Claim expiry gating (GCP-6.5 validation step 7) needs the wall clock
+	# (lichen_wall_clock_get) from time_sync.c; depends, not select, per the
+	# a2a2 comment above.
+	depends on LICHEN_CCP_TIME_SYNC
+	select TINYCRYPT_SHA256
 	default n
 	help
 	  Enable GCP-6 Slot Coordination protocol per spec/08-gateway-coordination.md
 	  Section 6. Provides superframe synchronization, slot allocation, and
 	  conflict resolution for gateway coordination.
 
-	  SECURITY: All slot claims are signed with Schnorr48. Claims with invalid
-	  or missing signatures are silently discarded.
+	  SECURITY: All slot claims are COSE_Sign1 (Schnorr48-Ed25519) over the
+	  full claim payload. Claims with invalid or missing signatures are
+	  silently discarded.
 
 config LICHEN_COAP_SLOT_COORD_RESOURCE
 	bool "Enable Slot Coordination CoAP resources"

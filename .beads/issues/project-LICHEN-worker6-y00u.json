@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-y00u",
   "title": "[review] sub-/128 prefix delegations are gate-authorized but uninstalleable end-to-end (operator trap)",
   "description": "P2, wave-5 review (2 reviewers independently). rust/lichen-rpl/src/routing.rs: delegate() (routing.rs:205-230) accepts /1../127 and authorize_dao_prefixes (routing.rs:797-816) authorizes them, BUT no DAO can ever deliver one: envelope profile rejects Target options with length != 18 (message.rs:472-476) so truncated sub-/128 targets fail signature verification before the gate, and the 18-byte encoding with prefix_len \u003c 128 is rejected by extract_updates (routing.rs:1481, parsed.prefix_len != 128 -\u003e None). Net: operator who delegates a /64 gets RouteRejected on every DAO forever, indistinguishable from hostile origin. Test suite masks it: /64 rows only call authorize_dao_prefixes directly, no full-pipeline test (tests/dao_prefix_authorization.rs:483-530). Fix (choose one): (a) make delegate() reject prefix_len != 128 with explicit error until the 8.7.1 generalized profile ships, or (b) extend extract_updates to install delegated sub-/128 targets; add a full-pipeline test pinning the chosen outcome.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T00:59:29.30362Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T00:59:29.30362Z",
+  "updated_at": "2026-08-29T01:41:06.901342Z",
+  "closed_at": "2026-08-29T01:41:06.901342Z",
+  "close_reason": "Resolved via resolution (b) per project-LICHEN-worker6-i3m9 (the more recent decomposition, matching spec/05-routing.md 8.7.1 generalized Targets): envelope now accepts structurally-valid non-18-byte Target bodies (message.rs is_generalized_target_body) and extract_updates (routing.rs) installs canonicalized sub-/128 delegated prefixes; authorization stays in the routing gate which denies unauthorized sub-/128 pre-mutation; /0 fail-closed at every layer (delegate() refuses, gate denies DefaultRoute, extraction rejects prefix_len==0). Evidence: delegated /64 DAO installs end-to-end Applied (rust/lichen-rpl/tests/dao_prefix_authorization.rs delegated_slash64_dao_installs_end_to_end); foreign /64 and /0 RouteRejected with zero storage writes and empty high-water; full cargo test -p lichen-rpl green (232 lib + suites), clippy -D warnings clean, fmt clean. Candidate (a) (rejecting prefix_len!=128 in delegate()) was rejected: it would make the already-landed gate-authorized delegations permanently uninstalleable and contradict spec 8.7.1.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-y00u",
