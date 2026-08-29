@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-wutk.10.4",
+  "title": "OSCORE spec gap: open bead iemi.3 premise contradicts spec 06 §15.3 (clear-vs-persist replay state)",
+  "description": "CONTEXT: spec/06-security.md §15.3 was rewritten on 2026-08-28 (commit 660b9bf3bf) to REQUIRE persistence: 'sender sequence reservations, recipient replay window, and response replay/correlation state MUST remain valid across that restart... Clearing a replay window while retaining the old context is not a re-keying event and MUST NOT make previously accepted messages acceptable again.'\n\nCONFLICT: open bead project-LICHEN-worker6-iemi.3 (created 2026-08-27, i.e. BEFORE the spec change) directs: 'Verify Python/Rust/Zephyr do NOT persist OSCORE recipient replay windows or response replay state. Restart must clear these.' Working that bead as written would (a) contradict the current normative spec, and (b) undo the deliberate, spec-conformant C implementation (lichen/subsys/lichen/oscore/oscore_persist.c, oscore_settings.c, and the fail-closed gate in oscore_ctx.c:355-368, whose comments explicitly cite the reboot-replay rationale).\n\nRFC 8613 anchor: §7.5 permits discarding mutable state ONLY together with establishing a fresh context (options 1-4); clearing while retaining the context is exactly what spec §15.3 forbids.\n\nACTION: supersede or rewrite project-LICHEN-worker6-iemi.3 to align with the current §15.3 (persistence + fail-closed + fresh-context-on-unrestorable), or explicitly re-key contexts on restart if the clear-on-restart design is chosen — before anyone picks it up. Filed under this review so the contradiction is tracked; not a code change request by itself. Related: project-LICHEN-wutk.10.3 (C production persistence wiring).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T02:36:37.106935Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T02:36:37.106935Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-wutk.10.4",
+      "depends_on_id": "project-LICHEN-wutk.10",
+      "type": "parent-child",
+      "created_at": "2026-08-29T02:36:37.328646Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -5,9 +5,11 @@
 //! (spec/05-routing.md 8.7, 8.7.1, 8.7.2).
 //!
 //! The `.44.7` profile allows exactly one node-owned Target: the
-//! authenticated origin's own /128. Unauthorized /0, foreign host routes,
-//! and undelegated broad prefixes must be rejected before any route or
-//! replay-floor mutation.
+//! authenticated origin's own /128. Generalized Target bodies (sub-/128
+//! prefix lengths, §8.7.1) pass the wire profile but are denied by the
+//! routing gate unless the origin holds an exact delegation (§8.7.2); `/0`
+//! fails closed everywhere. Denials must precede any route or replay-floor
+//! mutation.
 
 use lichen_core::addr::ygg_addr_from_pubkey;
 use lichen_hal::storage::mem::MemStorage;
@@ -39,7 +41,8 @@ fn signed_dao(
 }
 
 /// Target option built with a generalized (prefix_len, prefix) shape so the
-/// /0 and sub-/128 rows exercise the wire-profile rejection.
+/// /0 and sub-/128 rows exercise the gate denial and the truncated-body row
+/// exercises the wire-profile rejection.
 fn prefix_target_dao(
     dao_sequence: u8,
     path_sequence: u8,
@@ -85,7 +88,7 @@ fn dao_prefix_authorization_allow_deny_matrix() {
     };
 
     // (name, target prefix octets, prefix length, expected outcome)
-    let cases: [PrefixAuthCase; 4] = [
+    let cases: [PrefixAuthCase; 5] = [
         ("self_host_route_allowed", origin.to_vec(), 128, Ok(true)),
         (
             "foreign_host_route_rejected",
@@ -93,18 +96,21 @@ fn dao_prefix_authorization_allow_deny_matrix() {
             128,
             Ok(false),
         ),
-        // /0 and sub-/128 targets fail the .44.7 wire profile (Target option
-        // data length MUST be 18, spec/05-routing.md 8.7) during signature
-        // verification, before any routing policy or replay state is read.
+        // The wire profile accepts generalized Target bodies (spec 8.7.1);
+        // /0 and undelegated sub-/128 prefixes are denied by the routing gate
+        // (spec 8.7.2) after signature verification, before any mutation.
+        ("slash_zero_gate_denied", Vec::new(), 0, Ok(false)),
         (
-            "slash_zero_rejected",
-            Vec::new(),
-            0,
-            Err(DaoVerifyError::Malformed(DaoMalformed::InvalidOptionLength)),
-        ),
-        (
-            "undelegated_broad_prefix_rejected",
+            "undelegated_broad_prefix_gate_denied",
             vec![0x02, 0, 0, 0, 0, 0, 0, 0],
+            64,
+            Ok(false),
+        ),
+        // A prefix body shorter than ceil(prefix_len/8) octets still fails
+        // the wire profile during signature verification itself.
+        (
+            "truncated_target_wire_rejected",
+            vec![0x02, 0, 0, 0, 0, 0],
             64,
             Err(DaoVerifyError::Malformed(DaoMalformed::InvalidOptionLength)),
         ),
@@ -626,4 +632,155 @@ fn external_egress_transit_is_rejected_at_routing_layer_without_mutation() {
         .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before);
+}
+
+/// Full pipeline for a delegated sub-/128 egress Target: wire profile accepts
+/// the generalized body, the gate authorizes it only once the /64 is
+/// delegated to the origin's public key, and `extract_updates` installs the
+/// canonical /64 (spec 05 §8.7.1-§8.7.2).
+#[test]
+fn delegated_slash64_dao_installs_end_to_end() {
+    let mut h = harness();
+    let delegated_prefix = Ipv6Addr::new(0x2001, 0xdb8, 0xaa, 0, 0, 0, 0, 0);
+    let unsigned = grouped_unsigned_dao(
+        241,
+        &[
+            [
+                target_option(128, &h.origin.octets()),
+                transit_option(0, 241, h.root.octets()),
+            ]
+            .concat(),
+            [
+                target_option(64, &delegated_prefix.octets()[..8]),
+                transit_option(0, 241, h.origin.octets()),
+            ]
+            .concat(),
+        ],
+    );
+    let mut wire = Vec::new();
+    let verified = sign_and_verify(&h, &unsigned, &mut wire, 1);
+
+    // Not delegated yet: the generalized Target passes the wire profile but
+    // the gate denies before any route, replay, or persistence mutation.
+    let writes_before = h.storage.writes();
+    assert_eq!(
+        h.manager.process_signature_verified(
+            &verified,
+            verified.origin_iid(),
+            &mut h.rx_state,
+            &mut h.storage,
+            h.timing,
+            &h.admission,
+        ),
+        Err(DaoProcessError::RouteRejected)
+    );
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(&delegated_prefix.octets())
+        .is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(&h.origin.octets())
+        .is_none());
+    assert!(h.manager.origin_high_water().is_empty());
+    assert_eq!(h.storage.writes(), writes_before, "denial persists nothing");
+
+    // Same bytes, same origin_sequence: applied once the /64 is delegated.
+    h.manager
+        .delegate_prefix(*h.origin_key.as_bytes(), delegated_prefix, 64)
+        .unwrap();
+    let verified = sign_and_verify(&h, &unsigned, &mut wire, 1);
+    assert_eq!(
+        h.manager.process_signature_verified(
+            &verified,
+            verified.origin_iid(),
+            &mut h.rx_state,
+            &mut h.storage,
+            h.timing,
+            &h.admission,
+        ),
+        Ok(DaoProcessOutcome::Applied)
+    );
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(&delegated_prefix.octets())
+        .is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(&h.origin.octets())
+        .is_some());
+    assert_eq!(h.manager.origin_high_water().len(), 1);
+}
+
+/// A foreign /64 (delegated to nobody) and `::/0` (never delegable) fail
+/// closed at the gate with zero state mutation, despite now passing the
+/// generalized wire profile.
+#[test]
+fn foreign_slash64_and_default_route_fail_closed_without_mutation() {
+    let mut h = harness();
+    let cases = [
+        (
+            "foreign_slash64",
+            grouped_unsigned_dao(
+                241,
+                &[
+                    [
+                        target_option(128, &h.origin.octets()),
+                        transit_option(0, 241, h.root.octets()),
+                    ]
+                    .concat(),
+                    [
+                        target_option(64, &[0x20, 0x01, 0x0d, 0xb8, 0, 0x66, 0, 0]),
+                        transit_option(0, 241, h.origin.octets()),
+                    ]
+                    .concat(),
+                ],
+            ),
+        ),
+        (
+            "slash_zero",
+            grouped_unsigned_dao(
+                241,
+                &[[
+                    target_option(0, &[]),
+                    transit_option(0, 241, h.root.octets()),
+                ]
+                .concat()],
+            ),
+        ),
+    ];
+    for (name, unsigned) in cases {
+        let writes_before = h.storage.writes();
+        let rx_before = format!("{:?}", h.rx_state);
+        let mut wire = Vec::new();
+        let verified = sign_and_verify(&h, &unsigned, &mut wire, 1);
+        assert_eq!(
+            h.manager.process_signature_verified(
+                &verified,
+                verified.origin_iid(),
+                &mut h.rx_state,
+                &mut h.storage,
+                h.timing,
+                &h.admission,
+            ),
+            Err(DaoProcessError::RouteRejected),
+            "{name}"
+        );
+        assert!(h.manager.origin_high_water().is_empty(), "{name}");
+        assert!(h
+            .manager
+            .routing_table()
+            .lookup(&h.origin.octets())
+            .is_none());
+        assert_eq!(
+            h.storage.writes(),
+            writes_before,
+            "{name}: persists nothing"
+        );
+        assert_eq!(format!("{:?}", h.rx_state), rx_before, "{name}");
+    }
 }

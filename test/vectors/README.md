@@ -37,6 +37,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `link_frame.json` | Link-layer frame encode/decode roundtrip (spec 4, draft-lichen-link-01) |
 | `mic_length_selector.json` | LLSec MIC-length selector bits 2–4 semantics (spec 02 §4.2) |
 | `replay_window.json` | 32-slot anti-replay window and 24-bit logical counter (spec 4.4) |
+| `relay_signer_chain.json` | Relay signer identity, multi-hop A→B→C chain, RFC 6554 SRH destination-mutation variant, fail-closed key substitution, and SIID-indexed TOFU trust-cache behavior (spec 02 §4.2; closed schema `relay_signer_chain.schema.json`; generator `generate_relay_signer_chain.py`) |
 | `short_addr_dad.json` | Short-address assignment + CRC32 DAD (spec 02 §4.5, 04 §12.3) |
 | `wire_format_v2.json` | Canonical wire-format v2 corpus: SI+S signed frames (normal/relay-resigned/malformed), hop re-signing inputs, announce epoch replay, native 0200::/8 Rule 1/3 residues, near-collisions, immutable multicast group IDs (spec 02 §4, 03 §5.5, 05 §9, 12 §18.8) |
 

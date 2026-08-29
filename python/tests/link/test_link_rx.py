@@ -567,13 +567,20 @@ class TestLinkLayerRoundTrip:
         assert not node_link._pinned_keys
 
     @pytest.mark.asyncio
-    async def test_key_change_detection(
+    async def test_pinned_siid_unverifiable_frame_fails_closed(
         self,
         mock_radio: MockRadio,
         node_identity: Identity,
         peer_identity: Identity,
     ):
-        """Overwriting pinned key then receiving from same peer yields KEY_CHANGE."""
+        """Pinned SIID + unverifiable frame MUST reject without fallback.
+
+        Spec 02 section 4.2 rule 2: when a pinned SIID's transcript fails
+        verification under the pinned key, the receiver MUST reject without
+        falling back to trial verification or key substitution. An
+        unauthenticated frame cannot establish key-change evidence, so the
+        classification is BAD_SIGNATURE, not KEY_CHANGE.
+        """
         peer_radio = MockRadio()
         peer_peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
 
@@ -606,7 +613,7 @@ class TestLinkLayerRoundTrip:
         await peer_ll.send(b"second")
         mock_radio.queue_rx(peer_radio.tx_history[0])
         result2 = await node_ll.receive(timeout_ms=100)
-        assert result2 == ReceiveError.KEY_CHANGE
+        assert result2 == ReceiveError.BAD_SIGNATURE
 
     @pytest.mark.parametrize(
         "payload",

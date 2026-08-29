@@ -96,7 +96,7 @@ fn lookup_is_deterministic_lpm_with_expired_fallback_and_exact_host_mutation() {
 }
 
 #[test]
-fn dao_rebuild_and_expiry_preserve_static_prefix_while_wire_stays_host_only() {
+fn dao_rebuild_and_expiry_preserve_static_prefix_while_default_route_fails_closed() {
     let root = address(1);
     let host = address(2);
     let authority = address(3);
@@ -137,10 +137,12 @@ fn dao_rebuild_and_expiry_preserve_static_prefix_while_wire_stays_host_only() {
     );
 
     let before = manager.route_state_diagnostic(authority.into(), 2);
-    let mut non_host = route_dao(2, 2, 255, host, root);
-    non_host[7] = 127;
+    // A ::/0 Target fails closed at extraction (the diagnostic path has no
+    // delegation gate), so route state is untouched.
+    let mut default_route = route_dao(2, 2, 255, host, root);
+    default_route[7] = 0;
     assert!(manager
-        .process_route_state_diagnostic(&non_host, authority.into(), timing, limits())
+        .process_route_state_diagnostic(&default_route, authority.into(), timing, limits())
         .is_err());
     assert_eq!(manager.route_state_diagnostic(authority.into(), 2), before);
     assert_eq!(

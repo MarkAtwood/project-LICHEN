@@ -1,0 +1,7 @@
+{
+  "id": "1787970894644035000-1",
+  "issue_id": "project-LICHEN-worker6-jfln",
+  "author": "Mark Atwood",
+  "text": "Handoff context from the vector work (1lgt/gohv, now closed): canonical vectors are test/vectors/relay_signer_chain.json with closed schema relay_signer_chain.schema.json and generator generate_relay_signer_chain.py (python3 test/vectors/generate_relay_signer_chain.py --check verifies committed bytes). 12 vectors: multi-hop A-\u003eB-\u003eC chain (C pins immediate signer B, payload origin A preserved verbatim from wire_format_v2.json announce corpus), RFC 6554 SRH destination-mutation variant, fail-closed substitution (unknown SIID -\u003e no_candidate_verified; victim-SIID reuse where the attacker key cryptographically VERIFIES as a decoy -\u003e pinned_siid_verification_failed_no_fallback, no fallback), and TOFU cache sequences (pin-on-first-verified-contact, replay rejection, eviction invalidates replay state). Option (b) = no wire change, so no regeneration of existing signed-frame corpora is needed. Python consumer reference implementation: python/tests/link/test_relay_signer_chain_vectors.py (14 tests) against lichen.link.link_layer.LinkLayer _find_sender pinned-first semantics.",
+  "created_at": "2026-08-29T02:34:54.644035Z"
+}

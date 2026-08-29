@@ -437,10 +437,12 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         Some(route_before.as_slice())
     );
 
-    let mut non_host_target = route_dao(2, 2, target, root);
-    non_host_target[7] = 127;
+    // A ::/0 Target fails closed at extraction (the diagnostic path has no
+    // delegation gate), so route state is untouched.
+    let mut default_route_target = route_dao(2, 2, target, root);
+    default_route_target[7] = 0;
     assert!(manager
-        .process_route_state_diagnostic(&non_host_target, authority.into(), timing, limits)
+        .process_route_state_diagnostic(&default_route_target, authority.into(), timing, limits)
         .is_err());
     assert_eq!(
         manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds),

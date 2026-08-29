@@ -1,0 +1,574 @@
+{
+  "$schema": "./relay_signer_chain.schema.json",
+  "format_version": 2,
+  "name": "relay_signer_chain",
+  "description": "Relay signer identity, multi-hop A->B->C chain, RFC 6554 SRH destination-mutation variant, fail-closed key substitution, and SIID-indexed TOFU trust-cache behavior per the normative key selection policy of spec 02 section 4.2 (option (b), bead project-LICHEN-worker6-nxew): the receiver resolves the signer public key by looking up the frame's 8-byte Signer Identifier (wire EUI-64) in the trust store; a pinned SIID verifies ONLY against its pinned key and MUST reject without fallback on failure; an unpinned SIID MAY trial-verify provisioned or announced candidates and pins the binding when exactly one verifies; relay nodes re-sign with their own SIID and key so downstream receivers pin the immediate signer, never the payload origin; evicting a (SIID, key) binding MUST invalidate all replay state for that signer. Documented readings: SRH destination mutation is modeled at link scope as the next-hop DST swap (in-packet SRH processing is specified by source_route_hop_limit.json and srh_root_insertion.json); trust-store keys are SIIDs in wire EUI-64 form; rule 3's multiple-candidates branch is cryptographically unreachable for distinct keys and therefore not vectorized; the preserved relay payload is the wire_format_v2.json announce corpus verbatim (originator A) treated as opaque link-layer bytes. Option (b) keeps the wire format unchanged, so no signed-frame corpus regeneration is required.",
+  "spec": "spec/02-physical-link.md 4.1-4.2 (frame format, LLSec, key selection policy); spec/05-routing.md 9 (announce origin); draft-lichen-schnorr-00; draft-lichen-link-01",
+  "provenance": {
+    "key_selection": "Vectors derive from the spec 02 section 4.2 key-selection policy text (external truth) and the independent reference_schnorr48.py signer (libsodium/PyNaCl); lichen.crypto.schnorr48 and all Rust/C link code were never consulted.",
+    "frames": "Frame octets hand-assembled from the spec 4.1 wire table and 4.2 LLSec bit table by generate_relay_signer_chain.py; no production frame code is imported.",
+    "payload": "The preserved relay payload is borrowed verbatim from wire_format_v2.json wf2_announce_fresh_counter_accept (cross-checked at generation time); attacker frames carry opaque non-dispatch payloads.",
+    "identities": "A and B reuse the wire_format_v2 seeds (0x00*32, 0x01*32); C is 0x02*32 and the attacker X is 0xff*32. Seeds are fixed literals so every implementation derives identical keys offline."
+  },
+  "identities": {
+    "A": {
+      "role": "origin (payload/DAO origin)",
+      "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+      "public_key": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+      "siid_eui64": "7fd5cfc679ab6342"
+    },
+    "B": {
+      "role": "relay hop 1 (immediate signer at C)",
+      "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+      "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "siid_eui64": "3784728ae7309eab"
+    },
+    "C": {
+      "role": "downstream receiver (trust-cache owner)",
+      "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+      "public_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+      "siid_eui64": "0b080c6f41ac1802"
+    },
+    "X": {
+      "role": "attacker",
+      "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "public_key": "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5",
+      "siid_eui64": "f77a7baa1226b50c"
+    }
+  },
+  "vectors": [
+    {
+      "name": "rsc_chain_origin_A_broadcast",
+      "kind": "frame",
+      "description": "Hop 0: origin A signs a broadcast frame carrying the preserved announce payload (originator = A). Relay B consumes this frame; first contact pins (A SIID, A key).",
+      "receiver": "B",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+        ]
+      },
+      "fields": {
+        "epoch": 5,
+        "seqnum": 300,
+        "dst_addr": "",
+        "payload": "1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "mic": "81049f9be2070c5ec3d68ceec36878ad54153863f5156f4729c0182911b3e48f0c44b2c6d1fee09894a8c474ff1d3901",
+        "addr_mode": 0,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "7fd5cfc679ab6342",
+        "signer_eui64_present": true
+      },
+      "encoded": "aaa005012c7fd5cfc679ab63421501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f626581049f9be2070c5ec3d68ceec36878ad54153863f5156f4729c0182911b3e48f0c44b2c6d1fee09894a8c474ff1d3901",
+      "crypto": {
+        "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+        "private_key": "5046adc1dba838867b2bbbfdd0c3423e58b57970b5267a90f57960924a87f156",
+        "public_key": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+        "preimage": "4c494348454e2d4c494e4b2d763100aaa005012c007fd5cfc679ab63421501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "wire_prefix": "aaa005012c7fd5cfc679ab63421501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "signature": "81049f9be2070c5ec3d68ceec36878ad54153863f5156f4729c0182911b3e48f0c44b2c6d1fee09894a8c474ff1d3901",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=0. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "accept",
+        "verify_pubkey": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+        "must_not_verify_pubkeys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ],
+        "authenticated_signer": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+        "trust_store_after": {
+          "7fd5cfc679ab6342": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+        }
+      }
+    },
+    {
+      "name": "rsc_chain_hop1_B_resigned_broadcast",
+      "kind": "frame",
+      "description": "Hop 1: relay B re-signs the preserved payload under its own identity (own SIID, own counter, origin MIC never forwarded). Downstream C consumes this frame on first contact and pins the relay's (B SIID, B key) binding -- the immediate signer, never the payload origin A (spec 02 4.2).",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "fields": {
+        "epoch": 6,
+        "seqnum": 400,
+        "dst_addr": "",
+        "payload": "1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "mic": "3d93b5e853941fb0ac17601f51605fbf37235865da9d443f2dc2bdf28408fe4eaa15718e3e8bc1b8ca4e1dcbf3988008",
+        "addr_mode": 0,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "3784728ae7309eab",
+        "signer_eui64_present": true
+      },
+      "encoded": "aaa00601903784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f62653d93b5e853941fb0ac17601f51605fbf37235865da9d443f2dc2bdf28408fe4eaa15718e3e8bc1b8ca4e1dcbf3988008",
+      "crypto": {
+        "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+        "private_key": "58e86efb75fa4e2c410f46e16de9f6acae1a1703528651b69bc176c088bef36e",
+        "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "preimage": "4c494348454e2d4c494e4b2d763100aaa0060190003784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "wire_prefix": "aaa00601903784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "signature": "3d93b5e853941fb0ac17601f51605fbf37235865da9d443f2dc2bdf28408fe4eaa15718e3e8bc1b8ca4e1dcbf3988008",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=0. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "accept",
+        "verify_pubkey": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "must_not_verify_pubkeys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ],
+        "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    },
+    {
+      "name": "rsc_srh_origin_A_unicast_to_B",
+      "kind": "frame",
+      "description": "SRH variant hop 0: A signs a unicast frame whose link destination is relay B's canonical EUI-64 (the inbound next hop of the source route). B has already pinned A (previous vector), so this exercises the pinned-first accept path.",
+      "receiver": "B",
+      "scenario": {
+        "trust_store_before": {
+          "7fd5cfc679ab6342": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+        },
+        "candidate_keys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+        ]
+      },
+      "fields": {
+        "epoch": 5,
+        "seqnum": 301,
+        "dst_addr": "3784728ae7309eab",
+        "payload": "1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "mic": "356cc1e5b65ffc778153d4138eb4070e83ab72bfd79cb447fb0813d2d1313d0afa7fbf402f2226a85bbb74ecd75a4e0e",
+        "addr_mode": 2,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "7fd5cfc679ab6342",
+        "signer_eui64_present": true
+      },
+      "encoded": "b2a205012d3784728ae7309eab7fd5cfc679ab63421501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265356cc1e5b65ffc778153d4138eb4070e83ab72bfd79cb447fb0813d2d1313d0afa7fbf402f2226a85bbb74ecd75a4e0e",
+      "crypto": {
+        "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+        "private_key": "5046adc1dba838867b2bbbfdd0c3423e58b57970b5267a90f57960924a87f156",
+        "public_key": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+        "preimage": "4c494348454e2d4c494e4b2d763100b2a205012d083784728ae7309eab7fd5cfc679ab63421501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "wire_prefix": "b2a205012d3784728ae7309eab7fd5cfc679ab63421501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "signature": "356cc1e5b65ffc778153d4138eb4070e83ab72bfd79cb447fb0813d2d1313d0afa7fbf402f2226a85bbb74ecd75a4e0e",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=8. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "accept",
+        "verify_pubkey": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+        "must_not_verify_pubkeys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ],
+        "authenticated_signer": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+        "trust_store_after": {
+          "7fd5cfc679ab6342": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+        }
+      }
+    },
+    {
+      "name": "rsc_srh_hop1_B_unicast_to_C_dst_mutated",
+      "kind": "frame",
+      "description": "SRH variant hop 1: relay B re-signs toward the outbound next hop C. The link destination mutated from B's EUI-64 (inbound, previous vector) to C's EUI-64, so the transcript differs in DST_LEN/Dst plus B's identity and counter; the payload origin A could not have produced this signature. C pins B and verifies the mutated transcript only under the pinned relay key.",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        },
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "fields": {
+        "epoch": 6,
+        "seqnum": 401,
+        "dst_addr": "0b080c6f41ac1802",
+        "payload": "1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "mic": "9e99f831bebec3791e4571e6be0a6d78a1de9603aa400011b3b506b2155e7fd70fa358dcecebf7572f36a8e52689410c",
+        "addr_mode": 2,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "3784728ae7309eab",
+        "signer_eui64_present": true
+      },
+      "encoded": "b2a20601910b080c6f41ac18023784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f62659e99f831bebec3791e4571e6be0a6d78a1de9603aa400011b3b506b2155e7fd70fa358dcecebf7572f36a8e52689410c",
+      "crypto": {
+        "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+        "private_key": "58e86efb75fa4e2c410f46e16de9f6acae1a1703528651b69bc176c088bef36e",
+        "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "preimage": "4c494348454e2d4c494e4b2d763100b2a2060191080b080c6f41ac18023784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "wire_prefix": "b2a20601910b080c6f41ac18023784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "signature": "9e99f831bebec3791e4571e6be0a6d78a1de9603aa400011b3b506b2155e7fd70fa358dcecebf7572f36a8e52689410c",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=8. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "accept",
+        "verify_pubkey": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "must_not_verify_pubkeys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ],
+        "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    },
+    {
+      "name": "rsc_substitution_unknown_attacker_own_siid",
+      "kind": "frame",
+      "description": "Attacker X introduces its own SIID with a valid self-signed frame. C has no pin for X's SIID and X is not a provisioned candidate, so first contact has zero verifying candidates: the frame MUST be rejected and nothing may be pinned.",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "fields": {
+        "epoch": 9,
+        "seqnum": 900,
+        "dst_addr": "",
+        "payload": "7701756e6b6e6f776e2d736969642d70726f6265",
+        "mic": "ac83e55bc4f2ef00af7c2a44807452dbe4a9856e5757e64f3c9b9264711718b4f76d250861f8faa94802f787d9364d0c",
+        "addr_mode": 0,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "f77a7baa1226b50c",
+        "signer_eui64_present": true
+      },
+      "encoded": "50a0090384f77a7baa1226b50c7701756e6b6e6f776e2d736969642d70726f6265ac83e55bc4f2ef00af7c2a44807452dbe4a9856e5757e64f3c9b9264711718b4f76d250861f8faa94802f787d9364d0c",
+      "crypto": {
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "private_key": "20cd6935864716a79d74dd5fabbd8964304051ca41a31c4659158ebb7c3d0b57",
+        "public_key": "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5",
+        "preimage": "4c494348454e2d4c494e4b2d76310050a009038400f77a7baa1226b50c7701756e6b6e6f776e2d736969642d70726f6265",
+        "wire_prefix": "50a0090384f77a7baa1226b50c7701756e6b6e6f776e2d736969642d70726f6265",
+        "signature": "ac83e55bc4f2ef00af7c2a44807452dbe4a9856e5757e64f3c9b9264711718b4f76d250861f8faa94802f787d9364d0c",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=0. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "reject",
+        "verify_pubkey": null,
+        "must_not_verify_pubkeys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+        ],
+        "authenticated_signer": null,
+        "trust_store_after": {},
+        "reject_reason": "no_candidate_verified"
+      }
+    },
+    {
+      "name": "rsc_substitution_victim_siid_no_fallback",
+      "kind": "frame",
+      "description": "Key substitution: attacker X signs with its own key but reuses victim B's SIID. C has B's SIID pinned, so the receiver MUST verify only against the pinned B key, fail, and reject WITHOUT falling back to trial verification -- even though X's key is itself a provisioned candidate whose key would verify this transcript (decoy). This is spec 02 4.2 rules 2 and 4 (TOFU violation / key substitution).",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        },
+        "candidate_keys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ]
+      },
+      "fields": {
+        "epoch": 9,
+        "seqnum": 901,
+        "dst_addr": "",
+        "payload": "770176696374696d2d736969642d70726f6265",
+        "mic": "7990d077a6a519541ca539fc3a051c195a4a1c05205fd49191d223c1bfec16e85229e0493c30fc4f1ec8ce17bc5f3f06",
+        "addr_mode": 0,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "3784728ae7309eab",
+        "signer_eui64_present": true
+      },
+      "encoded": "4fa00903853784728ae7309eab770176696374696d2d736969642d70726f62657990d077a6a519541ca539fc3a051c195a4a1c05205fd49191d223c1bfec16e85229e0493c30fc4f1ec8ce17bc5f3f06",
+      "crypto": {
+        "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "private_key": "20cd6935864716a79d74dd5fabbd8964304051ca41a31c4659158ebb7c3d0b57",
+        "public_key": "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5",
+        "preimage": "4c494348454e2d4c494e4b2d7631004fa0090385003784728ae7309eab770176696374696d2d736969642d70726f6265",
+        "wire_prefix": "4fa00903853784728ae7309eab770176696374696d2d736969642d70726f6265",
+        "signature": "7990d077a6a519541ca539fc3a051c195a4a1c05205fd49191d223c1bfec16e85229e0493c30fc4f1ec8ce17bc5f3f06",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=0. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "reject",
+        "verify_pubkey": null,
+        "must_not_verify_pubkeys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ],
+        "authenticated_signer": null,
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        },
+        "reject_reason": "pinned_siid_verification_failed_no_fallback",
+        "decoy_verifying_pubkeys": [
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ]
+      }
+    },
+    {
+      "name": "rsc_cache_B_lower_counter",
+      "kind": "frame",
+      "description": "Reference frame for the eviction sequences: a valid B-signed broadcast whose replay counter (epoch 6, seqnum 368) sits below the high-water (400) C recorded from rsc_chain_hop1_B_resigned_broadcast. The standalone decision here assumes the pin was re-provisioned WITHOUT replay state (e.g. restored from an out-of-band trust snapshot), so 368 is a fresh first contact and MUST be accepted. With replay state intact the same frame is a replay (see rsc_seq_lower_counter_replay_rejected_without_eviction) and after eviction it is acceptable again (see rsc_seq_eviction_invalidates_replay_state).",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        },
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "fields": {
+        "epoch": 6,
+        "seqnum": 368,
+        "dst_addr": "",
+        "payload": "1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "mic": "0e4375a3b8e28ad65712942786154a20ca87c84f6f5d03ee4a0e92809ab043e0a92ce6f9bb91f9779ed1233f46195404",
+        "addr_mode": 0,
+        "mic_length": 0,
+        "signature_present": true,
+        "encrypted": false,
+        "signer_eui64": "3784728ae7309eab",
+        "signer_eui64_present": true
+      },
+      "encoded": "aaa00601703784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f62650e4375a3b8e28ad65712942786154a20ca87c84f6f5d03ee4a0e92809ab043e0a92ce6f9bb91f9779ed1233f46195404",
+      "crypto": {
+        "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+        "private_key": "58e86efb75fa4e2c410f46e16de9f6acae1a1703528651b69bc176c088bef36e",
+        "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "preimage": "4c494348454e2d4c494e4b2d763100aaa0060170003784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "wire_prefix": "aaa00601703784728ae7309eab1501000000047dd5cfc679ab63423b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da290621c68fe37b06daa69207e9ca9bf00851d3754c7396536145a135aa70f22150b0002bb1fd0902bee74cdb89403716077766322d7265706c61792d70726f6265",
+        "signature": "0e4375a3b8e28ad65712942786154a20ca87c84f6f5d03ee4a0e92809ab043e0a92ce6f9bb91f9779ed1233f46195404",
+        "provenance": "Independent PyNaCl reference signer over Link Signature Domain Version 1 and the normative transcript with non-wire DST_LEN=0. Frame octets hand-derived from the spec 4.1 wire table and spec 4.2 LLSec bit table."
+      },
+      "expect": {
+        "decision": "accept",
+        "verify_pubkey": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "must_not_verify_pubkeys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ],
+        "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    },
+    {
+      "name": "rsc_seq_first_contact_pin_then_replay_rejected",
+      "kind": "sequence",
+      "description": "Pin on first VERIFIED contact: the first delivery of B's frame is accepted and pins (B SIID, B key); the identical frame redelivered is rejected as a replay. Nothing but a verified signature may allocate trust or replay state.",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "operations": [
+        {
+          "op": "receive",
+          "frame": "rsc_chain_hop1_B_resigned_broadcast",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "rsc_chain_hop1_B_resigned_broadcast",
+          "expect": {
+            "decision": "reject",
+            "reject_reason": "replay"
+          }
+        }
+      ],
+      "expect": {
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    },
+    {
+      "name": "rsc_seq_eviction_invalidates_replay_state",
+      "kind": "sequence",
+      "description": "Eviction semantics (spec 02 4.2 rule 5): after C accepts B at counter 400, local policy evicts the (B SIID, B key) binding; the eviction MUST also invalidate B's replay state, so the lower-counter frame (368, below the 32-slot window under 400) is then acceptable as a fresh first contact under a re-pinned key. A receiver that retained the old high-water would wrongly reject it.",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "operations": [
+        {
+          "op": "receive",
+          "frame": "rsc_chain_hop1_B_resigned_broadcast",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+          }
+        },
+        {
+          "op": "evict",
+          "siid": "3784728ae7309eab"
+        },
+        {
+          "op": "receive",
+          "frame": "rsc_cache_B_lower_counter",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+          }
+        }
+      ],
+      "expect": {
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    },
+    {
+      "name": "rsc_seq_downstream_pins_immediate_signer_not_origin",
+      "kind": "sequence",
+      "description": "Selected signer identity per hop: C (two hops from the origin) pins only the immediate relay B and accepts B's re-signed frame without any knowledge of A -- the relay chain requires and creates no trust in the payload origin at link scope. The second operation documents spec 02 4.2 rule 3's announced-candidate branch: if A's own frame physically reaches C, the zero-hop canonical Announce inside it is exactly one announced candidate key and the frame is accepted as a bootstrap first contact (relayed announces can never bootstrap their relay's outer signer). Origin authentication for relayed traffic remains the application-layer DAO Origin Signature profile's job (spec 02 4.2 final paragraph).",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "operations": [
+        {
+          "op": "receive",
+          "frame": "rsc_chain_hop1_B_resigned_broadcast",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "rsc_chain_origin_A_broadcast",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+          }
+        }
+      ],
+      "expect": {
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+          "7fd5cfc679ab6342": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29"
+        }
+      }
+    },
+    {
+      "name": "rsc_seq_lower_counter_replay_rejected_without_eviction",
+      "kind": "sequence",
+      "description": "Control for the eviction sequence: with B's pin AND replay state intact (C accepted B at counter 400 in operation 1), the lower-counter frame (368, below the 32-slot window under 400) MUST be rejected as a replay. Contrast rsc_seq_eviction_invalidates_replay_state, where the eviction of the (SIID, key) binding invalidates the replay state and the identical frame is then acceptable.",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {},
+        "candidate_keys": [
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        ]
+      },
+      "operations": [
+        {
+          "op": "receive",
+          "frame": "rsc_chain_hop1_B_resigned_broadcast",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "rsc_cache_B_lower_counter",
+          "expect": {
+            "decision": "reject",
+            "reject_reason": "replay"
+          }
+        }
+      ],
+      "expect": {
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    },
+    {
+      "name": "rsc_seq_substitution_attack_leaves_trust_store_intact",
+      "kind": "sequence",
+      "description": "A rejected substitution attempt must not mutate trust or replay state: after X's victim-SIID frame is rejected without fallback, the legitimate relay frame still verifies and the pinned binding is unchanged. Scenario note: the store holds B's pin restored without replay state (e.g. re-provisioned), so B's counter 400 is fresh.",
+      "receiver": "C",
+      "scenario": {
+        "trust_store_before": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        },
+        "candidate_keys": [
+          "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+          "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+          "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+          "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5"
+        ]
+      },
+      "operations": [
+        {
+          "op": "receive",
+          "frame": "rsc_substitution_victim_siid_no_fallback",
+          "expect": {
+            "decision": "reject",
+            "reject_reason": "pinned_siid_verification_failed_no_fallback"
+          }
+        },
+        {
+          "op": "receive",
+          "frame": "rsc_chain_hop1_B_resigned_broadcast",
+          "expect": {
+            "decision": "accept",
+            "authenticated_signer": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+          }
+        }
+      ],
+      "expect": {
+        "trust_store_after": {
+          "3784728ae7309eab": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+        }
+      }
+    }
+  ]
+}

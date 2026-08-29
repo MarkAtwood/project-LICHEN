@@ -428,6 +428,15 @@ impl From<RplError> for DaoEnvelopeError {
     }
 }
 
+/// Structural validity of a generalized RPL Target option body
+/// (spec/05-routing.md §8.7.1): flags and prefix-length octets present,
+/// prefix length at most 128, and at least `ceil(prefix_len / 8)` prefix
+/// octets. Whether the origin may advertise the prefix is a routing-layer
+/// decision (§8.7.2), enforced after signature verification.
+fn is_generalized_target_body(body: &[u8]) -> bool {
+    body.len() >= 2 && body[1] <= 128 && body.len() - 2 >= usize::from(body[1].div_ceil(8))
+}
+
 impl<'a> SignedDaoEnvelope<'a> {
     /// Require one origin signature option, with exact length, as the final option.
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, DaoEnvelopeError> {
@@ -469,7 +478,7 @@ impl<'a> SignedDaoEnvelope<'a> {
                 }
                 match data[pos] {
                     OPT_PAD1 => {}
-                    OPT_RPL_TARGET if data[pos + 1] as usize == 18 => {}
+                    OPT_RPL_TARGET if is_generalized_target_body(&data[pos + 2..end]) => {}
                     OPT_TRANSIT_INFO if data[pos + 1] as usize == TransitInfo::DATA_LEN => {}
                     OPT_RPL_TARGET_DESCRIPTOR if data[pos + 1] as usize == 4 => {}
                     OPT_RPL_TARGET | OPT_TRANSIT_INFO | OPT_RPL_TARGET_DESCRIPTOR => {

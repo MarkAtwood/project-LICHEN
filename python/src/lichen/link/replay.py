@@ -648,6 +648,14 @@ class ReplayProtector:
         """Atomically retire an old key and initialize a replacement key."""
         self._rotate(old_sender, new_sender, owner_token=None)
 
+    def _reset_owned(self, sender: bytes | str | int, owner_token: object) -> None:
+        """Forget all state for a sender through the lifecycle owner once sealed."""
+        with self._lock:
+            self._require_admin_unlocked(owner_token)
+            self._windows.pop(sender, None)
+            self._floors.pop(sender, None)
+            self._pins.pop(sender, None)
+
     def _rotate_owned(
         self,
         old_sender: bytes | str | int,

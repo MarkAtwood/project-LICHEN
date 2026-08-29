@@ -451,7 +451,12 @@ class LinkLayer:
         return self._schc_reassembly_manager.peer_eviction_blocked(signer)
 
     def _retire_evicted_peer_unlocked(self, iid: bytes, signer: bytes) -> None:
-        """Retire bounded peer registries while preserving replay high-water."""
+        """Retire bounded peer registries and invalidate the signer's replay state.
+
+        Spec 02 section 4.2 rule 5: evicting a pinned (SIID, key) binding MUST
+        also invalidate all replay state for that signer, so a re-pinned
+        signer starts from a fresh replay window.
+        """
         self._schc_session_manager.retire_remote(signer)
         self._schc_reassembly_manager.invalidate_remote_policy(signer)
         stale_peer = self._schc_peer_contexts.pop(signer, None)
@@ -478,6 +483,7 @@ class LinkLayer:
         self._rekeyed_peers.pop(signer, None)
         self._key_generations.pop(signer, None)
         self._pinned_keys.pop(iid, None)
+        self.replay_protector._reset_owned(signer, self._replay_owner_token)
 
     @property
     def receiving_link_identity(self) -> object:
@@ -1789,6 +1795,26 @@ class LinkLayer:
             # It's from us - might be a loopback or echo
             logger.debug("RX frame from self (loopback)")
             return PeerIdentity.from_pubkey(self._local_pubkey)
+
+        # Normative key selection (spec 02 section 4.2, TOFU): a pinned SIID
+        # resolves to exactly one trust-store key. Verify only against that
+        # pinned key; a failed verification MUST reject the frame without
+        # falling back to trial verification or key substitution.
+        siid_iid = eui64_to_iid(frame.signer_eui64)
+        with self._security_lock:
+            pinned_pubkey = self._pinned_keys.get(siid_iid)
+        if pinned_pubkey is not None:
+            if not verify(pinned_pubkey, signable, signature):
+                logger.warning(
+                    "RX frame for pinned SIID %s failed pinned-key verification; "
+                    "rejecting without fallback (spec 02 4.2)",
+                    frame.signer_eui64.hex(),
+                )
+                return None
+            canonical = PeerIdentity.from_pubkey(pinned_pubkey)
+            if canonical.iid != siid_iid:
+                return None
+            return canonical
 
         with self._security_lock:
             rekeyed_candidates = tuple(self._rekeyed_peers.values())

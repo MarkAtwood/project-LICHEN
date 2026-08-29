@@ -1477,11 +1477,28 @@ impl DaoManager {
                         transits = core::array::from_fn(|_| None);
                         transit_count = 0;
                     }
-                    let parsed = RplTarget::from_bytes(opt.data).ok()?;
-                    if parsed.prefix_len != 128 || target_count == MAX_DAO_UPDATES {
+                    // Generalized Targets (spec/05-routing.md §8.7.1): prefix
+                    // lengths up to 128, reserved flags and bits beyond the
+                    // prefix length ignored, then canonicalized. `/0` fails
+                    // closed here as at every other layer. On the verified
+                    // ingest path, prefix authorization (§8.7.2) was already
+                    // screened before extraction.
+                    if opt.data.len() < 2 {
                         return None;
                     }
-                    targets[target_count] = Some(Ipv6Addr::from(parsed.prefix));
+                    let prefix_len = opt.data[1];
+                    let host_octets = usize::from(prefix_len.div_ceil(8));
+                    if prefix_len == 0
+                        || prefix_len > 128
+                        || opt.data.len() - 2 < host_octets
+                        || target_count == MAX_DAO_UPDATES
+                    {
+                        return None;
+                    }
+                    let mut prefix = [0u8; 16];
+                    prefix[..host_octets].copy_from_slice(&opt.data[2..2 + host_octets]);
+                    mask_prefix_bits(prefix_len, &mut prefix);
+                    targets[target_count] = Some(Ipv6Addr::from(prefix));
                     target_count += 1;
                     descriptor_allowed = true;
                 }
