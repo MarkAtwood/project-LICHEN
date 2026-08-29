@@ -364,6 +364,66 @@ bool lichen_rpl_routing_table_is_managed_host(const struct lichen_rpl_routing_ta
 int lichen_rpl_routing_table_expire(struct lichen_rpl_routing_table *_Nullable rt,
 				    uint32_t now, uint32_t lifetime_unit);
 
+/* ── Prefix delegation authorization (spec/05-routing.md 8.7.2) ────────────── */
+
+/**
+ * Delegation table bound (mirrors rust MAX_PREFIX_DELEGATIONS).
+ */
+#ifndef CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS
+#define CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS 64
+#endif
+
+/**
+ * @brief Delegate canonical prefix/prefix_len to a verified DAO origin.
+ *
+ * Operator-seeded, process-lifetime state: the table must be re-seeded after
+ * restart. Host bits beyond prefix_len are cleared, so only canonical entries
+ * are stored; registering an existing delegation is idempotent. ::/0 is never
+ * delegable (the authorization gate denies default routes).
+ *
+ * The C DAO path binds origin identity by the verified DAO Source Address
+ * (the node's key-derived primary 02xx /128, spec 6.1), where rust keys by
+ * the Ed25519 public key.
+ *
+ * @param origin     Verified origin address (16 bytes, must not be NULL)
+ * @param prefix     Delegated prefix (16 bytes, must not be NULL)
+ * @param prefix_len Prefix length (1-128)
+ * @return 0 on success (including idempotent re-delegation),
+ *         LICHEN_RPL_ERR_INVALID if any pointer is NULL, prefix_len is 0
+ *         (::/0) or exceeds 128, LICHEN_RPL_ERR_FULL if the table is at
+ *         capacity
+ */
+int lichen_rpl_prefix_delegate(const uint8_t *_Nonnull origin,
+			       const uint8_t *_Nonnull prefix,
+			       uint8_t prefix_len);
+
+/**
+ * @brief Revoke an exact delegation.
+ *
+ * Matches the canonical (origin, prefix_len, prefix) key; host bits beyond
+ * prefix_len are cleared before matching. Revoking an absent delegation is a
+ * no-op.
+ */
+void lichen_rpl_prefix_revoke(const uint8_t *_Nonnull origin,
+			      const uint8_t *_Nonnull prefix,
+			      uint8_t prefix_len);
+
+/**
+ * @brief Whether origin may advertise the canonical prefix/prefix_len.
+ *
+ * Exact match only: never sub-prefixes or enclosing aggregates. The caller
+ * must pass the canonical prefix (host bits cleared); a non-canonical value
+ * fails closed.
+ */
+bool lichen_rpl_prefix_delegation_authorizes(
+	const uint8_t *_Nonnull origin, uint8_t prefix_len,
+	const uint8_t *_Nonnull canonical_prefix);
+
+/**
+ * @brief Drop all delegations (operator reset; test isolation).
+ */
+void lichen_rpl_prefix_delegations_reset(void);
+
 /* ── DAO Manager ───────────────────────────────────────────────────────────── */
 
 /**
@@ -637,9 +697,10 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
  *
  * @warning The caller MUST authenticate the DAO (Schnorr link signature or
  * OSCORE per LICHEN security architecture) and pass the verified origin: the
- * preserved DAO Source Address that owns the advertised Target
- * (spec/05-routing.md 8.7). Every RPL Target MUST equal @p origin; a foreign
- * /128 host route is rejected before any route or snapshot mutation. Passing
+ * preserved DAO Source Address (spec/05-routing.md 8.7). Every RPL Target
+ * MUST be @p origin's own canonical /128 or an exact prefix delegation to
+ * @p origin (lichen_rpl_prefix_delegate(), spec/05-routing.md 8.7.1-8.7.2);
+ * a foreign prefix is rejected before any route or snapshot mutation. Passing
  * @p origin as NULL or @p origin_authenticated as false fails closed: the
  * DAO is rejected without mutating routing state.
  *
@@ -665,9 +726,10 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull 
  *
  * The caller MUST authenticate the DAO origin exactly as described for
  * lichen_rpl_dao_manager_process_dao(): @p origin is the preserved DAO
- * Source Address and every RPL Target MUST equal it (spec/05-routing.md 8.7);
- * foreign host routes are rejected before any mutation, and a NULL @p origin
- * or false @p origin_authenticated fails closed. This blocking API is
+ * Source Address and every RPL Target MUST be its own canonical /128 or an
+ * exact prefix delegation to it (spec/05-routing.md 8.7); foreign prefixes
+ * are rejected before any mutation, and a NULL @p origin or false
+ * @p origin_authenticated fails closed. This blocking API is
  * thread-context only and MUST NOT be called from an ISR.
  *
  * If ack_buf is non-NULL and ack_buf_len >= 20, and the DAO has the ACK

@@ -1238,6 +1238,252 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
+    fn grouped_delegated_prefix_dao_is_forwarded_by_parent_and_processed_by_root() {
+        use crate::routing::{
+            Dao, DaoOriginSignature, RplTarget, TransitInfo, DAO_ORIGIN_SIGNATURE_LEN,
+            OPT_RPL_TARGET,
+        };
+        use crate::{announce::AnnounceProcessor, gradient::GradientTable};
+        use lichen_hal::storage::mem::MemStorage;
+        use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
+        use lichen_rpl::routing::DaoAdmissionState;
+
+        let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
+        let parent_identity = Identity::from_seed(Seed::new([2; 32]));
+        let leaf_identity = Identity::from_seed(Seed::new([3; 32]));
+        let mut parent_eui64 = parent_identity.iid;
+        parent_eui64[0] ^= 0x02;
+        let mut leaf_eui64 = leaf_identity.iid;
+        leaf_eui64[0] ^= 0x02;
+        let parent_id = NodeId(parent_eui64);
+        let leaf_id = NodeId(leaf_eui64);
+        let root_addr = ula(root_id);
+        let parent_addr =
+            lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
+        let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
+        // §8.7.2 delegated prefix advertised alongside the leaf's own /128.
+        let delegated_prefix = [0xfd, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        let mut root_storage = MemStorage::new();
+        let (root_router, mut root_rx) =
+            Router::provision_root(&mut root_storage, root_addr).unwrap();
+        let mut dao_admission =
+            DaoAdmissionState::provision(&mut root_storage, root_addr, RPL_INSTANCE_ID, root_addr)
+                .unwrap();
+        dao_admission
+            .admit(&mut root_storage, *parent_identity.pubkey.as_bytes())
+            .unwrap();
+        dao_admission
+            .admit(&mut root_storage, *leaf_identity.pubkey.as_bytes())
+            .unwrap();
+        let mut root = RplNode {
+            node: Node::new(root_id),
+            router: root_router,
+        };
+        // The root delegates the /64 to the leaf's public key (§8.7.2), so
+        // the generalized Target in the grouped DAO is authorized on ingest.
+        root.router
+            .dao_manager
+            .delegate_prefix(
+                *leaf_identity.pubkey.as_bytes(),
+                core::net::Ipv6Addr::from(delegated_prefix),
+                64,
+            )
+            .unwrap();
+        let mut parent = RplNode {
+            node: Node::new(parent_id),
+            router: Router::new(parent_addr, root_addr),
+        };
+        let mut leaf = RplNode {
+            node: Node::new(leaf_id),
+            router: Router::new(leaf_addr, root_addr),
+        };
+        let mut announces = AnnounceProcessor::new(
+            GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
+            root_addr[..8].try_into().unwrap(),
+        );
+        announces.pin_for_test(parent_identity.pubkey);
+        announces.pin_for_test(leaf_identity.pubkey);
+
+        let root_dio = lichen_rpl::message::Dio {
+            rpl_instance_id: RPL_INSTANCE_ID,
+            version: 0,
+            rank: crate::routing::ROOT_RANK,
+            grounded: true,
+            mode_of_operation: 1,
+            preference: 0,
+            dtsn: 0,
+            flags: 0,
+            dodag_id: root_addr,
+        };
+        let mut dio_bytes = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN];
+        root_dio.write_to(&mut dio_bytes).unwrap();
+        assert!(parent
+            .router
+            .process_dio(&root_dio, &dio_bytes, root_addr, 0, 0));
+        let parent_dio = lichen_rpl::message::Dio {
+            rank: parent.router.rank(),
+            ..root_dio
+        };
+        parent_dio.write_to(&mut dio_bytes).unwrap();
+        assert!(leaf
+            .router
+            .process_dio(&parent_dio, &dio_bytes, parent_addr, 0, 0));
+
+        // Parent's own DAO reaches the root directly, installing the
+        // root→parent edge the leaf's route assembly needs.
+        let mut parent_storage = MemStorage::new();
+        let mut parent_tx = crate::routing::DaoTxState::provision(
+            &mut parent_storage,
+            parent_identity.pubkey,
+            parent_addr,
+            RPL_INSTANCE_ID,
+            root_addr,
+        )
+        .unwrap();
+        let parent_dao = parent
+            .build_signed_dao(
+                parent_addr,
+                &mut parent_tx,
+                &mut parent_storage,
+                &LinkLayer::new(parent_identity.clone()),
+            )
+            .unwrap();
+        let parent_packet = l2_dao_packet(parent_addr, root_addr, &parent_dao);
+        let mut output = [0u8; 260];
+        assert_eq!(
+            root.handle_frame_rpl(&parent_packet, parent_identity.iid, &mut output, 0),
+            (0, RplEvent::DaoReceived)
+        );
+        assert_eq!(
+            root.handle_dao(
+                &parent_dao,
+                parent_addr,
+                parent_identity.iid,
+                &announces,
+                &mut root_rx,
+                &mut root_storage,
+                0,
+                &dao_admission,
+            ),
+            DaoHandlingOutcome::Applied
+        );
+
+        // Leaf's grouped DAO: self /128 + delegated /64 in one target group
+        // (§8.7.1), covered by a single Transit Information option, signed by
+        // the leaf.
+        let mut unsigned = std::vec::Vec::new();
+        let mut scratch = [0u8; 24];
+        let base = Dao {
+            rpl_instance_id: RPL_INSTANCE_ID,
+            ack_requested: false,
+            flags: 0,
+            dao_sequence: 1,
+            dodag_id: Some(root_addr),
+        };
+        let n = base.write_to(&mut scratch).unwrap();
+        unsigned.extend_from_slice(&scratch[..n]);
+        let self_target = RplTarget {
+            prefix_len: 128,
+            prefix: leaf_addr,
+        };
+        let n = self_target.write_to(&mut scratch).unwrap();
+        unsigned.extend_from_slice(&scratch[..n]);
+        unsigned.extend_from_slice(&[OPT_RPL_TARGET, 10, 0, 64]);
+        unsigned.extend_from_slice(&delegated_prefix[..8]);
+        let transit = TransitInfo {
+            external: false,
+            path_control: 0x80,
+            path_sequence: 1,
+            path_lifetime: 255,
+            parent_address: parent_addr,
+        };
+        let n = transit.write_to(&mut scratch).unwrap();
+        unsigned.extend_from_slice(&scratch[..n]);
+        let origin_sequence: u64 = 1;
+        let digest = dao_origin_digest(leaf_addr, root_addr, origin_sequence, &unsigned);
+        let signature = LinkLayer::new(leaf_identity.clone()).sign_digest(&digest);
+        let signed_len = unsigned.len() + DAO_ORIGIN_SIGNATURE_LEN;
+        unsigned.resize(signed_len, 0);
+        DaoOriginSignature::write_to(
+            origin_sequence,
+            &signature,
+            &mut unsigned[signed_len - DAO_ORIGIN_SIGNATURE_LEN..],
+        )
+        .unwrap();
+        let leaf_dao = unsigned;
+
+        let leaf_packet = l2_dao_packet(leaf_addr, root_addr, &leaf_dao);
+        // A sender whose link-layer IID does not match the DAO origin is not
+        // forwarded, grouped Targets or not.
+        assert_eq!(
+            parent.handle_frame_rpl(&leaf_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
+            (0, RplEvent::None)
+        );
+        // The grouped DAO is forwarded at the non-root hop: before the
+        // generalized-Target fix the delegated /64 aborted
+        // dao_parents_for_source and the DAO was dropped here.
+        let (forwarded_len, event) =
+            parent.handle_frame_rpl(&leaf_packet, leaf_identity.iid, &mut output, 0);
+        assert_eq!(
+            event,
+            RplEvent::DaoForwarded {
+                next_hop: root_addr
+            }
+        );
+
+        let mut forwarded_ipv6 = [0u8; 256];
+        let forwarded_n = codec::decompress(
+            l2_payload_body(&output[..forwarded_len]),
+            &mut forwarded_ipv6,
+        )
+        .unwrap();
+        assert_eq!(
+            &forwarded_ipv6[field::SRC_OFFSET..field::DST_OFFSET],
+            &leaf_addr
+        );
+        assert_eq!(forwarded_ipv6[7], 63);
+        let body_offset = IPV6_HEADER_LEN + hdr_field::BODY_OFFSET;
+        assert_eq!(
+            &forwarded_ipv6[body_offset..forwarded_n],
+            leaf_dao.as_slice()
+        );
+
+        assert_eq!(
+            root.handle_frame_rpl(
+                &output[..forwarded_len],
+                parent_identity.iid,
+                &mut [0u8; 260],
+                0,
+            ),
+            (0, RplEvent::DaoReceived)
+        );
+        assert_eq!(
+            root.handle_dao(
+                &leaf_dao,
+                leaf_addr,
+                parent_identity.iid,
+                &announces,
+                &mut root_rx,
+                &mut root_storage,
+                0,
+                &dao_admission,
+            ),
+            DaoHandlingOutcome::Applied
+        );
+        assert_eq!(
+            root.router.lookup_route(&leaf_addr),
+            Some([parent_addr, leaf_addr].as_slice())
+        );
+        // The delegated /64 propagated multi-hop and is installed at the root.
+        assert_eq!(
+            root.router.lookup_route(&delegated_prefix),
+            Some([parent_addr, delegated_prefix].as_slice())
+        );
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
     fn production_signed_dao_cannot_mutate_equal_path_sequence() {
         use crate::{announce::AnnounceProcessor, gradient::GradientTable};
         use lichen_hal::storage::mem::MemStorage;

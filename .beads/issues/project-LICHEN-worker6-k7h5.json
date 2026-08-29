@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-k7h5",
+  "title": "[review] spec/02-physical-link.md 4.5 still mandates FNV-1a32 for short-address DAD; contradicts CRC32-IEEE resolution everywhere else",
+  "description": "P1, wave-7 review. spec/02-physical-link.md:435-500 (also :67) says 'Short-address DAD uses FNV-1a32 ... Implementations MUST match test/vectors/short_addr_dad.json' but the vector files (short_addr_dad.json:3, dad_hash_clarification.json:8-13), Python (short_addr.py), and Rust (short_addr.rs) now mandate CRC32-IEEE (init 0x4348454E, xorout 0xFFFFFFFF, poly 0xEDB88320); 04-network.md:250 already specifies crc32_ieee. A spec-literal implementation today fails the vectors and vice versa - recreates the duplicated-pseudocode ambiguity bo37 was filed to eliminate. Fix: spec-only edit - replace 4.5 FNV pseudocode + line 67 with the crc32_ieee form or cross-ref 04-network.md 12.3; keep FNV only for CCP channel/SF selection. Reviewer independently verified all corrected vector values (0x5dd5056e etc.) with a hand-rolled CRC oracle - the values are right, only the spec text is stale.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:15:33.356529Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:15:33.356529Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k7h5",
+      "depends_on_id": "project-LICHEN-worker6-6qy5",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:15:33.626058Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

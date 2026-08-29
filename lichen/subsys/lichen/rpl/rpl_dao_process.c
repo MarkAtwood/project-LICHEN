@@ -141,13 +141,22 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 				candidate_count = 0;
 				have_transit = false;
 			}
-			if (opt.data_len != LICHEN_RPL_TARGET_DATA_LEN ||
-			    opt.data[0] != 0 || opt.data[1] != 128U ||
-			    lichen_rpl_target_parse(&target, opt.data, opt.data_len) !=
-				LICHEN_RPL_OK || target.prefix_len != 128U ||
+			/* Generalized Targets (spec/05-routing.md 8.7.1):
+			 * prefix_len 1..=128, at least ceil(prefix_len/8)
+			 * prefix octets; reserved flags and bits beyond the
+			 * Prefix Length are ignored, then canonicalized. /0
+			 * fails closed. On the verified ingest path the gate
+			 * already authorized every Target. */
+			if (opt.data_len < 2 || opt.data[1] == 0 ||
+			    opt.data[1] > 128U ||
+			    opt.data_len - 2 < (opt.data[1] + 7U) / 8U ||
 			    target_count == CONFIG_LICHEN_RPL_MAX_ROUTES) {
 				return false;
 			}
+			memset(&target, 0, sizeof(target));
+			target.prefix_len = opt.data[1];
+			memcpy(target.prefix, &opt.data[2],
+			       (opt.data[1] + 7U) / 8U);
 			/* Canonicalize the prefix to ensure consistent matching */
 			lichen_rpl_prefix_canonicalize(target.prefix, target.prefix_len);
 			for (int i = 0; i < target_count; i++) {
@@ -256,18 +265,127 @@ duplicate_candidate:
 			    candidates, candidate_count, path_sequence);
 }
 
+/* ── Prefix delegation table (spec/05-routing.md 8.7.2) ───────────────────── */
+
+/**
+ * Operator-seeded static delegation table (the C counterpart of rust
+ * PrefixDelegations). Process-lifetime state: entries must be re-seeded after
+ * restart and ::/0 is never delegable. Not internally synchronized: seed and
+ * revoke from a single operator context before DAO processing starts; the
+ * authorization gate reads the table under the DAO manager mutex.
+ */
+static struct lichen_rpl_prefix_delegation {
+	uint8_t origin[16];
+	uint8_t prefix[16];
+	uint8_t prefix_len;
+	bool valid;
+} delegations[CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS];
+
+/** Copy prefix/prefix_len canonicalized into out; false when ::/0 or >128. */
+static bool delegation_canonicalize(const uint8_t *prefix, uint8_t prefix_len,
+				    uint8_t out[16])
+{
+	if (prefix == NULL || prefix_len == 0 || prefix_len > 128U) {
+		return false;
+	}
+	memset(out, 0, 16);
+	memcpy(out, prefix, 16);
+	return lichen_rpl_prefix_canonicalize(out, prefix_len);
+}
+
+static bool delegation_matches(const struct lichen_rpl_prefix_delegation *d,
+			       const uint8_t *origin, uint8_t prefix_len,
+			       const uint8_t *canonical_prefix)
+{
+	return d->valid && d->prefix_len == prefix_len &&
+	       rpl_addr_eq(d->origin, origin) &&
+	       rpl_addr_eq(d->prefix, canonical_prefix);
+}
+
+int lichen_rpl_prefix_delegate(const uint8_t *origin, const uint8_t *prefix,
+			       uint8_t prefix_len)
+{
+	uint8_t canonical[16];
+
+	if (origin == NULL || prefix == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+	if (!delegation_canonicalize(prefix, prefix_len, canonical)) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS; i++) {
+		if (delegation_matches(&delegations[i], origin, prefix_len,
+				       canonical)) {
+			return LICHEN_RPL_OK;
+		}
+	}
+	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS; i++) {
+		struct lichen_rpl_prefix_delegation *d = &delegations[i];
+
+		if (d->valid) {
+			continue;
+		}
+		rpl_addr_copy(d->origin, origin);
+		rpl_addr_copy(d->prefix, canonical);
+		d->prefix_len = prefix_len;
+		d->valid = true;
+		return LICHEN_RPL_OK;
+	}
+	return LICHEN_RPL_ERR_FULL;
+}
+
+void lichen_rpl_prefix_revoke(const uint8_t *origin, const uint8_t *prefix,
+			      uint8_t prefix_len)
+{
+	uint8_t canonical[16];
+
+	if (origin == NULL || prefix == NULL ||
+	    !delegation_canonicalize(prefix, prefix_len, canonical)) {
+		return;
+	}
+	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS; i++) {
+		if (delegation_matches(&delegations[i], origin, prefix_len,
+				       canonical)) {
+			delegations[i].valid = false;
+			return;
+		}
+	}
+}
+
+bool lichen_rpl_prefix_delegation_authorizes(const uint8_t *origin,
+					     uint8_t prefix_len,
+					     const uint8_t *canonical_prefix)
+{
+	if (origin == NULL || canonical_prefix == NULL) {
+		return false;
+	}
+	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS; i++) {
+		if (delegation_matches(&delegations[i], origin, prefix_len,
+				       canonical_prefix)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void lichen_rpl_prefix_delegations_reset(void)
+{
+	memset(delegations, 0, sizeof(delegations));
+}
+
 /* ── DAO origin authorization ──────────────────────────────────────────────── */
 
 /**
  * Authorize every RPL Target against the verified DAO origin before any
- * routing or replay mutation (spec/05-routing.md 8.7): each Target MUST be a
- * /128 whose 16 octets equal the preserved DAO Source Address. Mirrors
- * rust/lichen-rpl/src/routing.rs authorize_dao_prefixes() restricted to the
- * current .44.7 host-route profile. /0 and broad prefixes fail here at the
- * wire profile.
+ * routing or replay mutation (spec/05-routing.md 8.7.1-8.7.2): each Target
+ * MUST be the origin's own canonical /128 or an exact prefix delegated to it
+ * via lichen_rpl_prefix_delegate(). Mirrors rust/lichen-rpl/src/routing.rs
+ * authorize_dao_prefixes(). Generalized bodies (prefix_len 1..=128) are
+ * canonicalized per 8.7.1: reserved flags and bits beyond the Prefix Length
+ * are ignored; truncated bodies, prefix_len > 128, and ::/0 fail closed.
  */
-static bool dao_targets_match_origin(const uint8_t *dao_bytes, size_t len,
-				     const uint8_t *origin)
+static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
+				   const uint8_t *origin)
 {
 	const uint8_t *opts = lichen_rpl_dao_options(dao_bytes, len);
 	size_t opts_len = lichen_rpl_dao_options_len_ex(dao_bytes, len);
@@ -293,12 +411,23 @@ static bool dao_targets_match_origin(const uint8_t *dao_bytes, size_t len,
 		if (opt.opt_type != LICHEN_RPL_OPT_RPL_TARGET) {
 			continue;
 		}
-		if (opt.data_len != LICHEN_RPL_TARGET_DATA_LEN ||
-		    opt.data[0] != 0 || opt.data[1] != 128U ||
-		    memcmp(&opt.data[2], origin, 16) != 0) {
+		if (opt.data_len < 2 || opt.data[1] == 0 || opt.data[1] > 128U ||
+		    opt.data_len - 2 < (opt.data[1] + 7U) / 8U) {
 			return false;
 		}
+		uint8_t canonical[16];
+
+		memset(canonical, 0, sizeof(canonical));
+		memcpy(canonical, &opt.data[2], (opt.data[1] + 7U) / 8U);
+		lichen_rpl_prefix_canonicalize(canonical, opt.data[1]);
 		saw_target = true;
+		if (opt.data[1] == 128U && rpl_addr_eq(canonical, origin)) {
+			continue;
+		}
+		if (!lichen_rpl_prefix_delegation_authorizes(origin, opt.data[1],
+							     canonical)) {
+			return false;
+		}
 	}
 	return saw_target;
 }
@@ -399,12 +528,12 @@ static bool validate_graph(const struct lichen_rpl_dao_manager *dm,
 			}
 			for (int j = 0; j < snapshot->candidate_count; j++) {
 				uint8_t candidate_depth = 0;
-				int parent_slot;
 
 				if (rpl_addr_eq(snapshot->candidates[j].parent, dm->node_address)) {
 					candidate_depth = 1;
 				} else {
-					parent_slot = proposed_target_slot(dm, staged, staged_count,
+					int parent_slot = proposed_target_slot(dm, staged,
+								       staged_count,
 								       snapshot->candidates[j].parent);
 					if (parent_slot >= 0 && max_depth[parent_slot] > 0) {
 						candidate_depth = max_depth[parent_slot] + 1;
@@ -658,9 +787,10 @@ static enum lichen_rpl_dao_process_result process_dao(
 	    (d_flag && memcmp(dao.dodag_id, dm->dodag_id, 16) != 0)) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
-	/* spec/05-routing.md 8.7: every Target MUST equal the preserved DAO
-	 * Source Address; reject foreign host routes before any mutation. */
-	if (!dao_targets_match_origin(dao_bytes, len, origin)) {
+	/* spec/05-routing.md 8.7.1-8.7.2: every Target MUST be the origin's own
+	 * canonical /128 or an exact prefix delegated to it; ::/0, truncated
+	 * bodies, and prefix_len > 128 fail closed before any mutation. */
+	if (!dao_targets_authorized(dao_bytes, len, origin)) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	if (!extract_updates(dao_bytes, len, &root->workspace, &staged_count)) {

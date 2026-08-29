@@ -427,14 +427,18 @@ int lichen_rpl_dodag_config_write(const struct lichen_rpl_dodag_config *_Nonnull
 
 /* ── RPL Target option (type 5) ────────────────────────────────────────────── */
 
-/** Canonical LICHEN RPL Target Data Length: flags + prefix length + /128. */
+/** Canonical /128 LICHEN RPL Target Data Length: flags + prefix length + /128.
+ * Generalized bodies (spec/05-routing.md 8.7.1) carry at least
+ * ceil(prefix_len/8) prefix octets instead of the fixed 16. */
 #define LICHEN_RPL_TARGET_DATA_LEN 18U
 
 /**
  * @brief RPL Target option (RFC 6550 section 6.7.7)
  *
- * Advertises a /128 target address in a DAO. The LICHEN profile accepts only
- * Data Length 18, zero flags, and Prefix Length 128.
+ * Advertises a target prefix in a DAO. The canonical LICHEN encoding is a
+ * /128 with zero flags; the wire profile accepts generalized bodies
+ * (prefix_len 1..=128, at least ceil(prefix_len/8) prefix octets, reserved
+ * flags and bits beyond the Prefix Length ignored).
  */
 struct lichen_rpl_target {
 	uint8_t prefix_len;

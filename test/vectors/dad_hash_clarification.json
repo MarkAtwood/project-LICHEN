@@ -2,14 +2,15 @@
   "$schema": "./schema.json",
   "format_version": 2,
   "vector_type": "dad_hash_clarification",
-  "description": "DAD (Duplicate Address Detection) hash algorithm clarification vectors. FNV-1a32 is the authoritative algorithm per spec 02-physical-link.md section 4.5. CRC32 vectors retained for migration reference only.",
+  "description": "DAD (Duplicate Address Detection) hash algorithm clarification vectors. CRC32-IEEE (ISO HDLC, reflected poly 0xedb88320) seeded with the low 32 bits of ASCII \"LICHEN\" (0x4348454e) is the authoritative short-address derivation per spec 02-physical-link.md section 4.5 (project-LICHEN-bo37). FNV-1a32 vectors are retained for oracle-parity comparison only.",
   "oracle_provenance": "Independent implementation of both hash algorithms. CRC32-IEEE uses polynomial 0x04C11DB7 with initial value truncated from 0x4c494348454e to 0x4348454e (32-bit). FNV-1a32 uses basis 0x811c9dc5 and prime 0x01000193.",
   "spec_reference": "spec/02-physical-link.md section 4.5 - DAD Retry Strategy",
   "resolution": {
-    "authoritative_algorithm": "fnv1a32",
-    "basis": "0x811c9dc5",
-    "prime": "0x01000193",
-    "note": "FNV-1a32 is simpler, has better distribution for this use case, and matches the hash_32 used elsewhere in the spec. CRC32-IEEE was a historical artifact that has been removed."
+    "authoritative_algorithm": "crc32_ieee",
+    "polynomial": "0x04C11DB7",
+    "reflected_polynomial": "0xedb88320",
+    "initial_value": "0x4348454e",
+    "note": "CRC32-IEEE (ISO HDLC) seeded with the low 32 bits of ASCII \"LICHEN\" (0x4348454e) is the authoritative short-address derivation, resolving the duplicated spec 02-physical-link.md section 4.5 pseudocode in favor of the crc32_ieee form (project-LICHEN-bo37; matching Python lichen.link.short_addr and Rust lichen-core short_addr). FNV-1a32 vectors are retained for oracle-parity comparison only (basis 0x811c9dc5, prime 0x01000193)."
   },
   "vectors": [
     {
@@ -28,7 +29,7 @@
         119
       ],
       "crc32_init": "0x4348454e",
-      "full_crc32": "0x0000056e",
+      "full_crc32": "0x5dd5056e",
       "derived_addr": 1390,
       "derived_hex": "0x056e"
     },
@@ -49,7 +50,7 @@
       ],
       "fnv_basis": "0x811c9dc5",
       "fnv_prime": "0x01000193",
-      "full_fnv": "0x373e1bbd",
+      "full_fnv": "0xc0e31bbd",
       "derived_addr": 7101,
       "derived_hex": "0x1bbd",
       "note": "Different result from crc32_ieee - this algorithm is NOT used for DAD"
@@ -89,14 +90,14 @@
       "eui64": "0011223344556677",
       "seed": 1,
       "crc32_result": {
-        "mixed_eui64": "0011223345556676",
+        "mixed_eui64": "0011223345556677",
         "derived_addr": 25099,
         "derived_hex": "0x620b"
       },
       "fnv1a_result": {
-        "mixed_eui64": "0011223345556676",
-        "derived_addr_would_be": 58742,
-        "note": "NOT the authoritative result"
+        "mixed_eui64": "0011223345556677",
+        "derived_addr_would_be": 3424,
+        "note": "NOT the authoritative result; seed XOR uses seed.to_le_bytes() into eui64[4..8] per both implementations"
       }
     },
     {

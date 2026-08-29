@@ -7,8 +7,9 @@ use lichen_core::constants::RPL_INSTANCE_ID;
 use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
 use lichen_rpl::dodag::{DodagState, MIN_HOP_RANK_INCREASE};
 use lichen_rpl::message::{
-    Dao, Dio, DodagConfig, OptionIter, TransitInfo, DODAG_CONFIG_DATA_LEN, OPT_DODAG_CONFIG,
-    OPT_DODAG_VERSION_AUTHORIZATION, OPT_TRANSIT_INFO,
+    Dao, Dio, DodagConfig, OptionIter, TransitInfo, DODAG_CONFIG_DATA_LEN,
+    DODAG_VERSION_AUTHORIZATION_DATA_LEN, OPT_DODAG_CONFIG, OPT_DODAG_VERSION_AUTHORIZATION,
+    OPT_RPL_TARGET, OPT_TRANSIT_INFO,
 };
 use lichen_rpl::trickle::TrickleTimer;
 use std::vec;
@@ -538,6 +539,125 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
     assert_eq!(leaf.dodag.version, 1);
 }
 
+/// Canonical root-signed option from `test/vectors/dodag_version_authorization.json`.
+fn canonical_version_authorization_option() -> Vec<u8> {
+    let document: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../test/vectors/dodag_version_authorization.json"
+    ))
+    .unwrap();
+    hex::decode(document["vectors"][0]["option"].as_str().unwrap()).unwrap()
+}
+
+fn authorized_version_one_dio(root_addr: [u8; 16], option: &[u8]) -> (Dio, Vec<u8>) {
+    let dio = Dio {
+        rpl_instance_id: RPL_INSTANCE_ID,
+        version: 1,
+        rank: ROOT_RANK,
+        grounded: true,
+        mode_of_operation: NON_STORING_MOP,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: root_addr,
+    };
+    let mut bytes = dio_with_config(&dio, &DodagConfig::default());
+    bytes.extend_from_slice(option);
+    (dio, bytes)
+}
+
+fn leaf_joined_at_version_zero(root_addr: [u8; 16], parent: [u8; 16]) -> Router {
+    let mut router = Router::new(link_local(3), root_addr);
+    let dio = Dio {
+        rpl_instance_id: RPL_INSTANCE_ID,
+        version: 0,
+        rank: ROOT_RANK,
+        grounded: true,
+        mode_of_operation: NON_STORING_MOP,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: root_addr,
+    };
+    assert!(router.process_dio(&dio, &dio_bytes(&dio), parent, -40, 0));
+    router
+}
+
+#[test]
+fn garbage_version_authorization_rejects_increase_without_state_change() {
+    let root_addr = test_origin(0x61);
+    let parent_addr = test_origin(0x62);
+    let option = canonical_version_authorization_option();
+    assert_eq!(option.len(), 2 + DODAG_VERSION_AUTHORIZATION_DATA_LEN);
+
+    let mut corrupt_variants: Vec<(&str, Vec<u8>)> = Vec::new();
+
+    let mut bad_signature = option.clone();
+    let last = bad_signature.len() - 1;
+    bad_signature[last] ^= 0xff;
+    corrupt_variants.push(("corrupted signature", bad_signature));
+
+    let impostor = Identity::from_seed(Seed::new([0x62; 32]));
+    let mut wrong_key = option.clone();
+    wrong_key[2..34].copy_from_slice(impostor.pubkey.as_bytes());
+    corrupt_variants.push(("non-root pubkey", wrong_key));
+
+    let mut mismatched_version = option.clone();
+    mismatched_version[2] = 2;
+    corrupt_variants.push(("option version mismatch", mismatched_version));
+
+    let mut duplicated = option.clone();
+    duplicated.extend_from_slice(&option);
+    corrupt_variants.push(("duplicate option", duplicated));
+
+    corrupt_variants.push(("truncated option", option[..option.len() - 1].to_vec()));
+
+    for (label, variant) in corrupt_variants {
+        let mut leaf = leaf_joined_at_version_zero(root_addr, parent_addr);
+        let (dio, wire) = authorized_version_one_dio(root_addr, &variant);
+        assert!(
+            !leaf.process_dio(&dio, &wire, parent_addr, -40, 100),
+            "{label} must be rejected"
+        );
+        assert_eq!(leaf.dodag.version, 0, "{label} must not adopt");
+        assert!(leaf.is_joined(), "{label} must not evict membership");
+        assert_eq!(leaf.preferred_parent(), Some(parent_addr));
+    }
+
+    let mut leaf = leaf_joined_at_version_zero(root_addr, parent_addr);
+    let (dio, wire) = authorized_version_one_dio(root_addr, &option);
+    assert!(leaf.process_dio(&dio, &wire, parent_addr, -40, 100));
+    assert_eq!(leaf.dodag.version, 1);
+}
+
+#[test]
+fn version_floor_rejects_stale_root_authorization_and_replays_are_idempotent() {
+    let root_addr = test_origin(0x61);
+    let parent_addr = test_origin(0x62);
+    let (dio, wire) =
+        authorized_version_one_dio(root_addr, &canonical_version_authorization_option());
+
+    // A fresh node adopts the root-authorized version, proving the
+    // authorization itself verifies for this DODAG.
+    let mut node = Router::new(link_local(3), root_addr);
+    assert!(node.process_dio(&dio, &wire, parent_addr, -40, 100));
+    assert_eq!(node.dodag.version, 1);
+    assert_eq!(node.preferred_parent(), Some(parent_addr));
+
+    // Replaying the identical accepted DIO stays consistent: same version,
+    // valid authorization, no state change and no Trickle reset.
+    assert!(!node.process_dio(&dio, &wire, parent_addr, -40, 200));
+    assert_eq!(node.dodag.version, 1);
+    assert_eq!(node.preferred_parent(), Some(parent_addr));
+
+    // The same valid signature cannot drag a node back to an older version:
+    // the DODAG version floor wins over authorization.
+    let mut ahead = Router::new(link_local(4), root_addr);
+    ahead.dodag = DodagState::new(RPL_INSTANCE_ID, root_addr, 2);
+    assert!(!ahead.process_dio(&dio, &wire, parent_addr, -40, 300));
+    assert_eq!(ahead.dodag.version, 2);
+    assert_eq!(ahead.preferred_parent(), None);
+}
+
 #[test]
 fn rejected_newer_version_does_not_commit_config_or_neighbor_refresh() {
     let dodag_id = link_local(1);
@@ -796,6 +916,184 @@ fn dao_helper_returns_every_parent_for_source_group() {
     );
 }
 
+/// One DAO base object followed by raw §8.7.1 Target option bodies
+/// (`flags, prefix_len, prefix octets...`), optionally terminated by a
+/// Transit Information option naming `parent`.
+fn generalized_target_dao(
+    root_addr: [u8; 16],
+    target_bodies: &[Vec<u8>],
+    parent: Option<[u8; 16]>,
+) -> Vec<u8> {
+    let mut dao = Vec::new();
+    let base = Dao {
+        rpl_instance_id: RPL_INSTANCE_ID,
+        ack_requested: false,
+        flags: 0,
+        dao_sequence: 1,
+        dodag_id: Some(root_addr),
+    };
+    let mut buf = [0u8; Dao::BASE_LEN];
+    let n = base.write_to(&mut buf).unwrap();
+    dao.extend_from_slice(&buf[..n]);
+    for body in target_bodies {
+        dao.push(OPT_RPL_TARGET);
+        dao.push(body.len() as u8);
+        dao.extend_from_slice(body);
+    }
+    if let Some(parent) = parent {
+        let transit = TransitInfo {
+            external: false,
+            path_control: 0x80,
+            path_sequence: 1,
+            path_lifetime: 255,
+            parent_address: parent,
+        };
+        let mut buf = [0u8; 24];
+        let n = transit.write_to(&mut buf).unwrap();
+        dao.extend_from_slice(&buf[..n]);
+    }
+    dao
+}
+
+fn self_target_body(addr: [u8; 16]) -> Vec<u8> {
+    let mut body = vec![0, 128];
+    body.extend_from_slice(&addr);
+    body
+}
+
+#[test]
+fn dao_helper_parses_generalized_target_groups() {
+    let root_addr = ula(1);
+    let packet_source = ula(2);
+    let parent = ula(3);
+    // Grouped §8.7.1 Targets: the origin's own /128 plus a delegated /64
+    // sub-prefix, covered by a single Transit Information option.
+    let delegated = {
+        let mut body = vec![0, 64];
+        body.extend_from_slice(&[0xfd, 0, 0, 0, 0, 0, 0, 0x64]);
+        body
+    };
+    let dao = generalized_target_dao(
+        root_addr,
+        &[self_target_body(packet_source), delegated],
+        Some(parent),
+    );
+
+    assert_eq!(
+        dao_parents_for_source(&dao, &packet_source),
+        Some(vec![parent])
+    );
+}
+
+#[test]
+fn dao_helper_collects_every_transit_parent_for_grouped_source() {
+    let root_addr = ula(1);
+    let packet_source = ula(2);
+    let first_parent = ula(3);
+    let second_parent = ula(4);
+    // One target group with two Transit Information options: the root
+    // installs both (target × transit) pairs, so both parents must be
+    // reported for the anti-spoof check to see them.
+    let mut dao = generalized_target_dao(
+        root_addr,
+        &[self_target_body(packet_source)],
+        Some(first_parent),
+    );
+    let second = TransitInfo {
+        external: false,
+        path_control: 0x40,
+        path_sequence: 1,
+        path_lifetime: 255,
+        parent_address: second_parent,
+    };
+    let mut buf = [0u8; 24];
+    let n = second.write_to(&mut buf).unwrap();
+    dao.extend_from_slice(&buf[..n]);
+
+    assert_eq!(
+        dao_parents_for_source(&dao, &packet_source),
+        Some(vec![first_parent, second_parent])
+    );
+}
+
+#[test]
+fn dao_helper_canonicalizes_generalized_prefixes_before_matching() {
+    let root_addr = ula(1);
+    let parent = ula(3);
+    // A /60 whose advertised host bits must be ignored: the canonicalized
+    // form is what the routing layer stores and matches against.
+    let dirty_slash_60 = {
+        let mut body = vec![0, 60];
+        body.extend_from_slice(&[0xfd, 0, 0, 0, 0, 0, 0, 0xf1]);
+        body
+    };
+    let mut canonical_prefix = [0u8; 16];
+    canonical_prefix[..8].copy_from_slice(&[0xfd, 0, 0, 0, 0, 0, 0, 0xf0]);
+    let dao = generalized_target_dao(root_addr, &[dirty_slash_60], Some(parent));
+
+    assert_eq!(
+        dao_parents_for_source(&dao, &canonical_prefix),
+        Some(vec![parent])
+    );
+}
+
+#[test]
+fn dao_helper_fails_closed_on_invalid_generalized_target_shapes() {
+    let root_addr = ula(1);
+    let packet_source = ula(2);
+    let parent = ula(3);
+
+    // /0 default route fails closed even with a matching /128 sibling.
+    let slash_zero = vec![0, 0];
+    let dao = generalized_target_dao(
+        root_addr,
+        &[self_target_body(packet_source), slash_zero],
+        Some(parent),
+    );
+    assert_eq!(dao_parents_for_source(&dao, &packet_source), None);
+
+    // A /64 body carrying fewer than 8 prefix octets fails closed.
+    let truncated: Vec<u8> = [0, 64]
+        .iter()
+        .copied()
+        .chain([0xfd, 0, 0, 0, 0, 0, 0])
+        .collect();
+    let dao = generalized_target_dao(
+        root_addr,
+        &[self_target_body(packet_source), truncated],
+        Some(parent),
+    );
+    assert_eq!(dao_parents_for_source(&dao, &packet_source), None);
+
+    // A Transit Information option before any Target yields no parents, so
+    // the DAO is dropped at the forwarder like the root's extract_updates
+    // rejection.
+    let orphan_transit = generalized_target_dao(root_addr, &[], Some(parent));
+    assert_eq!(
+        dao_parents_for_source(&orphan_transit, &packet_source),
+        None
+    );
+
+    // A trailing target group without a transit does not block forwarding of
+    // the matched group: the forwarder only collects parents for the
+    // anti-spoof check, and the root's extract_updates fully rejects the
+    // malformed shape (mirroring how unsigned DAOs are forwarded).
+    let delegated: Vec<u8> = [0, 64]
+        .iter()
+        .copied()
+        .chain([0xfd, 0, 0, 0, 0, 0, 0, 0x64])
+        .collect();
+    let mut dangling =
+        generalized_target_dao(root_addr, &[self_target_body(packet_source)], Some(parent));
+    dangling.push(OPT_RPL_TARGET);
+    dangling.push(delegated.len() as u8);
+    dangling.extend_from_slice(&delegated);
+    assert_eq!(
+        dao_parents_for_source(&dangling, &packet_source),
+        Some(vec![parent])
+    );
+}
+
 #[test]
 fn processing_dao_expires_routes_with_active_lifetime_unit() {
     let root_addr = link_local(1);
@@ -821,7 +1119,9 @@ fn exact_dao_at_expiry_reports_accepted_update() {
     let target = test_origin(2);
     let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
     let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
-    let exact = sender.build_dao_copy_with_lifetime(root_addr.into(), 1).unwrap();
+    let exact = sender
+        .build_dao_copy_with_lifetime(root_addr.into(), 1)
+        .unwrap();
     let mut root = Router::new_root(root_addr);
     assert!(root.set_dao_lifetime_unit(1));
 

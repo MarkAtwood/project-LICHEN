@@ -1135,24 +1135,51 @@ pub(crate) fn dao_parents_for_source(
     dao_bytes: &[u8],
     packet_source: &[u8; 16],
 ) -> Option<Vec<[u8; 16]>> {
-    use lichen_rpl::message::{RplTarget, OPT_RPL_TARGET, OPT_TRANSIT_INFO};
+    use lichen_rpl::message::{OPT_RPL_TARGET, OPT_TRANSIT_INFO};
 
     let _dao = Dao::from_bytes(dao_bytes).ok()?;
     let mut parents = Vec::new();
-    let mut current_target: Option<[u8; 16]> = None;
+    // Targets in the current group, canonicalized per the routing layer's
+    // extract_updates for §8.7.1 generalized Target bodies: bits beyond the
+    // prefix length are ignored and the prefix is padded to 128 bits.
+    // Malformed bodies and /0 fail closed, matching the root's rejection.
+    // Mirroring extract_updates, one group holds every Target since the last
+    // transit-terminated flush and every Transit Information option in the
+    // group names a parent for each of those targets (RFC 6550 §6.4.4); the
+    // group is flushed only when a Target follows a Transit.
+    let mut group_targets: Vec<[u8; 16]> = Vec::new();
+    let mut transit_seen = false;
 
     for option in OptionIter::new(Dao::options_tail(dao_bytes)) {
         let option = option.ok()?;
         match option.opt_type {
             OPT_RPL_TARGET => {
-                let target = RplTarget::from_bytes(option.data).ok()?;
-                current_target = Some(target.prefix);
+                if transit_seen {
+                    group_targets.clear();
+                    transit_seen = false;
+                }
+                if option.data.len() < 2 {
+                    return None;
+                }
+                let prefix_len = option.data[1];
+                let host_octets = usize::from(prefix_len.div_ceil(8));
+                if prefix_len == 0 || prefix_len > 128 || option.data.len() - 2 < host_octets {
+                    return None;
+                }
+                let mut prefix = [0u8; 16];
+                prefix[..host_octets].copy_from_slice(&option.data[2..2 + host_octets]);
+                if prefix_len % 8 != 0 {
+                    prefix[usize::from(prefix_len / 8)] &=
+                        u8::MAX << (8 - usize::from(prefix_len % 8));
+                }
+                group_targets.push(prefix);
             }
             OPT_TRANSIT_INFO => {
-                if current_target == Some(*packet_source) {
+                if group_targets.iter().any(|target| target == packet_source) {
                     let transit = TransitInfo::from_bytes(option.data).ok()?;
                     parents.push(transit.parent_address);
                 }
+                transit_seen = true;
             }
             _ => {}
         }

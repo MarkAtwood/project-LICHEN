@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-nie1",
+  "title": "[review] C root applies delegated-prefix-only DAOs that Rust rejects (identical-decisions invariant break)",
+  "description": "P2, wave-7 review. rpl_dao_process.c:756-886 process_dao has no found_origin equivalent: a verified-origin DAO advertising ONLY delegated prefixes (no self /128 target) is APPLIED by the C root, while Rust rejects it (routing.rs:669 + sender_is_authorized routing.rs:727-760 requires \u003e=1 canonical target == origin). Wave-7 created this class (the old all-targets==origin gate made it unreachable in C). Not a bypass (origin IS delegated) but breaks identical-decisions for mixed C/Rust meshes. Fix: add the found_origin check (\u003e=1 canonical target == origin) to process_dao after the gate, or document the C extension as intentional in spec/05-routing.md 8.7 - coordinate the decision across impls.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T07:15:33.803558Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T07:15:33.803558Z",
+  "labels": [
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nie1",
+      "depends_on_id": "project-LICHEN-worker6-ekcc",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T07:15:34.070082Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
