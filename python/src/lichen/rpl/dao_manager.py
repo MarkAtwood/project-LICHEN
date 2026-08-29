@@ -26,6 +26,11 @@ from dataclasses import dataclass, field
 from ipaddress import IPv6Address
 from typing import Any, cast
 
+from lichen.crypto.delegation_tokens import (
+    DELEGATION_FLAG_EXTERNAL,
+    PrefixDelegationToken,
+    verify_prefix_delegation_token,
+)
 from lichen.crypto.identity import Identity, yggdrasil_address
 from lichen.crypto.schnorr48 import sign as schnorr_sign
 from lichen.crypto.schnorr48 import verify as schnorr_verify
@@ -74,6 +79,29 @@ _ORIGIN_REJECT_TO_REASON: dict[DaoOriginRejectReason, str] = {
     DaoOriginRejectReason.SEQUENCE_EQUAL_DIFFERENT_BYTES: "origin_sequence_mutation",
 }
 _MAX_RESOURCE_CAPACITY = 65535
+# Spec 8.7.2: the delegation table MUST be bounded; recommended 64 entries.
+_MAX_PREFIX_DELEGATIONS = 64
+
+
+@dataclass
+class PrefixDelegationEntry:
+    """A verified prefix delegation cached on the root (spec 8.7.2)."""
+
+    delegate_iid: bytes
+    expiry: int
+    delegation_seq: int
+    external: bool
+
+
+def _canonical_prefix_key(prefix: bytes, prefix_len: int) -> tuple[bytes, int]:
+    """Canonicalize a delegated prefix per spec 8.7.1 (host bits cleared)."""
+    canonical = bytearray(16)
+    host_octets = (prefix_len + 7) // 8
+    canonical[:host_octets] = prefix[:host_octets]
+    rem = prefix_len % 8
+    if rem:
+        canonical[host_octets - 1] &= (0xFF << (8 - rem)) & 0xFF
+    return bytes(canonical), prefix_len
 
 
 @dataclass
@@ -106,6 +134,7 @@ class DaoManager:
     max_candidates_per_target: int | None = None
     freshness_retention_seconds: float = DEFAULT_FRESHNESS_RETENTION_SECONDS
     clock: Callable[[], float] = time.monotonic
+    wall_clock: Callable[[], float] = time.time
     persistence: DaoPersistence | None = None
     require_crash_safety: bool = False
     origin_validator: DaoOriginValidator | None = None
@@ -128,6 +157,9 @@ class DaoManager:
     )
     _edge_expiry: dict[tuple[IPv6Address, IPv6Address], float | None] = field(default_factory=dict)
     _rx_floors: dict[bytes, tuple[int, bytes]] = field(default_factory=dict)
+    _prefix_delegations: dict[tuple[bytes, int], PrefixDelegationEntry] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _tx_recovery_error: DaoError | None = field(default=None, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _scheduler: DaoRefreshScheduler = field(init=False, repr=False)
@@ -181,6 +213,8 @@ class DaoManager:
             setattr(self, duration_name, normalized_duration)
         if not callable(self.clock):
             raise ValueError("clock must be callable")
+        if not callable(self.wall_clock):
+            raise ValueError("wall_clock must be callable")
         for name, value, maximum in (
             ("_dao_sequence", self._dao_sequence, 0xFF),
             ("_path_sequence", self._path_sequence, 0xFF),
@@ -862,9 +896,11 @@ class DaoManager:
                 raise DaoError(str(exc), reason="inconsistent_transit") from exc
             raise
 
-        # Step 4: Exact self /128 Target validation
-        # SECURITY: Per spec 8.7, the /128 Target MUST equal the preserved DAO source address.
-        # This prevents a node from advertising routes for addresses it doesn't own.
+        # Step 4: Target authorization (spec 8.7/8.7.2)
+        # SECURITY: Per spec 8.7, the /128 Target MUST equal the preserved DAO
+        # source address unless the origin holds an exact, unexpired prefix
+        # delegation for it. Delegation lookup happens here, before any
+        # route, replay-floor, or persistence mutation.
         if source_address is not None:
             if len({update.target for update in updates}) != 1:
                 raise DaoError(
@@ -873,10 +909,7 @@ class DaoManager:
                 )
             for update in updates:
                 if update.target != source_address:
-                    raise DaoError(
-                        f"Target {update.target} != source address {source_address}",
-                        reason="target_mismatch",
-                    )
+                    self._authorize_delegated_target(update, source_address)
         incoming: dict[IPv6Address, tuple[Candidate, ...]] = {}
         sequences: dict[IPv6Address, int] = {}
         descriptors: dict[IPv6Address, int | None] = {}
@@ -961,9 +994,7 @@ class DaoManager:
                     self.max_targets,
                     incoming.keys(),
                 )
-                freshness[target] = self._scheduler.create_initial_freshness(
-                    sequence, now_seconds
-                )
+                freshness[target] = self._scheduler.create_initial_freshness(sequence, now_seconds)
             candidates[target] = snapshot
             retained_descriptors[target] = descriptors[target]
             path_sequences[target] = sequence
@@ -1085,6 +1116,40 @@ class DaoManager:
         self._edge_expiry = expiry
         self.routing_table.replace_routes(routes)
         return DaoOutcome(True, state_changed, False, reason)
+
+    def _authorize_delegated_target(self, update: Update, source_address: IPv6Address) -> None:
+        """Authorize a DAO Target that is not the origin's own /128 (spec 8.7.2).
+
+        The Target requires an exact, unexpired delegation bound to the origin;
+        ``::/0`` is never authorized (spec 8.7.1). Sub-/128 Targets never reach
+        here: the .44.7 wire profile rejects them during origin validation or
+        semantic parsing, before any route or replay mutation.
+        """
+        entry = self._prefix_delegations.get((update.target.packed, 128))
+        if entry is None:
+            raise DaoError(
+                f"Target {update.target} != source address {source_address}",
+                reason="target_mismatch",
+            )
+        if entry.delegate_iid != source_address.packed[8:16]:
+            raise DaoError(
+                f"delegation for {update.target} is bound to another delegate",
+                reason="delegate_mismatch",
+            )
+        if entry.expiry <= self.wall_clock():
+            raise DaoError(
+                f"delegation for {update.target} has expired",
+                reason="delegation_expired",
+            )
+        # SECURITY: Spec 8.7.2 step 5 — external reachability (Transit E=1)
+        # requires the delegation's E flag. The .44.7 profile rejects E=1
+        # Transits during parsing; this enforces the delegation contract if
+        # that profile ever relaxes.
+        if update.candidate.external and not entry.external:
+            raise DaoError(
+                f"delegation for {update.target} does not allow external reachability",
+                reason="delegation_external_flag",
+            )
 
     def _existing_host_routes(self) -> dict[RouteTarget, list[IPv6Address]]:
         return self.routing_table.routes()
@@ -1230,6 +1295,60 @@ class DaoManager:
         """Return exact installed complete paths keyed by target hex."""
         with self._lock:
             return self._route_table.snapshot()
+
+    def install_prefix_delegation(self, token: PrefixDelegationToken) -> None:
+        """Root-side: verify and cache a prefix delegation (spec 8.7.2).
+
+        The token must be signed by this root (origin_identity), bound to the
+        delegate IID, unexpired, and carry a strictly increasing
+        delegation_seq for the canonical (prefix, prefix_len) key.
+        ``::/0`` is never delegable (spec 8.7.1).
+
+        Thread-safe: acquires _lock before mutating state.
+
+        Raises:
+            DaoError: If the token fails verification or the table is full.
+        """
+        if self.origin_identity is None:
+            raise DaoError(
+                "prefix delegation install requires origin_identity",
+                reason="origin_identity_required",
+            )
+        payload = token.payload
+        if payload.prefix_len == 0:
+            raise DaoError(
+                "::/0 is reserved and never delegable (spec 8.7.1)",
+                reason="default_route",
+            )
+        with self._lock:
+            # SECURITY: Canonicalize per spec 8.7.1 before use as the cache key
+            # so a non-canonical token cannot alias or split a delegation entry.
+            key = _canonical_prefix_key(payload.prefix, payload.prefix_len)
+            cached = self._prefix_delegations.get(key)
+            valid, error = verify_prefix_delegation_token(
+                token,
+                self.origin_identity.pubkey,
+                payload.delegate_iid,
+                int(self.wall_clock()),
+                cached.delegation_seq if cached is not None else None,
+            )
+            if not valid:
+                reason = {
+                    "EXPIRED": "delegation_expired",
+                    "REPLAY_DETECTED": "delegation_seq_replay",
+                }.get(error or "", "delegation_invalid")
+                raise DaoError(f"prefix delegation rejected: {error}", reason=reason)
+            if cached is None and len(self._prefix_delegations) >= _MAX_PREFIX_DELEGATIONS:
+                raise DaoError(
+                    "prefix delegation table is full (spec 8.7.2)",
+                    reason="delegation_capacity",
+                )
+            self._prefix_delegations[key] = PrefixDelegationEntry(
+                delegate_iid=payload.delegate_iid,
+                expiry=payload.expiry,
+                delegation_seq=payload.delegation_seq,
+                external=bool(payload.flags & DELEGATION_FLAG_EXTERNAL),
+            )
 
     def build_dao_ack(self, dao: DAO, status: int = 0) -> DAOAck:
         return DAOAck(

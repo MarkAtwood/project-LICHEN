@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntFlag
 from hashlib import sha256
+from ipaddress import IPv6Address
 from typing import TYPE_CHECKING
 
 import cbor2
@@ -124,9 +125,7 @@ class DelegationTokenPayload:
 
         # Validate scope bits (only bits 0-4 are valid)
         if self.scope & ~VALID_SCOPE_MASK:
-            raise ValueError(
-                f"Invalid scope bits (only bits 0-4 allowed), got {self.scope}"
-            )
+            raise ValueError(f"Invalid scope bits (only bits 0-4 allowed), got {self.scope}")
 
         if self.scope == 0:
             raise ValueError("scope must grant at least one capability")
@@ -191,9 +190,7 @@ class DelegationToken:
 
     def __post_init__(self) -> None:
         if len(self.delegator_iid) != 8:
-            raise ValueError(
-                f"delegator_iid must be 8 bytes, got {len(self.delegator_iid)}"
-            )
+            raise ValueError(f"delegator_iid must be 8 bytes, got {len(self.delegator_iid)}")
         if len(self.signature) != 48:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
 
@@ -234,8 +231,7 @@ class DelegationToken:
         protected = cbor2.loads(protected_bytes)
         if protected.get(COSE_ALG_LABEL) != SCHNORR48_ED25519_ALG:
             raise ValueError(
-                f"Algorithm must be {SCHNORR48_ED25519_ALG}, "
-                f"got {protected.get(COSE_ALG_LABEL)}"
+                f"Algorithm must be {SCHNORR48_ED25519_ALG}, got {protected.get(COSE_ALG_LABEL)}"
             )
 
         # Extract delegator IID from unprotected header
@@ -250,9 +246,7 @@ class DelegationToken:
         if not isinstance(signature, bytes):
             raise ValueError("signature must be bytes")
 
-        return cls(
-            payload=payload, delegator_iid=delegator_iid, signature=signature
-        )
+        return cls(payload=payload, delegator_iid=delegator_iid, signature=signature)
 
 
 def create_delegation_token(
@@ -293,9 +287,7 @@ def create_delegation_token(
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
 
-    return DelegationToken(
-        payload=payload, delegator_iid=identity.iid, signature=signature
-    )
+    return DelegationToken(payload=payload, delegator_iid=identity.iid, signature=signature)
 
 
 def verify_delegation_token(
@@ -407,3 +399,242 @@ def decode_delegation_token(data: bytes) -> DelegationToken:
         Decoded DelegationToken
     """
     return DelegationToken.from_cose_sign1(data)
+
+
+# Prefix delegation payload map keys (integer keys per spec to minimize size)
+_PREFIX_PAYLOAD_PREFIX = 1
+_PREFIX_PAYLOAD_PREFIX_LEN = 2
+_PREFIX_PAYLOAD_DELEGATE = 3
+_PREFIX_PAYLOAD_EXPIRY = 4
+_PREFIX_PAYLOAD_SEQ = 5
+_PREFIX_PAYLOAD_FLAGS = 6
+
+# Delegation flags per spec section 8.7.2
+DELEGATION_FLAG_EXTERNAL = 1 << 0  # E: delegate may set Transit E flag
+DELEGATION_RESERVED_FLAG_MASK = 0xFE  # Bits 1-7 reserved, MUST be zero
+
+
+@dataclass
+class PrefixDelegationTokenPayload:
+    """Prefix delegation token payload per spec/05-routing.md section 8.7.2.
+
+    Attributes:
+        prefix: Prefix bytes, ceil(prefix_len/8), zero-padded
+        prefix_len: Prefix length in bits (0-128)
+        delegate_iid: 8-byte IID of the authorized delegate
+        expiry: Unix timestamp when delegation expires
+        delegation_seq: Monotonic sequence for replay protection
+        flags: Delegation flags (bit 0 = E/external, bits 1-7 reserved zero)
+    """
+
+    prefix: bytes
+    prefix_len: int
+    delegate_iid: bytes
+    expiry: int
+    delegation_seq: int
+    flags: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.prefix, bytes):
+            raise ValueError("prefix must be bytes")
+        if not isinstance(self.prefix_len, int) or not 0 <= self.prefix_len <= 128:
+            raise ValueError(f"prefix_len must be 0-128, got {self.prefix_len}")
+        if len(self.prefix) != (self.prefix_len + 7) // 8:
+            raise ValueError(
+                f"prefix must be ceil(prefix_len/8) bytes: expected "
+                f"{(self.prefix_len + 7) // 8}, got {len(self.prefix)}"
+            )
+        if len(self.delegate_iid) != 8:
+            raise ValueError(f"delegate_iid must be 8 bytes, got {len(self.delegate_iid)}")
+        if self.expiry <= 0:
+            raise ValueError(f"expiry must be positive, got {self.expiry}")
+        if self.delegation_seq < 0:
+            raise ValueError(f"delegation_seq must be non-negative, got {self.delegation_seq}")
+        if self.flags & DELEGATION_RESERVED_FLAG_MASK:
+            raise ValueError(f"reserved flag bits (1-7) must be zero, got {self.flags:#x}")
+
+    def to_cbor(self) -> bytes:
+        """Encode payload as CBOR map with integer keys."""
+        payload_map = {
+            _PREFIX_PAYLOAD_PREFIX: self.prefix,
+            _PREFIX_PAYLOAD_PREFIX_LEN: self.prefix_len,
+            _PREFIX_PAYLOAD_DELEGATE: self.delegate_iid,
+            _PREFIX_PAYLOAD_EXPIRY: self.expiry,
+            _PREFIX_PAYLOAD_SEQ: self.delegation_seq,
+            _PREFIX_PAYLOAD_FLAGS: self.flags,
+        }
+        return cbor2.dumps(payload_map)
+
+    @classmethod
+    def from_cbor(cls, data: bytes) -> PrefixDelegationTokenPayload:
+        """Decode payload from CBOR bytes."""
+        payload_map = cbor2.loads(data)
+        return cls(
+            prefix=payload_map[_PREFIX_PAYLOAD_PREFIX],
+            prefix_len=payload_map[_PREFIX_PAYLOAD_PREFIX_LEN],
+            delegate_iid=payload_map[_PREFIX_PAYLOAD_DELEGATE],
+            expiry=payload_map[_PREFIX_PAYLOAD_EXPIRY],
+            delegation_seq=payload_map[_PREFIX_PAYLOAD_SEQ],
+            flags=payload_map[_PREFIX_PAYLOAD_FLAGS],
+        )
+
+
+@dataclass
+class PrefixDelegationToken:
+    """COSE_Sign1 prefix delegation token per spec/05-routing.md 8.7.2.
+
+    Same COSE_Sign1 envelope as the group delegation token: protected header
+    {1: -65537} (Schnorr48-Ed25519), unprotected {4: delegator IID}, payload,
+    48-byte Schnorr48 signature.
+    """
+
+    payload: PrefixDelegationTokenPayload
+    delegator_iid: bytes
+    signature: bytes
+
+    def __post_init__(self) -> None:
+        if len(self.delegator_iid) != 8:
+            raise ValueError(f"delegator_iid must be 8 bytes, got {len(self.delegator_iid)}")
+        if len(self.signature) != 48:
+            raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
+
+    def to_cose_sign1(self) -> bytes:
+        """Encode as COSE_Sign1 structure."""
+        protected = _encode_protected_header()
+        unprotected = {COSE_KID_LABEL: self.delegator_iid}
+        payload_bytes = self.payload.to_cbor()
+        cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
+        return cbor2.dumps(cose_sign1)
+
+    @classmethod
+    def from_cose_sign1(cls, data: bytes) -> PrefixDelegationToken:
+        """Decode from COSE_Sign1 structure.
+
+        Raises:
+            ValueError: If structure is invalid
+        """
+        cose_array = cbor2.loads(data)
+
+        if not isinstance(cose_array, list) or len(cose_array) != 4:
+            raise ValueError("COSE_Sign1 must be a 4-element array")
+
+        protected_bytes, unprotected, payload_bytes, signature = cose_array
+
+        protected = cbor2.loads(protected_bytes)
+        if protected.get(COSE_ALG_LABEL) != SCHNORR48_ED25519_ALG:
+            raise ValueError(
+                f"Algorithm must be {SCHNORR48_ED25519_ALG}, got {protected.get(COSE_ALG_LABEL)}"
+            )
+
+        delegator_iid = unprotected.get(COSE_KID_LABEL)
+        if not isinstance(delegator_iid, bytes) or len(delegator_iid) != 8:
+            raise ValueError("kid in unprotected header must be 8-byte IID")
+
+        payload = PrefixDelegationTokenPayload.from_cbor(payload_bytes)
+
+        if not isinstance(signature, bytes):
+            raise ValueError("signature must be bytes")
+
+        return cls(payload=payload, delegator_iid=delegator_iid, signature=signature)
+
+
+def _masked_prefix_bytes(prefix: IPv6Address, prefix_len: int) -> bytes:
+    """Encode the ceil(prefix_len/8) prefix octets with host bits cleared."""
+    host_octets = (prefix_len + 7) // 8
+    masked = bytearray(prefix.packed[:host_octets])
+    rem = prefix_len % 8
+    if rem:
+        masked[-1] &= (0xFF << (8 - rem)) & 0xFF
+    return bytes(masked)
+
+
+def create_prefix_delegation_token(
+    identity: Identity,
+    delegate_iid: bytes,
+    prefix: IPv6Address,
+    prefix_len: int,
+    expiry: int,
+    delegation_seq: int,
+    external: bool = False,
+) -> PrefixDelegationToken:
+    """Create a signed prefix delegation token (spec section 8.7.2).
+
+    Args:
+        identity: The delegator's (root's) identity
+        delegate_iid: 8-byte IID of the node receiving the delegation
+        prefix: Delegated prefix; host bits beyond prefix_len are cleared
+        prefix_len: Prefix length in bits (0-128)
+        expiry: Unix timestamp when delegation expires
+        delegation_seq: Strictly increasing sequence per prefix
+        external: True to grant external reachability (Transit E flag)
+
+    Returns:
+        Signed PrefixDelegationToken ready for delivery
+    """
+    payload = PrefixDelegationTokenPayload(
+        prefix=_masked_prefix_bytes(prefix, prefix_len),
+        prefix_len=prefix_len,
+        delegate_iid=delegate_iid,
+        expiry=expiry,
+        delegation_seq=delegation_seq,
+        flags=DELEGATION_FLAG_EXTERNAL if external else 0,
+    )
+
+    protected = _encode_protected_header()
+    payload_bytes = payload.to_cbor()
+    sig_structure = _build_sig_structure(protected, payload_bytes)
+    to_sign = sha256(sig_structure).digest()
+    signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
+
+    return PrefixDelegationToken(payload=payload, delegator_iid=identity.iid, signature=signature)
+
+
+def verify_prefix_delegation_token(
+    token: PrefixDelegationToken,
+    delegator_pubkey: bytes,
+    delegate_iid: bytes,
+    current_time: int,
+    cached_seq: int | None = None,
+) -> tuple[bool, str | None]:
+    """Verify a prefix delegation token (spec section 8.7.2).
+
+    Performs the delegate validation steps: signature, delegator-IID binding,
+    delegate binding, expiry, sequence replay, and flag validity.
+
+    Args:
+        token: The token to verify
+        delegator_pubkey: 32-byte Ed25519 public key of the delegator (root)
+        delegate_iid: 8-byte IID of the node exercising the delegation
+        current_time: Current Unix timestamp
+        cached_seq: Previously cached delegation_seq for this prefix
+
+    Returns:
+        (valid, error): (True, None) if valid, else (False, error_string)
+    """
+    payload = token.payload
+
+    if payload.flags & DELEGATION_RESERVED_FLAG_MASK:
+        return False, "INVALID_FLAGS"
+
+    derived_iid = _pubkey_to_iid(delegator_pubkey)
+    if token.delegator_iid != derived_iid:
+        return False, "DELEGATOR_IID_MISMATCH"
+
+    protected = _encode_protected_header()
+    payload_bytes = payload.to_cbor()
+    sig_structure = _build_sig_structure(protected, payload_bytes)
+    to_verify = sha256(sig_structure).digest()
+
+    if not schnorr48.verify(delegator_pubkey, to_verify, token.signature):
+        return False, "SIGNATURE_INVALID"
+
+    if payload.delegate_iid != delegate_iid:
+        return False, "DELEGATE_MISMATCH"
+
+    if payload.expiry <= current_time:
+        return False, "EXPIRED"
+
+    if cached_seq is not None and payload.delegation_seq <= cached_seq:
+        return False, "REPLAY_DETECTED"
+
+    return True, None
