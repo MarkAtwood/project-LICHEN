@@ -145,6 +145,19 @@ def _write_trust_document(path, entries, **overrides: object) -> None:
     path.chmod(0o600)
 
 
+def _write_trust_document_raw(path, body) -> None:
+    """Write an authenticated document tolerating non-finite float literals."""
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    authentication = hmac.new(
+        _AUTHENTICATION_KEY,
+        _TRUST_AUTH_DOMAIN + canonical,
+        hashlib.sha256,
+    ).hexdigest()
+    data = {**body, "authentication": authentication}
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    path.chmod(0o600)
+
+
 class TestMemoryKeyStore:
     """Tests for in-memory key store (testing only)."""
 
@@ -944,6 +957,110 @@ class TestTrustStorePersistence:
         assert entry is not None
         assert entry.first_seen == 2**53
         assert entry.last_seen == 2**53 + 1
+
+    def test_load_rejects_empty_object_document(self, tmp_path):
+        """An existing empty JSON object is corrupt state, not a fresh store."""
+        persistence = TrustStorePersistence(tmp_path)
+        path = tmp_path / "trust_store.json"
+        path.write_text("{}")
+        path.chmod(0o600)
+
+        with pytest.raises(TrustStorePersistenceError, match="exact versioned schema"):
+            persistence.load()
+
+    def test_load_rejects_unknown_root_key(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        alice = TrustEntry.from_pubkey(Identity.from_seed(SEED_ALICE).pubkey)
+        _write_trust_document(
+            tmp_path / "trust_store.json",
+            [_entry_document(alice)],
+            extra_root_key="surprise",
+        )
+
+        with pytest.raises(TrustStorePersistenceError, match="exact versioned schema"):
+            persistence.load()
+
+    def test_load_rejects_unknown_entry_key(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        alice = TrustEntry.from_pubkey(Identity.from_seed(SEED_ALICE).pubkey)
+        _write_trust_document(
+            tmp_path / "trust_store.json",
+            [_entry_document(alice, unexpected_field=1)],
+        )
+
+        with pytest.raises(TrustStorePersistenceError, match="fields do not match schema"):
+            persistence.load()
+
+    def test_load_rejects_bool_timestamp(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        alice = TrustEntry.from_pubkey(Identity.from_seed(SEED_ALICE).pubkey)
+        _write_trust_document(
+            tmp_path / "trust_store.json",
+            [_entry_document(alice, first_seen=True, last_seen=True)],
+        )
+
+        with pytest.raises(TrustStorePersistenceError, match="first_seen must be number"):
+            persistence.load()
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+    def test_load_rejects_non_finite_timestamp(self, tmp_path, bad):
+        persistence = TrustStorePersistence(tmp_path)
+        alice = TrustEntry.from_pubkey(Identity.from_seed(SEED_ALICE).pubkey)
+        entry = _entry_document(alice, first_seen=bad, last_seen=bad)
+        _write_trust_document_raw(
+            tmp_path / "trust_store.json",
+            {
+                "format_version": 2,
+                "revision": 1,
+                "auto_pin": True,
+                "entries": [entry],
+            },
+        )
+
+        with pytest.raises(TrustStorePersistenceError, match="non-finite"):
+            persistence.load()
+
+    def test_load_rejects_deeply_nested_document(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        path = tmp_path / "trust_store.json"
+        path.write_bytes(b"[" * 200000)
+        path.chmod(0o600)
+
+        with pytest.raises(TrustStorePersistenceError, match="corrupt JSON"):
+            persistence.load()
+
+    def test_load_rejects_oversize_metadata_key(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        alice = TrustEntry.from_pubkey(Identity.from_seed(SEED_ALICE).pubkey)
+        _write_trust_document(
+            tmp_path / "trust_store.json",
+            [_entry_document(alice, metadata={"k" * 129: "v"})],
+        )
+
+        with pytest.raises(TrustStorePersistenceError, match="too long"):
+            persistence.load()
+
+    def test_load_rejects_oversize_file(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        path = tmp_path / "trust_store.json"
+        path.write_bytes(b"0" * (4 * 1024 * 1024 + 1))
+        path.chmod(0o600)
+
+        with pytest.raises(TrustStorePersistenceError, match="exceeds size limit"):
+            persistence.load()
+
+    def test_save_and_load_auto_pin_true_with_entries(self, tmp_path):
+        persistence = TrustStorePersistence(tmp_path)
+        store = TrustStore(auto_pin=True)
+        alice = Identity.from_seed(SEED_ALICE)
+        store.verify_or_pin(alice.pubkey, alice.iid)
+
+        persistence.save(store)
+        loaded = persistence.load()
+
+        assert loaded is not None
+        assert loaded.auto_pin is True
+        assert alice.iid in loaded
 
     def test_preserves_auto_pin_setting(self, tmp_path):
         """TrustStorePersistence preserves auto_pin setting."""

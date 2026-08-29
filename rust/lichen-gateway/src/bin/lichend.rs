@@ -1137,7 +1137,7 @@ fn recover_or_provision_trust_store(
                 .map_err(|error| format!("interrupted trust-store recovery failed: {error}"))?
         }
         (false, true) => {
-            let floor = load_generation_floor(&trust_floor_path).unwrap_or(u64::MAX);
+            let floor = load_generation_floor(trust_floor_path).unwrap_or(u64::MAX);
             let store = TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS)
                 .map_err(|error| format!("trust-store provisioning failed: {error}"))?;
             if floor != store.generation() {
@@ -1146,7 +1146,7 @@ fn recover_or_provision_trust_store(
             store
         }
         (true, true) => {
-            let floor = load_generation_floor(&trust_floor_path)
+            let floor = load_generation_floor(trust_floor_path)
                 .map_err(|error| format!("trust generation load failed: {error}"))?;
             TrustStore::load(
                 trust_path,
@@ -1455,6 +1455,7 @@ fn load_private_seed(path: &Path) -> io::Result<Option<Seed>> {
 }
 
 /// Staged identity seed: a private temp file held open until publish.
+#[derive(Debug)]
 struct StagedPrivateSeed {
     parent: PathBuf,
     temp_path: PathBuf,
@@ -1831,6 +1832,70 @@ mod tests {
         fs::create_dir(&root).unwrap();
         fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
         assert!(verify_private_directory(&root).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ephemeral_sim_state_root_is_owner_only_real_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (root, guard) = create_ephemeral_state_root().unwrap();
+        let metadata = fs::symlink_metadata(&root).unwrap();
+        assert!(metadata.is_dir());
+        assert_eq!(metadata.permissions().mode() & 0o7777, 0o700);
+        drop(guard);
+        assert!(!root.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ensure_private_state_root_rejects_symlinked_directory() {
+        use std::os::unix::fs::symlink;
+
+        let suffix = TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let base = std::env::temp_dir().join(format!(
+            "lichend-symlink-root-{}-{suffix}",
+            std::process::id()
+        ));
+        create_private_directory(&base).unwrap();
+        let link = base.join("state-root");
+        symlink(&base, &link).unwrap();
+        assert!(ensure_private_state_root(&link).is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn world_readable_identity_seed_is_rejected_on_load() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (root, guard) = create_ephemeral_state_root().unwrap();
+        let seed_path = root.join(keys::IDENTITY_SEED);
+        let seed = Seed::new([0x6a; 32]);
+        save_private_seed(&seed_path, &seed).unwrap();
+        fs::set_permissions(&seed_path, fs::Permissions::from_mode(0o644)).unwrap();
+        let error = load_private_seed(&seed_path).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        drop(guard);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn seed_staging_refuses_insecure_parent_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let suffix = TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "lichend-insecure-staging-{}-{suffix}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+        let seed_path = root.join(keys::IDENTITY_SEED);
+        let error = stage_private_seed(&seed_path).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(!seed_path.exists());
         fs::remove_dir_all(root).unwrap();
     }
 

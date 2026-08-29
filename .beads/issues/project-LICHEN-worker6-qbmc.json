@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-qbmc",
+  "title": "lichen-gateway end_to_end runtime_ingress test fails: state directory must have mode 0700",
+  "description": "Pre-existing failure on the current working tree (not caused by handoff work): cargo test -p lichen-gateway --test end_to_end :: runtime_ingress_dispatches_authenticated_gcp_slot_claim panics at tests/end_to_end.rs:730 with Custom { kind: PermissionDenied, error: \"state directory must have mode 0700\" }. The test creates its state root and floor root with std::fs::create_dir_all (default umask), but FileStorage now enforces 0700 on state directories. Fix the harness to create both dirs with 0700 (same pattern as gateway.rs's private_test_dir helper). 16/17 other end_to_end tests pass; lichen-gateway lib tests pass except the known tunnel_auth::revocation_root_change_expiry_and_lru_fail_closed failure (tracked separately).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T19:20:51.951041Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T19:20:51.951041Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qbmc",
+      "depends_on_id": "project-LICHEN-worker6-izg5",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T19:20:56.393898Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

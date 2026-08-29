@@ -698,7 +698,7 @@ class TrustStorePersistence:
         try:
             document: object = json.loads(raw)
             return document
-        except (ValueError, UnicodeDecodeError) as exc:
+        except (ValueError, UnicodeDecodeError, RecursionError) as exc:
             raise TrustStorePersistenceError(f"corrupt JSON: {exc}") from exc
 
     def _write_json_locked(self, encoded: bytes) -> None:
@@ -762,9 +762,13 @@ class TrustStorePersistence:
         except ValueError:
             raise TrustStorePersistenceError("authentication must be hex") from None
         body = {key: value for key, value in data.items() if key != "authentication"}
+        try:
+            canonical_body = self._canonical(body)
+        except ValueError as exc:
+            raise TrustStorePersistenceError("trust store contains non-finite numbers") from exc
         expected_authentication = hmac.new(
             self._authentication_key,
-            _TRUST_AUTH_DOMAIN + self._canonical(body),
+            _TRUST_AUTH_DOMAIN + canonical_body,
             hashlib.sha256,
         ).digest()
         if not hmac.compare_digest(supplied_authentication, expected_authentication):

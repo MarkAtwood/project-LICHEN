@@ -218,23 +218,29 @@ class SchcHandler:
                     "SCHC data fragmentation requires a version-compatible, "
                     "authenticated replay-accepted DIO"
                 )
+            from ..schc.codec import SchcError
             from ..schc.headers import decode_rule255
 
-            # Validate payload as a complete SCHC packet. SchcError propagates
-            # with its specific message (empty packet, unknown rule, invalid
-            # residue, etc.) so callers can distinguish packet/rule errors from
-            # stale-peer conditions.
-            if payload[0] == 0xFF:
-                # The single-frame ceiling is an L2 serialization limit,
-                # not a fragmentation limit. A Rule 255 packet admitted
-                # here is about to be fragmented and may use the peer's
-                # advertised reassembly budget.
-                decode_rule255(payload)
-            else:
-                peer.decompress_packet(
-                    payload,
-                    single_frame_limit=MAX_SINGLE_FRAME_SCHC_PACKET,
-                )
+            # Validate payload as a complete SCHC packet before allocating any
+            # fragment state, converting packet/rule errors into the ValueError
+            # documented in Raises. Stale-peer conditions above raise their own
+            # distinct ValueError, so callers can still tell the cases apart.
+            try:
+                if payload[0] == 0xFF:
+                    # The single-frame ceiling is an L2 serialization limit,
+                    # not a fragmentation limit. A Rule 255 packet admitted
+                    # here is about to be fragmented and may use the peer's
+                    # advertised reassembly budget.
+                    decode_rule255(payload)
+                else:
+                    peer.decompress_packet(
+                        payload,
+                        single_frame_limit=MAX_SINGLE_FRAME_SCHC_PACKET,
+                    )
+            except (SchcError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    "fragmented packet must be a canonical complete SCHC packet"
+                ) from exc
             return self._link._schc_session_manager.create_sender(
                 payload=payload,
                 remote_signer_identity=remote_signer_identity,
