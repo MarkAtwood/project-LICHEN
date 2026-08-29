@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-vs0b",
+  "title": "atomic_json reserved-name guard bypassed by case aliasing on case-insensitive filesystems",
+  "description": "Wave-1 review (security, P2): test/vectors/atomic_json.py:577-583 rejects reserved targets by exact name only. On case-insensitive APFS (primary dev platform), a batch target like .LICHEN-VECTOR-BATCH.LOCK resolves to the live lock inode; the batch then os.replace()s a new inode over the lock directory entry while holding flock on the old inode, letting a concurrent writer lock the new inode and run its critical section concurrently (breaks the mixed-generation mutual exclusion invariant). Journal alias (.LICHEN-VECTOR-BATCH.TRANSACTION.JSON as target) ends with os.unlink(journal) + backup deletion: silent data destruction with no journal left for recovery. Fix: case-fold the reserved comparison (names are ASCII) in atomic_write_json_batch and journal validation; add an aliased-case regression asserting rejection with no mutation. Discovered-from wave 1 bead project-LICHEN-worker6-blqw.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T23:36:06.884245Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T23:41:01.020901Z",
+  "closed_at": "2026-08-29T23:41:01.020901Z",
+  "close_reason": "Fixed in wave 1 follow-up: casefold guard + aliased regression, parametrize entry, fsync-ordering pin, hold-down constants, wait_for timeouts + ctime_ns. Suites green (44+178+130).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vs0b",
+      "depends_on_id": "project-LICHEN-worker6-blqw",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T23:36:08.736804Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

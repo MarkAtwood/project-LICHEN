@@ -335,7 +335,7 @@ class TestNodeLifecycle:
 
         node.link.receive = receive  # type: ignore[method-assign]
         await node.start()
-        await entered.wait()
+        await asyncio.wait_for(entered.wait(), timeout=5)
         assert node.state is NodeState.RUNNING
         assert node._scheduler.is_running
 
@@ -374,7 +374,7 @@ class TestNodeLifecycle:
 
         node.link.receive = receive  # type: ignore[method-assign]
         await node.start()
-        await entered.wait()
+        await asyncio.wait_for(entered.wait(), timeout=5)
         assert node.state is NodeState.RUNNING
 
         fail.set()
@@ -2146,6 +2146,54 @@ async def test_ipv6_forwarding_enforces_hop_limit_boundary(
         assert forwarded.header.dst_addr == destination
         assert forwarded.payload == b"bounded"
     assert source not in node.gradient_table
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("hop_limit", "consumed"), [(0, False), (1, True), (2, True)])
+async def test_local_delivery_enforces_hop_limit_boundary(
+    node: Node,
+    monkeypatch: pytest.MonkeyPatch,
+    hop_limit: int,
+    consumed: bool,
+) -> None:
+    """Spec 04-network.md 6.3.2 delivery boundary.
+
+    Hop Limit 0 is rejected before routing (exhausted upstream). A datagram
+    with Hop Limit 1 addressed to this node is consumed locally, never
+    relayed; local delivery itself does not decrement the Hop Limit.
+    """
+    delivered: list[bytes] = []
+    transmitted: list[bytes] = []
+    ingress_peer = PeerIdentity.from_pubkey(Identity.from_seed(bytes([8]) * 32).pubkey)
+    destination = yggdrasil_address(node.identity.pubkey)
+    source = IPv6Address("fe80::5678")
+    raw = IPv6Packet(
+        IPv6Header(
+            src_addr=source,
+            dst_addr=destination,
+            next_header=NextHeader.NO_NEXT_HEADER,
+            hop_limit=hop_limit,
+        ),
+        payload=b"consume",
+    ).to_bytes()
+    encoded = wrap_schc_payload(b"\x02test")
+
+    node.set_on_receive(lambda payload, _sender: delivered.append(payload))
+    monkeypatch.setattr(node.link, "accept_authenticated_schc_packet", lambda _rx: raw)
+
+    async def transmit(schc: bytes, peer: PeerIdentity) -> bool:
+        transmitted.append(schc)
+        return True
+
+    monkeypatch.setattr(node, "_transmit_peer_schc", transmit)
+
+    await node._process_received(_verified_rx(encoded, ingress_peer))
+
+    if consumed:
+        assert delivered == [encoded]
+    else:
+        assert delivered == []
+    assert transmitted == []
 
 
 def test_node_uses_key_derived_native_primary_and_routes_native_mesh_peers(

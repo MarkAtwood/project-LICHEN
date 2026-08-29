@@ -3,15 +3,12 @@
   "title": "schc: test_fragment.py 2 deterministic failures on main",
   "description": "Found during a6qg verification (main @ 164468c700, detached worktree run 2026-08-28): tests/schc/test_fragment.py::test_fragment_sender_validates_before_allocation_and_seals_wire_once and ::test_tofu_capacity_rejects_active_session_saturation_until_hold_down_expires fail deterministically (2 failed, 176 passed on isolated rerun; also failing in full-suite run 11808 passed/2 failed). Unrelated to SOS work; likely fallout from recent SCHC session-authority/hold-down changes. Repro: cd python \u0026\u0026 uv run --extra dev pytest tests/schc/test_fragment.py -q.",
   "notes": "Uncommitted test changes in python/tests/schc/test_fragment.py and python/tests/test_ccp_sync_vector_consumers.py. 2 deterministic failures remain: test_fragment_sender_validates_before_allocation_and_seals_wire_once and test_tofu_capacity_rejects_active_session_saturation_until_hold_down_expires.",
-  "status": "in_progress",
+  "status": "open",
   "priority": 1,
   "issue_type": "bug",
-  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T16:55:04.541967Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T04:54:14.776272Z",
-  "started_at": "2026-08-28T17:01:00.187026Z",
-  "lease_expires_at": "2026-08-28T17:06:00.187026Z",
-  "heartbeat_at": "2026-08-28T17:01:00.187026Z"
+  "updated_at": "2026-08-29T23:37:48.277069Z",
+  "started_at": "2026-08-28T17:01:00.187026Z"
 }

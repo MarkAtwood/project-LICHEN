@@ -2409,10 +2409,10 @@ def test_tofu_capacity_rejects_active_session_saturation_until_hold_down_expires
     assert len(link._pinned_keys) == 64
 
     senders[0].cancel()
-    now[0] = 59.999
+    now[0] = AUTHENTICATED_HOLD_DOWN_SECONDS - 0.001
     radio.queue_rx(wire)
     assert asyncio.run(link.receive(100)) is ReceiveError.CAPACITY_EXHAUSTED
-    now[0] = 60.0
+    now[0] = AUTHENTICATED_HOLD_DOWN_SECONDS
     radio.queue_rx(wire)
     admitted = asyncio.run(link.receive(100))
     assert isinstance(admitted, RxFrame)

@@ -326,7 +326,9 @@ def _validated_journal(document: object) -> tuple[str, list[_JournalEntry]]:
             )
         names = (target, temporary) if backup is None else (target, temporary, backup)
         if any(
-            not name or Path(name).name != name or name in (_LOCK_NAME, _JOURNAL_NAME)
+            not name
+            or Path(name).name != name
+            or name.casefold() in (_LOCK_NAME.casefold(), _JOURNAL_NAME.casefold())
             for name in names
         ):
             raise RuntimeError(
@@ -574,9 +576,10 @@ def atomic_write_json_batch(items: Sequence[tuple[Path, object]]) -> None:
     parents = {path.parent for path in paths}
     if len(parents) != 1:
         raise ValueError("atomic JSON batch destinations must share one directory")
+    reserved_names = {_LOCK_NAME.casefold(), _JOURNAL_NAME.casefold()}
     if any(
         not path.name
-        or path.name in (_LOCK_NAME, _JOURNAL_NAME)
+        or path.name.casefold() in reserved_names
         or path.name.startswith(_PREPARATION_PREFIX)
         for path in paths
     ):

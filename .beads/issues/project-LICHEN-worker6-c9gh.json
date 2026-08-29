@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-c9gh",
+  "title": "test_fragment TOFU hold-down boundary uses hardcoded 59.999/60.0 literals",
+  "description": "Wave-1 review (correctness, P3): python/tests/schc/test_fragment.py:2412,2415 hardcode 59.999/60.0 instead of AUTHENTICATED_HOLD_DOWN_SECONDS (reassembly.py:41), which the file already imports and four sibling tests use (lines 2355, 2530, 2628, 2698). If the spec constant changes, this test fails with a confusing RxFrame-vs-ReceiveError mismatch instead of tracking the constant. Use AUTHENTICATED_HOLD_DOWN_SECONDS - 0.001 and AUTHENTICATED_HOLD_DOWN_SECONDS. Discovered-from wave 1 bead project-LICHEN-worker6-hg27.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T23:36:20.987515Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T23:41:02.139961Z",
+  "closed_at": "2026-08-29T23:41:02.139961Z",
+  "close_reason": "Fixed in wave 1 follow-up: casefold guard + aliased regression, parametrize entry, fsync-ordering pin, hold-down constants, wait_for timeouts + ctime_ns. Suites green (44+178+130).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-c9gh",
+      "depends_on_id": "project-LICHEN-worker6-hg27",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T23:36:21.214569Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

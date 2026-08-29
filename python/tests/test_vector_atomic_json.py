@@ -223,6 +223,7 @@ def test_atomic_write_json_batch_rolls_back_first_replace_when_second_fails(
     [
         ".lichen-vector-batch.lock",
         ".lichen-vector-batch.transaction.json",
+        ".lichen-vector-prep-0123456789abcdef.tmp",
     ],
 )
 def test_atomic_batch_rejects_reserved_target_before_mutation(
@@ -277,12 +278,48 @@ def test_atomic_batch_rejects_reserved_name_without_touching_other_targets(
     other_after = other.stat()
     assert lock.read_bytes() == lock_sentinel
     assert other.read_bytes() == other_sentinel
-    assert (other_after.st_dev, other_after.st_ino, other_after.st_mtime_ns) == (
+    assert (
+        other_after.st_dev,
+        other_after.st_ino,
+        other_after.st_mtime_ns,
+        other_after.st_ctime_ns,
+    ) == (
         other_before.st_dev,
         other_before.st_ino,
         other_before.st_mtime_ns,
+        other_before.st_ctime_ns,
     )
     assert sorted(item.name for item in tmp_path.iterdir()) == [lock.name, other.name]
+
+
+def test_atomic_batch_rejects_case_aliased_reserved_target(tmp_path: Path) -> None:
+    lock = tmp_path / ".lichen-vector-batch.lock"
+    aliased = tmp_path / ".LICHEN-VECTOR-BATCH.LOCK"
+    lock_sentinel = b"stale lock inode\n"
+    lock.write_bytes(lock_sentinel)
+    lock_before = lock.stat()
+    aliased_exists = aliased.exists()
+
+    with pytest.raises(ValueError, match="reserved names"):
+        atomic_write_json_batch([(aliased, {"generation": 2})])
+
+    lock_after = lock.stat()
+    assert lock.read_bytes() == lock_sentinel
+    assert (
+        lock_after.st_dev,
+        lock_after.st_ino,
+        lock_after.st_size,
+        lock_after.st_mtime_ns,
+        lock_after.st_ctime_ns,
+    ) == (
+        lock_before.st_dev,
+        lock_before.st_ino,
+        lock_before.st_size,
+        lock_before.st_mtime_ns,
+        lock_before.st_ctime_ns,
+    )
+    assert aliased.exists() is aliased_exists
+    assert sorted(item.name for item in tmp_path.iterdir()) == [lock.name]
 
 
 def test_atomic_write_json_directory_open_failure_is_not_silently_accepted(
@@ -437,17 +474,33 @@ def test_crash_during_rollback_cleanup_is_recovered_by_next_writer(
         {"version": 1, "phase": "prepared", "entries": entries},
     )
     real_unlink = os.unlink
+    events: list[tuple[str, str]] = []
+    real_write_journal_at = atomic_json._write_journal_at
+    real_fsync_directory = atomic_json._fsync_directory
+
+    def recording_write_journal_at(parent_fd: int, document: object) -> None:
+        phase = document["phase"] if isinstance(document, dict) else ""
+        events.append(("journal", str(phase)))
+        real_write_journal_at(parent_fd, document)
+
+    def recording_fsync_directory(parent_fd: int) -> None:
+        events.append(("fsync", ""))
+        real_fsync_directory(parent_fd)
 
     def crash_on_second_backup(
         name: os.PathLike[str] | str,
         *,
         dir_fd: int | None = None,
     ) -> None:
+        if name in (first_backup.name, second_backup.name):
+            events.append(("unlink_backup", str(name)))
         if name == second_backup.name:
             raise OSError("simulated crash during cleanup")
         real_unlink(name, dir_fd=dir_fd)
 
     monkeypatch.setattr(os, "unlink", crash_on_second_backup)
+    monkeypatch.setattr(atomic_json, "_write_journal_at", recording_write_journal_at)
+    monkeypatch.setattr(atomic_json, "_fsync_directory", recording_fsync_directory)
     with pytest.raises(OSError, match="simulated crash during cleanup"):
         atomic_write_json_batch([(first, {"generation": 9}), (second, {"generation": 9})])
     monkeypatch.undo()
@@ -456,10 +509,25 @@ def test_crash_during_rollback_cleanup_is_recovered_by_next_writer(
     assert second.read_bytes() == second_original
     assert not first_backup.exists()
     assert second_backup.exists()
-    journal = atomic_json._read_journal(
-        tmp_path / ".lichen-vector-batch.transaction.json"
-    )
+    journal = atomic_json._read_journal(tmp_path / ".lichen-vector-batch.transaction.json")
     assert journal["phase"] == "rolled_back"
+    rolled_back_at = events.index(("journal", "rolled_back"))
+    backup_unlinks = [
+        index
+        for index, (kind, _name) in enumerate(events)
+        if kind == "unlink_backup" and index > rolled_back_at
+    ]
+    assert backup_unlinks, "cleanup must attempt backup deletion after rollback"
+    durability_fsyncs = [
+        index
+        for index, (kind, _name) in enumerate(events)
+        if kind == "fsync" and rolled_back_at < index < backup_unlinks[0]
+    ]
+    assert durability_fsyncs, (
+        "directory fsync must land between the rolled_back journal write "
+        "and the first backup deletion, or a crash window can leave a "
+        "prepared journal whose backups are already gone"
+    )
 
     atomic_write_json_batch([(first, {"generation": 3}), (second, {"generation": 3})])
 
