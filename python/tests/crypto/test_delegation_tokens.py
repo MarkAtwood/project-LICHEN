@@ -288,9 +288,7 @@ class TestVerification:
         """Create a delegate identity for testing."""
         return Identity.from_seed(bytes([0xFF - i for i in range(32)]))
 
-    def test_expired_token(
-        self, delegator_identity: Identity, delegate_identity: Identity
-    ) -> None:
+    def test_expired_token(self, delegator_identity: Identity, delegate_identity: Identity) -> None:
         """Test that expired tokens are rejected."""
         past_time = int(time.time()) - 3600
         token = create_delegation_token(
@@ -628,12 +626,13 @@ class TestCheckDelegationScope:
         assert check_delegation_scope(token, DelegationScope.DISTRIBUTE_KEY) is False
 
         # Combined scopes
-        assert check_delegation_scope(
-            token, DelegationScope.INVITE | DelegationScope.REMOVE
-        ) is True
-        assert check_delegation_scope(
-            token, DelegationScope.INVITE | DelegationScope.DISTRIBUTE_KEY
-        ) is False
+        assert (
+            check_delegation_scope(token, DelegationScope.INVITE | DelegationScope.REMOVE) is True
+        )
+        assert (
+            check_delegation_scope(token, DelegationScope.INVITE | DelegationScope.DISTRIBUTE_KEY)
+            is False
+        )
 
 
 class TestPayloadIntegerKeys:

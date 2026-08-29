@@ -79,7 +79,8 @@ class TestPayloadEncoding:
     @pytest.mark.parametrize(
         "vector",
         [
-            v for v in get_vectors()
+            v
+            for v in get_vectors()
             if v.get("coverage") == "delegation_token_cose_sign1"
             and v.get("expected", {}).get("scope_bits_valid", True)
         ],
@@ -139,7 +140,8 @@ class TestSignatureVerification:
     @pytest.mark.parametrize(
         "vector",
         [
-            v for v in get_vectors()
+            v
+            for v in get_vectors()
             if v.get("expected", {}).get("signature_valid", False)
             and "delegator_pubkey" in v  # Filter out partial vectors
         ],
@@ -162,7 +164,8 @@ class TestCoseSign1Decoding:
     @pytest.mark.parametrize(
         "vector",
         [
-            v for v in get_vectors()
+            v
+            for v in get_vectors()
             if v.get("coverage") == "delegation_token_cose_sign1"
             and v.get("expected", {}).get("scope_bits_valid", True)  # Exclude invalid scope
         ],
@@ -184,7 +187,8 @@ class TestCoseSign1Decoding:
     @pytest.mark.parametrize(
         "vector",
         [
-            v for v in get_vectors()
+            v
+            for v in get_vectors()
             if v.get("coverage") == "delegation_token_cose_sign1"
             and v.get("expected", {}).get("scope_bits_valid", True)  # Exclude invalid scope
         ],
