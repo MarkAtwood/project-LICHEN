@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-e698",
+  "title": "store_rx_floor: precheck catalog capacity before slot commit; align 512 cap with pin-table 10000",
+  "description": "From 3-perspective review of bidu fix: store_rx_floor commits slot+anchor THEN records catalog; catalog failure (ENOSPC, anchor CAS, or capacity exceeded) is an indeterminate post-commit failure. At _MAX_RX_CATALOG_ENTRIES=512 a new origin fails permanently on store AND on every subsequent load (heal re-raises at dao_persistence.py:991-\u003e771-772) with no eviction path; recovery requires wiping base dir which resets ALL replay floors. Note 512 cap is inconsistent with _MAX_TRUST_ENTRIES=10000 (key_persistence.py:63) while _RX_CATALOG_MAX_SIZE formula already scales. Fix: pre-check capacity/anchor liveness before _write_to_older_slot_locked; raise/configure cap to match pin budget; document ENOSPC/anchor indeterminate window in store_rx_floor contract.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:35:51.235026Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:35:51.235026Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-e698",
+      "depends_on_id": "project-LICHEN-worker6-bidu",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:35:51.417343Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

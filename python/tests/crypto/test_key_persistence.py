@@ -21,6 +21,7 @@ from lichen.crypto import (
     KeyPersistenceError,
     MemoryKeyStore,
     TrustEntry,
+    TrustError,
     TrustLevel,
     TrustStore,
     TrustStorePersistence,
@@ -106,6 +107,7 @@ def TrustStorePersistence(  # noqa: N802
 # Deterministic seeds for reproducible tests
 SEED_ALICE = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000001")
 SEED_BOB = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000002")
+SEED_CHARLIE = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000003")
 
 
 def _entry_document(entry: TrustEntry, **overrides: object) -> dict[str, object]:
@@ -520,6 +522,107 @@ class TestTrustStorePersistence:
         assert restored is not None
         assert restored.get(alice.iid) is None
         assert restored.get(bob.iid) is not None
+
+    @pytest.mark.parametrize("failure_point", ["chmod", "directory_fsync"])
+    def test_rotation_after_indeterminate_failure_is_terminal_not_stale(
+        self, tmp_path, monkeypatch, failure_point: str
+    ):
+        """A post-replace failure blocks further mutations as terminal, never stale-CAS."""
+        persistence = TrustStorePersistence(tmp_path)
+        alice = Identity.from_seed(SEED_ALICE)
+        bob = Identity.from_seed(SEED_BOB)
+        charlie = Identity.from_seed(SEED_CHARLIE)
+        store = TrustStore(persistence=persistence)
+        store.verify_or_pin(alice.pubkey, alice.iid)
+        transcript = compute_rotation_transcript(alice.pubkey, bob.pubkey, 1)
+        signature = schnorr_sign(alice.privkey, alice.pubkey, transcript)
+
+        if failure_point == "chmod":
+            real_chmod = key_persistence_module.os.chmod
+
+            def fail_chmod(path, mode):  # type: ignore[no-untyped-def]
+                if Path(path) == tmp_path / "trust_store.json":
+                    raise OSError("injected post-replace chmod failure")
+                return real_chmod(path, mode)
+
+            monkeypatch.setattr(key_persistence_module.os, "chmod", fail_chmod)
+        else:
+            real_fsync = key_persistence_module.os.fsync
+
+            def fail_directory_fsync(fd: int) -> None:
+                if stat.S_ISDIR(os.fstat(fd).st_mode):
+                    raise OSError("injected directory fsync failure")
+                real_fsync(fd)
+
+            monkeypatch.setattr(key_persistence_module.os, "fsync", fail_directory_fsync)
+
+        with pytest.raises(TrustStorePersistenceIndeterminateError):
+            store.rotate_key(alice.pubkey, bob.pubkey, 1, signature)
+
+        assert store._persistence_revision == 2
+        rotated_in_memory = store.get(bob.iid)
+        assert rotated_in_memory is not None
+        assert rotated_in_memory.rotation_sequence == 1
+
+        next_transcript = compute_rotation_transcript(bob.pubkey, charlie.pubkey, 2)
+        next_signature = schnorr_sign(bob.privkey, bob.pubkey, next_transcript)
+        with pytest.raises(TrustError, match="terminal"):
+            store.rotate_key(bob.pubkey, charlie.pubkey, 2, next_signature)
+
+        still_in_memory = store.get(bob.iid)
+        assert still_in_memory is not None
+        assert still_in_memory.rotation_sequence == 1
+        restored = TrustStorePersistence(tmp_path).load()
+        assert restored is not None
+        assert restored.get(alice.iid) is None
+        durable_entry = restored.get(bob.iid)
+        assert durable_entry is not None
+        assert durable_entry.rotation_sequence == 1
+
+    def test_pre_replace_rotation_failure_keeps_disk_and_memory_old(self, tmp_path, monkeypatch):
+        """A failure before replace reports failure with disk and memory both still old."""
+        persistence = TrustStorePersistence(tmp_path)
+        alice = Identity.from_seed(SEED_ALICE)
+        bob = Identity.from_seed(SEED_BOB)
+        store = TrustStore(persistence=persistence)
+        store.verify_or_pin(alice.pubkey, alice.iid)
+        transcript = compute_rotation_transcript(alice.pubkey, bob.pubkey, 1)
+        signature = schnorr_sign(alice.privkey, alice.pubkey, transcript)
+
+        real_replace = key_persistence_module.os.replace
+
+        def fail_first_replace(src, dst):  # type: ignore[no-untyped-def]
+            if Path(dst) == tmp_path / "trust_store.json":
+                raise OSError("injected pre-replace failure")
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(key_persistence_module.os, "replace", fail_first_replace)
+
+        with pytest.raises(OSError, match="injected pre-replace failure"):
+            store.rotate_key(alice.pubkey, bob.pubkey, 1, signature)
+
+        monkeypatch.undo()
+
+        assert store.get(alice.iid) is not None
+        assert store.get(bob.iid) is None
+        assert store._persistence_revision == 1
+        assert not list(tmp_path.glob(".trust_store.*.tmp"))
+        restored = TrustStorePersistence(tmp_path).load()
+        assert restored is not None
+        assert restored.get(alice.iid) is not None
+        assert restored.get(bob.iid) is None
+
+        rotated = store.rotate_key(alice.pubkey, bob.pubkey, 1, signature)
+
+        assert rotated.rotation_sequence == 1
+        assert store.get(alice.iid) is None
+        assert store.get(bob.iid) is not None
+        redone = TrustStorePersistence(tmp_path).load()
+        assert redone is not None
+        assert redone.get(alice.iid) is None
+        redone_bob = redone.get(bob.iid)
+        assert redone_bob is not None
+        assert redone_bob.rotation_sequence == 1
 
     def test_deleting_initialized_trust_document_is_detected(self, tmp_path):
         persistence = TrustStorePersistence(tmp_path)

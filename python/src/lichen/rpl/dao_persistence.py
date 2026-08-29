@@ -15,6 +15,13 @@ Per spec section 8.6, DAO state requires crash-safe persistence:
 This module provides the abstract interface and a two-slot implementation that
 survives interruption at any point.
 
+The two-slot file backend additionally maintains a checksummed RX floor catalog
+(``dao_rx_catalog.bin``) recording, per pinned Announce public key, the
+high-water floor committed so far. The catalog is written atomically and
+anchored through the external ``StateRevisionAnchor`` so a key that has
+initialized floors cannot become "unseen" (treated as a first DAO) merely
+because its per-key slot files were deleted or restored to an older pair.
+
 Note: The RX side interface is compatible with the `OriginReplayStore` protocol
 defined in `dao_origin.py`.
 """
@@ -49,6 +56,11 @@ _MAX_GENERATION: Final[int] = (1 << 32) - 1
 _NOFOLLOW: Final[int] = getattr(os, "O_NOFOLLOW", 0)
 _TX_INITIALIZED_MARKER: Final[bytes] = b"LICHEN-DAO-TX-INITIALIZED-v1\n"
 _DAO_ANCHOR_DOMAIN: Final[bytes] = b"LICHEN-DAO-STATE-ANCHOR-v1\x00"
+_RX_CATALOG_MAGIC: Final[bytes] = b"DAOC"
+_RX_CATALOG_ANCHOR_KIND: Final[bytes] = b"rx-catalog"
+_MAX_RX_CATALOG_ENTRIES: Final[int] = 512
+# magic (4) + revision (8) + entry count (4) + entries + checksum (32)
+_RX_CATALOG_MAX_SIZE: Final[int] = 4 + 8 + 4 + 32 + _MAX_RX_CATALOG_ENTRIES * (1 + 32 + 8 + 64)
 
 
 class DaoPersistenceError(Exception):
@@ -253,6 +265,16 @@ class TwoSlotFilePersistence(DaoPersistence):
         - Payload length (4 bytes, big-endian)
         - SHA-256 checksum of generation + sequence + payload (32 bytes)
         - Payload bytes (variable)
+
+    RX floor catalog:
+        A single atomically replaced file ``dao_rx_catalog.bin`` records the
+        high-water ``(sequence, digest)`` committed for every pinned key that
+        has initialized RX floors. It is keyed by the pinned Announce public
+        key (spec section 8.6) and its ``(revision, checksum)`` is anchored in
+        the external ``StateRevisionAnchor`` so deletion, corruption, or stale
+        restoration of the catalog itself is detected. On load, a catalog
+        entry without valid slot files fails closed instead of degrading to a
+        first-DAO bootstrap.
     """
 
     @property
@@ -438,6 +460,9 @@ class TwoSlotFilePersistence(DaoPersistence):
         key_hex = pubkey.hex()
         return self._base_dir / f"dao_rx_{key_hex}_{slot}.bin"
 
+    def _rx_catalog_path(self) -> Path:
+        return self._base_dir / "dao_rx_catalog.bin"
+
     def _write_slot(self, path: Path, generation: int, sequence: int, payload: bytes) -> None:
         """Write a slot atomically with checksum validation."""
         if len(payload) > _MAX_PAYLOAD_SIZE:
@@ -590,6 +615,175 @@ class TwoSlotFilePersistence(DaoPersistence):
         """
         return os.path.lexists(path0) or os.path.lexists(path1)
 
+    # ------------------------------------------------------------------
+    # RX floor catalog
+    #
+    # The catalog records, per pinned Announce public key, the high-water
+    # (sequence, digest) floor committed so far. It exists so a key that has
+    # initialized floors cannot become "unseen" (a first DAO) merely because
+    # its two per-key slot files were deleted or restored to an older pair.
+    # Deleting the catalog itself (all state) is outside this threat model,
+    # but a deleted or stale catalog is still detected whenever the external
+    # revision anchor for the catalog is retained.
+    # ------------------------------------------------------------------
+
+    def _encode_rx_catalog(self, revision: int, entries: dict[bytes, tuple[int, bytes]]) -> bytes:
+        body = bytearray(struct.pack(">QI", revision, len(entries)))
+        for key in sorted(entries, key=lambda item: (len(item), item)):
+            sequence, dao_digest = entries[key]
+            body += struct.pack(">B", len(key))
+            body += key
+            body += struct.pack(">Q", sequence)
+            body += dao_digest
+        body_bytes = bytes(body)
+        return _RX_CATALOG_MAGIC + body_bytes + hashlib.sha256(body_bytes).digest()
+
+    def _parse_rx_catalog(self, data: bytes) -> tuple[int, dict[bytes, tuple[int, bytes]], bytes]:
+        """Parse and checksum-verify catalog bytes into (revision, entries, checksum)."""
+        if (
+            len(data) < 4 + 8 + 4 + 32
+            or data[:4] != _RX_CATALOG_MAGIC
+            or len(data) > _RX_CATALOG_MAX_SIZE
+        ):
+            raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+        body = data[4:-32]
+        stored_checksum = data[-32:]
+        if hashlib.sha256(body).digest() != stored_checksum:
+            raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+        revision = struct.unpack(">Q", body[:8])[0]
+        count = struct.unpack(">I", body[8:12])[0]
+        if not 1 <= revision <= (1 << 64) - 1 or count > _MAX_RX_CATALOG_ENTRIES:
+            raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+        entries: dict[bytes, tuple[int, bytes]] = {}
+        offset = 12
+        for _ in range(count):
+            if offset + 1 > len(body):
+                raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+            key_len = body[offset]
+            offset += 1
+            if key_len not in (16, 32) or offset + key_len + 8 + 64 > len(body):
+                raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+            key = bytes(body[offset : offset + key_len])
+            offset += key_len
+            sequence = struct.unpack(">Q", body[offset : offset + 8])[0]
+            offset += 8
+            dao_digest = bytes(body[offset : offset + 64])
+            offset += 64
+            if key in entries:
+                raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+            entries[key] = (sequence, dao_digest)
+        if offset != len(body):
+            raise DaoPersistenceError("DAO RX floor catalog is corrupt")
+        return revision, entries, stored_checksum
+
+    def _write_rx_catalog_file(self, encoded: bytes) -> None:
+        """Atomically replace the catalog file (staging + rename + fsync)."""
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".dao-rx-catalog.", suffix=".tmp", dir=self._base_dir
+        )
+        temporary = Path(temporary_name)
+        try:
+            os.fchmod(descriptor, 0o600)
+            with os.fdopen(descriptor, "wb", closefd=True) as stream:
+                stream.write(encoded)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self._rx_catalog_path())
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.close(descriptor)
+            with contextlib.suppress(OSError):
+                temporary.unlink(missing_ok=True)
+            raise
+
+        directory = os.open(self._base_dir, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def _read_rx_catalog_locked(
+        self,
+    ) -> tuple[int, dict[bytes, tuple[int, bytes]], AnchoredState | None]:
+        """Read and validate the catalog; returns (revision, entries, file state).
+
+        Caller must hold ``_write_lock`` and the process lock. The catalog's
+        own ``(revision, checksum)`` is verified against the external anchor
+        so stale restoration is detected when the anchor is retained. A file
+        exactly one revision ahead of the anchor is a crash between the
+        atomic file replacement and the anchor advance and is adopted (the
+        file content is checksum-protected), mirroring the announce journal.
+        """
+        path = self._rx_catalog_path()
+        catalog_key = self._state_anchor_key(_RX_CATALOG_ANCHOR_KIND)
+        external = read_anchor(self._revision_anchor, catalog_key, DaoPersistenceError)
+        try:
+            descriptor = os.open(path, os.O_RDONLY | _NOFOLLOW)
+        except FileNotFoundError:
+            if external is not None:
+                raise DaoPersistenceError("DAO RX floor catalog was deleted") from None
+            return 0, {}, None
+        except OSError as exc:
+            raise DaoPersistenceError("DAO RX floor catalog is unreadable") from exc
+        try:
+            info = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or info.st_mode & 0o077
+                or info.st_size > _RX_CATALOG_MAX_SIZE
+            ):
+                raise DaoPersistenceError("DAO RX floor catalog is unsafe")
+            data = os.read(descriptor, _RX_CATALOG_MAX_SIZE + 1)
+        finally:
+            os.close(descriptor)
+        revision, entries, checksum = self._parse_rx_catalog(data)
+        state = AnchoredState(revision, checksum)
+        if external is None:
+            if revision != 1:
+                raise DaoPersistenceError("DAO RX floor catalog is missing its rollback anchor")
+            advance_anchor(self._revision_anchor, catalog_key, None, state, DaoPersistenceError)
+        elif revision == external.revision:
+            if checksum != external.digest:
+                raise DaoPersistenceError("DAO RX floor catalog rollback or substitution detected")
+        elif revision == external.revision + 1:
+            advance_anchor(self._revision_anchor, catalog_key, external, state, DaoPersistenceError)
+        else:
+            raise DaoPersistenceError("DAO RX floor catalog rollback or substitution detected")
+        return revision, entries, state
+
+    def _record_rx_catalog_locked(self, pubkey: bytes, sequence: int, dao_digest: bytes) -> None:
+        """Advance the catalog's high-water record for ``pubkey``.
+
+        Caller must hold ``_write_lock`` and the process lock. Floors only
+        move forward: an equal sequence must carry the identical digest, and
+        a lower sequence than the recorded floor is a rollback.
+        """
+        revision, entries, expected = self._read_rx_catalog_locked()
+        previous = entries.get(pubkey)
+        if previous is not None:
+            if previous[0] == sequence:
+                if previous[1] != dao_digest:
+                    raise DaoPersistenceError("DAO persistence sequence collision")
+                return
+            if previous[0] > sequence:
+                raise DaoPersistenceError("DAO persistence sequence rollback")
+        elif len(entries) >= _MAX_RX_CATALOG_ENTRIES:
+            raise DaoPersistenceError("DAO RX floor catalog capacity exceeded")
+        entries[pubkey] = (sequence, dao_digest)
+        if revision == (1 << 64) - 1:
+            raise DaoPersistenceError("DAO RX floor catalog revision exhausted")
+        new_revision = revision + 1
+        encoded = self._encode_rx_catalog(new_revision, entries)
+        self._write_rx_catalog_file(encoded)
+        advance_anchor(
+            self._revision_anchor,
+            self._state_anchor_key(_RX_CATALOG_ANCHOR_KIND),
+            expected,
+            AnchoredState(new_revision, encoded[-32:]),
+            DaoPersistenceError,
+        )
+
     def _write_to_older_slot(
         self,
         path0: Path,
@@ -607,48 +801,71 @@ class TwoSlotFilePersistence(DaoPersistence):
         "older" slot and generation, and one write would be lost.
         """
         with self._write_lock, self._process_lock():
-            current_result = self._get_anchored_slot(
+            self._write_to_older_slot_locked(
                 path0,
                 path1,
+                sequence,
+                payload,
                 anchor_key,
                 allow_initial=allow_initial,
-                missing_message="initialized DAO state was deleted",
             )
-            slot0 = self._read_slot(path0)
-            slot1 = self._read_slot(path1)
-            if (
-                self._fail_closed
-                and slot0 is None
-                and slot1 is None
-                and self._any_slot_exists(path0, path1)
-            ):
-                raise DaoPersistenceError("refusing to overwrite corrupt DAO persistence state")
 
-            if current_result is not None:
-                if sequence < current_result[2]:
-                    raise DaoPersistenceError("DAO persistence sequence rollback")
-                if sequence == current_result[2]:
-                    if payload != current_result[3]:
-                        raise DaoPersistenceError("DAO persistence sequence collision")
-                    return
+    def _write_to_older_slot_locked(
+        self,
+        path0: Path,
+        path1: Path,
+        sequence: int,
+        payload: bytes,
+        anchor_key: bytes,
+        *,
+        allow_initial: bool,
+    ) -> None:
+        """Write to the older slot with incremented generation.
 
-            # Write to older slot with generation = max + 1
-            current_generation = 0 if current_result is None else current_result[1]
-            if current_generation == _MAX_GENERATION:
-                raise DaoPersistenceError("DAO persistence generation exhausted")
-            new_gen = current_generation + 1
-            if current_result is None or current_result[0] == 1:
-                self._write_slot(path0, new_gen, sequence, payload)
-            else:
-                self._write_slot(path1, new_gen, sequence, payload)
-            previous = read_anchor(self._revision_anchor, anchor_key, DaoPersistenceError)
-            advance_anchor(
-                self._revision_anchor,
-                anchor_key,
-                previous,
-                self._slot_anchor(new_gen, sequence, payload),
-                DaoPersistenceError,
-            )
+        Caller must hold ``_write_lock`` and the process lock.
+        """
+        current_result = self._get_anchored_slot(
+            path0,
+            path1,
+            anchor_key,
+            allow_initial=allow_initial,
+            missing_message="initialized DAO state was deleted",
+        )
+        slot0 = self._read_slot(path0)
+        slot1 = self._read_slot(path1)
+        if (
+            self._fail_closed
+            and slot0 is None
+            and slot1 is None
+            and self._any_slot_exists(path0, path1)
+        ):
+            raise DaoPersistenceError("refusing to overwrite corrupt DAO persistence state")
+
+        if current_result is not None:
+            if sequence < current_result[2]:
+                raise DaoPersistenceError("DAO persistence sequence rollback")
+            if sequence == current_result[2]:
+                if payload != current_result[3]:
+                    raise DaoPersistenceError("DAO persistence sequence collision")
+                return
+
+        # Write to older slot with generation = max + 1
+        current_generation = 0 if current_result is None else current_result[1]
+        if current_generation == _MAX_GENERATION:
+            raise DaoPersistenceError("DAO persistence generation exhausted")
+        new_gen = current_generation + 1
+        if current_result is None or current_result[0] == 1:
+            self._write_slot(path0, new_gen, sequence, payload)
+        else:
+            self._write_slot(path1, new_gen, sequence, payload)
+        previous = read_anchor(self._revision_anchor, anchor_key, DaoPersistenceError)
+        advance_anchor(
+            self._revision_anchor,
+            anchor_key,
+            previous,
+            self._slot_anchor(new_gen, sequence, payload),
+            DaoPersistenceError,
+        )
 
     def store_tx_state(self, sequence: int, dao_bytes: bytes) -> None:
         if type(sequence) is not int or not 0 <= sequence <= (1 << 64) - 1:
@@ -705,14 +922,18 @@ class TwoSlotFilePersistence(DaoPersistence):
             raise ValueError("dao_digest must be 64 bytes (SHA-512)")
         path0 = self._rx_slot_path(pubkey, 0)
         path1 = self._rx_slot_path(pubkey, 1)
-        self._write_to_older_slot(
-            path0,
-            path1,
-            sequence,
-            dao_digest,
-            self._state_anchor_key(b"rx", pubkey),
-            allow_initial=True,
-        )
+        with self._write_lock, self._process_lock():
+            self._write_to_older_slot_locked(
+                path0,
+                path1,
+                sequence,
+                dao_digest,
+                self._state_anchor_key(b"rx", pubkey),
+                allow_initial=True,
+            )
+            # Record the committed floor in the anchored catalog AFTER the
+            # slot commit so the catalog's high-water never leads the slots.
+            self._record_rx_catalog_locked(pubkey, sequence, dao_digest)
 
     def store_rx_floors_batch(self, floors: list[tuple[bytes, int, bytes]]) -> None:
         """Atomically commit multiple RX replay floors.
@@ -746,7 +967,38 @@ class TwoSlotFilePersistence(DaoPersistence):
                 allow_initial=True,
                 missing_message=f"initialized RX floor was deleted for pubkey {pubkey.hex()}",
             )
+            catalog_entry = self._read_rx_catalog_locked()[1].get(pubkey)
+            if result is not None:
+                _, _, sequence, digest = result
+                if catalog_entry is not None:
+                    entry_sequence, entry_digest = catalog_entry
+                    # Restored or substituted slot files must never lower the
+                    # recorded high-water floor or diverge from it at the same
+                    # sequence.
+                    if sequence < entry_sequence or (
+                        sequence == entry_sequence and digest != entry_digest
+                    ):
+                        raise DaoPersistenceError(
+                            f"DAO RX floor rollback or substitution detected"
+                            f" for pubkey {pubkey.hex()}"
+                        )
+                # Heal the catalog forward to the verified floor. This closes
+                # the crash window between a slot commit and its catalog
+                # record and converges pre-catalog slot state. It is a no-op
+                # when the entry already matches and never rewrites the floor
+                # slots, so byte-identical retransmissions do not rewrite the
+                # replay floor (spec 8.6).
+                self._record_rx_catalog_locked(pubkey, sequence, digest)
         if result is None:
+            if catalog_entry is not None:
+                # The anchored catalog records that this pinned key committed
+                # a floor, so missing slot files are deletion, not a first
+                # DAO. Fail closed per spec 8.6 ("Missing, corrupt, or
+                # unavailable receive state MUST fail closed") regardless of
+                # the legacy fail_closed setting.
+                raise DaoPersistenceError(
+                    f"initialized RX floor was deleted for pubkey {pubkey.hex()}"
+                )
             # Per spec 8.6, distinguish missing (no prior DAO from this origin)
             # from corrupt. Missing RX floor for an origin is normal (first DAO).
             # Corrupt floor files are a hard failure when fail_closed.

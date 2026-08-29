@@ -17,6 +17,7 @@ import lichen.rpl.dao_persistence as dao_persistence_module
 from lichen.crypto.identity import Identity, yggdrasil_address
 from lichen.rollback_anchor import AnchoredState
 from lichen.rpl.dao_manager import DaoManager
+from lichen.rpl.dao_origin import DaoOriginValidator
 from lichen.rpl.dao_persistence import (
     DaoPersistenceError,
     MemoryPersistence,
@@ -24,6 +25,7 @@ from lichen.rpl.dao_persistence import (
     compute_dao_digest,
 )
 from lichen.rpl.dao_types import DaoError
+from tests.rpl.test_dao_origin import make_signed_dao
 
 _RealTwoSlotFilePersistence = TwoSlotFilePersistence
 _DAO_ANCHOR_KEY = bytes(range(32))
@@ -1400,3 +1402,250 @@ class TestRequireCrashSafety:
                 persistence=persistence,
                 origin_validator=validator,
             )
+
+
+class _StaticPinTable:
+    """Minimal PinTable double mapping source IIDs to pinned pubkeys."""
+
+    def __init__(self, pins: dict[bytes, bytes]) -> None:
+        self._pins = pins
+
+    def pinned_pubkey_for(self, iid: bytes) -> bytes | None:
+        return self._pins.get(iid)
+
+
+class TestRxFloorCatalog:
+    """Deletion-resistant RX replay floors via the anchored floor catalog.
+
+    Per spec section 8.6 ("Missing, corrupt, or unavailable receive state MUST
+    fail closed"), a pinned key whose replay floor was committed must never
+    become "unseen" again: deleting or restoring its per-key slot files must
+    fail closed instead of degrading to a first-DAO bootstrap, across root
+    restarts. The catalog records the high-water floor per pinned key so this
+    holds even when the caller-supplied revision anchor does not retain
+    per-key state across restarts.
+    """
+
+    def _fresh_anchor_persistence(self, base_dir: Path, *, fail_closed: bool = True):
+        """Construct persistence with a fresh in-memory anchor per instance.
+
+        A fresh anchor simulates a caller whose revision anchor does not
+        retain per-key slot records across restarts, exercising the catalog
+        rather than the per-key slot anchors.
+        """
+        return _RealTwoSlotFilePersistence(
+            base_dir,
+            revision_anchor=MemoryStateAnchor(),
+            anchor_key=_DAO_ANCHOR_KEY,
+            allow_tx_bootstrap=True,
+            fail_closed=fail_closed,
+        )
+
+    def test_first_dao_still_works_across_restarts(self, tmp_path: Path) -> None:
+        """A key absent from the catalog is still a normal first DAO."""
+        digest = compute_dao_digest(b"first-dao")
+        first = self._fresh_anchor_persistence(tmp_path)
+        assert first.load_rx_floor(TEST_PUBKEY) is None
+        first.store_rx_floor(TEST_PUBKEY, 7, digest)
+
+        restarted = self._fresh_anchor_persistence(tmp_path)
+        floor = restarted.load_rx_floor(TEST_PUBKEY)
+        assert floor is not None
+        assert (floor.sequence, floor.digest) == (7, digest)
+
+    def test_deleted_rx_slots_fail_closed_across_restart(self, tmp_path: Path) -> None:
+        """Deleting both slot files of an initialized key fails closed."""
+        digest = compute_dao_digest(b"fresh-dao")
+        first = self._fresh_anchor_persistence(tmp_path)
+        first.store_rx_floor(TEST_PUBKEY, 9, digest)
+        for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"):
+            path.unlink()
+
+        restarted = self._fresh_anchor_persistence(tmp_path)
+        with pytest.raises(DaoPersistenceError, match="initialized RX floor was deleted"):
+            restarted.load_rx_floor(TEST_PUBKEY)
+        with pytest.raises(DaoPersistenceError, match="initialized RX floor was deleted"):
+            restarted.get_floor(TEST_PUBKEY)
+
+    def test_deleted_rx_slots_fail_closed_with_durable_anchor(self, tmp_path: Path) -> None:
+        """Slot deletion is rejected even before the catalog is consulted."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        persistence.store_rx_floor(TEST_PUBKEY, 5, compute_dao_digest(b"dao-5"))
+        for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"):
+            path.unlink()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        with pytest.raises(DaoPersistenceError, match="initialized RX floor was deleted"):
+            restarted.load_rx_floor(TEST_PUBKEY)
+
+    def test_restoring_older_rx_slots_fails_closed_across_restart(self, tmp_path: Path) -> None:
+        """Restoring an older pair of slot files must not lower the floor."""
+        first = self._fresh_anchor_persistence(tmp_path)
+        first.store_rx_floor(TEST_PUBKEY, 5, compute_dao_digest(b"dao-5"))
+        snapshot = {
+            path.name: path.read_bytes()
+            for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin")
+        }
+        first.store_rx_floor(TEST_PUBKEY, 9, compute_dao_digest(b"dao-9"))
+        for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"):
+            path.unlink()
+        for name, contents in snapshot.items():
+            restored = tmp_path / name
+            restored.write_bytes(contents)
+            restored.chmod(0o600)
+
+        restarted = self._fresh_anchor_persistence(tmp_path)
+        with pytest.raises(DaoPersistenceError, match="rollback"):
+            restarted.load_rx_floor(TEST_PUBKEY)
+
+    def test_restored_lower_sequence_slots_fail_closed(self, tmp_path: Path) -> None:
+        """Slot content claiming a sequence below the catalog floor is rejected."""
+        first = self._fresh_anchor_persistence(tmp_path)
+        first.store_rx_floor(TEST_PUBKEY, 9, compute_dao_digest(b"dao-9"))
+        persistence = self._fresh_anchor_persistence(tmp_path)
+        # Substitute slot content claiming the older floor (gen 1, seq 5).
+        persistence._write_slot(
+            tmp_path / f"dao_rx_{TEST_PUBKEY.hex()}_0.bin",
+            1,
+            5,
+            compute_dao_digest(b"dao-5"),
+        )
+        (tmp_path / f"dao_rx_{TEST_PUBKEY.hex()}_1.bin").unlink(missing_ok=True)
+
+        with pytest.raises(DaoPersistenceError, match="rollback or substitution"):
+            persistence.load_rx_floor(TEST_PUBKEY)
+
+    def test_substituted_same_sequence_slots_fail_closed(self, tmp_path: Path) -> None:
+        """Slot content with the recorded sequence but different bytes is rejected."""
+        first = self._fresh_anchor_persistence(tmp_path)
+        first.store_rx_floor(TEST_PUBKEY, 9, compute_dao_digest(b"dao-9"))
+        persistence = self._fresh_anchor_persistence(tmp_path)
+        persistence._write_slot(
+            tmp_path / f"dao_rx_{TEST_PUBKEY.hex()}_0.bin",
+            1,
+            9,
+            compute_dao_digest(b"forged"),
+        )
+        (tmp_path / f"dao_rx_{TEST_PUBKEY.hex()}_1.bin").unlink(missing_ok=True)
+
+        with pytest.raises(DaoPersistenceError, match="rollback or substitution"):
+            persistence.load_rx_floor(TEST_PUBKEY)
+
+    def test_floor_cycle_survives_restarts_with_durable_anchor(self, tmp_path: Path) -> None:
+        """Restart, deletion, and stale restore all fail closed across a full cycle."""
+        digest5 = compute_dao_digest(b"dao-5")
+        digest9 = compute_dao_digest(b"dao-9")
+        first = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        first.store_rx_floor(TEST_PUBKEY, 5, digest5)
+        snapshot = {
+            path.name: path.read_bytes()
+            for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin")
+        }
+
+        second = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        floor = second.load_rx_floor(TEST_PUBKEY)
+        assert floor is not None
+        assert (floor.sequence, floor.digest) == (5, digest5)
+        second.store_rx_floor(TEST_PUBKEY, 9, digest9)
+
+        third = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        floor = third.load_rx_floor(TEST_PUBKEY)
+        assert floor is not None
+        assert (floor.sequence, floor.digest) == (9, digest9)
+
+        for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"):
+            path.unlink()
+        with pytest.raises(DaoPersistenceError, match="initialized RX floor was deleted"):
+            TwoSlotFilePersistence(tmp_path, fail_closed=True).load_rx_floor(TEST_PUBKEY)
+
+        for name, contents in snapshot.items():
+            restored = tmp_path / name
+            restored.write_bytes(contents)
+            restored.chmod(0o600)
+        with pytest.raises(DaoPersistenceError, match="rollback or substitution"):
+            TwoSlotFilePersistence(tmp_path, fail_closed=True).load_rx_floor(TEST_PUBKEY)
+
+    def test_catalog_deletion_fails_closed_with_durable_anchor(self, tmp_path: Path) -> None:
+        """Deleting the catalog itself is detected when its anchor is retained."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        persistence.store_rx_floor(TEST_PUBKEY, 5, compute_dao_digest(b"dao-5"))
+        (tmp_path / "dao_rx_catalog.bin").unlink()
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        with pytest.raises(DaoPersistenceError, match="catalog was deleted"):
+            restarted.load_rx_floor(TEST_PUBKEY)
+
+    def test_catalog_corruption_fails_closed(self, tmp_path: Path) -> None:
+        """A corrupt catalog fails closed instead of downgrading protection."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        persistence.store_rx_floor(TEST_PUBKEY, 5, compute_dao_digest(b"dao-5"))
+        catalog = tmp_path / "dao_rx_catalog.bin"
+        catalog.write_bytes(b"corrupt")
+        catalog.chmod(0o600)
+
+        restarted = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        with pytest.raises(DaoPersistenceError, match="catalog is corrupt"):
+            restarted.load_rx_floor(TEST_PUBKEY)
+
+    def test_slots_without_catalog_still_load(self, tmp_path: Path) -> None:
+        """Pre-catalog slot state (or a store/catalog crash window) still loads."""
+        persistence = TwoSlotFilePersistence(tmp_path, fail_closed=True)
+        digest = compute_dao_digest(b"legacy")
+        persistence._write_slot(tmp_path / f"dao_rx_{TEST_PUBKEY.hex()}_0.bin", 1, 50, digest)
+
+        floor = persistence.load_rx_floor(TEST_PUBKEY)
+        assert floor is not None
+        assert (floor.sequence, floor.digest) == (50, digest)
+
+    def test_catalog_heals_first_store_crash_window(self, tmp_path: Path) -> None:
+        """A slot commit that crashed before its catalog record heals on load.
+
+        After the heal, deleting the slot files is still detected even though
+        the catalog record did not exist at commit time.
+        """
+        digest = compute_dao_digest(b"dao-7")
+        first = self._fresh_anchor_persistence(tmp_path)
+        # Simulate a crash between the slot+anchor commit and the catalog
+        # record: commit the slot without updating the catalog.
+        first._write_to_older_slot(
+            first._rx_slot_path(TEST_PUBKEY, 0),
+            first._rx_slot_path(TEST_PUBKEY, 1),
+            7,
+            digest,
+            first._state_anchor_key(b"rx", TEST_PUBKEY),
+            allow_initial=True,
+        )
+
+        restarted = self._fresh_anchor_persistence(tmp_path)
+        floor = restarted.load_rx_floor(TEST_PUBKEY)
+        assert floor is not None
+        assert (floor.sequence, floor.digest) == (7, digest)
+
+        for path in tmp_path.glob(f"dao_rx_{TEST_PUBKEY.hex()}_*.bin"):
+            path.unlink()
+        with pytest.raises(DaoPersistenceError, match="initialized RX floor was deleted"):
+            self._fresh_anchor_persistence(tmp_path).load_rx_floor(TEST_PUBKEY)
+
+    def test_old_signed_dao_rejected_after_slot_deletion(self, tmp_path: Path) -> None:
+        """A previously accepted origin's old signed DAO is rejected, not replayed."""
+        identity = Identity.from_seed(bytes(range(32, 64)))
+        origin_addr = yggdrasil_address(identity.pubkey)
+        parent = IPv6Address("fd00::99")
+        pin_table = _StaticPinTable({origin_addr.packed[8:16]: identity.pubkey})
+        base = tmp_path / "root"
+
+        first = self._fresh_anchor_persistence(base)
+        validator = DaoOriginValidator(pin_table, first)
+        fresh = make_signed_dao(identity, parent, ROOT, 9, path_sequence=2)
+        result = validator.validate(fresh, origin_addr, ROOT)
+        assert result.valid and result.is_fresh
+        first.store_rx_floor(identity.pubkey, 9, compute_dao_digest(fresh.to_bytes()))
+
+        for path in base.glob(f"dao_rx_{identity.pubkey.hex()}_*.bin"):
+            path.unlink()
+
+        restarted = self._fresh_anchor_persistence(base)
+        replay_validator = DaoOriginValidator(pin_table, restarted)
+        stale = make_signed_dao(identity, parent, ROOT, 5, path_sequence=1)
+        with pytest.raises(DaoPersistenceError):
+            replay_validator.validate(stale, origin_addr, ROOT)

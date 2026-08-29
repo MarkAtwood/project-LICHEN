@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ig2p",
+  "title": "Forwarder DAO parsing looser than root extract_updates: reject E=1/unknown option types or document spec blessing",
+  "description": "Security review of wave: dao_parents_for_source (rust/lichen-node/src/routing/router.rs:1185-1193) ignores unknown option types, accepts E=1 external transits and inconsistent path_sequence/lifetime across transits, caps group_targets only by DAO size not MAX_DAO_UPDATES. Consequence: forwarders relay DAOs the root will reject (bounded amplification toward root) and anti-spoof parent set can include parents from transits the root would reject. No acceptance hazard (drop-only, root re-validates) but tighten for defense in depth: reject E=1 and unknown types in forwarder, or add comment citing spec section blessing the asymmetry.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:36:32.830237Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:36:32.830237Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ig2p",
+      "depends_on_id": "project-LICHEN-worker6-kznk",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:36:33.096883Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

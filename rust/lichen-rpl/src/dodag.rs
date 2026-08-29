@@ -953,6 +953,55 @@ mod tests {
     }
 
     #[test]
+    fn authorization_does_not_make_stale_or_incomparable_versions_acceptable() {
+        let mut node = DodagState::new(0, dodag_id(), 5);
+        let joined = Dio {
+            version: 5,
+            ..dio(ROOT_RANK)
+        };
+        assert_eq!(
+            node.process_dio_with_version_authorization(&joined, ll(1), 1.0, true),
+            DioOutcome::Accepted
+        );
+        assert_eq!(node.version, 5);
+
+        // Older and incomparable versions are rejected even when the caller
+        // attests a valid root authorization: lollipop comparison still
+        // decides (spec 05-routing.md 8.4.1).
+        let stale = Dio {
+            version: 3,
+            ..dio(ROOT_RANK)
+        };
+        assert_eq!(
+            node.process_dio_with_version_authorization(&stale, ll(2), 1.0, true),
+            DioOutcome::Rejected
+        );
+        let incomparable = Dio {
+            version: 22,
+            ..dio(ROOT_RANK)
+        };
+        assert_eq!(
+            node.process_dio_with_version_authorization(&incomparable, ll(3), 1.0, true),
+            DioOutcome::Rejected
+        );
+        assert_eq!(node.version, 5);
+        assert_eq!(node.preferred_parent, Some(ll(1)));
+
+        // Control: a genuinely newer authorized version is still adopted.
+        let newer = Dio {
+            version: 6,
+            ..dio(ROOT_RANK)
+        };
+        assert_eq!(
+            node.process_dio_with_version_authorization(&newer, ll(4), 1.0, true),
+            DioOutcome::Accepted
+        );
+        assert_eq!(node.version, 6);
+        assert!(node.is_joined());
+        assert_eq!(node.preferred_parent, Some(ll(4)));
+    }
+
+    #[test]
     fn inadmissible_newer_version_still_adopts_and_resets_membership() {
         let mut node = DodagState::new(0, dodag_id(), 0);
         node.process_dio(&dio(ROOT_RANK), ll(1), 1.0);

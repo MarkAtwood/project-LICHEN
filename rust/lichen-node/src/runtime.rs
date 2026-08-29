@@ -480,8 +480,8 @@ mod tests {
         let root_addr = node.node().node_id.link_local_addr().0;
         let identity = Identity::from_seed(Seed::new([2; 32]));
         let target = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-        let mut sender = DaoManager::new(target, RPL_INSTANCE_ID, root_addr);
-        let dao = sender.build_dao_with_lifetime(root_addr, 1);
+        let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+        let dao = sender.build_dao_with_lifetime(root_addr.into(), 1);
         assert!(node.router.set_dao_lifetime_unit(1));
         assert!(node.router.process_dao_at_ms(&dao, target, target, 1_000));
         let mut runtime = RplRuntime::new(RplRuntimeConfig::new(1_000, 10_000).unwrap(), 1_000);

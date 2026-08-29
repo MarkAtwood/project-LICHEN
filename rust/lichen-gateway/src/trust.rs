@@ -153,6 +153,8 @@ pub enum TrustError {
     InvalidRotationSignature,
     /// Rotation sequence is zero or does not strictly advance the durable floor.
     InvalidRotationSequence { current: u64, presented: u64 },
+    /// Rotation proposed the public key that is already pinned.
+    UnchangedRotationKey,
     /// Unknown gateway (not in trust store).
     UnknownGateway,
     /// Key conflict: different key presented for pinned IID.
@@ -193,6 +195,7 @@ impl std::fmt::Display for TrustError {
                 f,
                 "key rotation sequence {presented} does not advance durable floor {current}"
             ),
+            Self::UnchangedRotationKey => write!(f, "key rotation must change the public key"),
             Self::UnknownGateway => write!(f, "unknown gateway"),
             Self::KeyConflict { .. } => write!(f, "key conflict for pinned IID"),
             Self::InvalidSignature => write!(f, "invalid signature"),
@@ -546,13 +549,16 @@ pub fn ul_bit_test(pubkey: &[u8; 32]) -> (u8, u8, bool) {
 
 // ─── Key Rotation ────────────────────────────────────────────────────────────
 
-/// Build the key rotation message for signing.
+/// Build the canonical key-rotation transcript for signing.
 ///
-/// Format: `LICHEN-KEY-ROTATION-v1 || 0x00 || old_pubkey || old_iid ||
-/// new_pubkey || rotation_sequence_be64`.
+/// Format (spec 8.7): `LICHEN-KEY-ROTATION-v1 || 0x00 || old_pubkey ||
+/// old_key_derived_iid || new_pubkey || rotation_sequence_be64`.
+///
+/// The old IID is always derived from `old_pubkey`, so a transcript over any
+/// other old IID cannot be produced and a signature over a substituted IID is
+/// rejected.
 pub fn build_rotation_message(
     old_pubkey: &[u8; 32],
-    old_iid: &[u8; 8],
     new_pubkey: &[u8; 32],
     rotation_sequence: u64,
 ) -> Vec<u8> {
@@ -560,7 +566,7 @@ pub fn build_rotation_message(
     msg.extend_from_slice(KEY_ROTATION_DOMAIN);
     msg.push(0);
     msg.extend_from_slice(old_pubkey);
-    msg.extend_from_slice(old_iid);
+    msg.extend_from_slice(&iid_from_pubkey(old_pubkey));
     msg.extend_from_slice(new_pubkey);
     msg.extend_from_slice(&rotation_sequence.to_be_bytes());
     msg
@@ -568,31 +574,29 @@ pub fn build_rotation_message(
 
 /// Verify a key rotation signature.
 ///
-/// The OLD key signs a message authorizing the NEW key.
+/// The OLD key signs a transcript authorizing the NEW key.
 /// The transcript binds both identities and the monotonic rotation sequence.
 pub fn verify_key_rotation(
     old_pubkey: &[u8; 32],
-    old_iid: &[u8; 8],
     new_pubkey: &[u8; 32],
     rotation_sequence: u64,
     signature: &[u8; 48],
 ) -> bool {
-    let msg = build_rotation_message(old_pubkey, old_iid, new_pubkey, rotation_sequence);
+    let msg = build_rotation_message(old_pubkey, new_pubkey, rotation_sequence);
     let pubkey = PublicKey::new(*old_pubkey);
     verify(&pubkey, &msg, signature)
 }
 
-/// Sign a key rotation message.
+/// Sign a key rotation transcript.
 ///
 /// The OLD key signs authorization for the NEW key.
 pub fn sign_key_rotation(
     old_privkey: &[u8; 32],
     old_pubkey: &[u8; 32],
-    old_iid: &[u8; 8],
     new_pubkey: &[u8; 32],
     rotation_sequence: u64,
 ) -> [u8; 48] {
-    let msg = build_rotation_message(old_pubkey, old_iid, new_pubkey, rotation_sequence);
+    let msg = build_rotation_message(old_pubkey, new_pubkey, rotation_sequence);
     let privkey = PrivateKey::new(*old_privkey);
     let pubkey = PublicKey::new(*old_pubkey);
     sign(&privkey, &pubkey, &msg)
@@ -974,6 +978,10 @@ impl TrustStore {
         let old_trust_level = old_entry.trust_level;
         let old_rotation_sequence = old_entry.rotation_sequence;
 
+        if *new_pubkey == old_pubkey {
+            return Err(TrustError::UnchangedRotationKey);
+        }
+
         if rotation_sequence == 0 || rotation_sequence <= old_rotation_sequence {
             return Err(TrustError::InvalidRotationSequence {
                 current: old_rotation_sequence,
@@ -984,7 +992,6 @@ impl TrustStore {
         // Verify the rotation signature
         if !verify_key_rotation(
             &old_pubkey,
-            old_iid,
             new_pubkey,
             rotation_sequence,
             rotation_signature,
@@ -1915,13 +1922,13 @@ mod tests {
         let old_pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
         assert_eq!(derived_old_public.as_bytes(), &old_pubkey);
-        let old_iid: [u8; 8] = hex!("fd6b265c8585369b");
         let new_pubkey: [u8; 32] =
             hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
         let rotation_sequence = 1;
 
-        // Verify the rotation message format
-        let msg = build_rotation_message(&old_pubkey, &old_iid, &new_pubkey, rotation_sequence);
+        // Verify the canonical transcript format. The old IID in the middle
+        // (fd6b265c8585369b) must be the one derived from the old pubkey.
+        let msg = build_rotation_message(&old_pubkey, &new_pubkey, rotation_sequence);
         let expected_msg: Vec<u8> = hex!(
             "4c494348454e2d4b45592d524f544154494f4e2d7631004cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29fd6b265c8585369b7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe26740000000000000001"
         )
@@ -1932,7 +1939,6 @@ mod tests {
         let signature = sign_key_rotation(
             old_private.as_bytes(),
             &old_pubkey,
-            &old_iid,
             &new_pubkey,
             rotation_sequence,
         );
@@ -1942,7 +1948,6 @@ mod tests {
         assert_eq!(signature, expected_signature);
         assert!(verify_key_rotation(
             &old_pubkey,
-            &old_iid,
             &new_pubkey,
             rotation_sequence,
             &signature
@@ -1955,13 +1960,12 @@ mod tests {
         // Signature from Charlie, not Alice
         let old_pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
-        let old_iid: [u8; 8] = hex!("fd6b265c8585369b");
         let new_pubkey: [u8; 32] =
             hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
         let charlie_seed: [u8; 32] =
             hex!("0000000000000000000000000000000000000000000000000000000000000003");
         let (charlie_private, charlie_public) = derive_keypair(&Seed::new(charlie_seed));
-        let transcript = build_rotation_message(&old_pubkey, &old_iid, &new_pubkey, 1);
+        let transcript = build_rotation_message(&old_pubkey, &new_pubkey, 1);
         let signature = sign(&charlie_private, &charlie_public, &transcript);
         let expected_signature: [u8; 48] = hex!(
             "7b676951cc6de2c0519255696606e063d1a3c3177221dd25cdf630e99386f171806a99b249462c31d1f150529a336a0b"
@@ -1970,7 +1974,6 @@ mod tests {
 
         assert!(!verify_key_rotation(
             &old_pubkey,
-            &old_iid,
             &new_pubkey,
             1,
             &signature
@@ -2091,7 +2094,6 @@ mod tests {
         let sig = sign_key_rotation(
             alice_privkey.as_bytes(),
             &alice_pubkey_bytes,
-            &alice_iid,
             &bob_pubkey,
             1,
         );
@@ -2146,13 +2148,8 @@ mod tests {
         let identity = verified_identity(*alice_seed.as_bytes(), [0x39; 32]);
         let mut store = TrustStore::new_ephemeral(4).unwrap();
         store.verify_tofu(&identity).unwrap();
-        let first_signature = sign_key_rotation(
-            alice_private.as_bytes(),
-            &alice_pubkey,
-            &alice_iid,
-            &bob_pubkey,
-            7,
-        );
+        let first_signature =
+            sign_key_rotation(alice_private.as_bytes(), &alice_pubkey, &bob_pubkey, 7);
         store
             .process_key_rotation(&alice_iid, &bob_pubkey, 7, &first_signature)
             .unwrap();
@@ -2160,13 +2157,7 @@ mod tests {
 
         let mut loaded = TrustStore::load(&path, &sealing_seed, store.generation(), 4).unwrap();
         assert_eq!(loaded.get(&bob_iid).unwrap().rotation_sequence, 7);
-        let replay = sign_key_rotation(
-            bob_private.as_bytes(),
-            &bob_pubkey,
-            &bob_iid,
-            &charlie_pubkey,
-            7,
-        );
+        let replay = sign_key_rotation(bob_private.as_bytes(), &bob_pubkey, &charlie_pubkey, 7);
         assert!(matches!(
             loaded.process_key_rotation(&bob_iid, &charlie_pubkey, 7, &replay),
             Err(TrustError::InvalidRotationSequence {
@@ -2175,6 +2166,120 @@ mod tests {
             })
         ));
         assert!(loaded.contains(&bob_iid));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn trust_store_rejects_zero_rotation_sequence() {
+        let identity = verified_identity([31; 32], [17; 32]);
+        let iid = *identity.iid();
+        let mut store = TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS).unwrap();
+        store.verify_tofu(&identity).unwrap();
+
+        let new_pubkey: [u8; 32] =
+            hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
+        assert!(matches!(
+            store.process_key_rotation(&iid, &new_pubkey, 0, &[0; SIGNATURE_LEN]),
+            Err(TrustError::InvalidRotationSequence {
+                current: 0,
+                presented: 0
+            })
+        ));
+        assert!(store.contains(&iid));
+    }
+
+    #[test]
+    fn trust_store_rejects_rotation_to_unchanged_key() {
+        let seed = [32u8; 32];
+        let identity = verified_identity(seed, [18; 32]);
+        let pubkey = *identity.pubkey();
+        let iid = *identity.iid();
+        let mut store = TrustStore::new_ephemeral(DEFAULT_MAX_TRUSTED_GATEWAYS).unwrap();
+        store.verify_tofu(&identity).unwrap();
+
+        let (private, public) = derive_keypair(&Seed::new(seed));
+        assert_eq!(public.as_bytes(), &pubkey);
+        let signature = sign_key_rotation(private.as_bytes(), &pubkey, &pubkey, 5);
+        assert!(matches!(
+            store.process_key_rotation(&iid, &pubkey, 5, &signature),
+            Err(TrustError::UnchangedRotationKey)
+        ));
+        assert!(store.contains(&iid));
+        assert_eq!(store.get(&iid).unwrap().rotation_sequence, 0);
+    }
+
+    #[test]
+    fn trust_store_legacy_v1_migrates_sequence_floor_and_blocks_replay() {
+        let path = test_store_path("legacy-v1-rotation");
+        let sealing_seed = [0x76; 32];
+        // Canonical gcp3_trust_models.json key material.
+        let old_pubkey: [u8; 32] =
+            hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
+        let old_iid: [u8; 8] = hex!("fd6b265c8585369b");
+        let bob_pubkey: [u8; 32] =
+            hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
+        let charlie_pubkey: [u8; 32] =
+            hex!("f381626e41e7027ea431bfe3009e94bdd25a746beec468948d6c3c7c5dc9a54b");
+
+        // Hand-encode a legacy version-1 store: identical layout to version 2
+        // minus the per-entry rotation sequence.
+        let mut payload = Vec::new();
+        payload.extend_from_slice(TRUST_STORE_MAGIC);
+        payload.extend_from_slice(&TRUST_STORE_VERSION_LEGACY.to_be_bytes());
+        payload.extend_from_slice(&1u64.to_be_bytes()); // generation
+        payload.extend_from_slice(&4u32.to_be_bytes()); // capacity
+        payload.extend_from_slice(&1u32.to_be_bytes()); // count
+        payload.extend_from_slice(&old_iid);
+        payload.extend_from_slice(&old_pubkey);
+        payload.push(TrustLevel::Tofu.as_u8());
+        payload.extend_from_slice(&1_000u64.to_be_bytes()); // first_seen
+        payload.extend_from_slice(&2_000u64.to_be_bytes()); // last_verified
+        payload.extend_from_slice(&3u64.to_be_bytes()); // verify_count
+        let signature = sign_store_payload(&payload, &sealing_seed);
+        let mut bytes = payload;
+        bytes.extend_from_slice(&signature);
+        fs::write(&path, &bytes).unwrap();
+
+        // Migration: a legacy pin loads with no rotation floor (sequence 0).
+        let mut loaded = TrustStore::load(&path, &sealing_seed, 0, 4).unwrap();
+        assert_eq!(loaded.get(&old_iid).unwrap().rotation_sequence, 0);
+
+        // The first rotation after migration sets the floor to one.
+        let (old_private, old_public) = derive_keypair(&Seed::new(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000001"
+        )));
+        assert_eq!(old_public.as_bytes(), &old_pubkey);
+        let rotation_signature =
+            sign_key_rotation(old_private.as_bytes(), &old_pubkey, &bob_pubkey, 1);
+        loaded
+            .process_key_rotation(&old_iid, &bob_pubkey, 1, &rotation_signature)
+            .unwrap();
+        let bob_iid = iid_from_pubkey(&bob_pubkey);
+        assert_eq!(loaded.get(&bob_iid).unwrap().rotation_sequence, 1);
+
+        // Re-saving upgrades the store to version 2 and persists the floor.
+        loaded.save_atomic(&path, &sealing_seed).unwrap();
+        let persisted = fs::read(&path).unwrap();
+        assert_eq!(
+            persisted[8..10],
+            TRUST_STORE_VERSION.to_be_bytes(),
+            "migrated store must be resealed as version 2"
+        );
+        let mut reloaded = TrustStore::load(&path, &sealing_seed, loaded.generation(), 4).unwrap();
+        assert_eq!(reloaded.get(&bob_iid).unwrap().rotation_sequence, 1);
+
+        // The migrated floor rejects replaying the sequence-1 authorization.
+        let (bob_private, _) = derive_keypair(&Seed::new(hex!(
+            "0000000000000000000000000000000000000000000000000000000000000002"
+        )));
+        let replay = sign_key_rotation(bob_private.as_bytes(), &bob_pubkey, &charlie_pubkey, 1);
+        assert!(matches!(
+            reloaded.process_key_rotation(&bob_iid, &charlie_pubkey, 1, &replay),
+            Err(TrustError::InvalidRotationSequence {
+                current: 1,
+                presented: 1
+            })
+        ));
         fs::remove_file(path).unwrap();
     }
 

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-3u3o",
+  "title": "DAO RX floor catalog requires durably-anchored state outside base_dir; enforce/document",
+  "description": "Security review of worker6-bidu fix: if dao_rx_catalog.bin, both per-key slot files, AND the anchor state are all absent, load_rx_floor degrades to first-DAO bootstrap and old signed DAOs replay. Slot files and catalog live in the same directory with identical permissions, so any actor able to delete slots can delete the catalog; protection only holds when StateRevisionAnchor is externally durable. Fix: enforce or document that production construction requires a durable anchor stored outside base_dir (e.g. requires_durable_anchor flag or gateway-config assertion) and add a test asserting the fail-open path is unreachable with the durable anchor. Ref dao_persistence.py:625-627,722-725,992-1007.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-29T08:35:50.798311Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-29T08:35:50.798311Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3u3o",
+      "depends_on_id": "project-LICHEN-worker6-bidu",
+      "type": "discovered-from",
+      "created_at": "2026-08-29T08:35:51.061128Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
