@@ -34,22 +34,8 @@ extern "C" {
  * Configuration constants
  * -------------------------------------------------------------------------- */
 
-/* RX thread configuration - use Kconfig values */
-#define RX_THREAD_STACK_SIZE CONFIG_LICHEN_LORA_L2_RX_STACK_SIZE
-#define RX_THREAD_PRIORITY   CONFIG_LICHEN_LORA_L2_RX_PRIORITY
+/* Modem arbitration timeout budget - use Kconfig value */
 #define RX_TIMEOUT_MS        CONFIG_LICHEN_LORA_L2_RX_TIMEOUT_MS
-#define RX_ERROR_WARN_THRESHOLD 5
-
-/* Join timeout for RX thread when not blocked in lora_recv() */
-#define RX_THREAD_QUICK_JOIN_MS 100
-
-/*
- * Join timeout for deinit() best-effort recovery.
- * Short timeout because: if stop() completed normally, thread is already dead
- * (instant return); if truly stuck, waiting longer won't help. 10ms is enough
- * for kernel to finalize thread termination.
- */
-#define DEINIT_JOIN_TIMEOUT_MS 10
 
 /* --------------------------------------------------------------------------
  * State machine
@@ -106,10 +92,6 @@ static inline enum lora_state lora_get_state(void)
  * Shared resources
  * -------------------------------------------------------------------------- */
 
-/* RX thread and stack */
-extern struct k_thread rx_thread_data;
-extern k_thread_stack_t rx_stack[];
-
 /* Mutex protecting state transitions and callback registration */
 extern struct k_mutex lora_mutex;
 
@@ -160,9 +142,24 @@ uint8_t lora_l2_duty_region(void);
  * -------------------------------------------------------------------------- */
 
 /**
- * @brief RX thread entry point
+ * @brief Arm the first asynchronous reception (called from start())
+ *
+ * Requires the module to be in LORA_RUNNING. Arms the driver via
+ * lora_recv_async(); the ISR callback stages packets and the system
+ * workqueue processes and re-arms.
+ *
+ * @return 0 on success, negative errno from the driver on failure
  */
-void rx_thread(void *arg1, void *arg2, void *arg3);
+int lora_l2_rx_start(void);
+
+/**
+ * @brief Disarm the driver and drain the RX work item
+ *
+ * Called from stop() after the transition to STOPPED, and from the ABORTED
+ * recovery path in deinit(). After this returns, no RX callback invocation
+ * can start and no RX work item is queued or running.
+ */
+void lora_l2_rx_stop(void);
 
 /**
  * @brief Generate stable EUI-64 from hardware device ID

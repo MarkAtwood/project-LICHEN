@@ -43,6 +43,10 @@ struct lora_loopback_data {
 	char __aligned(4) rx_queue_buf[LOOPBACK_QUEUE_DEPTH * sizeof(struct loopback_packet)];
 	struct lora_modem_config config;
 	bool configured;
+	/* Asynchronous RX (lora_recv_async): registered callback + user_data.
+	 * Single outstanding reception; NULL when disarmed. */
+	lora_recv_cb async_cb;
+	void *async_user_data;
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_t sent_packets;
 	atomic_t received_packets;
@@ -94,6 +98,36 @@ static int lora_loopback_config(const struct device *dev,
 	return 0;
 }
 
+/*
+ * Deliver one queued packet to the registered async callback, if any.
+ * The packet is copied to this function's stack first, so the callback's
+ * data pointer is valid only for the duration of the invocation (the
+ * lora_recv_async contract). The loopback driver has no real IRQ, so the
+ * callback runs in the caller's context; callers must honor the contract
+ * (copy only, no blocking).
+ */
+static void lora_loopback_async_deliver(const struct device *dev,
+					struct lora_loopback_data *data)
+{
+	struct loopback_packet pkt;
+
+	if (data->async_cb == NULL) {
+		return;
+	}
+	if (k_msgq_get(&data->rx_queue, &pkt, K_NO_WAIT) != 0) {
+		return;
+	}
+
+#ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
+	atomic_inc(&data->received_packets);
+#endif
+	LOG_DBG("async received %u bytes (from loopback queue)", pkt.len);
+
+	data->async_cb(dev, pkt.data, pkt.len,
+		       CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR,
+		       data->async_user_data);
+}
+
 static int lora_loopback_send(const struct device *dev,
 			      uint8_t *payload, uint32_t payload_len)
 {
@@ -123,6 +157,11 @@ static int lora_loopback_send(const struct device *dev,
 	atomic_inc(&data->sent_packets);
 #endif
 	LOG_DBG("sent %u bytes (looped back to rx queue)", payload_len);
+
+	/* A registered async callback receives the looped-back packet
+	 * immediately, mirroring RX_DONE on real hardware. */
+	lora_loopback_async_deliver(dev, data);
+
 	return 0;
 }
 
@@ -183,6 +222,33 @@ static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
 }
 #endif
 
+static int lora_loopback_recv_async(const struct device *dev, lora_recv_cb cb,
+				    void *user_data)
+{
+	struct lora_loopback_data *data = dev->data;
+
+	if (cb == NULL) {
+		/* Cancel any pending asynchronous reception. */
+		data->async_cb = NULL;
+		data->async_user_data = NULL;
+		return 0;
+	}
+
+	if (data->async_cb != NULL) {
+		return -EBUSY;
+	}
+
+	data->async_cb = cb;
+	data->async_user_data = user_data;
+
+	/* A packet looped back while disarmed (e.g. during the TX window) is
+	 * still in the queue; deliver it now, mirroring a radio that was
+	 * listening the whole time. */
+	lora_loopback_async_deliver(dev, data);
+
+	return 0;
+}
+
 static int lora_loopback_init(const struct device *dev)
 {
 	struct lora_loopback_data *data = dev->data;
@@ -202,9 +268,10 @@ static int lora_loopback_init(const struct device *dev)
 }
 
 static const struct lora_driver_api lora_loopback_api = {
-	.config = lora_loopback_config,
-	.send   = lora_loopback_send,
-	.recv   = lora_loopback_recv,
+	.config      = lora_loopback_config,
+	.send        = lora_loopback_send,
+	.recv        = lora_loopback_recv,
+	.recv_async  = lora_loopback_recv_async,
 };
 
 #define LORA_LOOPBACK_DEFINE(inst)					\
