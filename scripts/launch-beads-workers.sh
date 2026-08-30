@@ -74,9 +74,10 @@ for i in $(seq 1 $NUM_WORKERS); do
     fi
 
     echo "Launching worker $i in $WORKTREE"
-    # Workers are unattended: allow all tool calls inside the worker (disposable
-    # worktree) without permission prompts. Scoped here, not in global config.
-    CMD="env OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"}}' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    # Unattended workers: allow the tool surface, deny the catastrophic few.
+    # Allow-list covers paths AGENTS.md already sanctions (Attic tmp/zephyr/cache).
+    WORKER_POLICY='{"permission":{"edit":"allow","webfetch":"allow","bash":{"*":"allow","rm -rf *":"deny","sudo *":"deny","git push*":"deny"}}}'
+    CMD="env OPENCODE_CONFIG_CONTENT='$WORKER_POLICY' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
     else
