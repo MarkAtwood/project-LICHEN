@@ -36,6 +36,8 @@
 
 #[cfg(feature = "std")]
 pub mod announce;
+#[cfg(feature = "std")]
+pub mod announce_store;
 pub mod dispatch;
 #[cfg(feature = "std")]
 pub mod forward_buffer;
@@ -63,6 +65,8 @@ pub mod tdma_scheduler;
 pub use announce::{
     seq_gt, AnnounceProcessor, AnnounceRejectReason, AnnounceResult, MAX_TRACKED_ORIGINATORS,
 };
+#[cfg(feature = "std")]
+pub use announce_store::{AnnouncePinFloor, AnnounceStoreError, AnnounceTrustStore};
 pub use dispatch::{Dispatcher, Request, Resource, Response};
 #[cfg(feature = "std")]
 pub use gradient::GradientTable;
