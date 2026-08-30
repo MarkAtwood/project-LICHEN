@@ -2936,6 +2936,74 @@ mod tests {
         assert_eq!(&out[1..n], packet);
     }
 
+    fn srh_packet(routing_type: u8, segments_left: u8, hop: &[u8], checksum_dst: &[u8]) -> Vec<u8> {
+        let udp_len = 8usize + 4;
+        let total_payload = 8 + 16 + udp_len;
+        let mut packet = vec![0u8; 40 + total_payload];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&(total_payload as u16).to_be_bytes());
+        packet[6] = 43;
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&hex("fe800000000000000000000000000001"));
+        packet[24..40].copy_from_slice(&hex("fe800000000000000000000000000002"));
+        packet[40..48].copy_from_slice(&[17, 2, routing_type, segments_left, 0, 0, 0, 0]);
+        packet[48..64].copy_from_slice(hop);
+        let checksum =
+            udp_checksum(&packet[8..24], checksum_dst, 5000, 5001, b"ping").unwrap();
+        packet[64..66].copy_from_slice(&5000u16.to_be_bytes());
+        packet[66..68].copy_from_slice(&5001u16.to_be_bytes());
+        packet[68..70].copy_from_slice(&(udp_len as u16).to_be_bytes());
+        packet[70..72].copy_from_slice(&checksum.to_be_bytes());
+        packet[72..].copy_from_slice(b"ping");
+        packet
+    }
+
+    #[test]
+    fn routing_header_policy_matches_rfc6554_and_rfc2460() {
+        let dst = hex("fe800000000000000000000000000002");
+        let final_dst = hex("fe80000000000000000000000000000a");
+        let mut out = [0u8; 256];
+
+        // In-transit RH3, checksum over the RFC 2460 section 8.1 final
+        // destination: valid but unmatched -> byte-preserving Rule 255.
+        let packet = srh_packet(3, 1, &final_dst, &final_dst);
+        let n = compress(&packet, &mut out).unwrap();
+        assert_eq!(out[0], RULE_UNCOMPRESSED);
+        assert_eq!(&out[1..n], &packet[..]);
+        let mut encoded = vec![RULE_UNCOMPRESSED];
+        encoded.extend_from_slice(&packet);
+        let mut decoded = [0u8; 256];
+        let m = decompress(&encoded, &mut decoded).unwrap();
+        assert_eq!(&decoded[..m], &packet[..]);
+
+        // RFC 5095 deprecated Routing type 0 is malformed.
+        let packet = srh_packet(0, 1, &hex("fe80000000000000000000000000000b"), &dst);
+        assert!(matches!(compress(&packet, &mut out), Err(SchcError::InvalidPacket(_))));
+
+        // segments-left above the address count is malformed.
+        let packet = srh_packet(3, 2, &hex("fe80000000000000000000000000000c"), &final_dst);
+        assert!(matches!(compress(&packet, &mut out), Err(SchcError::InvalidPacket(_))));
+
+        // Checksum over the outer destination instead of the final destination.
+        let packet = srh_packet(3, 1, &final_dst, &dst);
+        assert!(matches!(compress(&packet, &mut out), Err(SchcError::InvalidPacket(_))));
+    }
+
+    #[test]
+    fn fragment_header_is_unsupported() {
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let packet = mqtt_packet(&src, &dst, 5000, 5001, b"ping");
+        let mut fragged = vec![0u8; packet.len() + 8];
+        fragged[..40].copy_from_slice(&packet[..40]);
+        fragged[4..6].copy_from_slice(&((packet.len() - 40 + 8) as u16).to_be_bytes());
+        fragged[6] = 44;
+        fragged[40..48].copy_from_slice(&[17, 0, 0, 0, 0, 0, 0, 1]);
+        fragged[48..].copy_from_slice(&packet[40..]);
+        let mut out = [0u8; 256];
+        assert!(matches!(compress(&fragged, &mut out), Err(SchcError::InvalidPacket(_))));
+    }
+
     #[test]
     fn mqtt_sn_rejects_noncanonical_residues() {
         let src = hex("fe800000000000000000000000000001");

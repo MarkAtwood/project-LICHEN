@@ -109,6 +109,32 @@ def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> N
             raise SchcError(f"invalid Rule 7 multicast destination scope {scope}")
 
 
+def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
+    """Enforce the RPL RH3-only routing-header policy (RFC 6554, RFC 5095).
+
+    Every Routing extension header must be an uncompressed RPL source-routing
+    header (type 3) with full 128-bit addresses (CmprI/CmprE/Pad zero) and a
+    segments-left within the address count; any other routing type, including
+    the deprecated type 0, is malformed. Returns the RFC 2460 section 8.1
+    upper-layer checksum destination: the final Routing-header address while
+    segments_left is nonzero (origin and in-transit views), else the packet
+    destination (final-delivery view).
+    """
+    upper_dst = packet.header.dst_addr
+    for ext in packet.extension_headers:
+        if ext.header_type != NextHeader.ROUTING:
+            continue
+        data = ext.data
+        if len(data) + 2 < 24 or data[0] != 3 or data[2] != 0 or data[3] != 0:
+            raise SchcError("unsupported RPL source-routing header")
+        segments_left = data[1]
+        if segments_left > (len(data) - 6) // 16:
+            raise SchcError("invalid RPL source-routing segments-left")
+        if segments_left != 0:
+            upper_dst = IPv6Address(data[-16:])
+    return upper_dst
+
+
 def validate_full_ipv6(raw: bytes) -> bytes:
     """Validate a complete IPv6 packet before Rule 255 delivery."""
     if type(raw) is not bytes:
@@ -122,14 +148,13 @@ def validate_full_ipv6(raw: bytes) -> bytes:
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
     _validate_ipv6_addresses(packet.header)
+    upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
         try:
             UdpDatagram.from_bytes(packet.payload, packet.header.src_addr)
         except UdpError as error:
             raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
-        if not UdpDatagram.verify_checksum(
-            packet.header.src_addr, packet.header.dst_addr, packet.payload
-        ):
+        if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
             raise SchcError("invalid Rule 255 IPv6 UDP checksum")
     return raw
 
