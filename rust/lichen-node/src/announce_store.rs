@@ -589,6 +589,52 @@ mod tests {
     }
 
     #[test]
+    fn store_floor_outlives_cache_eviction() {
+        // Eviction interaction: the in-memory admission cache may evict a
+        // pinned originator under capacity pressure, but the durable pin and
+        // floor outlive that eviction. After the cache entry is gone (store
+        // handle dropped and reopened), the evicted originator can neither
+        // replay an older sequence nor re-pin the IID with a different key.
+        let (state_root, floor_root) = unique_roots("floor-outlives-eviction");
+        let iid = [0x8A; 8];
+        let mut store =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xB2; 32]).unwrap();
+        store.accept(&iid, state(0x21, 100)).unwrap();
+        // Eviction: drop the handle; durable state must be untouched.
+        drop(store);
+
+        let mut reopened =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xB2; 32]).unwrap();
+        // Replay of the evicted originator's older announcement is refused.
+        assert_eq!(
+            reopened.accept(&iid, state(0x21, 99)),
+            Err(AnnounceStoreError::Corrupt)
+        );
+        // A different key claiming the evicted IID must not re-pin.
+        assert_eq!(
+            reopened.accept(
+                &iid,
+                AnnounceTrustState {
+                    pubkey: [0x22; 32],
+                    seq: 101,
+                }
+            ),
+            Err(AnnounceStoreError::Corrupt)
+        );
+        // The floor still advances for the pinned key.
+        reopened.accept(&iid, state(0x21, 101)).unwrap();
+        drop(reopened);
+
+        // And the advanced floor survives another restart.
+        let mut reopened =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xB2; 32]).unwrap();
+        assert_eq!(reopened.load(&iid), Ok(Some(state(0x21, 101))));
+
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
+    }
+
+    #[test]
     fn ephemeral_store_roundtrip() {
         let iid = [0x88; 8];
         let mut store = AnnounceTrustStore::ephemeral();
