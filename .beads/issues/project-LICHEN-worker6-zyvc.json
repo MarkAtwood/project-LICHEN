@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-zyvc",
+  "title": "Kconfig security-doc accuracy: LICHEN_COAP_KEYS claims BLE admin but code enforces SLIP; LICHEN_COAP_CLIENT_OSCORE cites wrong spec section",
+  "description": "Two pre-existing doc-accuracy defects in lichen/subsys/lichen/coap/Kconfig, found during 3x codereview of worker6-1jl1: (1) :252-253 LICHEN_COAP_KEYS SECURITY note says write ops require 'local admin access (loopback or BLE LCI interface)' but lichen_coap_is_local_admin (coap_keys.c:51-98) checks the SLIP LCI interface via slip_transport_iface_get(); the same file's depends-comment (:213-218) correctly says SLIP. (2) :42-44 LICHEN_COAP_CLIENT_OSCORE cites 'spec/06-security.md Section 8.7' for the OSCORE-for-all-traffic recommendation; 8.7 is Key Management - the recommendation is Section 15.6 (spec/06-security.md:1271-1274). The SERVER_OSCORE citation was fixed in worker6-1jl1; the client one remains.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:46:49.561246Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:46:49.561246Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zyvc",
+      "depends_on_id": "project-LICHEN-worker6-1jl1",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:46:50.069557Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

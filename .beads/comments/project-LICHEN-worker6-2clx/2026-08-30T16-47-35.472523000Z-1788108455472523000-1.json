@@ -1,0 +1,7 @@
+{
+  "id": "1788108455472523000-1",
+  "issue_id": "project-LICHEN-worker6-2clx",
+  "author": "opencode-worker-4",
+  "text": "Blocked-by: project-LICHEN-worker6-2z8e (update the gate-function name in the same series that lands coap_oscore_authorize_mutating).",
+  "created_at": "2026-08-30T16:47:35.472523Z"
+}

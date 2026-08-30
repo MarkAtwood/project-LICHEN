@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-3yhv",
+  "title": "coap_slot_coord.c conflict path dereferences size_t conflict_cose_len - cannot compile under LICHEN_COAP_SLOT_COORD=y",
+  "description": "coap_slot_coord.c:1463 declares local 'size_t conflict_cose_len = 0;' (passed by address to process_claim at :1467), but the conflict snapshot guard at :1486-1488 treats it as a pointer: ':1486 conflict_cose_len != NULL' (integer-vs-pointer comparison) and ':1487 *conflict_cose_len \u003e 0' (invalid unary * on size_t) - hard compile error under -Werror. Latent today because CONFIG_LICHEN_COAP_SLOT_COORD defaults n. Fix: drop the != NULL test on the size_t and use 'conflict_cose_len \u003e 0' directly (matching :486-488 producer semantics). Found by security codereview of project-LICHEN-worker6-1jl1; verified by direct read.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:46:48.892898Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:46:48.892898Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3yhv",
+      "depends_on_id": "project-LICHEN-worker6-1jl1",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:46:49.253751Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

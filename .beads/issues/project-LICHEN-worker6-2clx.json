@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2clx",
+  "title": "LICHEN_COAP_SERVER_OSCORE help names coap_oscore_unprotect_resource_request; rename reference when authorize_mutating lands",
+  "description": "lichen/subsys/lichen/coap/Kconfig:91 MUTATING-REQUEST GATE paragraph names coap_oscore_unprotect_resource_request (the current low-level helper). Bead project-LICHEN-worker6-2z8e ports coap_oscore_authorize_mutating from draft 02a8ee28fd and siblings migrate handlers to it; once that lands the Kconfig header names the wrong function. Update the name (semantics text already matches the mandated preserved behavior: EUI-64 ctx lookup, admin fallback, 4.01) in the same series as 2z8e or as immediate follow-up.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:46:50.279234Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:46:50.279234Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2clx",
+      "depends_on_id": "project-LICHEN-worker6-1jl1",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:46:50.621591Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}
