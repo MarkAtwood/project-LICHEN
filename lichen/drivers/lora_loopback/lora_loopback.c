@@ -104,11 +104,18 @@ static int lora_loopback_config(const struct device *dev,
  * lora_recv_async contract). The loopback driver has no real IRQ, so the
  * callback runs in the caller's context; callers must honor the contract
  * (copy only, no blocking).
+ *
+ * One-shot contract: the registration is consumed by the delivery (async_cb
+ * cleared before the callback runs), mirroring L2's single-outstanding-RX
+ * re-arm model - after a delivery the driver is disarmed until the next
+ * lora_recv_async(). Packets looped back while disarmed stay in the queue
+ * and are delivered by the next arm (deliver-on-arm).
  */
 static void lora_loopback_async_deliver(const struct device *dev,
 					struct lora_loopback_data *data)
 {
 	struct loopback_packet pkt;
+	lora_recv_cb cb;
 
 	if (data->async_cb == NULL) {
 		return;
@@ -122,8 +129,10 @@ static void lora_loopback_async_deliver(const struct device *dev,
 #endif
 	LOG_DBG("async received %u bytes (from loopback queue)", pkt.len);
 
-	data->async_cb(dev, pkt.data, pkt.len,
-		       CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR);
+	cb = data->async_cb;
+	data->async_cb = NULL;
+	cb(dev, pkt.data, pkt.len,
+	   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR);
 }
 
 static int lora_loopback_send(const struct device *dev,

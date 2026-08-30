@@ -146,8 +146,11 @@ int lichen_lora_l2_start(void);
  * @brief Stop the LoRa L2 layer
  *
  * Disarms asynchronous RX and drains the RX work item. Idempotent: safe to
- * call when already stopped. Blocks until any in-flight RX callback has
- * completed; no RX callback can start after this returns.
+ * call when already stopped. Blocks (bounded by the modem arbitration
+ * budget) until any in-flight RX callback has completed; no RX callback can
+ * start after this returns. With concurrent stop()/start() callers, the
+ * guarantee applies to the caller's own RX session: a stop() racing a newer
+ * start() leaves the new session armed.
  *
  * @note RX callback clearing: stop() ALWAYS clears the RX callback to NULL.
  * Callers that need to receive packets after restart must re-register their
