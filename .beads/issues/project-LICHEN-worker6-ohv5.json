@@ -2,12 +2,15 @@
   "id": "project-LICHEN-worker6-ohv5",
   "title": "Align addressing spec human IID derivation with canonical SHA-512 native model",
   "description": "spec/03-addressing.md normatively says SHA-256(pubkey), and claims the IID is used for ULA/optional GUA, while canonical implementations/vectors/security spec use SHA-512(pubkey)[0:8] with U/L clear, link-local plus exact 0200::/8 native /128, no ULA. Correct the normative derivation and cross-references to eliminate an implementation-splitting contradiction.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:28:03.346427Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T23:37:51.13785Z",
-  "started_at": "2026-08-24T15:28:07.917728Z"
+  "updated_at": "2026-08-30T03:32:33.330192Z",
+  "started_at": "2026-08-24T15:28:07.917728Z",
+  "closed_at": "2026-08-30T03:32:33.330192Z",
+  "close_reason": "Verified fixed at HEAD (adopted spec updates, checkpoint 846971f9dc): spec/03-addressing.md normative derivation now SHA-512(pubkey) with U/L clear (:15-16), no ULA - 'ULA addresses (fc00::/7) are not used' with exact native construction addr=[0x02]+SHA-512(pubkey)[0:7]+IID (:22), cross-references 04-network 6.2/12 and 06-security 8.5 intact (:22,:30). Cross-checked: 04-network.md uses SHA-512 unified derivation + 0200::/8 single-primary (no ULA/GUA layering), 06-security.md 8.5 'MUST be SHA-512, not SHA-256' with U/L cleared; repo-wide rg finds no remaining SHA-256(pubkey) normative text in spec/."
 }
