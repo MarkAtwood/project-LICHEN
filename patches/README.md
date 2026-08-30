@@ -1,4 +1,6 @@
-# Local Zephyr patches
+# Local dependency patches
+
+## Zephyr / west modules
 
 The `zephyr/` west module is pinned to upstream **v3.7.0** plus the local
 changes captured in `zephyr-v3.7.0-local.patch`, and `modules/lib/loramac-node`
@@ -25,3 +27,18 @@ loramac-node contents (`loramac-node-local.patch`):
 | File | What / why |
 |---|---|
 | `src/radio/sx126x/radio.c` | Adds a weak no-op `RadioRxActivity()` hook, called from `RadioIrqProcess()` on PREAMBLE_DETECTED / SYNCWORD_VALID / HEADER_VALID (previously ignored). Platforms override it to implement receive-window holding; unpatched consumers are unaffected. |
+
+# Local Rust crate patches
+
+The `[patch.crates-io]` entry in `rust/Cargo.toml` points `oscore` at a local
+clone (machine-specific path; on the Mac `/Volumes/Attic/Desktop/Projects/
+crates/oscore`, on this Linux box `/home/mark/crates/oscore`). The workspace
+calls two APIs that upstream `MarkAtwood/rust-oscore` does not ship yet; both
+are ported locally and captured in `rust-oscore-local.patch` (apply with
+`git apply rust-oscore-local.patch` from the clone root, on top of upstream
+`main` at `7434512`):
+
+| API | What / why |
+|---|---|
+| `Context::begin_unprotect_observe_response` | Observe-notification unprotect (RFC 8613 §4.2). Notifications share the registration request's PIV, so the one-response-per-request guard must not apply (`PendingResponse::consume_request_piv`); a fresh explicit PIV is mandatory (a request-derived nonce would alias across notifications). Implemented as a `begin_unprotect_response_inner` core with two thin public wrappers — one crypto path. Pinned by the crate unit test `observe_notifications_share_request_piv_and_require_fresh_piv` and the workspace test `protected_observe_registration_notifications_retries_blocks_and_reset`. |
+| `Context::master_secret` | Read-only accessor used by gateway trust tests to assert PSK-derived contexts agree. |
