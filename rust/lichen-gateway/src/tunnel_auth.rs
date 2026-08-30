@@ -39,6 +39,7 @@ pub enum TunnelAuthError {
     InvalidSignature,
     TableDisabled,
     UnauthorizedTunnel,
+    Capacity,
 }
 
 impl TunnelAuthError {
@@ -175,11 +176,19 @@ struct ReplayFloor {
     used: u64,
 }
 
+/// Replay-floor history keeps `FLOOR_HISTORY_PER_ENTRY * N` floors, mirroring
+/// the Python gateway (`max_history = 4 * max_entries`); floors are never
+/// evicted, so a captured revoked post can never outlive its floor.
+const FLOOR_HISTORY_PER_ENTRY: usize = 4;
+
 /// Bounded egress authorization cache.  Validation is completed before any
-/// table mutation; replacement is deterministic least-recently-used eviction.
+/// table mutation; accepted claims are deterministically least-recently-used
+/// evicted, while the replay-floor history fail-closes with
+/// [`TunnelAuthError::Capacity`] when full (Python parity: silent floor
+/// eviction would let a captured revoked post re-arm the data plane).
 pub struct TunnelAuthorizationTable<const N: usize = DEFAULT_AUTHORIZATION_CAPACITY> {
     entries: [Option<Entry>; N],
-    replay_floors: [Option<ReplayFloor>; N],
+    replay_floors: Vec<ReplayFloor>,
     root_iid: Option<[u8; 8]>,
     clock: u64,
     last_now: Option<u64>,
@@ -189,7 +198,7 @@ impl<const N: usize> Default for TunnelAuthorizationTable<N> {
     fn default() -> Self {
         Self {
             entries: [None; N],
-            replay_floors: [None; N],
+            replay_floors: Vec::new(),
             root_iid: None,
             clock: 0,
             last_now: None,
@@ -198,12 +207,17 @@ impl<const N: usize> Default for TunnelAuthorizationTable<N> {
 }
 
 impl<const N: usize> TunnelAuthorizationTable<N> {
+    /// Maximum number of replay floors the table retains.
+    pub fn max_history(&self) -> usize {
+        N.saturating_mul(FLOOR_HISTORY_PER_ENTRY)
+    }
+
     /// Change the trusted DODAG root.  A root change atomically revokes every
     /// authorization; there is no old-root grace interval.
     pub fn set_root(&mut self, root_iid: [u8; 8]) {
         if self.root_iid != Some(root_iid) {
             self.entries.fill(None);
-            self.replay_floors.fill(None);
+            self.replay_floors.clear();
             self.root_iid = Some(root_iid);
             self.clock = 0;
             self.last_now = None;
@@ -212,7 +226,7 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
 
     pub fn clear(&mut self) {
         self.entries.fill(None);
-        self.replay_floors.fill(None);
+        self.replay_floors.clear();
         self.clock = 0;
         self.last_now = None;
     }
@@ -227,6 +241,15 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         if N == 0 {
             return Err(TunnelAuthError::TableDisabled);
         }
+        let existing = self.replay_floors.iter().position(|slot| {
+            slot.prefix == prefix && slot.prefix_len == prefix_len && slot.route_hash == route_hash
+        });
+        if existing.is_none() && self.replay_floors.len() >= self.max_history() {
+            // Python parity: a revoke for an unknown key with the floor
+            // history full raises and mutates nothing; evicting an older
+            // floor here could let its captured revoked post re-arm.
+            return Err(TunnelAuthError::Capacity);
+        }
         for slot in &mut self.entries {
             if slot.is_some_and(|entry| {
                 entry.claim.prefix == prefix
@@ -237,34 +260,21 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
             }
         }
         self.clock = self.clock.saturating_add(1);
-        let existing = self.replay_floors.iter().position(|slot| {
-            slot.is_some_and(|floor| {
-                floor.prefix == prefix
-                    && floor.prefix_len == prefix_len
-                    && floor.route_hash == route_hash
-            })
-        });
-        let index = existing
-            .or_else(|| self.replay_floors.iter().position(Option::is_none))
-            .unwrap_or_else(|| {
-                self.replay_floors
-                    .iter()
-                    .enumerate()
-                    .min_by_key(|(_, slot)| slot.unwrap().used)
-                    .map(|(index, _)| index)
-                    .unwrap_or(0)
-            });
         let retained = existing
-            .and_then(|slot| self.replay_floors[slot])
+            .and_then(|slot| self.replay_floors.get(slot).copied())
             .map_or(path_seq, |floor| floor.path_seq.max(path_seq));
-        self.replay_floors[index] = Some(ReplayFloor {
+        let floor = ReplayFloor {
             prefix,
             prefix_len,
             route_hash,
             path_seq: retained,
             revoked: true,
             used: self.clock,
-        });
+        };
+        match existing {
+            Some(index) => self.replay_floors[index] = floor,
+            None => self.replay_floors.push(floor),
+        }
         Ok(())
     }
 
@@ -309,9 +319,9 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         let floor = self
             .replay_floors
             .iter()
-            .position(|slot| slot.is_some_and(|entry| same_floor_key(&entry, &claim)));
+            .position(|entry| same_floor_key(entry, &claim));
         if let Some(index) = floor {
-            let retained = self.replay_floors[index].unwrap();
+            let retained = self.replay_floors[index];
             if retained.path_seq >= claim.path_seq {
                 return Err(if retained.revoked {
                     TunnelAuthError::Revoked
@@ -319,6 +329,11 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
                     TunnelAuthError::Replay
                 });
             }
+        } else if self.replay_floors.len() >= self.max_history() {
+            // Python parity: a fresh claim with the floor history full is
+            // denied capacity; silently evicting an older floor could let a
+            // captured revoked post re-arm the data plane.
+            return Err(TunnelAuthError::Capacity);
         }
 
         let existing = self
@@ -336,24 +351,18 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
                     .unwrap_or(0)
             });
         self.clock = self.clock.saturating_add(1);
-        let floor_index = floor
-            .or_else(|| self.replay_floors.iter().position(Option::is_none))
-            .unwrap_or_else(|| {
-                self.replay_floors
-                    .iter()
-                    .enumerate()
-                    .min_by_key(|(_, slot)| slot.unwrap().used)
-                    .map(|(index, _)| index)
-                    .unwrap_or(0)
-            });
-        self.replay_floors[floor_index] = Some(ReplayFloor {
+        let next_floor = ReplayFloor {
             prefix: claim.prefix,
             prefix_len: claim.prefix_len,
             route_hash: claim.route_hash,
             path_seq: claim.path_seq,
             revoked: false,
             used: self.clock,
-        });
+        };
+        match floor {
+            Some(index) => self.replay_floors[index] = next_floor,
+            None => self.replay_floors.push(next_floor),
+        }
         self.entries[index] = Some(Entry {
             claim,
             used: self.clock,
@@ -405,7 +414,7 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
             entry.used = self.clock;
         }
         let accepted_claim = self.entries[index].unwrap().claim;
-        if let Some(floor) = self.replay_floors.iter_mut().flatten().find(|floor| {
+        if let Some(floor) = self.replay_floors.iter_mut().find(|floor| {
             floor.route_hash == request_route_hash
                 && floor.prefix == accepted_claim.prefix
                 && floor.prefix_len == accepted_claim.prefix_len
@@ -975,6 +984,153 @@ mod tests {
         assert_eq!(
             table.authorize_decapsulation(egress_request(second_claim.prefix, &second_route), 2),
             Err(TunnelAuthError::UnauthorizedTunnel)
+        );
+    }
+
+    #[test]
+    fn accept_on_full_floor_history_fails_closed_without_eviction() {
+        let (base, route, root, own, private, public) = fixture();
+        let mut table = TunnelAuthorizationTable::<1>::default();
+        table.set_root(root);
+        assert_eq!(table.max_history(), 4);
+
+        // Four distinct claims fill the 4x floor history.
+        let mut posts = Vec::new();
+        for index in 0..4u8 {
+            let mut claim = base;
+            claim.prefix[7] = 0x70 + index;
+            let claim_route = [[index + 10; 8], [index + 20; 8], [3; 8]];
+            claim.route_hash = route_hash(&claim_route).unwrap();
+            let post = build_root_post(claim, &claim_route, root, &private, &public).unwrap();
+            table
+                .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1)
+                .unwrap();
+            posts.push((claim, claim_route, post));
+        }
+
+        // A fifth distinct claim is denied capacity; it must not evict a
+        // floor, or a captured revoked post could re-arm the data plane.
+        let mut fifth_claim = base;
+        fifth_claim.prefix[7] = 0x80;
+        let fifth_route = [[9; 8], [10; 8], [3; 8]];
+        fifth_claim.route_hash = route_hash(&fifth_route).unwrap();
+        let fifth = build_root_post(fifth_claim, &fifth_route, root, &private, &public).unwrap();
+        assert_eq!(
+            table.accept_post(fifth.body.as_bytes(), authenticated(root, &public), own, 1),
+            Err(TunnelAuthError::Capacity)
+        );
+
+        // Every retained floor still classifies replays: the first claim's
+        // stale-seq post is Replay (not silently forgotten by eviction).
+        let (_, _, first_post) = &posts[0];
+        assert_eq!(
+            table.accept_post(
+                first_post.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                2
+            ),
+            Err(TunnelAuthError::Replay)
+        );
+
+        // A fresher grant for a floor that already exists still re-arms even
+        // at full capacity: only floor-creating accepts are capacity-gated.
+        let (target_claim, target_route, _) = &posts[3];
+        let mut fresher_claim = *target_claim;
+        fresher_claim.path_seq += 1;
+        let fresher =
+            build_root_post(fresher_claim, target_route, root, &private, &public).unwrap();
+        assert_eq!(
+            table.accept_post(
+                fresher.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                2
+            ),
+            Ok(fresher_claim)
+        );
+
+        // Revocation then blocks the re-armed claim again.
+        table
+            .revoke(
+                fresher_claim.prefix,
+                fresher_claim.prefix_len,
+                fresher_claim.route_hash,
+                fresher_claim.path_seq,
+            )
+            .unwrap();
+        assert_eq!(
+            table.accept_post(
+                fresher.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                3
+            ),
+            Err(TunnelAuthError::Revoked)
+        );
+    }
+
+    #[test]
+    fn revoke_on_full_floor_history_fails_closed_and_mutates_nothing() {
+        let (base, route, root, own, private, public) = fixture();
+        let mut table = TunnelAuthorizationTable::<1>::default();
+        table.set_root(root);
+
+        let mut revoked = Vec::new();
+        for index in 0..4u8 {
+            let mut claim = base;
+            claim.prefix[7] = 0x70 + index;
+            let claim_route = [[index + 10; 8], [index + 20; 8], [3; 8]];
+            claim.route_hash = route_hash(&claim_route).unwrap();
+            let post = build_root_post(claim, &claim_route, root, &private, &public).unwrap();
+            table
+                .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1)
+                .unwrap();
+            table
+                .revoke(
+                    claim.prefix,
+                    claim.prefix_len,
+                    claim.route_hash,
+                    claim.path_seq,
+                )
+                .unwrap();
+            revoked.push((claim, claim_route, post));
+        }
+
+        // A revoke for an unknown key with the history full fails closed and
+        // mutates nothing: every retained revoked floor still rejects.
+        let mut unknown = base;
+        unknown.prefix[7] = 0x90;
+        let unknown_route = [[11; 8], [12; 8], [3; 8]];
+        unknown.route_hash = route_hash(&unknown_route).unwrap();
+        assert_eq!(
+            table.revoke(
+                unknown.prefix,
+                unknown.prefix_len,
+                unknown.route_hash,
+                unknown.path_seq
+            ),
+            Err(TunnelAuthError::Capacity)
+        );
+        let (_, _, first_post) = &revoked[0];
+        assert_eq!(
+            table.accept_post(
+                first_post.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                2
+            ),
+            Err(TunnelAuthError::Revoked)
+        );
+        let (last_claim, _, _) = &revoked[3];
+        assert_eq!(
+            table.revoke(
+                last_claim.prefix,
+                last_claim.prefix_len,
+                last_claim.route_hash,
+                last_claim.path_seq
+            ),
+            Ok(())
         );
     }
 
