@@ -10,7 +10,9 @@
 //! - State and rollback floor live in separate storage roots. Every accept
 //!   writes state first, then the floor, so a crash between the two writes
 //!   leaves the floor lagging (healed forward on the next load) but never
-//!   ahead (which fails closed).
+//!   ahead (which fails closed). A non-crash floor-write failure evicts the
+//!   cache entry for the IID, so the stale pre-accept state is neither
+//!   served nor re-validated against while the floor lags.
 //! - `load` fails closed when the state side is missing (trust is never
 //!   rebuilt from a floor alone), when the state does not strictly advance
 //!   its floor, or when a seal does not verify. Only `(None, None)`
@@ -398,7 +400,16 @@ impl AnnounceTrustStore {
                 // write, so a failed floor write cannot undercount.
                 self.durable_count += 1;
             }
-            self.write(iid, true, next)?;
+            if let Err(error) = self.write(iid, true, next) {
+                // The state record committed but the floor witness did not.
+                // The cache (and any caller-held state) may still reflect the
+                // pre-accept floor, and validating against it could overwrite
+                // the newer sealed state with a replayed sequence. Evict so
+                // the next load() rebuilds from the sealed state and heals
+                // the lagging floor forward.
+                self.records.remove(iid);
+                return Err(error);
+            }
         }
         self.remember(iid, next);
         Ok(())
@@ -861,6 +872,55 @@ mod tests {
     }
 
     #[test]
+    fn failed_floor_write_evicts_stale_cache_and_load_rebuilds() {
+        // Non-fatal floor-write failure after the state commit (ENOSPC/EIO on
+        // the floor root): the accept must not leave the pre-accept state in
+        // the cache, or a replayed intermediate sequence would pass the
+        // stale-cache check and regress the newer sealed state.
+        let (state_root, floor_root) = unique_roots("floor-write-fail");
+        let iid = [0x9B; 8];
+        let mut store =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xF2; 32]).unwrap();
+        store.accept(&iid, state(0x71, 100)).unwrap();
+
+        // Detaching the floor storage makes exactly the floor write fail
+        // (Err(Io)) after the state write committed.
+        let floor_storage = store.floor_storage.take();
+        assert_eq!(
+            store.accept(&iid, state(0x71, 200)),
+            Err(AnnounceStoreError::Io)
+        );
+
+        // The state record committed: the durable record on disk holds 200.
+        let raw = std::fs::read(record_path(&state_root, &iid, false)).unwrap();
+        let durable_seq = u16::from_be_bytes([raw[32], raw[33]]);
+        assert_eq!(durable_seq, 200);
+
+        // Restore the floor and rebuild in the SAME store instance: the
+        // durable state (200) must be served, not the stale cached 100, and
+        // the lagging floor heals forward to the sealed state.
+        store.floor_storage = floor_storage;
+        assert_eq!(store.load(&iid), Ok(Some(state(0x71, 200))));
+
+        // The healed floor rejects the intermediate replay that a stale
+        // cache would have accepted, and the floor keeps advancing.
+        assert_eq!(
+            store.accept(&iid, state(0x71, 150)),
+            Err(AnnounceStoreError::Corrupt)
+        );
+        assert!(store.accept(&iid, state(0x71, 201)).is_ok());
+        drop(store);
+
+        // The advanced state is durable across a restart.
+        let mut final_check =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xF2; 32]).unwrap();
+        assert_eq!(final_check.load(&iid), Ok(Some(state(0x71, 201))));
+
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
+    }
+
+    #[test]
     fn ephemeral_store_roundtrip() {
         let iid = [0x88; 8];
         let mut store = AnnounceTrustStore::ephemeral();
@@ -954,5 +1014,4 @@ mod tests {
         std::fs::remove_dir_all(state_root).unwrap();
         std::fs::remove_dir_all(floor_root).unwrap();
     }
-
 }
