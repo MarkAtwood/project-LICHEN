@@ -282,6 +282,60 @@ class TestSosPutDelete:
             await client.shutdown()
             await server.shutdown()
 
+    async def test_post_cancel_cancels_sos(self) -> None:
+        """POST with type=cancel must cancel, not activate (spec 18.4.2)."""
+        client, server, sos = await _setup()
+        try:
+            # Activate with seq=1, then cancel via POST type=cancel with seq=2
+            activate_body = _signed_body(seq=1)
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=activate_body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.CREATED
+            assert sos._active is True
+            cancel_body = _signed_body(seq=2, type="cancel")
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=cancel_body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.CHANGED
+            assert sos._active is False
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_post_cancel_when_idle_returns_not_found(self) -> None:
+        client, server, sos = await _setup()
+        try:
+            cancel_body = _signed_body(seq=1, type="cancel")
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=cancel_body, content_format=60)
+            ).response
+            assert resp.code == aiocoap.NOT_FOUND
+            assert sos._active is False
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_post_cancel_by_non_originator_rejected(self) -> None:
+        """Only the active alert's originator may cancel (anti-griefing)."""
+        client, server, sos = await _setup()
+        try:
+            activate_body = _signed_body(seq=1)
+            await client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=activate_body, content_format=60)
+            ).response
+            assert sos._active is True
+            other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
+            forged = _signed_body(seq=1, priv=other_priv, pub=other_pub, type="cancel")
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
+            ).response
+            assert resp.code == aiocoap.UNAUTHORIZED
+            assert sos._active is True
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
 
 # ---------------------------------------------------------------------------
 # Rate Limiting
