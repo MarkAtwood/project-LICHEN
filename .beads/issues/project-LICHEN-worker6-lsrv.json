@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-lsrv",
+  "title": "link_schc.h lichen_link_compress contract doc omits newly-visible SCHC_ERR_NO_MATCHING_RULE",
+  "description": "P3 doc fix, found by worker5 subagent robustness pass of project-LICHEN-worker6-hahk. lichen/subsys/lichen/link/include/lichen/link_schc.h:59-61 documents lichen_link_compress returning only SCHC_ERR_BUFFER_TOO_SMALL. With the hahk gate, the wrapped lichen_schc_compress now also returns SCHC_ERR_NO_MATCHING_RULE for malformed packets - and that is now the most likely TX-side failure for callers of this wrapper. The wrapper currently has no callers (verified by grep), so doc-only. Fix: add SCHC_ERR_NO_MATCHING_RULE (malformed packet rejected by the compress gate) to the contract comment. Also noted in the same robustness pass (opinion, no bead): lichen_link_strerror (lichen_util.h:90-155) has no SCHC cases so -1 logs as unknown error, and lichen_l2_to_zephyr_errno passes -1 through so Zephyr callers see -EPERM; pre-existing mapping gap worth folding into any error-mapping bead.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:40:48.35024567Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T21:40:48.35024567Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-lsrv",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:40:48.455757464Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

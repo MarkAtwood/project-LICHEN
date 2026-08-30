@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-silq",
+  "title": "Branch breakage: rust lichen-schc lib tests fail to compile - Ipv6Addr::from_str without FromStr import in cfg(test)",
+  "description": "P1 branch health, found while running gates for project-LICHEN-worker6-hahk on heft (worker5). On beads-worker-5 HEAD 8b07985284: cargo test -p lichen-schc --lib fails to compile with 6x E0599 no associated function or constant named from_str found for struct core::net::Ipv6Addr at rust/lichen-schc/src/codec.rs:2837, 2840, 2868, 2871, 2887, 2890 (cfg(test) code, likely from the ow1e.111 Ipv6Addr newtype refactor). The LIB itself builds (cargo build -p lichen-schc passes); only the test profile breaks, so cargo test -p lichen-schc is dead and nyx7-adjacent direct-call test work cannot run until fixed. Fix: add use core::str::FromStr (or Ipv6Addr::new literals) in the test module, then run cargo test -p lichen-schc --lib and cargo clippy --all-features -p lichen-schc -- -D warnings. Note for heft workers: the workspace rust/Cargo.toml:57 pins oscore to a macOS path /Volumes/Attic/Desktop/Projects/crates/oscore; on heft redirect to /home/mark/crates/oscore via a scratch worktree (do not commit the path change).",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-6",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:41:14.554862342Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T21:42:00.664465721Z",
+  "started_at": "2026-08-30T21:42:00.664465721Z",
+  "lease_expires_at": "2026-08-30T21:47:00.664465721Z",
+  "heartbeat_at": "2026-08-30T21:42:00.664465721Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-silq",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:41:14.655632477Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

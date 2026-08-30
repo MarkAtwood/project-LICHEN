@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5b1y",
+  "title": "Rust decompress-side finalize_checksum lacks computed-zero to 0xFFFF mapping; reconstructed UDP datagram can emit illegal wire 0x0000",
+  "description": "P2, out-of-scope note from kimi edge-cases codereview pass of project-LICHEN-worker6-hahk. rust/lichen-schc/src/headers.rs:203-209 finalize lacks the computed-zero -\u003e 0xFFFF mapping that C (lichen/subsys/lichen/schc/schc_checksum.c:62 finalize_checksum) and Python (python/src/lichen/schc/udp.py:77 or 0xFFFF) implement, and headers.rs:466 uses it for packet reconstruction on decompress. A UDP datagram whose true checksum computes to 0x0000 (legal; RFC 768/8200 require transmitting it as 0xFFFF) would be reconstructed by Rust emitting the illegal wire value 0x0000, where C and Python emit 0xFFFF - cross-impl divergence on the decompress/reconstruct path. Compress-side (ones_complement_sum codec.rs:602-613) is correct. Fix: apply the same mapping in headers.rs finalize (or route reconstruction through the compress-side checksum), pin with a shared vector whose UDP checksum computes to zero, rerun the parity gate.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:41:14.710067547Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T21:41:14.710067547Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5b1y",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:41:14.797664164Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

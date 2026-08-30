@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-uylk",
+  "title": "validate_ipv6_transport_lengths relies on caller for version check; self-check packet[0]\u003e\u003e4 == 6",
+  "description": "P3 hardening, found by worker5 subagent correctness pass of project-LICHEN-worker6-hahk. lichen/subsys/lichen/schc/schc_helpers.c:453-472 reads packet[4..5] and packet[6] without validating packet[0]\u003e\u003e4 == 6; correctness depends entirely on the single caller lichen_schc_compress short-circuiting at schc.c:542 (pkt_len \u003c IPV6_HDR_LEN || ipv6_version(packet) != 6). Python (packet.py:116-117 IPv6Header.from_bytes) and Rust (codec.rs:275 validate_full_ipv6_structure) both validate version INSIDE the validator. The guard pkt_len \u003e= IPV6_HDR_LEN exists (:465-467, closing bead nyx7's OOB) but the version check is missing. validate_ipv6_header_chain is static with one guarded call site today, so no live bug - contract hardening so the validator is self-defending like the references. Fix: add version != 6 -\u003e SCHC_ERR_NO_MATCHING_RULE at the top of validate_ipv6_transport_lengths; cover with a direct-call unit test in lichen/tests/schc/main.c (which also discharges the missing-test part of bead project-LICHEN-worker6-nyx7 if folded there).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:40:48.04600553Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T21:40:48.04600553Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-uylk",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:40:48.164036145Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

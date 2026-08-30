@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-fv4f",
+  "title": "Branch breakage: lichen-schc integration tests fail to compile - imports of removed lichen-link modules and missing APIs",
+  "description": "Found while gating silq (one-line lib-test import fix): cargo test -p lichen-schc --lib now passes (81/81) but the integration tests under rust/lichen-schc/tests/ fail to compile: E0432 unresolved imports lichen_link::identity, lichen_link::link_layer, lichen_schc::link (adaptation_vectors.rs, authenticated_dio_vectors.rs, fragmentation*.rs, link_layer_integration.rs, oscore_roundtrip.rs, reassembly_state_machine.rs, rule*_*.rs); E0433 cannot find link_layer in lichen_link; E0599 no method from_authenticated_dio_frame on AuthenticatedPeerSchcContext and no method accept_peer on FragmentationPolicy\u003cMAX_PEERS\u003e. Last touched by worker4 sync commits (636411fd65, faed8ccfb5); looks like the lichen-link module split / API renames never updated this test corpus. Pre-existing on HEAD (cannot be caused by silq's one-line cfg(test) import). Fix: update the integration corpus to the current lichen-link/lichen-schc APIs or retire tests whose APIs were removed deliberately; coordinate with worker4/nyx7-adjacent work before touching.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:44:04.307592143Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:44:04.307592143Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fv4f",
+      "depends_on_id": "project-LICHEN-worker6-silq",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:44:04.412420144Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
