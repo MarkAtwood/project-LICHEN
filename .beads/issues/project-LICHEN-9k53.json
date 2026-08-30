@@ -3,12 +3,12 @@
   "title": "[spec-compliance] outdated cross-reference to ygg_addr_from_pubkey after refactor",
   "description": "spec/06-security.md:105-145 (sections 8.5, 8.7) references `rust/lichen-link/src/identity.rs:14-48` (`yggdrasil_addr_from_pubkey`) and specific line 40. This no longer matches after commit ce284558b (project-LICHEN-ebhw.2.1.2) which moved the function to lichen-core/src/addr.rs as ygg_addr_from_pubkey (with SHA-512+SHA-256 impl matching the normative steps and test/vectors/yggdrasil-derivation.json). The re-export in lichen-link/lib.rs exists but spec is stale. Code now differs from spec documentation. Also verify all other cross-references in 03-addressing.md, 04-network.md. Test vectors still pass.",
   "status": "open",
-  "priority": 1,
+  "priority": 2,
   "issue_type": "bug",
   "assignee": "AI Agent",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-23T05:39:05.194103587Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-08-28T03:36:06.013806Z",
+  "updated_at": "2026-08-30T17:34:12.567583Z",
   "started_at": "2026-07-24T16:15:29.995076531Z"
 }
