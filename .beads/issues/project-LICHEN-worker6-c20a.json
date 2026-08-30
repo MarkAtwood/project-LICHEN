@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-c20a",
   "title": "Rust DAO Transit emits and accepts obsolete E=1 parent encoding",
   "description": "lichen-rpl routing emits Transit path_control 0x80 and parser explicitly accepts E=0 or E=1, but canonical current profile requires E=0 for the exact 20-byte parent form; option length conveys Parent presence. E=0x80 is an unsupported negative and reserved 0x40 must also fail. Update production DAO generation/parser and exact vector/negative tests.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T16:26:20.929207Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T03:39:42.156837Z",
+  "updated_at": "2026-08-30T03:53:58.32006Z",
   "started_at": "2026-08-24T16:26:28.09958Z",
-  "lease_expires_at": "2026-08-30T03:44:42.156837Z",
-  "heartbeat_at": "2026-08-30T03:39:42.156837Z"
+  "closed_at": "2026-08-30T03:53:58.32006Z",
+  "close_reason": "Stale/superseded: spec/05 defines the layered model the bead asked to change, and all of it is already implemented. (1) Option framing (spec/05 8.6): Transit option parse requires Data Length 20, E bit parseable, reserved bits (0x40 et al) MUST be zero -\u003e all three impls reject 0x40: rust message.rs:759, python dao_types.py:99, C messages.c:684. Parse-layer E=1 acceptance is spec-REQUIRED so nonzero E can be rejected 'after replay classification' per 8.7. (2) Semantic layer (spec/05 8.7): nonzero E rejected before route mutation: rust routing.rs:1521 + dao origin vectors, C rpl_dao_process.c:194, python UNSUPPORTED_TRANSIT_E. (3) Emission (8.4.4): no production path sets external=true; writers emit 0x80 only from that field (all constructors pass false). (4) Vectors: rpl_messages.json transit_type6_external (option-layer positive) is consistent with 8.6; dao_origin_signature.json carries the semantic negative reject_unsupported_transit_e. Re-verified: cargo test -p lichen-rpl --lib 237 pass, --test dao_origin_vectors 2 pass; pytest rpl/test_dao.py -k 'transit or e_flag' 10 pass. No files changed."
 }
