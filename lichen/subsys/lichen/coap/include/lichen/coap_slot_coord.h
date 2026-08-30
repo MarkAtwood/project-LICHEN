@@ -110,6 +110,9 @@ enum lichen_claim_result {
 	/** Claim rejected: claim_seq high-water persist failed; claim not
 	 *  applied (spec/08 GCP-6.5: persist before apply) */
 	LICHEN_CLAIM_REJECT_PERSIST = 7,
+	/** Claim rejected: wall clock unsynced, so expiry (GCP-6.5 step 7)
+	 *  cannot be evaluated; fail-closed, never accept without it */
+	LICHEN_CLAIM_REJECT_NO_CLOCK = 8,
 };
 
 /**
@@ -337,6 +340,7 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 	struct lichen_slot_coord_ctx *_Nonnull ctx,
 	const struct lichen_slot_claim *_Nonnull claim,
 	uint64_t now_unix,
+	bool clock_valid,
 	struct lichen_slot_grant *_Nonnull grant,
 	const uint8_t *_Nullable *_Nullable conflict_cose,
 	size_t *_Nullable conflict_cose_len);

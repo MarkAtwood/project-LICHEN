@@ -378,12 +378,17 @@ static void tb_payload(struct tb *t, const struct lichen_slot_claim *claim,
 }
 
 #define PROCESS_OK(ctx_, cose_, len_, now_, want_)                          \
-	process_ok_ctx((ctx_), (cose_), (len_), (now_), (want_), __func__)
+	process_claim_check((ctx_), (cose_), (len_), (now_), true, (want_), \
+			    __func__)
+#define PROCESS_NO_CLOCK(ctx_, cose_, len_, want_)                          \
+	process_claim_check((ctx_), (cose_), (len_), 0, false, (want_),     \
+			    __func__)
 
-static void process_ok_ctx(struct lichen_slot_coord_ctx *ctx,
-			   const uint8_t *cose, size_t cose_len,
-			   uint64_t now, enum lichen_claim_result want,
-			   const char *caller)
+static void process_claim_check(struct lichen_slot_coord_ctx *ctx,
+				const uint8_t *cose, size_t cose_len,
+				uint64_t now, bool clock_valid,
+				enum lichen_claim_result want,
+				const char *caller)
 {
 	struct lichen_slot_claim claim;
 	struct lichen_slot_grant grant;
@@ -395,8 +400,8 @@ static void process_ok_ctx(struct lichen_slot_coord_ctx *ctx,
 		printf("FAIL %s (from %s): decode\n", caller, __func__);
 		return;
 	}
-	got = lichen_slot_coord_process_claim(ctx, &claim, now, &grant,
-					      NULL, NULL);
+	got = lichen_slot_coord_process_claim(ctx, &claim, now, clock_valid,
+					      &grant, NULL, NULL);
 	if (got != want) {
 		tests_failed++;
 		printf("FAIL %s (from %s): result %d want %d\n", caller,
@@ -454,7 +459,7 @@ static void test_roundtrip_and_accept(void)
 
 	/* Accept: expiry 3000 > now 1000 */
 	CHECK(lichen_slot_coord_init(&ctx, IID_B) == 0);
-	ret = lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	ret = lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL);
 	CHECK(ret == LICHEN_CLAIM_ACCEPTED);
 	CHECK(grant.granted_count == 4);
@@ -503,7 +508,7 @@ static void test_mutation_breaks_verify(void)
 		uint8_t saved = cose[payload - cose + offs[i]];
 
 		cose[payload - cose + offs[i]] ^= 0x01;
-		CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000,
+		CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true,
 						      &grant, NULL,
 						      NULL) ==
 		      LICHEN_CLAIM_REJECT_INVALID_SIG);
@@ -515,13 +520,13 @@ static void test_mutation_breaks_verify(void)
 	uint8_t saved = cose[sig - cose + 10];
 
 	cose[sig - cose + 10] ^= 0x80;
-	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL) ==
 	      LICHEN_CLAIM_REJECT_INVALID_SIG);
 	cose[sig - cose + 10] = saved;
 
 	/* Untouched claim still verifies (control) */
-	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL) ==
 	      LICHEN_CLAIM_ACCEPTED);
 }
@@ -550,7 +555,7 @@ static void test_no_verification_material(void)
 
 	fill_claim(&claim, IID_A, 0, 1, 3000, 0);
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
-	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL) ==
 	      LICHEN_CLAIM_REJECT_NO_SIG);
 }
@@ -570,6 +575,17 @@ static void test_gates(void)
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
 		       LICHEN_CLAIM_REJECT_EXPIRED);
+
+	/* Fail-closed: unsynced wall clock (now 0, clock_valid false) must
+	 * reject even a not-yet-expired claim instead of accepting it with
+	 * no expiry validation (GCP-6.5 step 7 precondition). Seq 7 chosen
+	 * above the later accept (seq 5): if a regression ever persisted
+	 * the high-water on this rejection, the following seq-5 ACCEPTED
+	 * assertion below would fail. */
+	ret = sign_into(IID_A, 2, 7, 3000, 0, cose, sizeof(cose));
+	CHECK(ret > 0);
+	PROCESS_NO_CLOCK(&ctx, cose, (size_t)ret,
+			 LICHEN_CLAIM_REJECT_NO_CLOCK);
 
 	/* Replay: seq 5 accepted, then 5 and 4 rejected, 6 accepted
 	 * (spec step 8) */
@@ -659,7 +675,7 @@ static void test_conflict_resolution(void)
 	CHECK(ret > 0);
 	CHECK(lichen_slot_coord_decode_claim(cose_b, (size_t)ret, &claim) ==
 	      0);
-	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      &conflict_cose,
 					      &conflict_len) ==
 	      LICHEN_CLAIM_REJECT_CONFLICT);
@@ -952,7 +968,7 @@ static void test_max_slots_claim(void)
 	CHECK(lichen_slot_coord_init(&ctx, IID_B) == 0);
 	CHECK(lichen_slot_coord_decode_claim(cose, (size_t)ret, &claim) == 0);
 	CHECK(claim.slot_count == CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS);
-	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL) ==
 	      LICHEN_CLAIM_ACCEPTED);
 }
@@ -976,7 +992,7 @@ static void test_slot_range_gate(void)
 					   sizeof(cose));
 	CHECK(ret > 0);
 	CHECK(lichen_slot_coord_decode_claim(cose, (size_t)ret, &claim) == 0);
-	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, &grant,
+	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL) ==
 	      LICHEN_CLAIM_REJECT_INVALID_SLOTS);
 }

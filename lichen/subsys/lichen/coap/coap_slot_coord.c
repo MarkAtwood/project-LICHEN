@@ -357,6 +357,7 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 	struct lichen_slot_coord_ctx *ctx,
 	const struct lichen_slot_claim *claim,
 	uint64_t now_unix,
+	bool clock_valid,
 	struct lichen_slot_grant *grant,
 	const uint8_t **conflict_cose,
 	size_t *conflict_cose_len)
@@ -408,7 +409,18 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 #error "slot-coord requires LICHEN_LINK_SCHNORR: claim verification must never be compiled out (fail-open backstop)"
 #endif
 
-	/* GCP-6.5 validation step 7: expiry > now */
+	/* GCP-6.5 validation step 7: expiry > now. A synced wall clock is a
+	 * precondition: lichen_wall_clock_get() returns 0 until first sync,
+	 * so without this gate every claim would pass the expiry check
+	 * (fail-open) from boot to first time sync. Also treat now==0 as
+	 * unsynced: get() and valid() snapshot independently, and a clock
+	 * that synced between them could otherwise pair a valid flag with
+	 * the stale pre-sync 0 (now==0 is impossible once synced - the
+	 * epoch floor rejects it). */
+	if (!clock_valid || now_unix == 0) {
+		LOG_DBG("Claim rejected: wall clock unsynced");
+		return LICHEN_CLAIM_REJECT_NO_CLOCK;
+	}
 	if (claim->expiry <= now_unix) {
 		LOG_DBG("Claim rejected: expired");
 		return LICHEN_CLAIM_REJECT_EXPIRED;
@@ -1451,7 +1463,7 @@ static int slots_post(struct coap_resource *resource,
 	size_t conflict_cose_len = 0;
 	uint64_t now_unix = lichen_wall_clock_get();
 	enum lichen_claim_result result = lichen_slot_coord_process_claim(
-		&s_ctx, &claim, now_unix, &grant,
+		&s_ctx, &claim, now_unix, lichen_wall_clock_valid(), &grant,
 		&conflict_cose, &conflict_cose_len);
 
 	if (result != LICHEN_CLAIM_ACCEPTED) {
