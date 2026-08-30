@@ -154,15 +154,20 @@ int schc_decompress(const struct schc_profile *profile,
 	if (data_len == 0) {
 		return SCHC_ERR_TOO_SHORT;
 	}
+	/* Ingress profile ceiling: the encoded SCHC packet must fit
+	 * SCHC_FRAGMENT_MAX_PACKET_SIZE (mirrors Rust decompress,
+	 * codec.rs:2270) — an oversized blob is not a deliverable packet.
+	 * Deliberately SCHC_ERR_BUFFER_TOO_SMALL to match this codebase's
+	 * per-rule decompressor convention, not Rust's InvalidPacket. */
+	if (data_len > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
 	uint8_t id = data[0];
 	if (profile->use_uncompressed_fallback &&
 	    id == profile->uncompressed_rule_id) {
 		const uint8_t *payload = &data[1];
 		size_t payload_len = data_len - 1;
 
-		if (payload_len > (size_t)INT_MAX) {
-			return SCHC_ERR_BUFFER_TOO_SMALL;
-		}
 		if (out_len < payload_len) {
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}

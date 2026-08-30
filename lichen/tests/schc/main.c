@@ -422,6 +422,32 @@ static int test_rule255_fallback_profile_ceiling(void)
 	return 1;
 }
 
+static int test_rule255_ingress_profile_ceiling(void)
+{
+	/* Decompress ingress enforces the encoded-SCHC-packet profile ceiling
+	 * for every rule including Rule 255 (mirrors Rust decompress,
+	 * codec.rs:2270): exactly-ceiling input decodes; ceiling+1 rejects
+	 * without touching the output buffer. */
+	static uint8_t data[SCHC_FRAGMENT_MAX_PACKET_SIZE + 1];
+	static uint8_t out[SCHC_FRAGMENT_MAX_PACKET_SIZE];
+	static uint8_t sentinel[SCHC_FRAGMENT_MAX_PACKET_SIZE];
+
+	memset(data, 0x41, sizeof(data));
+	data[0] = SCHC_RULE_UNCOMPRESSED;
+	memset(sentinel, 0xA5, sizeof(sentinel));
+
+	int m = lichen_schc_decompress(data, SCHC_FRAGMENT_MAX_PACKET_SIZE,
+				       out, sizeof(out));
+	ASSERT_EQ(m, SCHC_FRAGMENT_MAX_PACKET_SIZE - 1, "rule255 at ceiling");
+
+	memset(out, 0xA5, sizeof(out));
+	m = lichen_schc_decompress(data, SCHC_FRAGMENT_MAX_PACKET_SIZE + 1,
+				   out, sizeof(out));
+	ASSERT_EQ(m, SCHC_ERR_BUFFER_TOO_SMALL, "rule255 over ceiling");
+	ASSERT_MEM_EQ(out, sentinel, sizeof(out), "rule255 over ceiling atomic");
+	return 1;
+}
+
 /* ─── test runner ─────────────────────────────────────────────────────────── */
 
 #define RUN_TEST(fn) do { \
@@ -454,6 +480,7 @@ int main(void)
 	RUN_TEST(test_reject_bad_udp_len);
 	RUN_TEST(test_uncompressed_length_exceeds_int);
 	RUN_TEST(test_rule255_fallback_profile_ceiling);
+	RUN_TEST(test_rule255_ingress_profile_ceiling);
 
 	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
 
