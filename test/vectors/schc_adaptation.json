@@ -6,6 +6,7 @@
     "p0": 23,
     "endpoint_direction": 6,
     "rule7_address_policy": 14,
+    "rule255_endpoint_policy": 8,
     "duplicate_idempotence": 1
   },
   "vectors": [
@@ -688,6 +689,93 @@
       "trailing_received_bits": 58,
       "wire": "7835",
       "provenance": "The full bitmap is 11010 followed by 58 ones. Compression removes all 58 trailing ones, then restores one removed 1 so W=0, C=0, and bitmap prefix 11010 end on an octet: 0x35."
+    },
+    {
+      "name": "rule255_tx_reject_loopback_source",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 emission MUST reject a ::1 source; receipt stays byte-preserving.",
+      "source_ipv6": "::1",
+      "destination_ipv6": "2001:db8::1",
+      "expect_valid": false,
+      "expect_error": "invalid_source_address",
+      "provenance": "spec/03-adaptation.md Rule 255 endpoint TX/RX split: emission policy matches the Rule 7 Section 5.5 policy."
+    },
+    {
+      "name": "rule255_tx_reject_ipv4_mapped_source",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 emission MUST reject an IPv4-mapped source.",
+      "source_ipv6": "::ffff:192.0.2.1",
+      "destination_ipv6": "2001:db8::1",
+      "expect_valid": false,
+      "expect_error": "invalid_source_address",
+      "provenance": "spec/03-adaptation.md Rule 255 endpoint TX/RX split."
+    },
+    {
+      "name": "rule255_tx_reject_loopback_destination",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 emission MUST reject a ::1 destination.",
+      "source_ipv6": "2001:db8::1",
+      "destination_ipv6": "::1",
+      "expect_valid": false,
+      "expect_error": "invalid_destination_address",
+      "provenance": "spec/03-adaptation.md Rule 255 endpoint TX/RX split."
+    },
+    {
+      "name": "rule255_tx_reject_ipv4_mapped_destination",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 emission MUST reject an IPv4-mapped destination.",
+      "source_ipv6": "2001:db8::1",
+      "destination_ipv6": "::ffff:192.0.2.1",
+      "expect_valid": false,
+      "expect_error": "invalid_destination_address",
+      "provenance": "spec/03-adaptation.md Rule 255 endpoint TX/RX split."
+    },
+    {
+      "name": "rule255_tx_reject_multicast_scope_1",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 emission MUST reject an interface-local (scope 1) multicast destination.",
+      "source_ipv6": "2001:db8::1",
+      "destination_ipv6": "ff01::1",
+      "expect_valid": false,
+      "expect_error": "invalid_destination_scope",
+      "provenance": "spec/03-adaptation.md: interface-local scope 1 is invalid on a transmitted LICHEN link."
+    },
+    {
+      "name": "rule255_tx_reject_multicast_scope_15",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 emission MUST reject a reserved (scope 15) multicast destination.",
+      "source_ipv6": "2001:db8::1",
+      "destination_ipv6": "ff0f::1",
+      "expect_valid": false,
+      "expect_error": "invalid_destination_scope",
+      "provenance": "spec/03-adaptation.md Rule 255 endpoint TX/RX split: scopes 0 and 15 are reserved."
+    },
+    {
+      "name": "rule255_tx_accept_multicast_scope_5",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 accepts a site-local scope 5 multicast destination and round-trips byte-preserving.",
+      "source_ipv6": "2001:db8::1",
+      "destination_ipv6": "ff15::1",
+      "expect_valid": true,
+      "provenance": "spec/03-adaptation.md Rule 255: multicast destinations with scope 2-14 are valid."
+    },
+    {
+      "name": "rule255_rx_byte_preserving_loopback_source",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 decode MUST be byte-preserving for a packet that violates emission policy only (interop with pre-canonicalization senders).",
+      "source_ipv6": "::1",
+      "destination_ipv6": "2001:db8::1",
+      "expect_valid": false,
+      "expect_error": "invalid_source_address",
+      "provenance": "spec/03-adaptation.md Rule 255 TX/RX split: decode validates structure and checksums only."
     }
   ]
 }

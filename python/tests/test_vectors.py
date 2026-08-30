@@ -180,12 +180,7 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
     from generate_tofu_c_header import render
 
     header = (
-        VECTORS_DIR.parents[1]
-        / "lichen"
-        / "tests"
-        / "coap_keys"
-        / "src"
-        / "tofu_edge_vectors.h"
+        VECTORS_DIR.parents[1] / "lichen" / "tests" / "coap_keys" / "src" / "tofu_edge_vectors.h"
     )
     assert header.read_text() == render()
 
@@ -1688,10 +1683,7 @@ def test_meshcore_app_compat_vectors_match_generator() -> None:
 def test_edhoc_vectors_match_generator() -> None:
     doc = _load("edhoc.json")
     assert doc["description"] == EDHOC_REGRESSION_DESCRIPTION
-    assert (
-        "NOT an independent conformance or interoperability oracle"
-        in doc["description"]
-    )
+    assert "NOT an independent conformance or interoperability oracle" in doc["description"]
     assert doc["vectors"] == edhoc_vectors()
 
 
@@ -1758,11 +1750,7 @@ def test_ccp16_hop_vector(name: str, vector: dict) -> None:
         assert vector["expected_channel"] == vector["rx_channel"], f"rx_channel pref: {name}"
     elif "hash_32" in vector:
         # Standard hash selection excludes reserved CH0 from the modulus.
-        computed_channel = (
-            0
-            if num_channels <= 1
-            else 1 + (vector["hash_32"] % (num_channels - 1))
-        )
+        computed_channel = 0 if num_channels <= 1 else 1 + (vector["hash_32"] % (num_channels - 1))
         assert computed_channel == vector["expected_channel"], f"channel select: {name}"
 
 
@@ -3240,10 +3228,7 @@ def test_loadng_discovery_vector(name: str, vector: dict) -> None:
             # If the vector didn't add originator to cache, verify it's not there
             # (unless it was pre-populated)
             originator = IPv6Address(inp["rreq"]["originator"])
-            pre_populated = {
-                IPv6Address(c["destination"])
-                for c in state.get("cache_entries", [])
-            }
+            pre_populated = {IPv6Address(c["destination"]) for c in state.get("cache_entries", [])}
             if originator not in pre_populated:
                 entry = cache.lookup(originator, now_ms)
                 assert entry is None, f"{name}: unexpected cache entry for originator"
@@ -3514,11 +3499,7 @@ def test_epoch_rollover_vector_file_integrity() -> None:
 
 @pytest.mark.parametrize(
     "name,vector",
-    [
-        (v["name"], v)
-        for v in _load("epoch_rollover.json")["vectors"]
-        if "sender_sequence" in v
-    ],
+    [(v["name"], v) for v in _load("epoch_rollover.json")["vectors"] if "sender_sequence" in v],
 )
 def test_epoch_rollover_sender_sequence_oracle(name: str, vector: dict) -> None:
     """Drive the real ReplayWindow through sender_sequence vectors (spec 4.4)."""
@@ -3536,8 +3517,7 @@ def test_epoch_rollover_sender_sequence_oracle(name: str, vector: dict) -> None:
             warnings.filterwarnings("ignore", message=".*approaching 24-bit limit.*")
             result = window.check_and_update(step["epoch"], step["seqnum"])
         assert result == step["accept"], (
-            f"{name}: ({step['epoch']}, {step['seqnum']}) expected "
-            f"{step['accept']}, got {result}"
+            f"{name}: ({step['epoch']}, {step['seqnum']}) expected {step['accept']}, got {result}"
         )
 
     if vector.get("key_rotation_required_after"):
@@ -3576,17 +3556,12 @@ def test_epoch_rollover_receiver_state_oracle() -> None:
                 # verify the recorded bits agree with the frame's offset.
                 offset = state["last_seqnum"] - received["seqnum"]
                 assert 0 < offset < 32 and (state["window"] >> offset) & 1, (
-                    f"{name}: recorded window does not mark seqnum "
-                    f"{received['seqnum']} as seen"
+                    f"{name}: recorded window does not mark seqnum {received['seqnum']} as seen"
                 )
                 assert window.check_and_update(received["epoch"], received["seqnum"])
-                assert window.check_and_update(
-                    state["last_epoch"], state["last_seqnum"]
-                )
+                assert window.check_and_update(state["last_epoch"], state["last_seqnum"])
             else:
-                assert window.check_and_update(
-                    state["last_epoch"], state["last_seqnum"]
-                )
+                assert window.check_and_update(state["last_epoch"], state["last_seqnum"])
             result = window.check_and_update(received["epoch"], received["seqnum"])
         assert result == expected["accept"], (
             f"{name}: ({received['epoch']}, {received['seqnum']}) reason="
@@ -4644,6 +4619,7 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
     """
     from lichen.schc.context import NoMatchingRuleError, SchcContext
     from lichen.schc.fragment import Ack, ack_request, receiver_abort, sender_abort
+    from lichen.schc.headers import decode_rule255, encode_rule255
     from lichen.schc.rules import SchcRuleVersionOption
 
     category = vector["category"]
@@ -4719,22 +4695,55 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             assert decompress_packet(compressed) == raw, name
         else:
             error_pattern = {
-                "invalid_source_address": "source address",
-                "invalid_destination_address": "destination address",
-                "invalid_destination_scope": "destination scope",
+                "invalid_source_address": "invalid IPv6 source address",
+                "invalid_destination_address": "invalid IPv6 destination address",
+                "invalid_destination_scope": "invalid IPv6 destination multicast scope",
             }[vector["expect_error"]]
             with pytest.raises(SchcError, match=error_pattern):
                 validate_rule7_addresses(source, destination)
             assert MQTT_SN_PROFILE.compress_if_matching(raw) is None
             with pytest.raises(SchcError, match=error_pattern):
                 decompress_packet(_rule7_full_address_wire(source, destination))
-            if source.is_unspecified or source.is_multicast or destination.is_unspecified:
-                with pytest.raises(SchcError):
-                    compress_packet(raw)
-            else:
-                fallback = compress_packet(raw)
-                assert fallback[0] == 255, name
-                assert decompress_packet(fallback) == raw, name
+            # Canonical emission policy (spec 03-adaptation.md Rule 255 TX/RX
+            # split): the compressor MUST NOT originate policy-invalid
+            # endpoints via Rule 255 fallback either. (Message text is not
+            # pinned here: unspecified endpoints are caught by the structural
+            # receive-side check before the emission policy runs.)
+            with pytest.raises(SchcError):
+                compress_packet(raw)
+
+    elif category == "rule255_endpoint_policy":
+        # Rule 255 endpoint policy TX/RX split: emission rejects the same
+        # endpoints Rule 7 rejects; decode is byte-preserving structure-only.
+        source = IPv6Address(vector["source_ipv6"])
+        destination = IPv6Address(vector["destination_ipv6"])
+        udp = UdpDatagram(PORT_MQTT_SN, 5000, b"lichen255").to_bytes(source, destination)
+        raw = (
+            IPv6Header(
+                src_addr=source,
+                dst_addr=destination,
+                next_header=NextHeader.UDP,
+                payload_length=len(udp),
+                hop_limit=64,
+            ).to_bytes()
+            + udp
+        )
+        if vector["expect_valid"]:
+            encoded = encode_rule255(raw)
+            assert encoded == b"\xff" + raw, name
+            assert decode_rule255(encoded) == raw, name
+        else:
+            error_pattern = {
+                "invalid_source_address": "invalid IPv6 source address",
+                "invalid_destination_address": "invalid IPv6 destination address",
+                "invalid_destination_scope": "invalid IPv6 destination multicast scope",
+            }[vector["expect_error"]]
+            with pytest.raises(SchcError, match=error_pattern):
+                encode_rule255(raw)
+            # Byte-preserving receipt in both implementations: the packet is
+            # structurally valid with a valid checksum, so decode succeeds
+            # even though a canonical sender could not have originated it.
+            assert decode_rule255(b"\xff" + raw) == raw, name
 
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
@@ -4879,6 +4888,7 @@ def test_schc_adaptation_vector_coverage() -> None:
         "uncompressed",
         "port_boundary",
         "rule7_address_policy",
+        "rule255_endpoint_policy",
         "fragmentation_direction",
         "fragmentation_endpoint_direction",
         "compressed_size",

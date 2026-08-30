@@ -23,6 +23,7 @@ struct ExpectedCounts {
     p0: usize,
     endpoint_direction: usize,
     rule7_address_policy: usize,
+    rule255_endpoint_policy: usize,
     #[cfg_attr(
         not(all(feature = "raw-fragment-codec", feature = "test-utils")),
         allow(dead_code)
@@ -580,6 +581,7 @@ fn test_schc_adaptation_vectors() {
     let mut p0_count = 0;
     let mut endpoint_direction_count = 0;
     let mut rule7_address_policy_count = 0;
+    let mut rule255_endpoint_policy_count = 0;
     #[cfg(all(feature = "raw-fragment-codec", feature = "test-utils"))]
     let mut duplicate_idempotence_count = 0;
 
@@ -1101,6 +1103,117 @@ fn test_schc_adaptation_vectors() {
                 }
             }
 
+            "rule255_endpoint_policy" => {
+                use std::net::Ipv6Addr;
+                use std::str::FromStr;
+
+                rule255_endpoint_policy_count += 1;
+                let source = Ipv6Addr::from_str(
+                    vector
+                        .source_ipv6
+                        .as_deref()
+                        .expect("Rule 255 vector source address"),
+                )
+                .expect("valid Rule 255 source literal")
+                .octets();
+                let destination = Ipv6Addr::from_str(
+                    vector
+                        .destination_ipv6
+                        .as_deref()
+                        .expect("Rule 255 vector destination address"),
+                )
+                .expect("valid Rule 255 destination literal")
+                .octets();
+                let expect_valid = vector.expect_valid.expect("Rule 255 validity result");
+
+                // Packet built with the shared upper-layer checksum helper:
+                // structurally valid, valid UDP checksum, policy-checked only.
+                let packet = rule7_udp_packet(source, destination);
+
+                if expect_valid {
+                    let mut encoded = vec![0u8; packet.len() + 1];
+                    match lichen_schc::encode_rule255(&packet, &mut encoded, usize::MAX) {
+                        Ok(length) => {
+                            if encoded[..length]
+                                != [[0xffu8].as_slice(), packet.as_slice()].concat()
+                            {
+                                failures.push(format!(
+                                    "{}: Rule 255 encoding is not a byte-preserving prefix",
+                                    name
+                                ));
+                            }
+                        }
+                        Err(error) => failures.push(format!(
+                            "{}: valid Rule 255 packet rejected: {:?}",
+                            name, error
+                        )),
+                    }
+                    let mut decoded = vec![0u8; packet.len()];
+                    match lichen_schc::decode_rule255(
+                        &[[0xffu8].as_slice(), packet.as_slice()].concat(),
+                        &mut decoded,
+                        usize::MAX,
+                    ) {
+                        Ok(length) if decoded[..length] == packet => {}
+                        Ok(_) => failures
+                            .push(format!("{}: Rule 255 decode was not byte-preserving", name)),
+                        Err(error) => failures.push(format!(
+                            "{}: valid Rule 255 packet failed decode: {:?}",
+                            name, error
+                        )),
+                    }
+                } else {
+                    let expected = match vector.expect_error.as_deref() {
+                        Some("invalid_source_address") => "invalid IPv6 source address",
+                        Some("invalid_destination_address") => "invalid IPv6 destination address",
+                        Some("invalid_destination_scope") => {
+                            "invalid IPv6 destination multicast scope"
+                        }
+                        other => {
+                            failures.push(format!(
+                                "{}: unknown Rule 255 rejection token {:?}",
+                                name, other
+                            ));
+                            continue;
+                        }
+                    };
+                    let mut encoded = [0u8; 1500];
+                    match lichen_schc::encode_rule255(&packet, &mut encoded, usize::MAX) {
+                        Ok(_) => failures.push(format!(
+                            "{}: emission-policy-invalid packet was accepted by Rule 255",
+                            name
+                        )),
+                        Err(lichen_schc::SchcError::InvalidPacket(actual)) => {
+                            if actual != expected {
+                                failures.push(format!(
+                                    "{}: expected error {:?}, got {:?}",
+                                    name, expected, actual
+                                ));
+                            }
+                        }
+                        Err(error) => failures.push(format!(
+                            "{}: expected InvalidPacket({:?}), got {:?}",
+                            name, expected, error
+                        )),
+                    }
+                    // Byte-preserving receipt: a canonical sender could not
+                    // have originated this packet, but a structurally valid
+                    // copy already on the link MUST decode intact.
+                    let wire = [[0xffu8].as_slice(), packet.as_slice()].concat();
+                    let mut decoded = vec![0u8; packet.len()];
+                    match lichen_schc::decode_rule255(&wire, &mut decoded, usize::MAX) {
+                        Ok(length) if decoded[..length] == packet => {}
+                        Ok(_) => {
+                            failures.push(format!("{}: Rule 255 decode was not byte-preserving", name))
+                        }
+                        Err(error) => failures.push(format!(
+                            "{}: policy-invalid-but-structured packet failed byte-preserving decode: {:?}",
+                            name, error
+                        )),
+                    }
+                }
+            }
+
             "rule_version" => {
                 // SCHC Rule Version Option tests
                 if let Some(wire_hex) = &vector.wire {
@@ -1352,6 +1465,12 @@ fn test_schc_adaptation_vectors() {
             expected.rule7_address_policy, rule7_address_policy_count
         ));
     }
+    if rule255_endpoint_policy_count != expected.rule255_endpoint_policy {
+        failures.push(format!(
+            "Expected {} Rule 255 endpoint-policy vectors (per metadata), found {}",
+            expected.rule255_endpoint_policy, rule255_endpoint_policy_count
+        ));
+    }
     #[cfg(all(feature = "raw-fragment-codec", feature = "test-utils"))]
     if duplicate_idempotence_count != expected.duplicate_idempotence {
         failures.push(format!(
@@ -1413,6 +1532,7 @@ fn test_schc_adaptation_coverage() {
         "fragmentation_direction",
         "fragmentation_endpoint_direction",
         "rule7_address_policy",
+        "rule255_endpoint_policy",
         "rule_version",
         "ack_bitmap",
     ];

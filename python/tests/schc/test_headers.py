@@ -250,6 +250,43 @@ def test_rule255_rejects_zero_udp_checksum() -> None:
         decode_rule255(b"\xff" + bytes(raw))
 
 
+def test_rule255_emission_rejects_policy_invalid_endpoints() -> None:
+    # Canonical TX/RX split (spec/03-adaptation.md): encode must not originate
+    # loopback, IPv4-mapped, or bad-scope-multicast endpoints.
+    cases = [
+        ("::1", "2001:db8::1", "invalid IPv6 source address"),
+        ("::ffff:192.0.2.1", "2001:db8::1", "invalid IPv6 source address"),
+        ("2001:db8::1", "::1", "invalid IPv6 destination address"),
+        ("2001:db8::1", "::ffff:192.0.2.1", "invalid IPv6 destination address"),
+        ("2001:db8::1", "ff01::1", "invalid IPv6 destination multicast scope"),
+        ("2001:db8::1", "ff0f::1", "invalid IPv6 destination multicast scope"),
+    ]
+    for src, dst, message in cases:
+        raw = _build_packet(_coap_request(), src=IPv6Address(src), dst=IPv6Address(dst))
+        with pytest.raises(SchcError, match=message):
+            encode_rule255(raw)
+        with pytest.raises(SchcError, match=message):
+            compress_packet(raw)
+
+
+def test_rule255_accepts_policy_valid_endpoints() -> None:
+    raw = _build_packet(
+        _coap_request(),
+        src=IPv6Address("2001:db8::1"),
+        dst=IPv6Address("ff15::1"),
+    )
+    encoded = encode_rule255(raw)
+    assert encoded == b"\xff" + raw
+    assert decode_rule255(encoded) == raw
+
+
+def test_rule255_decode_is_byte_preserving_despite_emission_policy() -> None:
+    # A structurally valid packet that violates only the emission policy
+    # still decodes byte-preserving (interop with pre-canonicalization senders).
+    raw = _build_packet(_coap_request(), src=IPv6Address("::1"), dst=IPv6Address("2001:db8::1"))
+    assert decode_rule255(b"\xff" + raw) == raw
+
+
 def _rule255_schc_bytes(encoded_length: int) -> bytes:
     data_length = encoded_length - 1 - 40 - 8
     icmp = (

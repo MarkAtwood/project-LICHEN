@@ -417,6 +417,20 @@ inside an incompatible DODAG. Its payload MUST be a complete,
 structurally valid IPv6 packet: version 6, exact Payload Length, no IPv6
 Fragment header, and, for UDP, exact UDP Length plus a nonzero valid checksum.
 
+**Endpoint address policy (canonical TX/RX split):** The profile address
+policy defined for Rule 7 selection (Section 5.5) is an EMISSION constraint
+and applies to every transmitted packet, including Rule 255: a sender MUST
+NOT originate a packet whose source is unspecified, loopback, multicast, or
+IPv4-mapped, nor one whose destination is unspecified, loopback,
+IPv4-mapped, or a multicast address with a scope outside 2-14. A Rule 255
+encoder (and the compression path falling back to it) MUST reject such
+packets. Rule 255 DECODING is byte-preserving and MUST validate structure
+and checksums only: a decoder MUST NOT apply the endpoint address policy on
+receipt, because a structurally valid packet already on the link is
+preserved verbatim rather than reinterpreted or dropped as malformed. This
+split keeps the two implementation families interoperable: a packet one
+implementation cannot originate is still delivered intact by the other.
+
 ```
 Rule 255 packet:
 +----------+-----------------+
