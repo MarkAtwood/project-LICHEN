@@ -1,3 +1,4 @@
 {"id":"01a050e7-e769-7478-ace5-8b326975c301","issue_id":"project-LICHEN-worker6-h2u7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:50.473293Z"}
 {"id":"01a050e7-e76f-7718-8f98-515660995e25","issue_id":"project-LICHEN-worker6-h2u7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:50.479466Z"}
 {"id":"01a050e7-e773-717e-b24a-f9e96abe5ce0","issue_id":"project-LICHEN-worker6-h2u7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:50.483099Z"}
+{"id":"01a050f0-c111-7897-b40d-8a2db345e6b2","issue_id":"project-LICHEN-worker6-h2u7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added RREQ rate limit (10/min/peer, 30/min global) to 05-routing.md","created_at":"2026-08-30T04:32:30.481563Z"}

@@ -1,3 +1,4 @@
 {"id":"01a050e7-9756-7937-bf16-74738575b8bd","issue_id":"project-LICHEN-worker6-c7sy","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:29.974605Z"}
 {"id":"01a050e7-975c-7eff-a159-16fca94affbb","issue_id":"project-LICHEN-worker6-c7sy","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:29.980983Z"}
 {"id":"01a050e7-9761-71d8-bcb0-0c384b5415a4","issue_id":"project-LICHEN-worker6-c7sy","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:29.985123Z"}
+{"id":"01a050ec-591a-7904-a6f3-d5bf02f59cea","issue_id":"project-LICHEN-worker6-c7sy","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added MUST bound (128 entries) with MUST LRU eviction to 05-routing.md Section 11.1","created_at":"2026-08-30T04:27:41.722592Z"}

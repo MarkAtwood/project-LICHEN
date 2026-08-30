@@ -1,3 +1,4 @@
 {"id":"01a050e7-95d4-7a77-a208-80bc3a2b3568","issue_id":"project-LICHEN-worker6-w84p","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:29.588687Z"}
 {"id":"01a050e7-95d9-7d52-a25f-3dcd53f2f120","issue_id":"project-LICHEN-worker6-w84p","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:29.593873Z"}
 {"id":"01a050e7-95dd-7a3d-976a-556008c270ff","issue_id":"project-LICHEN-worker6-w84p","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:29.597671Z"}
+{"id":"01a050ec-51b0-78dd-b7e5-2dd48a409e95","issue_id":"project-LICHEN-worker6-w84p","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Changed SHOULD→MUST for root join rate limiting in 02a-coordinated-capacity.md","created_at":"2026-08-30T04:27:39.824582Z"}

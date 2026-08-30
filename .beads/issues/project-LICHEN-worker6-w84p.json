@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-w84p",
   "title": "spec: SHOULD→MUST for root join rate limiting",
   "description": "Root-side rate limiting uses SHOULD not MUST (lines 187-188). Implementations may omit protection entirely.\n\nFix: Change 02a-coordinated-capacity.md:\n- 'The root SHOULD track...' → 'The root MUST track join requests per source IID'\n- 'SHOULD ignore...' → 'MUST ignore requests exceeding 6 per 60-second window'\n\nRef: worker6-h4pl",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:22:29.517852Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:22:29.517852Z",
+  "updated_at": "2026-08-30T04:27:39.796708Z",
+  "closed_at": "2026-08-30T04:27:39.796708Z",
+  "close_reason": "Changed SHOULD→MUST for root join rate limiting in 02a-coordinated-capacity.md",
   "labels": [
     "spec",
     "security"

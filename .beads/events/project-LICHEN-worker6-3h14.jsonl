@@ -1,3 +1,4 @@
 {"id":"01a050e8-0a1e-7261-8d68-bdb003391020","issue_id":"project-LICHEN-worker6-3h14","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:59.358157Z"}
 {"id":"01a050e8-0a24-70bb-aa50-1467ed163050","issue_id":"project-LICHEN-worker6-3h14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:59.364049Z"}
 {"id":"01a050e8-0a28-73e0-b43f-1bd9632ac7c3","issue_id":"project-LICHEN-worker6-3h14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:59.368256Z"}
+{"id":"01a050f0-de4e-7d84-866f-02de4c23bfba","issue_id":"project-LICHEN-worker6-3h14","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added OSCORE context bound (64 entries, MUST LRU) to 06-security.md","created_at":"2026-08-30T04:32:37.966887Z"}

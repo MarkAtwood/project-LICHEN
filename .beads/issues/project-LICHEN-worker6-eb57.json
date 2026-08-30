@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-eb57",
   "title": "spec: Bound CoAP Observe subscriptions",
   "description": "No maximum observer count per resource. Unbounded subscription state.\n\nFix: Add to 07-transport-app.md Section 10.3:\n'Implementations MUST bound CoAP Observe subscriptions per resource to at most 16 and globally to at most 64. LRU eviction.'\n\nRef: worker6-h4pl",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:22:50.014265Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:22:50.014265Z",
+  "updated_at": "2026-08-30T04:32:29.140739Z",
+  "closed_at": "2026-08-30T04:32:29.140739Z",
+  "close_reason": "Added CoAP Observe bounds (16/resource, 64 global) to 07-transport-app.md",
   "labels": [
     "spec",
     "security"

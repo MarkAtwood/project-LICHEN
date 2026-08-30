@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-tczj",
+  "title": "coap_status.c fails to compile against pinned Zephyr v3.7.0 (blocks puck + ping_l2 builds)",
+  "description": "While validating bead 1m92 on the AWS v3.7.0 builder (worktree /mnt/lichen-zephyr/work/1m92-validate, base 730d03cd lineage), lichen/subsys/lichen/coap/coap_status.c fails with -Werror: (1) static assertions at gcc.h:87 'LICHEN_COAP_STATUS_CBOR_MAX_SIZE must fit in CONFIG_COAP_SERVER_MESSAGE_SIZE' plus NEIGHBORS and ROUTES variants; (2) coap_status.c:475 -Werror=switch-enum: enumeration value LICHEN_COAP_TRUST_UNKNOWN not handled in switch. This breaks: west build -b t1000_e/nrf52840 lichen/apps/puck and west build -b native_sim lichen/tests/ping_l2 on the pinned Zephyr. Drivers (bead 1m92) are unaffected and validated. Note: another worker has uncommitted coap/Kconfig + CMakeLists changes in the local tree that may already address part of this.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T05:09:02.977453Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T05:09:02.977453Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tczj",
+      "depends_on_id": "project-LICHEN-worker6-1m92",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T05:09:03.204144Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

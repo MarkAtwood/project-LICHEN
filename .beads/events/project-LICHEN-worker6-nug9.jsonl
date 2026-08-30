@@ -1,3 +1,4 @@
 {"id":"01a050e7-e3b0-7320-9698-b499011f6cba","issue_id":"project-LICHEN-worker6-nug9","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:49.520206Z"}
 {"id":"01a050e7-e3b7-7aaa-b716-c33e8f49e92a","issue_id":"project-LICHEN-worker6-nug9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:49.5277Z"}
 {"id":"01a050e7-e3bd-7c5f-9f7f-1ef7c96d00a1","issue_id":"project-LICHEN-worker6-nug9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:49.533811Z"}
+{"id":"01a050f0-b6e8-7c15-b9d5-b4e36a81cb80","issue_id":"project-LICHEN-worker6-nug9","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added claim_seq cache bound (64 entries, LRU) to 08-gateway-coordination.md","created_at":"2026-08-30T04:32:27.880792Z"}

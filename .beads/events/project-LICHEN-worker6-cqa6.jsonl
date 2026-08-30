@@ -1,3 +1,4 @@
 {"id":"01a050e7-e12e-736e-be52-c931c382baeb","issue_id":"project-LICHEN-worker6-cqa6","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:48.878225Z"}
 {"id":"01a050e7-e133-76e5-b6bb-ce3a858c0257","issue_id":"project-LICHEN-worker6-cqa6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:48.883453Z"}
 {"id":"01a050e7-e136-7a19-9b1c-0318835f8ba2","issue_id":"project-LICHEN-worker6-cqa6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:48.886663Z"}
+{"id":"01a050f0-af4b-7e5b-89a4-001036847ff9","issue_id":"project-LICHEN-worker6-cqa6","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added concrete bounds: 4 contexts/peer, 64 global to 03-adaptation.md","created_at":"2026-08-30T04:32:25.931942Z"}

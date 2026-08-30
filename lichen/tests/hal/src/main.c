@@ -2,8 +2,12 @@
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
 #include <errno.h>
+#include <string.h>
 
 #include <zephyr/ztest.h>
+
+#include <zephyr/drivers/lora.h>
+#include <zephyr/sys/atomic.h>
 
 #include <zephyr/drivers/adc/adc_emul.h>
 #if DT_NODE_HAS_COMPAT(DT_ALIAS(pmic0), sbs_sbs_charger)
@@ -67,6 +71,78 @@ ZTEST(hal, test_loopback_lora_capability_when_enabled)
 	zassert_equal(lichen_hal_lora_device_get(&dev), 0);
 	zassert_not_null(dev);
 }
+
+#if IS_ENABLED(CONFIG_LORA_LOOPBACK)
+
+/* v3.7.0's lora_recv_async() has no user_data slot, so the callback context
+ * is file-scope state — the same pattern any driver consumer must use. */
+static struct loopback_async_ctx {
+	atomic_t deliveries;
+	uint16_t last_len;
+	int16_t last_rssi;
+	int8_t last_snr;
+	bool cancelled_ok;
+} loopback_async_ctx;
+
+static void loopback_async_rx_cb(const struct device *dev, uint8_t *data,
+				 uint16_t size, int16_t rssi, int8_t snr)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(data);
+
+	loopback_async_ctx.last_len = size;
+	loopback_async_ctx.last_rssi = rssi;
+	loopback_async_ctx.last_snr = snr;
+	atomic_inc(&loopback_async_ctx.deliveries);
+}
+
+ZTEST(hal, test_loopback_recv_async_delivers_frames)
+{
+	const struct device *dev = NULL;
+	uint8_t payload[5] = { 0x01, 0x02, 0x03, 0x04, 0x05 };
+	int rc;
+
+	if (!IS_ENABLED(CONFIG_LICHEN_HAS_LORA)) {
+		ztest_test_skip();
+	}
+
+	zassert_equal(lichen_hal_lora_device_get(&dev), 0);
+
+	memset(&loopback_async_ctx, 0, sizeof(loopback_async_ctx));
+
+	rc = lora_recv_async(dev, loopback_async_rx_cb);
+	zassert_equal(rc, 0, "arming async RX failed: %d", rc);
+
+	/* Double-arm conflicts with the pending reception. */
+	rc = lora_recv_async(dev, loopback_async_rx_cb);
+	zassert_equal(rc, -EBUSY, "second arm must be -EBUSY, got %d", rc);
+
+	rc = lora_send(dev, payload, sizeof(payload));
+	zassert_equal(rc, 0, "loopback send failed: %d", rc);
+
+	/* Delivery happens in the system workqueue; poll briefly. */
+	for (int i = 0; i < 100 && atomic_get(&loopback_async_ctx.deliveries) == 0;
+	     i++) {
+		k_sleep(K_MSEC(10));
+	}
+
+	zassert_equal(atomic_get(&loopback_async_ctx.deliveries), 1,
+		      "frame not delivered to async callback");
+	zassert_equal(loopback_async_ctx.last_len, sizeof(payload),
+		      "wrong delivered length: %u", loopback_async_ctx.last_len);
+	zassert_equal(loopback_async_ctx.last_rssi, CONFIG_LORA_LOOPBACK_RSSI,
+		      "wrong RSSI: %d", loopback_async_ctx.last_rssi);
+	zassert_equal(loopback_async_ctx.last_snr, CONFIG_LORA_LOOPBACK_SNR,
+		      "wrong SNR: %d", loopback_async_ctx.last_snr);
+
+	/* Cancel the armed reception, then cancelling again is invalid. */
+	rc = lora_recv_async(dev, NULL);
+	zassert_equal(rc, 0, "cancel failed: %d", rc);
+	rc = lora_recv_async(dev, NULL);
+	zassert_equal(rc, -EINVAL, "double cancel must be -EINVAL, got %d", rc);
+}
+
+#endif /* IS_ENABLED(CONFIG_LORA_LOOPBACK) */
 
 ZTEST(hal, test_identity_reports_board_and_caps)
 {

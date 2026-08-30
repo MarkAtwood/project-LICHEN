@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-s61k",
   "title": "spec: Bound tombstone/admission-floor tables",
   "description": "Tombstones are 'bounded state' but no concrete limit.\n\nFix: Add to 03-adaptation.md Section 5.6:\n'Tombstone and admission-floor tables MUST be bounded to at most 256 entries per direction with LRU eviction.'\n\nRef: worker6-h4pl",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:22:49.057012Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:22:49.057012Z",
+  "updated_at": "2026-08-30T04:32:26.580716Z",
+  "closed_at": "2026-08-30T04:32:26.580716Z",
+  "close_reason": "Added tombstone table bound (256 entries) to 03-adaptation.md",
   "labels": [
     "spec",
     "security"

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-3h14",
   "title": "spec: Bound OSCORE security contexts",
   "description": "No limit on concurrent OSCORE contexts.\n\nFix: Add to 06-security.md Section 8:\n'Implementations MUST bound OSCORE security contexts. Recommended: 64 contexts with LRU eviction.'\n\nRef: worker6-h4pl",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:22:59.351611Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:22:59.351611Z",
+  "updated_at": "2026-08-30T04:32:37.960949Z",
+  "closed_at": "2026-08-30T04:32:37.960949Z",
+  "close_reason": "Added OSCORE context bound (64 entries, MUST LRU) to 06-security.md",
   "labels": [
     "spec",
     "security"

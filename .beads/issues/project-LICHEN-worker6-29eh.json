@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-29eh",
   "title": "spec: Add global join rate limit across all IIDs",
   "description": "Per-IID limit allows N*6 requests/60s with N spoofed IIDs. No global cap.\n\nFix: Add to 02a-coordinated-capacity.md section 2a.5.5.2:\n'The root MUST enforce a global join rate limit of 60 requests per 60-second window across all IIDs. When exceeded, respond 5.03 Service Unavailable.'\n\nRef: worker6-h4pl",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:22:29.758306Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:22:29.758306Z",
+  "updated_at": "2026-08-30T04:27:40.775881Z",
+  "closed_at": "2026-08-30T04:27:40.775881Z",
+  "close_reason": "Added global 60/60s rate limit with 5.03 response in 02a-coordinated-capacity.md",
   "labels": [
     "spec",
     "security"

@@ -1,3 +1,4 @@
 {"id":"01a050e7-9689-7399-a62f-f665aa79d55a","issue_id":"project-LICHEN-worker6-29eh","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:29.769236Z"}
 {"id":"01a050e7-9690-7845-bb38-bfc30c53b40f","issue_id":"project-LICHEN-worker6-29eh","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:29.776543Z"}
 {"id":"01a050e7-9696-7a06-98af-3c0da69fb4ea","issue_id":"project-LICHEN-worker6-29eh","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:29.782658Z"}
+{"id":"01a050ec-557d-7298-9056-41c82b69bbbf","issue_id":"project-LICHEN-worker6-29eh","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added global 60/60s rate limit with 5.03 response in 02a-coordinated-capacity.md","created_at":"2026-08-30T04:27:40.797171Z"}

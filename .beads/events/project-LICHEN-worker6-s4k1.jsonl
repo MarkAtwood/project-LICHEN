@@ -1,3 +1,4 @@
 {"id":"01a050e8-0b8e-7d79-9b25-9d18074f22cd","issue_id":"project-LICHEN-worker6-s4k1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:59.726884Z"}
 {"id":"01a050e8-0b95-73b5-989f-669df54421d6","issue_id":"project-LICHEN-worker6-s4k1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:59.733243Z"}
 {"id":"01a050e8-0b98-74ab-a09b-ad5916a924e2","issue_id":"project-LICHEN-worker6-s4k1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:59.736307Z"}
+{"id":"01a050f0-e37a-7e15-92de-4241df1f939f","issue_id":"project-LICHEN-worker6-s4k1","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added waypoint bounds (32/originator, 256 global) to 12-apps.md","created_at":"2026-08-30T04:32:39.290924Z"}

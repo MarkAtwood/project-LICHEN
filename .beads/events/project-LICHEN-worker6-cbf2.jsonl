@@ -1,3 +1,4 @@
 {"id":"01a050e7-e82d-76ce-8f65-a6e85b8ef4d4","issue_id":"project-LICHEN-worker6-cbf2","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:50.669446Z"}
 {"id":"01a050e7-e835-7cdc-b555-364bc7f2270e","issue_id":"project-LICHEN-worker6-cbf2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:50.677844Z"}
 {"id":"01a050e7-e838-7b5a-9965-ec6159e331c9","issue_id":"project-LICHEN-worker6-cbf2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:50.680745Z"}
+{"id":"01a050f0-c3a6-7a12-9244-5a67fc6de18e","issue_id":"project-LICHEN-worker6-cbf2","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added announce pin table bound (128 entries, LRU) to 05-routing.md","created_at":"2026-08-30T04:32:31.142661Z"}

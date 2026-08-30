@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-tut2",
   "title": "Persist SCHC tombstone duration in a restart-safe clock domain",
   "description": "rust/lichen-schc/src/fragment.rs serializes TerminalTombstone.until_ms as an absolute process-monotonic timestamp and restore_receiver_floor installs it unchanged after restart. Monotonic epochs are not comparable across processes: a new uptime already above the old value expires the replay hold-down immediately, while a reset-to-zero clock can extend it arbitrarily. Persist a restart-independent expiry or conservatively reconstruct a full hold-down from restore time, bind the representation into the sealed floor record, and add restart tests with lower and higher new clock values.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T14:57:40.243819Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:30:13.77217Z",
-  "started_at": "2026-08-24T14:58:52.361317Z"
+  "updated_at": "2026-08-30T04:55:16.952051Z",
+  "started_at": "2026-08-24T14:58:52.361317Z",
+  "closed_at": "2026-08-30T04:55:16.952051Z",
+  "close_reason": "Verified fixed at HEAD via batch-verify wave-3"
 }

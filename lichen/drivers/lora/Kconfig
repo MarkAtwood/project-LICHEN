@@ -29,6 +29,25 @@ config LORA_LICHEN_SIM_SIM_ID
 	string "Simulation run identifier"
 	default "lichen"
 
+config LORA_LICHEN_SIM_RX_THREAD_STACK_SIZE
+	int "Simulator async RX thread stack size"
+	default 4096
+	help
+	  Stack size for the lora_recv_async() RX thread. The thread runs
+	  push-protocol RX_ENTER windows against the simulator server and
+	  delivers frames to the registered callback, which runs the full
+	  RX consumer (L2/IPv6/CoAP) on this stack.
+
+config LORA_LICHEN_SIM_RX_THREAD_PRIORITY
+	int "Simulator async RX thread priority"
+	default 7
+	range 0 NUM_PREEMPT_PRIORITIES
+	help
+	  Priority for the lora_recv_async() RX thread. Lower numbers have
+	  higher priority in Zephyr. Valid preemptible values are
+	  0..NUM_PREEMPT_PRIORITIES-1 (enforced at runtime when
+	  CONFIG_ASSERT=y, the same idiom Zephyr's own Kconfigs use).
+
 endif # LORA_LICHEN_SIM
 
 config LORA_LICHEN_RENODE

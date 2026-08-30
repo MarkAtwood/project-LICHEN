@@ -1,3 +1,4 @@
 {"id":"01a050e7-9952-79a8-887d-dd752b1f0108","issue_id":"project-LICHEN-worker6-fexn","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:30.482634Z"}
 {"id":"01a050e7-995a-7bb4-810d-4e43971c28b3","issue_id":"project-LICHEN-worker6-fexn","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:30.490767Z"}
 {"id":"01a050e7-995f-7e21-9744-9c10a5564a71","issue_id":"project-LICHEN-worker6-fexn","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:30.495927Z"}
+{"id":"01a050ec-6025-7e82-8079-d88b1c6b51c6","issue_id":"project-LICHEN-worker6-fexn","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added MUST bound (256 entries) with MUST LRU eviction to 02-physical-link.md","created_at":"2026-08-30T04:27:43.525952Z"}

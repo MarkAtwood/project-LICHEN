@@ -43,6 +43,15 @@ struct lora_loopback_data {
 	char __aligned(4) rx_queue_buf[LOOPBACK_QUEUE_DEPTH * sizeof(struct loopback_packet)];
 	struct lora_modem_config config;
 	bool configured;
+	/* Async RX (lora_recv_async): a registered callback is fed queued
+	 * packets from the system workqueue. recv_cb != NULL means armed;
+	 * rx_lock guards the callback pointer. The delivery buffer lives in
+	 * per-instance data rather than the workqueue stack. */
+	const struct device *dev;
+	struct k_work rx_work;
+	struct k_spinlock rx_lock;
+	lora_recv_cb recv_cb;
+	struct loopback_packet rx_pkt;
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_t sent_packets;
 	atomic_t received_packets;
@@ -122,6 +131,11 @@ static int lora_loopback_send(const struct device *dev,
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_inc(&data->sent_packets);
 #endif
+	/* Feed a registered async receiver (work-item context). Sending while
+	 * async RX is armed is deliberately allowed — loopback tests must be
+	 * able to transmit into their own armed receiver. */
+	k_work_submit(&data->rx_work);
+
 	LOG_DBG("sent %u bytes (looped back to rx queue)", payload_len);
 	return 0;
 }
@@ -137,6 +151,16 @@ static int lora_loopback_recv(const struct device *dev,
 
 	if (payload == NULL || size == 0) {
 		return -EINVAL;
+	}
+
+	k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
+	bool armed = data->recv_cb != NULL;
+
+	k_spin_unlock(&data->rx_lock, key);
+	if (armed) {
+		/* One receiver at a time: an armed async RX owns the queue
+		 * (upstream sx12xx semantics). */
+		return -EBUSY;
 	}
 
 	ret = k_msgq_get(&data->rx_queue, &pkt, timeout);
@@ -183,6 +207,72 @@ static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
 }
 #endif
 
+/* Deliver queued packets to the registered async callback. Runs in system
+ * workqueue context; the callback may cancel (recv_async(NULL)) — cancel-then
+ * re-arm also works — both handled by re-reading recv_cb each packet. The
+ * drain is capped per run so a send flood cannot monopolize the workqueue;
+ * excess packets are picked up by the re-submitted work item. */
+static void lora_loopback_rx_work(struct k_work *work)
+{
+	struct lora_loopback_data *data =
+		CONTAINER_OF(work, struct lora_loopback_data, rx_work);
+	const struct device *dev = data->dev;
+	int drained = 0;
+
+	while (drained++ < LOOPBACK_QUEUE_DEPTH) {
+		k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
+		lora_recv_cb cb = data->recv_cb;
+
+		k_spin_unlock(&data->rx_lock, key);
+
+		if (cb == NULL) {
+			return;
+		}
+
+		if (k_msgq_get(&data->rx_queue, &data->rx_pkt, K_NO_WAIT) != 0) {
+			return;
+		}
+
+#ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
+		atomic_inc(&data->received_packets);
+#endif
+		cb(dev, data->rx_pkt.data, data->rx_pkt.len,
+		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR);
+	}
+
+	/* Queue still has work: re-queue ourselves (Zephyr re-submission of a
+	 * running item is legal and ordered after this run). */
+	k_work_submit(&data->rx_work);
+}
+
+static int lora_loopback_recv_async(const struct device *dev,
+				    lora_recv_cb cb)
+{
+	struct lora_loopback_data *data = dev->data;
+
+	if (cb == NULL) {
+		k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
+		bool was_armed = data->recv_cb != NULL;
+
+		data->recv_cb = NULL;
+		k_spin_unlock(&data->rx_lock, key);
+		return was_armed ? 0 : -EINVAL;
+	}
+
+	k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
+
+	if (data->recv_cb != NULL) {
+		k_spin_unlock(&data->rx_lock, key);
+		return -EBUSY;
+	}
+	data->recv_cb = cb;
+	k_spin_unlock(&data->rx_lock, key);
+
+	/* Deliver anything already queued (sent before arming). */
+	k_work_submit(&data->rx_work);
+	return 0;
+}
+
 static int lora_loopback_init(const struct device *dev)
 {
 	struct lora_loopback_data *data = dev->data;
@@ -191,6 +281,9 @@ static int lora_loopback_init(const struct device *dev)
 		    sizeof(struct loopback_packet), LOOPBACK_QUEUE_DEPTH);
 
 	data->configured = false;
+	data->dev = dev;
+	data->recv_cb = NULL;
+	k_work_init(&data->rx_work, lora_loopback_rx_work);
 
 	LOG_INF("LoRa loopback driver initialized (queue depth=%d)",
 		LOOPBACK_QUEUE_DEPTH);
@@ -202,9 +295,10 @@ static int lora_loopback_init(const struct device *dev)
 }
 
 static const struct lora_driver_api lora_loopback_api = {
-	.config = lora_loopback_config,
-	.send   = lora_loopback_send,
-	.recv   = lora_loopback_recv,
+	.config     = lora_loopback_config,
+	.send       = lora_loopback_send,
+	.recv       = lora_loopback_recv,
+	.recv_async = lora_loopback_recv_async,
 };
 
 #define LORA_LOOPBACK_DEFINE(inst)					\

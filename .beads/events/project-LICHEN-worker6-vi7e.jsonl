@@ -1,3 +1,4 @@
 {"id":"01a050e8-0acf-7971-ab62-d4efd93aa8f9","issue_id":"project-LICHEN-worker6-vi7e","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:59.53562Z"}
 {"id":"01a050e8-0ad4-7d27-bb85-cf53ce3b868e","issue_id":"project-LICHEN-worker6-vi7e","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:59.540863Z"}
 {"id":"01a050e8-0ad8-71c5-9878-99f537ab86fa","issue_id":"project-LICHEN-worker6-vi7e","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:59.544116Z"}
+{"id":"01a050f0-e0de-74e9-806a-7cd40b9573d2","issue_id":"project-LICHEN-worker6-vi7e","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added MAY reserve 25% capability table for egress to 06-security.md","created_at":"2026-08-30T04:32:38.622323Z"}

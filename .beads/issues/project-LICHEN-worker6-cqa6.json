@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-cqa6",
   "title": "spec: Add concrete fragment context bounds (4/peer, 64 global)",
   "description": "Spec says MUST bound contexts per signer but gives no number.\n\nFix: Change 03-adaptation.md line 312-313 to:\n'They MUST bound the number of contexts per remote signer to at most 4 and the global context table to at most 64 entries.'\n\nRef: worker6-h4pl",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:22:48.832026Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:22:48.832026Z",
+  "updated_at": "2026-08-30T04:32:25.907594Z",
+  "closed_at": "2026-08-30T04:32:25.907594Z",
+  "close_reason": "Added concrete bounds: 4 contexts/peer, 64 global to 03-adaptation.md",
   "labels": [
     "spec",
     "security"

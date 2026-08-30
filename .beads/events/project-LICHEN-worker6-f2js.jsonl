@@ -1,3 +1,4 @@
 {"id":"01a050e8-0969-7da0-834c-ae3c2fa2d9a9","issue_id":"project-LICHEN-worker6-f2js","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:59.177894Z"}
 {"id":"01a050e8-0973-707d-af78-2acb49cff911","issue_id":"project-LICHEN-worker6-f2js","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:59.187033Z"}
 {"id":"01a050e8-0977-774f-aaab-6107c28881bc","issue_id":"project-LICHEN-worker6-f2js","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:59.19148Z"}
+{"id":"01a050f0-db76-792b-92a7-b01e1d050f11","issue_id":"project-LICHEN-worker6-f2js","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added EDHOC concurrent limit (3/peer, 10 global SHOULD) to 06-security.md","created_at":"2026-08-30T04:32:37.238601Z"}

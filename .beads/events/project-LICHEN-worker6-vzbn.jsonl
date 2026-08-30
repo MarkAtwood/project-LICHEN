@@ -1,3 +1,4 @@
 {"id":"01a050e7-e4af-7dd3-9b0e-1378af627954","issue_id":"project-LICHEN-worker6-vzbn","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-30T04:22:49.775907Z"}
 {"id":"01a050e7-e4b7-73b1-acce-cf4202a69ab7","issue_id":"project-LICHEN-worker6-vzbn","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-08-30T04:22:49.783243Z"}
 {"id":"01a050e7-e4bb-774b-a25c-52b7ce379a92","issue_id":"project-LICHEN-worker6-vzbn","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-30T04:22:49.787479Z"}
+{"id":"01a050f0-b95c-7c11-b9fe-2534d3a4c22d","issue_id":"project-LICHEN-worker6-vzbn","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Added DIO/DAO rate limit (30/min/peer) to 05-routing.md","created_at":"2026-08-30T04:32:28.508791Z"}
