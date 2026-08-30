@@ -1,0 +1,5 @@
+# Build outputs on the Attic volume (root-drive protection).
+# Env CARGO_TARGET_DIR overrides this if set; this makes the redirect
+# hold even in contexts without the shell env (cron, fresh tmux).
+[build]
+target-dir = "/Volumes/Attic/Cache/Cargo"
