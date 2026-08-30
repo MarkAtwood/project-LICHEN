@@ -76,8 +76,23 @@ const STATE_BYTES: usize = 34;
 const RECORD_BYTES: usize = STATE_BYTES + SIGNATURE_LENGTH;
 
 /// Durable, sealed pin/floor store for Node Announce trust state.
+///
+/// The `Debug` impl is hand-written because `Zeroizing`'s own `Debug` is a
+/// derived, transparent print; a derived impl here would emit the sealing
+/// seed on any `{:?}` of the store.
 #[cfg(feature = "std")]
-#[derive(Debug)]
+impl std::fmt::Debug for AnnounceTrustStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnnounceTrustStore")
+            .field("records", &self.records)
+            .field("storage", &self.storage)
+            .field("floor_storage", &self.floor_storage)
+            .field("sealing_seed", &self.sealing_seed.is_some())
+            .finish()
+    }
+}
+
+#[cfg(feature = "std")]
 pub struct AnnounceTrustStore {
     records: HashMap<[u8; 8], AnnounceTrustState>,
     storage: Option<FileStorage>,
@@ -584,6 +599,28 @@ mod tests {
             store.accept(&iid, state(0x21, 8)),
             Err(AnnounceStoreError::Corrupt)
         );
+    }
+
+    #[test]
+    fn debug_output_never_contains_the_sealing_seed() {
+        let (state_root, floor_root) = unique_roots("debug-redacted");
+        let seed = [0x37; 32];
+        let mut store = AnnounceTrustStore::persistent(&state_root, &floor_root, &seed).unwrap();
+        store.accept(&[0x99; 8], state(0x31, 1)).unwrap();
+        let rendered = format!("{store:?}");
+        assert!(rendered.contains("sealing_seed"), "{rendered}");
+        // The seed must appear neither raw (byte-wise window) nor as any
+        // run of its own hex nibbles.
+        for window in seed.windows(4) {
+            assert!(
+                !rendered.as_bytes().windows(4).any(|w| w == window),
+                "debug output leaked seed bytes: {rendered}"
+            );
+        }
+        assert!(!rendered.contains("37373737"), "{rendered}");
+        drop(store);
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
     }
 
     #[test]

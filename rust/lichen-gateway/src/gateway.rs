@@ -58,12 +58,24 @@ pub struct Gateway {
     gcp_context_peers: Vec<([u8; 8], ContextId)>,
 }
 
-#[derive(Debug)]
 struct GatewayOscoreSenderStore {
     records: Vec<(ContextId, SenderSequenceState)>,
     storage: Option<FileStorage>,
     floor_storage: Option<FileStorage>,
     sealing_seed: Option<Zeroizing<[u8; 32]>>,
+}
+
+/// Hand-written because `Zeroizing`'s `Debug` is a derived, transparent
+/// print; a derived impl would emit the sealing seed.
+impl std::fmt::Debug for GatewayOscoreSenderStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GatewayOscoreSenderStore")
+            .field("records", &self.records)
+            .field("storage", &self.storage)
+            .field("floor_storage", &self.floor_storage)
+            .field("sealing_seed", &self.sealing_seed.is_some())
+            .finish()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -249,12 +261,22 @@ struct RecipientReplayState {
     initialized: bool,
 }
 
-#[derive(Debug)]
 struct GatewayOscoreRecipientStore {
     records: Vec<(ContextId, RecipientReplayState)>,
     storage: Option<FileStorage>,
     floor_storage: Option<FileStorage>,
     sealing_seed: Option<Zeroizing<[u8; 32]>>,
+}
+
+impl std::fmt::Debug for GatewayOscoreRecipientStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GatewayOscoreRecipientStore")
+            .field("records", &self.records)
+            .field("storage", &self.storage)
+            .field("floor_storage", &self.floor_storage)
+            .field("sealing_seed", &self.sealing_seed.is_some())
+            .finish()
+    }
 }
 
 const OSCORE_RECIPIENT_STATE_DOMAIN: &[u8] = b"LICHEN-GCP-OSCORE-RECIPIENT-STATE-v1\0";
@@ -604,11 +626,20 @@ impl SenderStateStore for GatewayOscoreSenderStore {
     }
 }
 
-#[derive(Debug)]
 struct GatewayTrustPersistence {
     store_path: PathBuf,
     floor_path: PathBuf,
     sealing_seed: Zeroizing<[u8; 32]>,
+}
+
+impl std::fmt::Debug for GatewayTrustPersistence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GatewayTrustPersistence")
+            .field("store_path", &self.store_path)
+            .field("floor_path", &self.floor_path)
+            .field("sealing_seed", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug)]
