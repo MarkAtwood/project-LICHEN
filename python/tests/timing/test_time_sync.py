@@ -749,7 +749,13 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
     if kind == "task":
         await asyncio.sleep(0)
     _assert_terminated(kind, created[0], ran)
+    # Poisoned fail-closed: the ambiguous write revokes all live authority.
     assert verifier.current() is None
+    assert verifier.minimum_record_version == 0
+    assert (
+        evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status
+        is ProvisionEpochStatus.PERSISTENCE_FAILED
+    )
 
 
 @pytest.mark.asyncio
