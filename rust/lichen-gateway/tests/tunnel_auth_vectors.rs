@@ -49,7 +49,9 @@ fn denial(error: TunnelAuthError) -> &'static str {
         TunnelAuthError::Revoked => "revoked",
         TunnelAuthError::InvalidSignature => "signature",
         TunnelAuthError::UnauthorizedTunnel => "no-authorization",
-        TunnelAuthError::BufferTooSmall | TunnelAuthError::TableDisabled => "capacity",
+        TunnelAuthError::BufferTooSmall
+        | TunnelAuthError::TableDisabled
+        | TunnelAuthError::Capacity => "capacity",
     }
 }
 
