@@ -25,7 +25,7 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 
 - `blocked:hardware` label — needs physical bench hardware
 - `needs-linux` label — work it via `ssh heft` (local Linux builder); EC2 only if heft lacks the toolchain
-- Too complex (>50 lines, >3 files, or fuzzy scope) — decompose, but do it RIGHT:
+- Too complex (>50 lines, >3 files, fuzzy scope, or you estimate >30 minutes) — decompose, but do it RIGHT:
   1. Create children: `bd create --parent <id> "<slice>" --description="..." --label decomposed`
      — 2 to 5 children, each independently ≤50 lines, each with a clear description.
   2. If a child must land after another, say so in its description.
@@ -34,6 +34,12 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
   5. If you cannot write the full child set in one pass, release the parent UNCHANGED
      (no half-decompositions) with a note explaining what made it hard, and move on.
   6. Never close any bead that has open children.
+- TIMEBOX (applies MID-bead, not just before claiming): one round ≈ one bead ≈ 30–40 minutes
+  of work. If you are past that and the remaining work is still large, STOP:
+  commit the coherent slice you have done, `bd create` follow-up beads for the remainder
+  (discovered-from this bead, noting what is already done), then release the original
+  (`bd update <id> --status open --assignee ""`) and end your round. Grinding for hours
+  on one bead is a protocol violation — the swarm needs small landable pieces, not heroes.
 - Stuck >5 min — release and move on
 
 ## Dirty file check (after claiming bead)

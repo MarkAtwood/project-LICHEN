@@ -1,3 +1,3 @@
-FLEET STAND-DOWN — MIGRATION TO HEFT.
-
-Finish your current bead completely (tests, 3x codereview per step 4, close, commit), then STOP: do not claim any further bead. Do not release or reopen anything. When done, reply with the single word: moored.
+Continue the beads worker loop (instructions: scripts/beads-worker-full.txt).
+Claim the next ready bead, complete it fully (tests, 3x codereview delegating each pass to the reviewer model per step 4, findings filed as new beads, close, commit), then stop and report. Exactly one bead this round.
+TIMEBOX: if the bead is too big to finish within ~30-40 minutes, follow the TIMEBOX rule in the instructions — commit the slice, file follow-up beads for the remainder, release, end the round.
