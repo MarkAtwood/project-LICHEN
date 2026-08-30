@@ -75,8 +75,7 @@ static void rx_work_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(rx_work, rx_work_fn);
 
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr,
-			      void *user_data);
+			      uint16_t size, int16_t rssi, int8_t snr);
 
 /**
  * @brief Arm the driver for the next asynchronous reception
@@ -115,7 +114,7 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret == 0) {
@@ -147,11 +146,9 @@ retry:
  * callable from error paths including ISRs) and leave the radio unarmed.
  */
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr,
-			      void *user_data)
+			      uint16_t size, int16_t rssi, int8_t snr)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(user_data);
 
 	if ((size_t)size > sizeof(rx_stage)) {
 		LOG_ERR("lora_l2: recv overflow (%u > %u)", size,
@@ -167,10 +164,11 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 		return;
 	}
 
-	if (atomic_test_and_set(&rx_pending)) {
-		/* Previous packet not yet processed. Cannot happen with a
-		 * single outstanding RX (we re-arm only after processing);
-		 * defensive against drivers that auto-re-arm. */
+	if (atomic_cas(&rx_pending, 0, 1)) {
+		/* Claimed the staging buffer. Single outstanding RX means a
+		 * concurrent claim cannot happen (we re-arm only after
+		 * processing); defensive against drivers that auto-re-arm. */
+	} else {
 		LOG_DBG("lora_l2: RX staging busy, packet dropped");
 		return;
 	}
@@ -180,7 +178,9 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 	rx_stage_rssi = rssi;
 	rx_stage_snr = snr;
 
-	k_work_submit(&rx_work);
+	/* rx_work is delayable (the re-arm retry uses the delay slot); submit
+	 * it immediately with a zero delay. */
+	k_work_schedule(&rx_work, K_NO_WAIT);
 }
 
 /**
@@ -250,7 +250,7 @@ int lora_l2_rx_start(void)
 	atomic_set(&rx_enabled, 1);
 
 	k_mutex_lock(&modem_mutex, K_FOREVER);
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret < 0) {
@@ -286,10 +286,15 @@ void lora_l2_rx_stop(void)
 	atomic_set(&rx_enabled, 0);
 
 	k_work_cancel_delayable(&rx_work);
-	k_work_flush(&rx_work, NULL);
+	{
+		/* Thread context requires a sync token for the flush. */
+		struct k_work_sync rx_sync;
+
+		k_work_flush_delayable(&rx_work, &rx_sync);
+	}
 
 	if (dev != NULL && k_mutex_lock(&modem_mutex, K_NO_WAIT) == 0) {
-		ret = lora_recv_async(dev, NULL, NULL);
+		ret = lora_recv_async(dev, NULL);
 		k_mutex_unlock(&modem_mutex);
 		if (ret < 0) {
 			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
