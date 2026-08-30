@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-yiss",
+  "title": "Test gap: announce_store heal durability is mutation-untested",
+  "description": "Found by correctness codereview of project-LICHEN-worker6-s6ml (mutation-verified). Deleting the heal write at announce_store.rs:273 (self.write(iid, true, state)) still passes all 12 announce_store tests. The held-seq assertion at :518-521 passes via the in-memory cache populated by load (:288), and the follow-up accept (:525) rewrites both sides itself, so no test observes that the healed floor was actually durably rewritten - the security-relevant half of the fix that re-arms rollback detection via precedes (:276). The pre-existing store_rejects_state_rollback_and_heals_floor_lag durability claim (:565-572) has the same gap and also passes under the mutation. Fix: after a heal load, assert the floor record exists and verifies, e.g. assert store.read(iid, true) is Ok(Some(state)) (tests module can call the private read) or record_path(floor_root, iid, true).exists().",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:26:17.539562Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T17:26:17.539562Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yiss",
+      "depends_on_id": "project-LICHEN-worker6-s6ml",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:26:18.012952Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-y5eh",
+  "title": "persistent() should reject state_root == floor_root to enforce separate-roots invariant",
+  "description": "Found by security codereview of project-LICHEN-worker6-s6ml. AnnounceTrustStore::persistent (announce_store.rs:121-136) accepts identical or nested state_root/floor_root without complaint, while the anti-rollback story (module doc :10-13) and the heal safety rationale lean on the caller passing distinct roots; a single-snapshot rewind of a shared root loads fine today. The existing test at :683 even passes the same path twice. Hardening: in persistent(), reject state_root == floor_root (and ideally a prefix/nesting check) with Err(Io) or a new error variant, and fix the affected test to pass distinct roots.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:26:18.186694Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T17:26:18.186694Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-y5eh",
+      "depends_on_id": "project-LICHEN-worker6-s6ml",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:26:18.539508Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
