@@ -3,14 +3,16 @@
   "title": "LICHEN L2 disable: retry incomplete queue destruction",
   "description": "Round-4 correctness review found that after common disable returns a deinit failure and leaves LORA_DESTROY_FAILED, retrying common disable calls stop(), receives success for the non-RUNNING state, skips deinit, and falsely reports successful teardown. Recognize DESTROY_FAILED on the common disable path, retry lichen_lora_l2_deinit(), and continue to propagate incomplete cleanup; add a regression.",
   "notes": "2026-08-29 worker: needs_destroy_retry() implementation verified present (lora_l2.c:705) and disable-path retry per 2026-08-28 comment; close requires native_sim ping_l2 run (test_disable_retries_incomplete_queue_destruction) on AWS builder.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T03:47:59.405004Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T02:57:04.993102Z",
+  "updated_at": "2026-08-30T03:58:38.748421Z",
   "started_at": "2026-08-28T03:56:50.706626Z",
+  "closed_at": "2026-08-30T03:58:38.748421Z",
+  "close_reason": "Already implemented + regression exists. DESTROY_FAILED retry on the common disable path: lichen_lora_l2_deinit accepts DESTROY_FAILED -\u003e DEINITING with goto destroy_queue (lichen/subsys/lichen/l2/lora_l2.c:469-474), needs_destroy_retry query at lora_l2.c:707, failed destroy sets LORA_DESTROY_FAILED (lora_l2.c:667), and the common disable path retries deinit instead of falsely reporting success (net_if_down path completes the retry). Regression: test_disable_retries_incomplete_queue_destruction (lichen/tests/ping_l2/src/main.c:551-607) corrupts a pool handle, asserts deinit fails, retry flag set, stats -ECANCELED, init refused, then repaired handle + net_if_down completes teardown and re-init succeeds. Landed in checkpoint commit 95d85c3747. Caveat: ztest runtime validation is on the Linux/Twister path (bead y7wh). No files changed this session.",
   "labels": [
     "needs-linux"
   ],

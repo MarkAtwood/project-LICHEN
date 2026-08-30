@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5rr9",
+  "title": "Slot-claim replay gate: re-check claim_seq under s_coord_lock before applying",
+  "description": "Codereview finding (P2, correctness+security) on coap_slot_coord.c:429-438 vs 453-502: the claim_seq gate lookup runs BEFORE k_mutex_lock(s_coord_lock) and the monotonic no-op in commit returns 0, so a stale lower-seq claim racing a higher-seq one can be applied after the newer grant (highest-seq-wins violated at the coordination layer). Latent today (single CoAP RX thread) but process_claim is public API. Fix: re-run the claim_seq gate inside the critical section just before conflict resolution (lookup under lock; s_coord_lock -\u003e s_lock ordering already acyclic), or make lichen_slot_claim_seq_commit return a distinct nonzero (-EALREADY) from the monotonic no-op so process_claim rejects. Add a regression test for out-of-order same-IID claims. Discovered from project-LICHEN-worker6-uiun 3x codereview.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:56:53.779551Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:56:53.779551Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5rr9",
+      "depends_on_id": "project-LICHEN-worker6-uiun",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T03:56:53.953993Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

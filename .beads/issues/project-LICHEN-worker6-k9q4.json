@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-k9q4",
+  "title": "slot_coord: register_gateway failure ignored on accept path grants invisible gateway",
+  "description": "Codereview finding (P3, pre-existing, adjacent to persist-first wiring): coap_slot_coord.c:513 ignores lichen_slot_coord_register_gateway's return. When the coord table is full, a claim is committed (seq burned), ACCEPTED returned, grant handed out — but no table entry exists, so the gateway is invisible to conflict resolution and overlapping slot grants become possible. Decide: reject the claim when registration fails (return an error result) or document the accepted loss. Discovered from project-LICHEN-worker6-uiun 3x codereview.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:57:17.679477Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:57:17.679477Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k9q4",
+      "depends_on_id": "project-LICHEN-worker6-uiun",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T03:57:17.886533Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

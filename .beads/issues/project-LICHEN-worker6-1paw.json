@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-1paw",
+  "title": "Define claim_seq wrap semantics for floor at UINT32_MAX",
+  "description": "Codereview finding (P3): lichen_slot_claim_seq_commit monotonic guard (entry-\u003eseq \u003e= seq) plus the process_claim gate (claim_seq \u003c= cached) mean a floor of 0xFFFFFFFF (hostile NV content or a gateway that genuinely burned max seq) permanently rejects all claims including wrapped seq 0, with no recovery short of NV wipe. Spec/08 GCP-6.5 does not define wrap. Options: spec amendment (declare wrap illegal / require new IID), or module-side recovery. Discovered from project-LICHEN-worker6-uiun 3x codereview.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:57:18.077683Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:57:18.077683Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1paw",
+      "depends_on_id": "project-LICHEN-worker6-uiun",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T03:57:18.31263Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
