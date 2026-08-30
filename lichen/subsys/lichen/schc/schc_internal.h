@@ -24,8 +24,13 @@ extern "C" {
 #endif
 
 /* IPv6 protocol constants */
+#define IPV6_NH_HOP_BY_HOP      0    /* Hop-by-Hop Options (RFC 8200) */
 #define IPV6_NH_UDP             17   /* UDP next header (RFC 768) */
+#define IPV6_NH_ROUTING         43   /* Routing header (RFC 8200) */
+#define IPV6_NH_FRAGMENT        44   /* Fragment header (unsupported; SCHC fragments) */
 #define IPV6_NH_ICMPV6          58   /* ICMPv6 next header (RFC 4443) */
+#define IPV6_NH_DEST_OPTS       60   /* Destination Options (RFC 8200) */
+#define IPV6_ROUTING_TYPE_RPL_SRH 3  /* RPL Source Routing Header (RFC 6554) */
 #define IPV6_HDR_LEN            40   /* IPv6 base header length */
 #define UDP_HDR_LEN             8    /* UDP header length */
 #define MQTT_SN_PORT            10883 /* MQTT-SN assigned UDP port */

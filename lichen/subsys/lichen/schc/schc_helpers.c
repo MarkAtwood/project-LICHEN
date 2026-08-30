@@ -387,12 +387,64 @@ void rpl_dao_write_base(uint8_t *rpl, uint8_t instance,
 
 /* ─── validation ──────────────────────────────────────────────────────────── */
 
+/*
+ * Walk the extension-header chain and enforce the routing-header policy.
+ *
+ * Mirrors the Rust validate_full_ipv6 chain walk: Hop-by-Hop, Routing, and
+ * Destination Options headers advance through the chain; every Routing header
+ * must be an uncompressed RPL source-routing header (type 3, RFC 6554) with
+ * full 128-bit addresses (CmprI/CmprE/Pad zero) and a segments-left within
+ * the address count; Fragment headers are unsupported (SCHC fragments instead,
+ * and type 0 is deprecated by RFC 5095). Anything else terminates the chain.
+ */
+static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len)
+{
+	uint8_t next_header = ipv6_next_header(packet);
+	size_t offset = IPV6_HDR_LEN;
+
+	while (next_header == IPV6_NH_HOP_BY_HOP ||
+	       next_header == IPV6_NH_ROUTING ||
+	       next_header == IPV6_NH_DEST_OPTS) {
+		size_t ext_len;
+		size_t end;
+
+		if (offset + 2u > pkt_len) {
+			return SCHC_ERR_NO_MATCHING_RULE;
+		}
+		ext_len = ((size_t)packet[offset + 1u] + 1u) * 8u;
+		end = offset + ext_len;
+		if (end > pkt_len) {
+			return SCHC_ERR_NO_MATCHING_RULE;
+		}
+		if (next_header == IPV6_NH_ROUTING &&
+		    (ext_len < 24u ||
+		     packet[offset + 2u] != IPV6_ROUTING_TYPE_RPL_SRH ||
+		     packet[offset + 4u] != 0u || packet[offset + 5u] != 0u)) {
+			return SCHC_ERR_NO_MATCHING_RULE;
+		}
+		if (next_header == IPV6_NH_ROUTING &&
+		    (size_t)packet[offset + 3u] > (ext_len - 8u) / SCHC_IPV6_ADDR_LEN) {
+			return SCHC_ERR_NO_MATCHING_RULE;
+		}
+		next_header = packet[offset];
+		offset = end;
+	}
+	if (next_header == IPV6_NH_FRAGMENT) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+	return SCHC_OK;
+}
+
 int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 {
 	uint16_t declared_payload_len = ipv6_payload_len(packet);
 	size_t actual_payload_len = pkt_len - IPV6_HDR_LEN;
 
 	if (declared_payload_len != actual_payload_len) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
+	if (validate_ipv6_header_chain(packet, pkt_len) != SCHC_OK) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 

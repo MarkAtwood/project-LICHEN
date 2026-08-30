@@ -411,3 +411,72 @@ def test_oscore_without_payload_compresses_to_oscore_rule() -> None:
     assert compressed[0] == 5, "OSCORE without payload should use OSCORE rule 5, not CoAP rule 0"
     # Round-trip must work
     assert decompress_packet(compressed) == raw
+
+
+# ─── routing-header policy (RFC 6554 RH3-only, RFC 2460 section 8.1) ──────────
+
+
+def _build_srh_packet(
+    routing_type: int,
+    segments_left: int,
+    hop: IPv6Address,
+    *,
+    checksum_dst: IPv6Address | None = None,
+    use_fragment: bool = False,
+) -> bytes:
+    """Build an IPv6 datagram with a Routing (or Fragment) header.
+
+    The UDP checksum is computed over ``checksum_dst`` so tests can pin the
+    RFC 2460 section 8.1 pseudo-header destination independently of the outer
+    header destination.
+    """
+    udp = UdpDatagram(5000, 5001, b"ping").to_bytes(SRC, checksum_dst or DST)
+    if use_fragment:
+        body = bytes([NextHeader.UDP, 0, 0, 0, 0, 0, 0, 1]) + udp
+        next_header = NextHeader.FRAGMENT
+    else:
+        # RFC 6554 RH3: next_header, hdr_ext_len, type, segments_left,
+        # CmprI/CmprE, Pad/Reserved, Reserved
+        rh3 = bytes([NextHeader.UDP, 2, routing_type, segments_left, 0, 0, 0, 0]) + hop.packed
+        body = rh3 + udp
+        next_header = NextHeader.ROUTING
+    header = IPv6Header(
+        src_addr=SRC,
+        dst_addr=DST,
+        next_header=next_header,
+        payload_length=len(body),
+        hop_limit=64,
+    )
+    return header.to_bytes() + body
+
+
+def test_valid_rh3_in_transit_falls_back_byte_preserving() -> None:
+    """In-transit RH3 with checksum over the final destination round-trips via 255."""
+    final = IPv6Address("fe80::a")
+    raw = _build_srh_packet(3, 1, final, checksum_dst=final)
+    compressed = compress_packet(raw)
+    assert compressed == b"\xff" + raw
+    assert decompress_packet(compressed) == raw
+
+
+def test_routing_type_zero_is_rejected() -> None:
+    """RFC 5095 deprecated Routing type 0 must not be forwarded under Rule 255."""
+    with pytest.raises(SchcError, match="routing"):
+        compress_packet(_build_srh_packet(0, 1, IPv6Address("fe80::b")))
+
+
+def test_rh3_segments_left_overflow_is_rejected() -> None:
+    with pytest.raises(SchcError, match="segments-left"):
+        compress_packet(_build_srh_packet(3, 2, IPv6Address("fe80::c")))
+
+
+def test_fragment_header_is_rejected() -> None:
+    with pytest.raises(SchcError):
+        compress_packet(_build_srh_packet(0, 0, DST, use_fragment=True))
+
+
+def test_rh3_checksum_over_outer_destination_is_rejected() -> None:
+    """In-transit RH3 whose checksum covers the outer destination is malformed."""
+    raw = _build_srh_packet(3, 1, IPv6Address("fe80::a"), checksum_dst=DST)
+    with pytest.raises(SchcError, match="checksum"):
+        compress_packet(raw)
