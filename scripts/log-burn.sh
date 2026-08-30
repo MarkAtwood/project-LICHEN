@@ -30,7 +30,8 @@ DATA=$(curl -s --max-time 30 https://openrouter.ai/api/v1/credits -H "Authorizat
     { echo "$(date -Is) burn-log: curl failed" >> "$HOME/Developer/burn.log"; exit 1; }
 
 python3 - "$DATA" <<'PYEOF'
-import json, sys, os, datetime
+import json, sys, os
+from datetime import datetime
 d = json.loads(sys.argv[1]).get("data", {})
 tc, tu = float(d.get("total_credits", 0)), float(d.get("total_usage", 0))
 rem = tc - tu
