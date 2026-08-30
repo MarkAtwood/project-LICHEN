@@ -620,6 +620,12 @@ Observe: 0
 Observe reduces polling overhead but requires state on both endpoints.
 Use for slowly-changing resources where push notification saves bandwidth.
 
+**Subscription Limits:**
+
+Implementations MUST bound CoAP Observe subscriptions to at most 16 per
+resource and 64 globally. On overflow, implementations MUST evict the oldest
+subscription (LRU by registration time).
+
 ### 10.4. MQTT-SN (Port 10883)
 
 MQTT for Sensor Networks (OASIS standard) provides publish/subscribe
