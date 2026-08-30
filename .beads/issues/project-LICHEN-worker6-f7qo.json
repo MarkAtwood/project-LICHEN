@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-f7qo",
+  "title": "announce_store read/write leaves unzeroized sealing-seed copies on the stack",
+  "description": "Found by security review of project-LICHEN-worker6-dowx (pre-existing in child-1 code, but now on the announce admission hot path). AnnounceTrustStore::read and write (announce_store.rs:200-201, 220-221) call derive_keypair(\u0026Seed::new(*seed)) which copies the node persistence key material onto the stack on EVERY record read, not just writes. The durable copy is correctly Zeroizing and Debug is redacted, but each pinned_pubkey_for durable fallback and each admission check leaves a transient non-zeroized seed copy in stack memory. Hygiene inconsistency with the crate's own Zeroizing discipline; low exposure window, no logging path. Fix: keep a pre-derived keypair in the store at construction, or zeroize the transient copies.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:29:40.926333Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T18:29:40.926333Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-f7qo",
+      "depends_on_id": "project-LICHEN-worker6-dowx",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:29:41.170998Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

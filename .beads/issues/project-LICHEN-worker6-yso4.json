@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-yso4",
+  "title": "pinned_pubkeys_snapshot lacks the durable fallback; DAO signer fallback diverges from indexed pin lookup after restart",
+  "description": "Found by robustness review of project-LICHEN-worker6-dowx. pinned_pubkey_for (announce.rs:287-302) now consults the durable store on memory miss, but pinned_pubkeys_snapshot (announce.rs:310-325) is still memory-only. node.rs resolve_dao_signer_from_bounded_snapshot (384-391) uses the indexed lookup first and the snapshot only when it misses; after restart or in-memory eviction a durably-pinned key is authoritative in the indexed view yet invisible to the snapshot, so a DAO that the fallback should resolve returns UnknownKey. Fails closed (no wrong accept) - consistency gap only. Either give the snapshot a bounded durable-scan path or document that fallback resolution is memory-only.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:29:32.719025Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T18:29:32.719025Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yso4",
+      "depends_on_id": "project-LICHEN-worker6-dowx",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:29:33.032456Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

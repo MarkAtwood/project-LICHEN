@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-cvko",
+  "title": "secure_block1_and_block2_roundtrip_replay_order_and_pivs fails with Blockwise(BlockOutOfOrder) (pre-existing)",
+  "description": "Discovered while validating project-LICHEN-worker6-dowx: lichen-node/src/secure.rs:2568 test secure_block1_and_block2_roundtrip_replay_order_and_pivs fails with 'called Result::unwrap() on an Err value: Blockwise(BlockOutOfOrder)'. Verified pre-existing, NOT caused by the dowx announce-persistence work: reproduced at base commit 3b9e774cad with only the lib.rs duplicate-export compile fix applied (the crate does not compile at 3b9e774cad without it - see the merge 54e2c2cc5b which left a broken re-export for a nonexistent AnnouncePinFloor). Full lichen-node suite is otherwise green at the dowx commit (288 passed, this 1 failed). OSCORE blockwise transfer handles a replay/ordering scenario; failure appears unrelated to announce or RPL. Needs independent root-cause: either the test's blockwise expectations regressed when secure.rs changed (merge 54e2c2cc5b range) or the blockwise layer has an out-of-order handling bug. Failing test blocks a clean test gate on main.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:29:58.415216Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T18:29:58.415216Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cvko",
+      "depends_on_id": "project-LICHEN-worker6-dowx",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:29:58.691681Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

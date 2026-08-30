@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-xrcj",
+  "title": "Persist-first announce commit burns a sequence number on relay failure for persistent stores",
+  "description": "Found by correctness+robustness review of project-LICHEN-worker6-dowx. In rpl_stack/receive.rs process_announce (376-407) the staged clone shares the durable store via Rc\u003cRefCell\u003e; staged.process() commits pin+floor before relay (announce.rs persist-first block). If send_l2_payload_to fails, self.announces = staged is skipped but the durable floor is already at seq N; the originator's same-seq retry (the invariant enshrined by failed_announce_relay_can_retry_same_origin_sequence, rpl_stack/tests.rs:753) then hits !seq_gt(N,N) -\u003e StaleSeqNum and receive.rs forget_peer. Ephemeral processors (AnnounceProcessor::new) keep the old retry contract because is_persistent() skips the store, so the tested behavior and persistent-gateway behavior silently diverge. Bounded (next periodic announce advances seq; matches GCP-6.5's 'surviving cached value forces the legitimate sender to increment') but on lossy LoRa relay failures are routine. Decide: document the divergence, or add equal-seq idempotent retransmission for the durable floor (requires replay-amplification analysis since hop_count is unsigned).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:29:22.772049Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T18:29:22.772049Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xrcj",
+      "depends_on_id": "project-LICHEN-worker6-dowx",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:29:23.148749Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

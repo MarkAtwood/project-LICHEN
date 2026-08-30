@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-lqgt",
+  "title": "C Rule-255 decompress validates nothing: verbatim memcpy where Python and Rust decode_rule255 enforce validate_full_ipv6",
+  "description": "Confirmed empirically by two independent codereview passes of project-LICHEN-worker6-njdx. lichen/subsys/schc/schc.c:151-165 copies Rule-255 payloads to out without any validation; Python decode_rule255 (headers.py:193 -\u003e validate_full_ipv6) and Rust decode_rule255 (codec.rs:1444) run the full validator and reject. Demonstrated: ff + RH3(sl=1)+UDP with bad checksum -\u003e C lichen_schc_decompress ret=76 payload copied, P/R reject; ff + IPv6 Fragment header packet -\u003e C ret=60 accepted, P/R reject. The parity corpus has no malformed-category vector with rule_id 255 (all use 0-7), so this cannot be caught by the current gate. Impact: a C receiver admits on-air Rule255 frames that every Rust/Python peer rejects, and locally accepts packets the firmware's own compress gate rejects (asymmetric admission). Fix: run validate_ipv6_transport_lengths + the chain policy over the decoded payload in the C rule-255 decompress branch, then add shared malformed rule-255 compressed vectors (fragment header, bad checksum, non-RH3 routing) so the parity gate pins it. Related: project-LICHEN-worker6-prld covers Python/Rust Rule255 laxness; this is the C-side decode gap.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:26:05.111035Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T18:26:05.111035Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-lqgt",
+      "depends_on_id": "project-LICHEN-worker6-njdx",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:26:05.382715Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

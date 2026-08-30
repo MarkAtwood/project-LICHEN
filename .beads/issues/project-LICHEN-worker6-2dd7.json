@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2dd7",
+  "title": "Persistent announce trust store capacity is a permanent admission brick after 64 originators",
+  "description": "Found by security+robustness review of project-LICHEN-worker6-dowx. AnnounceTrustStore::accept returns Full for a fresh IID once records.len() \u003e= MAX_TRACKED_ORIGINATORS (64) and durable records are never deleted (deliberately no removal API, announce_store.rs:17-21,302-304); AnnounceProcessor::process maps any load/accept error incl. Full to AnnounceRejectReason::PersistenceError (announce.rs:250-252). On a persistent gateway, 64 distinct lifetime originators - trivially cheap for an attacker (throwaway keypairs, one valid announce each) - permanently reject all future new-origin admission, across restarts. In-memory LRU eviction cannot relieve it (durable check runs before memory admission). Availability-only (existing pinned origins keep working) but converts a bounded self-healing memory cap into a permanent remote DoS on gateway onboarding. Also: Full is conflated with corrupt/io in PersistenceError so operators cannot diagnose store-full. Needs a design decision: durable cap sized above real mesh population, or prune policy that preserves pins (key-change protection) while still preventing floor regression, or operator recovery path, plus a distinct reject reason for Full. Recovery today = manual deletion of state roots.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:29:07.895599Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T18:29:07.895599Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2dd7",
+      "depends_on_id": "project-LICHEN-worker6-dowx",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:29:08.132353Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
