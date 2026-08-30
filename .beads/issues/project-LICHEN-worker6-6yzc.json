@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-6yzc",
   "title": "DAO origin validator has a parsed-object mutation TOCTOU after raw provenance check",
   "description": "DaoOriginValidator.validate first validates immutable received-wire provenance, then continues reading dao.options from the caller-visible mutable DAO object. A concurrent mutation after the provenance check can substitute a different signature option while the transcript/digest still use the original raw bytes, potentially accepting an on-wire DAO whose original signature is invalid. Reparse the bound raw bytes into a detached local DAO and consume only detached semantics; add a deterministic mutation-race regression.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:22:49.002899Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:30:05.505364Z",
-  "started_at": "2026-08-24T15:24:19.22376Z"
+  "updated_at": "2026-08-30T04:23:51.282425Z",
+  "started_at": "2026-08-24T15:24:19.22376Z",
+  "closed_at": "2026-08-30T04:23:51.282425Z",
+  "close_reason": "Implemented: DaoOriginValidator.validate takes an _exact_received_dao_wire provenance snapshot and consumes only a detached parse of that exact wire (python/src/lichen/rpl/dao_origin.py:275-288), so post-provenance mutation of the caller-visible DAO object cannot substitute a different signature option while the transcript uses the original bytes. 751/751 python/tests/test_vectors.py + 751/751 python/tests/rpl pass."
 }
