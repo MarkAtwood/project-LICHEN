@@ -2,7 +2,11 @@
 extern crate std;
 
 #[cfg(feature = "std")]
+use std::cell::RefCell;
+#[cfg(feature = "std")]
 use std::collections::HashMap;
+#[cfg(feature = "std")]
+use std::rc::Rc;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
@@ -11,6 +15,7 @@ use lichen_link::identity::{iid_from_pubkey, PeerIdentity};
 use lichen_link::keys::PublicKey;
 use lichen_link::schnorr;
 
+use crate::announce_store::{AnnounceTrustState, AnnounceTrustStore};
 use crate::gradient::{
     GeoCoords, GradientEntry, GradientSource, GradientTable, GRADIENT_TIMEOUT_MS,
 };
@@ -32,6 +37,9 @@ pub enum AnnounceRejectReason {
     HopLimitExceeded,
     Malformed,
     KeyChangeDetected,
+    /// Durable trust state could not be read or committed; admission fails
+    /// closed (no route/gradient mutation) per persist-first ordering.
+    PersistenceError,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,6 +106,9 @@ pub struct AnnounceProcessor {
     prefix: [u8; 8],
     seen: HashMap<[u8; 8], SeenEntry>,
     pinned_keys: HashMap<[u8; 8], PinnedKeyEntry>,
+    /// Durable TOFU pin/floor state, shared with clones so a staged admission
+    /// (receive-path clone-process-commit) still persists before applying.
+    trust_store: Rc<RefCell<AnnounceTrustStore>>,
     access_counter: u64,
     max_entries: usize,
 }
@@ -105,11 +116,22 @@ pub struct AnnounceProcessor {
 #[cfg(feature = "std")]
 impl AnnounceProcessor {
     pub fn new(gradient_table: GradientTable, prefix: [u8; 8]) -> Self {
+        Self::with_trust_store(gradient_table, prefix, AnnounceTrustStore::ephemeral())
+    }
+
+    /// Build a processor whose admission decisions commit to `store` before
+    /// any in-memory state is applied (persist-first, spec GCP-6.5).
+    pub fn with_trust_store(
+        gradient_table: GradientTable,
+        prefix: [u8; 8],
+        store: AnnounceTrustStore,
+    ) -> Self {
         Self {
             gradient_table,
             prefix,
             seen: HashMap::new(),
             pinned_keys: HashMap::new(),
+            trust_store: Rc::new(RefCell::new(store)),
             access_counter: 0,
             max_entries: MAX_TRACKED_ORIGINATORS,
         }
@@ -154,6 +176,33 @@ impl AnnounceProcessor {
             }
         }
 
+        // Durable trust state is authoritative for both the pin and the
+        // sequence floor, including after eviction or restart (the in-memory
+        // tables above can lag the store). Ephemeral stores mirror memory and
+        // are not consulted. Any durable failure rejects the announce before
+        // any state is touched.
+        let durable = {
+            let mut store = self.trust_store.borrow_mut();
+            if !store.is_persistent() {
+                None
+            } else {
+                match store.load(&iid) {
+                    Ok(state) => state,
+                    Err(_) => {
+                        return AnnounceResult::rejected(AnnounceRejectReason::PersistenceError)
+                    }
+                }
+            }
+        };
+        if let Some(state) = durable {
+            if state.pubkey != *announce.pubkey {
+                return AnnounceResult::rejected(AnnounceRejectReason::KeyChangeDetected);
+            }
+            if !seq_gt(announce.seq_num, state.seq) {
+                return AnnounceResult::rejected(AnnounceRejectReason::StaleSeqNum);
+            }
+        }
+
         if let Some(entry) = self.seen.get(&iid) {
             if !seq_gt(announce.seq_num, entry.seq_num) {
                 return AnnounceResult::rejected(AnnounceRejectReason::StaleSeqNum);
@@ -180,6 +229,29 @@ impl AnnounceProcessor {
             expires_ms: now_ms.wrapping_add(GRADIENT_TIMEOUT_MS),
             coords,
         };
+
+        // Persist-first (spec GCP-6.5): commit the exact pin and the new
+        // sequence floor to the store before mutating any in-memory state.
+        // If the durable commit fails, admission fails closed with the
+        // gradient, pin, and replay tables untouched. A surviving floor after
+        // a crash forces the legitimate sender to increment its sequence.
+        if self.trust_store.borrow().is_persistent() {
+            let accepted = self
+                .trust_store
+                .borrow_mut()
+                .accept(
+                    &iid,
+                    AnnounceTrustState {
+                        pubkey: *announce.pubkey,
+                        seq: announce.seq_num,
+                    },
+                )
+                .is_ok();
+            if !accepted {
+                return AnnounceResult::rejected(AnnounceRejectReason::PersistenceError);
+            }
+        }
+
         self.gradient_table.update(entry, now_ms);
 
         self.pinned_keys.insert(
@@ -213,7 +285,19 @@ impl AnnounceProcessor {
     }
 
     pub fn pinned_pubkey_for(&self, iid: &[u8; 8]) -> Option<PublicKey> {
-        let public_key = PublicKey::new(self.pinned_keys.get(iid)?.pubkey);
+        if let Some(entry) = self.pinned_keys.get(iid) {
+            let public_key = PublicKey::new(entry.pubkey);
+            return (iid_from_pubkey(&public_key) == *iid).then_some(public_key);
+        }
+        // Durable fallback: an evicted or restarted-over pin still binds the
+        // exact stored key, so Announce TOFU and DAO origin admission share
+        // one trust base. Ephemeral stores are not consulted; a corrupt or
+        // missing durable record fails closed (no pin).
+        if !self.trust_store.borrow().is_persistent() {
+            return None;
+        }
+        let state = self.trust_store.borrow_mut().load(iid).ok().flatten()?;
+        let public_key = PublicKey::new(state.pubkey);
         (iid_from_pubkey(&public_key) == *iid).then_some(public_key)
     }
 
@@ -320,6 +404,8 @@ mod tests {
     use lichen_link::identity::Identity;
     use lichen_link::keys::Seed;
     use lichen_link::schnorr::sign;
+    use std::format;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     fn make_identity(seed_byte: u8) -> Identity {
         Identity::from_seed(Seed::new([seed_byte; 32]))
@@ -963,5 +1049,194 @@ mod tests {
         let announce = Announce::from_bytes(&buf[..len]).unwrap();
         let result = processor.process(&announce, link_local(0xAA), 3000);
         assert!(result.accepted);
+    }
+
+    // --- Durable trust store integration (persist-first admission) ---
+
+    fn unique_test_roots(name: &str, counter: &AtomicU64) -> (std::path::PathBuf, std::path::PathBuf) {
+        let suffix = counter.fetch_add(1, Ordering::Relaxed);
+        let state = std::env::temp_dir().join(format!(
+            "lichen-node-announce-integration-{name}-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor = state.with_extension("floors");
+        for path in [&state, &floor] {
+            std::fs::create_dir_all(path).unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+            }
+        }
+        (state, floor)
+    }
+
+    fn remove_roots(state: &std::path::Path, floor: &std::path::Path) {
+        std::fs::remove_dir_all(state).unwrap();
+        std::fs::remove_dir_all(floor).unwrap();
+    }
+
+    #[test]
+    fn durable_commit_failure_fails_admission_closed() {
+        let counter = AtomicU64::new(3000);
+        let (state_root, floor_root) = unique_test_roots("capacity", &counter);
+        let gradient_table = GradientTable::new(64);
+        let mut processor = AnnounceProcessor::with_trust_store(
+            gradient_table,
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x4A; 32]).unwrap(),
+        );
+
+        // Exhaust the durable store's lifetime capacity so the next admission
+        // cannot commit. The store is shared with the processor via the same Rc.
+        for i in 0..MAX_TRACKED_ORIGINATORS {
+            let mut iid = [0u8; 8];
+            iid[0] = i as u8;
+            processor
+                .trust_store
+                .borrow_mut()
+                .accept(
+                    &iid,
+                    AnnounceTrustState {
+                        pubkey: [i as u8; 32],
+                        seq: 1,
+                    },
+                )
+                .unwrap();
+        }
+
+        let identity = make_identity(0x7E);
+        let mut buf = [0u8; 256];
+        let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+
+        let result = processor.process(&announce, link_local(0xAA), 1000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::PersistenceError)
+        );
+
+        // Fail closed: the route/gradient state for the originator was not
+        // mutated and nothing was pinned or replay-tracked in memory.
+        let mut destination = [0u8; 16];
+        destination[..8].copy_from_slice(&ula_prefix());
+        destination[8..].copy_from_slice(&identity.iid);
+        assert!(processor.gradient_table_mut().lookup(&destination, 1000).is_none());
+        assert!(processor.pinned_pubkey_for(&identity.iid).is_none());
+        assert!(!processor.known_originators().contains(&identity.iid));
+        drop(processor);
+        remove_roots(&state_root, &floor_root);
+    }
+
+    #[test]
+    fn eviction_respects_durable_pin_and_floor() {
+        let counter = AtomicU64::new(1000);
+        let (state_root, floor_root) = unique_test_roots("eviction", &counter);
+        let identity = make_identity(0x11);
+
+        let mut processor = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
+        );
+        processor.max_entries = 2;
+
+        let mut buf = [0u8; 256];
+        let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        assert!(processor.process(&announce, link_local(0xAA), 1000).accepted);
+
+        // Push the pinned entry out of the in-memory cache.
+        for i in 2..=3 {
+            let identity = make_identity(i);
+            let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+            let announce = Announce::from_bytes(&buf[..len]).unwrap();
+            assert!(processor.process(&announce, link_local(0xAA), 2000).accepted);
+        }
+        assert!(!processor.known_originators().contains(&identity.iid));
+
+        // The pin survives eviction through the durable store and still
+        // binds the exact TOFU pubkey.
+        assert_eq!(processor.pinned_pubkey_for(&identity.iid), Some(identity.pubkey));
+
+        // The durable floor survived eviction: the old sequence replays no more.
+        let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        let result = processor.process(&announce, link_local(0xAA), 3000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::StaleSeqNum)
+        );
+
+        // A strictly newer announce re-admits and re-applies in memory.
+        let len = make_signed_announce(&identity, 105, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        let result = processor.process(&announce, link_local(0xAA), 4000);
+        assert!(result.accepted, "{:?}", result.reject_reason);
+
+        drop(processor);
+
+        // Restart: a fresh processor over the same roots restores the pin
+        // and floor; the accepted sequence is now the durable floor.
+        let mut reopened = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
+        );
+        assert_eq!(reopened.pinned_pubkey_for(&identity.iid), Some(identity.pubkey));
+        let len = make_signed_announce(&identity, 105, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        let result = reopened.process(&announce, link_local(0xAA), 5000);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::StaleSeqNum)
+        );
+
+        remove_roots(&state_root, &floor_root);
+    }
+
+    #[test]
+    fn corrupt_durable_record_fails_admission_closed() {
+        let counter = AtomicU64::new(2000);
+        let (state_root, floor_root) = unique_test_roots("corrupt", &counter);
+        let identity = make_identity(0x21);
+
+        let mut processor = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x6B; 32]).unwrap(),
+        );
+        let mut buf = [0u8; 256];
+        let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        assert!(processor.process(&announce, link_local(0xAA), 1000).accepted);
+        drop(processor);
+
+        // A foreign sealing seed cannot verify the sealed records: pin
+        // lookups fail closed and admission is refused outright.
+        let mut foreign = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x6B ^ 0xFF; 32]).unwrap(),
+        );
+        assert!(foreign.pinned_pubkey_for(&identity.iid).is_none());
+
+        let len = make_signed_announce(&identity, 200, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        let result = foreign.process(&announce, link_local(0xAA), 2000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::PersistenceError)
+        );
+        let mut destination = [0u8; 16];
+        destination[..8].copy_from_slice(&ula_prefix());
+        destination[8..].copy_from_slice(&identity.iid);
+        assert!(foreign.gradient_table_mut().lookup(&destination, 2000).is_none());
+
+        drop(foreign);
+        remove_roots(&state_root, &floor_root);
     }
 }

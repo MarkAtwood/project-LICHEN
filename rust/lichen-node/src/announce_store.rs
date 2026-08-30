@@ -116,6 +116,13 @@ impl AnnounceTrustStore {
         }
     }
 
+    /// True when this store is backed by durable storage. Only durable stores
+    /// are authoritative for admission: an ephemeral store is a mirror of the
+    /// processor's in-memory tables and is never consulted.
+    pub fn is_persistent(&self) -> bool {
+        self.storage.is_some()
+    }
+
     /// Open durable stores under `state_root` and `floor_root` (separate
     /// roots so a rollback snapshot cannot silently rewind both sides).
     pub fn persistent(
