@@ -292,6 +292,12 @@ an exact-size output buffer. Any rejected or undersized build MUST leave the
 output bytes, both sequence counters, and the cached last successful logical
 update unchanged.
 
+#### 8.4.5. Control Message Rate Limiting
+
+Receivers MUST rate-limit RPL control message (DIO/DAO) processing to at most
+30 messages per minute per source IID. Messages exceeding this limit MAY be
+dropped before signature verification.
+
 ### 8.5. Downward Routing
 
 Non-storing mode: the root source-routes downward packets to a mesh node's
@@ -816,7 +822,9 @@ across processes, and paired with an independent monotonic revision anchor.
 Missing, deleted, rolled-back, corrupt, or unverifiable state fails closed.
 Restart restores pins and per-origin sequence floors before any packet is
 admitted. A commit failure MUST leave the pin, replay floor, and gradient
-unchanged in memory.
+unchanged in memory. Implementations MUST bound the announce pin table to at
+most 128 entries. On overflow, implementations MUST evict the
+least-recently-updated entry (LRU by last announce timestamp).
 
 `now()` returns current TDMA slot/ASN per Slot struct (see spec/02a-coordinated-capacity.md §2a.2 for SFN interaction and hash-based assignment).
 
@@ -1100,6 +1108,10 @@ RREQ is flooded. Each node:
 3. If seen before (originator + seq) → drop
 4. Otherwise → record reverse gradient, decrement hop limit, rebroadcast
 
+Implementations MUST rate-limit RREQ processing to at most 10 per minute per
+source IID and 30 per minute globally. RREQs exceeding these limits MUST be
+dropped before processing.
+
 ### 10.4. Route Reply (RREP)
 
 ```
@@ -1167,6 +1179,10 @@ GradientEntry:
     expires: timestamp
     coords: (lat, lon) | None  # from announce app_data (§9.7)
 ```
+
+Implementations MUST bound the gradient table to at most 128 entries. On
+overflow, implementations MUST evict the least-recently-updated entry.
+Constrained devices MAY use smaller bounds.
 
 ### 11.2. Passive Learning
 
@@ -1290,6 +1306,12 @@ ambiguous age ordering after long idle gaps or clock exhaustion:
 - Python `int` is unbounded, so wrap is not a concern.
 - GradientTable expiry uses caller-supplied `now` without internal tracking;
   callers MUST provide nondecreasing values.
+
+### 11.6. Neighbor Table Bounds
+
+Implementations MUST bound the neighbor table to at most 64 entries. On
+overflow, implementations MUST evict the least-recently-heard neighbor (LRU by
+last-heard timestamp).
 
 ---
 
