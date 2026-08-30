@@ -485,11 +485,46 @@ build directory per bead.
 `west build -b native_sim` on this Mac is unreliable: `native_sim` is
 Linux-oriented, and the 4.1.0 vs v3.7.0 split produces Kconfig/module loops
 (example: `zcbor`). Prefer host CMake tests. For a real `native_sim` run that
-matches CI, use the AWS EC2 Zephyr builder below instead of skipping the bead.
+matches CI, use the local Linux builder (`heft`) first, and the AWS EC2
+Zephyr builder below only for the pinned v3.7.0 CI environment or when heft
+lacks the toolchain a bead needs.
 
 Do not open hardware ports without `docs/bench-operations.md`.
 
+## Local Linux Builder: heft
+
+`heft` is the LAN Linux box — **first choice for Linux-only work**
+(`native_sim`, twister, Rust Linux checks). Do not launch EC2 instances for
+work heft can do.
+
+```bash
+ssh heft          # passwordless (ssh key); user mark@heft
+```
+
+| Fact | Value |
+|------|-------|
+| OS | Pop!_OS 24.04, 18 cores, 30G RAM, ~155G free |
+| Has | git, cmake 3.x, ninja, gcc 13, Python 3.12, LiteLLM (`:4000`) |
+| Missing (as of 2026-08-30) | rust/cargo, Zephyr SDK, west, LICHEN checkout |
+
+Bootstrap (one-time, from any agent with SSH access):
+
+```bash
+ssh heft 'git clone git@github.com:MarkAtwood/project-LICHEN.git ~/project-LICHEN'
+ssh heft 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
+# Zephyr (only if a bead needs native_sim; mirror the Attic recipe: SDK 0.16.8
+# + west workspace pinned to v3.7.0), or run the shared builder EC2 instead.
+```
+
+Routing rule for agents:
+
+- Linux-only bead on a Mac worker → claim it, work it via `ssh heft`
+- `needs-linux` label no longer means "skip" — it means "use heft"
+- EC2 builder only for the pinned Zephyr v3.7.0 CI environment, AWS-only
+  toolchains, or when heft is unreachable
+
 ## AWS EC2 Access
+
 
 ### Authentication
 

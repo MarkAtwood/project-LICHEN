@@ -24,7 +24,7 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 ## Skip if
 
 - `blocked:hardware` label — needs physical bench hardware
-- `needs-linux` label — needs AWS builder (skip if on Mac)
+- `needs-linux` label — work it via `ssh heft` (local Linux builder); EC2 only if heft lacks the toolchain
 - Too complex (>50 lines needed) — decompose with `bd create`, close parent, pick next
 - Stuck >5 min — release and move on
 
