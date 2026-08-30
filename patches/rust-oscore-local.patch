@@ -1,0 +1,197 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index 6332429..94f73b1 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -243,6 +243,9 @@ pub struct PendingResponse<'a> {
+     code: u8,
+     options: heapless::Vec<u8, 128>,
+     payload: heapless::Vec<u8, 128>,
++    /// Ordinary responses consume the request PIV one-shot slot; observe
++    /// notifications share the registration request's PIV and must not.
++    consume_request_piv: bool,
+ }
+ 
+ impl PendingResponse<'_> {
+@@ -256,7 +259,9 @@ impl PendingResponse<'_> {
+         if let Some(seq) = self.response_seq {
+             self.context.update_replay_window(seq);
+         }
+-        self.context.mark_received_response(self.request_seq);
++        if self.consume_request_piv {
++            self.context.mark_received_response(self.request_seq);
++        }
+         Ok((self.code, self.options, self.payload))
+     }
+ }
+@@ -768,6 +773,14 @@ impl Context {
+         &self.recipient_id[..self.recipient_id_len as usize]
+     }
+ 
++    /// Get the master secret.
++    ///
++    /// Read-only access for callers that persist or compare derived
++    /// contexts; the material remains zeroized on drop.
++    pub fn master_secret(&self) -> &[u8; KEY_LEN] {
++        &self.master_secret
++    }
++
+     /// Protect (encrypt) a CoAP request.
+     ///
+     /// Returns (ciphertext, OSCORE option value).
+@@ -1209,6 +1222,50 @@ impl Context {
+         oscore_option: &[u8],
+         ciphertext: &[u8],
+         request_piv: &[u8],
++    ) -> Result<PendingResponse<'_>, OscoreError> {
++        self.begin_unprotect_response_inner(
++            oscore_option,
++            ciphertext,
++            request_piv,
++            false,
++        )
++    }
++
++    /// Authenticate and parse an OSCORE-protected observe notification
++    /// (RFC 8613 Section 4.2) without accepting replay state.
++    ///
++    /// Unlike [`Context::begin_unprotect_response`], notifications:
++    /// - MUST carry a fresh explicit Partial IV (the server includes one per
++    ///   RFC 8613 Section 4.2; without it the notification nonce would be
++    ///   derived from the request PIV, which is shared by every notification
++    ///   of the registration and would alias the AEAD nonce)
++    /// - Share the registration request's PIV, so the one response-per-request
++    ///   guard does not apply; freshness is enforced by the response Partial IV
++    ///   replay window instead
++    ///
++    /// The returned capability does not expose plaintext. Call [`PendingResponse::commit`] only
++    /// after any required transport acknowledgement succeeds. Dropping it changes no replay or
++    /// response one-shot state.
++    ///
++    /// # Parameters
++    /// - `oscore_option`: The OSCORE option from the notification
++    /// - `ciphertext`: The encrypted payload
++    /// - `request_piv`: The PIV from the original observe registration request
++    pub fn begin_unprotect_observe_response(
++        &mut self,
++        oscore_option: &[u8],
++        ciphertext: &[u8],
++        request_piv: &[u8],
++    ) -> Result<PendingResponse<'_>, OscoreError> {
++        self.begin_unprotect_response_inner(oscore_option, ciphertext, request_piv, true)
++    }
++
++    fn begin_unprotect_response_inner(
++        &mut self,
++        oscore_option: &[u8],
++        ciphertext: &[u8],
++        request_piv: &[u8],
++        observe_notification: bool,
+     ) -> Result<PendingResponse<'_>, OscoreError> {
+         if ciphertext.len() < TAG_LEN + 1 {
+             return Err(OscoreError::InvalidParam);
+@@ -1228,10 +1285,16 @@ impl Context {
+         }
+ 
+         let request_seq = OscoreSeqNum::from_piv(request_piv).ok_or(OscoreError::InvalidParam)?;
+-        if self.is_received_response_reuse(request_seq) {
++        if !observe_notification && self.is_received_response_reuse(request_seq) {
+             return Err(OscoreError::Replay);
+         }
+ 
++        if observe_notification && opt.piv_len == 0 {
++            // A notification without a fresh Partial IV would reuse the
++            // request-derived nonce; reject rather than decrypt.
++            return Err(OscoreError::InvalidParam);
++        }
++
+         let piv = if opt.piv_len > 0 {
+             &opt.piv[..opt.piv_len as usize]
+         } else {
+@@ -1316,6 +1379,7 @@ impl Context {
+             code,
+             options,
+             payload,
++            consume_request_piv: !observe_notification,
+         })
+     }
+ 
+@@ -2416,6 +2480,79 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn observe_notifications_share_request_piv_and_require_fresh_piv() {
++        let secret = [0x42; KEY_LEN];
++        // Client (decrypts notifications, sender_id [1]) and server (protects
++        // them, sender_id [0]) share the master secret.
++        let mut client = Context::new_ephemeral(&secret, None, &[1], &[0]).unwrap();
++        let mut server = Context::new_ephemeral(&secret, None, &[0], &[1]).unwrap();
++        let request_piv = &[0x14];
++
++        // First notification with a fresh explicit PIV decrypts and commits.
++        let (first_ciphertext, first_option) = server
++            .protect_response_with_piv(0x45, &[], b"first", &[1], request_piv)
++            .unwrap();
++        client
++            .begin_unprotect_observe_response(&first_option, &first_ciphertext, request_piv)
++            .unwrap()
++            .commit()
++            .unwrap();
++
++        // A second notification for the same registration request must not be
++        // rejected by the one-response-per-request guard.
++        let (second_ciphertext, second_option) = server
++            .protect_response_with_piv(0x45, &[], b"second", &[1], request_piv)
++            .unwrap();
++        client
++            .begin_unprotect_observe_response(&second_option, &second_ciphertext, request_piv)
++            .unwrap()
++            .commit()
++            .unwrap();
++
++        // A notification without an explicit PIV is rejected: its nonce would
++        // be derived from the shared request PIV and alias across notifications.
++        let (no_piv_ciphertext, no_piv_option) = server
++            .protect_response(0x45, &[], b"no-piv", &[1], request_piv, false)
++            .unwrap();
++        assert!(no_piv_option.is_empty());
++        assert!(matches!(
++            client.begin_unprotect_observe_response(
++                &no_piv_option,
++                &no_piv_ciphertext,
++                request_piv
++            ),
++            Err(OscoreError::InvalidParam)
++        ));
++
++        // The ordinary response path still consumes its request PIV exactly
++        // once: a second ordinary response for the same request is a replay.
++        let (ordinary_ciphertext, ordinary_option) = server
++            .protect_response_with_piv(0x45, &[], b"ordinary", &[1], request_piv)
++            .unwrap();
++        client
++            .begin_unprotect_response(&ordinary_option, &ordinary_ciphertext, request_piv)
++            .unwrap()
++            .commit()
++            .unwrap();
++        let (late_ciphertext, late_option) = server
++            .protect_response_with_piv(0x45, &[], b"late", &[1], request_piv)
++            .unwrap();
++        assert!(matches!(
++            client.begin_unprotect_response(&late_option, &late_ciphertext, request_piv),
++            Err(OscoreError::Replay)
++        ));
++        // The observe path is unaffected by that consumed slot.
++        let (third_ciphertext, third_option) = server
++            .protect_response_with_piv(0x45, &[], b"third", &[1], request_piv)
++            .unwrap();
++        assert!(client
++            .begin_unprotect_observe_response(&third_option, &third_ciphertext, request_piv)
++            .unwrap()
++            .commit()
++            .is_ok());
++    }
++
+     #[test]
+     fn restored_context_continues_at_reserved_sequence() {
+         let master_secret = hex!("0102030405060708090a0b0c0d0e0f10");
