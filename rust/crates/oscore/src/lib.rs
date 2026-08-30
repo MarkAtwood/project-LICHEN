@@ -1436,6 +1436,10 @@ impl Context {
             self.response_seq = seq;
         } else {
             let diff = self.response_seq.get() - seq.get();
+            debug_assert!(
+                diff < u64::from(WINDOW_SIZE),
+                "response window shift out of range; begin must reject diff >= WINDOW_SIZE"
+            );
             self.response_window |= 1 << diff as u32;
         }
     }
@@ -1466,6 +1470,10 @@ impl Context {
             self.received_response_seq = seq;
         } else {
             let diff = self.received_response_seq.get() - seq.get();
+            debug_assert!(
+                diff < u64::from(WINDOW_SIZE),
+                "received-response window shift out of range; begin must reject diff >= WINDOW_SIZE"
+            );
             self.received_response_window |= 1 << diff as u32;
         }
     }
@@ -1497,6 +1505,10 @@ impl Context {
             self.received_response_piv_seq = seq;
         } else {
             let diff = self.received_response_piv_seq.get() - seq.get();
+            debug_assert!(
+                diff < u64::from(WINDOW_SIZE),
+                "response-PIV window shift out of range; begin must reject diff >= WINDOW_SIZE"
+            );
             self.received_response_piv_window |= 1 << diff as u32;
         }
     }
@@ -3434,6 +3446,77 @@ mod tests {
             .unwrap();
         assert!(matches!(
             alice.begin_unprotect_observe_response(&twelve.1, &twelve.0, request_piv),
+            Err(OscoreError::Replay)
+        ));
+    }
+
+    #[test]
+    fn ordinary_replay_window_accepts_out_of_order_once_and_rejects_old() {
+        // Ordinary explicit-PIV responses are replay-window checked exactly
+        // like notifications; the request-PIV one-shot guard is per request,
+        // so give each response its own request. A reordered-but-fresh
+        // response still decrypts; the response-PIV window (not the one-shot
+        // guard) rejects a seen PIV arriving under a fresh request and a PIV
+        // beyond the window.
+        let master_secret = hex!("0102030405060708090a0b0c0d0e0f10");
+        let mut alice = Context::new_ephemeral(&master_secret, None, &[0], &[1]).unwrap();
+        let mut request_sender = Context::new_ephemeral(&master_secret, None, &[0], &[1]).unwrap();
+
+        let mut make_exchange = |request_sequence: u64,
+                                 response_sequence: u64,
+                                 payload: &'static [u8]| {
+            request_sender.sender_seq = seq(request_sequence);
+            let (_, request_option) = request_sender.protect_request(0x01, &[], b"get").unwrap();
+            let request_piv = &request_option[1..2];
+            let mut responder = Context::new_ephemeral(&master_secret, None, &[1], &[0]).unwrap();
+            responder.sender_seq = seq(response_sequence);
+            let response = responder
+                .protect_response_with_piv(0x45, &[], payload, &[0], request_piv)
+                .unwrap();
+            (request_piv.to_vec(), response)
+        };
+        let ten = make_exchange(1, 10, b"ten");
+        let twelve = make_exchange(2, 12, b"twelve");
+        let eleven = make_exchange(3, 11, b"eleven");
+        let forty_four = make_exchange(4, 44, b"forty-four");
+
+        for (request_piv, response) in [&ten, &twelve, &eleven] {
+            alice
+                .unprotect_response(&response.1, &response.0, request_piv)
+                .unwrap();
+        }
+        let (forty_four_request_piv, forty_four_response) = &forty_four;
+        alice
+            .unprotect_response(
+                &forty_four_response.1,
+                &forty_four_response.0,
+                forty_four_request_piv,
+            )
+            .unwrap();
+        // Response PIV 11 was committed above; a fresh request whose PIV the
+        // one-shot guard has never seen must still be rejected by the
+        // response-PIV window.
+        let replay_under_fresh_request = make_exchange(5, 11, b"replay");
+        let (replay_request_piv, replay_response) = &replay_under_fresh_request;
+        assert!(matches!(
+            alice.begin_unprotect_response(
+                &replay_response.1,
+                &replay_response.0,
+                replay_request_piv
+            ),
+            Err(OscoreError::Replay)
+        ));
+        // PIV 12 is beyond the window after forty-four reset it and made 44
+        // the newest sequence; build that stale PIV against a fresh request so
+        // the one-shot guard cannot mask the window rejection.
+        let beyond_window = make_exchange(6, 12, b"old");
+        let (beyond_request_piv, beyond_response) = &beyond_window;
+        assert!(matches!(
+            alice.begin_unprotect_response(
+                &beyond_response.1,
+                &beyond_response.0,
+                beyond_request_piv
+            ),
             Err(OscoreError::Replay)
         ));
     }

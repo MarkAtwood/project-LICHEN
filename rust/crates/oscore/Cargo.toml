@@ -62,3 +62,7 @@ defmt = ["dep:defmt"]
 log = ["dep:log"]
 # Test utilities for RFC vector conformance testing (not for production use)
 test-vectors = []
+
+# Standalone testability: the workspace patch-points at this path but does
+# not include it as a member; without this table in-place cargo test fails.
+[workspace]
