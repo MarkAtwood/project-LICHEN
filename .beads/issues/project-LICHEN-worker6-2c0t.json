@@ -2,12 +2,15 @@
   "id": "project-LICHEN-worker6-2c0t",
   "title": "Apply u32 wrapping addition before TDMA slot modulus in Python",
   "description": "python timing.sfn.slot_for and ccp.slot_hash currently compute (hash + masked_sfn) % N without masking the sum to u32. The normative spec and Rust use wrapping-u32 addition before modulus; results diverge when the addition carries and N does not divide 2^32. Existing vectors mostly use power-of-two slot counts and miss this. Mask the sum, add independent non-power-of-two carry vectors, and align both Python entry points.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:33:55.009663Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T23:37:26.894104Z",
-  "started_at": "2026-08-24T15:33:58.560477Z"
+  "updated_at": "2026-08-30T03:31:07.321043Z",
+  "started_at": "2026-08-24T15:33:58.560477Z",
+  "closed_at": "2026-08-30T03:31:07.321043Z",
+  "close_reason": "Verified fixed at HEAD: (1) slot_for masks the sum to u32 BEFORE modulus (timing/sfn.py:44: (hash_32(eui64) + (sfn \u0026 0xFFFFFFFF)) \u0026 0xFFFFFFFF), (2) both Python entry points aligned - ccp.slot_hash delegates to slot_for (ccp.py:322), (3) independent non-power-of-two carry vectors exist: test/vectors/ccp_slot_hash_carry.json (8 vectors, every case hash+sfn exceeds 2^32 with non-power-of-2 num_slots, independent FNV-1a32 oracle, unwrapped_wrong_slot cross-field), consumed via _cases(CARRY_HASH) parametrize driving slot_for against expected_slot (test_ccp_sync_vector_consumers.py:510-514). 64 passed, 1 skipped (justified)."
 }
