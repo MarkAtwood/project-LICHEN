@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-uiun",
   "title": "slot_claim_settings.c: NV settings module under root lichen/slot_claim",
   "description": "Child 1 of nwjl.4 decomposition (Zephyr C, parent design D4; spec GCP-6.5 step 8 + persistence table spec/08-gateway-coordination.md:193,210-220 as amended by receiver-side-MUST child). New module lichen/subsys/lichen/coap/slot_claim_settings.c: mirror lichen/subsys/lichen/link/replay_settings.c:1-76 exactly - SETTINGS_STATIC_HANDLER_DEFINE root 'lichen/slot_claim', dual-blob a/b wear-leveling, K_MUTEX, load/save ops. API: slot_claim_seq_load(iid,\u0026seq)/slot_claim_seq_store(iid,seq); RAM cache table of CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS {iid[8],seq,valid} guarded by mutex; lazy settings_load_subtree('lichen/slot_claim') at coord init. One settings entry per gateway IID (name=16 hex chars of IID, value=uint32 LE high-water). Kconfig CONFIG_LICHEN_SLOT_CLAIM_REPLAY default y when slot coord on. Acceptance: compiles standalone (host ztest if feasible, else qemu_x86 west build like lichen/tests/coap_keys), round-trip load/store unit test, wear-leveling dual-blob behavior test.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T03:02:04.7562Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T03:38:41.982405Z",
+  "updated_at": "2026-08-30T04:03:05.423246Z",
   "started_at": "2026-08-30T03:33:01.886217Z",
+  "closed_at": "2026-08-30T04:03:05.423246Z",
+  "close_reason": "Implemented slot_claim_settings.c (root lichen/slot_claim, one uint32-LE entry per gateway IID, RAM cache sized MAX_GATEWAYS, lazy subtree load, monotonic commits, fail-closed when cache full — never regresses a persisted floor). Strong lookup/commit hooks override weak defaults via Kconfig LICHEN_SLOT_CLAIM_REPLAY (default y). Host test (ASan/UBSan, faked settings backend) covers round-trip, reboot rebuild, overflow fail-closed, corrupt names/lengths, save/load/init failure propagation: 10/10 pass. cppcheck clean; coap_slot_claim test still green. 3x codereview done; cross-component findings filed as beads 5rr9 (gate re-check under coord lock), 0k8i (NV growth cap), k9q4 (register_gateway ignored), 1paw (seq wrap); spec 7a max-duration already tracked as 70p7.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-uiun",
