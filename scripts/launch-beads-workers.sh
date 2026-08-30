@@ -63,6 +63,7 @@ for i in $(seq 1 $NUM_WORKERS); do
     # don't need main's beads content anyway.
     mkdir -p "$WORKTREE/scripts" "$WORKTREE/.opencode/plugins"
     cp -f "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
+    cp -f "$REPO_ROOT/scripts/beads-worker-round.txt" "$WORKTREE/scripts/" 2>/dev/null || true
     cp -f "$REPO_ROOT"/.opencode/plugins/* "$WORKTREE/.opencode/plugins/"
     cp -f "$REPO_ROOT/.opencode/package.json" "$WORKTREE/.opencode/package.json"
     cp -f "$REPO_ROOT/tui.json" "$WORKTREE/tui.json"

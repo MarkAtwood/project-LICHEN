@@ -4,9 +4,20 @@ import type { TuiPlugin } from "@opencode-ai/plugin/tui"
 
 const id = "lichen-beads-loop"
 
-const ROUND_PROMPT = `Continue the beads worker loop (instructions: scripts/beads-worker-full.txt).
+// Round prompt lives in a file the launcher copies fresh into each worktree:
+// editing scripts/beads-worker-round.txt changes the next round with no restart.
+const ROUND_PROMPT_FILE = "scripts/beads-worker-round.txt"
+const ROUND_PROMPT_FALLBACK = `Continue the beads worker loop (instructions: scripts/beads-worker-full.txt).
 Claim the next ready bead, complete it fully (tests, 3x codereview with findings filed as new beads, close, commit), then stop and report.
 Exactly one bead this round.`
+
+async function roundPrompt(cwd: string): Promise<string> {
+  try {
+    const text = await Bun.file(`${cwd}/${ROUND_PROMPT}`).text()
+    if (text.trim()) return text
+  } catch {}
+  return ROUND_PROMPT
+}
 
 const NEW_SESSION_EVERY = 6
 const MIN_ROUND_INTERVAL_MS = 30_000
@@ -53,7 +64,7 @@ const tui: TuiPlugin = async (api) => {
       await api.client.tui.executeCommand({ command: "session.new" })
       await sleep(1000)
     }
-    await api.client.tui.appendPrompt({ text: ROUND_PROMPT })
+    await api.client.tui.appendPrompt({ text: await roundPrompt(api.state.path.directory || process.cwd()) })
     await api.client.tui.submitPrompt()
     lastRoundAt = Date.now()
     report(`round ${rounds} submitted (worker ${worker})`)

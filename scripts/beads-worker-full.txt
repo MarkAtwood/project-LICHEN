@@ -8,7 +8,13 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 1. Get next: `bd ready | head -1` → `bd update <id> --claim`
 2. Read: `bd show <id>`
 3. Fix, run tests
-4. Codereview 3x on files you touched (correctness / security / edge)
+4. Codereview 3x on files you touched (correctness / security / edge) —
+   DO NOT review with your own model. Delegate each pass to the reviewer:
+   `opencode run --agent plan -m openrouter/moonshotai/kimi-k3 "Code review pass <correctness|security|edge-cases> on <touched files>. Read the changes, report only real defects with file:line. Answer with PASS or a numbered findings list."`
+   - Reviewer is read-only (`plan` agent); it never edits files.
+   - If the bead touches crypto/security/concurrency (`lichen-oscore`, `schnorr`,
+     `rpl`, keys, handshake, replay) use `-m anthropic/claude-opus-4-5` instead.
+   - If `opencode run` fails (no API access, timeout), do the pass yourself and note it in the close reason.
    - Findings → `bd create` (new beads), not recursive fixes
 5. Close: `bd close <id>`
 6. Commit: `git add <changed files> && git commit -m "fix(<area>): <what>"`

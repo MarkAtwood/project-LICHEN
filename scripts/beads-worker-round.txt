@@ -1,0 +1,3 @@
+Continue the beads worker loop (instructions: scripts/beads-worker-full.txt).
+Claim the next ready bead, complete it fully (tests, 3x codereview delegating each pass to the reviewer model per step 4, findings filed as new beads, close, commit), then stop and report.
+Exactly one bead this round.
