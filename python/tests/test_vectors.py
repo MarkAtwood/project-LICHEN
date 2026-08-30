@@ -120,12 +120,12 @@ from generate import (  # noqa: E402
     EDHOC_REGRESSION_DESCRIPTION,
     _oracle_hash_32,
     announce_coords_vectors,
-    ccp_hop_vectors,
     ccp9_vectors,
     ccp12_synchronized_hop_vectors,
     ccp13_vectors,
     ccp15_vectors,
     ccp16_vectors,
+    ccp_hop_vectors,
     edhoc_vectors,
     frame_vectors,
     l2_payload_vectors,
@@ -180,12 +180,7 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
     from generate_tofu_c_header import render
 
     header = (
-        VECTORS_DIR.parents[1]
-        / "lichen"
-        / "tests"
-        / "coap_keys"
-        / "src"
-        / "tofu_edge_vectors.h"
+        VECTORS_DIR.parents[1] / "lichen" / "tests" / "coap_keys" / "src" / "tofu_edge_vectors.h"
     )
     assert header.read_text() == render()
 
@@ -1688,10 +1683,7 @@ def test_meshcore_app_compat_vectors_match_generator() -> None:
 def test_edhoc_vectors_match_generator() -> None:
     doc = _load("edhoc.json")
     assert doc["description"] == EDHOC_REGRESSION_DESCRIPTION
-    assert (
-        "NOT an independent conformance or interoperability oracle"
-        in doc["description"]
-    )
+    assert "NOT an independent conformance or interoperability oracle" in doc["description"]
     assert doc["vectors"] == edhoc_vectors()
 
 
@@ -1758,11 +1750,7 @@ def test_ccp16_hop_vector(name: str, vector: dict) -> None:
         assert vector["expected_channel"] == vector["rx_channel"], f"rx_channel pref: {name}"
     elif "hash_32" in vector:
         # Standard hash selection excludes reserved CH0 from the modulus.
-        computed_channel = (
-            0
-            if num_channels <= 1
-            else 1 + (vector["hash_32"] % (num_channels - 1))
-        )
+        computed_channel = 0 if num_channels <= 1 else 1 + (vector["hash_32"] % (num_channels - 1))
         assert computed_channel == vector["expected_channel"], f"channel select: {name}"
 
 
@@ -3240,10 +3228,7 @@ def test_loadng_discovery_vector(name: str, vector: dict) -> None:
             # If the vector didn't add originator to cache, verify it's not there
             # (unless it was pre-populated)
             originator = IPv6Address(inp["rreq"]["originator"])
-            pre_populated = {
-                IPv6Address(c["destination"])
-                for c in state.get("cache_entries", [])
-            }
+            pre_populated = {IPv6Address(c["destination"]) for c in state.get("cache_entries", [])}
             if originator not in pre_populated:
                 entry = cache.lookup(originator, now_ms)
                 assert entry is None, f"{name}: unexpected cache entry for originator"
@@ -3514,11 +3499,7 @@ def test_epoch_rollover_vector_file_integrity() -> None:
 
 @pytest.mark.parametrize(
     "name,vector",
-    [
-        (v["name"], v)
-        for v in _load("epoch_rollover.json")["vectors"]
-        if "sender_sequence" in v
-    ],
+    [(v["name"], v) for v in _load("epoch_rollover.json")["vectors"] if "sender_sequence" in v],
 )
 def test_epoch_rollover_sender_sequence_oracle(name: str, vector: dict) -> None:
     """Drive the real ReplayWindow through sender_sequence vectors (spec 4.4)."""
@@ -3536,8 +3517,7 @@ def test_epoch_rollover_sender_sequence_oracle(name: str, vector: dict) -> None:
             warnings.filterwarnings("ignore", message=".*approaching 24-bit limit.*")
             result = window.check_and_update(step["epoch"], step["seqnum"])
         assert result == step["accept"], (
-            f"{name}: ({step['epoch']}, {step['seqnum']}) expected "
-            f"{step['accept']}, got {result}"
+            f"{name}: ({step['epoch']}, {step['seqnum']}) expected {step['accept']}, got {result}"
         )
 
     if vector.get("key_rotation_required_after"):
@@ -3576,17 +3556,12 @@ def test_epoch_rollover_receiver_state_oracle() -> None:
                 # verify the recorded bits agree with the frame's offset.
                 offset = state["last_seqnum"] - received["seqnum"]
                 assert 0 < offset < 32 and (state["window"] >> offset) & 1, (
-                    f"{name}: recorded window does not mark seqnum "
-                    f"{received['seqnum']} as seen"
+                    f"{name}: recorded window does not mark seqnum {received['seqnum']} as seen"
                 )
                 assert window.check_and_update(received["epoch"], received["seqnum"])
-                assert window.check_and_update(
-                    state["last_epoch"], state["last_seqnum"]
-                )
+                assert window.check_and_update(state["last_epoch"], state["last_seqnum"])
             else:
-                assert window.check_and_update(
-                    state["last_epoch"], state["last_seqnum"]
-                )
+                assert window.check_and_update(state["last_epoch"], state["last_seqnum"])
             result = window.check_and_update(received["epoch"], received["seqnum"])
         assert result == expected["accept"], (
             f"{name}: ({received['epoch']}, {received['seqnum']}) reason="

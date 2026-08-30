@@ -105,11 +105,7 @@ def _validate_emission_endpoints(source: IPv6Address, destination: IPv6Address) 
         or source.ipv4_mapped is not None
     ):
         raise SchcError("invalid IPv6 source address")
-    if (
-        destination.is_unspecified
-        or destination.is_loopback
-        or destination.ipv4_mapped is not None
-    ):
+    if destination.is_unspecified or destination.is_loopback or destination.ipv4_mapped is not None:
         raise SchcError("invalid IPv6 destination address")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F

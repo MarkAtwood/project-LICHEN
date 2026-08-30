@@ -1132,9 +1132,10 @@ fn test_schc_adaptation_vectors() {
 
                 if expect_valid {
                     let mut encoded = vec![0u8; packet.len() + 1];
-                    match encode_rule255(&packet, &mut encoded, usize::MAX) {
+                    match lichen_schc::encode_rule255(&packet, &mut encoded, usize::MAX) {
                         Ok(length) => {
-                            if encoded[..length] != [[0xffu8].as_slice(), packet.as_slice()].concat()
+                            if encoded[..length]
+                                != [[0xffu8].as_slice(), packet.as_slice()].concat()
                             {
                                 failures.push(format!(
                                     "{}: Rule 255 encoding is not a byte-preserving prefix",
@@ -1148,11 +1149,14 @@ fn test_schc_adaptation_vectors() {
                         )),
                     }
                     let mut decoded = vec![0u8; packet.len()];
-                    match decode_rule255(&[[0xffu8].as_slice(), packet.as_slice()].concat(), &mut decoded, usize::MAX) {
+                    match lichen_schc::decode_rule255(
+                        &[[0xffu8].as_slice(), packet.as_slice()].concat(),
+                        &mut decoded,
+                        usize::MAX,
+                    ) {
                         Ok(length) if decoded[..length] == packet => {}
-                        Ok(_) => {
-                            failures.push(format!("{}: Rule 255 decode was not byte-preserving", name))
-                        }
+                        Ok(_) => failures
+                            .push(format!("{}: Rule 255 decode was not byte-preserving", name)),
                         Err(error) => failures.push(format!(
                             "{}: valid Rule 255 packet failed decode: {:?}",
                             name, error
@@ -1174,7 +1178,7 @@ fn test_schc_adaptation_vectors() {
                         }
                     };
                     let mut encoded = [0u8; 1500];
-                    match encode_rule255(&packet, &mut encoded, usize::MAX) {
+                    match lichen_schc::encode_rule255(&packet, &mut encoded, usize::MAX) {
                         Ok(_) => failures.push(format!(
                             "{}: emission-policy-invalid packet was accepted by Rule 255",
                             name
@@ -1197,7 +1201,7 @@ fn test_schc_adaptation_vectors() {
                     // copy already on the link MUST decode intact.
                     let wire = [[0xffu8].as_slice(), packet.as_slice()].concat();
                     let mut decoded = vec![0u8; packet.len()];
-                    match decode_rule255(&wire, &mut decoded, usize::MAX) {
+                    match lichen_schc::decode_rule255(&wire, &mut decoded, usize::MAX) {
                         Ok(length) if decoded[..length] == packet => {}
                         Ok(_) => {
                             failures.push(format!("{}: Rule 255 decode was not byte-preserving", name))

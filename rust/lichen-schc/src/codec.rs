@@ -2790,8 +2790,7 @@ mod tests {
         udp[2..4].copy_from_slice(&destination_port.to_be_bytes());
         udp[4..6].copy_from_slice(&(udp_len as u16).to_be_bytes());
         udp[8..].copy_from_slice(&payload);
-        let checksum =
-            lichen_core::checksum::upper_layer_checksum(&src, &dst, 17, &udp);
+        let checksum = lichen_core::checksum::upper_layer_checksum(&src, &dst, 17, &udp);
         udp[6..8].copy_from_slice(&checksum.to_be_bytes());
 
         let mut packet = vec![0u8; 40 + udp_len];
@@ -2811,15 +2810,27 @@ mod tests {
         // originate loopback, IPv4-mapped, or bad-scope-multicast endpoints.
         let cases: [(&str, &str, &str); 6] = [
             ("::1", "2001:db8::1", "invalid IPv6 source address"),
-            ("::ffff:192.0.2.1", "2001:db8::1", "invalid IPv6 source address"),
+            (
+                "::ffff:192.0.2.1",
+                "2001:db8::1",
+                "invalid IPv6 source address",
+            ),
             ("2001:db8::1", "::1", "invalid IPv6 destination address"),
             (
                 "2001:db8::1",
                 "::ffff:192.0.2.1",
                 "invalid IPv6 destination address",
             ),
-            ("2001:db8::1", "ff01::1", "invalid IPv6 destination multicast scope"),
-            ("2001:db8::1", "ff0f::1", "invalid IPv6 destination multicast scope"),
+            (
+                "2001:db8::1",
+                "ff01::1",
+                "invalid IPv6 destination multicast scope",
+            ),
+            (
+                "2001:db8::1",
+                "ff0f::1",
+                "invalid IPv6 destination multicast scope",
+            ),
         ];
         for (src, dst, message) in cases {
             let packet = udp_packet_with_endpoints(
