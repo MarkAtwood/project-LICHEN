@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-uiun",
+  "title": "slot_claim_settings.c: NV settings module under root lichen/slot_claim",
+  "description": "Child 1 of nwjl.4 decomposition (Zephyr C, parent design D4; spec GCP-6.5 step 8 + persistence table spec/08-gateway-coordination.md:193,210-220 as amended by receiver-side-MUST child). New module lichen/subsys/lichen/coap/slot_claim_settings.c: mirror lichen/subsys/lichen/link/replay_settings.c:1-76 exactly - SETTINGS_STATIC_HANDLER_DEFINE root 'lichen/slot_claim', dual-blob a/b wear-leveling, K_MUTEX, load/save ops. API: slot_claim_seq_load(iid,\u0026seq)/slot_claim_seq_store(iid,seq); RAM cache table of CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS {iid[8],seq,valid} guarded by mutex; lazy settings_load_subtree('lichen/slot_claim') at coord init. One settings entry per gateway IID (name=16 hex chars of IID, value=uint32 LE high-water). Kconfig CONFIG_LICHEN_SLOT_CLAIM_REPLAY default y when slot coord on. Acceptance: compiles standalone (host ztest if feasible, else qemu_x86 west build like lichen/tests/coap_keys), round-trip load/store unit test, wear-leveling dual-blob behavior test.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:02:04.7562Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:02:04.7562Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-uiun",
+      "depends_on_id": "project-LICHEN-worker6-nwjl.4",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T03:02:05.04357Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
