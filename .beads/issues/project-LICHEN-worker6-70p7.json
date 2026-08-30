@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-70p7",
+  "title": "GCP-6: Add max slot claim duration (e.g. 30-60 min)",
+  "description": "Current spec only checks expiry \u003e now, no upper bound. A griefer can claim slots with expiry = now + 10 years and squat forever.\n\nAdd validation step: expiry \u003c= now + MAX_CLAIM_DURATION_SEC (suggest 30-60 min default, Kconfig tunable).\n\nTouches:\n- spec/08-gateway-coordination.md (GCP-6.5 validation steps)\n- lichen/subsys/lichen/coap/coap_slot_coord.c (add check after expiry \u003e now)\n- Kconfig for CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SEC\n\nShort leases force regular renewal, which:\n1. Costs squatters airtime/battery to maintain\n2. Lets legitimate nodes reclaim abandoned slots faster\n3. Matches mesh topology churn reality",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:32:54.697893Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:32:54.697893Z",
+  "labels": [
+    "spec",
+    "security"
+  ]
+}
