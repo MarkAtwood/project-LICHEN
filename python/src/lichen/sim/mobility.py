@@ -33,6 +33,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lichen.sim.node import SimNode
 
+# Upper bound on state transitions (waypoint arrivals, intersection visits)
+# within a single step() call. Guards against giant-dt steps combined with
+# sub-microsecond leg times turning step() into a near-infinite loop.
+_MAX_STEP_ITERATIONS = 100_000
+
 
 class MobilityPattern(ABC):
     """Base class for node mobility patterns.
@@ -89,7 +94,7 @@ class RandomWaypoint(MobilityPattern):
     _rng: random.Random = field(init=False, repr=False)
     _state: WaypointState = field(init=False, default=WaypointState.PAUSED)
     _target: tuple[float, float] | None = field(init=False, default=None)
-    _pause_remaining_us: int = field(init=False, default=0)
+    _pause_remaining_us: float = field(init=False, default=0)
 
     def __post_init__(self) -> None:
         self._rng = random.Random(self.seed)
@@ -111,15 +116,19 @@ class RandomWaypoint(MobilityPattern):
             node: The SimNode to move.
             dt_us: Time step in microseconds.
         """
-        remaining_us = dt_us
+        remaining_us: float = dt_us
 
+        iterations = 0
         while remaining_us > 0:
+            iterations += 1
+            if iterations > _MAX_STEP_ITERATIONS:
+                break
             if self._state == WaypointState.PAUSED:
                 remaining_us = self._handle_paused(node, remaining_us)
             else:
                 remaining_us = self._handle_moving(node, remaining_us)
 
-    def _handle_paused(self, node: SimNode, remaining_us: int) -> int:
+    def _handle_paused(self, node: SimNode, remaining_us: float) -> float:
         """Handle pause state, returns remaining time after state change."""
         if self._pause_remaining_us > 0:
             if remaining_us <= self._pause_remaining_us:
@@ -133,7 +142,7 @@ class RandomWaypoint(MobilityPattern):
         self._state = WaypointState.MOVING
         return remaining_us
 
-    def _handle_moving(self, node: SimNode, remaining_us: int) -> int:
+    def _handle_moving(self, node: SimNode, remaining_us: float) -> float:
         """Handle moving state, returns remaining time after state change."""
         if self._target is None:
             # No target - go to pause state
@@ -162,8 +171,14 @@ class RandomWaypoint(MobilityPattern):
         if max_distance >= distance:
             # We arrive this step
             node.set_position(tx, ty, self.z)
-            time_used_s = distance / self.speed_m_s
-            time_used_us = int(time_used_s * 1_000_000)
+            time_used_us = distance / self.speed_m_s * 1_000_000
+            if time_used_us >= 1.0:
+                time_used_us = float(int(time_used_us))
+            # else: sub-microsecond leg. int() would truncate to 0, consuming
+            # no time and stalling the loop; charging the true float value
+            # keeps time-to-motion accounting exact. Termination is
+            # guaranteed by the iteration cap, not strict decrease (a tiny
+            # charge can be absorbed by float ULP).
             self._state = WaypointState.PAUSED
             self._pause_remaining_us = self.pause_time_us
             self._target = None
@@ -245,7 +260,7 @@ class GroupMobility(MobilityPattern):
     _rng: random.Random = field(init=False, repr=False)
     _state: WaypointState = field(init=False, default=WaypointState.PAUSED)
     _target: tuple[float, float] | None = field(init=False, default=None)
-    _pause_remaining_us: int = field(init=False, default=0)
+    _pause_remaining_us: float = field(init=False, default=0)
     _center: tuple[float, float] | None = field(init=False, default=None)
     _members: list[SimNode] = field(init=False, repr=False, default_factory=list)
     _offsets: list[tuple[float, float]] = field(init=False, repr=False, default_factory=list)
@@ -344,8 +359,12 @@ class GroupMobility(MobilityPattern):
                 min(max(y, min_y + inset), max_y - inset),
             )
 
-        remaining_us = dt_us
+        remaining_us: float = dt_us
+        iterations = 0
         while remaining_us > 0:
+            iterations += 1
+            if iterations > _MAX_STEP_ITERATIONS:
+                break
             if self._state == WaypointState.PAUSED:
                 remaining_us = self._handle_paused(remaining_us)
             else:
@@ -400,7 +419,7 @@ class GroupMobility(MobilityPattern):
         ratio = max_step / distance
         return (current[0] + dx * ratio, current[1] + dy * ratio)
 
-    def _handle_paused(self, remaining_us: int) -> int:
+    def _handle_paused(self, remaining_us: float) -> float:
         """Handle pause state, returns remaining time after state change."""
         if self._pause_remaining_us > 0:
             if remaining_us <= self._pause_remaining_us:
@@ -413,7 +432,7 @@ class GroupMobility(MobilityPattern):
         self._state = WaypointState.MOVING
         return remaining_us
 
-    def _handle_moving(self, remaining_us: int) -> int:
+    def _handle_moving(self, remaining_us: float) -> float:
         """Handle moving state, returns remaining time after state change."""
         if self._target is None or self._center is None:
             self._state = WaypointState.PAUSED
@@ -439,7 +458,14 @@ class GroupMobility(MobilityPattern):
 
         if max_distance >= distance:
             self._center = (tx, ty)
-            time_used_us = int(distance / self.speed_m_s * 1_000_000)
+            time_used_us = distance / self.speed_m_s * 1_000_000
+            if time_used_us >= 1.0:
+                time_used_us = float(int(time_used_us))
+            # else: sub-microsecond leg. int() would truncate to 0, consuming
+            # no time and stalling the PAUSED<->MOVING cycle; charging the
+            # true float value keeps time-to-motion accounting exact.
+            # Termination is guaranteed by the iteration cap, not strict
+            # decrease (a tiny charge can be absorbed by float ULP).
             self._state = WaypointState.PAUSED
             self._pause_remaining_us = self.pause_time_us
             self._target = None
@@ -519,7 +545,7 @@ class RPGM(MobilityPattern):
     _rng: random.Random = field(init=False, repr=False)
     _state: WaypointState = field(init=False, default=WaypointState.PAUSED)
     _target: tuple[float, float] | None = field(init=False, default=None)
-    _pause_remaining_us: int = field(init=False, default=0)
+    _pause_remaining_us: float = field(init=False, default=0)
     _center: tuple[float, float] | None = field(init=False, default=None)
     _members: list[SimNode] = field(init=False, repr=False, default_factory=list)
     _offsets: list[tuple[float, float]] = field(init=False, repr=False, default_factory=list)
@@ -589,8 +615,12 @@ class RPGM(MobilityPattern):
                 min(max(y, min_y + self.max_offset_m), max_y - self.max_offset_m),
             )
 
-        remaining_us = dt_us
+        remaining_us: float = dt_us
+        iterations = 0
         while remaining_us > 0:
+            iterations += 1
+            if iterations > _MAX_STEP_ITERATIONS:
+                break
             if self._state == WaypointState.PAUSED:
                 remaining_us = self._handle_paused(remaining_us)
             else:
@@ -604,7 +634,7 @@ class RPGM(MobilityPattern):
         angle = 2.0 * math.pi * self._rng.random()
         return (magnitude * math.cos(angle), magnitude * math.sin(angle))
 
-    def _handle_paused(self, remaining_us: int) -> int:
+    def _handle_paused(self, remaining_us: float) -> float:
         """Handle pause state, returns remaining time after state change."""
         if self._pause_remaining_us > 0:
             if remaining_us <= self._pause_remaining_us:
@@ -617,7 +647,7 @@ class RPGM(MobilityPattern):
         self._state = WaypointState.MOVING
         return remaining_us
 
-    def _handle_moving(self, remaining_us: int) -> int:
+    def _handle_moving(self, remaining_us: float) -> float:
         """Handle moving state, returns remaining time after state change."""
         if self._target is None or self._center is None:
             self._state = WaypointState.PAUSED
@@ -643,7 +673,14 @@ class RPGM(MobilityPattern):
 
         if max_distance >= distance:
             self._center = (tx, ty)
-            time_used_us = int(distance / self.speed_m_s * 1_000_000)
+            time_used_us = distance / self.speed_m_s * 1_000_000
+            if time_used_us >= 1.0:
+                time_used_us = float(int(time_used_us))
+            # else: sub-microsecond leg. int() would truncate to 0, consuming
+            # no time and stalling the PAUSED<->MOVING cycle; charging the
+            # true float value keeps time-to-motion accounting exact.
+            # Termination is guaranteed by the iteration cap, not strict
+            # decrease (a tiny charge can be absorbed by float ULP).
             self._state = WaypointState.PAUSED
             self._pause_remaining_us = self.pause_time_us
             self._target = None
@@ -750,7 +787,7 @@ class ManhattanGrid(MobilityPattern):
     _current: tuple[int, int] | None = field(init=False, default=None)
     _target_cell: tuple[int, int] | None = field(init=False, default=None)
     _direction: GridDirection | None = field(init=False, default=None)
-    _pause_remaining_us: int = field(init=False, default=0)
+    _pause_remaining_us: float = field(init=False, default=0)
 
     def __post_init__(self) -> None:
         if self.spacing_m <= 0:
@@ -841,8 +878,12 @@ class ManhattanGrid(MobilityPattern):
             self._current = (i, j)
             node.set_position(self._axis_value(i, 0), self._axis_value(j, 1), self.z)
 
-        remaining_us = dt_us
+        remaining_us: float = dt_us
+        iterations = 0
         while remaining_us > 0:
+            iterations += 1
+            if iterations > _MAX_STEP_ITERATIONS:
+                break
             if self._state == WaypointState.PAUSED:
                 remaining_us = self._handle_paused(remaining_us)
                 continue
@@ -863,7 +904,14 @@ class ManhattanGrid(MobilityPattern):
 
             if max_distance >= distance:
                 node.set_position(tx, ty, self.z)
-                time_used_us = int(distance / self.speed_m_s * 1_000_000)
+                time_used_us = distance / self.speed_m_s * 1_000_000
+                if time_used_us >= 1.0:
+                    time_used_us = float(int(time_used_us))
+                # else: sub-microsecond leg. int() would truncate to 0,
+                # consuming no time and stalling the loop; charging the true
+                # float value keeps time-to-motion accounting exact.
+                # Termination is guaranteed by the iteration cap, not strict
+                # decrease (a tiny charge can be absorbed by float ULP).
                 self._current = (ti, tj)
                 self._target_cell = None
                 remaining_us -= time_used_us
@@ -873,7 +921,7 @@ class ManhattanGrid(MobilityPattern):
                 node.set_position(x + dx * ratio, y + dy * ratio, self.z)
                 return
 
-    def _handle_paused(self, remaining_us: int) -> int:
+    def _handle_paused(self, remaining_us: float) -> float:
         """Handle pause state, returns remaining time after state change."""
         if self._pause_remaining_us > 0:
             if remaining_us <= self._pause_remaining_us:

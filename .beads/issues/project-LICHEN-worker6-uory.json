@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-uory",
   "title": "Mobility patterns: step() infinite-loops on sub-microsecond leg times",
   "description": "int(distance/speed*1e6) truncates to 0 when leg time \u003c 1us (legal configs pass validation), so remaining_us never decreases. ManhattanGrid.step (mobility.py:782) hangs DETERMINISTICALLY when spacing_m/speed_m_s \u003c 1e-6. GroupMobility (:442) and RPGM (:646) hang with pause_time_us=0 (PAUSED\u003c-\u003eMOVING ping-pong consumes 0us). RandomWaypoint._handle_moving (:166) has the same latent truncation (pre-existing, probabilistic-only). Fix: max(1, leg_us) floor or rational time accounting; also cap per-step work or validate speed/spacing ratio. Tests: giant-dt hang regression for all four patterns.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T15:58:03.323823Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T02:24:21.894801Z",
+  "updated_at": "2026-08-30T02:50:15.108897Z",
   "started_at": "2026-08-28T16:02:07.092678Z",
-  "lease_expires_at": "2026-08-30T02:29:21.894801Z",
-  "heartbeat_at": "2026-08-30T02:24:21.894801Z"
+  "closed_at": "2026-08-30T02:50:15.108897Z",
+  "close_reason": "Fixed: sub-us legs charge true float time (int() truncation was the stall), \u003e=1us legs keep exact int semantics (bit-identical trajectories verified), 100k-iteration cap per step() bounds giant-dt. 4 new giant-dt regression tests (one per pattern, pytest-timeout), full sim suite 1644 passed, mypy clean on file, ruff clean. Review findings filed as cszg (jitter loop hang), ohw4 (NaN/inf validation), 3x2e (P3 batch)."
 }

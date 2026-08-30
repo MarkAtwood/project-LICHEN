@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-worker6-cszg",
+  "title": "GroupMobility._update_jitter redraw loop hangs on giant dt with tiny jitter_update_us",
+  "description": "Found in 3x codereview of uory fix (mobility.py ~:398). _update_jitter's 'while self._jitter_elapsed_us \u003e= self.jitter_update_us' loop is NOT covered by the step() iteration cap: with jitter_m\u003e0, jitter_update_us=1, dt_us=10**18 it performs ~dt/jitter_update_us redraw iterations (RNG+trig per member per pass) - the exact hang class uory fixed for the movement loops. Fix: cap redraws per call (or compute redraw count arithmetically: elapsed = (elapsed + dt) % jitter_update_us, redraws = total // jitter_update_us, drawing only the last few targets that matter). Test: jitter_m\u003e0 + jitter_update_us=1 + giant dt terminates (giant-dt test file test_mobility_giant_dt.py currently only covers jitter_m=0).",
+  "acceptance_criteria": "giant-dt regression test with jitter_m\u003e0/jitter_update_us=1 passes; no other behavior change for normal configs",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T02:49:48.032679Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T02:49:48.032679Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cszg",
+      "depends_on_id": "project-LICHEN-worker6-uory",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T02:49:49.281304Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
