@@ -159,6 +159,24 @@ def validate_full_ipv6(raw: bytes) -> bytes:
     return raw
 
 
+def _validate_rule255_emission_endpoints(packet: IPv6Packet) -> None:
+    """TX-side Rule 255 endpoint policy (spec/03-adaptation.md).
+
+    Encode must not originate loopback, IPv4-mapped, or bad-scope multicast
+    endpoints. Receive-side validation stays emission-free: looped-back and
+    multicast datagrams are legitimate RX.
+    """
+    source, destination = packet.header.src_addr, packet.header.dst_addr
+    if source.is_loopback or source.ipv4_mapped is not None:
+        raise SchcError(f"invalid IPv6 source address {source}")
+    if destination.is_loopback or destination.ipv4_mapped is not None:
+        raise SchcError(f"invalid IPv6 destination address {destination}")
+    if destination.is_multicast:
+        scope = destination.packed[1] & 0x0F
+        if not 2 <= scope <= 14:
+            raise SchcError(f"invalid IPv6 destination multicast scope {scope}")
+
+
 def _validate_single_frame_limit(limit: int | None) -> None:
     if limit is not None and (type(limit) is not int or limit < 1):
         raise ValueError("single_frame_limit must be a positive integer")
@@ -168,6 +186,7 @@ def encode_rule255(raw: bytes, *, single_frame_limit: int | None = None) -> byte
     """Encode a validated full IPv6 packet with sender-selected Rule 255."""
     _validate_single_frame_limit(single_frame_limit)
     validated = validate_full_ipv6(raw)
+    _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(validated, strict=True))
     if len(validated) > MAX_PACKET_SIZE - 1:
         raise SchcError(f"Rule 255 raw IPv6 packet exceeds {MAX_PACKET_SIZE - 1} bytes")
     encoded = bytes((RULE_ID_UNCOMPRESSED,)) + validated
@@ -839,6 +858,7 @@ def compress_packet(raw: bytes, profiles: tuple[PacketProfile, ...] = DEFAULT_PR
     # fields. Valid field non-matches continue to Rule 255; malformed packets do
     # not get repaired by compression.
     validate_full_ipv6(raw)
+    _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(raw, strict=True))
     mqtt_sn = MQTT_SN_PROFILE.compress_if_matching(raw)
     if mqtt_sn is not None:
         return mqtt_sn
