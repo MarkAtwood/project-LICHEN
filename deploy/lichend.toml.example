@@ -1,5 +1,7 @@
 # lichend — LICHEN border router configuration
 # Copy to /etc/lichen/gateway.toml and adjust for your deployment.
+# If you enable [gateway_coordination] secrets, the file must be readable
+# only by the lichend user (chmod 0600).
 
 [mesh]
 # Serial device connected to the LoRa puck (CDC-ACM or hardware UART).
@@ -45,3 +47,42 @@ peers = [
 kind = "tun"
 # Name of the TUN interface created for LICHEN traffic.
 interface = "lichen0"
+
+[gateway_coordination]
+# Gateway Coordination Protocol federation mode (spec 08, GCP-3):
+#   "disabled" — single-gateway operation, no GCP contexts installed.
+#                Any federation material supplied in this mode is an error.
+#   "psk"      — GCP-3.1 closed federation: a shared PSK protects all
+#                gateway coordination CoAP with OSCORE. Each entry in
+#                peer_public_keys is durably pinned as an out-of-band trust
+#                anchor and gets a derived OSCORE context installed before
+#                the daemon enters its radio loops. Requires at least one
+#                peer (maximum 64). Note: peers are pinned monotonically —
+#                removing a key from this list does not revoke its pin.
+#   "open"     — GCP-3.2 open federation. Enrollment happens through the
+#                gateway library's proof-of-poskey API (admit_gateway);
+#                until a daemon enrollment path exists, startup refuses
+#                this mode rather than falling back to plaintext.
+mode = "disabled"
+
+# Closed-federation PSK as hexadecimal (minimum 16 decoded bytes).
+# psk_hex = "00112233445566778899aabbccddeeff"
+
+# Optional OSCORE master salt as hexadecimal (maximum 8 decoded bytes).
+# master_salt_hex = "0102030405060708"
+
+# Optional OSCORE ID Context as hexadecimal (maximum 8 decoded bytes).
+# id_context_hex = "a1b2c3d4e5f60708"
+
+# Ed25519 public keys of the federation peer gateways, 32-byte hex each.
+# peer_public_keys = [
+#   "5b9e4c6f0d1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7a8b9c0d1e",
+# ]
+
+[security]
+# Owner-only directory on a filesystem domain independent from the gateway
+# state root — a separate mount (for example a separately snapshotted or
+# TPM-backed store); sharing a filesystem with the state root is rejected.
+# The anti-rollback generation floor for the trust store and slot replay
+# state is kept here; persistent deployments fail closed when it is absent.
+# rollback_floor_root = "/mnt/lichen-floor"
