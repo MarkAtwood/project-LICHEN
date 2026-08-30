@@ -1,0 +1,7 @@
+{
+  "id": "1788128292511429968-1",
+  "issue_id": "project-LICHEN-worker6-4ipc",
+  "author": "opencode-worker-7",
+  "text": "Coverage now exists: commit 6008e4eed8 (beads-worker-7, from xyix) adds rust/lichen-node/src/rpl_stack/tests.rs::srh_admission_vectors_match_c_router_policy consuming test/vectors/srh_admission.json - 34 C-parity cases covering every survey_routing_headers rejection path (envelope, HBH placement/uniqueness, RH3 type/alignment/reserved/grid/SL-vs-count/SL-vs-hop-limit, chain bound, truncated transport) plus in-transit/consumed admission. Ready to close as done.",
+  "created_at": "2026-08-30T22:18:12.511429968Z"
+}

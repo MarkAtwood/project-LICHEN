@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-7lca",
+  "title": "Gateway border-ingress consumes in-transit RH3 datagrams (survey bypass)",
+  "description": "Security codereview of project-LICHEN-worker6-xyix: ingest_border_frame (rust/lichen-node/src/rpl_stack/receive.rs:121-123) returns non-RPL IPv6 to the gateway with no survey_routing_headers call; dispatch_runtime_gcp (rust/lichen-gateway/src/gateway.rs:1291-1300,1343) then feeds it to secure_datagram/secure_transport, which can decrypt and locally execute an RH3-bearing datagram the C router would relay (router.c:505-522), or write it unadvanced to the TUN (lichend.rs:947-951). Requires installed GCP peer context and valid OSCORE. Fix: run survey_routing_headers on gateway-ingress datagrams and drop/relay per RFC 6554 forwarding precedence before GCP dispatch.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:10:48.470783906Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T22:10:48.470783906Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7lca",
+      "depends_on_id": "project-LICHEN-worker6-xyix",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:10:48.580603239Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

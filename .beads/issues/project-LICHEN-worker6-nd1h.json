@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-nd1h",
+  "title": "Python _relay_source_routed lacks preferred-parent/root provenance gating (parity with Rust process_source_route)",
+  "description": "Robustness/security codereview of project-LICHEN-worker6-xyix: Rust process_source_route (rust/lichen-node/src/rpl_stack/receive.rs:327-339) additionally requires the sender to be the preferred parent and the packet source to be the DODAGID; C enforces equivalent downward-traffic provenance. Python _relay_source_routed (python/src/lichen/node.py) now checks outer-dst-is-self (fixed in xyix) but still relays from any authenticated neighbor without RPL provenance gating. Decide and implement the Python-side policy (incl. behavior when dodag is None).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:11:03.992251634Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T22:11:03.992251634Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nd1h",
+      "depends_on_id": "project-LICHEN-worker6-xyix",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:11:04.097155095Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
