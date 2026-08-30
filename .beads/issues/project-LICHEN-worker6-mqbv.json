@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-mqbv",
   "title": "Correct DAO Transit E-flag semantics across code, spec, and vectors",
   "description": "P1 protocol/security: spec/05-routing.md current /128 profile requires a 20-byte Transit carrying Parent Address with E=0 for node-owned reachability. Python TransitInformation instead treats bit 0x80 (RFC External E) as a parent-presence bit: to_option() sets it whenever parent_address exists, from_option() only parses the parent when set, and then reports external=False. dao_origin_signature valid vectors likewise encode 0x80 while labeling the route self-owned, contradicting the normative authorization model; the 'unsupported E' negative mutates 0x40 (a reserved bit), not E. Encode/parse Parent Address by option length, preserve/reject the actual E bit per profile authorization, regenerate independent vectors with valid E=0 and explicit E=1 rejection, and align all implementations/spec text.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:56:56.050481Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:52.693114Z",
-  "started_at": "2026-08-24T15:58:05.769671Z"
+  "updated_at": "2026-08-30T03:55:30.06886Z",
+  "started_at": "2026-08-24T15:58:05.769671Z",
+  "closed_at": "2026-08-30T03:55:30.06886Z",
+  "close_reason": "Stale: all four claims contradict the current tree. (1) to_option no longer treats 0x80 as parent-presence: dao_types.py:87 emits 0x80 only when self.external is set (parent always encoded per non-storing profile). (2) from_option parses the parent unconditionally (dao_types.py:97-102, Data Length 20 required). (3) external is reported from the wire bit (dao_types.py:101), not forced False. (4) dao_origin_signature.json: 49 transit options scanned, all 48 valid cases encode flags=0x00; only the designated negative reject_unsupported_transit_e encodes 0x80, and the DaoOriginValidator rejects it as UNSUPPORTED_TRANSIT_E (spec/05 8.7). Verified: pytest test_dao_origin.py -k 'e_flag or external or transit' 5 pass; test_dao_prefix_authorization.py 1 pass; test_vectors.py -k dao_origin 106 pass (project venv). Cross-ref: sibling bead c20a closed with the full layered-model analysis."
 }
