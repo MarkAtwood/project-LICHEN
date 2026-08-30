@@ -2104,7 +2104,6 @@ async def test_ipv6_forwarding_enforces_hop_limit_boundary(
             next_header=NextHeader.NO_NEXT_HEADER,
             hop_limit=hop_limit,
         ),
-        payload=b"bounded",
     ).to_bytes()
     encoded = wrap_schc_payload(b"\x02test")
     compressed_inputs: list[bytes] = []
@@ -2144,7 +2143,7 @@ async def test_ipv6_forwarding_enforces_hop_limit_boundary(
         assert forwarded.header.hop_limit == forwarded_hop_limit
         assert forwarded.header.src_addr == source
         assert forwarded.header.dst_addr == destination
-        assert forwarded.payload == b"bounded"
+        assert forwarded.payload == b""
     assert source not in node.gradient_table
 
 
@@ -2174,7 +2173,6 @@ async def test_local_delivery_enforces_hop_limit_boundary(
             next_header=NextHeader.NO_NEXT_HEADER,
             hop_limit=hop_limit,
         ),
-        payload=b"consume",
     ).to_bytes()
     encoded = wrap_schc_payload(b"\x02test")
 
@@ -2674,7 +2672,6 @@ def _relay_test_packet(*, src: IPv6Address, dst: IPv6Address, hop_limit: int) ->
             next_header=NextHeader.NO_NEXT_HEADER,
             hop_limit=hop_limit,
         ),
-        payload=b"stable-application-packet",
     ).to_bytes()
 
 
