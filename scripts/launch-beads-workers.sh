@@ -82,6 +82,15 @@ for i in $(seq 1 $NUM_WORKERS); do
     sleep 2
 done
 
+# Hourly sync window: commits + merges worker code to main, reclaims dead
+# workers' leases. This is what makes overnight/week-long runs self-sufficient.
+if ! tmux list-windows -t "$SESSION:" 2>/dev/null | grep -q "sync"; then
+    chmod +x "$REPO_ROOT/scripts/sync-beads-loop.sh"
+    tmux new-window -d -t "$SESSION:" -n "sync" -c "$REPO_ROOT" \
+        "$REPO_ROOT/scripts/sync-beads-loop.sh 60"
+    echo "Sync loop window started (hourly; log: .beads-sync.log)"
+fi
+
 echo ""
 echo "=== $NUM_WORKERS workers launched in tmux session '$SESSION' ==="
 [ -z "${TMUX:-}" ] && echo "Attach with: tmux attach -t $SESSION"
