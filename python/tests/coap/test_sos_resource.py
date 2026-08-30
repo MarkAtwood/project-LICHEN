@@ -326,7 +326,7 @@ class TestSosPutDelete:
             ).response
             assert sos._active is True
             other_priv, other_pub = derive_keypair(bytes(range(96, 128)))
-            forged = _signed_body(seq=1, priv=other_priv, pub=other_pub, type="cancel")
+            forged = _signed_body(seq=2, priv=other_priv, pub=other_pub, type="cancel")
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=forged, content_format=60)
             ).response
