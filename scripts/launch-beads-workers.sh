@@ -74,7 +74,9 @@ for i in $(seq 1 $NUM_WORKERS); do
     fi
 
     echo "Launching worker $i in $WORKTREE"
-    CMD="env BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    # Workers are unattended: allow all tool calls inside the worker (disposable
+    # worktree) without permission prompts. Scoped here, not in global config.
+    CMD="env OPENCODE_CONFIG_CONTENT='{\"permission\":{\"*\":\"allow\"}}' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
     else
