@@ -23,6 +23,15 @@
 //!   including across cache eviction and restart. Eviction removes the
 //!   in-memory cache entry only; durable floors are never deleted, so there
 //!   is deliberately no removal API.
+//!
+//! Capacity policy: the [`AnnounceStoreError::Full`] gate for *new* pins
+//! counts durable state records (recounted from the state directory at
+//! open), never the volatile cache, so saturation cannot be reset by a
+//! restart and an over-capacity legacy store cannot overflow further.
+//! IIDs that already have a durable record are never capacity-gated. The
+//! cache is an optimization: at capacity `load` returns the durable state
+//! without caching it, and a new `accept` LRU-evicts the coldest cache
+//! entry (durable records are unaffected).
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -37,7 +46,6 @@ use std::path::Path;
 use std::string::String;
 #[cfg(feature = "std")]
 use std::vec::Vec;
-
 #[cfg(feature = "std")]
 use lichen_hal::storage::fs::FileStorage;
 #[cfg(feature = "std")]
@@ -89,6 +97,8 @@ impl std::fmt::Debug for AnnounceTrustStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AnnounceTrustStore")
             .field("records", &self.records)
+            .field("clock", &self.clock)
+            .field("durable_count", &self.durable_count)
             .field("storage", &self.storage)
             .field("floor_storage", &self.floor_storage)
             .field("sealing_seed", &self.sealing_seed.is_some())
@@ -96,9 +106,26 @@ impl std::fmt::Debug for AnnounceTrustStore {
     }
 }
 
+/// Cached durable state plus its LRU stamp (larger = more recently used).
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CacheEntry {
+    state: AnnounceTrustState,
+    last_use: u64,
+}
+
 #[cfg(feature = "std")]
 pub struct AnnounceTrustStore {
-    records: HashMap<[u8; 8], AnnounceTrustState>,
+    /// Volatile read/write cache of durable records. An optimization only:
+    /// entries may be absent (capacity) or evicted (LRU) at any time without
+    /// changing what is authoritative.
+    records: HashMap<[u8; 8], CacheEntry>,
+    /// Monotonic source of LRU stamps.
+    clock: u64,
+    /// Number of durable state records this store owns. Recounted from the
+    /// state directory at open and incremented only when a new record is
+    /// durably committed; never derived from the volatile cache.
+    durable_count: usize,
     storage: Option<FileStorage>,
     floor_storage: Option<FileStorage>,
     sealing_seed: Option<Zeroizing<[u8; 32]>>,
@@ -110,6 +137,8 @@ impl AnnounceTrustStore {
     pub fn ephemeral() -> Self {
         Self {
             records: HashMap::new(),
+            clock: 0,
+            durable_count: 0,
             storage: None,
             floor_storage: None,
             sealing_seed: None,
@@ -125,17 +154,25 @@ impl AnnounceTrustStore {
 
     /// Open durable stores under `state_root` and `floor_root` (separate
     /// roots so a rollback snapshot cannot silently rewind both sides).
+    ///
+    /// The number of durable state records already on disk is recounted at
+    /// open so the new-pin capacity gate survives restarts (a cache-only
+    /// count would reopen admission after every restart and let an
+    /// over-capacity store overflow without bound).
     pub fn persistent(
         state_root: &Path,
         floor_root: &Path,
         sealing_seed: &[u8; 32],
     ) -> Result<Self, AnnounceStoreError> {
-        let storage = FileStorage::new(state_root.join("announce-trust"))
-            .map_err(|_| AnnounceStoreError::Io)?;
+        let state_dir = state_root.join("announce-trust");
+        let storage = FileStorage::new(&state_dir).map_err(|_| AnnounceStoreError::Io)?;
         let floor_storage = FileStorage::new(floor_root.join("announce-trust"))
             .map_err(|_| AnnounceStoreError::Io)?;
+        let durable_count = count_durable_state_records(&state_dir)?;
         Ok(Self {
             records: HashMap::new(),
+            clock: 0,
+            durable_count,
             storage: Some(storage),
             floor_storage: Some(floor_storage),
             sealing_seed: Some(Zeroizing::new(*sealing_seed)),
@@ -259,12 +296,19 @@ impl AnnounceTrustStore {
     /// unverifiable record. A missing floor record heals forward to the
     /// sealed state (first-accept crash window or lost floor file) so the
     /// originator is not permanently bricked.
+    ///
+    /// At cache capacity the resolved durable state is returned without
+    /// being cached: the cache is an optimization and must never make a
+    /// durably-pinned origin unusable ([`AnnounceStoreError::Full`] is a
+    /// new-pin admission outcome, never a load outcome).
     pub fn load(
         &mut self,
         iid: &[u8; 8],
     ) -> Result<Option<AnnounceTrustState>, AnnounceStoreError> {
-        if let Some(state) = self.records.get(iid) {
-            return Ok(Some(*state));
+        if let Some(entry) = self.records.get_mut(iid) {
+            self.clock = self.clock.wrapping_add(1);
+            entry.last_use = self.clock;
+            return Ok(Some(entry.state));
         }
         if self.storage.is_none() {
             return Ok(None);
@@ -289,16 +333,43 @@ impl AnnounceTrustStore {
             }
             (Some(state), Some(_)) => state,
         };
-        if self.records.len() >= MAX_TRACKED_ORIGINATORS {
-            return Err(AnnounceStoreError::Full);
+        if self.records.len() < MAX_TRACKED_ORIGINATORS {
+            self.remember(iid, state);
         }
-        self.records.insert(*iid, state);
         Ok(Some(state))
+    }
+
+    /// Cache `state` for `iid`, LRU-evicting the coldest entry when the
+    /// cache is at capacity and `iid` is not already cached. Only the cache
+    /// entry is removed; durable records are never deleted.
+    fn remember(&mut self, iid: &[u8; 8], state: AnnounceTrustState) {
+        if !self.records.contains_key(iid) && self.records.len() >= MAX_TRACKED_ORIGINATORS {
+            if let Some((victim, _)) = self
+                .records
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_use)
+                .map(|(iid, entry)| (*iid, entry.last_use))
+            {
+                self.records.remove(&victim);
+            }
+        }
+        self.clock = self.clock.wrapping_add(1);
+        self.records.insert(
+            *iid,
+            CacheEntry {
+                state,
+                last_use: self.clock,
+            },
+        );
     }
 
     /// Record an accepted Announce: pin the exact pubkey and advance the
     /// sequence floor. Refuses pin replacement and any sequence that does
     /// not strictly advance the current floor (wraparound-aware).
+    ///
+    /// The new-pin capacity gate counts durable state records, so it holds
+    /// across restarts and cache eviction; an origin that already has a
+    /// durable record is never capacity-gated.
     pub fn accept(
         &mut self,
         iid: &[u8; 8],
@@ -312,16 +383,48 @@ impl AnnounceTrustStore {
             if !seq_gt(next.seq, current.seq) {
                 return Err(AnnounceStoreError::Corrupt);
             }
+        } else if self.storage.is_some() {
+            if self.durable_count >= MAX_TRACKED_ORIGINATORS {
+                return Err(AnnounceStoreError::Full);
+            }
         } else if self.records.len() >= MAX_TRACKED_ORIGINATORS {
             return Err(AnnounceStoreError::Full);
         }
         if self.storage.is_some() {
             self.write(iid, false, next)?;
+            if existing.is_none() {
+                // The state record is the durable identity: count it as soon
+                // as it exists on disk, before the (healable) floor witness
+                // write, so a failed floor write cannot undercount.
+                self.durable_count += 1;
+            }
             self.write(iid, true, next)?;
         }
-        self.records.insert(*iid, next);
+        self.remember(iid, next);
         Ok(())
     }
+}
+
+/// Count durable state records in `state_dir` (opened by
+/// [`AnnounceTrustStore::persistent`]). Floor witnesses live under the
+/// separate floor root and temp files are dot-prefixed, but both are
+/// excluded by name for robustness. Fails closed on any I/O error so the
+/// capacity gate never undercounts.
+#[cfg(feature = "std")]
+fn count_durable_state_records(state_dir: &Path) -> Result<usize, AnnounceStoreError> {
+    let mut count = 0usize;
+    for entry in std::fs::read_dir(state_dir).map_err(|_| AnnounceStoreError::Io)? {
+        let entry = entry.map_err(|_| AnnounceStoreError::Io)?;
+        if !entry.file_type().map_err(|_| AnnounceStoreError::Io)?.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("announce-pin-") && !name.ends_with("-floor") {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 #[cfg(feature = "std")]
@@ -641,6 +744,113 @@ mod tests {
             store.accept(&[0xFF; 8], state(1, 1)),
             Err(AnnounceStoreError::Full)
         );
+    }
+
+    #[test]
+    fn durable_capacity_gate_counts_durable_records_not_cache() {
+        let (state_root, floor_root) = unique_roots("durable-gate");
+        let mut store =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xD2; 32]).unwrap();
+        for i in 0..MAX_TRACKED_ORIGINATORS {
+            let mut iid = [0u8; 8];
+            iid[0] = i as u8;
+            store
+                .accept(&iid, state(i as u8 + 1, 100 + i as u16))
+                .unwrap();
+        }
+        // At capacity a brand-new pin is refused.
+        assert_eq!(
+            store.accept(&[0xEE; 8], state(1, 1)),
+            Err(AnnounceStoreError::Full)
+        );
+        drop(store);
+
+        // Restart with an EMPTY cache: the gate must still hold. Counting
+        // the cache would reopen admission and overflow the durable store.
+        let mut reopened =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xD2; 32]).unwrap();
+        assert_eq!(
+            reopened.accept(&[0xEF; 8], state(1, 2)),
+            Err(AnnounceStoreError::Full)
+        );
+
+        // An origin with a durable record is never capacity-gated.
+        let first = [0u8; 8];
+        assert!(reopened.accept(&first, state(1, 101)).is_ok());
+        assert_eq!(reopened.load(&first), Ok(Some(state(1, 101))));
+
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
+    }
+
+    #[test]
+    fn load_survives_full_cache_and_accept_lru_evicts() {
+        let (state_root, floor_root) = unique_roots("full-cache");
+        let over = MAX_TRACKED_ORIGINATORS + 2;
+
+        // Seed an over-capacity durable store directly through the sealed
+        // record writer: the only way this state arises is the old
+        // cache-counted gate (or an operator capacity downgrade), and the
+        // store must still serve every durably-pinned origin.
+        {
+            let mut store =
+                AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xE2; 32]).unwrap();
+            for i in 0..over {
+                let mut iid = [0u8; 8];
+                iid[0] = i as u8;
+                let seeded = state(i as u8 + 1, 7);
+                store.write(&iid, false, seeded).unwrap();
+                store.write(&iid, true, seeded).unwrap();
+            }
+        }
+
+        let mut reopened =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xE2; 32]).unwrap();
+        // The open-time recount sees all over-capacity records: no new pins.
+        assert_eq!(
+            reopened.accept(&[0xFF; 8], state(9, 9)),
+            Err(AnnounceStoreError::Full)
+        );
+
+        // The first MAX loads fill the cache; the remainder must still load
+        // (cache-skip path) instead of failing with Full.
+        for i in 0..over {
+            let mut iid = [0u8; 8];
+            iid[0] = i as u8;
+            assert_eq!(
+                reopened.load(&iid),
+                Ok(Some(state(i as u8 + 1, 7))),
+                "durably-pinned origin {i} must survive a full cache"
+            );
+        }
+
+        // Over-capacity origins keep advancing: the accept's cache insert
+        // LRU-evicts a cache entry rather than failing with Full, and the
+        // evicted origin still resolves from its durable record.
+        let mut evict_candidate = [0u8; 8];
+        evict_candidate[0] = (over - 1) as u8;
+        assert!(reopened
+            .accept(&evict_candidate, state(over as u8, 8))
+            .is_ok());
+        assert_eq!(reopened.load(&evict_candidate), Ok(Some(state(over as u8, 8))));
+        assert_eq!(reopened.load(&[0u8; 8]), Ok(Some(state(1, 7))));
+
+        // And the advanced floor is durable across another restart.
+        drop(reopened);
+        let mut final_check =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xE2; 32]).unwrap();
+        assert_eq!(
+            final_check.load(&evict_candidate),
+            Ok(Some(state(over as u8, 8)))
+        );
+        assert_eq!(final_check.load(&[0u8; 8]), Ok(Some(state(1, 7))));
+        assert_eq!(
+            final_check.accept(&[0xF1; 8], state(1, 1)),
+            Err(AnnounceStoreError::Full)
+        );
+
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
     }
 
     #[test]
