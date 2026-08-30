@@ -163,8 +163,10 @@ static int test_rule_constraints_and_checksum(void)
 	packet[1] = 0;
 	packet[46] ^= 1; /* Corrupt UDP checksum. */
 	memset(out, 0xA5, sizeof(out));
+	/* validate_ipv6_transport_lengths reports every structural failure,
+	 * including a bad checksum, as SCHC_ERR_NO_MATCHING_RULE. */
 	CHECK(lichen_schc_compress(packet, length, out, sizeof(out)) ==
-	      SCHC_ERR_INVALID_ARGUMENT);
+	      SCHC_ERR_NO_MATCHING_RULE);
 	for (size_t i = 0; i < sizeof(out); i++) CHECK(out[i] == 0xA5);
 	return 0;
 }

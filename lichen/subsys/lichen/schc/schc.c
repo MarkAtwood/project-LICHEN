@@ -535,9 +535,12 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	if (out == NULL) {
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
-	if (pkt_len > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
-		return SCHC_ERR_BUFFER_TOO_SMALL;
-	}
+	/* No raw-input profile cap on the compression path: a compressible
+	 * packet may legitimately be larger than SCHC_FRAGMENT_MAX_PACKET_SIZE
+	 * (raw > compressed).  The 22554-byte ceiling applies to the encoded
+	 * SCHC packet — enforced here on the fallback paths and by the rule
+	 * compressors, and on the receive side by decompress; every write is
+	 * bounded by out_len. */
 
 	if (pkt_len < IPV6_HDR_LEN || ipv6_version(packet) != 6) {
 		/* Not IPv6 - uncompressed fallback */
@@ -546,6 +549,11 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}
 		size_t needed = 1 + pkt_len;
+		/* Mirrors Rust encode_rule255: the fallback's encoded output is
+		 * a complete SCHC packet and must fit the profile ceiling. */
+		if (needed > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
+			return SCHC_ERR_BUFFER_TOO_SMALL;
+		}
 		if (out_len < needed) {
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}

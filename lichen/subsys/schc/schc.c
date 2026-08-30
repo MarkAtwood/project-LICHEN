@@ -123,6 +123,12 @@ int schc_compress(const struct schc_profile *profile,
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 	size_t needed = 1 + packet_len;
+	/* The encoded SCHC packet must fit the profile ceiling (mirrors Rust
+	 * encode_rule255): an oversized fallback output would be a packet no
+	 * peer's decompressor accepts. */
+	if (needed > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
 	if (out_len < needed) {
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}

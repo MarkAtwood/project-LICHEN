@@ -386,6 +386,42 @@ static int test_uncompressed_length_exceeds_int(void)
 	return 1;
 }
 
+static int test_rule255_fallback_profile_ceiling(void)
+{
+	/* A valid version-6 packet that matches no rule falls back to Rule
+	 * 255; its encoded output (1 + raw) must fit the profile ceiling.
+	 * TCP next-header matches no rule, so payload length drives raw size:
+	 * raw 22553 encodes to 22554 (exactly the ceiling); raw 22554 would
+	 * encode to 22555 and must be rejected (Rust encode_rule255 parity). */
+	static uint8_t packet[SCHC_FRAGMENT_MAX_PACKET_SIZE];
+	uint8_t comp_buf[SCHC_FRAGMENT_MAX_PACKET_SIZE + 2];
+	size_t pkt_len;
+
+	memset(packet, 0, sizeof(packet));
+	packet[0] = 0x60; /* version 6, TC/FL zero */
+	packet[6] = 6;    /* TCP: no compression rule matches */
+	/* src/dst fe80::1 / fe80::2 (policy-clean), payload = 22553 - 40. */
+	memcpy(&packet[8], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&packet[24], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			    "\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	packet[4] = (uint8_t)((22553u - 40u) >> 8);
+	packet[5] = (uint8_t)((22553u - 40u) & 0xff);
+
+	pkt_len = 22553;
+	int ret = lichen_schc_compress(packet, pkt_len, comp_buf, sizeof(comp_buf));
+	ASSERT_EQ(ret, SCHC_FRAGMENT_MAX_PACKET_SIZE, "fallback at ceiling");
+	ASSERT_EQ(comp_buf[0], SCHC_RULE_UNCOMPRESSED, "fallback rule id");
+
+	pkt_len = 22554;
+	packet[5] = (uint8_t)((22554u - 40u) & 0xff);
+	memset(comp_buf, 0xA5, sizeof(comp_buf));
+	ret = lichen_schc_compress(packet, pkt_len, comp_buf, sizeof(comp_buf));
+	ASSERT_EQ(ret, SCHC_ERR_BUFFER_TOO_SMALL, "fallback over ceiling");
+	ASSERT_EQ(comp_buf[0], 0xA5, "fallback over ceiling atomic");
+	return 1;
+}
+
 /* ─── test runner ─────────────────────────────────────────────────────────── */
 
 #define RUN_TEST(fn) do { \
@@ -417,6 +453,7 @@ int main(void)
 	RUN_TEST(test_reject_bad_ipv6_payload_len);
 	RUN_TEST(test_reject_bad_udp_len);
 	RUN_TEST(test_uncompressed_length_exceeds_int);
+	RUN_TEST(test_rule255_fallback_profile_ceiling);
 
 	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
 
