@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-bb5u",
   "title": "SCHC compress validation-order divergence: C policy-then-structure vs Rust/Python structure-then-policy (error identity differs on dual-defect packets)",
   "description": "Found by correctness+robustness codereview passes of project-LICHEN-worker6-wrxl (P3, inert today). For a packet that violates BOTH the endpoint address policy and a structural rule: C lichen_schc_compress runs validate_ipv6_address_policy (schc.c:557) BEFORE validate_ipv6_transport_lengths (schc.c:562) so it returns SCHC_ERR_INVALID_ENDPOINT (-15); Rust validate_full_ipv6 (codec.rs:363-366) runs structure first then policy; Python validate_full_ipv6 likewise (headers.py:138-159 structure, :861 emission). Verdicts identical (both fail closed); error identity differs. No shared vector exercises doubly-invalid input and all three consumers assert rejection-only, so nothing breaks today - but future interop tests comparing error identity would diverge. Fix if/when error-identity parity is ever asserted: align order (structure first, matching Rust/Python, is the lower-churn direction) or pin the divergence explicitly in spec/03-adaptation.md.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T22:06:30.937706609Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-30T22:06:30.937706609Z",
+  "updated_at": "2026-08-30T23:09:56.571205337Z",
+  "closed_at": "2026-08-30T23:09:56.571205337Z",
+  "close_reason": "lichen_schc_compress now validates structure/checksums (validate_ipv6_transport_lengths) BEFORE the emission endpoint policy (validate_ipv6_address_policy), mirroring Rust validate_full_ipv6 (codec.rs:363-366 structure-\u003epolicy) and Python's TX wrappers (encode_rule255 headers.py:188-189, compress_packet :860-861) - closing the dual-defect error-identity divergence (C returned INVALID_ENDPOINT where Rust returns the structure error; Python has a single SchcError class). Pure ordering swap: accept/reject set provably unchanged (both validators pure; policy still unconditional after structure), verdict matrix re-verified per class; TX-only invariant and fallback bypasses unchanged. No dual-defect fixtures exist anywhere (verified computationally across all 17 malformed/policy vectors), so no test flips; all 18 C host suites green + python test_vectors 776/776. 3x codereview (correctness/security/robustness, reviewer-model passes): no P0-P2 on the delta; own-comment imprecision (Python citation) fixed pre-commit. Findings: 9j6r (P3 pre-existing - Python's internal address-before-structure order inside validate_full_ipv6, filed with fix direction + vector plan); C-RX Rule255 unvalidated-memcpy finding already tracked as 5rvk. Commit hygiene: staged only schc.c.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-bb5u",
