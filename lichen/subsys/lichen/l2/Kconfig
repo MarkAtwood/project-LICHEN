@@ -58,7 +58,8 @@ config LICHEN_LORA_L2
 	default y
 	help
 	  Enable the LICHEN LoRa L2 driver. This provides low-level LoRa
-	  radio access including TX/RX threads and EUI-64 generation.
+	  radio access including interrupt-driven RX (recv_async + system
+	  workqueue) and EUI-64 generation.
 
 	  It is intended to be used through the full LICHEN_L2 Zephyr network
 	  interface path so received frames are parsed, decompressed, verified,
@@ -73,30 +74,15 @@ config LICHEN_LORA_L2_LOG_LEVEL
 	  Log level for LICHEN LoRa L2 driver.
 	  0 = Off, 1 = Error, 2 = Warning, 3 = Info, 4 = Debug.
 
-config LICHEN_LORA_L2_RX_STACK_SIZE
-	int "LICHEN LoRa L2 RX thread stack size"
-	depends on LICHEN_LORA_L2
-	default 2048
-	help
-	  Stack size for the LoRa L2 RX thread.
-
-config LICHEN_LORA_L2_RX_PRIORITY
-	int "LICHEN LoRa L2 RX thread priority"
-	depends on LICHEN_LORA_L2
-	default 7
-	range 0 NUM_PREEMPT_PRIORITIES
-	help
-	  Priority for the LoRa L2 RX thread. Lower numbers have higher
-	  priority in Zephyr. Validated against NUM_PREEMPT_PRIORITIES
-	  at build time. (project-LICHEN-dq6n.26)
-
 config LICHEN_LORA_L2_RX_TIMEOUT_MS
-	int "LoRa RX timeout in milliseconds"
+	int "LoRa modem arbitration timeout in milliseconds"
 	depends on LICHEN_LORA_L2
 	default 1000
 	range 100 10000
 	help
-	  Timeout for lora_recv() calls in the RX thread.
+	  Timeout budget for modem access. TX uses it to wait out an
+	  outstanding RX re-arm; the RX re-arm retry loop uses the same
+	  budget as an upper bound before re-attempting.
 
 	  Lower values provide faster stop() responsiveness. Higher values may
 	  reduce wakeups on some platforms, but slow disable/enable cycles.

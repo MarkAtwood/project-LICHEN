@@ -130,12 +130,14 @@ int lichen_lora_l2_init(void);
 /**
  * @brief Start the LoRa L2 layer
  *
- * Configures the radio and starts the RX thread.
- * Requires init() to have been called. Idempotent: returns 0 if already running.
+ * Configures the radio and arms asynchronous RX (interrupt-driven; packets
+ * are delivered from the system workqueue). Requires init() to have been
+ * called. Idempotent: returns 0 if already running.
  *
  * @return 0 on success (idempotent if already running)
  * @return -EINVAL if not initialized (call init() first)
  * @return -ECANCELED if module needs re-init after forced abort (call deinit() then init())
+ * @return -ENOTSUP if the LoRa driver does not implement recv_async()
  * @return Other negative errno from lora_config() on radio configuration failure
  */
 int lichen_lora_l2_start(void);
@@ -143,26 +145,15 @@ int lichen_lora_l2_start(void);
 /**
  * @brief Stop the LoRa L2 layer
  *
- * Stops the RX thread. Idempotent: safe to call when already stopped.
- * Blocks until RX thread exits.
- *
- * @note Maximum blocking time: 100ms + CONFIG_LICHEN_LORA_L2_RX_TIMEOUT_MS
- * (default 1000ms, configurable 100-10000ms). The function uses a two-phase
- * join: a quick 100ms wait for the common case, then up to RX_TIMEOUT_MS if
- * the thread is blocked in lora_recv(). If both timeouts expire, the thread
- * is forcibly aborted and joined with K_FOREVER (typically immediate).
- *
- * If the RX thread does not exit gracefully within the timeout, it will be
- * forcibly aborted. After a forced abort, the module enters an undefined
- * state and requires lichen_lora_l2_deinit() followed by lichen_lora_l2_init()
- * before it can be restarted.
+ * Disarms asynchronous RX and drains the RX work item. Idempotent: safe to
+ * call when already stopped. Blocks until any in-flight RX callback has
+ * completed; no RX callback can start after this returns.
  *
  * @note RX callback clearing: stop() ALWAYS clears the RX callback to NULL.
  * Callers that need to receive packets after restart must re-register their
  * callback via lichen_lora_l2_set_rx_callback() before calling start().
  *
  * @return 0 on success (graceful stop)
- * @return -ECANCELED if RX thread had to be forcibly aborted (requires deinit/init cycle)
  */
 int lichen_lora_l2_stop(void);
 
@@ -253,7 +244,8 @@ bool lichen_lora_l2_is_running(void);
 /**
  * @brief Check if module requires re-initialization
  *
- * Returns true if the RX thread was forcibly aborted during stop().
+ * Returns true if the RX path entered the ABORTED state (e.g. driver
+ * contract violation such as an oversized delivery, or an arm failure).
  * When true, the module is in an undefined state and requires
  * lichen_lora_l2_deinit() followed by lichen_lora_l2_init() before
  * it can be used again.

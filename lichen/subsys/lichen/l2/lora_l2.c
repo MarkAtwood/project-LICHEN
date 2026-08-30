@@ -13,18 +13,19 @@
  * Architecture:
  *   Application calls lichen_lora_l2_start()
  *       -> Configures LoRa radio
- *       -> Starts RX thread
+ *       -> Arms asynchronous RX (driver ISR -> workqueue)
  *       -> TX is called directly via lichen_lora_l2_tx(data, len, channel)
  *
  * Threading model:
  * - TX is synchronous (called from application context)
- * - RX runs in dedicated thread, can invoke callbacks for received packets
+ * - RX is interrupt-driven: the driver ISR callback stages packets and the
+ *   system workqueue processes them (see lora_l2_rx.c)
  *
  * Module split:
  * - lora_l2.c: Global state, init/start/stop/deinit, status queries
  * - lora_l2_state.c: State machine transitions
  * - lora_l2_identity.c: EUI-64 generation and access
- * - lora_l2_rx.c: RX thread and callback management
+ * - lora_l2_rx.c: Interrupt-driven RX (arm/re-arm, staging, work handler)
  * - lora_l2_tx.c: Transmit functions
  * - lora_l2_internal.h: Shared definitions
  */
@@ -48,18 +49,14 @@ LOG_MODULE_REGISTER(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 
 /*
  * ARCHITECTURAL LIMITATION (project-LICHEN-tvfm.110): This module uses static
- * global state (rx_stack, rx_thread_data, lora_mutex, tx_buf, lora_data) and
- * supports only one LoRa radio instance per system. The selected device is
- * provided by the HAL's zephyr,lora boundary; multi-radio support would require
- * per-instance context structs, instance enumeration, RX thread ownership, and
- * API changes to accept an instance handle.
+ * global state (lora_mutex, tx_buf, lora_data) and supports only one LoRa
+ * radio instance per system. The selected device is provided by the HAL's
+ * zephyr,lora boundary; multi-radio support would require per-instance
+ * context structs, instance enumeration, RX ownership, and API changes to
+ * accept an instance handle.
  */
 BUILD_ASSERT(DT_NODE_EXISTS(DT_ALIAS(lora0)),
              "lora_l2 requires a 'lora0' devicetree alias for single-radio operation");
-
-/* RX thread and stack */
-K_THREAD_STACK_DEFINE(rx_stack, RX_THREAD_STACK_SIZE);
-struct k_thread rx_thread_data;
 
 /* Mutex protecting state transitions and callback registration */
 K_MUTEX_DEFINE(lora_mutex);
@@ -73,33 +70,34 @@ K_MUTEX_DEFINE(tx_buf_mutex);
  * TX/RX modem arbitration (half-duplex radio, non-blocking driver acquire).
  *
  * The sx12xx driver's modem_acquire() is non-blocking: whichever of
- * lora_recv()/lora_send() finds the modem held fails immediately with
- * -EBUSY. The RX thread re-arms lora_recv() back-to-back, so it holds the
- * modem near-continuously and TX essentially never wins the race; when TX
- * did slip in (during the RX error backoff), RX logged -EBUSY as a hardware
- * error and slept 1 s, going deaf.
+ * lora_recv_async()/lora_send() finds the modem held fails immediately with
+ * -EBUSY. Interrupt-driven RX re-arms lora_recv_async() back-to-back from
+ * the work handler, so it holds the modem near-continuously and TX
+ * essentially never wins the race.
  *
- * Fix: TX raises tx_pending before sending. The RX thread checks it before
- * re-arming and yields (short sleep) while set, so TX acquires the modem as
- * soon as the in-flight RX window drains (bounded by RX_TIMEOUT_MS). Both
- * sides treat -EBUSY as the expected "other side owns the modem" signal,
- * not an error.
+ * Fix: TX raises tx_pending before sending. The RX re-arm path checks it
+ * before re-arming and defers (delayable retry) while set, so TX acquires
+ * the modem as soon as the outstanding RX delivery drains. RX re-arm also
+ * uses a non-blocking modem_mutex lock and retries while TX owns the modem.
+ * Both sides treat -EBUSY as the expected "other side owns the modem"
+ * signal, not an error.
  */
 atomic_t tx_pending;
 
 /*
  * Hard mutual exclusion for driver calls (modem_mutex).
  *
- * tx_pending alone only stops the RX thread from RE-ARMING lora_recv(); it
- * does nothing about a recv that is already in flight. Drivers do not
+ * tx_pending alone only stops the RX path from RE-ARMING lora_recv_async();
+ * it does nothing about a delivery already in flight. Drivers do not
  * tolerate concurrent recv+send: the LR1110 driver has no internal locking
- * at all, so a send() issued while recv() is mid-poll interleaves SPI
- * transactions on the same chip - corrupting radio state, spinning both
- * sides in error/retry storms (heavy enough SPIM traffic to wedge nRF52840
- * USB enumeration as collateral), and putting nothing on the air. The
- * sx12xx driver merely returns -EBUSY. Wrap every lora_recv()/lora_send()
- * in modem_mutex so a send waits out the in-flight RX window (bounded by
- * RX_TIMEOUT_MS; k_mutex priority inheritance protects against inversion).
+ * at all, so a send() issued while an RX delivery is mid-processing
+ * interleaves SPI transactions on the same chip - corrupting radio state,
+ * spinning both sides in error/retry storms (heavy enough SPIM traffic to
+ * wedge nRF52840 USB enumeration as collateral), and putting nothing on the
+ * air. The sx12xx driver merely returns -EBUSY. Wrap every
+ * lora_recv_async()/lora_send() in modem_mutex so a send waits out the
+ * re-arm window and a re-arm yields to an in-flight send (k_mutex priority
+ * inheritance protects against inversion).
  */
 K_MUTEX_DEFINE(modem_mutex);
 
@@ -123,7 +121,7 @@ struct tx_queue tx_queue;
  * Access patterns:
  *   - Mutex-protected fields (lora_dev, eui64, rx_callback, rx_callback_user_data):
  *     Must hold lora_mutex for both read and write. Callers read callback pair
- *     atomically via snapshot under lock (see rx_thread).
+ *     atomically via snapshot under lock (see the RX work handler).
  */
 struct lora_l2_data lora_data;
 
@@ -266,8 +264,8 @@ int lichen_lora_l2_start(void)
      * lichen_lora_l2_start() holds lora_mutex and is non-re-entrant.
      *
      * RX then TX pass programs both directions (RX config reused by recv).
-     * CAD scan added in rx_thread under multi-SF config (lr1110 IRQ extended
-     * for PREAMBLEDETECTED per ASSIGNED_SF in DIO).
+     * CAD scan uses the registered CAD hook under multi-SF config (lr1110
+     * IRQ extended for PREAMBLEDETECTED per ASSIGNED_SF in DIO).
      */
     static struct lora_modem_config config = {
         .frequency = CONFIG_LICHEN_LORA_FREQUENCY,
@@ -308,21 +306,24 @@ int lichen_lora_l2_start(void)
         return -EAGAIN;
     }
 
-    /* Start RX thread.
-     * k_thread_create() returns the thread pointer passed in (first arg).
-     * It cannot fail at runtime - thread/stack resources are sized at build time.
+    /*
+     * Arm asynchronous RX. The ISR callback only stages packets; processing
+     * and re-arming run in the system workqueue (see lora_l2_rx.c).
      *
-     * RX_THREAD_PRIORITY is CONFIG_LICHEN_LORA_L2_RX_PRIORITY, which Kconfig
-     * validates via "range 0 NUM_PREEMPT_PRIORITIES". Invalid priorities are
-     * rejected at build time. (project-LICHEN-tvfm.73) */
-    k_thread_create(&rx_thread_data, rx_stack,
-                    K_THREAD_STACK_SIZEOF(rx_stack),
-                    rx_thread, NULL, NULL, NULL,
-                    RX_THREAD_PRIORITY, 0, K_NO_WAIT);
-    /* Thread naming is best-effort - failure is non-fatal but logged for debugging */
-    int name_ret = k_thread_name_set(&rx_thread_data, "lora_rx");
-    if (name_ret < 0) {
-        LOG_DBG("lora_l2: failed to set thread name (%d)", name_ret);
+     * Fail closed: a driver without recv_async support cannot receive at
+     * all, so start() reports the error and reverts to STOPPED rather than
+     * running with a silently deaf radio.
+     */
+    ret = lora_l2_rx_start();
+    if (ret < 0) {
+        LOG_ERR("lora_l2: async RX arm failed (%d)", ret);
+        if (lora_transition_from(LORA_RUNNING, LORA_STOPPED) != 0) {
+            /* Should be impossible - start() holds lora_mutex. */
+            atomic_set(&current_state, LORA_ABORTED);
+            LOG_ERR("lora_l2: state corrupted after RX arm failure");
+        }
+        k_mutex_unlock(&lora_mutex);
+        return ret;
     }
 
     k_mutex_unlock(&lora_mutex);
@@ -357,11 +358,11 @@ int lichen_lora_l2_stop(void)
     }
 
     /*
-     * Clear RX callback BEFORE signaling thread to exit.
-     * This prevents new callbacks from starting after we begin shutdown.
-     * Any in-flight callback (already past the snapshot in rx_thread) will
-     * complete and release rx_mutex before lichen_l2_enable's cleanup runs,
-     * since cleanup acquires rx_mutex.
+     * Clear RX callback BEFORE disarming. This prevents new callbacks from
+     * starting after we begin shutdown. Any in-flight callback (already past
+     * the snapshot in the RX work handler) will complete and release
+     * rx_mutex before lichen_l2_enable's cleanup runs, since cleanup acquires
+     * rx_mutex - the work flush below waits for it.
      *
      * CONTRACT (project-LICHEN-i1gk.48): stop() ALWAYS clears the RX callback.
      * lichen_l2_enable() relies on this to re-register its callback on enable.
@@ -373,64 +374,24 @@ int lichen_lora_l2_stop(void)
     lora_data.rx_callback_user_data = NULL;
     lichen_csma_cancel(&lora_data.csma);
 
-    /* Transition to STOPPED before releasing mutex - thread will see this */
+    /* Transition to STOPPED before releasing mutex - RX work sees this */
     if (lora_transition(LORA_STOPPED) != 0) {
         k_mutex_unlock(&lora_mutex);
         return -EIO;
     }
 
-    /* Release mutex before joining - allows any in-flight TX to complete */
+    /* Release mutex before draining - allows any in-flight TX to complete */
     k_mutex_unlock(&lora_mutex);
 
     /*
-     * Wait for RX thread to exit gracefully. Use a short initial timeout
-     * (RX_THREAD_QUICK_JOIN_MS) for the common case where the thread exits
-     * quickly (state changed while not blocked in lora_recv). This is
-     * ample time for a thread that checked state between lora_recv() calls;
-     * if still blocked, it's inside lora_recv() and needs up to RX_TIMEOUT_MS
-     * to return. If that times out, wait up to one full RX timeout cycle.
-     * If still stuck, forcibly abort to ensure thread struct is safe to reuse
-     * on subsequent start().
+     * Disarm the driver and drain the RX work item. When this returns, the
+     * ISR is gated off, the driver is disarmed, and the work handler is
+     * neither queued nor running - the same guarantee the RX thread join
+     * used to provide, without the join/abort failure modes (no forced
+     * abort path exists anymore; a wedged driver surfaces as arm/retry
+     * errors logged by the RX path instead).
      */
-    int join_ret = k_thread_join(&rx_thread_data, K_MSEC(RX_THREAD_QUICK_JOIN_MS));
-    if (join_ret == -EAGAIN) {
-        /*
-         * Thread still running - likely blocked in lora_recv(). Wait for the
-         * full RX_TIMEOUT_MS because worst-case lora_recv() just started when
-         * we set the stop flag. (We cannot know how long it has been blocked,
-         * so we must budget for a fresh call.)
-         */
-        join_ret = k_thread_join(&rx_thread_data, K_MSEC(RX_TIMEOUT_MS));
-        if (join_ret == -EAGAIN) {
-            LOG_WRN("lora_l2: RX thread join timed out after %d ms, aborting - possible data loss",
-                    RX_THREAD_QUICK_JOIN_MS + RX_TIMEOUT_MS);
-            k_thread_abort(&rx_thread_data);
-            join_ret = k_thread_join(&rx_thread_data, K_MSEC(100));
-            if (join_ret != 0) {
-                /*
-                 * Thread struct should be joinable immediately after abort,
-                 * but if the driver ignores the abort (e.g., stuck in DMA
-                 * wait), even 100 ms is not enough. The system is in an
-                 * unrecoverable state.
-                 */
-                LOG_ERR("lora_l2: RX thread join still failing after abort "
-                        "(ret=%d), system unrecoverable", join_ret);
-                k_panic();
-            }
-            /*
-             * Mark module as requiring re-initialization. k_thread_abort()
-             * may have terminated the thread while it held lora_mutex or
-             * while inside a callback. The callback may hold its own locks
-             * or have allocated resources that are now leaked. Safe restart
-             * requires full de-init/re-init cycle.
-             */
-            /* Note: lora_transition() may fail here since we're already in
-             * STOPPED state, so set ABORTED directly. */
-            atomic_set(&current_state, LORA_ABORTED);
-            LOG_WRN("lora_l2: module requires deinit() before restart");
-            ret = -ECANCELED;
-        }
-    }
+    lora_l2_rx_stop();
 
     LOG_INF("lora_l2: stopped");
     return ret;
@@ -489,7 +450,7 @@ int lichen_lora_l2_deinit(void)
     /*
      * Serialize cleanup with public accessors (EUI-64 copies, queue stats).
      * On the STOPPED path lora_mutex is in a clean state (stop() released
-     * it and no RX thread was aborted), so it is held for the remainder of
+     * it and no RX work was left running), so it is held for the remainder of
      * teardown instead of being reinitialized mid-teardown.
      */
     if (state == LORA_STOPPED) {
@@ -513,47 +474,40 @@ int lichen_lora_l2_deinit(void)
     k_mutex_unlock(&tx_buf_mutex);
 
     /*
-     * Abort recovery only: ensure the RX thread is actually terminated before
-     * touching mutexes or callback state. Normal STOPPED teardown skips this
-     * join because stop() already joined the RX thread, and init-without-start
-     * has no valid RX thread object to join.
+     * Abort recovery only: drain the RX work item and disarm the driver
+     * before touching mutexes or callback state. Normal STOPPED teardown
+     * skips this because stop() already drained the RX path, and
+     * init-without-start never armed anything.
      *
-     * If this join fails, deinit is incomplete. Continuing would let callers
-     * reuse or reinitialize resources while the RX thread may still access
-     * them. Leave the module in ABORTED and return the join error so callers
-     * can treat a system reboot as the only guaranteed recovery.
+     * Unlike the RX thread join this replaced, the drain cannot fail: the
+     * ISR gate and work flush guarantee no RX callback can start once this
+     * returns. The best-effort modem disarm is non-blocking, so a wedged
+     * driver cannot hang deinit.
      */
     if (state == LORA_ABORTED) {
-        int join_ret = k_thread_join(&rx_thread_data, K_MSEC(DEINIT_JOIN_TIMEOUT_MS));
-
-        if (join_ret != 0) {
-            LOG_ERR("lora_l2: RX thread join failed in deinit (%d); "
-                    "deinit incomplete, reboot required for guaranteed recovery",
-                    join_ret);
-            atomic_set(&current_state, LORA_ABORTED);
-            return join_ret;
-        }
+        lora_l2_rx_stop();
     }
 
     /*
      * ABORTED recovery only: we do NOT acquire lora_mutex here. If we got
-     * into the aborted state, the mutex may be left locked by the aborted
-     * thread. Attempting to lock it would deadlock. Instead, we reinitialize
-     * it. On the STOPPED path the mutex is already held (acquired above), so
-     * only tx_buf_mutex is reinitialized.
+     * into the aborted state, the mutex may be left locked by an aborted
+     * work handler. Attempting to lock it would deadlock. Instead, we
+     * reinitialize it. On the STOPPED path the mutex is already held
+     * (acquired above), so only tx_buf_mutex is reinitialized.
      *
-     * This is best-effort recovery. In the rare case where the thread is in
-     * an undefined state that the join above didn't resolve, reinitializing
-     * the mutex may have undefined behavior. However:
-     * - The join above should catch most cases
+     * This is best-effort recovery. In the rare case where the work handler
+     * is in an undefined state that the drain above didn't resolve,
+     * reinitializing the mutex may have undefined behavior. However:
+     * - The drain above should catch all cases (the work item cannot be
+     *   aborted mid-run; it either completed or was never running)
      * - Refusing to recover leaves the module permanently unusable
      * - The system is already in a degraded state if we reached this path
      */
 
     /*
      * SECURITY: Reinitializing a mutex that may still be held by a dead
-     * thread is UNDEFINED BEHAVIOR per POSIX and Zephyr semantics. If the
-     * RX thread was aborted while holding lora_mutex, the mutex's internal
+     * thread is UNDEFINED BEHAVIOR per POSIX and Zephyr semantics. If a
+     * work handler was aborted while holding lora_mutex, the mutex's internal
      * state (owner, lock count, wait queue) is corrupted. Calling
      * k_mutex_init() on such a mutex may:
      * - Appear to succeed but leave internal state inconsistent
@@ -563,15 +517,14 @@ int lichen_lora_l2_deinit(void)
      * We proceed anyway because:
      * 1. The alternative (refusing to deinit) leaves the module permanently
      *    unusable until full system reset
-     * 2. In practice, most abort scenarios terminate the thread outside the
-     *    critical section (the mutex is held only briefly for callback
-     *    pointer snapshots)
+     * 2. In practice, work handlers are not aborted; they complete and
+     *    release the mutex (critical sections are pointer snapshots)
      * 3. The aborted flag forces a full deinit/init cycle, which resets all
      *    module state including this mutex
      *
-     * The ONLY truly safe recovery from a thread-abort scenario is a full
+     * The ONLY truly safe recovery from an abort scenario is a full
      * system reset (k_sys_reboot). Applications requiring guaranteed
-     * correctness after RX thread abort should reboot rather than attempt
+     * correctness after an abort should reboot rather than attempt
      * module restart via deinit/init.
      *
      * K_MUTEX_DEFINE created it statically, so we use k_mutex_init to reset.
@@ -621,7 +574,7 @@ int lichen_lora_l2_deinit(void)
     }
 
     /*
-     * Clear callback state. No mutex needed: the RX thread was joined above
+     * Clear callback state. No mutex needed: the RX work item was drained above
      * and DEINITING state blocks new operations, so no concurrent access.
      */
     lora_data.rx_callback = NULL;
@@ -633,7 +586,7 @@ int lichen_lora_l2_deinit(void)
     /*
      * Reinitialize lichen_l2's rx_mutex (project-LICHEN-dq6n.22).
      *
-     * If the RX thread was aborted while executing lichen_l2_input(), it may
+     * If a work handler was aborted while executing lichen_l2_input(), it may
      * have been holding rx_mutex (which lives in lichen_l2.c, not here).
      * Without reinitializing that mutex, subsequent RX callbacks would deadlock.
      *
@@ -650,7 +603,7 @@ int lichen_lora_l2_deinit(void)
 
 destroy_queue:
     /*
-     * Destroy TX queue only after the RX worker was stopped and joined above;
+     * Destroy TX queue only after the RX work item was drained above;
      * tx_queue_destroy() requires exclusive ownership. Holding lora_mutex
      * across destruction serializes with the public accessors (EUI-64,
      * queue stats), which cannot run underneath the teardown. Done before

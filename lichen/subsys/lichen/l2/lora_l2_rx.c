@@ -3,282 +3,337 @@
 
 /**
  * @file lora_l2_rx.c
- * @brief LICHEN LoRa L2 receive thread and callback management
+ * @brief LICHEN LoRa L2 interrupt-driven receive path
  *
- * Handles continuous packet reception via dedicated RX thread.
+ * Reception uses the driver's asynchronous API (lora_recv_async): the radio
+ * is armed once and the driver invokes the ISR callback on RX_DONE. The ISR
+ * callback only copies (data, len, rssi, snr) into a staging buffer owned by
+ * this module and submits a work item; all packet processing (the callback
+ * chain into lichen_link_rx) and re-arming happens in the system workqueue.
+ *
+ * Buffer ownership: rx_stage is owned by L2. The registered RX callback
+ * receives a pointer that is valid ONLY for the duration of the callback
+ * invocation (same contract the old RX thread provided with its stack
+ * buffer). While a packet is staged, the ISR drops any further delivery, so
+ * a callback that outlives its invocation never observes mutated data.
+ *
+ * Radio-liveness hook. Apps that gate a watchdog feed on radio progress
+ * (puck main.c) provide a strong definition; standalone builds fall back to
+ * this no-op. Same pattern as lichen/lib/native/native.c. The hook is now
+ * bumped from work executions (packet delivery and re-arm attempts) instead
+ * of an RX thread loop; consumers must not rely on it being bumped while the
+ * radio sits idle and armed.
  */
-
 #include "lora_l2_internal.h"
 #include "crash_info.h"
 
-#include <limits.h>
+#include <string.h>
 
-#include <zephyr/logging/log.h>
+#include <zephyr/kernel.h>
 #include <zephyr/drivers/lora.h>
 
 LOG_MODULE_DECLARE(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 
-/*
- * Radio-liveness hook. Apps that gate a watchdog feed on radio progress
- * (puck main.c) provide a strong definition; standalone builds fall back to
- * this no-op. Same pattern as lichen/lib/native/native.c.
- */
+/** Delay between re-arm attempts while the modem is owned by TX. */
+#define RX_REARM_RETRY_MS 10
+
 __attribute__((weak)) void lichen_radio_progress(void)
 {
 }
 
-/**
- * @brief RX thread - continuously receives LoRa packets
+/*
+ * Staging buffer for received packets. Sized to LICHEN_LORA_MAX_PAYLOAD
+ * (255 bytes) - the maximum a driver may deliver. The ISR callback copies
+ * driver-owned data here before handing off to the workqueue.
  */
-void rx_thread(void *arg1, void *arg2, void *arg3)
+static uint8_t rx_stage[LICHEN_LORA_MAX_PHY_PAYLOAD];
+BUILD_ASSERT(sizeof(rx_stage) == LICHEN_LORA_MAX_PHY_PAYLOAD,
+             "rx_stage size must equal LICHEN_LORA_MAX_PHY_PAYLOAD for "
+             "callback buffer sizing guarantees");
+static uint16_t rx_stage_len;
+static int16_t rx_stage_rssi;
+static int8_t rx_stage_snr;
+
+/*
+ * rx_enabled: RX is supposed to be active (RUNNING and not stopping).
+ * Written from thread context (start/stop), read from the ISR callback.
+ * Cleared BEFORE the driver is disarmed so late deliveries are dropped.
+ *
+ * rx_pending: a packet is staged and awaiting processing. Set by the ISR
+ * (test-and-set), cleared by the work handler after the RX callback returns,
+ * which makes the staging buffer immutable for the whole callback duration.
+ */
+static atomic_t rx_enabled;
+static atomic_t rx_pending;
+
+/*
+ * Single work item: delivers the staged packet (if any), then re-arms the
+ * driver. Delayable so a re-arm blocked by TX ownership can retry shortly
+ * without a dedicated thread or busy sleep.
+ */
+static void rx_work_fn(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(rx_work, rx_work_fn);
+
+static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
+			      uint16_t size, int16_t rssi, int8_t snr,
+			      void *user_data);
+
+/**
+ * @brief Arm the driver for the next asynchronous reception
+ *
+ * Must be called with the module in LORA_RUNNING. Arms under modem_mutex
+ * (non-blocking) so driver access stays serialized with TX; if the modem is
+ * busy or the arm call fails transiently, a short delayable retry keeps the
+ * re-arm alive without blocking the system workqueue.
+ *
+ * A driver that reports -ENOTSUP cannot receive at all: fail closed by
+ * forcing the module into ABORTED so callers see needs_reinit() instead of a
+ * silently deaf radio.
+ */
+static void lora_l2_rx_arm(void)
 {
-    ARG_UNUSED(arg1);
-    ARG_UNUSED(arg2);
-    ARG_UNUSED(arg3);
+	int ret;
 
-    int ret;
-    /*
-     * rx_buf sized to LICHEN_LORA_MAX_PHY_PAYLOAD (255 bytes) - the maximum
-     * that lora_recv() can return. The callback receives (data, len) where
-     * len is bounded by this buffer size. Callers implementing the callback
-     * must be prepared to handle up to LICHEN_LORA_MAX_PHY_PAYLOAD bytes.
-     */
-    uint8_t rx_buf[LICHEN_LORA_MAX_PHY_PAYLOAD];
-    BUILD_ASSERT(sizeof(rx_buf) == LICHEN_LORA_MAX_PHY_PAYLOAD,
-                 "rx_buf size must equal LICHEN_LORA_MAX_PHY_PAYLOAD for "
-                 "callback buffer sizing guarantees");
-    int16_t rssi;
-    int8_t snr;
-    int consecutive_errors = 0;
+	if (atomic_get(&tx_pending) > 0) {
+		/* TX owns or is about to own the modem; retry shortly. */
+		goto retry;
+	}
 
-    /*
-     * Capture lora_dev under mutex once at thread startup. This ensures
-     * proper synchronization with init() and avoids repeated mutex
-     * acquisition in the hot path. The device pointer is immutable after
-     * init(), so a single snapshot is sufficient.
-     *
-     * SAFETY (project-LICHEN-0li1.5): The cached pointer cannot become stale
-     * because stop() joins this thread (waits for termination) before returning,
-     * and deinit() can only be called after stop() completes (state machine
-     * enforces STOPPED->DEINITING transition). The shutdown sequence is:
-     *   1. stop() transitions to STOPPED
-     *   2. This thread sees STOPPED, exits the loop
-     *   3. stop() joins this thread (k_thread_join)
-     *   4. stop() returns
-     *   5. Only then can deinit() be called
-     * Thus deinit() never runs while this thread holds the cached pointer.
-     */
-    k_mutex_lock(&lora_mutex, K_FOREVER);
-    const struct device *dev = lora_data.lora_dev;
-    k_mutex_unlock(&lora_mutex);
+	if (k_mutex_lock(&modem_mutex, K_NO_WAIT) != 0) {
+		/* TX holds the modem; retry when it is released. */
+		goto retry;
+	}
 
-    LOG_INF("lora_l2: RX thread started");
+	/*
+	 * Re-check under the modem lock: stop() may have transitioned the
+	 * module to STOPPED while this handler was waiting; arming a stopped
+	 * module would leave the driver armed across stop() and fail the
+	 * next start() with -EBUSY on drivers that reject double-arming.
+	 */
+	if (lora_get_state() != LORA_RUNNING) {
+		k_mutex_unlock(&modem_mutex);
+		return;
+	}
 
-    /*
-     * Loop condition: checking LORA_RUNNING is sufficient because ABORTED
-     * can only be set AFTER this thread is terminated. The shutdown sequence
-     * in stop() is: (1) transition to STOPPED, (2) join/abort thread,
-     * (3) only then transition to ABORTED if abort was needed. So this thread
-     * will either exit gracefully when it sees STOPPED, or be forcibly
-     * terminated by k_thread_abort() before ABORTED is ever set.
-     */
-    while (lora_get_state() == LORA_RUNNING) {
-        /*
-         * Radio-liveness heartbeat: apps gate their watchdog feed on this
-         * (see puck main.c). Each loop pass proves the radio path is not
-         * wedged; without it, an app main thread legitimately blocked in a
-         * long network call (CoAP request, ND resolution) has no other
-         * progress source and the watchdog resets the SoC.
-         */
-        lichen_radio_progress();
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
+	k_mutex_unlock(&modem_mutex);
 
-        /*
-         * Yield the modem to a pending TX. Without this, back-to-back
-         * lora_recv() calls hold the modem near-continuously and
-         * lichen_lora_l2_tx() can never acquire it (see tx_pending above).
-         */
-        if (atomic_get(&tx_pending) > 0) {
-            k_sleep(K_MSEC(10));
-            continue;
-        }
+	if (ret == 0) {
+		return;
+	}
 
-        k_mutex_lock(&modem_mutex, K_FOREVER);
-        ret = lora_recv(dev, rx_buf, sizeof(rx_buf),
-                        K_MSEC(RX_TIMEOUT_MS), &rssi, &snr);
-        k_mutex_unlock(&modem_mutex);
+	if (ret == -ENOTSUP) {
+		LOG_ERR("lora_l2: driver lacks recv_async; RX impossible");
+		atomic_set(&current_state, LORA_ABORTED);
+		return;
+	}
 
-        if (ret < 0) {
-            if (ret == -EAGAIN) {
-                /* Timeout is normal operation, not an error - reset counter */
-                consecutive_errors = 0;
-                continue;
-            }
-            if (ret == -EBUSY) {
-                /* TX owns the modem (half-duplex). Expected during a send;
-                 * yield briefly and re-arm - not a hardware error. */
-                consecutive_errors = 0;
-                k_sleep(K_MSEC(50));
-                continue;
-            }
-            if (consecutive_errors < INT_MAX) {
-                consecutive_errors++;
-            } else {
-                consecutive_errors = RX_ERROR_WARN_THRESHOLD;
-            }
-            LOG_ERR("lora_l2: RX error (%d)", ret);
-            if (consecutive_errors % RX_ERROR_WARN_THRESHOLD == 0) {
-                LOG_WRN("lora_l2: %d consecutive RX errors, check hardware",
-                        consecutive_errors);
-            }
-            /*
-             * Backoff on persistent errors to avoid log flooding and CPU starvation.
-             *
-             * TIMING INTERACTION (project-LICHEN-i1gk.103): This 1000ms sleep is NOT
-             * interruptible. If stop() is called while the thread is in this backoff:
-             * - stop() uses join timeout: RX_THREAD_QUICK_JOIN_MS (100ms) + RX_TIMEOUT_MS
-             * - Default RX_TIMEOUT_MS is 1000ms, so total join timeout is 1100ms
-             * - The backoff can last up to 1000ms, which is within the 1100ms budget
-             *
-             * However, if CONFIG_LICHEN_LORA_L2_RX_TIMEOUT_MS is configured lower than
-             * 1000ms (e.g., 100ms for fast response), the join timeout becomes 200ms and
-             * this 1000ms backoff will cause forced thread abort. This is acceptable:
-             * - Error backoff indicates the radio is misbehaving
-             * - Forced abort triggers ABORTED state requiring deinit/init cycle
-             * - Recovery from persistent hardware errors requires reinitialization anyway
-             *
-             * A production system experiencing persistent LoRa errors should address
-             * the root cause (hardware fault, interference, misconfiguration) rather
-             * than relying on fast stop/start cycling.
-             */
-            k_sleep(K_MSEC(1000));
-            continue;
-        }
+	LOG_ERR("lora_l2: recv_async arm failed (%d)", ret);
 
-        /* Non-negative return means radio responded successfully - reset error counter.
-         * This includes both ret==0 (empty packet) and ret>0 (data received). */
-        consecutive_errors = 0;
+retry:
+	k_work_schedule(&rx_work, K_MSEC(RX_REARM_RETRY_MS));
+}
 
-        if (ret == 0) {
-            continue;  /* Empty packet */
-        }
+/**
+ * @brief ISR callback invoked by the driver on RX_DONE
+ *
+ * Runs in driver interrupt context: only copy into the staging buffer and
+ * submit the work item. The driver's data buffer is valid only during this
+ * callback (Zephyr lora_recv_async contract).
+ *
+ * A payload larger than the staging buffer is a driver-contract violation
+ * that would overflow rx_stage. The old RX thread treated this as
+ * unrecoverable corruption; do the same here (crash_info is designed to be
+ * callable from error paths including ISRs) and leave the radio unarmed.
+ */
+static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
+			      uint16_t size, int16_t rssi, int8_t snr,
+			      void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
 
-        /*
-         * SECURITY: If driver returned more than buffer size, stack corruption
-         * has ALREADY occurred. rx_buf is stack-allocated, so out-of-bounds
-         * writes may have corrupted the return address, saved registers, or
-         * other stack frames. There is no safe recovery from this state.
-         *
-         * We panic rather than continue because:
-         * 1. Corruption already happened - the damage is done
-         * 2. Continuing risks exploiting the corrupted state
-         * 3. A restart gives the system a clean slate
-         * 4. This is a driver bug that needs immediate attention, not silent handling
-         */
-        /* lora_recv() returns int: negative errno on error, byte count on success.
-         * At this point ret > 0 (we checked ret < 0 and ret == 0 above), so cast
-         * ret to size_t for a type-safe comparison against sizeof(rx_buf). */
-        if ((size_t)ret > sizeof(rx_buf)) {
-            /*
-             * Driver returned more bytes than buffer size - corruption likely.
-             * Store crash info for post-mortem, transition to ABORTED, and
-             * exit the RX loop. Watchdog will reset us if we're stuck.
-             */
-            LOG_ERR("lora_l2: recv overflow (%d > %d)", ret, (int)sizeof(rx_buf));
-            /*
-             * Best-effort retained telemetry only: crash_info_store() cannot
-             * report failure, so recovery must not depend on this write.
-             */
-            crash_info_store(CRASH_DRIVER_OVERFLOW, __LINE__, (uint32_t)ret);
-            atomic_set(&current_state, LORA_ABORTED);
-            break;  /* Exit RX loop - let watchdog reset if needed */
-        }
+	if ((size_t)size > sizeof(rx_stage)) {
+		LOG_ERR("lora_l2: recv overflow (%u > %u)", size,
+			(unsigned int)sizeof(rx_stage));
+		crash_info_store(CRASH_DRIVER_OVERFLOW, __LINE__, (uint32_t)size);
+		atomic_set(&current_state, LORA_ABORTED);
+		return;
+	}
 
-        LOG_DBG("lora_l2: RX %d bytes (RSSI %d dBm, SNR %d dB)", ret, rssi, snr);
+	if (!atomic_get(&rx_enabled)) {
+		/* Stop raced the delivery; the packet is dropped, which is
+		 * what the radio would have lost anyway when disarming. */
+		return;
+	}
 
-        /*
-         * Invoke callback if registered - snapshot under lock for consistency.
-         *
-         * LOCK ORDER INVARIANT (project-LICHEN-i1gk.45): lora_mutex is released
-         * BEFORE the callback is invoked. The callback (lichen_l2_input) acquires
-         * rx_mutex. This ordering is safe because:
-         *
-         * 1. lora_mutex protects callback registration, not callback execution
-         * 2. The callback never calls back into lora_l2.c functions that need
-         *    lora_mutex (tx uses tx_buf_mutex only, not lora_mutex)
-         * 3. This ensures no lock ordering between lora_mutex and rx_mutex exists
-         *
-         * CROSS-MODULE INVARIANT: lora_l2_tx() must NOT acquire lora_mutex.
-         * If TX ever needs lora_mutex while a callback holds rx_mutex, and that
-         * callback's caller needed rx_mutex before acquiring lora_mutex, we'd have
-         * ABBA deadlock. Currently tx_buf_mutex is independent, preserving safety.
-         * See lichen_lora_l2_tx() which explicitly documents using only tx_buf_mutex.
-         */
-        k_mutex_lock(&lora_mutex, K_FOREVER);
-        lichen_lora_rx_cb_t cb = lora_data.rx_callback;
-        void *cb_user_data = lora_data.rx_callback_user_data;
-        k_mutex_unlock(&lora_mutex);
+	if (atomic_test_and_set(&rx_pending)) {
+		/* Previous packet not yet processed. Cannot happen with a
+		 * single outstanding RX (we re-arm only after processing);
+		 * defensive against drivers that auto-re-arm. */
+		LOG_DBG("lora_l2: RX staging busy, packet dropped");
+		return;
+	}
 
-        if (cb) {
-            /*
-             * SECURITY: Callback interruption risk during k_thread_abort().
-             *
-             * If stop() times out and calls k_thread_abort() while this
-             * callback is executing, the callback will be terminated
-             * mid-execution. This can leave the callback's resources in an
-             * inconsistent state (held locks, partial allocations, etc.).
-             *
-             * Recovery mechanism: After abort, stop() sets LORA_ABORTED state.
-             * Callers must check lichen_lora_l2_needs_reinit() and perform a
-             * full deinit()/init() cycle before restart. The callback owner
-             * is responsible for detecting the abort (via needs_reinit() or
-             * its own timeout/watchdog) and cleaning up any leaked resources.
-             *
-             * This is a known limitation of thread abort - there is no safe
-             * way to interrupt an arbitrary callback. The ABORTED state
-             * ensures callers are aware recovery action is required.
-             */
-            cb(rx_buf, ret, rssi, snr, cb_user_data);
-        }
-    }
+	memcpy(rx_stage, data, size);
+	rx_stage_len = size;
+	rx_stage_rssi = rssi;
+	rx_stage_snr = snr;
 
-    LOG_INF("lora_l2: RX thread exiting");
+	k_work_submit(&rx_work);
+}
+
+/**
+ * @brief Work handler: deliver staged packet, then re-arm the driver
+ */
+static void rx_work_fn(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	/*
+	 * Radio-liveness heartbeat: apps gate their watchdog feed on this
+	 * (see puck main.c). Each execution proves the RX path is not wedged.
+	 */
+	lichen_radio_progress();
+
+	if (atomic_get(&rx_pending)) {
+		uint16_t len = rx_stage_len;
+		int16_t rssi = rx_stage_rssi;
+		int8_t snr = rx_stage_snr;
+
+		/*
+		 * Snapshot the callback pair under lock for consistency
+		 * (preserves the old RX thread invariant: stop() clears the
+		 * callback before any later work execution observes it).
+		 *
+		 * LOCK ORDER INVARIANT (project-LICHEN-i1gk.45): lora_mutex is
+		 * released BEFORE the callback is invoked, and the callback
+		 * never calls back into functions that need lora_mutex, so no
+		 * lock ordering between lora_mutex and rx_mutex exists.
+		 */
+		k_mutex_lock(&lora_mutex, K_FOREVER);
+		lichen_lora_rx_cb_t cb = lora_data.rx_callback;
+		void *cb_user_data = lora_data.rx_callback_user_data;
+		k_mutex_unlock(&lora_mutex);
+
+		if (cb != NULL && len > 0) {
+			/*
+			 * Buffer ownership: rx_stage stays immutable for the
+			 * whole callback (rx_pending is still set, so the ISR
+			 * drops any concurrent delivery). The pointer is valid
+			 * ONLY for the duration of this invocation.
+			 */
+			cb(rx_stage, len, rssi, snr, cb_user_data);
+		}
+
+		atomic_clear(&rx_pending);
+	}
+
+	if (lora_get_state() == LORA_RUNNING) {
+		lora_l2_rx_arm();
+	}
+}
+
+/**
+ * @brief Arm the first asynchronous reception (called from start())
+ *
+ * The modem cannot be contended here: the module just transitioned
+ * STOPPED -> RUNNING and no TX can be in flight yet.
+ *
+ * @return 0 on success, negative errno from the driver on failure
+ */
+int lora_l2_rx_start(void)
+{
+	int ret;
+
+	atomic_clear(&rx_pending);
+	atomic_set(&rx_enabled, 1);
+
+	k_mutex_lock(&modem_mutex, K_FOREVER);
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
+	k_mutex_unlock(&modem_mutex);
+
+	if (ret < 0) {
+		atomic_set(&rx_enabled, 0);
+		return ret;
+	}
+
+	return 0;
+}
+
+/**
+ * @brief Disarm the driver and drain the RX work item (called from stop())
+ *
+ * Order matters:
+ * 1. Clear rx_enabled: ISR deliveries are dropped from here on (stop() has
+ *    already transitioned to STOPPED before calling this).
+ * 2. Cancel a scheduled re-arm retry, then flush: when this returns, the
+ *    work item is neither queued nor running, and - because the handler
+ *    re-checks the state inside its arm critical section - nothing will
+ *    arm the driver afterwards.
+ * 3. Disarm under modem_mutex (non-blocking): if TX owns the modem the
+ *    enabled gate already drops stragglers, and TX cannot deliver a packet
+ *    to this module.
+ *
+ * The net effect equals the old RX thread join: no RX callback can start
+ * after stop() completes, without any join/abort failure modes.
+ */
+void lora_l2_rx_stop(void)
+{
+	const struct device *dev = lora_data.lora_dev;
+	int ret;
+
+	atomic_set(&rx_enabled, 0);
+
+	k_work_cancel_delayable(&rx_work);
+	k_work_flush(&rx_work, NULL);
+
+	if (dev != NULL && k_mutex_lock(&modem_mutex, K_NO_WAIT) == 0) {
+		ret = lora_recv_async(dev, NULL, NULL);
+		k_mutex_unlock(&modem_mutex);
+		if (ret < 0) {
+			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
+		}
+	} else {
+		LOG_DBG("lora_l2: modem busy during RX disarm");
+	}
 }
 
 int lichen_lora_l2_set_rx_callback(lichen_lora_rx_cb_t cb, void *user_data)
 {
-    enum lora_state state = lora_get_state();
+	enum lora_state state = lora_get_state();
 
-    if (state == LORA_UNINIT) {
-        LOG_WRN("lora_l2: cannot set RX callback, not initialized");
-        return -ENODEV;
-    }
-    if (state == LORA_DEINITING) {
-        LOG_WRN("lora_l2: cannot set RX callback during deinit");
-        return -EBUSY;
-    }
-    if (state == LORA_ABORTED || lichen_lora_l2_needs_reinit()) {
-        LOG_WRN("lora_l2: cannot set RX callback until reinit after abort");
-        return -ECANCELED;
-    }
+	if (state == LORA_UNINIT) {
+		LOG_WRN("lora_l2: cannot set RX callback, not initialized");
+		return -ENODEV;
+	}
+	if (state == LORA_DEINITING) {
+		LOG_WRN("lora_l2: cannot set RX callback during deinit");
+		return -EBUSY;
+	}
+	if (state == LORA_ABORTED || lichen_lora_l2_needs_reinit()) {
+		LOG_WRN("lora_l2: cannot set RX callback until reinit after abort");
+		return -ECANCELED;
+	}
 
-    /*
-     * Use mutex to ensure atomic update of callback + user_data pair.
-     * The RX thread reads both fields, so they must be updated together
-     * to avoid invoking a callback with mismatched user_data.
-     *
-     * Order matters: user_data MUST be set before callback. If the callback
-     * pointer is read non-NULL, user_data must already be valid. This order
-     * is safe even for lock-free reads (though we use mutex here).
-     *
-     * Ownership: caller retains ownership of user_data. This module stores
-     * the pointer and passes it back on invocation, but never frees it.
-     * Callers should clean up their user_data before calling stop() or
-     * deinit() if the memory would otherwise be orphaned.
-     */
-    k_mutex_lock(&lora_mutex, K_FOREVER);
-    lora_data.rx_callback_user_data = user_data;
-    lora_data.rx_callback = cb;
-    k_mutex_unlock(&lora_mutex);
+	/*
+	 * Use mutex to ensure atomic update of callback + user_data pair.
+	 * The work handler reads both fields, so they must be updated together
+	 * to avoid invoking a callback with mismatched user_data.
+	 *
+	 * Order matters: user_data MUST be set before callback. If the callback
+	 * pointer is read non-NULL, user_data must already be valid. This order
+	 * is safe even for lock-free reads (though we use mutex here).
+	 *
+	 * Ownership: caller retains ownership of user_data. This module stores
+	 * the pointer and passes it back on invocation, but never frees it.
+	 * Callers should clean up their user_data before calling stop() or
+	 * deinit() if the memory would otherwise be orphaned.
+	 */
+	k_mutex_lock(&lora_mutex, K_FOREVER);
+	lora_data.rx_callback_user_data = user_data;
+	lora_data.rx_callback = cb;
+	k_mutex_unlock(&lora_mutex);
 
-    return 0;
+	return 0;
 }
