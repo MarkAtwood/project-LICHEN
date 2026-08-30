@@ -88,9 +88,25 @@ config LICHEN_COAP_SERVER_OSCORE
 	  When enabled, the server can verify OSCORE-protected requests
 	  and send OSCORE-protected responses.
 
-	  SECURITY: Per spec/06-security.md Section 8.7, OSCORE is
+	  MUTATING-REQUEST GATE (coap_oscore_unprotect_resource_request):
+	  Enabled: an OSCORE-protected request is verified by looking up
+	  the security context for the peer EUI-64 derived from the source
+	  address, unprotecting it, and checking the inner method; a
+	  protected request without a matching context is rejected 4.01.
+	  Unprotected requests still require local admin
+	  (lichen_coap_is_local_admin). Disabled: the whole OSCORE branch
+	  compiles out, every request is treated as unprotected, and every
+	  gate built on this helper degrades to the local-admin check
+	  alone — remote mesh peers receive 4.01 Unauthorized for the
+	  mutating operations it guards (admin-only fallback, not an open
+	  gate). Only handlers routed through this helper inherit these
+	  properties.
+
+	  SECURITY: Per spec/06-security.md Section 15.6, OSCORE is
 	  recommended for all CoAP traffic to provide end-to-end security
-	  independent of the link layer.
+	  independent of the link layer. Disabling this option downgrades
+	  remote mutating access to admin-only; it does not expose those
+	  operations to unauthenticated peers.
 
 config LICHEN_COAP_CONFIG
 	bool "LCI /config resource handlers"
