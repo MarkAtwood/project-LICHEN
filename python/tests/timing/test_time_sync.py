@@ -924,7 +924,11 @@ def test_concurrent_provision_raise_never_reports_valid_time_below_displayed_flo
 
 
 def test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition() -> None:
-    for action in ("adopt", "consider", "replace-policy"):
+    for action, reason in (
+        ("adopt", "sample-invalidated-or-replayed"),
+        ("consider", "sample-invalidated-or-replayed"),
+        ("replace-policy", "below-live-epoch-floor:accepted"),
+    ):
         clock = Clock()
         authority = provider(clock, SourceClass.GNSS)
         verifier, admin = provision()
@@ -939,12 +943,22 @@ def test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition() -> 
         assert state.adopt(gnss(authority, FLOOR + 10))
         verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 20).encode())
         if action == "adopt":
-            state.adopt(gnss(authority, FLOOR + 19))
+            assert state.adopt(gnss(authority, FLOOR + 19)) is False
         elif action == "consider":
             candidate = gnss(authority, FLOOR + 19)
-            state.consider(DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate)
+            assert (
+                state.consider(
+                    DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate
+                )
+                is False
+            )
         else:
             state.replace_policy(policy_admin, policy(SourceClass.GNSS))
+        # The transition itself must have cleared the below-floor active
+        # source; raw_sample_diagnostic() reads state without triggering
+        # read-path revalidation, so this pins eager invalidation.
+        assert state.raw_sample_diagnostic() is None, action
+        assert state.last_rejection_reason == reason, action
         assert not state.status().wall_clock_valid, action
 
 
