@@ -67,6 +67,9 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_DEADDROP
 zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_SLOT_COORD
   coap_slot_coord.c
 )
+zephyr_library_sources_ifdef(CONFIG_LICHEN_SLOT_CLAIM_REPLAY
+  slot_claim_settings.c
+)
 
 zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_HANDOFF
   coap_handoff.c

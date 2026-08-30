@@ -352,6 +352,37 @@ config LICHEN_COAP_SLOT_COORD
 	  full claim payload. Claims with invalid or missing signatures are
 	  silently discarded.
 
+config LICHEN_SLOT_CLAIM_REPLAY
+	bool "Persist per-gateway slot-claim_seq high-water marks"
+	depends on LICHEN_COAP_SLOT_COORD
+	depends on SETTINGS
+	default y
+	help
+	  Persist the per-gateway claim_seq high-water mark (spec/08 GCP-6.5
+	  step 8) so slot-claim replays are rejected across reboots. One
+	  Settings entry per gateway IID (16 hex chars, uint32 LE value);
+	  writes happen only when a gateway raises its high-water. Slot
+	  claims are infrequent (superframe-scale, one write per accepted
+	  claim), so erase wear is negligible compared to the link replay
+	  table.
+
+	  SECURITY: setting this to n disables cross-reboot replay
+	  protection entirely (the in-memory weak defaults accept every
+	  first-seen seq after each boot). Within a single boot the
+	  high-water is still enforced by lichen_slot_coord_process_claim.
+	  When the persist cache is full (more stored gateways than
+	  CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS), commits for uncached
+	  gateways fail closed (LICHEN_CLAIM_REJECT_PERSIST) rather than
+	  risk regressing a persisted floor.
+
+config LICHEN_SLOT_CLAIM_REPLAY_TEST_HOOKS
+	bool "Test hooks for slot-claim seq persistence"
+	depends on LICHEN_SLOT_CLAIM_REPLAY
+	depends on ZTEST
+	help
+	  Enable lichen_slot_claim_seq_test_reset() for clearing the RAM
+	  cache between test cases. Only for testing.
+
 config LICHEN_COAP_SLOT_COORD_RESOURCE
 	bool "Enable Slot Coordination CoAP resources"
 	depends on LICHEN_COAP_SLOT_COORD
