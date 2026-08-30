@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-ipbu",
+  "title": "[bug] tunnel_auth: revoked-post resubmission returns Revoked but regression test expects Replay",
+  "description": "lichen-gateway/src/tunnel_auth.rs test revocation_root_change_expiry_and_lru_fail_closed (tunnel_auth.rs:921-975) fails deterministically on current main at :954-957: after table.revoke(second_claim...) succeeds, re-accepting the identical root post (accept_post(second.body..., own, 3)) returns Err(TunnelAuthError::Revoked) while the regression test asserts Err(TunnelAuthError::Replay). Repro: cargo test -p lichen-gateway --lib tunnel_auth::tests::revocation_root_change_expiry_and_lru_fail_closed (2/2 runs failed; 211 other lib tests pass). Root cause to adjudicate: accept_post() check ordering now classifies the revoked-then-replayed post as Revoked (revocation check precedes replay-window check), but the test (and possibly spec/06 tunnel-auth text) treats replay as the expected failure class for an identical resubmitted post. Decide the canonical classification: if Revoked-first ordering is deliberate (fail-closed on revocation before anti-replay), update the test assertion and any spec text; if replay-first is canonical, fix accept_post ordering and re-run the full revocation/expiry/LRU matrix. Discovered while validating bead 5rx2 (unrelated subsystem; no code was changed).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T04:04:58.007188Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T04:04:58.007188Z"
+}
