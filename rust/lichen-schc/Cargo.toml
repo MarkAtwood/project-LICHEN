@@ -50,3 +50,7 @@ required-features = ["std", "raw-fragment-codec"]
 [[test]]
 name = "authenticated_dio_vectors"
 required-features = ["std"]
+
+[[test]]
+name = "link_layer_integration"
+required-features = ["std"]
