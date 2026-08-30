@@ -562,12 +562,17 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 		return (int)needed;
 	}
 
-	ret = validate_ipv6_address_policy(packet);
+	/* Structure/checksum validation first, then the emission endpoint
+	 * address policy — mirroring Rust validate_full_ipv6 (codec.rs:363-366)
+	 * and Python's TX wrappers (encode_rule255, headers.py:188-189) so
+	 * dual-defect packets report the same error class as Rust (Python
+	 * raises one SchcError class for both stages). */
+	ret = validate_ipv6_transport_lengths(packet, pkt_len);
 	if (ret < 0) {
 		return ret;
 	}
 
-	ret = validate_ipv6_transport_lengths(packet, pkt_len);
+	ret = validate_ipv6_address_policy(packet);
 	if (ret < 0) {
 		return ret;
 	}
