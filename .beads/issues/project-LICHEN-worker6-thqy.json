@@ -3,13 +3,13 @@
   "title": "Review: discovery.rs edge cases 2026-08-16",
   "description": "Review confidence: 85% chance of no missed edge-case bugs.\nLeast confident areas: CoapBuilder internals (not reviewed - assumed to validate token length).\nWould raise confidence if: reviewed CoapBuilder::new() for token length validation.",
   "status": "open",
-  "priority": 1,
+  "priority": 3,
   "issue_type": "epic",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-16T18:47:10.289004Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:34:51.368295Z",
+  "updated_at": "2026-08-30T16:58:54.161125Z",
   "started_at": "2026-08-16T18:47:10.969255Z",
   "labels": [
     "review"

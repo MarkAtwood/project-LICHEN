@@ -3,13 +3,13 @@
   "title": "Review: loadng.rs edge cases 2026-08-16",
   "description": "\n\n---\nReview confidence: 15% chance of missed bug.\nLeast confident areas: interaction with link layer signature verification, runtime state machine (vs typestate).\nWould raise confidence if: reviewed integration with calling code, examined protocol spec for flag semantics.",
   "status": "open",
-  "priority": 1,
+  "priority": 3,
   "issue_type": "epic",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-16T19:39:10.555195Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:34:32.476369Z",
+  "updated_at": "2026-08-30T16:58:49.87938Z",
   "started_at": "2026-08-16T19:40:10.574911Z",
   "labels": [
     "review"
