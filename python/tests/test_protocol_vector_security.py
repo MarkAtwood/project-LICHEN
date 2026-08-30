@@ -113,6 +113,28 @@ def _compressed_ack(rule_id: int, window: int, bitmap: str) -> bytes:
     return int(bits, 2).to_bytes(len(bits) // 8, "big")
 
 
+def _decompress_ack(wire: bytes) -> tuple[int, int, int, str]:
+    """Decode an ACK per draft-lichen-schc-lora-00 section 5.4.
+
+    Returns (rule_id, window, c_bit, full 63-bit bitmap). C=1 carries no
+    bitmap and encodes as exactly 2 octets. C=0 carries a bitmap field of
+    min(63, message_bits - 10) bits; the decoder restores omitted trailing
+    bitmap bits as 1, and bits beyond the 63-bit bitmap are zero padding.
+    """
+    bits = "".join(f"{byte:08b}" for byte in wire)
+    rule_id = int(bits[0:8], 2)
+    window = int(bits[8], 2)
+    c_bit = int(bits[9], 2)
+    if c_bit == 1:
+        assert len(bits) == 16, "C=1 ACK encodes as exactly 2 octets"
+        return rule_id, window, c_bit, "1" * 63
+    field = bits[10:]
+    assert (10 + len(field)) % 8 == 0, "ACK must end on an octet boundary"
+    assert set(field[63:]) <= {"0"}, "bits beyond the 63-bit bitmap are zero padding"
+    bitmap = field[:63]
+    return rule_id, window, c_bit, bitmap + "1" * (63 - len(bitmap))
+
+
 def test_link_signatures_use_canonical_dst_len_transcript() -> None:
     signed = [vector for vector in _load("link_frame.json")["vectors"] if "crypto" in vector]
     assert signed
@@ -180,14 +202,39 @@ def test_mic_selector_signed_vectors_bind_mandatory_signer_eui64() -> None:
         crypto = vector["crypto"]
         prefix, signature = wire[:-48], wire[-48:]
         public_key = bytes.fromhex(crypto["public_key"])
-        transcript = signature_transcript(prefix, 0)
+        assert wire[0] == len(wire) - 1, vector["name"]
+        # spec/02-physical-link.md 4.2: signed frames MUST set both S and SI;
+        # bits 2-4 carry the MIC selector, bit 6 must stay clear (no encryption).
         assert prefix[1] & 0xA0 == 0xA0, vector["name"]
+        assert prefix[1] & 0x40 == 0, vector["name"]
+        assert (prefix[1] >> 2) & 0x07 == vector["expected"]["mic_length_selector"], vector["name"]
+        # Addr mode 0 (no DstAddr on the wire) puts the SIID right after SeqNum
+        # at offset 5 and justifies the non-wire DST_LEN octet value of 0.
+        assert prefix[1] & 0x03 == 0, vector["name"]
         assert prefix[5:13] == _eui64_for_key(public_key)
         assert crypto["signer_eui64"] == _eui64_for_key(public_key).hex()
         assert prefix.hex() == crypto["wire_prefix"]
+        transcript = signature_transcript(prefix, 0)
         assert transcript.hex() == crypto["preimage"]
+        assert transcript.startswith(LINK_SIGNATURE_DOMAIN), vector["name"]
         assert signature.hex() == crypto["signature"]
         assert verify(public_key, transcript, signature), vector["name"]
+        # The exact eight on-wire SIID octets are covered by the signature
+        # (spec/02-physical-link.md 4.1), so tampering must break verification.
+        siid_offset = len(LINK_SIGNATURE_DOMAIN) + 5 + 1
+        tampered = bytearray(transcript)
+        tampered[siid_offset] ^= 0x01
+        assert not verify(public_key, bytes(tampered), signature), vector["name"]
+        # The legacy unprefixed transcript (no DST_LEN, no domain) must not verify.
+        assert not verify(public_key, prefix, signature), vector["name"]
+
+
+def test_mic_selector_unsigned_vectors_clear_s_and_si() -> None:
+    """spec/02-physical-link.md 4.2: unsigned frames MUST clear both S and SI."""
+    for vector in _load("mic_length_selector.json")["vectors"]:
+        llsec = bytes.fromhex(vector["input_hex"])[1]
+        signed = vector["expected"].get("signature_present", False)
+        assert (llsec & 0xA0 == 0xA0) is signed, vector["name"]
 
 
 def test_link_vector_schema_names_si_identifier_as_eui64() -> None:
@@ -579,6 +626,61 @@ def test_ack_bitmap_vectors_encode_complete_semantics() -> None:
         _compressed_ack(multiple["rule_id"], multiple["window"], multiple_bitmap).hex()
         == multiple["wire"]
     )
+
+
+def test_ack_bitmap_vectors_decode_wire_tile_semantics() -> None:
+    """Decode W/C/bitmap from each wire image and assert tile semantics."""
+    vectors = {
+        vector["name"]: vector
+        for vector in _load("schc_adaptation.json")["vectors"]
+        if vector["category"] == "ack_bitmap"
+    }
+
+    single = vectors["frag_ack_bitmap_single_missing"]
+    rule_id, window, c_bit, bitmap = _decompress_ack(bytes.fromhex(single["wire"]))
+    assert (rule_id, window, c_bit) == (single["rule_id"], single["window"], single["c_bit"])
+    semantic = (
+        single["received_bitmap_bits"]
+        + "0" * single["unassigned_zero_bits"]
+        + ("1" if single["final_all_1_received"] else "0")
+    )
+    assert bitmap == semantic, single["name"]
+    assert bitmap[0] == "1", single["name"]  # FCN 62 received
+    assert bitmap[1] == "0", single["name"]  # FCN 61 missing
+    assert bitmap[2:62] == "0" * single["unassigned_zero_bits"], single["name"]  # unassigned zeros
+    assert bitmap[62] == "1", single["name"]  # final All-1 received at the rightmost position
+    assert single["assigned_fcns"] == [62, 61, 63]
+
+    multiple = vectors["frag_ack_bitmap_multiple_missing"]
+    rule_id, window, c_bit, bitmap = _decompress_ack(bytes.fromhex(multiple["wire"]))
+    assert (rule_id, window, c_bit) == (multiple["rule_id"], multiple["window"], multiple["c_bit"])
+    semantic = multiple["received_bitmap_prefix_bits"] + "1" * multiple["trailing_received_bits"]
+    assert bitmap == semantic, multiple["name"]
+    assert [index for index, bit in enumerate(bitmap) if bit == "0"] == [2, 4], multiple["name"]
+
+    all_received = vectors["frag_ack_bitmap_all_received"]
+    all_received_wire = bytes.fromhex(all_received["wire"])
+    rule_id, window, c_bit, bitmap = _decompress_ack(all_received_wire)
+    assert (rule_id, window, c_bit) == (
+        all_received["rule_id"],
+        all_received["window"],
+        all_received["c_bit"],
+    )
+    assert len(all_received_wire) == 2  # C=1 encodes as exactly 2 octets, no bitmap
+    assert bitmap == "1" * 63
+
+    for name in ("frag_ack_bitmap_single_missing", "frag_ack_bitmap_multiple_missing"):
+        vector = vectors[name]
+        rule_id, window, c_bit, bitmap = _decompress_ack(bytes.fromhex(vector["wire"]))
+        # Decoder restores omitted trailing bits as 1: decode(encode(x)) == x.
+        assert _compressed_ack(rule_id, window, bitmap) == bytes.fromhex(vector["wire"]), name
+        # Transmitted bitmap is the full bitmap minus its maximal trailing run of
+        # 1 bits, plus restored 1 bits to end the message on an octet boundary.
+        bits = "".join(f"{byte:08b}" for byte in bytes.fromhex(vector["wire"]))
+        field = bits[10:]
+        stripped = bitmap.rstrip("1")
+        assert field.startswith(stripped), name
+        assert set(field[len(stripped) :]) <= {"1"}, name
 
 
 def test_rpl_vectors_distinguish_root_propagation_and_dao_shape() -> None:

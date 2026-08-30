@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-o3tw",
+  "title": "cargo clippy -p lichen-gateway -- -D warnings fails inside dependency lichen-node (send_secure_block1, secure.rs:642)",
+  "description": "cargo clippy -p lichen-gateway --all-features -- -D warnings fails inside dependency lichen-node/src/secure.rs:642: send_secure_block1 takes 8 arguments (too_many_arguments). Introduced by f20a338940 (orphaned-work checkpoint). Blocks the -D warnings gate for any crate depending on lichen-node. Fix: introduce a params struct or builder for send_secure_block1 in rust/lichen-node/src/secure.rs.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T00:50:54.215966Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T00:50:54.215966Z"
+}

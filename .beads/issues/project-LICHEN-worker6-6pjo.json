@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-6pjo",
+  "title": "SecureStack: failed send leaves stale pending_requests entry causing CorrelationMismatch on identical retry",
+  "description": "Discovered during milq/mybk gateway handoff tests. SecureStack::send_secure_response_to (rust/lichen-node/src/secure.rs:1427-1431) correlates the outgoing response to pending_requests by inner request equality (code+options+payload+sender); the entry is removed only on successful send (secure.rs:1511). After a failed send (e.g. GatewayOscoreSenderStore persistence failure), the stale entry remains, so a retry whose inner payload is byte-identical builds its response from the stale entry's token/MID/request-PIV and the client sees CorrelationMismatch. Retry tests in end_to_end.rs work around it by rebuilding the handoff payload with a fresh timestamp (realistic but masks the bug). Fix: drop the pending entry on send failure, or match by request PIV.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T00:50:51.690446Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T00:50:51.690446Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6pjo",
+      "depends_on_id": "project-LICHEN-worker6-milq",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T00:50:52.094243Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

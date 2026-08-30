@@ -893,8 +893,8 @@ def test_trickle_constants_match_spec() -> None:
 def test_duty_cycle_max_packets() -> None:
     from lichen.timing.duty_cycle import EU868_MAX_PACKETS_PER_HOUR, max_packets_per_hour
 
-    assert EU868_MAX_PACKETS_PER_HOUR == 1800
-    assert max_packets_per_hour(200, 10) == 1800
+    assert EU868_MAX_PACKETS_PER_HOUR == 973
+    assert max_packets_per_hour(369.664, 10) == 973
 
 
 def test_csma_cw() -> None:

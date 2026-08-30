@@ -966,6 +966,12 @@ class Node:
             self._record_schc_failure(rx)
             return
         self._rule_version_failures.record_success(rx.sender_pubkey)
+        # Why before routing: spec/04-network.md 6.3.2. An arriving Hop Limit
+        # of 0 is exhausted upstream, so the datagram is rejected before any
+        # routing, local consumption, or relay re-encoding.
+        if packet.header.hop_limit == 0:
+            logger.debug("dropping IPv6 packet with exhausted Hop Limit")
+            return
         relay_identity = _relay_identity(packet)
 
         now_ms = int(asyncio.get_running_loop().time() * 1000)

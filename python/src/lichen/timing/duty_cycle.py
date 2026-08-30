@@ -11,13 +11,15 @@ from types import MappingProxyType
 from lora_medium import DutyCycleTracker
 
 # §14.4 EU 868 MHz (10% duty cycle) example from spec
-# At SF9/125kHz, airtime per 60-byte packet ~200ms
+# SF9/125kHz, CR4/5, 8-symbol preamble, explicit header, PHY CRC:
+# computed airtime for a 60-byte packet is 369.664 ms (spec §14.4;
+# packets-timing.json airtime_sf9_60b / duty_cycle_eu868_10pct).
 EU868_DUTY_CYCLE_PERCENT: float = 10.0
-EU868_SF9_AIRTIME_60B_MS: float = 200.0
+EU868_SF9_AIRTIME_60B_MS: float = 369.664
 EU868_MAX_PACKETS_PER_HOUR: int = int(
     3600 * (EU868_DUTY_CYCLE_PERCENT / 100) / (EU868_SF9_AIRTIME_60B_MS / 1000)
 )
-# 3600*0.1/0.2 = 1800 packets (spec table)
+# 3600*0.10/0.369664 = 973 packets (spec §14.4)
 
 # Comfortable per-node accounting for routing
 EU868_COMFORTABLE_PACKETS_PER_HOUR: tuple[int, int] = (100, 300)
@@ -191,7 +193,7 @@ def max_packets_per_hour(airtime_ms: float, duty_cycle_percent: float, window_s:
     """Compute max packets/hour given airtime and duty cycle.
 
     Formula: ``3600s * (duty_cycle/100) / (airtime_s)``
-    Matches spec §14.4: ``3600s * 0.1 / 0.2s = 1800``.
+    Matches spec §14.4: ``3600s * 0.10 / 0.369664s = 973``.
     """
     if airtime_ms <= 0:
         raise ValueError("airtime_ms must be positive")

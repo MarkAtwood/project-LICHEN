@@ -36,11 +36,11 @@ class TestDutyCycleConstants:
         assert EU868_DUTY_CYCLE_PERCENT == 10.0
 
     def test_eu868_sf9_airtime(self) -> None:
-        assert EU868_SF9_AIRTIME_60B_MS == 200.0
+        assert EU868_SF9_AIRTIME_60B_MS == 369.664
 
     def test_eu868_max_packets(self) -> None:
-        # Spec: 3600 * 0.1 / 0.2 = 1800
-        assert EU868_MAX_PACKETS_PER_HOUR == 1800
+        # Spec §14.4: 3600 * 0.10 / 0.369664 = 973
+        assert EU868_MAX_PACKETS_PER_HOUR == 973
 
     def test_eu868_comfortable_range(self) -> None:
         assert EU868_COMFORTABLE_PACKETS_PER_HOUR == (100, 300)
@@ -119,14 +119,14 @@ class TestMaxPacketsPerHour:
     """Test max_packets_per_hour calculation."""
 
     def test_spec_example_eu868(self) -> None:
-        # Spec: 200ms airtime, 10% duty cycle = 1800 packets/hour
-        result = max_packets_per_hour(200.0, 10.0)
-        assert result == 1800
+        # Spec §14.4: 369.664ms airtime, 10% duty cycle = 973 packets/hour
+        result = max_packets_per_hour(369.664, 10.0)
+        assert result == 973
 
     def test_1_percent_duty_cycle(self) -> None:
-        # 200ms airtime, 1% duty cycle = 180 packets/hour
-        result = max_packets_per_hour(200.0, 1.0)
-        assert result == 180
+        # 369.664ms airtime, 1% duty cycle = 97 packets/hour
+        result = max_packets_per_hour(369.664, 1.0)
+        assert result == 97
 
     def test_smaller_airtime_more_packets(self) -> None:
         at_100ms = max_packets_per_hour(100.0, 10.0)
@@ -219,16 +219,16 @@ class TestDutyCycleScenarios:
         # 200ms / 3600000ms = 0.00556%
         assert usage < 0.01
 
-    def test_1800_packets_usage(self) -> None:
-        # 1800 packets * 200ms = 360000ms = 10%
-        usage = duty_cycle_usage_percent(1800 * 200.0)
-        assert abs(usage - 10.0) < 0.001
+    def test_973_packets_usage(self) -> None:
+        # 973 whole packets * 369.664ms = 359,887.672ms, just under 10%
+        usage = duty_cycle_usage_percent(973 * 369.664)
+        assert 9.99 < usage < 10.0
 
     def test_comfortable_packet_rate(self) -> None:
-        # 100-300 packets at 200ms airtime
+        # 100-300 packets at 369.664ms airtime
         low, high = EU868_COMFORTABLE_PACKETS_PER_HOUR
-        usage_low = duty_cycle_usage_percent(low * 200.0)
-        usage_high = duty_cycle_usage_percent(high * 200.0)
+        usage_low = duty_cycle_usage_percent(low * 369.664)
+        usage_high = duty_cycle_usage_percent(high * 369.664)
         # Should be well under 10%
         assert usage_low < 10.0
         assert usage_high < 10.0

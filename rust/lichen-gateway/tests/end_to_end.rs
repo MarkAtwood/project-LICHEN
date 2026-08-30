@@ -19,6 +19,7 @@ use lichen_core::icmpv6;
 use lichen_core::icmpv6::hdr_field;
 use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
 use lichen_gateway::{
+    handoff::{HandoffRejectReason, HandoffRequest, HandoffResponse, NodeRegistryEntry},
     resources::{CoapMethod, GatewayCoordinator, SlotClaim},
     trust::{iid_from_pubkey, PskFederation, TrustStore},
     Gateway, GatewayPersistence,
@@ -33,7 +34,7 @@ use lichen_link::link_layer::LinkLayer;
 use lichen_link::schnorr;
 use lichen_link::seqnum::LinkSeqNum;
 use lichen_node::rpl_code;
-use lichen_node::secure::{SecureRequestData, SecureStack};
+use lichen_node::secure::{SecureRequestData, SecureResponse, SecureStack};
 use lichen_node::RplEvent;
 use lichen_oscore::{ContextId, SenderSequenceState, SenderStateStore};
 use lichen_schc::codec;
@@ -91,6 +92,16 @@ fn ula(suffix: u8) -> Ipv6Addr {
 fn test_gateway() -> Gateway {
     let seed = Seed::new([0x02; 32]);
     Gateway::new_ephemeral(Identity::from_seed(seed), 128).unwrap()
+}
+
+/// Create a state directory that hardened FileStorage accepts (0700).
+fn private_test_dir(path: &std::path::Path) {
+    std::fs::create_dir_all(path).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
 }
 
 fn gateway_identity() -> Identity {
@@ -701,8 +712,8 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
             .as_nanos()
     ));
     let floor_root = root.with_extension("floors");
-    std::fs::create_dir_all(&root).unwrap();
-    std::fs::create_dir_all(&floor_root).unwrap();
+    private_test_dir(&root);
+    private_test_dir(&floor_root);
     let sealing_seed = [0x7a; 32];
     let trust = TrustStore::new_ephemeral(8).unwrap();
     trust
@@ -879,4 +890,304 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     drop(restarted);
     std::fs::remove_dir_all(root).unwrap();
     std::fs::remove_dir_all(floor_root).unwrap();
+}
+
+/// ── Transactional handoff over runtime dispatch ─────────────────────────────
+
+struct HandoffHarness {
+    gateway: Gateway,
+    client: SecureStack<LoopbackRadio>,
+    client_store: TestSenderStore,
+    wire_receiver: LoopbackRadio,
+    gateway_addr: [u8; 16],
+    gateway_iid: [u8; 8],
+    root: std::path::PathBuf,
+    floor_root: std::path::PathBuf,
+    current_superframe: u64,
+}
+
+async fn handoff_harness(label: &str) -> HandoffHarness {
+    let gateway_identity = gateway_identity();
+    let gateway_addr = gw_native(&gateway_identity);
+    let remote_identity = Identity::from_seed(Seed::new([0x76; 32]));
+    let remote_pubkey = *remote_identity.pubkey.as_bytes();
+    let remote_iid = remote_identity.iid;
+
+    let master_secret = [0x78; 16];
+    let root = std::env::temp_dir().join(format!(
+        "lichen-handoff-{label}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let floor_root = root.with_extension("floors");
+    private_test_dir(&root);
+    private_test_dir(&floor_root);
+    let sealing_seed = [0x7a; 32];
+    let trust = TrustStore::new_ephemeral(8).unwrap();
+    trust
+        .save_atomic_with_floor(
+            &root.join("gateway-trust.bin"),
+            &floor_root.join("gateway-trust.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+    let coordinator = GatewayCoordinator::provision_persistent(
+        gateway_addr,
+        60,
+        64,
+        &root.join("gateway-slot-replay.bin"),
+        &floor_root.join("gateway-slot-replay.generation"),
+        &sealing_seed,
+    )
+    .unwrap();
+    let mut gateway = Gateway::new_persistent(
+        gateway_identity.clone(),
+        128,
+        trust,
+        coordinator,
+        GatewayPersistence::new(
+            FileStorage::new(&root).unwrap(),
+            true,
+            root.clone(),
+            floor_root.clone(),
+            sealing_seed,
+        ),
+    )
+    .unwrap();
+    let federation = PskFederation::new(&master_secret, None, None).unwrap();
+    gateway
+        .provision_closed_federation(&federation, &[remote_pubkey])
+        .unwrap();
+
+    let (client_radio, wire_receiver) = LoopbackRadio::pair();
+    let mut client = SecureStack::from_radio(client_radio, remote_identity, 128, 1).unwrap();
+    client.add_peer(PeerIdentity::from_pubkey(gateway_identity.pubkey));
+    let mut client_store = TestSenderStore::default();
+    let client_context = federation
+        .derive_context(&remote_iid, &gateway_identity.iid)
+        .unwrap()
+        .register_fresh(&mut client_store)
+        .unwrap();
+    client
+        .restore_context(gateway_identity.iid, client_context, &mut client_store)
+        .unwrap();
+    let current_superframe = gateway.current_superframe();
+
+    HandoffHarness {
+        gateway,
+        client,
+        client_store,
+        wire_receiver,
+        gateway_addr,
+        gateway_iid: gateway_identity.iid,
+        root,
+        floor_root,
+        current_superframe,
+    }
+}
+
+/// Drive one protected handoff POST through runtime dispatch. Returns the
+/// ingress outcome and, when the gateway managed to deliver a protected
+/// response, the client-decrypted CoAP response.
+async fn exchange_protected_handoff(
+    harness: &mut HandoffHarness,
+    node_addr: [u8; 16],
+    handoff_timestamp: i64,
+    token: u8,
+    now_ms: u64,
+) -> (lichen_gateway::GatewayIngress, Option<SecureResponse>) {
+    let payload = HandoffRequest::new(node_addr, handoff_timestamp).encode();
+    let mut correlation = harness
+        .client
+        .send_secure_request(
+            &Addr(harness.gateway_addr),
+            &harness.gateway_iid,
+            SecureRequestData {
+                uri_path: &[".well-known", "lichen-gw", "handoff"],
+                token: &[token],
+                method: MessageCode::POST,
+                payload: &payload,
+            },
+            &mut harness.client_store,
+        )
+        .await
+        .unwrap();
+    let mut wire = [0u8; 255];
+    let length = harness
+        .wire_receiver
+        .receive(0, &mut wire, 1)
+        .await
+        .unwrap()
+        .unwrap()
+        .len;
+    let mut ingress = harness
+        .gateway
+        .ingest_mesh_frame_at_superframe(
+            &wire[..length],
+            Some(-45),
+            Some(8),
+            now_ms,
+            harness.current_superframe,
+        )
+        .await
+        .unwrap();
+    let response = match ingress.take_mesh_reply() {
+        Some(response_wire) => {
+            harness
+                .wire_receiver
+                .transmit(0, &response_wire)
+                .await
+                .unwrap();
+            let protected = harness
+                .client
+                .receive_secure_datagram(1)
+                .await
+                .unwrap()
+                .expect("client receives handoff response");
+            Some(
+                harness
+                    .client
+                    .decrypt_response(&protected, &mut correlation)
+                    .await
+                    .unwrap(),
+            )
+        }
+        None => None,
+    };
+    (ingress, response)
+}
+
+fn assert_handoff_status(response: &SecureResponse, expected: HandoffRejectReason) {
+    match response {
+        SecureResponse::Decrypted { code, payload, .. } => {
+            assert_eq!(code.0, 0x44, "handoff responses must be 2.04 Changed");
+            let decoded = HandoffResponse::decode(payload).unwrap();
+            assert_eq!(decoded.status, expected);
+        }
+        other => panic!("expected a decrypted handoff response, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn runtime_ingress_handoff_commits_after_protected_response() {
+    let mut harness = handoff_harness("commit").await;
+    let node_addr = [
+        0x02u8, 0, 0, 0, 0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22,
+    ];
+    harness
+        .gateway
+        .coordinator_mut()
+        .node_registry
+        .register(NodeRegistryEntry::new(node_addr));
+
+    let (ingress, response) =
+        exchange_protected_handoff(&mut harness, node_addr, 1_720_001_000, 0x7b, 1).await;
+    assert!(ingress.gcp_dispatched());
+    assert!(ingress.upstream_ipv6().is_none());
+    assert_handoff_status(
+        response
+            .as_ref()
+            .expect("protected handoff success must be delivered to the client"),
+        HandoffRejectReason::Success,
+    );
+    assert!(
+        !harness
+            .gateway
+            .coordinator_mut()
+            .node_registry
+            .contains(&node_addr),
+        "ownership must be released only after the protected response was delivered"
+    );
+
+    let (replay, replay_response) =
+        exchange_protected_handoff(&mut harness, node_addr, 1_720_002_000, 0x7c, 2).await;
+    assert!(replay.gcp_dispatched());
+    assert_handoff_status(
+        replay_response
+            .as_ref()
+            .expect("re-handoff response must be delivered to the client"),
+        HandoffRejectReason::NodeNotFound,
+    );
+
+    std::fs::remove_dir_all(&harness.root).unwrap();
+    std::fs::remove_dir_all(&harness.floor_root).unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn runtime_ingress_handoff_rolls_back_when_sender_state_persistence_fails() {
+    let mut harness = handoff_harness("persistence").await;
+    let node_addr = [
+        0x02u8, 0, 0, 0, 0, 0, 0, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+    ];
+    harness
+        .gateway
+        .coordinator_mut()
+        .node_registry
+        .register(NodeRegistryEntry::new(node_addr));
+
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(
+        harness.root.join("gcp-oscore-sender"),
+        std::fs::Permissions::from_mode(0o500),
+    )
+    .unwrap();
+
+    let (ingress, response) =
+        exchange_protected_handoff(&mut harness, node_addr, 1_720_001_000, 0x7b, 1).await;
+    assert!(ingress.gcp_dispatched());
+    assert!(
+        response.is_none(),
+        "no protected response may be delivered while sender-state persistence fails"
+    );
+    let still_registered = harness
+        .gateway
+        .coordinator_mut()
+        .node_registry
+        .contains(&node_addr);
+    let still_retryable = !harness
+        .gateway
+        .coordinator_mut()
+        .node_registry
+        .get(&node_addr)
+        .expect("node must remain registered after the failed dispatch")
+        .busy;
+    assert!(
+        still_registered,
+        "failed dispatch must not unregister the node"
+    );
+    assert!(
+        still_retryable,
+        "failed dispatch must roll the staged handoff back"
+    );
+
+    std::fs::set_permissions(
+        harness.root.join("gcp-oscore-sender"),
+        std::fs::Permissions::from_mode(0o700),
+    )
+    .unwrap();
+
+    let (retry_ingress, retry_response) =
+        exchange_protected_handoff(&mut harness, node_addr, 1_720_002_000, 0x7c, 2).await;
+    assert!(retry_ingress.gcp_dispatched());
+    assert_handoff_status(
+        retry_response
+            .as_ref()
+            .expect("rolled-back handoff must be retryable"),
+        HandoffRejectReason::Success,
+    );
+    assert!(
+        !harness
+            .gateway
+            .coordinator_mut()
+            .node_registry
+            .contains(&node_addr),
+        "the retried handoff must commit after its protected response"
+    );
+
+    std::fs::remove_dir_all(&harness.root).unwrap();
+    std::fs::remove_dir_all(&harness.floor_root).unwrap();
 }

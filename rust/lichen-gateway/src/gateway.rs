@@ -1384,6 +1384,18 @@ impl Gateway {
                 now_ms,
             )
             .await;
+        self.resolve_staged_handoff(send_result, staged_handoff);
+        true
+    }
+
+    /// Finish one staged handoff transaction against the protected-response
+    /// transport outcome: commit ownership only on success, roll it back on
+    /// every failure so the node stays registered and retryable.
+    fn resolve_staged_handoff(
+        &mut self,
+        send_result: Result<(), SecureError>,
+        staged_handoff: Option<[u8; 16]>,
+    ) {
         match (send_result, staged_handoff) {
             (Ok(()), Some(address)) => {
                 if !self.coordinator.commit_staged_handoff(&address) {
@@ -1399,7 +1411,6 @@ impl Gateway {
             }
             (Ok(()), None) => {}
         }
-        true
     }
 
     /// Extract the request sequence from the single outer OSCORE option.
@@ -1632,9 +1643,11 @@ impl Gateway {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handoff::{HandoffRequest, NodeRegistryEntry};
     use lichen_core::{addr::Ipv6Addr, icmpv6};
     use lichen_ipv6::{Addr, UdpHeader};
     use lichen_link::keys::Seed;
+    use lichen_node::stack::TxError;
     use schnorr48::{derive_keypair, sign};
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -2218,6 +2231,76 @@ mod tests {
             &decompressed[last_addr_start..srh_end],
             &node_addr,
             "last SRH address = original dst"
+        );
+    }
+
+    fn register_handoff_node(gw: &mut Gateway) -> [u8; 16] {
+        let node_addr = [
+            0x02u8, 0, 0, 0, 0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22,
+        ];
+        gw.coordinator
+            .node_registry
+            .register(NodeRegistryEntry::new(node_addr));
+        node_addr
+    }
+
+    #[test]
+    fn staged_handoff_rolls_back_on_no_route_dispatch_failure() {
+        let mut gw = test_gateway();
+        let node_addr = register_handoff_node(&mut gw);
+        let payload = HandoffRequest::new(node_addr, 1_720_001_000).encode();
+
+        let (response, staged) = gw.coordinator.stage_post_handoff(&payload, true);
+        assert_eq!(response.code, 0x44);
+        assert_eq!(staged, Some(node_addr));
+
+        gw.resolve_staged_handoff(Err(SecureError::Tx(TxError::NoRoute)), staged);
+
+        let entry = gw
+            .coordinator
+            .node_registry
+            .get(&node_addr)
+            .expect("no-route failure must not unregister the node");
+        assert!(
+            !entry.busy,
+            "no-route failure must roll the staged handoff back"
+        );
+        let (retry, staged_again) = gw.coordinator.stage_post_handoff(&payload, true);
+        assert_eq!(retry.code, 0x44);
+        assert_eq!(
+            staged_again,
+            Some(node_addr),
+            "node must remain registered and re-stageable after a no-route failure"
+        );
+    }
+
+    #[test]
+    fn staged_handoff_rolls_back_on_transmit_dispatch_failure() {
+        let mut gw = test_gateway();
+        let node_addr = register_handoff_node(&mut gw);
+        let payload = HandoffRequest::new(node_addr, 1_720_001_000).encode();
+
+        let (response, staged) = gw.coordinator.stage_post_handoff(&payload, true);
+        assert_eq!(response.code, 0x44);
+        assert_eq!(staged, Some(node_addr));
+
+        gw.resolve_staged_handoff(Err(SecureError::Tx(TxError::RadioTx)), staged);
+
+        let entry = gw
+            .coordinator
+            .node_registry
+            .get(&node_addr)
+            .expect("transmit failure must not unregister the node");
+        assert!(
+            !entry.busy,
+            "transmit failure must roll the staged handoff back"
+        );
+        let (retry, staged_again) = gw.coordinator.stage_post_handoff(&payload, true);
+        assert_eq!(retry.code, 0x44);
+        assert_eq!(
+            staged_again,
+            Some(node_addr),
+            "node must remain registered and re-stageable after a transmit failure"
         );
     }
 }
