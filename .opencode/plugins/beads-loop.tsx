@@ -13,10 +13,10 @@ Exactly one bead this round.`
 
 async function roundPrompt(cwd: string): Promise<string> {
   try {
-    const text = await Bun.file(`${cwd}/${ROUND_PROMPT}`).text()
+    const text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
     if (text.trim()) return text
   } catch {}
-  return ROUND_PROMPT
+  return ROUND_PROMPT_FALLBACK
 }
 
 const NEW_SESSION_EVERY = 6
