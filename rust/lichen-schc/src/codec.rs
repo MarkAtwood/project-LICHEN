@@ -2834,8 +2834,12 @@ mod tests {
         ];
         for (src, dst, message) in cases {
             let packet = udp_packet_with_endpoints(
-                src.parse().expect("source literal"),
-                dst.parse().expect("destination literal"),
+                std::net::Ipv6Addr::from_str(src)
+                    .expect("source literal")
+                    .octets(),
+                std::net::Ipv6Addr::from_str(dst)
+                    .expect("destination literal")
+                    .octets(),
             );
             let mut encoded = [0u8; 1500];
             assert!(
@@ -2861,8 +2865,12 @@ mod tests {
         // still decodes byte-preserving (interop with pre-canonicalization
         // senders); receipt applies no endpoint address policy.
         let packet = udp_packet_with_endpoints(
-            "::1".parse().expect("source literal"),
-            "2001:db8::1".parse().expect("destination literal"),
+            std::net::Ipv6Addr::from_str("::1")
+                .expect("source literal")
+                .octets(),
+            std::net::Ipv6Addr::from_str("2001:db8::1")
+                .expect("destination literal")
+                .octets(),
         );
         let wire = [[0xffu8].as_slice(), packet.as_slice()].concat();
         let mut decoded = vec![0u8; packet.len()];
@@ -2876,8 +2884,12 @@ mod tests {
     #[test]
     fn rule255_accepts_policy_valid_multicast_scope_5() {
         let packet = udp_packet_with_endpoints(
-            "2001:db8::1".parse().expect("source literal"),
-            "ff15::1".parse().expect("destination literal"),
+            std::net::Ipv6Addr::from_str("2001:db8::1")
+                .expect("source literal")
+                .octets(),
+            std::net::Ipv6Addr::from_str("ff15::1")
+                .expect("destination literal")
+                .octets(),
         );
         let mut encoded = vec![0u8; packet.len() + 1];
         assert_eq!(
