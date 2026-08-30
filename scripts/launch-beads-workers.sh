@@ -34,16 +34,9 @@ echo ""
 
 mkdir -p "$WORKTREE_BASE"
 
-# Target session: attach to the caller's session if inside tmux, else create/detach
+# Target session: attach to the caller's session if inside tmux, else create on demand
 if [ -n "${TMUX:-}" ]; then
     SESSION=$(tmux display-message -p '#S')
-fi
-
-if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-    FIRST_WORKTREE="$WORKTREE_BASE/worker1"
-    mkdir -p "$FIRST_WORKTREE"
-    tmux new-session -d -s "$SESSION" -c "$FIRST_WORKTREE" "bash --norc"
-    tmux send-keys -t "$SESSION" "exit" Enter
 fi
 
 for i in $(seq 1 $NUM_WORKERS); do
@@ -73,8 +66,12 @@ for i in $(seq 1 $NUM_WORKERS); do
     fi
 
     echo "Launching worker $i in $WORKTREE"
-    tmux new-window -d -t "$SESSION" -n "worker$i" -c "$WORKTREE" \
-        "env BEADS_AGENT_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    CMD="env BEADS_AGENT_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+        tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
+    else
+        tmux new-session -d -s "$SESSION" -n "worker$i" -c "$WORKTREE" "$CMD"
+    fi
     sleep 2
 done
 
