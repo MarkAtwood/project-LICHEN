@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-k3c4",
+  "title": "Gateway sender-store exhausted-flag arms have zero test coverage",
+  "description": "Found by correctness codereview of project-LICHEN-worker6-lynw. rust/lichen-gateway/src/gateway.rs: all sender-store test states use exhausted: false. The exhaustion-regression rejection in sender_state_precedes (state (exhausted: false, low seq) vs floor (MAX, exhausted: true) must be Err(Corrupt), :253) and the terminal heal (floor := (MAX, true)) are logically verified correct by review but exercised by no test. Review confirmed the dangerous incomparable input is unproducible with current callers (exhausted implies next_sequence == u64::MAX, oscore lib.rs:655-663, validated at context.rs:322-324), but the exhausted flag is load-bearing for floor ordering and deserves a small test per the repo test-vector discipline. Fix: add a test that (a) loads a floor (MAX, exhausted) against a restored non-exhausted lower-seq state record and asserts Err(Corrupt), and (b) exercises the heal arm with a terminal (MAX, exhausted) state.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:59:36.108482Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T18:59:36.108482Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k3c4",
+      "depends_on_id": "project-LICHEN-worker6-lynw",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:59:36.41435Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

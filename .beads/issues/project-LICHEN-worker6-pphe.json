@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-pphe",
+  "title": "Dead test helper write_record_raw in gateway tests; raw writes bypass 0600 helper",
+  "description": "Found by correctness+robustness codereview of project-LICHEN-worker6-lynw. rust/lichen-gateway/src/gateway.rs:1714-1721: write_record_raw (writes with 0600 like hardened FileStorage) has zero call sites and cargo check --tests emits a dead_code warning that fails a clippy -D warnings gate. The tamper/rollback tests and the new first-accept-crash test use bare std::fs::write (:1789, :1799, :1807, :1899, :1907); this only works because each write truncates a pre-existing 0600 file in place (mode preserved on the inode). A future raw write to a NEW path would create a 0644 file that FileStorage::read rejects with Err(Io) instead of the expected Err(Corrupt), silently changing asserted failure modes. The sibling announce_store.rs routes all raw record writes through its write_record_raw helper (announce_store.rs:360-367). Fix: either delete the helper or route all raw record writes through it, matching announce_store.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:59:22.599696Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T18:59:22.599696Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pphe",
+      "depends_on_id": "project-LICHEN-worker6-lynw",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:59:22.935069Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
