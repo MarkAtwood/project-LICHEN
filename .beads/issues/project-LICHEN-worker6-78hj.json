@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-78hj",
+  "title": "Persist-rejection poison state is not pinned (current() is None is vacuous)",
+  "description": "python/tests/timing/test_time_sync.py:752: in test_provision_persist_hook_rejects_scheduled_awaitable the only state assertion is verifier.current() is None, which passes even if _poison_after_persistence_failure (provisioning.py:426) is disabled — a virgin verifier's __current is None either way (mutant-verified). The established poison pin in this suite is the floor channel: evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status is ProvisionEpochStatus.PERSISTENCE_FAILED (cf. :1792-1795). Also add the non-commitment pin verifier.minimum_record_version == 0 (sibling OSError test asserts it at :685).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:54:21.861658Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:54:21.861658Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-78hj",
+      "depends_on_id": "project-LICHEN-worker6-qzxv",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:54:22.161125Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
