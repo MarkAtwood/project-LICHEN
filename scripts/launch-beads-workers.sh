@@ -50,15 +50,17 @@ for i in $(seq 1 $NUM_WORKERS); do
         { echo "Failed to create worktree $i"; continue; }
     fi
 
-    # Shared beads coordination
-    if [ ! -L "$WORKTREE/.beads" ]; then
-        rm -rf "$WORKTREE/.beads" 2>/dev/null
-        ln -s "$REPO_ROOT/.beads" "$WORKTREE/.beads"
+    # Shared beads coordination via BEADS_DIR (no symlink: git in the worktree
+    # never sees .beads changes; workers' bd reads/writes main's store).
+    # Remove any stale symlink from the old launcher design.
+    if [ -L "$WORKTREE/.beads" ]; then
+        rm -f "$WORKTREE/.beads"
+        git -C "$WORKTREE" checkout -- .beads 2>/dev/null || true
     fi
 
     # Worker prompt + current plugin/config files.
-    # Never git-merge main into workers: the .beads symlink blocks any merge
-    # touching .beads paths, and workers don't need main's beads content anyway.
+    # Never git-merge main into workers: .beads paths block merges, and workers
+    # don't need main's beads content anyway.
     mkdir -p "$WORKTREE/scripts" "$WORKTREE/.opencode/plugins"
     cp -f "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
     cp -f "$REPO_ROOT"/.opencode/plugins/* "$WORKTREE/.opencode/plugins/"
@@ -71,7 +73,7 @@ for i in $(seq 1 $NUM_WORKERS); do
     fi
 
     echo "Launching worker $i in $WORKTREE"
-    CMD="env BEADS_AGENT_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    CMD="env BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
     else
