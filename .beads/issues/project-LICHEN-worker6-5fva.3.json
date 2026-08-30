@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-5fva.3",
+  "title": "ping_l2: fix test_udp_payload_reaches_socket_after_l2_injection (UDP observer bind returns -ENOENT)",
+  "description": "Child 3 of 5fva. After children 1-2 land, debug the UDP observer bind -ENOENT in test_udp_payload_reaches_socket_after_l2_injection (Zephyr net socket bind on the injected-path observer; -ENOENT from bind is unusual - likely net_if/observer setup ordering vs the L2 injection harness). Build/run on heft native_sim; land with the test passing. Parent 5fva closes when all three children pass.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T23:45:23.75969223Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T23:45:23.75969223Z",
+  "labels": [
+    "decomposed"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5fva.3",
+      "depends_on_id": "project-LICHEN-worker6-5fva",
+      "type": "parent-child",
+      "created_at": "2026-08-30T23:45:23.862834777Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

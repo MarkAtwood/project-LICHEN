@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-tpbv",
+  "title": "Rust tunnel_auth accept_post lacks Python's _purge_expired: LRU can evict a live entry while expired ones linger (P-R divergence)",
+  "description": "Codereview finding on aqyw (correctness pass; pre-existing divergence, NOT introduced by the aqyw diff). python/src/lichen/gateway/tunnel_auth.py:479 runs _purge_expired(now) (pops entries with expiry \u003c= now, tunnel_auth.py:416-419) before the replay/capacity checks and LRU trim; rust/lichen-gateway/src/tunnel_auth.rs accept_post selects its LRU eviction slot among ALL occupied entries with no expiry sweep, so it can evict a live entry while expired ones linger, and later denies (UnauthorizedTunnel) where Python would permit (the same grant re-POSTed or its authorize path). Deny-only divergence: Rust denies where Python permits. Fix: sweep expired entries (drop expired ones) in accept_post before slot selection, mirroring _purge_expired; consider the same sweep in authorize_decapsulation's expiry handling for consistency. Add a unit test: fill entries, let one expire, accept a new claim, assert the expired slot was reclaimed rather than a live one evicted.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T23:37:54.82935539Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T23:37:54.82935539Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tpbv",
+      "depends_on_id": "project-LICHEN-worker6-aqyw",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T23:37:54.942626031Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
