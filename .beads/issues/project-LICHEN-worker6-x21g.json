@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-x21g",
   "title": "Implement authenticated DAO origination instead of persisting unsigned 8-bit DAOs",
   "description": "P1 security/protocol: DaoManager.build_dao() emits only Target+Transit options; no Python production path allocates a 64-bit Origin Sequence, computes the LICHEN-DAO-ORIGIN-v1 transcript, appends the final Schnorr-48 option, or persists the resulting signed bytes. Yet _build_dao_unlocked() calls persistence.store_tx_state(path_sequence, dao.to_bytes()), storing the 8-bit RPL Path Sequence as if it were the Origin Sequence and exposing unsigned bytes for reboot retransmission. Such DAOs cannot pass the mandatory root validator or survive relays with origin authentication. Add a key-owned origination transaction that crash-safely reserves the monotonic u64 sequence and exact complete signed DAO before return/transmit, handles max exhaustion, and proves output against independent DAO vectors/reboot retransmission.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:54:36.052826Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:51.825807Z",
-  "started_at": "2026-08-24T15:55:01.208655Z"
+  "updated_at": "2026-08-30T04:19:55.619801Z",
+  "started_at": "2026-08-24T15:55:01.208655Z",
+  "closed_at": "2026-08-30T04:19:55.619801Z",
+  "close_reason": "Authenticated DAO origination implemented: build_dao/_build_dao require authenticated origination (dao_manager.py:405-410 _require_authenticated_origination), 64-bit _origin_sequence (dao_manager.py:146,:222 cap 0xFFFFFFFFFFFFFFFF), compute_signature_transcript + schnorr48 sign/verify imported (dao_manager.py:35-45), signed-byte persistence with origin-sequence restore (:369-394). 751/751 python/tests/rpl tests pass."
 }
