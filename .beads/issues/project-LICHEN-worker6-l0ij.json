@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-l0ij",
+  "title": "heft migration blocker: rust-oscore fork on GitHub lacks LICHEN additions (begin_unprotect_observe_response, master_secret); lichen-node/lichen-gateway unbuildable off the Mac",
+  "description": "Found while verifying project-LICHEN-worker6-0rep on heft (P2, environment, blocks ALL Rust work on lichen-node/lichen-gateway/lichen-sim/lichen-apps on every heft worker). rust/Cargo.toml:57 patches crates.io oscore with path /Volumes/Attic/Desktop/Projects/crates/oscore - a macOS-only Attic volume holding the newest fork. The GitHub fork MarkAtwood/rust-oscore main (7434512, same commit as the /home/mark/crates/oscore clone worker2 uses) has edhoc-schnorr48 but LACKS: (1) Context::begin_unprotect_observe_response called by lichen-node/src/secure.rs:1361 (decrypt_observe_response path; used 13x inside secure.rs, not feature-gated - secure mod is #[cfg(feature=\"std\")] which gateway enables); (2) master_secret() called by lichen-gateway/src/trust.rs tests (~:2437-2528). Result: cargo test/check -p lichen-gateway (or lichen-node) fails E0599 on heft for every worker; confirmed independently by worker2's build fingerprint /home/mark/Cache/cargo-target-worker2/debug/.fingerprint/lichen-node-*/output with the identical E0599. The only source of truth for the observe API is the Mac Attic copy, which was never pushed. DO NOT hand-reconstruct the observe unprotect path (crypto-adjacent, no independent oracle on this machine). Fix options (human decision needed): push the Attic fork (incl. observe + master_secret work) to MarkAtwood/rust-oscore, or vendor the fork into the repo, or publish to crates.io and drop the path patch. Interim heft workaround used for 0rep verification: path-include tunnel_auth.rs in a standalone harness (needs only schnorr48+sha2+lichen-core). Machine notes for whoever fixes: repo rust/.cargo/config.toml also redirects target-dir to /Volumes/Attic/Cache/Cargo (CARGO_TARGET_DIR env must be set on heft, e.g. /home/mark/Cache/cargo-target); test/vectors needed chmod g-w (Ubuntu group-write default tripped atomic_json _open_owned_directory 0o022 check, masking generator --check as 'out-of-date'); C parity tests need clang or gcc-14 (gcc-13 lacks -std=c23, gcc-14 trips -Werror=conversion on monocypher/schnorr48, clang-20 clean).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T20:55:53.456043228Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T20:55:53.456043228Z",
+  "labels": [
+    "human"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l0ij",
+      "depends_on_id": "project-LICHEN-worker6-0rep",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T20:55:53.574378462Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

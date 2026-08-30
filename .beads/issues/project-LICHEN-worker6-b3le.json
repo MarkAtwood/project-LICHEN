@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-b3le",
+  "title": "Rust tunnel_auth claim-selection and last_now high-water semantics diverge from Python (P3 pair)",
+  "description": "Found by 3x codereview of project-LICHEN-worker6-0rep (P3 pair, same file). (1) Selection: rust/lichen-gateway/src/tunnel_auth.rs:385-399 authorize_decapsulation takes the FIRST matching entry in scan order; Python python/src/lichen/gateway/tunnel_auth.py:545 selects the longest-prefix match. With overlapping prefixes covering one inner source, both permit, but WHICH claim governs (and thus whose expiry is enforced) can differ between Rust and Python. Fix: mirror Python longest-prefix selection (tie-break deterministically, e.g. lexicographic route_hash), pin with a unit test with two overlapping-prefix claims where expiry differs. (2) High-water time: Python updates _last_now even when the subsequent check denies (tunnel_auth.py:413 - _observe_time runs before the policy checks and sets the high-water on every authenticated attempt); Rust sets last_now only on success (tunnel_auth.rs:361, :415). Under interleaved denied traffic the rollback-detection boundary diverges: Python treats a denied attempt at time T as advancing the high-water (a later attempt below T rolls back), Rust does not. Fix direction: decide the intended semantics (advancing high-water on denied attempts prevents rollback masked by expected-denial traffic; NOT advancing avoids letting unauthenticated-ish failed attempts DoS the clock), then align both implementations and pin with mirrored tests. Note (2) interacts with the rollback-wipes-floors bead; land that one first. Both are cross-impl parity violations per the identical-output rule.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T20:55:37.430505382Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T20:55:37.430505382Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b3le",
+      "depends_on_id": "project-LICHEN-worker6-0rep",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T20:55:37.554401509Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
