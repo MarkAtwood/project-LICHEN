@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-j6o2",
+  "title": "Python: Enforce max slot claim duration in slot_claim.py",
+  "description": "Add expiry duration check to python/src/lichen/gateway/slot_claim.py:\n\nAdd validation in verify_slot_claim() or a new validate_claim_timing():\n- claim.expiry \u003c= now_unix + MAX_CLAIM_DURATION_SEC\n\nAdd ClaimRejectReason.EXPIRY_TOO_FAR.\n\nDefault MAX_CLAIM_DURATION = 5 * SUPERFRAME_SEC.\n\nAdd test case.\n\nRef: project-LICHEN-worker6-70p7",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:36:50.048114Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:36:50.048114Z",
+  "labels": [
+    "python",
+    "security"
+  ]
+}

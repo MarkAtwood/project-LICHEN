@@ -3,6 +3,10 @@
 # Usage: ./scripts/sync-beads-workers.sh
 #
 # Safe to run while workers are active (they work on separate branches)
+#
+# .beads is NEVER staged from worktrees: there it is a symlink to main's
+# store, and committing it records a typechange that poisons every merge.
+# Beads flat files are committed in the main repo at the end of this script.
 
 set -e
 
@@ -11,6 +15,9 @@ WORKTREE_BASE="/Volumes/Attic/Desktop/Projects/lichen-workers"
 
 echo "=== Syncing Beads Workers ==="
 
+# Reuse recorded conflict resolutions across syncs (common gitdir: shared by worktrees)
+git config rerere.enabled true
+
 # Commit in each worktree
 for worktree in "$WORKTREE_BASE"/worker*/; do
     [ -d "$worktree" ] || continue
@@ -18,24 +25,20 @@ for worktree in "$WORKTREE_BASE"/worker*/; do
 
     cd "$worktree"
 
-    # Check for changes
-    if [ -z "$(git status --porcelain)" ]; then
+    # .beads excluded: symlink typechange must never be staged
+    dirty=$(git status --porcelain -- ':!.beads' ':!.beads/**')
+    if [ -z "$dirty" ]; then
         echo "$name: clean"
         continue
     fi
 
-    # Count changes
-    beads_count=$(git status --porcelain | grep -c '\.beads/' || true)
-    code_count=$(git status --porcelain | grep -v '\.beads/' | grep -v '^??' | wc -l | tr -d ' ')
+    untracked=$(git status --porcelain -- ':!.beads' ':!.beads/**' | grep -c '^??' || true)
+    echo "$name: syncing (untracked leftovers: $untracked)"
 
-    echo "$name: $beads_count beads files, $code_count code files"
-
-    # Stage and commit
-    git add .beads/ 2>/dev/null || true
-    git add -u  # stage modified tracked files
+    git add -u -- ':!.beads' ':!.beads/**'
 
     if [ -n "$(git diff --cached --name-only)" ]; then
-        git commit -m "chore(beads): $name sync - ${beads_count} beads, ${code_count} code changes"
+        git commit -m "chore(beads): $name sync"
         echo "$name: committed"
     fi
 done
@@ -44,17 +47,10 @@ done
 cd "$REPO_ROOT"
 
 echo ""
-echo "=== Merging code changes to main ==="
+echo "=== Merging worker branches to main ==="
 
-# Merge any worker branches with code changes
-for i in 1 2 3 4 5; do
-    branch="beads-worker-$i"
-
-    # Check if branch exists and has commits ahead of main
-    if ! git rev-parse --verify "$branch" >/dev/null 2>&1; then
-        continue
-    fi
-
+conflicted=()
+for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-worker-*'); do
     ahead=$(git rev-list main.."$branch" --count 2>/dev/null || echo 0)
     if [ "$ahead" -eq 0 ]; then
         continue
@@ -62,19 +58,28 @@ for i in 1 2 3 4 5; do
 
     echo "Merging $branch ($ahead commits ahead)..."
 
-    if git merge "$branch" --no-edit 2>/dev/null; then
+    if git merge "$branch" --no-edit; then
         echo "  merged successfully"
     else
-        echo "  CONFLICT - resolve manually"
+        echo "  CONFLICT — merge aborted, branch kept for manual resolution"
         git merge --abort 2>/dev/null || true
+        conflicted+=("$branch")
     fi
 done
 
-# Commit any remaining beads changes in main
+# Commit beads flat-file updates in main (workers wrote them via symlink)
 if [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
     git commit -m "chore(beads): sync from workers"
     echo "Main: committed beads sync"
+fi
+
+if [ ${#conflicted[@]} -gt 0 ]; then
+    echo ""
+    echo "=== MANUAL MERGE NEEDED ==="
+    printf '  %s\n' "${conflicted[@]}"
+    echo "After resolving each: git merge <branch> again (rerere replays known resolutions)."
+    exit 1
 fi
 
 echo ""

@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-w2m6",
+  "title": "Fix worktree sync: never stage .beads symlink; rerere; dynamic branch loop",
+  "description": "Worker branches record a typechange (.beads dir -\u003e symlink) whenever .beads is staged, poisoning every merge to main. Fix: worker prompt step 6 stages only changed files; sync script excludes :!.beads pathspecs everywhere, enables rerere (repo config), iterates beads-worker-* branches dynamically instead of hardcoded 1..5, reports conflicted branches and exits 1. Exclusion verified against a real symlinked worktree.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:45:00.237588Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:45:20.14242Z",
+  "started_at": "2026-08-30T03:45:05.112922Z",
+  "closed_at": "2026-08-30T03:45:20.14242Z",
+  "close_reason": "Exclusion pathspec verified against a real symlinked worktree; sync + worker prompt updated; rerere enabled."
+}

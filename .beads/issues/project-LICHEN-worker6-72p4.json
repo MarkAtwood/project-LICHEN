@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-72p4",
+  "title": "Rust: Enforce max slot claim duration in verify_slot_claim",
+  "description": "Add expiry duration check to rust/lichen-link/src/trust.rs verify_slot_claim():\n\nAfter signature verification, check:\n- claim.expiry \u003c= now_unix + MAX_CLAIM_DURATION_SEC\n\nReturn SlotClaimResult variant for expiry-too-far rejection.\n\nNeeds now_unix parameter added to verify_slot_claim() or a time provider trait.\n\nAdd test case.\n\nRef: project-LICHEN-worker6-70p7",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:36:49.808841Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:36:49.808841Z",
+  "labels": [
+    "rust",
+    "security"
+  ]
+}

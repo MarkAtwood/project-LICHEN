@@ -1,0 +1,1678 @@
+{
+  "total_count": 1522,
+  "detailed_sample": [
+    {
+      "id": "project-LICHEN-worker6-yqy6.2",
+      "title": "HAL: R1 Neo Board",
+      "created": "2026-07-29",
+      "type": "epic",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-l1qw",
+      "title": "Implement LICHEN spec v0.1 across all implementations",
+      "created": "2026-07-25",
+      "type": "epic",
+      "files": [
+        "docs/spec-implementation-plan.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-y7wh",
+      "title": "Run ztest rpl_routing DAO-auth matrix on native_sim (AWS builder)",
+      "created": "2026-08-29",
+      "type": "task",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-kzt0",
+      "title": "Implement group OSCORE key distribution (spec 18.8.5, group_oscore_key.json)",
+      "created": "2026-08-28",
+      "type": "feature",
+      "files": [
+        "12-apps.md",
+        "python/tests/coap/test_security_app_vector_consumers.py",
+        "test/vectors/group_oscore_key.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-l9hb",
+      "title": "(authz) Centralize CONFIG_LICHEN_COAP_SERVER_OSCORE enforcement for mutating dis",
+      "created": "2026-08-28",
+      "type": "task",
+      "files": [
+        "checkin_resource.c",
+        "coap_config.c",
+        "coap_dtn.c",
+        "coap_keys.c",
+        "coap_location.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-l1qw.8.17.17.1",
+      "title": "Zephyr: align TX queue priority ABI and deadlines with B.2 vectors",
+      "created": "2026-08-28",
+      "type": "bug",
+      "files": [
+        "lichen/subsys/lichen/link/include/lichen/tx_queue.h",
+        "spec/appendix-bufferbloat.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-a6qg",
+      "title": "Security/app vector consumers surface 7 implementation gaps + provably-wrong vec",
+      "created": "2026-08-25",
+      "type": "bug",
+      "files": [
+        "SosResource.c",
+        "announce_signed_data/sos_signature/sos_rate_limiting/group_oscore_key/confessions_rate/receipt_cbor.json",
+        "confessions_rate.json",
+        "group_oscore_key.json",
+        "python/tests/coap/test_security_app_vector_consumers.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-5rx2",
+      "title": "OSCORE stores recreate missing rollback authority from mutable state",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-h8ol",
+      "title": "Gateway OSCORE sender state permits authenticated rollback and nonce reuse",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-c20a",
+      "title": "Rust DAO Transit emits and accepts obsolete E=1 parent encoding",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-w0fp",
+      "title": "Standalone lichend cannot provision any runtime GCP OSCORE peer",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-mqbv",
+      "title": "Correct DAO Transit E-flag semantics across code, spec, and vectors",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/05-routing.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-x21g",
+      "title": "Implement authenticated DAO origination instead of persisting unsigned 8-bit DAO",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-imie",
+      "title": "Make production DAO route mutation impossible without origin authentication",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-9hgx",
+      "title": "Require the DAO validator to read the same replay store it commits",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-25l3",
+      "title": "Enforce exact DAO option framing before origin replay classification",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/05-routing.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-utqb",
+      "title": "Gateway current_superframe does not compile due to signed epoch arithmetic",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/gateway.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ta0c",
+      "title": "Persist Announce TOFU pins and replay floors across Node restarts",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-tyvl",
+      "title": "Harden DAO file persistence against concurrent processes and hostile files",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-nr71",
+      "title": "Bind installed gateway OSCORE contexts to canonical peer IDs",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-ivp6",
+      "title": "Lock-order fix needs a DODAG scope revalidation fence",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-s0ia",
+      "title": "Atomic DIO admission can deadlock against a generation-lease callback",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-h6gd",
+      "title": "Keep gateway trust memory unchanged when durable commit fails",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-6obk",
+      "title": "Update authenticated-DIO integration fixtures for signer-bound source validation",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/tests/test_vectors.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-a1yp",
+      "title": "Atomic DIO policy transaction does not wait and revalidate generation leases",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-6yzc",
+      "title": "DAO origin validator has a parsed-object mutation TOCTOU after raw provenance ch",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-7djc",
+      "title": "Simulator TDMA transmit predicate expands into guard and adjacent slots",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/sim/tdma.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-mvuu",
+      "title": "Expose and dispatch durable gateway coordination state in lichend",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/bin/lichend.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-fmrp",
+      "title": "Validate gateway CBOR slot-map dimensions before owned_slots",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/resources.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ows5",
+      "title": "Frame gateway outbound mesh traffic with signed link-layer wire format",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/gateway.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-1r1o",
+      "title": "Persist gateway RPL DAO replay and routing state across lichend restarts",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/gateway.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-p7sh",
+      "title": "Reallocate local slots when a lower-IID peer wins a conflict",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/resources.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-tut2",
+      "title": "Persist SCHC tombstone duration in a restart-safe clock domain",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-schc/src/fragment.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-7n4i",
+      "title": "Default TOFU mesh bootstrap cannot authenticate an unknown Announce",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-vwoc",
+      "title": "Receipt-clock callback failure is recoverable and can extend stale authority",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-z788",
+      "title": "Authenticated DIO issuance omits signer/source and root key binding",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/rpl/authenticated_dio.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-0ebk",
+      "title": "TDMA guard and slot-duration requirements contradict the 2346 ms canonical minim",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "packets-timing.json",
+        "spec/02a-coordinated-capacity.md",
+        "spec/02a-tdma.md",
+        "spec/09-packets-timing.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-wm48",
+      "title": "Persist Rust SCHC generation-scoped tombstone and admission floors",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-g5mv",
+      "title": "Fragmented RPL DIO bypasses authenticated DODAG admission",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/node.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-w7i2",
+      "title": "SCHC replacement contexts persist duplicate admission-floor keys",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/schc/reassembly.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-dqdb",
+      "title": "Invalidate SCHC sessions across Rule-Version compatibility transitions",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-x1ew",
+      "title": "Python DAO origin validator accepts noncanonical same-IID source aliases",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-t779",
+      "title": "SCHC durable floors can alias a new key generation through Python object-id reus",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-wozd",
+      "title": "DAO origin vectors mark non-key-derived source aliases as accepted",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "test/vectors/dao_origin_signature.json",
+        "tests/dao_origin_vectors.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-h2jn",
+      "title": "AnnounceProcessor mutates gradient before TOFU key acceptance",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-myil",
+      "title": "Node SCHC ingress has no authenticated DIO bootstrap path",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rpl/dodag.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-j2yt",
+      "title": "SCHC 22,554-byte ceiling is applied to raw IPv6 instead of encoded SCHC packets",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/schc/headers.py",
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-pro2",
+      "title": "Node never drives SCHC fragmentation retransmission or inactivity timers",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-4vqc",
+      "title": "Node still uses ULA as its primary address and classifies native 02xx peers as e",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/node.py",
+        "spec/04-network.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-dt3u",
+      "title": "Define a canonical SCHC encoding for multicast RPL DIOs",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/03-adaptation.md",
+        "spec/09-packets-timing.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-itzv",
+      "title": "Prevent delayed prior fragments from contaminating replacement SCHC sessions",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-13kv",
+      "title": "Bind SCHC fragmentation contexts and tombstones to key generation",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-u9rl",
+      "title": "Include mandatory Rule-Version option in RPL DIO packet artifacts",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "generate_packets_timing.py",
+        "python/src/lichen/packets/formats.py",
+        "spec/03-adaptation.md",
+        "spec/09-packets-timing.md",
+        "test/vectors/packets-formats.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-w0mm",
+      "title": "Older authenticated DIO capability can roll back peer SCHC policy",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-f7p2",
+      "title": "Align link draft replay identity with full key generation",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-0ttq",
+      "title": "Align packet-format vectors with mandatory signer EUI-64 overhead",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "generate_packets_timing.py",
+        "python/src/lichen/packets/formats.py",
+        "spec/09-packets-timing.md",
+        "test/vectors/packets-formats.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-h3lm",
+      "title": "Gateway HAT/serial ingress bypasses link signature and replay verification",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/bin/lichend.rs",
+        "rust/lichen-gateway/src/lib.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-2502",
+      "title": "lichend treats identity/epoch storage errors and malformed records as first boot",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-k0xp",
+      "title": "lichend persists a replay epoch but Gateway ignores it and always starts at epoc",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "gateway.rs",
+        "rust/lichen-gateway/src/bin/lichend.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-5j12",
+      "title": "Gateway TOFU pins keys without authenticated proof of possession",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/trust.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-0hko",
+      "title": "Rust gateway provisions a link-local DODAG ID that cannot satisfy root key autho",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/gateway.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-zk09",
+      "title": "Gateway slot conflict resolution accepts replayed claims from other superframes",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/slot.rs",
+        "spec/08-gateway-coordination.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ejth",
+      "title": "Gateway slot claims expose a forgeable signature_valid authorization bit",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/slot.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-01gs",
+      "title": "Rust gateway DAO route mutation trusts caller-asserted sender IID without link e",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-gateway/src/gateway.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-zegq",
+      "title": "Rust DAO authority accepts and originates noncanonical link-local identity alias",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "provisioning.rs",
+        "rust/lichen-rpl/src/verify.rs",
+        "spec/05-routing.md",
+        "transmit.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-mknn",
+      "title": "Rust authenticated DIO path lets any link peer advance the root-owned DODAG vers",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-rpl/src/dodag.rs",
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ownx",
+      "title": "TDMA 250 ms slot cannot contain the profile own SF10 airtime and guard is contra",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "packets-timing.json",
+        "spec/09-packets-timing.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-8het",
+      "title": "Timing wrong-signer vector expects BAD_SIGNATURE for a valid signature",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "generate_packets_timing.py",
+        "packets-timing.json",
+        "python/tests/test_protocol_vector_security.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-od7h",
+      "title": "Packets/timing examples use obsolete SCHC and impossible layer sizes",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "appendix-schc.md",
+        "spec/03-adaptation.md",
+        "spec/09-packets-timing.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-7pm8",
+      "title": "Non-root RPL vector silently inserts local SCHC version",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/tests/test_protocol_vector_security.py",
+        "rule_versioning.json",
+        "spec/03-adaptation.md",
+        "test/vectors/generate.py",
+        "test/vectors/rpl_messages.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-juft",
+      "title": "Rule 255 minimal IPv6 vectors carry an absent ICMPv6 header",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/03-adaptation.md",
+        "test/vectors/rule_versioning.json",
+        "test/vectors/schc_adaptation.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-jzi2",
+      "title": "Canonical SCHC Rule 2/3/4 fixed-size vectors contradict their own bit arithmetic",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "appendix-schc.md",
+        "draft-lichen-schc-lora-00.md",
+        "python/tests/test_protocol_vector_security.py",
+        "spec/03-adaptation.md",
+        "spec/appendix-schc.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-0iky",
+      "title": "Generic vector generator silently erases most SCHC compression corpus",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "generate.py",
+        "schc_compression.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-jlet",
+      "title": "Mandatory Signer IID reduces SCHC authenticated tile ceiling from 187 to 179 byt",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-h3qe",
+      "title": "Python and signed vector families violate mandatory Signer IID framing",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-k3t1.1",
+      "title": "Rule 7 compressor drops address-policy nonmatches instead of falling back",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "MqttSnProfile.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-0cl1",
+      "title": "Python TOFU capacity can evict peers with active fragmentation state",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-kvmn",
+      "title": "Python Node delivers signed frames addressed to other nodes",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-z6i0",
+      "title": "Python fragmentation targets IID while Rust and link draft require Extended EUI-",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-8ayp",
+      "title": "Python vector consumer has SyntaxError in fragmentation-direction branch",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/tests/test_vectors.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-cw97",
+      "title": "Link replay spec permits IID-only and unauthenticated state poisoning",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "spec/02-physical-link.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-yl9x",
+      "title": "Timing authority vector accepts IPv6 source unrelated to signer key",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "generate_packets_timing.py",
+        "packets-timing.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-l65d",
+      "title": "Authenticated vector generators sign a hidden non-wire byte",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "generate_authenticated_schc_dio.py",
+        "generate_packets_timing.py",
+        "link_frame.json"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-4wty",
+      "title": "SCHC endpoint ordering is undefined and production defaults both directions to R",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "draft-lichen-schc-lora-00.md",
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-hqxc",
+      "title": "Python authenticated fragmentation uses broadcast instead of exact peer target",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-xqbo",
+      "title": "Rust fragmentation tombstones omit terminal replay state and cached response",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-zysv",
+      "title": "Rust exposes unauthenticated production RPL mutation APIs",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-xf82",
+      "title": "Rust no_std peer authority accepts regressed or foreign receipt clocks",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-9aki",
+      "title": "Python production DODAG admits peer-asserted root and unbound source IID",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-10ka",
+      "title": "Rust FragmentSender accepts unauthenticated ACK and abort controls",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "FragmentSender.h"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-amyz",
+      "title": "Rust permits concurrent indistinguishable T=0 fragmentation senders",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-szxc",
+      "title": "Concurrent Link persistence writers can fork one accepted revision",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-45bc",
+      "title": "Python SCHC receiver remains unauthenticated and absent from production Node",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/schc/reassembly.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-5d8m",
+      "title": "Python FragmentSender cannot consume authenticated abort controls",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-rmbl",
+      "title": "Rust production DIO admission lets peers self-assert root role",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "root_authorization.json",
+        "rust/lichen-node/src/rpl_stack/receive.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-mgop",
+      "title": "Rust authenticated fragmentation API is unavailable in no_std builds",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-bokv",
+      "title": "Modified Rust RPL source breaks default no_std build",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-rpl/src/multi_instance.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ywtj",
+      "title": "Rust FragmentReceiver accepts unauthenticated bytes outside Link policy",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-schc/src/fragment.rs",
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-6wmb",
+      "title": "Public FragmentSender can emit wire fragments without LinkLayer policy",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "LinkLayer.c",
+        "python/src/lichen/schc/fragment.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-9c6n",
+      "title": "Public ReplayProtector mutation APIs can roll back live Link replay floors",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-opui",
+      "title": "Provision persistence post-write failure leaves live stale verifier state",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-nmjq",
+      "title": "Failed Python rekey can erase replay floor while retaining old trust",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-n49m",
+      "title": "Link receive rereads mutable peer identity after signature verification",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-v4h5",
+      "title": "Production Python Node bypasses authenticated SCHC Rule-version policy",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/node.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-37cr",
+      "title": "Link elevation callbacks and StratumTracker use inverted locks",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-f49v",
+      "title": "Fail-closed persistence disable leaves cached SCHC and time capabilities live",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-qzxv",
+      "title": "Rejected scheduled awaitable hooks remain live and mutate state after failure",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "asyncio.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-v6f0",
+      "title": "LinkLayer receipt clock can self-assert and retain a forged trusted timing domai",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-n4zq",
+      "title": "Provision epoch floor reads caller metadata after validation and accepts concurr",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "EpochFloorAuthority.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-gzh4",
+      "title": "Concurrent TimeSample mutation can win after authority validation and before ado",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-fxrh",
+      "title": "DIO option-mismatch rejection fails to consume network replay high-water",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-rhm2",
+      "title": "StratumTracker clear does not invalidate pre-clear network time samples",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-mpq0",
+      "title": "Provision persistence and integrity hooks can reenter verifier and regress rollb",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-ja7o",
+      "title": "Adopted DIO time remains trusted after signer key generation is retired",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-sb51",
+      "title": "Rust production SCHC ingress does not use bounded per-signer failure tracking",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rpl_stack/receive.rs",
+        "rust/lichen-node/src/stack.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-wob9",
+      "title": "Rust stale authenticated SCHC contexts can remint current fragmentation permits",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-qx7u",
+      "title": "Rust production RPL ingress bypasses authenticated SCHC version admission",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "node.rs",
+        "routing/router.rs",
+        "rust/lichen-node/src/rpl_stack/receive.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-jov2",
+      "title": "Private Rust AuthenticatedFrame fields break lichen-node all-features build",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-link/src/link_layer.rs",
+        "rust/lichen-node/src/rpl_stack/receive.rs",
+        "rust/lichen-node/src/stack.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ukc4",
+      "title": "Python T=0 fragmentation state loss on reboot admits delayed prior-session ACKs",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-urvs",
+      "title": "Python fragmentation version gate accepts unknown SCHC Rule IDs 8 through 254",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-ilwl",
+      "title": "Python SCHC failure streak resets before decompressed IPv6 is validated",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/node.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-gvbx",
+      "title": "Python malformed SCHC ingress is delivered to applications instead of dropped",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/node.py",
+        "spec/03-adaptation.md"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-dsyb",
+      "title": "Link send can hang when a different queued head fails terminally",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-m1lv",
+      "title": "Rust FragmentSender permit is not bound to the intended remote signer",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-schc/src/fragment.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-rjtg",
+      "title": "Rust fragmentation permit remains valid after authenticated peer version mismatc",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "rust/lichen-schc/src/fragment.rs"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-5dpv",
+      "title": "Python SCHC sessions survive an authenticated incompatible version update",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "LinkLayer.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-62e4",
+      "title": "Link persistence journal cannot detect complete deletion or signed revision roll",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-zoi0",
+      "title": "Provision verifier aliases mutable rollback state across trust and persistence h",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-byej",
+      "title": "Cleared direct-source TimeSample can be replayed to restore wall-clock validity",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-ommq",
+      "title": "Provision floor reads and tracker commits race across verifier lock boundaries",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "EpochFloorAuthority.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-zzw5",
+      "title": "Timing transitions preserve an active clock invalidated by a raised live floor",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-8dul",
+      "title": "Provision clear state cannot survive reboot without restoring cleared epoch or l",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "ProvisionVerifier.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-09jd",
+      "title": "Mutable EpochFloorAuthority can lower a bound trackers firmware floor",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-i8ll",
+      "title": "Mutable MonotonicClock callback preserves domain identity and bypasses timing bi",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-oef1",
+      "title": "Rust FragmentSender API bypasses authenticated SCHC version policy",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-eqmd",
+      "title": "Python SCHC fragmentation version gate only protects Rule 255 payloads",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "LinkLayer.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-tg4c",
+      "title": "SCHC version option is omitted from non-root DIOs and breaks multi-hop admission",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-895b",
+      "title": "Mutable Rust AuthenticatedFrame permits post-verification DIO and signer forgery",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-8c09",
+      "title": "Mutable authenticated peer SCHC context can bypass version mismatch policy",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-3jis",
+      "title": "Python DIO parser accepts truncated 20 to 23 byte base object",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-ofp1",
+      "title": "Restored link sequence journal remains resettable through public setter",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-9iua",
+      "title": "Caller can mutate sealed AuthenticatedDio evidence after LinkLayer issuance",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-lgky",
+      "title": "DIO time verifier accepts sealed evidence from a different receiving LinkLayer",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "AuthenticatedDio.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-m1az",
+      "title": "Link persistence failures occur after live send/receive/rekey mutations",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-uf09",
+      "title": "Replay persistence import permits live window below retained floor",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-hxmo",
+      "title": "SCHC retry budget ignores regular-fragment repair and timeout rounds",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-szgr",
+      "title": "Radio exception or cancellation can retry indeterminate on-air bytes with same r",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-x2bp",
+      "title": "Terminal link counter exhaustion leaves duplicate tuple frame queued",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-6wc1",
+      "title": "DIO time elevation ignores enclosing RPL instance and DODAG context",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-974f",
+      "title": "Time authorities, tracker, and LinkLayer receipts can use incompatible monotonic",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-wvrb",
+      "title": "Provision verifier permits missing persistent rollback state and unsafe virgin d",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-4wmw",
+      "title": "Local-client time providers can falsely claim GNSS/gpsd stratum",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-55ol",
+      "title": "DIO time verifier accepts malformed ICMPv6 checksum",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-7m9f",
+      "title": "One-use DIO receipt cannot elevate both required SCHC version and time options",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-hgt8",
+      "title": "Time policy replacement leaves now-disallowed current source valid",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-aaak",
+      "title": "Time tracker does not invalidate clock when dynamic epoch floor rises",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "EpochFloorAuthority.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-9098.48",
+      "title": "radio.py: polling capture still fires on_rx_timeout after success",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/sim/events.py",
+        "python/src/lichen/sim/simulation/radio.py",
+        "python/tests/sim/test_observer.py",
+        "python/tests/sim/test_radio.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-9098.44",
+      "title": "radio.py: 9098.39 GE shim wipes burst state every apply",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "/lora_medium/chaos.py",
+        "Radio.py",
+        "lora_medium/chaos.py",
+        "python/src/lichen/sim/simulation/radio.py",
+        "python/tests/sim/test_radio.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-9098.43",
+      "title": "radio.py: parked polling RX is a latch; later TXs in the window are shadowed",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "metrics.py",
+        "python/src/lichen/sim/metrics.py",
+        "python/src/lichen/sim/simulation/radio.py",
+        "python/tests/sim/test_radio.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-id3x",
+      "title": "DIO time receipt consumption can race rekey before semantic issuance",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-qctx",
+      "title": "Rekey replacement can resurrect a previously retired compromised identity",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-02t4",
+      "title": "Key rotation revokes outstanding receipts using caller-mutable RxFrame facade",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-kf26",
+      "title": "LinkLayer rekey API does not enforce authenticated rekey evidence",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-c1fr",
+      "title": "LinkLayer restart loses inbound replay, pin, rekey, and retired-key security sta",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-8urr",
+      "title": "SCHC ACK transition discards detached receipt snapshot and parses caller-mutated",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "LinkLayer.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-3ps4",
+      "title": "Python and Rust SCHC v3 registries and selection order diverge",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-apjf",
+      "title": "Python plaintext CoAP compression accepts and repairs invalid UDP checksums",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-f360",
+      "title": "Rust generic SCHC rules ignore descriptor matches and normalize packet fields",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-jftb",
+      "title": "Rust SCHC Rules0/5 match fe80::/10 while reconstructing exact fe80::/64",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-2697",
+      "title": "SCHC version mismatch does not prevent fragmentation initiation",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-lfzb",
+      "title": "SCHC authenticated peer version state is forgeable and unwired from DIO processi",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-xuc8",
+      "title": "Rule7 valid field non-matches fail instead of byte-preserving Rule255 fallback",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-9qpz",
+      "title": "Public drain_tx_queue bypasses TX lock and double-transmits queue head",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-cdze",
+      "title": "DIO time freshness is caller-stamped instead of receipt-stamped",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-db9k",
+      "title": "StratumTracker transitions race and can regress replay/time state",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-lwc9",
+      "title": "DIO time verifier parses noncanonical bare DIO instead of authenticated L2 envel",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-u2yu",
+      "title": "Time clear or expiry bypasses per-step correction bounds",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "StratumTracker.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-56dk",
+      "title": "ProvisionVerifier record installation trusts caller-asserted integrity without a",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-rabc",
+      "title": "StratumTracker trusts a raw caller-supplied epoch floor per adoption",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-d4eh",
+      "title": "StratumTracker accepts caller-selected policy on every transition",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-qrth",
+      "title": "Accepted direct time samples can report valid wall clock with NO_SYNC stratum",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-rjgj",
+      "title": "Provision clear does not revoke previously issued epoch metadata",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "ProvisionVerifier.c"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-73eh",
+      "title": "DioTimeVerifier accepts forgeable duck-typed link receipt providers",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-np8e",
+      "title": "Time capability issuance can be bypassed through callable _issue and post-issue ",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-ma2p",
+      "title": "Time provision verifier exposes mutable rollback and board-identity trust anchor",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-r3jm",
+      "title": "Link-TX failure cluster: test_cad::test_tx_fails_after_max_retries FAILED; test_",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-n22y",
+      "title": "Key rotation can erase live replacement identity security state",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-21rt",
+      "title": "Replay admission failure evicts unrelated active replay window",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-1qo9",
+      "title": "LinkLayer.send hangs forever when CAD leaves frame queued",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-hf2f",
+      "title": "SCHC sender retransmits All-1 instead of aborting unrecoverable C=0 ACK",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-4ada",
+      "title": "SCHC sender start drops all initial fragments after the first",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-nnyv",
+      "title": "Time tracker does not expire stale authoritative state without a valid replaceme",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-nwmi",
+      "title": "Network TimeSample erases origin provenance and rejects valid stratum-4 DIO",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-prld",
+      "title": "SCHC Rule 255 accepts malformed data instead of validated full IPv6 packets",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-3829",
+      "title": "Verified network time cannot bind an option embedded in a signed DIO",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-3slq",
+      "title": "SCHC Rule 7 decoders accept illegal IPv6 multicast source addresses",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-d1ur",
+      "title": "SCHC rule-set version is not bound to a concrete immutable registry",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": []
+    },
+    {
+      "id": "project-LICHEN-worker6-soqo",
+      "title": "SCHC rekey reset is unauthenticated non-atomic and leaves stale senders usable",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "python/src/lichen/link/link_layer.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-kqug",
+      "title": "SCHC session baseline reservation races LinkLayer replay acceptance",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "link_layer.py",
+        "python/src/lichen/schc/fragment.py"
+      ]
+    },
+    {
+      "id": "project-LICHEN-worker6-fa9f",
+      "title": "Tombstone expiry plus ReplayProtector eviction forgets ACK counter floor",
+      "created": "2026-08-24",
+      "type": "bug",
+      "files": [
+        "link/replay.py",
+        "python/src/lichen/schc/fragment.py"
+      ]
+    }
+  ],
+  "summary": {
+    "by_type": {
+      "bug": 871,
+      "task": 555,
+      "epic": 59,
+      "feature": 11,
+      "decision": 10,
+      "chore": 7,
+      "issue": 6,
+      "doc": 1,
+      "improvement": 1,
+      "not-a-bug": 1
+    },
+    "by_month": {
+      "2026-05": 12,
+      "2026-06": 93,
+      "2026-07": 254,
+      "2026-08": 1163
+    }
+  }
+}
