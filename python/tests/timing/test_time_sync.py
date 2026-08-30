@@ -947,9 +947,7 @@ def test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition() -> 
         elif action == "consider":
             candidate = gnss(authority, FLOOR + 19)
             assert (
-                state.consider(
-                    DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate
-                )
+                state.consider(DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate)
                 is False
             )
         else:
