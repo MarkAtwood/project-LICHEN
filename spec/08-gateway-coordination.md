@@ -116,6 +116,8 @@ New resource: `/.well-known/lichen-gw`
 | POST   | /handoff      | Node handoff request         | Node EUI+state |
 | GET    | /nodes        | Node registry query          | SenML list     |
 
+GET responses for /slots, /channels, and /nodes MUST be limited to at most 32 entries per response. Larger result sets require Block2 pagination.
+
 All CoAP messages use OSCORE (PSK or signature context per mode).
 
 ### 6.5. GCP Slot Claim COSE_Sign1
@@ -177,6 +179,15 @@ fields `gateway_count` and `slot_start` are sender-local bookkeeping (present
 only in internal claim structs); they are NOT payload keys, have no receiver
 consumer, and implementations MUST NOT add them to the payload.
 
+**Parameters:**
+
+| Name | Default | Description |
+|------|---------|-------------|
+| MAX_CLAIM_DURATION_SUPERFRAMES | 5 | Maximum claim duration in superframes (anti-squatting) |
+
+With a 60-second superframe, MAX_CLAIM_DURATION is 300s. Add 5s clock tolerance
+for validation (step 7a).
+
 **On-air size:** A COSE_Sign1 slot claim is ~110 bytes typical (4 slots) and
 ~200-215 bytes at the 60-slot cap (`CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS`, 60,
 lichen/subsys/lichen/coap/include/lichen/coap_slot_coord.h). A 255-byte LoRa
@@ -212,6 +223,7 @@ On receiving slot claim POST:
 5. Reconstruct Sig_structure per RFC 9052 and verify signature using peer's pubkey
 6. Decode payload; verify `gateway_iid` matches `kid`
 7. Verify `expiry` > now
+7a. Verify `expiry` - now <= MAX_CLAIM_DURATION (5 superframes = 300s, +5s clock tolerance = 305s); respond 4.03 Forbidden if exceeded. This bounds how far into the future a gateway can reserve slots, preventing a single gateway from squatting on capacity and blocking peers from scheduling.
 8. Verify `claim_seq` > cached claim_seq for this gateway, or no cached entry
 9. Check for conflicts with existing slot allocations (see below)
 10. If no conflict or conflict resolved: cache claim, respond 2.04 Changed
@@ -258,11 +270,15 @@ surviving cached value forces the legitimate sender to increment per the
 replay window, allowing a replayed claim to overwrite live slot state after
 a restart.
 
+Implementations MUST bound the claim_seq high-water cache to at most 64
+entries. On overflow, implementations MUST evict the least-recently-updated
+entry (LRU by last claim timestamp).
+
 **Security Considerations:**
 
 - claim_seq replay protection requires persistent storage
 - Signature verification MUST complete before conflict resolution
-- Rate limiting SHOULD apply to slot claim endpoints (see GCP-9)
+- Gateways MUST rate-limit slot claim processing to at most 10 claims per minute per peer IID and 60 claims per minute globally. Claims exceeding these limits MUST be silently dropped. (See GCP-9 for general rate limiting guidance.)
 
 ## GCP-7. Node Handoff
 
