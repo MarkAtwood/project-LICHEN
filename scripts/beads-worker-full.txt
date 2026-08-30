@@ -12,7 +12,7 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
    - Findings → `bd create` (new beads), not recursive fixes
 5. Close: `bd close <id>`
 6. Commit: `git add <changed files> && git commit -m "fix(<area>): <what>"`
-   - NEVER `git add .beads` — in worktrees it is a symlink; staging it poisons merges.
+   - NEVER stage `.beads/` — bd writes the shared store directly via BEADS_DIR.
 7. Repeat until `bd ready` empty
 
 ## Skip if
@@ -30,6 +30,8 @@ didn't make, release the bead and pick another — that file is mid-edit by
 another agent. Unrelated dirty files in other subsystems are fine to ignore.
 
 `bd ready` already filters deferred and dependency-blocked beads.
+Beads commands run against the shared store via BEADS_DIR — do not
+create, move, or stage anything under `.beads/` yourself.
 
 ## Rules
 
