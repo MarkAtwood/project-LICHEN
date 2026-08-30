@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-snh1",
+  "title": "SOS cancel-path test gaps: stale-seq replay, rate-budget neutrality, routing discrimination",
+  "description": "python/tests/coap/test_sos_resource.py TestSosPutDelete: (1) the replay/stale-sequence gate on the POST-cancel path (emergency.py:304) is untested — after a successful cancel the resource is idle so naive replay hits 404; needs re-activate-then-replay-cancel (expect UNAUTHORIZED). (2) No test that cancel does not consume the rate budget (activate -\u003e POST-cancel -\u003e immediate re-activate within burst should be CREATED). (3) test_post_cancel_by_non_originator_rejected passes with AND without the fix (activate path also rejects wrong-key bodies) — it cannot discriminate routing; acceptable, but note it in a comment or use a distinguishing observable.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:05:49.880353Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:05:49.880353Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-snh1",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:05:50.076426Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

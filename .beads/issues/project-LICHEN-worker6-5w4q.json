@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5w4q",
+  "title": "Self-secure SOS sequence acceptance (check accept() return, order before cancel)",
+  "description": "python/src/lichen/coap/resources/emergency.py:306-307 (_cancel_from_body) and pre-existing at render_post:272-274 / render_delete:354-355: the boolean return of self._sequences.accept() is discarded; safety depends on the adjacent last_seen pre-check with no await between them. Any refactor inserting an await between check and accept breaks it. Harden: 'if not self._sequences.accept(...): return UNAUTHORIZED' (accept returns False on non-advancing), and in _cancel_from_body swap accept() to precede... rather: call accept() only after cancel() succeeds, or check its return, so a raise in cancel() cannot leave a consumed sequence with the alert still active (verified unreachable with pinned aiocoap, defensive only).",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:05:41.725215Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:05:41.725215Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5w4q",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:05:41.966386Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

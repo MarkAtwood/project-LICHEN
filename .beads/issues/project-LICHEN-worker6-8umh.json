@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-8umh",
+  "title": "POST-cancel tests pin only internals; wire state and observe notification unasserted",
+  "description": "python/tests/coap/test_sos_resource.py:285-304 (test_post_cancel_cancels_sos): after POST-cancel the test only checks sos._active; it never GETs /sos to pin the wire state {active: false, from: null, t: null} nor checks an Observe notification. A regression in cancel() (emergency.py:184-190) that cleared _active but left stale _from/_t or skipped updated_state() would pass. Follow TestSosGet/TestSosObserve conventions.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:05:07.750217Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:05:07.750217Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8umh",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:05:07.953515Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

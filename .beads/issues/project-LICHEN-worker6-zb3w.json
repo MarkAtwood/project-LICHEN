@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-zb3w",
+  "title": "SOS cancel docs and minor behavior divergences vs DELETE path",
+  "description": "python/src/lichen/coap/resources/emergency.py: (1) class docstring (~line 51-59) still says only 'DELETE cancels.' — update for the new POST type=cancel surface (2.04 CHANGED). (2) Ordering divergence: render_post decodes payload BEFORE the idle check, so a malformed POST-cancel to an idle node returns 400 where DELETE-when-idle returns 404 (render_delete checks active first) — observable only in malformed+idle combos; align or document. (3) Cancel bodies without node/ts are accepted (parity with render_delete which accepts arbitrary signed cores; spec 18.4.2 defines cancel within the alert format that includes them) — tighten both paths if strict format compliance is wanted.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:05:57.402815Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:05:57.402815Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zb3w",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:05:57.703631Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

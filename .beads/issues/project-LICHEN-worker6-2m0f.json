@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2m0f",
+  "title": "SOS replay gate is vacuous when the active origin has no sequence-tracker entry",
+  "description": "python/src/lichen/coap/resources/emergency.py:303-305 (_cancel_from_body) and the render_delete counterpart: a captured-but-undelivered valid cancel envelope replays successfully when last_seen(source_key) is None. That happens when the alert was activated via a direct activate() call (no seq recorded) or when the 256-entry LRU in OriginSequenceTracker (sos_origin.py:202-203) evicts the active origin under a flood of distinct-origin activations. Gate on the activation-time sequence being known, or record it at activate() time.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:04:50.265716Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:04:50.265716Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2m0f",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:04:50.521199Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

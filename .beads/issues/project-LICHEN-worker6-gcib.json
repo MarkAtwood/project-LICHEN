@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-gcib",
+  "title": "L2 RX packet processing on system workqueue can starve all other system work",
+  "description": "Found by security+robustness codereview of project-LICHEN-worker6-sb0b (P2). rx_work_fn on the cooperative system workqueue runs the full lichen_l2_input chain: rx_mutex K_FOREVER, Schnorr-48 verify (CPU-bound, up to N peers per attacker frame), SCHC decompress, and net_pkt_rx_alloc_with_buffer with CONFIG_LICHEN_L2_RX_ALLOC_TIMEOUT_MS (default 50ms) - all unpreeemptible at cooperative priority, shared with USB/udc work, net DAD/ND delayed work, mgmt events. A radio-range attacker (~40fps at SF7) can hold sysworkq near-permanently. Mitigations to evaluate: dedicated RX workqueue (k_work_queue_start, prio like old RX_THREAD_PRIORITY), shrinking the alloc timeout for sysworkq builds, or moving net_pkt alloc off the hot path. Stack budgets were migrated in sb0b (puck 8192, gateway boards 12288, nucleo_wl55jc 2048 = old RX default); budget parity is verified, sharing is the issue.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:02:16.890015Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-30T18:02:16.890015Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gcib",
+      "depends_on_id": "project-LICHEN-worker6-sb0b",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:02:17.171302Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-kw4o",
+  "title": "SOS cancel path skips trust-store verify_or_pin (defense-in-depth parity)",
+  "description": "python/src/lichen/coap/resources/emergency.py:285-301 (_cancel_from_body) mirrors render_delete in never consulting self._trust_store.verify_or_pin, which the activation path enforces (emergency.py:252-256). Cancel authorization rests on IID-derivation + signature; exploiting requires a second key colliding on the victim's 8-byte IID (~2^63), so this is defense-in-depth parity with DELETE, not an introduced gap. Either add the check for parity with activate or document the divergence deliberately.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:05:32.279691Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:05:32.279691Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kw4o",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:05:32.566639Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

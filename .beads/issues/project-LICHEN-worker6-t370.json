@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-t370",
+  "title": "native_sim test-infra breakage cluster at pinned v3.7.0 tree (coap_status switch-enum, COAP_CLIENT prio assert, rx_stack collision, qemu_x86 entropy link)",
+  "description": "Found during project-LICHEN-worker6-sb0b validation; several block ANY CONFIG_LICHEN=y Zephyr build. (1) FIXED in sb0b: coap_status.c trust_level_str lacked a case for LICHEN_COAP_TRUST_UNKNOWN -\u003e -Werror=switch-enum (default: does not suppress -Wswitch-enum); case added, behavior identical to old default. (2) OPEN: Zephyr COAP_CLIENT_THREAD_PRIORITY defaults to NUM_PREEMPT_PRIORITIES (=idle priority) -\u003e z_init_static_threads assert 'invalid priority (15)' before any test runs; LICHEN selects COAP_CLIENT via LICHEN_L2_IF-\u003eLICHEN_COAP. Workaround exists (set =14, done in ping_l2 + coap_client tests) but gateway/puck prj.confs do NOT set it - audit all apps/boards (pre-existing boot-assert risk on real boards). (3) OPEN: base lora_l2.c defined a global rx_stack that collides with Zephyr net_tc.c rx_stack (multiple definition at link) - latent, only bites configs building net TC + old L2; gone after sb0b but symbols were renamed only in the new code. (4) OPEN: qemu_x86 cannot link L2 at all - sys_csrand_get undefined (no entropy driver on qemu_x86; all existing qemu_x86 test configs set CONFIG_LICHEN_LORA_L2=n for this reason), so the sb0b acceptance clause 'qemu_x86 build of an app pulling L2' is only satisfiable to object-compile level; needs either an entropy shim/test driver for qemu_x86 or an explicit Kconfig gate. Verify (2) and (4) after fixing.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:02:57.598115Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-30T18:02:57.598115Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t370",
+      "depends_on_id": "project-LICHEN-worker6-sb0b",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:02:58.035518Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

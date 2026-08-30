@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-4s5f",
+  "title": "rx workqueue robustness residue: unbounded deinit flush on wedged handler, loopback deaf-window divergence, disarm -EINVAL noise",
+  "description": "Residual P2/P3 findings from 3x codereview of project-LICHEN-worker6-sb0b (main items fixed in bead; these deferred). (1) deinit() ABORTED path calls lora_l2_rx_stop() whose k_work_flush_delayable can block forever if a wedged lichen_l2_input holds rx_mutex (old code had a bounded thread join); consider k_work_cancel_delayable_sync with a timeout or bounded flush. (2) Loopback driver deliver-on-arm models a radio that listened while disarmed; a real disarmed radio receives nothing - burst-TX windows rely on this on loopback but diverge from production; once real drivers implement one-shot recv_async (0l5j) re-evaluate whether deliver-on-arm should stay test-only with a loud comment. (3) On sx12xx-style drivers lora_recv_async(dev,NULL) when not receiving returns -EINVAL -\u003e spurious 'disarm failed' warning; the rx_armed flag in sb0b's lora_l2_rx.c skips the call when unarmed, but the log path should also distinguish not-armed from real failure once real drivers exist. (4) COAP_CLIENT_THREAD_PRIORITY=14 override in ping_l2/coap_client tests silently breaks if NUM_PREEMPT_PRIORITIES ever drops below 15 - assert-guarded only at boot.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:03:04.442108Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-30T18:03:04.442108Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4s5f",
+      "depends_on_id": "project-LICHEN-worker6-sb0b",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:03:04.776244Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

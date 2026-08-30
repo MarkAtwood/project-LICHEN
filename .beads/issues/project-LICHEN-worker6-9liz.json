@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-9liz",
+  "title": "[bug] GatewayOscoreRecipientStore: same first-accept crash window bricks replay state (mirror of lynw)",
+  "description": "Found during lynw fix work; verified in source. lichen-gateway/src/gateway.rs: GatewayOscoreRecipientStore::accept writes state (line 517) before floor (line 518), and load maps (Some(_), None) to Err(Corrupt) at line 462. A crash or transient IO error between the two writes of the FIRST accept for a context id leaves (Some(state), None) on disk; every later load returns Err(Corrupt), so is_replay and accept fail permanently for that context and inbound OSCORE traffic for it is bricked. Same class as the sender-store bug fixed in lynw and the announce store fixed in s6ml. Fix: heal (Some(state), None) on load by rewriting floor := sealed state (state seal unforgeable, missing floor cannot lower trust), keep (None, Some(_)) fail-closed. Mirrors announce_store.rs heal arm. Note the recipient precedes() also compares the replay window bitmask (:426-432), so the heal must write floor := state exactly (same as sender store). The existing test oscore_recipient_replay_store_survives_restart asserts the missing-floor case is Err(Corrupt) (:1856-1867) and must be updated to assert the heal, like the sender test was.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:02:55.722309Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T18:02:55.722309Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9liz",
+      "depends_on_id": "project-LICHEN-worker6-lynw",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:02:55.949688Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
