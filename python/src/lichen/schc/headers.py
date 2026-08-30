@@ -100,13 +100,13 @@ def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> N
         or source.is_multicast
         or source.ipv4_mapped is not None
     ):
-        raise SchcError(f"invalid Rule 7 source address {source}")
+        raise SchcError(f"invalid IPv6 source address {source}")
     if destination.is_unspecified or destination.is_loopback or destination.ipv4_mapped is not None:
-        raise SchcError(f"invalid Rule 7 destination address {destination}")
+        raise SchcError(f"invalid IPv6 destination address {destination}")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F
         if not 2 <= scope <= 14:
-            raise SchcError(f"invalid Rule 7 multicast destination scope {scope}")
+            raise SchcError(f"invalid IPv6 destination multicast scope {scope}")
 
 
 def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:

@@ -2303,6 +2303,8 @@ mod tests {
     extern crate std;
     use std::{vec, vec::Vec};
 
+    use core::str::FromStr as _;
+
     use super::*;
 
     fn hex(s: &str) -> Vec<u8> {
