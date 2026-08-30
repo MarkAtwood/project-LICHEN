@@ -27,7 +27,7 @@ use lichen_node::{
     rpl_stack::{RplBorderIngressOutcome, RplReceiveError, RplReceiveOutcome, RplStack},
     secure::{SecureError, SecureResponseData, SecureStack},
     stack::{add_rpl_source_route, MAX_FRAME_SIZE},
-    RplEvent,
+    AnnounceTrustStore, RplEvent,
 };
 use lichen_oscore::{
     Context, ContextId, SenderSequenceState, SenderStateStore, COAP_OPTION_OSCORE,
@@ -694,6 +694,8 @@ pub enum GatewayOpenError {
     InvalidEpoch,
     RplProvision,
     OscoreStorage,
+    /// Durable announce trust (pin/floor) storage failed to open.
+    AnnounceTrustStorage,
     InvalidFloorAuthority,
 }
 
@@ -733,6 +735,8 @@ struct GatewayBacking {
     trust_persistence: Option<GatewayTrustPersistence>,
     oscore_sender_store: GatewayOscoreSenderStore,
     oscore_recipient_store: GatewayOscoreRecipientStore,
+    /// Durable TOFU pin/sequence-floor state for Announce admission.
+    announce_trust: AnnounceTrustStore,
 }
 
 impl fmt::Display for GatewayOpenError {
@@ -741,6 +745,9 @@ impl fmt::Display for GatewayOpenError {
             Self::InvalidEpoch => write!(f, "gateway link epoch must be in 128..=255"),
             Self::RplProvision => write!(f, "gateway RPL root provisioning failed"),
             Self::OscoreStorage => write!(f, "gateway OSCORE sender-state storage failed"),
+            Self::AnnounceTrustStorage => {
+                write!(f, "gateway announce trust persistence failed to open")
+            }
             Self::InvalidFloorAuthority => write!(
                 f,
                 "rollback floors require an independent authority outside gateway state"
@@ -851,6 +858,7 @@ impl Gateway {
                 trust_persistence: None,
                 oscore_sender_store: GatewayOscoreSenderStore::ephemeral(),
                 oscore_recipient_store: GatewayOscoreRecipientStore::ephemeral(),
+                announce_trust: AnnounceTrustStore::ephemeral(),
             },
         )
     }
@@ -901,6 +909,12 @@ impl Gateway {
             &rollback_floor_root,
             &persistence.sealing_seed,
         )?;
+        let announce_trust = AnnounceTrustStore::persistent(
+            &state_root,
+            &rollback_floor_root,
+            &persistence.sealing_seed,
+        )
+        .map_err(|_| GatewayOpenError::AnnounceTrustStorage)?;
         Self::with_storage(
             identity,
             safe_epoch,
@@ -916,6 +930,7 @@ impl Gateway {
                 }),
                 oscore_sender_store,
                 oscore_recipient_store,
+                announce_trust,
             },
         )
     }
@@ -935,8 +950,11 @@ impl Gateway {
         let (radio, radio_peer) = LoopbackRadio::pair();
         let stack = SecureStack::from_radio(radio, identity, safe_epoch, 0)
             .map_err(|_| GatewayOpenError::InvalidEpoch)?;
-        let announces =
-            AnnounceProcessor::new(GradientTable::new(64), dodag_id[..8].try_into().unwrap());
+        let announces = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            dodag_id[..8].try_into().unwrap(),
+            backing.announce_trust,
+        );
         let mut rpl_stack = if backing.provision {
             RplStack::provision_root(stack, root_addr, dodag_id, announces, backing.storage)
                 .map_err(|_| GatewayOpenError::RplProvision)?
