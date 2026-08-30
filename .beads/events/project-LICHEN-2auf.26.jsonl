@@ -4,3 +4,4 @@
 {"id":"01a0319c-3488-7ee8-892f-1f4d90b7de1a","issue_id":"project-LICHEN-2auf.26","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-24T02:31:55.784978Z"}
 {"id":"01a0319d-1e92-7b33-be5d-d0eb14849e24","issue_id":"project-LICHEN-2auf.26","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: blocked:hardware","created_at":"2026-08-24T02:32:55.698734Z"}
 {"id":"01a048ed-3a00-7288-8e94-8ae927ca6e4e","issue_id":"project-LICHEN-2auf.26","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T15:11:41.568167Z"}
+{"id":"01a053ca-5512-75b8-86bb-ee9cdebdf4b7","issue_id":"project-LICHEN-2auf.26","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"verified fixed","created_at":"2026-08-30T17:49:24.114376Z"}
