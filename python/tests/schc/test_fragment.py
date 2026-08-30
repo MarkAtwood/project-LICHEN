@@ -24,6 +24,7 @@ from lichen.ipv6.packet import IPv6Header, NextHeader
 from lichen.l2_payload import wrap_schc_payload
 from lichen.link.frame import AddrMode, LichenFrame
 from lichen.link.link_layer import (
+    MAX_SINGLE_FRAME_SCHC_PACKET,
     LinkLayer,
     ReceiveError,
     RxFrame,
@@ -2142,6 +2143,70 @@ def test_fragmented_rule255_uses_reassembly_limit_not_single_frame_limit() -> No
             decoded = candidate
 
     assert decoded == packet[1:]
+
+
+@pytest.mark.parametrize("encoded_length", [186, 1000, MAX_SCHC_PACKET])
+def test_fragmented_rule255_spans_full_fragmented_range_end_to_end(encoded_length: int) -> None:
+    harness = SessionHarness(-1)
+    harness.authorize_schc()
+    _authorize_link_schc(harness.remote_link, LOCAL_IDENTITY)
+    packet = _rule255_payload(encoded_length)
+    assert len(packet) == encoded_length
+
+    sender = harness.remote_link.create_fragment_sender(packet, LOCAL_IDENTITY)
+    decoded = None
+    for counter, wire in enumerate(sender.start()):
+        received = harness.receive(wire, counter)
+        assert isinstance(received, RxFrame)
+        _, candidate = harness.local_link.accept_authenticated_schc_fragment(received)
+        if candidate is not None:
+            decoded = candidate
+
+    assert decoded == packet[1:]
+    assert decoded is not None and len(decoded) == encoded_length - 1
+
+
+def test_fragmented_rule255_above_profile_limit_rejected_before_session() -> None:
+    harness = SessionHarness(-1)
+    harness.authorize_schc()
+    packet = _rule255_payload(MAX_SCHC_PACKET + 1)
+    assert len(packet) == MAX_SCHC_PACKET + 1
+
+    with pytest.raises(FragmentError, match="payload too large"):
+        harness.local_link.create_fragment_sender(packet, REMOTE_IDENTITY)
+    assert not harness.local_link._schc_session_manager._prepared
+
+
+def test_fragmented_rule255_over_receiver_budget_aborts_reassembly() -> None:
+    harness = SessionHarness(-1)
+    harness.authorize_schc()
+    _authorize_link_schc(harness.remote_link, LOCAL_IDENTITY)
+    packet = _rule255_payload(MAX_SCHC_PACKET + 100)
+    sender = harness.remote_link.create_fragment_sender(
+        packet, LOCAL_IDENTITY, receiver_limit=MAX_PACKET_SIZE
+    )
+
+    aborted = False
+    for counter, wire in enumerate(sender.start()):
+        received = harness.receive(wire, counter)
+        assert isinstance(received, RxFrame)
+        result, decoded = harness.local_link.accept_authenticated_schc_fragment(received)
+        if result.aborted:
+            aborted = True
+            assert result.response == receiver_abort(sender.rule_id)
+        assert decoded is None
+
+    assert aborted
+
+
+def test_unfragmented_rule255_single_frame_ceiling_still_enforced() -> None:
+    harness = SessionHarness(-1)
+    _authorize_link_schc(harness.local_link, REMOTE_IDENTITY, 2)
+    raw = _rule255_payload(1000)[1:]
+    assert len(raw) + 1 > MAX_SINGLE_FRAME_SCHC_PACKET
+
+    with pytest.raises(SchcError, match="single frame limit"):
+        harness.local_link.compress_schc_for_peer(raw, REMOTE_IDENTITY)
 
 
 def test_link_derives_directional_fragment_rule_and_rejects_caller_mismatch() -> None:

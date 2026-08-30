@@ -30,6 +30,10 @@ pub const TILE_SIZE: usize =
     (FRAGMENT_ENVELOPE_MTU * 8 - FRAGMENT_HEADER_BITS - MIC_LENGTH * 8) / 8;
 pub const WINDOW_SIZE: usize = 63;
 pub const BITMAP_MASK: u64 = (1u64 << WINDOW_SIZE) - 1;
+/// Encoded SCHC packet profile ceiling (126 × 179 = 22,554 bytes). The Rule
+/// ID counts toward it. This bounds encoded admission only — a reconstructed
+/// IPv6 datagram may exceed it (for example 22,581 bytes from an exactly
+/// maximal Rule 7 packet) and is bounded by the caller's output buffer.
 pub const MAX_PACKET_SIZE: usize = SCHC_FRAG_MAX_PACKET_SIZE;
 /// Largest encoded fragment accepted by the fixed profile: Rule ID, W/FCN,
 /// 32-bit RCS, one full tile, and the final zero pad bit.

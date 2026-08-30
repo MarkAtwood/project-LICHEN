@@ -155,13 +155,22 @@ fn exact_embedded_coap_boundary_round_trips_and_one_over_fails_atomically() {
     assert_eq!(compressed_length, encoded.len());
     assert_eq!(recompressed, encoded);
 
+    // One more tail byte reconstructs to one byte more than `output` holds:
+    // the caller-buffer capacity error fires atomically, leaving a sentinel
+    // buffer untouched. Reconstruction is never capped by the 1,500-byte
+    // SCHC_MAX_DECOMPRESSED buffer bound itself.
     encoded.push(0xaa);
-    let mut oversized_output = vec![0xa5; output.len() + 1];
+    let mut one_short = vec![0xa5u8; output.len()];
     assert!(matches!(
-        decompress(&encoded, &mut oversized_output),
+        decompress(&encoded, &mut one_short),
         Err(SchcError::BufferTooSmall(_))
     ));
-    assert!(oversized_output.iter().all(|byte| *byte == 0xa5));
+    assert!(one_short.iter().all(|byte| *byte == 0xa5));
+
+    // A buffer one byte larger admits the packet.
+    let mut one_larger = vec![0xa5u8; output.len() + 1];
+    let grown = decompress(&encoded, &mut one_larger).unwrap();
+    assert_eq!(grown, one_larger.len());
 }
 
 #[test]

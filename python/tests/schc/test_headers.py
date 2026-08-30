@@ -12,11 +12,13 @@ import pytest
 from aiocoap import GET, Message
 
 from lichen.constants import PORT_MQTT_SN
+from lichen.ipv6.icmpv6 import EchoRequest
 from lichen.ipv6.packet import HEADER_LENGTH, IPv6Header, NextHeader
 from lichen.ipv6.udp import UdpDatagram
+from lichen.link.link_layer import MAX_SINGLE_FRAME_SCHC_PACKET
 from lichen.schc.codec import SchcError
 from lichen.schc.fragment import MAX_PACKET_SIZE
-from lichen.schc.headers import compress_packet, decode_rule255, decompress_packet
+from lichen.schc.headers import compress_packet, decode_rule255, decompress_packet, encode_rule255
 
 SRC = IPv6Address("fe80::1")
 DST = IPv6Address("fe80::2")
@@ -246,6 +248,30 @@ def test_rule255_rejects_zero_udp_checksum() -> None:
     raw[46:48] = b"\x00\x00"
     with pytest.raises(SchcError, match="checksum"):
         decode_rule255(b"\xff" + bytes(raw))
+
+
+def _rule255_schc_bytes(encoded_length: int) -> bytes:
+    data_length = encoded_length - 1 - 40 - 8
+    icmp = (
+        EchoRequest(identifier=1, sequence=1, data=bytes(data_length))
+        .to_message()
+        .to_bytes(SRC, DST)
+    )
+    raw = IPv6Header(SRC, DST, NextHeader.ICMPV6, payload_length=len(icmp)).to_bytes() + icmp
+    encoded = encode_rule255(raw)
+    assert len(encoded) == encoded_length
+    return encoded
+
+
+def test_decode_rule255_enforces_single_frame_limit_only_when_given() -> None:
+    limit = MAX_SINGLE_FRAME_SCHC_PACKET
+    at_ceiling = _rule255_schc_bytes(limit)
+    above_ceiling = _rule255_schc_bytes(limit + 1)
+
+    assert decode_rule255(at_ceiling, single_frame_limit=limit) == at_ceiling[1:]
+    with pytest.raises(SchcError, match="single frame limit"):
+        decode_rule255(above_ceiling, single_frame_limit=limit)
+    assert decode_rule255(above_ceiling) == above_ceiling[1:]
 
 
 def test_non_linklocal_falls_back_to_uncompressed() -> None:

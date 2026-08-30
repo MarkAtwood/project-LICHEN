@@ -398,24 +398,42 @@ fn has_oscore_option(coap: &[u8]) -> bool {
     if coap.len() < 4 {
         return false;
     }
-    let tkl = (coap[0] & 0x0F) as usize;
+    has_oscore_option_parts(
+        coap[..4].try_into().expect("split at 4 yields 4 bytes"),
+        &coap[4..],
+    )
+}
+
+/// Walk CoAP options across the 4-byte fixed header and the residue tail so
+/// decompression can validate the OSCORE rule match without materializing the
+/// full datagram in an intermediate buffer.
+fn has_oscore_option_parts(head: &[u8; 4], tail: &[u8]) -> bool {
+    let byte = |i: usize| {
+        if i < head.len() {
+            head[i]
+        } else {
+            tail[i - head.len()]
+        }
+    };
+    let coap_len = head.len().saturating_add(tail.len());
+    let tkl = (byte(0) & 0x0F) as usize;
     if tkl > 8 {
         return false;
     }
-    let Some(mut pos) = 4usize.checked_add(tkl) else {
+    let Some(mut pos) = head.len().checked_add(tkl) else {
         return false;
     };
-    if pos > coap.len() {
+    if pos > coap_len {
         return false;
     }
     let mut opt_num: usize = 0;
     let mut oscore_found = false;
 
-    while pos < coap.len() {
-        let b = coap[pos];
+    while pos < coap_len {
+        let b = byte(pos);
         if b == 0xFF {
             // A payload marker without at least one payload byte is malformed.
-            return oscore_found && pos + 1 < coap.len();
+            return oscore_found && pos + 1 < coap_len;
         }
         let delta_nibble = (b >> 4) & 0x0F;
         let len_nibble = b & 0x0F;
@@ -424,18 +442,18 @@ fn has_oscore_option(coap: &[u8]) -> bool {
         let delta = match delta_nibble {
             0..=12 => delta_nibble as usize,
             13 => {
-                if pos >= coap.len() {
+                if pos >= coap_len {
                     return false;
                 }
-                let ext = coap[pos] as usize;
+                let ext = byte(pos) as usize;
                 pos += 1;
                 ext + 13
             }
             14 => {
-                if pos + 1 >= coap.len() {
+                if pos + 1 >= coap_len {
                     return false;
                 }
-                let ext = u16::from_be_bytes([coap[pos], coap[pos + 1]]) as usize;
+                let ext = u16::from_be_bytes([byte(pos), byte(pos + 1)]) as usize;
                 pos += 2;
                 ext + 269
             }
@@ -445,18 +463,18 @@ fn has_oscore_option(coap: &[u8]) -> bool {
         let len = match len_nibble {
             0..=12 => len_nibble as usize,
             13 => {
-                if pos >= coap.len() {
+                if pos >= coap_len {
                     return false;
                 }
-                let ext = coap[pos] as usize;
+                let ext = byte(pos) as usize;
                 pos += 1;
                 ext + 13
             }
             14 => {
-                if pos + 1 >= coap.len() {
+                if pos + 1 >= coap_len {
                     return false;
                 }
-                let ext = u16::from_be_bytes([coap[pos], coap[pos + 1]]) as usize;
+                let ext = u16::from_be_bytes([byte(pos), byte(pos + 1)]) as usize;
                 pos += 2;
                 ext + 269
             }
@@ -470,11 +488,21 @@ fn has_oscore_option(coap: &[u8]) -> bool {
         let Some(end) = pos.checked_add(len) else {
             return false;
         };
-        if end > coap.len() {
+        if end > coap_len {
             return false;
         }
         if opt_num == 9 {
-            if oscore_found || !valid_oscore_option(&coap[pos..end]) {
+            if oscore_found {
+                return false;
+            }
+            if end - pos > u8::MAX as usize {
+                return false;
+            }
+            let mut value = [0u8; u8::MAX as usize];
+            for (i, j) in (pos..end).enumerate() {
+                value[i] = byte(j);
+            }
+            if !valid_oscore_option(&value[..end - pos]) {
                 return false;
             }
             oscore_found = true;
@@ -503,6 +531,40 @@ fn checksum_bytes(data: &[u8]) -> u32 {
         sum = oc_add(sum, u16::from_be_bytes([pair[0], pair[1]]) as u32);
     }
     if let Some(&last) = remainder.first() {
+        sum = oc_add(sum, (last as u32) << 8);
+    }
+    sum
+}
+
+/// One's-complement sum over concatenated pieces, equivalent to
+/// `checksum_bytes` of the contiguous stream: an odd-length piece leaves its
+/// trailing byte pending as the high byte of the next piece's first word.
+fn checksum_bytes_parts(parts: &[&[u8]]) -> u32 {
+    let mut sum: u32 = 0;
+    let mut pending: Option<u8> = None;
+    for part in parts {
+        let mut bytes = *part;
+        if let Some(high) = pending.take() {
+            match bytes.split_first() {
+                Some((&first, rest)) => {
+                    sum = oc_add(sum, u16::from_be_bytes([high, first]) as u32);
+                    bytes = rest;
+                }
+                None => {
+                    pending = Some(high);
+                    continue;
+                }
+            }
+        }
+        let mut chunks = bytes.chunks_exact(2);
+        for pair in &mut chunks {
+            sum = oc_add(sum, u16::from_be_bytes([pair[0], pair[1]]) as u32);
+        }
+        if let Some(&last) = chunks.remainder().first() {
+            pending = Some(last);
+        }
+    }
+    if let Some(last) = pending {
         sum = oc_add(sum, (last as u32) << 8);
     }
     sum
@@ -540,7 +602,21 @@ fn udp_checksum(
     dst_port: u16,
     payload: &[u8],
 ) -> Result<u16, SchcError> {
-    let total_len = 8usize.saturating_add(payload.len());
+    udp_checksum_parts(src, dst, src_port, dst_port, &[payload])
+}
+
+/// UDP checksum over a payload assembled from disjoint pieces (fixed header
+/// fields plus the residue tail), so decompression never needs an
+/// intermediate copy of the full datagram.
+fn udp_checksum_parts(
+    src: &[u8],
+    dst: &[u8],
+    src_port: u16,
+    dst_port: u16,
+    parts: &[&[u8]],
+) -> Result<u16, SchcError> {
+    let payload_len: usize = parts.iter().map(|part| part.len()).sum();
+    let total_len = 8usize.saturating_add(payload_len);
     if total_len > u16::MAX as usize {
         return Err(BufferTooSmall::new(total_len, u16::MAX as usize).into());
     }
@@ -549,14 +625,15 @@ fn udp_checksum(
     sum = oc_add(sum, src_port as u32);
     sum = oc_add(sum, dst_port as u32);
     sum = oc_add(sum, udp_len as u32);
-    sum = oc_add(sum, checksum_bytes(payload));
+    sum = oc_add(sum, checksum_bytes_parts(parts));
     Ok(ones_complement_sum(sum))
 }
 
-fn icmpv6_checksum(src: &[u8], dst: &[u8], icmpv6_payload: &[u8]) -> u16 {
-    let length = icmpv6_payload.len() as u16;
-    let mut sum = pseudo_sum(src, dst, 58, length);
-    sum = oc_add(sum, checksum_bytes(icmpv6_payload));
+/// ICMPv6 checksum over disjoint pieces (fixed header fields plus tail).
+fn icmpv6_checksum_parts(src: &[u8], dst: &[u8], parts: &[&[u8]]) -> u16 {
+    let length: usize = parts.iter().map(|part| part.len()).sum();
+    let mut sum = pseudo_sum(src, dst, 58, length as u16);
+    sum = oc_add(sum, checksum_bytes_parts(parts));
     ones_complement_sum(sum)
 }
 
@@ -1017,25 +1094,22 @@ fn decompress_coap(data: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     let src = src_int.to_be_bytes();
     let dst = dst_int.to_be_bytes();
     let coap_b0 = (1u8 << 6) | ((coap_type & 0x3) << 4) | (coap_tkl & 0x0F);
+    let coap_head = [coap_b0, coap_code, (coap_mid >> 8) as u8, coap_mid as u8];
     let coap_len = 4 + tail.len();
     let total_udp = 8usize.saturating_add(coap_len);
     if total_udp > u16::MAX as usize {
         return Err(BufferTooSmall::new(total_udp, u16::MAX as usize).into());
     }
     let udp_len = total_udp as u16;
-
-    if coap_len > SCHC_MAX_DECOMPRESSED {
-        return Err(BufferTooSmall::new(coap_len, SCHC_MAX_DECOMPRESSED).into());
+    let total = 40 + 8 + coap_len;
+    // Reconstructed IPv6 size is bounded by the caller buffer alone; the
+    // 22,554-byte SCHC_FRAG_MAX_PACKET_SIZE profile ceiling applies to the
+    // encoded SCHC packet (enforced by the caller, decompress()).
+    if total > out.len() {
+        return Err(BufferTooSmall::new(total, out.len()).into());
     }
-    let mut coap_buf = [0u8; SCHC_MAX_DECOMPRESSED];
-    coap_buf[0] = coap_b0;
-    coap_buf[1] = coap_code;
-    coap_buf[2] = (coap_mid >> 8) as u8;
-    coap_buf[3] = coap_mid as u8;
-    coap_buf[4..4 + tail.len()].copy_from_slice(tail);
-    let coap_slice = &coap_buf[..coap_len];
 
-    let has_oscore = has_oscore_option(coap_slice);
+    let has_oscore = has_oscore_option_parts(&coap_head, tail);
     match rule_id {
         RULE_LINK_LOCAL_OSCORE | RULE_GLOBAL_OSCORE if !has_oscore => {
             return Err(SchcError::NonCanonicalResidue(
@@ -1050,11 +1124,7 @@ fn decompress_coap(data: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
         _ => {}
     }
 
-    let udp_cksum = udp_checksum(&src, &dst, src_port, dst_port, coap_slice)?;
-    let total = 40 + 8 + coap_len;
-    if total > out.len() {
-        return Err(BufferTooSmall::new(total, out.len()).into());
-    }
+    let udp_cksum = udp_checksum_parts(&src, &dst, src_port, dst_port, &[&coap_head, tail])?;
 
     write_ipv6_header(out, udp_len, 17, hop_limit, &src, &dst);
 
@@ -1064,8 +1134,9 @@ fn decompress_coap(data: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     out[44..46].copy_from_slice(&udp_len.to_be_bytes());
     out[46..48].copy_from_slice(&udp_cksum.to_be_bytes());
 
-    // CoAP
-    out[48..48 + coap_len].copy_from_slice(coap_slice);
+    // CoAP: fixed header fields then the verbatim residue tail
+    out[48..52].copy_from_slice(&coap_head);
+    out[52..total].copy_from_slice(tail);
     Ok(total)
 }
 
@@ -1107,23 +1178,19 @@ fn decompress_icmpv6_echo(data: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
         return Err(BufferTooSmall::new(total, out.len()).into());
     }
 
-    // Build ICMPv6 with zero checksum for computation.
-    if icmp_len > SCHC_MAX_DECOMPRESSED {
-        return Err(BufferTooSmall::new(icmp_len, SCHC_MAX_DECOMPRESSED).into());
-    }
-    let mut icmp_buf = [0u8; SCHC_MAX_DECOMPRESSED];
-    icmp_buf[0] = icmp_type;
-    icmp_buf[1] = 0; // code NOT_SENT = 0
-    icmp_buf[2] = 0; // checksum placeholder hi
-    icmp_buf[3] = 0; // checksum placeholder lo
-    icmp_buf[4] = (icmp_id >> 8) as u8;
-    icmp_buf[5] = icmp_id as u8;
-    icmp_buf[6] = (icmp_seq >> 8) as u8;
-    icmp_buf[7] = icmp_seq as u8;
-    icmp_buf[8..8 + tail.len()].copy_from_slice(tail);
-    let icmp_slice = &icmp_buf[..icmp_len];
-
-    let cksum = icmpv6_checksum(&src, &dst, icmp_slice);
+    // Checksum inputs with a zero checksum field; no intermediate buffer is
+    // needed, so reconstruction is bounded by the caller buffer alone.
+    let icmp_head = [
+        icmp_type,
+        0, // code NOT_SENT = 0
+        0, // checksum placeholder hi
+        0, // checksum placeholder lo
+        (icmp_id >> 8) as u8,
+        icmp_id as u8,
+        (icmp_seq >> 8) as u8,
+        icmp_seq as u8,
+    ];
+    let cksum = icmpv6_checksum_parts(&src, &dst, &[&icmp_head, tail]);
 
     write_ipv6_header(out, icmp_len as u16, 58, hop_limit, &src, &dst);
 
@@ -1172,32 +1239,27 @@ fn decompress_rpl_dio(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if total > out.len() {
         return Err(BufferTooSmall::new(total, out.len()).into());
     }
-    if icmp_len > SCHC_MAX_DECOMPRESSED {
-        return Err(BufferTooSmall::new(icmp_len, SCHC_MAX_DECOMPRESSED).into());
-    }
 
-    let mut icmp_buf = [0u8; SCHC_MAX_DECOMPRESSED];
-    icmp_buf[0] = 155; // RPL
-    icmp_buf[1] = 1; // DIO code
-    icmp_buf[2] = 0; // checksum placeholder
-    icmp_buf[3] = 0;
-    icmp_buf[4] = instance;
-    icmp_buf[5] = version;
-    icmp_buf[6] = (rank >> 8) as u8;
-    icmp_buf[7] = rank as u8;
-    icmp_buf[8] = gmop;
-    icmp_buf[9] = dtsn;
-    icmp_buf[10] = 0; // flags (NOT_SENT = 0)
-    icmp_buf[11] = 0; // reserved (NOT_SENT = 0)
+    // Checksum inputs with a zero checksum field; reconstruction is bounded
+    // by the caller buffer alone, never by SCHC_MAX_DECOMPRESSED.
+    let mut icmp_head = [0u8; 28];
+    icmp_head[0] = 155; // RPL
+    icmp_head[1] = 1; // DIO code
+    icmp_head[4] = instance;
+    icmp_head[5] = version;
+    icmp_head[6] = (rank >> 8) as u8;
+    icmp_head[7] = rank as u8;
+    icmp_head[8] = gmop;
+    icmp_head[9] = dtsn;
+    // flags and reserved stay zero (NOT_SENT = 0)
     let dodagid_bytes = dodagid.to_be_bytes();
-    icmp_buf[12..28].copy_from_slice(&dodagid_bytes);
-    icmp_buf[28..28 + tail.len()].copy_from_slice(tail);
-    let icmp_slice = &icmp_buf[..icmp_len];
+    icmp_head[12..28].copy_from_slice(&dodagid_bytes);
 
-    let cksum = icmpv6_checksum(&src, &dst, icmp_slice);
+    let cksum = icmpv6_checksum_parts(&src, &dst, &[&icmp_head, tail]);
 
     write_ipv6_header(out, icmp_len as u16, 58, hop_limit, &src, &dst);
-    out[40..40 + icmp_len].copy_from_slice(icmp_slice);
+    out[40..68].copy_from_slice(&icmp_head);
+    out[68..total].copy_from_slice(tail);
     out[42] = (cksum >> 8) as u8;
     out[43] = cksum as u8;
 
@@ -1242,28 +1304,23 @@ fn decompress_rpl_dao(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if total > out.len() {
         return Err(BufferTooSmall::new(total, out.len()).into());
     }
-    if icmp_len > SCHC_MAX_DECOMPRESSED {
-        return Err(BufferTooSmall::new(icmp_len, SCHC_MAX_DECOMPRESSED).into());
-    }
 
-    let mut icmp_buf = [0u8; SCHC_MAX_DECOMPRESSED];
-    icmp_buf[0] = 155; // RPL
-    icmp_buf[1] = 2; // DAO code
-    icmp_buf[2] = 0; // checksum placeholder
-    icmp_buf[3] = 0;
-    icmp_buf[4] = instance;
-    icmp_buf[5] = kd_flags;
-    icmp_buf[6] = 0; // reserved (NOT_SENT = 0)
-    icmp_buf[7] = seq;
+    // Checksum inputs with a zero checksum field; reconstruction is bounded
+    // by the caller buffer alone, never by SCHC_MAX_DECOMPRESSED.
+    let mut icmp_head = [0u8; 24];
+    icmp_head[0] = 155; // RPL
+    icmp_head[1] = 2; // DAO code
+    icmp_head[4] = instance;
+    icmp_head[5] = kd_flags;
+    icmp_head[7] = seq;
     let dodagid_bytes = dodagid.to_be_bytes();
-    icmp_buf[8..24].copy_from_slice(&dodagid_bytes);
-    icmp_buf[24..24 + tail.len()].copy_from_slice(tail);
-    let icmp_slice = &icmp_buf[..icmp_len];
+    icmp_head[8..24].copy_from_slice(&dodagid_bytes);
 
-    let cksum = icmpv6_checksum(&src, &dst, icmp_slice);
+    let cksum = icmpv6_checksum_parts(&src, &dst, &[&icmp_head, tail]);
 
     write_ipv6_header(out, icmp_len as u16, 58, hop_limit, &src, &dst);
-    out[40..40 + icmp_len].copy_from_slice(icmp_slice);
+    out[40..64].copy_from_slice(&icmp_head);
+    out[64..total].copy_from_slice(tail);
     out[42] = (cksum >> 8) as u8;
     out[43] = cksum as u8;
 
@@ -2176,6 +2233,15 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 
 /// Decompress a SCHC packet back into a full IPv6 datagram.
 ///
+/// Two distinct size limits apply:
+/// - the encoded SCHC packet is admitted up to
+///   [`SCHC_FRAG_MAX_PACKET_SIZE`] (22,554 bytes, the profile ceiling; the
+///   Rule ID counts toward it),
+/// - the reconstructed IPv6 datagram is bounded only by `out` (the caller
+///   buffer), which must hold the rule's maximum expansion of the encoded
+///   packet — it is never capped by `SCHC_MAX_DECOMPRESSED` or the profile
+///   ceiling.
+///
 /// Returns the number of bytes written to `out`.
 pub fn decompress(data: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if data.is_empty() {
@@ -2265,10 +2331,10 @@ mod tests {
         packet[41] = 1;
         packet[44..52].copy_from_slice(&[0, 1, 1, 0, 0x08, 0, 0, 0]);
         packet[52..68].copy_from_slice(&src);
-        let checksum = icmpv6_checksum(
+        let checksum = icmpv6_checksum_parts(
             packet[8..24].try_into().unwrap(),
             packet[24..40].try_into().unwrap(),
-            &packet[40..],
+            &[&packet[40..]],
         );
         packet[42..44].copy_from_slice(&checksum.to_be_bytes());
         packet
@@ -2347,7 +2413,7 @@ mod tests {
     }
 
     #[test]
-    fn rpl_dio_decompression_uses_profile_capacity_boundary() {
+    fn rpl_dio_decompression_uses_caller_capacity_boundary() {
         let maximum = rpl_dio_packet(SCHC_MAX_DECOMPRESSED);
         let mut compressed = vec![0u8; maximum.len()];
         let compressed_len = compress(&maximum, &mut compressed).unwrap();
@@ -2356,14 +2422,22 @@ mod tests {
         assert_eq!(restored_len, restored.len());
         assert_eq!(&restored[..restored_len], maximum.as_slice());
 
+        // Reconstruction is bounded by the caller buffer alone, never by
+        // SCHC_MAX_DECOMPRESSED: a 1501-byte ICMP body fits a 1501-byte
+        // output and only hits the capacity error with a 1500-byte output.
         let oversized = rpl_dio_packet(SCHC_MAX_DECOMPRESSED + 1);
         let mut compressed = vec![0u8; oversized.len()];
         let compressed_len = compress(&oversized, &mut compressed).unwrap();
-        let mut restored = vec![0u8; IPV6_HEADER_LEN + SCHC_MAX_DECOMPRESSED + 1];
-        assert_eq!(
-            decompress(&compressed[..compressed_len], &mut restored),
-            Err(BufferTooSmall::new(SCHC_MAX_DECOMPRESSED + 1, SCHC_MAX_DECOMPRESSED,).into())
-        );
+        let mut exact = vec![0u8; IPV6_HEADER_LEN + SCHC_MAX_DECOMPRESSED + 1];
+        let oversized_len = decompress(&compressed[..compressed_len], &mut exact).unwrap();
+        assert_eq!(oversized_len, exact.len());
+        assert_eq!(&exact[..oversized_len], oversized.as_slice());
+
+        let mut short = vec![0u8; IPV6_HEADER_LEN + SCHC_MAX_DECOMPRESSED];
+        assert!(matches!(
+            decompress(&compressed[..compressed_len], &mut short),
+            Err(SchcError::BufferTooSmall(_))
+        ));
     }
 
     #[test]
@@ -2515,6 +2589,251 @@ mod tests {
                 "SCHC packet exceeds profile limit"
             ))
         ));
+    }
+
+    #[test]
+    fn mqtt_sn_reconstruction_bound_is_caller_buffer() {
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+
+        let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
+        let compressed_len = compress(&packet, &mut compressed).unwrap();
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        compressed.truncate(compressed_len);
+
+        // The exactly maximal encoded packet reconstructs to 22,581 bytes; a
+        // caller buffer one byte short is a capacity error even though the
+        // encoded packet is within the 22,554-byte profile ceiling.
+        let mut short = vec![0u8; packet.len() - 1];
+        assert!(matches!(
+            decompress(&compressed, &mut short),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        let mut exact = vec![0u8; packet.len()];
+        assert_eq!(decompress(&compressed, &mut exact).unwrap(), packet.len());
+    }
+
+    fn coap_rule0_packet(payload_len: usize) -> Vec<u8> {
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let coap_len = 4 + 1 + payload_len; // fixed header + payload marker + payload
+        let udp_len = 8 + coap_len;
+        let mut packet = vec![0u8; 40 + udp_len];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&(udp_len as u16).to_be_bytes());
+        packet[6] = 17;
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&src);
+        packet[24..40].copy_from_slice(&dst);
+        let src_port: u16 = 5683;
+        let dst_port: u16 = 5683;
+        packet[40..42].copy_from_slice(&src_port.to_be_bytes());
+        packet[42..44].copy_from_slice(&dst_port.to_be_bytes());
+        packet[44..46].copy_from_slice(&(udp_len as u16).to_be_bytes());
+        packet[48] = 0x40; // ver 1, TKL 0
+        packet[49] = 0x01; // POST
+        packet[50..52].copy_from_slice(&0x1234u16.to_be_bytes());
+        packet[52] = 0xFF; // payload marker
+        let checksum = udp_checksum(&src, &dst, src_port, dst_port, &packet[48..]).unwrap();
+        packet[46..48].copy_from_slice(&checksum.to_be_bytes());
+        packet
+    }
+
+    #[test]
+    fn coap_rule0_profile_size_boundary() {
+        // Rules 0/5 carry a fixed 22-byte residue, so the exact 22,554-byte
+        // encoded maximum is 1 (rule ID) + 22 (residue) + 22,531 (tail) and
+        // reconstructs to 22,583 raw IPv6 bytes (40 + 8 + 4 + tail).
+        let payload_len = SCHC_FRAG_MAX_PACKET_SIZE - 24;
+        let packet = coap_rule0_packet(payload_len);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 29);
+
+        let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
+        let compressed_len = compress(&packet, &mut compressed).unwrap();
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed[0], RULE_LINK_LOCAL_COAP);
+        compressed.truncate(compressed_len);
+
+        let mut restored = vec![0u8; packet.len()];
+        let restored_len = decompress(&compressed, &mut restored).unwrap();
+        assert_eq!(restored_len, packet.len());
+        assert_eq!(&restored[..restored_len], packet.as_slice());
+
+        // Reconstructed size is bounded by the caller buffer, not the
+        // profile ceiling: one byte short is a capacity error.
+        let mut short = vec![0u8; packet.len() - 1];
+        assert!(matches!(
+            decompress(&compressed, &mut short),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+
+        // One encoded byte over the ceiling is rejected at ingress.
+        compressed.push(0);
+        assert!(matches!(
+            decompress(&compressed, &mut restored),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+
+        // Compressor-side: one raw byte more encodes to 22,555 bytes and is
+        // rejected by the encoded profile ceiling.
+        let over = coap_rule0_packet(payload_len + 1);
+        let mut bigger = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE + 1];
+        assert!(matches!(
+            compress(&over, &mut bigger),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+    }
+
+    fn icmpv6_echo_packet(tail_len: usize) -> Vec<u8> {
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let icmp_len = 8 + tail_len;
+        let mut packet = vec![0u8; 40 + icmp_len];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&(icmp_len as u16).to_be_bytes());
+        packet[6] = 58;
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&src);
+        packet[24..40].copy_from_slice(&dst);
+        packet[40] = 128; // echo request
+        packet[44..46].copy_from_slice(&0x1234u16.to_be_bytes());
+        packet[46..48].copy_from_slice(&1u16.to_be_bytes());
+        let checksum = icmpv6_checksum_parts(
+            packet[8..24].try_into().unwrap(),
+            packet[24..40].try_into().unwrap(),
+            &[&packet[40..]],
+        );
+        packet[42..44].copy_from_slice(&checksum.to_be_bytes());
+        packet
+    }
+
+    #[test]
+    fn icmpv6_rule2_profile_size_boundary() {
+        // Rule 2 carries a fixed 22-byte residue: 1 + 22 + 22,531 tail is the
+        // exact 22,554-byte encoded maximum and reconstructs to 22,579 bytes.
+        let tail_len = SCHC_FRAG_MAX_PACKET_SIZE - 23;
+        let packet = icmpv6_echo_packet(tail_len);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 25);
+
+        let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
+        let compressed_len = compress(&packet, &mut compressed).unwrap();
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed[0], RULE_ICMPV6_ECHO);
+        compressed.truncate(compressed_len);
+
+        let mut restored = vec![0u8; packet.len()];
+        let restored_len = decompress(&compressed, &mut restored).unwrap();
+        assert_eq!(restored_len, packet.len());
+        assert_eq!(&restored[..restored_len], packet.as_slice());
+
+        let mut short = vec![0u8; packet.len() - 1];
+        assert!(matches!(
+            decompress(&compressed, &mut short),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+
+        compressed.push(0);
+        assert!(matches!(
+            decompress(&compressed, &mut restored),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+    }
+
+    fn uncompressed_packet(len: usize) -> Vec<u8> {
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let mut packet = vec![0u8; len];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&((len - 40) as u16).to_be_bytes());
+        packet[6] = 59; // no next header
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&src);
+        packet[24..40].copy_from_slice(&dst);
+        packet
+    }
+
+    #[test]
+    fn rule255_profile_size_boundary() {
+        // Rule 255 carries the raw IPv6 after the one-byte Rule ID, so the
+        // raw packet caps at 22,553 bytes: encoded 22,554 is the ceiling.
+        let raw_exact = uncompressed_packet(SCHC_FRAG_MAX_PACKET_SIZE - 1);
+        let mut encoded = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
+        assert_eq!(
+            encode_rule255(&raw_exact, &mut encoded, usize::MAX).unwrap(),
+            SCHC_FRAG_MAX_PACKET_SIZE
+        );
+
+        let mut decoded = vec![0u8; raw_exact.len()];
+        assert_eq!(
+            decode_rule255(
+                &encoded[..SCHC_FRAG_MAX_PACKET_SIZE],
+                &mut decoded,
+                usize::MAX
+            )
+            .unwrap(),
+            raw_exact.len()
+        );
+        assert_eq!(&decoded[..], &raw_exact[..]);
+
+        // Raw one byte over: encoded would be 22,555 — rejected when encoding.
+        let raw_over = uncompressed_packet(SCHC_FRAG_MAX_PACKET_SIZE);
+        assert!(matches!(
+            encode_rule255(&raw_over, &mut encoded, usize::MAX),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+
+        // Encoded one byte over the ceiling: rejected at ingress. The direct
+        // decode_rule255 API reports the profile overflow as a capacity
+        // error; the public decompress() path rejects it as a profile
+        // violation before rule dispatch.
+        let mut encoded_over = encoded.clone();
+        encoded_over.push(0);
+        assert!(matches!(
+            decode_rule255(&encoded_over, &mut decoded, usize::MAX),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(matches!(
+            decompress(&encoded_over, &mut decoded),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+
+        // Caller buffer one byte short: capacity error, not profile rejection.
+        let mut short = vec![0u8; raw_exact.len() - 1];
+        assert!(matches!(
+            decode_rule255(
+                &encoded[..SCHC_FRAG_MAX_PACKET_SIZE],
+                &mut short,
+                usize::MAX
+            ),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+    }
+
+    #[test]
+    fn checksum_parts_match_contiguous_stream_across_piece_boundaries() {
+        // Hand-computed per RFC 1071 pairing: [01 02 03] sums as word 0x0102
+        // plus the odd trailing byte as 0x0300, i.e. 0x0402. An odd-length
+        // piece must leave its trailing byte pending, not pad it early
+        // (which would give 0x0100 + 0x0203 = 0x0303).
+        let expected = checksum_bytes(&[0x01, 0x02, 0x03]);
+        assert_eq!(expected, 0x0402);
+        assert_eq!(checksum_bytes_parts(&[&[0x01], &[0x02, 0x03]]), expected);
+        assert_eq!(checksum_bytes_parts(&[&[0x01, 0x02], &[0x03]]), expected);
+        assert_eq!(
+            checksum_bytes_parts(&[&[0x01], &[], &[0x02], &[0x03]]),
+            expected
+        );
+        assert_eq!(checksum_bytes_parts(&[&[0x01, 0x02, 0x03]]), expected);
     }
 
     #[test]

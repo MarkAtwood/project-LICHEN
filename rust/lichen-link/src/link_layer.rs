@@ -1500,6 +1500,67 @@ mod tests {
     }
 
     #[test]
+    fn same_key_readd_keeps_replay_rejected_and_accepts_new_frame() {
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
+        let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
+        let mut bob = make_ll(0x02);
+        bob.add_peer(alice_peer.clone());
+        let sender = LinkLayer::new(alice);
+        let mut wire = [0u8; 256];
+        let len = sender
+            .build_frame(1, seq(42), &[], b"data", &mut wire)
+            .unwrap();
+        bob.receive_frame(&wire[..len]).unwrap();
+
+        // Production announcement handling re-adds accepted peers; this must
+        // not erase the replay high-water mark established by seq(42).
+        assert!(bob.add_peer(alice_peer).is_none());
+
+        assert!(matches!(
+            bob.receive_frame(&wire[..len]),
+            Err(LinkRxError::Replay)
+        ));
+
+        let mut fresh = [0u8; 256];
+        let fresh_len = sender
+            .build_frame(1, seq(43), &[], b"next", &mut fresh)
+            .unwrap();
+        let rx = bob.receive_frame(&fresh[..fresh_len]).unwrap();
+        assert_eq!(rx.payload, b"next");
+    }
+
+    #[test]
+    fn same_key_readd_retains_evidence_and_pin() {
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
+        let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
+        let alice_iid = alice_peer.iid;
+        let mut bob = make_ll(0x02);
+        bob.add_peer(alice_peer.clone());
+        let sender = LinkLayer::new(alice);
+        let mut wire = [0u8; 256];
+        let len = sender
+            .build_frame(1, seq(1), &[], b"evidence", &mut wire)
+            .unwrap();
+        let frame = bob.receive_frame(&wire[..len]).unwrap();
+        assert!(frame.is_current());
+        assert!(bob.accepts_authenticated_frame(&frame));
+
+        assert!(bob.add_peer(alice_peer).is_none());
+
+        assert!(frame.is_current());
+        assert!(frame.link_evidence().is_current());
+        assert!(bob.accepts_authenticated_frame(&frame));
+        assert_eq!(
+            bob.peer_auth_state(&alice_iid),
+            PeerAuthState::Authenticated
+        );
+        assert_eq!(
+            bob.pinned_pubkey_for(&alice_iid),
+            Some(&frame.sender.pubkey)
+        );
+    }
+
+    #[test]
     fn dropping_receiver_revokes_detached_authenticated_frames() {
         let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
         let alice_peer = PeerIdentity::from_pubkey(alice.pubkey);
