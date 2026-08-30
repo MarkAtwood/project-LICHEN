@@ -431,6 +431,12 @@ impl GatewayOscoreRecipientStore {
                 && current.window & floor.window != floor.window)
     }
 
+    /// Load the recipient replay state for `context_id`, rebuilding the
+    /// cache from storage. Fails closed on a missing state record, a
+    /// regressed state, or an unverifiable record. A missing floor record
+    /// heals forward to the sealed state (crash window between the state
+    /// and floor writes, or lost floor file) so the context is not
+    /// permanently bricked.
     fn load(
         &mut self,
         context_id: &ContextId,
@@ -451,6 +457,12 @@ impl GatewayOscoreRecipientStore {
         let state = match (state, floor) {
             (None, None) => empty,
             (None, Some(_)) => return Err(GatewayOscoreStoreError::Corrupt),
+            (Some(state), None) => {
+                // The sealed state is unforgeable and a missing floor cannot
+                // lower trust below it: rebuild the floor from the state.
+                self.write(context_id, true, state)?;
+                state
+            }
             (Some(state), Some(floor)) if Self::precedes(state, floor) => {
                 return Err(GatewayOscoreStoreError::Corrupt)
             }
@@ -459,7 +471,6 @@ impl GatewayOscoreRecipientStore {
                 state
             }
             (Some(state), Some(_)) => state,
-            (Some(_), None) => return Err(GatewayOscoreStoreError::Corrupt),
         };
         if self.records.len() >= MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayOscoreStoreError::Full);
@@ -1980,6 +1991,8 @@ mod tests {
         assert_eq!(reopened.is_replay(&context_id, 43), Ok(false));
         assert_eq!(reopened.accept(&context_id, 43), Ok(()));
         drop(reopened);
+        // The state record is authoritative and unforgeable, so a missing
+        // floor heals forward on load instead of failing closed.
         std::fs::remove_file(
             floor_path
                 .join("gcp-oscore-recipient")
@@ -1988,10 +2001,85 @@ mod tests {
         .unwrap();
         let mut missing_floor =
             GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(missing_floor.is_replay(&context_id, 44), Ok(false));
+        assert_eq!(missing_floor.is_replay(&context_id, 42), Ok(true));
+        std::fs::remove_dir_all(path).unwrap();
+        std::fs::remove_dir_all(floor_path).unwrap();
+    }
+
+    #[test]
+    fn oscore_recipient_store_heals_first_accept_crash_window() {
+        // Crash (or transient IO error) between the state and floor writes
+        // of an accept leaves (Some(state), None) on disk; on the first
+        // accept there is no prior floor at all. The context must recover
+        // on the next load, not stay bricked behind Err(Corrupt) forever.
+        let suffix = PERSISTENT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "lichen-gateway-oscore-recipient-crash-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor_path = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_path);
+        let context = Context::new(&[0x71; 16], None, None, &[1], &[2]).unwrap();
+        let context_id = context.context_id();
+        let sealing_seed = [0x72; 32];
+        let record_path = path
+            .join("gcp-oscore-recipient")
+            .join(GatewayOscoreRecipientStore::key(&context_id, false));
+        let floor_record_path = floor_path
+            .join("gcp-oscore-recipient")
+            .join(GatewayOscoreRecipientStore::key(&context_id, true));
+
+        let mut store =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(store.accept(&context_id, 42), Ok(()));
+        let stale_record = std::fs::read(&record_path).unwrap();
+        assert_eq!(store.accept(&context_id, 43), Ok(()));
+        let current_record = std::fs::read(&record_path).unwrap();
+        drop(store);
+
+        // Simulate the crash artifact: the state write landed, the floor
+        // write did not.
+        std::fs::remove_file(&floor_record_path).unwrap();
+        let mut reopened =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(reopened.is_replay(&context_id, 42), Ok(true));
+        drop(reopened);
+
+        // The healed floor is durably rewritten: restoring the older sealed
+        // state record must be detected as rollback, not silently accepted.
+        std::fs::write(&record_path, &stale_record).unwrap();
+        let mut rolled_back =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
         assert_eq!(
-            missing_floor.is_replay(&context_id, 44),
+            rolled_back.is_replay(&context_id, 42),
             Err(GatewayOscoreStoreError::Corrupt)
         );
+        drop(rolled_back);
+        std::fs::write(&record_path, &current_record).unwrap();
+
+        // And the context can continue accepting from the healed state.
+        let mut resumed =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(resumed.accept(&context_id, 44), Ok(()));
+        drop(resumed);
+        let mut final_check =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(final_check.is_replay(&context_id, 43), Ok(true));
+        assert_eq!(final_check.is_replay(&context_id, 45), Ok(false));
+        drop(final_check);
+
+        // A missing state record still fails closed: trust is never rebuilt
+        // from a floor alone.
+        std::fs::remove_file(&record_path).unwrap();
+        let mut missing_state =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(
+            missing_state.is_replay(&context_id, 45),
+            Err(GatewayOscoreStoreError::Corrupt)
+        );
+
         std::fs::remove_dir_all(path).unwrap();
         std::fs::remove_dir_all(floor_path).unwrap();
     }
