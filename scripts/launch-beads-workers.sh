@@ -56,9 +56,14 @@ for i in $(seq 1 $NUM_WORKERS); do
         ln -s "$REPO_ROOT/.beads" "$WORKTREE/.beads"
     fi
 
-    # Worker prompt for the model
-    mkdir -p "$WORKTREE/scripts"
+    # Worker prompt + current plugin/config files.
+    # Never git-merge main into workers: the .beads symlink blocks any merge
+    # touching .beads paths, and workers don't need main's beads content anyway.
+    mkdir -p "$WORKTREE/scripts" "$WORKTREE/.opencode/plugins"
     cp -f "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
+    cp -f "$REPO_ROOT"/.opencode/plugins/* "$WORKTREE/.opencode/plugins/"
+    cp -f "$REPO_ROOT/.opencode/package.json" "$WORKTREE/.opencode/package.json"
+    cp -f "$REPO_ROOT/tui.json" "$WORKTREE/tui.json"
 
     if tmux list-windows -t "$SESSION" 2>/dev/null | grep -q "^$i:.*worker$i"; then
         echo "Worker $i window already exists, skipping"
