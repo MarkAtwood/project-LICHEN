@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-yi05",
+  "title": "spec: Add max slot claim duration to GCP-6.5 validation",
+  "description": "Add validation step to spec/08-gateway-coordination.md GCP-6.5:\n\nAfter step 7 (expiry \u003e now), add:\n- Step 7a: expiry \u003c= now + MAX_CLAIM_DURATION (default: 5 superframes, ~5 min)\n\nDocument rationale: short leases prevent squatting, force renewal which costs airtime.\n\nRef: project-LICHEN-worker6-70p7",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T03:35:41.025573Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:35:41.025573Z",
+  "labels": [
+    "spec"
+  ]
+}

@@ -1,44 +1,55 @@
 #!/bin/bash
-# Launch parallel opencode workers for beads processing
+# Launch parallel opencode TUI workers for beads processing.
+#
+# Each worker runs in its own tmux window with the beads-loop plugin active
+# (OPENCODE_BEADS_LOOP=<i>): the TUI drives itself bead-by-bead until the
+# ready queue drains. Watch progress live; interrupt or type anytime.
+#
 # Usage: ./scripts/launch-beads-workers.sh [num_workers]
 #
-# IMPORTANT: Workers accumulate uncommitted changes. Run periodically:
+# Workers accumulate uncommitted changes. Run periodically:
 #   ./scripts/sync-beads-workers.sh   # commits in all worktrees, merges to main
 #
-# Or kill + cleanup:
-#   pkill -f 'opencode.*worker'
-#   ./scripts/sync-beads-workers.sh
+# Stop: kill each tmux window (or: tmux kill-session -t lichen-workers)
 
 set -e
 
 NUM_WORKERS=${1:-5}
 REPO_ROOT=$(git rev-parse --show-toplevel)
-PROMPT_FILE="$REPO_ROOT/scripts/beads-worker-prompt.txt"
 WORKTREE_BASE="/Volumes/Attic/Desktop/Projects/lichen-workers"
+SESSION="lichen-workers"
 
-echo "=== Beads Worker Launcher ==="
+command -v opencode >/dev/null 2>&1 || { echo "opencode not found"; exit 1; }
+command -v bd >/dev/null 2>&1 || { echo "bd (beads) not found"; exit 1; }
+command -v tmux >/dev/null 2>&1 || { echo "tmux not found (brew install tmux)"; exit 1; }
+
+echo "=== Beads Worker Launcher (TUI mode) ==="
 echo "Workers: $NUM_WORKERS"
 echo "Repo: $REPO_ROOT"
 echo ""
 
-# Check prerequisites
-command -v opencode >/dev/null 2>&1 || { echo "opencode not found"; exit 1; }
-command -v bd >/dev/null 2>&1 || { echo "bd (beads) not found"; exit 1; }
-
-# Show current bead status
 echo "=== Current Beads Status ==="
 bd list --json 2>/dev/null | jq -r 'group_by(.status) | .[] | "\(.[0].status): \(length)"'
 echo ""
 
-# Create worktrees and launch workers
-echo "=== Launching Workers ==="
 mkdir -p "$WORKTREE_BASE"
+
+# Target session: attach to the caller's session if inside tmux, else create/detach
+if [ -n "${TMUX:-}" ]; then
+    SESSION=$(tmux display-message -p '#S')
+fi
+
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    FIRST_WORKTREE="$WORKTREE_BASE/worker1"
+    mkdir -p "$FIRST_WORKTREE"
+    tmux new-session -d -s "$SESSION" -c "$FIRST_WORKTREE" "bash --norc"
+    tmux send-keys -t "$SESSION" "exit" Enter
+fi
 
 for i in $(seq 1 $NUM_WORKERS); do
     WORKTREE="$WORKTREE_BASE/worker$i"
     BRANCH="beads-worker-$i"
 
-    # Create worktree if it doesn't exist
     if [ ! -d "$WORKTREE" ]; then
         echo "Creating worktree: $WORKTREE"
         git worktree add "$WORKTREE" -b "$BRANCH" HEAD 2>/dev/null || \
@@ -46,36 +57,28 @@ for i in $(seq 1 $NUM_WORKERS); do
         { echo "Failed to create worktree $i"; continue; }
     fi
 
-    # Symlink .beads to main repo (shared coordination)
+    # Shared beads coordination
     if [ ! -L "$WORKTREE/.beads" ]; then
         rm -rf "$WORKTREE/.beads" 2>/dev/null
         ln -s "$REPO_ROOT/.beads" "$WORKTREE/.beads"
     fi
 
-    # Copy prompt to worktree so worker can find it
-    cp "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/" 2>/dev/null || \
-        mkdir -p "$WORKTREE/scripts" && cp "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
+    # Worker prompt for the model
+    mkdir -p "$WORKTREE/scripts"
+    cp -f "$REPO_ROOT/scripts/beads-worker-full.txt" "$WORKTREE/scripts/"
 
-    # Launch opencode in background with auto-approve
+    if tmux list-windows -t "$SESSION" 2>/dev/null | grep -q "^$i:.*worker$i"; then
+        echo "Worker $i window already exists, skipping"
+        continue
+    fi
+
     echo "Launching worker $i in $WORKTREE"
-    (
-        cd "$WORKTREE"
-        export BEADS_AGENT_ACTOR="opencode-worker-$i"
-        opencode run --auto --dir "$WORKTREE" "$(cat "$WORKTREE/scripts/beads-worker-full.txt")" 2>&1 | tee "$WORKTREE/worker.log"
-    ) &
-
-    # Small delay to stagger startup
+    tmux new-window -d -t "$SESSION" -n "worker$i" -c "$WORKTREE" \
+        "env BEADS_AGENT_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
     sleep 2
 done
 
 echo ""
-echo "=== $NUM_WORKERS workers launched ==="
-echo "Logs: $WORKTREE_BASE/worker*/worker.log"
-echo ""
-echo "Monitor with: tail -f $WORKTREE_BASE/worker*/worker.log"
-echo "Stop all: pkill -f 'opencode.*beads-worker'"
-echo ""
-echo "Press Ctrl+C to detach (workers continue in background)"
-
-# Wait for all background jobs
-wait
+echo "=== $NUM_WORKERS workers launched in tmux session '$SESSION' ==="
+[ -z "${TMUX:-}" ] && echo "Attach with: tmux attach -t $SESSION"
+echo "Stop all: tmux kill-session -t $SESSION"
