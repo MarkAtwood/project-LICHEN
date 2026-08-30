@@ -951,9 +951,13 @@ mod tests {
             table.authorize_decapsulation(egress_request(second_claim.prefix, &second_route), 2),
             Err(TunnelAuthError::UnauthorizedTunnel)
         );
+        // Revocation removes the accepted entry but retains a revoked floor,
+        // so a resubmitted post can no longer be told apart from a stale-seq
+        // post; the floor check therefore classifies every stale/equal-seq
+        // post against a revoked floor as Revoked (fail-closed either way).
         assert_eq!(
             table.accept_post(second.body.as_bytes(), authenticated(root, &public), own, 3),
-            Err(TunnelAuthError::Replay)
+            Err(TunnelAuthError::Revoked)
         );
         let mut fresher_claim = second_claim;
         fresher_claim.path_seq += 1;
