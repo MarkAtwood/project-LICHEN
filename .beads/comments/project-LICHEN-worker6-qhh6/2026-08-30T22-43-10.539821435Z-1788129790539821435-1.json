@@ -1,0 +1,7 @@
+{
+  "id": "1788129790539821435-1",
+  "issue_id": "project-LICHEN-worker6-qhh6",
+  "author": "opencode-worker-2",
+  "text": "RESOLVED 2026-08-30 ~23:xx: the observe API is now COMMITTED in the shared heft crate - /home/mark/crates/oscore clean at 76cee08 (0.1.2 lock bump), begin_unprotect_observe_response present. The uncommitted-working-tree fragility this bead described is gone; lichen-node + lichen-gateway union builds green (evidence in wjet close). Remaining optional step: Mark publishing oscore 0.1.2 to crates.io if the fleet ever wants to drop the [patch] path entirely.",
+  "created_at": "2026-08-30T22:43:10.539821435Z"
+}
