@@ -439,6 +439,12 @@ security for CoAP:
 
 **OSCORE Overhead:** 8-13 bytes (Partial IV + Tag)
 
+**Security Context Limits:**
+
+Implementations MUST bound OSCORE security contexts to at most 64 entries.
+On overflow, implementations MUST evict the least-recently-used context
+(LRU by last message timestamp).
+
 ### 8.9. EDHOC (RFC 9528)
 
 Ephemeral Diffie-Hellman Over COSE provides lightweight authenticated key
@@ -514,6 +520,12 @@ EDHOC is designed for constrained devices:
 
 Nodes unable to run EDHOC MAY use pre-shared OSCORE contexts provisioned
 out-of-band (see 8.7 Key Management).
+
+**Rate Limiting:**
+
+Implementations SHOULD rate-limit concurrent EDHOC handshakes to at most 3 per
+peer IID and 10 globally. This mitigates CPU and memory exhaustion from
+handshake flooding.
 
 ### 8.10. RPL Security
 
@@ -967,6 +979,9 @@ Root maintains a capability table mapping announcer IIDs to their capabilities:
 
 Implementations MUST bound the capability table. Recommended: 256 entries
 with LRU eviction. Exceeding capacity evicts least-recently-used entry.
+Implementations MAY reserve up to 25% of capability table capacity for entries
+with the egress capability bit set, preventing eviction of critical egress
+nodes by non-egress announcement flooding.
 
 **Trigger Conditions:**
 
