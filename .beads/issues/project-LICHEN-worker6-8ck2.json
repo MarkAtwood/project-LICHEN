@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-8ck2",
+  "title": "rpl_routing vector initial_multi_parent_grouped_install committed failing (root rejects grouped multi-target DAO)",
+  "description": "Found running bead y7wh's twister validation on the AWS v3.7.0 builder. test_canonical_route_state_vectors fails on native_sim/native/64 at BOTH HEAD (6212034cbf+beads) and the pinned 65ca175106: 'Assertion failed at lichen/tests/rpl_routing/src/main.c:1233: (accepted not equal to vector-\u003eaccepted): initial_multi_parent_grouped_install: acceptance (installed): got 0 expected 1'. So the vector was committed failing at the pin commit; not a later regression. Vector: rpl_route_state_vectors.h:408, a 110-byte DAO (dao_len=110) with grouped multi-target RPL Target+Transit-Information options (path_control 0x80 on first, 0x40/0x10 on later targets, path_lifetime 255), expecting accepted=true reason=installed with 5 targets. Hypothesis to check: process_dao/_ex rejects the grouped frame (option framing/overlap check in rpl_dao_process.c per bead 25l3's 'exact DAO option framing' work, or target-count/capacity interplay) OR the fixture generator (generate_rpl_route_state_fixture.py) emitted an inconsistent DAO for a grouped install. Verify against spec DAO framing (spec/07 RPL chapter / draft-lora-rpl) before touching either side; do not weaken the vector without a spec argument. Twister artifacts: /mnt/lichen-zephyr/work/twister-daoauth-y7wh (HEAD) and twister-daoauth-65ca (pin) on the builder EBS. The other 19 cases incl. all four DAO-auth matrix cases named in y7wh PASS.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T05:50:20.984835Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T05:50:20.984835Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8ck2",
+      "depends_on_id": "project-LICHEN-worker6-y7wh",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T05:50:21.287929Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
