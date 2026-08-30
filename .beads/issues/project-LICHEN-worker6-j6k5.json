@@ -2,12 +2,14 @@
   "id": "project-LICHEN-worker6-j6k5",
   "title": "Replace fabricated IPv6 pubkey derivation vectors with an independent oracle",
   "description": "P1 vector correctness/security: test/vectors/ipv6-addresses.json labels arbitrary pubkeys but records IID/native addresses that are not SHA-512(pubkey) derivations (for example all-zero pubkey claims all-zero IID). It also cites production Python as its oracle and has no deterministic generator/consumer. Replace the key-derived cases with an independent hashlib-based exact generator, retain EUI/short forms only as explicitly non-identity link interoperability vectors, add Python consumer checks, and ensure the canonical API exposes no ULA identity path.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T16:27:19.42921Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T23:37:39.970506Z",
-  "started_at": "2026-08-24T16:27:25.194652Z"
+  "updated_at": "2026-08-30T03:28:12.634519Z",
+  "started_at": "2026-08-24T16:27:25.194652Z",
+  "closed_at": "2026-08-30T03:28:12.634519Z",
+  "close_reason": "Verified at HEAD: (1) test/vectors/generate_ipv6_addresses.py rewritten as independent hashlib-based generator ('without importing LICHEN'), derivation h=SHA-512(pubkey); iid=h[0:8] U/L cleared; native=0x02||h[0:7]||iid - hand-verified all_zero_pubkey matches (iid 5046adc1dba83886 = sha512(zero)[0:8] masked), native packing exact. (2) EUI/short forms retained with profile=link_interoperability_only. (3) Python consumers pass: test_key_address_cross_impl_vectors.py + test_link_local_assignment.py = 34 passed. (4) No ULA identity path: addr.py states 'LICHEN does not advertise ULA', native_address_from_pubkey is the sole identity constructor with native-prefix guard; rust identity.rs uses canonical n(pubkey) U/L-cleared derivation. No changes needed."
 }
