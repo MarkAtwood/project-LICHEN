@@ -3,12 +3,12 @@
   "title": "Migrate coap_msg.c + coap_keys.c mutating handlers to shared authorize helper",
   "description": "Child of worker6-l9hb decomposition. Migrate inline OSCORE gate sequences in coap_msg.c (6 sites) and coap_keys.c (2 sites) to coap_oscore_authorize_mutating(). Draft 02a8ee28fd partially migrated coap_keys.c - re-apply onto current branch. Acceptance (from parent): zero inline re-implementations remain (grep coap_oscore_unprotect_resource_request returns 0); all per-resource tests pass.",
   "status": "open",
-  "priority": 1,
+  "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T16:34:51.015801Z",
   "created_by": "opencode-worker-4",
-  "updated_at": "2026-08-30T16:34:51.015801Z",
+  "updated_at": "2026-08-30T17:18:49.220544Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-ncv8",

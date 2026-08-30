@@ -4,12 +4,12 @@
   "description": "Validate LR1110 radio model on T1000-E. Driver and hardware validation needed. Test interoperability with SX126X nodes.",
   "notes": "Hardware validation required: The LR1110 driver (lichen/drivers/lora/lr1110/lr1110.c, 764 lines) is fully implemented with TX/RX, T1000-E RF switch config, TCXO/calibration, and diagnostic stats. Physical bench testing needed: (1) T1000-E device with LR1110, (2) SX126X nodes (RAK4631/T-Echo) for interoperability testing. Cannot be completed through code changes alone.",
   "status": "open",
-  "priority": 1,
+  "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-29T18:15:19.907413Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:01:27.890747Z",
+  "updated_at": "2026-08-30T17:18:56.935183Z",
   "started_at": "2026-08-26T01:38:23.618126Z",
   "labels": [
     "blocked:hardware"
