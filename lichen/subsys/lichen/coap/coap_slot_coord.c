@@ -452,6 +452,24 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 
 	k_mutex_lock(&s_coord_lock, K_FOREVER);
 
+	/* GCP-6.5 validation step 8 (re-check inside the critical
+	 * section): the pre-lock gate above is advisory only. A concurrent
+	 * process_claim for the same gateway could pass its own gate and
+	 * commit a higher seq between this claim's lookup and this
+	 * critical section; without the re-check the stale claim would
+	 * override the newer allocation (highest-seq-wins violated). The
+	 * pre-lock gate is kept as a cheap fast reject for replay floods. */
+	{
+		uint32_t cached_seq;
+		int ret = lichen_slot_claim_seq_lookup(claim->gateway_iid,
+						       &cached_seq);
+		if (ret == 0 && claim->claim_seq <= cached_seq) {
+			k_mutex_unlock(&s_coord_lock);
+			LOG_DBG("Claim rejected: claim_seq replay (recheck)");
+			return LICHEN_CLAIM_REJECT_REPLAY;
+		}
+	}
+
 	/* Check for conflicts with existing allocations (step 9) */
 	const struct lichen_gateway_alloc *winner = NULL;
 	for (int i = 0; i < CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS; i++) {

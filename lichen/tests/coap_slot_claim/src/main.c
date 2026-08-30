@@ -101,6 +101,11 @@ struct seq_cache {
 	uint32_t seq;
 	bool commit_fails;
 	int commit_calls;
+	/* Race simulation: first lookup after arming reports no floor
+	 * (the stale pre-lock view) while later lookups report the real
+	 * floor, exercising the in-lock re-check in process_claim. */
+	bool fail_first_lookup;
+	int lookups;
 };
 
 static struct seq_cache seq_cache_a;
@@ -123,6 +128,9 @@ int lichen_slot_claim_seq_lookup(const uint8_t iid[LICHEN_IID_LEN],
 	struct seq_cache *c = seq_cache_for(iid);
 
 	if (c == NULL || !c->present) {
+		return -ENOENT;
+	}
+	if (c->fail_first_lookup && c->lookups++ == 0) {
 		return -ENOENT;
 	}
 	*cached = c->seq;
@@ -603,6 +611,35 @@ static void test_gates(void)
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_ACCEPTED);
 }
 
+static void test_seq_recheck_under_lock(void)
+{
+	static uint8_t cose[LICHEN_SLOT_CLAIM_COSE_MAX];
+	struct lichen_slot_coord_ctx ctx;
+	int ret;
+
+	reset_seq_hooks();
+
+	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
+
+	/* Race simulation: the pre-lock gate sees no floor (stale view,
+	 * lookup returns -ENOENT) while the in-lock re-check sees the
+	 * floor a concurrent accept just committed (seq 6). The stale
+	 * seq-5 claim must be rejected by the re-check, not applied. */
+	seq_cache_a.present = true;
+	seq_cache_a.seq = 6U;
+	seq_cache_a.fail_first_lookup = true;
+	seq_cache_a.lookups = 0;
+
+	ret = sign_into(IID_A, 2, 5, 3000, 0, cose, sizeof(cose));
+	CHECK(ret > 0);
+	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
+		   LICHEN_CLAIM_REJECT_REPLAY);
+	/* Claim must not have been applied or committed */
+	CHECK(ctx.gateway_count == 0);
+	CHECK(seq_cache_a.commit_calls == 0);
+	CHECK(seq_cache_a.seq == 6U);
+}
+
 static void test_persist_failure(void)
 {
 	static uint8_t cose[LICHEN_SLOT_CLAIM_COSE_MAX];
@@ -1025,6 +1062,7 @@ int main(void)
 	test_unknown_signer();
 	test_no_verification_material();
 	test_gates();
+	test_seq_recheck_under_lock();
 	test_persist_failure();
 	test_conflict_resolution();
 	test_structural_rejects();
