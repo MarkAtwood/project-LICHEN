@@ -21,6 +21,8 @@ while :; do
         bd reclaim --json >/dev/null 2>&1 || true
         "$REPO_ROOT/scripts/sync-beads-workers.sh" >> "$REPO_ROOT/.beads-sync.log" 2>&1 || \
             echo "$(date '+%F %T') sync reported conflicts — see .beads-sync.log" >> "$REPO_ROOT/.beads-sync.log"
+        # Hourly OpenRouter burn entry (cost-per-bead trending)
+        "$REPO_ROOT/scripts/log-burn.sh" >> "$HOME/Developer/burn.log" 2>&1 || true
         trap - EXIT
         rmdir "$LOCK"
     fi
