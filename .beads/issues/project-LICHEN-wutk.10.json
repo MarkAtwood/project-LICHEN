@@ -1,17 +1,13 @@
 {
   "id": "project-LICHEN-wutk.10",
   "title": "Spec compliance: OSCORE implementation vs spec/06-security.md",
-  "status": "in_progress",
+  "status": "open",
   "priority": 2,
   "issue_type": "task",
-  "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T04:47:53.241603Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T02:09:57.108948Z",
-  "started_at": "2026-08-29T02:09:57.108948Z",
-  "lease_expires_at": "2026-08-29T02:14:57.108948Z",
-  "heartbeat_at": "2026-08-29T02:09:57.108948Z",
+  "updated_at": "2026-08-30T06:50:48.956033Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wutk.10",
