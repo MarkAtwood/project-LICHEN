@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-s4k1",
+  "title": "spec: Bound waypoint storage",
+  "description": "Waypoint/route resources have no storage limits.\n\nFix: Add to 12-apps.md Section 18.3:\n'Implementations MUST bound waypoint storage to 32 per originator and 256 globally.'\n\nRef: worker6-h4pl",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T04:22:59.719661Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T04:22:59.719661Z",
+  "labels": [
+    "spec",
+    "security"
+  ]
+}

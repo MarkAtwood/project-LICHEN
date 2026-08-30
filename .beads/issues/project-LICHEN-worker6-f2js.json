@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-f2js",
+  "title": "spec: Add EDHOC concurrent handshake limit",
+  "description": "No rate limit on EDHOC handshake initiation.\n\nFix: Add to 06-security.md Section 8.9:\n'Implementations SHOULD rate-limit EDHOC initiations to at most 3 concurrent per peer IID and 10 concurrent globally.'\n\nRef: worker6-h4pl",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T04:22:59.165665Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T04:22:59.165665Z",
+  "labels": [
+    "spec",
+    "security"
+  ]
+}

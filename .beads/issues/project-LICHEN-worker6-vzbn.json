@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-vzbn",
+  "title": "spec: Add per-peer rate limit for DIO/DAO processing",
+  "description": "Trickle limits outbound but no receiver-side rate limit. Verifies every inbound signature without budget.\n\nFix: Add to 05-routing.md Section 8:\n'Receivers MUST rate-limit RPL control message processing to at most 30 messages per minute per source IID.'\n\nRef: worker6-h4pl",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T04:22:49.704884Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T04:22:49.704884Z",
+  "labels": [
+    "spec",
+    "security"
+  ]
+}

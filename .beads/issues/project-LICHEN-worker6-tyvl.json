@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-tyvl",
   "title": "Harden DAO file persistence against concurrent processes and hostile files",
   "description": "P1 security/robustness: TwoSlotFilePersistence uses only an instance-local threading.Lock, predictable shared *.tmp names, path.exists()/open() following symlinks, inherited directory/file modes, and unbounded f.read(). Two instances/processes can choose the same generation/slot and race temp replacement, losing an acknowledged replay floor or TX sequence; a local attacker can redirect/clobber files, read signed DAO state, or cause memory exhaustion with an oversized slot. Use an owned private directory, no-follow/regular-file validation, restrictive modes, an inter-process lock/CAS, unique safe staging, and a strict payload/file-size ceiling; test two instances plus symlink/oversize cases.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:49:37.246685Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:52.254967Z",
-  "started_at": "2026-08-24T15:57:58.898038Z"
+  "updated_at": "2026-08-30T04:23:02.020998Z",
+  "started_at": "2026-08-24T15:57:58.898038Z",
+  "closed_at": "2026-08-30T04:23:02.020998Z",
+  "close_reason": "Already implemented. TwoSlotFilePersistence (python/src/lichen/rpl/dao_persistence.py) hardened: O_NOFOLLOW on open (dao_persistence.py:56,:440), base-dir symlink rejection (:363), explicit 0700/0600 modes via fchmod (:372,:471,:519), unpredictable per-call temp names via tempfile.mkstemp in the target directory (:463,:513) so concurrent processes cannot collide on shared *.tmp names, fsync of file and directory (:476-480,:524), bounded reads with fstat + fixed marker read (:446-447) and _MAX_PAYLOAD_SIZE enforcement (:500) plus bounded catalog sizing (:64-66). Test suite python/tests/rpl/test_dao_persistence.py: 107 passed."
 }

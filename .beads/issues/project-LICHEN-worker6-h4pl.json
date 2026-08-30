@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-h4pl",
+  "title": "Epic: Anti-griefing spec hardening",
+  "description": "Griefing audit found gaps in resource exhaustion defenses. Strong authentication gates exist but several tables lack normative bounds and rate limits use SHOULD not MUST.\n\nP1 (6): join-tracking table, gradient table, neighbor table, trust store bounds; SHOULD→MUST for join rate limits\nP2 (10): fragment context bounds, claim rate limits, DIO/DAO rate limits, CoAP observer limits\nP3 (4): EDHOC/OSCORE limits, table reservations\n\nSee child beads for individual fixes.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T04:22:13.611232Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T04:22:13.611232Z",
+  "labels": [
+    "spec",
+    "security"
+  ]
+}
