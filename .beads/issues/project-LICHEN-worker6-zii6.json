@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-zii6",
+  "title": "RollcallResource.render_post returns 2.01 without Location-Path",
+  "description": "python/src/lichen/coap/resources/emergency.py:452 (pre-existing, noted during zbn8 review): POST /rollcall returns 2.01 Created without Location-Path/Query, the same RFC 7252 §5.8.1 conformance point that motivated the /sos 2.01-\u003e2.04 fix. Unlike /sos, a rollcall POST does create a new rollcall entry, so 2.01 is defensible IF a Location-Path option is added (e.g. /rollcall/\u003cid\u003e); otherwise switch to 2.04. Decide and align the C checkin_resource.h documentation which documents 'POST /rollcall (18.6.2) -\u003e 2.01 Created'.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T18:39:30.30691Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T18:39:30.30691Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zii6",
+      "depends_on_id": "project-LICHEN-worker6-zbn8",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T18:39:30.528919Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
