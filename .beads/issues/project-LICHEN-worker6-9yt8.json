@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-9yt8",
+  "title": "Poison floor pin targets _missing_metadata_floor branch, not the tracker-consumed _floor_result_locked branch",
+  "description": "python/tests/timing/test_time_sync.py:755-758 (78hj follow-up): the added evaluate_epoch_floor(FLOOR, None, verifier=...) assertion routes through _missing_metadata_floor (provisioning.py:629-630), but StratumTracker._validate_active_at_live_generation_locked (stratum.py:519-521) consumes the _floor_result_locked persistence_failed branch (provisioning.py:596-597) via EpochFloorAuthority._with_snapshot -\u003e _with_floor_snapshot — that branch is untested repo-wide, so a regression deleting only the :596 check passes the pin while trackers stop clearing active clocks on persistence failure. Strengthen with ~2 lines: EpochFloorAuthority(FLOOR, verifier=verifier).current().provision_status is ProvisionEpochStatus.PERSISTENCE_FAILED (routes 777-\u003e592-\u003e596). Context: current() is None / minimum_record_version == 0 are non-discriminating for poison on a virgin verifier (any raise-at-persist leaves them so); minimum_record_version still kills a commit-before-persist reordering mutant, but as a poison pin it is dead weight. Optional hardening: add assert verifier.cleared (mirror sibling clear-path pin at :789).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:02:31.378802Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T17:02:31.378802Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9yt8",
+      "depends_on_id": "project-LICHEN-worker6-78hj",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:02:32.229938Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

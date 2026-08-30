@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5753",
+  "title": "Clarify which poison assert is load-bearing in persist-awaitable test",
+  "description": "python/tests/timing/test_time_sync.py:752-758: the 'Poisoned fail-closed' comment sits above verifier.current() is None and verifier.minimum_record_version == 0, which pass under a no-poison mutant (they pin 'commit never happened', guaranteed by virgin state); only the evaluate_epoch_floor assert enforces the poison contract. A future reader could misattribute which assert is load-bearing — add a one-line comment separating the two (non-commitment vs poison-revocation).",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:02:40.300088Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T17:02:40.300088Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5753",
+      "depends_on_id": "project-LICHEN-worker6-78hj",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:02:41.019054Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
