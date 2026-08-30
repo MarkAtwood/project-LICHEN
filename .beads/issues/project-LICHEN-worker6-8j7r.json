@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-8j7r",
+  "title": "rangetest counter comment overclaims coverage: now_provider uncounted",
+  "description": "3x review P3 (jkli, bead jkli): lichen/tests/coap_rangetest/src/main.c:103 comment claims counters prove the 4.01 gate fires before 'any provider work', but only get_metrics/get_hops are counted; now_provider (time_now() in build_senml, coap_rangetest.c:669) is also a provider callback and is not counted, so a hypothetical regression calling time_now() standalone pre-gate would be missed. Fix: reword comment to 'metrics/hops provider work' (or add now_calls counter). Reviewer marked it dismissible; realistic regressions move the whole build_senml call and are caught.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T02:58:40.450751Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T03:01:21.640509Z",
+  "closed_at": "2026-08-30T03:01:21.640509Z",
+  "close_reason": "Fixed: comment now scopes the guarantee to metrics/hops provider work and documents that now_provider is only reachable via the same build_senml call the metrics counter covers. Suite re-run 13/13 PASS.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8j7r",
+      "depends_on_id": "project-LICHEN-worker6-jkli",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T02:58:40.642564Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

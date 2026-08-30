@@ -100,9 +100,15 @@ int coap_oscore_respond_resource(
 static uint32_t test_now;
 static const struct lichen_rangetest_hop *prov_hops;
 static size_t prov_hop_count;
+/* Call counters prove the 4.01 gate fires before any metrics/hops
+ * provider work (now_provider is not counted; it is only reachable
+ * through the same build_senml call the metrics counter covers). */
+static uint32_t metrics_calls;
+static uint32_t hops_calls;
 
 static void metrics_provider(struct lichen_rangetest_metrics *metrics)
 {
+	metrics_calls++;
 	metrics->rssi = VEC_RSSI;
 	metrics->snr = VEC_SNR;
 	metrics->sf = (uint8_t)VEC_SF;
@@ -111,6 +117,7 @@ static void metrics_provider(struct lichen_rangetest_metrics *metrics)
 
 static size_t hops_provider(struct lichen_rangetest_hop *hops, size_t max_hops)
 {
+	hops_calls++;
 	size_t count = prov_hop_count < max_hops ? prov_hop_count : max_hops;
 
 	for (size_t i = 0U; i < count; i++) {
@@ -136,6 +143,8 @@ static void init_provider(void)
 	test_now = VEC_BT;
 	prov_hops = NULL;
 	prov_hop_count = 0U;
+	metrics_calls = 0U;
+	hops_calls = 0U;
 	response_code = 0U;
 	response_cf = 0U;
 	response_payload_len = 0U;
@@ -265,6 +274,10 @@ ZTEST(coap_rangetest, test_post_requires_oscore_or_local_admin) {
 		      response_code);
 	zassert_equal(response_payload_len, 0U,
 		      "4.01 must not emit a SenML response");
+	zassert_equal(metrics_calls, 0U,
+		      "4.01 must not query the metrics provider");
+	zassert_equal(hops_calls, 0U,
+		      "4.01 must not query the hops provider");
 
 	/* OSCORE-protected mesh peer is allowed without local admin. */
 	oscore_protected = true;
@@ -273,6 +286,9 @@ ZTEST(coap_rangetest, test_post_requires_oscore_or_local_admin) {
 		      (const struct sockaddr *)&peer);
 	zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
 	zassert_equal(response_cf, LICHEN_RANGETEST_CF_SENML_CBOR);
+	zassert_true(metrics_calls > 0U,
+		     "authorized POST must reach the metrics provider "
+		     "(counters live; hops are traceroute-only)");
 
 	/* Plain request from the local admin client is allowed. */
 	oscore_protected = false;
