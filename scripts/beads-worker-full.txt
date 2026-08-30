@@ -25,7 +25,15 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 
 - `blocked:hardware` label — needs physical bench hardware
 - `needs-linux` label — work it via `ssh heft` (local Linux builder); EC2 only if heft lacks the toolchain
-- Too complex (>50 lines needed) — decompose with `bd create`, close parent, pick next
+- Too complex (>50 lines, >3 files, or fuzzy scope) — decompose, but do it RIGHT:
+  1. Create children: `bd create --parent <id> "<slice>" --description="..." --label decomposed`
+     — 2 to 5 children, each independently ≤50 lines, each with a clear description.
+  2. If a child must land after another, say so in its description.
+  3. NEVER close the parent while children are open — it closes when they do.
+  4. Release the parent (`bd update <id> --status open --assignee ""`) and claim a child next.
+  5. If you cannot write the full child set in one pass, release the parent UNCHANGED
+     (no half-decompositions) with a note explaining what made it hard, and move on.
+  6. Never close any bead that has open children.
 - Stuck >5 min — release and move on
 
 ## Dirty file check (after claiming bead)
