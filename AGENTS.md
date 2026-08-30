@@ -504,16 +504,16 @@ ssh heft          # passwordless (ssh key); user mark@heft
 | Fact | Value |
 |------|-------|
 | OS | Pop!_OS 24.04, 18 cores, 30G RAM, ~155G free |
-| Has | git, cmake 3.x, ninja, gcc 13, Python 3.12, LiteLLM (`:4000`) |
-| Missing (as of 2026-08-30) | rust/cargo, Zephyr SDK, west, LICHEN checkout |
+| LICHEN checkout | `~/Developer/lichen-workspace/project-LICHEN` |
+| Zephyr env | `source ~/Developer/lichen-env.sh` (SDK 0.16.8, west venv, ZEPHYR_BASE) |
+| Toolchains | rust/cargo (`~/.cargo`, via `.bashrc`), cmake, ninja, gcc 13, Python 3.12 |
 
-Bootstrap (one-time, from any agent with SSH access):
+**SSH gotcha**: non-interactive `ssh heft '<cmd>'` does not source `.bashrc`,
+so `cargo`/`west` are not on PATH. Source the env script first, or use
+absolute paths:
 
 ```bash
-ssh heft 'git clone git@github.com:MarkAtwood/project-LICHEN.git ~/project-LICHEN'
-ssh heft 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
-# Zephyr (only if a bead needs native_sim; mirror the Attic recipe: SDK 0.16.8
-# + west workspace pinned to v3.7.0), or run the shared builder EC2 instead.
+ssh heft 'source ~/Developer/lichen-env.sh && cd ~/Developer/lichen-workspace/project-LICHEN && west build -b native_sim/native/64 lichen/tests/hal'
 ```
 
 Routing rule for agents:
@@ -522,6 +522,7 @@ Routing rule for agents:
 - `needs-linux` label no longer means "skip" — it means "use heft"
 - EC2 builder only for the pinned Zephyr v3.7.0 CI environment, AWS-only
   toolchains, or when heft is unreachable
+- Keep the heft checkout on `main`; do not leave uncommitted debris there
 
 ## AWS EC2 Access
 
