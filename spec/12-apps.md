@@ -499,6 +499,23 @@ DELETE coap://[node]/waypoints/wpt-001
 Response: 2.02 Deleted
 ```
 
+**Storage Limits:**
+
+Implementations MUST bound waypoint storage to at most 32 waypoints per
+originator IID and 256 waypoints globally. POST to a full table MUST return
+5.03 Service Unavailable with a CBOR diagnostic:
+
+```
+Response: 5.03 Service Unavailable
+Content-Format: application/cbor
+
+{
+  "reason": "waypoint_limit",
+  "per_originator": 32,
+  "global": 256
+}
+```
+
 #### 18.3.3. Routes
 
 Ordered list of waypoints:
