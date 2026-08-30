@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-wgyl",
+  "title": "Migrate coap_dtn.c + coap_config.c + coap_server.c mutating handlers to shared authorize helper",
+  "description": "Child of worker6-l9hb decomposition. Migrate ALL inline 'unprotect -\u003e (is_protected || local_admin) -\u003e coap_oscore_respond_resource' sequences in coap_dtn.c (2 sites), coap_config.c (2 sites), coap_server.c non-config_put mutating handlers to coap_oscore_authorize_mutating(). EXCLUDE config_put: worker6-giol/worker6-dsrv already track it - reconcile, do not duplicate. Draft 02a8ee28fd already migrated deaddrop_post/msg_inbox_post/confessions_post - re-apply onto current branch. Acceptance (from parent): zero inline re-implementations remain (grep coap_oscore_unprotect_resource_request in these files returns 0); all per-resource tests pass.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:34:50.038518Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:34:50.038518Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wgyl",
+      "depends_on_id": "project-LICHEN-worker6-l9hb",
+      "type": "parent-child",
+      "created_at": "2026-08-30T16:34:50.286735Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

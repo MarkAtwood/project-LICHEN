@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-dzxs",
+  "title": "replace-policy leg cannot distinguish old-policy vs new-policy validation ordering",
+  "description": "python/tests/timing/test_time_sync.py:954: the replace-policy iteration uses a replacement policy identical to the old one, so validation placed after self.__policy = self._copy_policy(...) (stratum.py:473) produces the identical observable reason 'below-live-epoch-floor:accepted'. Only a replacement policy that would itself reject the below-floor sample can distinguish the orderings. The bead's core requirement (clear happens inside replace_policy before any read) is still pinned; this is the remaining ordering nuance.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:33:21.638294Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:33:21.638294Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-dzxs",
+      "depends_on_id": "project-LICHEN-worker6-zzw5",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:33:21.922106Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

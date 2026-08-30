@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-95wz",
+  "title": "Raw TxQueue mutators are publicly reachable, unsynchronized, and uncontracted",
+  "description": "tx_queue.py:401-429 pop/confirm_transmitted, tx_queue.py:587-599 signal_all_pending, tx_queue.py:294/98 public push(return_reservation=True), and LinkLayer.tx_queue is a public field (link_layer.py:186). Any in-process component holding the link instance can (i) tx_queue.push(raw)+drain_tx_queue() to put unsigned frames on air bypassing signing; (ii) signal_all_pending(True) to fake on-air success while dropping every queued frame; (iii) pop()/confirm_transmitted() remove the head without resolving the attached reservation, hanging the awaiting send() caller forever; (iv) a directly-pushed reservation can strand if no later queue op runs (wait() has no timeout), and a drain cancelled mid-CAD-backoff (link_layer.py:1457) is the one exit that cleans only the caller's own reservation. No remote path reaches the queue (all LinkLayer-internal use is under _tx_lock); this is local-misuse hardening. Fix: privatize or owner-token-gate the raw mutators (mirror _replay_owner_token pattern), document the reservation-resolution contract, and clean unresolved reservations on the CAD-cancellation exit. Found by security+correctness codereview of project-LICHEN-worker6-9qpz.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:27:44.44754Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:27:44.44754Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-95wz",
+      "depends_on_id": "project-LICHEN-worker6-9qpz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:27:44.642373Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

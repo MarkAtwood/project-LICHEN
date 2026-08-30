@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-jt5c",
+  "title": "Document CPython \u003e=3.11.3 floor: asyncio.Lock cancelled-after-grant wedge",
+  "description": "pyproject requires-python '\u003e=3.11' but a task cancelled at the exact moment asyncio.Lock.acquire is granted can leave the lock wedged (no owner, _locked=True) on CPython 3.11.0-3.11.2 (gh-90155, fixed in 3.11.3/3.12.0). send()/drain_tx_queue() would hang forever on affected interpreters. Window is microscopic and the project venv is 3.11.15; on patched interpreters the lock self-heals and no queue state exists to corrupt. Fix: bump requires-python to \u003e=3.11.3 or document the interpreter floor caveat. Found by robustness codereview of project-LICHEN-worker6-9qpz.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:27:44.829586Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:27:44.829586Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-jt5c",
+      "depends_on_id": "project-LICHEN-worker6-9qpz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:27:45.039601Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ueym",
+  "title": "Document emergent sample-invalidated-or-replayed dependency in floor-raise test",
+  "description": "python/tests/timing/test_time_sync.py:948 + stratum.py:438-439,609-610: the pinned 'sample-invalidated-or-replayed' reason for adopt/consider is emergent, not direct — the candidate is issued (seq 2, samples.py:341-342) before the call, and _clear_locked's eager invalidation bumps __issuance_high_water to _latest_issuance_sequence() (=2), so the reject fires at stratum.py:609-610 before _rejection's 'below-epoch-floor' (stratum.py:145). Deterministic, but the dependency chain is undocumented; add a one-line comment citing stratum.py:438-439 to prevent a future 'why is this the reason?' fix.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:33:30.020887Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:33:30.020887Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ueym",
+      "depends_on_id": "project-LICHEN-worker6-zzw5",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:33:30.249559Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

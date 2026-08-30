@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2z8e",
+  "title": "Adopt shared coap_oscore_authorize_mutating helper from 6mij.2.4 draft",
+  "description": "Child of worker6-l9hb decomposition. Port the shared authorize helper from draft commit 02a8ee28fd (coap_oscore.c: coap_oscore_send_protected + coap_oscore_authorize_mutating; header decls) onto the current diverged branch. Apply open review findings in the same change: worker6-fmee (plain_buf may be NULL per doc but is unconditionally dereferenced in unprotect path - either guard with a bounded static dummy or make doc/annotation require non-NULL and validate), worker6-2m4y (respond path uses 1KB+ stack buf[CONFIG_COAP_SERVER_MESSAGE_SIZE]; use static, matching project pattern). Preserve the draft's semantics: OSCORE verify by EUI64 ctx lookup (coap_oscore.c:54-84), admin fallback when unprotected or OSCORE disabled, 4.01/4.03 responds, payload publication. VERIFY: lichen/tests/coap_lci_auth + coap_oscore_fallback on native_sim (Linux-only; requires EC2 Zephyr builder per AGENTS.md - native_sim is unreliable on macOS). Do NOT migrate handlers in this bead; sibling children do.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:34:28.961311Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:34:28.961311Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2z8e",
+      "depends_on_id": "project-LICHEN-worker6-l9hb",
+      "type": "parent-child",
+      "created_at": "2026-08-30T16:34:29.200238Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

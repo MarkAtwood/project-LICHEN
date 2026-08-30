@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-zdgp",
+  "title": "Pin raw_sample_diagnostic read-only contract (eager-invalidation pin depends on it)",
+  "description": "python/tests/timing/test_time_sync.py:958 + python/src/lichen/timing/stratum.py:422-424: the zzw5 eager-invalidation pin rests entirely on raw_sample_diagnostic()'s read-only contract, and that test is its ONLY consumer in the suite. A future regression that makes the diagnostic revalidate (lazy clear) would pass line 958 while eager invalidation is silently lost. Fix: add one assert that a raw read on a live tracker does not change last_rejection_reason or state (pins the contract directly).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:33:13.91685Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:33:13.91685Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zdgp",
+      "depends_on_id": "project-LICHEN-worker6-zzw5",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:33:14.211951Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

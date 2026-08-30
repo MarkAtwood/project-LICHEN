@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-zzw5",
   "title": "Timing transitions preserve an active clock invalidated by a raised live floor",
   "description": "Timing correctness review: live-floor invalidation of the active source occurs only in `_current_time_locked`. `adopt`, `consider`, and `replace_policy` can run after provision raises the floor, reject a candidate, yet leave the old below-floor source active until a later read. Begin every authoritative transition with projected active-clock validation against one live floor snapshot and atomically clear invalid state before candidate-specific work. Add floor-raise tests for adopt, consider, and policy replacement.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T08:24:11.690439Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:32:07.020985Z",
-  "started_at": "2026-08-24T08:24:20.632212Z"
+  "updated_at": "2026-08-30T16:33:49.458905Z",
+  "started_at": "2026-08-24T08:24:20.632212Z",
+  "closed_at": "2026-08-30T16:33:49.458905Z",
+  "close_reason": "Eager live-floor invalidation at adopt/consider/replace_policy already implemented in stratum.py (_validate_active_locked at transitions, under floor snapshot + lock). The previously demanded test existed but was VACUOUS — its final status() read performs the invalidation itself, so it passed with the fix removed. Strengthened test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition: asserts candidate transitions return False, pins eager clearing via non-validating raw_sample_diagnostic() BEFORE any status() read, pins per-action rejection reasons. Counterfactually verified: neutralizing the three transition-entry validations fails the test at the raw-diagnostic assert; the old version passed. 870 timing + 28 packets-timing pass; ruff/mypy clean. Also restored stratum.py (an auto-sync commit c29e45df74 had swept a mid-experiment counterfactual patch into HEAD). Findings filed: 2x P3, 2x P4 (see discovered-from links)."
 }

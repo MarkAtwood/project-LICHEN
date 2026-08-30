@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ezh2",
+  "title": "clear()/signal_all_pending leave packet drops unaccounted in TxQueueStats",
+  "description": "tx_queue.py:488-492: clear() -\u003e signal_all_pending(False) removes N entries and resolves their reservations False but increments none of packets_dropped_deadline/preempt/full, so the CAD-terminal path (link_layer.py:1466), the radio-exception path (link_layer.py:1475), and the on_persistence_failure eviction (link_layer.py:2108) silently shrink the queue. The operator invariant packets_queued ~ transmitted + dropped no longer holds after any CAD-busy episode, masking loss when diagnosing congestion/failure modes. No hang or corruption - observability only. Fix: count removals in clear()/signal_all_pending under a dropped-other bucket (or reuse an existing counter deliberately). Distinct from project-LICHEN-worker6-m01y (silent-clear semantics) and project-LICHEN-lllg (stats += atomicity). Found by robustness codereview of project-LICHEN-worker6-9qpz.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:27:44.037623Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:27:44.037623Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ezh2",
+      "depends_on_id": "project-LICHEN-worker6-9qpz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:27:44.300455Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

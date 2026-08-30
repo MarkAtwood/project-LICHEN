@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-76bi",
+  "title": "restore_state() bypasses _sequence_started rewind guard and can reuse a tuple",
+  "description": "link_layer.py:2093-2095 -\u003e 2024-2027: set_sequence() refuses to rewind after first use (_sequence_started guard, RuntimeError at 1927-1928), but _restore_security_state overwrites _epoch/_seqnum unconditionally, taking neither _tx_lock nor the guard. A mid-operation restore rewinds the counter so two legitimately signed frames share one (epoch, seqnum) with different payloads; peer replay windows accept at most one sighting and drop the other (availability loss, no forgery). Fix: apply the same _sequence_started refusal (and take _tx_lock) on the restore path, matching set_sequence(). Found by security codereview of project-LICHEN-worker6-9qpz.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:27:23.396999Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:27:23.396999Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-76bi",
+      "depends_on_id": "project-LICHEN-worker6-9qpz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:27:23.578122Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

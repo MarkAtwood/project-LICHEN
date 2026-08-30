@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-3w7e",
+  "title": "TxQueue.complete() removes by value-equality instead of entry identity",
+  "description": "tx_queue.py:523: self._entries.remove(entry) deletes the first value-equal TxQueueEntry (plain @dataclass __eq__), not necessarily the reserved object. fail() (567) and cancel_reservation() (579) already use identity; complete() is the one inconsistent site. Unreachable today (complete is only called on the reserved head while the queue cannot mutate under _tx_lock), but a byte-identical entry pushed to the head while a twin is in flight (lock-bypassing push, same-ms enqueue_time_ms) would remove the wrong object and leave the stale twin eligible to re-reserve -\u003e duplicate transmission. Fix: identity scan (e.g. next(i for i,e in enumerate(self._entries) if e is entry)) mirroring fail()/cancel_reservation(). Related: project-LICHEN-worker6-gwpt. Found by correctness codereview of project-LICHEN-worker6-9qpz.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:27:23.753239Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-30T16:27:23.753239Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3w7e",
+      "depends_on_id": "project-LICHEN-worker6-9qpz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:27:23.956544Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

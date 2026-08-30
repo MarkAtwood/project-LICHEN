@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-mc69",
   "title": "Over-air self-sender frames bypass LinkLayer replay protection",
   "description": "python/src/lichen/link/link_layer.py treats frames signed by the local key as trusted loopback and skips replay protection, but an RF attacker can retransmit a recorded self-signed frame. Distinguish internal loopback injection from radio RX and replay-check all over-air self-sender frames; repeated signed wire frame must return REPLAY.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T06:11:36.2423Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:33:39.802963Z",
-  "started_at": "2026-08-24T06:11:47.218643Z"
+  "updated_at": "2026-08-30T16:38:50.548093Z",
+  "started_at": "2026-08-24T06:11:47.218643Z",
+  "closed_at": "2026-08-30T16:38:50.548093Z",
+  "close_reason": "stale-check verified fixed"
 }

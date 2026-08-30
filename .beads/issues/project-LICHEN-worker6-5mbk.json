@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5mbk",
+  "title": "Rust encode_rule255 reports profile-ceiling overflow as retryable-looking BufferTooSmall",
+  "description": "Confirmed empirically (discovered-from project-LICHEN-worker6-xuc8, robustness pass). encode_rule255 (rust/lichen-schc/src/codec.rs:1415-1422) checks needed \u003e single_frame_limit.min(SCHC_FRAG_MAX_PACKET_SIZE) before consulting out.len() and returns BufferTooSmall::new(needed, profile_limit). Probe: raw 22554-byte nonzero-TC packet -\u003e BufferTooSmall{required:22555, provided:22554} regardless of actual out capacity, so a grow-and-retry caller loop never terminates. Python raises unambiguous SchcError 'Rule 255 raw IPv6 packet exceeds 22553 bytes' (python/src/lichen/schc/headers.py:146-147). Both fatal; only the error classification differs. Fix: return a terminal profile-limit SchcError::InvalidPacket (or dedicated variant) when needed exceeds the profile ceiling, reserving BufferTooSmall for genuinely too-small caller buffers.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:37:08.79472Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T16:37:08.79472Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5mbk",
+      "depends_on_id": "project-LICHEN-worker6-xuc8",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:37:09.22579Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
