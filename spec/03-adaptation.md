@@ -309,8 +309,7 @@ fragmentation context. Before every context mutation or control response, the
 receiver MUST revalidate that every applicable generation token is current. Revocation or
 replacement atomically invalidates every active context, tombstone, cached
 response, and admission floor in the retired generation, even when the same
-public key is reinstalled. They MUST bound the number of contexts per remote signer
-and globally. On authenticated allocation exhaustion, the receiver sends one
+public key is reinstalled. They MUST bound the number of contexts per remote signer to at most 4 and the global context table to at most 64 entries. On authenticated allocation exhaustion, the receiver sends one
 Receiver-Abort for the rejected key and MUST NOT evict or mutate an active
 authenticated context. An unauthenticated fragment is silently dropped and
 MUST NOT cause a control response.
@@ -351,7 +350,9 @@ success ACK. Late fragments MUST NOT create or contaminate the next session.
 Tombstones, floors, and hold-down records are bounded state and are persisted
 with the authenticated trust/replay transaction. Link-key rotation invalidates
 all such state for the old signer generation; a counter at
-`0xffffff` cannot be reused or wrapped under the same key.
+`0xffffff` cannot be reused or wrapped under the same key. Tombstone and
+admission-floor tables MUST be bounded to at most 256 entries per direction.
+On overflow, implementations MUST evict the oldest tombstone by terminal-time.
 
 The fixed M=1 window field and N=6 FCN field identify positions within one
 such session and do not provide concurrency identity. Fragmentation is
