@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-29bu",
+  "title": "Python decode_rule255 applies endpoint address policy on receipt, violating spec 03 TX/RX split; diverges from Rust RX",
+  "description": "P1, found by worker5 probe during project-LICHEN-worker6-1jbb verification. spec/03-adaptation.md:426-429 (canonical TX/RX split, landed faed8ccfb5): 'Rule 255 DECODING is byte-preserving and MUST validate structure and checksums only: a decoder MUST NOT apply the endpoint address policy on receipt, because a structurally valid packet already on the link is preserved verbatim rather than dropped as malformed. This split keeps the two implementation families interoperable: a packet one implementation cannot originate is still delivered intact by the other.' Python python/src/lichen/schc/headers.py decode_rule255 -\u003e validate_full_ipv6 still runs _validate_ipv6_addresses (rejects unspecified src, multicast src, unspecified dst) AND UdpDatagram.from_bytes(payload, src) re-checks malformed sources (python/src/lichen/ipv6/udp.py:96-97) on the RX path. Rust RX decode_rule255 -\u003e validate_full_ipv6_structure (codec.rs:1464) applies NO address checks (spec-compliant). Probe (valid UDP checksum, independent RFC 1071 oracle): src=:: / src=ff02::1 / dst=:: -\u003e Python decode_rule255 REJECTS (invalid IPv6 source/destination address), Rust ACCEPTS byte-preserving - identical on-air bytes, opposite verdicts, same class as the k0r2 break for the loopback/v4mapped/scope classes wlts fixed. Also inflates RuleVersionFailureTracker misbehaving-peer notifications on Python nodes. wlts close incorrectly recorded 'Python verified aligned: decode_rule255:212 runs structural validation only' - the split was only verified for the 5 loopback/v4mapped/scope classes; the 3 unspecified/multicast-source classes still hit _validate_ipv6_addresses first. Fix: split decode from the full validator on the Python side the way Rust did (decode_rule255 must call a structure+checksums-only validator: version/length/next-header/chain/UDP length/checksum over RFC 2460 s8.1 dst, NO _validate_ipv6_addresses, NO UdpDatagram.from_bytes malformed-source check, keep UdpDatagram length/zero-checksum structure checks), keep validate_full_ipv6 (TX) enforcing the full emission policy; then add the 3 missing corpus rows (source ::, source ff02::1, destination ::) to schc_adaptation.json rule255_endpoint_policy with expect_valid=false (they currently cannot be committed: python false-branch asserts decode byte-preservation and would fail), and rerun parity + adaptation suites in both impls.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:57:28.63554096Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T21:57:28.63554096Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-29bu",
+      "depends_on_id": "project-LICHEN-worker6-1jbb",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:57:28.755179894Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

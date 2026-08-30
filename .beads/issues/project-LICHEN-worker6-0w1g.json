@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-0w1g",
+  "title": "schc_parity_vectors.h source-dir copy shadows CMake build-dir generation; pick one source of truth",
+  "description": "Found by robustness+security codereview passes of project-LICHEN-worker6-wrxl (P2). lichen/tests/schc_parity/main.c:9 includes \"schc_parity_vectors.h\" with quotes, so clang resolves it to the SOURCE-DIR copy (includer-dir precedes -I), while lichen/tests/schc_parity/CMakeLists.txt:10-24 also generates a build-dir copy at configure time. The two were byte-identical when wrxl landed, but any future JSON edit regenerates the UNUSED build copy while tests compile the stale source copy - silent stale-vector testing; the source copy is also untracked, polluting git status. Fix: pick one source of truth - either (a) delete the source-dir copy and let CMake generation be authoritative (matches pre-wrxl behavior), or (b) commit the source copy as the artifact and drop the CMake generation step. Option (a) preferred (no generated artifacts in git); then verify schc_parity still builds+passes on a fresh checkout.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:06:18.906138946Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T22:06:18.906138946Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0w1g",
+      "depends_on_id": "project-LICHEN-worker6-wrxl",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:06:19.007746626Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
