@@ -54,4 +54,4 @@ rust-version = "1.81.0"
 
 # Patch crates.io dependencies with local versions for Schnorr48 EDHOC support
 [patch.crates-io]
-oscore = { path = "/Volumes/Attic/Desktop/Projects/crates/oscore" }
+oscore = { path = "crates/oscore" }
