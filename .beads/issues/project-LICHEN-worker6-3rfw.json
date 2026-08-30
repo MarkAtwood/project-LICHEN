@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-3rfw",
+  "title": "lichend TOML config silently ignores unknown keys (no deny_unknown_fields)",
+  "description": "Found in 3x codereview of w0fp (robustness pass). Config structs in rust/lichen-gateway/src/config.rs (Config:14-30, GatewayCoordinationConfig:43-61, SecurityConfig:33-40) use #[serde(default)] without deny_unknown_fields, so a typo'd key such as master_salt (instead of master_salt_hex) or rollback_floor is silently dropped. Worst case: mode=psk starts without the intended master salt, deriving different per-peer OSCORE contexts than every other federation member (silent interop outage, fail-open-ish); misspelled psk_hex/peer_public_keys do fail closed via EmptyPeers/missing-psk. Add #[serde(deny_unknown_fields)] to the public config structs (verify no existing deployment TOMLs rely on extra keys) and add a regression test that an unknown key under [gateway_coordination]/[security] is rejected. Related docs already shipped in deploy/lichend.toml.example.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T05:22:33.675131Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T05:22:33.675131Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3rfw",
+      "depends_on_id": "project-LICHEN-worker6-w0fp",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T05:22:33.877775Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

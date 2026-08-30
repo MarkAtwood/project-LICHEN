@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5can",
+  "title": "lichend open federation mode (GCP-3.2) has no enrollment path",
+  "description": "Found in 3x codereview of w0fp. Gateway::admit_gateway (rust/lichen-gateway/src/gateway.rs:960-980) implements TOFU proof-of-poskey admission, but no lichend daemon config or runtime endpoint invokes it — only unit tests (gateway.rs:1951-1954). mode=open in TOML therefore unconditionally errors at startup (lichend.rs:511-514) with no way to ever enroll; deploy/lichend.toml.example documents this refusal. Implement a spec GCP-3.2 enrollment surface (daemon config trust anchors and/or a runtime CoAP enrollment resource behind existing authz), keeping the no-plaintext-fallback guarantee, and update the example docs once reachable.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T05:22:34.546489Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T05:22:34.546489Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5can",
+      "depends_on_id": "project-LICHEN-worker6-w0fp",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T05:22:34.788205Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

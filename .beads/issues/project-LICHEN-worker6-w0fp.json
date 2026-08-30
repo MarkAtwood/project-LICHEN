@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-w0fp",
   "title": "Standalone lichend cannot provision any runtime GCP OSCORE peer",
   "description": "lichend loads durable TrustStore/GatewayCoordinator and calls Gateway runtime GCP ingress, but no daemon config or enrollment path invokes admit_gateway/install_gcp_context. SecureStack therefore has no context and every standalone GCP packet fails before dispatch. Extend existing TOML config with a spec GCP-3 closed-PSK federation mode and explicit peer public keys, durably provision/bind those configured trust anchors, derive collision-checked bounded OSCORE contexts, install them before entering radio loops, fail closed on invalid/ambiguous configuration, and add configuration/startup-runtime integration coverage. Open mode must remain explicit rather than silently unauthenticated.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T16:09:51.755905Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:45:14.218982Z",
+  "updated_at": "2026-08-30T05:26:11.286151Z",
   "started_at": "2026-08-24T16:10:08.203408Z",
-  "lease_expires_at": "2026-08-30T04:50:14.218982Z",
-  "heartbeat_at": "2026-08-30T04:45:14.218982Z"
+  "closed_at": "2026-08-30T05:26:11.286151Z",
+  "close_reason": "Verified the described capability is fully implemented and committed: TOML [gateway_coordination] with mode disabled/psk/open + explicit 32-byte hex peer_public_keys (config.rs:43-61); configure_gateway_federation runs before radio loops (lichend.rs:443-446, 496-542) rejecting stray material in disabled mode and refusing open mode rather than plaintext-fallback; provision_closed_federation (gateway.rs:1039-1099) durably pins configured anchors (TrustStore::provision_configured_peer, BrProvisioned, save_atomic_with_floor) and installs collision-checked bounded OSCORE contexts (install_gcp_context gateway.rs:985-1033, MAX_GCP_OSCORE_CONTEXTS=64, sender-sequence restore) before any GCP dispatch. Tests green: 18/18 lichend bin tests incl. closed_psk_config_provisions_durable_trust_and_runtime_context and disabled_and_open_modes_never_fall_back_to_plaintext. Completed the one remaining gap this round: documented [gateway_coordination] and [security] (rollback_floor_root, separate-mount requirement) in deploy/lichend.toml.example with accurate constraints (psk min 16B, salt/id_context max 8B, \u003e=1 peer max 64, monotonic non-revocable pins, chmod 0600). 3x codereview (correctness/security/robustness) found no P0-P3 issues in the diff; findings on pre-existing code filed as beads: tunnel_auth Revoked-vs-Replay test failure (P1), unknown-TOML-key silencing (P3), pin removal not revocation + partial-failure intermediate state (P2), open-mode enrollment path absent (P3)."
 }

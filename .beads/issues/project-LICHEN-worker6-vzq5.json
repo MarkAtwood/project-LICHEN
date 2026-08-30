@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-vzq5",
+  "title": "GCP trust anchor pin removal is not revocation; partial federation failure leaves pinned-but-contextless anchor",
+  "description": "Found in 3x codereview of w0fp. Two related semantics in the lichend GCP-3.1 flow: (1) TrustStore provisioning is monotonic (rust/lichen-gateway/src/trust.rs provision_configured_peer 672-713 only adds/raises level; TrustStore::remove 1067 has no daemon caller), so dropping a compromised peer key from gateway_coordination.peer_public_keys in deploy/lichend.toml.example does NOT revoke its durable BrProvisioned pin or GCP context — an explicit operator revocation path (config change -\u003e pin+context removal, atomic with persistence) is missing. (2) provision_closed_federation (rust/lichen-gateway/src/gateway.rs:1039-1099) commits trust anchors durably (save_atomic_with_floor 1081-1090) before installing contexts (1091-1097); a context-install failure exits the daemon with the anchor pinned but contextless — fail-closed direction and self-heals on next restart, but document/handle the intermediate state deliberately. Design revocation carefully against IID-collision trust-replacement protections; add tests for config-removal revocation and restart-after-partial-install.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T05:22:34.100148Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T05:22:34.100148Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vzq5",
+      "depends_on_id": "project-LICHEN-worker6-w0fp",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T05:22:34.27542Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
