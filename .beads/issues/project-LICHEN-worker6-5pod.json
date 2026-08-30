@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-5pod",
+  "title": "Node announce persistence reboot/corruption/rollback tests",
+  "description": "Child 3 of ta0c decomposition (Rust). Tests for children 1+2: (a) reboot — pins and origin-seq floors survive Node restart (store re-open rebuilds cache); (b) corruption — tampered record fails closed with the store error, never re-pins a different key for the same IID; (c) rollback — restored older floor/state snapshot fails closed; exactly-one-side present fails closed; (d) eviction interaction — pinned eviction does not silently lower a durable floor; (e) replay — an old origin-signed Announce replayed through an authenticated relay is rejected after restart using the durable floor. Style: mirror rust/lichen-gateway/src/gateway.rs oscore store tests (private_test_dir, reopen, mutate file, reopen, assert error).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T04:21:36.657485Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T04:21:36.657485Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5pod",
+      "depends_on_id": "project-LICHEN-worker6-ta0c",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T04:21:36.813976Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
