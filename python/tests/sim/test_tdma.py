@@ -78,11 +78,7 @@ def test_invalid_beacon_assignment_is_failure_atomic(
     scheduler.clock.last_sync_us = 11
 
     with pytest.raises(ValueError):
-        scheduler.sync_from_beacon(  # type: ignore[arg-type]
-            rx_time_us,
-            sfn,
-            assigned,
-        )
+        scheduler.sync_from_beacon(rx_time_us, sfn, assigned)  # type: ignore[arg-type]
 
     assert scheduler.state is TDMAState.DRIFTING
     assert scheduler.assigned_slot == 3

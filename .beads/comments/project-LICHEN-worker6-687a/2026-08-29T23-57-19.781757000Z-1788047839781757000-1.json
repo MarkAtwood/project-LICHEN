@@ -1,0 +1,7 @@
+{
+  "id": "1788047839781757000-1",
+  "issue_id": "project-LICHEN-worker6-687a",
+  "author": "Mark Atwood",
+  "text": "CODE WORK VERIFIED: the described bug is already fixed in committed code (commit 660b9bf3bf, postdates bead filing 2026-08-24). Egress schc_handler.py:229-234 and ingress validate closure schc_handler.py:538-552 call decode_rule255 WITHOUT the single-frame ceiling; fragmentation receiver limit 1281 enforced via reassembly max_size (DEFAULT_RECEIVER_LIMIT) and FragmentSender receiver_limit. Empirical repro confirmed: fragmented Rule 255 accepted at 186/1000/1281 encoded, 1282 rejected pre-session (FragmentError payload too large), oversized ingress aborts, unfragmented \u003e185 still rejected. Added 7 boundary regression tests pinning this: tests/schc/test_fragment.py (spans_full_fragmented_range_end_to_end x[186,1000,1281], above_profile_limit_rejected_before_session, over_receiver_budget_aborts_reassembly, unfragmented_rule255_single_frame_ceiling_still_enforced) and tests/schc/test_headers.py (decode_rule255_enforces_single_frame_limit_only_when_given). tests/schc: 1366 passed; tests/link: 836 passed 12 skipped; ruff clean in scope; mypy errors all pre-existing (118 with/without changes). Ready to close.",
+  "created_at": "2026-08-29T23:57:19.781757Z"
+}
