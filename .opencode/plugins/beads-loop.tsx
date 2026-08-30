@@ -26,7 +26,7 @@ const tui: TuiPlugin = async (api) => {
   function report(message: string, variant: "info" | "success" | "error" = "info") {
     api.ui.toast({ title: "beads-loop", message, variant })
     void api.client.app
-      .log({ body: { service: "beads-loop", level: variant === "error" ? "error" : "info", message } })
+      .log({ service: "beads-loop", level: variant === "error" ? "error" : "info", message })
       .catch(() => {})
   }
 
@@ -50,10 +50,10 @@ const tui: TuiPlugin = async (api) => {
   async function runRound() {
     rounds += 1
     if (rounds % NEW_SESSION_EVERY === 0) {
-      await api.client.tui.executeCommand({ body: { command: "session.new" } })
+      await api.client.tui.executeCommand({ command: "session.new" })
       await sleep(1000)
     }
-    await api.client.tui.appendPrompt({ body: { text: ROUND_PROMPT } })
+    await api.client.tui.appendPrompt({ text: ROUND_PROMPT })
     await api.client.tui.submitPrompt()
     lastRoundAt = Date.now()
     report(`round ${rounds} submitted (worker ${worker})`)
