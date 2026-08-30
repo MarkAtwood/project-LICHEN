@@ -6,7 +6,7 @@
     "p0": 23,
     "endpoint_direction": 6,
     "rule7_address_policy": 14,
-    "rule255_endpoint_policy": 8,
+    "rule255_endpoint_policy": 11,
     "duplicate_idempotence": 1
   },
   "vectors": [
@@ -776,6 +776,39 @@
       "expect_valid": false,
       "expect_error": "invalid_source_address",
       "provenance": "spec/03-adaptation.md Rule 255 TX/RX split: decode validates structure and checksums only."
+    },
+    {
+      "name": "rule255_rx_byte_preserving_unspecified_source",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 decode MUST be byte-preserving for an unspecified source: the structural RX path applies no endpoint address policy (spec 03 TX/RX split, worker6-29bu).",
+      "source_ipv6": "::",
+      "destination_ipv6": "2001:db8::1",
+      "expect_valid": false,
+      "expect_error": "invalid_source_address",
+      "provenance": "spec/03-adaptation.md Rule 255 TX/RX split: decode validates structure and checksums only; emission refuses an unspecified source."
+    },
+    {
+      "name": "rule255_rx_byte_preserving_multicast_source",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 decode MUST be byte-preserving for a multicast source: multicast datagrams are legitimate RX (spec 03 TX/RX split, worker6-29bu).",
+      "source_ipv6": "ff02::1",
+      "destination_ipv6": "2001:db8::1",
+      "expect_valid": false,
+      "expect_error": "invalid_source_address",
+      "provenance": "spec/03-adaptation.md Rule 255 TX/RX split: decode validates structure and checksums only; emission refuses a multicast source."
+    },
+    {
+      "name": "rule255_rx_byte_preserving_unspecified_destination",
+      "category": "rule255_endpoint_policy",
+      "priority": "P1",
+      "description": "Rule 255 decode MUST be byte-preserving for an unspecified destination: the structural RX path applies no endpoint address policy (spec 03 TX/RX split, worker6-29bu).",
+      "source_ipv6": "2001:db8::1",
+      "destination_ipv6": "::",
+      "expect_valid": false,
+      "expect_error": "invalid_destination_address",
+      "provenance": "spec/03-adaptation.md Rule 255 TX/RX split: decode validates structure and checksums only; emission refuses an unspecified destination."
     }
   ]
 }
