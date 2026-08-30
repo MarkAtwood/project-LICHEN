@@ -37,6 +37,14 @@
 extern crate std;
 
 #[cfg(feature = "std")]
+use lichen_hal::storage::fs::FileStorage;
+#[cfg(feature = "std")]
+use lichen_hal::NonVolatile;
+#[cfg(feature = "std")]
+use lichen_link::keys::Seed;
+#[cfg(feature = "std")]
+use lichen_link::schnorr::{derive_keypair, sign, verify, SIGNATURE_LENGTH};
+#[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::format;
@@ -46,14 +54,6 @@ use std::path::Path;
 use std::string::String;
 #[cfg(feature = "std")]
 use std::vec::Vec;
-#[cfg(feature = "std")]
-use lichen_hal::storage::fs::FileStorage;
-#[cfg(feature = "std")]
-use lichen_hal::NonVolatile;
-#[cfg(feature = "std")]
-use lichen_link::keys::Seed;
-#[cfg(feature = "std")]
-use lichen_link::schnorr::{derive_keypair, sign, verify, SIGNATURE_LENGTH};
 #[cfg(feature = "std")]
 use zeroize::Zeroizing;
 
@@ -415,7 +415,11 @@ fn count_durable_state_records(state_dir: &Path) -> Result<usize, AnnounceStoreE
     let mut count = 0usize;
     for entry in std::fs::read_dir(state_dir).map_err(|_| AnnounceStoreError::Io)? {
         let entry = entry.map_err(|_| AnnounceStoreError::Io)?;
-        if !entry.file_type().map_err(|_| AnnounceStoreError::Io)?.is_file() {
+        if !entry
+            .file_type()
+            .map_err(|_| AnnounceStoreError::Io)?
+            .is_file()
+        {
             continue;
         }
         let name = entry.file_name();
@@ -832,7 +836,10 @@ mod tests {
         assert!(reopened
             .accept(&evict_candidate, state(over as u8, 8))
             .is_ok());
-        assert_eq!(reopened.load(&evict_candidate), Ok(Some(state(over as u8, 8))));
+        assert_eq!(
+            reopened.load(&evict_candidate),
+            Ok(Some(state(over as u8, 8)))
+        );
         assert_eq!(reopened.load(&[0u8; 8]), Ok(Some(state(1, 7))));
 
         // And the advanced floor is durable across another restart.

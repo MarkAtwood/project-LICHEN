@@ -1053,7 +1053,10 @@ mod tests {
 
     // --- Durable trust store integration (persist-first admission) ---
 
-    fn unique_test_roots(name: &str, counter: &AtomicU64) -> (std::path::PathBuf, std::path::PathBuf) {
+    fn unique_test_roots(
+        name: &str,
+        counter: &AtomicU64,
+    ) -> (std::path::PathBuf, std::path::PathBuf) {
         let suffix = counter.fetch_add(1, Ordering::Relaxed);
         let state = std::env::temp_dir().join(format!(
             "lichen-node-announce-integration-{name}-{}-{suffix}",
@@ -1122,7 +1125,10 @@ mod tests {
         let mut destination = [0u8; 16];
         destination[..8].copy_from_slice(&ula_prefix());
         destination[8..].copy_from_slice(&identity.iid);
-        assert!(processor.gradient_table_mut().lookup(&destination, 1000).is_none());
+        assert!(processor
+            .gradient_table_mut()
+            .lookup(&destination, 1000)
+            .is_none());
         assert!(processor.pinned_pubkey_for(&identity.iid).is_none());
         assert!(!processor.known_originators().contains(&identity.iid));
         drop(processor);
@@ -1145,20 +1151,31 @@ mod tests {
         let mut buf = [0u8; 256];
         let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
         let announce = Announce::from_bytes(&buf[..len]).unwrap();
-        assert!(processor.process(&announce, link_local(0xAA), 1000).accepted);
+        assert!(
+            processor
+                .process(&announce, link_local(0xAA), 1000)
+                .accepted
+        );
 
         // Push the pinned entry out of the in-memory cache.
         for i in 2..=3 {
             let identity = make_identity(i);
             let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
             let announce = Announce::from_bytes(&buf[..len]).unwrap();
-            assert!(processor.process(&announce, link_local(0xAA), 2000).accepted);
+            assert!(
+                processor
+                    .process(&announce, link_local(0xAA), 2000)
+                    .accepted
+            );
         }
         assert!(!processor.known_originators().contains(&identity.iid));
 
         // The pin survives eviction through the durable store and still
         // binds the exact TOFU pubkey.
-        assert_eq!(processor.pinned_pubkey_for(&identity.iid), Some(identity.pubkey));
+        assert_eq!(
+            processor.pinned_pubkey_for(&identity.iid),
+            Some(identity.pubkey)
+        );
 
         // The durable floor survived eviction: the old sequence replays no more.
         let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
@@ -1185,7 +1202,10 @@ mod tests {
             ula_prefix(),
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x5A; 32]).unwrap(),
         );
-        assert_eq!(reopened.pinned_pubkey_for(&identity.iid), Some(identity.pubkey));
+        assert_eq!(
+            reopened.pinned_pubkey_for(&identity.iid),
+            Some(identity.pubkey)
+        );
         let len = make_signed_announce(&identity, 105, 3, 0, &[], &mut buf);
         let announce = Announce::from_bytes(&buf[..len]).unwrap();
         let result = reopened.process(&announce, link_local(0xAA), 5000);
@@ -1211,7 +1231,11 @@ mod tests {
         let mut buf = [0u8; 256];
         let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
         let announce = Announce::from_bytes(&buf[..len]).unwrap();
-        assert!(processor.process(&announce, link_local(0xAA), 1000).accepted);
+        assert!(
+            processor
+                .process(&announce, link_local(0xAA), 1000)
+                .accepted
+        );
         drop(processor);
 
         // A foreign sealing seed cannot verify the sealed records: pin
@@ -1234,7 +1258,10 @@ mod tests {
         let mut destination = [0u8; 16];
         destination[..8].copy_from_slice(&ula_prefix());
         destination[8..].copy_from_slice(&identity.iid);
-        assert!(foreign.gradient_table_mut().lookup(&destination, 2000).is_none());
+        assert!(foreign
+            .gradient_table_mut()
+            .lookup(&destination, 2000)
+            .is_none());
 
         drop(foreign);
         remove_roots(&state_root, &floor_root);
