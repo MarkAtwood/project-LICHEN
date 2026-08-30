@@ -2,12 +2,15 @@
   "id": "project-LICHEN-worker6-7sdm",
   "title": "Update time-sync DIO fixtures for canonical signer IID",
   "description": "The fully merged Python correctness gate fails 18 authenticated-DIO/time-sync tests because python/tests/timing/test_time_sync.py::dio_envelope hard-codes IPv6 source fe80::2 while production _issue_authenticated_dio_from_ipv6 now correctly requires fe80::\u003cPeerIdentity.iid\u003e derived from the authenticated signer. This prevents tests from reaching their intended DIO option, mutation, concurrency, rekey, and time-policy assertions. Update the test helper/call sites to build the source address from the signer under test, retain explicit wrong-source negative coverage, and run the full timing suite.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
+  "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:43:42.278098Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T23:37:31.653241Z",
-  "started_at": "2026-08-24T15:48:47.52968Z"
+  "updated_at": "2026-08-30T03:32:01.868601Z",
+  "started_at": "2026-08-24T15:48:47.52968Z",
+  "closed_at": "2026-08-30T03:32:01.868601Z",
+  "close_reason": "Verified fixed at HEAD: dio_envelope helper (test_time_sync.py:134-164) builds the IPv6 source from the signer under test by default (:151: fe80:: + signer.iid), all valid-path call sites use the default; the one explicit fe80::2 call site (:461) is exactly the retained wrong-source negative coverage (test_dio_rejects_source_iid_not_owned_by_authenticated_signer, asserts ValueError 'source IID does not match signer'). Full timing suite: 868 passed (test_time_sync.py alone 65 passed). No changes needed."
 }
