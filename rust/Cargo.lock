@@ -2643,7 +2643,9 @@ dependencies = [
 
 [[package]]
 name = "oscore"
-version = "0.1.0"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e35a9b21ead291c2cbae0c32dc83c10dc2d89e54e36e1afa87f2bda0ca94b95"
 dependencies = [
  "aes",
  "ccm",
@@ -4565,3 +4567,7 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[patch.unused]]
+name = "oscore"
+version = "0.1.0"
