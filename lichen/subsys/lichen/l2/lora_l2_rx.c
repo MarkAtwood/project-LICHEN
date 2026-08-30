@@ -19,14 +19,16 @@
  *
  * Radio-liveness hook. Apps that gate a watchdog feed on radio progress
  * (puck main.c) provide a strong definition; standalone builds fall back to
- * this no-op. Same pattern as lichen/lib/native/native.c. The hook is now
- * bumped from work executions (packet delivery and re-arm attempts) instead
- * of an RX thread loop; consumers must not rely on it being bumped while the
- * radio sits idle and armed.
+ * this no-op. Same pattern as lichen/lib/native/native.c. The hook is bumped
+ * on packet deliveries and successful arms - deliberately NOT on retry
+ * attempts, which would keep the heartbeat fresh while the radio path is
+ * dead. Consumers must not rely on it being bumped while the radio sits
+ * idle and armed.
  */
 #include "lora_l2_internal.h"
 #include "crash_info.h"
 
+#include <stdint.h>
 #include <string.h>
 
 #include <zephyr/kernel.h>
@@ -62,9 +64,22 @@ static int8_t rx_stage_snr;
  * rx_pending: a packet is staged and awaiting processing. Set by the ISR
  * (test-and-set), cleared by the work handler after the RX callback returns,
  * which makes the staging buffer immutable for the whole callback duration.
+ *
+ * rx_armed: the driver currently has our callback registered. Guards the
+ * disarm path (skip recv_async(NULL) when nothing is armed) and keeps the
+ * log level honest.
+ *
+ * rx_session: incremented by every lora_l2_rx_start(). stop() captures the
+ * session at entry and only cancels/flushes/disarms if it still matches, so
+ * a stop() racing a newer start() cannot tear down the new session.
  */
 static atomic_t rx_enabled;
 static atomic_t rx_pending;
+static atomic_t rx_armed;
+static atomic_t rx_session;
+
+/** Consecutive re-arm failures before the module gives up (ABORTED). */
+#define RX_ARM_MAX_CONSECUTIVE_FAILURES 3
 
 /*
  * Single work item: delivers the staged packet (if any), then re-arms the
@@ -75,8 +90,7 @@ static void rx_work_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(rx_work, rx_work_fn);
 
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr,
-			      void *user_data);
+			      uint16_t size, int16_t rssi, int8_t snr);
 
 /**
  * @brief Arm the driver for the next asynchronous reception
@@ -86,12 +100,19 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
  * busy or the arm call fails transiently, a short delayable retry keeps the
  * re-arm alive without blocking the system workqueue.
  *
+ * Failures escalate: after RX_ARM_MAX_CONSECUTIVE_FAILURES consecutive arm
+ * failures the module is forced into ABORTED (needs_reinit) instead of
+ * retrying forever - a radio that cannot arm is dead weight, and an eternal
+ * 100 Hz retry would both flood the log and keep the watchdog heartbeat
+ * artificially fresh.
+ *
  * A driver that reports -ENOTSUP cannot receive at all: fail closed by
- * forcing the module into ABORTED so callers see needs_reinit() instead of a
- * silently deaf radio.
+ * forcing the module into ABORTED immediately so callers see needs_reinit()
+ * instead of a silently deaf radio.
  */
 static void lora_l2_rx_arm(void)
 {
+	static uint8_t consecutive_failures;
 	int ret;
 
 	if (atomic_get(&tx_pending) > 0) {
@@ -115,10 +136,13 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret == 0) {
+		consecutive_failures = 0;
+		atomic_set(&rx_armed, 1);
+		lichen_radio_progress();
 		return;
 	}
 
@@ -128,7 +152,18 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	LOG_ERR("lora_l2: recv_async arm failed (%d)", ret);
+	if (consecutive_failures < UINT8_MAX) {
+		consecutive_failures++;
+	}
+	if (consecutive_failures >= RX_ARM_MAX_CONSECUTIVE_FAILURES) {
+		LOG_ERR("lora_l2: recv_async arm failed %u times (%d); "
+			"giving up, deinit/init required",
+			consecutive_failures, ret);
+		atomic_set(&current_state, LORA_ABORTED);
+		return;
+	}
+
+	LOG_ERR("lora_l2: recv_async arm failed (%d), retrying", ret);
 
 retry:
 	k_work_schedule(&rx_work, K_MSEC(RX_REARM_RETRY_MS));
@@ -147,30 +182,35 @@ retry:
  * callable from error paths including ISRs) and leave the radio unarmed.
  */
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr,
-			      void *user_data)
+			      uint16_t size, int16_t rssi, int8_t snr)
 {
 	ARG_UNUSED(dev);
-	ARG_UNUSED(user_data);
+
+	if (!atomic_get(&rx_enabled)) {
+		/* Stop raced the delivery; the packet is dropped, which is
+		 * what the radio would have lost anyway when disarming. The
+		 * gate comes first so a stale-armed driver cannot flip the
+		 * module into ABORTED after stop() returned. */
+		return;
+	}
 
 	if ((size_t)size > sizeof(rx_stage)) {
 		LOG_ERR("lora_l2: recv overflow (%u > %u)", size,
 			(unsigned int)sizeof(rx_stage));
 		crash_info_store(CRASH_DRIVER_OVERFLOW, __LINE__, (uint32_t)size);
+		/* Driver-contract violation: disable further staging and fail
+		 * closed. The radio stays unarmed for this session. */
+		atomic_set(&rx_enabled, 0);
+		atomic_set(&rx_armed, 0);
 		atomic_set(&current_state, LORA_ABORTED);
 		return;
 	}
 
-	if (!atomic_get(&rx_enabled)) {
-		/* Stop raced the delivery; the packet is dropped, which is
-		 * what the radio would have lost anyway when disarming. */
-		return;
-	}
-
-	if (atomic_test_and_set(&rx_pending)) {
-		/* Previous packet not yet processed. Cannot happen with a
-		 * single outstanding RX (we re-arm only after processing);
-		 * defensive against drivers that auto-re-arm. */
+	if (atomic_cas(&rx_pending, 0, 1)) {
+		/* Claimed the staging buffer. Single outstanding RX means a
+		 * concurrent claim cannot happen (we re-arm only after
+		 * processing); defensive against drivers that auto-re-arm. */
+	} else {
 		LOG_DBG("lora_l2: RX staging busy, packet dropped");
 		return;
 	}
@@ -180,7 +220,10 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 	rx_stage_rssi = rssi;
 	rx_stage_snr = snr;
 
-	k_work_submit(&rx_work);
+	/* rx_work is delayable (the re-arm retry uses the delay slot); submit
+	 * immediately with a zero delay - k_work_reschedule expedites a
+	 * pending 10 ms retry so a staged packet never waits it out. */
+	k_work_reschedule(&rx_work, K_NO_WAIT);
 }
 
 /**
@@ -190,16 +233,18 @@ static void rx_work_fn(struct k_work *work)
 {
 	ARG_UNUSED(work);
 
-	/*
-	 * Radio-liveness heartbeat: apps gate their watchdog feed on this
-	 * (see puck main.c). Each execution proves the RX path is not wedged.
-	 */
-	lichen_radio_progress();
-
 	if (atomic_get(&rx_pending)) {
 		uint16_t len = rx_stage_len;
 		int16_t rssi = rx_stage_rssi;
 		int8_t snr = rx_stage_snr;
+
+		/*
+		 * Radio-liveness heartbeat: apps gate their watchdog feed on
+		 * this (see puck main.c). Bumped on actual deliveries and
+		 * successful arms only - NOT on retry attempts, which would
+		 * keep the heartbeat fresh while the radio path is dead.
+		 */
+		lichen_radio_progress();
 
 		/*
 		 * Snapshot the callback pair under lock for consistency
@@ -237,8 +282,14 @@ static void rx_work_fn(struct k_work *work)
 /**
  * @brief Arm the first asynchronous reception (called from start())
  *
- * The modem cannot be contended here: the module just transitioned
- * STOPPED -> RUNNING and no TX can be in flight yet.
+ * Starts a new RX session: any pending state from a previous session is
+ * cleared, and rx_session is bumped so a stop() still draining a previous
+ * session cannot tear this one down.
+ *
+ * The modem lock is bounded: a TX that raced the STOPPED->RUNNING
+ * transition may still hold the modem; waiting it out (same budget TX uses)
+ * keeps start() from hanging forever, and the caller reverts to STOPPED on
+ * failure.
  *
  * @return 0 on success, negative errno from the driver on failure
  */
@@ -248,9 +299,15 @@ int lora_l2_rx_start(void)
 
 	atomic_clear(&rx_pending);
 	atomic_set(&rx_enabled, 1);
+	atomic_inc(&rx_session);
 
-	k_mutex_lock(&modem_mutex, K_FOREVER);
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
+	if (k_mutex_lock(&modem_mutex, K_MSEC(RX_TIMEOUT_MS + 1000)) != 0) {
+		LOG_ERR("lora_l2: modem busy during RX arm");
+		atomic_set(&rx_enabled, 0);
+		return -EBUSY;
+	}
+
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret < 0) {
@@ -258,6 +315,7 @@ int lora_l2_rx_start(void)
 		return ret;
 	}
 
+	atomic_set(&rx_armed, 1);
 	return 0;
 }
 
@@ -267,36 +325,66 @@ int lora_l2_rx_start(void)
  * Order matters:
  * 1. Clear rx_enabled: ISR deliveries are dropped from here on (stop() has
  *    already transitioned to STOPPED before calling this).
- * 2. Cancel a scheduled re-arm retry, then flush: when this returns, the
+ * 2. Session check: capture rx_session at entry. If a concurrent start()
+ *    began a new session (session changed), this stop() owns nothing
+ *    anymore - cancel/flush/disarm are skipped entirely so the new session's
+ *    arm and scheduled retries are left intact.
+ * 3. Cancel a scheduled re-arm retry, then flush: when this returns, the
  *    work item is neither queued nor running, and - because the handler
  *    re-checks the state inside its arm critical section - nothing will
- *    arm the driver afterwards.
- * 3. Disarm under modem_mutex (non-blocking): if TX owns the modem the
- *    enabled gate already drops stragglers, and TX cannot deliver a packet
- *    to this module.
+ *    arm the driver afterwards for this session.
+ * 4. Disarm under modem_mutex with a bounded wait: the old K_NO_WAIT skip
+ *    could leave the driver armed when TX held the modem, wedging every
+ *    future start() on drivers that reject double-arming. TX holds the
+ *    modem at most one airtime window, so RX_TIMEOUT_MS + margin is a
+ *    bounded upper wait.
  *
- * The net effect equals the old RX thread join: no RX callback can start
- * after stop() completes, without any join/abort failure modes.
+ * Single-caller guarantee: no RX callback can start after stop() completes.
+ * With concurrent stop()/start() callers, the guarantee applies to the
+ * caller's own session (see the session check above).
  */
 void lora_l2_rx_stop(void)
 {
 	const struct device *dev = lora_data.lora_dev;
+	atomic_val_t session = atomic_get(&rx_session);
 	int ret;
 
 	atomic_set(&rx_enabled, 0);
 
-	k_work_cancel_delayable(&rx_work);
-	k_work_flush(&rx_work, NULL);
+	if (atomic_get(&rx_session) == session) {
+		k_work_cancel_delayable(&rx_work);
+		{
+			/* Thread context requires a sync token for the flush. */
+			struct k_work_sync rx_sync;
 
-	if (dev != NULL && k_mutex_lock(&modem_mutex, K_NO_WAIT) == 0) {
-		ret = lora_recv_async(dev, NULL, NULL);
+			k_work_flush_delayable(&rx_work, &rx_sync);
+		}
+	}
+
+	if (dev == NULL) {
+		return;
+	}
+
+	if (k_mutex_lock(&modem_mutex, K_MSEC(RX_TIMEOUT_MS + 1000)) != 0) {
+		LOG_WRN("lora_l2: modem busy, RX disarm skipped");
+		return;
+	}
+
+	if (atomic_get(&rx_session) != session) {
+		/* A newer start() owns the modem now; its arm stands. */
 		k_mutex_unlock(&modem_mutex);
+		return;
+	}
+
+	if (atomic_get(&rx_armed)) {
+		ret = lora_recv_async(dev, NULL);
 		if (ret < 0) {
 			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
 		}
-	} else {
-		LOG_DBG("lora_l2: modem busy during RX disarm");
 	}
+	atomic_set(&rx_armed, 0);
+	atomic_clear(&rx_pending);
+	k_mutex_unlock(&modem_mutex);
 }
 
 int lichen_lora_l2_set_rx_callback(lichen_lora_rx_cb_t cb, void *user_data)

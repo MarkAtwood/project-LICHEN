@@ -80,9 +80,11 @@ config LICHEN_LORA_L2_RX_TIMEOUT_MS
 	default 1000
 	range 100 10000
 	help
-	  Timeout budget for modem access. TX uses it to wait out an
-	  outstanding RX re-arm; the RX re-arm retry loop uses the same
-	  budget as an upper bound before re-attempting.
+	  Timeout budget for modem access. TX waits this long (plus margin)
+	  for the modem when a re-arm is outstanding, and the RX start/stop
+	  paths use the same bounded budget when the driver modem is held by
+	  an in-flight TX. It does not bound the re-arm retry cadence, which
+	  is a fixed short delay.
 
 	  Lower values provide faster stop() responsiveness. Higher values may
 	  reduce wakeups on some platforms, but slow disable/enable cycles.

@@ -479,6 +479,8 @@ static const char *trust_level_str(enum lichen_coap_trust_level trust)
 		return "dane";
 	case LICHEN_COAP_TRUST_VERIFIED:
 		return "verified";
+	case LICHEN_COAP_TRUST_UNKNOWN:
+		return "unknown";
 	default:
 		return "unknown";
 	}
