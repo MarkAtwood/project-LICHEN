@@ -210,6 +210,8 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.BAD_REQUEST)
         from_hex = body["from"] if "from" in body else body.get("node")
         timestamp = body["t"] if "t" in body else body.get("ts")
+        if "type" in body and body["type"] == "cancel":
+            return self._cancel_from_body(body)
         if "type" in body and body["type"] != "sos":
             pass  # support other types per spec in future
         if from_hex is None or timestamp is None:
@@ -271,6 +273,39 @@ class SosResource(resource.ObservableResource):
         self._record_request(source_key)
         self.activate(bytes.fromhex(from_hex), timestamp)
         return Message(code=CREATED)
+
+    def _cancel_from_body(self, body: dict[Any, Any]) -> Message:
+        """Cancel the active alert for a POST with ``type: cancel`` (18.4.2).
+
+        Authorization mirrors render_delete: only the originator of the active
+        alert may cancel, using a signed envelope with replay protection.
+        """
+        if not self._active or self._from is None:
+            return Message(code=aiocoap.NOT_FOUND)
+        pubkey = body.get("pubkey")
+        sig_blob = body.get("sig")
+        if not isinstance(pubkey, bytes) or len(pubkey) != 32 or not isinstance(sig_blob, bytes):
+            return Message(code=aiocoap.UNAUTHORIZED)
+        try:
+            origin_sig = SosOriginSignature.from_bytes(sig_blob)
+        except ValueError:
+            return Message(code=aiocoap.UNAUTHORIZED)
+        active_iid = bytes.fromhex(self._from.lower())
+        if _pubkey_to_iid(pubkey) != active_iid:
+            return Message(code=aiocoap.UNAUTHORIZED)
+        core_cancel = {k: v for k, v in body.items() if k not in _SOS_ENVELOPE_FIELDS}
+        origin_addr = b"\x02\x00" + b"\x00" * 6 + active_iid
+        if not verify_sos_origin(
+            pubkey, origin_addr, canonicalize_sos_payload(core_cancel), origin_sig
+        ):
+            return Message(code=aiocoap.UNAUTHORIZED)
+        source_key = self._from.lower()
+        last_seq = self._sequences.last_seen(source_key)
+        if last_seq is not None and origin_sig.origin_sequence <= last_seq:
+            return Message(code=aiocoap.UNAUTHORIZED)
+        self._sequences.accept(source_key, origin_sig.origin_sequence)
+        self.cancel()
+        return Message(code=aiocoap.CHANGED)
 
     async def render_delete(self, request: Message) -> Message:
         """DELETE /sos cancels an active alert. Requires origin authentication.

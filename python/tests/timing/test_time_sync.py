@@ -685,6 +685,111 @@ def test_provision_persistence_failure_does_not_commit() -> None:
     assert verifier.current() is None and verifier.minimum_record_version == 0
 
 
+class _CustomCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom hook results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+        return None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+def _scheduled_awaitable(kind: str, ran: list[int], created: list[object]) -> object:
+    async def _later() -> None:
+        ran.append(1)
+
+    if kind == "task":
+        value: object = asyncio.create_task(_later())
+    elif kind == "future":
+        value = asyncio.get_running_loop().create_future()
+    else:
+        value = _CustomCloseAwaitable()
+    created.append(value)
+    return value
+
+
+def _assert_terminated(kind: str, value: object, ran: list[int]) -> None:
+    if kind == "task":
+        assert ran == []
+        assert cast(asyncio.Task[None], value).cancelled()
+    elif kind == "future":
+        assert cast(asyncio.Future[None], value).cancelled()
+    else:
+        assert cast(_CustomCloseAwaitable, value).close_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> None:
+    ran: list[int] = []
+    created: list[object] = []
+
+    def persist(_state: ProvisionRollbackState) -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    admin = TimeAdmin("board-admin")
+    verifier = ProvisionVerifier(
+        expected_board_identity=LOCAL.pubkey,
+        rollback_state=admin.initialize_virgin_provision_state(lambda marker: marker),
+        verify_integrity=lambda _wire: True,
+        # Deliberately returns a scheduled awaitable to exercise the
+        # runtime rejection of the declared -> None sync-hook contract.
+        persist_rollback_state=cast("Callable[[ProvisionRollbackState], None]", persist),
+        persist_clear=lambda _reason: None,
+        admin=admin,
+    )
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    if kind == "task":
+        await asyncio.sleep(0)
+    _assert_terminated(kind, created[0], ran)
+    # Poisoned fail-closed: the ambiguous write revokes all live authority.
+    assert verifier.current() is None
+    assert verifier.minimum_record_version == 0
+    assert (
+        evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status
+        is ProvisionEpochStatus.PERSISTENCE_FAILED
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_provision_clear_hook_rejects_scheduled_awaitable(kind: str) -> None:
+    ran: list[int] = []
+    created: list[object] = []
+    saved: list[ProvisionRollbackState] = []
+
+    def persist_clear(_state: ProvisionClearedState) -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    admin = TimeAdmin("board-admin")
+    verifier = ProvisionVerifier(
+        expected_board_identity=LOCAL.pubkey,
+        rollback_state=admin.initialize_virgin_provision_state(lambda marker: marker),
+        verify_integrity=lambda _wire: True,
+        persist_rollback_state=saved.append,
+        # Deliberately returns a scheduled awaitable to exercise the
+        # runtime rejection of the declared -> None sync-hook contract.
+        persist_clear=cast("Callable[[ProvisionClearedState], None]", persist_clear),
+        admin=admin,
+    )
+    metadata = verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        verifier.clear(admin, reason="repair")
+    if kind == "task":
+        await asyncio.sleep(0)
+    _assert_terminated(kind, created[0], ran)
+    # Poisoned fail-closed: the ambiguous write revokes all live authority.
+    assert verifier.cleared
+    assert not verifier.accepts(metadata)
+
+
 def test_provision_concurrent_installs_cannot_regress_rollback_state() -> None:
     verifier, admin = provision()
     barrier = threading.Barrier(3)
@@ -947,9 +1052,7 @@ def test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition() -> 
         elif action == "consider":
             candidate = gnss(authority, FLOOR + 19)
             assert (
-                state.consider(
-                    DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate
-                )
+                state.consider(DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate)
                 is False
             )
         else:

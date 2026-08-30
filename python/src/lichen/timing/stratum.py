@@ -469,7 +469,7 @@ class StratumTracker:
             def replace(snapshot: EpochFloorSnapshot) -> object:
                 # Begin with live-floor validation under the old policy, then
                 # preserve anchors/replay/reference while replacing policy.
-                pass  # COUNTERFACTUAL
+                self._validate_active_locked(now, snapshot.result)
                 self.__policy = self._copy_policy(policy)
                 if self.__sample is not None:
                     rejection = _replacement_policy_rejection(
@@ -712,7 +712,7 @@ class StratumTracker:
             now = self._now()
 
             def adopt_at_floor(snapshot: EpochFloorSnapshot) -> object:
-                pass  # COUNTERFACTUAL
+                self._validate_active_locked(now, snapshot.result)
                 return self._adopt_locked(sample, now, snapshot.result.floor)
 
             result = self._floor_transition(adopt_at_floor)
@@ -728,7 +728,7 @@ class StratumTracker:
                 return self._reject("structured-sample-required")
 
             def consider_at_floor(snapshot: EpochFloorSnapshot) -> object:
-                pass  # COUNTERFACTUAL
+                self._validate_active_locked(now, snapshot.result)
                 return self._adopt_locked(sample, now, snapshot.result.floor, option)
 
             result = self._floor_transition(consider_at_floor)
