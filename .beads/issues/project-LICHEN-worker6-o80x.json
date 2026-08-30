@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-o80x",
+  "title": "Announce store doc overclaims rollback resistance vs whole-volume snapshot restore",
+  "description": "announce_store.rs module doc claims separate state/floor roots mean 'a rollback snapshot cannot silently rewind both sides'. True only for single-root rollback or crash windows; an attacker who restores a same-volume snapshot predating an IID's first accept() rewinds BOTH roots, load() returns Ok(None), and accept() silently TOFU-pins whatever key arrives. Options: persist a monotonic generation marker in a third root so (None,None) with a marker present fails closed, and/or correct the doc to state the TOFU-inherent limit. Found by security codereview of project-LICHEN-worker6-12zy.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T06:09:50.38635Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T06:09:50.38635Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-o80x",
+      "depends_on_id": "project-LICHEN-worker6-12zy",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T06:09:50.546492Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

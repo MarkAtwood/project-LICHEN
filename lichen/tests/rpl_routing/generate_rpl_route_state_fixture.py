@@ -346,10 +346,45 @@ def render(document: dict) -> str:
                 ]
             )
         lines.extend(["\t\t},", "\t},"])
+    lines.append("};")
+    delegations = document.get("delegations", [])
+    # Always emit the array: with zero delegations it is a zero-length array
+    # (GNU extension, fine under Zephyr's GCC) whose sizeof yields COUNT 0,
+    # keeping the harness loop valid without preprocessor arithmetic.
+    lines.extend(
+        [
+            "struct rpl_route_state_delegation {",
+            "\tuint8_t origin[16];",
+            "\tuint8_t prefix[16];",
+            "\tuint8_t prefix_len;",
+            "};",
+            "",
+            "static const struct rpl_route_state_delegation",
+            "\trpl_route_state_delegations[] = {",
+        ]
+    )
+    for delegation in delegations:
+        lines.extend(
+            [
+                "\t{",
+                f"\t\t.origin = {{ {c_bytes(delegation['origin'])} }},",
+                f"\t\t.prefix = {{ {c_bytes(delegation['prefix'])} }},",
+                f"\t\t.prefix_len = {delegation['prefix_length']},",
+                "\t},",
+            ]
+        )
     lines.extend(
         [
             "};",
             "",
+            "#define RPL_ROUTE_STATE_DELEGATION_COUNT \\",
+            "\t(sizeof(rpl_route_state_delegations) / "
+            "sizeof(rpl_route_state_delegations[0]))",
+            "",
+        ]
+    )
+    lines.extend(
+        [
             "#define RPL_ROUTE_STATE_VECTOR_COUNT \\",
             "\t(sizeof(rpl_route_state_vectors) / sizeof(rpl_route_state_vectors[0]))",
             "",

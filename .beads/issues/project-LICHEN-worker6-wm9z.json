@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-wm9z",
+  "title": "Announce store tests leak temp dirs on assertion failure",
+  "description": "announce_store.rs tests call std::fs::remove_dir_all only on the success path; any assert failure leaves lichen-node-announce-* dirs (0600 sealed records derived from test key material) in std::env::temp_dir(). Disk litter only — pid+counter names are collision-free. Fix: drop-guard struct so cleanup runs on unwind. Mirrors existing gap in gateway and lichen-hal tests. Found by robustness codereview of project-LICHEN-worker6-12zy.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T06:10:28.203539Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T06:10:28.203539Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wm9z",
+      "depends_on_id": "project-LICHEN-worker6-12zy",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T06:10:28.361636Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

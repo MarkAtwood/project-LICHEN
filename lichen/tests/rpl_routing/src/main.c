@@ -175,6 +175,10 @@ static void before(void *fixture)
 	ARG_UNUSED(fixture);
 	address(root, 1);
 	address(dodag, 0x99);
+	/* The delegation table is file-scope state shared by every case in
+	 * this binary; reset it per-test so delegation grants can never leak
+	 * between cases regardless of execution order. */
+	lichen_rpl_prefix_delegations_reset();
 	zassert_equal(lichen_rpl_dao_manager_init_root(&manager, root, 1, dodag),
 		      LICHEN_RPL_OK, "root init failed");
 	zassert_equal(lichen_rpl_dao_manager_bind_root_state(&manager, &root_state),
@@ -1194,6 +1198,21 @@ ZTEST(rpl_routing, test_canonical_route_state_vectors)
 		0x02, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x01,
 	};
+
+	/* spec/05-routing.md 8.7.2: the oracle's grouped DAOs advertise
+	 * non-self /128 targets, which the root accepts only under an exact
+	 * prefix delegation. Register the oracle's delegations (global
+	 * table — reset first so reruns stay isolated). */
+	lichen_rpl_prefix_delegations_reset();
+	for (size_t d = 0; d < RPL_ROUTE_STATE_DELEGATION_COUNT; d++) {
+		const struct rpl_route_state_delegation *delegation =
+			&rpl_route_state_delegations[d];
+
+		zassert_equal(lichen_rpl_prefix_delegate(
+				      delegation->origin, delegation->prefix,
+				      delegation->prefix_len),
+			      LICHEN_RPL_OK, "delegation %zu failed", d);
+	}
 
 	zassert_equal(lichen_rpl_dao_manager_init_root(&manager, vector_root, 0, vector_root),
 		      LICHEN_RPL_OK, "vector root init failed");

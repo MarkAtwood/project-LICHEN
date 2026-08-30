@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-xn3r",
+  "title": "FileStorage::read unbounded read_to_end amplifies planted oversized records to OOM",
+  "description": "lichen-hal/src/storage.rs fs::FileStorage::read (~line 529) does read_to_end into an unbounded Vec before copying min(stored, buf.len()). Callers pass small buffers (announce store: 82 bytes) but the allocation is file-sized; a planted multi-GB file at any record key turns load() into unbounded allocation instead of Err(Corrupt). Newly reachable via rust/lichen-node/src/announce_store.rs load(); gateway stores share the exposure (pre-existing). Fix: pre-stat the file and cap the read at buf.len()+1, rejecting anything larger. Found by security codereview of project-LICHEN-worker6-12zy.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T06:10:14.157088Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T06:10:14.157088Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xn3r",
+      "depends_on_id": "project-LICHEN-worker6-12zy",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T06:10:14.350127Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

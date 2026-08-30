@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-0oim",
+  "title": "lichen-node: secure_block1_and_block2_roundtrip test fails on worktree HEAD",
+  "description": "Pre-existing failure (deterministic, 4/4 reruns) in lichen-node/src/secure.rs test secure_block1_and_block2_roundtrip_replay_order_and_pivs, panicking at secure.rs:2568 (.unwrap() in the blockwise replay sequence around bob.decrypt_request/accept_secure_block1_response). Not touched by worker6-12zy (announce trust store) — no coupling: store is a standalone std module. Discovered while running full lichen-node --features std --lib suite (278 passed / 1 failed). Fails identically with announce_store module present or not (code untouched by that bead).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T06:17:39.644832Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T06:17:39.644832Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0oim",
+      "depends_on_id": "project-LICHEN-worker6-12zy",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T06:17:39.843516Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

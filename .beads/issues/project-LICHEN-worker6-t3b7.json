@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-t3b7",
+  "title": "Rust/Python route-state consumers bypass the DAO delegation gate on grouped vectors",
+  "description": "Found reviewing bead 8ck2: the rpl_route_state.json oracle now carries delegations (:12-\u003e:11, :13-\u003e:15) per spec/05-routing.md 8.7.2, and the C ztest registers them via lichen_rpl_prefix_delegate() so the real fail-closed authorization gate runs (twister 20/20). But the Rust consumer (rust/lichen-rpl/tests/rpl_route_state_vectors.rs) uses process_route_state_diagnostic which per its own comment (rpl_route_state_vectors.rs:440) has no delegation gate, and the Python consumer (python/src/lichen/rpl/dao_manager.py evaluate_dao_semantics_for_test_at) passes source_address=None which skips the authorization gate (dao_manager.py:906-912). So the cross-implementation identical-output guarantee for the delegation authorization path currently rests on C alone. Follow-up: wire the oracle's delegations array into the Rust PrefixDelegations (delegate_prefix by public key - note the C delegates by origin address, Rust by pubkey; the oracle may need a key binding field) and the Python dao manager, then assert the grouped vectors through the same gate.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T06:30:49.461912Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T06:30:49.461912Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t3b7",
+      "depends_on_id": "project-LICHEN-worker6-8ck2",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T06:30:49.611843Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

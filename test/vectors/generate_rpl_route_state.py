@@ -1023,6 +1023,22 @@ def build_document() -> JsonObject:
         "sequence_relations": SEQUENCE_RELATIONS,
         "tx_sequence_transitions": TX_SEQUENCE_TRANSITIONS,
         "route_hop_boundaries": ROUTE_HOP_BOUNDARIES,
+        # spec/05-routing.md 8.7.2: exact-prefix delegations the root grants so
+        # grouped DAOs may advertise non-self /128 targets. Consumed by the C
+        # fixture generator (lichen/tests/rpl_routing) to register
+        # lichen_rpl_prefix_delegate() entries before processing vectors.
+        "delegations": [
+            {
+                "origin": TARGET_A,
+                "prefix": TARGET_B,
+                "prefix_length": 128,
+            },
+            {
+                "origin": TARGET_E,
+                "prefix": TARGET_C,
+                "prefix_length": 128,
+            },
+        ],
         "vectors": vectors,
     }
 

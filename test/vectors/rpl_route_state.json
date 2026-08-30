@@ -162,6 +162,18 @@
       "accepted": false
     }
   ],
+  "delegations": [
+    {
+      "origin": "02001122334455660011223344556611",
+      "prefix": "02001122334455660011223344556612",
+      "prefix_length": 128
+    },
+    {
+      "origin": "02001122334455660011223344556615",
+      "prefix": "02001122334455660011223344556613",
+      "prefix_length": 128
+    }
+  ],
   "vectors": [
     {
       "name": "install_parent_2_to_root",
