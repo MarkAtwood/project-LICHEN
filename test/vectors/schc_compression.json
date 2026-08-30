@@ -211,6 +211,34 @@
       "packet": "6000000000142c40fe800000000000000000000000000001fe800000000000000000000000000002110000000000000113881389000cfcef70696e67"
     },
     {
+      "name": "srh3_outer_dst_checksum_malformed",
+      "category": "malformed_input",
+      "description": "An in-transit RPL RH3 whose UDP checksum was computed over the outer destination instead of the RFC 2460 section 8.1 final destination is rejected.",
+      "expect_error": "invalid_udp_checksum",
+      "packet": "6000000000242b40fe800000000000000000000000000001fe8000000000000000000000000000021102030100000000fe80000000000000000000000000000a13881389000cfcef70696e67"
+    },
+    {
+      "name": "ext_header_udp_length_mismatch_malformed",
+      "category": "malformed_input",
+      "description": "A Routing-header-led packet whose UDP length field (8) disagrees with the bytes present (12) is rejected.",
+      "expect_error": "udp_length_mismatch",
+      "packet": "6000000000242b40fe800000000000000000000000000001fe8000000000000000000000000000021102030100000000fe80000000000000000000000000000a138813890008fceb70696e67"
+    },
+    {
+      "name": "hbh_udp_bad_checksum_malformed",
+      "category": "malformed_input",
+      "description": "A Hop-by-Hop-led UDP packet with a garbage checksum is rejected; the ext-header chain does not bypass UDP validation.",
+      "expect_error": "invalid_udp_checksum",
+      "packet": "6000000000140040fe800000000000000000000000000001fe800000000000000000000000000002110000000000000013881389000cdead70696e67"
+    },
+    {
+      "name": "udp_zero_checksum_malformed",
+      "category": "malformed_input",
+      "description": "A plain UDP datagram on non-SCHC ports with a wire checksum of zero is rejected; computed-zero serializes as 0xFFFF.",
+      "expect_error": "invalid_udp_checksum",
+      "packet": "60000000000c1140fe800000000000000000000000000001fe80000000000000000000000000000213881389000c000070696e67"
+    },
+    {
       "name": "coap_invalid_udp_checksum",
       "category": "malformed_input",
       "description": "A plaintext CoAP packet with a corrupted mandatory IPv6 UDP checksum is rejected rather than repaired.",

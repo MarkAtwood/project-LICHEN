@@ -396,12 +396,22 @@ void rpl_dao_write_base(uint8_t *rpl, uint8_t instance,
  * full 128-bit addresses (CmprI/CmprE/Pad zero) and a segments-left within
  * the address count; Fragment headers are unsupported (SCHC fragments instead,
  * and type 0 is deprecated by RFC 5095). Anything else terminates the chain.
+ *
+ * On success returns SCHC_OK and reports the chain end: *final_offset is the
+ * offset of the upper-layer protocol, *final_next_header its protocol value,
+ * and *upper_destination the RFC 2460 section 8.1 pseudo-header destination
+ * (the final Routing-header address while segments_left is nonzero, else the
+ * packet destination).
  */
-static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len)
+static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len,
+				      size_t *final_offset,
+				      uint8_t *final_next_header,
+				      const uint8_t **upper_destination)
 {
 	uint8_t next_header = ipv6_next_header(packet);
 	size_t offset = IPV6_HDR_LEN;
 
+	*upper_destination = &packet[SCHC_IPV6_DST_OFFSET];
 	while (next_header == IPV6_NH_HOP_BY_HOP ||
 	       next_header == IPV6_NH_ROUTING ||
 	       next_header == IPV6_NH_DEST_OPTS) {
@@ -426,38 +436,70 @@ static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len)
 		    (size_t)packet[offset + 3u] > (ext_len - 8u) / SCHC_IPV6_ADDR_LEN) {
 			return SCHC_ERR_NO_MATCHING_RULE;
 		}
+		if (next_header == IPV6_NH_ROUTING && packet[offset + 3u] != 0u) {
+			*upper_destination = &packet[end - SCHC_IPV6_ADDR_LEN];
+		}
 		next_header = packet[offset];
 		offset = end;
 	}
 	if (next_header == IPV6_NH_FRAGMENT) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
+	*final_offset = offset;
+	*final_next_header = next_header;
 	return SCHC_OK;
 }
 
 int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 {
-	uint16_t declared_payload_len = ipv6_payload_len(packet);
-	size_t actual_payload_len = pkt_len - IPV6_HDR_LEN;
+	size_t final_offset;
+	uint8_t final_next_header;
+	const uint8_t *upper_destination;
+	const uint8_t *udp;
+	size_t remaining;
+	uint16_t declared_payload_len;
+	uint16_t declared_udp_len;
+	uint16_t wire_checksum;
+	uint16_t expected_checksum;
 
-	if (declared_payload_len != actual_payload_len) {
+	if (pkt_len < IPV6_HDR_LEN) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 
-	if (validate_ipv6_header_chain(packet, pkt_len) != SCHC_OK) {
+	declared_payload_len = ipv6_payload_len(packet);
+	if (declared_payload_len != pkt_len - IPV6_HDR_LEN) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 
-	if (ipv6_next_header(packet) != IPV6_NH_UDP) {
+	if (validate_ipv6_header_chain(packet, pkt_len, &final_offset,
+				       &final_next_header,
+				       &upper_destination) != SCHC_OK) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
+	if (final_next_header != IPV6_NH_UDP) {
 		return SCHC_OK;
 	}
 
-	if (actual_payload_len < UDP_HDR_LEN) {
+	remaining = pkt_len - final_offset;
+	if (remaining < UDP_HDR_LEN) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
-
-	uint16_t declared_udp_len = udp_len(ipv6_payload(packet));
-	if (declared_udp_len < UDP_HDR_LEN || declared_udp_len != actual_payload_len) {
+	udp = &packet[final_offset];
+	declared_udp_len = udp_len(udp);
+	if (declared_udp_len < UDP_HDR_LEN || declared_udp_len != remaining) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+	wire_checksum = read_be16(&udp[SCHC_UDP_CHECKSUM_OFFSET]);
+	if (wire_checksum == 0u) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+	if (udp_checksum(&packet[SCHC_IPV6_SRC_OFFSET], upper_destination,
+			 read_be16(&udp[SCHC_UDP_SRC_PORT_OFFSET]),
+			 read_be16(&udp[SCHC_UDP_DST_PORT_OFFSET]),
+			 &udp[UDP_HDR_LEN], remaining - UDP_HDR_LEN,
+			 &expected_checksum) < 0 ||
+	    wire_checksum != expected_checksum) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 

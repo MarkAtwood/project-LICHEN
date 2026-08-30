@@ -480,3 +480,36 @@ def test_rh3_checksum_over_outer_destination_is_rejected() -> None:
     raw = _build_srh_packet(3, 1, IPv6Address("fe80::a"), checksum_dst=DST)
     with pytest.raises(SchcError, match="checksum"):
         compress_packet(raw)
+
+
+def _prepend_hbh(raw: bytes) -> bytes:
+    """Insert an 8-byte Hop-by-Hop header (six Pad1 options) after the IPv6 header."""
+    header = bytearray(raw[:HEADER_LENGTH])
+    header[6] = NextHeader.HOP_BY_HOP
+    header[4:6] = (len(raw) - HEADER_LENGTH + 8).to_bytes(2, "big")
+    hbh = bytes([NextHeader.UDP, 0, 0, 0, 0, 0, 0, 0])
+    return bytes(header) + hbh + raw[HEADER_LENGTH:]
+
+
+def test_hbh_led_udp_bad_checksum_is_rejected() -> None:
+    """A Hop-by-Hop chain does not bypass UDP checksum validation."""
+    raw = bytearray(_build_mqtt_packet(b"ping", src_port=5000, dst_port=5001))
+    raw[HEADER_LENGTH + 6 : HEADER_LENGTH + 8] = b"\xde\xad"
+    with pytest.raises(SchcError, match="checksum"):
+        compress_packet(_prepend_hbh(bytes(raw)))
+
+
+def test_ext_header_led_udp_length_mismatch_is_rejected() -> None:
+    """The UDP length field must match the bytes present even after ext headers."""
+    raw = bytearray(_build_srh_packet(3, 1, IPv6Address("fe80::a")))
+    raw[HEADER_LENGTH + 24 + 4 : HEADER_LENGTH + 24 + 6] = (8).to_bytes(2, "big")
+    with pytest.raises(SchcError, match="UDP datagram|length"):
+        compress_packet(bytes(raw))
+
+
+def test_plain_udp_zero_checksum_is_rejected() -> None:
+    """Wire checksum zero is malformed on non-SCHC ports too (0xFFFF encodes computed-zero)."""
+    raw = bytearray(_build_mqtt_packet(b"ping", src_port=5000, dst_port=5001))
+    raw[HEADER_LENGTH + 6 : HEADER_LENGTH + 8] = b"\x00\x00"
+    with pytest.raises(SchcError, match="checksum"):
+        compress_packet(bytes(raw))
