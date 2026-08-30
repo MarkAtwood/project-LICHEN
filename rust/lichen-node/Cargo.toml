@@ -7,7 +7,7 @@ description = "LICHEN integration crate: combines link, SCHC, CoAP, and routing 
 
 [features]
 default = []
-std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "dep:lichen-oscore", "lichen-oscore?/std", "lichen-ipv6/std", "dep:tokio", "lichen-meshtastic?/std"]
+std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "dep:lichen-oscore", "lichen-oscore?/std", "lichen-ipv6/std", "dep:tokio", "dep:zeroize", "lichen-meshtastic?/std"]
 # Meshtastic bridge integration
 meshtastic = ["dep:lichen-meshtastic", "lichen-meshtastic/alloc"]
 # Logging: defmt takes precedence when both are enabled
@@ -34,6 +34,8 @@ log = { version = "0.4", default-features = false, optional = true }
 
 # Async runtime for scheduler (std only)
 tokio = { version = "1", features = ["time"], optional = true }
+# Zeroizes the announce trust-store sealing seed (std only)
+zeroize = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }
