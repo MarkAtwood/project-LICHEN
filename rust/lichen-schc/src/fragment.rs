@@ -4612,6 +4612,19 @@ mod tests {
             ),
             Err(FragmentError::InvalidPersistentState)
         );
+        // A restart clock below the monotonic floor already observed by the
+        // restored policy fails closed and leaves the record unconsumed.
+        assert_eq!(
+            restored_policy.restore_receiver_floor(
+                &restored_permit,
+                &restored,
+                &restored_peer,
+                &floor_record[..floor_len],
+                revision,
+                3,
+            ),
+            Err(FragmentError::PersistentRollback)
+        );
         assert_eq!(
             restored_policy.restore_receiver_floor(
                 &restored_permit,
@@ -4641,6 +4654,39 @@ mod tests {
             ),
             Err(FragmentError::SessionBusy)
         ));
+        // The restored hold-down is bounded by the restart clock, exactly one
+        // full tombstone duration from restore time: still held one tick
+        // before the rebased deadline even though the old absolute deadline
+        // (persist-time clock plus duration) is long past, and admitted at the
+        // deadline itself with the authenticated counter floor intact.
+        let mut near_deadline_storage = [0u8; MAX_PACKET_SIZE];
+        assert!(matches!(
+            AuthenticatedFragmentReceiver::new(
+                &restored_policy,
+                &restored_permit,
+                &restored,
+                &restored_peer,
+                &mut near_deadline_storage,
+                100_000 + FRAGMENT_TOMBSTONE_MILLIS - 1,
+            ),
+            Err(FragmentError::SessionBusy)
+        ));
+        let mut after_deadline_storage = [0u8; MAX_PACKET_SIZE];
+        {
+            let after_deadline = AuthenticatedFragmentReceiver::new(
+                &restored_policy,
+                &restored_permit,
+                &restored,
+                &restored_peer,
+                &mut after_deadline_storage,
+                100_000 + FRAGMENT_TOMBSTONE_MILLIS,
+            )
+            .unwrap();
+            let snapshot = restored_policy.snapshot_for_tests();
+            assert_eq!(snapshot.receiver_session_count, 1);
+            assert_eq!(snapshot.max_receiver_high_counter, Some(3));
+            drop(after_deadline);
+        }
 
         restored.unpin_peer(&remote.iid);
         let reinstalled_peer = authenticate_dio(&sender, &mut restored, &dio, &dodag, 4, 5);
