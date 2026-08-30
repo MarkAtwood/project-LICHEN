@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-pms5",
+  "title": "TUI plugin: display in-progress bead in sidebar footer",
+  "description": "Add .opencode/plugins/beads-status.tsx — an opencode TUI slot plugin that polls bd for in_progress beads and renders the active one (id + title) in the sidebar_footer slot. Registered via project opencode.json plugin entry. Deps pinned in .opencode/package.json (@opentui/solid 0.4.5, solid-js 1.9.12 to match host).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "feature",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T00:19:04.999823Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T00:29:50.907477Z",
+  "started_at": "2026-08-30T00:29:50.366828Z",
+  "closed_at": "2026-08-30T00:29:50.907477Z",
+  "close_reason": "Implemented .opencode/plugins/beads-status.tsx (TUI sidebar_footer slot) + beads-tracker.ts (tool.execute.before hook mapping sessionID-\u003ebead on bd update/close; unit-tested via node driver: claim, close-clears, flag-first form, close-other no-op). Deps pinned in .opencode/package.json; registered via tui.json. Pending: visual confirmation on next TUI restart."
+}
