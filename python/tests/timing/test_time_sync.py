@@ -401,6 +401,74 @@ async def test_signed_canonical_dio_uses_link_receipt_time_and_exact_span() -> N
     assert verifier.verify(authenticated).evidence.replay_counter == 1
 
 
+async def _dio_time_setup(
+    counter: int, option: DioTimeOption
+) -> tuple[Clock, QueueRadio, LinkLayer, DioTimeVerifier, AuthenticatedDio]:
+    clock = Clock(10)
+    radio = QueueRadio()
+    link = receiver(radio, clock)
+    radio.frames.append((signed_wire(REMOTE, dio_envelope(option), counter=counter), -91, 5))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    verifier = DioTimeVerifier(
+        "dio-verifier",
+        link,
+        peer_origins={REMOTE.pubkey: {Stratum.GNSS_GPSD: SourceClass.GNSS}},
+        peer_accuracy_seconds={REMOTE.pubkey: 1},
+        clock=clock.capability,
+    )
+    authenticated = authenticate_dio(link, received)
+    return clock, radio, link, verifier, authenticated
+
+
+@pytest.mark.asyncio
+async def test_option_mismatch_rejection_consumes_network_replay_high_water() -> None:
+    option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
+    clock, radio, link, verifier, authenticated = await _dio_time_setup(1, option)
+    gnss_provider = provider(clock, SourceClass.GNSS)
+    state = StratumTracker(
+        authorities=(verifier, gnss_provider),
+        policy=policy(SourceClass.GNSS, SourceClass.NETWORK, peers=frozenset({REMOTE.pubkey})),
+        floor_authority=EpochFloorAuthority(FLOOR),
+        clock=clock.capability,
+    )
+    sample = verifier.verify(authenticated)
+    assert not state.consider(DioTimeOption(Stratum.NTS, FLOOR), sample=sample)
+    assert state.last_rejection_reason == "sample-does-not-match-option"
+    reissued = verifier.verify(authenticated)
+    assert reissued.evidence.replay_counter == sample.evidence.replay_counter
+    assert not state.consider(option, sample=reissued)
+    assert state.last_rejection_reason == "network-replay-counter-not-new"
+    fresh_option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 30)
+    radio.frames.append((signed_wire(REMOTE, dio_envelope(fresh_option), counter=2), -91, 5))
+    fresh_received = await link.receive(100)
+    assert isinstance(fresh_received, RxFrame)
+    fresh_authenticated = authenticate_dio(link, fresh_received)
+    fresh_sample = verifier.verify(fresh_authenticated)
+    assert fresh_sample.evidence.replay_counter == 2
+    assert state.consider(fresh_option, sample=fresh_sample)
+    assert state.current_time() is not None
+    clock.set(11)
+    assert state.adopt(gnss(gnss_provider, FLOOR + 90))
+    assert state.current_time() == FLOOR + 90
+
+
+@pytest.mark.asyncio
+async def test_repeated_dio_time_verify_same_counter_rejected() -> None:
+    option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
+    clock, _radio, _link, verifier, authenticated = await _dio_time_setup(1, option)
+    state = tracker(
+        clock,
+        verifier,
+        policy(SourceClass.GNSS, SourceClass.NETWORK, peers=frozenset({REMOTE.pubkey})),
+    )
+    first = verifier.verify(authenticated)
+    assert state.consider(option, sample=first)
+    second = verifier.verify(authenticated)
+    assert not state.consider(option, sample=second)
+    assert state.last_rejection_reason == "network-replay-counter-not-new"
+
+
 @pytest.mark.asyncio
 async def test_delayed_receipt_expires_before_elevation() -> None:
     clock = Clock(10)
