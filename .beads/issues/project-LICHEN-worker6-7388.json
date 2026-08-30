@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-7388",
+  "title": "Assert no stray durable writes in awaitable clear test (saved list unasserted)",
+  "description": "python/tests/timing/test_time_sync.py:760, 770: the clear test's persist_rollback_state=saved.append capture is never asserted. Cheap pin that the rejected clear transition performed no stray durable writes beyond the one legitimate install: assert len(saved) == 1 after the rejection (and it documents that the capture is load-bearing rather than vestigial).",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:55:01.529744Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:55:01.529744Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7388",
+      "depends_on_id": "project-LICHEN-worker6-qzxv",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:55:02.064938Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -2,15 +2,15 @@
   "id": "project-LICHEN-worker6-qzxv",
   "title": "Rejected scheduled awaitable hooks remain live and mutate state after failure",
   "description": "Fresh final timing security review: _reject_awaitable and LinkLayer elevation guards close coroutine objects but do not cancel asyncio.Task/Future or other scheduled awaitables. A synchronous persistence hook can return asyncio.create_task(later_persist(state)); ProvisionVerifier.install raises TypeError, then the task runs on the next loop turn and durably advances rejected state. Use one common rejection helper that synchronously cancels Future/Task, closes coroutine/custom-closeable awaitables, and verifies termination where possible before failing closed. Add scheduled Task/Future/custom awaitable tests for provision persist/clear, MonotonicClock, verified receipt, authenticated DIO, and time-generation callbacks.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "opencode-worker-6",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T09:23:17.514015Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T16:37:23.083384Z",
+  "updated_at": "2026-08-30T16:55:36.441057Z",
   "started_at": "2026-08-24T09:23:22.466338Z",
-  "lease_expires_at": "2026-08-30T16:42:23.083384Z",
-  "heartbeat_at": "2026-08-30T16:37:23.083384Z"
+  "closed_at": "2026-08-30T16:55:36.441057Z",
+  "close_reason": "The common rejection helper demanded by the bead already exists (lichen/_sync_callbacks.py reject_awaitable_result: synchronously cancels Future/Task, closes coroutine/custom closeables, raises TypeError) and all five callback surfaces are wired through it (provisioning _call_transition_hook-\u003e_call_sync, MonotonicClock, receipt elevation, DIO elevation, time-generation). What was missing was surface-level scheduled-awaitable tests. Implemented the persist/clear slice (the bead's named attack): 6 new parametrized tests in tests/timing/test_time_sync.py covering Task/Future/custom for provision persist and clear hooks — TypeError raised, task/future cancelled + body never runs, custom closed exactly once, fail-closed poison state asserted (clear: cleared True + metadata rejected by design of _poison_after_persistence_failure). 907 timing+sync-callbacks tests pass; ruff/mypy clean. Remaining surfaces (MonotonicClock, verified receipt, authenticated DIO, time-generation) decomposed into 4 child beads; 7 review findings filed as beads (1 P1, 1 P2, 2 P3, 3 P4) via discovered-from links."
 }

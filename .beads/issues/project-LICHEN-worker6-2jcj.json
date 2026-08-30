@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2jcj",
+  "title": "Awaitable tests assume lazy task factory (single sleep(0) tick)",
+  "description": "python/tests/timing/test_time_sync.py:750, 780: a single 'await asyncio.sleep(0)' makes task.cancelled() True deterministically under the default lazy task factory (mutant-verified on CPython 3.11/3.14), but silently breaks under loop.set_task_factory(asyncio.eager_task_factory) (3.12+ opt-in): probe shows cancelled()=False, ran=[1] — the body runs eagerly and cancellation lands differently. Use a bounded drain loop (e.g. up to 10 ticks until task.cancelled()) in both tests to absorb task-factory and multi-tick delivery assumptions at zero cost.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:54:52.521894Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:54:52.521894Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2jcj",
+      "depends_on_id": "project-LICHEN-worker6-qzxv",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:54:52.810117Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

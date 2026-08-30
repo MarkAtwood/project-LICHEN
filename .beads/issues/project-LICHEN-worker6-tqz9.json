@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-tqz9",
+  "title": "Future done-callbacks run after rejection — residual channel needs scoping decision",
+  "description": "python/tests/timing/test_time_sync.py:709-710, 721-722 + python/src/lichen/_sync_callbacks.py:26-27: a hook may attach add_done_callback to a Future before returning it; Future.cancel() synchronously schedules those callbacks to run on the NEXT loop iteration, so attacker code can still execute after the rejection raises. reject_awaitable_result cannot prevent this for Futures. Neither the tests nor the bead threat model covers or documents this residual channel — file a scoping decision (document as accepted residual in the helper docstring, or restrict hook results to Task/coroutine/custom). Needs a human/spec decision, not a blind fix.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:54:41.521978Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:54:41.521978Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tqz9",
+      "depends_on_id": "project-LICHEN-worker6-qzxv",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:54:41.82133Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
