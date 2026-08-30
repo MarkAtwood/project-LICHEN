@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-uekc",
+  "title": "Pin network replay high-water LRU eviction (honest signer eviction)",
+  "description": "python/src/lichen/timing/stratum.py:626-632: the MAX_NETWORK_REPLAY_GENERATIONS LRU cap (popitem(last=False)) can evict an honest signer's high-water entry when an attacker-controlled signer floods 256 key rotations, re-admitting that signer's already-consumed counter. No test pins eviction behavior. Exploitation is expensive (256 live generations plus defeating link replay and freshness policy) but the behavior is unpinned — add a test that documents/guards the eviction semantics.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T07:38:15.669927Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T07:38:15.669927Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-uekc",
+      "depends_on_id": "project-LICHEN-worker6-fxrh",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T07:38:15.977262Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

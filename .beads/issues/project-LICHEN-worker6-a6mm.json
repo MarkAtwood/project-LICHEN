@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-a6mm",
+  "title": "Pin DioTimeVerifier replay_counter composition with nonzero epoch",
+  "description": "python/tests/timing/test_time_sync.py new DIO tests (~lines 439, 448) assert replay_counter equality/equality-to-2 using epoch 0 counters 1 and 2. A broken (epoch \u003c\u003c 16) | seqnum composition (time_sync.py:433) would still produce 1 and 2 and pass. Add an assertion with a nonzero-epoch frame (e.g. counter (1\u003c\u003c16)|5) or pin a literal == 1 on the first sample.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T07:37:59.917597Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T07:37:59.917597Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-a6mm",
+      "depends_on_id": "project-LICHEN-worker6-fxrh",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T07:38:00.27075Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

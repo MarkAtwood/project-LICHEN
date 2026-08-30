@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-31l9",
+  "title": "DIO repeated-verify test pins replay barrier only via rejection reason string",
+  "description": "In python/tests/timing/test_time_sync.py test_repeated_dio_time_verify_same_counter_rejected (~line 468), the boolean 'assert not state.consider(option, sample=second)' is satisfiable by an insecure implementation: the first consider() adopted a sample with the same observed_monotonic (both verifies read the same detached.received_monotonic, time_sync.py:444), so _adopt_claimed_locked's stale-or-duplicate check (stratum.py:678-679) rejects even if the entire network replay barrier were deleted. Only the exact 'network-replay-counter-not-new' reason assertion discriminates. Strengthen the pin (e.g. assert the reason, or make the second verify use a fresh receipt time).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T07:37:50.542329Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T07:37:50.542329Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-31l9",
+      "depends_on_id": "project-LICHEN-worker6-fxrh",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T07:37:51.001721Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

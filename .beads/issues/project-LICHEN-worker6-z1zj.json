@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-z1zj",
+  "title": "Test re-issue from same AuthenticatedDio with fresh receipt time",
+  "description": "Both new DIO replay tests (python/tests/timing/test_time_sync.py ~438, 467) re-verify the SAME AuthenticatedDio object, so a regression keying time-sample dedupe on receipt time instead of the frame-derived counter (time_sync.py:433) would pass (identical received_monotonic). A re-issue with fresh receipt time (OTA retransmission path) is the untested defense-in-depth route; same-frame link replay is already covered at lines ~548-555.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T07:38:08.233706Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T07:38:08.233706Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-z1zj",
+      "depends_on_id": "project-LICHEN-worker6-fxrh",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T07:38:08.477519Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
