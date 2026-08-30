@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-aazf",
+  "title": "announce_store: corrupt state records permanently consume durable capacity slots",
+  "description": "Found by edge-cases codereview of project-LICHEN-worker6-t8ox (P3). rust/lichen-node/src/announce_store.rs:425-443 (name filter at 438): count_durable_state_records is name-based, so a state record that fails seal verification or the length check (234, 251) still consumes a durable slot forever: load() -\u003e Corrupt, accept() -\u003e Corrupt (via load), and there is deliberately no removal API. 64 such files wedge the store Full for new pins permanently; recovery is only manual file deletion + reopen (recount). Conservative by design (never undercounts) but the recount skews above the number of SERVABLE records with no quarantine or self-heal path. Requires local filesystem write access to trigger (which also permits worse), so low severity. Fix direction when picked up: on load() Corrupt, either quarantine-rename the offending file (e.g. dot-prefix, excluded by the recount filter) or subtract a per-open tally of load-failed records from the capacity gate - quarantine is the simpler fail-safe (record is unforgeable-sealed garbage either way).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:07:18.483653407Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-30T21:07:18.483653407Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-aazf",
+      "depends_on_id": "project-LICHEN-worker6-t8ox",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:07:18.597901768Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

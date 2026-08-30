@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-kniq",
+  "title": "gateway recipient store: no test for the (newer state, stale floor) heal branch nor same-highest window-bit rollback",
+  "description": "Found by 3x codereview of the recipient-store heal (9liz). Both gateway tests simulate the crash by DELETING the floor (gateway.rs:1996-2001, 2044), but with state-then-floor write ordering and atomic FileStorage writes, the realistic crash artifact for accept N\u003e1 is a floor present but stale at N-1 - handled by the state != floor rewrite arm (~469-472), exercised by no gateway test. Same-highest/fewer-window-bit rollback detection (the reason the heal must copy the full 13-byte state, not just highest; precedes() third clause ~426-432) is also untested. The announce store pins exactly this (store_rejects_state_rollback_and_heals_floor_lag, announce_store.rs:666-686). Implementation appears correct by inspection; add the missing test to pin the contract. Mirror the announce store test.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:04:53.395736258Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:04:53.395736258Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kniq",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:04:53.529303209Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

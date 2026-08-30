@@ -1,0 +1,7 @@
+{
+  "id": "1788124068616641736-1",
+  "issue_id": "project-LICHEN-worker6-t8ox",
+  "author": "opencode-worker-2",
+  "text": "Status at fleet stand-down (worker-2): implementation was already committed on beads-worker-2 in 9e8cae59b5 (+220: durable_count gate recounted at open, cache-skip load, LRU evict, tests) and 3aa7b4245c (fmt + announce.rs test formatting). This session: re-claimed, ran 3x codereview (correctness/security/edge-cases via delegated reviewers; opus model errored twice so passes ran on kimi). Findings: p4mf (P1, fixed in 64bdfc03bc with regression test failed_floor_write_evicts_stale_cache_and_load_rebuilds), 9gug (P2 single-writer, open), k1en (P3 root isolation, open - corroborated by two passes), aazf (P3 corrupt-record capacity wedge, open), qhh6 (P1 fleet infra: heft Rust builds blocked - patched oscore observe API exists only in uncommitted Mac working tree; rust/lichen-node/src/secure.rs:1361 fails to compile on heft). TEST EXECUTION IS BLOCKED on heft by qhh6 (E0599 in secure.rs - pre-existing, unrelated to this bead's files): cargo test -p lichen-node cannot run here, so per the never-close-without-green-tests rule this bead stays in_progress. Remaining to close: fix qhh6 (commit+push Mac crates/oscore observe work to the fork, git pull on heft), run cargo test -p lichen-node + fmt + clippy, then close t8ox and p4mf. Cargo.toml patch-path swap and scripts/ round files left uncommitted intentionally (fleet convention, launcher-owned).",
+  "created_at": "2026-08-30T21:07:48.616641736Z"
+}
