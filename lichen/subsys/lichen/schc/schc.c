@@ -554,6 +554,11 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 		return (int)needed;
 	}
 
+	ret = validate_ipv6_address_policy(packet);
+	if (ret < 0) {
+		return ret;
+	}
+
 	ret = validate_ipv6_transport_lengths(packet, pkt_len);
 	if (ret < 0) {
 		return ret;

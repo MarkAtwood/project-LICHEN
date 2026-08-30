@@ -50,6 +50,7 @@ enum schc_error {
 	SCHC_ERR_ACK_MALFORMED = -12,
 	SCHC_ERR_ACK_NONCANONICAL = -13,
 	SCHC_ERR_ACK_UNASSIGNED = -14,
+	SCHC_ERR_INVALID_ENDPOINT = -15,
 };
 
 struct schc_rule;
