@@ -11,6 +11,13 @@
       "compressed": "00400000000000000001000000000000000233000448d0ff737461747573"
     },
     {
+      "name": "coap_linklocal_computed_zero_checksum",
+      "rule_id": 0,
+      "description": "Link-local IPv6+UDP+CoAP GET whose true UDP checksum computes to zero: the wire field is 0xFFFF (RFC 768 computed-zero encoding) and decompression must reconstruct 0xFFFF, never the illegal 0x0000.",
+      "packet": "6000000000131140fe800000000000000000000000000001fe800000000000000000000000000002163316330013ffff40011234ff73746174529c",
+      "compressed": "00400000000000000001000000000000000233000448d0ff73746174529c"
+    },
+    {
       "name": "coap_global",
       "rule_id": 1,
       "description": "Global IPv6+UDP+CoAP GET",

@@ -221,7 +221,17 @@ fn udp_checksum(
     sum = oc_add(sum, dst_port as u32);
     sum = oc_add(sum, udp_len as u32);
     sum = oc_add(sum, checksum_bytes(payload));
-    finalize(sum)
+    let cksum = finalize(sum);
+    // RFC 768: a computed checksum of zero is transmitted as all ones; IPv6
+    // UDP never permits the on-wire zero value. Mirrors C finalize_checksum
+    // (schc_checksum.c) and Python UdpDatagram.to_bytes. ICMPv6 keeps the raw
+    // complement: a zero checksum is legal there and Python serializes it as
+    // 0x0000, so mapping here would break cross-implementation byte identity.
+    if cksum == 0 {
+        0xFFFF
+    } else {
+        cksum
+    }
 }
 
 fn icmpv6_checksum(src: &[u8; 16], dst: &[u8; 16], icmpv6_payload: &[u8]) -> u16 {
@@ -1071,6 +1081,27 @@ mod tests {
             .build(parsed.as_slice(), parsed.tail, &mut out)
             .unwrap();
         assert_eq!(&out[..n], packet.as_slice());
+    }
+
+    #[test]
+    fn coap_linklocal_computed_zero_checksum_round_trip() {
+        // True UDP checksum computes to zero; the wire field is 0xFFFF per
+        // RFC 768. Reconstruction must re-emit 0xFFFF, never 0x0000.
+        // Shared vector: schc_compression.json coap_linklocal_computed_zero_checksum.
+        let packet = hex("6000000000131140fe800000000000000000000000000001\
+             fe800000000000000000000000000002163316330013ffff\
+             40011234ff73746174529c");
+        let profile = CoapUdpLinkLocalProfile;
+        assert!(profile.matches(&packet));
+
+        let parsed = profile.parse(&packet).unwrap();
+        let mut out = [0u8; 256];
+        let n = profile
+            .build(parsed.as_slice(), parsed.tail, &mut out)
+            .unwrap();
+        assert_eq!(&out[..n], packet.as_slice());
+        // Checksum field is bytes 46..48 of the IPv6 packet (40 header + 6).
+        assert_eq!(&out[46..48], &[0xFF, 0xFF]);
     }
 
     #[test]
