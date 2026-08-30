@@ -1,4 +1,9 @@
-/* Generated from test/vectors/schc_compression.json; do not edit. */
+/* Generated from test/vectors/schc_compression.json; do not edit.
+ * Committed artifact and sole include source for the schc_parity suite.
+ * Regenerate after editing the JSON (from the repository root):
+ *   python3 lichen/tests/schc_parity/gen_vectors.py \
+ *     test/vectors/schc_compression.json \
+ *     lichen/tests/schc_parity/schc_parity_vectors.h */
 #ifndef LICHEN_SCHC_PARITY_VECTORS_H
 #define LICHEN_SCHC_PARITY_VECTORS_H
 #include <stdbool.h>

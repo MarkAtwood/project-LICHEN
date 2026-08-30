@@ -33,6 +33,20 @@ def main() -> int:
     build_root.mkdir(parents=True, exist_ok=True)
     c_build = build_root / "c"
 
+    # Step 0: freshness guard - the committed C header must match generator
+    # output for the current JSON, else the C leg silently tests stale vectors.
+    run(
+        [
+            sys.executable,
+            "lichen/tests/schc_parity/gen_vectors.py",
+            "--check",
+            "test/vectors/schc_compression.json",
+            "lichen/tests/schc_parity/schc_parity_vectors.h",
+        ],
+        cwd=repo,
+        timeout=args.timeout,
+    )
+
     run(
         [
             "uv",
