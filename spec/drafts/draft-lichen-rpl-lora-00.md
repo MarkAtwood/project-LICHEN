@@ -109,7 +109,8 @@ Multi-hop RTT can exceed 30 seconds at SF12 with 3+ hops.
 | US | 915 MHz | None (FCC) |
 | AU | 915 MHz | None |
 
-At 1% duty cycle with 200ms packets, maximum is 36 packets/hour.
+At 1% duty cycle with 369.664 ms SF9/125kHz 60-byte packets, maximum is 97
+packets/hour (10% would permit 973).
 
 ### 3.3. Link Asymmetry
 
