@@ -11,9 +11,13 @@
 //!   writes state first, then the floor, so a crash between the two writes
 //!   leaves the floor lagging (healed forward on the next load) but never
 //!   ahead (which fails closed).
-//! - `load` fails closed when exactly one side exists, when the state does
-//!   not strictly advance its floor, or when a seal does not verify. Only
-//!   `(None, None)` initializes fresh.
+//! - `load` fails closed when the state side is missing (trust is never
+//!   rebuilt from a floor alone), when the state does not strictly advance
+//!   its floor, or when a seal does not verify. Only `(None, None)`
+//!   initializes fresh. A missing floor heals forward to the sealed state:
+//!   the state record is unforgeable under the seal threat model, and a
+//!   deleted floor cannot lower trust below it, so healing never weakens
+//!   the pin or the sequence floor.
 //! - `accept` refuses to replace an existing pin with a different pubkey
 //!   (IID-collision trust replacement) or to lower/hold the sequence floor,
 //!   including across cache eviction and restart. Eviction removes the
@@ -244,7 +248,10 @@ impl AnnounceTrustStore {
 
     /// Load the trust state for `iid`, rebuilding the cache from storage.
     ///
-    /// Fails closed on any half-present, regressed, or unverifiable record.
+    /// Fails closed on a missing state record, a regressed state, or an
+    /// unverifiable record. A missing floor record heals forward to the
+    /// sealed state (first-accept crash window or lost floor file) so the
+    /// originator is not permanently bricked.
     pub fn load(
         &mut self,
         iid: &[u8; 8],
@@ -259,7 +266,13 @@ impl AnnounceTrustStore {
         let floor = self.read(iid, true)?;
         let state = match (state, floor) {
             (None, None) => return Ok(None),
-            (None, Some(_)) | (Some(_), None) => return Err(AnnounceStoreError::Corrupt),
+            (None, Some(_)) => return Err(AnnounceStoreError::Corrupt),
+            (Some(state), None) => {
+                // The sealed state is unforgeable and a missing floor cannot
+                // lower trust below it: rebuild the floor from the state.
+                self.write(iid, true, state)?;
+                state
+            }
             (Some(state), Some(floor)) if Self::precedes(state, floor) => {
                 return Err(AnnounceStoreError::Corrupt)
             }
@@ -472,12 +485,47 @@ mod tests {
         );
         drop(store);
 
-        // Restore state, remove floor: the mirror half must also fail closed.
+        // Restore state, remove floor: the state is authoritative and
+        // unforgeable, so load heals the floor forward instead of failing.
         write_record_raw(&record_path(&state_root, &iid, false), &state_record);
         std::fs::remove_file(record_path(&floor_root, &iid, true)).unwrap();
         let mut store =
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x62; 32]).unwrap();
-        assert_eq!(store.load(&iid), Err(AnnounceStoreError::Corrupt));
+        assert_eq!(store.load(&iid), Ok(Some(state(0xD1, 12))));
+
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
+    }
+
+    #[test]
+    fn store_heals_first_accept_crash_window_instead_of_bricking() {
+        // Crash (or transient IO error) between the state and floor writes
+        // of the FIRST-ever accept leaves (Some(state), None) on disk. The
+        // originator must recover on the next load/accept, not stay bricked
+        // behind Err(Corrupt) forever.
+        let (state_root, floor_root) = unique_roots("first-accept-crash");
+        let iid = [0xAB; 8];
+        let mut store =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xC2; 32]).unwrap();
+        store.accept(&iid, state(0x41, 1)).unwrap();
+        drop(store);
+        std::fs::remove_file(record_path(&floor_root, &iid, true)).unwrap();
+
+        let mut reopened =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xC2; 32]).unwrap();
+        assert_eq!(reopened.load(&iid), Ok(Some(state(0x41, 1))));
+        // The healed floor is durably rewritten: a held sequence is refused.
+        assert_eq!(
+            reopened.accept(&iid, state(0x41, 1)),
+            Err(AnnounceStoreError::Corrupt)
+        );
+        // And the originator can continue advancing from the healed state.
+        assert!(reopened.accept(&iid, state(0x41, 2)).is_ok());
+        drop(reopened);
+
+        let mut final_check =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xC2; 32]).unwrap();
+        assert_eq!(final_check.load(&iid), Ok(Some(state(0x41, 2))));
 
         std::fs::remove_dir_all(state_root).unwrap();
         std::fs::remove_dir_all(floor_root).unwrap();
