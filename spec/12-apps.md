@@ -631,7 +631,7 @@ Content-Format: application/cbor
   "msg": "Injured, need help"
 }
 
-Response: 2.01 Created
+Response: 2.04 Changed
 ```
 
 Nodes receiving SOS:

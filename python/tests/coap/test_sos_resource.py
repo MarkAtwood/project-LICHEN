@@ -149,7 +149,7 @@ class TestSosPutDelete:
                     content_format=60,
                 )
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
             assert sos._active is True
             assert sos._from == _EUI.hex()
         finally:
@@ -291,7 +291,7 @@ class TestSosPutDelete:
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=activate_body, content_format=60)
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
             assert sos._active is True
             cancel_body = _signed_body(seq=2, type="cancel")
             resp = await client.request(
@@ -468,7 +468,7 @@ class TestSosSignatureEnforcement:
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=_signed_body(), content_format=60)
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
             assert sos._active is True
         finally:
             await client.shutdown()
@@ -523,7 +523,7 @@ class TestSosSignatureEnforcement:
             first = Message(
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
             )
-            assert (await client.request(first).response).code == aiocoap.CREATED
+            assert (await client.request(first).response).code == aiocoap.CHANGED
             replay = Message(
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=7), content_format=60
             )
@@ -539,7 +539,7 @@ class TestSosSignatureEnforcement:
             first = Message(
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=9), content_format=60
             )
-            assert (await client.request(first).response).code == aiocoap.CREATED
+            assert (await client.request(first).response).code == aiocoap.CHANGED
             stale = Message(
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=8), content_format=60
             )
@@ -565,7 +565,7 @@ class TestSosBurstOverCoap:
             first = Message(
                 code=POST, uri="coap://srv/sos", payload=_signed_body(seq=1), content_format=60
             )
-            assert (await client.request(first).response).code == aiocoap.CREATED
+            assert (await client.request(first).response).code == aiocoap.CHANGED
             # Second within the open period: burst allowance accepts.
             second = Message(
                 code=POST,
@@ -573,7 +573,7 @@ class TestSosBurstOverCoap:
                 payload=_signed_body(t=_T0, seq=2),
                 content_format=60,
             )
-            assert (await client.request(second).response).code == aiocoap.CREATED
+            assert (await client.request(second).response).code == aiocoap.CHANGED
             # Third while the period is still open: 4.29 with Retry-After.
             third = Message(
                 code=POST,
@@ -605,13 +605,13 @@ class TestSosBurstOverCoap:
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
             # Burst second POST also succeeds
             body = _signed_body(seq=2)
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
             # Third POST with the burst budget spent is rate limited
             body = _signed_body(seq=3)
             resp = await client.request(
@@ -637,7 +637,7 @@ class TestSosBurstOverCoap:
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
             # Advance time past cooldown
             clock["t"] = _T0 + SOS_COOLDOWN_S + 1
             # Second POST (fresh sequence) should succeed
@@ -645,7 +645,7 @@ class TestSosBurstOverCoap:
             resp = await client.request(
                 Message(code=POST, uri="coap://srv/sos", payload=body, content_format=60)
             ).response
-            assert resp.code == aiocoap.CREATED
+            assert resp.code == aiocoap.CHANGED
         finally:
             await client.shutdown()
             await server.shutdown()

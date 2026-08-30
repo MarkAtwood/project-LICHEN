@@ -272,7 +272,7 @@ class SosResource(resource.ObservableResource):
         self._sequences.accept(source_key, origin_sig.origin_sequence)
         self._record_request(source_key)
         self.activate(bytes.fromhex(from_hex), timestamp)
-        return Message(code=CREATED)
+        return Message(code=CHANGED)
 
     def _cancel_from_body(self, body: dict[Any, Any]) -> Message:
         """Cancel the active alert for a POST with ``type: cancel`` (18.4.2).
