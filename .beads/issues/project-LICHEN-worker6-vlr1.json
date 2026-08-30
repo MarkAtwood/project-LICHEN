@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-vlr1",
   "title": "P0: AnnounceTrustStore Debug derive leaks sealing seed",
   "description": "announce_store.rs derives Debug on AnnounceTrustStore, whose sealing_seed is Option\u003cZeroizing\u003c[u8;32]\u003e\u003e. zeroize 1.9.0's Zeroizing has #[derive(Debug)] on a transparent tuple struct (zeroize-1.9.0/src/lib.rs:602-604), so any {:?}/dbg!/trace of the store prints all 32 seed bytes. With the seed an attacker forges/validates every seal, defeating tamper/rollback fail-closed protection; if callers pass node identity material it is a root secret leak. Fix: manual redacted Debug impl (print only whether a seed is present). Note: GatewayOscoreSenderStore/GatewayOscoreRecipientStore in lichen-gateway/src/gateway.rs share the same pattern — file a follow-up there or fix in same pass. Found by security codereview of project-LICHEN-worker6-12zy.",
-  "status": "open",
+  "status": "closed",
   "priority": 0,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T06:09:19.070068Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T06:50:48.860051Z",
+  "updated_at": "2026-08-30T07:02:34.973412Z",
+  "closed_at": "2026-08-30T07:02:34.973412Z",
+  "close_reason": "wave-10",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-vlr1",

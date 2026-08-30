@@ -1,13 +1,15 @@
 {
   "id": "project-LICHEN-ow1e.111.10",
   "title": "Replace [u8; 16] with Ipv6Addr in lichen-rpl/src/routing.rs DaoManager method signatures",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T04:52:48.721381Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T06:50:48.753577Z",
+  "updated_at": "2026-08-30T07:09:35.249293Z",
+  "closed_at": "2026-08-30T07:09:35.249293Z",
+  "close_reason": "wave-11",
   "labels": [
     "newtype",
     "lichen-rpl",
