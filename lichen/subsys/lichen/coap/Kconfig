@@ -227,7 +227,10 @@ config LICHEN_COAP_KEYS
 	  - PUT /keys/{iid} - add/update peer key (requires local admin)
 	  - DELETE /keys/{iid} - remove peer (requires local admin)
 
-	  Keys are stored in memory. TOFU key pinning is enforced: once a key
+	  Keys are stored in memory; when SETTINGS is enabled, the platform
+	  may bind durable TOFU persistence via
+	  lichen_key_store_settings_init_protected() (coap_keys_settings.h)
+	  before accepting peers. TOFU key pinning is enforced: once a key
 	  is learned for an IID, it cannot be changed without explicit removal.
 
 	  SECURITY: Write operations require local admin access (loopback or
@@ -256,8 +259,11 @@ config LICHEN_COAP_KEYS_TEST_HOOKS
 	bool "Test hooks for key store"
 	depends on LICHEN_COAP_KEYS
 	depends on ZTEST
+	depends on SETTINGS
 	help
 	  Enable test hooks for resetting the key store. Only for testing.
+	  Requires SETTINGS because the store-reset hooks live in
+	  coap_keys_settings.c, which is only compiled when SETTINGS is on.
 
 config LICHEN_COAP_LOCATION
 	bool "CoAP /sensors/location resource (SenML position)"

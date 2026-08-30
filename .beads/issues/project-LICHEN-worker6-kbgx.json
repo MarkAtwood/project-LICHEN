@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-kbgx",
+  "title": "Wire or remove committed-but-unbuilt coap sources: coap_codec.c, coap_blockwise.c, coap_waypoints.c, presence.c",
+  "description": "Found during 4xln codereview. lichen/subsys/lichen/coap/ contains coap_codec.c, coap_blockwise.c, coap_waypoints.c, presence.c that are committed but not referenced by lichen/subsys/lichen/coap/CMakeLists.txt, so no build target compiles them (same class as commit 609a648228 'drop refs to unlanded WIP sources'; the sources were landed by 660b9bf3bf without CMake wiring). Also no Kconfig symbols gate them (no LICHEN_COAP_WAYPOINTS etc.). Decide per file: wire with proper Kconfig + fix any compile breaks they expose (use the qemu_x86 overlay-proof approach from bd 4xln), or remove the dead sources. Verify each choice with a build that includes it.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T02:47:48.471003Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T02:47:48.471003Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kbgx",
+      "depends_on_id": "project-LICHEN-worker6-4xln",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T02:47:49.637652Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

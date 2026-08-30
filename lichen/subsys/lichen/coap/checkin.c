@@ -1770,21 +1770,27 @@ int lichen_rollcall_record_missing(struct lichen_rollcall *rc,
 				   rc->responded, &rc->responded_count, track);
 }
 
+/* struct lichen_rollcall_status is a layout-compatible prefix of struct
+ * lichen_rollcall, so render() reinterprets the stored roll call in place
+ * instead of copying ~3.4 KiB of track arrays onto the call stack. The
+ * asserts pin the prefix contract against field drift. */
+#define ROLLCALL_PREFIX_ASSERT(field) \
+	_Static_assert(offsetof(struct lichen_rollcall, field) == \
+		       offsetof(struct lichen_rollcall_status, field), \
+		       "rollcall/status prefix drift: " #field)
+ROLLCALL_PREFIX_ASSERT(id);
+ROLLCALL_PREFIX_ASSERT(started);
+ROLLCALL_PREFIX_ASSERT(timeout_s);
+ROLLCALL_PREFIX_ASSERT(responded);
+ROLLCALL_PREFIX_ASSERT(responded_count);
+ROLLCALL_PREFIX_ASSERT(missing);
+ROLLCALL_PREFIX_ASSERT(missing_count);
+
 int lichen_rollcall_render(const struct lichen_rollcall *rc,
 			   uint8_t *buf, size_t cap, size_t *out_len)
 {
-	struct lichen_rollcall_status s;
-
-	memset(&s, 0, sizeof(s));
-	memcpy(s.id, rc->id, sizeof(s.id));
-	s.started = rc->started;
-	s.timeout_s = rc->timeout_s;
-	memcpy(s.responded, rc->responded, sizeof(rc->responded));
-	s.responded_count = rc->responded_count;
-	memcpy(s.missing, rc->missing, sizeof(rc->missing));
-	s.missing_count = rc->missing_count;
-
-	return lichen_rollcall_status_to_cbor(&s, buf, cap, out_len);
+	return lichen_rollcall_status_to_cbor(
+		(const struct lichen_rollcall_status *)rc, buf, cap, out_len);
 }
 
 int lichen_checkin_list_encode(const struct lichen_checkin_service *svc,

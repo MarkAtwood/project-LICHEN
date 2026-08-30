@@ -47,7 +47,12 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_KEYS
   coap_keys_format.c
   coap_keys_store.c
   coap_keys_oscore.c
+  coap_keys_alert.c
 )
+
+if(CONFIG_LICHEN_COAP_KEYS AND CONFIG_SETTINGS)
+  zephyr_library_sources(coap_keys_settings.c)
+endif()
 
 zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_LOCATION
   coap_location.c

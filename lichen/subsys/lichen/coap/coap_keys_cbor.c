@@ -153,11 +153,19 @@ size_t encode_iso8601_timestamp(uint32_t unix_time, char *buf, size_t buf_len)
 	uint8_t min = (secs % 3600) / 60;
 	uint8_t sec = secs % 60;
 
-	int pr = snprintf(buf, buf_len, "%04u-%02u-%02uT%02u:%02u:%02uZ",
+	/* Fixed-size scratch: gcc -Wformat-truncation=2 cannot bound the
+	 * runtime buf_len, and the widest possible field expansion exceeds
+	 * the 20-char nominal form (uint16 year, uint8 fields). */
+	char tmp[40];
+	int pr = snprintf(tmp, sizeof(tmp), "%04u-%02u-%02uT%02u:%02u:%02uZ",
 		 year, month, day, hour, min, sec);
-	if (pr < 0 || (size_t)pr >= buf_len) {
+	if (pr < 0 || (size_t)pr >= sizeof(tmp)) {
 		return 0;
 	}
+	if (buf_len < (size_t)pr + 1) {
+		return 0;
+	}
+	memcpy(buf, tmp, (size_t)pr + 1);
 	return (size_t)pr;
 }
 

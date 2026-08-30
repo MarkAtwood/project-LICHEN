@@ -19,6 +19,9 @@
 
 #include <lichen/oscore.h>
 
+/* Durable record identity length (SHA-256 digest, mirrors Rust ContextId) */
+#define OSCORE_RECORD_ID_LEN 32
+
 /*
  * OSCORE security context - full private definition.
  * This is the canonical definition; oscore.h has only forward declaration.
@@ -86,9 +89,6 @@ extern oscore_nvm_read_cb s_nvm_read_cb;
 
 /* COSE Algorithm ID for AES-CCM-16-64-128 */
 #define OSCORE_ALG_AEAD 10
-
-/* Durable record identity length (SHA-256 digest, mirrors Rust ContextId) */
-#define OSCORE_RECORD_ID_LEN 32
 
 /*
  * CBOR encoding constants (RFC 8949).
