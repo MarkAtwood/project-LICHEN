@@ -536,6 +536,11 @@ impl GatewayOscoreRecipientStore {
 impl SenderStateStore for GatewayOscoreSenderStore {
     type Error = GatewayOscoreStoreError;
 
+    /// Load the sender state for `context_id`, rebuilding the cache from
+    /// storage. Fails closed on a missing state record, a regressed state,
+    /// or an unverifiable record. A missing floor record heals forward to
+    /// the sealed state (first-accept crash window or lost floor file) so
+    /// the context is not permanently bricked.
     fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         if let Some(state) = self.cached(context_id) {
             return Ok(Some(state));
@@ -558,6 +563,18 @@ impl SenderStateStore for GatewayOscoreSenderStore {
         let state = match (state, floor) {
             (None, None) => return Ok(None),
             (None, Some(_)) => return Err(GatewayOscoreStoreError::Corrupt),
+            (Some(state), None) => {
+                // The sealed state is unforgeable and a missing floor cannot
+                // lower trust below it: rebuild the floor from the state.
+                self.write_sealed(
+                    true,
+                    &Self::floor_key(context_id),
+                    OSCORE_FLOOR_DOMAIN,
+                    context_id,
+                    state,
+                )?;
+                state
+            }
             (Some(state), Some(floor)) if sender_state_precedes(state, floor) => {
                 return Err(GatewayOscoreStoreError::Corrupt)
             }
@@ -572,7 +589,6 @@ impl SenderStateStore for GatewayOscoreSenderStore {
                 state
             }
             (Some(state), Some(_)) => state,
-            (Some(_), None) => return Err(GatewayOscoreStoreError::Corrupt),
         };
         if self.records.len() >= MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayOscoreStoreError::Full);
@@ -1827,6 +1843,8 @@ mod tests {
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
         assert_eq!(reopened.load(&context_id), Ok(Some(second)));
         drop(reopened);
+        // The state record is authoritative and unforgeable, so a missing
+        // floor heals forward on load instead of failing closed.
         std::fs::remove_file(
             floor_path
                 .join("gcp-oscore-sender")
@@ -1835,10 +1853,101 @@ mod tests {
         .unwrap();
         let mut missing_floor =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(missing_floor.load(&context_id), Ok(Some(second)));
+        std::fs::remove_dir_all(path).unwrap();
+        std::fs::remove_dir_all(floor_path).unwrap();
+    }
+
+    #[test]
+    fn oscore_sender_store_heals_first_accept_crash_window() {
+        // Crash (or transient IO error) between the state and floor writes
+        // of the FIRST-ever accept leaves (Some(state), None) on disk. The
+        // context must recover on the next load, not stay bricked behind
+        // Err(Corrupt) forever.
+        let suffix = PERSISTENT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "lichen-gateway-oscore-first-accept-crash-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor_path = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_path);
+        let context = Context::new(&[0x61; 16], None, None, &[1], &[2]).unwrap();
+        let context_id = context.context_id();
+        let sealing_seed = [0x62; 32];
+        let first = SenderSequenceState {
+            next_sequence: 7,
+            exhausted: false,
+        };
+        let second = SenderSequenceState {
+            next_sequence: 8,
+            exhausted: false,
+        };
+        let third = SenderSequenceState {
+            next_sequence: 9,
+            exhausted: false,
+        };
+        let record_path = path
+            .join("gcp-oscore-sender")
+            .join(GatewayOscoreSenderStore::key(&context_id));
+        let floor_record_path = floor_path
+            .join("gcp-oscore-sender")
+            .join(GatewayOscoreSenderStore::floor_key(&context_id));
+
+        let mut store =
+            GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(store.compare_exchange(&context_id, None, first), Ok(true));
+        let stale_record = std::fs::read(&record_path).unwrap();
         assert_eq!(
-            missing_floor.load(&context_id),
+            store.compare_exchange(&context_id, Some(first), second),
+            Ok(true)
+        );
+        let current_record = std::fs::read(&record_path).unwrap();
+        drop(store);
+
+        // Simulate the crash window: only the state write landed.
+        std::fs::remove_file(&floor_record_path).unwrap();
+        let mut reopened =
+            GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(reopened.load(&context_id), Ok(Some(second)));
+        drop(reopened);
+
+        // The healed floor is durably rewritten: restoring the older sealed
+        // state record must be detected as rollback, not silently accepted.
+        std::fs::write(&record_path, &stale_record).unwrap();
+        let mut rolled_back =
+            GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(
+            rolled_back.load(&context_id),
             Err(GatewayOscoreStoreError::Corrupt)
         );
+        drop(rolled_back);
+        std::fs::write(&record_path, &current_record).unwrap();
+
+        // And the context can continue advancing from the healed state.
+        let mut resumed =
+            GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(resumed.load(&context_id), Ok(Some(second)));
+        assert_eq!(
+            resumed.compare_exchange(&context_id, Some(second), third),
+            Ok(true)
+        );
+        drop(resumed);
+        let mut final_check =
+            GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(final_check.load(&context_id), Ok(Some(third)));
+        drop(final_check);
+
+        // A missing state record still fails closed: trust is never rebuilt
+        // from a floor alone.
+        std::fs::remove_file(&record_path).unwrap();
+        let mut missing_state =
+            GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        assert_eq!(
+            missing_state.load(&context_id),
+            Err(GatewayOscoreStoreError::Corrupt)
+        );
+
         std::fs::remove_dir_all(path).unwrap();
         std::fs::remove_dir_all(floor_path).unwrap();
     }
