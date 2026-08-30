@@ -4644,6 +4644,7 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
     """
     from lichen.schc.context import NoMatchingRuleError, SchcContext
     from lichen.schc.fragment import Ack, ack_request, receiver_abort, sender_abort
+    from lichen.schc.headers import decode_rule255, encode_rule255
     from lichen.schc.rules import SchcRuleVersionOption
 
     category = vector["category"]
@@ -4719,22 +4720,55 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             assert decompress_packet(compressed) == raw, name
         else:
             error_pattern = {
-                "invalid_source_address": "source address",
-                "invalid_destination_address": "destination address",
-                "invalid_destination_scope": "destination scope",
+                "invalid_source_address": "invalid IPv6 source address",
+                "invalid_destination_address": "invalid IPv6 destination address",
+                "invalid_destination_scope": "invalid IPv6 destination multicast scope",
             }[vector["expect_error"]]
             with pytest.raises(SchcError, match=error_pattern):
                 validate_rule7_addresses(source, destination)
             assert MQTT_SN_PROFILE.compress_if_matching(raw) is None
             with pytest.raises(SchcError, match=error_pattern):
                 decompress_packet(_rule7_full_address_wire(source, destination))
-            if source.is_unspecified or source.is_multicast or destination.is_unspecified:
-                with pytest.raises(SchcError):
-                    compress_packet(raw)
-            else:
-                fallback = compress_packet(raw)
-                assert fallback[0] == 255, name
-                assert decompress_packet(fallback) == raw, name
+            # Canonical emission policy (spec 03-adaptation.md Rule 255 TX/RX
+            # split): the compressor MUST NOT originate policy-invalid
+            # endpoints via Rule 255 fallback either. (Message text is not
+            # pinned here: unspecified endpoints are caught by the structural
+            # receive-side check before the emission policy runs.)
+            with pytest.raises(SchcError):
+                compress_packet(raw)
+
+    elif category == "rule255_endpoint_policy":
+        # Rule 255 endpoint policy TX/RX split: emission rejects the same
+        # endpoints Rule 7 rejects; decode is byte-preserving structure-only.
+        source = IPv6Address(vector["source_ipv6"])
+        destination = IPv6Address(vector["destination_ipv6"])
+        udp = UdpDatagram(PORT_MQTT_SN, 5000, b"lichen255").to_bytes(source, destination)
+        raw = (
+            IPv6Header(
+                src_addr=source,
+                dst_addr=destination,
+                next_header=NextHeader.UDP,
+                payload_length=len(udp),
+                hop_limit=64,
+            ).to_bytes()
+            + udp
+        )
+        if vector["expect_valid"]:
+            encoded = encode_rule255(raw)
+            assert encoded == b"\xff" + raw, name
+            assert decode_rule255(encoded) == raw, name
+        else:
+            error_pattern = {
+                "invalid_source_address": "invalid IPv6 source address",
+                "invalid_destination_address": "invalid IPv6 destination address",
+                "invalid_destination_scope": "invalid IPv6 destination multicast scope",
+            }[vector["expect_error"]]
+            with pytest.raises(SchcError, match=error_pattern):
+                encode_rule255(raw)
+            # Byte-preserving receipt in both implementations: the packet is
+            # structurally valid with a valid checksum, so decode succeeds
+            # even though a canonical sender could not have originated it.
+            assert decode_rule255(b"\xff" + raw) == raw, name
 
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
@@ -4879,6 +4913,7 @@ def test_schc_adaptation_vector_coverage() -> None:
         "uncompressed",
         "port_boundary",
         "rule7_address_policy",
+        "rule255_endpoint_policy",
         "fragmentation_direction",
         "fragmentation_endpoint_direction",
         "compressed_size",

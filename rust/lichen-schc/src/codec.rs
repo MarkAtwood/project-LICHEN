@@ -262,8 +262,13 @@ fn validate_address_policy(src: &[u8], dst: &[u8]) -> Result<(), SchcError> {
     Ok(())
 }
 
-/// Validate the complete IPv6 packet accepted by the LICHEN SCHC profile.
-pub fn validate_full_ipv6(packet: &[u8]) -> Result<(), SchcError> {
+/// Validate the structure and checksums of a complete IPv6 packet accepted
+/// by the LICHEN SCHC profile, without the emission endpoint address policy.
+///
+/// This is the receive-side (byte-preserving Rule 255 decode) contract per
+/// spec/03-adaptation.md: structure, extension headers, and UDP checksum are
+/// enforced; endpoint addresses are not re-interpreted on receipt.
+fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
     if packet.len() < 40 {
         return Err(SchcError::InvalidPacket("truncated IPv6 header"));
     }
@@ -276,7 +281,6 @@ pub fn validate_full_ipv6(packet: &[u8]) -> Result<(), SchcError> {
     }
     let src = &packet[8..24];
     let dst = &packet[24..40];
-    validate_address_policy(src, dst)?;
 
     let mut next_header = packet[6];
     let mut offset = 40usize;
@@ -347,6 +351,19 @@ pub fn validate_full_ipv6(packet: &[u8]) -> Result<(), SchcError> {
         }
     }
     Ok(())
+}
+
+/// Validate the complete IPv6 packet accepted by the LICHEN SCHC profile.
+///
+/// Structure plus the emission endpoint address policy. Callers on the
+/// transmit path (compress, encode_rule255) use this; the receive path
+/// (`decode_rule255`) validates structure only, per the canonical TX/RX
+/// split in spec/03-adaptation.md.
+pub fn validate_full_ipv6(packet: &[u8]) -> Result<(), SchcError> {
+    validate_full_ipv6_structure(packet)?;
+    let src = &packet[8..24];
+    let dst = &packet[24..40];
+    validate_address_policy(src, dst)
 }
 
 /// Validate an RFC 8613 Object-Security option value.
@@ -1426,6 +1443,9 @@ pub fn encode_rule255(
 }
 
 /// Decode Rule 255 without accepting arbitrary or fragmented IPv6 bytes.
+///
+/// Byte-preserving receive path: structure and checksums only, no emission
+/// endpoint address policy (spec/03-adaptation.md TX/RX split).
 pub fn decode_rule255(
     data: &[u8],
     out: &mut [u8],
@@ -1441,7 +1461,7 @@ pub fn decode_rule255(
         return Err(BufferTooSmall::new(data.len(), profile_limit).into());
     }
     let packet = &data[1..];
-    validate_full_ipv6(packet)?;
+    validate_full_ipv6_structure(packet)?;
     if out.len() < packet.len() {
         return Err(BufferTooSmall::new(packet.len(), out.len()).into());
     }
@@ -2758,6 +2778,108 @@ mod tests {
         packet[8..24].copy_from_slice(&src);
         packet[24..40].copy_from_slice(&dst);
         packet
+    }
+
+    fn udp_packet_with_endpoints(src: [u8; 16], dst: [u8; 16]) -> Vec<u8> {
+        let payload = [0x01, 0x00];
+        let source_port = 10883u16;
+        let destination_port = 61616u16;
+        let udp_len = 8 + payload.len();
+        let mut udp = vec![0u8; udp_len];
+        udp[..2].copy_from_slice(&source_port.to_be_bytes());
+        udp[2..4].copy_from_slice(&destination_port.to_be_bytes());
+        udp[4..6].copy_from_slice(&(udp_len as u16).to_be_bytes());
+        udp[8..].copy_from_slice(&payload);
+        let checksum =
+            lichen_core::checksum::upper_layer_checksum(&src, &dst, 17, &udp);
+        udp[6..8].copy_from_slice(&checksum.to_be_bytes());
+
+        let mut packet = vec![0u8; 40 + udp_len];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&(udp_len as u16).to_be_bytes());
+        packet[6] = 17;
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&src);
+        packet[24..40].copy_from_slice(&dst);
+        packet[40..].copy_from_slice(&udp);
+        packet
+    }
+
+    #[test]
+    fn rule255_emission_rejects_policy_invalid_endpoints() {
+        // Canonical TX/RX split (spec/03-adaptation.md): emission must not
+        // originate loopback, IPv4-mapped, or bad-scope-multicast endpoints.
+        let cases: [(&str, &str, &str); 6] = [
+            ("::1", "2001:db8::1", "invalid IPv6 source address"),
+            ("::ffff:192.0.2.1", "2001:db8::1", "invalid IPv6 source address"),
+            ("2001:db8::1", "::1", "invalid IPv6 destination address"),
+            (
+                "2001:db8::1",
+                "::ffff:192.0.2.1",
+                "invalid IPv6 destination address",
+            ),
+            ("2001:db8::1", "ff01::1", "invalid IPv6 destination multicast scope"),
+            ("2001:db8::1", "ff0f::1", "invalid IPv6 destination multicast scope"),
+        ];
+        for (src, dst, message) in cases {
+            let packet = udp_packet_with_endpoints(
+                src.parse().expect("source literal"),
+                dst.parse().expect("destination literal"),
+            );
+            let mut encoded = [0u8; 1500];
+            assert!(
+                matches!(
+                    encode_rule255(&packet, &mut encoded, usize::MAX),
+                    Err(SchcError::InvalidPacket(actual)) if actual == message
+                ),
+                "encode {src} -> {dst}: expected {message:?}"
+            );
+            assert!(
+                matches!(
+                    compress(&packet, &mut encoded),
+                    Err(SchcError::InvalidPacket(actual)) if actual == message
+                ),
+                "compress {src} -> {dst}: expected {message:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rule255_decode_is_byte_preserving_despite_emission_policy() {
+        // A structurally valid packet that violates only the emission policy
+        // still decodes byte-preserving (interop with pre-canonicalization
+        // senders); receipt applies no endpoint address policy.
+        let packet = udp_packet_with_endpoints(
+            "::1".parse().expect("source literal"),
+            "2001:db8::1".parse().expect("destination literal"),
+        );
+        let wire = [[0xffu8].as_slice(), packet.as_slice()].concat();
+        let mut decoded = vec![0u8; packet.len()];
+        assert_eq!(
+            decode_rule255(&wire, &mut decoded, usize::MAX).unwrap(),
+            packet.len()
+        );
+        assert_eq!(&decoded[..], &packet[..]);
+    }
+
+    #[test]
+    fn rule255_accepts_policy_valid_multicast_scope_5() {
+        let packet = udp_packet_with_endpoints(
+            "2001:db8::1".parse().expect("source literal"),
+            "ff15::1".parse().expect("destination literal"),
+        );
+        let mut encoded = vec![0u8; packet.len() + 1];
+        assert_eq!(
+            encode_rule255(&packet, &mut encoded, usize::MAX).unwrap(),
+            packet.len() + 1
+        );
+        assert_eq!(&encoded[1..], &packet[..]);
+        let mut decoded = vec![0u8; packet.len()];
+        assert_eq!(
+            decode_rule255(&encoded, &mut decoded, usize::MAX).unwrap(),
+            packet.len()
+        );
+        assert_eq!(&decoded[..], &packet[..]);
     }
 
     #[test]

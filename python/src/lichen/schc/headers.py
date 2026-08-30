@@ -87,12 +87,16 @@ def _validate_ipv6_addresses(header: IPv6Header) -> None:
         raise SchcError("invalid unspecified IPv6 destination address")
 
 
-def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> None:
-    """Validate the canonical Rule 7 IPv6 source/destination policy.
+def _validate_emission_endpoints(source: IPv6Address, destination: IPv6Address) -> None:
+    """Canonical emission (TX) endpoint policy shared by all rules.
 
-    Rule 7 carries native IPv6 endpoints only.  A source must be usable
-    unicast; a destination may additionally be multicast when its scope is in
-    the link-through-global range (2 through 14).
+    Rule 7 selection and the Rule 255 fallback MUST NOT originate
+    unspecified, loopback, multicast, or IPv4-mapped sources, nor
+    unspecified, loopback, or IPv4-mapped destinations, and multicast
+    destinations are limited to non-reserved scope 2-14.  Decoding
+    deliberately does NOT apply this policy: Rule 255 receipt is
+    byte-preserving (spec/03-adaptation.md Rule 255 TX/RX split).  Error
+    strings are canonical and identical across implementations.
     """
     if (
         source.is_unspecified
@@ -100,17 +104,42 @@ def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> N
         or source.is_multicast
         or source.ipv4_mapped is not None
     ):
-        raise SchcError(f"invalid Rule 7 source address {source}")
-    if destination.is_unspecified or destination.is_loopback or destination.ipv4_mapped is not None:
-        raise SchcError(f"invalid Rule 7 destination address {destination}")
+        raise SchcError("invalid IPv6 source address")
+    if (
+        destination.is_unspecified
+        or destination.is_loopback
+        or destination.ipv4_mapped is not None
+    ):
+        raise SchcError("invalid IPv6 destination address")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F
         if not 2 <= scope <= 14:
-            raise SchcError(f"invalid Rule 7 multicast destination scope {scope}")
+            raise SchcError("invalid IPv6 destination multicast scope")
 
 
-def validate_full_ipv6(raw: bytes) -> bytes:
-    """Validate a complete IPv6 packet before Rule 255 delivery."""
+def validate_emission_addresses(header: IPv6Header) -> None:
+    """Apply the canonical emission endpoint policy to a packet header."""
+    _validate_emission_endpoints(header.src_addr, header.dst_addr)
+
+
+def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> None:
+    """Validate the canonical Rule 7 IPv6 source/destination policy.
+
+    Rule 7 carries native IPv6 endpoints only and applies the same
+    emission policy as every other transmitted packet (see
+    ``validate_emission_addresses``); this wrapper keeps the Rule 7
+    call-site naming.
+    """
+    _validate_emission_endpoints(source, destination)
+
+
+def _parse_validated_ipv6(raw: bytes) -> IPv6Packet:
+    """Structurally validate a complete IPv6 packet and return it parsed.
+
+    Performs the receive-side checks only: framing, header structure, loose
+    endpoint sanity, and UDP structure/checksum.  Emission (TX) address
+    policy is applied separately by ``validate_emission_addresses``.
+    """
     if type(raw) is not bytes:
         raise SchcError("IPv6 packet must be bytes")
     if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
@@ -131,6 +160,16 @@ def validate_full_ipv6(raw: bytes) -> bytes:
             packet.header.src_addr, packet.header.dst_addr, packet.payload
         ):
             raise SchcError("invalid Rule 255 IPv6 UDP checksum")
+    return packet
+
+
+def validate_full_ipv6(raw: bytes) -> bytes:
+    """Validate a complete IPv6 packet before Rule 255 delivery.
+
+    Byte-preserving receive-side validation: structure and checksums only,
+    no emission endpoint policy (spec/03-adaptation.md Rule 255 TX/RX split).
+    """
+    _parse_validated_ipv6(raw)
     return raw
 
 
@@ -142,7 +181,9 @@ def _validate_single_frame_limit(limit: int | None) -> None:
 def encode_rule255(raw: bytes, *, single_frame_limit: int | None = None) -> bytes:
     """Encode a validated full IPv6 packet with sender-selected Rule 255."""
     _validate_single_frame_limit(single_frame_limit)
-    validated = validate_full_ipv6(raw)
+    packet = _parse_validated_ipv6(raw)
+    validate_emission_addresses(packet.header)
+    validated = raw
     if len(validated) > MAX_PACKET_SIZE - 1:
         raise SchcError(f"Rule 255 raw IPv6 packet exceeds {MAX_PACKET_SIZE - 1} bytes")
     encoded = bytes((RULE_ID_UNCOMPRESSED,)) + validated
@@ -811,9 +852,12 @@ def compress_packet(raw: bytes, profiles: tuple[PacketProfile, ...] = DEFAULT_PR
     wire contract with generic descriptors.
     """
     # Validate transport structure and checksums once before any profile elides
-    # fields. Valid field non-matches continue to Rule 255; malformed packets do
-    # not get repaired by compression.
-    validate_full_ipv6(raw)
+    # fields, and apply the profile-wide emission endpoint policy (spec
+    # 03-adaptation.md Rule 255 TX/RX split). Valid field non-matches continue
+    # to Rule 255; malformed or non-originatable packets do not get repaired
+    # by compression.
+    packet = _parse_validated_ipv6(raw)
+    validate_emission_addresses(packet.header)
     mqtt_sn = MQTT_SN_PROFILE.compress_if_matching(raw)
     if mqtt_sn is not None:
         return mqtt_sn
