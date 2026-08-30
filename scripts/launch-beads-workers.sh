@@ -16,7 +16,12 @@ set -e
 
 NUM_WORKERS=${1:-5}
 REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_BASE="/Volumes/Attic/Desktop/Projects/lichen-workers"
+# Fleet worktree base: Mac (Attic) by default; override for other hosts.
+if [ -d /Volumes/Attic ]; then
+    WORKTREE_BASE="${LICHEN_WORKTREE_BASE:-/Volumes/Attic/Desktop/Projects/lichen-workers}"
+else
+    WORKTREE_BASE="${LICHEN_WORKTREE_BASE:-$HOME/Developer/lichen-workers}"
+fi
 SESSION="lichen-workers"
 
 command -v opencode >/dev/null 2>&1 || { echo "opencode not found"; exit 1; }
