@@ -1,0 +1,23 @@
+{
+  "id": "project-LICHEN-worker6-pr7v",
+  "title": "beads-loop driver robustness gaps (heft generation)",
+  "description": "Residual findings from 3x codereview of .opencode/plugins/beads-loop.tsx (fleet debug-trace round, 2026-08-30; fixed inline: Bun.appendSync nonexistent -\u003e node:fs appendFileSync; bd failure returned 0 -\u003e false 'queue drained' success, now -1 + error report). NOT fixed, pre-existing driver design: (1) no retry timer on skip/fail paths — if a round fails or completes under MIN_ROUND_INTERVAL_MS, next session.idle hits the min-interval guard and the loop silently stalls until external stimulus (trace shows this); (2) no timeout on the Bun.spawn bd-ready subprocess — a hung bd wedges running=true forever; (3) OPENCODE_BEADS_LOOP=0 or negative parses to worker 1 / short delays instead of refusing to activate; (4) drained path has no latch, re-toasts 'queue drained' on every idle; (5) appendPrompt can concatenate onto a partially typed user draft if a worker TUI is driven interactively. Relevant for the heft migration relaunch of the driver (bead bywc plugin, launch-beads-workers.sh).",
+  "notes": "Addendum from re-review round: (6) trace file path is $HOME/Developer/fleet-debug.log — silently no-ops (catch{}) when ~/Developer does not exist, e.g. generic Linux hosts; homedir() fallback added, but a tmpdir fallback or one-time 'tracing disabled' report remains open. Also: sequential stdout-\u003estderr pipe drain is a latent deadlock pattern reviewers assessed as unreachable for bd-ready output sizes (left as-is).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T20:17:48.733934175Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-30T20:22:09.929495513Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pr7v",
+      "depends_on_id": "project-LICHEN-worker6-bywc",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T20:17:48.828933836Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

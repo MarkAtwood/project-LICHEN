@@ -2,11 +2,13 @@
   "id": "project-LICHEN-worker6-mt5q",
   "title": "Zephyr 4.1.0 migration: reconcile west.yml pin with committed sources (Option B)",
   "description": "Decision (Mark, 2026-08-30): commit to Zephyr v4.1.0. lichen/west.yml was bumped v3.7.0-\u003ev4.1.0 in da24053a1c but committed C sources still require v3.7.0 APIs, so the pin, the code, CI, and the docs are in contradiction. Resolution path: land the already-filed 4.1-incompatibility fixes, then rewrite the version story in docs. Known blockers (filed, do not duplicate): worker6-ldkq (coap_client.c send_mutex removed in 4.x + lichen_util.c array-param), worker6-dyrj (checkin.c stack-usage Werror), worker6-tczj (coap_status.c BUILD_ASSERTs + switch-enum breaking puck + ping_l2), worker6-xm1n (zcbor Kconfig dependency loop on 4.1.0 module-aware builds), worker6-47mi (CSTD global property v3.7-only; fix landed as unconditional c2x — verify against 4.1 CONFIG_STD_*). After sources compile clean on 4.1.0: (1) heft (18 cores, v4.1.0 workspace) becomes the canonical validation host — run full twister/native_sim there; (2) re-provision or retire the v3.7.0 EBS builder vol-0a95eee8d1d8461eb (Mark's call); (3) sweep AGENTS.md/CLAUDE.md/README/CONTRIBUTING/patches-README of the v3.7.0 story (AGENTS lines ~413,433,436-443,479-489,523,614,622; also lichen/README.md, patches/zephyr-v3.7.0-local.patch applicability, lichen/zephyr/CMakeLists.txt CSTD comment, coap_client.c v3.7.0 warning comment); (4) close bead xplt as superseded. Acceptance: module-aware west build + twister of coap/checkin/hal suites green on 4.1.0 (heft or qemu), docs coherent, no v3.7.0-required APIs left in tree.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T17:41:07.104636Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T18:59:02.961543Z"
+  "updated_at": "2026-08-30T20:03:04.648143Z",
+  "closed_at": "2026-08-30T20:03:04.648143Z",
+  "close_reason": "Closed"
 }

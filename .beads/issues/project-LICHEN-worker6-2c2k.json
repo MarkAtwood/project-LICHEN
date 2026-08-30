@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-2c2k",
+  "title": "gateway oscore stores: records cache has no eviction; Err(Full) permanently rejects existing durable contexts past 64",
+  "description": "Found by 3x codereview of the recipient-store heal (9liz). rust/lichen-gateway/src/gateway.rs: GatewayOscoreRecipientStore.records and GatewayOscoreSenderStore cache are Vecs that only grow (recipient capacity gate at ~475-477, sender ~604-606; MAX_GCP_OSCORE_CONTEXTS=64 at gateway.rs:48). After a restart with \u003e64 durable contexts, the first 64 touched fill the cache and every further context - including ones with valid durable sealed state - fails load() with Err(Full) forever, order-dependently; callers drop packets on any error (~1360-1380). The sibling announce store explicitly fixed this class: 'Full is a new-pin admission outcome, never a load outcome' (lichen-node/src/announce_store.rs:300-339, LRU eviction + uncached loads). Additional growth vector: persistent (None,None) load() caches an empty state for any probed context, consuming slots; stale records accumulate across PSK/epoch rotations (ContextId deterministic, so reinstalling same peer reuses its record; rotations mint new ids). Also: Err(Full) is never cached, so each packet for an uncached context repeats the full 2-read + double-schnorr-verify sequence. Fix: adopt the announce store's admission policy (evict LRU on capacity for contexts with durable state; never return Full from load for an already-durable context).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:04:41.04239045Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:04:41.04239045Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2c2k",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:04:41.161593009Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

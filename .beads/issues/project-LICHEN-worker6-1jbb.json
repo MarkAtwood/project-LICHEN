@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-1jbb",
+  "title": "Shared Rule255 endpoint-policy parity vectors + parity script rerun; then close k0r2",
+  "description": "Child of project-LICHEN-worker6-k0r2 (last step). After the Rust RX-side split lands and Python's TX-side emission enforcement is confirmed, add shared malformed/divergence vectors in test/vectors/ (schema-consistent with existing SCHC Rule255 vectors) covering the k0r2 trigger classes on BOTH sides: src=::1, src=::ffff:192.0.2.1, dst=::1, dst=ff01::1 (scope 1), dst=ff0f::1 (scope 15) - each asserting encode_rule255 REJECTS (both impls, emission policy) and decode_rule255 of the byte-preserving frame ACCEPTS (both impls, RX rule). Wire Python (python/tests) and Rust (rust/lichen-schc tests) to consume the same JSON per the shared-vector discipline (oracles must be the committed JSON, not code outputs), then rerun scripts/check-schc-compression-parity.py (needs C clang on heft: use clang, gcc-13 lacks -std=c23) and close k0r2. Note wrxl/hahk cover the C-side emission gate; vectors here should be consistent with that work's mcast_src/unspecified_src/unspecified_dst classes.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:17:31.845003682Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T21:17:31.845003682Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1jbb",
+      "depends_on_id": "project-LICHEN-worker6-k0r2",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:17:31.951316234Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

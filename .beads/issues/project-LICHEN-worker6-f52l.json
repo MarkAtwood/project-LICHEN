@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-f52l",
+  "title": "gateway: dev() rollback-root independence check lives only in lichend, not in Gateway::new_persistent",
+  "description": "Found by 3x codereview of the recipient-store heal (9liz), security pass (informational). The anti-rollback design relies on the floor root being on a filesystem independent of the state root; the enforcement (dev() comparison) exists only in the lichend binary (rust/lichen-gateway/src/bin/lichend.rs:1408-1425). Gateway::new_persistent (rust/lichen-gateway/src/gateway.rs:915-928) checks only canonicalize/nesting, so another embedder of the library constructor silently skips the check, collapsing the mitigation to directory separation. Promote the dev() independence check into Gateway::new_persistent (return GatewayOpenError) or a new constructor, keep the binary call site.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:05:21.683667425Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:05:21.683667425Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-f52l",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:05:21.805608077Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

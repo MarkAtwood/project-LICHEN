@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-89cz",
+  "title": "SOS POST cancel path has no rate limiting; spec 18.4.1 rate table covers all SOS types",
+  "description": "Found by security codereview pass of project-LICHEN-worker6-r7hs (P3). python/src/lichen/coap/resources/emergency.py _cancel_from_body (:277-308) calls neither evaluate_rate_limit nor _record_request, while the activate path does (evaluate :263, 4.29+retry_after :265-271, record :273). spec/12-apps.md:560-573 (18.4.1) defines the per-source SOS rate table (600s cooldown, 3/hour, burst 2) for SOS messages generally, and 18.4.2 (:597-619) classifies cancel as an SOS type - so cancel is currently a spec deviation. Mitigations verified: when idle the handler short-circuits 4.04 before any parsing (:283-284); when active, bounded CBOR decode (4096B/1024 items/depth 16) + envelope shape checks + _pubkey_to_iid sha512 all run BEFORE the Schnorr48 verify, so garbage floods are cheap and there is no unbounded-work or memory-growth path (cancel never touches _request_times; ikcx leak is activate-side). Residual impact: unthrottled response generation (one 4.01/4.04 per request) and spec non-compliance. Fix: either apply the same evaluate_rate_limit/_record_request pair keyed by the active origin's source_key (but keep legitimate cancel un-blockable - e.g. exempt the valid-originator cancel from the budget while still recording it), or add a cheap pre-filter counter; decide semantics, then mirror in render_delete (which is likewise unthrottled) and pin with a test asserting rate-budget neutrality for a valid cancel (overlaps snh1's neutrality assertion - coordinate).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:10:10.665718323Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T21:10:10.665718323Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-89cz",
+      "depends_on_id": "project-LICHEN-worker6-r7hs",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:10:10.787698987Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

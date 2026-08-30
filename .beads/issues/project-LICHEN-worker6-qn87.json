@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-qn87",
+  "title": "6 C host suites red at HEAD: schc_rule{1..6}_compress fail test_profile_limit/rule constraints (pre-existing, baseline-reproducible)",
+  "description": "Found by robustness codereview pass of project-LICHEN-worker6-wrxl (P1, pre-existing on the branch, NOT caused by the wrxl delta - reviewer verified identical failures from a git archive HEAD baseline). On heft (clang 20, -std=c23, ASan+UBSan per test_common.cmake): lichen/tests/schc_rule1_compress through schc_rule6_compress (6 suites) fail test_profile_limit (e.g. rule1 main.c:149-150 profile-limit assertion) and test_rule_constraints_and_checksum (:167/:197 SCHC_ERR_INVALID_ARGUMENT). Everything else green: schc, schc_ack_processing, schc_fragment_generation, schc_mqtt_sn, schc_parity (57/57), schc_reassembly, rule*_decompress. Likely SCHC_FRAGMENT_MAX_PACKET_SIZE/profile-limit or rule-constraint drift from recent SCHC work (hahk/wrxl-era changes to lichen_schc_compress gating or fragment sizing). Needs triage: run each suite, diff expectations vs current constants, fix code or tests per spec (spec/03-adaptation.md fragmentation/profile limits), do NOT weaken assertions without a spec basis.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:06:11.799052305Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T22:06:11.799052305Z"
+}

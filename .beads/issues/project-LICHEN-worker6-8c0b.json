@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-8c0b",
+  "title": "StratumTracker network replay high-water LRU is eviction-exposed to DIOs never authorized for time (replay-window bypass)",
+  "description": "Found by security codereview of project-LICHEN-worker6-fxrh. python/src/lichen/timing/stratum.py:629-632 inserts and move_to_end-refreshes the (signer,generation)-\u003ecounter barrier UNCONDITIONALLY once the counter is new, BEFORE the time-authorization and payload-binding checks that run later inside _rejection via _adopt_claimed_locked (network-transport-not-authorized / network-peer-not-authorized-for-time at stratum.py:185-188, network-option-evidence-mismatch at 193-197). Rejected, unauthorized-for-time DIOs therefore consume and order LRU slots. Same-signer eviction (626-628) caps each signer at one entry, but with MAX_NETWORK_REPLAY_GENERATIONS=256 (time_sync.py:58) an attacker controlling \u003e=256 distinct signer keys admitted to the verifier's peer_origins can flood the OrderedDict and evict a victim signer's high-water entry; __network_high_water.get(replay_key,-1) at 623 then returns -1 and ANY counter passes: a previously-considered validly-signed victim DIO re-verified into a fresh sample is considered again. With no current sample the stale sample skips backward-step (690-691) and stratum/precedence (680-685) checks, so a sufficiently old floor-passing timestamp can adopt = time rollback. Preconditions (256+ keys in peer_origins, LRU race vs the victim's refresh, low epoch floor) are deployment-dependent but plausible under open mesh admission. Fix directions: only insert/refresh LRU entries for samples whose authority is authorized for time (move the barrier insert after _rejection's authorization checks, or gate on the authorization verdict before 629); or track victim eviction via a tombstone floor that survives eviction; or size-bound per-signer with a persistent floor file like the announce/gateway stores. Also consider whether issuance_high_water (609-612, no eviction) already bounds the same reissue path and document the interplay.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:27:34.155282346Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-30T21:27:34.155282346Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8c0b",
+      "depends_on_id": "project-LICHEN-worker6-fxrh",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:27:34.27062037Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

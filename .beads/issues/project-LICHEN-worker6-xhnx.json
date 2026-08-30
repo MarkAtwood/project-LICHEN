@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-xhnx",
+  "title": "oscore response_window is dual-role across server/client contexts: false-replay DoS on bidirectional contexts",
+  "description": "Found by 3x codereview of the rust-oscore observe port (9liz unblock work). Same root cause as project-LICHEN-worker6-ythw. In /home/mark/crates/oscore/src/lib.rs, response_seq/response_window is written by mark_response_used only from protect_response's no-PIV branch (server role: 'request PIVs whose nonce I reused for my own no-PIV responses') but is consulted by begin_unprotect_response_inner (~lib.rs:1308) as 'peer response PIVs I have accepted' (client role). A Context legitimately serves both roles; the two are independent sequence spaces, so on a bidirectional context a legitimate notification/response whose PIV numerically falls in the marked range of previously-answered request seqs is falsely rejected as Err(Replay) — a fail-closed DoS. Fix together with ythw by separating the windows or using the recipient window consistently on both paths. Machine-local clone; regenerate patches/rust-oscore-local.patch after the fix.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:04:32.233270629Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:04:32.233270629Z",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xhnx",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:04:32.376377173Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

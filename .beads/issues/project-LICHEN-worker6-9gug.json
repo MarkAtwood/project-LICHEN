@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-9gug",
+  "title": "announce_store: no single-writer exclusion on durable roots; second store instance seals a regression via its stale cache",
+  "description": "Found by security codereview of project-LICHEN-worker6-t8ox (P2). rust/lichen-node/src/announce_store.rs:164-182: persistent() opens state_root/floor_root with no lock or exclusive-claim check; FileStorage::new takes no lock either. Every guarantee (pin binding, floor monotonicity, replay rejection, cache consistency after failed-floor-write eviction) rests on all writes flowing through ONE store instance so the cache mirrors durable state. A second AnnounceTrustStore on the same roots (stale systemd unit beside a debug run, or a second persistent() in-process) has an independent cache: instance B load/accept validates against its stale cache, so after instance A commits seq 200, B accept(150) passes B checks and seals a CONSISTENT (state=150, floor=150) pair that load() precedes() can never flag - bypasses replay protection with zero tamper evidence. Fix directions: (a) accept() validates against the DURABLE record (re-read from storage, same fail-closed matrix as load) instead of the cache-first load() - closes the seal-regression vector regardless of instance count at one extra disk read per accept (accepts are rare; announce intervals); also subsumes the p4mf re-validation window as defense in depth; or (b) exclusive claim (flock on a lockfile in the state dir - note std File::try_lock needs rustc 1.89 \u003e MSRV 1.81, so needs a dep or the MSRV bump; lockfile must not match the announce-pin- count filter) or (c) documented+asserted single-instance contract (weakest). Prefer (a) implemented where tests can run.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T20:49:18.596600176Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-30T20:49:18.596600176Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9gug",
+      "depends_on_id": "project-LICHEN-worker6-t8ox",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T20:49:18.683883178Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

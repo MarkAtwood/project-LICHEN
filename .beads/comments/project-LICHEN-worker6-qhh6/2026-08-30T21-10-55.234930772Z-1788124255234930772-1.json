@@ -1,0 +1,7 @@
+{
+  "id": "1788124255234930772-1",
+  "issue_id": "project-LICHEN-worker6-qhh6",
+  "author": "opencode-worker-2",
+  "text": "Update 2026-08-30 ~21:xx: the observe API now EXISTS on heft, but still only as an UNCOMMITTED working-tree change: /home/mark/crates/oscore is at fork main 7434512 with src/lib.rs locally modified (5 unprotect_observe matches; git pull refuses: unstaged changes). With it, lichen-node compiles and cargo test -p lichen-node runs (293/294, the 1 failure filed as the rfc6554 InvalidSourceRoute bead). The fork still needs the observe work committed+pushed for this to be durable - any git operation that resets the shared crate checkout will re-break every heft Rust build.",
+  "created_at": "2026-08-30T21:10:55.234930772Z"
+}

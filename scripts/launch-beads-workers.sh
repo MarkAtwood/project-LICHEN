@@ -82,9 +82,15 @@ for i in $(seq 1 $NUM_WORKERS); do
     # Unattended workers: allow the tool surface, deny the catastrophic few.
     # Allow-list covers paths AGENTS.md already sanctions (Attic tmp/zephyr/cache/Developer).
     WORKER_POLICY='{"permission":{"edit":"allow","webfetch":"allow","bash":{"*":"allow","rm -rf *":"deny","sudo *":"deny","git push*":"deny"}}}'
-    # Zephyr toolchain env (per AGENTS.md) so Zephyr beads work regardless of shell context
-    ZEPHYR_ENV="ZEPHYR_SDK_INSTALL_DIR=/Volumes/Attic/zephyr-sdk-0.16.8 ZEPHYR_BASE=/Volumes/Attic/Developer/zephyr-workspace/zephyr PATH=/Volumes/Attic/Developer/zephyr-venv/bin:/Volumes/Attic/Developer/cmake-3.31.3-macos-universal/CMake.app/Contents/bin:\$PATH"
-    CMD="env PATH=\"$HOME/.opencode/bin:$PATH\" $ZEPHYR_ENV OPENCODE_CONFIG_CONTENT='$WORKER_POLICY' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    # Zephyr toolchain env per host (Mac Attic layout vs heft Developer layout),
+    # so Zephyr beads work regardless of shell context. ~/.opencode/bin is kept
+    # ahead of any stale system opencode install.
+    if [ -d /Volumes/Attic ]; then
+        ZEPHYR_ENV="ZEPHYR_SDK_INSTALL_DIR=/Volumes/Attic/zephyr-sdk-0.16.8 ZEPHYR_BASE=/Volumes/Attic/Developer/zephyr-workspace/zephyr PATH=/Volumes/Attic/Developer/zephyr-venv/bin:/Volumes/Attic/Developer/cmake-3.31.3-macos-universal/CMake.app/Contents/bin:$HOME/.opencode/bin:$PATH"
+    else
+        ZEPHYR_ENV="ZEPHYR_SDK_INSTALL_DIR=$HOME/Developer/zephyr-sdk/zephyr-sdk-0.16.8 ZEPHYR_BASE=$HOME/Developer/lichen-workspace/project-LICHEN/zephyr PATH=$HOME/Developer/lichen-venv/bin:$HOME/.opencode/bin:$PATH"
+    fi
+    CMD="env $ZEPHYR_ENV OPENCODE_CONFIG_CONTENT='$WORKER_POLICY' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
     else
