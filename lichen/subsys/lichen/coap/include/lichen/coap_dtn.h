@@ -63,10 +63,11 @@ struct lichen_deaddrop_provider {
  * Must be called before the CoAP server handles /deaddrop requests.
  * Initializes the DTN buffer and starts periodic expiry.
  *
- * @param[in] provider Provider callbacks (must remain valid)
+ * @param[in,out] provider Provider callbacks (must remain valid); the
+ *	module writes provider->dtn_buf, so the pointer is not const
  * @return 0 on success, negative errno on failure
  */
-int lichen_coap_deaddrop_register(const struct lichen_deaddrop_provider *provider);
+int lichen_coap_deaddrop_register(struct lichen_deaddrop_provider *provider);
 
 /**
  * @brief Initialize DTN subsystem

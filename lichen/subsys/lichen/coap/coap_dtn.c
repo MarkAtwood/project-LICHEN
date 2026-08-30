@@ -65,7 +65,7 @@ static void dtn_expire_work_handler(struct k_work *work)
 }
 
 int lichen_coap_deaddrop_register(
-	const struct lichen_deaddrop_provider *provider)
+	struct lichen_deaddrop_provider *provider)
 {
 	if (provider == NULL) return -EINVAL;
 	k_mutex_lock(&s_dtn_buf_mutex, K_FOREVER);
