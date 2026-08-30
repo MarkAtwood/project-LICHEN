@@ -320,7 +320,7 @@ class TestSosSignatureVectors:
         assert result.should_relay is True
 
     async def test_signed_sos_accepted_by_resource(self) -> None:
-        """Spec 18.4.1 gate: a validly signed SOS activates with 2.01."""
+        """Spec 18.4.1 gate: a validly signed SOS activates with 2.04."""
         priv, pub, iid = _identity()
         source = iid.hex()
         sos = SosResource(time_func=_Clock())
@@ -334,7 +334,7 @@ class TestSosSignatureVectors:
                     content_format=60,
                 )
             ).response
-            assert response.code == aiocoap.CREATED
+            assert response.code == aiocoap.CHANGED
             assert sos._active is True and sos._from == source
         finally:
             await _teardown(client, server)
@@ -622,7 +622,7 @@ class TestSosRateLimitingVectors:
                     content_format=60,
                 )
             ).response
-            assert response.code == aiocoap.CREATED
+            assert response.code == aiocoap.CHANGED
         finally:
             await _teardown(client, server)
 
@@ -808,9 +808,9 @@ class TestSosRateLimitingVectors:
             allowed = sos.check_rate_limit(source)
             if allowed:
                 sos._record_request(source)
-            codes.append("2.01" if allowed else "4.29")
-        assert codes == [f"{'2.01' if step['accept'] else '4.29'}" for step in steps]
-        assert codes == ["2.01", "2.01", "2.01", "4.29"]
+            codes.append("2.04" if allowed else "4.29")
+        assert codes == [f"{'2.04' if step['accept'] else '4.29'}" for step in steps]
+        assert codes == ["2.04", "2.04", "2.04", "4.29"]
 
     async def test_sos_independent_of_confessions_rate(self) -> None:
         vec = _vec(SOS_RATE_LIMITING, "sos_clears_confessions_rate")

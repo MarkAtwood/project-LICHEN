@@ -58,7 +58,7 @@ from typing import Any
 
 import cbor2
 import pytest
-from aiocoap import BAD_REQUEST, CREATED, POST, Message
+from aiocoap import BAD_REQUEST, CHANGED, NOT_FOUND, POST, Code, Message
 
 from lichen.client import CoapResult, LciClient, LciClientError
 from lichen.coap.params import (
@@ -377,24 +377,37 @@ def test_sos_cbor_canonical_signing_roundtrip(name: str, vector: dict) -> None:
 
 
 @pytest.mark.parametrize(
-    ("sos_type", "origin_seq"),
-    [("sos", 1), ("medical", 2), ("security", 3), ("fire", 4), ("cancel", 5)],
+    ("sos_type", "origin_seq", "expected_code"),
+    [
+        ("sos", 1, CHANGED),
+        ("medical", 2, CHANGED),
+        ("security", 3, CHANGED),
+        ("fire", 4, CHANGED),
+        # cancel routes to cancel semantics; on a fresh (idle) resource the
+        # active-alert check yields NOT_FOUND, not a validation rejection.
+        ("cancel", 5, NOT_FOUND),
+    ],
 )
-async def test_sos_type_validation_accepted_types(sos_type: str, origin_seq: int) -> None:
-    """All five spec types are accepted by POST /sos.
+async def test_sos_type_validation_accepted_types(
+    sos_type: str, origin_seq: int, expected_code: Code
+) -> None:
+    """All five spec types pass the POST /sos type-validation gate.
 
     The vector's unknown_type_handling expectation ("reject_or_log_unknown")
     has no enforcement surface in the implementation and stays undrivable.
 
     Each type uses a distinct origin_seq so the monotonic sequence gate
     passes on a fresh SosResource (which tracks per-node sequences).
+    Activation types update the pre-registered observable resource and
+    return 2.04 Changed (RFC 7252 §5.8.1); type=cancel routes to cancel
+    semantics, which on an idle resource is 4.04 Not Found.
     """
     vector = _case("sos_cbor.json", "sos_type_validation")
     assert sos_type in vector["valid_types"]
     resource = SosResource()
     body = _make_signed_sos_body(sos_type, ts=1716742800, origin_seq=origin_seq)
     response = await resource.render_post(Message(code=POST, payload=cbor2.dumps(body)))
-    assert response.code == CREATED
+    assert response.code == expected_code
 
 
 def test_sos_seq_rollover_known_divergence() -> None:
@@ -451,7 +464,7 @@ async def test_sos_ts_semantics() -> None:
     resource = SosResource()
     zero_ts_body = _make_signed_sos_body("sos", ts=0, origin_seq=1)
     response = await resource.render_post(Message(code=POST, payload=cbor2.dumps(zero_ts_body)))
-    assert response.code == CREATED
+    assert response.code == CHANGED
     fresh = SosResource()
     privkey, pubkey = derive_keypair(bytes(range(32)))
     iid = _pubkey_to_iid(pubkey)
