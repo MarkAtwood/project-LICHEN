@@ -67,6 +67,7 @@ pub use announce::{
 };
 #[cfg(feature = "std")]
 pub use announce_store::{AnnounceStoreError, AnnounceTrustState, AnnounceTrustStore};
+pub use announce_store::{AnnouncePinFloor, AnnounceStoreError, AnnounceTrustStore};
 pub use dispatch::{Dispatcher, Request, Resource, Response};
 #[cfg(feature = "std")]
 pub use gradient::GradientTable;
