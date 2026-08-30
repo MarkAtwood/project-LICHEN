@@ -401,6 +401,74 @@ async def test_signed_canonical_dio_uses_link_receipt_time_and_exact_span() -> N
     assert verifier.verify(authenticated).evidence.replay_counter == 1
 
 
+async def _dio_time_setup(
+    counter: int, option: DioTimeOption
+) -> tuple[Clock, QueueRadio, LinkLayer, DioTimeVerifier, AuthenticatedDio]:
+    clock = Clock(10)
+    radio = QueueRadio()
+    link = receiver(radio, clock)
+    radio.frames.append((signed_wire(REMOTE, dio_envelope(option), counter=counter), -91, 5))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    verifier = DioTimeVerifier(
+        "dio-verifier",
+        link,
+        peer_origins={REMOTE.pubkey: {Stratum.GNSS_GPSD: SourceClass.GNSS}},
+        peer_accuracy_seconds={REMOTE.pubkey: 1},
+        clock=clock.capability,
+    )
+    authenticated = authenticate_dio(link, received)
+    return clock, radio, link, verifier, authenticated
+
+
+@pytest.mark.asyncio
+async def test_option_mismatch_rejection_consumes_network_replay_high_water() -> None:
+    option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
+    clock, radio, link, verifier, authenticated = await _dio_time_setup(1, option)
+    gnss_provider = provider(clock, SourceClass.GNSS)
+    state = StratumTracker(
+        authorities=(verifier, gnss_provider),
+        policy=policy(SourceClass.GNSS, SourceClass.NETWORK, peers=frozenset({REMOTE.pubkey})),
+        floor_authority=EpochFloorAuthority(FLOOR),
+        clock=clock.capability,
+    )
+    sample = verifier.verify(authenticated)
+    assert not state.consider(DioTimeOption(Stratum.NTS, FLOOR), sample=sample)
+    assert state.last_rejection_reason == "sample-does-not-match-option"
+    reissued = verifier.verify(authenticated)
+    assert reissued.evidence.replay_counter == sample.evidence.replay_counter
+    assert not state.consider(option, sample=reissued)
+    assert state.last_rejection_reason == "network-replay-counter-not-new"
+    fresh_option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 30)
+    radio.frames.append((signed_wire(REMOTE, dio_envelope(fresh_option), counter=2), -91, 5))
+    fresh_received = await link.receive(100)
+    assert isinstance(fresh_received, RxFrame)
+    fresh_authenticated = authenticate_dio(link, fresh_received)
+    fresh_sample = verifier.verify(fresh_authenticated)
+    assert fresh_sample.evidence.replay_counter == 2
+    assert state.consider(fresh_option, sample=fresh_sample)
+    assert state.current_time() is not None
+    clock.set(11)
+    assert state.adopt(gnss(gnss_provider, FLOOR + 90))
+    assert state.current_time() == FLOOR + 90
+
+
+@pytest.mark.asyncio
+async def test_repeated_dio_time_verify_same_counter_rejected() -> None:
+    option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
+    clock, _radio, _link, verifier, authenticated = await _dio_time_setup(1, option)
+    state = tracker(
+        clock,
+        verifier,
+        policy(SourceClass.GNSS, SourceClass.NETWORK, peers=frozenset({REMOTE.pubkey})),
+    )
+    first = verifier.verify(authenticated)
+    assert state.consider(option, sample=first)
+    second = verifier.verify(authenticated)
+    assert not state.consider(option, sample=second)
+    assert state.last_rejection_reason == "network-replay-counter-not-new"
+
+
 @pytest.mark.asyncio
 async def test_delayed_receipt_expires_before_elevation() -> None:
     clock = Clock(10)
@@ -856,7 +924,11 @@ def test_concurrent_provision_raise_never_reports_valid_time_below_displayed_flo
 
 
 def test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition() -> None:
-    for action in ("adopt", "consider", "replace-policy"):
+    for action, reason in (
+        ("adopt", "sample-invalidated-or-replayed"),
+        ("consider", "sample-invalidated-or-replayed"),
+        ("replace-policy", "below-live-epoch-floor:accepted"),
+    ):
         clock = Clock()
         authority = provider(clock, SourceClass.GNSS)
         verifier, admin = provision()
@@ -871,12 +943,22 @@ def test_live_floor_is_revalidated_at_adopt_consider_and_policy_transition() -> 
         assert state.adopt(gnss(authority, FLOOR + 10))
         verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 20).encode())
         if action == "adopt":
-            state.adopt(gnss(authority, FLOOR + 19))
+            assert state.adopt(gnss(authority, FLOOR + 19)) is False
         elif action == "consider":
             candidate = gnss(authority, FLOOR + 19)
-            state.consider(DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate)
+            assert (
+                state.consider(
+                    DioTimeOption(Stratum.GNSS_GPSD, FLOOR + 19), sample=candidate
+                )
+                is False
+            )
         else:
             state.replace_policy(policy_admin, policy(SourceClass.GNSS))
+        # The transition itself must have cleared the below-floor active
+        # source; raw_sample_diagnostic() reads state without triggering
+        # read-path revalidation, so this pins eager invalidation.
+        assert state.raw_sample_diagnostic() is None, action
+        assert state.last_rejection_reason == reason, action
         assert not state.status().wall_clock_valid, action
 
 
