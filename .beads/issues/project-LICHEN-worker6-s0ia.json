@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-s0ia",
   "title": "Atomic DIO admission can deadlock against a generation-lease callback",
   "description": "DodagState.process_authenticated_dio[_evidence] holds the DODAG RLock while LinkLayer.transact_authenticated_schc_dio waits for foreign generation leases. An allowed elevate_authenticated_dio callback runs outside the Link lock while holding such a lease and may call process_dio/wait on the DODAG lock, producing DODAG-lock -\u003e lease versus lease -\u003e DODAG-lock deadlock. Establish Link-wait -\u003e DODAG-lock ordering (while retaining atomic SCHC-policy+routing commit), and add a deterministic two-thread regression.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:32:05.053484Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:30:02.716878Z",
-  "started_at": "2026-08-24T15:32:15.100958Z"
+  "updated_at": "2026-08-30T04:25:02.176565Z",
+  "started_at": "2026-08-24T15:32:15.100958Z",
+  "closed_at": "2026-08-30T04:25:02.176565Z",
+  "close_reason": "Implemented: process_authenticated_dio (python/src/lichen/rpl/dodag.py:483-511) holds the DODAG lock only for the state snapshot (:496-498) and calls link_layer.accept_authenticated_dio outside it; LinkLayer.transact_authenticated_schc_dio waits for foreign generation leases inside the security lock (_wait_for_foreign_generation_leases_unlocked, link_layer.py:693,:704-707) and runs elevate callbacks outside the lock with lease released after (:699-702) — the DODAG-lock -\u003e generation-lease cycle is eliminated. python/tests/timing + python/tests/link: 1704 passed, 12 skipped."
 }
