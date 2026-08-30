@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-vn20",
+  "title": "unique_roots does not clear stale test dirs; pid reuse can resurrect state",
+  "description": "Found by robustness codereview of project-LICHEN-worker6-s6ml. announce_store.rs:347-357: unique_roots builds temp paths from a per-process counter plus pid but never clears pre-existing directories; a crashed prior run whose pid was reused can leave pre-populated records that spuriously fail tests like store_survives_restart_and_enforces_durable_floor (flaky failure, not a false pass). Panic-leaked dirs share the same root cause. Fix: remove_dir_all before create_dir_all in unique_roots, or add a random component to the path.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:26:42.054909Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T17:26:42.054909Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vn20",
+      "depends_on_id": "project-LICHEN-worker6-s6ml",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:26:42.392623Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

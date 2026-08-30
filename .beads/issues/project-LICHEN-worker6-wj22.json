@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-wj22",
+  "title": "accept() partial floor-write failure leaves cache behind disk state",
+  "description": "Found by robustness codereview of project-LICHEN-worker6-s6ml. Pre-existing, safe direction: if write(state) succeeds and write(floor) fails in accept (announce_store.rs:312-313), accept returns Err(Io) and the in-memory cache keeps the older floor while disk state advanced; a replay of the already-accepted announce can then be re-accepted in-process via the cache hit (:301-307) with the stale lower floor. Never permits durable rollback (disk heals forward on next load), but it is the one cache/disk divergence the heal design permits. Fix: document the divergence in the accept() doc comment, or on floor-write Io failure re-read disk and refresh the cache entry.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:26:32.900681Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T17:26:32.900681Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wj22",
+      "depends_on_id": "project-LICHEN-worker6-s6ml",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:26:33.166047Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

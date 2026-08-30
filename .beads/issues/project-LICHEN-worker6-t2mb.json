@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-t2mb",
+  "title": "Add test for heal-failure Err(Io) retry idempotency in announce_store load",
+  "description": "Found by robustness codereview of project-LICHEN-worker6-s6ml. The fix relies on a failed heal write (announce_store.rs:273) leaving (Some(state), None) on disk and the next load retrying the heal successfully, but no test covers this and FileStorage has no fault-injection seam (unlike MemStorage fail_after_writes at lichen-hal/src/storage.rs:443). The retry is byte-idempotent only because Schnorr48 signing is deterministic (schnorr.rs:3, determinism test at :637). Fix: add a fault-injection seam to FileStorage or simulate via a raw unwritable floor path, then assert first load returns Err(Io) with floor still absent and second load heals to Ok(Some(state)) with identical record bytes.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T17:26:32.31884Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T17:26:32.31884Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t2mb",
+      "depends_on_id": "project-LICHEN-worker6-s6ml",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T17:26:32.686684Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
