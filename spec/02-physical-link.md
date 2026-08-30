@@ -293,6 +293,11 @@ Use (TOFU) semantics:
    timeout, explicit removal). Eviction of a pinned (SIID, key) binding MUST
    also invalidate all replay state for that signer.
 
+6. **Trust Store Bounds:** Implementations MUST bound the trust store to at
+   most 256 entries. On overflow, implementations MUST evict the
+   least-recently-verified binding (LRU by last-verified timestamp). Eviction
+   of a trust-store entry invalidates replay state for that signer generation.
+
 Implementations on constrained devices MAY use constant-time trial verification
 over a bounded peer table when the trust store is small, but MUST still enforce
 the pin-on-first-verified-contact and reject-on-mismatch rules above.
