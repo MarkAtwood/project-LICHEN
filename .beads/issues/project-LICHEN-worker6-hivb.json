@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-hivb",
+  "title": "BlockReceiver loses negotiated szx across re-requests after mid-transfer size change",
+  "description": "Found by 3x review of bead 0oim (pre-existing, receiver side, NOT introduced by the acknowledge clamp fix). rust/lichen-coap/src/block.rs: receive_block (block.rs:396-424) accepts a server block with a NEW szx (mid-transfer size change is legal and tested at block.rs:742-769) but never persists it into self.block_size; next_request_block (block.rs:434-438) rebuilds requests at the stale requested size with expected num taken from the server. Concrete hang trace: transfer requests {0,szx=2}+{1,szx=2}; server responds {1,szx=3} (128B blocks) and later blocks at szx=3; a lost final block {2,szx=3} triggers a re-request built as {num:2,szx:2} = byte offset 128 while the server has sent through 256 -\u003e server resends overlapping data -\u003e receive_block rejects BlockOutOfOrder (block.rs:402-407) -\u003e caller retry loop never converges. Fix: persist self.block_size = block.size() in receive_block (and verify num accounting matches the new size), plus a regression test: mid-transfer size change then lost-final-block re-request converges.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T07:26:09.471808Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T07:26:09.471808Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hivb",
+      "depends_on_id": "project-LICHEN-worker6-0oim",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T07:26:09.704709Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

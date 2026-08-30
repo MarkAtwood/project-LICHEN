@@ -302,8 +302,14 @@ impl BlockSender {
             .map(|end| end.min(self.data_len))
             .ok_or(CoapError::InvalidBlockOption)?;
         let ack_start = ack.offset();
+        // The final block of a transfer may carry fewer payload bytes than
+        // the negotiated size implies (sent_end truncates at data_len), so
+        // the ack's implied end clamps to the data length too — an unclamped
+        // terminal ack (ack_start + full block size > data_len) would
+        // otherwise be rejected as out-of-order.
         let ack_end = ack_start
             .checked_add(ack.size())
+            .map(|end| end.min(self.data_len))
             .ok_or(CoapError::InvalidBlockOption)?;
         if ack_start > sent_start || ack_end <= sent_start || ack_end > sent_end {
             return Err(CoapError::BlockOutOfOrder);
@@ -547,6 +553,23 @@ mod tests {
         let (next, data) = sender.next_block().unwrap();
         assert_eq!(next, BlockOption::new(1, true, 2).unwrap());
         assert_eq!(data, &payload[64..128]);
+    }
+
+    #[test]
+    fn sender_accepts_terminal_ack_for_short_final_block() {
+        // 100 bytes in 64-byte blocks: the final block carries only 36 bytes,
+        // so the echoed ack (full szx) implies an end past data_len and must
+        // not be rejected as out-of-order.
+        let payload = [0x5au8; 100];
+        let mut sender = BlockSender::new(&payload, 64).unwrap();
+        let sent = sender.next_block().unwrap().0;
+        assert_eq!(sent, BlockOption::new(0, true, 2).unwrap());
+        assert!(!sender.acknowledge(sent, sent).unwrap());
+
+        let sent = sender.next_block().unwrap().0;
+        assert_eq!(sent, BlockOption::new(1, false, 2).unwrap());
+        assert!(sender.acknowledge(sent, sent).unwrap());
+        assert!(sender.is_complete());
     }
 
     #[test]
