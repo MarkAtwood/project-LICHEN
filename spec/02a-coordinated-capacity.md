@@ -184,9 +184,12 @@ Nodes MUST implement join-attempt rate limiting to prevent resource exhaustion a
 - The backoff counter resets on successful join (valid slot_map received and adopted).
 
 **Root-Side Limits:**
-- The root SHOULD track join requests per source IID with a sliding window.
-- The root SHOULD ignore join requests from any IID that exceeds 6 requests per 60-second window.
+- The root MUST track join requests per source IID with a sliding window.
+- The root MUST ignore join requests from any IID that exceeds 6 requests per 60-second window.
+- The root MUST enforce a global join rate limit of 60 requests per 60-second window across all IIDs. When exceeded, the root MUST respond with 5.03 Service Unavailable and MAY enable PoW challenge.
 - The root MAY silently drop excessive join requests without response; it MUST NOT allocate state for dropped requests.
+
+Implementations MUST bound the per-IID join tracking table to at most 1024 entries. On overflow, implementations MUST evict the least-recently-seen IID (LRU by last request timestamp).
 
 **Proof-of-Work (OPTIONAL):**
 
