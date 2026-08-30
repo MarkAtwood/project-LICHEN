@@ -28,7 +28,8 @@ use super::error::RplReceiveError;
 use super::util::{
     advance_rpl_source_route, bootstrap_announce_peer, dao_parts, dio_dis_destination_is_allowed,
     eui64_link_local, ipv6_eui64, link_local_from_iid, multicast_dis_jitter, routing_announce,
-    rpl_ipv6_multicast_is_allowed, wire_is_for_local,
+    rpl_ipv6_multicast_is_allowed, survey_routing_headers, wire_is_for_local,
+    RoutingHeaderSurvey,
 };
 use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
 
@@ -241,10 +242,19 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     let header = Ipv6Header::from_bytes(&received.ipv6)
                         .map_err(|_| RplReceiveError::Receive(RxError::SchcDecompress))?;
                     secure_datagram_from_received(&received).map_err(RplReceiveError::Receive)?;
-                    if header.next_header == 43 {
-                        return self
-                            .process_source_route(received, frame.sender().iid)
-                            .await;
+                    // SECURITY: RFC 6554 forwarding precedence (mirrors the C
+                    // router's parse_ipv6_dispatch). A datagram whose RH3 still
+                    // has segments to visit is relayed, never consumed here;
+                    // the survey also rejects malformed or repeated Routing
+                    // headers before any state is touched.
+                    match survey_routing_headers(&received.ipv6) {
+                        Err(error) => return Err(RplReceiveError::Receive(error)),
+                        Ok(RoutingHeaderSurvey::SourceRouted(_)) => {
+                            return self
+                                .process_source_route(received, frame.sender().iid)
+                                .await;
+                        }
+                        Ok(RoutingHeaderSurvey::Absent) => {}
                     }
                     let local_link_addr = self.stack.local_addr().0;
                     if header.dst.0 != self.local_rpl_addr

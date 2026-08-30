@@ -209,63 +209,185 @@ pub(crate) fn dio_dis_destination_is_allowed(ipv6: &[u8], local_rpl_addr: [u8; 1
         })
 }
 
+/// A located, policy-valid RPL source-routing header within a packet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SourceRouteView {
+    /// Offset of the Routing header within the packet.
+    pub offset: usize,
+    /// Total Routing header length in bytes (`(hdr_ext_len + 1) * 8`).
+    pub routing_len: usize,
+    /// Byte position of the next-header field that points at this header
+    /// (6 for the IPv6 header, or the previous extension header's position).
+    pub previous_next_header_position: usize,
+    /// Number of 16-byte grid addresses.
+    pub address_count: usize,
+    /// Segments still to be visited.
+    pub segments_left: u8,
+}
+
+impl SourceRouteView {
+    /// True when the header still has segments to visit: RFC 6554 forwarding
+    /// precedence applies and the datagram must never be delivered locally.
+    pub(crate) fn in_transit(&self) -> bool {
+        self.segments_left != 0
+    }
+}
+
+/// Outcome of surveying a packet's extension chain for RPL source routing
+/// (mirrors the C router's `parse_ipv6_dispatch` policy in
+/// `lichen/subsys/lichen/routing/router.c`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RoutingHeaderSurvey {
+    /// No Routing header in the chain.
+    Absent,
+    /// Exactly one policy-valid RH3 present (segments consumed or not).
+    SourceRouted(SourceRouteView),
+}
+
+/// Validate the extension chain and locate any RPL source-routing header.
+///
+/// Fails closed on: inconsistent payload length, unsupported or malformed
+/// extensions, more than one Routing header, a non-RH3 routing type, misaligned
+/// or reserved-bit-violating RH3s, and grid addresses that are unspecified,
+/// multicast, duplicated, equal to the outer destination, or equal to the
+/// packet source. An in-transit RH3 (`segments_left != 0`) additionally
+/// requires `segments_left < hop_limit` (spec 05-routing 8.4 / RFC 6554).
+pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxError> {
+    if ipv6.len() < IPV6_HEADER_LEN || ipv6[0] >> 4 != 6 {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    let payload_len = usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]]));
+    if IPV6_HEADER_LEN + payload_len != ipv6.len() {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    let source: [u8; 16] = ipv6[8..24].try_into().expect("checked header length");
+    let destination: [u8; 16] = ipv6[24..40].try_into().expect("checked header length");
+    let hop_limit = ipv6[7];
+
+    let mut next_header = ipv6[6];
+    let mut offset = IPV6_HEADER_LEN;
+    let mut previous_next_header_position = 6usize;
+    let mut routing: Option<SourceRouteView> = None;
+    for _extension_count in 0..4 {
+        match next_header {
+            next_header::UDP | next_header::ICMPV6 => break,
+            next_header::NO_NEXT => {
+                if offset != ipv6.len() {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                break;
+            }
+            next_header::FRAGMENT => return Err(RxError::InvalidSourceRoute),
+            next_header::HOP_BY_HOP | next_header::ROUTING | next_header::DEST_OPTIONS => {
+                if offset + 2 > ipv6.len() {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                let routing_len = (usize::from(ipv6[offset + 1]) + 1) * 8;
+                let extension_end = offset + routing_len;
+                if extension_end > ipv6.len() {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                if next_header == next_header::ROUTING {
+                    if routing.is_some() || routing_len < 24 || ipv6[offset + 2] != 3 {
+                        return Err(RxError::InvalidSourceRoute);
+                    }
+                    if (routing_len - 8) % 16 != 0 || ipv6[offset + 4..offset + 8] != [0, 0, 0, 0]
+                    {
+                        return Err(RxError::InvalidSourceRoute);
+                    }
+                    let address_count = (routing_len - 8) / 16;
+                    let segments_left = ipv6[offset + 3];
+                    if usize::from(segments_left) > address_count {
+                        return Err(RxError::InvalidSourceRoute);
+                    }
+                    for index in 0..address_count {
+                        let start = offset + 8 + index * 16;
+                        let address: [u8; 16] =
+                            ipv6[start..start + 16].try_into().expect("aligned grid");
+                        if address == [0; 16]
+                            || address[0] == 0xff
+                            || address == destination
+                            || address == source
+                        {
+                            return Err(RxError::InvalidSourceRoute);
+                        }
+                        for prior in 0..index {
+                            let prior_start = offset + 8 + prior * 16;
+                            if ipv6[prior_start..prior_start + 16] == address {
+                                return Err(RxError::InvalidSourceRoute);
+                            }
+                        }
+                    }
+                    if segments_left != 0 && usize::from(segments_left) >= usize::from(hop_limit)
+                    {
+                        return Err(RxError::InvalidSourceRoute);
+                    }
+                    routing = Some(SourceRouteView {
+                        offset,
+                        routing_len,
+                        previous_next_header_position,
+                        address_count,
+                        segments_left,
+                    });
+                }
+                previous_next_header_position = offset;
+                next_header = ipv6[offset];
+                offset = extension_end;
+            }
+            _ => return Err(RxError::InvalidSourceRoute),
+        }
+    }
+
+    Ok(match routing {
+        None => RoutingHeaderSurvey::Absent,
+        Some(view) => RoutingHeaderSurvey::SourceRouted(view),
+    })
+}
+
+/// Consume one RFC 6554 source-route segment in place.
+///
+/// `current_destination` is the packet's outer destination (the caller's local
+/// address); `sender_iid` is the authenticated link-layer sender, whose
+/// link-local address must never appear as the next hop (forwarding loop).
+///
+/// Returns the next destination to relay to, or `None` when `segments_left`
+/// was already zero: the header is consumed, stripped, and the packet is
+/// addressed to this node for local delivery.
 pub(crate) fn advance_rpl_source_route(
     ipv6: &mut Vec<u8>,
     current_destination: [u8; 16],
     sender_iid: [u8; 8],
 ) -> Result<Option<[u8; 16]>, RxError> {
-    if ipv6.len() < 64 || ipv6[6] != 43 || ipv6[24..40] != current_destination {
+    let view = match survey_routing_headers(ipv6)? {
+        RoutingHeaderSurvey::SourceRouted(view) => view,
+        RoutingHeaderSurvey::Absent => return Err(RxError::InvalidSourceRoute),
+    };
+    if ipv6[24..40] != current_destination {
         return Err(RxError::InvalidSourceRoute);
-    }
-    let payload_len = usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]]));
-    let routing_len = (usize::from(ipv6[41]) + 1) * 8;
-    if routing_len < 24
-        || routing_len > payload_len
-        || (routing_len - 8) % 16 != 0
-        || IPV6_HEADER_LEN + payload_len != ipv6.len()
-        || ipv6[42] != 3
-        || ipv6[44..48] != [0, 0, 0, 0]
-    {
-        return Err(RxError::InvalidSourceRoute);
-    }
-    let address_count = (routing_len - 8) / 16;
-    let segments_left = usize::from(ipv6[43]);
-    if segments_left > address_count {
-        return Err(RxError::InvalidSourceRoute);
-    }
-    for index in 0..address_count {
-        let start = 48 + index * 16;
-        let address: [u8; 16] = ipv6[start..start + 16].try_into().unwrap();
-        if address[0] == 0xff || address == current_destination {
-            return Err(RxError::InvalidSourceRoute);
-        }
-        for prior in 0..index {
-            let prior_start = 48 + prior * 16;
-            if ipv6[prior_start..prior_start + 16] == address {
-                return Err(RxError::InvalidSourceRoute);
-            }
-        }
     }
 
-    if segments_left == 0 {
-        let plain_payload_len = payload_len - routing_len;
-        let mut plain = vec![0u8; IPV6_HEADER_LEN + plain_payload_len];
-        plain[..IPV6_HEADER_LEN].copy_from_slice(&ipv6[..IPV6_HEADER_LEN]);
+    if view.segments_left == 0 {
+        let plain_payload_len = usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]]))
+            - view.routing_len;
+        let mut plain = Vec::with_capacity(ipv6.len() - view.routing_len);
+        plain.extend_from_slice(&ipv6[..view.offset]);
+        plain[view.previous_next_header_position] = ipv6[view.offset];
+        plain.extend_from_slice(&ipv6[view.offset + view.routing_len..]);
         plain[4..6].copy_from_slice(&(plain_payload_len as u16).to_be_bytes());
-        plain[6] = ipv6[40];
-        plain[IPV6_HEADER_LEN..].copy_from_slice(&ipv6[IPV6_HEADER_LEN + routing_len..]);
         *ipv6 = plain;
         return Ok(None);
     }
 
-    let next_index = address_count - segments_left;
-    let next_start = 48 + next_index * 16;
-    let next_destination: [u8; 16] = ipv6[next_start..next_start + 16].try_into().unwrap();
+    let next_index = view.address_count - usize::from(view.segments_left);
+    let next_start = view.offset + 8 + next_index * 16;
+    let next_destination: [u8; 16] = ipv6[next_start..next_start + 16]
+        .try_into()
+        .expect("surveyed grid address");
     if ipv6_eui64(next_destination) == ipv6_eui64(link_local_from_iid(sender_iid)) {
         return Err(RxError::InvalidSourceRoute);
     }
     ipv6[next_start..next_start + 16].copy_from_slice(&current_destination);
     ipv6[24..40].copy_from_slice(&next_destination);
-    ipv6[43] -= 1;
+    ipv6[view.offset + 3] -= 1;
     Ok(Some(next_destination))
 }

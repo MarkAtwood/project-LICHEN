@@ -76,6 +76,11 @@ from lichen.radio.base import Radio
 from lichen.routing.router import RouteDecision, Router
 from lichen.rpl.dodag import DodagState
 from lichen.rpl.messages import RPL_ICMPV6_TYPE, RplCode
+from lichen.rpl.routing import (
+    RoutingError,
+    advance_source_route,
+    survey_source_route,
+)
 from lichen.schc.codec import SchcError
 from lichen.schc.context import RuleVersionFailureTracker, RuleVersionFailureTrackerFull
 from lichen.schc.fragment import (
@@ -975,6 +980,20 @@ class Node:
         relay_identity = _relay_identity(packet)
 
         now_ms = int(asyncio.get_running_loop().time() * 1000)
+
+        # SECURITY: RFC 6554 forwarding precedence (mirrors the C router). A
+        # datagram whose source-routing header still has segments to visit is
+        # relayed to the next segment, never consumed locally; a malformed or
+        # repeated Routing header drops the packet outright.
+        try:
+            in_transit = survey_source_route(packet)
+        except RoutingError as error:
+            logger.debug("dropping packet with invalid source-route header: %s", error)
+            return
+        if in_transit:
+            await self._relay_source_routed(packet, relay_identity, now_ms)
+            return
+
         decision, next_hop = self.router.route(packet, now_ms)
 
         if decision == RouteDecision.DELIVER_LOCAL:
@@ -1009,6 +1028,46 @@ class Node:
             # Cache only a packet accepted for transmission; a transient
             # sender-capacity/radio failure must remain retryable.
             self._remember_relay(relay_identity, now_ms)
+
+    async def _relay_source_routed(
+        self,
+        packet: IPv6Packet,
+        relay_identity: bytes,
+        now_ms: int,
+    ) -> None:
+        """Consume one RH3 segment and relay (RFC 6554); never deliver locally."""
+        try:
+            advanced, next_hop = advance_source_route(packet)
+        except RoutingError as error:
+            logger.debug("dropping in-transit source-routed packet: %s", error)
+            return
+        if next_hop is None:
+            # survey_source_route guarantees segments_left != 0 here.
+            return
+        if self._relay_seen_recently(relay_identity, now_ms):
+            return
+        forwarded_ipv6 = advanced.to_bytes()
+        # Link authentication proves only the immediate sender. Without
+        # end-to-end source evidence, forwarded data MUST NOT modify the
+        # routable gradient table for its asserted IPv6 source.
+        peer = self._peer_for_next_hop(next_hop)
+        if peer is None:
+            logger.warning("source-route next hop has no pinned peer identity")
+            return
+        try:
+            forwarded = self.link.compress_schc_for_peer(
+                forwarded_ipv6,
+                peer.pubkey,
+                allow_fragmentation=True,
+            )
+        except (SchcError, TypeError, ValueError):
+            logger.warning("forwarding next-hop SCHC policy rejected packet")
+            return
+        if not await self._transmit_peer_schc(forwarded, peer):
+            return
+        # Cache only a packet accepted for transmission; a transient
+        # sender-capacity/radio failure must remain retryable.
+        self._remember_relay(relay_identity, now_ms)
 
     def _is_configured_rpl_dio(self, schc: bytes) -> bool:
         """Classify a candidate DIO without consuming its authenticated receipt."""

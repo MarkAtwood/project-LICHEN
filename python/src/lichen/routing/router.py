@@ -25,6 +25,7 @@ from lichen.gradient import GradientTable
 from lichen.ipv6.packet import IPv6Packet
 from lichen.loadng.discovery import LoadngRouter
 from lichen.rpl.dodag import DodagState
+from lichen.rpl.routing import RoutingError, survey_source_route
 
 logger = logging.getLogger(__name__)
 
@@ -469,6 +470,20 @@ class Router:
         dst = packet.header.dst_addr
         if not isinstance(dst, IPv6Address):
             logger.error("route: invalid dst_addr type: %s", type(dst))
+            return RouteDecision.DROP, None
+
+        # SECURITY: RFC 6554 forwarding precedence (mirrors the C router). A
+        # datagram whose source-routing header still has segments to visit is
+        # never delivered or routed by destination: the header owner must
+        # advance it. Direct route() callers have no channel to advance the
+        # header, so in-transit (or malformed) source routes drop here; the
+        # node's receive path advances before routing.
+        try:
+            in_transit = survey_source_route(packet)
+        except RoutingError as error:
+            logger.debug("route: dropping packet with invalid source-route header: %s", error)
+            return RouteDecision.DROP, None
+        if in_transit:
             return RouteDecision.DROP, None
 
         # Why check for local first: Don't route packets addressed to us.
