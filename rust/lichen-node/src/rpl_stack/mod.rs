@@ -9,7 +9,7 @@ mod receive;
 mod runtime;
 mod secure;
 mod transmit;
-mod util;
+pub(crate) mod util;
 
 #[cfg(test)]
 mod tests;

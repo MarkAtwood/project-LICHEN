@@ -564,6 +564,17 @@ impl<R: Radio> Stack<R> {
         if !ipv6_destination_is_local_or_multicast(&ipv6, &local_link, &local_native) {
             return Ok(None);
         }
+        // SECURITY: RFC 6554 forwarding precedence (mirrors the C router).  A
+        // datagram whose source-routing header still has segments to visit —
+        // or one with malformed or repeated Routing headers — must never be
+        // consumed locally.  The plaintext stack has no forwarding contract;
+        // in-transit traffic is relayed by the RPL owner, so drop it here.
+        match crate::rpl_stack::util::survey_routing_headers(&ipv6) {
+            Ok(crate::rpl_stack::util::RoutingHeaderSurvey::SourceRouted(view))
+                if !view.in_transit() => {}
+            Ok(crate::rpl_stack::util::RoutingHeaderSurvey::Absent) => {}
+            _ => return Ok(None),
+        }
 
         Ok(Some(ReceivedIpv6 {
             ipv6,

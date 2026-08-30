@@ -425,3 +425,42 @@ def advance_source_route(
     new_header = replace(packet.header, dst_addr=next_hop, hop_limit=packet.header.hop_limit - 1)
     new_packet = replace(packet, header=new_header, extension_headers=new_exts)
     return new_packet, next_hop
+
+
+def survey_source_route(packet: IPv6Packet) -> bool:
+    """Router-level source-route admission (mirrors the C router's
+    ``parse_ipv6_dispatch`` policy in ``lichen/subsys/lichen/routing/router.c``).
+
+    Returns ``True`` when the packet carries an in-transit source-routing
+    header (``segments_left != 0``) and therefore has RFC 6554 forwarding
+    precedence: it must be relayed to the next segment, never delivered
+    locally.
+
+    Raises :class:`RoutingError` on policy violations: more than one Routing
+    header, a malformed RH3, a grid address that is unspecified, multicast,
+    duplicated, equal to the outer destination, or equal to the packet source,
+    or ``segments_left >= hop_limit`` for an in-transit header
+    (spec/05-routing.md 8.4).
+    """
+    routing_headers = [
+        ext for ext in packet.extension_headers if ext.header_type == NextHeader.ROUTING
+    ]
+    if len(routing_headers) > 1:
+        raise RoutingError("multiple Routing extension headers")
+    if not routing_headers:
+        return False
+    srh = SourceRoutingHeader.from_extension_header(routing_headers[0])
+    for address in srh.addresses:
+        if address.is_unspecified or address.is_multicast:
+            raise RoutingError("invalid source-route address")
+        if address == packet.header.src_addr:
+            raise RoutingError("source-route address duplicates packet source")
+        if address == packet.header.dst_addr:
+            raise RoutingError("source-route address duplicates outer destination")
+    if len(set(srh.addresses)) != len(srh.addresses):
+        raise RoutingError("duplicate source-route address")
+    if srh.segments_left == 0:
+        return False
+    if srh.segments_left >= packet.header.hop_limit:
+        raise RoutingError("segments_left not strictly less than hop_limit")
+    return True
