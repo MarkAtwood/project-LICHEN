@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-19d4",
+  "title": "lichen-link tests silently skipped without --features schnorr,std; lichen-node blockwise test fails",
+  "description": "Discovered in wave 2 (b4f7/d9ab verification, both reproducible with changes stashed): (1) plain 'cargo test -p lichen-link' never compiles link_layer.rs - the whole link-layer suite (incl. peer/replay tests) is gated behind 'schnorr,std', so default CI-style runs report 93 tests/0 failures while skipping the actual link-layer suite; lichen-schc's link_layer_integration test likewise fails to compile without --all-features (12 errors: authenticated_frame, write_to missing) - feature-gating drift between lichen-link and lichen-schc consumers. (2) Pre-existing deterministic failure: cargo test -p lichen-node :: secure::tests::secure_block1_and_block2_roundtrip_replay_order_and_pivs at rust/lichen-node/src/secure.rs:2568 with Blockwise(BlockOutOfOrder) (274/275 pass). Also tracked-already: project-LICHEN-worker6-buh8 (authenticated-path 1500 scratch caps, filed by wave-2 agent).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T02:11:05.530902Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T02:11:05.530902Z"
+}
