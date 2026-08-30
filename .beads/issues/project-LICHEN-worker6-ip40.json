@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ip40",
+  "title": "Verified receipt elevation scheduled-awaitable rejection tests",
+  "description": "Decomposition of project-LICHEN-worker6-qzxv (persist/clear slice done in parent). Add scheduled Task/Future/custom-awaitable tests for the verified receipt elevation callback: link_layer.py:1065 require_sync_callable + reject_awaitable_result on the elevation result — a receipt-elevation hook returning asyncio.create_task must raise TypeError, leave the task cancelled and never-run, and produce no authenticated receipt state. Follow tests/timing/test_time_sync.py::test_provision_persist_hook_rejects_scheduled_awaitable.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T16:43:10.449053Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T16:43:10.449053Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ip40",
+      "depends_on_id": "project-LICHEN-worker6-qzxv",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T16:43:11.007212Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
