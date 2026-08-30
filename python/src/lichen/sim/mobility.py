@@ -396,8 +396,16 @@ class GroupMobility(MobilityPattern):
         if self.jitter_m <= 0.0:
             return
         self._jitter_elapsed_us += dt_us
+        redraws = 0
         while self._jitter_elapsed_us >= self.jitter_update_us:
             self._jitter_elapsed_us -= self.jitter_update_us
+            redraws += 1
+            if redraws > _MAX_STEP_ITERATIONS:
+                # Giant dt with a tiny update interval: cap the redraw
+                # churn the same way step() caps leg transitions. Only
+                # the last-drawn targets matter for the glide.
+                self._jitter_elapsed_us = 0
+                break
             self._jitter_target = [self._draw_jitter() for _ in self._members]
         progress = min(1.0, dt_us / self.jitter_update_us)
         max_step = self.jitter_m * progress

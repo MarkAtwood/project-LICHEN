@@ -70,6 +70,32 @@ def test_group_mobility_giant_dt_sub_us_legs_terminates() -> None:
 
 
 @pytest.mark.timeout(10)
+def test_group_mobility_giant_dt_tiny_jitter_update_terminates() -> None:
+    # jitter_update_us=1 with a giant dt used to drive ~dt redraw
+    # iterations in _update_jitter (RNG + trig per member per pass),
+    # outside the movement-loop iteration cap.
+    pattern = GroupMobility(
+        area_bounds=(0, 100, 0, 100),
+        speed_m_s=1.0,
+        pause_time_us=0,
+        group_size=3,
+        group_radius_m=5.0,
+        jitter_m=2.0,
+        jitter_update_us=1,
+        seed=42,
+    )
+    anchor = SimNode(id="anchor", position=(50.0, 50.0, 0.0))
+    pattern.add_member(anchor)
+    for i in range(1, 3):
+        pattern.add_member(SimNode(id=f"member-{i}", position=(50.0, 50.0, 0.0)))
+
+    pattern.step(anchor, GIANT_DT_US)
+
+    for member in pattern._members:
+        _assert_in_bounds(member)
+
+
+@pytest.mark.timeout(10)
 def test_rpgm_giant_dt_sub_us_legs_terminates() -> None:
     pattern = RPGM(
         area_bounds=(0, 100, 0, 100),
