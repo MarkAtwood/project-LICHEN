@@ -46,6 +46,9 @@ done
 # Back to main repo
 cd "$REPO_ROOT"
 
+# Merge worker branches to main. Beads flat files are authoritative in main
+# only (bd writes the shared store via BEADS_DIR), so any .beads changes a
+# worker branch carries (legacy symlink-era commits) are dropped at merge time.
 echo ""
 echo "=== Merging worker branches to main ==="
 
@@ -58,12 +61,30 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
 
     echo "Merging $branch ($ahead commits ahead)..."
 
-    if git merge "$branch" --no-edit; then
-        echo "  merged successfully"
+    if git merge --no-commit --no-ff "$branch" >/dev/null 2>&1; then
+        # Normalize: beads store lives in main only; discard branch-side .beads entries
+        if git diff --cached --name-only -- .beads | grep -q .; then
+            git checkout HEAD -- .beads 2>/dev/null || git rm -r --cached --ignore-unmatch .beads >/dev/null 2>&1
+            git checkout HEAD -- .beads 2>/dev/null || true
+        fi
+        if git commit --no-edit --quiet; then
+            echo "  merged (code only)"
+        else
+            echo "  nothing to commit after normalization"
+            git merge --abort 2>/dev/null || true
+        fi
     else
-        echo "  CONFLICT — merge aborted, branch kept for manual resolution"
-        git merge --abort 2>/dev/null || true
-        conflicted+=("$branch")
+        # Retry surgically: apply everything except .beads as a plain commit
+        if git diff --name-only main..."$branch" -- ':!.beads' ':!.beads/**' | grep -q . \
+           && git diff main..."$branch" -- ':!.beads' ':!.beads/**' | git apply --index 2>/dev/null; then
+            git commit --no-edit -q -m "chore: merge $branch (code only, .beads excluded)"
+            echo "  merged surgically (conflicts were .beads-only or patch-applied)"
+        else
+            echo "  CONFLICT — merge aborted, branch kept for manual resolution"
+            git merge --abort 2>/dev/null || true
+            git checkout -- .beads 2>/dev/null || true
+            conflicted+=("$branch")
+        fi
     fi
 done
 
