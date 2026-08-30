@@ -2,15 +2,17 @@
   "id": "project-LICHEN-worker6-ikjk",
   "title": "Review: key_persistence.py correctness 2026-08-24",
   "notes": "Review confidence: 15% chance of missed bug.\nLeast confident areas: Race conditions in concurrent access (TrustStorePersistence not documented as thread-safe like TrustStore).\nWould raise confidence if: Explicit thread-safety documentation or locking for TrustStorePersistence.\n\nSummary: 2 findings filed\n- P2: 1 (missing file permissions on save)\n- P3: 1 (non-constant-time checksum comparison, labeled opinion)\n\nNo P0/P1 correctness bugs found. The new load() validation is thorough.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T15:55:46.438596Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:29:51.558955Z",
+  "updated_at": "2026-08-30T03:29:19.833397Z",
   "started_at": "2026-08-24T15:55:53.979244Z",
+  "closed_at": "2026-08-30T03:29:19.833397Z",
+  "close_reason": "Epic verified complete: both filed findings are fixed at HEAD and its review conclusions recorded. P2 (missing file permissions on save): key_persistence.py now enforces 0o700 dirs (mkdir mode + chmod + stat recheck at :87-90) and 0o600 files (os.open flags + fchmod at :101-105, :311, :318). P3 (non-constant-time checksum comparison): hmac.compare_digest used at :774. Tests: python/tests/crypto persist/trust selection 148 passed. No open children found; review confidence note (15% missed-bug risk re TrustStorePersistence thread-safety) is informational.",
   "labels": [
     "review"
   ]
