@@ -2948,8 +2948,7 @@ mod tests {
         packet[24..40].copy_from_slice(&hex("fe800000000000000000000000000002"));
         packet[40..48].copy_from_slice(&[17, 2, routing_type, segments_left, 0, 0, 0, 0]);
         packet[48..64].copy_from_slice(hop);
-        let checksum =
-            udp_checksum(&packet[8..24], checksum_dst, 5000, 5001, b"ping").unwrap();
+        let checksum = udp_checksum(&packet[8..24], checksum_dst, 5000, 5001, b"ping").unwrap();
         packet[64..66].copy_from_slice(&5000u16.to_be_bytes());
         packet[66..68].copy_from_slice(&5001u16.to_be_bytes());
         packet[68..70].copy_from_slice(&(udp_len as u16).to_be_bytes());
@@ -2978,15 +2977,24 @@ mod tests {
 
         // RFC 5095 deprecated Routing type 0 is malformed.
         let packet = srh_packet(0, 1, &hex("fe80000000000000000000000000000b"), &dst);
-        assert!(matches!(compress(&packet, &mut out), Err(SchcError::InvalidPacket(_))));
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(_))
+        ));
 
         // segments-left above the address count is malformed.
         let packet = srh_packet(3, 2, &hex("fe80000000000000000000000000000c"), &final_dst);
-        assert!(matches!(compress(&packet, &mut out), Err(SchcError::InvalidPacket(_))));
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(_))
+        ));
 
         // Checksum over the outer destination instead of the final destination.
         let packet = srh_packet(3, 1, &final_dst, &dst);
-        assert!(matches!(compress(&packet, &mut out), Err(SchcError::InvalidPacket(_))));
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(_))
+        ));
     }
 
     #[test]
@@ -3001,7 +3009,10 @@ mod tests {
         fragged[40..48].copy_from_slice(&[17, 0, 0, 0, 0, 0, 0, 1]);
         fragged[48..].copy_from_slice(&packet[40..]);
         let mut out = [0u8; 256];
-        assert!(matches!(compress(&fragged, &mut out), Err(SchcError::InvalidPacket(_))));
+        assert!(matches!(
+            compress(&fragged, &mut out),
+            Err(SchcError::InvalidPacket(_))
+        ));
     }
 
     #[test]
