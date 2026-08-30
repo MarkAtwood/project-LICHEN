@@ -19,6 +19,7 @@ import re
 import sys
 import threading
 import zlib
+from collections import Counter
 from ipaddress import IPv6Address
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -4878,10 +4879,14 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             expected = Ack(rule_id, window, complete=True).to_bytes()
             assert wire == expected, f"{name}: ACK complete mismatch"
 
+    else:
+        pytest.fail(f"{name}: unknown schc_adaptation category {category!r}")
+
 
 def test_schc_adaptation_vector_coverage() -> None:
     """Verify schc_adaptation.json covers all required categories."""
-    cases = _schc_adaptation_cases()
+    doc = _load("schc_adaptation.json")
+    cases = [(v["name"], v) for v in doc["vectors"]]
     categories = {vector["category"] for _, vector in cases}
     expected = {
         "rejection",
@@ -4899,6 +4904,51 @@ def test_schc_adaptation_vector_coverage() -> None:
     }
     missing = expected - categories
     assert not missing, f"Missing categories: {missing}"
+
+    # Per-category count guard shared with the Rust suite: the committed
+    # expected_counts table is the cross-implementation oracle, so a row
+    # added or mis-categorized in the JSON fails loudly in both suites.
+    # Key semantics mirror the Rust counters: "p0" counts P0-priority rows,
+    # "endpoint_direction" counts category fragmentation_endpoint_direction,
+    # and "duplicate_idempotence" counts the receive_tile_0_then_tile_0_again
+    # single_active scenario.
+    declared = dict(doc["expected_counts"])
+    counted = Counter(vector["category"] for _, vector in cases)
+    p0_declared = declared.pop("p0", None)
+    if p0_declared is not None:
+        p0_counted = sum(1 for _, vector in cases if vector.get("priority") == "P0")
+        assert p0_counted == p0_declared, (
+            f"priority P0: counted {p0_counted}, expected_counts declares {p0_declared}"
+        )
+    endpoint_direction_declared = declared.pop("endpoint_direction", None)
+    if endpoint_direction_declared is not None:
+        counted["fragmentation_endpoint_direction"] = counted.pop(
+            "fragmentation_endpoint_direction", 0
+        )
+        assert (
+            counted["fragmentation_endpoint_direction"] == endpoint_direction_declared
+        ), (
+            f"category fragmentation_endpoint_direction: "
+            f"counted {counted['fragmentation_endpoint_direction']}, "
+            f"expected_counts declares {endpoint_direction_declared}"
+        )
+    duplicate_declared = declared.pop("duplicate_idempotence", None)
+    if duplicate_declared is not None:
+        duplicate_counted = sum(
+            1
+            for _, vector in cases
+            if vector.get("category") == "single_active"
+            and vector.get("scenario") == "receive_tile_0_then_tile_0_again"
+        )
+        assert duplicate_counted == duplicate_declared, (
+            f"duplicate_idempotence: counted {duplicate_counted}, "
+            f"expected_counts declares {duplicate_declared}"
+        )
+    for category, count in declared.items():
+        assert counted.get(category, 0) == count, (
+            f"category {category}: counted {counted.get(category, 0)}, "
+            f"expected_counts declares {count}"
+        )
 
     # Verify P0 vectors are present
     p0_vectors = [v for _, v in cases if v.get("priority") == "P0"]
