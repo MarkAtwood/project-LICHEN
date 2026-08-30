@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-mpct",
   "title": "[bug] lichen-node rfc6554_route_crosses_two_relays_and_restores_packet fails on HEAD after worker7 SRH validation rewrite",
   "description": "Deterministic failure on HEAD (worker6 checkout, clean tree): lichen-node/src/rpl_stack/tests.rs:443 unwrap on Err(InvalidSourceRoute) at the second relay hop of advance_rpl_source_route. Introduced by worker7 sync commit acffbe4365 which rewrote advance_rpl_source_route with SourceRouteView/RoutingHeaderSurvey policy mirroring the C router (router.c). The test's hop/sender data (relay_one[8..] as sender_iid at the middle hop) no longer satisfies the new policy. Discovered while running lichen-node tests to validate the local oscore observe port (bead 9liz work); NOT caused by it (workspace diff was Cargo.toml patch path only). Likely within the in-progress project-LICHEN-worker6-xyix fix scope (router-level SRH validation + aligned address grid); coordinate with worker7: either the test data must be updated to grid-valid addresses, or the new validation rejects a legitimate middle-hop case (sender_iid expectation changed from previous-hop to upstream-of-sender).",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T20:32:40.539743819Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-30T20:32:40.539743819Z",
+  "updated_at": "2026-08-30T21:12:17.946735599Z",
+  "closed_at": "2026-08-30T21:12:17.946735599Z",
+  "close_reason": "Duplicate of project-LICHEN-worker6-scgh (same test, same failure, filed independently after qhh6 unblocked lichen-node compilation on heft). Working scgh instead; scgh carries additional claimer guidance.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-mpct",

@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-scgh",
+  "title": "lichen-node rpl_stack test rfc6554_route_crosses_two_relays_and_restores_packet fails: InvalidSourceRoute",
+  "description": "Discovered on heft once project-LICHEN-worker6-qhh6 unblocked lichen-node compilation (first run of the suite on this box; surfaced while verifying t8ox). cargo test -p lichen-node: 293 passed, 1 failed - thread panicked at rust/lichen-node/src/rpl_stack/tests.rs:443:91: called Result::unwrap() on an Err value: InvalidSourceRoute (test rfc6554_route_crosses_two_relays_and_restores_packet). Not caused by t8ox/p4mf changes (announce_store.rs only, merged commits 9e8cae59b5/3aa7b4245c/64bdfc03bc never touch rpl_stack). Likely related to the in-flight RH3 router-validation work (project-LICHEN-worker6-xyix / hahk describe Rust-side RH3 admission and route validation; my branch merged beads-worker-4/6/7 at 12:14-12:22). rpl_stack/receive.rs and util.rs also carry pre-existing cargo-fmt drift, suggesting uncommitted/divergent state in this area. Note for claimer: cross-check against worker6-xyix's fix direction (router-level SRH validation: final != outer dst when SL!=0, single RH3, aligned address grid) and the C reference behavior (routing/router.c) before changing admission logic; also confirm the test's expected route grid matches the vectors in test/vectors/.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:10:54.992296662Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-30T21:10:54.992296662Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-scgh",
+      "depends_on_id": "project-LICHEN-worker6-qhh6",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:10:55.090414731Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
