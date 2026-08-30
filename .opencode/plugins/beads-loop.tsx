@@ -1,5 +1,7 @@
 // ponytail: self-looping beads worker driver for an interactive TUI; gated by OPENCODE_BEADS_LOOP env
 // .tsx extension (no JSX) so the server plugin auto-scan (*.ts,*.js) skips it — TUI-only module
+import { appendFileSync } from "node:fs"
+import { homedir } from "node:os"
 import type { TuiPlugin } from "@opencode-ai/plugin/tui"
 
 const id = "lichen-beads-loop"
@@ -13,10 +15,10 @@ Exactly one bead this round.`
 
 async function roundPrompt(cwd: string): Promise<string> {
   try {
-    const text = await Bun.file(`${cwd}/${ROUND_PROMPT}`).text()
+    const text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
     if (text.trim()) return text
   } catch {}
-  return ROUND_PROMPT
+  return ROUND_PROMPT_FALLBACK
 }
 
 const NEW_SESSION_EVERY = 6
@@ -34,6 +36,14 @@ const tui: TuiPlugin = async (api) => {
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+  // File-based debug trace: survives TUI restarts, readable without the TUI.
+  const TRACE = `${homedir()}/Developer/fleet-debug.log`
+  function trace(message: string) {
+    try {
+      appendFileSync(TRACE, `${new Date().toISOString()} worker${worker}: ${message}\n`)
+    } catch {}
+  }
+
   function report(message: string, variant: "info" | "success" | "error" = "info") {
     api.ui.toast({ title: "beads-loop", message, variant })
     void api.client.app
@@ -41,20 +51,25 @@ const tui: TuiPlugin = async (api) => {
       .catch(() => {})
   }
 
+  // -1 = bd failed (missing, nonzero exit, unparseable output); >= 0 = queue length
   async function readyCount(): Promise<number> {
     try {
+      const cwd = api.state.path.directory || process.cwd()
       const proc = Bun.spawn(["bd", "ready", "--json"], {
-        cwd: api.state.path.directory || process.cwd(),
+        cwd,
         stdout: "pipe",
-        stderr: "ignore",
+        stderr: "pipe",
       })
       const out = await new Response(proc.stdout).text()
+      const err = await new Response(proc.stderr).text()
       await proc.exited
-      if (proc.exitCode !== 0) return 0
+      trace(`readyCount cwd=${cwd} exit=${proc.exitCode} err=${err.slice(0, 120).replace(/\n/g, " ")}`)
+      if (proc.exitCode !== 0) return -1
       const parsed: unknown = JSON.parse(out)
-      return Array.isArray(parsed) ? parsed.length : 0
-    } catch {
-      return 0
+      return Array.isArray(parsed) ? parsed.length : -1
+    } catch (error) {
+      trace(`readyCount threw: ${error instanceof Error ? error.message : String(error)}`)
+      return -1
     }
   }
 
@@ -64,26 +79,41 @@ const tui: TuiPlugin = async (api) => {
       await api.client.tui.executeCommand({ command: "session.new" })
       await sleep(1000)
     }
-    await api.client.tui.appendPrompt({ text: await roundPrompt(api.state.path.directory || process.cwd()) })
+    const prompt = await roundPrompt(api.state.path.directory || process.cwd())
+    trace(`round ${rounds}: submitting ${prompt.length} chars`)
+    await api.client.tui.appendPrompt({ text: prompt })
     await api.client.tui.submitPrompt()
     lastRoundAt = Date.now()
     report(`round ${rounds} submitted (worker ${worker})`)
   }
 
   async function maybeRound(trigger: string) {
-    if (running) return
-    if (Date.now() - lastRoundAt < MIN_ROUND_INTERVAL_MS) return
+    if (running) {
+      trace(`${trigger}: skipped, already running`)
+      return
+    }
+    if (Date.now() - lastRoundAt < MIN_ROUND_INTERVAL_MS) {
+      trace(`${trigger}: skipped, min interval`)
+      return
+    }
     running = true
     try {
       await sleep(SETTLE_MS)
       const remaining = await readyCount()
+      trace(`${trigger}: remaining=${remaining}`)
+      if (remaining < 0) {
+        report("bd ready failed — worker loop paused, see fleet-debug.log", "error")
+        return
+      }
       if (remaining === 0) {
         report("ready queue drained — worker loop done", "success")
         return
       }
       await runRound()
     } catch (error) {
-      report(`${trigger} failed: ${error instanceof Error ? error.message : String(error)}`, "error")
+      const message = error instanceof Error ? error.message : String(error)
+      trace(`${trigger} FAILED: ${message}`)
+      report(`${trigger} failed: ${message}`, "error")
     } finally {
       running = false
     }
@@ -94,6 +124,7 @@ const tui: TuiPlugin = async (api) => {
   })
 
   report(`active (worker ${worker}, settle ${SETTLE_MS}ms)`)
+  trace("plugin activated, kickoff scheduled")
   setTimeout(() => {
     void maybeRound("kickoff")
   }, 3000 + worker * 1500)
