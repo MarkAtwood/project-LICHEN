@@ -1,3 +1,4 @@
 Continue the beads worker loop (instructions: scripts/beads-worker-full.txt).
 Claim the next ready bead, complete it fully (tests, 3x codereview delegating each pass to the reviewer model per step 4, findings filed as new beads, close, commit), then stop and report. Exactly one bead this round.
+SIZE RULE (Yegge): if the bead is more than ~5 minutes of complexity, decompose it FIRST and claim the smallest child. If mid-bead it runs past ~15 minutes, follow the TIMEBOX rule — commit the slice, file follow-ups for the remainder, release, end the round.
 TIMEBOX: if the bead is too big to finish within ~30-40 minutes, follow the TIMEBOX rule in the instructions — commit the slice, file follow-up beads for the remainder, release, end the round.

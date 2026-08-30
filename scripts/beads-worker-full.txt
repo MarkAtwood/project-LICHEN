@@ -25,21 +25,22 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 
 - `blocked:hardware` label — needs physical bench hardware
 - `needs-linux` label — work it via `ssh heft` (local Linux builder); EC2 only if heft lacks the toolchain
-- Too complex (>50 lines, >3 files, fuzzy scope, or you estimate >30 minutes) — decompose, but do it RIGHT:
-  1. Create children: `bd create --parent <id> "<slice>" --description="..." --label decomposed`
-     — 2 to 5 children, each independently ≤50 lines, each with a clear description.
-  2. If a child must land after another, say so in its description.
-  3. NEVER close the parent while children are open — it closes when they do.
-  4. Release the parent (`bd update <id> --status open --assignee ""`) and claim a child next.
-  5. If you cannot write the full child set in one pass, release the parent UNCHANGED
-     (no half-decompositions) with a note explaining what made it hard, and move on.
-  6. Never close any bead that has open children.
-- TIMEBOX (applies MID-bead, not just before claiming): one round ≈ one bead ≈ 30–40 minutes
-  of work. If you are past that and the remaining work is still large, STOP:
-  commit the coherent slice you have done, `bd create` follow-up beads for the remainder
-  (discovered-from this bead, noting what is already done), then release the original
-  (`bd update <id> --status open --assignee ""`) and end your round. Grinding for hours
-  on one bead is a protocol violation — the swarm needs small landable pieces, not heroes.
+- More than ~5 minutes of complexity — decompose FIRST (Yegge's rule). A leaf bead is
+  ONE narrow change: one function fixed, one behavior added, one test written —
+  typically ≤20 lines across 1–2 files. Create children with
+  `bd create --parent <id> "<slice>" --description="..." --label decomposed`
+  — as many as the work actually needs (don't force a count), each independently
+  landable. If a child must land after another, say so in its description.
+  NEVER close the parent while children are open — it closes when they do.
+  Release the parent (`bd update <id> --status open --assignee ""`) and claim a child.
+  If you cannot write the full child set in one pass, release the parent UNCHANGED
+  (no half-decompositions) with a note explaining why, and move on.
+  Never close any bead that has open children.
+- TIMEBOX (applies MID-bead): if a bead runs past ~15 minutes it is too big —
+  STOP: commit the coherent slice done so far, file follow-up beads for the remainder
+  (discovered-from this bead, noting what is already done), release the original
+  (`bd update <id> --status open --assignee ""`), and end your round. Grinding is a
+  protocol violation — the swarm wants small landable pieces, not heroes.
 - Stuck >5 min — release and move on
 
 ## Dirty file check (after claiming bead)
