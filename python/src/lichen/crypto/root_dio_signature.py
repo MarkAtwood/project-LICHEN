@@ -166,7 +166,7 @@ class RootDioSignature:
 
     COSE_Sign1 structure:
     [
-        h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+        h'a1013a00010000',      ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
         {4: h'<root-iid>'},     ; unprotected: {kid: root 8-byte IID}
         h'<payload>',           ; CBOR-encoded RootDioSignaturePayload
         h'<48-byte signature>'  ; Schnorr48 signature
