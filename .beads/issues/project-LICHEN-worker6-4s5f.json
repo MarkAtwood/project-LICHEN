@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T18:03:04.442108Z",
   "created_by": "opencode-worker-3",
   "updated_at": "2026-08-30T18:03:04.442108Z",
+  "labels": [
+    "lci"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-4s5f",

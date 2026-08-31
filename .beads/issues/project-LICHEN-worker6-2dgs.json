@@ -12,7 +12,8 @@
   "labels": [
     "tdma",
     "tests",
-    "coap"
+    "coap",
+    "lci"
   ],
   "dependencies": [
     {
