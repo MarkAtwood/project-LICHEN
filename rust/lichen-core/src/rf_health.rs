@@ -20,6 +20,8 @@ const SNR_POOR: i8 = 0;
 const SNR_GOOD: i8 = 8;
 const LOAD_HIGH: u32 = FP_SCALE * 4 / 5;
 const LOAD_REBALANCE: u32 = FP_SCALE * 2 / 5;
+/// Smallest Q16.16 value strictly greater than 0.8 (0.8 * 65536 = 52428.8).
+const LOAD_FACTOR_FLOOR_FP: u32 = 52429;
 
 /// CCP-16 Section 2a.10.3: PER threshold for density bonus (100 permille = 10%).
 const DENSITY_PER_BONUS_PERMILLE: u16 = 100;
@@ -399,8 +401,10 @@ impl RfHealthMetrics {
     }
 
     /// Full AdaptiveSFSelect pseudocode from spec/02a-coordinated-capacity.md
-    /// §2a.7. Takes table-assigned SF, utilization (scaled by `util_fp_scale`),
-    /// and per-neighbor EMA loss (Q16.16). Returns (sf, tx_allowed).
+    /// §2a.8 (including the post-step-6 minimum-SF floors). Takes table-assigned SF, utilization (scaled by `util_fp_scale`),
+    /// per-neighbor EMA loss (Q16.16), and applies the floors from the
+    /// tracked load factor (Q16.16, same scale as the loss input). Returns
+    /// (sf, tx_allowed).
     #[inline]
     pub fn adaptive_sf_select(
         &self,
@@ -420,7 +424,7 @@ impl RfHealthMetrics {
         let explicit = assigned_sf.is_some() || utilization.is_some() || ema_loss_fp.is_some();
 
         // Step 3: density driven only when explicit pseudocode mode is engaged
-        if (explicit && self.density > 10) || util > util_thresh_150 {
+        if (explicit && self.density > DENSITY_HIGH) || util > util_thresh_150 {
             sf = sf.saturating_add(2).min(12);
         }
         // Step 4: only apply when caller engages pseudocode with explicit params
@@ -435,6 +439,19 @@ impl RfHealthMetrics {
         if util > util_thresh_200 {
             sf = 12;
             tx_allowed = false;
+        }
+        // Post-step-6 minimum-SF floors (spec 2a.8, Downgrade MUST column,
+        // in order a-d; floor a subsumes b).
+        if snr_ema < -5 {
+            sf = 12;
+        } else if snr_ema < 0 {
+            sf = sf.max(11);
+        }
+        if self.density > DENSITY_HIGH {
+            sf = sf.max(11);
+        }
+        if self.load_factor_fp >= LOAD_FACTOR_FLOOR_FP {
+            sf = sf.max(11);
         }
         (sf, tx_allowed)
     }
@@ -647,6 +664,63 @@ mod tests {
         assert_eq!(m.adaptive_sf(), 12);
         let (sf, allowed) = m.adaptive_sf_select(None, None, None);
         assert_eq!(sf, 12);
+        assert!(allowed);
+    }
+
+    #[test]
+    fn adaptive_sf_select_floors() {
+        // Post-step-6 minimum-SF floors (spec 2a.8 a-d). density=4 and
+        // utilization=0 keep steps 3 and 5 out of the way; each case uses a
+        // fresh metrics struct so stored state cannot leak.
+
+        // Floor a: EMA_SNR < -5 forces SF = 12. EMA needs repeated samples
+        // of -6 to converge below -5 (alpha = 1/4, arithmetic shift).
+        let mut m = RfHealthMetrics::new();
+        m.record_density(4);
+        for _ in 0..10 {
+            m.record_rx(-6);
+        }
+        let (sf, allowed) = m.adaptive_sf_select(Some(7), None, None);
+        assert_eq!(sf, 12);
+        assert!(allowed);
+
+        // Floor b: -5 <= EMA_SNR < 0 raises SF to at least 11.
+        let mut m = RfHealthMetrics::new();
+        m.record_density(4);
+        m.record_rx(-3);
+        let (sf, allowed) = m.adaptive_sf_select(Some(7), None, None);
+        assert_eq!(sf, 11);
+        assert!(allowed);
+
+        // Boundary: EMA_SNR = 0 triggers neither a nor b.
+        let mut m = RfHealthMetrics::new();
+        m.record_density(4);
+        let (sf, allowed) = m.adaptive_sf_select(Some(7), None, None);
+        assert_eq!(sf, 7);
+        assert!(allowed);
+
+        // Floor c: density > 8 raises SF to at least 11 (start 7: step 3
+        // raises 7 -> 9, then the floor raises 9 -> 11).
+        let mut m = RfHealthMetrics::new();
+        m.record_density(9);
+        let (sf, allowed) = m.adaptive_sf_select(Some(7), None, None);
+        assert_eq!(sf, 11);
+        assert!(allowed);
+
+        // Floor d: load factor >= 0.8 raises SF to at least 11.
+        let mut m = RfHealthMetrics::new();
+        m.record_density(4);
+        m.record_load_factor(52429);
+        let (sf, allowed) = m.adaptive_sf_select(Some(7), None, None);
+        assert_eq!(sf, 11);
+        assert!(allowed);
+
+        // Just below 0.8 (52428 = 0.79998): no floor d.
+        let mut m = RfHealthMetrics::new();
+        m.record_density(4);
+        m.record_load_factor(52428);
+        let (sf, allowed) = m.adaptive_sf_select(Some(7), None, None);
+        assert_eq!(sf, 7);
         assert!(allowed);
     }
 
