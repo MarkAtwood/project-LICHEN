@@ -1,0 +1,7 @@
+{
+  "id": "1788160660101282666-1",
+  "issue_id": "project-LICHEN-kpv0",
+  "author": "opencode-worker-5",
+  "text": "Status survey 2026-08-31 (bead description stale): ruff now reports 84 errors across ~40 files in python/ (was 9); cargo fmt --check shows exactly 10 diff hunks in 5 files (lichen-hal/src/storage.rs x5, lichen-node/src/announce_store.rs, lichen-node/src/rpl_stack/receive.rs, lichen-node/src/rpl_stack/util.rs x3); pytest-cov\u003e=7,\u003c8 IS already in pyproject dev deps and uv.lock but absent from the installed venv (/home/mark/Developer/lichen-venv), and no --cov invocation found in current .github/workflows or scripts; clippy/rustdoc/mypy counts not re-verified this survey. NOTE: util.rs fmt hunks overlap b7z9.4.2 (Rust egress decapsulation, targets util.rs:259-394) — fmt that file only after b7z9.4.2 lands. Decomposing into per-gate children.",
+  "created_at": "2026-08-31T07:17:40.101282666Z"
+}

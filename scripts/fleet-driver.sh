@@ -73,6 +73,7 @@ while :; do
             NIP=$(worker_in_progress "$i")
             [ "$NIP" -gt 0 ] && { echo "   worker$i: holds $NIP in-progress bead(s) — waiting"; continue; }
             echo "   worker$i: dispatching round"
+            wait_ready "$WIN"
             tmux send-keys -t "$WIN" -l "$ROUND_PROMPT"
             sleep 1
             tmux send-keys -t "$WIN" Enter
