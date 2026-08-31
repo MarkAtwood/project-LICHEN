@@ -8,5 +8,8 @@
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:21:25.808423Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T23:21:25.808423Z"
+  "updated_at": "2026-08-27T23:21:25.808423Z",
+  "labels": [
+    "human-only"
+  ]
 }

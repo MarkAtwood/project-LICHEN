@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T05:21:23.498002Z",
   "labels": [
-    "l2"
+    "l2",
+    "human-only"
   ],
   "dependencies": [
     {
