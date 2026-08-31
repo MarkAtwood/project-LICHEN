@@ -402,6 +402,49 @@ static int test_queue_copy_gpsr_and_dtn(void)
 	return 0;
 }
 
+static int test_dtn_expiry_zero_drop_and_expire(void)
+{
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	struct accessor_state state = {.discovery_succeeds = false};
+	struct lichen_router router;
+	struct lichen_packet_route_result result;
+	struct lichen_route_packet input;
+	uint8_t destination[16] = {0x03, [15] = 9U};
+	uint8_t packet[48];
+
+	/* S-flag store-and-forward with expiry==0 at a valid clock: the
+	 * router DTN fallback requires a nonzero expiry, so the packet is
+	 * silently dropped rather than buffered (the R-05-080 fail-open
+	 * interplay for clockless nodes is tracked in bead 6dh4). */
+	configure_router(&router, &state);
+	(void)make_udp_packet(packet, sizeof(packet), source_address, destination, 8U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = sizeof(packet), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		.dtn_expiry_unix = 0U, .now_unix = 100U,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 10U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_DROP);
+	REQUIRE(router.dtn_buffer_bytes == 0U);
+
+	/* A stored message survives until its expiry, then flushes exactly
+	 * once via lichen_router_dtn_expire. */
+	configure_router(&router, &state);
+	input.dtn_expiry_unix = 200U;
+	REQUIRE(lichen_router_route_packet(&router, &input, 11U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+	REQUIRE(result.path == LICHEN_ROUTE_PATH_DTN);
+	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
+
+	REQUIRE(lichen_router_dtn_expire(&router, 150U) == 0);
+	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
+	REQUIRE(lichen_router_dtn_expire(&router, 200U) == 1);
+	REQUIRE(router.dtn_buffer_bytes == 0U);
+	REQUIRE(lichen_router_dtn_expire(&router, 300U) == 0);
+	REQUIRE(lichen_router_dtn_expire(NULL, 300U) == 0);
+#endif
+	return 0;
+}
+
 static int run_all_tests(void)
 {
 	int ret;
@@ -416,7 +459,9 @@ static int run_all_tests(void)
 	if (ret != 0) return ret;
 	ret = test_source_route_validation();
 	if (ret != 0) return ret;
-	return test_queue_copy_gpsr_and_dtn();
+	ret = test_queue_copy_gpsr_and_dtn();
+	if (ret != 0) return ret;
+	return test_dtn_expiry_zero_drop_and_expire();
 }
 
 #ifdef __ZEPHYR__

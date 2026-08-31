@@ -57,9 +57,9 @@ config LICHEN_COAP_SERVER_STANDALONE
 	depends on LICHEN_COAP_SERVER
 	depends on !LICHEN_COAP_CONFIG
 	depends on LICHEN_SLIP_TRANSPORT
+	depends on LICHEN_SENML
+	depends on LICHEN_OSCORE
 	default n
-	select LICHEN_SENML
-	select LICHEN_OSCORE
 	help
 	  Compile the subsystem-owned COAP_SERVICE (lichen_coap_server) from
 	  coap_server.c, which registers its own /status, /config, /neighbors,
