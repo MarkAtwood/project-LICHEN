@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T22:10:58.973743151Z",
   "labels": [
     "networking",
-    "rust"
+    "rust",
+    "vectors"
   ],
   "dependencies": [
     {
