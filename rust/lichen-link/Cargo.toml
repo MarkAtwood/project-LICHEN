@@ -16,6 +16,13 @@ defmt = ["dep:defmt", "lichen-core/defmt"]
 log = ["dep:log", "lichen-core/log"]
 
 [dependencies]
+# AtomicU32 RMW (fetch_update) is unavailable on no-CAS MCU targets
+# (riscv32imc, thumbv6m): portable-atomic routes it through the
+# critical-section contract the firmware platform provides, while using
+# native atomics everywhere else.
+portable-atomic = { version = "1", default-features = false, features = [
+    "critical-section",
+] }
 schnorr48 = { version = "0.1", default-features = false, optional = true }
 lichen-core = { path = "../lichen-core" }
 sha2 = { version = "0.11.0", default-features = false, optional = true, features = ["zeroize"] }
