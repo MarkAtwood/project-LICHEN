@@ -12,7 +12,8 @@
     "integration",
     "hardware",
     "test",
-    "defer-external"
+    "defer-external",
+    "gateway"
   ],
   "dependencies": [
     {
