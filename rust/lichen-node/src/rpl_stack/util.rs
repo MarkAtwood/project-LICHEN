@@ -63,7 +63,12 @@ pub(crate) fn rpl_ipv6_packet(
     let mut packet = vec![0u8; IPV6_HEADER_LEN + usize::from(payload_len)];
     let src = Addr(source);
     let dst = Addr(destination);
-    Ipv6Header::new(next_header::ICMPV6, src, dst)
+    let mut header = Ipv6Header::new(next_header::ICMPV6, src, dst);
+    // RPL control messages are link-local single-hop: RFC 6550 / spec 09
+    // 13.3 (R-09-005) require hop limit 255 on send, and the authenticated
+    // DIO admission path rejects anything else.
+    header.hop_limit = 255;
+    header
         .write_to(payload_len, &mut packet[..IPV6_HEADER_LEN])
         .ok()?;
     packet[IPV6_HEADER_LEN] = RPL_ICMPV6_TYPE;
