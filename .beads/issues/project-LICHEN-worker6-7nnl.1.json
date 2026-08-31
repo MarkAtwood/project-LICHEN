@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-7nnl.1",
+  "title": "Rust lichen-gateway: bounded LRU capability table (256, 25% egress reservation)",
+  "description": "Smallest child of 7nnl (b7z9.36(b)). Pure data-structure slice: a capability table keyed by announcer IID (8 bytes) with capacity 256, LRU eviction, and the spec 8.12 'MAY reserve 25 percent for egress' partition (64 slots reserved for egress-path entries; eviction of mesh-learned entries must not consume the reserved partition — read spec/06-security.md:949-1008 for the exact reservation semantics before implementing). Stored per entry: capability payload bytes, sequence number, expiry. no_std-friendly (heapless or bounded Vec per lichen-gateway conventions). Unit tests: insert/lookup/update-refresh ordering, LRU eviction order, reservation partition behavior, capacity bounds. Discovered from project-LICHEN-worker6-7nnl.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:45:15.27905676Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T23:45:32.172981888Z",
+  "started_at": "2026-08-31T23:45:32.172981888Z",
+  "lease_expires_at": "2026-08-31T23:50:32.172981888Z",
+  "heartbeat_at": "2026-08-31T23:45:32.172981888Z",
+  "labels": [
+    "gateway",
+    "decomposed",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7nnl.1",
+      "depends_on_id": "project-LICHEN-worker6-7nnl",
+      "type": "parent-child",
+      "created_at": "2026-08-31T23:45:15.50385158Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

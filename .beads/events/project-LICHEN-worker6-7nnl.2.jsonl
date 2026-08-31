@@ -1,0 +1,4 @@
+{"id":"01a05a36-7e6e-77f4-9b1a-2dafed1ac2c0","issue_id":"project-LICHEN-worker6-7nnl.2","event_type":"created","actor":"opencode-worker-2","old_value":"","new_value":"","created_at":"2026-08-31T23:45:15.886522576Z"}
+{"id":"01a05a36-7e73-7580-b906-1844f70a3a94","issue_id":"project-LICHEN-worker6-7nnl.2","event_type":"label_added","actor":"opencode-worker-2","comment":"Added label: gateway","created_at":"2026-08-31T23:45:15.891362183Z"}
+{"id":"01a05a36-7e78-733a-bded-216297ef109a","issue_id":"project-LICHEN-worker6-7nnl.2","event_type":"label_added","actor":"opencode-worker-2","comment":"Added label: security","created_at":"2026-08-31T23:45:15.896213156Z"}
+{"id":"01a05a36-7e7d-701d-a72e-6c50c6dc9abd","issue_id":"project-LICHEN-worker6-7nnl.2","event_type":"label_added","actor":"opencode-worker-2","comment":"Added label: decomposed","created_at":"2026-08-31T23:45:15.901009069Z"}

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-7nnl.2",
+  "title": "Rust lichen-gateway: COSE_Sign1 decode + Schnorr48 capability verification (mirror python ordering)",
+  "description": "Child of 7nnl. Port python/src/lichen/crypto/capability_announcements.py from_cose_sign1:199-232 + verify:279-333 to Rust: COSE_Sign1 decode (kid == announcer_iid, alg -65537), verification ordering: reserved bits 2-7 zero -\u003e IID match -\u003e signature (Schnorr48 over SHA-256 Sig_structure) -\u003e expiry -\u003e seq \u003e cached (replay). Vectors exist: test/vectors/capability_announcements.json — drive the tests from it (independent oracle = python impl + vectors). Cross-check the Rust Schnorr48 verify (schnorr48 crate) signature semantics against python's before wiring. Discovered from project-LICHEN-worker6-7nnl.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:45:15.881551379Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T23:45:15.881551379Z",
+  "labels": [
+    "gateway",
+    "security",
+    "decomposed"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7nnl.2",
+      "depends_on_id": "project-LICHEN-worker6-7nnl",
+      "type": "parent-child",
+      "created_at": "2026-08-31T23:45:16.058667465Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
