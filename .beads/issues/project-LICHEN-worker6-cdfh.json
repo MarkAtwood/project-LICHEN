@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-cdfh",
+  "title": "gateway slot-claim: spec-08 GCP-6.5 step-failure codes (4.03 replay/expiry/invalid-slot, 4.09 conflict-unresolved) unimplemented — verifier conflates all causes",
+  "description": "Refinement surfaced by l1qw.16.3 codereview (worker-4 self-review after delegation timeout, against spec/08-gateway-coordination.md GCP-6.5 validation steps): the spec distinguishes (a) invalid/missing SIGNATURE -\u003e silent discard per GCP-6.3 (landed in l1qw.16.3: decode/into_raw/verify failures all empty-2.04), (b) replay (claim_seq gate step 8), expiry (step 7), invalid-slot (step 9) -\u003e 4.03 Forbidden, (c) unresolved conflict -\u003e 4.09 Conflict with the winning claim. Rust handle_post_slots's verifier (slot.rs SlotClaimVerifier::verify, SlotError::{StaleSuperframe, Replay, IdentityMismatch, StateFull, InvalidSignature...}) returns a single error type, and the handler collapses everything into empty 2.04 — so the 4.03/4.09 semantics are NOT implemented (and were not before this change either: everything was 4.01). Fix: make SlotError carry the cause, map replay/expiry/invalid-slot to 4.03 and unresolved conflict to 4.09 in handle_post_slots, keep only signature-class failures silent. Check Python discovery.py/slot_claim.py for the same conflation. Current conflict path returns 2.05 'rejected' (test gateway_coordinator_slot_conflict_resolution pins 0x45) — should be 4.09 per spec. Tests in resources.rs at :2694/:2810 pin replay as 0x44 — revisit when 4.03 lands.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:48:21.985205121Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T20:48:21.985205121Z",
+  "labels": [
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cdfh",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.16.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:48:22.115971384Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

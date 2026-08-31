@@ -117,6 +117,16 @@ config LICHEN_ROUTER_DTN_MAX_MESSAGES
 	  Maximum number of messages that can be stored in the DTN buffer.
 	  Each message slot has overhead beyond the data itself.
 
+config LICHEN_ROUTER_DTN_MAX_PER_SOURCE
+	int "Maximum DTN buffered messages per source IID"
+	depends on LICHEN_ROUTER
+	depends on LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	default 2
+	help
+	  Caps store-and-forward buffering per source IID so a single
+	  (authenticated) sender cannot churn-evict every other source's
+	  buffered messages (project-LICHEN-worker6-cxa2).
+
 config LICHEN_ROUTER_FORWARDING_BUFFER
 	bool "Forwarding buffer with backpressure (spec appendix-bufferbloat)"
 	depends on LICHEN_ROUTER

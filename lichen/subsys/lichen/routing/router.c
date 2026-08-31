@@ -752,7 +752,8 @@ static int route_packet_checked(struct lichen_router *router,
 		    (packet->now_unix == 0U ||
 		     (int32_t)(view.dtn_expiry_unix - packet->now_unix) > 0)) {
 			ret = lichen_router_dtn_buffer(router, destination_iid,
-						       packet->data, packet->len,
+						       &view.source[8], packet->data,
+						       packet->len,
 						       view.dtn_expiry_unix, now_ms);
 			if (ret < 0) {
 				return ret;
@@ -1175,6 +1176,7 @@ int lichen_router_gpsr_forward(struct lichen_router *router,
 
 int lichen_router_dtn_buffer(struct lichen_router *router,
 			     const uint8_t dst_iid[8],
+			     const uint8_t source_iid[8],
 			     const uint8_t *data,
 			     size_t len,
 			     uint32_t expiry_unix,
@@ -1182,6 +1184,27 @@ int lichen_router_dtn_buffer(struct lichen_router *router,
 {
 	if (router == NULL || dst_iid == NULL || data == NULL) {
 		return -EINVAL;
+	}
+
+	/* SECURITY: Per-source admission cap (project-LICHEN-worker6-cxa2):
+	 * without it, one sender can churn-evict every other source's
+	 * buffered messages through repeated S-flagged stores. */
+	if (source_iid != NULL) {
+		unsigned per_source = 0U;
+
+		for (int i = 0; i < CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGES; i++) {
+			const struct lichen_router_dtn_message *m =
+				&router->dtn_buffer[i];
+
+			if (m->valid &&
+			    memcmp(m->source_iid, source_iid,
+				   sizeof(m->source_iid)) == 0) {
+				per_source++;
+			}
+		}
+		if (per_source >= CONFIG_LICHEN_ROUTER_DTN_MAX_PER_SOURCE) {
+			return -ENOBUFS;
+		}
 	}
 
 	/* SECURITY: Reject messages larger than our static buffer to prevent
@@ -1246,6 +1269,11 @@ int lichen_router_dtn_buffer(struct lichen_router *router,
 
 	memset(slot, 0, sizeof(*slot));
 	memcpy(slot->destination_iid, dst_iid, 8);
+	if (source_iid != NULL) {
+		memcpy(slot->source_iid, source_iid, 8);
+	} else {
+		memcpy(slot->source_iid, dst_iid, 8);
+	}
 	/* SECURITY: Copy data into static buffer to prevent use-after-free
 	 * if caller frees their buffer before message is delivered. */
 	memcpy(slot->data, data, len);
