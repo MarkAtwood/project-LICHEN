@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections import deque
 from collections.abc import Callable
 from hashlib import sha256
 from threading import Lock
@@ -250,6 +251,10 @@ class GroupsCollectionResource(resource.Resource):
         self._clock = clock or time.time
         self.groups: dict[str, dict[str, Any]] = {}
         self._mutation_lock = Lock()
+        # Per-inviter COSE invitation nonce ledger (spec 18.8.2 R-12-064):
+        # ring buffer of 32 nonces per inviter IID, RAM-only by policy —
+        # deliberately NOT part of the persisted groups map.
+        self.invitation_nonce_ring: dict[bytes, deque[bytes]] = {}
 
     def get_link_description(self) -> dict[str, Any]:
         return {"rt": self.rt, "ct": str(int(CBOR))}

@@ -6,6 +6,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import cbor2
+from collections import deque
+
 from aiocoap import BAD_REQUEST, CHANGED, FORBIDDEN, Message, resource
 
 from lichen.coap.resources.base import CBOR
@@ -14,11 +17,13 @@ from lichen.coap.resources.groups_collection import (
     GroupsCollectionResource,
     _origin_locally_trusted,
 )
+from lichen.crypto.identity import _pubkey_to_iid
 from lichen.group_membership import (
     GroupInvitation,
     GroupRoster,
     MembershipError,
     parse_invitation,
+    verify_invitation_cose,
     verify_invitation_signature,
 )
 
@@ -61,6 +66,65 @@ class GroupsInviteResource(resource.Resource):
             # An entry already present wins: callers may have provisioned a
             # deliberate trust decision that must not be silently clobbered.
             self.pubkeys.setdefault(self.node_id, node_pubkey)
+        self.node_pubkey = node_pubkey
+
+    async def _render_cose_invitation(self, envelope: bytes) -> Message:
+        """Validate a COSE_Sign1 invitation (spec 18.8.2, R-12-062..064).
+
+        The codec (verify_invitation_cose) enforces alg/kid/invitee/nonce
+        shape and the signature; this resource owns the clock (expiry), the
+        per-inviter 32-entry RAM-only nonce ring (R-12-064), and roster
+        authority. Fail-closed: unknown inviter key or missing own key.
+        """
+        if self.node_pubkey is None or self.collection is None:
+            return Message(code=FORBIDDEN)
+        try:
+            probe = cbor2.loads(envelope)
+            kid = probe[1][4]
+        except Exception:
+            return Message(code=BAD_REQUEST)
+        inviter = None
+        for addr, pubkey in self.pubkeys.items():
+            if _pubkey_to_iid(pubkey) == kid:
+                inviter = addr
+                break
+        if inviter is None:
+            # Unknown inviter key: cannot authenticate, fail closed.
+            return Message(code=FORBIDDEN)
+        if self.roster is not None and not self.roster.can_invite(
+            inviter, requested_role="member"
+        ):
+            # Coarse precheck: the exact role gate re-runs on the decoded
+            # payload via can_invite when the role is known.
+            return Message(code=FORBIDDEN)
+        own_iid = _pubkey_to_iid(self.node_pubkey)
+        try:
+            invitation = verify_invitation_cose(envelope, self.pubkeys[inviter], own_iid)
+        except MembershipError:
+            return Message(code=FORBIDDEN)
+        if invitation.expires <= int(self.collection._clock()):
+            return Message(code=FORBIDDEN)
+        ring = self.collection.invitation_nonce_ring.setdefault(
+            invitation.inviter_iid, deque(maxlen=32)
+        )
+        if invitation.nonce in ring:
+            return Message(code=FORBIDDEN)
+        if self.roster is not None and not self.roster.can_invite(
+            inviter, requested_role=invitation.role
+        ):
+            return Message(code=FORBIDDEN)
+        ring.append(invitation.nonce)
+        recorded = self.collection.record_invitation(
+            invitation.group_id,
+            self.invitee,
+            expires=invitation.expires,
+            role=invitation.role,
+            inviter=inviter,
+        )
+        if not recorded:
+            return Message(code=FORBIDDEN)
+        self.accepted.append(invitation)
+        return Message(code=CHANGED)
 
     async def render_post(self, request: Message) -> Message:
         if not request.payload:
@@ -69,6 +133,9 @@ class GroupsInviteResource(resource.Resource):
             body = _decode_single_cbor(request.payload)
         except Exception:
             return Message(code=BAD_REQUEST)
+        if type(body) is bytes:
+            # COSE_Sign1 envelope (spec 18.8.2 canonical form).
+            return await self._render_cose_invitation(body)
         try:
             invitation = parse_invitation(body)
         except MembershipError:
