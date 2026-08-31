@@ -12,7 +12,8 @@
   "started_at": "2026-08-26T19:08:54.157816Z",
   "labels": [
     "c",
-    "coap"
+    "coap",
+    "zephyr"
   ],
   "dependencies": [
     {
