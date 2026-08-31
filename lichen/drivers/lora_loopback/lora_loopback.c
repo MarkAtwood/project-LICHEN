@@ -51,6 +51,7 @@ struct lora_loopback_data {
 	struct k_work rx_work;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
+	void *recv_cb_user_data;
 	struct loopback_packet rx_pkt;
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_t sent_packets;
@@ -208,10 +209,12 @@ static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
 #endif
 
 /* Deliver queued packets to the registered async callback. Runs in system
- * workqueue context; the callback may cancel (recv_async(NULL)) — cancel-then
- * re-arm also works — both handled by re-reading recv_cb each packet. The
- * drain is capped per run so a send flood cannot monopolize the workqueue;
- * excess packets are picked up by the re-submitted work item. */
+ * workqueue context. Arming is ONE-SHOT: each delivery consumes the
+ * registration (recv_cb cleared) and the upper layer re-arms after
+ * processing, matching upstream sx12xx semantics where RX_DONE disarms the
+ * receiver. A callback cancel (recv_async(NULL)) is honored at the next
+ * delivery check. The drain is capped per run so a send flood cannot
+ * monopolize the workqueue. */
 static void lora_loopback_rx_work(struct k_work *work)
 {
 	struct lora_loopback_data *data =
@@ -222,6 +225,7 @@ static void lora_loopback_rx_work(struct k_work *work)
 	while (drained++ < LOOPBACK_QUEUE_DEPTH) {
 		k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
 		lora_recv_cb cb = data->recv_cb;
+		void *cb_user_data = data->recv_cb_user_data;
 
 		k_spin_unlock(&data->rx_lock, key);
 
@@ -233,11 +237,36 @@ static void lora_loopback_rx_work(struct k_work *work)
 			return;
 		}
 
+		/* One-shot arming (upstream sx12xx semantics: RX_DONE disarms
+		 * the receiver) — consume the registration before invoking the
+		 * callback so the upper layer's post-processing re-arm does
+		 * not fail with -EBUSY and abort the module
+		 * (project-LICHEN-worker6-17nw). The clear is gated on the
+		 * registration being unchanged: a cancel (recv_async(NULL))
+		 * or cancel+re-arm racing this window must not have its new
+		 * registration clobbered, and a canceled callback must not
+		 * fire. */
+		key = k_spin_lock(&data->rx_lock);
+		bool still_armed = (data->recv_cb == cb);
+		if (still_armed) {
+			data->recv_cb = NULL;
+			data->recv_cb_user_data = NULL;
+		}
+		k_spin_unlock(&data->rx_lock, key);
+
+		if (!still_armed) {
+			/* Canceled between snapshot and dequeue: drop the
+			 * packet, exactly as a real radio discards a frame
+			 * received after disarm. */
+			return;
+		}
+
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 		atomic_inc(&data->received_packets);
 #endif
 		cb(dev, data->rx_pkt.data, data->rx_pkt.len,
-		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR);
+		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR,
+		   cb_user_data);
 	}
 
 	/* Queue still has work: re-queue ourselves (Zephyr re-submission of a
@@ -246,7 +275,7 @@ static void lora_loopback_rx_work(struct k_work *work)
 }
 
 static int lora_loopback_recv_async(const struct device *dev,
-				    lora_recv_cb cb)
+				    lora_recv_cb cb, void *user_data)
 {
 	struct lora_loopback_data *data = dev->data;
 
@@ -255,6 +284,7 @@ static int lora_loopback_recv_async(const struct device *dev,
 		bool was_armed = data->recv_cb != NULL;
 
 		data->recv_cb = NULL;
+		data->recv_cb_user_data = NULL;
 		k_spin_unlock(&data->rx_lock, key);
 		return was_armed ? 0 : -EINVAL;
 	}
@@ -266,6 +296,7 @@ static int lora_loopback_recv_async(const struct device *dev,
 		return -EBUSY;
 	}
 	data->recv_cb = cb;
+	data->recv_cb_user_data = user_data;
 	k_spin_unlock(&data->rx_lock, key);
 
 	/* Deliver anything already queued (sent before arming). */
@@ -294,9 +325,24 @@ static int lora_loopback_init(const struct device *dev)
 	return 0;
 }
 
+static int lora_loopback_send_async(const struct device *dev, uint8_t *data,
+				    uint32_t data_len,
+				    struct k_poll_signal *async)
+{
+	int ret = lora_loopback_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
+}
+
 static const struct lora_driver_api lora_loopback_api = {
 	.config     = lora_loopback_config,
 	.send       = lora_loopback_send,
+	.send_async = lora_loopback_send_async,
 	.recv       = lora_loopback_recv,
 	.recv_async = lora_loopback_recv_async,
 };
