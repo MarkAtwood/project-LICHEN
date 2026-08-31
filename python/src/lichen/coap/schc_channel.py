@@ -29,13 +29,13 @@ from lichen.coap.transport import (
     DatagramChannel,
     Endpoint,
     EndpointPolicy,
-    Priority,
     ReceiveCallback,
     parse_channel_endpoint,
     unscoped_ipv6,
 )
 from lichen.ipv6.packet import HEADER_LENGTH, IPv6Header, IPv6Packet, NextHeader, PacketError
 from lichen.ipv6.udp import UDP_NEXT_HEADER, UdpDatagram, UdpError, udp_checksum
+from lichen.link.tx_queue import Priority
 from lichen.schc.codec import SchcError
 from lichen.schc.headers import compress_packet, decompress_packet
 

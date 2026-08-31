@@ -25,6 +25,7 @@ import struct
 from collections import OrderedDict
 from dataclasses import dataclass
 from ipaddress import IPv6Address
+from typing import Any
 
 import cbor2
 
@@ -72,7 +73,7 @@ class SosOriginSignature:
         return cls(origin_sequence=origin_sequence, signature=signature)
 
 
-def canonicalize_sos_payload(payload: dict) -> bytes:
+def canonicalize_sos_payload(payload: dict[str, Any]) -> bytes:
     """Canonicalize SOS payload to deterministic CBOR.
 
     The payload is sorted by key to ensure consistent signing/verification
@@ -121,7 +122,7 @@ def sign_sos_origin(
     pubkey: bytes,
     origin_address: IPv6Address,
     origin_sequence: int,
-    payload: dict,
+    payload: dict[str, Any],
 ) -> SosOriginSignature:
     """Generate SOS origin signature.
 

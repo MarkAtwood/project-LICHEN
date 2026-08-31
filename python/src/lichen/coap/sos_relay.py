@@ -23,6 +23,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from lichen.coap.sos_origin import OriginSequenceTracker
 
@@ -250,7 +251,9 @@ class SosRelay:
         return len(self._seen)
 
 
-def add_ttl_to_sos_payload(payload: dict, ttl: int = DEFAULT_INITIAL_TTL) -> dict:
+def add_ttl_to_sos_payload(
+    payload: dict[str, Any], ttl: int = DEFAULT_INITIAL_TTL
+) -> dict[str, Any]:
     """Add TTL field to an SOS payload dict.
 
     Args:
@@ -264,7 +267,7 @@ def add_ttl_to_sos_payload(payload: dict, ttl: int = DEFAULT_INITIAL_TTL) -> dic
     return payload
 
 
-def get_sos_id_from_payload(payload: dict) -> tuple[str, int] | None:
+def get_sos_id_from_payload(payload: dict[str, Any]) -> tuple[str, int] | None:
     """Extract SOS ID (node, seq) from a payload dict.
 
     Args:
@@ -282,7 +285,7 @@ def get_sos_id_from_payload(payload: dict) -> tuple[str, int] | None:
     return (node, seq)
 
 
-def get_ttl_from_payload(payload: dict, default: int = DEFAULT_INITIAL_TTL) -> int:
+def get_ttl_from_payload(payload: dict[str, Any], default: int = DEFAULT_INITIAL_TTL) -> int:
     """Extract TTL from a payload dict.
 
     Args:

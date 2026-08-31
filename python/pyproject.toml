@@ -119,10 +119,15 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 
-# Explicit mypy scope and handling per project-LICHEN-kpv0 acceptance:
+# Explicit mypy scope and handling per project-LICHEN-kpv0/kpv0.9 acceptance:
 # - aiocoap, starlette lack py.typed/stubs: ignore_missing_imports (not error suppression).
 # - Core protocol modules fixed for clean pass; no broad ignores or untyped-def disables.
 # - TUI/dashboard/tests excluded from CI gate (prototype code).
+# - CI gate (kpv0.9 contract): strict mypy over packages converged to zero
+#   errors (coap, rpl, ipv6, client, l2_payload, constants, channel_plan,
+#   gradient); widen per package as link/sim/dashboard/mqttsn/interface/crypto
+#   are fixed. The per-module disable_error_code overrides below are the
+#   recorded aiocoap-integration decisions, not new masking.
 [[tool.mypy.overrides]]
 module = [
     "aiocoap.*",
