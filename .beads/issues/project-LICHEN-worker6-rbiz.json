@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-4",
   "updated_at": "2026-08-30T16:27:08.06605Z",
   "labels": [
-    "l2"
+    "l2",
+    "python"
   ],
   "dependencies": [
     {
