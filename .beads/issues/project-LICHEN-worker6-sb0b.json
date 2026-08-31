@@ -3,13 +3,15 @@
   "title": "L2 RX: replace rx_thread poll loop with lora_recv_async()",
   "description": "First slice of parent project-LICHEN-worker6-9hfe (async LoRa API refactor). Driver async API ALREADY EXISTS (lr1110.c:627 lr1110_lora_recv_async, lora_sim.c:433, lora_renode.c:279; Zephyr lora.h:293 lora_recv_async) — do NOT touch drivers.\n\nScope (files): lichen/subsys/lichen/l2/lora_l2_rx.c, RX-side of lichen/subsys/lichen/l2/lora_l2.c, lichen/subsys/lichen/l2/lora_l2_internal.h.\n\nWork:\n1. Delete rx_thread() (lora_l2_rx.c:33) and its k_sleep(10/50/1000ms) yields, consecutive_errors loop, blocking lora_recv() at :106.\n2. In lichen_l2 init (lora_l2.c:318 k_thread_create site): register lora_recv_async(dev, rx_cb, ...) instead. rx_cb runs in driver ISR context — must only copy (data,len,rssi,snr) into a staging buffer + k_work_submit to system workqueue; packet processing (existing callback chain into lichen_link_rx) happens in the work handler.\n3. Re-arm policy: work handler re-calls lora_recv_async() after processing (single outstanding RX). Document buffer ownership: staging buffer owned by L2, caller callback receives pointer valid during callback only (preserve current rx_buf semantics: LICHEN_LORA_MAX_PHY_PAYLOAD=255).\n4. Deinit (lora_l2.c:395-408 k_thread_join/abort block): replace with lora_recv_async(dev, NULL, NULL) to disarm, k_work flush/cancel, no thread join.\n5. tx_pending gating (lora_l2.c:93 comment: stops RX thread RE-ARMING): reimplement as flag checked before re-arm in work handler.\n\nAcceptance: rg -n 'k_sleep|lora_recv\\(' lichen/subsys/lichen/l2/ returns no RX-path hits; rx_thread symbol gone; lichen/tests/l2_dispatch and lichen/tests/ping_l2 pass; west build -b qemu_x86 of an app pulling L2 succeeds. Do not modify lora_l2_tx.c (child B owns it) — minimal touches to shared lora_l2.c state only.",
   "notes": "2026-08-29 worker: bead premise 'driver async API already exists' is false - lr1110/sim/renode recv_async all -ENOTSUP, loopback lacks the vtable slot. Created blocker project-LICHEN-worker6-1m92 (driver recv_async impls); sb0b is now gated on it. Released unimplemented.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T03:51:56.46548Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T18:59:03.008873Z",
+  "updated_at": "2026-08-31T01:01:05.473619188Z",
+  "closed_at": "2026-08-31T01:01:05.473619188Z",
+  "close_reason": "Already implemented - verified against the tree. Every element of this bead's prescription is present in lichen/subsys/lichen/l2/lora_l2_rx.c: no rx_thread()/k_sleep yields/blocking lora_recv() remain (grep clean); the async architecture is exactly as prescribed - lora_l2_rx_isr_cb runs in driver interrupt context and only copies (data,len,rssi,snr) into the staging buffer (module doc lines 10/66, ISR comment at 176), rx_work_fn on the workqueue does the processing/re-arm (K_WORK_DELAYABLE_DEFINE at 90, retry re-arm RX_REARM_RETRY_MS at 170), arming via lora_recv_async (139/313) with disarm at 383; lora_l2.c and lora_l2_internal.h carry no rx_thread. The async delivery path is runtime-verified on heft in this round's 0l5j work: lichen/tests/hal loopback scenario test_loopback_recv_async_delivers_frames PASS (frame through the 6-arg 4.1.0 callback into this staging-buffer path) - see 0l5j close. Stale bead: the refactor landed before its claim; closing as complete.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-sb0b",

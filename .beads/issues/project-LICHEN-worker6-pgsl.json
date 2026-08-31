@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-pgsl",
+  "title": "Rule 7 address-policy rejects make MQTT-SN-port packets un-sendable instead of degrading to Rule 255 fallback",
+  "description": "P3 policy question, surfaced by kimi correctness review of project-LICHEN-worker6-lsrv (doc-only). On this branch, a well-formed IPv6/UDP packet with either port == 10883 whose endpoints fail validate_rule7_addresses (src unspecified/loopback/multicast/IPv4-mapped; dst unspecified/loopback/IPv4-mapped; dst multicast scope outside 2-14) returns SCHC_ERR_INVALID_ARGUMENT from lichen_schc_compress: gate passes (no address checks) -\u003e MQTT-SN rule first in the table (schc.c:470-475) -\u003e compress_mqtt_sn -\u003e validate_rule7_addresses (schc_helpers.c:51-63, -6) -\u003e generic engine propagates any non-(-1) rule return immediately (lichen/subsys/schc/schc.c:118-120). Every OTHER rule-shape mismatch returns -1 and degrades to byte-preserving Rule 255; rule 7's -6 makes such packets un-sendable outright. Behavior is consistent with python/rust references only by accident of each implementing the same propagation - verify before changing. Decide per spec/03-adaptation.md section 5.5 + Rule255 fallback mandate: (a) keep -6 (emission policy is a MUST-NOT-originate, failing loudly is correct and matches the TX/RX split where RX stays byte-preserving), or (b) return -1 like other non-matches (packet degrades to Rule255 - but then emission policy would NOT reject it, violating the spec's MUST reject on encode). Likely answer is (a) keep -6 and treat the doc as canonical (wrxl's INVALID_ENDPOINT gate already rejects most of these classes earlier with a distinct code once synced - check interaction: after wrxl, mcast/unspec/loopback/v4mapped endpoints return -15 from the gate before rules run, and ONLY the remaining rule7-reachable class may be... none? wrxl's gate covers src unspec/loopback/mcast/v4mapped + dst unspec/loopback/v4mapped + mcast scope - the full rule7 policy - so post-wrxl the -6 path at compress_mqtt_sn may be unreachable; document that interaction in the fix). Low priority; doc already describes current behavior truthfully.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T01:10:50.579262171Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T01:10:50.579262171Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pgsl",
+      "depends_on_id": "project-LICHEN-worker6-lsrv",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T01:10:50.661715894Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
