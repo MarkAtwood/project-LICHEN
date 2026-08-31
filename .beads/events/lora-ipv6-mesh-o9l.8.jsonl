@@ -1,2 +1,3 @@
 {"id":"01a048de-2a61-78a6-9e4b-05bc130c2390","issue_id":"lora-ipv6-mesh-o9l.8","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T14:55:14.529567Z"}
 {"id":"01a055fe-ab35-7840-8b29-b22e8e023135","issue_id":"lora-ipv6-mesh-o9l.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: coap","created_at":"2026-08-31T04:05:48.469541862Z"}
+{"id":"01a055fe-acd3-7c6d-b0fa-794103f969a2","issue_id":"lora-ipv6-mesh-o9l.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: schc","created_at":"2026-08-31T04:05:48.883816338Z"}
