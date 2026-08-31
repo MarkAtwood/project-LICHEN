@@ -11,6 +11,9 @@ pub const TUNNEL_AUTH_PATH: &str = "/.well-known/tunnel-auth";
 pub const COSE_SCHNORR48_ED25519: i64 = -65_537;
 pub const MAX_AUTHORIZATION_WIRE_LEN: usize = 256;
 pub const DEFAULT_AUTHORIZATION_CAPACITY: usize = 256;
+/// Floor history per entry slot: mirrors the Python gateway's
+/// `_max_history = 4 * max_entries`.
+pub const FLOOR_SLOTS_PER_ENTRY: usize = 4;
 pub const MAX_ROUTE_HOPS: usize = 8;
 pub const COAP_FORBIDDEN_CODE: u8 = 0x83;
 
@@ -36,6 +39,7 @@ pub enum TunnelAuthError {
     ClockRollback,
     Replay,
     Revoked,
+    Capacity,
     InvalidSignature,
     TableDisabled,
     UnauthorizedTunnel,
@@ -176,10 +180,15 @@ struct ReplayFloor {
 }
 
 /// Bounded egress authorization cache.  Validation is completed before any
-/// table mutation; replacement is deterministic least-recently-used eviction.
+/// table mutation; entry replacement is deterministic least-recently-used
+/// eviction, while replay floors are never evicted (fail closed when full).
 pub struct TunnelAuthorizationTable<const N: usize = DEFAULT_AUTHORIZATION_CAPACITY> {
     entries: [Option<Entry>; N],
-    replay_floors: [Option<ReplayFloor>; N],
+    /// Bounded replay/revocation floor history, never silently evicted: when
+    /// full, a NEW key's accept or revoke fails closed with
+    /// [`TunnelAuthError::Capacity`] (mirrors the Python gateway's
+    /// `_max_history = 4 * max_entries`). Stored as 4 slots per entry slot.
+    replay_floors: [[Option<ReplayFloor>; FLOOR_SLOTS_PER_ENTRY]; N],
     root_iid: Option<[u8; 8]>,
     clock: u64,
     last_now: Option<u64>,
@@ -189,7 +198,7 @@ impl<const N: usize> Default for TunnelAuthorizationTable<N> {
     fn default() -> Self {
         Self {
             entries: [None; N],
-            replay_floors: [None; N],
+            replay_floors: [[None; FLOOR_SLOTS_PER_ENTRY]; N],
             root_iid: None,
             clock: 0,
             last_now: None,
@@ -198,12 +207,22 @@ impl<const N: usize> Default for TunnelAuthorizationTable<N> {
 }
 
 impl<const N: usize> TunnelAuthorizationTable<N> {
+    fn floor_slot(&self, index: usize) -> &Option<ReplayFloor> {
+        &self.replay_floors[index / FLOOR_SLOTS_PER_ENTRY][index % FLOOR_SLOTS_PER_ENTRY]
+    }
+
+    fn floor_slot_mut(&mut self, index: usize) -> &mut Option<ReplayFloor> {
+        &mut self.replay_floors[index / FLOOR_SLOTS_PER_ENTRY][index % FLOOR_SLOTS_PER_ENTRY]
+    }
+
     /// Change the trusted DODAG root.  A root change atomically revokes every
     /// authorization; there is no old-root grace interval.
     pub fn set_root(&mut self, root_iid: [u8; 8]) {
         if self.root_iid != Some(root_iid) {
             self.entries.fill(None);
-            self.replay_floors.fill(None);
+            for row in &mut self.replay_floors {
+                row.fill(None);
+            }
             self.root_iid = Some(root_iid);
             self.clock = 0;
             self.last_now = None;
@@ -212,7 +231,9 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
 
     pub fn clear(&mut self) {
         self.entries.fill(None);
-        self.replay_floors.fill(None);
+        for row in &mut self.replay_floors {
+            row.fill(None);
+        }
         self.clock = 0;
         self.last_now = None;
     }
@@ -227,6 +248,24 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         if N == 0 {
             return Err(TunnelAuthError::TableDisabled);
         }
+        let existing = self.replay_floors.iter().flatten().position(|slot| {
+            slot.is_some_and(|floor| {
+                floor.prefix == prefix
+                    && floor.prefix_len == prefix_len
+                    && floor.route_hash == route_hash
+            })
+        });
+        // Fail closed when the floor history is full and the key is unknown:
+        // never silently evict (mirrors the Python gateway's revoke). Resolved
+        // BEFORE any mutation so a refused revoke leaves the table untouched.
+        let index = existing
+            .or_else(|| {
+                self.replay_floors
+                    .iter()
+                    .flatten()
+                    .position(|slot| slot.is_none())
+            })
+            .ok_or(TunnelAuthError::Capacity)?;
         for slot in &mut self.entries {
             if slot.is_some_and(|entry| {
                 entry.claim.prefix == prefix
@@ -237,27 +276,10 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
             }
         }
         self.clock = self.clock.saturating_add(1);
-        let existing = self.replay_floors.iter().position(|slot| {
-            slot.is_some_and(|floor| {
-                floor.prefix == prefix
-                    && floor.prefix_len == prefix_len
-                    && floor.route_hash == route_hash
-            })
-        });
-        let index = existing
-            .or_else(|| self.replay_floors.iter().position(Option::is_none))
-            .unwrap_or_else(|| {
-                self.replay_floors
-                    .iter()
-                    .enumerate()
-                    .min_by_key(|(_, slot)| slot.unwrap().used)
-                    .map(|(index, _)| index)
-                    .unwrap_or(0)
-            });
         let retained = existing
-            .and_then(|slot| self.replay_floors[slot])
+            .and_then(|slot| self.floor_slot(slot).as_ref())
             .map_or(path_seq, |floor| floor.path_seq.max(path_seq));
-        self.replay_floors[index] = Some(ReplayFloor {
+        *self.floor_slot_mut(index) = Some(ReplayFloor {
             prefix,
             prefix_len,
             route_hash,
@@ -309,9 +331,10 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         let floor = self
             .replay_floors
             .iter()
+            .flatten()
             .position(|slot| slot.is_some_and(|entry| same_floor_key(&entry, &claim)));
         if let Some(index) = floor {
-            let retained = self.replay_floors[index].unwrap();
+            let retained = self.floor_slot(index).unwrap();
             if retained.path_seq >= claim.path_seq {
                 return Err(if retained.revoked {
                     TunnelAuthError::Revoked
@@ -325,6 +348,17 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
             .entries
             .iter()
             .position(|slot| slot.is_some_and(|entry| same_key(&entry.claim, &claim)));
+        // A new key needs a free floor slot: never silently evict an existing
+        // floor (a revoked or replay-protected origin would be re-armed).
+        let floor_index = match floor {
+            Some(index) => index,
+            None => self
+                .replay_floors
+                .iter()
+                .flatten()
+                .position(Option::is_none)
+                .ok_or(TunnelAuthError::Capacity)?,
+        };
         let index = existing
             .or_else(|| self.entries.iter().position(Option::is_none))
             .unwrap_or_else(|| {
@@ -336,17 +370,7 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
                     .unwrap_or(0)
             });
         self.clock = self.clock.saturating_add(1);
-        let floor_index = floor
-            .or_else(|| self.replay_floors.iter().position(Option::is_none))
-            .unwrap_or_else(|| {
-                self.replay_floors
-                    .iter()
-                    .enumerate()
-                    .min_by_key(|(_, slot)| slot.unwrap().used)
-                    .map(|(index, _)| index)
-                    .unwrap_or(0)
-            });
-        self.replay_floors[floor_index] = Some(ReplayFloor {
+        *self.floor_slot_mut(floor_index) = Some(ReplayFloor {
             prefix: claim.prefix,
             prefix_len: claim.prefix_len,
             route_hash: claim.route_hash,
@@ -405,11 +429,17 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
             entry.used = self.clock;
         }
         let accepted_claim = self.entries[index].unwrap().claim;
-        if let Some(floor) = self.replay_floors.iter_mut().flatten().find(|floor| {
-            floor.route_hash == request_route_hash
-                && floor.prefix == accepted_claim.prefix
-                && floor.prefix_len == accepted_claim.prefix_len
-        }) {
+        if let Some(floor) = self
+            .replay_floors
+            .iter_mut()
+            .flatten()
+            .flatten()
+            .find(|floor| {
+                floor.route_hash == request_route_hash
+                    && floor.prefix == accepted_claim.prefix
+                    && floor.prefix_len == accepted_claim.prefix_len
+            })
+        {
             floor.used = self.clock;
         }
         self.last_now = Some(now);
@@ -1106,6 +1136,94 @@ mod tests {
         assert_eq!(accepted.path_seq, 8);
         assert!(table
             .authorize_decapsulation(egress_request(fresh.prefix, &route), 54)
+            .is_ok());
+    }
+
+    #[test]
+    fn floor_capacity_fails_closed_and_retains_revoked_floor() {
+        let (base, route, root, own, private, public) = fixture();
+        // Table with 1 entry slot => floor history of 4 (4x, Python parity).
+        let mut table = TunnelAuthorizationTable::<1>::default();
+        table.set_root(root);
+
+        let variant_claim = |byte: u8, path_seq: u64| -> TunnelAuthorization {
+            let mut prefix = base.prefix;
+            prefix[7] = byte;
+            TunnelAuthorization::new(
+                prefix,
+                base.prefix_len,
+                base.route_hash,
+                path_seq,
+                10_000,
+                [3; 8],
+            )
+            .unwrap()
+        };
+
+        // Fill the floor history: A (accepted then revoked), B, C, D.
+        let claim_a = variant_claim(0x78, 7);
+        let post_a = build_root_post(claim_a, &route, root, &private, &public).unwrap();
+        assert!(table
+            .accept_post(
+                post_a.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                10
+            )
+            .is_ok());
+        table
+            .revoke(claim_a.prefix, claim_a.prefix_len, claim_a.route_hash, 7)
+            .unwrap();
+        for byte in [0x79, 0x7A, 0x7B] {
+            let claim = variant_claim(byte, 7);
+            let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+            assert!(table
+                .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 20)
+                .is_ok());
+        }
+
+        // A fifth distinct key is refused outright: the store never silently
+        // evicts a floor to make room (Python denies CAPACITY).
+        let claim_e = variant_claim(0x7C, 7);
+        let post_e = build_root_post(claim_e, &route, root, &private, &public).unwrap();
+        assert_eq!(
+            table.accept_post(
+                post_e.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                30
+            ),
+            Err(TunnelAuthError::Capacity)
+        );
+        // Revoking an unknown key on a full history also fails closed.
+        assert_eq!(
+            table.revoke(claim_e.prefix, claim_e.prefix_len, claim_e.route_hash, 7),
+            Err(TunnelAuthError::Capacity)
+        );
+
+        // The revoked floor survived: replaying A's captured post is still
+        // refused as Revoked instead of re-arming the data plane (this is the
+        // exploit the old silent-LRU behavior allowed).
+        assert_eq!(
+            table.accept_post(
+                post_a.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                40
+            ),
+            Err(TunnelAuthError::Revoked)
+        );
+
+        // An existing key advancing its own floor is never capacity-gated.
+        let advance = variant_claim(0x79, 8);
+        let advance_post = build_root_post(advance, &route, root, &private, &public).unwrap();
+        assert!(table
+            .accept_post(
+                advance_post.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                50
+            )
             .is_ok());
     }
 
