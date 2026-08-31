@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T06:28:06.308153Z",
   "labels": [
-    "oscore"
+    "oscore",
+    "rust"
   ],
   "dependencies": [
     {
