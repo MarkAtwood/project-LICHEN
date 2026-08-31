@@ -28,6 +28,7 @@ pub mod message;
 pub mod multi_instance;
 pub mod persistence;
 pub mod pps;
+pub mod root_seq_cache;
 pub mod routing;
 pub mod srh;
 pub mod table;
