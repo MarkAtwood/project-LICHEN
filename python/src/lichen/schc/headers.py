@@ -87,6 +87,17 @@ def _validate_ipv6_addresses(header: IPv6Header) -> None:
         raise SchcError("invalid unspecified IPv6 destination address")
 
 
+def validate_datagram_source_policy(src: IPv6Address) -> None:
+    """Endpoint source policy, applied at origination and forwarding only.
+
+    The UDP parser verifies framing and integrity only (Rule 255 RX
+    byte-preserving decision, spec/03-adaptation.md): callers that originate
+    or forward a datagram apply this check explicitly.
+    """
+    if src.is_unspecified or src.is_multicast:
+        raise SchcError(f"invalid datagram source address {src}")
+
+
 def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> None:
     """Validate the canonical Rule 7 IPv6 source/destination policy.
 
@@ -151,7 +162,7 @@ def validate_full_ipv6(raw: bytes) -> bytes:
     upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
         try:
-            UdpDatagram.from_bytes(packet.payload, packet.header.src_addr)
+            UdpDatagram.from_bytes(packet.payload)
         except UdpError as error:
             raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
         if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
@@ -558,7 +569,7 @@ class MqttSnProfile:
             raise SchcError("Rule 7 IPv6 payload length mismatch")
         udp_bytes = raw[HEADER_LENGTH:]
         try:
-            udp = UdpDatagram.from_bytes(udp_bytes, header.src_addr)
+            udp = UdpDatagram.from_bytes(udp_bytes)
         except UdpError as error:
             raise SchcError(f"invalid Rule 7 UDP datagram: {error}") from error
         if not UdpDatagram.verify_checksum(header.src_addr, header.dst_addr, udp_bytes):

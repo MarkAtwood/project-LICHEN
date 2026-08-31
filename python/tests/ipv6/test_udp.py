@@ -9,6 +9,8 @@ from ipaddress import IPv6Address
 import pytest
 
 from lichen.ipv6.udp import UdpDatagram, UdpError, udp_checksum
+from lichen.schc.codec import SchcError
+from lichen.schc.headers import validate_datagram_source_policy
 
 SRC = IPv6Address("fe80::1")
 DST = IPv6Address("fe80::2")
@@ -84,16 +86,22 @@ def test_from_bytes_rejects_length_below_minimum() -> None:
         UdpDatagram.from_bytes(bytes(raw))
 
 
-def test_from_bytes_rejects_unspecified_source() -> None:
-    raw = bytearray(UdpDatagram(1, 2, b"data").to_bytes(SRC, DST))
-    with pytest.raises(UdpError, match="malformed source"):
-        UdpDatagram.from_bytes(bytes(raw), src=IPv6Address("::"))
+def test_source_policy_rejects_unspecified() -> None:
+    with pytest.raises(SchcError, match="invalid datagram source address"):
+        validate_datagram_source_policy(IPv6Address("::"))
 
 
-def test_from_bytes_rejects_multicast_source() -> None:
-    with pytest.raises(UdpError, match="malformed source"):
-        raw = bytearray(UdpDatagram(1, 2, b"data").to_bytes(SRC, DST))
-        UdpDatagram.from_bytes(bytes(raw), src=IPv6Address("ff02::1"))
+def test_source_policy_rejects_multicast_source() -> None:
+    with pytest.raises(SchcError, match="invalid datagram source address"):
+        validate_datagram_source_policy(IPv6Address("ff02::1"))
+
+
+def test_from_bytes_parses_without_endpoint_policy() -> None:
+    """Parser is policy-free: a datagram whose source the policy rejects still parses."""
+    raw = UdpDatagram(1, 2, b"data").to_bytes(IPv6Address("::"), DST)
+    assert UdpDatagram.from_bytes(raw).src_port == 1
+    with pytest.raises(SchcError, match="invalid datagram source address"):
+        validate_datagram_source_policy(IPv6Address("::"))
 
 
 def test_verify_checksum_rejects_zero_checksum_datagram() -> None:
