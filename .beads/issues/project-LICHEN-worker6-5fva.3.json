@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-5fva.3",
   "title": "ping_l2: fix test_udp_payload_reaches_socket_after_l2_injection (UDP observer bind returns -ENOENT)",
   "description": "Child 3 of 5fva. After children 1-2 land, debug the UDP observer bind -ENOENT in test_udp_payload_reaches_socket_after_l2_injection (Zephyr net socket bind on the injected-path observer; -ENOENT from bind is unusual - likely net_if/observer setup ordering vs the L2 injection harness). Build/run on heft native_sim; land with the test passing. Parent 5fva closes when all three children pass.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T23:45:23.75969223Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-30T23:45:23.75969223Z",
+  "updated_at": "2026-08-31T18:32:35.01662458Z",
+  "closed_at": "2026-08-31T18:32:35.01662458Z",
+  "close_reason": "Fixed by the worker-3 chain, validated 7/7 on heft (1j89). Root cause was NOT UDP-specific: (1) lichen_l2_tx passed frame_len=0 as the link TX capacity (237dc35064) — every TX failed -ENOMEM; (2) post-reinit the ctx was wiped and the peer was registered under the device eui64 instead of the canonical key-derived SIID (24cde81e5a) — auth failure; (3) nonce stream reuse after re-provision (75b86d62cd) — replay rejection. All three fixed; test_udp_payload_reaches_socket_after_l2_injection PASSES.",
   "labels": [
     "decomposed",
     "zephyr"

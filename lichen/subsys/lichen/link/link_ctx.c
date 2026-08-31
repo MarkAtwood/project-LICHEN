@@ -159,7 +159,10 @@ static int seq_unlock(struct lichen_link_ctx *ctx);
 
 int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
 {
-	uint8_t rand_byte;
+	/* Initialized so cppcheck can prove no config branch reaches the
+	 * epoch derivation with an undefined value (all random-source
+	 * branches assign or return -EIO before use). */
+	uint8_t rand_byte = 0U;
 
 	if (ctx == NULL || eui64 == NULL) {
 		return -EINVAL;
@@ -256,7 +259,10 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx,
 {
 	uint8_t new_sk[LICHEN_SK_LEN];
 	uint8_t new_pk[LICHEN_PK_LEN];
-	uint8_t new_epoch;
+	/* Initialized so cppcheck can prove no config branch reaches the
+	 * epoch derivation with an undefined value (all random-source
+	 * branches assign or return -EIO before use). */
+	uint8_t new_epoch = 0U;
 	uint16_t restored_seq = 0U;
 	uint8_t restored_epoch;
 	bool restored_exhausted = false;

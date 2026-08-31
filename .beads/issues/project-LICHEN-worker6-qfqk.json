@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-qfqk",
+  "title": "Flaky: test_expired_message_3_is_rejected_without_publication fails under full-suite timing pressure",
+  "description": "Observed once during a full tests/coap run (b7z9.40(b) round): tests/coap/test_edhoc_responder.py::TestEdhocResource::test_expired_message_3_is_rejected_without_publication FAILED in the suite, then passed 6/6 in isolation and on a pristine-tree stash run. The test exercises message-3 expiry timing; under suite load the expiry window appears to race. Fix: inject a controllable clock (pattern already used by RawDiagTTL/RawTxResource) or widen the expiry margin so the assertion is timing-independent.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T18:39:53.848551658Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T18:39:53.848551658Z",
+  "labels": [
+    "coap",
+    "tests"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.3.2",
+  "title": "b7z9.37.3(ii): wire RootSeqCache into RplStack DODAG state",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37.3. LANDS AFTER sibling (i). Add the RootSeqCache to RplStack DODAG state (rust/lichen-node/src/rpl_stack/mod.rs — field near dao_admissions) and expose it for the DIO receive path so child b7z9.37.1 (Rust root-sig receiver validation) consumes cached root_seq per (dodag_id, instance); rejected sequences surface as a receive error. Tests via the existing rpl_stack test seams.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T18:34:36.590898091Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T18:34:36.590898091Z",
+  "labels": [
+    "decomposed",
+    "rust",
+    "rpl",
+    "python",
+    "security",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.3.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.3",
+      "type": "parent-child",
+      "created_at": "2026-08-31T18:34:36.731967334Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
