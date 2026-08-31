@@ -64,8 +64,12 @@ extern "C" {
 #define LICHEN_RPL_OPT_SOLICITED_INFO 7
 #define LICHEN_RPL_OPT_PREFIX_INFO   8
 #define LICHEN_RPL_OPT_RPL_TARGET_DESCRIPTOR 9
-#define LICHEN_RPL_OPT_DIO_TIME      0x12  /**< DIO Time Option (experimental) */
+#define LICHEN_RPL_OPT_DIO_TIME      0x15  /**< DIO Time Option (project-local provisional; matches python DIO_TIME_OPTION_TYPE and rust OPT_DIO_TIME; do NOT use 0x12 - that is the DAO Origin Signature option, and 0x00 is RFC 6550 Pad1) */
 #define LICHEN_RPL_OPT_SCHC_RULE_VERSION 0x13  /**< SCHC Rule Version Option (spec 5.7) */
+
+/* DIO Time Option stratum bounds (python Stratum / rust Stratum) */
+#define LICHEN_RPL_STRATUM_NO_SYNC   0U
+#define LICHEN_RPL_STRATUM_MAX       4U
 
 /* ── SCHC Rule Set Version ─────────────────────────────────────────────────── */
 
@@ -495,7 +499,7 @@ int lichen_rpl_transit_info_parse(struct lichen_rpl_transit_info *_Nonnull ti,
 int lichen_rpl_transit_info_write(const struct lichen_rpl_transit_info *_Nonnull ti,
 				  uint8_t *_Nonnull buf, size_t len);
 
-/* ── DIO Time Option (type TBD) ────────────────────────────────────────────── */
+/* ── DIO Time Option (type 0x15, project-local provisional) ────────────────── */
 
 /** DIO Time Option data length (excluding type/length bytes) */
 #define LICHEN_RPL_DIO_TIME_DATA_LEN  6

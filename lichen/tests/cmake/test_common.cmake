@@ -29,8 +29,18 @@ function(lichen_test_target target)
     )
 
     # Hardening flags - NO EXCEPTIONS
+    # -std=c23 needs GCC 14+/current clang; older GCC accepts c2x for the
+    # same standard draft.
+    check_c_compiler_flag("-std=c23" _has_std_c23)
+    if(_has_std_c23)
+        target_compile_options(${target} PRIVATE -std=c23)
+    else()
+        check_c_compiler_flag("-std=c2x" _has_std_c2x)
+        if(_has_std_c2x)
+            target_compile_options(${target} PRIVATE -std=c2x)
+        endif()
+    endif()
     target_compile_options(${target} PRIVATE
-        -std=c23
         -Wall -Wextra -Werror
         -Wformat=2
         -Wshadow
