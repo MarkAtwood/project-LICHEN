@@ -324,7 +324,7 @@ impl AprsIsClient {
     ///
     /// # Errors
     ///
-    /// Returns `LineTooLong` if a line exceeds [`MAX_LINE_LEN`] bytes or
+    /// Returns `LineTooLong` if a line exceeds `MAX_LINE_LEN` bytes or
     /// `UnterminatedLine` for partial lines at EOF. This keeps reads bounded
     /// before allocation against malicious servers or session poisoning.
     pub fn recv(&mut self) -> Result<Option<String>, AprsError> {

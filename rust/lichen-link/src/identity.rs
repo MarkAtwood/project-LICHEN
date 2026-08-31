@@ -8,7 +8,7 @@ use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey};
 
 /// Derive a link-local IID from an Ed25519 public key.
 ///
-/// Canonical SHA-512(pubkey)[0..8] with U/L bit cleared (IID[0] &= 0b11111101)
+/// Canonical `SHA-512(pubkey)[0..8]` with U/L bit cleared (`IID[0] &= 0b11111101`)
 /// per RFC 4291 section 2.5.1 and spec/04-network.md section 6.2. Uses the
 /// canonical `lichen_core::addr::iid_from_pubkey_bytes` to ensure consistency
 /// with Yggdrasil address derivation and cross-implementation compatibility.

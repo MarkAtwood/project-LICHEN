@@ -21,7 +21,7 @@
 //! - [`LoraGatewayAnnounce`]: Wire format for LoRa gateway announcements
 //! - [`GATEWAY_FLAG`]: Bit mask for GATEWAY flag in announce type byte
 //! - [`is_gateway_announce`]: Check if a type byte indicates gateway announce
-//! - [`TimeMasterCandidate`]: Re-exported from slot module for time master election
+//! - `GatewayTimeMasterCandidate`: time-master election type, re-exported from the slot module
 
 use crate::slot::iid_to_u64;
 use lichen_coap::codec::{CoapBuilder, CoapError};
