@@ -1,2 +1,3 @@
 {"id":"01a045db-f896-79ac-9106-cbc3c29cd246","issue_id":"project-LICHEN-0li1.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:53:59.062634Z"}
 {"id":"01a05606-83fd-7ce7-a960-7c529d56bf83","issue_id":"project-LICHEN-0li1.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-08-31T04:14:22.717846971Z"}
+{"id":"01a05668-e115-785c-815f-95ed42127544","issue_id":"project-LICHEN-0li1.12","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Self-concluded: NOT a bug, was mistaken","created_at":"2026-08-31T06:01:49.077548863Z"}

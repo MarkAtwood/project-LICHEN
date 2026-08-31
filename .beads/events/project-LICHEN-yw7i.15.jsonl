@@ -1,2 +1,3 @@
 {"id":"01a045e1-b3aa-7be2-9efa-e4c30097cd30","issue_id":"project-LICHEN-yw7i.15","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T01:00:14.634779Z"}
 {"id":"01a0560f-d996-7b9c-a3ff-1b0ea031a592","issue_id":"project-LICHEN-yw7i.15","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-08-31T04:24:34.454762511Z"}
+{"id":"01a0566a-dba6-7c77-b3b1-9af57d66c75e","issue_id":"project-LICHEN-yw7i.15","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Obsolete: references RX thread abort/join in lora_l2.c; RX thread removed by sb0b async migration.","created_at":"2026-08-31T06:03:58.7588209Z"}

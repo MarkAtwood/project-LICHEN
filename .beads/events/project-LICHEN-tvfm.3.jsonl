@@ -1,2 +1,3 @@
 {"id":"01a045df-f0d0-7ae8-b347-8494a402d53c","issue_id":"project-LICHEN-tvfm.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:58:19.216716Z"}
 {"id":"01a05608-8183-7a85-b5f6-f2692822ff20","issue_id":"project-LICHEN-tvfm.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-08-31T04:16:33.155690934Z"}
+{"id":"01a05668-c411-7cac-81fc-c35fe110e1ad","issue_id":"project-LICHEN-tvfm.3","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: lora_l2_identity.c:108 catches hwid_len==0","created_at":"2026-08-31T06:01:41.649831638Z"}

@@ -1,2 +1,3 @@
 {"id":"01a045db-f0fa-7849-ad9f-61255a3c7abb","issue_id":"project-LICHEN-0li1.10","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:53:57.114544Z"}
 {"id":"01a05606-83f5-7263-a3d9-5e734a0a5029","issue_id":"project-LICHEN-0li1.10","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-08-31T04:14:22.709158389Z"}
+{"id":"01a05668-ded4-78aa-bab1-de8fe5558bd8","issue_id":"project-LICHEN-0li1.10","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: dual-magic + crash_retain_checked BSS flag","created_at":"2026-08-31T06:01:48.500569064Z"}
