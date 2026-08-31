@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-4ngz",
+  "title": "Python SCHC rule7 MQTT-SN: error message drift breaks test_mqtt_sn_rule7_rejects_invalid_full_mode_addresses",
+  "description": "Pre-existing at current main (verified failing in isolation on a pristine stash run during kpv0.9's full-suite survey; unrelated to the mypy typing fixes landed with it). tests/schc/test_headers.py:212 test_mqtt_sn_rule7_rejects_invalid_full_mode_addresses expects pytest.raises(SchcError, match='malformed source') for a multicast source (ff02::1) but the compressor now raises 'invalid IPv6 source address ff02::1' — the rejection is correct, the message text drifted (likely from the SCHC rule7/mqtt-sn error-path work in eb8e361f2b/wtxl). Decide the canonical message (test wording vs compressor wording), align one side, keep the rejection semantics intact.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:18:45.324592974Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T19:18:45.324592974Z",
+  "labels": [
+    "schc",
+    "tests"
+  ]
+}

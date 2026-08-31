@@ -235,10 +235,12 @@ static int test_reject_non_ipv6_input(void)
 		return 0;
 	}
 
-	int m = lichen_schc_decompress(comp_buf, n, decomp_buf, sizeof(decomp_buf));
 	/* Rule 255 RX validates the payload as a complete IPv6 packet, so a
-	 * non-IPv6 payload must be rejected at decompress even though the
-	 * compress side still emits it (worker-6-7v5f fixes the emit). */
+	 * non-IPv6 rule255 wire (rule byte + garbage) must be rejected by the
+	 * payload validator itself — not by a length/ceiling accident. */
+	static const uint8_t bad_rule255[5] = { 0xff, 0xde, 0xad, 0xbe, 0xef };
+	int m = lichen_schc_decompress(bad_rule255, sizeof(bad_rule255),
+				       decomp_buf, sizeof(decomp_buf));
 	if (m >= 0) {
 		printf("  FAIL: non-IPv6 rule255 payload decoded (%d)\n", m);
 		return 0;

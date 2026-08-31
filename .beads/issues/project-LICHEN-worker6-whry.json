@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-whry",
+  "title": "link_load_balance.c has the same negative-left-shift UB fixed in rf_health.c",
+  "description": "Out-of-scope note from the 205c security codereview: lichen/subsys/lichen/link/link_load_balance.c:32 uses '(int32_t)snr \u003c\u003c 16' — identical C11 UB to what worker6-205c fixed in rf_health.c:45 (left shift of negative signed; LoRa SNR is routinely negative). Line 88 also has the unclamped '(avg_fp + (1\u003c\u003c15)) \u003e\u003e 16' rounding that 205c clamped in rf_health.c snr_avg (reviewer notes its EMA is bounded so overflow is not reachable, but the shift UB is live). Apply the same two fixes: multiply by FP_SCALE instead of shifting, and consider the same clamp shape if the accumulation can saturate. Verify with the R-APPC-011 gate command (must stay exit 0) and a standalone behavior check like the one used in 205c.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:15:32.512717819Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T19:15:32.512717819Z",
+  "labels": [
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-whry",
+      "depends_on_id": "project-LICHEN-worker6-205c",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:15:32.642262267Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -20,6 +20,7 @@ use std::vec::Vec;
 use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::PeerAuthState;
+use lichen_rpl::root_seq_cache::RootSeqCache;
 use lichen_rpl::routing::{DaoAdmissionState, DaoTxState};
 
 use crate::announce::AnnounceProcessor;
@@ -111,6 +112,7 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     local_control_addr: [u8; 16],
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
+    root_seqs: RootSeqCache,
     routing_now_ms: u64,
     generation: u64,
     direct_neighbors: HashSet<[u8; 8]>,
@@ -142,6 +144,25 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// this value; reprovision or reset increments it to invalidate stale runtimes.
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// Highest accepted root-DIO signature sequence per `(dodag_id, instance)`.
+    ///
+    /// Receiver-side trust state: only record sequences from DIOs whose root
+    /// signature has passed verification (see `RootSeqCache` caller contract).
+    /// The root-signature receiver validation consumes this at the DIO path.
+    /// Interim `dead_code` expectation: the receiver call site lands with the
+    /// root-signature validation bead (b7z9.37.1); the expectation then stops
+    /// being fulfilled and must be removed.
+    #[cfg_attr(not(test), expect(dead_code))]
+    pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
+        &mut self.root_seqs
+    }
+
+    /// Cached highest accepted `root_seq` for the key, if observed.
+    #[must_use]
+    pub fn root_seq_cached(&self, dodag_id: [u8; 16], instance: u8) -> Option<u64> {
+        self.root_seqs.cached(dodag_id, instance)
     }
 
     pub(crate) fn bump_generation(&mut self) {

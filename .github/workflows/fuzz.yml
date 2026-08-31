@@ -94,58 +94,46 @@ jobs:
           path: rust/*/fuzz/artifacts/
 
   zephyr-fuzz:
-    name: Zephyr fuzzing (native_sim)
+    name: Parser fuzzing (host, ASan/UBSan)
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set SOURCE_DATE_EPOCH
-        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
-
       - name: Install system deps
-        run: sudo apt-get install -y --no-install-recommends cmake ninja-build gcc gcc-multilib
+        run: sudo apt-get install -y --no-install-recommends clang cmake ninja-build
 
-      - name: Install west
-        run: pip install west
-
-      - name: Cache west workspace
-        id: cache-zephyr
-        uses: actions/cache@v4
-        with:
-          path: |
-            zephyr
-            modules
-            bootloader
-            tools
-          key: west-workspace-${{ hashFiles('lichen/west.yml') }}
-
-      - name: west init + update
-        if: steps.cache-zephyr.outputs.cache-hit != 'true'
+      # R-APPC-013 (spec/appendix-c-safety.md): parsers of untrusted input
+      # (frame.c, schnorr48.c, schc.c) are fuzzed here. lichen/tests/fuzz is
+      # a standalone host CMake project — not a Zephyr app, so west twister
+      # discovers no tests for it. The harnesses build with
+      # -fsanitize=address,undefined (the sanitizers.conf ASAN/UBSAN policy,
+      # R-APPC-009, applied to these host binaries).
+      - name: Build fuzz harnesses
         run: |
-          west init -l lichen/
-          west update
+          cmake lichen/tests/fuzz -B build-fuzz -G Ninja -DCMAKE_C_COMPILER=clang \
+            -DLICHEN_FUZZ_FORCE_STANDALONE=ON
+          cmake --build build-fuzz
 
-      - name: west init (manifest only)
-        if: steps.cache-zephyr.outputs.cache-hit == 'true'
-        run: west init -l lichen/
-
-      - name: Install Zephyr Python requirements
-        run: pip install -r zephyr/scripts/requirements.txt
-
-      - name: west zephyr-export
-        run: west zephyr-export
-
-      - name: Run fuzz tests (if exist)
+      # Standalone drivers take "iterations seed"; the seed varies per run
+      # (github.run_number, visible in the run UI) so nightly exploration
+      # differs while any failure is replayable with the logged seed.
+      - name: Run fuzz harnesses
         env:
-          ZEPHYR_TOOLCHAIN_VARIANT: host
+          FUZZ_SEED: ${{ github.run_number }}
         run: |
-          if [ -d lichen/tests/fuzz ]; then
-            west twister -T lichen/tests/fuzz -p native_sim --inline-logs
-          else
-            echo "No Zephyr fuzz tests yet"
-          fi
+          echo "fuzz seed: $FUZZ_SEED"
+          ./build-fuzz/fuzz_frame 50000 "$FUZZ_SEED"
+          ./build-fuzz/fuzz_schnorr48 50000 "$FUZZ_SEED"
+          ./build-fuzz/fuzz_schc 50000 "$FUZZ_SEED"
         timeout-minutes: 15
+
+      - name: Upload build for failure reproduction
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zephyr-fuzz-build
+          path: build-fuzz/
 
   integration-stress:
     name: Integration stress tests

@@ -1,0 +1,5 @@
+{"id":"01a0593d-0b58-71e4-b0c6-d3ce2b1beeee","issue_id":"project-LICHEN-worker6-l1qw.26.2","event_type":"created","actor":"opencode-worker-4","old_value":"","new_value":"","created_at":"2026-08-31T19:12:47.96012499Z"}
+{"id":"01a0593d-0b5c-79e7-a634-95f74d93c4b6","issue_id":"project-LICHEN-worker6-l1qw.26.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: lci","created_at":"2026-08-31T19:12:47.964650546Z"}
+{"id":"01a0593d-0b60-7bbf-b502-f0ac50042674","issue_id":"project-LICHEN-worker6-l1qw.26.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: apps","created_at":"2026-08-31T19:12:47.968771553Z"}
+{"id":"01a0593d-0b64-7c5f-be82-a2bdf9f0a7dd","issue_id":"project-LICHEN-worker6-l1qw.26.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: spec","created_at":"2026-08-31T19:12:47.9728122Z"}
+{"id":"01a0593d-0b68-7f20-8e6b-32a11e54ce2e","issue_id":"project-LICHEN-worker6-l1qw.26.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: spec-gap","created_at":"2026-08-31T19:12:47.976992959Z"}

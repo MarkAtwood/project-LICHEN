@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-gvbc",
   "title": "docs/renode-workflow.md:60 version-verification line should name the tested Renode version",
   "description": "Review finding (woo7 round): the 'renode --version' sanity check says 'Expected: Renode, version X.X.X' without stating that 1.16.1 is the version CI validates and the fleet AMI ships (docs/simulation-infrastructure-deployment.md:47). A dev on nightly/brew-latest gets no divergence signal. State 'Expected: Renode, version 1.16.1' (or reference the pinned install step). Discovered from woo7.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T08:10:46.655323064Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-08-31T17:22:58.758630987Z",
+  "updated_at": "2026-08-31T18:56:13.872735841Z",
+  "closed_at": "2026-08-31T18:56:13.872735841Z",
+  "close_reason": "Re-closing (repeat store-resurrection): work verified in tree (07d80f909f / ef5ade997e / f3c3c970a1). No new work existed.",
   "labels": [
     "python",
     "codereview"

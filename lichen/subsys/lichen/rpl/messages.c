@@ -437,6 +437,9 @@ int lichen_rpl_dao_write(const struct lichen_rpl_dao *dao,
 	}
 
 	/* K=ack_requested; D follows the explicit DODAGID presence bit. */
+	/* lichen_rpl_dao_write rejects dao->flags != 0 above, so the low 6
+	 * bits are provably zero here; the mask is retained as defensive
+	 * encoding for the reserved field (see .cppcheck-suppressions). */
 	uint8_t kd = ((dao->ack_requested ? 1 : 0) << 7)
 		   | ((dao->has_dodag_id ? 1 : 0) << 6)
 		   | (dao->flags & 0x3F);

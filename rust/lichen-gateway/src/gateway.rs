@@ -56,6 +56,9 @@ pub struct Gateway {
     oscore_sender_store: GatewayOscoreSenderStore,
     oscore_recipient_store: GatewayOscoreRecipientStore,
     gcp_context_peers: Vec<([u8; 8], ContextId)>,
+    /// Spec 04-network 6.3.4: mesh↔internet multicast is dropped unless
+    /// explicitly configured multicast peering is enabled. Defaults to off.
+    multicast_peering: bool,
 }
 
 struct GatewayOscoreSenderStore {
@@ -899,6 +902,18 @@ impl Gateway {
         self.rpl_stack.set_ygg_reachable(reachable)
     }
 
+    /// Explicitly configured multicast peering (spec 04-network 6.3.4).
+    /// When enabled, the border router forwards multicast between the mesh
+    /// and the backbone in both directions; the default (off) drops it.
+    pub fn set_multicast_peering(&mut self, enabled: bool) {
+        self.multicast_peering = enabled;
+    }
+
+    /// Whether explicitly configured multicast peering is enabled.
+    pub fn multicast_peering_enabled(&self) -> bool {
+        self.multicast_peering
+    }
+
     /// Open or provision a production gateway using durable RPL state.
     ///
     /// `persistence.provision` is an idempotent provision-or-resume mode: the
@@ -1002,6 +1017,7 @@ impl Gateway {
             oscore_sender_store: backing.oscore_sender_store,
             oscore_recipient_store: backing.oscore_recipient_store,
             gcp_context_peers: Vec::new(),
+            multicast_peering: false,
         })
     }
 
@@ -1548,6 +1564,13 @@ impl Gateway {
         dst.copy_from_slice(&ipv6_packet[field::DST_OFFSET..field::DST_OFFSET + 16]);
         if dst[0] == 0xfd {
             warn!("upstream ULA destination is outside the LICHEN native profile");
+            return None;
+        }
+        if dst[0] == 0xff && !self.multicast_peering {
+            // Spec 04-network 6.3.4: a border router MUST NOT forward
+            // multicasts across the backbone boundary (this direction:
+            // backbone → mesh) without explicitly configured peering.
+            warn!("upstream multicast destination dropped (spec 04 6.3.4)");
             return None;
         }
         if self.is_local_mesh(&dst) {

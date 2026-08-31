@@ -229,7 +229,9 @@ static bool admin_payload_variant_field(uint32_t field)
 	 * Field 101 (session_passkey) is context not a oneof arm.
 	 * Unknown future fields must be skipped (do not override prior oneof).
 	 */
-	return (field >= 0U && field <= 8U) ||
+	/* field is uint32_t: the >= 0U half of the original first range was
+	 * always true and is omitted. */
+	return (field <= 8U) ||
 	       (field >= 10U && field <= 27U) ||
 	       (field >= 32U && field <= 49U) ||
 	       (field >= 64U && field <= 67U) ||
