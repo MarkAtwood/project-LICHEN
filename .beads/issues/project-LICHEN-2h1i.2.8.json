@@ -12,7 +12,8 @@
   "closed_at": "2026-07-25T01:13:17.951814479Z",
   "close_reason": "Already fixed",
   "labels": [
-    "oscore"
+    "oscore",
+    "security"
   ],
   "dependencies": [
     {
