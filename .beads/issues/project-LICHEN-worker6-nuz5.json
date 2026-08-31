@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-7",
   "updated_at": "2026-08-30T22:10:58.973743151Z",
   "labels": [
-    "networking"
+    "networking",
+    "rust"
   ],
   "dependencies": [
     {
