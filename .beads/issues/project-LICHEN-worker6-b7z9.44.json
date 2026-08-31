@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.44",
+  "title": "Spec 07 10.3: CoAP Observe MUST limits absent - no 16/resource + 64/global bounds, no LRU eviction (all stacks fail-closed or unbounded)",
+  "description": "Spec 07 (spec/07-transport-app.md:625-627): 'Implementations MUST bound CoAP Observe subscriptions to at most 16 per resource and 64 globally. On overflow, implementations MUST evict the oldest subscription (LRU by registration time).' Sweep rows R-07-036 (divergent) + R-07-037 (not-implemented): no stack implements the 16/64 bounds or LRU eviction. Evidence: (a) Rust: ObserveServer\u003cPeer, OBSERVERS, MAX_WIRE\u003e fail-closed ObserveError::RegistryFull, capacity is a caller-chosen const-generic with NO production instantiation (rust/lichen-coap/src/observe.rs:289-341; tests use 2-observer instances rust/lichen-coap/tests/observe.rs:127-297); no global 64-subscription registry. (b) Python: aiocoap ObservableResource observer lists unbounded (python/src/lichen/coap/resources/*.py); no max_subscribers/subscription-cap code. (c) C/Zephyr: per-resource pools of 4/4/3, explicitly never-evict (MSG_INBOX_MAX_OBSERVERS=4 lichen/subsys/lichen/coap/coap_msg.c:37-39; CONFIG_LICHEN_COAP_STATUS_MAX_OBSERVERS=4 coap_status.h:37-38; LICHEN_POSITION_OBSERVER_MAX=3 coap_location.h:29; 'the observer pool is bounded and never evicts' coap_rangetest.c:838-855); no global counter across resources. Per-resource pools of 4 satisfy 'at most 16 per resource' incidentally, but nothing enforces 16/64 as the spec bound, and the LRU-eviction MUST is unimplemented everywhere. NOTE: C never-evict looks like a deliberate fail-closed policy - needs a human decision: implement evict-oldest per spec, or amend the spec to reject-new (current behavior is arguably safer against subscription thrash). Suggested placement: rust/lichen-coap observe.rs default OBSERVERS=16 + process-global 64 registry; python site wrapper capping observers per resource; C shared observer registry if the eviction policy is adopted. Related: project-LICHEN-worker6-b7z9.32 (Observe fresh-PIV policy).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T15:21:04.801188612Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T15:21:04.801188612Z",
+  "labels": [
+    "transport",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.44",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T15:21:04.894075796Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
