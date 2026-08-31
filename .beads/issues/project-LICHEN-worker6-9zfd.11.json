@@ -10,7 +10,8 @@
   "updated_at": "2026-08-28T15:02:10.913474Z",
   "labels": [
     "c",
-    "hal"
+    "hal",
+    "networking"
   ],
   "dependencies": [
     {
