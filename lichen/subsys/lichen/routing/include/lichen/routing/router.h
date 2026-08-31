@@ -57,6 +57,9 @@ extern "C" {
 #ifndef CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGES
 #define CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGES 8
 #endif
+#ifndef CONFIG_LICHEN_ROUTER_DTN_MAX_PER_SOURCE
+#define CONFIG_LICHEN_ROUTER_DTN_MAX_PER_SOURCE 2
+#endif
 
 #ifndef CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGE_SIZE
 #define CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGE_SIZE 512
@@ -185,6 +188,7 @@ struct lichen_mesh_prefix {
  */
 struct lichen_router_dtn_message {
 	uint8_t destination_iid[8]; /**< 8-byte IID of destination */
+	uint8_t source_iid[8];      /**< 8-byte IID of the storing source */
 	uint8_t data[CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGE_SIZE]; /**< Copied message data */
 	size_t len;                 /**< Message length */
 	uint32_t expiry_unix;       /**< Absolute Unix timestamp expiry */
@@ -551,10 +555,16 @@ int lichen_router_gpsr_forward(struct lichen_router *router,
  */
 int lichen_router_dtn_buffer(struct lichen_router *router,
 			     const uint8_t dst_iid[8],
+			     const uint8_t source_iid[8],
 			     const uint8_t *data,
 			     size_t len,
 			     uint32_t expiry_unix,
 			     uint32_t now_ms);
+/* SECURITY (spec 05-routing 9.8, project-LICHEN-worker6-cxa2): admission is
+ * capped per source IID (CONFIG_LICHEN_ROUTER_DTN_MAX_PER_SOURCE) so one
+ * sender cannot churn-evict other sources' buffered messages. The cap is
+ * keyed on the claimed wire source IID passed by the routing dispatcher;
+ * keying it on the LLSec-authenticated peer identity is future work. */
 
 /**
  * @brief Get list of destination IIDs with buffered DTN messages.

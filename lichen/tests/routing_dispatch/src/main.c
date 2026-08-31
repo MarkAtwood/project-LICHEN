@@ -571,6 +571,9 @@ static int test_dtn_hbh_option_parsing(void)
 
 	/* 5. Pad1 before DTN option parses correctly. */
 	{
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+
 		const size_t hbh_len = 16U;
 		const size_t total = 40U + hbh_len + 8U;
 		uint8_t pkt3[64];
@@ -618,6 +621,9 @@ static int test_dtn_hbh_option_parsing(void)
 
 	/* 6. Unrecognized option with action=00 (skip) followed by DTN. */
 	{
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+
 		const size_t hbh_len = 16U;
 		const size_t total = 40U + hbh_len + 8U;
 		uint8_t pkt4[64];
@@ -714,6 +720,9 @@ static int test_dtn_hbh_option_parsing(void)
 	/* 9. R-05-080 fail-open: no valid wall-clock → store despite expiry=0. */
 #if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
 	{
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+
 		uint8_t pkt7[64];
 		size_t pkt7_len = make_dtn_hbh_packet(pkt7, sizeof(pkt7),
 						      0x80U, 0U);
@@ -912,6 +921,65 @@ static int test_dtn_hbh_option_parsing(void)
 		REQUIRE(result.path == LICHEN_ROUTE_PATH_GRADIENT);
 		REQUIRE(result.forward_hop_limit == 7U); /* 8 - 1 forwarded hop */
 		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
+	/* 17. Per-source admission cap (cxa2): with MAX_PER_SOURCE=3 the
+	 * fourth buffered message from one source is rejected even though
+	 * slots remain, and a different source is still admitted. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+
+		for (unsigned i = 0U; i < CONFIG_LICHEN_ROUTER_DTN_MAX_PER_SOURCE;
+		     i++) {
+			uint8_t cap_pkt[64];
+			size_t cap_len = make_dtn_hbh_packet(cap_pkt, sizeof(cap_pkt),
+							     0x80U, 200U);
+			REQUIRE(cap_len != 0U);
+			input = (struct lichen_route_packet) {
+				.data = cap_pkt, .len = cap_len,
+				.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+				.now_unix = 100U,
+			};
+			REQUIRE(lichen_router_route_packet(&router, &input,
+							   21U + i, &result) == 0);
+			REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+		}
+		/* Cap reached for this source: next store fails closed. */
+		{
+			uint8_t cap_pkt[64];
+			size_t cap_len = make_dtn_hbh_packet(cap_pkt, sizeof(cap_pkt), 0x80U, 200U);
+			input = (struct lichen_route_packet) {
+				.data = cap_pkt, .len = cap_len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+				.now_unix = 100U,
+			};
+			REQUIRE(lichen_router_route_packet(&router, &input, 24U, &result)
+				== -ENOBUFS);
+		}
+
+		/* A different source still gets buffer space. */
+		{
+			uint8_t pkt_b[64];
+			size_t pkt_b_len;
+
+			pkt_b_len = make_dtn_hbh_packet(pkt_b, sizeof(pkt_b),
+							0x80U, 200U);
+			REQUIRE(pkt_b_len != 0U);
+			pkt_b[8] = 0x02U;
+			pkt_b[9] = 0x00U;
+			pkt_b[15] = 0xB1U; /* distinct source identity */
+			pkt_b[23] = 0xB1U;
+			input = (struct lichen_route_packet) {
+				.data = pkt_b, .len = pkt_b_len,
+				.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+				.now_unix = 100U,
+			};
+			REQUIRE(lichen_router_route_packet(&router, &input, 25U,
+							   &result) == 0);
+			REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+		}
 	}
 #endif
 
