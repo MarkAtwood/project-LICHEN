@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-v1c2",
   "title": "IPv6-in-IPv6: decapsulated inner datagram is not re-surveyed for RH3",
   "description": "Codereview finding (P2, security-adjacent) from ba39 3-pass review. rust/lichen-node/src/rpl_stack/receive.rs:296-300 and 352-355 deliver a decapsulated inner datagram without running survey_routing_headers on it; secure.rs:1935-1979 will parse an RH3 present in a delivered datagram without the survey's grid constraints and without rejecting in-transit segments_left. Bounded: local dispatch requires UDP, OSCORE context keys on link-authenticated sender IID, C router rejects NH=41 outright (router.c:375-377) so it is a Rust-only divergence. Suggested hardening: reject next_header==43 (or re-survey) on the delivered inner at both decap sites. Discovered-from: project-LICHEN-worker6-ba39",
-  "status": "open",
+  "status": "in_progress",
   "priority": 2,
   "issue_type": "bug",
+  "assignee": "opencode-worker-6",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T10:06:02.184027732Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T10:06:02.184027732Z",
+  "updated_at": "2026-08-31T22:11:24.378140308Z",
+  "started_at": "2026-08-31T22:11:24.378140308Z",
+  "lease_expires_at": "2026-08-31T22:16:24.378140308Z",
+  "heartbeat_at": "2026-08-31T22:11:24.378140308Z",
   "labels": [
     "needs-linux"
   ]

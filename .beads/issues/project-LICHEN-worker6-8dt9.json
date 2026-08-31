@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-8dt9",
+  "title": "92dv.2: verify DAO Origin Signature (0x12) Schnorr48 at root ingest",
+  "description": "Child of 92dv, after 92dv.1. rpl_dao_process.c: replace the structural-only 0x12 validation with real verification per spec 05 8.6: transcript = SHA-512('LICHEN-DAO-ORIGIN-v1' || origin IPv6 address (preserved source, 16B) || effective DODAGID (16B) || Origin Sequence (8B BE) || unsigned DAO bytes (from RPLInstanceID to before the 0x12 option)); Schnorr48-verify the 48-byte signature with the pinned pubkey from 92dv.1's lookup; the preserved source IID must equal the pinned identity's bound IID; a DAO MUST NOT create/replace an announce pin. origin_authenticated=true only on verified provenance. Flip the test helper add_origin_signature (rpl_routing/src/main.c:91-97) from dummy 0x5a bytes to real signatures (test keys + sign), keeping a negative case (tampered body).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:10:46.927836291Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T22:10:46.927836291Z",
+  "labels": [
+    "networking",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8dt9",
+      "depends_on_id": "project-LICHEN-worker6-92dv",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T22:10:47.0382007Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}
