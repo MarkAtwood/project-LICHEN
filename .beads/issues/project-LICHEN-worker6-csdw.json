@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-5",
   "updated_at": "2026-08-30T16:37:08.260221Z",
   "labels": [
-    "rust"
+    "rust",
+    "schc"
   ],
   "dependencies": [
     {
