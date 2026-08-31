@@ -12,7 +12,8 @@
   "labels": [
     "l2",
     "spec",
-    "link"
+    "link",
+    "human-only"
   ],
   "dependencies": [
     {
