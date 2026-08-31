@@ -17,7 +17,8 @@
     "newtype",
     "owner-reserved",
     "review",
-    "workspace-api"
+    "workspace-api",
+    "networking"
   ],
   "dependencies": [
     {
