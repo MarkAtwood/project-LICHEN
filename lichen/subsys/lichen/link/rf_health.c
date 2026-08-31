@@ -35,7 +35,9 @@ void lichen_rf_health_record_rx(struct lichen_rf_health *h, int8_t snr)
 	if (snr < h->snr.min) h->snr.min = snr;
 	if (snr > h->snr.max) h->snr.max = snr;
 
-	int32_t snr_fp = (int32_t)snr << 16;
+	/* Multiply, not left-shift: snr is int8_t and LoRa SNR is routinely
+	 * negative — left-shifting a negative signed value is C11 UB. */
+	int32_t snr_fp = (int32_t)snr * FP_SCALE;
 	if (h->snr.count == 0) {
 		h->snr.avg_fp = snr_fp;
 	} else {
@@ -43,6 +45,11 @@ void lichen_rf_health_record_rx(struct lichen_rf_health *h, int8_t snr)
 		if (__builtin_ssub_overflow(snr_fp, h->snr.avg_fp, &diff)) {
 			diff = (snr_fp >= 0) ? INT32_MAX : INT32_MIN;
 		}
+		/* Arithmetic right shift of the signed EMA accumulator is
+		 * intentional (floor semantics); dividing would change rounding
+		 * for negative deltas. gcc/clang document the shift as
+		 * arithmetic for signed types. */
+		// cppcheck-suppress shiftNegativeLHS
 		int32_t delta = diff >> LICHEN_RF_EMA_ALPHA_SHIFT;
 		if (__builtin_sadd_overflow(h->snr.avg_fp, delta, &h->snr.avg_fp)) {
 			h->snr.avg_fp = (delta > 0) ? INT32_MAX : INT32_MIN;
@@ -94,7 +101,13 @@ uint16_t lichen_rf_health_packet_loss_permille(const struct lichen_rf_health *h)
 int8_t lichen_rf_health_snr_avg(const struct lichen_rf_health *h)
 {
 	if (h->snr.count == 0) return 0;
-	return (int8_t)((h->snr.avg_fp + FP_ROUND) >> 16);
+	/* Clamp before rounding: the saturation paths can store INT32_MAX,
+	 * and adding FP_ROUND to that would overflow. */
+	int32_t avg = h->snr.avg_fp;
+	if (avg > INT32_MAX - FP_ROUND) {
+		avg = INT32_MAX - FP_ROUND;
+	}
+	return (int8_t)((avg + FP_ROUND) >> 16);
 }
 
 uint8_t lichen_rf_health_adaptive_sf(const struct lichen_rf_health *h)

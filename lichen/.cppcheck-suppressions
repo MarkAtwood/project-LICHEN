@@ -23,6 +23,10 @@ unknownMacro:lichen/drivers/lora/lora_renode.c
 # __has_include in the platform-header cascade: cppcheck's preprocessor
 # cannot evaluate the condition and reports a bogus division by zero.
 preprocessorErrorDirective:lichen/subsys/lichen/l2/ipv6_addr.h
+# lichen_rpl_dao_write rejects dao->flags != 0 before encoding, so the third
+# OR operand (dao->flags & 0x3F) is provably zero on that path; the mask is
+# kept as defensive encoding for the reserved field.
+badBitmaskCheck:lichen/subsys/lichen/rpl/messages.c
 
 # ── Intentional constructs ──────────────────────────────────────────────────
 # Negative-build guard: the #error IS the test.
