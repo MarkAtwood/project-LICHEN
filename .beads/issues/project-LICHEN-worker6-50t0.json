@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-50t0",
+  "title": "C L2 tx still labels profile-limit rejections of 256-264B unmatched packets as corruption (BUFFER_TOO_SMALL passthrough)",
+  "description": "Found by correctness review pass of project-LICHEN-worker6-jfzk (P3, pre-existing class partially narrowed but not eliminated). lichen_link_tx's compressed buffer is 256 bytes (lichen_link_tx.c:43) while the SCHC Rule255 fallback needs 1+pkt_len; lichen_l2.h:215 gives tx_ipv6_buf = LICHEN_L2_MTU(200)+40+OSCORE overhead = 264. So a legitimate, policy-clean, rule-UNMATCHED packet (unprofiled UDP ports, ICMPv6 NS/NA/RA - the profile only has echo/DIO/DAO/CoAP/MQTT-SN rules) with pkt_len in [256..264] returns SCHC_ERR_BUFFER_TOO_SMALL, which jfzk deliberately kept as a passthrough (internal sizing anomaly) and which lichen_l2_tx.c:159 still labels CRASH_STATE_CORRUPTION and maps raw -ENOENT to the net stack. Narrow window (only 9 byte-lengths, only unmatched rules), pre-existing, fail-closed either way. Fix direction: either size the compressed buffer to cover the fallback (e.g. min(1+ipv6_len, SCHC_FRAGMENT_MAX_PACKET_SIZE) on the stack - 265 bytes is affordable) so the fallback succeeds and the frame goes out uncompressed, or keep the cap and classify BUFFER_TOO_SMALL from the compress step as an operational rejection (skip crash_info, map -EINVAL) like LICHEN_ESCHC. Decide which behavior the profile wants (uncompressed delivery of unmatched-but-valid packets is what the Rust side does - rust compress falls back with usize::MAX single-frame limit and the caller buffer bounds), then align C and pin.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:49:13.785979128Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T00:49:13.785979128Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-50t0",
+      "depends_on_id": "project-LICHEN-worker6-jfzk",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:49:13.896645554Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

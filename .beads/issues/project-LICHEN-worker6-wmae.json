@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-wmae",
+  "title": "coap_config/coap_rangetest/coap_waypoints still call strnlen: same minimal-libc -Werror break as y0z0",
+  "description": "Scope note from correctness codereview of project-LICHEN-worker6-y0z0 (which fixed coap_status.c only): strnlen is not declared by Zephyr's minimal libc under the 4.1.0 toolchain (implicit-function-declaration -Werror breaks any build pulling these files). Remaining call sites: lichen/subsys/lichen/coap/coap_config.c:138,237,620-624, coap_rangetest.c:469, coap_waypoints.c:95. They compile today only because ping_l2's config does not pull those translation units; the gateway/app builds that do will break identically. Fix: mirror y0z0's status_bounded_len memchr helper (or a shared coap-level helper) at each site; keep the \u003e= sizeof(...) invalid-string semantics. Naturally bundled with the 2r8s/wgyl handler migrations that touch the same files.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:44:08.735455196Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T00:44:08.735455196Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wmae",
+      "depends_on_id": "project-LICHEN-worker6-y0z0",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:44:08.836100644Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

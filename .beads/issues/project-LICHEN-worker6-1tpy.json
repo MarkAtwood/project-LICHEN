@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-1tpy",
+  "title": "Sync firmware/bridge-zephyr vendored lichen_l2 copy with jfzk error-code changes (LICHEN_ESCHC, ENOKEY=126, crash_info skip)",
+  "description": "Found by security review pass of project-LICHEN-worker6-jfzk (P2). firmware/bridge-zephyr/subsys/lichen/lichen_l2.c is a vendored copy of the L2 tx path and still carries the pre-jfzk behavior its parent bead fixed: (1) crash_info_store(CRASH_STATE_CORRUPTION) for every negative lichen_link_tx return - policy rejections (-LICHEN_ESCHC semantics) and keyless state (-ENOKEY) are mislabeled as corruption there (:87-96 area); (2) its local to_zephyr_errno leaks raw SCHC/201 codes to the Zephyr net stack (:989-993 area); (3) its vendored lichen_util.h strerror lacks the new cases. Fix: mirror the jfzk edits - LICHEN_ESCHC (201) in its errno header, the policy-rejection mapping in lichen_link_tx's compress step, the crash_info skip for -LICHEN_ESCHC/-ENOKEY, the -EINVAL Zephyr mapping, and the strerror cases - or re-vendor the updated files wholesale if the vendored tree tracks upstream files 1:1. Verify the bridge-zephyr firmware builds for its target (Zephyr env required - not available on heft, see the v3.7.0 tree note) before closing.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:49:01.152013053Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T00:49:01.152013053Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1tpy",
+      "depends_on_id": "project-LICHEN-worker6-jfzk",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:49:01.267841637Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

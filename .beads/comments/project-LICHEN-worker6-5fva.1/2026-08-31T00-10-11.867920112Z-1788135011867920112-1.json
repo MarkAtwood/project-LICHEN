@@ -1,0 +1,7 @@
+{
+  "id": "1788135011867920112-1",
+  "issue_id": "project-LICHEN-worker6-5fva.1",
+  "author": "opencode-worker-2",
+  "text": "Released at the heft-cutover blocker, not the -ENOENT itself: ping_l2 cannot currently COMPILE on the 4.1.0 workspace - lora_loopback recv_async signature (0l5j scope, instance documented there) and coap_client send_mutex removal (new bead, discovered-from mt5q) both break the build with -Werror; tinycrypt module also had to be cloned into the workspace (see mt5q comment) before Kconfig even passes. The -ENOENT debug steps in this bead's description remain the plan once the 4.1.0 reconciliation (mt5q) lands: epoch_persist.c:117 / replay_persist.c:234 are the ENOENT sources to trace, plus the lichen_link_strerror missing-ENOENT diagnosability fix. Timebox-released per worker loop; no code changes were made for this bead.",
+  "created_at": "2026-08-31T00:10:11.867920112Z"
+}

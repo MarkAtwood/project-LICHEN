@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-xqvj",
+  "title": "ping_l2 native_sim build blockers: coap_client.c send_mutex drift (and recv_async family)",
+  "description": "Found while debugging project-LICHEN-worker6-5fva.1 on heft (native_sim/native/64, pinned v3.7.0, main checkout): after fixing coap_status.c (strnlen strict-ISO + conversion), ping_l2 still fails to compile at lichen/subsys/lichen/coap/coap_client.c:181 - 'struct coap_client has no member named send_mutex; did you mean send_buf' - coap_client code drifted from the struct definition (likely coap_server/coap_client refactor). Additionally the recv_async 3-arg (user_data) contract migration tracked in project-LICHEN-worker6-0l5j blocks: lora_l2_rx.c:139,310,380 (2-arg calls + wrong callback signature), lora_loopback.c:239 (cb invoked with too few args), lora_loopback.c:301 (registration function pointer mismatch). ping_l2 runtime diagnosis (-ENOENT from lichen_link_tx) cannot proceed until these compile. Fix send_mutex drift and coordinate the recv_async migration with 0l5j/sb0b.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-6",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:30:50.17329414Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T00:31:54.962546509Z",
+  "started_at": "2026-08-31T00:31:54.962546509Z",
+  "lease_expires_at": "2026-08-31T00:36:54.962546509Z",
+  "heartbeat_at": "2026-08-31T00:31:54.962546509Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-xqvj",
+      "depends_on_id": "project-LICHEN-worker6-5fva.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:30:50.270960677Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

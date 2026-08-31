@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ptmp",
+  "title": "test_vector_file_schema does not gate schc_compression.json; schema schc_vector definition is stale against the live corpus",
+  "description": "P3, found by kimi edge-cases codereview pass of project-LICHEN-worker6-5o7x. python/tests/test_vectors.py:190-216 parametrizes test_vector_file_schema over a corpus list that omits test/vectors/schc_compression.json, so the corpus schema gate never runs on it. It cannot simply be added: test/vectors/schema.json's schc_vector definition (schema.json:797-849) has additionalProperties: false and lacks properties the live corpus now carries (category values malformed_input/malformed/size_boundary/fallback, expect_error, compressed_prefix, tail_byte, tail_length, expected_packet_size) - adding the file to the gate would fail on ~30 rows, so the omission is load-bearing drift, not an oversight to toggle. Mitigation already landed in 5o7x: gen_vectors.py and the python consumers now enforce nonempty snake_case expect_error and fail closed on type drift, and rust serde Option\u003cString\u003e fails closed; but the generator validates only its own field set, not the full schema (e.g. unknown fields in round_trip rows, missing descriptions, rule_id ranges are checked, but description/type constraints per category are not). Fix: update schema.json schc_vector to model the live corpus (all five categories with their field sets, expect_error string pattern, size_boundary numeric ranges), then add schc_compression.json to the test_vector_file_schema parametrization and make the whole corpus schema-clean. Sizeable schema work - decompose if it exceeds a slice.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:46:11.526059941Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T00:46:11.526059941Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ptmp",
+      "depends_on_id": "project-LICHEN-worker6-5o7x",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:46:11.637341984Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
