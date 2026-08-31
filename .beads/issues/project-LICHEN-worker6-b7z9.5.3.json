@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.5.3",
+  "title": "b7z9.5.3: Node TX — fragment oversized datagrams via FragmentationPolicy/FragmentSender",
+  "description": "Child of project-LICHEN-worker6-b7z9.5. At the b7z9.5.1 seam, instead of erroring: own a FragmentationPolicy in Stack (accept_peer for authenticated peers), create a FragmentSender for oversized payloads, emit tile frames as sequential send_l2_payload_to calls each with CCP-15 CCA. Requires b7z9.5.2 on the receiving side (loopback tests pair two Stacks). ACK handling and retransmit are b7z9.5.4.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:33:34.827520178Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T06:33:34.827520178Z",
+  "labels": [
+    "schc",
+    "rust",
+    "gateway",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.5.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.5",
+      "type": "parent-child",
+      "created_at": "2026-08-31T06:33:34.990700267Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

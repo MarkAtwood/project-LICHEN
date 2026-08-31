@@ -1,0 +1,5 @@
+{"id":"01a05686-3f9b-7789-9491-d85bea851bac","issue_id":"project-LICHEN-worker6-b7z9.5.4","event_type":"created","actor":"opencode-worker-4","old_value":"","new_value":"","created_at":"2026-08-31T06:33:53.819495745Z"}
+{"id":"01a05686-3fa0-7568-b8ce-c525837e61aa","issue_id":"project-LICHEN-worker6-b7z9.5.4","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: schc","created_at":"2026-08-31T06:33:53.82435552Z"}
+{"id":"01a05686-3fa4-7f0d-9310-fd4f6f8d39ab","issue_id":"project-LICHEN-worker6-b7z9.5.4","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: rust","created_at":"2026-08-31T06:33:53.828987558Z"}
+{"id":"01a05686-3fae-763b-bb3f-e8d6a38188bd","issue_id":"project-LICHEN-worker6-b7z9.5.4","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: gateway","created_at":"2026-08-31T06:33:53.838409736Z"}
+{"id":"01a05686-3fb3-7246-9ab8-df89ba029094","issue_id":"project-LICHEN-worker6-b7z9.5.4","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: spec-gap","created_at":"2026-08-31T06:33:53.843150475Z"}

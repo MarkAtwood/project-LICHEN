@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-emca",
   "title": "Rust SCHC: remaining non-atomic compress error paths — sibling per-rule compressors and dispatcher profile limit",
   "description": "Remainder of the compress-atomicity audit from project-LICHEN-worker6-csdw (fixed for compress_mqtt_sn in commit d8478e092c; reviewer scope-note confirmed). Two clusters still violate 'Err leaves out untouched' (decompress is atomic; Python is atomic by construction): (1) Sibling per-rule compressors retain mutate-then-check: compress_coap (codec.rs:731), compress_icmpv6_echo (:829), compress_rpl_dio (:871), compress_rpl_dao (:923, late check at :960-966). Each writes out[0]=RULE and zero-fills via BitWriter::new before its needed\u003eout.len() check. Fix each the csdw way: branch-computable residue size checked before first mutation + regression test asserting sentinel buffer untouched on error. (2) Dispatcher compress() (codec.rs:2196 etc.): enforce_encoded_profile_limit (:2304) converts Ok(n) to Err('SCHC packet exceeds profile limit') AFTER the per-rule fn fully wrote the buffer — probe: 40000-byte out, over-profile input -\u003e Err with all 40000 bytes written. Needs per-rule pre-check or a documented non-atomic carve-out for this one error, consistently across Rust and Python (check python/src/lichen/schc headers.py compress_packet behavior for the same over-profile path before deciding). No current in-repo caller reads out after Err (csdw checked link.rs:263, decompress_authenticated_frame_tracked), so impact is latent contract robustness, not an active bug. Label schc (primary), rust.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T05:21:24.006516972Z",
   "created_by": "opencode-worker-4",
-  "updated_at": "2026-08-31T05:21:24.006516972Z",
+  "updated_at": "2026-08-31T06:35:26.998748609Z",
+  "closed_at": "2026-08-31T06:35:26.998748609Z",
+  "close_reason": "Made all sibling per-rule SCHC compressors atomic on error (Err leaves out untouched, matching decompress and Python): (1) compress_icmpv6_echo/rpl_dio/rpl_dao restructured to preflight needed=1+RESIDUE+tail (residue 176/312/288 bits, const + debug_assert) checking out.is_empty -\u003e out.len() -\u003e profile limit BEFORE first mutation; (2) compress_coap gained the profile precheck (BufferTooSmall preflight already existed); (3) dispatcher compress() arms converted from 'if let Ok' fall-through to mqtt-style match propagating non-NoMatchingRule errors - justified because compressed needed \u003c rule255 needed always (rule255 rescue impossible) and the old fall-through misreported per-rule profile errors as rule255 BufferTooSmall; reviewer verified no packet previously emitted is now dropped (fail-strictly-earlier, no DoS amplification) and it also removes a partial-mutation leak on the old double-failure path; (4) parity: Python raises on bad Rule-7 checksum/profile overflow, so Rust fail-closed is now Python-consistent. 5 new sentinel tests (0xAA buffer untouched on BufferTooSmall per rule + dispatcher over-profile). lichen-schc 86/86, lichen-link 93/93, clippy -D warnings clean, fmt clean. Reviewer 3x: P1 PASS (verified bit math, check ordering, error identity), P2 PASS (no overflow - lengths from slices not header field; atomicity holds on all paths), P3 one finding = the rule-7 mqtt gap, already filed as 83wu (worker-4's fb8e7f4a70 owns that function; clean merge surface confirmed).",
   "labels": [
     "schc",
     "rust"
