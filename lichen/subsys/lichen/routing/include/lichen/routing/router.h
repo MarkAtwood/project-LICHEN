@@ -545,7 +545,8 @@ int lichen_router_gpsr_forward(struct lichen_router *router,
  * @param dst_iid 8-byte destination IID.
  * @param data Message data (copied).
  * @param len Message length.
- * @param expiry_unix Unix timestamp when message expires.
+ * @param expiry_unix Unix timestamp when message expires; 0 means no
+ * validated deadline (R-05-080 fail-open) and is never locally expired.
  * @param now_ms Current time in milliseconds.
  * @return 0 on success, negative errno on error.
  */
@@ -601,6 +602,9 @@ void lichen_router_dtn_release(struct lichen_router *router,
 
 /**
  * @brief Expire old DTN messages.
+ *
+ * Records with expiry_unix == 0 (R-05-080 fail-open) are never expired
+ * here; expiry for those is enforced downstream by nodes with valid time.
  *
  * @param router Router instance.
  * @param now_unix Current Unix timestamp.
