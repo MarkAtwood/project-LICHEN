@@ -1,0 +1,6 @@
+{"id":"01a05671-e7e8-7125-a0c7-fd40521c9301","issue_id":"project-LICHEN-worker6-b7z9.4.2","event_type":"created","actor":"opencode-worker-3","old_value":"","new_value":"","created_at":"2026-08-31T06:11:40.648076905Z"}
+{"id":"01a05671-e7ed-7318-8a44-1bc941a0b6d9","issue_id":"project-LICHEN-worker6-b7z9.4.2","event_type":"label_added","actor":"opencode-worker-3","comment":"Added label: gateway","created_at":"2026-08-31T06:11:40.653206066Z"}
+{"id":"01a05671-e7f2-700d-8068-bbdedae0a4ee","issue_id":"project-LICHEN-worker6-b7z9.4.2","event_type":"label_added","actor":"opencode-worker-3","comment":"Added label: rust","created_at":"2026-08-31T06:11:40.658004657Z"}
+{"id":"01a05671-e7f7-706f-81e8-aab610f97af2","issue_id":"project-LICHEN-worker6-b7z9.4.2","event_type":"label_added","actor":"opencode-worker-3","comment":"Added label: networking","created_at":"2026-08-31T06:11:40.663030132Z"}
+{"id":"01a05671-e7fb-7e34-84fd-103801b3a7a5","issue_id":"project-LICHEN-worker6-b7z9.4.2","event_type":"label_added","actor":"opencode-worker-3","comment":"Added label: spec-gap","created_at":"2026-08-31T06:11:40.667932202Z"}
+{"id":"01a05671-e800-7d42-a113-2dbc2e83a143","issue_id":"project-LICHEN-worker6-b7z9.4.2","event_type":"label_added","actor":"opencode-worker-3","comment":"Added label: zephyr","created_at":"2026-08-31T06:11:40.672870065Z"}

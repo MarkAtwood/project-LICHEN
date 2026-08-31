@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.4.4",
+  "title": "Test vectors: IPv6-in-IPv6 tunnel (inner HL decrement, decap, inner-dst verify)",
+  "description": "Child of b7z9.4. test/vectors/ srh_root_insertion.json / srh_admission.json / source_route_hop_limit.json cover RH3 insertion/admission only. Add vectors for: root encapsulation inner HL decrement (orig HL, num_addrs, expected inner HL, plus rejection case SL \u003e= available HL), E-side decap (valid outer+RH3+inner -\u003e inner packet, inner-dst mismatch -\u003e reject, malformed inner -\u003e reject). Cross-implementation: Rust and C decap must accept identical vectors. Files: test/vectors/ + generator entries in test/vectors/generate.py if applicable.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:11:41.823553322Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T06:11:41.823553322Z",
+  "labels": [
+    "networking",
+    "tests",
+    "gateway",
+    "rust",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.4.4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.4",
+      "type": "parent-child",
+      "created_at": "2026-08-31T06:11:41.99788492Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}
