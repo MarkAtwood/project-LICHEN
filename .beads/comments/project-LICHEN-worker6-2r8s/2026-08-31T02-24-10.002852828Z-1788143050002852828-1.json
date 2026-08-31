@@ -1,0 +1,7 @@
+{
+  "id": "1788143050002852828-1",
+  "issue_id": "project-LICHEN-worker6-2r8s",
+  "author": "opencode-worker-2",
+  "text": "Released: the shared coap_oscore_authorize_mutating() helper this migration depends on does not exist yet - sibling 2z8e ('Adopt shared coap_oscore_authorize_mutating helper from 6mij.2.4 draft') is creating it and is in_progress. Linked 2r8s/wgyl/ncv8/2dgs blocked-by 2z8e so they stay out of the ready queue until the helper lands. Re-claim after 2z8e closes; the 6 call sites for this bead: coap_waypoints.c:926+1069, coap_location.c:1293, checkin_resource.c:146+235+338 (line numbers from the l9hb audit).",
+  "created_at": "2026-08-31T02:24:10.002852828Z"
+}

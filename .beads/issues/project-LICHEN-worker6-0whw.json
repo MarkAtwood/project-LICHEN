@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-0whw",
+  "title": "coap_config test app cannot build on the 4.1.0 workspace: zcbor module stub lacks headers (zcbor_decode.h missing)",
+  "description": "Found while verifying project-LICHEN-worker6-wmae (strnlen replacement) on heft: west build -b native_sim/native/64 lichen/tests/coap_config fails with coap_config.c:18 fatal error: zcbor_decode.h: No such file or directory - the zcbor module dir (lichen-workspace/zephyr/modules/zcbor) contains no headers on the 4.1.0 workspace (the module stub predates/parallels the zcbor Kconfig-loop issue in the 4.1.0 workspace memory note and t370's pinned-tree cluster). The tests/coap_config/src/main.c also includes zcbor_decode.h directly. Consequence: the app's -Werror gate (including wmae's strnlen-\u003ememchr change in subsys/lichen/coap/coap_config.c) is unverifiable on heft for THIS app; coap_rangetest and coap_waypoints apps DO build clean with the same pattern (verified). Fix options: point the workspace's zcbor module at a real zcbor checkout (west update with a working revision, or the pinned v3.7.0 tree where it works), or vendor zcbor headers. Until then coap_config.c compiles unverified on heft - its edit mirrors the reviewed af780aefe1 pattern exactly (same memchr helper as coap_status.c).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:29:45.313743224Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T02:29:45.313743224Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0whw",
+      "depends_on_id": "project-LICHEN-worker6-wmae",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:29:45.38700548Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

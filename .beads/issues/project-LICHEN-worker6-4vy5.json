@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-4vy5",
+  "title": "Remaining strnlen callers will hit the minimal-libc -Werror break (gateway config_cbor, senml, adapter, tests)",
+  "description": "Follow-up from wmae (which fixed coap_config/coap_rangetest/coap_waypoints/coap_status). Zephyr's minimal libc does not declare strnlen, so any translation unit calling it fails -Werror=implicit-function-declaration under the 4.1.0 toolchain (see y0z0/wmae for the pattern and the memchr-based bounded-length helper fix). Known remaining callers per review: rust-adjacent gateway config_cbor.c:254, lichen senml.c:43, adapter.c (which has its own strnlen wrapper - check whether it compiles under a config that hides the declaration), plus test files. Sweep the repo (grep strnlen), port each to the bounded-length helper or include the proper header where a libc provides it, and consider centralizing one shared helper instead of per-file statics. Priority P3 because the affected configs are not currently built in CI.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:29:41.532110095Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T02:29:41.532110095Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4vy5",
+      "depends_on_id": "project-LICHEN-worker6-wmae",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:29:41.630591989Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
