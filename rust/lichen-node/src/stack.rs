@@ -576,6 +576,16 @@ impl<R: Radio> Stack<R> {
             _ => return Ok(None),
         }
 
+        // EGRESS DECapsulation (spec 05-routing 8.9 R-05-063): a tunneled
+        // outer addressed to this stack is unwrapped here, with the inner
+        // destination verified against the authorized primary 02xx address
+        // (fail-closed), mirroring the RPL receive path.
+        let ipv6 = if ipv6[6] == lichen_core::ipv6::next_header::IPV6_IN_IPV6 {
+            crate::rpl_stack::util::decapsulate_ipv6(&ipv6, local_native)?
+        } else {
+            ipv6
+        };
+
         Ok(Some(ReceivedIpv6 {
             ipv6,
             sender_iid: l2.sender().iid,
@@ -1078,6 +1088,119 @@ mod tests {
         // Alice receives reply
         let reply = alice.receive(1000).await.unwrap().unwrap();
         assert_eq!(reply.ipv6[40], 129); // ICMPv6 Echo Reply
+    }
+
+    /// Plaintext Stack unwraps an IPv6-in-IPv6 outer addressed to it and
+    /// delivers the inner packet (spec 05-routing 8.9 R-05-063).
+    #[tokio::test]
+    async fn stack_receive_decapsulates_tunnel_with_local_inner_dst() {
+        let alice_id = Identity::from_seed(Seed::new([0x11; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x22; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        let bob_native = lichen_link::ygg_addr_from_pubkey(bob.local_public_key().as_bytes());
+        let inner = tunnel_inner(
+            lichen_core::ipv6::next_header::UDP,
+            alice_addr_native(&alice),
+            bob_native,
+            &[1, 2, 3],
+        );
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        let frame = bob.receive(1000).await.unwrap().unwrap();
+        assert_eq!(frame.ipv6, inner);
+    }
+
+    #[tokio::test]
+    async fn stack_receive_rejects_tunnel_with_foreign_inner_dst() {
+        let alice_id = Identity::from_seed(Seed::new([0x33; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x44; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        // Inner claims a destination that is not Bob's authorized primary.
+        let inner = tunnel_inner(
+            lichen_core::ipv6::next_header::UDP,
+            alice_addr_native(&alice),
+            alice_addr_native(&alice),
+            &[1],
+        );
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        assert!(matches!(
+            bob.receive(1000).await,
+            Err(RxError::InvalidSourceRoute)
+        ));
+    }
+
+    #[tokio::test]
+    async fn stack_receive_rejects_tunnel_with_malformed_inner() {
+        let alice_id = Identity::from_seed(Seed::new([0x55; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x66; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        // Inner payload length disagrees with the wire length.
+        let mut inner = tunnel_inner(
+            lichen_core::ipv6::next_header::UDP,
+            alice_addr_native(&alice),
+            alice_addr_native(&bob),
+            &[1, 2, 3],
+        );
+        inner[4..6].copy_from_slice(&99u16.to_be_bytes());
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        assert!(matches!(
+            bob.receive(1000).await,
+            Err(RxError::InvalidSourceRoute)
+        ));
+    }
+
+    /// Build an IPv6 packet from native 02xx (or link-local) addresses.
+    fn tunnel_inner(
+        next_header_value: u8,
+        source: [u8; 16],
+        destination: [u8; 16],
+        body: &[u8],
+    ) -> Vec<u8> {
+        let mut packet = vec![0u8; IPV6_HEADER_LEN + body.len()];
+        Ipv6Header::new(next_header_value, Addr(source), Addr(destination))
+            .write_to(body.len() as u16, &mut packet[..IPV6_HEADER_LEN])
+            .unwrap();
+        packet[IPV6_HEADER_LEN..].copy_from_slice(body);
+        packet
+    }
+
+    fn alice_addr_native(stack: &Stack<LoopbackRadio>) -> [u8; 16] {
+        lichen_link::ygg_addr_from_pubkey(stack.local_public_key().as_bytes())
     }
 
     #[tokio::test]
