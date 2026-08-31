@@ -21,6 +21,7 @@ All implementations MUST match test vectors in:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from lichen.crypto import schnorr48
+from lichen.link.channel import SUPERFRAME_DURATION_US
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,6 +48,10 @@ __all__ = [
 ]
 
 
+MAX_CLAIM_DURATION_SEC = 5 * (SUPERFRAME_DURATION_US // 1_000_000)
+"""Maximum how far ahead a claim's timestamp may be (5 superframes, GCP-6.3)."""
+
+
 class ClaimRejectReason(Enum):
     """Reasons a slot claim may be rejected (GCP-6.3)."""
 
@@ -53,6 +59,7 @@ class ClaimRejectReason(Enum):
     INVALID_SIGNATURE = auto()  # Signature failed verification
     INVALID_CLAIM_DATA = auto()  # Malformed claim structure
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
+    EXPIRY_TOO_FAR = auto()  # Claim timestamp further ahead than the max horizon
 
 
 class AllocationMode(Enum):
@@ -217,6 +224,7 @@ def encode_claim_canonical(claim: SlotClaim) -> bytes:
 def verify_slot_claim(
     claim: SlotClaim,
     gateway_pubkey: bytes,
+    now_unix: float | None = None,
 ) -> tuple[bool, ClaimRejectReason | None]:
     """Verify Schnorr48 signature on slot claim.
 
@@ -230,6 +238,9 @@ def verify_slot_claim(
     Args:
         claim: SlotClaim to verify
         gateway_pubkey: 32-byte Ed25519 public key of claiming gateway
+        now_unix: Current Unix timestamp for the claim-horizon check;
+            defaults to the wall clock. Claims with a timestamp further
+            than MAX_CLAIM_DURATION_SEC ahead are rejected EXPIRY_TOO_FAR.
 
     Returns:
         Tuple of (is_valid, rejection_reason or None)
@@ -249,6 +260,16 @@ def verify_slot_claim(
     # Verify Schnorr48 signature
     if not schnorr48.verify(gateway_pubkey, signed_data, claim.signature):
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
+
+    # GCP-6.3 hardening: bound how far ahead a claim may pre-book slots.
+    # The timestamp is covered by the signature, so this rejects a
+    # legitimately-signed claim whose horizon exceeds the maximum — after
+    # authentication, never before. Claims without a timestamp skip this
+    # check (they cannot express a horizon).
+    if claim.timestamp is not None:
+        now = time.time() if now_unix is None else now_unix
+        if claim.timestamp > now + MAX_CLAIM_DURATION_SEC:
+            return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
 
     return (True, None)
 

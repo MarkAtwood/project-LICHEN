@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from lichen.crypto import schnorr48
+from lichen.gateway import slot_claim
 from lichen.gateway.slot_claim import (
     ClaimError,
     ClaimRejectReason,
@@ -583,3 +584,77 @@ class TestSlotClaimVectors:
                 assert not is_valid
                 assert reason == ClaimRejectReason.INVALID_SIGNATURE
                 break
+
+
+class TestClaimExpiryHorizon:
+    """GCP-6.3 hardening: bound how far ahead a claim may pre-book."""
+
+    @pytest.fixture
+    def keypair(self) -> tuple[bytes, bytes]:
+        seed = bytes.fromhex(
+            "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface"
+        )
+        return schnorr48.derive_keypair(seed)
+
+    @pytest.fixture
+    def pubkey(self, keypair: tuple[bytes, bytes]) -> bytes:
+        return keypair[1]
+
+    def _signed(
+        self, privkey: bytes, pubkey: bytes, timestamp: int | None
+    ) -> SlotClaim:
+        claim = SlotClaim(
+            gateway_iid="0011223344556677",
+            slots=(3, 4),
+            superframe_id=1000,
+            timestamp=timestamp,
+        )
+        return sign_slot_claim(claim, privkey, pubkey)
+
+    def test_timestamp_within_horizon_accepted(
+        self, keypair: tuple[bytes, bytes], pubkey: bytes
+    ) -> None:
+        privkey, _ = keypair
+        now = 1_900_000_000.0
+        horizon = slot_claim.MAX_CLAIM_DURATION_SEC
+        signed = self._signed(privkey, pubkey, int(now) + horizon)
+        is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
+        assert is_valid
+        assert reason is None
+
+    def test_timestamp_beyond_horizon_rejected(
+        self, keypair: tuple[bytes, bytes], pubkey: bytes
+    ) -> None:
+        privkey, _ = keypair
+        now = 1_900_000_000.0
+        horizon = slot_claim.MAX_CLAIM_DURATION_SEC
+        signed = self._signed(privkey, pubkey, int(now) + horizon + 1)
+        is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
+        assert not is_valid
+        assert reason is slot_claim.ClaimRejectReason.EXPIRY_TOO_FAR
+
+    def test_claim_without_timestamp_skips_horizon_check(
+        self, keypair: tuple[bytes, bytes], pubkey: bytes
+    ) -> None:
+        privkey, _ = keypair
+        signed = self._signed(privkey, pubkey, None)
+        is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=1_900_000_000.0)
+        assert is_valid
+        assert reason is None
+
+    def test_invalid_signature_reported_before_horizon(
+        self, keypair: tuple[bytes, bytes]
+    ) -> None:
+        privkey, _ = keypair
+        _, other_pubkey = schnorr48.derive_keypair(
+            bytes.fromhex(
+                "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            )
+        )
+        now = 1_900_000_000.0
+        horizon = slot_claim.MAX_CLAIM_DURATION_SEC
+        signed = self._signed(privkey, keypair[1], int(now) + horizon + 1)
+        is_valid, reason = verify_slot_claim(signed, other_pubkey, now_unix=now)
+        assert not is_valid
+        assert reason is slot_claim.ClaimRejectReason.INVALID_SIGNATURE
+
