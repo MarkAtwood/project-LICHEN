@@ -519,6 +519,10 @@ static const struct schc_profile lichen_schc_profile = {
 	.rule_count = sizeof(lichen_schc_rules) / sizeof(lichen_schc_rules[0]),
 	.uncompressed_rule_id = SCHC_RULE_UNCOMPRESSED,
 	.use_uncompressed_fallback = true,
+	/* Byte-preserving Rule 255 decode still verifies framing, structure,
+	 * and checksums (spec/03-adaptation.md); endpoint address policy is
+	 * deliberately absent here — it applies at origination only. */
+	.validate_payload = validate_ipv6_transport_lengths,
 };
 
 /* ─── public API ──────────────────────────────────────────────────────────── */
@@ -548,6 +552,16 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	}
 
 	ret = validate_ipv6_transport_lengths(packet, pkt_len);
+	if (ret < 0) {
+		return ret;
+	}
+
+	/* Emission endpoint policy (spec/03-adaptation.md Rule 255 TX/RX
+	 * split): origination refuses policy-invalid endpoints. Integrity and
+	 * structural failures report before endpoint-shape opinions, so this
+	 * runs after the structural validation above. The receive path
+	 * (schc_decompress validate_payload hook) stays policy-free. */
+	ret = validate_ipv6_address_policy(packet);
 	if (ret < 0) {
 		return ret;
 	}

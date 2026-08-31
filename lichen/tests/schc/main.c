@@ -213,7 +213,6 @@ static int test_oscore_global(void)
 
 static int test_reject_non_ipv6_input(void)
 {
-	uint8_t packet[4] = { 0xde, 0xad, 0xbe, 0xef };
 	uint8_t comp_buf[8];
 	uint8_t decomp_buf[8];
 	uint8_t big_comp_buf[128];
@@ -224,7 +223,6 @@ static int test_reject_non_ipv6_input(void)
 	 * datagrams at decode_rule255. */
 	static const uint8_t garbage[4] = { 0xde, 0xad, 0xbe, 0xef };
 	uint8_t ipv4ish[45] = { 0 };
-	uint8_t comp_buf[64];
 	int n;
 
 	ipv4ish[0] = 0x45; /* IPv4 version 4, IHL 5 */
@@ -284,6 +282,9 @@ static int test_reject_non_ipv6_input(void)
 				   sizeof(big_decomp_buf));
 	if (m != (int)sizeof(v6) || memcmp(big_decomp_buf, v6, sizeof(v6)) != 0) {
 		printf("  FAIL: valid fallback round-trip (got %d)\n", m);
+		return 0;
+	}
+
 	n = lichen_schc_compress(ipv4ish, sizeof(ipv4ish), comp_buf,
 				 sizeof(comp_buf));
 	if (n != SCHC_ERR_INVALID_ARGUMENT) {
