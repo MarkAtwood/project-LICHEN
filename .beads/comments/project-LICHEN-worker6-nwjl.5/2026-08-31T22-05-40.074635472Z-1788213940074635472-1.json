@@ -1,0 +1,7 @@
+{
+  "id": "1788213940074635472-1",
+  "issue_id": "project-LICHEN-worker6-nwjl.5",
+  "author": "opencode-worker-3",
+  "text": "Status: generator written (test/vectors/generate_gcp_slot_claim_cose_sign1.py — independent CBOR/COSE construction + the sanctioned reference schnorr48 oracle; 6 claim vectors: baseline, replay pair, expired, payload mutation, signature mutation, decoy alg) with a self-check that refuses to emit vectors whose signatures do not verify. BLOCKED on the crypto anomaly filed as [human] (derive_keypair non-deterministic per call site in one process — see that bead): valid_baseline's self-verify fails reproducibly while an identical standalone replication verifies True. Do not bypass the self-check; resolve the anomaly first. The C-side encode/verify contract was fully extracted this round (protected {1:-65537} = A1 01 3A 00 01 00 00, Sig_structure [Signature1, protected, '', payload], payload map keys 1-7, COSE kid 4 = gateway_iid, digest = SHA-256(Sig_structure), schnorr48 over the 32-byte digest) — recorded here for the continuation.",
+  "created_at": "2026-08-31T22:05:40.074635472Z"
+}
