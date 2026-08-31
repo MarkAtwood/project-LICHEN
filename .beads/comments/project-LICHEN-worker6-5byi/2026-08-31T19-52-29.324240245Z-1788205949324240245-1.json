@@ -1,0 +1,7 @@
+{
+  "id": "1788205949324240245-1",
+  "issue_id": "project-LICHEN-worker6-5byi",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 diagnosis round 2 (released at timebox — instrumentation fully reverted, tree clean). DECISIVE FINDING: the root's post-DIS DIO is admitted (multicast+Rule-255 gate passes) and then rejected by the commit revalidation — DodagScopeMismatch (dodag.rs commit_admitted_dio -\u003e unwrap_or(Rejected), instrumented as arm 11). The probe values prove the state performing admit/commit is NOT the provisioned leaf DODAG: sealed.dodag_id[0] == 0x00 and current.dodag_id[0] == 0x00, while the provisioned leaf scope must carry the root_addr (0x02-prefixed Yggdrasil address). I.e., after join, the RplStack receive path (receive.rs:489 self.rpl.router.process_authenticated_dio) processes DIOs against a DEFAULT/unprovisioned DodagState instance, while the join-time DIO#1 was processed against the provisioned one (hence DIO#1 succeeded and is_joined passed). FIX DIRECTION: state-wiring in the recent RplStack refactor (provisioning.rs / mod.rs root_seqs move) — ensure the router/receive path uses the same provisioned DodagState that provisioning_leaf seeded; verify which DodagState instance router.rs:343 process_authenticated_dio delegates to vs the one RplStack::provision_leaf configures. The join path evidently reaches the provisioned state (first DIO OK) — find the divergence between the bootstrap and post-join receive paths.",
+  "created_at": "2026-08-31T19:52:29.324240245Z"
+}
