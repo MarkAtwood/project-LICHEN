@@ -139,12 +139,11 @@ static int gateway_rpl_init(void) {
 	uint8_t iid[8];
 	struct in6_addr ll_addr;
 
-	if (IS_ENABLED(CONFIG_LICHEN_GATEWAY_PREFIX_DELEGATION)) {
-		dodag_id[0] = 0xfd;
-		dodag_id[1] = 0x00;
-	} else {
-		dodag_id[0] = 0xfd;
-	}
+	/* Native 0200::/8 DODAG ID (zt3c.7: fd00:: ULA dropped). The root
+	 * advertises this /128 as the DODAG prefix; upgrading to the root's
+	 * key-derived native address is tracked as follow-up work. */
+	dodag_id[0] = 0x02;
+	dodag_id[1] = 0x00;
 	dodag_id[15] = 0x01;
 
 	ret = lichen_lora_l2_copy_eui64(self_eui64);

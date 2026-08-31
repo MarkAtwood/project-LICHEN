@@ -242,7 +242,7 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 		return false;
 	}
 
-	LOG_DBG("DIO sent (rank=%u, dodag_id=fd00::%02x%02x)",
+	LOG_DBG("DIO sent (rank=%u, dodag_id=0200::%02x%02x)",
 		dio.rank, dio.dodag_id[14], dio.dodag_id[15]);
 	return true;
 }
