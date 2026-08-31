@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-b7z9.46",
   "title": "Banned strcpy() in production C: coap/checkin.c, coap/slot_claim_settings.c (spec appendix-c R-APPC-014)",
   "description": "spec/appendix-c-safety.md R-APPC-014 (Coding Rules, CERT C subset): 'Never use these functions: strcpy, strcat, sprintf, gets.' Sweep classification: divergent. Production-code violations: lichen/subsys/lichen/coap/checkin.c:1670 strcpy(rc-\u003eid, req.id) and :1673 strcpy(rc-\u003ecreator, creator) (into fixed struct fields; creator is strlen-guarded here, req.id validation is upstream), and lichen/subsys/lichen/coap/slot_claim_settings.c:249 strcpy(name, SETTINGS_ROOT \"/\") (constant prefix into caller buffer). Test code additionally uses strcpy/strcat freely (lichen/tests/checkin_rollcall/main.c:389+, lichen/tests/slot_claim_settings/main.c:179-180) — lower stakes. No sprintf/gets anywhere in lichen/ or firmware/ (word-boundary rg clean). Suggested placement: replace with bounded copies (memcpy with explicit size against sizeof field, or a strlcpy-style helper) in lichen/subsys/lichen/coap/checkin.c and slot_claim_settings.c; optional test sweep. Full row in docs/spec-coverage.md (spec/appendix-c-safety.md sweep 2026-08-31).",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T16:04:07.916835615Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T16:04:07.916835615Z",
+  "updated_at": "2026-08-31T18:02:19.720977335Z",
+  "closed_at": "2026-08-31T18:02:19.720977335Z",
+  "close_reason": "RE-CLOSE (store reverted the earlier close; see bd8h — 3rd occurrence of lost writes). Work was completed and committed as 3107b62bb3 on beads-worker-7: R-APPC-014 strcpy removed from production C (checkin.c memchr-bounded id copy + guarded creator memcpy; slot_claim_settings.c memcpy of the literal prefix), zero banned-function uses remain in lichen/subsys/ and firmware/, checkin_rollcall + slot_claim_settings host suites pass, 3x codereview (Kimi K3) all PASS. Verify: git log --all --oneline | grep 3107b62bb3.",
   "labels": [
     "spec-gap",
     "c-safety"
