@@ -12,5 +12,8 @@
   "updated_at": "2026-08-28T03:44:40.384772Z",
   "started_at": "2026-07-25T02:26:39.894864846Z",
   "closed_at": "2026-06-25T04:47:49Z",
-  "close_reason": "lichen-dashboard FastAPI+HTMX app implemented with 15 passing tests; lichen-dashboard entry point added to pyproject.toml"
+  "close_reason": "lichen-dashboard FastAPI+HTMX app implemented with 15 passing tests; lichen-dashboard entry point added to pyproject.toml",
+  "labels": [
+    "python"
+  ]
 }
