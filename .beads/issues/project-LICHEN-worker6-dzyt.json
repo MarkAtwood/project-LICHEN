@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-2",
   "updated_at": "2026-08-31T02:03:05.29681808Z",
   "labels": [
-    "hal"
+    "hal",
+    "l2"
   ],
   "dependencies": [
     {
