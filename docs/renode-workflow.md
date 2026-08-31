@@ -50,7 +50,9 @@ sudo apt install renode
 git clone https://github.com/renode/renode.git
 cd renode
 ./build.sh
-# Binary at output/bin/Release/Renode.exe (mono) or renode (Linux)
+# Entry point: the repo-root ./renode wrapper (runs the built Renode.dll
+# via dotnet). Source builds do NOT install `renode` on PATH — invoke
+# ./renode from the clone root, or put a symlink to it on PATH yourself.
 ```
 
 ### Verify Installation
@@ -61,6 +63,8 @@ renode --version
 #   Renode v1.16.1.<build>  —  e.g. Renode v1.16.1.16908, build d66b0c2a-202602160923
 # The <build> suffix varies per artifact; "v1.16.1." is the stable prefix.
 # 1.16.1 is what CI pins and the fleet AMI ships; nightly/brew are untested.
+# From-source builds report a similar versioned string — invoke ./renode
+# from your clone root (see From Source above).
 ```
 
 ## Running Single-Node Simulation
