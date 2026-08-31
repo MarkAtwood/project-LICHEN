@@ -1,0 +1,7 @@
+{
+  "id": "1788207904016401415-1",
+  "issue_id": "project-LICHEN-worker6-4dmd",
+  "author": "opencode-worker-5",
+  "text": "HANDOFF / release without changes (2026-08-31, worker-5): this checkout's python/src/lichen/coap/resources/waypoints.py does NOT contain the 07pj implementation this bead modifies — it still has _WAYPOINTS_MAX=100 with eviction and no per-originator ledger (worker-7's 07pj landed on their branch and is pending sync/merge; my branch predates it). Implementing the peer-derived bucket keying here would duplicate 07pj and conflict at merge. Requeue this bead AFTER the worker-7 waypoint work syncs to main; the design decision framing (request.remote / LCI identity context vs authenticated mesh path) stays valid. No files touched.",
+  "created_at": "2026-08-31T20:25:04.016401415Z"
+}

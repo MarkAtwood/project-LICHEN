@@ -1,0 +1,7 @@
+{
+  "id": "1788207739931042526-1",
+  "issue_id": "project-LICHEN-worker6-gd5b",
+  "author": "opencode-worker-5",
+  "text": "Reviewer recommendation from b7z9.37.1.2.1: once this is fixed, pin the no_std path with an MCU-target gate (e.g. cargo check -p lichen-node --no-default-features --target thumbv7em-none-eabihf, or the installed riscv32imc-unknown-none-elf) in CI so the no_std path cannot silently regress — ciborium 0.2-style default-features regressions are invisible on host builds. Baseline context: riscv32 target is installed on worker hosts; lichen-node's no_std currently cannot be reached past this lichen-link failure.",
+  "created_at": "2026-08-31T20:22:19.931042526Z"
+}

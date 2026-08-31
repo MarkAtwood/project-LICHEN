@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-aqk6",
+  "title": "Waypoint store 256-entry static footprint vs STM32WL RAM budget (needs Mark's call)",
+  "description": "Deployment constraint surfaced by o8dp review (spec 18.3.2 R-12-029 chose global 256): the waypoint store is now two static images (s_store + mutex-guarded s_staged staging buffer) at ~76KB each (~152KB total) in lichen/subsys/lichen/coap/coap_waypoints.c, plus the store image passed to the config load/save callbacks. This exceeds the STM32WL 64KB RAM baseline cited in AGENTS.md (fits nRF52840-class 256KB parts and native_sim). Options for constrained boards: config-limited runtime max (e.g. Kconfig LICHEN_WAYPOINT_MAX smaller per board), heap-allocated staging, or a no-copy persistence path. Decide the RAM strategy before flashing coap-waypoints firmware to STM32WL-class devices.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:26:49.720299477Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T20:26:49.720299477Z",
+  "labels": [
+    "coap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-aqk6",
+      "depends_on_id": "project-LICHEN-worker6-o8dp",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:26:49.834198246Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
