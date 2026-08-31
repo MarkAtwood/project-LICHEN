@@ -7,7 +7,7 @@ description = "LICHEN integration crate: combines link, SCHC, CoAP, and routing 
 
 [features]
 default = []
-std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "lichen-oscore?/std", "dep:lichen-oscore", "lichen-ipv6/std", "dep:tokio", "dep:zeroize", "dep:hex", "lichen-meshtastic?/std"]
+std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "lichen-oscore?/std", "dep:lichen-oscore", "lichen-ipv6/std", "dep:tokio", "dep:zeroize", "dep:hex", "dep:sha2", "lichen-meshtastic?/std"]
 # Meshtastic bridge integration
 meshtastic = ["dep:lichen-meshtastic", "lichen-meshtastic/alloc"]
 # Logging: defmt takes precedence when both are enabled
@@ -16,6 +16,8 @@ log = ["dep:log", "lichen-core/log", "lichen-hal/log", "lichen-link/log", "liche
 raw-rpl-test-api = []
 
 [dependencies]
+ciborium = { version = "0.2", default-features = false }
+sha2 = { version = "0.11.0", default-features = false, optional = true }
 lichen-core = { path = "../lichen-core" }
 lichen-hal = { path = "../lichen-hal" }
 lichen-link = { path = "../lichen-link" }
