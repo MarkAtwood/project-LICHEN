@@ -217,21 +217,29 @@ void lichen_gradient_sf_update(struct lichen_gradient_table *table,
  * @brief Select TX spreading factor for a neighbor based on tracked state.
  *
  * Implements the CCP-16 adaptive_sf_select pseudocode from
- * spec/02a-coordinated-capacity.md section 2a.7:
+ * spec/02a-coordinated-capacity.md section 2a.8:
  * 1. SF = AssignedSF (or entry.current_sf if absent)
  * 2. IF SF absent THEN SF = 10
- * 3. IF (Density > 10) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
+ * 3. IF (Density > 8) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
  * 4. IF (Neighbor.EMA_SNR > 8) AND (Density < 5) THEN SF = MAX(7, SF - 1)
  * 5. IF (Neighbor.EMA_Loss > 0.25) OR (Utilization > 200) THEN
  *       SF = MIN(12, SF + 1)
  *       IF Utilization > 200 THEN RETURN (SF, false)
  * 6. RETURN (SF, true)
  *
+ * After step 6, the Downgrade (MUST increase SF) column applies as
+ * minimum-SF floors, in order:
+ * a. IF Neighbor.EMA_SNR < -5 THEN SF = 12
+ * b. IF Neighbor.EMA_SNR < 0 THEN SF = MAX(11, SF)
+ * c. IF Density > 8 THEN SF = MAX(11, SF)
+ * d. IF LoadFactor > 0.8 THEN SF = MAX(11, SF)
+ *
  * @param table       Gradient table.
  * @param neighbor_iid 8-byte IID of the destination neighbor.
  * @param density     Current network density estimate (nodes heard).
  * @param utilization Current channel utilization (0-255 scale).
  * @param ema_loss_fp EMA packet loss ratio in Q16.16 fixed-point (0 = 0%, 65536 = 100%).
+ * @param load_factor_fp Gateway load factor in Q16.16 fixed-point (65536 = 1.0).
  * @param now_ms      Current time in milliseconds (for expiry check).
  * @param out_sf      Output: selected spreading factor (7-12).
  * @param out_tx_allowed Output: true if transmission is permitted, false if blocked.
@@ -242,6 +250,7 @@ int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 			      uint8_t density,
 			      uint16_t utilization,
 			      uint32_t ema_loss_fp,
+			      uint32_t load_factor_fp,
 			      uint32_t now_ms,
 			      uint8_t *out_sf,
 			      bool *out_tx_allowed);

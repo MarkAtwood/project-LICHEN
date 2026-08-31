@@ -445,7 +445,8 @@ static int test_queue_copy_gpsr_and_dtn(void)
 	 * expire sweep; downstream nodes with valid time enforce it. */
 	configure_router(&router, &state);
 	uint8_t failopen_dst[16] = {0x03, [15] = 3U};
-	REQUIRE(lichen_router_dtn_buffer(&router, failopen_dst, packet,
+	REQUIRE(lichen_router_dtn_buffer(&router, failopen_dst,
+					 &source_address[8], packet,
 					 sizeof(packet), 0U, 0U) == 0);
 	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
 	REQUIRE(lichen_router_dtn_expire(&router, 0U) == 0);
@@ -455,7 +456,8 @@ static int test_queue_copy_gpsr_and_dtn(void)
 
 	/* Positive control: an absolute-deadline record does expire. */
 	uint8_t deadline_dst[16] = {0x03, [15] = 4U};
-	REQUIRE(lichen_router_dtn_buffer(&router, deadline_dst, packet,
+	REQUIRE(lichen_router_dtn_buffer(&router, deadline_dst,
+					 &source_address[8], packet,
 					 sizeof(packet), 250U, 0U) == 0);
 	REQUIRE(router.dtn_buffer_bytes == 2U * sizeof(packet));
 	REQUIRE(lichen_router_dtn_expire(&router, 300U) == 1);
@@ -758,11 +760,14 @@ static int test_dtn_hbh_option_parsing(void)
 		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
 		REQUIRE(router.dtn_buffer_bytes == pkt7_len);
 
-		/* dtn_expire flushes the expiry==0 fail-open store once valid
-		 * wall-clock arrives (documented bpyr interplay: the record is
-		 * purged, not re-queued for downstream enforcement). */
-		REQUIRE(lichen_router_dtn_expire(&router, 100U) == 1);
-		REQUIRE(router.dtn_buffer_bytes == 0U);
+		/* R-05-080 fail-open (af7464c9 semantics): an expiry==0 record
+		 * is never locally expired — a local flush would defeat the
+		 * downstream-enforcement handoff.  This supersedes the older
+		 * "flush once valid wall-clock arrives" expectation written
+		 * before the fail-open sentinel landed; see the fail-open
+		 * block in test_queue_copy_gpsr_and_dtn. */
+		REQUIRE(lichen_router_dtn_expire(&router, 100U) == 0);
+		REQUIRE(router.dtn_buffer_bytes == pkt7_len);
 	}
 #endif
 
@@ -1108,6 +1113,52 @@ static int test_ipv6_in_ipv6_egress_decap(void)
 	return 0;
 }
 
+static int test_gradient_sf_density_threshold(void)
+{
+#if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED)
+	/* Mirrors gradient.h: sf_select itself only exists when adaptive SF
+	 * is enabled, so this test is compiled under the same condition (the
+	 * host CMake build defines it; twister builds without LICHEN_RPL
+	 * simply skip it). */
+	struct lichen_gradient_table table = {0};
+	struct lichen_gradient_entry entry = {
+		.hop_count = 1U,
+		.seq_num = 1U,
+		.source = LICHEN_GRADIENT_ANNOUNCE,
+		.expires_ms = 100000U,
+		.valid = true,
+		.sf.current_sf = 10U,
+		.sf.snr_ewma = 0, /* keep the step-4 upgrade path inactive */
+		.sf.upgrade_count = 0U,
+	};
+	const uint8_t neighbor[8] = {0x02, 0, 0, 0, 0, 0, 0, 0x5a};
+	uint8_t next_hop[16] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0,
+				0x02, 0,   0, 0, 0, 0, 0, 0x5a};
+	uint8_t sf = 0U;
+	bool tx_allowed = false;
+
+	memcpy(entry.destination_iid, neighbor, 8U);
+	memcpy(entry.next_hop, next_hop, sizeof(entry.next_hop));
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+
+	/* Spec 02a 2a.8 step 3: Density > 8 (strictly greater). Density 8 is
+	 * NOT the trigger; the SF stays at the entry's current value. */
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 8U, 0U, 0U, 1U, &sf,
+					  &tx_allowed) == 0);
+	REQUIRE(sf == 10U);
+
+	/* Density 9 crosses the threshold: SF +2, capped at 12. NOTE:
+	 * sf_select writes the result back into entry.sf.current_sf, so the
+	 * second call's baseline is the first call's result (still 10 here) —
+	 * keep the call order stable. */
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 9U, 0U, 0U, 2U, &sf,
+					  &tx_allowed) == 0);
+	REQUIRE(sf == 12U);
+	(void)tx_allowed;
+#endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
+	return 0;
+}
+
 static int run_all_tests(void)
 {
 	int ret;
@@ -1127,6 +1178,8 @@ static int run_all_tests(void)
 	ret = test_dtn_hbh_option_parsing();
 	if (ret != 0) return ret;
 	ret = test_ipv6_in_ipv6_egress_decap();
+	if (ret != 0) return ret;
+	ret = test_gradient_sf_density_threshold();
 	if (ret != 0) return ret;
 	return 0;
 }

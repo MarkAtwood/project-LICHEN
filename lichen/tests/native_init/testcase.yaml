@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 
+common:
+  # R-APPC-009 (spec/appendix-c-safety.md): ASan+UBSan on native_sim builds.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
 tests:
   net.lichen.native_init.no_serial:
     tags:

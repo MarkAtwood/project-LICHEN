@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-cvkj",
+  "title": "Rust rf_health: explicit-SF path bypasses post-step-6 floors; step-3 density threshold parity",
+  "description": "Child of b7z9.30 residue. rust/lichen-core/src/rf_health.rs: floors (R-02a-114: EMA_SNR\u003c-5-\u003e12; SNR\u003c0-\u003e\u003e=11; Density\u003e8-\u003e\u003e=11; Load\u003e0.8-\u003e\u003e=11) apply only via the default table when SF unassigned (:390-393); an explicitly AssignedSF bypasses them (:405-440). Also verify step-3 density constant is 8 (2a.8) not 10. Python ccp.py:241-261 applies floors except after util\u003e200 early-return — cross-check. Add boundary tests. NOTE: rust/lichen-core/src/rf_health.rs is currently DIRTY (mid-flight by another worker) — coordinate before claiming.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-6",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:16:04.949210278Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T23:19:19.09328653Z",
+  "started_at": "2026-08-31T23:18:22.753593275Z",
+  "closed_at": "2026-08-31T23:19:19.09328653Z",
+  "close_reason": "Resolved by 4ce6413e21 (landed this session before this bead was worked). The bead's premise — floors apply only via the default table (:390-393 adaptive_sf) and an explicitly AssignedSF bypasses them in adaptive_sf_select (:405-440) — was true of the pre-landing state; 4ce6413e21 added the post-step-6 floors INSIDE adaptive_sf_select where they run unconditionally against self state, so explicitly-assigned SF now respects them: the landing's own tests prove it — adaptive_sf_step3_uses_spec_density_8 (Some(7) + density 9 -\u003e 11 via floor c) and adaptive_sf_load_boundary_52429_vs_52428 (Some(9) + load 52429 -\u003e 11). Step-3 density constant verified: DENSITY_HIGH = 8 per 2a.8 (with an engagement-boundary test at density 8 exactly). Python ccp.py:241-261 cross-check: python applies floors except after the util\u003e200 early-return; the Rust ordering (floors after the util\u003e200 sf=12 branch) is behaviorally identical — at util\u003e200 sf is already 12 and every floor max() is a no-op, matching the early-return. Boundary tests present: 52429/52428 load, EMA-convergence floor (a), density-8 non-engagement, floors matrix. Verified: full lichen-core suite green, clippy --all-features -D warnings clean, fmt clean.",
+  "labels": [
+    "rust",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cvkj",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.30",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:16:05.067557326Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

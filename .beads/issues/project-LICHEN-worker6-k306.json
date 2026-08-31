@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-k306",
+  "title": "Sync janitor: resolve beads-worker-2 merge (kimi fallback)",
+  "description": "beads-worker-2 (10 commits) conflicted in lichen/subsys/lichen/l2/lichen_l2_tx.c, lichen/tests/ping_l2/src/main.c, lichen/tests/routing_dispatch/src/main.c during the 16:18 sync cycle; the repaired kimi session could not complete the 3-file resolution and the loop kept the branch for manual resolution per design. Resolve per established patterns (same-feature duplicates take main, complementary union, adjudicated slices take the worker), verify touched paths (routing_dispatch host suite, C syntax), commit, rerun sync to confirm clean.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:35:24.386669131Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T23:43:39.105786176Z",
+  "started_at": "2026-08-31T23:35:32.294394942Z",
+  "closed_at": "2026-08-31T23:43:39.105786176Z",
+  "close_reason": "beads-worker-2 merged (10 commits: TDMA desync FSM b7z9.12 work, CCP adaptive-SF floors, build-tree cleanups, puck LCI, sanitizers). Resolutions: gradient.c doc-comment (main), rf_health.rs same-const 2a.8 floors (main canonical), lichen_l2_tx.c comment-only duplicate (main), ping_l2 canonical-EUI64 peer fix (main), routing_dispatch took main's fail-open DTN semantics - w2's 3f6ca8883b pins superseded expiry==0-drop behavior contradicting w7's af7464c967 fix for filed bug bpyr (R-05-080). Gates: routing_dispatch host suite green, lichen-core 365 tests green.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k306",
+      "depends_on_id": "project-LICHEN-worker6-ba39",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:35:24.571178071Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

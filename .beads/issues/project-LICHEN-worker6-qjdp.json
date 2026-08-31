@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-qjdp",
+  "title": "Host tests: rf_health CMake -std flag surgery fails confusingly if COMPILE_OPTIONS unset",
+  "description": "lichen/tests/rf_health/CMakeLists.txt:24-27 uses get_target_property + REMOVE_ITEM to swap -std=c23 for -std=c2x (gcc-13 on the Linux builder). If lichen_test_target is ever bypassed/reordered, get_target_property returns RF_HEALTH_OPTS-NOTFOUND which lands on the compiler command line as a filename. Robust fix: check_c_compiler_flag probe in lichen/tests/cmake/test_common.cmake (benefits all host tests) or list(FILTER ... EXCLUDE REGEX '^-std='). Found in edge-cases review of bead 0hvq (worker1).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:28:38.224931498Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T23:28:38.224931498Z",
+  "labels": [
+    "zephyr",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qjdp",
+      "depends_on_id": "project-LICHEN-worker6-0hvq",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:28:38.357402397Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

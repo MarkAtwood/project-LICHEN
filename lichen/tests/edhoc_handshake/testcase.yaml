@@ -1,3 +1,7 @@
+common:
+  # R-APPC-009 (spec/appendix-c-safety.md): ASan+UBSan on native_sim builds.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
 tests:
   lichen.edhoc.handshake:
     tags: edhoc crypto security

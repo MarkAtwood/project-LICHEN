@@ -1001,6 +1001,10 @@ async fn multicast_dio_and_dis_use_broadcast_l2_destination() {
     assert_eq!(frame.addr_mode, AddrMode::None);
     assert!(frame.dst_addr.is_empty());
 
+    // Solicited (unicast-named) DIO requests are re-targeted to the
+    // all-RPL-nodes multicast group per R-09-005 (option A of the ehcn
+    // decision): unicast-dst DIOs are inadmissible, so the wire shape is
+    // identical to the trickle DIO.
     root.send_dio(unicast).await.unwrap();
     let len = observer
         .receive(0, &mut wire, 1)
@@ -1009,8 +1013,8 @@ async fn multicast_dio_and_dis_use_broadcast_l2_destination() {
         .unwrap()
         .len;
     let frame = LichenFrame::from_bytes(&wire[..len]).unwrap();
-    assert_eq!(frame.addr_mode, AddrMode::Extended);
-    assert_eq!(frame.dst_addr, ipv6_eui64(unicast));
+    assert_eq!(frame.addr_mode, AddrMode::None);
+    assert!(frame.dst_addr.is_empty());
 }
 
 #[tokio::test]
@@ -1701,12 +1705,25 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     leaf.send_announce(&signed_announce(&leaf_identity, 1), 0)
         .await
         .unwrap();
+    let relay_outcome = relay.receive(1, 0).await.unwrap();
+    std::eprintln!("PROBE relay outcome: {:?}", relay_outcome);
     assert!(matches!(
-        relay.receive(1, 0).await.unwrap(),
+        relay_outcome,
         Some(RplReceiveOutcome::AnnouncementAccepted { relayed: true, .. })
     ));
+    // The root first hears the relay's multicast DIO echo: as the DODAG
+    // root it rejects foreign DIOs, consuming one receive cycle. Then it
+    // processes the relayed leaf announce.
+    let _ = root.receive(1, 0).await;
+    let root_outcome = root.receive(1, 0).await.unwrap();
+    let peer_ok = matches!(
+        &root_outcome,
+        Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
+            if peer.iid == leaf_identity.iid
+    );
+    assert!(peer_ok, "root did not accept the relayed leaf announce");
     assert!(matches!(
-        root.receive(1, 0).await.unwrap(),
+        root_outcome,
         Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
             if peer.iid == leaf_identity.iid
     ));
@@ -1736,6 +1753,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     ));
 
     relay.send_dao().await.unwrap();
+    // Drain the relay's multicast DIO echo the root heard before the DAO.
+    let _ = root.receive(1, 0).await;
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
     assert!(
         matches!(

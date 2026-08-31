@@ -20,6 +20,10 @@
 # To remove flash file on exit:
 #   ./build/zephyr/zephyr.exe --flash=test_flash.bin --flash_rm
 
+common:
+  # R-APPC-009 (spec/appendix-c-safety.md): ASan+UBSan on native_sim builds.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
 tests:
   fs.lichen.nvs_persistence:
     tags:

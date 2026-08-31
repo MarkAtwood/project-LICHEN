@@ -450,6 +450,50 @@ class TestPresencePut:
             await client.shutdown()
             await server.shutdown()
 
+    async def test_put_rejects_battery_without_low_battery_flag(self) -> None:
+        # Spec 18.5.3: battery < 10 requires low_battery=True; omitting the
+        # flag must be rejected BAD_REQUEST (validation must not regress to
+        # silently accepting malformed presence documents).
+        client, server, _, _ = await _setup_writable()
+        try:
+            req = Message(
+                code=PUT,
+                uri="coap://srv/presence",
+                payload=cbor2.dumps({"status": "busy", "battery": 9}),
+            )
+            req.opt.content_format = 60
+            resp = await client.request(req).response
+            assert resp.code == aiocoap.BAD_REQUEST
+            # State must be unchanged: the invalid PUT did not overwrite.
+            _, body = await _get(client)
+            assert body["status"] == "available"
+            assert body.get("battery") is None
+            assert "low_battery" not in body
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_put_rejects_low_battery_flag_without_low_battery(self) -> None:
+        # Spec 18.5.3 (validator's third branch): battery >= 10 requires
+        # low_battery to be OMITTED; sending low_battery=True with a healthy
+        # battery is the mirror-image inconsistency and must also be rejected.
+        client, server, _, _ = await _setup_writable()
+        try:
+            req = Message(
+                code=PUT,
+                uri="coap://srv/presence",
+                payload=cbor2.dumps({"status": "busy", "battery": 20, "low_battery": True}),
+            )
+            req.opt.content_format = 60
+            resp = await client.request(req).response
+            assert resp.code == aiocoap.BAD_REQUEST
+            _, body = await _get(client)
+            assert body["status"] == "available"
+            assert body.get("battery") is None
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
     async def test_put_during_sos_is_restored_when_sos_clears(self) -> None:
         client, server, presence, clock = await _setup_writable()
         try:

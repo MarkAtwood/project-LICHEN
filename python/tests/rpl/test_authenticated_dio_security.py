@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Callable
+from typing import cast
 from ipaddress import IPv6Address
 
 import pytest
@@ -368,6 +369,100 @@ def test_transactional_elevation_rejects_awaitable_callbacks() -> None:
 
     with pytest.raises(TypeError, match="must be synchronous"):
         _ = link.elevate_authenticated_dio(authenticated, elevate=asynchronous_elevation)
+
+
+class _CustomCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom hook results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+        return None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+def _scheduled_awaitable(kind: str, ran: list[int], created: list[object]) -> object:
+    async def _later() -> None:
+        ran.append(1)
+
+    if kind == "task":
+        value: object = asyncio.create_task(_later())
+    elif kind == "future":
+        value = asyncio.get_running_loop().create_future()
+    else:
+        value = _CustomCloseAwaitable()
+    created.append(value)
+    return value
+
+
+def _assert_terminated(kind: str, value: object, ran: list[int]) -> None:
+    if kind == "task":
+        assert ran == []
+        assert cast(asyncio.Task[None], value).cancelled()
+    elif kind == "future":
+        assert cast(asyncio.Future[None], value).cancelled()
+    else:
+        assert cast(_CustomCloseAwaitable, value).close_calls == 1
+
+
+async def _issue_async(
+    link: LinkLayer,
+    radio: QueueRadio,
+    counter: int,
+) -> AuthenticatedDio:
+    """Async twin of issue(): issue() runs its own loop via asyncio.run."""
+    radio.frames.append((signed_wire(counter, 3, remote=REMOTE), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    return link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+
+
+# dio_handler.py requires a synchronous elevation callback whose RESULT is
+# also synchronous: a hook returning an awaitable must raise TypeError, leave
+# the scheduled awaitable cancelled and never-run, and release the generation
+# lease (mirrors test_time_sync.py::test_provision_persist_hook_rejects_
+# scheduled_awaitable; bead project-LICHEN-worker6-mgot).
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_elevation_result_rejects_scheduled_awaitable(kind: str) -> None:
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    authenticated = await _issue_async(link, radio, 0)
+    ran: list[int] = []
+    created: list[object] = []
+
+    def elevate(_evidence: DetachedAuthenticatedDio) -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_authenticated_dio(
+            authenticated,
+            elevate=cast(
+                "Callable[[DetachedAuthenticatedDio], object]", elevate
+            ),
+        )
+    if kind == "task":
+        await asyncio.sleep(0)
+    _assert_terminated(kind, created[0], ran)
+
+    # No state poisoning: the generation lease was released, so a fresh
+    # issuance still elevates with a proper synchronous callback.
+    authenticated2 = await _issue_async(link, radio, 1)
+    detached = link.elevate_authenticated_dio(
+        authenticated2, elevate=lambda evidence: evidence
+    )
+    assert type(detached) is DetachedAuthenticatedDio
 
 
 def test_time_generation_elevation_is_current_and_synchronous() -> None:
