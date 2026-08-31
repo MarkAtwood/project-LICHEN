@@ -44,6 +44,25 @@ extern "C" {
 /** Default superframe duration in seconds */
 #define LICHEN_SUPERFRAME_DURATION_S 60
 
+/** Superframe duration in seconds used for claim-duration math
+ *  (Kconfig-overridable on Zephyr; defaults match
+ *  LICHEN_SUPERFRAME_DURATION_S) */
+#ifndef CONFIG_LICHEN_CCP_SUPERFRAME_SEC
+#define CONFIG_LICHEN_CCP_SUPERFRAME_SEC LICHEN_SUPERFRAME_DURATION_S
+#endif
+
+/** Maximum accepted slot-claim lifetime, in superframes (GCP-6.5
+ *  validation step 7 upper bound; Kconfig-overridable on Zephyr) */
+#ifndef CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES
+#define CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES 5
+#endif
+
+/** Maximum accepted slot-claim lifetime in seconds: a claim whose expiry
+ *  exceeds now + this is rejected (LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR) */
+#define LICHEN_SLOT_CLAIM_MAX_DURATION_SEC \
+	(CONFIG_LICHEN_CCP_SUPERFRAME_SEC * \
+	 CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES)
+
 /** Default slots per superframe */
 #define LICHEN_SLOTS_PER_SUPERFRAME 60
 
@@ -113,6 +132,9 @@ enum lichen_claim_result {
 	/** Claim rejected: wall clock unsynced, so expiry (GCP-6.5 step 7)
 	 *  cannot be evaluated; fail-closed, never accept without it */
 	LICHEN_CLAIM_REJECT_NO_CLOCK = 8,
+	/** Claim rejected: expiry beyond the superframe-denominated cap
+	 *  (GCP-6.5 step 7 upper bound; anti-squatting cap) */
+	LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR = 9,
 };
 
 /**
@@ -316,7 +338,8 @@ bool lichen_slot_coord_tx_allowed(const struct lichen_slot_coord_ctx *_Nonnull c
  *
  * Per GCP-6.3 and GCP-6.5, in order:
  * - COSE_Sign1 verification against the signer's key-store entry
- * - expiry > now (step 7)
+ * - expiry > now (step 7) and expiry within the claim-duration cap
+ *   now + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (step 7 upper bound)
  * - claim_seq above the cached per-gateway high-water mark (step 8);
  *   on acceptance the new high-water is committed via
  *   lichen_slot_claim_seq_commit() BEFORE the claim is applied

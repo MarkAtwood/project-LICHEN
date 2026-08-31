@@ -174,8 +174,14 @@ struct lr1110_data {
 	 * serializes async_cb mutations between the API, the cancel path,
 	 * and the work handler's self-disarm. */
 	lora_recv_cb         async_cb;
+	void *                async_cb_user_data;
 	struct k_spinlock    cb_lock;
 	atomic_t             modem_usage;
+	/* Async CAD (bead uwip.2): self-rescheduling poll work dodges the
+	 * documented DIO9+get_status freeze hazard on delivered packets while
+	 * keeping the CadDone classification off the caller's thread. */
+	struct k_work_delayable cad_poll;
+	int64_t                 cad_deadline_ms;
 	/* Delivery buffer for the irq_work handler — per-instance data
 	 * instead of the system workqueue stack. Single instance enforced
 	 * by BUILD_ASSERT. */
@@ -272,6 +278,7 @@ static void lr1110_irq_work_handler(struct k_work *work)
 	 * path. */
 	k_spinlock_key_t key = k_spin_lock(&data->cb_lock);
 	lora_recv_cb cb = data->async_cb;
+	void *cb_user_data = data->async_cb_user_data;
 
 	k_spin_unlock(&data->cb_lock, key);
 
@@ -311,7 +318,7 @@ static void lr1110_irq_work_handler(struct k_work *work)
 			if (len > 0) {
 				LOG_DBG("async RX: %u bytes, rssi=%d, snr=%d",
 					len, rssi, snr);
-				cb(lr1110_dev, data->rx_buf, len, rssi, snr);
+				cb(lr1110_dev, data->rx_buf, len, rssi, snr, cb_user_data);
 			}
 		} else {
 			LOG_ERR("async rx: payload too large (%u) or buffer status failed",
@@ -328,6 +335,7 @@ static void lr1110_irq_work_handler(struct k_work *work)
 		bool was_armed = data->async_cb != NULL;
 
 		data->async_cb = NULL;
+		data->async_cb_user_data = NULL;
 		k_spin_unlock(&data->cb_lock, key);
 		if (was_armed) {
 			lr1110_modem_release(data);
@@ -603,8 +611,14 @@ static int lr1110_lora_send(const struct device *dev, uint8_t *data,
 static int lr1110_lora_send_async(const struct device *dev, uint8_t *data,
 				  uint32_t data_len, struct k_poll_signal *async)
 {
-	ARG_UNUSED(async);
-	return lr1110_lora_send(dev, data, data_len);
+	int ret = lr1110_lora_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
 }
 
 static int lr1110_recv_impl(const struct device *dev, uint8_t *data,
@@ -811,7 +825,8 @@ static void lr1110_async_rx_rearm(struct lr1110_data *data)
 	(void)lr1110_hal_get_last_error();
 }
 
-static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb)
+static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
+				  void *user_data)
 {
 	if (dev == NULL) {
 		return -EINVAL;
@@ -826,6 +841,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb)
 		bool was_armed = drv->async_cb != NULL;
 
 		drv->async_cb = NULL;
+		drv->async_cb_user_data = NULL;
 		k_spin_unlock(&drv->cb_lock, key);
 		if (!was_armed) {
 			return -EINVAL;
@@ -905,6 +921,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb)
 	k_spinlock_key_t key = k_spin_lock(&drv->cb_lock);
 
 	drv->async_cb = cb;
+	drv->async_cb_user_data = user_data;
 	k_spin_unlock(&drv->cb_lock, key);
 
 	/* Enable DIO9 after SetRx: the ISR/work path is the async RX
@@ -918,6 +935,7 @@ fail:
 	fail_key = k_spin_lock(&drv->cb_lock);
 
 	drv->async_cb = NULL;
+	drv->async_cb_user_data = NULL;
 	k_spin_unlock(&drv->cb_lock, fail_key);
 	if (acquired) {
 		lr1110_modem_release(drv);
@@ -1003,6 +1021,95 @@ static int lr1110_cad_impl(const struct device *dev, k_timeout_t timeout,
 	return 0;
 }
 
+/* Async CAD poll step (uwip.2): re-arm every 10ms until CadDone/CadDetected
+ * or deadline, mirroring cad_impl's fail-closed classification without
+ * blocking the caller. Runs in the system workqueue; modem is held for the
+ * whole CAD (released here before the done callback fires). */
+static void lr1110_cad_poll_fn(struct k_work *work)
+{
+	struct lr1110_data *drv =
+		CONTAINER_OF(work, struct lr1110_data, cad_poll);
+	lr1110_system_stat1_t stat1;
+	lr1110_system_stat2_t stat2;
+	uint32_t irq = 0;
+
+	lr1110_hal_clear_last_error();
+	lr1110_system_get_status(lr1110_dev, &stat1, &stat2, &irq);
+	int ret = lr1110_hal_get_last_error();
+
+	if (ret == 0 && (irq & (LR1110_SYSTEM_IRQ_CADDONE_MASK |
+				LR1110_SYSTEM_IRQ_CADDETECTED_MASK))) {
+		bool busy = (irq & LR1110_SYSTEM_IRQ_CADDETECTED_MASK) != 0;
+
+		lr1110_system_clear_irq(lr1110_dev, irq);
+		(void)lr1110_system_set_standby(
+			lr1110_dev, LR1110_SYSTEM_STDBY_CONFIG_RC);
+		(void)lr1110_system_set_dio_irq_params(lr1110_dev,
+						       LR1110_IRQ_RADIO, 0);
+		lr1110_modem_release(drv);
+		lichen_lora_cad_done(lr1110_dev, busy, 0);
+		return;
+	}
+
+	if (ret < 0 || k_uptime_get() >= drv->cad_deadline_ms) {
+		/* Missing CAD completion is not evidence of a clear channel:
+		 * fail closed exactly like the blocking path's timeout. */
+		(void)lr1110_system_clear_irq(lr1110_dev, irq);
+		(void)lr1110_system_set_standby(
+			lr1110_dev, LR1110_SYSTEM_STDBY_CONFIG_RC);
+		(void)lr1110_system_set_dio_irq_params(lr1110_dev,
+						       LR1110_IRQ_RADIO, 0);
+		lr1110_modem_release(drv);
+		lichen_lora_cad_done(lr1110_dev, ret < 0,
+				     ret < 0 ? ret : -ETIMEDOUT);
+		return;
+	}
+
+	k_work_reschedule(&drv->cad_poll, K_MSEC(10));
+}
+
+static int lr1110_cad_start_impl(const struct device *dev, k_timeout_t timeout)
+{
+	struct lr1110_data *drv = dev->data;
+
+	if (!lr1110_modem_acquire(drv)) {
+		/* An armed async RX holds the modem. */
+		return -EBUSY;
+	}
+
+	lr1110_radio_cad_params_t cad_params = {
+		.symbol_num = LICHEN_CSMA_CAD_TIMEOUT_SYMBOLS,
+		.det_peak   = 0x32,
+		.det_min    = 0x0A,
+		.exit_mode  = LR1110_RADIO_CAD_EXIT_MODE_STANDBYRC,
+		.timeout    = 0,
+	};
+
+	gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9, GPIO_INT_DISABLE);
+
+	int ret = lr1110_radio_set_cad_params(dev, &cad_params);
+	if (ret == 0) {
+		ret = lr1110_system_set_dio_irq_params(
+			dev, LR1110_SYSTEM_IRQ_CADDONE_MASK |
+			     LR1110_SYSTEM_IRQ_CADDETECTED_MASK, 0);
+	}
+	if (ret == 0) {
+		ret = lr1110_radio_set_cad(dev);
+	}
+	if (ret != 0) {
+		/* Synchronous arm failure: no completion will be delivered. */
+		(void)lr1110_system_set_standby(
+			dev, LR1110_SYSTEM_STDBY_CONFIG_RC);
+		lr1110_modem_release(drv);
+		return ret;
+	}
+
+	drv->cad_deadline_ms =
+		k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
+	k_work_reschedule(&drv->cad_poll, K_MSEC(10));
+	return 0;
+}
+
 static int lr1110_lora_cad(const struct device *dev, k_timeout_t timeout,
 			   bool *busy)
 {
@@ -1062,7 +1169,9 @@ static int lr1110_init(const struct device *dev)
 
 	k_sem_init(&data->radio_sem, 0, 1);
 	k_work_init(&data->irq_work, lr1110_irq_work_handler);
+	k_work_init_delayable(&data->cad_poll, lr1110_cad_poll_fn);
 	data->async_cb = NULL;
+	data->async_cb_user_data = NULL;
 	data->modem_usage = 0;
 
 	gpio_init_callback(&data->dio9_cb, lr1110_dio9_isr,
@@ -1081,6 +1190,11 @@ static int lr1110_init(const struct device *dev)
 	int ret = lichen_lora_cad_register(dev, lr1110_lora_cad);
 	if (ret < 0) {
 		LOG_ERR("CAD extension registration failed (%d)", ret);
+		return ret;
+	}
+	ret = lichen_lora_cad_start_register(dev, lr1110_cad_start_impl);
+	if (ret < 0) {
+		LOG_ERR("async CAD registration failed (%d)", ret);
 		return ret;
 	}
 #endif

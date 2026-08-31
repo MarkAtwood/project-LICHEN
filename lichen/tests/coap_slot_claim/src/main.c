@@ -11,6 +11,8 @@
  * - any payload/signature byte mutation fails verification (the parent
  *   bead's forgery regression: the slots array is covered by the signature)
  * - unknown signer, expiry, claim_seq replay, persist failure gates
+ * - expiry-duration cap: expiry beyond now + 5 superframes rejected
+ *   (inclusive boundary accepted), claim not applied on rejection
  * - structural rejections: non-canonical protected header (-65536 decoy),
  *   kid/gateway_iid mismatch, truncated signature, unknown/duplicate/
  *   missing payload keys, trailing bytes
@@ -430,7 +432,7 @@ static void test_roundtrip_and_accept(void)
 	struct lichen_slot_grant grant;
 	int ret;
 
-	ret = sign_into(IID_A, 2, 1, 3000, LICHEN_SLOT_ALLOC_INTERLEAVED,
+	ret = sign_into(IID_A, 2, 1, 1250, LICHEN_SLOT_ALLOC_INTERLEAVED,
 			cose, sizeof(cose));
 	CHECK(ret > 0);
 	size_t cose_len = (size_t)ret;
@@ -451,7 +453,7 @@ static void test_roundtrip_and_accept(void)
 	CHECK(claim.superframe_id == 4242);
 	CHECK(claim.ordinal == 2);
 	CHECK(claim.mode == LICHEN_SLOT_ALLOC_INTERLEAVED);
-	CHECK(claim.expiry == 3000);
+	CHECK(claim.expiry == 1250);
 	CHECK(claim.claim_seq == 1);
 	CHECK(memcmp(claim.gateway_iid, IID_A, LICHEN_IID_LEN) == 0);
 	CHECK(claim.cose_payload != NULL && claim.cose_payload_len > 0);
@@ -465,14 +467,14 @@ static void test_roundtrip_and_accept(void)
 	CHECK(memcmp(reenc, claim.cose_payload,
 		     claim.cose_payload_len) == 0);
 
-	/* Accept: expiry 3000 > now 1000 */
+	/* Accept: expiry 1250 > now 1000 */
 	CHECK(lichen_slot_coord_init(&ctx, IID_B) == 0);
 	ret = lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL);
 	CHECK(ret == LICHEN_CLAIM_ACCEPTED);
 	CHECK(grant.granted_count == 4);
 	CHECK(grant.superframe_id == 4242);
-	CHECK(grant.valid_until == 3000);
+	CHECK(grant.valid_until == 1250);
 	CHECK(grant.granted_slots[0] == 3 && grant.granted_slots[3] == 27);
 	/* Registration: gateway table has A's allocation */
 	CHECK(ctx.gateway_count == 1);
@@ -499,7 +501,7 @@ static void test_mutation_breaks_verify(void)
 
 	reset_seq_hooks();
 
-	ret = sign_into(IID_A, 2, 1, 3000, LICHEN_SLOT_ALLOC_INTERLEAVED,
+	ret = sign_into(IID_A, 2, 1, 1250, LICHEN_SLOT_ALLOC_INTERLEAVED,
 			cose, sizeof(cose));
 	CHECK(ret > 0);
 	size_t cose_len = (size_t)ret;
@@ -545,7 +547,7 @@ static void test_unknown_signer(void)
 	struct lichen_slot_coord_ctx ctx;
 	int ret;
 
-	ret = sign_into(IID_UNKNOWN, 2, 1, 3000,
+	ret = sign_into(IID_UNKNOWN, 2, 1, 1250,
 			LICHEN_SLOT_ALLOC_INTERLEAVED, cose, sizeof(cose));
 	CHECK(ret > 0);
 	reset_seq_hooks();
@@ -561,7 +563,7 @@ static void test_no_verification_material(void)
 	struct lichen_slot_claim claim;
 	struct lichen_slot_grant grant;
 
-	fill_claim(&claim, IID_A, 0, 1, 3000, 0);
+	fill_claim(&claim, IID_A, 0, 1, 1250, 0);
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
 					      NULL, NULL) ==
@@ -590,25 +592,61 @@ static void test_gates(void)
 	 * above the later accept (seq 5): if a regression ever persisted
 	 * the high-water on this rejection, the following seq-5 ACCEPTED
 	 * assertion below would fail. */
-	ret = sign_into(IID_A, 2, 7, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_A, 2, 7, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_NO_CLOCK(&ctx, cose, (size_t)ret,
 			 LICHEN_CLAIM_REJECT_NO_CLOCK);
 
 	/* Replay: seq 5 accepted, then 5 and 4 rejected, 6 accepted
 	 * (spec step 8) */
-	ret = sign_into(IID_A, 2, 5, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_A, 2, 5, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_ACCEPTED);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_REJECT_REPLAY);
 
-	ret = sign_into(IID_A, 2, 4, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_A, 2, 4, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_REJECT_REPLAY);
 
-	ret = sign_into(IID_A, 2, 6, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_A, 2, 6, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_ACCEPTED);
+}
+
+static void test_expiry_too_far(void)
+{
+	static uint8_t cose[LICHEN_SLOT_CLAIM_COSE_MAX];
+	struct lichen_slot_coord_ctx ctx;
+	int ret;
+
+	reset_seq_hooks();
+
+	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
+
+	/* GCP-6.5 step 7 upper bound: expiry beyond now +
+	 * LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (5 superframes x 60 s = 300 s
+	 * at defaults) must be rejected so a compromised key cannot squat
+	 * slots with a far-future expiry. Seq 2 chosen above the later
+	 * accept (seq 1): if a regression ever moved this cap check below
+	 * the claim_seq persist step, this rejection would persist a
+	 * high-water and the following seq-1 ACCEPTED assertion would
+	 * fail (same pattern as the NO_CLOCK probe in test_gates). */
+	ret = sign_into(IID_A, 2, 2,
+			1000 + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC + 1, 0,
+			cose, sizeof(cose));
+	CHECK(ret > 0);
+	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
+		   LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR);
+	/* Claim must not have been applied */
+	CHECK(ctx.gateway_count == 0);
+
+	/* Boundary: expiry exactly now + cap is accepted (the cap is
+	 * inclusive) */
+	ret = sign_into(IID_A, 2, 1, 1000 + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC,
+			0, cose, sizeof(cose));
+	CHECK(ret > 0);
+	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_ACCEPTED);
+	CHECK(ctx.gateway_count == 1);
 }
 
 static void test_seq_recheck_under_lock(void)
@@ -630,7 +668,7 @@ static void test_seq_recheck_under_lock(void)
 	seq_cache_a.fail_first_lookup = true;
 	seq_cache_a.lookups = 0;
 
-	ret = sign_into(IID_A, 2, 5, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_A, 2, 5, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
 		   LICHEN_CLAIM_REJECT_REPLAY);
@@ -652,7 +690,7 @@ static void test_persist_failure(void)
 	seq_cache_b.commit_fails = true;
 
 	/* Sign by B so the failing cache entry (B) is the one consulted */
-	ret = sign_into(IID_B, 2, 1, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_B, 2, 1, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
 		       LICHEN_CLAIM_REJECT_PERSIST);
@@ -681,7 +719,7 @@ static void test_conflict_resolution(void)
 	/* B (higher IID) takes slot 5 first */
 	struct lichen_slot_claim claim_b;
 
-	fill_claim(&claim_b, IID_B, 3, 1, 3000, 0);
+	fill_claim(&claim_b, IID_B, 3, 1, 1250, 0);
 	claim_b.slots[0] = 5;
 	claim_b.slot_count = 1;
 	ret = lichen_slot_coord_sign_claim(privkey_b, pubkey_b, &claim_b,
@@ -692,7 +730,7 @@ static void test_conflict_resolution(void)
 	/* A (lower IID) claims the same slot: overrides, accepted */
 	struct lichen_slot_claim claim_a;
 
-	fill_claim(&claim_a, IID_A, 2, 1, 3000, 0);
+	fill_claim(&claim_a, IID_A, 2, 1, 1250, 0);
 	claim_a.slots[0] = 5;
 	claim_a.slot_count = 1;
 	ret = lichen_slot_coord_sign_claim(privkey_a, pubkey_a, &claim_a,
@@ -704,7 +742,7 @@ static void test_conflict_resolution(void)
 	/* B re-claims slot 5: 4.09 conflict, payload is A's stored claim */
 	struct lichen_slot_claim claim_b2;
 
-	fill_claim(&claim_b2, IID_B, 3, 2, 3000, 0);
+	fill_claim(&claim_b2, IID_B, 3, 2, 1250, 0);
 	claim_b2.slots[0] = 5;
 	claim_b2.slot_count = 1;
 	ret = lichen_slot_coord_sign_claim(privkey_b, pubkey_b, &claim_b2,
@@ -738,7 +776,7 @@ static void test_structural_rejects(void)
 	};
 	int ret;
 
-	ret = sign_into(IID_A, 2, 1, 3000, 0, cose, sizeof(cose));
+	ret = sign_into(IID_A, 2, 1, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	size_t cose_len = (size_t)ret;
 
@@ -844,7 +882,7 @@ static void test_structural_rejects(void)
 	/* Payload structural rejects, all with a well-formed envelope */
 	struct lichen_slot_claim base;
 
-	fill_claim(&base, IID_A, 2, 1, 3000, 0);
+	fill_claim(&base, IID_A, 2, 1, 1250, 0);
 
 	const struct {
 		const char *name;
@@ -992,7 +1030,7 @@ static void test_max_slots_claim(void)
 	big.superframe_id = 7;
 	big.ordinal = 1;
 	big.mode = 1;
-	big.expiry = 3000;
+	big.expiry = 1250;
 	big.claim_seq = 1;
 
 	ret = lichen_slot_coord_sign_claim(privkey_a, pubkey_a, &big, cose,
@@ -1022,7 +1060,7 @@ static void test_slot_range_gate(void)
 
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 
-	fill_claim(&claim, IID_A, 2, 1, 3000, 0);
+	fill_claim(&claim, IID_A, 2, 1, 1250, 0);
 	claim.slot_count = 1;
 	claim.slots[0] = 200; /* >= slots_per_superframe (60) */
 	ret = lichen_slot_coord_sign_claim(privkey_a, pubkey_a, &claim, cose,
@@ -1043,7 +1081,7 @@ static void test_bad_args(void)
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 
 	/* Buffer too small for the payload map */
-	fill_claim(&claim, IID_A, 2, 1, 3000, 0);
+	fill_claim(&claim, IID_A, 2, 1, 1250, 0);
 	CHECK(lichen_slot_coord_encode_claim(&claim, buf, sizeof(buf)) ==
 	      -ENOBUFS);
 	CHECK(lichen_slot_coord_encode_claim(&claim, buf, 0) == -ENOBUFS);
@@ -1062,6 +1100,7 @@ int main(void)
 	test_unknown_signer();
 	test_no_verification_material();
 	test_gates();
+	test_expiry_too_far();
 	test_seq_recheck_under_lock();
 	test_persist_failure();
 	test_conflict_resolution();

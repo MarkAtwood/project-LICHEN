@@ -368,6 +368,20 @@ config LICHEN_COAP_SLOT_COORD
 	  full claim payload. Claims with invalid or missing signatures are
 	  silently discarded.
 
+config LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES
+	int "Max accepted slot-claim duration (superframes)"
+	depends on LICHEN_COAP_SLOT_COORD
+	default 5
+	range 1 10
+	help
+	  Upper bound on accepted slot-claim lifetime (GCP-6.5 validation
+	  step 7), in superframes of CONFIG_LICHEN_CCP_SUPERFRAME_SEC
+	  seconds. Claims whose expiry exceeds now + N superframes are
+	  rejected (LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR) so a compromised
+	  key cannot squat slots with a far-future expiry. Default 5
+	  superframes (~5 minutes at the 60 s default) matches the cap
+	  discussed in the GCP-6 claim-model review.
+
 config LICHEN_SLOT_CLAIM_REPLAY
 	bool "Persist per-gateway slot-claim_seq high-water marks"
 	depends on LICHEN_COAP_SLOT_COORD

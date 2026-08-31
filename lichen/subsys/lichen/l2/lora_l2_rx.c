@@ -90,7 +90,8 @@ static void rx_work_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(rx_work, rx_work_fn);
 
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr);
+			      uint16_t size, int16_t rssi, int8_t snr,
+			      void *user_data);
 
 /**
  * @brief Arm the driver for the next asynchronous reception
@@ -136,7 +137,7 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret == 0) {
@@ -182,9 +183,11 @@ retry:
  * callable from error paths including ISRs) and leave the radio unarmed.
  */
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr)
+			      uint16_t size, int16_t rssi, int8_t snr,
+			      void *user_data)
 {
 	ARG_UNUSED(dev);
+	ARG_UNUSED(user_data);
 
 	if (!atomic_get(&rx_enabled)) {
 		/* Stop raced the delivery; the packet is dropped, which is
@@ -307,7 +310,7 @@ int lora_l2_rx_start(void)
 		return -EBUSY;
 	}
 
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb, NULL);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret < 0) {
@@ -377,7 +380,7 @@ void lora_l2_rx_stop(void)
 	}
 
 	if (atomic_get(&rx_armed)) {
-		ret = lora_recv_async(dev, NULL);
+		ret = lora_recv_async(dev, NULL, NULL);
 		if (ret < 0) {
 			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
 		}
