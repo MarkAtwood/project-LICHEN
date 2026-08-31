@@ -1183,6 +1183,15 @@ pub struct CoapResponse {
 }
 
 impl CoapResponse {
+    /// 2.04 Changed with empty payload (silent discard acknowledgment).
+    pub fn empty_success() -> Self {
+        Self {
+            code: 0x44, // 2.04 Changed
+            payload: Zeroizing::new(Vec::new()),
+            content_format: 0,
+        }
+    }
+
     /// 2.05 Content response.
     pub fn content(payload: Vec<u8>, content_format: u16) -> Self {
         Self {
@@ -1951,16 +1960,26 @@ impl GatewayCoordinator {
 
         let claim = match SlotClaim::decode(payload) {
             Ok(c) => c,
-            Err(e) => return CoapResponse::bad_request(&e.to_string()),
+            // GCP-6.3: malformed and invalid-signature claims are silently
+            // discarded — an indistinguishable empty 2.04, never a
+            // protocol error (the claim never existed as far as the peer
+            // can observe).
+            Err(_) => return CoapResponse::empty_success(),
         };
         let raw_claim = match claim.into_raw(self.slots_per_superframe) {
             Ok(claim) => claim,
-            Err(error) => return CoapResponse::bad_request(&error.to_string()),
+            // GCP-6.3: invalid-signature claims are silently discarded.
+            Err(_) => return CoapResponse::empty_success(),
         };
         let mut candidate_verifier = self.slot_verifier.clone();
         let claim = match candidate_verifier.verify(raw_claim, peer_pubkey, current_superframe) {
             Ok(claim) => claim,
-            Err(_) => return CoapResponse::unauthorized(),
+            // GCP-6.3: verification failure (bad signature, replay,
+            // identity mismatch) is silently discarded; spec 08 GCP-6.5
+            // step-failure semantics (4.03 for replay/expiry/invalid-slot)
+            // are tracked separately — this handler's verifier does not
+            // yet distinguish those causes (see slot.rs SlotError).
+            Err(_) => return CoapResponse::empty_success(),
         };
         let mut candidate_peer_claims = self.peer_claims.clone();
         let mut candidate_owned = self.info.slot_map.owned.clone();
@@ -2486,6 +2505,28 @@ mod tests {
     }
 
     #[test]
+    fn signature_failed_slot_claim_is_silently_discarded() {
+        let mut coordinator = coordinator([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x09, 0, 0, 0, 0, 0, 0, 1]);
+
+        // GCP-6.3: a claim whose signature fails MUST be silently discarded —
+        // an indistinguishable empty 2.04, never a 4.01 protocol error.
+        let (mut claim, pubkey) = signed_slot_claim([0x51; 32], vec![20, 21], 1, 0);
+        claim.signature = Some([0x00; 48]); // garbage signature
+        let payload = claim.encode();
+        let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
+        assert_eq!(response.code, 0x44); // 2.04 Changed (empty = discarded)
+        assert!(response.payload.is_empty());
+
+        // A missing signature is also silently discarded.
+        let (mut claim, pubkey) = signed_slot_claim([0x52; 32], vec![22], 1, 0);
+        claim.signature = None;
+        let payload = claim.encode();
+        let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
+        assert_eq!(response.code, 0x44);
+        assert!(response.payload.is_empty());
+    }
+
+    #[test]
     fn gateway_coordinator_slot_conflict_resolution() {
         // Create coordinator with lower IID
         let lower_iid = [
@@ -2649,11 +2690,13 @@ mod tests {
         assert_eq!(restored.info.slot_map.owned, accepted_owned);
         assert_eq!(restored.peer_claims.len(), 1);
         assert_eq!(restored.peer_claims[0].slots(), &[10, 11, 12]);
+        // Replay is a verification failure: GCP-6.3 mandates silent discard
+        // (empty 2.04), not a 4.01 protocol error.
         assert_eq!(
             restored
                 .handle_post_slots(&claim.encode(), true, Some(&pubkey), 4)
                 .code,
-            0x81
+            0x44
         );
 
         fs::remove_file(state_path).unwrap();
@@ -2765,11 +2808,12 @@ mod tests {
         assert_eq!(restored.slot_replay_generation(), restored_generation);
         assert_eq!(restored.peer_claims.len(), 1);
         assert_eq!(restored.peer_claims[0].slots(), &[5]);
+        // Conflicting/replayed claim: GCP-6.3 silent discard (empty 2.04).
         assert_eq!(
             restored
                 .handle_post_slots(&conflict.encode(), true, Some(&pubkey), 4)
                 .code,
-            0x81
+            0x44
         );
 
         fs::remove_file(state_path).unwrap();
