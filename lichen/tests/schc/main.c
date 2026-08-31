@@ -445,8 +445,16 @@ static int test_validator_direct_call_self_defense(void)
 	/* version nibble 4 with a chain-terminating next-header so the version
 	 * check is the ONLY rejection path: pre-uylk code returned SCHC_OK
 	 * here (non-UDP terminal, zero payload length consistent), so this
-	 * fixture discriminates a revert of the self-check. */
-	static const uint8_t minimal_v6[40] = { [0] = 0x60, [6] = 59 };
+	 * fixture discriminates a revert of the self-check. Addresses are
+	 * valid link-locals: the structural address constraints (unspecified
+	 * or multicast source, unspecified destination) must not fire on this
+	 * fixture — it targets the version self-check only. */
+	static const uint8_t minimal_v6[40] = { [0] = 0x60,
+						[6] = 59,
+						[8] = 0xfe,
+						[9] = 0x80,
+						[24] = 0xfe,
+						[25] = 0x80 };
 	uint8_t coap[64];
 	size_t coap_len;
 	int ret;

@@ -927,11 +927,12 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
   struct lichen_waypoint created;
   char actor[LICHEN_WAYPOINT_CREATOR_MAX + 1U] = {0};
   bool local_admin;
+  const uint8_t *payload = NULL;
   int ret;
 
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_POST, oscore.plainbuf,
-                                       sizeof(oscore.plainbuf), &oscore.payload,
+                                       sizeof(oscore.plainbuf), &payload,
                                        &oscore.payload_len, &oscore.ctx,
                                        oscore.piv, &oscore.piv_len,
                                        &oscore.is_protected);
@@ -954,7 +955,7 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
           COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
     }
   }
-  if (oscore.payload == NULL || oscore.payload_len == 0U) {
+  if (payload == NULL || oscore.payload_len == 0U) {
     return coap_oscore_respond_resource(resource, request, addr, addr_len,
                                         &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
                                         0, NULL, 0);
@@ -964,7 +965,7 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
         resource, request, addr, addr_len, &oscore,
         COAP_RESPONSE_CODE_REQUEST_TOO_LARGE, 0, NULL, 0);
   }
-  if (decode_waypoint(oscore.payload, oscore.payload_len, &candidate, false) <
+  if (decode_waypoint(payload, oscore.payload_len, &candidate, false) <
       0) {
     return coap_oscore_respond_resource(resource, request, addr, addr_len,
                                         &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
@@ -1074,11 +1075,12 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
   char actor[LICHEN_WAYPOINT_CREATOR_MAX + 1U] = {0};
   char id[LICHEN_WAYPOINT_ID_MAX + 1U];
   bool local_admin;
+  const uint8_t *payload = NULL;
   int ret;
 
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_DELETE, oscore.plainbuf,
-                                       sizeof(oscore.plainbuf), &oscore.payload,
+                                       sizeof(oscore.plainbuf), &payload,
                                        &oscore.payload_len, &oscore.ctx,
                                        oscore.piv, &oscore.piv_len,
                                        &oscore.is_protected);

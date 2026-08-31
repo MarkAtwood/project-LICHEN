@@ -510,6 +510,20 @@ int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 
+	/* Structural address constraints apply in BOTH directions
+	 * (spec/03-adaptation.md two-tier contract): unspecified or
+	 * multicast sources and an unspecified destination are invalid
+	 * on receipt as well as on emission. Loopback, IPv4-mapped, and
+	 * multicast-destination-scope remain emission-only policy
+	 * (validate_ipv6_address_policy). */
+	if (is_unspecified(&packet[SCHC_IPV6_SRC_OFFSET]) ||
+	    packet[SCHC_IPV6_SRC_OFFSET] == 0xffU) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+	if (is_unspecified(&packet[SCHC_IPV6_DST_OFFSET])) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
 	declared_payload_len = ipv6_payload_len(packet);
 	if (declared_payload_len != pkt_len - IPV6_HDR_LEN) {
 		return SCHC_ERR_NO_MATCHING_RULE;

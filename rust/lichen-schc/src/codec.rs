@@ -2888,7 +2888,9 @@ mod tests {
         // The profile ceiling bounds the RAW packet (the fragmenter's
         // reassembly buffer): raw == MAX compresses via rule 0 (encoded =
         // raw - 29); raw above it is rejected before rule dispatch.
-        // coap_len includes the payload marker byte, which rule 0 drops.
+        // coap_len includes the payload marker byte: compress_coap's tail
+        // is the 0xFF marker plus the payload, so the marker is carried in
+        // the residue, not dropped.
         let payload_len = SCHC_FRAG_MAX_PACKET_SIZE - 53;
         let packet = coap_rule0_packet(payload_len);
         assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
