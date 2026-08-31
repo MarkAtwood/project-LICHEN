@@ -6,6 +6,9 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 ## Loop
 
 1. Get next: `bd ready | head -1` → `bd update <id> --claim`
+   - AFFINITY (when LICHEN_AFFINITY is set): first try your labels — for each
+     comma-separated label, `bd ready --label <label> --json` and take the first
+     bead. If all your label pools are empty, claim any ready bead (work-stealing).
 2. Read: `bd show <id>`
 3. Fix, run tests
 4. Codereview 3x on files you touched (correctness / security / edge) —
