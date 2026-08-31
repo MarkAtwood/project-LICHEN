@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T02:12:06.768445Z",
   "labels": [
-    "tdma"
+    "tdma",
+    "lci"
   ],
   "dependencies": [
     {
