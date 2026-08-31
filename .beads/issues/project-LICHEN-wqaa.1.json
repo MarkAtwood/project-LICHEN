@@ -18,7 +18,8 @@
     "networking",
     "oscore",
     "rust",
-    "schc"
+    "schc",
+    "spec"
   ],
   "dependencies": [
     {
