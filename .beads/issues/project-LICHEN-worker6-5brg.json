@@ -9,6 +9,9 @@
   "created_at": "2026-08-28T23:38:48.359833Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T23:38:48.359833Z",
+  "labels": [
+    "c"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-5brg",
