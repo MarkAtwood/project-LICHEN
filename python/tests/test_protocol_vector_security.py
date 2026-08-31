@@ -786,6 +786,8 @@ def test_production_derived_timing_categories_have_independent_oracles() -> None
             "seq_advance_valid",
             "seq_no_advance_invalid",
             "seq_max_valid_terminal",
+            "seq_max_after_floor_valid",
+            "seq_after_max_invalid",
         )
     } == {
         "seq_0_invalid": False,
@@ -793,6 +795,8 @@ def test_production_derived_timing_categories_have_independent_oracles() -> None
         "seq_advance_valid": True,
         "seq_no_advance_invalid": False,
         "seq_max_valid_terminal": True,
+        "seq_max_after_floor_valid": True,
+        "seq_after_max_invalid": False,
     }
 
     airtime_rows = [vector for vector in vectors.values() if vector["category"] == "airtime"]
