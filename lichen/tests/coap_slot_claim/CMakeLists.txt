@@ -65,6 +65,15 @@ set_source_files_properties(stub/tinycrypt/sha256.c PROPERTIES
 set_source_files_properties(stub/tinycrypt/utils.c PROPERTIES
   COMPILE_OPTIONS "-Wno-conversion"
 )
+# Vendored upstream monocypher (unmodified): same policy as the tinycrypt
+# stubs — silence -Wconversion inside vendored sources only; we do not
+# carry patches to third-party crypto code to satisfy host-only lints.
+set_source_files_properties(
+  ${CRYPTO_SRC}/monocypher.c
+  ${CRYPTO_SRC}/monocypher-ed25519.c
+  PROPERTIES
+  COMPILE_OPTIONS "-Wno-error=conversion"
+)
 
 enable_testing()
 add_test(NAME coap_slot_claim COMMAND coap_slot_claim_test)
