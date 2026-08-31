@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T20:49:18.596600176Z",
   "labels": [
     "ble",
-    "security"
+    "security",
+    "human-only"
   ],
   "dependencies": [
     {
