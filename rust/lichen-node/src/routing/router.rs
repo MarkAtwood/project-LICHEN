@@ -1158,7 +1158,9 @@ pub(crate) fn dao_parents_for_source(
                     group_targets.clear();
                     transit_seen = false;
                 }
-                if option.data.len() < 2 {
+                if option.data.len() < 2 || option.data[0] != 0 {
+                    // Target Flags MUST be zero (R-05-035), matching the
+                    // root's extract_updates rejection.
                     return None;
                 }
                 let prefix_len = option.data[1];

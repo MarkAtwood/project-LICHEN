@@ -143,11 +143,16 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 			}
 			/* Generalized Targets (spec/05-routing.md 8.7.1):
 			 * prefix_len 1..=128, at least ceil(prefix_len/8)
-			 * prefix octets; reserved flags and bits beyond the
-			 * Prefix Length are ignored, then canonicalized. /0
-			 * fails closed. On the verified ingest path the gate
-			 * already authorized every Target. */
-			if (opt.data_len < 2 || opt.data[1] == 0 ||
+			 * prefix octets; bits beyond the Prefix Length are
+			 * ignored, then canonicalized. /0 fails closed. The
+			 * reserved Target Flags octet MUST be zero (8.6
+			 * R-05-035): nonzero rejects the DAO before any
+			 * route-state mutation, matching the Rust ingest and
+			 * the Python reference dao_origin.py. On the verified
+			 * ingest path the gate already authorized every
+			 * Target. */
+			if (opt.data_len < 2 || opt.data[0] != 0U ||
+			    opt.data[1] == 0 ||
 			    opt.data[1] > 128U ||
 			    opt.data_len - 2 < (opt.data[1] + 7U) / 8U ||
 			    target_count == CONFIG_LICHEN_RPL_MAX_ROUTES) {

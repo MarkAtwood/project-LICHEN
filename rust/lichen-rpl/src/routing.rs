@@ -1478,12 +1478,15 @@ impl DaoManager {
                         transit_count = 0;
                     }
                     // Generalized Targets (spec/05-routing.md §8.7.1): prefix
-                    // lengths up to 128, reserved flags and bits beyond the
-                    // prefix length ignored, then canonicalized. `/0` fails
-                    // closed here as at every other layer. On the verified
-                    // ingest path, prefix authorization (§8.7.2) was already
-                    // screened before extraction.
-                    if opt.data.len() < 2 {
+                    // lengths up to 128, bits beyond the prefix length
+                    // ignored, then canonicalized. `/0` fails closed here as
+                    // at every other layer. On the verified ingest path,
+                    // prefix authorization (§8.7.2) was already screened
+                    // before extraction. The reserved Target Flags octet
+                    // MUST be zero (§8.6 R-05-035): nonzero rejects the DAO
+                    // before any route-state mutation, matching the Python
+                    // reference dao_origin.py.
+                    if opt.data.len() < 2 || opt.data[0] != 0 {
                         return None;
                     }
                     let prefix_len = opt.data[1];
