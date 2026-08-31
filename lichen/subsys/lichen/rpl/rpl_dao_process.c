@@ -395,6 +395,7 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 	const uint8_t *opts = lichen_rpl_dao_options(dao_bytes, len);
 	size_t opts_len = lichen_rpl_dao_options_len_ex(dao_bytes, len);
 	bool saw_target = false;
+	bool found_origin = false;
 
 	if (opts == NULL || opts_len == 0) {
 		return false;
@@ -427,6 +428,11 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 		lichen_rpl_prefix_canonicalize(canonical, opt.data[1]);
 		saw_target = true;
 		if (opt.data[1] == 128U && rpl_addr_eq(canonical, origin)) {
+			/* Mirrors Rust sender_is_authorized: >=1 canonical
+			 * /128 Target must equal the origin; delegated
+			 * prefixes alone do not satisfy provenance
+			 * (project-LICHEN-worker6-nie1). */
+			found_origin = true;
 			continue;
 		}
 		if (!lichen_rpl_prefix_delegation_authorizes(origin, opt.data[1],
@@ -434,7 +440,7 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 			return false;
 		}
 	}
-	return saw_target;
+	return saw_target && found_origin;
 }
 
 /* ── Graph validation ──────────────────────────────────────────────────────── */

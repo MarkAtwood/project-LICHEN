@@ -562,6 +562,10 @@ static int test_gate_generalized_body_literals(void)
 		  LICHEN_RPL_OK, "delegate /64");
 	fresh_manager();
 	len = dao_begin(dao, 1);
+	/* The canonical self /128 target is required (mirrors Rust
+	 * sender_is_authorized: >=1 target == origin, project-LICHEN-
+	 * worker6-nie1); the delegated /64 then tests canonicalization. */
+	add_target(dao, &len, 2);
 	add_raw_target(dao, &len, 0, 64, padded, sizeof(padded));
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
@@ -596,6 +600,9 @@ static int test_gate_generalized_body_literals(void)
 		  LICHEN_RPL_OK, "delegate /127");
 	fresh_manager();
 	len = dao_begin(dao, 1);
+	/* Self /128 required (found_origin, nie1); the /127 delegated target
+	 * below exercises canonicalization. */
+	add_target(dao, &len, 2);
 	add_raw_target(dao, &len, 0, 127, slash127_wire, 16);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
@@ -614,6 +621,7 @@ static int test_gate_generalized_body_literals(void)
 	struct lichen_rpl_dao_root_state saved = root_state;
 
 	len = dao_begin(dao, 1);
+	add_target(dao, &len, 2);
 	add_raw_target(dao, &len, 0, 63, slash64, sizeof(slash64));
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
