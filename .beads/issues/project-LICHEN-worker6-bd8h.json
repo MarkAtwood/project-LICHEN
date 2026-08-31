@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-bd8h",
+  "title": "Beads shared store keeps reverting worker closes (3rd occurrence)",
+  "description": "Pattern observed by beads-worker-4 across 2026-08-31: closes written via bd (BEADS_DIR shared store) are reverted to OPEN by a later store sync/merge — first ilye.6 (re-closed), then on the next round ALL post-ilye.1 closes (ilye parent + ilye.2-.6, b7z9.5.1, 1qs4, mfu5) were OPEN again despite verified close transactions hours earlier. Each re-close costs a worker round. Likely cause: the janitor sync or a worker merge restores an older snapshot of the store files (closes never reach the canonical copy; or two stores diverge and one wins). Impact: swarm loses completion state; parents with open children stay claimed; work gets re-verified repeatedly. Fix direction for janitor/Mark: investigate BEADS_DIR store consolidation in scripts/sync-beads-workers.sh / scripts/sync-beads-loop.sh — closes must survive branch merges (either commit store files atomically per worker, or run bd export/merge rather than file-copy). All affected closes were re-applied 2026-08-31 with evidence.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:34:56.345186997Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T17:34:56.345186997Z",
+  "labels": [
+    "gateway"
+  ]
+}

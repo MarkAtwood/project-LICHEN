@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.2",
+  "title": "b7z9.37(b): C root-sig DIO option parse + CONFIG_LICHEN_RPL_ROOT_SIG Kconfig",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37 (spec/06-security.md:587-700). Add root-signature DIO option parsing to the C rpl option table and the CONFIG_LICHEN_RPL_ROOT_SIG Kconfig gating root signature inclusion (root SHOULD include when y, L694); receiver validation mirrors python/src/lichen/crypto/root_dio_signature.py verify_root_dio_signature:278-362 against test/vectors/root_dio_signature.json. Nodes MUST NOT reject DIOs solely for missing capability (L679). Host-buildable CMake test per lichen/tests patterns.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:32:16.976410364Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T17:32:16.976410364Z",
+  "labels": [
+    "decomposed",
+    "zephyr",
+    "rpl",
+    "python",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37",
+      "type": "parent-child",
+      "created_at": "2026-08-31T17:32:17.096239736Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

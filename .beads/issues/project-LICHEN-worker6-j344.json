@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-j344",
+  "title": "Untrack python/.coverage binary artifact (add to gitignore)",
+  "description": "Repo hygiene noticed during kpv0.8 verification: python/.coverage is a TRACKED binary coverage-data file that changes on every local pytest --cov run (it showed as modified immediately after running the documented probe). Coverage artifacts are machine-local state and should not be versioned: add '.coverage' to python/.gitignore (or root .gitignore) and git rm --cached python/.coverage. Needs Mark's explicit ok since it removes a tracked file. No functional impact.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:32:35.148889109Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T17:32:35.148889109Z",
+  "labels": [
+    "python"
+  ]
+}
