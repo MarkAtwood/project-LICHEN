@@ -458,17 +458,148 @@ class TestWaypointsCapacity:
     async def test_waypoints_capped_at_max(self) -> None:
         client, server, wpts = await _setup_bounded(max_waypoints=5)
         try:
-            for i in range(10):
+            for i in range(5):
                 payload = cbor2.dumps({"name": f"Waypoint {i}", "lat": float(i), "lon": float(-i)})
-                await client.request(
+                resp = await client.request(
                     Message(code=POST, uri="coap://srv/waypoints", payload=payload)
                 ).response
+                assert resp.code == aiocoap.CREATED
+
+            # Spec 18.3.2: 6th POST hits the global bound -> 5.03 with the
+            # waypoint_limit diagnostic; nothing is evicted.
+            payload = cbor2.dumps({"name": "Overflow", "lat": 1.0, "lon": -1.0})
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            assert resp.code == aiocoap.SERVICE_UNAVAILABLE
+            diagnostic = cbor2.loads(resp.payload)
+            assert diagnostic["reason"] == "waypoint_limit"
+            assert diagnostic["global"] == 5
+            assert diagnostic["per_originator"] == 32
 
             wpt_list = wpts.waypoints()
             assert len(wpt_list) == 5
-            # Oldest were dropped; newest survive
-            assert wpt_list[-1]["name"] == "Waypoint 9"
-            assert wpt_list[0]["name"] == "Waypoint 5"
+            # Nothing was evicted: the first five survive in creation order.
+            assert wpt_list[0]["name"] == "Waypoint 0"
+            assert wpt_list[-1]["name"] == "Waypoint 4"
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_waypoints_reject_33rd_per_originator(self) -> None:
+        client, server, wpts = await _setup()
+        try:
+            # Same creator: 32 accepted (spec per-originator bound), 33rd -> 5.03.
+            for i in range(32):
+                payload = cbor2.dumps({"name": f"W {i}", "lat": float(i), "lon": float(-i)})
+                resp = await client.request(
+                    Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+                ).response
+                assert resp.code == aiocoap.CREATED
+
+            payload = cbor2.dumps({"name": "Over per-originator", "lat": 9.0, "lon": -9.0})
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            assert resp.code == aiocoap.SERVICE_UNAVAILABLE
+            diagnostic = cbor2.loads(resp.payload)
+            assert diagnostic["reason"] == "waypoint_limit"
+            assert diagnostic["per_originator"] == 32
+            assert diagnostic["global"] == 256
+            assert len(wpts.waypoints()) == 32
+
+            # A different creator still has headroom under the global bound.
+            payload = cbor2.dumps(
+                {"name": "Other", "lat": 2.0, "lon": -2.0, "creator": "0200:other:1"}
+            )
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            assert resp.code == aiocoap.CREATED
+            assert len(wpts.waypoints()) == 33
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_readd_existing_id_at_per_originator_bound(self) -> None:
+        client, server, wpts = await _setup()
+        try:
+            for i in range(32):
+                payload = cbor2.dumps({"name": f"W {i}", "lat": float(i), "lon": float(-i)})
+                await client.request(
+                    Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+                ).response
+            # Re-POST of an existing id replaces storage in place: it must
+            # succeed even though this originator is at the 32 bound.
+            payload = cbor2.dumps(
+                {"id": "wpt-001", "name": "Updated", "lat": 5.0, "lon": -5.0}
+            )
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            assert resp.code == aiocoap.CREATED
+            assert len(wpts.waypoints()) == 32
+            assert wpts.waypoint("wpt-001")["name"] == "Updated"
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_reattribution_to_full_creator_bucket_rejected(self) -> None:
+        client, server, wpts = await _setup()
+        try:
+            # alice holds one waypoint; bob fills his own 32-slot bucket.
+            payload = cbor2.dumps(
+                {"id": "wpt-alice", "name": "Alice", "lat": 1.0, "lon": 1.0,
+                 "creator": "alice"}
+            )
+            await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            for i in range(32):
+                payload = cbor2.dumps(
+                    {"name": f"B {i}", "lat": float(i), "lon": float(-i),
+                     "creator": "bob"}
+                )
+                await client.request(
+                    Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+                ).response
+            # Re-attributing alice's waypoint to bob (at his 32 bound) must
+            # be rejected with 5.03: the move consumes bob's headroom.
+            payload = cbor2.dumps(
+                {"id": "wpt-alice", "name": "Alice", "lat": 1.0, "lon": 1.0,
+                 "creator": "bob"}
+            )
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            assert resp.code == aiocoap.SERVICE_UNAVAILABLE
+            assert cbor2.loads(resp.payload)["reason"] == "waypoint_limit"
+            # Table unchanged: still 33 entries, alice still owns hers.
+            assert len(wpts.waypoints()) == 33
+            assert wpts.waypoint("wpt-alice")["creator"] == "alice"
+        finally:
+            await client.shutdown()
+            await server.shutdown()
+
+    async def test_delete_frees_per_originator_headroom(self) -> None:
+        client, server, wpts = await _setup()
+        try:
+            for i in range(32):
+                payload = cbor2.dumps({"name": f"W {i}", "lat": float(i), "lon": float(-i)})
+                await client.request(
+                    Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+                ).response
+            # Full for this creator: delete one, then POST succeeds again.
+            resp = await client.request(
+                Message(code=DELETE, uri="coap://srv/waypoints/wpt-001")
+            ).response
+            assert resp.code == aiocoap.DELETED
+            payload = cbor2.dumps({"name": "Refill", "lat": 4.0, "lon": -4.0})
+            resp = await client.request(
+                Message(code=POST, uri="coap://srv/waypoints", payload=payload)
+            ).response
+            assert resp.code == aiocoap.CREATED
+            assert len(wpts.waypoints()) == 32
         finally:
             await client.shutdown()
             await server.shutdown()
@@ -480,3 +611,19 @@ class TestWaypointsCapacity:
             WaypointsResource(max_waypoints=-1)
         with pytest.raises(ValueError, match="positive integer"):
             WaypointsResource(max_waypoints=True)
+        with pytest.raises(ValueError, match="max_per_originator"):
+            WaypointsResource(max_per_originator=0)
+
+    async def test_readd_with_new_creator_moves_the_count(self) -> None:
+        wpts = WaypointsResource(creator_id="cli")
+        wpts.add_waypoint(
+            {"id": "wpt-x", "name": "A", "lat": 1.0, "lon": 1.0, "creator": "alice"}
+        )
+        # Re-POST of the same id with a different creator must move the
+        # count: alice freed, bob charged (spec 18.3.2 accounting).
+        wpts.add_waypoint(
+            {"id": "wpt-x", "name": "B", "lat": 2.0, "lon": 2.0, "creator": "bob"}
+        )
+        assert wpts._creator_counts == {"bob": 1}
+        wpts.delete_waypoint("wpt-x")
+        assert wpts._creator_counts == {}
