@@ -17,6 +17,7 @@
 #include <lichen/routing/dtn.h>
 #include <lichen/senml.h>
 #include <lichen/l2/ipv6_addr.h>
+#include <lichen/link.h>
 
 LOG_MODULE_REGISTER(lichen_coap_dtn, CONFIG_LICHEN_COAP_DEADDROP_LOG_LEVEL);
 
@@ -50,9 +51,19 @@ static bool parse_recipient(const uint8_t *payload, size_t len,
 	return false;
 }
 
+/* R-05-080: never synthesize Unix time from uptime. When the wall clock is
+ * invalid (clockless node) this returns 0 — the "no validated deadline"
+ * sentinel: expiry sweeps skip expiry==0 records (fail open: store and
+ * forward; downstream nodes with valid time enforce). Guarded because
+ * time_sync.c only links with CONFIG_LICHEN_CCP_TIME_SYNC. */
 static uint32_t dtn_get_unix_time(void)
 {
-	return (uint32_t)(k_uptime_get() / 1000);
+#if defined(CONFIG_LICHEN_CCP_TIME_SYNC)
+	return lichen_wall_clock_valid() ? lichen_wall_clock_get() : 0U;
+#else
+	/* No time-sync module: the node is clockless. */
+	return 0U;
+#endif
 }
 
 static void dtn_expire_work_handler(struct k_work *work)
@@ -157,7 +168,10 @@ static int deaddrop_post(struct coap_resource *resource,
 		}
 	}
 	uint32_t now = dtn_get_unix_time();
-	uint32_t expiry = now + LICHEN_DTN_DEFAULT_TTL_SEC;
+	/* R-05-080: with an invalid clock, do not synthesize a deadline from
+	 * uptime — store the fail-open sentinel (expiry 0) and let downstream
+	 * nodes with valid time enforce expiry. */
+	uint32_t expiry = (now != 0U) ? now + LICHEN_DTN_DEFAULT_TTL_SEC : 0U;
 	bool ok = lichen_dtn_buffer_message(&s_dtn_buf, payload, payload_len,
 					    dest_iid, expiry, now, now_ms);
 	k_mutex_unlock(&s_dtn_buf_mutex);
