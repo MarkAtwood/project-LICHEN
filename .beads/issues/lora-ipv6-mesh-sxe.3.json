@@ -8,6 +8,9 @@
   "created_at": "2026-08-28T14:48:11.981373Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:48:11.981373Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-sxe.3",
