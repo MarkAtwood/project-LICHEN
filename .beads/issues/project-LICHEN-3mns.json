@@ -13,6 +13,9 @@
   "started_at": "2026-07-22T14:32:30.311993948Z",
   "closed_at": "2026-07-25T01:16:38.059096429Z",
   "close_reason": "Closed",
+  "labels": [
+    "gateway"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-3mns",

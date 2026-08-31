@@ -14,6 +14,9 @@
   "started_at": "2026-07-22T20:24:42.853300616Z",
   "closed_at": "2026-07-22T20:25:19.989671963Z",
   "close_reason": "Broke into sub-tasks afbk.1-3; epic closed to allow parallel work on children. No code changes in this pass.",
+  "labels": [
+    "gateway"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-afbk",
