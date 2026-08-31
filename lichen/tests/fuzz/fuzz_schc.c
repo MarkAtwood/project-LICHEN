@@ -127,25 +127,19 @@ static void fuzz_reassembler(const uint8_t *data, size_t size)
 	}
 	uint8_t packet[FUZZ_REASSEMBLY_BUF_SIZE];
 	struct schc_reassembler reassembler;
-	struct schc_reassembler_config config = {
-		.rule_id = (uint8_t)(config_byte & 0x0F),
-		.dtag = 0,
-		.dtag_bits = 0,
-		.window_bits = (uint8_t)(((config_byte >> 4) & 0x03) + 1),
-		.fcn_bits = (uint8_t)(((config_byte >> 6) & 0x03) + 1),
-		.tile_size = 32,
-		.mode = SCHC_FRAGMENT_ACK_ON_ERROR,
-	};
 
-	if (config.window_bits > 7 || config.fcn_bits > 7 ||
-	    config.dtag_bits + config.window_bits + config.fcn_bits > 8) {
-		config.dtag_bits = 0;
-		config.window_bits = 1;
-		config.fcn_bits = 6;
+	/* Vary the reassembly limit with the fuzz input across the whole
+	 * valid argument range 1..capacity, including the edges (limit 1,
+	 * first regular-tile limit 179, limit == capacity). schc_reassembler_init's
+	 * argument rejection is covered by the schc_reassembly host tests. */
+	size_t limit = (size_t)(data[0] | ((size_t)data[1] << 8)) %
+		       (FUZZ_REASSEMBLY_BUF_SIZE + 1U);
+	if (limit == 0U) {
+		limit = FUZZ_REASSEMBLY_BUF_SIZE;
 	}
 
-	int ret = schc_reassembler_init(&reassembler, &config,
-					packet, sizeof(packet));
+	int ret = schc_reassembler_init(&reassembler, packet,
+					sizeof(packet), limit);
 	if (ret != SCHC_OK) {
 		return;
 	}
