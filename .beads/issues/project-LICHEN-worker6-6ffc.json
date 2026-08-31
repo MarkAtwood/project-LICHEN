@@ -12,7 +12,8 @@
   "labels": [
     "l2",
     "tdma",
-    "tests"
+    "tests",
+    "lci"
   ],
   "dependencies": [
     {

@@ -16,7 +16,8 @@
     "codereview",
     "time-sync",
     "vectors",
-    "interop"
+    "interop",
+    "lci"
   ],
   "dependencies": [
     {
