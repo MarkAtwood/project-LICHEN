@@ -898,7 +898,7 @@ class HandoffRequestCoseSign1:
 
     COSE_Sign1 structure:
     [
-        h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+        h'a1013a00010000',      ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
         {4: h'<new-gw-iid>'},   ; unprotected: {kid: new gateway 8-byte IID}
         h'<payload>',           ; CBOR-encoded HandoffRequestCosePayload
         h'<48-byte signature>'  ; Schnorr48 signature
@@ -1033,7 +1033,7 @@ class HandoffConfirmCoseSign1:
 
     COSE_Sign1 structure:
     [
-        h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+        h'a1013a00010000',      ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
         {4: h'<old-gw-iid>'},   ; unprotected: {kid: old gateway 8-byte IID}
         h'<payload>',           ; CBOR-encoded HandoffConfirmCosePayload
         h'<48-byte signature>'  ; Schnorr48 signature

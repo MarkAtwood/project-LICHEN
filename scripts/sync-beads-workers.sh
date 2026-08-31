@@ -77,6 +77,20 @@ llm_semantic_merge() {
 }
 
 conflicted=()
+
+# Checkpoint pending bd writes (closes, comments, new beads) BEFORE any
+# merge: the merge normalization below runs `git checkout HEAD -- .beads`,
+# which would silently discard store writes still uncommitted in this
+# working tree (beads-worker-4 lost whole batches of verified closes this
+# way, bead project-LICHEN-worker6-bd8h). Committing first makes them
+# durable; the merge's .beads normalization then keeps main's committed
+# state, which now includes those closes.
+if [ -n "$(git status --porcelain .beads/)" ]; then
+    git add .beads/
+    git commit -m "chore(beads): checkpoint store writes before merge" --quiet &&
+        echo "checkpointed pending bd writes before merge"
+fi
+
 for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-worker-*'); do
     ahead=$(git rev-list main.."$branch" --count 2>/dev/null || echo 0)
     if [ "$ahead" -eq 0 ]; then

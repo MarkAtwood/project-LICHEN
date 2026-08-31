@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-upnv",
+  "title": "b7z9.40(b): raw-diag resources reject beyond-local exposure without OSCORE (R-11-032)",
+  "description": "Child of b7z9.40. spec/11-lci.md 17.5.4 R-11-032: beyond-local exposure of raw diagnostics MUST use OSCORE or equivalent. Today the Python raw-diag resources are mountable on any UDP site with no OSCORE gate and no build/config signal restricting them. Add a mounting/exposure guard: raw-diag resources only mount on the local site (or require OSCORE when mounted remotely), with a config signal restricting them; tests for both postures. Land after or with (a).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T18:03:07.619448551Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T18:03:07.619448551Z",
+  "labels": [
+    "coap",
+    "lci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-upnv",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.40",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T18:03:07.733665474Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -139,6 +139,19 @@ static int restore_tuple(struct lichen_link_ctx *ctx)
 }
 #endif
 
+/* RAM-resident nonce-stream checkpoint: survives ctx teardown (disable/
+ * enable cycles) within one boot even when NVS persistence is absent.
+ * Indexed by pubkey so a fresh keypair starts a fresh stream. Both the
+ * checkpoint and the only writer/reader context (the l2 global link_ctx)
+ * are singletons in production, so ctx->seq_lock also serializes access;
+ * multi-context users must provide their own serialization.
+ * (project-LICHEN-worker6-07s1) */
+static bool s_stream_valid;
+static uint8_t s_stream_pk[LICHEN_PK_LEN];
+static uint8_t s_stream_epoch;
+static uint16_t s_stream_tx_seq;
+static bool s_stream_exhausted;
+
 /* Forward declaration */
 static void secure_wipe(void *buf, size_t len);
 static int seq_lock(struct lichen_link_ctx *ctx);
@@ -244,6 +257,10 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx,
 	uint8_t new_sk[LICHEN_SK_LEN];
 	uint8_t new_pk[LICHEN_PK_LEN];
 	uint8_t new_epoch;
+	uint16_t restored_seq = 0U;
+	uint8_t restored_epoch;
+	bool restored_exhausted = false;
+	bool stream_matched = false;
 
 	if (ctx == NULL || seed == NULL) {
 		return -EINVAL;
@@ -284,6 +301,21 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx,
 		secure_wipe(new_pk, sizeof(new_pk));
 		return -EIO;
 	}
+
+	/* RAM checkpoint takes precedence when it matches and is ahead: it
+	 * always reflects the latest teardown of THIS boot (project-LICHEN-
+	 * worker6-07s1). Restoring the epoch with the seq keeps the stream
+	 * position consistent across seq-wrap epoch advances. */
+	if (s_stream_valid &&
+	    memcmp(s_stream_pk, new_pk, LICHEN_PK_LEN) == 0) {
+		stream_matched = true;
+		restored_epoch = s_stream_epoch;
+		restored_exhausted = s_stream_exhausted;
+		if (s_stream_tx_seq > restored_seq) {
+			restored_seq = s_stream_tx_seq;
+		}
+	}
+
 	if (ctx->has_key) {
 		secure_wipe(ctx->ed25519_sk, LICHEN_SK_LEN);
 	}
@@ -292,11 +324,20 @@ int lichen_link_load_key(struct lichen_link_ctx *ctx,
 	secure_wipe(new_sk, sizeof(new_sk));
 	secure_wipe(new_pk, sizeof(new_pk));
 	ctx->has_key = true;
-	ctx->epoch = new_epoch;
-	ctx->tx_seq = 0;
-	ctx->nonce_exhausted = false;
+	if (stream_matched) {
+		/* Same identity: resume the exact stream position (epoch may
+		 * have advanced past new_epoch via seq wrap). */
+		ctx->epoch = restored_epoch;
+		ctx->tx_seq = restored_seq;
+		ctx->nonce_exhausted = restored_exhausted;
+	} else {
+		/* Fresh keypair: new replay identity starts at seq 0. */
+		ctx->epoch = new_epoch;
+		ctx->tx_seq = 0U;
+		ctx->nonce_exhausted = false;
+	}
 #if defined(CONFIG_NVS) && !defined(CONFIG_LICHEN_APP_IDENTITY_PERSIST)
-	(void)save_tuple(ctx); /* persist new key + reset tuple; ignore errors to not block boot */
+	(void)save_tuple(ctx); /* persist new key + restored stream; ignore errors to not block boot */
 #endif
 	(void)seq_unlock(ctx);
 	return 0;
@@ -598,6 +639,23 @@ void lichen_link_cleanup(struct lichen_link_ctx *ctx)
 	ctx->cca_ops.cad = NULL;
 	ctx->cca_ops.user = NULL;
 	int locked = seq_lock(ctx);
+
+	/* Checkpoint the nonce stream before the wipe: a same-key reload
+	 * after teardown must continue the (epoch, seq) stream — receivers
+	 * holding this pubkey's replay window must never see a reused
+	 * (epoch, seq) (project-LICHEN-worker6-07s1). */
+	if (locked == 0 && ctx->has_key) {
+		memcpy(s_stream_pk, ctx->ed25519_pk, LICHEN_PK_LEN);
+		s_stream_epoch = ctx->epoch;
+		s_stream_tx_seq = ctx->tx_seq;
+		s_stream_exhausted = ctx->nonce_exhausted;
+		s_stream_valid = true;
+	}
+#if defined(CONFIG_NVS) && !defined(CONFIG_LICHEN_APP_IDENTITY_PERSIST)
+	if (locked == 0 && ctx->has_key) {
+		(void)save_tuple(ctx);
+	}
+#endif
 
 	secure_wipe(ctx->ed25519_sk, LICHEN_SK_LEN);
 	secure_wipe(ctx->link_key, LICHEN_LINK_KEY_LEN);

@@ -1,0 +1,7 @@
+{
+  "id": "1788198769922739046-1",
+  "issue_id": "project-LICHEN-worker6-2lei",
+  "author": "opencode-worker-6",
+  "text": "Third close (resurrection hygiene). The two prior closes stand: (1) 2026-08-31 round-2 — failure never reproduced on main; the reported HEAD 978da4e existed only on beads-worker-1 and diverged from the already-merged fix 6008e4eed8; (2) the fix commit's own verification. Re-verified TODAY at current synced HEAD (includes 3.1 d5c4bb1e29-era merges, the b926255ab2 vector landing, and the cyjm reconciliation 2e7991f1ec): 'cargo test -p lichen-node --all-features --lib rfc6554_route' -\u003e 1 passed / 0 failed. No code change needed. NOTE for the swarm: this is the third resurrection of a verified-closed bead this session (also b7z9.4.1 x2, kpv0.8 x2, kpv0.6 x2) — the stale-.beads-snapshot merge pattern tracked by janitor bead project-LICHEN-worker6-ba39 is the root cause; closing this bead re-records the close in the shared store.",
+  "created_at": "2026-08-31T17:52:49.922739046Z"
+}

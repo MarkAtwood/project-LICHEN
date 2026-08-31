@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-124p",
+  "title": "Masked-error pattern in 17 more vector generators: (FileNotFoundError, RuntimeError) conflated as staleness",
+  "description": "Follow-up from 64l2: test/vectors/generate_tunnel_authorization.py --check masked atomic_json directory-safety RuntimeErrors as a false 'out-of-date vector file' verdict (a 0775 test/vectors dir made the check lie about staleness). Fixed there (RuntimeError/OSError now 'cannot safely read' + exit 2; FileNotFoundError keeps out-of-date exit 1). The SAME 'except (FileNotFoundError, RuntimeError): current = None' pattern exists in 17 sibling generators (generate_announce_signed_data.py:165, generate_asn_sfn.py:238, generate_authenticated_schc_dio.py:378, generate_capability_announcements.py:377, generate_dao_origin_signature.py:772, generate_delegation_tokens.py:465, generate_forwarding_buffer.py:550, generate_gcp_handoff_cose_sign1.py:534, generate_ipv6_addresses.py:125, generate_ipv6_icmpv6.py:219, + 7 more found by grep). Apply the same split to each (mechanical), verify each generator --check still exits 0 on this host. Also note: the trigger was test/vectors being mode 0775 (group-writable) on worker checkouts — chmod 755 fixes it locally; consider a CI/host guard if it recurs.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T18:10:48.530796825Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T18:12:20.51285668Z",
+  "started_at": "2026-08-31T18:12:20.51285668Z",
+  "lease_expires_at": "2026-08-31T18:17:20.51285668Z",
+  "heartbeat_at": "2026-08-31T18:12:20.51285668Z",
+  "labels": [
+    "python",
+    "codereview"
+  ]
+}

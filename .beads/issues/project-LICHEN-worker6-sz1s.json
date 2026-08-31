@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-sz1s",
+  "title": "Stale COSE hex in gateway/handoff.py docstrings (lines 901, 1036)",
+  "description": "Review finding (7dbs round): python/src/lichen/gateway/handoff.py:901 and :1036 docstrings show protected header h'a10139ffff' with comment {1: -65537} — hex decodes to {1: -65536}, contradicting the comment; the module's own _encode_protected_header (line 718) live-emits a1013a00010000 (verified). Same one-line docstring fix as root_dio_signature.py:169 (commit bc1b8431d8) and key_rotation_attestation.py:151 (7dbs). NOTE: test/vectors/tunnel_authorization.json also contains a10139ffff but that is the intentional wrong_algorithm negative case (authorizations[9]) — do NOT touch it. Two docstring lines only.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:42:52.684840995Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T17:54:44.891920928Z",
+  "started_at": "2026-08-31T17:51:14.446688779Z",
+  "closed_at": "2026-08-31T17:54:44.891920928Z",
+  "close_reason": "Fixed both stale COSE docstrings in python/src/lichen/gateway/handoff.py:901 (HandoffRequest) and :1036 (HandoffConfirm): h'a10139ffff' -\u003e h'a1013a00010000'. Ground truth verified against this module's own _encode_protected_header (line 718, live output a1013a00010000, canonical cbor2.dumps({1:-65537})); old hex decoded to {1:-65536} contradicting its comment. Doc-only; from_cose_sign1 request/confirm validation paths untouched (reviewer-verified: protected header checked via cbor2.loads + alg equality). Gateway suite 249 passed; ruff clean; zero stale hex in file. 3x review (kimi-k3): correctness PASS (both sites consistent, encoder agreement, CBOR math), security PASS (no executable change, kid label 4 matches _COSE_KID in encode+decode), edge PASS (alg refs consistent file-wide; 65535 hits are unrelated link_seq bounds; other gateway modules use the same constant). DISCLOSED: test_tunnel_authorization_generator_is_fresh fails in this suite — verified PRE-EXISTING (reproduces with my diff stashed/reverted); vector file has drifted from its generator; filed as separate bead with investigation guidance (wrong_algorithm negative case a10139ffff must be preserved).",
+  "labels": [
+    "python",
+    "gateway",
+    "codereview"
+  ]
+}

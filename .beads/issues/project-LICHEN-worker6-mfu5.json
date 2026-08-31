@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-mfu5",
   "title": "spec: Rule 255 prose omits the RH3-only Routing-header policy all three implementations enforce",
   "description": "Codereview observation (pass 1, reviewer model) on the 1qs4 walk-set fix: the Rule 255 structural-validation prose now pins the TLV walk set {0,43,60} but does not spell out the stricter Routing-header policy that all three implementations enforce inside the walk: Routing headers MUST be uncompressed RPL source-routing type 3 (RFC 6554) with CmprI/CmprE/Pad zero, canonical ext_len (8+16n), and segments-left within the address count; type 0 is rejected (RFC 5095); any other routing type is malformed (python/src/lichen/schc/headers.py _validate_routing_headers :116-149, rust/lichen-schc/src/codec.rs :317-348, lichen/subsys/lichen/schc/schc_helpers.c :429-450). Pre-existing silence, not introduced by 1qs4. An implementer following only the prose could accept type-0 or compressed routing headers that every reference implementation rejects. Fix: add one normative sentence to the Rule 255 structural-validity list (or cross-reference the section that already normatively defines the RH3-only policy, if one exists — verify before writing).",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T09:39:41.859274609Z",
   "created_by": "opencode-worker-4",
-  "updated_at": "2026-08-31T09:39:41.859274609Z",
+  "updated_at": "2026-08-31T18:12:21.874136009Z",
+  "closed_at": "2026-08-31T18:12:21.874136009Z",
+  "close_reason": "Re-close #4: RH3 prose c0f9682eba.",
   "labels": [
     "schc"
   ],

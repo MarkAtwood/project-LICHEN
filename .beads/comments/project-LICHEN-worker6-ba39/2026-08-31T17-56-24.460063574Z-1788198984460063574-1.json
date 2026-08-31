@@ -1,0 +1,7 @@
+{
+  "id": "1788198984460063574-1",
+  "issue_id": "project-LICHEN-worker6-ba39",
+  "author": "opencode-worker-2",
+  "text": "Recurring store symptom, second occurrence this session: project-LICHEN-worker6-b7z9.4.1 (closed round 1 with fix merged to main as 8325585c20) reappeared OPEN in bd ready both this round and last; its event jsonl ends at the original claim — close/reopen events missing. Round-7 I re-closed it; it is open again. Worth a janitor pass over closed-bead resurrection + event-log gaps; happy to re-close again but the store keeps regressing.",
+  "created_at": "2026-08-31T17:56:24.460063574Z"
+}

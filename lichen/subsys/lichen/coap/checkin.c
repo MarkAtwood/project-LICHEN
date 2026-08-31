@@ -1667,10 +1667,16 @@ uint8_t lichen_rollcall_post_ex(struct lichen_checkin_service *svc,
 	if (rc == NULL) {
 		rc = &svc->rollcalls[svc->rollcall_count++];
 		memset(rc, 0, sizeof(*rc));
-		strcpy(rc->id, req.id);
+		/* R-APPC-014: no strcpy — bounded copy cannot overflow the
+		 * fixed id field even if upstream parse validation regressed. */
+		const char *id_end = memchr(req.id, '\0', sizeof(req.id));
+		size_t id_len = (id_end != NULL) ? (size_t)(id_end - req.id)
+						 : sizeof(rc->id) - 1U;
+		memcpy(rc->id, req.id, id_len);
+		rc->id[id_len] = '\0';
 		if (creator != NULL &&
 		    strlen(creator) < LICHEN_ROLLCALL_CREATOR_MAX) {
-			strcpy(rc->creator, creator);
+			memcpy(rc->creator, creator, strlen(creator) + 1U);
 			rc->has_creator = true;
 		}
 	} else {

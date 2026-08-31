@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-07s1",
   "title": "ping_l2 udp test: injected frame rejected as replay (-114) — same (epoch,seq) delivered or committed twice after soft reinit",
   "description": "Last ping_l2 failure (6/7 after 17nw fix cf9afa78a1). Trace on heft: queue_stats reinit window shows 2x 'TX frame build failed: no signing key (-126)' (startup MLD/ND racing the enable-\u003ereprovision window), then in test_udp_payload the injected UDP frame is RX-rejected 'replay detected (-114)' TWICE (00:00.350 and 01.250) and the UDP observer times out (-11). Candidates: (1) epoch_advance_for_boot returns the SAME epoch across soft deinit/init cycles on native_sim (persistence stubbed) while tx_seq resets to 0 on key reload, so frames reuse (epoch,seq) already committed by full_ping's exchange under the same peer key — i.e. epoch MUST advance per reinit or the replay table must be reset whenever the epoch resets (check init_link_ctx_locked replay_table_init ordering vs epoch selection); (2) the loopback driver double-delivering one frame after the one-shot change (arm-time rx_work submit racing the TX-path submit) — verify each frame is dequeued exactly once; (3) the IPv6 stack retransmitting (NS retransmit timer) the same compressed payload. Note the successful (non-logged) delivery path: a silent first delivery would mean the frame WAS committed once and the observer timeout is a socket-binding issue instead — instrument before assuming.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T09:44:37.271083697Z",
   "created_by": "opencode-worker-3",
-  "updated_at": "2026-08-31T10:05:47.357158124Z",
+  "updated_at": "2026-08-31T18:15:04.982664611Z",
   "started_at": "2026-08-31T09:45:52.782522011Z",
+  "closed_at": "2026-08-31T18:15:04.982664611Z",
+  "close_reason": "Root cause + fix landed (75b86d62cd). ROOT CAUSE (proven by two-sided instrumentation): lichen_link_load_key rolls a fresh RANDOM epoch per call and resets tx_seq=0; with CONFIG_LICHEN_LINK_REPLAY_PERSIST off, the l2 layer never pinned the boot epoch, so the same-key re-provision after ctx teardown moved the epoch backward (full_ping frames epoch=177, udp window epoch=142) and reset the seq — replay-window holders correctly returned EALREADY. l2_input fires exactly once per frame (double-processing hypotheses disproven). FIX: (1) lichen_l2_key.c boot-epoch latch (RAM, guarded to non-REPLAY_PERSIST builds): first load adopts, later loads pinned UP only (never down — post-seq-wrap advanced epochs are latched, never regressed); (2) link_ctx.c RAM nonce-stream checkpoint: cleanup snapshots (pk, epoch, tx_seq, nonce_exhausted) before the wipe; load_key with a matching pk resumes the exact stream position (fresh keypair starts at seq 0 — new replay identity). REVIEW: 3 passes + 1 verification on kimi-k3 — pass 3 caught unused latch statics under REPLAY_PERSIST (guarded) and the missing nonce_exhausted in the checkpoint (restored); pass 2 caught the pin-vs-seq-wrap regression (pin made raise-only; checkpoint carries the epoch); verification PASS. Documented ceiling: single-slot checkpoint loses a prior key's stream on A-\u003eB-\u003eA rotation within one boot (strictly better than pre-fix; multi-slot = follow-up if ever needed). VALIDATED: ping_l2 native_sim on heft 7/7 PROJECT EXECUTION SUCCESSFUL.",
   "labels": [
     "l2",
     "tests"
