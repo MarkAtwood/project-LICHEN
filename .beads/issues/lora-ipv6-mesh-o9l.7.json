@@ -9,7 +9,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:55:13.152868Z",
   "labels": [
-    "coap"
+    "coap",
+    "l2"
   ],
   "dependencies": [
     {
