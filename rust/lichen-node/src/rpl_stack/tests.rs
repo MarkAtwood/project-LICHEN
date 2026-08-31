@@ -2415,3 +2415,34 @@ fn root_provisioning_rejects_mismatched_and_nonempty_partials() {
         Err(DaoPersistentOpenError::Missing)
     ));
 }
+
+#[test]
+fn root_seq_cache_is_reachable_from_stack_state() {
+    let local = identity(251);
+    let local_addr = address(&local, 1);
+    let prefix = local_addr[..8].try_into().unwrap();
+    let (radio, _receiver) = LoopbackRadio::pair();
+    let mut stack = RplStack::provision_root(
+        Stack::new_default_epoch(radio, local),
+        local_addr,
+        local_addr,
+        announces(prefix),
+        MemStorage::new(),
+    )
+    .unwrap();
+
+    let dodag_a = [0x20u8; 16];
+    let dodag_b = [0x21u8; 16];
+    assert_eq!(stack.root_seq_cached(dodag_a, 0), None);
+
+    // Mutations through the receiver-facing accessor land in stack state.
+    stack.root_seqs_mut().accept(dodag_a, 0, 5).unwrap();
+    stack.root_seqs_mut().accept(dodag_b, 0, 5).unwrap();
+    assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
+    assert_eq!(stack.root_seq_cached(dodag_b, 0), Some(5));
+
+    // Replay via the stack API is rejected and leaves state untouched.
+    assert!(stack.root_seqs_mut().accept(dodag_a, 0, 5).is_err());
+    assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
+    assert_eq!(stack.root_seq_cached(dodag_a, 1), None);
+}
