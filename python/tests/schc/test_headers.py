@@ -201,11 +201,13 @@ def test_mqtt_sn_rule7_checksum_zero_serializes_as_ffff() -> None:
 
 
 def test_mqtt_sn_rule7_rejects_invalid_full_mode_addresses() -> None:
-    # Structure checks precede address checks (mirroring Rust/C order), so a
-    # multicast source that the UDP datagram constructor also rejects surfaces
-    # the UDP-layer message first.
+    # Rule 7 selection rejects the endpoints (compress_if_matching returns
+    # None), so the packet falls back to Rule 255 whose emission policy
+    # reports the canonical endpoint message; a Rule-255 decode of the same
+    # wire is byte-preserving, but the dispatch path surfaces the compression
+    # attempt's rejection.
     for source, destination, message in (
-        (IPv6Address("ff02::1"), IPv6Address("2001:db8::2"), "malformed source"),
+        (IPv6Address("ff02::1"), IPv6Address("2001:db8::2"), "invalid IPv6 source address"),
         (IPv6Address("2001:db8::1"), IPv6Address("::"), "address"),
     ):
         raw = _build_mqtt_packet(b"x", src=source, dst=destination)
