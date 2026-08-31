@@ -218,8 +218,12 @@ pub struct Stack<R: Radio> {
     channel: u8,
     schc_failure_tracker: lichen_schc::RuleVersionFailureTracker<64>,
     schc_failure_notifications: u64,
+    /// Bounded fragmentation-session policy (spec/05-routing.md §8.9
+    /// R-05-065). Seam for the RX reassembly slice: receive() wiring lands in
+    /// the sibling bead; the policy itself enforces MAX_PEERS without
+    /// hot-path allocation.
+    pub(crate) fragmentation_policy: lichen_schc::FragmentationPolicy<8>,
 }
-
 #[cfg(feature = "std")]
 impl<R: Radio> Stack<R> {
     /// Create a new stack with the given radio, identity, and epoch.
@@ -254,6 +258,8 @@ impl<R: Radio> Stack<R> {
             schc_failure_tracker: lichen_schc::RuleVersionFailureTracker::new(3)
                 .expect("fixed SCHC failure threshold and capacity are nonzero"),
             schc_failure_notifications: 0,
+            fragmentation_policy: lichen_schc::FragmentationPolicy::new()
+                .expect("fixed fragmentation peer capacity is nonzero"),
         }
     }
 
@@ -264,6 +270,15 @@ impl<R: Radio> Stack<R> {
     #[cfg(test)]
     pub fn new_default_epoch(radio: R, identity: lichen_link::identity::Identity) -> Self {
         Self::new(radio, identity, 128, 0)
+    }
+
+    /// Bounded fragmentation-session policy (RX seam for spec/05-routing.md
+    /// §8.9 R-05-065; the receive-path consumer lands in the sibling slice).
+    /// Gate-proof dead-code expectation: tests (compiled under --all-targets)
+    /// consume this accessor, production does not until b7z9.5.2.2.
+    #[cfg_attr(not(test), expect(dead_code, reason = "RX consumer lands in b7z9.5.2.2"))]
+    pub(crate) fn fragmentation_policy(&self) -> &lichen_schc::FragmentationPolicy<8> {
+        &self.fragmentation_policy
     }
 
     /// Get the local node ID.
@@ -920,6 +935,14 @@ mod tests {
         );
         assert_eq!(stack.try_next_link_tuple(), Err(TxError::SequenceExhausted));
         assert_eq!(stack.try_next_link_tuple(), Err(TxError::SequenceExhausted));
+    }
+
+    #[tokio::test]
+    async fn fragmentation_policy_seam_is_constructed_and_expired() {
+        // RX seam (R-05-065): the stack owns a bounded fragmentation policy;
+        // expire_due on an empty policy is a no-op success.
+        let stack = test_stack(128, 0);
+        assert_eq!(stack.fragmentation_policy().expire_due(0), Ok(0));
     }
 
     #[tokio::test]

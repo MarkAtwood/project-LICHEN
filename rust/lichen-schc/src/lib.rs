@@ -30,6 +30,7 @@ pub mod link;
 pub mod rules;
 
 pub use fragment::AuthenticatedFragmentReceiver;
+pub use fragment::FragmentationPolicy;
 
 // Re-export LICHEN-specific compression/decompression
 #[cfg(feature = "std")]
