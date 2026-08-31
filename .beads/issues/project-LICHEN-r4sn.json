@@ -14,7 +14,8 @@
   "closed_at": "2026-07-23T05:09:59.135253478Z",
   "close_reason": "Minimal viable Sx1302Concentrator integration complete: added --hat rak2287 flag and config option, init in new run_hat path mirroring sim/serial patterns. Fixed type/scope issues. No new files added.",
   "labels": [
-    "gateway"
+    "gateway",
+    "tdma"
   ],
   "dependencies": [
     {
