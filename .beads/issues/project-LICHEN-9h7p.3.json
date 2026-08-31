@@ -11,7 +11,8 @@
   "closed_at": "2026-07-22T17:08:23.113154813Z",
   "close_reason": "Fixed in synchronized hopping updates to SimNode/Simulation; channel propagation, immutability with tuple, docstring/tests addressed in passes",
   "labels": [
-    "codereview"
+    "codereview",
+    "python"
   ],
   "dependencies": [
     {
