@@ -295,6 +295,11 @@ int lichen_l2_to_zephyr_errno(int ret)
 	if (ret == -LICHEN_EAUTH) {
 		return -EACCES;
 	}
+	if (ret == -LICHEN_ESCHC) {
+		/* Caller-input rejection: the packet violates the SCHC
+		 * profile (structural or emission policy). */
+		return -EINVAL;
+	}
 #endif
 	return ret;
 }

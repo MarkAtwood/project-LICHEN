@@ -651,7 +651,10 @@ int lichen_lora_gw_announce_encode(const struct lichen_lora_gw_announce *announc
 
 /* ENOKEY may not be defined on all platforms */
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 
 /* L2 routing/control dispatch byte (spec 9.2) */

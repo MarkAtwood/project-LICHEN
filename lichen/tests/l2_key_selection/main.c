@@ -28,6 +28,8 @@
 #include <lichen/link_ctx.h>
 #include <lichen/replay.h>
 #include <lichen/schnorr48.h>
+
+#include "schc_internal.h"
 #include <monocypher.h>
 #include <monocypher-ed25519.h>
 
@@ -556,6 +558,77 @@ static void test_unsigned_frame_rejected(void)
 	lichen_link_cleanup(&peer);
 }
 
+static void test_tx_schc_rejection_returns_eschc(void)
+{
+	struct lichen_link_ctx ctx;
+	uint8_t siid[LICHEN_EUI64_LEN];
+	uint8_t packet[52];
+	uint8_t frame[256];
+	size_t frame_len = sizeof(frame);
+	uint16_t checksum = 0;
+	int ret;
+
+	make_identity(0x77, &ctx, siid);
+
+	/* Valid UDP/IPv6 packet (5000->5001 "ping") whose SOURCE is loopback:
+	 * structurally clean, checksum valid, but rejected by the SCHC
+	 * emission endpoint policy.  lichen_link_tx must surface the
+	 * LICHEN-specific rejection code, not a raw (POSIX-colliding) SCHC
+	 * code, so L2 can distinguish caller-input rejections from transport
+	 * failures. */
+	memset(packet, 0, sizeof(packet));
+	packet[0] = 0x60;
+	packet[5] = 12; /* payload length */
+	packet[6] = 17; /* UDP */
+	packet[7] = 64; /* hop limit */
+	memcpy(&packet[8], "\x00\x00\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&packet[24], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			    "\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	packet[40] = 0x13;
+	packet[41] = 0x88; /* src port 5000 */
+	packet[42] = 0x13;
+	packet[43] = 0x89; /* dst port 5001 */
+	packet[44] = 0;
+	packet[45] = 12; /* UDP length */
+	memcpy(&packet[48], "ping", 4);
+	if (udp_checksum(&packet[8], &packet[24], 5000, 5001, &packet[48],
+			 4, &checksum) != SCHC_OK) {
+		FAIL("udp_checksum");
+		return;
+	}
+	packet[46] = (uint8_t)(checksum >> 8);
+	packet[47] = (uint8_t)(checksum & 0xff);
+
+	ret = lichen_link_tx(&ctx, packet, sizeof(packet), NULL, frame,
+			     &frame_len);
+	CHECK_OK(ret == -LICHEN_ESCHC, "policy-rejected tx ret=%d want -ESCHC",
+		 ret);
+	CHECK_OK(frame_len == sizeof(frame),
+		 "frame_len untouched on rejection (%zu)", frame_len);
+	lichen_link_cleanup(&ctx);
+}
+
+static void test_tx_without_key_returns_enokey(void)
+{
+	struct lichen_link_ctx ctx;
+	uint8_t eui64[LICHEN_EUI64_LEN] = { 0x02, 0, 0, 0, 0, 0, 0, 0x78 };
+	uint8_t packet[52];
+	uint8_t frame[256];
+	size_t frame_len = sizeof(frame);
+	int ret;
+
+	if (lichen_link_init(&ctx, eui64) != 0) {
+		FAIL("lichen_link_init keyless");
+		return;
+	}
+
+	ret = lichen_link_tx(&ctx, packet, sizeof(packet), NULL, frame,
+			     &frame_len);
+	CHECK_OK(ret == -ENOKEY, "keyless tx ret=%d want -ENOKEY", ret);
+	lichen_link_cleanup(&ctx);
+}
+
 int main(void)
 {
 	for (size_t i = 0; i < PAYLOAD_A_LEN; i++) {
@@ -571,6 +644,8 @@ int main(void)
 	test_pinned_mismatch_decoy_rejected();
 	test_multihop_relay_resigned_and_accepted();
 	test_unsigned_frame_rejected();
+	test_tx_schc_rejection_returns_eschc();
+	test_tx_without_key_returns_enokey();
 
 	if (failures != 0) {
 		printf("l2_key_selection: %d FAILURES\n", failures);

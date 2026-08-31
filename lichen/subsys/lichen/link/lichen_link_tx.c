@@ -134,6 +134,14 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 	compressed_len = lichen_schc_compress(ipv6_pkt, ipv6_len,
 					      compressed, sizeof(compressed));
 	if (compressed_len < 0) {
+		/* Policy/structural rejections (no matching rule, emission
+		 * endpoint policy, malformed input) are caller-input
+		 * rejections: surface a LICHEN-specific code, since raw SCHC
+		 * codes (-1..-15) collide with POSIX errno values.  Buffer
+		 * sizing failures keep their errno (internal anomaly). */
+		if (compressed_len != SCHC_ERR_BUFFER_TOO_SMALL) {
+			return -LICHEN_ESCHC;
+		}
 		return compressed_len;
 	}
 	if ((size_t)compressed_len + 1U > sizeof(l2_payload)) {

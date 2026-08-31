@@ -13,7 +13,10 @@
 #include <lichen/app_identity/app_identity.h>
 
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 #include <lichen/link_ctx.h>
 #include <monocypher.h>

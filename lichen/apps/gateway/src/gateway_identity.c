@@ -9,7 +9,10 @@
 #include <zephyr/sys/util.h>
 
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 
 #if IS_ENABLED(CONFIG_LICHEN_L2) || defined(CONFIG_ZTEST)
