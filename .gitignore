@@ -78,3 +78,6 @@ lichen/tests/tx_queue/build/
 # More stale host/zephyr build trees (vi0a/lj13 cleanup)
 build_test_schnorr48/
 firmware/bridge-zephyr/build/
+build_heltec_gw/
+build-test/
+build_gateway_heltec/
