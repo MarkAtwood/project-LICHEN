@@ -25,10 +25,30 @@ LOG_MODULE_DECLARE(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 struct lichen_lora_cad_entry {
     const struct device *dev;
     lichen_lora_cad_fn callback;
+    /* Async CAD (bead uwip.2): registered driver starter plus the per-arm
+     * completion callback. done != NULL means CAD is in flight. */
+    lichen_lora_cad_start_fn start;
+    lichen_lora_cad_done_fn done;
+    void *done_user_data;
+    struct k_work_delayable emu_work;
 };
 
 static struct lichen_lora_cad_entry cad_registry[LICHEN_LORA_CAD_REGISTRY_SIZE];
 K_MUTEX_DEFINE(cad_registry_mutex);
+
+/* Emulated CAD completion for drivers without hardware CAD (sim/renode/
+ * loopback report a clear channel). Kept short so the CSMA backoff cadence
+ * stays meaningful. */
+#define LICHEN_CAD_EMU_DELAY_MS 5U
+
+static void lichen_lora_cad_emu_work(struct k_work *work)
+{
+    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+    struct lichen_lora_cad_entry *entry =
+        CONTAINER_OF(dwork, struct lichen_lora_cad_entry, emu_work);
+
+    lichen_lora_cad_done(entry->dev, false, 0);
+}
 
 /* TX_DONE completion for the async LoRa TX API. The signal is reset before
  * each arm and raised by the driver when the radio finishes (or fails); the
@@ -61,6 +81,127 @@ int lichen_lora_cad_register(const struct device *dev,
     }
     cad_registry[empty].dev = dev;
     cad_registry[empty].callback = callback;
+    k_work_init_delayable(&cad_registry[empty].emu_work,
+                          lichen_lora_cad_emu_work);
+    k_mutex_unlock(&cad_registry_mutex);
+    return 0;
+}
+
+int lichen_lora_cad_start_register(const struct device *dev,
+                                   lichen_lora_cad_start_fn start)
+{
+    if (dev == NULL || start == NULL) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&cad_registry_mutex, K_FOREVER);
+    for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
+        if (cad_registry[i].dev == dev) {
+            int ret = cad_registry[i].start == start ? 0 : -EALREADY;
+            if (ret != 0) {
+                k_mutex_unlock(&cad_registry_mutex);
+                return ret;
+            }
+            k_mutex_unlock(&cad_registry_mutex);
+            return 0;
+        }
+    }
+    k_mutex_unlock(&cad_registry_mutex);
+    return -ENOTSUP;
+}
+
+void lichen_lora_cad_done(const struct device *dev, bool busy, int status)
+{
+    lichen_lora_cad_done_fn done = NULL;
+    void *done_user_data = NULL;
+
+    if (dev == NULL) {
+        return;
+    }
+
+    k_mutex_lock(&cad_registry_mutex, K_FOREVER);
+    for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
+        if (cad_registry[i].dev == dev && cad_registry[i].done != NULL) {
+            done = cad_registry[i].done;
+            done_user_data = cad_registry[i].done_user_data;
+            cad_registry[i].done = NULL;
+            cad_registry[i].done_user_data = NULL;
+            break;
+        }
+    }
+    k_mutex_unlock(&cad_registry_mutex);
+
+    if (done != NULL) {
+        done(dev, busy, status, done_user_data);
+    }
+}
+
+int lichen_lora_cad_start(const struct device *dev, k_timeout_t timeout,
+                          lichen_lora_cad_done_fn done, void *user_data)
+{
+    size_t index = LICHEN_LORA_CAD_REGISTRY_SIZE;
+    bool have_start = false;
+
+    if (dev == NULL || done == NULL) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&cad_registry_mutex, K_FOREVER);
+    for (size_t i = 0; i < LICHEN_LORA_CAD_REGISTRY_SIZE; i++) {
+        if (cad_registry[i].dev == dev) {
+            index = i;
+            have_start = cad_registry[i].start != NULL;
+            break;
+        }
+    }
+    if (index == LICHEN_LORA_CAD_REGISTRY_SIZE) {
+        k_mutex_unlock(&cad_registry_mutex);
+        return -ENOTSUP;
+    }
+    if (cad_registry[index].done != NULL) {
+        k_mutex_unlock(&cad_registry_mutex);
+        return -EBUSY;
+    }
+    if (have_start) {
+        /* Store the completion before arming: the driver may deliver from
+         * its own context as soon as the start call returns. */
+        cad_registry[index].done = done;
+        cad_registry[index].done_user_data = user_data;
+    }
+    k_mutex_unlock(&cad_registry_mutex);
+
+    if (have_start) {
+        int ret = cad_registry[index].start(dev, timeout);
+
+        if (ret != 0) {
+            /* Synchronous arm failure: the driver delivers nothing, so
+             * roll the stored completion back (otherwise the entry would
+             * report in-flight forever). */
+            k_mutex_lock(&cad_registry_mutex, K_FOREVER);
+            if (cad_registry[index].dev == dev &&
+                cad_registry[index].done == done &&
+                cad_registry[index].done_user_data == user_data) {
+                cad_registry[index].done = NULL;
+                cad_registry[index].done_user_data = NULL;
+            }
+            k_mutex_unlock(&cad_registry_mutex);
+        }
+        return ret;
+    }
+
+    /* No hardware CAD: emulated clear-channel verdict after a short delay,
+     * matching the driver's own blocking emulation (busy=false). */
+    k_mutex_lock(&cad_registry_mutex, K_FOREVER);
+    if (cad_registry[index].dev != dev || cad_registry[index].done != NULL) {
+        /* Re-registered concurrently, or a concurrent starter won the race:
+         * both leave the registration consistent, this attempt just fails. */
+        k_mutex_unlock(&cad_registry_mutex);
+        return -EBUSY;
+    }
+    cad_registry[index].done = done;
+    cad_registry[index].done_user_data = user_data;
+    k_work_reschedule(&cad_registry[index].emu_work,
+                      K_MSEC(LICHEN_CAD_EMU_DELAY_MS));
     k_mutex_unlock(&cad_registry_mutex);
     return 0;
 }
