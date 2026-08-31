@@ -13,5 +13,8 @@
   "updated_at": "2026-08-28T03:44:29.239852Z",
   "started_at": "2026-07-22T22:53:22.93061904Z",
   "closed_at": "2026-07-22T22:55:33.794119707Z",
-  "close_reason": "CBOR map keys reordered for canonical numeric order per RFC 8428 §6. Updated count logic to match encoding order. Verified with existing test vectors."
+  "close_reason": "CBOR map keys reordered for canonical numeric order per RFC 8428 §6. Updated count logic to match encoding order. Verified with existing test vectors.",
+  "labels": [
+    "lci"
+  ]
 }
