@@ -563,6 +563,31 @@ void lichen_announce_unregister_all_app_data_observers(void)
 	k_mutex_unlock(&observer_mutex);
 }
 
+bool lichen_announce_get_pinned_pubkey(
+	const uint8_t originator_iid[LICHEN_ANNOUNCE_IID_LEN],
+	uint8_t out_pubkey[LICHEN_ANNOUNCE_PUBKEY_LEN])
+{
+	bool found = false;
+
+	if (originator_iid == NULL || out_pubkey == NULL) {
+		return false;
+	}
+
+	/* Serialize with ingest so a pin cannot appear/vanish mid-copy
+	 * (same ordering discipline as lichen_announce_reset). */
+	k_mutex_lock(&ingest_mutex, K_FOREVER);
+	k_mutex_lock(&announce_mutex, K_FOREVER);
+	const struct announce_peer_pin *peer = find_peer_locked(originator_iid);
+
+	if (peer != NULL) {
+		memcpy(out_pubkey, peer->pubkey, LICHEN_ANNOUNCE_PUBKEY_LEN);
+		found = true;
+	}
+	k_mutex_unlock(&announce_mutex);
+	k_mutex_unlock(&ingest_mutex);
+	return found;
+}
+
 void lichen_announce_reset(void)
 {
 	/* SECURITY: Acquire ingest_mutex first to serialize with any in-flight
