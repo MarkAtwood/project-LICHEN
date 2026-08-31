@@ -10,6 +10,9 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:35:27.55085Z",
   "started_at": "2026-08-25T23:15:00.38482Z",
+  "labels": [
+    "rust"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-l1qw.4.7.2.8",
