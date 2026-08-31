@@ -297,6 +297,8 @@ int lichen_time_source_precedence_init(
 	const enum lichen_time_source_class *order,
 	size_t count)
 {
+	/* memset so the whole struct (including padding) is defined before
+	 * it is copied out through *policy — memcpy fills only .order. */
 	struct lichen_time_source_precedence candidate;
 
 	if (policy == NULL || order == NULL ||
@@ -304,6 +306,7 @@ int lichen_time_source_precedence_init(
 		return -EINVAL;
 	}
 
+	memset(&candidate, 0, sizeof(candidate));
 	memcpy(candidate.order, order, sizeof(candidate.order));
 	if (time_source_precedence_validate(&candidate) != 0) {
 		return -EINVAL;

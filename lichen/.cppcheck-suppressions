@@ -16,6 +16,14 @@ syntaxError:lichen/apps/gateway/src/ble_uart.c
 syntaxError:lichen/drivers/gnss/gnss_ag3335.c
 syntaxError:lichen/subsys/lichen/transport/ble_ipsp_transport.c
 
+# ── Zephyr devicetree / tool-limitation artifacts (same rationale class) ────
+# DT_INST_FOREACH_STATUS_OKAY is Zephyr's devicetree instantiation macro;
+# cppcheck cannot expand it without the full Zephyr DT state.
+unknownMacro:lichen/drivers/lora/lora_renode.c
+# __has_include in the platform-header cascade: cppcheck's preprocessor
+# cannot evaluate the condition and reports a bogus division by zero.
+preprocessorErrorDirective:lichen/subsys/lichen/l2/ipv6_addr.h
+
 # ── Intentional constructs ──────────────────────────────────────────────────
 # Negative-build guard: the #error IS the test.
 preprocessorErrorDirective:lichen/tests/hal_serial_precedence/src/main.c
