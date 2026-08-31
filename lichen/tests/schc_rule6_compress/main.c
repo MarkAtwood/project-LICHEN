@@ -192,11 +192,16 @@ static int test_rule_constraints_and_checksum(void)
 
 	packet[1] = 0;
 	packet[47] ^= 1;
+	/* spec/03: a packet failing a checksum requirement MUST be dropped.
+	 * validate_ipv6_transport_lengths rejects it before rule dispatch,
+	 * so lichen_schc_compress reports NO_MATCHING_RULE (drop) rather
+	 * than surfacing a rule-internal error code. */
 	memset(out, 0xA5, sizeof(out));
 	/* validate_ipv6_transport_lengths reports every structural failure,
 	 * including a bad checksum, as SCHC_ERR_NO_MATCHING_RULE. */
 	CHECK(lichen_schc_compress(packet, length, out, sizeof(out)) ==
 	      SCHC_ERR_NO_MATCHING_RULE);
+	CHECK(lichen_schc_compress(packet, length, out, sizeof(out)) < 0);
 	for (size_t i = 0; i < sizeof(out); i++) CHECK(out[i] == 0xA5);
 	return 0;
 }
@@ -218,15 +223,27 @@ static int test_atomic_bounds_and_profile_limit(void)
 	static uint8_t max_packet[RULE6_FIXED_RAW + RULE6_MAX_TAIL + 1];
 	static uint8_t max_tail[RULE6_MAX_TAIL + 1];
 	static uint8_t max_out[SCHC_FRAGMENT_MAX_PACKET_SIZE + 1];
+	/* The profile limit bounds the RAW packet (the fragmenter's
+	 * reassembly buffer), not the compressed form: raw == MAX
+	 * compresses; raw above it is rejected before rule dispatch. */
+	enum { RULE6_RAW_TAIL_MAX = SCHC_FRAGMENT_MAX_PACKET_SIZE -
+			       RULE6_FIXED_RAW };
 	max_tail[0] = 0x90;
 	max_tail[1] = 0xFF;
 	length = make_packet(max_packet, sizeof(max_packet), global_src, global_dst,
 			     5683, 5683, 64, 0, 1, 0x1234,
-			     NULL, 0, max_tail, RULE6_MAX_TAIL);
+			     NULL, 0, max_tail, RULE6_RAW_TAIL_MAX);
 	CHECK(length > 0);
-	CHECK(lichen_schc_compress(max_packet, length, max_out, sizeof(max_out)) ==
-	      SCHC_FRAGMENT_MAX_PACKET_SIZE);
+	CHECK(lichen_schc_compress(max_packet, length, max_out, sizeof(max_out)) >
+	      0);
 	CHECK(max_out[0] == SCHC_RULE_GLOBAL_OSCORE);
+	memset(max_out, 0xA5, sizeof(max_out));
+	length = make_packet(max_packet, sizeof(max_packet), global_src, global_dst,
+			     5683, 5683, 64, 0, 1, 0x1234,
+			     NULL, 0, max_tail, RULE6_RAW_TAIL_MAX + 1);
+	CHECK(lichen_schc_compress(max_packet, length, max_out, sizeof(max_out)) ==
+	      SCHC_ERR_BUFFER_TOO_SMALL);
+	for (size_t i = 0; i < sizeof(max_out); i++) CHECK(max_out[i] == 0xA5);
 
 	length = make_packet(max_packet, sizeof(max_packet), global_src, global_dst,
 			     5683, 5683, 64, 0, 1, 0x1234,
