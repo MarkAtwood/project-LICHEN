@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-1vy1",
   "title": "lichen-client waypoint detail-form test fails: alt encoded f16 shortest-form vs committed f64 oracle",
   "description": "PRE-EXISTING at HEAD 65085156aa (verified in clean worktree; unrelated to kpv0.6 clippy fixes). lichen-client/tests/waypoint_vectors.rs:40 detail_share_and_collection_forms_are_byte_exact asserts 'all_fields' byte-exact against the committed oracle and fails on the alt field only: actual emits CBOR f16 shortest-form (0xf9 49 40) where the committed vector expects f64 (0xfb 40 37 00 00 00 00 00 00). Likely divergence introduced when the canonical senml wire codec (shortest-form float, see l1qw.10.5.5 notes) was applied to waypoint detail forms without regenerating the vector, or the vector is right and the encoder regressed vs Python parity. Decide per spec appendix-senml which encoding is canonical, fix encoder or regenerate vector accordingly (never code-under-test as oracle), and restore the test to green. Full actual/expected byte arrays in the round evidence; rerun: cargo test -p lichen-client --all-features --test waypoint_vectors",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T07:43:38.106822526Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-31T07:43:38.106822526Z",
+  "updated_at": "2026-08-31T08:10:01.700161649Z",
+  "closed_at": "2026-08-31T08:10:01.700161649Z",
+  "close_reason": "Spec decision resolved with evidence: waypoint float fields are canonically 0xfb f64 — pinned by the spec appendix-senml normative independent vector (v:75.0 encoded fb4052c0...), the lichen-senml wire.rs canonical codec policy ('v always encodes as 64-bit floats (0xfb)'), the Python reference (cbor2 defaults), and the committed test/vectors/waypoint.json oracle. The Rust encoder was the outlier: ciborium's deterministic serializer collapses f16-exact floats (10.5 -\u003e 0xf9). Fix: replaced ciborium-serde encoding in Waypoint/WaypointShare/WaypointList to_cbor with a hand-written canonical encoder in waypoint.rs (floats always 0xfb; ints/text shortest-form heads — identical to ciborium's integer behavior; map keys in declaration order with None-skipping identical to the serde skip_serializing_if shape). Decode path unchanged (ciborium accepts all definite widths). Verified: waypoint_vectors byte-exact test now green (2/2, was 1 passed/1 failed), full lichen-client suite green (147+27+17+13+... 0 failed), clippy -p lichen-client --all-features --all-targets -D warnings clean, cargo fmt clean, cargo check clean for all dependents (lichen-apps/cli/tui/sim). The workspace-check failure in lichen-firmware-wio-e5 (duplicate panic_halt lang item) is pre-existing and unrelated (no dep path from lichen-client). 3x reviewer passes (kimi-k3 correctness/security/edge-cases): all PASS; reviewer-verified oracle byte parity for boundary widths (23/24/255/256/65535/65536/2^32) and float values (0.0, 10.5, -430.5). Two pre-existing P3 hardening notes (Waypoint::to_cbor skips validate(); from_reader accepts trailing garbage) filed as new beads. WaypointClientError::Encode is now unconstructible on this path but stays public API (no breaking removal in a lint-fix bead).",
   "labels": [
     "coap"
   ]

@@ -1,0 +1,7 @@
+{
+  "id": "1788163711480245808-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.4.1",
+  "author": "opencode-worker-1",
+  "text": "next_header::IPV6_IN_IPV6 (41) is now in lichen-core (worker1, committed with b7z9.4.2) — the remaining scope of this bead is only the gateway inner Hop-Limit decrement on encapsulation (gateway.rs mesh_to_mesh encapsulation branch).",
+  "created_at": "2026-08-31T08:08:31.480245808Z"
+}

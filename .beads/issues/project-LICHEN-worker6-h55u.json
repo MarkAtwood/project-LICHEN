@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-h55u",
+  "title": "Waypoint::from_cbor accepts trailing garbage after a valid waypoint",
+  "description": "Pre-existing decode leniency surfaced by 1vy1 review passes (decode path untouched there): ciborium::from_reader on a slice (waypoint.rs:391/429) accepts a valid waypoint followed by trailing bytes; the reject vectors in test/vectors/waypoint.json only cover truncation. Decide the contract for trailing bytes on the /waypoints decode path (reject vs accept-with-offset like CoAP block-wise payloads) and either add reject vectors or document the acceptance.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:09:41.060376551Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T08:09:41.060376551Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-h55u",
+      "depends_on_id": "project-LICHEN-worker6-1vy1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T08:09:41.229076672Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
