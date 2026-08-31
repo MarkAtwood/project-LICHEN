@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-0l5j.3",
+  "title": "lora_recv_async 4.1.0 migration: lr1110.c driver",
+  "description": "Child 4 of 0l5j. Migrate lichen/drivers/lora/lr1110/lr1110.c recv_async (lr1110.c:814) to the Zephyr 4.x 3-arg contract (cb gains void *user_data; store and pass it from the DIO9 RX_DONE path). Use the shared compat macros from lichen/include/lichen/lora_compat.h (added in 0l5j.1). Real hardware: compile-verify via the lr1110 board build target; runtime needs bench access per docs/bench-operations.md.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:23:43.740883512Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T03:23:43.740883512Z",
+  "labels": [
+    "decomposed"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0l5j.3",
+      "depends_on_id": "project-LICHEN-worker6-0l5j",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:23:43.843563114Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

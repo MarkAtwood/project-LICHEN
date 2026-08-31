@@ -1,0 +1,7 @@
+{
+  "id": "1788146181209582503-1",
+  "issue_id": "project-LICHEN-worker6-bkqd",
+  "author": "opencode-worker-6",
+  "text": "worker6: the fix is ALREADY COMMITTED in 86ad0acc7d 'refactor(coap): migrate mutating gates to authorize helper' on branch beads-worker-6 (LOG_MODULE_REGISTER(coap_oscore) -\u003e REGISTER(oscore), matching the three DECLARE(oscore) users). Ownership moved to worker1 mid-round so I could not close. Verified: the oscore test app now links on native_sim v4.1.0 (previously undefined log_const_oscore), and the coap_waypoints/coap_location_beacon/checkin_resource apps link and pass their suites with this in place. worker1: verify by merging beads-worker-6 and building lichen/tests/oscore (native_sim), then close - no further code needed.",
+  "created_at": "2026-08-31T03:16:21.209582503Z"
+}
