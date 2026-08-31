@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           which west || pip3 install --user west
-          which uv || pip3 install --user uv
+          which uv || pip3 install --user "uv>=0.11,<0.12"
           which cmake || sudo dnf install -y cmake ninja-build gcc meson
           pip3 install -r zephyr/scripts/requirements.txt || true
 
@@ -75,7 +75,7 @@ jobs:
 
       - name: Install Python deps
         run: |
-          pip3 install --user uv || true
+          pip3 install --user "uv>=0.11,<0.12" || true
           uv sync --locked --all-extras --dev
 
       - name: Run tests
