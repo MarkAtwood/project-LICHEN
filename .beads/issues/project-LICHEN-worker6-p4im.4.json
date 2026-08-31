@@ -11,7 +11,8 @@
   "updated_at": "2026-08-28T23:39:53.196666Z",
   "labels": [
     "ble",
-    "hal"
+    "hal",
+    "tests"
   ],
   "dependencies": [
     {
