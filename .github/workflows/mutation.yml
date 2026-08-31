@@ -17,16 +17,21 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-mutants
-        run: cargo install cargo-mutants --version =27.1.0
-
-      - name: Install protoc
-        run: sudo apt-get install -y protobuf-compiler
-
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: rust
+
+      - name: Install cargo-mutants
+        run: |
+          # cargo install always rebuilds; skip when the cached binary already
+          # matches the pinned version (rust-cache restores ~/.cargo/bin).
+          if [ "$(cargo-mutants --version 2>/dev/null)" != "cargo-mutants 27.1.0" ]; then
+            cargo install cargo-mutants --version =27.1.0 --locked
+          fi
+
+      - name: Install protoc
+        run: sudo apt-get install -y protobuf-compiler
 
       - name: Run mutation testing on lichen-link
         working-directory: rust/lichen-link
