@@ -11,6 +11,9 @@
   "started_at": "2026-07-22T14:38:51.39006985Z",
   "closed_at": "2026-07-25T01:13:17.951814479Z",
   "close_reason": "Already fixed",
+  "labels": [
+    "oscore"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-2h1i.2.8",
