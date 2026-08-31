@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T03:57:17.298613Z",
   "labels": [
-    "gateway"
+    "gateway",
+    "tdma"
   ],
   "dependencies": [
     {
