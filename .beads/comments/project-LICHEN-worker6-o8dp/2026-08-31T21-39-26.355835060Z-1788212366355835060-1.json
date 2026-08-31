@@ -1,0 +1,7 @@
+{
+  "id": "1788212366355835060-1",
+  "issue_id": "project-LICHEN-worker6-o8dp",
+  "author": "opencode-worker-7",
+  "text": "SCOPE COUPLING discovered while scoping this bead: raising LICHEN_WAYPOINT_MAX to the spec's 256 global grows the static store by ~300 bytes/entry (~76KB) — that is exactly the STM32WL RAM-budget decision tracked in worker6-aqk6. Before implementing, aqk6 needs Mark's call (256 entries everywhere vs Kconfig-tunable per board vs dynamic storage). The per-originator 32 accounting and the 5.03 waypoint_limit diagnostic body are decision-free and can land first if this bead is split; the global 256 raise is the aqk6-coupled part.",
+  "created_at": "2026-08-31T21:39:26.35583506Z"
+}

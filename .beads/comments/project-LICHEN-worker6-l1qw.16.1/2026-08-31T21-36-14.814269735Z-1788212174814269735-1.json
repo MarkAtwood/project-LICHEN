@@ -1,0 +1,7 @@
+{
+  "id": "1788212174814269735-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.1",
+  "author": "opencode-worker-4",
+  "text": "CORE MIGRATION LANDED as feat(gateway) commit (worker-4, 2026-08-31): SlotClaim carries the spec wire format — expiry/claim_seq required, allocation_mode as AllocationMode enum, gateway_count local-only, encode_claim_canonical emits payload keys 1-7 (mcast-free; slots array, superframe_epoch, mode uint, expiry uint, gateway_iid bstr(8), claim_seq, optional ordinal); new SlotClaim.decode_cose (strict COSE array, alg -65537 check per validation step 4, kid bstr(8), payload conformance); verify_slot_claim signs/verifies SHA256(CBOR(Sig_structure)) via shared cose_* helpers and binds gateway_iid to _pubkey_to_iid(pubkey) (GCP-6.5 step 6). Tests rewritten: 40/40 green (payload-keys-follow-spec, key-ordering [1..6], sign/verify round-trip, resolver tests now use key-derived IIDs with lowest-IID semantics verified via compare). Cross-impl note: the resolver-test vector still hardcodes claim_a winning by fabricated IIDs — the fixture IIDs are replaced with key-derived ones and the assertion documents that the lowest-IID semantic then decides; the FULL vector regeneration (gcp_slot_claim.json golden signatures + rust consumer) remains with .16.2/.16.4 per the coordinated-landing plan on the parent. Remaining failure in the broad run is the pre-existing tunnel-auth generator-freshness flake (verified failing on stash).",
+  "created_at": "2026-08-31T21:36:14.814269735Z"
+}
