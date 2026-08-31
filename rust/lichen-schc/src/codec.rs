@@ -1803,6 +1803,16 @@ impl AuthenticatedPeerSchcContext {
                 "authenticated SCHC payload is not a valid RPL DIO",
             ));
         }
+        // Spec 09 13.3 (R-09-005): canonical multicast DIO admission requires
+        // hop-limit == 255 (link-local single hop), as the Python reference
+        // admission path enforces. Note: Python additionally requires
+        // dst == ff02::1a exactly; the Rust path accepts any L2-local
+        // destination (tracked divergence, see worker6-b7z9.15).
+        if ipv6[7] != 255 {
+            return Err(SchcError::InvalidPacket(
+                "authenticated DIO Hop Limit must be 255",
+            ));
+        }
         let src: &[u8; 16] = ipv6[8..24]
             .try_into()
             .map_err(|_| SchcError::InvalidPacket("invalid DIO IPv6 source"))?;
