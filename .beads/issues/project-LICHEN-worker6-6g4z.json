@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T05:20:09.250635Z",
   "labels": [
-    "python"
+    "python",
+    "vectors"
   ],
   "dependencies": [
     {
