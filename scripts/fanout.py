@@ -9,6 +9,7 @@ Usage:
 import argparse
 import asyncio
 import os
+
 import httpx
 
 LITELLM_URL = os.environ.get("LITELLM_URL", "http://heft:4000/v1")
@@ -32,6 +33,29 @@ async def call_agent(client: httpx.AsyncClient, prompt: str, label: str, model: 
     return {"label": label, "response": content}
 
 
+def describe_error(exc: Exception) -> str:
+    """Human-readable diagnosis for a failed agent call.
+
+    A dead or misrouted endpoint previously surfaced as a bare
+    ``Client error '404 Not Found'`` with no hint about which URL was
+    tried or how to override it.
+    """
+    if isinstance(exc, httpx.TransportError):
+        return (
+            f"endpoint unreachable or timed out: {LITELLM_URL} ({str(exc) or type(exc).__name__}). "
+            "Is the LiteLLM host up? Override with LITELLM_URL."
+        )
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status == 404:
+            return (
+                f"endpoint returned 404: POST {LITELLM_URL}/chat/completions. "
+                "Check LITELLM_URL (path and /v1 suffix) and LITELLM_MODEL."
+            )
+        return f"endpoint returned HTTP {status}: {LITELLM_URL} ({exc})."
+    return f"{type(exc).__name__}: {exc}"
+
+
 async def fanout(prompts: list[tuple[str, str]], model: str) -> list[dict]:
     """Fan out to multiple agents in parallel."""
     async with httpx.AsyncClient() as client:
@@ -39,13 +63,17 @@ async def fanout(prompts: list[tuple[str, str]], model: str) -> list[dict]:
         return await asyncio.gather(*tasks, return_exceptions=True)
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Fan out to multiple LLM agents")
     parser.add_argument("task", help="The task to perform")
     parser.add_argument("--agents", "-n", type=int, default=3, help="Number of parallel agents")
-    parser.add_argument("--perspectives", "-p", help="Comma-separated perspectives (overrides --agents)")
+    parser.add_argument(
+        "--perspectives",
+        "-p",
+        help="Comma-separated perspectives (overrides --agents)",
+    )
     parser.add_argument("--model", "-m", default=DEFAULT_MODEL, help="Model to use")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.perspectives:
         perspectives = [p.strip() for p in args.perspectives.split(",")]
@@ -62,13 +90,22 @@ def main():
     print(f"Fanning out to {len(prompts)} agents on {args.model}...\n")
     results = asyncio.run(fanout(prompts, args.model))
 
+    failures = 0
     for r in results:
         if isinstance(r, Exception):
-            print(f"ERROR: {r}\n")
+            failures += 1
+            print(f"ERROR: {describe_error(r)}\n")
         else:
             print(f"=== {r['label']} ===")
             print(r["response"])
             print()
+
+    if results and failures == len(results):
+        # Every agent failed: the endpoint is broken, not the task.
+        raise SystemExit(
+            f"all {failures} agent calls failed against {LITELLM_URL} "
+            f"(model: {args.model}); see errors above"
+        )
 
 
 if __name__ == "__main__":
