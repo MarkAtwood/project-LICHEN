@@ -14,7 +14,8 @@
   "closed_at": "2026-06-18T03:44:19Z",
   "close_reason": "Both named sim-harness features delivered: seeded RNG for reproducible runs (j34, Simulation.rng/seed/reseed + LossRule) and DODAG-formation visualization (hrv, rpl/visualize.py DOT+ASCII). No further harness work specified.",
   "labels": [
-    "simulation"
+    "simulation",
+    "python"
   ],
   "dependencies": [
     {

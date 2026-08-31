@@ -13,6 +13,9 @@
   "started_at": "2026-07-25T02:26:40.384938058Z",
   "closed_at": "2026-06-18T03:30:16Z",
   "close_reason": "Implemented in sim/simulation.py: Simulation gains seed param, rng property (random.Random), seed property, reseed(). Same seed -\u003e identical sequence. Added LossRule chaos rule (probabilistic drop drawing from an injected rng) for reproducible random chaos. 11 tests incl. reproducibility + LossRule wired to sim.rng. ruff clean.",
+  "labels": [
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-j34",
