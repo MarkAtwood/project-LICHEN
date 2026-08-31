@@ -2925,3 +2925,33 @@ async def test_announce_routing_frames_still_reach_announce_handling() -> None:
     routing_announce = bytes([L2_DISPATCH_ROUTING, 0x01]) + b"\x00" * 8
     await node._process_received(_verified_rx(routing_announce, peer))
     assert handled == [(routing_announce[1:], peer, -90)]
+
+
+async def test_empty_and_truncated_dispatch_frames_are_not_delivered() -> None:
+    """Frame-level rules (draft-lichen-link-01 section 3.1): empty PLD carries
+    nothing and a defined dispatch value MUST be at least 2 bytes."""
+    identity = Identity.generate()
+    peer_identity = Identity.generate()
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    node = Node(identity=identity, radio=MockRadio())
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+
+    await node._process_received(_verified_rx(b"", peer))  # empty PLD: legal, nothing to deliver
+    await node._process_received(_verified_rx(bytes([0x14]), peer))  # truncated SCHC dispatch
+    await node._process_received(_verified_rx(bytes([0x15]), peer))  # truncated routing dispatch
+    assert delivered == []
+
+
+async def test_undefined_dispatch_still_reaches_application() -> None:
+    """Undefined dispatch values remain the application extension point."""
+    identity = Identity.generate()
+    peer_identity = Identity.generate()
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    node = Node(identity=identity, radio=MockRadio())
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+
+    experimental = bytes([0x99]) + b"custom"
+    await node._process_received(_verified_rx(experimental, peer))
+    assert delivered == [(experimental, peer)]
