@@ -68,6 +68,11 @@ impl From<Priority> for u8 {
 const MAX_EXTENDED_SCHC_SIZE: usize = 185;
 // Broadcast/elided frames omit the destination but still carry the signer EUI-64.
 const MAX_ELIDED_SCHC_SIZE: usize = 193;
+// Signed-frame payload capacity for a 2-byte-destination frame (AddrMode
+// elided, 2-byte address): 254-byte body - 4 fixed - 2 dst - 8 signer - 48 MIC.
+// build_frame is the final authority; this pre-check mirrors it so oversized
+// payloads report NeedsFragmentation instead of a late FrameEncode.
+const ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD: usize = 192;
 
 /// TX path error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -530,10 +535,13 @@ impl<R: Radio> Stack<R> {
         l2_payload: &[u8],
         dst_addr: &[u8],
     ) -> Result<(), TxError> {
-        let max_payload = if dst_addr.len() == 8 {
-            MAX_EXTENDED_SCHC_SIZE + 1
-        } else {
-            MAX_ELIDED_SCHC_SIZE + 1
+        let max_payload = match dst_addr.len() {
+            8 => MAX_EXTENDED_SCHC_SIZE + 1,
+            // build_frame's true 2-byte-dst signed-frame capacity (ctbn).
+            2 => ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD,
+            // Broadcast (empty dst) and other lengths keep the legacy bound;
+            // build_frame remains the final authority for those shapes.
+            _ => MAX_ELIDED_SCHC_SIZE + 1,
         };
         if l2_payload.len() > max_payload {
             return Err(TxError::NeedsFragmentation);
@@ -1002,11 +1010,10 @@ mod tests {
 
     #[tokio::test]
     async fn elided_destination_capacity_boundary_is_pinned() {
-        // Elided (2-byte residue) destination: the seam pre-check grants
-        // MAX_ELIDED_SCHC_SIZE + 1 (194), but build_frame's true elided-dst
-        // capacity is 192 — payloads of 193..194 pass the pre-check and then
-        // fail frame encoding (known mislabel window, tracked bead), so this
-        // test pins the observed bounds: >=195 rejects at the seam, 192 sends.
+        // 2-byte-destination frames: the seam pre-check mirrors build_frame's
+        // signed-frame capacity (ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD = 192).
+        // 193..195 reject at the seam as NeedsFragmentation without consuming
+        // a link tuple; 192 still sends.
         let mut stack = test_stack(128, 0);
         let before = stack.seqnum;
         let oversized = vec![0u8; MAX_ELIDED_SCHC_SIZE + 2];
@@ -1016,14 +1023,14 @@ mod tests {
         );
         assert_eq!(stack.seqnum, before);
         let mut stack = test_stack(128, 0);
-        let exact = vec![0u8; MAX_ELIDED_SCHC_SIZE - 1];
-        assert_eq!(stack.send_l2_payload_to(&exact, &[0x33; 2]).await, Ok(()));
-        let mut stack = test_stack(128, 0);
-        let mislabeled_window = vec![0u8; MAX_ELIDED_SCHC_SIZE];
+        let mislabeled_window = vec![0u8; ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD + 1];
         assert_eq!(
             stack.send_l2_payload_to(&mislabeled_window, &[0x33; 2]).await,
-            Err(TxError::FrameEncode)
+            Err(TxError::NeedsFragmentation)
         );
+        let mut stack = test_stack(128, 0);
+        let exact = vec![0u8; ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD];
+        assert_eq!(stack.send_l2_payload_to(&exact, &[0x33; 2]).await, Ok(()));
     }
 
     #[tokio::test]
