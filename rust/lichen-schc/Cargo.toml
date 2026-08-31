@@ -17,6 +17,13 @@ raw-fragment-codec = []
 test-utils = ["lichen-link/test-utils"]
 
 [dependencies]
+# AtomicU32 RMW (fetch_update) is unavailable on no-CAS MCU targets
+# (riscv32imc, thumbv6m): portable-atomic routes it through the
+# critical-section contract the firmware platform provides, while using
+# native atomics everywhere else.
+portable-atomic = { version = "1", default-features = false, features = [
+    "critical-section",
+] }
 lichen-core = { path = "../lichen-core" }
 lichen-link = { path = "../lichen-link", default-features = false }
 schc = { version = "0.1", features = ["ack-on-error"] }

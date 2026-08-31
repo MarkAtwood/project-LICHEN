@@ -2,7 +2,8 @@
 
 #[cfg(all(feature = "schnorr", feature = "std"))]
 use core::sync::atomic::AtomicU64;
-use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
+use portable_atomic::{AtomicU32 as PaAtomicU32, Ordering as PaOrdering};
 
 use crate::{frame::AddrMode, LinkSeqNum};
 
@@ -10,7 +11,7 @@ use crate::{frame::AddrMode, LinkSeqNum};
 // provide AtomicU64. The public opaque representation remains u64 so this
 // allocation detail does not leak across protocol layers. Exhaustion is
 // explicit: the counter never wraps and zero is never issued.
-static NEXT_CLOCK_DOMAIN: AtomicU32 = AtomicU32::new(1);
+static NEXT_CLOCK_DOMAIN: PaAtomicU32 = PaAtomicU32::new(1);
 
 /// Advance the process-global nonzero clock-domain counter by one step.
 ///
@@ -193,7 +194,7 @@ impl ReceiptClock {
     /// Allocate a fresh, non-serializable-by-convention process-local domain.
     pub fn new() -> Result<Self, ReceiptClockError> {
         let domain = NEXT_CLOCK_DOMAIN
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, next_clock_domain)
+            .fetch_update(PaOrdering::Relaxed, PaOrdering::Relaxed, next_clock_domain)
             .map_err(|_| ReceiptClockError::DomainExhausted)?;
         Ok(Self {
             domain: u64::from(domain),

@@ -115,6 +115,18 @@ jobs:
       - name: Build with all features (catches FFI/feature drift)
         run: cargo build --package lichen-node --all-features
 
+  rust-mcu-no-std:
+    needs: rust-fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv32imc-unknown-none-elf
+      - name: Check no_std MCU target (no-CAS atomics path)
+        run: cargo check -p lichen-node --no-default-features --target riscv32imc-unknown-none-elf
+
   c-cppcheck:
     runs-on: ubuntu-latest
     steps:

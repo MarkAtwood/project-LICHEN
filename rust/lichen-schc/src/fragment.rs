@@ -1,13 +1,12 @@
 //! Rule Set Version 3 SCHC ACK-on-Error fragmentation (RFC 8724 section 8).
 
-use core::{
-    cell::{RefCell, RefMut},
-    sync::atomic::{AtomicU32, Ordering},
-};
+use core::cell::{RefCell, RefMut};
 use lichen_core::{
     constants::SCHC_FRAG_MAX_PACKET_SIZE,
     error::{BufferTooSmall, TooShort},
 };
+use portable_atomic::AtomicU32 as PaAtomicU32;
+use portable_atomic::Ordering as PaOrdering;
 
 use crate::{AuthenticatedPeerSchcContext, PeerContextAuthority};
 
@@ -225,7 +224,7 @@ pub struct AuthenticatedFragmentationPermit {
     signer: [u8; 32],
 }
 
-static NEXT_FRAGMENTATION_POLICY_OWNER: AtomicU32 = AtomicU32::new(1);
+static NEXT_FRAGMENTATION_POLICY_OWNER: PaAtomicU32 = PaAtomicU32::new(1);
 
 /// Owner of current authenticated fragmentation policy for a bounded peer set.
 pub struct FragmentationPolicy<const MAX_PEERS: usize> {
@@ -277,7 +276,7 @@ impl<const MAX_PEERS: usize> FragmentationPolicy<MAX_PEERS> {
             return Err(FragmentError::PolicyFull);
         }
         let owner = NEXT_FRAGMENTATION_POLICY_OWNER
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .fetch_update(PaOrdering::Relaxed, PaOrdering::Relaxed, |current| {
                 current.checked_add(1).filter(|next| *next != 0)
             })
             .map_err(|_| FragmentError::PolicyFull)?;

@@ -19,7 +19,6 @@
 
 use crate::context::RuleVersionFailureTracker;
 use crate::rules::{versions_compatible, RULE_SET_VERSION};
-use core::sync::atomic::{AtomicU32, Ordering};
 use lichen_core::constants::{
     PORT_MQTT_SN, RULE_GLOBAL_COAP, RULE_GLOBAL_OSCORE, RULE_ICMPV6_ECHO, RULE_LINK_LOCAL_COAP,
     RULE_LINK_LOCAL_OSCORE, RULE_MQTT_SN, RULE_RPL_DAO, RULE_RPL_DIO, RULE_UNCOMPRESSED,
@@ -27,6 +26,7 @@ use lichen_core::constants::{
 };
 use lichen_core::error::{BufferTooSmall, TooShort};
 use lichen_core::ipv6::IPV6_HEADER_LEN;
+use portable_atomic::{AtomicU32 as PaAtomicU32, Ordering as PaOrdering};
 
 /// IPv6 link-local prefix (fe80::/64) as a u128 with the prefix in the high 64 bits.
 /// To reconstruct a full link-local address, OR this with a 64-bit Interface Identifier (IID).
@@ -293,9 +293,7 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
         return Err(SchcError::InvalidPacket("invalid IPv6 source address"));
     }
     if dst.iter().all(|&b| b == 0) {
-        return Err(SchcError::InvalidPacket(
-            "invalid IPv6 destination address",
-        ));
+        return Err(SchcError::InvalidPacket("invalid IPv6 destination address"));
     }
 
     let mut next_header = packet[6];
@@ -1526,11 +1524,7 @@ pub fn encode_rule255(
     // Raw-packet profile bound (see compress); independent of the encoded
     // single_frame_limit check below.
     if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
-        return Err(BufferTooSmall::new(
-            packet.len(),
-            SCHC_FRAG_MAX_PACKET_SIZE,
-        )
-        .into());
+        return Err(BufferTooSmall::new(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE).into());
     }
     validate_full_ipv6(packet)?;
     let needed = packet.len().saturating_add(1);
@@ -1636,7 +1630,7 @@ struct PeerAuthorityEntry {
     receipt_ticks: u64,
 }
 
-static NEXT_PEER_AUTHORITY_OWNER: AtomicU32 = AtomicU32::new(1);
+static NEXT_PEER_AUTHORITY_OWNER: PaAtomicU32 = PaAtomicU32::new(1);
 
 /// Bounded no-std owner of link-verified peer capabilities.
 ///
@@ -1657,7 +1651,7 @@ impl<const MAX_PEERS: usize> PeerContextAuthority<MAX_PEERS> {
             return Err(SchcError::PeerAuthorityFull);
         }
         let owner = NEXT_PEER_AUTHORITY_OWNER
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .fetch_update(PaOrdering::Relaxed, PaOrdering::Relaxed, |current| {
                 current.checked_add(1).filter(|next| *next != 0)
             })
             .map_err(|_| SchcError::PeerAuthorityFull)?;
