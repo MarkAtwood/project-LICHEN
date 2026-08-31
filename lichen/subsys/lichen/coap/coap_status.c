@@ -486,16 +486,28 @@ static const char *trust_level_str(enum lichen_coap_trust_level trust)
 	}
 }
 
+/* Zephyr's minimal libc does not provide strnlen (POSIX). */
+static size_t safe_strnlen(const char *s, size_t max_len)
+{
+	size_t len = 0;
+
+	while (len < max_len && s[len] != '\0') {
+		len++;
+	}
+	return len;
+}
+
 static bool status_snapshot_valid(const struct lichen_coap_node_status *status)
 {
 	if (status->battery_pct_valid && status->battery_pct > 100U) {
 		return false;
 	}
 	if (status->time.valid &&
-	    (strnlen(status->time.source_class,
-		     sizeof(status->time.source_class)) >=
+	    (safe_strnlen(status->time.source_class,
+			  sizeof(status->time.source_class)) >=
 		     sizeof(status->time.source_class) ||
-	     strnlen(status->time.source_name, sizeof(status->time.source_name)) >=
+	     safe_strnlen(status->time.source_name,
+			  sizeof(status->time.source_name)) >=
 		     sizeof(status->time.source_name))) {
 		return false;
 	}
