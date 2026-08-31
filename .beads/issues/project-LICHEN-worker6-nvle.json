@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-nvle",
+  "title": "Optional hygiene: firmware/bridge-zephyr/subsys/lichen is a frozen reference snapshot drifting from the live module",
+  "description": "Residual from project-LICHEN-worker6-1tpy (P4, optional). firmware/bridge-zephyr carries a vendored copy of the L2 sources (subsys/lichen/lichen_l2.c, lora_l2.c, crash_info.c, lichen_util.c, ipv6_addr.c + headers) that is NOT compiled - bridge-zephyr/CMakeLists.txt target_sources is only src/main.c, includes come from the live lichen module (1www.61 resolved the earlier not-compiled enforcement question). The snapshot already drifted (its lichen_l2.c predates jfzk's LICHEN_ESCHC/ENOKEY/crash_info-classification changes and qn87/5rvk-era schc changes it references). Risk is low (nothing compiles it; resurrecting it would require deliberately re-adding sources to the build), but if the snapshot is meant as a fallback/reference it should either be periodically re-synced from lichen/subsys/lichen/l2 or deleted per the 1www.61 direction. Decide ownership: either add a periodic sync step, delete the snapshot, or document it as intentionally frozen. No action taken in 1tpy per the workspace leave-alone default.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:01:28.175060049Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T02:01:28.175060049Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nvle",
+      "depends_on_id": "project-LICHEN-worker6-1tpy",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:01:28.280099236Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
