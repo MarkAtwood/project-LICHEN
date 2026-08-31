@@ -13,7 +13,8 @@
   "closed_at": "2026-07-25T02:35:53.980138113Z",
   "close_reason": "Already fixed",
   "labels": [
-    "codereview"
+    "codereview",
+    "coap"
   ],
   "dependencies": [
     {

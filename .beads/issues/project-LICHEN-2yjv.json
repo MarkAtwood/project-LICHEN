@@ -11,5 +11,8 @@
   "updated_at": "2026-08-28T03:44:22.886037Z",
   "started_at": "2026-07-25T02:46:51.507169717Z",
   "closed_at": "2026-07-22T16:12:46.11946684Z",
-  "close_reason": "Clean codereview pass"
+  "close_reason": "Clean codereview pass",
+  "labels": [
+    "coap"
+  ]
 }

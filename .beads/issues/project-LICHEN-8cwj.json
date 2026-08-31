@@ -11,6 +11,9 @@
   "started_at": "2026-07-22T16:23:49.285606648Z",
   "closed_at": "2026-07-25T01:10:42.676168086Z",
   "close_reason": "Already fixed",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-8cwj",
