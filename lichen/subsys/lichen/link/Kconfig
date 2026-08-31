@@ -191,6 +191,20 @@ config LICHEN_CCP_TIME_SYNC
 	  Uses beacon SFN with GPS stratum-0 priority, local RTC fallback. Matches
 	  ccp16.json, ccp16-desync.json vectors exactly. SECURITY: signed beacons only.
 
+config LICHEN_CCP_SUPERFRAME_SEC
+	int "Superframe duration in seconds"
+	depends on LICHEN_CCP_TIME_SYNC
+	default 60
+	range 1 3600
+	help
+	  Superframe duration for CCP timing per
+	  spec/02a-coordinated-capacity.md. Slot-claim lifetime caps
+	  (CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES) are
+	  denominated in superframes of this length, and slot
+	  coordination seeds its superframe math from this value. Must
+	  match LICHEN_SUPERFRAME_DURATION_S in coap_slot_coord.h, the
+	  host-build fallback default.
+
 config LICHEN_TDMA_BEACON_SYNC
 	bool "Beacon-based TDMA synchronization"
 	depends on LICHEN_TDMA
