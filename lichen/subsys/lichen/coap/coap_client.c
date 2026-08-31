@@ -33,6 +33,7 @@
 #include <zephyr/net/coap_client.h>
 
 #include <lichen/coap_client.h>
+#include <lichen/coap_backoff.h>
 
 #ifdef CONFIG_LICHEN_COAP_CLIENT_OSCORE
 #include <lichen/oscore.h>
@@ -72,6 +73,9 @@ static int s_sock = -1;
 static struct coap_client s_client;
 static bool s_initialized;
 static K_MUTEX_DEFINE(s_mutex);
+/* Spec 07 10.2.4 (R-07-032): sender backoff after 5.03 Service Unavailable.
+ * This client is single-peer (one socket), so one backoff entry suffices. */
+static struct lichen_coap_backoff s_backoff;
 
 int lichen_coap_client_init(void)
 {
@@ -286,6 +290,28 @@ static void coap_response_handler(int16_t code, size_t offset, const uint8_t *pa
 		ctx->response_invalid = true;
 	}
 
+	/* Spec 07 10.2.4 (R-07-032): 5.03 arms the sender backoff for the
+	 * indicated duration (CBOR payload retry_after wins, default 60 s,
+	 * capped at 1 h); any 2.xx success clears it. NOTE: the blockwise
+	 * callback does not expose the Max-Age option, so the payload/default
+	 * precedence is what is reachable here (Rust and Python also
+	 * prioritize the payload). The success band is exactly the 2.xx class
+	 * [64, 96): 3.xx responses must not clear a backoff. */
+	if (code == COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE) {
+		bool payload_found = false;
+		uint32_t retry_after_s = lichen_coap_backoff_duration_s(
+			payload, len, &payload_found);
+		k_mutex_lock(&s_mutex, K_FOREVER);
+		lichen_coap_backoff_arm(&s_backoff, retry_after_s,
+					k_uptime_get());
+		k_mutex_unlock(&s_mutex);
+	} else if (code >= COAP_RESPONSE_CODE_OK &&
+		   code < COAP_MAKE_RESPONSE_CODE(3, 0)) {
+		k_mutex_lock(&s_mutex, K_FOREVER);
+		lichen_coap_backoff_clear(&s_backoff);
+		k_mutex_unlock(&s_mutex);
+	}
+
 	/*
 	 * Accumulate blockwise response payload.
 	 * Each block arrives with its offset; copy into response_buf.
@@ -437,6 +463,14 @@ int lichen_coap_request(const struct lichen_coap_request *req)
 
 	if (req->payload == NULL && req->payload_len > 0) {
 		return LICHEN_COAP_ERR_INVALID_PARAM;
+	}
+	/* Spec 07 10.2.4 (R-07-032): refuse sends to a peer that returned
+	 * 5.03 until its backoff window expires. */
+	k_mutex_lock(&s_mutex, K_FOREVER);
+	bool backed_off = lichen_coap_backoff_active(&s_backoff, k_uptime_get());
+	k_mutex_unlock(&s_mutex);
+	if (backed_off) {
+		return LICHEN_COAP_ERR_BACKOFF;
 	}
 	if (req->payload_len > 0U && req->content_format == LICHEN_COAP_FMT_UNSET) {
 		return LICHEN_COAP_ERR_INVALID_PARAM;
