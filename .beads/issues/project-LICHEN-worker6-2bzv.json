@@ -12,7 +12,8 @@
   "labels": [
     "c",
     "coap",
-    "oscore"
+    "oscore",
+    "tests"
   ],
   "dependencies": [
     {
