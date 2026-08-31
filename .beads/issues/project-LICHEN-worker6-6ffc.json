@@ -11,7 +11,8 @@
   "updated_at": "2026-08-28T15:41:38.451435Z",
   "labels": [
     "l2",
-    "tdma"
+    "tdma",
+    "tests"
   ],
   "dependencies": [
     {
