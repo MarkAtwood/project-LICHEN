@@ -11,7 +11,8 @@
   "labels": [
     "l2",
     "oscore",
-    "security"
+    "security",
+    "human-only"
   ],
   "dependencies": [
     {
