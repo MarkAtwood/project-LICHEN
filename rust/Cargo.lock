@@ -2643,7 +2643,9 @@ dependencies = [
 
 [[package]]
 name = "oscore"
-version = "0.1.0"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54cbec5f95ae9e34cc9a94c7f72332aa708e35b80cfa38f6d551019059d3bd71"
 dependencies = [
  "aes",
  "ccm",
