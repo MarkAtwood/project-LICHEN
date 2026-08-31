@@ -2,13 +2,16 @@
   "id": "project-LICHEN-worker6-gswp",
   "title": "schc_ruleN host tests fail at base: compress profile-limit and rule-constraint expectations vs lichen_schc_compress",
   "description": "Pre-existing runtime failures unmasked by the gcc-13 build sweep (project-LICHEN-worker6-8mgv); reviewer proved via two baseline worktree experiments they are INDEPENDENT of the conversion casts. Six suites fail: schc_rule1_compress (line 149: lichen_schc_compress == SCHC_FRAGMENT_MAX_PACKET_SIZE; line 163 test_profile_limit), schc_rule2_compress (152/167), schc_rule3_compress (171/185), schc_rule4_compress (153/170), schc_rule5_compress (166: == SCHC_ERR_INVALID_ARGUMENT; 215 rule-constraints), schc_rule6_compress (196/245). All decompress suites and everything else pass (35 executables, 49/55 ctest suites). Investigate with test-integrity discipline: determine whether the tests' profile-limit/rule-constraint expectations match current lichen_schc_compress semantics per spec/03 ( SCHC_FRAGMENT_MAX_PACKET_SIZE vs single_frame_limit; SCHC_ERR_INVALID_ARGUMENT for rule-constraint violations) - fix the CODE if the spec says the tests are right, regenerate/fix the TESTS if the semantics intentionally changed (do not weaken assertions; cite the spec line). Confirm parity with the Rust schc behavior for the same cases (rust/lichen-schc rule5/rule6 compression tests pass - check what they expect).",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T01:33:03.283379004Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-08-31T01:54:33.721059466Z",
+  "updated_at": "2026-08-31T02:20:02.868657048Z",
+  "started_at": "2026-08-31T02:04:09.521380981Z",
+  "closed_at": "2026-08-31T02:20:02.868657048Z",
+  "close_reason": "Root cause: the six schc_ruleN profile-limit tests constructed packets whose RAW size exceeded SCHC_FRAGMENT_MAX_PACKET_SIZE (22554) while asserting the compressed OUTPUT equals MAX - arithmetically unsatisfiable for every rule (compressed \u003c raw always; empirically rule1 output = raw - 15), so lichen_schc_compress's raw-packet guard (schc.c:538, the fragmenter reassembly bound) rejected before rule dispatch. Fixed the four tail-based tests (rule1/3/4 via TAIL_MAX = MAX - FIXED_RAW; rule2 via PAYLOAD_MAX) to pin the REAL boundary contract: raw == MAX compresses (ret \u003e 0, rule identity pinned via out[0] for rule5/6), raw == MAX+1 rejects SCHC_ERR_BUFFER_TOO_SMALL with full-buffer output atomicity. Fixed rule5/6 corrupt-checksum cases to the pre-dispatch drop contract: validate_ipv6_transport_lengths (schc_helpers.c:502-504) rejects checksum mismatch with NO_MATCHING_RULE before rule dispatch per spec/03 'structural or checksum failure MUST be dropped' - the old SCHC_ERR_INVALID_ARGUMENT expectation pinned a rule-internal path unreachable via the public API (reviewer-verified); replacing it with drop + atomicity is a strengthening. All six suites PASS on gcc-13 (full host sweep 0 build failures, 0 test failures). Follow-ups filed: ly9b (P1: C bounds raw vs Rust bounds encoded - genuine cross-impl divergence in the raw band (22554, 22583], needs a spec decision); review P3s addressed in-round (rule5/6 rule-identity pins, rules 1-4 full-buffer atomicity). Note: spec/03:118 confirms rules 2/3/4 intentionally ignore the ICMPv6 checksum (Rule 255 fallback), so only the UDP rules carry the checksum-strict comments.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-gswp",
