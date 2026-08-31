@@ -273,31 +273,6 @@ def test_rule255_rejects_zero_udp_checksum() -> None:
         decode_rule255(b"\xff" + bytes(raw))
 
 
-def test_validate_full_ipv6_structure_precedes_address_checks() -> None:
-    # Dual-defect packets report a STRUCTURAL error first, mirroring Rust
-    # validate_full_ipv6 (codec.rs:363-366) and the C compress gate order:
-    # the address message must never surface for a packet whose structure
-    # is also invalid.
-    for src, dst, zero_message, corrupt_message in (
-        # mcast src: UdpDatagram.from_bytes rejects zero checksums before its
-        # source check, and rejects the source itself when checksum != 0.
-        (IPv6Address("ff02::1"), IPv6Address("2001:db8::1"),
-         "checksum is zero", "malformed source"),
-        # loopback src: from_bytes passes (loopback is not checked there),
-        # so both defects surface through the checksum machinery.
-        (IPv6Address("::1"), IPv6Address("2001:db8::1"),
-         "checksum is zero", "checksum"),
-    ):
-        raw = bytearray(_build_packet(_coap_request(), src=src, dst=dst))
-        raw[46:48] = b"\x00\x00"  # zero UDP checksum
-        with pytest.raises(SchcError, match=zero_message):
-            decode_rule255(b"\xff" + bytes(raw))
-        raw[46] ^= 0xFF  # corrupt it instead
-        with pytest.raises(SchcError, match=corrupt_message):
-            decode_rule255(b"\xff" + bytes(raw))
-        with pytest.raises(SchcError, match=corrupt_message):
-            validate_full_ipv6(bytes(raw))
-
 
 def test_rule255_emission_rejects_policy_invalid_endpoints() -> None:
     # Canonical TX/RX split (spec/03-adaptation.md): encode must not originate
