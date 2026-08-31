@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-p7mv",
+  "title": "b7z9.36(c): C — capability-announce resource in coap_server + capability table",
+  "description": "Child of b7z9.36. C coap_server resource for POST /.well-known/capability-announce with the capability table (256 LRU) and the same verification ordering, mirroring the tunnel_auth.c resource-registration pattern. Host tests under lichen/tests/.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:29:57.456004162Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T23:29:57.456004162Z",
+  "labels": [
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p7mv",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.36",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:29:57.632556658Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

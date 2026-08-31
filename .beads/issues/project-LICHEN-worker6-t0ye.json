@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-t0ye",
+  "title": "Opus verification pass missing for the 11 already-swept spec sections",
+  "description": "spec-sweep-all.sh skips sections whose per-section matrix exists (docs/spec-coverage/\u003csec\u003e.md) BEFORE reaching its Opus verification block, so the 11 sections consolidated from the 2026-08-31 08:xx sweep (08-gateway-coordination, 04-network, 11-lci, 08-nodes, 10-implementation, 01-architecture, 07-transport-app, appendix-border-router, appendix-bufferbloat, appendix-c-safety, draft-lichen-schnorr-00) have flagged sets but NO Opus verify pass (docs/spec-coverage/*-verify.log empty as of 2026-08-31 16:20). The current sweep-all run verifies only the 6 sections it sweeps fresh (09-packets-timing, 02a-coordinated-capacity, 03-adaptation, 06-security, 02-physical-link, 12-apps). After it completes: for each skipped section run the script's verify step - opencode run --model openrouter/anthropic/claude-opus-4.5 with scripts/opus-verify-prompt.md + the section + its flagged set, teeing to docs/spec-coverage/\u003csec\u003e-verify.log - then commit. Consider patching spec-sweep-all.sh to verify skipped-but-unverified sections so resume passes cover them. Discovered-from: project-LICHEN-worker6-ba39",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:19:41.922600742Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T23:19:41.922600742Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t0ye",
+      "depends_on_id": "project-LICHEN-worker6-ba39",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:19:42.052814366Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

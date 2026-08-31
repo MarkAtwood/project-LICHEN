@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-18jr",
+  "title": "Python ccp.py: adaptive_sf_select step-3 density threshold 10 -\u003e 8 (spec 02a 2a.8)",
+  "description": "python/src/lichen/ccp.py:231 adaptive_sf_select uses 'if density \u003e 10 or utilization \u003e 150' and the docstring at :197 says Density \u003e 10. Spec 02a 2a.8 step 3 is Density \u003e 8 (now also aligned in spec/02-physical-link.md:115 by bead g7p7); C (gradient.c, bead b7z9.30.1) and Rust (rf_health.rs DENSITY_HIGH=8, bead b7z9.30.3) already use 8; ccp16.json vector select_channel_density_high_ch0 (density=10 -\u003e sf=11 via density\u003e8) pins 8. Fix the code and docstring, then run the python ccp tests (pytest python/tests -k ccp) — check whether any python test pins 10 first. Worker1 spec bead g7p7 covered only the editorial spec fix.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:30:46.539816292Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T23:30:46.539816292Z",
+  "labels": [
+    "python",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-18jr",
+      "depends_on_id": "project-LICHEN-worker6-g7p7",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:30:46.738817778Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
