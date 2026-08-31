@@ -81,12 +81,13 @@ for i in $(seq 1 $NUM_WORKERS); do
     # Area affinity per worker (disjoint-ish routing; workers fall back to any
     # ready bead when their pool is empty — see worker prompt affinity rule).
     case $i in
-        1|2) AFFINITY="zephyr,renode" ;;
-        3)   AFFINITY="gateway,networking" ;;
-        4)   AFFINITY="python,schc" ;;
-        5)   AFFINITY="rust,yggdrasil" ;;
-        6)   AFFINITY="hal,lci,app-interface" ;;
-        *)   AFFINITY="" ;;  # worker7: free-range burner
+        1)   AFFINITY="zephyr" ;;
+        2)   AFFINITY="zephyr,renode" ;;
+        3)   AFFINITY="networking,gateway" ;;
+        4)   AFFINITY="schc,link" ;;
+        5)   AFFINITY="python" ;;
+        6)   AFFINITY="coap,rust" ;;
+        7)   AFFINITY="lci,hal,yggdrasil,phy,renode" ;;
     esac
     # Unattended workers: allow the tool surface, deny the catastrophic few.
     WORKER_POLICY='{"permission":{"edit":"allow","webfetch":"allow","bash":{"*":"allow","rm -rf *":"deny","sudo *":"deny","git push*":"deny"}}}'
