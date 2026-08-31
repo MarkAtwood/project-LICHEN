@@ -578,7 +578,17 @@ ZTEST(coap_location_beacon, test_cache_resource_response) {
       lichen_position_cache_set_privacy(LICHEN_POSITION_PRIVACY_PRIVATE));
   zassert_ok(lichen_position_cache.get(&lichen_position_cache, NULL, NULL, 0));
   zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED);
-  zassert_equal(response_payload_len, 0U);
+  /* Spec 18.2.4 (l1qw.32): the 4.01 carries the structured body
+   * {error: "oscore_required", mode: "private"}. */
+  {
+    static const uint8_t expected[] = {
+        0xa2, 0x65, 'e', 'r', 'r', 'o', 'r', 0x6f, 'o', 's', 'c', 'o', 'r',
+        'e', '_', 'r', 'e', 'q', 'u', 'i', 'r', 'e', 'd', 0x64, 'm', 'o',
+        'd', 'e', 0x67, 'p', 'r', 'i', 'v', 'a', 't', 'e',
+    };
+    zassert_equal(response_payload_len, sizeof(expected));
+    zassert_mem_equal(response_payload, expected, sizeof(expected));
+  }
 }
 
 ZTEST(coap_location_beacon, test_observe_registry_cancel_and_sequence) {
