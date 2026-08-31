@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.51",
+  "title": "Hardening -Werror waived for conversion/cast-align/duplicated-branches + per-file exemptions (lr1110, monocypher) vs 'NO WAIVERS' policy (spec appendix-c R-APPC-001)",
+  "description": "spec/appendix-c-safety.md R-APPC-001: 'All C code MUST be compiled with these flags' (Basic Flags block incl. -Wall -Wextra -Werror, -Wconversion, -fstack-protector-strong; preamble 'NO EXCEPTIONS. NO WAIVERS.'). Sweep classification: divergent (all deviations documented in-file). lichen/zephyr/CMakeLists.txt:48-135 implements the full flag set on every lichen module library target (:169-185) and host tests get the set via lichen/tests/cmake/test_common.cmake:56-63, BUT: (1) -Werror is waived for three diagnostic classes: -Wno-error=conversion :71 (TODO at :68: promote once Zephyr headers are clean), -Wno-error=cast-align :78 (upstream nrfx/zephyr headers), -Wno-error=duplicated-branches :110 (Zephyr cbprintf internals), plus -Wno-error=cpp :125; (2) per-file exemptions: vendored lr1110 driver lichen/drivers/lora/lr1110/CMakeLists.txt:22, vendored monocypher -Wno-error=stack-usage lichen/subsys/lichen/crypto/CMakeLists.txt:13-19; (3) -fstack-protector-strong is deliberately not passed raw — routed through CONFIG_STACK_CANARIES (:115-118; Zephyr emits -fstack-protector-all, arguably stronger), literal flag present for host tests (test_common.cmake:63). Suggested placement: burn down the conversion/cast-align findings (per-file suppressions or header shims), then delete the -Wno-error= lines; ratify the CONFIG_STACK_CANARIES mechanism by updating the spec text if accepted. Full row in docs/spec-coverage.md (spec/appendix-c-safety.md sweep 2026-08-31).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T16:05:05.898723295Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T16:05:05.898723295Z",
+  "labels": [
+    "spec-gap",
+    "c-safety"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.51",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T16:05:06.016664355Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
