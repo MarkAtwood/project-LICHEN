@@ -606,6 +606,45 @@ static void test_tx_schc_rejection_returns_eschc(void)
 		 ret);
 	CHECK_OK(frame_len == sizeof(frame),
 		 "frame_len untouched on rejection (%zu)", frame_len);
+
+	/* Oversized-but-valid: a 260-byte policy-clean UDP packet on ports
+	 * matching no rule falls back to Rule 255, whose encoded output
+	 * (261 bytes) exceeds the 256-byte staging buffer — and could not
+	 * fit a link frame (250-byte payload) anyway, so this pins the link
+	 * layer directly rather than the L2 MTU.  Must also surface
+	 * -LICHEN_ESCHC (operational rejection), never a corruption record. */
+	uint8_t big[260];
+	size_t big_payload = sizeof(big) - 40u;
+	memset(big, 0, sizeof(big));
+	big[0] = 0x60;
+	big[4] = (uint8_t)(big_payload >> 8);
+	big[5] = (uint8_t)(big_payload & 0xff);
+	big[6] = 17; /* UDP */
+	big[7] = 64;
+	memcpy(&big[8], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			"\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&big[24], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			 "\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	big[40] = 0x13;
+	big[41] = 0x88;
+	big[42] = 0x13;
+	big[43] = 0x89;
+	big[44] = (uint8_t)(big_payload >> 8);
+	big[45] = (uint8_t)(big_payload & 0xff);
+	memset(&big[48], 0x70, big_payload - 8u);
+	if (udp_checksum(&big[8], &big[24], 5000, 5001, &big[48],
+			 big_payload - 8u, &checksum) != SCHC_OK) {
+		FAIL("udp_checksum big");
+		return;
+	}
+	big[46] = (uint8_t)(checksum >> 8);
+	big[47] = (uint8_t)(checksum & 0xff);
+
+	frame_len = sizeof(frame);
+	ret = lichen_link_tx(&ctx, big, sizeof(big), NULL, frame, &frame_len);
+	CHECK_OK(ret == -LICHEN_ESCHC, "oversized tx ret=%d want -ESCHC", ret);
+	CHECK_OK(frame_len == sizeof(frame),
+		 "frame_len untouched on oversized (%zu)", frame_len);
 	lichen_link_cleanup(&ctx);
 }
 
