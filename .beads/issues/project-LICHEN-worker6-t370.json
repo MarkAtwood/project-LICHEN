@@ -12,7 +12,8 @@
   "labels": [
     "c",
     "coap",
-    "l2"
+    "l2",
+    "simulation"
   ],
   "dependencies": [
     {
