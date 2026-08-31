@@ -13,6 +13,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/lora.h>
 #include <zephyr/logging/log.h>
+#include <lichen/lora_compat.h>
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
 #include <lichen/lora_cad.h>
@@ -45,12 +46,15 @@ struct lora_loopback_data {
 	bool configured;
 	/* Async RX (lora_recv_async): a registered callback is fed queued
 	 * packets from the system workqueue. recv_cb != NULL means armed;
-	 * rx_lock guards the callback pointer. The delivery buffer lives in
+	 * rx_lock guards the callback pointer AND its user_data (snapshot
+	 * both under the lock in rx_work; they are stored as a pair). The
+	 * delivery buffer lives in
 	 * per-instance data rather than the workqueue stack. */
 	const struct device *dev;
 	struct k_work rx_work;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
+	void *recv_cb_user_data;
 	struct loopback_packet rx_pkt;
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_t sent_packets;
@@ -222,6 +226,7 @@ static void lora_loopback_rx_work(struct k_work *work)
 	while (drained++ < LOOPBACK_QUEUE_DEPTH) {
 		k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
 		lora_recv_cb cb = data->recv_cb;
+		void *cb_user_data = data->recv_cb_user_data;
 
 		k_spin_unlock(&data->rx_lock, key);
 
@@ -237,7 +242,8 @@ static void lora_loopback_rx_work(struct k_work *work)
 		atomic_inc(&data->received_packets);
 #endif
 		cb(dev, data->rx_pkt.data, data->rx_pkt.len,
-		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR);
+		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR
+		   LORA_RECV_CB_PASS_VALUE(cb_user_data));
 	}
 
 	/* Queue still has work: re-queue ourselves (Zephyr re-submission of a
@@ -246,7 +252,7 @@ static void lora_loopback_rx_work(struct k_work *work)
 }
 
 static int lora_loopback_recv_async(const struct device *dev,
-				    lora_recv_cb cb)
+				    lora_recv_cb cb LORA_RECV_CB_EXTRA_ARGS)
 {
 	struct lora_loopback_data *data = dev->data;
 
@@ -255,6 +261,7 @@ static int lora_loopback_recv_async(const struct device *dev,
 		bool was_armed = data->recv_cb != NULL;
 
 		data->recv_cb = NULL;
+		data->recv_cb_user_data = NULL;
 		k_spin_unlock(&data->rx_lock, key);
 		return was_armed ? 0 : -EINVAL;
 	}
@@ -266,6 +273,7 @@ static int lora_loopback_recv_async(const struct device *dev,
 		return -EBUSY;
 	}
 	data->recv_cb = cb;
+	data->recv_cb_user_data = LORA_RECV_CB_USER_DATA_ARG;
 	k_spin_unlock(&data->rx_lock, key);
 
 	/* Deliver anything already queued (sent before arming). */
