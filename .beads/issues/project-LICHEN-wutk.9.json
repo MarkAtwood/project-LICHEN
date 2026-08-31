@@ -8,6 +8,9 @@
   "created_at": "2026-08-28T04:47:42.701181Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T04:47:42.701181Z",
+  "labels": [
+    "lci"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wutk.9",
