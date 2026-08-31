@@ -52,6 +52,7 @@ class ClaimRejectReason(Enum):
     MISSING_SIGNATURE = auto()  # No signature provided
     INVALID_SIGNATURE = auto()  # Signature failed verification
     INVALID_CLAIM_DATA = auto()  # Malformed claim structure
+    IDENTITY_MISMATCH = auto()  # kid/gateway_iid not bound to verifying key
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
 
 
@@ -70,31 +71,37 @@ class ClaimError(Exception):
 class SlotClaim:
     """Slot claim message for POST /.well-known/lichen-gw/slots.
 
-    Per GCP-6.2, gateways claim slots via POST to /slots on peer gateways.
-    The claim MUST be signed with the gateway's Ed25519 key (Schnorr48).
-
-    Wire format: CBOR map with deterministic encoding (RFC 8949 Section 4.2)
-    for consistent signature computation.
+    Per GCP-6.5, the claim is carried in a COSE_Sign1 envelope signed with
+    the gateway's Ed25519 key (Schnorr48, alg -65537).
 
     Attributes:
         gateway_iid: 8-byte gateway Interface Identifier (hex string)
         slots: List of slot indices being claimed (sorted ascending)
-        superframe_id: Current superframe number
-        timestamp: Optional Unix timestamp of claim (for replay protection)
-        gateway_count: Total gateways in federation (for interleaved mode)
-        ordinal: This gateway's ordinal position (for interleaved mode)
+        superframe_id: Superframe epoch when the claim was issued
+        expiry: Unix timestamp after which the claim is invalid (required)
+        claim_seq: Monotonic claim sequence (required, replay gate)
+        allocation_mode: Interleaved or contiguous allocation
+        ordinal: This gateway's ordinal position (interleaved mode)
+        gateway_count: Local federation size parameter (never serialized)
         signature: 48-byte Schnorr signature (hex string or bytes)
     """
 
     gateway_iid: str  # Hex string, 16 chars (8 bytes)
     slots: tuple[int, ...]  # Immutable, sorted ascending
     superframe_id: int
+    expiry: int
+    claim_seq: int
+    allocation_mode: AllocationMode = AllocationMode.INTERLEAVED
 
     # Optional fields
-    timestamp: int | None = None
-    gateway_count: int | None = None
     ordinal: int | None = None
+    gateway_count: int | None = None
     signature: bytes | None = None
+
+    @property
+    def timestamp(self) -> int:
+        """Backward-compatible alias for expiry (spec: key 4)."""
+        return self.expiry
 
     def __post_init__(self) -> None:
         """Validate claim structure."""
@@ -118,6 +125,14 @@ class SlotClaim:
         if self.superframe_id < 0:
             raise ClaimError("superframe_id must be non-negative")
 
+        # Expiry must be a non-negative integer (spec: key 4)
+        if type(self.expiry) is not int or self.expiry < 0:
+            raise ClaimError("expiry must be a non-negative integer")
+
+        # claim_seq must be a non-negative integer (spec: key 6)
+        if type(self.claim_seq) is not int or self.claim_seq < 0:
+            raise ClaimError("claim_seq must be a non-negative integer")
+
         # Validate signature length if present
         if self.signature is not None and len(self.signature) != 48:
             raise ClaimError(f"signature must be 48 bytes, got {len(self.signature)}")
@@ -126,92 +141,120 @@ class SlotClaim:
         """Return gateway IID as unsigned big-endian integer for comparison."""
         return int.from_bytes(bytes.fromhex(self.gateway_iid), "big")
 
-    def to_cbor_map(self) -> dict[str, object]:
-        """Convert to CBOR map for encoding (excludes signature)."""
-        result: dict[str, object] = {
-            "gateway_iid": bytes.fromhex(self.gateway_iid),
-            "slots": list(self.slots),
-            "superframe_id": self.superframe_id,
-        }
-        if self.timestamp is not None:
-            result["timestamp"] = self.timestamp
-        if self.gateway_count is not None:
-            result["gateway_count"] = self.gateway_count
-        if self.ordinal is not None:
-            result["ordinal"] = self.ordinal
-        return result
-
     @classmethod
-    def from_cbor(cls, payload: bytes) -> SlotClaim:
-        """Decode from CBOR payload.
+    def decode_cose(cls, envelope: bytes) -> SlotClaim:
+        """Decode a COSE_Sign1 slot-claim envelope (spec GCP-6.5).
 
-        Args:
-            payload: CBOR-encoded claim (may include signature field)
-
-        Returns:
-            SlotClaim instance
-
-        Raises:
-            ClaimError: If payload is malformed
+        Structural validation only: envelope shape, alg -65537, kid present,
+        payload key/type conformance. Signature verification is the caller's
+        (verify_slot_claim) with the resolved gateway pubkey.
         """
         try:
-            data = cbor2.loads(payload)
+            document = cbor2.loads(envelope)
         except (cbor2.CBORDecodeError, OverflowError) as e:
-            raise ClaimError(f"invalid CBOR: {e}") from None
-
-        if not isinstance(data, dict):
-            raise ClaimError("expected CBOR map")
-
+            raise ClaimError(f"invalid CBOR envelope: {e}") from None
+        if not isinstance(document, list) or len(document) != 4:
+            raise ClaimError("COSE_Sign1 must be a 4-element array")
+        protected, unprotected, payload, signature = document
+        if not isinstance(protected, bytes) or not isinstance(payload, bytes):
+            raise ClaimError("COSE protected header and payload must be bytes")
+        if not isinstance(unprotected, dict):
+            raise ClaimError("COSE unprotected header must be a map")
+        if not isinstance(signature, bytes):
+            raise ClaimError("COSE signature must be bytes")
         try:
-            iid_bytes = data["gateway_iid"]
-            if not isinstance(iid_bytes, bytes):
-                raise ClaimError("gateway_iid must be bytes in CBOR")
-            gateway_iid = iid_bytes.hex()
+            header = cbor2.loads(protected)
+        except (cbor2.CBORDecodeError, OverflowError) as e:
+            raise ClaimError(f"invalid protected header: {e}") from None
+        if not isinstance(header, dict) or header.get(1) != -65537:
+            # Validation step 4: non-(-65537) algorithms are decoys; reject.
+            raise ClaimError("slot-claim alg must be Schnorr48-Ed25519 (-65537)")
+        kid = unprotected.get(_COSE_KID_LABEL)
+        if not isinstance(kid, bytes) or len(kid) != 8:
+            raise ClaimError("slot-claim kid must be an 8-byte gateway IID")
+        try:
+            fields = cbor2.loads(payload)
+        except (cbor2.CBORDecodeError, OverflowError) as e:
+            raise ClaimError(f"invalid payload: {e}") from None
+        if not isinstance(fields, dict):
+            raise ClaimError("slot-claim payload must be a map")
 
-            raw_slots = data["slots"]
-            if not all(isinstance(s, int) for s in raw_slots):
-                raise ClaimError("slots must all be integers")
-            slots = tuple(raw_slots)
-            superframe_id = int(data["superframe_id"])
+        raw_slots = fields.get(_PAYLOAD_SLOTS)
+        if not isinstance(raw_slots, list) or not all(
+            isinstance(s, int) and not isinstance(s, bool) for s in raw_slots
+        ):
+            raise ClaimError("slots must be an array of integers")
+        superframe_epoch = fields.get(_PAYLOAD_SUPERFRAME_EPOCH)
+        if type(superframe_epoch) is not int or superframe_epoch < 0:
+            raise ClaimError("superframe_epoch must be a non-negative integer")
+        mode = fields.get(_PAYLOAD_MODE)
+        if mode == _MODE_INTERLEAVED:
+            allocation_mode = AllocationMode.INTERLEAVED
+        elif mode == _MODE_CONTIGUOUS:
+            allocation_mode = AllocationMode.CONTIGUOUS
+        else:
+            raise ClaimError("mode must be 0 (interleaved) or 1 (contiguous)")
+        expiry = fields.get(_PAYLOAD_EXPIRY)
+        if type(expiry) is not int or expiry < 0:
+            raise ClaimError("expiry must be a non-negative integer")
+        iid_bytes = fields.get(_PAYLOAD_GATEWAY_IID)
+        if not isinstance(iid_bytes, bytes) or len(iid_bytes) != 8:
+            raise ClaimError("gateway_iid must be bstr(8)")
+        claim_seq = fields.get(_PAYLOAD_CLAIM_SEQ)
+        if type(claim_seq) is not int or claim_seq < 0:
+            raise ClaimError("claim_seq must be a non-negative integer")
+        ordinal = fields.get(_PAYLOAD_ORDINAL)
+        if ordinal is not None and (type(ordinal) is not int or ordinal < 0):
+            raise ClaimError("ordinal must be a non-negative integer")
 
-            signature = data.get("signature")
-            if signature is not None and isinstance(signature, str):
-                signature = bytes.fromhex(signature)
-            if signature is not None and not isinstance(signature, bytes):
-                raise ClaimError("signature must be bytes or hex string")
+        return cls(
+            gateway_iid=iid_bytes.hex(),
+            slots=tuple(raw_slots),
+            superframe_id=superframe_epoch,
+            expiry=expiry,
+            claim_seq=claim_seq,
+            allocation_mode=allocation_mode,
+            ordinal=ordinal,
+            signature=signature,
+        )
 
-            return cls(
-                gateway_iid=gateway_iid,
-                slots=slots,
-                superframe_id=superframe_id,
-                timestamp=data.get("timestamp"),
-                gateway_count=data.get("gateway_count"),
-                ordinal=data.get("ordinal"),
-                signature=signature,
-            )
-        except (KeyError, TypeError, ValueError) as e:
-            raise ClaimError(f"malformed claim: {e}") from None
+
+# ─── COSE_Sign1 wire format (spec/08-gateway-coordination.md GCP-6.5) ────────
+
+_PAYLOAD_SLOTS = 1
+_PAYLOAD_SUPERFRAME_EPOCH = 2
+_PAYLOAD_MODE = 3
+_PAYLOAD_EXPIRY = 4
+_PAYLOAD_GATEWAY_IID = 5
+_PAYLOAD_CLAIM_SEQ = 6
+_PAYLOAD_ORDINAL = 7
+_COSE_KID_LABEL = 4
+_MODE_INTERLEAVED = 0
+_MODE_CONTIGUOUS = 1
 
 
 def encode_claim_canonical(claim: SlotClaim) -> bytes:
-    """Encode claim in CBOR deterministic format for signing.
+    """Encode the claim payload in spec wire form (CBOR map, integer keys).
 
-    Per RFC 8949 Section 4.2.1, deterministic encoding requires:
-    - Map keys sorted by byte-wise lexicographic order
-    - Shortest integer encoding
-    - No indefinite-length items
-
-    Per GCP-6.2, the signature covers the canonical CBOR encoding of
-    the claim data (excluding the signature field itself).
-
-    Args:
-        claim: SlotClaim to encode
-
-    Returns:
-        Deterministically encoded CBOR bytes
+    Per spec/08 GCP-6.5: payload keys are 1 slots, 2 superframe_epoch,
+    3 mode (0 interleaved / 1 contiguous), 4 expiry, 5 gateway_iid bstr(8),
+    6 claim_seq, 7 ordinal. gateway_count is a local allocation parameter
+    and is NEVER serialized.
     """
-    # cbor2 with canonical=True produces RFC 8949 Section 4.2 format
-    return cbor2.dumps(claim.to_cbor_map(), canonical=True)
+    from ipaddress import IPv6Address
+
+    mode = _MODE_INTERLEAVED if claim.allocation_mode == AllocationMode.INTERLEAVED else _MODE_CONTIGUOUS
+    payload: dict[int, object] = {
+        _PAYLOAD_SLOTS: list(claim.slots),
+        _PAYLOAD_SUPERFRAME_EPOCH: claim.superframe_id,
+        _PAYLOAD_MODE: mode,
+        _PAYLOAD_EXPIRY: claim.expiry,
+        _PAYLOAD_GATEWAY_IID: bytes.fromhex(claim.gateway_iid),
+        _PAYLOAD_CLAIM_SEQ: claim.claim_seq,
+    }
+    if claim.ordinal is not None:
+        payload[_PAYLOAD_ORDINAL] = claim.ordinal
+    return cbor2.dumps(payload, canonical=True)
 
 
 def verify_slot_claim(
@@ -243,11 +286,24 @@ def verify_slot_claim(
     if len(gateway_pubkey) != 32:
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
 
-    # Compute canonical encoding for signature verification
-    signed_data = encode_claim_canonical(claim)
+    # Bind the (unprotected) kid to the verifying key's derived IID.
+    from lichen.crypto.identity import _pubkey_to_iid
 
-    # Verify Schnorr48 signature
-    if not schnorr48.verify(gateway_pubkey, signed_data, claim.signature):
+    if bytes.fromhex(claim.gateway_iid) != _pubkey_to_iid(gateway_pubkey):
+        return (False, ClaimRejectReason.IDENTITY_MISMATCH)
+
+    # GCP-6.5: sig = Schnorr48(privkey, SHA256(CBOR(Sig_structure)))
+    from hashlib import sha256
+
+    from lichen.crypto.delegation_tokens import (
+        cose_protected_header,
+        cose_sig_structure,
+    )
+
+    payload = encode_claim_canonical(claim)
+    protected = cose_protected_header()
+    digest = sha256(cose_sig_structure(protected, payload)).digest()
+    if not schnorr48.verify(gateway_pubkey, digest, claim.signature):
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
 
     return (True, None)
@@ -435,16 +491,27 @@ def sign_slot_claim(
     Returns:
         New SlotClaim with signature field populated
     """
-    signed_data = encode_claim_canonical(claim)
-    signature = schnorr48.sign(privkey, pubkey, signed_data)
+    # GCP-6.5: sig = Schnorr48(privkey, SHA256(CBOR(Sig_structure)))
+    from hashlib import sha256
+
+    from lichen.crypto.delegation_tokens import (
+        cose_protected_header,
+        cose_sig_structure,
+    )
+
+    payload = encode_claim_canonical(claim)
+    protected = cose_protected_header()
+    digest = sha256(cose_sig_structure(protected, payload)).digest()
+    signature = schnorr48.sign(privkey, pubkey, digest)
 
     # Create new claim with signature
-    # Using object.__setattr__ because dataclass is frozen
     new_claim = SlotClaim(
         gateway_iid=claim.gateway_iid,
         slots=claim.slots,
         superframe_id=claim.superframe_id,
-        timestamp=claim.timestamp,
+        expiry=claim.expiry,
+        claim_seq=claim.claim_seq,
+        allocation_mode=claim.allocation_mode,
         gateway_count=claim.gateway_count,
         ordinal=claim.ordinal,
         signature=signature,
