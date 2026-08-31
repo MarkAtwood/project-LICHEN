@@ -215,3 +215,34 @@ async def test_raw_rx_fails_closed_without_level_source() -> None:
     resource = RawRxResource()
     resp = await resource.render_get(Message(code=GET))
     assert resp.code == aiocoap.FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_get_raw_rx_rejects_beyond_local_without_opt_in() -> None:
+    resource = RawRxResource(
+        access_level=lambda request: AccessLevel.ADMIN,
+        beyond_local_detector=lambda request: True,
+    )
+    resp = await resource.render_get(Message(code=GET))
+    assert resp.code == aiocoap.FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_get_raw_rx_allows_beyond_local_with_opt_in() -> None:
+    resource = RawRxResource(
+        access_level=lambda request: AccessLevel.ADMIN,
+        beyond_local_detector=lambda request: True,
+        expose_beyond_local=True,
+    )
+    resp = await resource.render_get(Message(code=GET))
+    assert resp.code == aiocoap.CONTENT
+
+
+@pytest.mark.asyncio
+async def test_raw_rx_events_reject_beyond_local_without_opt_in() -> None:
+    events = RawRxEventsResource(
+        access_level=lambda request: AccessLevel.ADMIN,
+        beyond_local_detector=lambda request: True,
+    )
+    resp = await events.render_get(Message(code=GET))
+    assert resp.code == aiocoap.FORBIDDEN

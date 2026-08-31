@@ -61,6 +61,27 @@ def denied_response(
     return Message(code=code_map.get(code, FORBIDDEN))
 
 
+def beyond_local_denied(
+    detector: Callable[[Message], bool] | None,
+    expose_beyond_local: bool,
+    request: Message,
+) -> Message | None:
+    """Beyond-local exposure guard (spec/11-lci.md 17.5.4 R-11-032).
+
+    Raw-diag resources are local-admin surfaces: exposing them beyond the
+    local binding requires OSCORE or equivalent plus an explicit
+    ``expose_beyond_local`` opt-in. ``detector`` is the assembler-provided
+    classification of the request's remote; a ``None`` detector means the
+    assembler wired no classification, in which case the guard is inert and
+    the admin gate (R-11-030) remains the only enforcement layer.
+    """
+    if expose_beyond_local or detector is None:
+        return None
+    if detector(request):
+        return Message(code=FORBIDDEN)
+    return None
+
+
 class NodeInfo(Protocol):
     """Data source backing the CoAP resources."""
 
