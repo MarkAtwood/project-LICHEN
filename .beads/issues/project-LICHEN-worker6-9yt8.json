@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-6",
   "updated_at": "2026-08-30T17:02:31.378802Z",
   "labels": [
-    "python"
+    "python",
+    "tests"
   ],
   "dependencies": [
     {
