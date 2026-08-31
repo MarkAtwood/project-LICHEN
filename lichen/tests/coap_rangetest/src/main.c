@@ -5,6 +5,15 @@
 #include <math.h>
 #include <string.h>
 
+/* Zephyr's minimal libc does not declare strnlen(): bounded length via
+ * memchr. Returns max when no NUL lies within the first max bytes. */
+static size_t bounded_len(const char *s, size_t max)
+{
+	const char *nul = memchr(s, '\0', max);
+
+	return nul ? (size_t)(nul - s) : max;
+}
+
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
 #include <zephyr/ztest.h>
@@ -483,7 +492,7 @@ ZTEST(coap_rangetest, test_traceroute_max_hops_encode) {
 		hops[i].addr[LICHEN_RANGETEST_ADDR_MAX - 1U] = '\0';
 		hops[i].rssi = -65.0 - (double)i;
 		hops[i].rtt_ms = 100.0 + (double)i;
-		zassert_equal(strnlen(hops[i].addr, sizeof(hops[i].addr)),
+		zassert_equal(bounded_len(hops[i].addr, sizeof(hops[i].addr)),
 			      LICHEN_RANGETEST_ADDR_MAX - 1U, "addr len");
 	}
 

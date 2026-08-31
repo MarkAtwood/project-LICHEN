@@ -38,9 +38,19 @@ enum senml_label {
 	SENML_LABEL_VD =  8,  /* Data Value */
 };
 
+/* Zephyr's minimal libc does not declare strnlen(): bounded length via
+ * memchr. Returns max_len + 1 when no NUL lies within the first max_len + 1
+ * bytes, i.e. the string overflows its bound. */
+static size_t senml_strnlen(const char *str, size_t max_len)
+{
+	const char *nul = memchr(str, '\0', max_len + 1);
+
+	return nul ? (size_t)(nul - str) : max_len + 1;
+}
+
 static bool string_too_long(const char *str, size_t max_len)
 {
-	return str != NULL && strnlen(str, max_len + 1) > max_len;
+	return str != NULL && senml_strnlen(str, max_len + 1) > max_len;
 }
 
 static int validate_name(const char *name)
