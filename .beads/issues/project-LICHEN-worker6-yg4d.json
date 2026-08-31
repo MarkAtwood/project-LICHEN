@@ -12,6 +12,7 @@
   "started_at": "2026-08-29T04:18:55.428102Z",
   "labels": [
     "gateway",
-    "oscore"
+    "oscore",
+    "rust"
   ]
 }
