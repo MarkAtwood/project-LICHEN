@@ -257,6 +257,74 @@ ZTEST(coap_waypoints, test_all_shared_vectors_round_trip_byte_exactly) {
   }
 }
 
+/* Spec 18.3.2 R-12-029/030: per-originator (32) and global (256) caps,
+ * with the structured 5.03 waypoint_limit diagnostic body. */
+ZTEST(coap_waypoints, test_per_originator_limit_is_32) {
+  struct lichen_waypoint value;
+  struct lichen_waypoint made;
+
+  init_store();
+  for (size_t i = 0U; i < LICHEN_WAYPOINT_PER_ORIGINATOR_MAX; i++) {
+    value = candidate("origin-a", 1.0 + (double)i, 2.0);
+    strncpy(value.creator, "origin-a", sizeof(value.creator) - 1U);
+    zassert_ok(lichen_waypoints_create(&value, &made));
+  }
+  /* The 33rd waypoint from the same originator is rejected. */
+  value = candidate("origin-a", 33.0, 34.0);
+  strncpy(value.creator, "origin-a", sizeof(value.creator) - 1U);
+  zassert_equal(lichen_waypoints_create(&value, &made), -ENOSPC);
+  /* Per-originator accounting is isolated: another originator still fits. */
+  value = candidate("origin-b", 3.0, 4.0);
+  strncpy(value.creator, "origin-b", sizeof(value.creator) - 1U);
+  zassert_ok(lichen_waypoints_create(&value, &made));
+}
+
+ZTEST(coap_waypoints, test_global_limit_is_256_with_503_body) {
+  static const uint8_t expected_body[] = {
+      0xa3, 0x66, 'r', 'e', 'a', 's', 'o', 'n', 0x6e, 'w', 'a', 'y', 'p', 'o',
+      'i', 'n', 't', '_', 'l', 'i', 'm', 'i', 't', 0x6e, 'p', 'e', 'r', '_',
+      'o', 'r', 'i', 'g', 'i', 'n', 'a', 't', 'o', 'r', 0x18, 0x20, 0x65, 'g',
+      'l', 'o', 'b', 'a', 'l', 0x19, 0x01, 0x00,
+  };
+  struct lichen_waypoint value;
+  struct lichen_waypoint made;
+
+  init_store();
+  for (size_t i = 0U; i < LICHEN_WAYPOINT_MAX; i++) {
+    char creator[LICHEN_WAYPOINT_CREATOR_MAX + 1U];
+    snprintf(creator, sizeof(creator), "origin-%02u", (unsigned int)(i / LICHEN_WAYPOINT_PER_ORIGINATOR_MAX));
+    value = candidate("fill", 1.0 + (double)(i % 90), 2.0);
+    strncpy(value.creator, creator, sizeof(value.creator) - 1U);
+    zassert_ok(lichen_waypoints_create(&value, &made));
+  }
+  zassert_equal(lichen_waypoints_count(), LICHEN_WAYPOINT_MAX);
+  /* The 257th waypoint globally is rejected. */
+  value = candidate("overflow", 5.0, 5.0);
+  zassert_equal(lichen_waypoints_create(&value, &made), -ENOSPC);
+
+  /* The POST handler surfaces the structured 5.03 diagnostic body. */
+  struct sockaddr_in6 peer = {.sin6_family = AF_INET6};
+  struct coap_resource resource = {0};
+  struct coap_packet request;
+  uint8_t packet_buf[256];
+
+  memcpy(peer.sin6_addr.s6_addr,
+         (uint8_t[]){0xfe, 0x80, 0, 0, 0, 0, 0, 0, 2, 1, 2, 3, 4, 5, 6, 7},
+         16U);
+  local_admin = true;
+  protected_request = true;
+  request_payload = minimal_vector;
+  request_payload_len = sizeof(minimal_vector);
+  zassert_ok(coap_packet_init(&request, packet_buf, sizeof(packet_buf),
+                              COAP_VERSION_1, COAP_TYPE_CON, 0, NULL,
+                              COAP_METHOD_POST, 123U));
+  (void)lichen_waypoints_post_handler(&resource, &request,
+                                      (struct sockaddr *)&peer, sizeof(peer));
+  zassert_equal(response_code, COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE);
+  zassert_equal(response_payload_len, sizeof(expected_body));
+  zassert_mem_equal(response_payload, expected_body, sizeof(expected_body));
+}
+
 ZTEST(coap_waypoints, test_transactional_crud_auth_and_capacity) {
   struct lichen_waypoint made;
   struct lichen_waypoint value;
@@ -295,8 +363,12 @@ ZTEST(coap_waypoints, test_transactional_crud_auth_and_capacity) {
 
   for (size_t i = 0U; i < LICHEN_WAYPOINT_MAX; i++) {
     char name[16];
+    char creator[LICHEN_WAYPOINT_CREATOR_MAX + 1U];
     snprintk(name, sizeof(name), "point-%u", (unsigned int)i);
+    snprintk(creator, sizeof(creator), "origin-%02u",
+             (unsigned int)(i / LICHEN_WAYPOINT_PER_ORIGINATOR_MAX));
     value = candidate(name, 0.0, 0.0);
+    strncpy(value.creator, creator, sizeof(value.creator) - 1U);
     zassert_ok(lichen_waypoints_create(&value, &made));
   }
   value = candidate("overflow", 0.0, 0.0);
