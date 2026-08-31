@@ -402,6 +402,162 @@ static int test_queue_copy_gpsr_and_dtn(void)
 	return 0;
 }
 
+static size_t make_hbh_udp_packet(uint8_t *packet, size_t capacity,
+				  const uint8_t source[16],
+				  const uint8_t destination[16],
+				  const uint8_t *options, size_t options_len)
+{
+	/* IPv6 fixed header + HBH (2-byte header + options, padded to an
+	 * 8-byte multiple) + UDP (8 bytes). Trailing option bytes left
+	 * as zero are Pad1 options, which the parser must skip. */
+	size_t hbh_len = ((2U + options_len + 7U) / 8U) * 8U;
+	size_t total = 40U + hbh_len + 8U;
+	size_t udp;
+
+	if (capacity < total || options_len > hbh_len - 2U) {
+		return 0U;
+	}
+	memset(packet, 0, total);
+	packet[0] = 0x60U;
+	packet[4] = (uint8_t)((hbh_len + 8U) >> 8);
+	packet[5] = (uint8_t)(hbh_len + 8U);
+	packet[6] = 0U; /* next header = hop-by-hop */
+	packet[7] = 64U;
+	memcpy(&packet[8], source, 16U);
+	memcpy(&packet[24], destination, 16U);
+	packet[40] = 17U; /* HBH next header = UDP */
+	packet[41] = (uint8_t)(hbh_len / 8U - 1U);
+	memcpy(&packet[42], options, options_len);
+	udp = 40U + hbh_len;
+	packet[udp] = 0x16U;
+	packet[udp + 1] = 0x16U;
+	packet[udp + 2] = 0x16U;
+	packet[udp + 3] = 0x33U;
+	packet[udp + 5] = 8U;
+	return total;
+}
+
+static int test_dtn_hbh_expiry_parse(void)
+{
+	const uint8_t destination[16] = {0x02, 0x00, [15] = 0x33};
+	struct lichen_router router;
+	struct accessor_state state = {
+		.joined = true, .discovery_succeeds = false,
+	};
+	struct lichen_route_packet input;
+	struct lichen_packet_route_result result;
+	uint8_t packet[128];
+	size_t len;
+	const uint8_t good_expiry[] = {
+		0x03, 0x04, 0x00, 0x00, 0x00, 0xc8, /* Type 0x03, 4B, 200 */
+	};
+	const uint8_t skip_then_expiry[] = {
+		0x1e, 0x01, 0x00,                   /* unknown, action 00: skip */
+		0x03, 0x04, 0x00, 0x00, 0x00, 0xc8,
+	};
+	const uint8_t pad1_then_expiry[] = {
+		0x00,                               /* Pad1 */
+		0x03, 0x04, 0x00, 0x00, 0x00, 0xc8,
+	};
+	const uint8_t short_expiry[] = {
+		0x03, 0x03, 0x00, 0x00, 0x00,       /* opt_len != 4 */
+	};
+	const uint8_t duplicate_expiry[] = {
+		0x03, 0x04, 0x00, 0x00, 0x00, 0xc8,
+		0x03, 0x04, 0x00, 0x00, 0x00, 0xc9,
+	};
+	const uint8_t overrun_option[] = {
+		0x03, 0x7f, 0x00, 0x00, 0x00, 0xc8, /* opt_len past header */
+	};
+	const uint8_t discard_unknown[] = {
+		0x40, 0x00,                         /* action bits 01: discard */
+	};
+
+	/* Well-formed expiry option routes normally (parse must not
+	 * change decisions; the expiry value itself is consumed by the
+	 * DTN wiring bead). */
+	configure_router(&router, &state);
+	REQUIRE(install_gradient(&router, destination, gradient_hop,
+				 LICHEN_GRADIENT_ANNOUNCE) == 0);
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, good_expiry,
+				  sizeof(good_expiry));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 1U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_FORWARD);
+
+	/* Unknown option with action 00 is skipped; Pad1 is skipped. */
+	configure_router(&router, &state);
+	REQUIRE(install_gradient(&router, destination, gradient_hop,
+				 LICHEN_GRADIENT_ANNOUNCE) == 0);
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, skip_then_expiry,
+				  sizeof(skip_then_expiry));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 2U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_FORWARD);
+
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, pad1_then_expiry,
+				  sizeof(pad1_then_expiry));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 3U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_FORWARD);
+
+	/* Malformed expiry options reject the packet. */
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, short_expiry,
+				  sizeof(short_expiry));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 4U, &result) ==
+		-EBADMSG);
+
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, duplicate_expiry,
+				  sizeof(duplicate_expiry));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 5U, &result) ==
+		-EBADMSG);
+
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, overrun_option,
+				  sizeof(overrun_option));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 6U, &result) ==
+		-EBADMSG);
+
+	/* Unknown option with discard action bits rejects the packet. */
+	len = make_hbh_udp_packet(packet, sizeof(packet), source_address,
+				  destination, discard_unknown,
+				  sizeof(discard_unknown));
+	REQUIRE(len > 0U);
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 7U, &result) ==
+		-EBADMSG);
+
+	return 0;
+}
+
 static int run_all_tests(void)
 {
 	int ret;
@@ -415,6 +571,8 @@ static int run_all_tests(void)
 	ret = test_multicast_scope_and_boundary();
 	if (ret != 0) return ret;
 	ret = test_source_route_validation();
+	if (ret != 0) return ret;
+	ret = test_dtn_hbh_expiry_parse();
 	if (ret != 0) return ret;
 	return test_queue_copy_gpsr_and_dtn();
 }

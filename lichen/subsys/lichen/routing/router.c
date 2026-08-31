@@ -271,6 +271,22 @@ int lichen_router_route(struct lichen_router *router,
 #define RPL_SRH_ADDRESS_LEN 16U
 #define RPL_SRH_MAX_ADDRESSES 8U
 
+/* LICHEN DTN hop-by-hop option (spec 05-routing.md section 9.8): option
+ * type 0x03 carries the 4-byte absolute UTC expiry. The DTN S-flag option
+ * type is not yet assigned in the spec (pending decision), so only the
+ * expiry option is parsed here. */
+#define IPV6_OPT_DTN_EXPIRY 0x03U
+#define IPV6_OPT_DTN_EXPIRY_LEN 4U
+#define IPV6_OPTION_TYPE_PAD1 0x00U
+
+/* Big-endian read; hand-rolled so the host test build (stub headers)
+ * needs no Zephyr byteorder shim. */
+static uint32_t be32_get(const uint8_t src[4])
+{
+	return ((uint32_t)src[0] << 24) | ((uint32_t)src[1] << 16) |
+	       ((uint32_t)src[2] << 8) | (uint32_t)src[3];
+}
+
 struct ipv6_dispatch_view {
 	const uint8_t *source;
 	const uint8_t *destination;
@@ -280,6 +296,9 @@ struct ipv6_dispatch_view {
 	uint8_t source_route_segments_left;
 	size_t source_route_header_offset;
 	size_t source_route_address_offset;
+	/** DTN absolute expiry from the hop-by-hop Type 0x03 option. */
+	bool dtn_expiry_present;
+	uint32_t dtn_expiry_unix;
 };
 
 static bool addr_is_zero(const uint8_t addr[16])
@@ -386,6 +405,52 @@ static int parse_ipv6_dispatch(const uint8_t *data, size_t len,
 		size_t extension_len = ((size_t)data[offset + 1U] + 1U) * 8U;
 		if (extension_len < 8U || extension_len > len - offset) {
 			return -EMSGSIZE;
+		}
+
+		if (next_header == IPV6_NH_HOP_BY_HOP) {
+			/* Walk the options TLVs (RFC 8200 section 4.2) to
+			 * extract the LICHEN DTN expiry. Unrecognized
+			 * options follow their action bits: skip on 00,
+			 * reject the packet otherwise (discard actions).
+			 * The view is memset to zero above, so options
+			 * simply record their findings. */
+			size_t opt = offset + 2U;
+			size_t options_end = offset + extension_len;
+
+			while (opt < options_end) {
+				uint8_t opt_type;
+				size_t opt_len;
+
+				opt_type = data[opt];
+				if (opt_type == IPV6_OPTION_TYPE_PAD1) {
+					/* Pad1 is a single byte with no
+					 * length field. */
+					opt += 1U;
+					continue;
+				}
+				if (options_end - opt < 2U) {
+					return -EBADMSG;
+				}
+				opt_len = data[opt + 1U];
+				if (opt_len > options_end - opt - 2U) {
+					return -EBADMSG;
+				}
+				if (opt_type == IPV6_OPT_DTN_EXPIRY) {
+					if (view->dtn_expiry_present ||
+					    opt_len != IPV6_OPT_DTN_EXPIRY_LEN) {
+						return -EBADMSG;
+					}
+					view->dtn_expiry_present = true;
+					view->dtn_expiry_unix =
+						be32_get(&data[opt + 2U]);
+				} else if ((opt_type & 0xC0U) != 0U) {
+					/* Unrecognized option whose action
+					 * bits demand discarding the
+					 * packet. */
+					return -EBADMSG;
+				}
+				opt += 2U + opt_len;
+			}
 		}
 
 		if (next_header == IPV6_NH_ROUTING) {
