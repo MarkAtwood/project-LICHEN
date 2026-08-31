@@ -10,6 +10,9 @@
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-31T02:03:49.870237609Z",
   "started_at": "2026-08-31T02:03:01.820194979Z",
+  "labels": [
+    "schc"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-iard",
