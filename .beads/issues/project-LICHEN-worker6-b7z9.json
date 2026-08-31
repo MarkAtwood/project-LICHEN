@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-b7z9",
+  "title": "Spec coverage sweep: traceability matrix + gap beads (all sections)",
+  "description": "Epic: build docs/spec-coverage.md — a committed traceability matrix from every normative requirement in spec/*.md to implementation and tests. Architecture (approved): flash extraction pass per section (cheap, token-heavy, evidence-marked: file:line + test names + confidence flags) → Opus verification pass ONLY on the flagged-uncertain set and MUST claims in security sections → gap beads filed with area labels (feeding affinity routing). Classification buckets: implemented+tested / implemented+untested / divergent / not-implemented / ambiguous. Caps: ~10 gap beads per section, overflow noted in matrix. oscore/EDHOC semantics gaps: label human-only. Sections by requirement density: 09-packets-timing(167), 05-routing(123), 02a-coordinated-capacity(98), 03-adaptation(64), 06-security(56), 02-physical-link(51), 12-apps(30), 08-gateway-coordination(29), rest lower. Start: 05-routing calibration run. Finish state: matrix complete, zero open MUST-gap beads.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T04:42:54.881790658Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T04:42:54.881790658Z"
+}
