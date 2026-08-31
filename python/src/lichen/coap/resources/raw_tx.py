@@ -10,7 +10,11 @@ from typing import Any
 
 from aiocoap import BAD_REQUEST, CHANGED, Message, resource
 
-from lichen.coap.resources.base import CBOR
+from lichen.coap.resources.base import (
+    CBOR,
+    AccessLevelResolver,
+    denied_response,
+)
 from lichen.coap.resources.cbor_validation import _decode_single_cbor
 from lichen.coap.resources.raw_rx import SPEC_MAX_FRAME_LEN
 
@@ -23,22 +27,31 @@ class RawTxResource(resource.Resource):
 
     rt = "diag.raw.tx"
 
+    _ACCESS_RESOURCE = "/diag/raw/tx"
+
     def __init__(
         self,
         *,
         clock: Callable[[], float] | None = None,
         min_interval_s: float = MIN_INTERVAL_S,
         max_frame_len: int = SPEC_MAX_FRAME_LEN,
+        access_level: AccessLevelResolver | None = None,
     ) -> None:
         super().__init__()
         self._clock = clock or time.monotonic
         self._min_interval_s = min_interval_s
         self._max_frame_len = max_frame_len
+        self._access_level = access_level
         self._last_tx_at: float | None = None
         self.last_frame: bytes | None = None
         self.last_wait: bool | None = None
 
     async def render_post(self, request: Message) -> Message:
+        denied = denied_response(
+            self._access_level, request, "POST", self._ACCESS_RESOURCE
+        )
+        if denied is not None:
+            return denied
         if not request.payload:
             return Message(code=BAD_REQUEST)
         try:

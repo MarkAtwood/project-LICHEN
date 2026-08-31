@@ -4,18 +4,61 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 import cbor2
-from aiocoap import CONTENT, Message, resource
+from aiocoap import (
+    CONTENT,
+    FORBIDDEN,
+    METHOD_NOT_ALLOWED,
+    NOT_FOUND,
+    UNAUTHORIZED,
+    Message,
+    resource,
+)
 from aiocoap.numbers import ContentFormat
+
+from lichen.coap.access import AccessLevel, can_access
 
 if TYPE_CHECKING:
     pass
 
 CBOR = ContentFormat.CBOR
 SENML_CBOR = ContentFormat(112)  # application/senml+cbor (RFC 8428)
+
+AccessLevelResolver = Callable[[Message], AccessLevel]
+
+
+def denied_response(
+    access_level: AccessLevelResolver | None,
+    request: Message,
+    method: str,
+    resource_path: str,
+) -> Message | None:
+    """Server-side LCI authorization gate (spec/11-lci.md 17.6.3).
+
+    Resolves the requester's access level through ``access_level`` and
+    applies the pinned ``can_access`` rule table. A ``None`` resolver means
+    the assembler wired no level source, which fails closed to the
+    least-privileged tier (17.5.4 R-11-030: raw diagnostics MUST require
+    local administrative authorization).
+    """
+    level = access_level(request) if access_level is not None else AccessLevel.READ_ONLY
+    allowed, code = can_access(level, method, resource_path)
+    if allowed:
+        return None
+    if code is None:
+        # can_access never returns (False, None); fail closed regardless.
+        return Message(code=FORBIDDEN)
+    code_map = {
+        "4.01": UNAUTHORIZED,
+        "4.03": FORBIDDEN,
+        "4.04": NOT_FOUND,
+        "4.05": METHOD_NOT_ALLOWED,
+    }
+    return Message(code=code_map.get(code, FORBIDDEN))
 
 
 class NodeInfo(Protocol):

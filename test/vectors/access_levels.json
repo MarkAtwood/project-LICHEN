@@ -256,6 +256,23 @@
         "method": "GET",
         "resource": "/.well-known/lichen-gw/info",
         "allowed": true
+      },
+      {
+        "name": "diag_raw_put_blocked_standard",
+        "description": "Arming raw RX over a standard-level binding is rejected (R-11-030)",
+        "access_level": "standard",
+        "method": "PUT",
+        "resource": "/diag/raw/rx",
+        "allowed": false,
+        "error_code": "4.01"
+      },
+      {
+        "name": "diag_raw_put_allowed_admin",
+        "description": "Admin transport may arm raw RX",
+        "access_level": "admin",
+        "method": "PUT",
+        "resource": "/diag/raw/rx",
+        "allowed": true
       }
     ]
   }

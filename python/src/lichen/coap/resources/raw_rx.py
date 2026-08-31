@@ -9,7 +9,12 @@ from typing import Any
 from aiocoap import BAD_REQUEST, CHANGED, Message, resource
 
 from lichen.coap.raw_diag import CODE_BAD_REQUEST, MAX_TTL_S, RawDiagTTL
-from lichen.coap.resources.base import CBOR, _cbor_response
+from lichen.coap.resources.base import (
+    CBOR,
+    AccessLevelResolver,
+    _cbor_response,
+    denied_response,
+)
 from lichen.coap.resources.cbor_validation import _decode_single_cbor
 
 SPEC_MAX_FRAME_LEN = 255
@@ -33,16 +38,32 @@ class RawRxResource(resource.Resource):
 
     rt = "diag.raw.rx"
 
-    def __init__(self, ttl: RawDiagTTL | None = None) -> None:
+    _ACCESS_RESOURCE = "/diag/raw/rx"
+
+    def __init__(
+        self,
+        ttl: RawDiagTTL | None = None,
+        *,
+        access_level: AccessLevelResolver | None = None,
+    ) -> None:
         super().__init__()
         self.ttl = ttl if ttl is not None else RawDiagTTL()
         self.include_payload = False
+        self._access_level = access_level
+
+    def _denied(self, request: Message, method: str) -> Message | None:
+        return denied_response(self._access_level, request, method, self._ACCESS_RESOURCE)
 
     async def render_get(self, request: Message) -> Message:
-        del request
+        denied = self._denied(request, "GET")
+        if denied is not None:
+            return denied
         return _cbor_response(self.status_map())
 
     async def render_put(self, request: Message) -> Message:
+        denied = self._denied(request, "PUT")
+        if denied is not None:
+            return denied
         if not request.payload:
             return Message(code=BAD_REQUEST)
         try:
@@ -80,8 +101,11 @@ class RawRxEventsResource(resource.ObservableResource):
 
     rt = "diag.raw.rx.events"
 
-    def __init__(self) -> None:
+    _ACCESS_RESOURCE = "/diag/raw/rx/events"
+
+    def __init__(self, *, access_level: AccessLevelResolver | None = None) -> None:
         super().__init__()
+        self._access_level = access_level
         self._last: dict[str, Any] = {}
 
     def publish(self, event: dict[str, Any]) -> None:
@@ -91,7 +115,11 @@ class RawRxEventsResource(resource.ObservableResource):
         self.updated_state()
 
     async def render_get(self, request: Message) -> Message:
-        del request
+        denied = denied_response(
+            self._access_level, request, "GET", self._ACCESS_RESOURCE
+        )
+        if denied is not None:
+            return denied
         return _cbor_response(dict(self._last))
 
     def get_link_description(self) -> dict[str, Any]:
