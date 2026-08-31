@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-6",
   "updated_at": "2026-08-30T22:46:58.895595226Z",
   "labels": [
-    "codereview"
+    "codereview",
+    "python"
   ],
   "dependencies": [
     {
