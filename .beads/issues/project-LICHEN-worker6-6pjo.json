@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T00:50:51.690446Z",
   "labels": [
     "gateway",
-    "oscore"
+    "oscore",
+    "rust"
   ],
   "dependencies": [
     {
