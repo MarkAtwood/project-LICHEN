@@ -111,11 +111,12 @@ static int lichen_l2_send_inner(struct net_if *iface, struct net_pkt *pkt)
 	 * - Schnorr-48 signature (always applied when has_key is set)
 	 * - Returns -ENOKEY if has_key is not set (no unsigned frames)
 	 */
-	size_t frame_len = 0;
+	size_t frame_len = sizeof(tx_frame_buf);
 	/*
-	 * Zero-initialize frame_len so that if lichen_link_tx() returns an
-	 * error without writing frame_len, the frame_len == 0 check below
-	 * catches it (project-LICHEN-i1gk.102).
+	 * out_len is in:buffer-capacity / out:frame-length (link.h). Seed it
+	 * with the full scratch capacity; the frame_len == 0 check below
+	 * still guards a success return that wrote nothing
+	 * (project-LICHEN-i1gk.102).
 	 *
 	 * NULL dst_eui64 = broadcast (no destination address in frame header).
 	 *
@@ -151,7 +152,18 @@ static int lichen_l2_send_inner(struct net_if *iface, struct net_pkt *pkt)
 	if (ret < 0) {
 		LOG_ERR("lichen_l2: TX frame build failed: %s (%d)",
 			lichen_link_strerror(ret), ret);
-		crash_info_store(CRASH_STATE_CORRUPTION, __LINE__, (uint32_t)(-ret));
+		/* Caller-input rejections (SCHC policy/structural via
+		 * -LICHEN_ESCHC, unkeyed state via -ENOKEY, packet too large
+		 * for the link frame via -EMSGSIZE) are operational
+		 * conditions, not corruption: a datagram the profile refuses
+		 * to encode or that cannot fit a link frame must not be
+		 * recorded as a crash reason.  Everything else keeps the
+		 * corruption record. */
+		if (ret != -LICHEN_ESCHC && ret != -ENOKEY &&
+		    ret != -EMSGSIZE) {
+			crash_info_store(CRASH_STATE_CORRUPTION, __LINE__,
+					 (uint32_t)(-ret));
+		}
 		k_mutex_unlock(&tx_mutex);
 		return lichen_l2_to_zephyr_errno(ret);
 	}
