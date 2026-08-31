@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.36",
+  "title": "Capability announcements: crypto oracle only — no CoAP resource, no capability table, no re-announce on root change (spec 8.12)",
+  "description": "Requirements (spec/06-security.md:949-1008): root validation of POST /.well-known/capability-announce including kid matches OSCORE sender ID, cache keyed by announcer_iid, 2.04 on success and 4.03 on failure; Implementations MUST bound the capability table (recommended 256 entries with LRU eviction, MAY reserve 25 percent for egress); Nodes MUST re-announce capabilities to the new root after detecting root change in DIO. Classification: implemented+untested at crypto layer (Python only); not-implemented at system layer. Evidence: python/src/lichen/crypto/capability_announcements.py from_cose_sign1:199-232 (kid==announcer_iid, alg -65537), verify:279-333 (expiry, seq\u003ecached, reserved bits 2-7 zero, Schnorr48 over SHA-256 Sig_structure); tests python/tests/test_capability_announcements.py (30) + vectors test/vectors/capability_announcements.json. NOT FOUND: /.well-known/capability-announce resource in C coap_server, rust dispatch, or python site.add_resource; capability table in any language; re-announce logic (grep re_announce = 0 hits). Suggested placement: python lichen/coap/resources, rust lichen-gateway, C coap_server resource; root-side consumption feeding tunnel-auth decisions (spec 8.12 to 8.11 flow).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:17:09.150218431Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:17:09.150218431Z",
+  "labels": [
+    "spec-gap",
+    "coap",
+    "gateway",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.36",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T10:17:09.323960617Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

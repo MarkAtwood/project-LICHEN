@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-6id0",
+  "title": "Spec clarification: 8.6 R-05-035 flags-reject vs 8.7.1 'receivers MUST ignore reserved flags' — spec editor decision needed",
+  "description": "Found by kimi-k3 security review of b7z9.3.3 (informational, needs human/spec-editor glance; not a code defect). spec/05-routing.md 8.6 (line ~370) mandates: reserved Target Flags octet MUST be zero, nonzero rejects the DAO. spec/05-routing.md 8.7.1 (line ~461, the FUTURE .44.9 generalized model) says: senders MUST set reserved flags to zero and 'As required by RFC 6550, receivers MUST ignore reserved flags and bits beyond Prefix Length'. Every current implementation layer already REJECTS nonzero flags (Rust envelope is_generalized_target_body + extract_updates, C rpl_dao_process.c extract_updates, Python dao_origin.py structural stage; pinned by vector reject_target_flags_nonzero, 52 vectors), and no compliant wire is affected because senders MUST zero flags in both profiles. But the 8.7.1 ignore-MUST and the 8.6 reject-MUST are in normative tension for the future profile: when .44.9 generalized bodies become current, either the reject must be relaxed to ignore (change 8.6/impls) or 8.7.1's ignore-clause must be reworded (receiver-side reject stays). Decision affects the vector set (reject_target_flags_nonzero pins reject). Ask: which normative rule wins for .44.9, and reword the losing clause. Labels: human judgment on spec authoring. Discovered from project-LICHEN-worker6-b7z9.3.3.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:18:15.537583111Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T10:18:15.537583111Z",
+  "labels": [
+    "rpl",
+    "human"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6id0",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.3.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T10:18:15.654850772Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
