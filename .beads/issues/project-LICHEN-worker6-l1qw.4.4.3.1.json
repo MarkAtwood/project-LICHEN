@@ -9,7 +9,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-07-25T03:42:55.885465Z",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "python"
   ],
   "dependencies": [
     {
