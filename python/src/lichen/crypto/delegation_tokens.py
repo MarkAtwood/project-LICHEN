@@ -155,14 +155,38 @@ class DelegationTokenPayload:
 
     @classmethod
     def from_cbor(cls, data: bytes) -> DelegationTokenPayload:
-        """Decode payload from CBOR bytes."""
+        """Decode payload from CBOR bytes.
+
+        Raises:
+            TypeError: If the payload is not a CBOR map or any field has the
+                wrong wire type (bool is rejected for integer fields, and
+                bytearray/str are rejected where bytes are required).
+            KeyError: If a required field is missing.
+        """
         payload_map = cbor2.loads(data)
+        if not isinstance(payload_map, dict):
+            raise TypeError("payload must be a CBOR map")
+        delegate = payload_map[_PAYLOAD_DELEGATE]
+        scope = payload_map[_PAYLOAD_SCOPE]
+        resource = payload_map[_PAYLOAD_RESOURCE]
+        expiry = payload_map[_PAYLOAD_EXPIRY]
+        seq = payload_map[_PAYLOAD_SEQ]
+        if type(delegate) is not bytes:
+            raise TypeError("delegate must be bytes")
+        if type(scope) is not int:
+            raise TypeError("scope must be an integer")
+        if type(resource) is not str:
+            raise TypeError("resource must be a string")
+        if type(expiry) is not int:
+            raise TypeError("expiry must be an integer")
+        if type(seq) is not int:
+            raise TypeError("seq must be an integer")
         return cls(
-            delegate=payload_map[_PAYLOAD_DELEGATE],
-            scope=payload_map[_PAYLOAD_SCOPE],
-            resource=payload_map[_PAYLOAD_RESOURCE],
-            expiry=payload_map[_PAYLOAD_EXPIRY],
-            seq=payload_map[_PAYLOAD_SEQ],
+            delegate=delegate,
+            scope=scope,
+            resource=resource,
+            expiry=expiry,
+            seq=seq,
         )
 
 
