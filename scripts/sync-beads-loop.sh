@@ -24,6 +24,9 @@ while :; do
         # Hourly OpenRouter burn entry (cost-per-bead trending)
         BURN=$("$REPO_ROOT/scripts/log-burn.sh" 2>/dev/null) || true
         [ -n "$BURN" ] && echo "   $BURN"
+        # Publish commits (memories, store state) so other hosts stay current
+        git push origin main >> "$REPO_ROOT/.beads-sync.log" 2>&1 || \
+            echo "   push failed (will retry next cycle)"
         trap - EXIT
         rmdir "$LOCK"
     fi
