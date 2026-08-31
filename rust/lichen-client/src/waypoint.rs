@@ -109,8 +109,22 @@ impl WaypointShare {
     pub fn to_cbor(&self) -> Result<Vec<u8>, WaypointClientError> {
         self.validate()?;
         let mut buf = Vec::new();
-        ciborium::into_writer(self, &mut buf)
-            .map_err(|error| WaypointClientError::Encode(Error::Encode(error.to_string())))?;
+        write_waypoint(
+            &mut buf,
+            &WaypointFields {
+                id: self.id.as_deref(),
+                name: &self.name,
+                lat: self.lat,
+                lon: self.lon,
+                alt: self.alt,
+                icon: self.icon.as_ref().map(WaypointIcon::as_str),
+                color: self.color.as_deref(),
+                notes: self.notes.as_deref(),
+                created: self.created,
+                creator: self.creator.as_deref(),
+                expires: self.expires,
+            },
+        );
         Ok(buf)
     }
 }
@@ -380,8 +394,26 @@ impl Waypoint {
     /// Encode to CBOR for `POST /waypoints` or sharing.
     pub fn to_cbor(&self) -> Result<Vec<u8>, Error> {
         let mut buf = Vec::new();
-        ciborium::into_writer(self, &mut buf).map_err(|e| Error::Encode(e.to_string()))?;
+        write_waypoint(&mut buf, &self.fields());
         Ok(buf)
+    }
+
+    /// Wire-field view shared with the canonical encoder (`Waypoint` and
+    /// `WaypointShare` have identical wire shapes).
+    fn fields(&self) -> WaypointFields<'_> {
+        WaypointFields {
+            id: Some(&self.id),
+            name: &self.name,
+            lat: self.lat,
+            lon: self.lon,
+            alt: self.alt,
+            icon: self.icon.as_ref().map(WaypointIcon::as_str),
+            color: self.color.as_deref(),
+            notes: self.notes.as_deref(),
+            created: Some(self.created),
+            creator: Some(&self.creator),
+            expires: self.expires,
+        }
     }
 }
 
@@ -400,8 +432,132 @@ impl WaypointList {
     /// Encode to CBOR.
     pub fn to_cbor(&self) -> Result<Vec<u8>, Error> {
         let mut buf = Vec::new();
-        ciborium::into_writer(self, &mut buf).map_err(|e| Error::Encode(e.to_string()))?;
+        write_head(&mut buf, MAJOR_MAP, 1);
+        write_text(&mut buf, "waypoints");
+        write_head(&mut buf, MAJOR_ARRAY, self.waypoints.len() as u64);
+        for waypoint in &self.waypoints {
+            write_waypoint(&mut buf, &waypoint.fields());
+        }
         Ok(buf)
+    }
+}
+
+/// Canonical byte-level waypoint encoder (spec Section 18.3 wire contract).
+///
+/// Float fields always encode as 64-bit floats (`0xfb`) and text/integer
+/// fields as shortest-form heads, matching the shared oracle
+/// (`test/vectors/waypoint.json`, built with cbor2 defaults) and the
+/// normative example vectors in spec appendix-senml. ciborium's serializer
+/// is not used for encoding because it collapses f16-exact floats
+/// (e.g. `10.5` -> `0xf9`), breaking cross-implementation byte parity;
+/// decoding stays on ciborium, which accepts every definite width.
+const MAJOR_UINT: u8 = 0x00;
+const MAJOR_TEXT: u8 = 0x60;
+const MAJOR_ARRAY: u8 = 0x80;
+const MAJOR_MAP: u8 = 0xa0;
+
+fn write_head(out: &mut Vec<u8>, major: u8, value: u64) {
+    match value {
+        0..=23 => out.push(major | value as u8),
+        24..=0xff => {
+            out.push(major | 24);
+            out.push(value as u8);
+        }
+        0x100..=0xffff => {
+            out.push(major | 25);
+            out.extend_from_slice(&(value as u16).to_be_bytes());
+        }
+        0x1_0000..=0xffff_ffff => {
+            out.push(major | 26);
+            out.extend_from_slice(&(value as u32).to_be_bytes());
+        }
+        _ => {
+            out.push(major | 27);
+            out.extend_from_slice(&value.to_be_bytes());
+        }
+    }
+}
+
+fn write_text(out: &mut Vec<u8>, s: &str) {
+    write_head(out, MAJOR_TEXT, s.len() as u64);
+    out.extend_from_slice(s.as_bytes());
+}
+
+fn write_f64(out: &mut Vec<u8>, f: f64) {
+    out.push(0xfb); // major 7, additional 27 (8-byte float)
+    out.extend_from_slice(&f.to_bits().to_be_bytes());
+}
+
+/// Field view over the waypoint wire shape (declaration order, `None` skipped).
+struct WaypointFields<'a> {
+    id: Option<&'a str>,
+    name: &'a str,
+    lat: f64,
+    lon: f64,
+    alt: Option<f64>,
+    icon: Option<&'a str>,
+    color: Option<&'a str>,
+    notes: Option<&'a str>,
+    created: Option<u64>,
+    creator: Option<&'a str>,
+    expires: Option<u64>,
+}
+
+fn write_waypoint(out: &mut Vec<u8>, w: &WaypointFields<'_>) {
+    let entries = [
+        w.id.is_some(),
+        true,
+        true,
+        true,
+        w.alt.is_some(),
+        w.icon.is_some(),
+        w.color.is_some(),
+        w.notes.is_some(),
+        w.created.is_some(),
+        w.creator.is_some(),
+        w.expires.is_some(),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count() as u64;
+    write_head(out, MAJOR_MAP, entries);
+    if let Some(id) = w.id {
+        write_text(out, "id");
+        write_text(out, id);
+    }
+    write_text(out, "name");
+    write_text(out, w.name);
+    write_text(out, "lat");
+    write_f64(out, w.lat);
+    write_text(out, "lon");
+    write_f64(out, w.lon);
+    if let Some(alt) = w.alt {
+        write_text(out, "alt");
+        write_f64(out, alt);
+    }
+    if let Some(icon) = w.icon {
+        write_text(out, "icon");
+        write_text(out, icon);
+    }
+    if let Some(color) = w.color {
+        write_text(out, "color");
+        write_text(out, color);
+    }
+    if let Some(notes) = w.notes {
+        write_text(out, "notes");
+        write_text(out, notes);
+    }
+    if let Some(created) = w.created {
+        write_text(out, "created");
+        write_head(out, MAJOR_UINT, created);
+    }
+    if let Some(creator) = w.creator {
+        write_text(out, "creator");
+        write_text(out, creator);
+    }
+    if let Some(expires) = w.expires {
+        write_text(out, "expires");
+        write_head(out, MAJOR_UINT, expires);
     }
 }
 
