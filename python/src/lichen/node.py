@@ -41,6 +41,7 @@ from lichen.announce.scheduler import (
     AnnounceScheduler,
     SchedulerConfig,
 )
+from lichen.constants import L2_DISPATCH_ROUTING
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.gradient import GRADIENT_TIMEOUT_MS, GradientTable
 from lichen.ipv6.addr import iid_to_eui64
@@ -870,6 +871,18 @@ class Node:
 
         if kind == L2PayloadKind.ROUTING and len(body) > 0 and body[0] == L2_ROUTING_TYPE_ANNOUNCE:
             await self._process_announce(body, rx.sender, rx.rssi_dbm)
+            return
+
+        if kind == L2PayloadKind.ROUTING or (
+            len(payload) > 0 and payload[0] == L2_DISPATCH_ROUTING
+        ):
+            # Node-level routing traffic that is not a well-formed ANNOUNCE
+            # (other routing subtypes, malformed or truncated routing frames)
+            # is consumed here: it never reaches the application callback.
+            logger.debug(
+                "dropping non-ANNOUNCE routing frame from %s",
+                rx.sender,
+            )
             return
 
         is_fragment = bool(payload) and payload[0] in RULE_IDS
