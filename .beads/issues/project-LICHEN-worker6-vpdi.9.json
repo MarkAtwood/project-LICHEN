@@ -8,9 +8,6 @@
   "created_at": "2026-08-28T14:52:11.24537Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:52:11.24537Z",
-  "labels": [
-    "human-only"
-  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-vpdi.9",
