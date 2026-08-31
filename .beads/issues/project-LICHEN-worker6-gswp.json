@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-gswp",
+  "title": "schc_ruleN host tests fail at base: compress profile-limit and rule-constraint expectations vs lichen_schc_compress",
+  "description": "Pre-existing runtime failures unmasked by the gcc-13 build sweep (project-LICHEN-worker6-8mgv); reviewer proved via two baseline worktree experiments they are INDEPENDENT of the conversion casts. Six suites fail: schc_rule1_compress (line 149: lichen_schc_compress == SCHC_FRAGMENT_MAX_PACKET_SIZE; line 163 test_profile_limit), schc_rule2_compress (152/167), schc_rule3_compress (171/185), schc_rule4_compress (153/170), schc_rule5_compress (166: == SCHC_ERR_INVALID_ARGUMENT; 215 rule-constraints), schc_rule6_compress (196/245). All decompress suites and everything else pass (35 executables, 49/55 ctest suites). Investigate with test-integrity discipline: determine whether the tests' profile-limit/rule-constraint expectations match current lichen_schc_compress semantics per spec/03 ( SCHC_FRAGMENT_MAX_PACKET_SIZE vs single_frame_limit; SCHC_ERR_INVALID_ARGUMENT for rule-constraint violations) - fix the CODE if the spec says the tests are right, regenerate/fix the TESTS if the semantics intentionally changed (do not weaken assertions; cite the spec line). Confirm parity with the Rust schc behavior for the same cases (rust/lichen-schc rule5/rule6 compression tests pass - check what they expect).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T01:33:03.283379004Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T01:54:33.721059466Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gswp",
+      "depends_on_id": "project-LICHEN-worker6-8mgv",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T01:33:03.37488882Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
