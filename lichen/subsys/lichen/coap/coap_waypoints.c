@@ -923,13 +923,17 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
   bool local_admin;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
-      resource, request, addr, addr_len, COAP_METHOD_POST, &oscore);
+  ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+                                       COAP_METHOD_POST, oscore.plainbuf,
+                                       sizeof(oscore.plainbuf), &oscore.payload,
+                                       &oscore.payload_len, &oscore.ctx,
+                                       oscore.piv, &oscore.piv_len,
+                                       &oscore.is_protected);
   if (ret != 0) {
     return ret;
   }
   ret = request_actor(addr, addr_len, actor, &local_admin);
-  if (ret < 0 || (!local_admin && !oscore.is_protected)) {
+  if (ret < 0) {
     return coap_oscore_respond_resource(
         resource, request, addr, addr_len, &oscore,
         COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
@@ -1066,8 +1070,12 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
   bool local_admin;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
-      resource, request, addr, addr_len, COAP_METHOD_DELETE, &oscore);
+  ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+                                       COAP_METHOD_DELETE, oscore.plainbuf,
+                                       sizeof(oscore.plainbuf), &oscore.payload,
+                                       &oscore.payload_len, &oscore.ctx,
+                                       oscore.piv, &oscore.piv_len,
+                                       &oscore.is_protected);
   if (ret != 0) {
     return ret;
   }
@@ -1082,7 +1090,7 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
                                         0, NULL, 0);
   }
   ret = request_actor(addr, addr_len, actor, &local_admin);
-  if (ret < 0 || (!local_admin && !oscore.is_protected)) {
+  if (ret < 0) {
     return coap_oscore_respond_resource(
         resource, request, addr, addr_len, &oscore,
         COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
