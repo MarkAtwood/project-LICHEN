@@ -89,6 +89,26 @@ static void test_desync_fsm(void)
 	/* Missed superframes are a no-op outside RECOVERING. */
 	assert(lichen_desync_on_missed_superframe(&tdma) ==
 	       LICHEN_DESYNC_DESYNCED);
+
+	/* packets-timing.json desync_fsm_recovery_timeout: both partial-
+	 * recovery cases (valid_count 1 and 2) return to DESYNCED after 3
+	 * missed superframes, with the consecutive-valid counter reset. */
+	for (uint8_t valid_count = 1U; valid_count <= 2U; valid_count++) {
+		assert(lichen_desync_on_sfn_wrap(&tdma, false) ==
+		       LICHEN_DESYNC_DESYNCED);
+		for (uint8_t i = 0U; i < valid_count; i++) {
+			assert(lichen_desync_on_beacon(&tdma, true) ==
+			       LICHEN_DESYNC_RECOVERING);
+		}
+		assert(tdma.desync_consecutive_valid == valid_count);
+		assert(lichen_desync_on_missed_superframe(&tdma) ==
+		       LICHEN_DESYNC_RECOVERING);
+		assert(lichen_desync_on_missed_superframe(&tdma) ==
+		       LICHEN_DESYNC_RECOVERING);
+		assert(lichen_desync_on_missed_superframe(&tdma) ==
+		       LICHEN_DESYNC_DESYNCED);
+		assert(tdma.desync_consecutive_valid == 0U);
+	}
 }
 
 int main(void)
