@@ -1,3 +1,4 @@
 {"id":"01a048e4-77fa-74e9-bb28-dcf6d540d4aa","issue_id":"project-LICHEN-worker6-9zfd.9","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T15:02:07.610323Z"}
 {"id":"01a055fe-9b8f-76a9-aa72-de3532caaf34","issue_id":"project-LICHEN-worker6-9zfd.9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: hal","created_at":"2026-08-31T04:05:44.46343751Z"}
 {"id":"01a055fe-9cf5-7d71-964b-0e8795c987f1","issue_id":"project-LICHEN-worker6-9zfd.9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: meshtastic","created_at":"2026-08-31T04:05:44.821882274Z"}
+{"id":"01a055fe-9ebc-785f-b04f-7ffe21cbe854","issue_id":"project-LICHEN-worker6-9zfd.9","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-08-31T04:05:45.276551404Z"}

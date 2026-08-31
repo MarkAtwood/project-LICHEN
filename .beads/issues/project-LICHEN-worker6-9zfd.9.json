@@ -10,7 +10,8 @@
   "updated_at": "2026-08-28T15:02:07.601734Z",
   "labels": [
     "hal",
-    "meshtastic"
+    "meshtastic",
+    "networking"
   ],
   "dependencies": [
     {
