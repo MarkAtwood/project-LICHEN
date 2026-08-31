@@ -11,6 +11,7 @@
   "updated_at": "2026-08-28T00:47:45.503504Z",
   "labels": [
     "robustness",
-    "codereview"
+    "codereview",
+    "human-only"
   ]
 }
