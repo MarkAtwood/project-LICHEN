@@ -104,7 +104,7 @@ done
 if ! tmux list-windows -t "$SESSION:" 2>/dev/null | grep -q "sync"; then
     chmod +x "$REPO_ROOT/scripts/sync-beads-loop.sh"
     tmux new-window -d -t "$SESSION:" -n "sync" -c "$REPO_ROOT" \
-        "$REPO_ROOT/scripts/sync-beads-loop.sh 60"
+        "$REPO_ROOT/scripts/sync-beads-loop.sh 15"
     echo "Sync loop window started (hourly; log: .beads-sync.log)"
 fi
 
