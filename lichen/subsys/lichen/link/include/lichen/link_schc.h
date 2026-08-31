@@ -57,7 +57,15 @@ extern "C" {
  * @param[out] out       Output buffer for compressed data
  * @param[in]  out_max   Size of output buffer
  * @return Number of bytes written to @p out, or negative error code:
- *         - SCHC_ERR_BUFFER_TOO_SMALL (-2): output buffer too small
+ *         - SCHC_ERR_NO_MATCHING_RULE (-1): packet rejected by the
+ *           compress gate as malformed (length mismatch, unsupported
+ *           extension-header chain, bad UDP length or checksum)
+ *         - SCHC_ERR_BUFFER_TOO_SMALL (-2): output buffer too small, or
+ *           the input packet exceeds SCHC_FRAGMENT_MAX_PACKET_SIZE
+ *         - SCHC_ERR_INVALID_ARGUMENT (-6): input is NULL, shorter than
+ *           an IPv6 header, or not an IPv6 packet (compress accepts full
+ *           IPv6 packets only); also returned for rule 7 (MQTT-SN port)
+ *           packets whose endpoints fail the Rule 7 address policy
  */
 static inline int lichen_link_compress(const uint8_t *_Nonnull ipv6, size_t ipv6_len,
 				       uint8_t *_Nonnull out, size_t out_max)
@@ -79,6 +87,9 @@ static inline int lichen_link_compress(const uint8_t *_Nonnull ipv6, size_t ipv6
  *         - SCHC_ERR_BUFFER_TOO_SMALL (-2): output buffer too small
  *         - SCHC_ERR_UNKNOWN_RULE_ID (-3): unrecognized rule in data
  *         - SCHC_ERR_TOO_SHORT (-4): truncated compressed data
+ *         - SCHC_ERR_INVALID_ARGUMENT (-6): malformed residue (bad
+ *           padding bits, bad CoAP token length, OSCORE classification
+ *           mismatch)
  */
 static inline int lichen_link_decompress(const uint8_t *_Nonnull schc, size_t schc_len,
 					 uint8_t *_Nonnull out, size_t out_max)
