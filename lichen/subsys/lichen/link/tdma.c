@@ -73,7 +73,72 @@ int lichen_tdma_init(struct lichen_tdma_ctx *tdma, struct lichen_link_ctx *ctx)
 	tdma->synced = false;
 	tdma->ccp_state = LICHEN_CCP_UNJOINED;
 	tdma->missed_beacons = 0;
+	tdma->desync_state = LICHEN_DESYNC_SYNCED;
+	tdma->desync_consecutive_valid = 0;
+	tdma->desync_missed_superframes = 0;
 	return 0;
+}
+
+enum lichen_desync_state
+lichen_desync_on_sfn_wrap(struct lichen_tdma_ctx *tdma, bool time_valid)
+{
+	if (tdma == NULL) return LICHEN_DESYNC_DESYNCED;
+
+	/* Spec/09 14.7: SFN wrap with an invalid time provider drops a
+	 * SYNCED node to DESYNCED. No-op in DESYNCED/RECOVERING. */
+	if (!time_valid && tdma->desync_state == LICHEN_DESYNC_SYNCED) {
+		tdma->desync_state = LICHEN_DESYNC_DESYNCED;
+		tdma->desync_consecutive_valid = 0;
+		tdma->desync_missed_superframes = 0;
+	}
+	return tdma->desync_state;
+}
+
+enum lichen_desync_state lichen_desync_on_beacon(struct lichen_tdma_ctx *tdma,
+						  bool valid)
+{
+	if (tdma == NULL) return LICHEN_DESYNC_DESYNCED;
+
+	if (tdma->desync_state == LICHEN_DESYNC_DESYNCED && valid) {
+		tdma->desync_state = LICHEN_DESYNC_RECOVERING;
+		tdma->desync_consecutive_valid = 1;
+		tdma->desync_missed_superframes = 0;
+	} else if (tdma->desync_state == LICHEN_DESYNC_RECOVERING) {
+		if (valid) {
+			tdma->desync_consecutive_valid++;
+			tdma->desync_missed_superframes = 0;
+			if (tdma->desync_consecutive_valid >=
+			    LICHEN_DESYNC_RECOVERY_BEACONS) {
+				tdma->desync_state = LICHEN_DESYNC_SYNCED;
+				tdma->desync_consecutive_valid = 0;
+			}
+		} else {
+			tdma->desync_state = LICHEN_DESYNC_DESYNCED;
+			tdma->desync_consecutive_valid = 0;
+			tdma->desync_missed_superframes = 0;
+		}
+	}
+	return tdma->desync_state;
+}
+
+enum lichen_desync_state
+lichen_desync_on_missed_superframe(struct lichen_tdma_ctx *tdma)
+{
+	if (tdma == NULL) return LICHEN_DESYNC_DESYNCED;
+
+	/* Bounded RECOVERING listen timeout: 3 superframes (RECOMMENDED,
+	 * spec/09 14.7). No-op outside RECOVERING. */
+	if (tdma->desync_state != LICHEN_DESYNC_RECOVERING) {
+		return tdma->desync_state;
+	}
+	tdma->desync_missed_superframes++;
+	if (tdma->desync_missed_superframes >=
+	    LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES) {
+		tdma->desync_state = LICHEN_DESYNC_DESYNCED;
+		tdma->desync_consecutive_valid = 0;
+		tdma->desync_missed_superframes = 0;
+	}
+	return tdma->desync_state;
 }
 
 int lichen_ccp_fsm_event(struct lichen_tdma_ctx *tdma, enum lichen_ccp_event event, uint8_t missed)
