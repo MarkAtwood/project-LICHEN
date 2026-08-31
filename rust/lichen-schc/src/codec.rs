@@ -2276,11 +2276,12 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     // reassemble is undeliverable regardless of how well it compresses.
     // Mirrors the C lichen_schc_compress raw-packet guard.
     if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
-        return Err(BufferTooSmall::new(
-            packet.len(),
-            SCHC_FRAG_MAX_PACKET_SIZE,
-        )
-        .into());
+        // Profile-limit error (matching the Python compress_packet reference
+        // and the encoded-size guards below): the raw datagram can never be
+        // delivered, regardless of output-buffer capacity.
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
     }
     validate_full_ipv6(packet)?;
 
@@ -2750,7 +2751,9 @@ mod tests {
         );
         assert!(matches!(
             compress(&one_over, &mut compressed),
-            Err(SchcError::BufferTooSmall(_))
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
         ));
     }
 
@@ -2836,12 +2839,20 @@ mod tests {
             ))
         ));
         assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
-        // Boundary: exactly at the ceiling still encodes (also covered by
-        // mqtt_sn_profile_size_boundary's round trip).
+        // Boundary: the RAW-packet bound applies even when the encoded form
+        // would still fit the ceiling (spec 03: implementations MUST NOT
+        // substitute the encoded size for the raw size). raw = 22,581 >
+        // 22,554 is rejected before rule dispatch, sentinel buffer intact.
         let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
         let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
         let mut out = vec![0xAAu8; needed - 1];
-        assert_eq!(compress(&packet, &mut out).unwrap(), needed - 1);
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
     }
 
     fn coap_rule0_packet(payload_len: usize) -> Vec<u8> {
@@ -2911,12 +2922,16 @@ mod tests {
         ));
 
         // Compressor-side: one raw byte more exceeds the raw-packet
-        // reassembly bound and is rejected before rule dispatch.
+        // reassembly bound and is rejected before rule dispatch with the
+        // profile-limit error (matching the Python compress_packet
+        // reference and the encoded-size guards in this file).
         let over = coap_rule0_packet(payload_len + 1);
         let mut bigger = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE + 1];
         assert!(matches!(
             compress(&over, &mut bigger),
-            Err(SchcError::BufferTooSmall(_))
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
         ));
     }
 
