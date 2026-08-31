@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-bkl1",
   "title": "Preserve 5rvk decompress-side coverage when 7v5f (779600c0c3) merges: re-home deadbeef-RX-reject + valid-fallback round-trip assertions",
   "description": "Found by correctness review pass of project-LICHEN-worker6-5rvk (P3, merge hazard). 5rvk added decompress-side coverage to lichen/tests/schc/main.c test_uncompressed_fallback: (a) non-IPv6 rule255 payload (deadbeef) is REJECTED at decompress (RX validation via the profile validate_payload hook), and (b) a valid no-rule-match IPv6 UDP packet round-trips byte-preserving through the fallback. 7v5f's commit 779600c0c3 (compress rejects non-IPv6 input) renames that test to test_reject_non_ipv6_input and flips its RUN_TEST line - a naive 'take theirs' merge resolution would silently DELETE 5rvk's decompress-side assertions. On the merged tree compress no longer emits deadbeef-as-rule255, so the reject assertion must be re-homed to a hand-built ff|deadbeef frame. Fix at merge time: keep 7v5f's compress-side test, re-add (a) as a decompress test with a hand-built ff frame and (b) as the valid fallback round-trip, in whatever test function fits the merged file. Tracking bead only - no code change until the merge.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T01:14:38.527161777Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-31T01:14:38.527161777Z",
+  "updated_at": "2026-08-31T05:43:52.828502071Z",
+  "closed_at": "2026-08-31T05:43:52.828502071Z",
+  "close_reason": "Obsolete; merge-coordination note for 5rvk/7v5f branches which have both landed. codec.rs has substantial decompress test coverage.",
   "labels": [
     "schc"
   ],

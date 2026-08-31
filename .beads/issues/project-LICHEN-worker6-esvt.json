@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-esvt",
+  "title": "link_layer.py: fragment detection uses hardcoded rule IDs instead of RULE_IDS",
+  "description": "Same pattern as project-LICHEN-worker6-8lbq (fixed in node.py this round): python/src/lichen/link/link_layer.py lines 1326 and 1329 hardcode (0x78, 0x79) for fragment raw-dispatch detection (guard + error message) instead of the imported/importable RULE_IDS constant from lichen.schc.fragment. The 1328 error message also hardcodes the rule names. If RULE_IDS ever changes (e.g. fragmentation_rule_for_sender picks different bytes), link_layer fragment admission silently diverges from node.py detection and the fragment module. Replace membership checks with RULE_IDS and derive the message text from the constant or keep it stable by policy. Add/adjust regression coverage consistent with node.py's test_fragment_dispatch_tracks_rule_ids_constant.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:30:12.733528911Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T05:31:42.489376711Z",
+  "started_at": "2026-08-31T05:31:42.489376711Z",
+  "lease_expires_at": "2026-08-31T05:36:42.489376711Z",
+  "heartbeat_at": "2026-08-31T05:31:42.489376711Z",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-esvt",
+      "depends_on_id": "project-LICHEN-worker6-8lbq",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:30:12.906573567Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

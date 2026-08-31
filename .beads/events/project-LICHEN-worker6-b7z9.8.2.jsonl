@@ -1,0 +1,6 @@
+{"id":"01a05650-874a-7c9f-840c-483be0eee07e","issue_id":"project-LICHEN-worker6-b7z9.8.2","event_type":"created","actor":"opencode-worker-1","old_value":"","new_value":"","created_at":"2026-08-31T05:35:13.226828898Z"}
+{"id":"01a05650-874f-7ed5-8260-d41d4fa98c0b","issue_id":"project-LICHEN-worker6-b7z9.8.2","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: zephyr","created_at":"2026-08-31T05:35:13.231973145Z"}
+{"id":"01a05650-8754-78c1-909b-8cec4e7e5db7","issue_id":"project-LICHEN-worker6-b7z9.8.2","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: networking","created_at":"2026-08-31T05:35:13.236575158Z"}
+{"id":"01a05650-8759-74ec-9a66-36a84bd71261","issue_id":"project-LICHEN-worker6-b7z9.8.2","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: firmware","created_at":"2026-08-31T05:35:13.241324231Z"}
+{"id":"01a05650-875d-7f21-978b-9c8a59427c83","issue_id":"project-LICHEN-worker6-b7z9.8.2","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: security","created_at":"2026-08-31T05:35:13.245999385Z"}
+{"id":"01a05650-8762-77ee-81cb-e5cab632a186","issue_id":"project-LICHEN-worker6-b7z9.8.2","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: spec-gap","created_at":"2026-08-31T05:35:13.25052074Z"}

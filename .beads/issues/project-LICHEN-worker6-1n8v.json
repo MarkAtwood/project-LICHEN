@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-1n8v",
   "title": "coap_waypoints detail_get/detail_put still use the inline unprotect pattern (read endpoints)",
   "description": "Follow-up from 2r8s (which migrated the audited mutating sites): lichen/subsys/lichen/coap/coap_waypoints.c:1032 (lichen_waypoint_detail_get_handler - GET, asserts payload_len==0) and :1064 (lichen_waypoint_detail_put_handler - always NOT_ALLOWED) still call coap_oscore_unprotect_resource_request. These are READ/disallowed endpoints, not the mutating handlers the l9hb epic targets, so they were left on the old API to keep 2r8s's diff scoped. Migrating them to coap_oscore_authorize_mutating is mostly mechanical but detail_get is a read (no method gate to enforce - the helper is mutating-oriented) so confirm the helper fits or keep the read path on the plain unprotect API deliberately with a comment.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T03:45:49.240887785Z",
   "created_by": "opencode-worker-2",
-  "updated_at": "2026-08-31T03:45:49.240887785Z",
+  "updated_at": "2026-08-31T05:43:47.836303249Z",
+  "closed_at": "2026-08-31T05:43:47.836303249Z",
+  "close_reason": "Obsolete; detail_get/detail_put both use coap_oscore_unprotect_resource_request() + coap_oscore_respond_resource() shared helper pattern.",
   "labels": [
     "coap"
   ],

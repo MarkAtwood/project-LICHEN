@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-s8s6",
   "title": "Fix recipient store load() doc: scope heal to first-accept window and note state-record trust",
   "description": "Found by correctness+robustness codereview of project-LICHEN-worker6-9liz; both findings target the same doc comment on GatewayOscoreRecipientStore::load (rust/lichen-gateway/src/gateway.rs:436-438). (1) Robustness P3: the doc says the missing-floor heal covers 'crash window between the state and floor writes' without the first-accept qualifier - for a non-first accept the prior floor is still on disk in that window, so a crash there yields (Some, Some) healed by the pre-existing lag arm; only the first accept (no prior floor) yields (Some, None). The sibling sender-store doc was already scoped to 'first-accept crash window' and the new test comment is correctly scoped; only the load() doc carries the residue. (2) Correctness P2 (residual-risk note on the accepted design, agreed dominated by pre-existing strictly-worse paths: delete-both gives an uninitialized state where every sequence replays): the heal trusts the sealed state record alone when the floor is absent - an actor who can write the state root and delete the floor file gets one older sealed state accepted as the new floor with no precedes check. Add one sentence to the doc noting the heal trusts the state record alone under the seal threat model, matching the announce_store/sender-store rationale wording.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T19:14:01.493097Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-30T19:14:01.493097Z",
+  "updated_at": "2026-08-31T05:43:48.582586475Z",
+  "closed_at": "2026-08-31T05:43:48.582586475Z",
+  "close_reason": "Already fixed; load() doc comments for SenderStateStore and RecipientReplayStore correctly document heal scope and first-accept crash window.",
   "labels": [
     "gateway"
   ],

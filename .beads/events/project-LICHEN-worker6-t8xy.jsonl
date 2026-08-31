@@ -1,2 +1,3 @@
 {"id":"01a04c34-4241-77a1-bc88-40301b96feba","issue_id":"project-LICHEN-worker6-t8xy","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-29T06:28:08.385503Z"}
 {"id":"01a0560e-c84d-77ec-a8c3-474d4083fde0","issue_id":"project-LICHEN-worker6-t8xy","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-08-31T04:23:24.493520448Z"}
+{"id":"01a05658-69f4-7767-a589-4955e7c85e6e","issue_id":"project-LICHEN-worker6-t8xy","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed; lichen_l2_rx.c contains no doc comments referencing trial-verify loop or O(N) scan.","created_at":"2026-08-31T05:43:50.004487417Z"}

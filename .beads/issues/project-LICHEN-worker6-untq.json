@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-untq",
   "title": "checkin_resource.c: shared s_payload used outside its mutex",
   "description": "read_payload() memcpys request bytes into module-static s_payload BEFORE locking (callers :96 :151 :229) and GET handlers respond from s_payload AFTER unlocking (:128-142, :202-221). Safe only because coap service is single-threaded today; any second execution context interleaving serves torn/foreign bytes - the mutex exists precisely because the module does not trust that forever. Fix: hold s_lock across lichen_coap_respond for handlers emitting s_payload and move the payload copy under the lock.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T06:53:13.314274Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T05:27:47.704615485Z",
+  "updated_at": "2026-08-31T05:32:10.656288948Z",
   "started_at": "2026-08-31T05:21:43.444549042Z",
+  "closed_at": "2026-08-31T05:32:10.656288948Z",
+  "close_reason": "Fixed in 244912a172: both GET handlers (lichen_checkin_get_handler, lichen_rollcall_get_handler) now hold s_lock across the lichen_coap_respond() transmit of s_payload; error paths unlock before responding (they carry no payload). Note: the bead's read_payload()-copies-before-lock half no longer exists - POST handlers were refactored to parse oscore.payload directly and never touch s_payload, so only the respond-after-unlock half remained. Verified: tests/checkin_resource 9/9 PASS on native_sim/native/64 (self-contained suite, Zephyr 4.1.0 workspace, no module flag needed). Codereview 3x on checkin_resource.c via kimi-k3: pass1 correctness PASS (1 pre-existing doc finding -\u003e bead gkid); pass2 security PASS with 2 findings, both resolved: creator stack-pointer concern verified safe (lichen_rollcall_post_ex strcpy-copies into the record, checkin.c:1677), unlocked s_service accessor -\u003e bead 7j9y; pass3 edge-cases PASS (no findings).",
   "labels": [
     "zephyr"
   ]
