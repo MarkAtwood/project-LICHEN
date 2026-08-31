@@ -13,7 +13,8 @@
     "human",
     "ble",
     "coap",
-    "gateway"
+    "gateway",
+    "oscore"
   ],
   "dependencies": [
     {
