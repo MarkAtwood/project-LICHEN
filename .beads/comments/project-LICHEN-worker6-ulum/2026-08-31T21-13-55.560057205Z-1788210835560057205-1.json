@@ -1,0 +1,7 @@
+{
+  "id": "1788210835560057205-1",
+  "issue_id": "project-LICHEN-worker6-ulum",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 partial progress (released at timebox, changes left uncommitted in beads-worker-6 working tree for the next claimant): (1) DONE — the structured 4.01 body is implemented in coap_location.c: respond_oscore_required() helper (CBOR map {error: oscore_required, mode: \u003cpublic|group|private|off\u003e} using the file's cbor_writer primitives, CBOR content-format 60, overflow fallback to bare 4.01) wired at both previously-bare sites (position observe handler :1240 and position_cache_get -EACCES :1327), with the current privacy mode captured under the observe mutex. (2) NOT STARTED — /config/privacy (GET mode) + /config/privacy/allowed (PUT {peers:[...]}) resources replacing the single-peer whitelist, and their host tests. (3) BLOCKER for verification: lichen/tests/coap_location_beacon cannot configure on Zephyr 4.1.0 (Kconfig RING_BUFFER tangle) — filed as its own bead; the test dir's prj.conf also needs CONFIG_RING_BUFFER=y / CONFIG_COAP_SERVER / TEST_RANDOM_GENERATOR decisions. Body shape coordination: mode emitted as the lowercase enum-name text string; align with l1qw.32(a) Python when it lands.",
+  "created_at": "2026-08-31T21:13:55.560057205Z"
+}

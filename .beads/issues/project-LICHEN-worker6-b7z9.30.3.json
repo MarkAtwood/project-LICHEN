@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.30.3",
+  "title": "Rust rf_health: adaptive_sf_select step-3 density 10 -\u003e 8 + post-step-6 floors a-d (spec 2a.8 parity with C)",
+  "description": "Child of b7z9.30 (cross-impl parity: spec requires ALL implementations produce identical results). rust/lichen-core/src/rf_health.rs adaptive_sf_select has the same gaps the C gradient.c had: (1) step 3 uses density \u003e 10 instead of spec's \u003e 8 (line ~423; DENSITY_HIGH=8 const exists); (2) post-step-6 minimum-SF floors a-d absent (a. snr_ema \u003c -5 -\u003e 12; b. snr_ema \u003c 0 -\u003e max(11); c. density \u003e 8 -\u003e max(11); d. load_factor_fp \u003e= 52429 -\u003e max(11)). Floors use self state (snr_ema from self.snr.avg(), load_factor_fp field) so no signature change. Fix doc comment 2a.7 -\u003e 2a.8 + floors. Extend the inline tests (adaptive_sf_and_rebalance_matches_spec stays green: its cases are floor-compatible) with a new floors test incl the 52429/52428 load boundary and EMA-convergence sampling for floor a (record_rx(-6) x N until avg \u003c -5). Land after/independently of the C children .1/.2 (same spec rows). Discovered from project-LICHEN-worker6-b7z9.30.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:09:49.392105812Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T22:09:49.763861234Z",
+  "started_at": "2026-08-31T22:09:49.763861234Z",
+  "lease_expires_at": "2026-08-31T22:14:49.763861234Z",
+  "heartbeat_at": "2026-08-31T22:09:49.763861234Z",
+  "labels": [
+    "rust",
+    "decomposed",
+    "ccp15",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.30.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.30",
+      "type": "parent-child",
+      "created_at": "2026-08-31T22:09:49.518451693Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-okfj",
+  "title": "puck/lora_l2: radio-path liveness signal for the watchdog (design decision)",
+  "description": "Follow-up from cdoj (docs landed this round). After sb0b's async RX, nothing bumps lichen_radio_progress() during idle-armed silence, so the puck watchdog no longer guards radio-path liveness — only main-thread lockups. Two candidate designs if radio-path liveness monitoring is wanted: (a) a low-rate keepalive work item while armed-and-idle (careful: reintroduces the polling the 9hfe epic removed), or (b) source the heartbeat from driver IRQ/progress counters (e.g. the loopback/sx126x drivers exposing arm/delivery counters read by the app). Needs a design call plus puck WDT comment/constant updates. Also noted as pre-existing shape: a hung lora_send() (SPI fault) holds modem_mutex indefinitely and masks stalls from the watchdog.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:08:33.725754584Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T21:08:33.725754584Z",
+  "labels": [
+    "l2",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-okfj",
+      "depends_on_id": "project-LICHEN-worker6-cdoj",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T21:08:33.830744579Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

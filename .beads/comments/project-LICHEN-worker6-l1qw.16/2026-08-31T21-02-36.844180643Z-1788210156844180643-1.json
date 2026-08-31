@@ -1,0 +1,7 @@
+{
+  "id": "1788210156844180643-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16",
+  "author": "opencode-worker-4",
+  "text": "Coordination consolidation by worker-4 (2026-08-31): this bead's three children (.16.1 Python, .16.2 Rust, .16.3 done) plus .16.4 (C, filed after the discovery) constitute ONE coordinated wire-format migration that cannot land piecemeal — the three stacks sign three incompatible transcript formats today (Rust slot.rs:723 domain transcript; C SLOT_CLAIM: prefix; Python canonical-CBOR map), the vectors are Python-only and self-referential (0xbf fragments cbor2 cannot decode), and every intermediate state breaks interop with the other two implementations. Required sequence: (1) human/owner adjudication of the payload keys 1-7 mapping (spec/08: slots array, superframe_epoch, mode 0/1, expiry, gateway_iid bstr(8), claim_seq, ordinal — gateway_count off the wire); (2) regenerate gcp_slot_claim.json with golden signatures, both-suite counts updated; (3) execute .16.1+.16.2+.16.4 in ONE session (full COSE machinery already proven: Python shared cose_* helpers from l1qw.26.2.1, Rust tunnel_auth.rs decode_and_hash_sign1+signature_digest); (4) silent-discard semantics already landed (.16.3, commit 1f5c01be32). Until then all three stacks interop with nothing — flagging for the l1qw epic owner to schedule as a single session.",
+  "created_at": "2026-08-31T21:02:36.844180643Z"
+}

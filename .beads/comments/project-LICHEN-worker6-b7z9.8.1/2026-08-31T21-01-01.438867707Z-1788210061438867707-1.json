@@ -1,0 +1,7 @@
+{
+  "id": "1788210061438867707-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.8.1",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 evidence: this production gap now fails the routing_dispatch host suite on main. lichen/tests/routing_dispatch/src/main.c:755 (test_dtn_hbh_option_parsing, added by 6abcb23ce2 'DTN expire coverage + zero-expiry drop case') expects lichen_router_dtn_expire(\u0026router, 100U) == 1 — flush of the fail-open clockless store once valid wall-clock arrives — but it returns != 1, so the standalone and native_sim suite both fail at main tip (verified on a pristine main worktree AND a clean standalone build; suite blocks all later inner tests including the new ipv6-in-ipv6 decap tests). Fixing this bead's production behavior should turn the suite green; run 'lichen/tests/routing_dispatch' standalone (unset ZEPHYR_BASE) or native_sim to verify.",
+  "created_at": "2026-08-31T21:01:01.438867707Z"
+}

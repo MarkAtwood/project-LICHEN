@@ -42,12 +42,18 @@ class PositionPrivacyPolicy:
         *,
         member_groups: set[str] | None = None,
         allowed_peer_iid: str | None = None,
+        allowed_peers: set[str] | None = None,
     ) -> None:
         if isinstance(mode, str):
             mode = PositionPrivacyMode(mode)
         self._mode = mode
         self.member_groups = member_groups or set()
-        self.allowed_peer_iid = allowed_peer_iid
+        # Spec 18.2.4 private-mode whitelist: peers explicitly allowed to
+        # read this node's position over pairwise OSCORE. Generalized from
+        # the single-peer form; allowed_peer_iid seeds the set for back-compat.
+        self._allowed_peers: set[str] = set(allowed_peers or set())
+        if allowed_peer_iid is not None:
+            self._allowed_peers.add(allowed_peer_iid)
 
     @property
     def mode(self) -> PositionPrivacyMode:
@@ -58,6 +64,17 @@ class PositionPrivacyPolicy:
         if isinstance(value, str):
             value = PositionPrivacyMode(value)
         self._mode = value
+
+    @property
+    def allowed_peers(self) -> frozenset[str]:
+        return frozenset(self._allowed_peers)
+
+    def set_allowed_peers(self, peers: set[str] | list[str]) -> None:
+        """Replace the private-mode whitelist (PUT /config/privacy/allowed)."""
+        self._allowed_peers = set(peers)
+
+    def _peer_allowed(self, requester_iid: str | None) -> bool:
+        return requester_iid is not None and requester_iid in self._allowed_peers
 
     def check_read(
         self,
@@ -76,11 +93,7 @@ class PositionPrivacyPolicy:
         if self._mode is PositionPrivacyMode.GROUP:
             if not oscore:
                 return (False, CODE_UNAUTHORIZED)
-            if (
-                requester_iid is not None
-                and self.allowed_peer_iid is not None
-                and requester_iid == self.allowed_peer_iid
-            ):
+            if self._peer_allowed(requester_iid):
                 return (True, CODE_OK)
             if oscore_context == "group":
                 return (True, CODE_OK)
@@ -89,7 +102,7 @@ class PositionPrivacyPolicy:
         # PRIVATE
         if not oscore:
             return (False, CODE_UNAUTHORIZED)
-        if self.allowed_peer_iid is not None and requester_iid == self.allowed_peer_iid:
+        if self._peer_allowed(requester_iid):
             return (True, CODE_OK)
         return (False, CODE_FORBIDDEN)
 

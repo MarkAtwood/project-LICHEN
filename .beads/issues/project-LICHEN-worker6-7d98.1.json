@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-7d98.1",
+  "title": "7d98(i): TunnelAuthResource mounted at /.well-known/tunnel-auth via build_site",
+  "description": "Parent: project-LICHEN-worker6-7d98. New python/src/lichen/coap/resources/tunnel_auth.py: CoAP resource wrapping lichen.gateway.tunnel_auth.TunnelAuthorizationTable (receive_post) — POST COSE_Sign1 -\u003e 2.04 Changed on permit, 4.03 Forbidden with denial reason on deny (per parent b7z9.35 wiring note: C uses 204/403 literals; confirm CoAP 2.04/4.03 mapping here). Mount in build_site via optional tunnel_authorizations param (None = not mounted, per optional-resource pattern). Tests: POST valid authorization (from test/vectors/tunnel_authorization.json fixtures) -\u003e 2.04, POST tampered/wrong-egress/expired -\u003e 4.03 with diagnostic, GET/other methods -\u003e 4.05, absent param -\u003e not in site.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:37:10.255739975Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T21:37:11.359800683Z",
+  "started_at": "2026-08-31T21:37:11.359800683Z",
+  "lease_expires_at": "2026-08-31T21:42:11.359800683Z",
+  "heartbeat_at": "2026-08-31T21:37:11.359800683Z",
+  "labels": [
+    "decomposed",
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7d98.1",
+      "depends_on_id": "project-LICHEN-worker6-7d98",
+      "type": "parent-child",
+      "created_at": "2026-08-31T21:37:10.387603918Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

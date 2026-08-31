@@ -1545,6 +1545,23 @@ impl Gateway {
             .unwrap_or(0)
     }
 
+    /// Spec 05-routing 8.9 (R-05-066): the inner Hop Limit of an encapsulated
+    /// forwarded packet takes the normal forwarding decrement plus the initial
+    /// Segments Left (`num_addrs`). The initial Segments Left must be strictly
+    /// less than the Hop Limit remaining after the forwarding decrement, else
+    /// the route is not representable (`None` — emit no route).
+    pub(crate) fn inner_hop_limit_after_encapsulation(
+        hop_limit: u8,
+        num_addrs: usize,
+    ) -> Option<u8> {
+        let num_addrs = u8::try_from(num_addrs).ok()?;
+        let remaining = hop_limit.checked_sub(1)?;
+        if num_addrs >= remaining {
+            return None;
+        }
+        remaining.checked_sub(num_addrs)
+    }
+
     /// SCHC-compress an IPv6 packet from the upstream TUN device for the mesh.
     ///
     /// Prefers local RPL mesh (with source routing for Non-Storing mode per
@@ -1669,10 +1686,11 @@ impl Gateway {
                 let is_root_origin = ipv6[8..24] == root_addr;
                 let is_host_route = route.last() == Some(&dst);
                 if is_root_origin && is_host_route {
-                    // Inline SRH, not a tunnel: no inner/outer encapsulation,
-                    // so spec §8.9's inner Hop Limit decrements do not apply
-                    // here (add_rpl_source_route already rejects when the
-                    // initial Segments Left would exhaust the Hop Limit).
+                    // RH3 insertion only, not an IPv6-in-IPv6 tunnel: no
+                    // inner/outer encapsulation, so spec §8.9's inner Hop
+                    // Limit decrement does NOT apply here
+                    // (add_rpl_source_route already rejects when the initial
+                    // Segments Left would exhaust the Hop Limit).
                     let routing_len = 8 + 16 * (route.len() - 1);
                     let total_len = ipv6.len() + routing_len;
                     let mut routed = vec![0u8; total_len];
@@ -1682,23 +1700,28 @@ impl Gateway {
                     routed
                 } else {
                     let num_addrs = route.len() - 1;
-                    // Spec §8.9 (R-05-066): the root is forwarding this inner
-                    // packet — both callers (TUN egress and mesh-ingress
-                    // transit) are forwarding paths — so apply the normal
-                    // forwarding decrement first, then decrement the inner
-                    // Hop Limit by the initial Segments Left. The initial
-                    // Segments Left MUST be strictly less than the Hop Limit
-                    // available after the forwarding decrement; otherwise
-                    // emit no route.
-                    let hl_after_fwd = ipv6[7].checked_sub(1)?;
-                    if num_addrs >= usize::from(hl_after_fwd) {
-                        warn!(
-                            num_addrs,
-                            hop_limit = ipv6[7],
-                            "mesh_to_mesh: hop budget below initial Segments Left — no route"
-                        );
-                        return None;
-                    }
+                    // Spec §8.9 (R-05-066): this path forwards the inner
+                    // packet (TUN upstream or mesh hairpin ingress), so the
+                    // inner Hop Limit takes the normal forwarding decrement
+                    // plus the initial Segments Left. Resolves both sides
+                    // of the merge: beads-worker-7's tested helper computes
+                    // the decrement (with a u8 bound on num_addrs), and
+                    // HEAD's warn diagnostic on rejection is preserved.
+                    // A Segments Left that would exhaust the remaining Hop
+                    // Limit is not representable — emit no route.
+                    let mut inner = ipv6.to_vec();
+                    inner[7] = match Self::inner_hop_limit_after_encapsulation(inner[7], num_addrs)
+                    {
+                        Some(limit) => limit,
+                        None => {
+                            warn!(
+                                num_addrs,
+                                hop_limit = inner[7],
+                                "mesh_to_mesh: hop budget below initial Segments Left — no route"
+                            );
+                            return None;
+                        }
+                    };
                     let routing_len = 8 + 16 * num_addrs;
                     let outer_payload = routing_len + ipv6.len();
                     let outer_payload_u16 = u16::try_from(outer_payload).ok()?;
@@ -1719,8 +1742,6 @@ impl Gateway {
                         let start = 48 + i * 16;
                         outer[start..start + 16].copy_from_slice(addr);
                     }
-                    let mut inner = ipv6.to_vec();
-                    inner[7] = hl_after_fwd - num_addrs as u8;
                     let mut encapsulated = Vec::with_capacity(outer_hdr + inner.len());
                     encapsulated.extend_from_slice(&outer);
                     encapsulated.extend_from_slice(&inner);
@@ -2686,6 +2707,55 @@ mod tests {
             staged_again,
             Some(node_addr),
             "node must remain registered and re-stageable after a transmit failure"
+        );
+    }
+}
+
+#[cfg(test)]
+mod inner_hl_tests {
+    use super::Gateway;
+
+    #[test]
+    fn forwarding_decrement_plus_segments_left() {
+        // Canonical case: hop 255 (RPL control / freshly admitted packet),
+        // two-address source route (SL 1) -> 255 - 1 - 1 = 253.
+        assert_eq!(
+            Gateway::inner_hop_limit_after_encapsulation(255, 1),
+            Some(253)
+        );
+        // Three-address route (SL 2).
+        assert_eq!(
+            Gateway::inner_hop_limit_after_encapsulation(255, 2),
+            Some(252)
+        );
+    }
+
+    #[test]
+    fn segments_left_must_be_strictly_below_remaining_hop_limit() {
+        // SL == remaining after the forwarding decrement is NOT allowed.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(3, 2), None);
+        // SL greater than remaining is likewise rejected.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(3, 3), None);
+    }
+
+    #[test]
+    fn exhausted_or_oversized_inputs_emit_no_route() {
+        // A forwarded packet arriving with hop limit 0 is dead.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(0, 0), None);
+        // Hop limit 1 leaves zero headroom after the forwarding decrement.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(1, 0), None);
+        // SL must fit a u8: a 256-address route cannot be represented.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(255, 256), None);
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(255, 254), None);
+    }
+
+    #[test]
+    fn direct_delivery_boundary_is_representable() {
+        // SL 0 (route.len() == 1 is handled without encapsulation, but the
+        // helper must still accept the degenerate SL 0 shape).
+        assert_eq!(
+            Gateway::inner_hop_limit_after_encapsulation(255, 0),
+            Some(254)
         );
     }
 }

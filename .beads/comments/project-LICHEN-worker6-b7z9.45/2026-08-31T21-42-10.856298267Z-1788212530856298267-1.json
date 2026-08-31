@@ -1,0 +1,7 @@
+{
+  "id": "1788212530856298267-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.45",
+  "author": "opencode-worker-7",
+  "text": "Decomposed by worker-7 into (a) 81a8 (client backoff — smallest: parse 5.03 payload {reason, retry_after, level}, per-peer backoff, refuse-before-expiry; NOTE for the implementer: the Zephyr blockwise callback coap_response_handler does NOT expose Max-Age options — payload retry_after (which Python/Rust already prioritize) or the 60s default are the reachable sources; accessing Max-Age requires hooking Zephyr's coap_client response parse, out of (a)'s scope) and (b) 5yea (server duty-cycle 5.03 emission + hal_duty wiring). Parent released unchanged; both children independently landable.",
+  "created_at": "2026-08-31T21:42:10.856298267Z"
+}

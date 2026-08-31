@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-lbph",
+  "title": "node.py: app callback still receives UNKNOWN-dispatch and empty frames (surface question)",
+  "description": "Related pre-existing surface noted during 1pf8 (non-ANNOUNCE routing frames now dropped): _process_received still delivers to the application callback any frame that (a) has an UNKNOWN dispatch byte (any first byte other than 0x14 SCHC / 0x15 ROUTING — ~253 values), or (b) is completely empty (delivered as b''), or (c) is a lone L2_DISPATCH_SCHC byte (classifies UNKNOWN). Question for a policy round: is the app callback an intentional extension point for unknown dispatches (then document), or should unknown dispatches be dropped fail-closed like routing frames now are? Attacker-reachable via authenticated link peers. Discovered-from: 1pf8.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:11:26.687856034Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T21:21:22.753641843Z",
+  "started_at": "2026-08-31T21:12:45.729598197Z",
+  "closed_at": "2026-08-31T21:21:22.753641843Z",
+  "close_reason": "Resolved with spec grounding (draft-lichen-link-01 section 3.1) rather than leaving as a policy question: (1) 'a PLD using a currently defined dispatch value MUST be at least 2 bytes' — a lone 0x14 (like the lone 0x15 fixed in 1pf8) violates that MUST and was still reaching the app callback as UNKNOWN; now dropped. (2) 'link framing permits an empty PLD' — a syntactic allowance, not semantic: delivering b'' to the application was spurious (no keep-alive/no-op semantics exist); now dropped. (3) Undefined dispatch values remain the application extension point — documented in the code comment with the spec section, retained deliberately for authenticated bounded inputs. Tests: 2 new (empty + truncated 0x14 + truncated 0x15 all dropped; undefined 0x99 still delivered pinning the extension point); node suite 140 passed; ruff clean. 3x review (kimi-k3): correctness PASS (spec citation verified exact at lines 119-121; cosmetic note on now-always-true bool(payload) left untouched), security PASS (empty PLD spurious delivery removed; lone 0x14 cannot be SCHC per rule-ID requirement; extension-point surface = authenticated peers + bounded frames only), edge PASS (0x78/0x79 single-byte fragment bytes unaffected; 0x15 arm harmless defensive redundancy; logger args match).",
+  "labels": [
+    "python",
+    "lci",
+    "codereview"
+  ]
+}

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-cdoj",
   "title": "lichen_radio_progress watchdog contract narrowed: idle-armed radio feeds no heartbeat; puck docs stale",
   "description": "Found by security+robustness codereview of project-LICHEN-worker6-sb0b (P2). The old RX thread bumped lichen_radio_progress() every loop pass (\u003c=RX_TIMEOUT_MS), proving the radio path alive even during silence. The async RX (sb0b) bumps only on packet deliveries and successful arms - deliberately not on retry attempts, which masked wedges by keeping the heartbeat fresh. Net effect: while the radio sits idle and armed (the common case), nothing bumps the hook; puck's watchdog survives only because its main loop kicks every \u003c=1s (apps/puck/src/main.c:542). The original purpose - keeping WDT fed while main blocks in a long network call - no longer holds, and the puck main.c comment block (main.c:226-255) still describes thread-poll semantics. Fix: either a low-rate keepalive work item while armed-and-idle (careful: reintroduces polling the 9hfe epic removed), or liveness sourced from driver IRQ counters, plus update puck's stall-contract comment. Related: a hung lora_send() (SPI fault) holds modem_mutex indefinitely and masks stalls from the watchdog - pre-existing shape.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T18:02:31.88285Z",
   "created_by": "opencode-worker-3",
-  "updated_at": "2026-08-30T18:02:31.88285Z",
+  "updated_at": "2026-08-31T21:37:23.812691258Z",
+  "closed_at": "2026-08-31T21:37:23.812691258Z",
+  "close_reason": "Re-close (2nd; store reversion per biod). Docs landed: 3a377c96f2.",
   "labels": [
     "hal",
     "networking"
