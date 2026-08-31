@@ -42,6 +42,19 @@ def require_keys(vector: dict[str, object], required: set[str], optional: set[st
         )
 
 
+def require_string_expect_error(vector: dict[str, object]) -> None:
+    """expect_error must be a nonempty snake_case string when present.
+
+    The generated C table encodes it as presence-as-bool, so a JSON false
+    or empty string would silently invert rejection semantics instead of
+    failing closed. Mirrors the corpus schema (string, ^[a-z0-9_]+$).
+    """
+    if "expect_error" in vector:
+        value = vector["expect_error"]
+        if not isinstance(value, str) or not re.fullmatch(r"[a-z0-9_]+", value):
+            fail(f"{vector.get('name', '<unnamed>')}.expect_error must be a nonempty snake_case string")
+
+
 def c_array(name: str, data: bytes) -> str:
     values = ", ".join(f"0x{byte:02x}" for byte in data) or "0"
     return f"static const uint8_t {name}[] = {{ {values} }};"
@@ -80,6 +93,7 @@ def load(path: Path) -> list[dict[str, object]]:
             require_keys(
                 vector, common | {"category", "packet", "expect_error"}, description
             )
+            require_string_expect_error(vector)
             decode_hex(vector["packet"], f"{name}.packet")
         elif category == "malformed":
             require_keys(
@@ -87,6 +101,7 @@ def load(path: Path) -> list[dict[str, object]]:
                 common | {"category", "rule_id", "compressed", "expect_error"},
                 description,
             )
+            require_string_expect_error(vector)
             decode_hex(vector["compressed"], f"{name}.compressed")
         elif category == "size_boundary":
             require_keys(
@@ -102,6 +117,7 @@ def load(path: Path) -> list[dict[str, object]]:
                 },
                 {"expect_error", "description"},
             )
+            require_string_expect_error(vector)
             decode_hex(vector["compressed_prefix"], f"{name}.compressed_prefix")
             for field, maximum in (
                 ("tail_byte", 255),

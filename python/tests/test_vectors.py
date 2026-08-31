@@ -718,13 +718,26 @@ def test_ipv6_malformed_vector(name: str, vector: dict) -> None:
         assert handle_icmpv6(p) is None
 
 
+def _require_string_expect_error(vector: dict) -> None:
+    """Corpus drift guard: expect_error must be a nonempty string when
+    present. The C parity generator encodes it as presence-as-bool, so a
+    false or empty value would silently invert rejection semantics."""
+    if "expect_error" in vector:
+        value = vector["expect_error"]
+        assert isinstance(value, str) and value, (
+            f"{vector['name']}: expect_error must be a nonempty string"
+        )
+
+
 @pytest.mark.parametrize("name,vector", _schc_cases())
 def test_schc_vector(name: str, vector: dict) -> None:
     if vector.get("category") == "malformed_input":
+        _require_string_expect_error(vector)
         with pytest.raises(SchcError):
             compress_packet(bytes.fromhex(vector["packet"]))
         return
     if vector.get("category") == "size_boundary":
+        _require_string_expect_error(vector)
         compressed = (
             bytes.fromhex(vector["compressed_prefix"])
             + bytes([vector["tail_byte"]]) * vector["tail_length"]
@@ -737,6 +750,7 @@ def test_schc_vector(name: str, vector: dict) -> None:
         return
     compressed = bytes.fromhex(vector["compressed"])
     if vector.get("category") == "malformed":
+        _require_string_expect_error(vector)
         with pytest.raises((SchcError, ValueError)):
             decompress_packet(compressed)
         return
@@ -744,6 +758,69 @@ def test_schc_vector(name: str, vector: dict) -> None:
     assert compress_packet(packet) == compressed, f"compress drift: {name}"
     assert decompress_packet(compressed) == packet, f"decompress drift: {name}"
     assert compressed[0] == vector["rule_id"]
+
+
+def _load_gen_vectors_module():
+    """Import the C parity generator from its standalone script location."""
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[2] / "lichen" / "tests" / "schc_parity" / "gen_vectors.py"
+    spec = importlib.util.spec_from_file_location("schc_parity_gen_vectors", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_corpus(tmp_path: Path, vectors: list[dict]) -> Path:
+    path = tmp_path / "corpus.json"
+    path.write_text(json.dumps({"format_version": 2, "vectors": vectors}), encoding="utf-8")
+    return path
+
+
+def test_gen_vectors_accepts_canonical_corpus(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vectors = gen.load(VECTORS_DIR / "schc_compression.json")
+    header = gen.generate(vectors)
+    malformed = [v for v in vectors if v.get("category") == "malformed_input"]
+    assert malformed, "canonical corpus must keep malformed_input rows"
+    for vector in malformed:
+        assert str(vector["name"]) in header
+        assert "'true' if 'expect_error'" not in header  # generated, not template
+
+
+def test_gen_vectors_rejects_non_string_expect_error(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    base = {
+        "name": "row",
+        "category": "malformed_input",
+        "packet": "deadbeef",
+    }
+    for bad in (False, None, "", 1):
+        vector = dict(base, expect_error=bad)
+        with pytest.raises(ValueError, match="expect_error must be a nonempty snake_case string"):
+            gen.load(_write_corpus(tmp_path, [vector]))
+
+
+def test_gen_vectors_accepts_string_expect_error(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vector = {
+        "name": "row",
+        "category": "malformed_input",
+        "packet": "deadbeef",
+        "expect_error": "not_ipv6",
+        "description": "short garbage",
+    }
+    header = gen.generate([vector])  # generate() maps presence-as-bool for
+    # string expect_error; load()-level acceptance is covered by the
+    # canonical corpus test above, which contains string expect_error rows.
+    assert "true }" in header
+
+
+def test_gen_vectors_rejects_missing_expect_error_on_malformed_input(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vector = {"name": "row", "category": "malformed_input", "packet": "deadbeef"}
+    with pytest.raises(ValueError, match="field mismatch"):
+        gen.load(_write_corpus(tmp_path, [vector]))
 
 
 @pytest.mark.parametrize("name,vector", _rule_versioning_cases())
