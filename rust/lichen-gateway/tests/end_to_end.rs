@@ -514,6 +514,35 @@ async fn internet_host_pings_ula_mesh_node() {
     assert!(gw.upstream_to_mesh(ipv6).await.is_none());
 }
 
+/// ── Test: BR drops backbone→mesh multicast without peering (spec 04 6.3.4) ──
+
+#[tokio::test]
+async fn upstream_multicast_dropped_without_multicast_peering() {
+    // A backbone source multicasts to ff02::1a (all-RPL-nodes). The border
+    // router MUST NOT forward it onto the mesh unless multicast peering is
+    // explicitly configured.
+    let src = gua(0, 7);
+    let mut dst = [0u8; 16];
+    dst[0] = 0xff;
+    dst[1] = 0x02;
+    dst[15] = 0x1a;
+
+    let mut pkt = [0u8; 48];
+    let n = icmpv6::echo_request(&src, &Ipv6Addr(dst), 0xcccc, 6, &[], &mut pkt);
+    let ipv6 = &pkt[..n];
+
+    let mut gw = test_gateway();
+    assert!(gw.upstream_to_mesh(ipv6).await.is_none());
+
+    // Explicitly configured peering forwards it like any other backbone
+    // packet (exercises the guard's escape hatch).
+    gw.set_multicast_peering(true);
+    assert!(
+        gw.upstream_to_mesh(ipv6).await.is_some(),
+        "peering-enabled gateway must forward multicast"
+    );
+}
+
 /// ── Test 8: Link-local echo reply round-trips through gateway ────────────────
 
 #[tokio::test]
