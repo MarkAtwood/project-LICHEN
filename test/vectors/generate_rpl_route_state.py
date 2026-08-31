@@ -1054,8 +1054,13 @@ def main() -> None:
     if sys.argv[1:] == ["--check"]:
         try:
             current = read_bounded_exact(OUT)
-        except (FileNotFoundError, RuntimeError):
+        except FileNotFoundError:
             current = None
+        except (OSError, RuntimeError) as error:
+            # Unsafe directory / unreadable vector: report the real
+            # problem instead of masquerading as a stale file.
+            print(f"cannot safely read {OUT.name}: {error}", file=sys.stderr)
+            raise SystemExit(2)
         if current != json_bytes(document):
             raise SystemExit(f"{OUT.name} is not deterministically generated")
         print(f"checked {len(document['vectors'])} vectors in {OUT.name}")

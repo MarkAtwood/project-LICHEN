@@ -1680,8 +1680,13 @@ def main(argv: list[str] | None = None) -> int:
         for path, document in outputs:
             try:
                 current = read_bounded_exact(path)
-            except (FileNotFoundError, RuntimeError):
+            except FileNotFoundError:
                 mismatches.append(path.name)
+            except (OSError, RuntimeError) as error:
+                # Unsafe directory / unreadable vector: report the real
+                # problem instead of masquerading as a stale file.
+                print(f"cannot safely read {path.name}: {error}", file=sys.stderr)
+                return 2
             else:
                 if current != json_bytes(document):
                     mismatches.append(path.name)
