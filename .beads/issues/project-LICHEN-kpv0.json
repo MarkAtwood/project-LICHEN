@@ -16,7 +16,8 @@
     "coap",
     "l2",
     "python",
-    "rust"
+    "rust",
+    "tests"
   ],
   "dependencies": [
     {
