@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-z7xt",
   "title": "Spec: dangling 4.6 cross-reference in spec/02 4.2",
   "description": "spec/02-physical-link.md line ~300 (4.2 Key Selection Policy) says 'Relay nodes that re-sign frames (see 4.6)' but spec/02 has no section 4.6 (4.1-4.5 only). The relay re-sign normative text lives in spec/06-security.md 8.4 (the section relay.rs cites). Fix the reference to point at the actual relay re-sign section (or add the 4.6 section). Found during project-LICHEN-worker6-yg8b (Rust TOFU key-selection conformance).",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T01:37:16.903056Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T01:37:16.903056Z",
+  "updated_at": "2026-08-31T06:16:20.728876952Z",
+  "closed_at": "2026-08-31T06:16:20.728876952Z",
+  "close_reason": "spec/02-physical-link.md 4.2 now cites 'spec/06-security.md Section 8.4' (the Signed vs Relay-Mutable Fields section holding the relay re-sign normative text: new frame, own replay counter, full re-sign), matching house citation style ('\u003cfile\u003e Section X.Y' as in spec/02a:241). Verified no 4.x section numbering gaps remain in spec/02 (headings 4.1-4.5, zero '4.6' hits). 3x Kimi K3 review: correctness PASS, security PASS (8.4's hop-by-hop obligations are the correct normative source; not DAO-specific), edge pass reported line 148 '(see 14.8 TDMA)' as dangling — disproven: it resolves to spec/09-packets-timing.md Section 14.8 (TDMA Time Slots and CCP-1.2 FSM, line 642); false positive, no bead filed. Docs-only change; no test suite affected.",
   "labels": [
     "phy"
   ],

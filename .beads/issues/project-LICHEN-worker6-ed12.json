@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-ed12",
+  "title": "lichen-node: rfc6554_route_crosses_two_relays_and_restores_packet fails at base (InvalidSourceRoute)",
+  "description": "Pre-existing failure found while validating zt3c.7.4.1 on heft (my changes stashed, fails identically at HEAD): rust/lichen-node/src/rpl_stack/tests.rs:417 rfc6554_route_crosses_two_relays_and_restores_packet panics at :443 - add_rpl_source_route(\u0026plain, \u0026[relay_one, relay_two, destination], \u0026mut wire) returns Err(InvalidSourceRoute). The test routes 02xx ygg addresses [relay_one, relay_two, destination] with a NO_NEXT (59) inner packet, 48 bytes total. Repro: cargo test -p lichen-node --lib rfc6554_route_crosses (workspace needs the oscore patch wiring from worker6 xyt6.1 / beads-worker-6 ebdf8c0f04 to build on Linux). Not caused by zt3c.7.4.1 (add_rpl_source_route untouched by it). Likely suspect: source==first-address prohibition or route shape validation rejecting a 3-address route with distinct source; investigate add_rpl_source_route (rust/lichen-node/src/stack.rs:769) validation against the test's inputs.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:17:48.867537552Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T06:17:48.867537552Z",
+  "labels": [
+    "rust",
+    "networking"
+  ]
+}

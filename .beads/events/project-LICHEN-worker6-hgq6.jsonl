@@ -1,3 +1,4 @@
 {"id":"01a04bf7-2638-7069-90cc-9f1d2c4fe2fc","issue_id":"project-LICHEN-worker6-hgq6","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-29T05:21:23.512027Z"}
 {"id":"01a055fd-ce40-7846-878e-3b95440844ba","issue_id":"project-LICHEN-worker6-hgq6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: l2","created_at":"2026-08-31T04:04:51.904543401Z"}
 {"id":"01a0560d-cb77-716e-8d1c-b2225bb71853","issue_id":"project-LICHEN-worker6-hgq6","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:22:19.767095246Z"}
+{"id":"01a05679-f7cc-7706-b389-ea3c62151c5a","issue_id":"project-LICHEN-worker6-hgq6","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed; accept_post returns Revoked when retained.revoked is true (tunnel_auth.rs:326-329).","created_at":"2026-08-31T06:20:29.004461761Z"}
