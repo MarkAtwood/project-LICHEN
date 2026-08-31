@@ -11,7 +11,8 @@
   "updated_at": "2026-08-28T05:32:00.434704Z",
   "labels": [
     "local-ok",
-    "coap"
+    "coap",
+    "human-only"
   ],
   "dependencies": [
     {
