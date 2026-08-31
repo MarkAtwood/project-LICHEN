@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T07:15:34.268601Z",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "coap"
   ],
   "dependencies": [
     {
