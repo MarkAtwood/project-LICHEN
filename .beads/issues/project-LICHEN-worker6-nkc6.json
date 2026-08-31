@@ -11,6 +11,7 @@
   "updated_at": "2026-08-28T19:44:58.732803Z",
   "labels": [
     "coap",
-    "oscore"
+    "oscore",
+    "tdma"
   ]
 }
