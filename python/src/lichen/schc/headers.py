@@ -147,7 +147,6 @@ def validate_full_ipv6(raw: bytes) -> bytes:
         packet = IPv6Packet.from_bytes(raw, strict=True)
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
-    _validate_ipv6_addresses(packet.header)
     upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
         try:
@@ -156,6 +155,10 @@ def validate_full_ipv6(raw: bytes) -> bytes:
             raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
         if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
             raise SchcError("invalid Rule 255 IPv6 UDP checksum")
+    # Address checks last so dual-defect packets report the structural error
+    # first, mirroring Rust validate_full_ipv6 (codec.rs:363-366) and the C
+    # compress gate order.
+    _validate_ipv6_addresses(packet.header)
     return raw
 
 

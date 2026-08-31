@@ -18,7 +18,13 @@ from lichen.ipv6.udp import UdpDatagram
 from lichen.link.link_layer import MAX_SINGLE_FRAME_SCHC_PACKET
 from lichen.schc.codec import SchcError
 from lichen.schc.fragment import MAX_PACKET_SIZE
-from lichen.schc.headers import compress_packet, decode_rule255, decompress_packet, encode_rule255
+from lichen.schc.headers import (
+    compress_packet,
+    decode_rule255,
+    decompress_packet,
+    encode_rule255,
+    validate_full_ipv6,
+)
 
 SRC = IPv6Address("fe80::1")
 DST = IPv6Address("fe80::2")
@@ -195,12 +201,15 @@ def test_mqtt_sn_rule7_checksum_zero_serializes_as_ffff() -> None:
 
 
 def test_mqtt_sn_rule7_rejects_invalid_full_mode_addresses() -> None:
-    for source, destination in (
-        (IPv6Address("ff02::1"), IPv6Address("2001:db8::2")),
-        (IPv6Address("2001:db8::1"), IPv6Address("::")),
+    # Structure checks precede address checks (mirroring Rust/C order), so a
+    # multicast source that the UDP datagram constructor also rejects surfaces
+    # the UDP-layer message first.
+    for source, destination, message in (
+        (IPv6Address("ff02::1"), IPv6Address("2001:db8::2"), "malformed source"),
+        (IPv6Address("2001:db8::1"), IPv6Address("::"), "address"),
     ):
         raw = _build_mqtt_packet(b"x", src=source, dst=destination)
-        with pytest.raises(SchcError, match="address"):
+        with pytest.raises(SchcError, match=message):
             compress_packet(raw)
 
     for wire in (
@@ -248,6 +257,32 @@ def test_rule255_rejects_zero_udp_checksum() -> None:
     raw[46:48] = b"\x00\x00"
     with pytest.raises(SchcError, match="checksum"):
         decode_rule255(b"\xff" + bytes(raw))
+
+
+def test_validate_full_ipv6_structure_precedes_address_checks() -> None:
+    # Dual-defect packets report a STRUCTURAL error first, mirroring Rust
+    # validate_full_ipv6 (codec.rs:363-366) and the C compress gate order:
+    # the address message must never surface for a packet whose structure
+    # is also invalid.
+    for src, dst, zero_message, corrupt_message in (
+        # mcast src: UdpDatagram.from_bytes rejects zero checksums before its
+        # source check, and rejects the source itself when checksum != 0.
+        (IPv6Address("ff02::1"), IPv6Address("2001:db8::1"),
+         "checksum is zero", "malformed source"),
+        # loopback src: from_bytes passes (loopback is not checked there),
+        # so both defects surface through the checksum machinery.
+        (IPv6Address("::1"), IPv6Address("2001:db8::1"),
+         "checksum is zero", "checksum"),
+    ):
+        raw = bytearray(_build_packet(_coap_request(), src=src, dst=dst))
+        raw[46:48] = b"\x00\x00"  # zero UDP checksum
+        with pytest.raises(SchcError, match=zero_message):
+            decode_rule255(b"\xff" + bytes(raw))
+        raw[46] ^= 0xFF  # corrupt it instead
+        with pytest.raises(SchcError, match=corrupt_message):
+            decode_rule255(b"\xff" + bytes(raw))
+        with pytest.raises(SchcError, match=corrupt_message):
+            validate_full_ipv6(bytes(raw))
 
 
 def test_rule255_emission_rejects_policy_invalid_endpoints() -> None:
