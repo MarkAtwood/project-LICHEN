@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T00:02:02.61493Z",
   "labels": [
     "l2",
-    "rust"
+    "rust",
+    "schc"
   ],
   "dependencies": [
     {
