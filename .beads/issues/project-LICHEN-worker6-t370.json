@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T18:02:57.598115Z",
   "labels": [
     "c",
-    "coap"
+    "coap",
+    "l2"
   ],
   "dependencies": [
     {
