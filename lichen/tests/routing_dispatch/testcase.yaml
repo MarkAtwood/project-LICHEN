@@ -2,6 +2,11 @@ common:
   tags:
     - lichen
     - routing
+  # R-APPC-009 (spec/appendix-c-safety.md): native_sim tests build with
+  # ASan+UBSan. extra_conf_files (not a global -x EXTRA_CONF_FILE) keeps
+  # tests that set their own EXTRA_CONF_FILE (e.g. app_identity) safe.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
 tests:
   net.lichen.routing_dispatch:
     platform_allow:
