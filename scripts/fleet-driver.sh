@@ -36,9 +36,8 @@ PYEOF
         python3 -c "import json,sys; d=json.load(sys.stdin).get('data',{}); print(int(d.get('total_credits',0)-d.get('total_usage',0)))" 2>/dev/null || echo 0
 }
 
-pane_busy() {  # window index; 0 = idle
-    tmux capture-pane -t "$SESSION:$1" -p -S -12 2>/dev/null | rg -q "esc interrupt" && return 1
-    return 0
+pane_busy() {  # exit 0 (true) only when the pane shows a running generation
+    tmux capture-pane -t "$SESSION:$1" -p -S -5 2>/dev/null | rg -q "esc interrupt"
 }
 
 worker_in_progress() {  # worker number; count of that actor's in_progress beads
