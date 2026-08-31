@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-2",
   "updated_at": "2026-08-31T03:35:22.880549834Z",
   "labels": [
-    "coap"
+    "coap",
+    "oscore"
   ],
   "dependencies": [
     {
