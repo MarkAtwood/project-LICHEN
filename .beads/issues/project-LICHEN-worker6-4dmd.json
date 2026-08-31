@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-4dmd",
+  "title": "Waypoint per-originator bound keyed on client-supplied creator string is evadable (spec 18.3.2 hardening)",
+  "description": "Design follow-up from codereview of worker6-07pj (waypoint bounds 32/256 + 5.03 landed). The per-originator bound (32/IID) is keyed on the POST body's 'creator' string, which an unauthenticated client can rotate to get a fresh 32-slot budget each time; only the global 256 cap contains the DoS (bounded memory, DELETE frees slots). Spec 18.3.2 says 'per originator IID' — the bound should key on a peer-derived identity (source IID from the authenticated/requested-from address), not client metadata. Fix needs a design decision: aiocoap resources don't currently receive the peer's source address/IID; plumb request.remote or the LCI identity context into WaypointsResource and use that as the bucket key when available (fall back to creator string for local-client submissions), or move waypoint admission behind the authenticated mesh path. After deciding, add tests: rotating-creator attacker fills at most 256 global but cannot exceed 32 per TRUE identity.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:10:50.144182825Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T20:10:50.144182825Z",
+  "labels": [
+    "python",
+    "lci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4dmd",
+      "depends_on_id": "project-LICHEN-worker6-07pj",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:10:50.296694616Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
