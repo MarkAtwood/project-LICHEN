@@ -219,7 +219,8 @@ static int test_cross_region_always_comparable(void)
 	return 1;
 }
 
-/* python/tests/rpl/test_dodag.py DODAG_ID = fd00::1, P1/P2 = fe80::1 / ::2 */
+/* python/tests/rpl/test_dodag.py DODAG_ID = 0200::1 (native 0200::/8),
+ * P1/P2 = fe80::1 / ::2 */
 static void set_addr(uint8_t addr[16], uint8_t b0, uint8_t b1, uint8_t last)
 {
 	memset(addr, 0, 16);
@@ -337,7 +338,7 @@ static int test_joined_incomparable_version_ignored(void)
 	ASSERT_FALSE(lichen_rpl_version_is_newer(18, 1), "18 not newer than 1");
 	ASSERT_FALSE(lichen_rpl_version_is_newer(1, 18), "1 not newer than 18");
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	if (!join_on_p1(&d, dodag_id, 1, 7, p1)) {
@@ -365,7 +366,7 @@ static int test_unjoined_incomparable_same_dodag_not_adopted(void)
 	ASSERT_FALSE(lichen_rpl_version_is_newer(17, 0), "17 not newer than 0");
 	ASSERT_FALSE(lichen_rpl_version_is_newer(0, 17), "0 not newer than 17");
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 0), 0, "init");
 	make_dio(&dio, 0, 17, LICHEN_RPL_ROOT_RANK, 3, dodag_id);
@@ -387,7 +388,7 @@ static int test_unjoined_older_same_dodag_not_adopted(void)
 	ASSERT_TRUE(lichen_rpl_version_is_newer(5, 0), "5 newer than 0");
 	ASSERT_FALSE(lichen_rpl_version_is_newer(0, 5), "0 not newer than 5");
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 5), 0, "init");
 	make_dio(&dio, 0, 0, LICHEN_RPL_ROOT_RANK, 1, dodag_id);
@@ -408,7 +409,7 @@ static int test_joined_foreign_instance_ignored(void)
 	uint8_t p1[16];
 	uint8_t p2[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	if (!join_on_p1(&d, dodag_id, 1, 4, p1)) {
@@ -434,8 +435,8 @@ static int test_joined_foreign_dodagid_ignored(void)
 	uint8_t p1[16];
 	uint8_t p2[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
-	set_addr(foreign_id, 0xfd, 0x00, 0x99);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
+	set_addr(foreign_id, 0x02, 0x00, 0x99);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	if (!join_on_p1(&d, dodag_id, 1, 4, p1)) {
@@ -460,8 +461,8 @@ static int test_unjoined_foreign_dodag_rejected(void)
 	uint8_t foreign_id[16];
 	uint8_t p1[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
-	set_addr(foreign_id, 0xfd, 0x00, 0x99);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
+	set_addr(foreign_id, 0x02, 0x00, 0x99);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 5), 0, "init");
 	snap_dodag(&d, &before);
@@ -470,6 +471,42 @@ static int test_unjoined_foreign_dodag_rejected(void)
 	if (!snap_unchanged(&before, &d, "unjoined foreign DODAG")) {
 		return 0;
 	}
+	return 1;
+}
+
+static int test_native_0200_dodag_global_path(void)
+{
+	struct lichen_rpl_dodag d;
+	struct lichen_rpl_dio dio;
+	uint8_t dodag_id[16];
+	uint8_t p1[16];
+	uint8_t p2[16];
+
+	/* Native 0200::/8 DODAG_ID is the root's key-derived global address;
+	 * the DIO advertises it as the mesh's global routing identity while
+	 * parents stay link-local (fe80::/10). */
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
+	set_addr(p1, 0xfe, 0x80, 0x01);
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 3), 0, "init 0200");
+	make_dio(&dio, 0, 3, LICHEN_RPL_ROOT_RANK, 4, dodag_id);
+	/* Same-version join still advances DTSN: process returns 1 (state change). */
+	ASSERT_EQ(feed_dio(&d, &dio, p1), 1, "join on 0200 DIO");
+	ASSERT_EQ((int)d.role, (int)LICHEN_RPL_JOINED, "joined");
+	ASSERT_EQ(memcmp(d.dodag_id, dodag_id, 16), 0,
+		  "advertised 02xx prefix identity retained");
+	ASSERT_TRUE(d.has_preferred_parent, "global path via parent");
+	ASSERT_EQ(memcmp(d.preferred_parent, p1, 16), 0, "parent is fe80 nbr");
+
+	/* A non-02xx (e.g. legacy ULA fd00::/8) DODAG_ID is a foreign mesh:
+	 * joined state must not adopt it. */
+	set_addr(p2, 0xfd, 0x00, 0x02);
+	make_dio(&dio, 0, 4, 10, 5, p2);
+	ASSERT_EQ(feed_dio(&d, &dio, p1), 0, "fd00 foreign ret");
+	ASSERT_EQ(d.dtsn, 4, "foreign DIO did not advance DTSN");
+	ASSERT_EQ((int)d.role, (int)LICHEN_RPL_JOINED, "still joined");
+	ASSERT_EQ(d.version, 3, "version unchanged");
+	ASSERT_EQ(memcmp(d.dodag_id, dodag_id, 16), 0, "0200 id retained");
 	return 1;
 }
 
@@ -482,8 +519,8 @@ static int test_root_ignores_all_dios(void)
 	uint8_t foreign_id[16];
 	uint8_t p1[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
-	set_addr(foreign_id, 0xfd, 0x00, 0x99);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
+	set_addr(foreign_id, 0x02, 0x00, 0x99);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	ASSERT_EQ(lichen_rpl_dodag_init_root(&d, 0, dodag_id, 1), 0, "init root");
 	snap_dodag(&d, &before);
@@ -516,7 +553,7 @@ static int test_same_version_still_joins_and_updates_dtsn(void)
 	uint8_t p1[16];
 	uint8_t p2[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	if (!join_on_p1(&d, dodag_id, 1, 4, p1)) {
@@ -549,8 +586,8 @@ static int test_gateway_centric_root_authoritative(void)
 	uint8_t p2[16];
 
 	/* The DODAGID doubles as the root's address. */
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
-	set_addr(root, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
+	set_addr(root, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	lichen_rpl_dodag_config_init(&cfg_on);
@@ -602,7 +639,7 @@ static int test_gateway_centric_resets_on_version_adoption(void)
 	uint8_t dodag_id[16];
 	uint8_t p1[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 5), 0, "init");
@@ -628,7 +665,7 @@ static int test_mrhof_path_cost_and_admission_edges(void)
 	uint8_t dodag_id[16];
 	uint8_t p1[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	make_dio(&dio, 0, 0, LICHEN_RPL_ROOT_RANK, 0, dodag_id);
 
@@ -665,7 +702,7 @@ static int test_mrhof_hysteresis_boundary_and_tie(void)
 	uint8_t p1[16];
 	uint8_t p2[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 0), 0, "init");
@@ -704,7 +741,7 @@ static int test_mrhof_rank_bound_and_reprune(void)
 	uint8_t p2[16];
 	uint8_t p3[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	set_addr(p2, 0xfe, 0x80, 0x02);
 	set_addr(p3, 0xfe, 0x80, 0x03);
@@ -740,7 +777,7 @@ static int test_mrhof_parent_expiry_boundaries(void)
 	uint8_t dodag_id[16];
 	uint8_t p1[16];
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(p1, 0xfe, 0x80, 0x01);
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 0), 0, "init");
 	make_dio(&dio, 0, 0, 256, 0, dodag_id);
@@ -795,7 +832,7 @@ static int test_wire_receive_is_atomic_and_drives_trickle(void)
 	uint8_t base[LICHEN_RPL_DIO_BASE_LEN];
 	int wire_len;
 
-	set_addr(dodag_id, 0xfd, 0x00, 0x01);
+	set_addr(dodag_id, 0x02, 0x00, 0x01);
 	set_addr(parent, 0xfe, 0x80, 0x01);
 	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, dodag_id, 0), 0, "init");
 	make_dio(&dio, 0, 0, LICHEN_RPL_ROOT_RANK, 5, dodag_id);
@@ -889,6 +926,7 @@ int main(void)
 		{"unjoined older same DODAG not adopted", test_unjoined_older_same_dodag_not_adopted},
 		{"joined foreign instance ignored", test_joined_foreign_instance_ignored},
 		{"joined foreign DODAGID ignored", test_joined_foreign_dodagid_ignored},
+		{"native 0200 DODAG global path", test_native_0200_dodag_global_path},
 		{"unjoined foreign DODAG rejected", test_unjoined_foreign_dodag_rejected},
 		{"root ignores all DIOs", test_root_ignores_all_dios},
 		{"same-version still joins and updates DTSN", test_same_version_still_joins_and_updates_dtsn},
