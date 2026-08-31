@@ -486,16 +486,26 @@ static const char *trust_level_str(enum lichen_coap_trust_level trust)
 	}
 }
 
+/* Zephyr's minimal libc does not declare strnlen(): bounded length via
+ * memchr. A string that fills the buffer without a NUL yields max. */
+static size_t status_bounded_len(const char *s, size_t max)
+{
+	const char *nul = memchr(s, '\0', max);
+
+	return nul ? (size_t)(nul - s) : max;
+}
+
 static bool status_snapshot_valid(const struct lichen_coap_node_status *status)
 {
 	if (status->battery_pct_valid && status->battery_pct > 100U) {
 		return false;
 	}
 	if (status->time.valid &&
-	    (strnlen(status->time.source_class,
-		     sizeof(status->time.source_class)) >=
-		     sizeof(status->time.source_class) ||
-	     strnlen(status->time.source_name, sizeof(status->time.source_name)) >=
+	    (status_bounded_len(status->time.source_class,
+				sizeof(status->time.source_class)) >=
+	     sizeof(status->time.source_class) ||
+	     status_bounded_len(status->time.source_name,
+				sizeof(status->time.source_name)) >=
 		     sizeof(status->time.source_name))) {
 		return false;
 	}
