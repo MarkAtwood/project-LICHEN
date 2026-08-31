@@ -48,10 +48,6 @@ static const uint8_t test_seed[32] = {
 	0x63, 0x6b, 0x2d, 0x70, 0x61, 0x74, 0x68, 0x2d,
 	0x74, 0x65, 0x73, 0x74, 0x2d, 0x30, 0x30, 0x31,
 };
-static const uint8_t test_link_key[16] = {
-	0x4c, 0x32, 0x2d, 0x6c, 0x69, 0x6e, 0x6b, 0x2d,
-	0x6c, 0x6f, 0x6f, 0x70, 0x62, 0x61, 0x63, 0x6b,
-};
 
 static const struct device *lora_dev;
 static struct net_if *test_iface;
@@ -152,6 +148,26 @@ static uint16_t udp_checksum(const struct net_ipv6_hdr *ipv6,
 	return checksum == 0 ? 0xffff : checksum;
 }
 
+/* lichen_l2 disable/enable wipes link_ctx crypto state by design
+ * (project-LICHEN-rwio.1): re-provision the deterministic test identity so
+ * tests running after a reinit cycle see the same state ping_l2_setup built.
+ * Tolerates -EALREADY so the helper stays safe on an un-wiped context. */
+static void reprovision_after_reinit(void)
+{
+	uint8_t peer_eui64[8];
+	int ret;
+
+	ret = lichen_l2_test_load_key(test_seed, test_pubkey);
+	zassert_true(ret == 0 || ret == -EALREADY,
+		     "reinit: load signing key: %d", ret);
+	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
+	zassert_equal(ret, 0, "reinit: pubkey to iid: %d", ret);
+	peer_eui64[0] |= 0x02; /* wire/extended form == frame SIID */
+	ret = lichen_peer_add(peer_eui64, test_pubkey);
+	zassert_true(ret == 0 || ret == -EALREADY,
+		     "reinit: peer add: %d", ret);
+}
+
 static void *ping_l2_setup(void)
 {
 	uint8_t eui64[8];
@@ -178,10 +194,18 @@ static void *ping_l2_setup(void)
 	zassert_not_null(net_if_ipv6_addr_lookup_by_iface(test_iface, &primary_addr),
 			 "key load did not install primary address");
 
-	ret = lichen_l2_test_load_link_key(test_link_key);
-	zassert_equal(ret, 0, "failed to load deterministic link key: %d", ret);
+	/* No legacy LLSec link key here: lichen_link_tx rejects E=1 keyed
+	 * transmission outright (bead 2auf.21), so loading one would only
+	 * break every TX path this suite exercises. */
 
-	ret = lichen_peer_add(eui64, test_pubkey);
+	/* Peers are keyed by the canonical key-derived EUI-64 (frame SIID:
+	 * sha512(pubkey)[0:8] with U/L set), not by the device hardware ID
+	 * — lichen_link_rx.c SIID lookup misses otherwise (-LICHEN_EAUTH). */
+	uint8_t peer_eui64[8];
+	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
+	zassert_equal(ret, 0, "failed to derive canonical peer EUI-64: %d", ret);
+	peer_eui64[0] |= 0x02;
+	ret = lichen_peer_add(peer_eui64, test_pubkey);
 	zassert_equal(ret, 0, "failed to add self peer: %d", ret);
 
 	make_link_local_from_eui64(eui64, &test_ll_addr);
@@ -546,6 +570,7 @@ ZTEST(ping_l2, test_queue_stats_accessor_lifecycle)
 
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
+	reprovision_after_reinit();
 }
 
 ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
@@ -604,6 +629,7 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
+	reprovision_after_reinit();
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);

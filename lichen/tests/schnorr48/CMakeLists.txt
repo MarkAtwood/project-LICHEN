@@ -37,5 +37,15 @@ target_compile_definitions(schnorr48_test PRIVATE
 # Apply sanitizers and hardening
 lichen_test_target(schnorr48_test)
 
+# Vendored upstream monocypher (unmodified): silence -Wconversion inside it
+# only; we do not carry patches to third-party crypto code to satisfy
+# host-only lints.
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/crypto/monocypher.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/crypto/monocypher-ed25519.c
+  PROPERTIES
+  COMPILE_OPTIONS "-Wno-error=conversion"
+)
+
 include(CTest)
 add_test(NAME schnorr48 COMMAND schnorr48_test)
