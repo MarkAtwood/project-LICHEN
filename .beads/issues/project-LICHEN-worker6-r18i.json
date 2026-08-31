@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-r18i",
+  "title": "Consolidate duplicated SCHNORR48_ED25519_ALG constant",
+  "description": "SCHNORR48_ED25519_ALG = -65537 is defined independently in python/src/lichen/crypto/capability_announcements.py and python/src/lichen/crypto/root_dio_signature.py:37. Both old and new crypto/__init__.py import it from capability_announcements, so behavior is unchanged, but the duplicated literal risks drift. Consolidate to a single definition (e.g. export from one module, import in the other) and re-run uv run --directory python pytest tests/crypto/. Flagged by reviewer edge-cases pass during worker6-feqj; out of scope there.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T04:14:26.420495369Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T04:14:26.420495369Z",
+  "labels": [
+    "python"
+  ]
+}
