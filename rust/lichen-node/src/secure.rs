@@ -554,7 +554,7 @@ impl<R: Radio> SecureStack<R> {
 
     /// Restore and install an existing OSCORE context.
     ///
-    /// Unlike [`register_fresh_context`], this does not perform atomic registration
+    /// Unlike [`Self::register_fresh_context`], this does not perform atomic registration
     /// since the context was previously registered with the store.
     pub fn restore_context<S: SenderStateStore>(
         &mut self,

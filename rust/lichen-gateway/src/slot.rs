@@ -242,7 +242,7 @@ impl SlotAllocator {
 
     /// Validate that a slot pattern matches the expected interleaved allocation.
     ///
-    /// Per GCP-6.2: slots[i] == ordinal + i * gateway_count
+    /// Per GCP-6.2: `slots[i] == ordinal + i * gateway_count`
     ///
     /// # Returns
     ///

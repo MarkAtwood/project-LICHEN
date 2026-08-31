@@ -257,7 +257,7 @@ fn fixed_dao_origin_vectors_match_rpl_node_handler() {
             }
         }
     }
-    assert_eq!(count, 51);
+    assert_eq!(count, 52);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

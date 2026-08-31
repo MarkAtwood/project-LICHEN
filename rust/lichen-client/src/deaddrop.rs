@@ -355,7 +355,7 @@ fn record_from_map(map: &[(Value, Value)]) -> Result<SenmlRecord, Error> {
 ///
 /// Accepts integer labels and JSON-style string names; rejects trailing
 /// bytes, non-array packs, wrong-typed fields, records carrying more than
-/// one value field, non-finite numbers, and `bver` outside [1,10].
+/// one value field, non-finite numbers, and `bver` outside `[1,10]`.
 pub fn decode_senml_pack(bytes: &[u8]) -> Result<Vec<SenmlRecord>, Error> {
     let mut cursor = Cursor::new(bytes);
     let value: Value =
