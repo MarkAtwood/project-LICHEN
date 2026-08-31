@@ -1173,6 +1173,64 @@ int lichen_position_cache_encode(int64_t now_ms, uint8_t *out,
 
 /* Structured 4.01 body (spec 18.2.4, l1qw.32):
  * {error: "oscore_required", mode: "<privacy-mode>"}. */
+static uint8_t allowed_peers[LICHEN_POSITION_ALLOWED_PEERS_MAX][8];
+static size_t allowed_peers_count;
+
+size_t lichen_position_privacy_allowed_count(void) {
+  return allowed_peers_count;
+}
+
+int lichen_position_privacy_allowed_get(size_t index, uint8_t iid[8]) {
+  if (index >= allowed_peers_count) {
+    return -EINVAL;
+  }
+  memcpy(iid, allowed_peers[index], 8U);
+  return 0;
+}
+
+int lichen_position_privacy_allowed_set(const uint8_t (*iids)[8],
+                                        size_t count) {
+  if (count > LICHEN_POSITION_ALLOWED_PEERS_MAX || (count > 0 && iids == NULL)) {
+    return -EINVAL;
+  }
+  k_mutex_lock(&position_cache_mutex, K_FOREVER);
+  if (count > 0) {
+    memcpy(allowed_peers, iids, count * 8U);
+  }
+  allowed_peers_count = count;
+  k_mutex_unlock(&position_cache_mutex);
+  return 0;
+}
+
+bool lichen_position_privacy_allowed(const uint8_t iid[8]) {
+  for (size_t i = 0U; i < allowed_peers_count; i++) {
+    if (memcmp(allowed_peers[i], iid, 8U) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+enum lichen_position_privacy_mode lichen_position_privacy_mode(void) {
+  enum lichen_position_privacy_mode mode;
+
+  k_mutex_lock(&position_observe_mutex, K_FOREVER);
+  mode = position_observe.privacy;
+  k_mutex_unlock(&position_observe_mutex);
+  return mode;
+}
+
+const char *lichen_position_privacy_mode_name(
+    enum lichen_position_privacy_mode mode) {
+  static const char *const names[] = {
+      "public", "group", "private", "off",
+  };
+  if (mode > LICHEN_POSITION_PRIVACY_OFF) {
+    mode = LICHEN_POSITION_PRIVACY_OFF;
+  }
+  return names[mode];
+}
+
 static int respond_oscore_required(struct coap_resource *resource,
 				   struct coap_packet *request,
 				   struct sockaddr *addr, socklen_t addr_len,
@@ -1392,3 +1450,158 @@ COAP_RESOURCE_DEFINE(lichen_position_cache, lichen_coap_server,
                          .get = position_cache_get,
                          .path = position_cache_path,
                      });
+
+
+/* ── /config/privacy resources (spec 18.2.4, l1qw.32(b)) ──────────────── */
+
+struct cbor_reader {
+  const uint8_t *data;
+  size_t len;
+  size_t pos;
+  bool failed;
+};
+
+static uint64_t cbor_read_head(struct cbor_reader *r, uint8_t major) {
+  uint8_t info;
+  uint64_t value = 0U;
+
+  if (r->failed || r->pos >= r->len) {
+    r->failed = true;
+    return 0U;
+  }
+  info = r->data[r->pos] & 0x1fU;
+  if ((r->data[r->pos] >> 5U) != major) {
+    r->failed = true;
+    return 0U;
+  }
+  r->pos++;
+  if (info < 24U) {
+    return info;
+  }
+  if (info == 24U) {
+    if (r->pos + 1U > r->len) {
+      r->failed = true;
+      return 0U;
+    }
+    value = r->data[r->pos];
+    r->pos += 1U;
+    return value;
+  }
+  if (info == 25U) {
+    if (r->pos + 2U > r->len) {
+      r->failed = true;
+      return 0U;
+    }
+    value = ((uint64_t)r->data[r->pos] << 8) | r->data[r->pos + 1U];
+    r->pos += 2U;
+    return value;
+  }
+  r->failed = true;
+  return 0U;
+}
+
+static void cbor_read_text(struct cbor_reader *r, const char *expect) {
+  size_t len = strlen(expect);
+  uint64_t head;
+
+  head = cbor_read_head(r, 0x60U >> 5U);
+  if (r->failed || head != len || r->pos + len > r->len) {
+    r->failed = true;
+    return;
+  }
+  if (memcmp(r->data + r->pos, expect, len) != 0) {
+    r->failed = true;
+    return;
+  }
+  r->pos += len;
+}
+
+static void cbor_read_iid(struct cbor_reader *r, uint8_t out[8]) {
+  uint64_t head;
+
+  head = cbor_read_head(r, 0x40U >> 5U);
+  if (r->failed || head != 8U || r->pos + 8U > r->len) {
+    r->failed = true;
+    return;
+  }
+  memcpy(out, r->data + r->pos, 8U);
+  r->pos += 8U;
+}
+
+int lichen_config_privacy_get_handler(struct coap_resource *resource,
+				      struct coap_packet *request,
+				      struct sockaddr *addr,
+				      socklen_t addr_len) {
+	enum lichen_position_privacy_mode mode =
+		lichen_position_privacy_mode();
+	uint8_t body[80];
+	struct cbor_writer w = {
+		.buf = body,
+		.cap = sizeof(body),
+	};
+
+	cbor_put_value(&w, 0xa0U, 2U);
+	cbor_put_text(&w, "mode");
+	cbor_put_text(&w, lichen_position_privacy_mode_name(mode));
+	cbor_put_text(&w, "allowed");
+	cbor_put_value(&w, 0x80U, allowed_peers_count);
+	for (size_t i = 0U; i < allowed_peers_count; i++) {
+		cbor_put_value(&w, 0x40U, 8U);
+		cbor_put_bytes(&w, allowed_peers[i], 8U);
+	}
+	if (w.overflow) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_INTERNAL_ERROR, 0,
+					   NULL, 0);
+	}
+	return lichen_coap_respond(resource, request, addr, addr_len,
+				   COAP_RESPONSE_CODE_CONTENT, 60U, body,
+				   w.len);
+}
+
+int lichen_config_privacy_allowed_put_handler(
+	struct coap_resource *resource, struct coap_packet *request,
+	struct sockaddr *addr, socklen_t addr_len) {
+	uint16_t payload_len = 0U;
+	const uint8_t *payload =
+		coap_packet_get_payload(request, &payload_len);
+	struct cbor_reader r = {.data = payload, .len = payload_len};
+	uint8_t iids[LICHEN_POSITION_ALLOWED_PEERS_MAX][8];
+	size_t count = 0U;
+
+	if (payload == NULL) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_BAD_REQUEST, 0,
+					   NULL, 0);
+	}
+	/* Strict shape: map(1){ "peers": array([bstr(8) IIDs]) }. */
+	cbor_read_head(&r, 0xa0U >> 5U);
+	cbor_read_text(&r, "peers");
+	if (!r.failed) {
+		uint64_t items = cbor_read_head(&r, 0x80U >> 5U);
+
+		if (items > LICHEN_POSITION_ALLOWED_PEERS_MAX) {
+			r.failed = true;
+		}
+		for (uint64_t i = 0U; !r.failed && i < items; i++) {
+			cbor_read_iid(&r, iids[count]);
+			if (!r.failed) {
+				count++;
+			}
+		}
+	}
+	/* count == 0 restores the deny-all default (empty list). Trailing
+	 * bytes after the outer map are a strict-shape violation. */
+	if (r.failed || r.pos != r.len) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_BAD_REQUEST, 0,
+					   NULL, 0);
+	}
+	if (lichen_position_privacy_allowed_set(iids, count) != 0) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_BAD_REQUEST, 0,
+					   NULL, 0);
+	}
+	return lichen_coap_respond(resource, request, addr, addr_len,
+				   COAP_RESPONSE_CODE_CHANGED, 0, NULL, 0);
+}

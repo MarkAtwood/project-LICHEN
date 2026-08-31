@@ -567,6 +567,78 @@ ZTEST(coap_location_beacon, test_cache_bound_eviction_and_expiry) {
                 1U);
 }
 
+ZTEST(coap_location_beacon, test_config_privacy_resources) {
+  static const uint8_t peers_body[] = {
+      0xa1, 0x65, 'p', 'e', 'e', 'r', 's', 0x82, 0x48, 0x11, 0x11, 0x11, 0x11,
+      0x11, 0x11, 0x11, 0x11, 0x48, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22,
+      0x22,
+  };
+  static const uint8_t too_long_body[] = {
+      0xa1, 0x65, 'p', 'e', 'e', 'r', 's', 0x81, 0x43, 1, 2, 3,
+  };
+  struct coap_resource resource = {0};
+  struct coap_packet request;
+  uint8_t packet_buf[128];
+  struct sockaddr_in6 peer = {.sin6_family = AF_INET6};
+  const uint8_t iid1[8] = {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11};
+  uint8_t got[8] = {0};
+
+  zassert_ok(lichen_position_beacon_set_privacy(
+      LICHEN_POSITION_PRIVACY_PRIVATE));
+
+  /* PUT replaces the allowed list; the store APIs reflect it. */
+  zassert_ok(coap_packet_init(&request, packet_buf, sizeof(packet_buf),
+                              COAP_VERSION_1, COAP_TYPE_CON, 0, NULL,
+                              COAP_METHOD_PUT, 123U));
+  zassert_ok(coap_packet_append_payload_marker(&request));
+  zassert_ok(coap_packet_append_payload(&request, peers_body,
+                                        sizeof(peers_body)));
+  zassert_ok(lichen_config_privacy_allowed_put_handler(
+      &resource, &request, (struct sockaddr *)&peer, sizeof(peer)));
+  zassert_equal(lichen_position_privacy_allowed_count(), 2U);
+  zassert_ok(lichen_position_privacy_allowed_get(0U, got));
+  zassert_mem_equal(got, iid1, 8U);
+  zassert_true(lichen_position_privacy_allowed(iid1));
+
+  /* GET /config/privacy reports the mode and the list. */
+  zassert_ok(lichen_config_privacy_get_handler(
+      &resource, &request, (struct sockaddr *)&peer, sizeof(peer)));
+  zassert_equal(response_code, COAP_RESPONSE_CODE_CONTENT);
+  /* map(2) "mode" "private" "allowed" array(2) + two 8-byte bstrs. */
+  /* map(2) "mode" "private" "allowed" array(2) bstr bstr = 41 bytes. */
+  zassert_equal(response_payload_len, 41U);
+  zassert_equal(response_payload[0], 0xa2);
+  zassert_equal(response_payload[6], 0x67); /* "private" text head */
+  zassert_equal(response_payload[22], 0x82); /* allowed array head */
+
+  /* A malformed entry (3-byte IID) is rejected with 4.00, list unchanged. */
+  zassert_ok(coap_packet_init(&request, packet_buf, sizeof(packet_buf),
+                              COAP_VERSION_1, COAP_TYPE_CON, 0, NULL,
+                              COAP_METHOD_PUT, 124U));
+  zassert_ok(coap_packet_append_payload_marker(&request));
+  zassert_ok(coap_packet_append_payload(&request, too_long_body,
+                                        sizeof(too_long_body)));
+  (void)lichen_config_privacy_allowed_put_handler(
+      &resource, &request, (struct sockaddr *)&peer, sizeof(peer));
+  zassert_equal(response_code, COAP_RESPONSE_CODE_BAD_REQUEST);
+  zassert_equal(lichen_position_privacy_allowed_count(), 2U);
+
+  /* An empty peers list restores the deny-all default. */
+  static const uint8_t empty_body[] = {
+      0xa1, 0x65, 'p', 'e', 'e', 'r', 's', 0x80,
+  };
+  zassert_ok(coap_packet_init(&request, packet_buf, sizeof(packet_buf),
+                              COAP_VERSION_1, COAP_TYPE_CON, 0, NULL,
+                              COAP_METHOD_PUT, 125U));
+  zassert_ok(coap_packet_append_payload_marker(&request));
+  zassert_ok(coap_packet_append_payload(&request, empty_body,
+                                        sizeof(empty_body)));
+  (void)lichen_config_privacy_allowed_put_handler(
+      &resource, &request, (struct sockaddr *)&peer, sizeof(peer));
+  zassert_equal(response_code, COAP_RESPONSE_CODE_CHANGED);
+  zassert_equal(lichen_position_privacy_allowed_count(), 0U);
+}
+
 ZTEST(coap_location_beacon, test_cache_resource_response) {
   reset_state();
   zassert_ok(lichen_position_cache.get(&lichen_position_cache, NULL, NULL, 0));
