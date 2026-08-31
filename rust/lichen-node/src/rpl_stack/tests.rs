@@ -654,15 +654,19 @@ async fn join_leaf<R: Radio, L: Radio, S: NonVolatile>(
         .await
         .unwrap()
         .is_some());
+    // Canonical multicast DIO delivery (spec 09 13.3, R-09-005): the join
+    // DIO goes to ff02::1a in a broadcast link frame at hop limit 255 —
+    // exactly what the admission gate admits.
+    let all_rpl_nodes = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
     sender
         .send_ipv6_to(
             &dio_packet_from(
                 link_local_from_iid(root_identity.iid),
-                link_local_from_iid(leaf_addr[8..].try_into().unwrap()),
+                all_rpl_nodes,
                 root_addr,
                 ROOT_RANK,
             ),
-            &ipv6_eui64(leaf_addr),
+            &[],
             Priority::Routing,
         )
         .await
