@@ -100,6 +100,9 @@ for i in $(seq 1 $NUM_WORKERS); do
         ZEPHYR_ENV="ZEPHYR_SDK_INSTALL_DIR=$HOME/Developer/zephyr-sdk/zephyr-sdk-0.16.8 ZEPHYR_BASE=$HOME/Developer/lichen-workspace/project-LICHEN/zephyr PATH=$HOME/Developer/lichen-venv/bin:$HOME/.opencode/bin:$PATH"
     fi
     CMD="env $ZEPHYR_ENV OPENCODE_CONFIG_CONTENT='$WORKER_POLICY' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i LICHEN_AFFINITY='$AFFINITY' opencode"
+    # Affinity preference also goes in the worktree round file: hot-reloadable
+    # per round, so rebalances never require killing workers.
+    [ -n "$AFFINITY" ] && printf "AFFINITY: prefer beads labeled %s — check bd ready --label <label> --json per label first. If none ready, take any ready bead.\n" "$AFFINITY" >> "$WORKTREE/scripts/beads-worker-round.txt"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
     else
