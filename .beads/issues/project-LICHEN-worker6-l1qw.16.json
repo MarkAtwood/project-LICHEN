@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.16",
+  "title": "GCP-6.3/6.5: Rust+Python slot claims diverge from COSE_Sign1 format (gateway_count on wire, no alg check, 4.01 not silent discard)",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T12:01:49.955791957Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T12:01:49.955791957Z",
+  "labels": [
+    "gcp",
+    "spec-gap",
+    "lci",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.16",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-08-31T12:01:50.081723308Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
