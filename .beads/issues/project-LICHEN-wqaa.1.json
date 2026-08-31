@@ -15,7 +15,8 @@
     "c",
     "coap",
     "l2",
-    "networking"
+    "networking",
+    "oscore"
   ],
   "dependencies": [
     {
