@@ -69,7 +69,7 @@ _PAYLOAD_EXPIRY = 4
 _PAYLOAD_SEQ = 5
 
 
-def _encode_protected_header() -> bytes:
+def cose_protected_header() -> bytes:
     """Encode the protected header for COSE_Sign1.
 
     Returns:
@@ -78,7 +78,7 @@ def _encode_protected_header() -> bytes:
     return cbor2.dumps({COSE_ALG_LABEL: SCHNORR48_ED25519_ALG})
 
 
-def _build_sig_structure(protected: bytes, payload: bytes) -> bytes:
+def cose_sig_structure(protected: bytes, payload: bytes) -> bytes:
     """Build COSE Sig_structure per RFC 9052 section 4.4.
 
     Sig_structure = [
@@ -224,7 +224,7 @@ class DelegationToken:
         Returns:
             CBOR-encoded COSE_Sign1 array
         """
-        protected = _encode_protected_header()
+        protected = cose_protected_header()
         unprotected = {COSE_KID_LABEL: self.delegator_iid}
         payload_bytes = self.payload.to_cbor()
 
@@ -303,9 +303,9 @@ def create_delegation_token(
     )
 
     # Build COSE Sig_structure
-    protected = _encode_protected_header()
+    protected = cose_protected_header()
     payload_bytes = payload.to_cbor()
-    sig_structure = _build_sig_structure(protected, payload_bytes)
+    sig_structure = cose_sig_structure(protected, payload_bytes)
 
     # Sign SHA-256 hash of Sig_structure with Schnorr48
     to_sign = sha256(sig_structure).digest()
@@ -362,9 +362,9 @@ def verify_delegation_token(
         return False, "DELEGATOR_IID_MISMATCH"
 
     # Step 1: Verify signature
-    protected = _encode_protected_header()
+    protected = cose_protected_header()
     payload_bytes = payload.to_cbor()
-    sig_structure = _build_sig_structure(protected, payload_bytes)
+    sig_structure = cose_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 
     if not schnorr48.verify(delegator_pubkey, to_verify, token.signature):
@@ -524,7 +524,7 @@ class PrefixDelegationToken:
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure."""
-        protected = _encode_protected_header()
+        protected = cose_protected_header()
         unprotected = {COSE_KID_LABEL: self.delegator_iid}
         payload_bytes = self.payload.to_cbor()
         cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
@@ -604,9 +604,9 @@ def create_prefix_delegation_token(
         flags=DELEGATION_FLAG_EXTERNAL if external else 0,
     )
 
-    protected = _encode_protected_header()
+    protected = cose_protected_header()
     payload_bytes = payload.to_cbor()
-    sig_structure = _build_sig_structure(protected, payload_bytes)
+    sig_structure = cose_sig_structure(protected, payload_bytes)
     to_sign = sha256(sig_structure).digest()
     signature = schnorr48.sign(identity.privkey, identity.pubkey, to_sign)
 
@@ -644,9 +644,9 @@ def verify_prefix_delegation_token(
     if token.delegator_iid != derived_iid:
         return False, "DELEGATOR_IID_MISMATCH"
 
-    protected = _encode_protected_header()
+    protected = cose_protected_header()
     payload_bytes = payload.to_cbor()
-    sig_structure = _build_sig_structure(protected, payload_bytes)
+    sig_structure = cose_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 
     if not schnorr48.verify(delegator_pubkey, to_verify, token.signature):
