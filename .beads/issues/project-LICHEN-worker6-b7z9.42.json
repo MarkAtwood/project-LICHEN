@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.42",
+  "title": "C deaddrop POST accepts cleartext from local admin - violates 17.5.8 'All writes MUST use OSCORE' (R-11-041)",
+  "description": "spec/11-lci.md 17.5.8: 'All writes (POST) MUST use OSCORE (pairwise preferred; group context allowed)' and 'Unauthenticated POSTs return 4.01 Unauthorized'. C deaddrop_post gates via coap_oscore_authorize_mutating (lichen/subsys/lichen/coap/coap_dtn.c:146-152) but the authorize helper falls through to serve cleartext when lichen_coap_is_local_admin() passes (lichen/subsys/lichen/oscore/coap_oscore.c:482-487) — a SLIP/loopback local LCI client can POST /deaddrop with no OSCORE protection, and the behavior is documented as intentional ('OSCORE or local admin', lichen/include/lichen/coap_dtn.h:9). Python and Rust enforce OSCORE-only POST (python/src/lichen/coap/resources/deaddrop.py:586-594 returns 4.01 oscore_required; rust/lichen-client/src/deaddrop.rs:1088-1090). Classification: divergent; possibly an intentional local-admin exception per 17.6.3 access levels — needs a spec/human call on whether 17.5.8's unqualified MUST admits the local-admin carve-out (deaddrop holds asynchronous content, unlike /config). If carve-out is rejected: remove the fallthrough for deaddrop specifically or gate it behind an explicit Kconfig. Related: project-LICHEN-worker6-l1qw.30 (C deaddrop 18.9 divergences: budgets, codes, no ACL). Refs R-11-041 in docs/spec-coverage.md (spec/11-lci.md sweep).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T13:50:26.125411029Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T13:50:26.125411029Z",
+  "labels": [
+    "lci",
+    "security",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.42",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T13:50:26.245144356Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.41",
+  "title": "Puck constrained node fails minimal LCI MUST set: /config+/status 4.04 (NULL handlers), WKC off, SLIP off (spec 17.7)",
+  "description": "spec/11-lci.md 17.7: A constrained node MUST implement SLIP framing (serial), /.well-known/core, /config (read-only acceptable), /status (R-11-050..R-11-053). The subsystems are implemented and tested (lichen/tests/slip_transport 20 tests, lichen/tests/coap_config, lichen/tests/coap_status_get; vectors lci_config.json, lci_status.json, slip_framing.json) but the constrained product does not enable them. Evidence: (1) puck registers the standalone CoAP server with NULL handlers — lichen/apps/puck/src/main.c:522 lichen_coap_server_init(NULL) under CONFIG_LICHEN_COAP_SERVER_STANDALONE — so /config and /status answer 4.04; (2) CONFIG_COAP_SERVER_WELL_KNOWN_CORE absent from lichen/apps/puck/prj.conf (enabled gateway-only, apps/gateway/prj.conf:23); (3) CONFIG_LICHEN_SLIP_TRANSPORT absent from lichen/apps/puck/boards/t1000_e_nrf52840.conf (which instead enables CONFIG_LICHEN_NATIVE=y at :42), t_echo, r1_neo, thinknode; enabled only on rak4631_nrf52840.conf:18-19. Note the spec also deprecates the legacy native protocol as LCI (17.1.1) while the boards ship it live (separate finding, R-11-001). Suggested placement: lichen/apps/puck (main.c handler/provider registration, prj.conf WKC, board confs SLIP) or a puck LCI Kconfig fragment. Refs R-11-050, R-11-051, R-11-052, R-11-053 in docs/spec-coverage.md (spec/11-lci.md sweep).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T13:50:17.778442559Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T13:50:17.778442559Z",
+  "labels": [
+    "zephyr",
+    "lci",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.41",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T13:50:17.90657888Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
