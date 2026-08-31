@@ -4,6 +4,7 @@
 //! network. Acts as RPL DODAG root in Non-Storing Mode. Requires std.
 
 pub mod aprs_is;
+pub mod capability;
 pub mod config;
 pub mod discovery;
 pub mod gateway;
