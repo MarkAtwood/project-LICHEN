@@ -212,29 +212,41 @@ def test_mqtt_sn_rule7_rejects_invalid_full_mode_addresses() -> None:
 
 
 def test_mqtt_sn_rule7_profile_size_boundary() -> None:
-    payload = bytes(MAX_PACKET_SIZE - 21)
+    # The profile ceiling bounds the RAW packet (the fragmenter's reassembly
+    # buffer), not the encoded form: raw == MAX_PACKET_SIZE compresses
+    # (encoded = raw - 27); raw == MAX_PACKET_SIZE + 1 is rejected before
+    # rule dispatch.
+    payload = bytes(MAX_PACKET_SIZE - 48)
     raw = _build_mqtt_packet(payload)
     compressed = compress_packet(raw)
-    assert len(compressed) == MAX_PACKET_SIZE
+    assert len(compressed) == MAX_PACKET_SIZE - 27
     assert decompress_packet(compressed) == raw
 
+    raw_over = _build_mqtt_packet(bytes(MAX_PACKET_SIZE - 47))
     with pytest.raises(SchcError, match="profile limit"):
-        decompress_packet(compressed + b"\x00")
+        compress_packet(raw_over)
 
 
 def test_mqtt_sn_rule7_full_address_profile_size_boundary() -> None:
-    payload = bytes(MAX_PACKET_SIZE - 37)
+    # Raw-bound contract as above; the full-address residue shifts the
+    # encoded size by +16 relative to the canonical-address variant.
+    payload = bytes(MAX_PACKET_SIZE - 48)
     raw = _build_mqtt_packet(
         payload,
         src=IPv6Address("2001:db8::1"),
         dst=IPv6Address("2001:db8::2"),
     )
     compressed = compress_packet(raw)
-    assert len(compressed) == MAX_PACKET_SIZE
+    assert len(compressed) == MAX_PACKET_SIZE - 11
     assert decompress_packet(compressed) == raw
 
+    raw_over = _build_mqtt_packet(
+        bytes(MAX_PACKET_SIZE - 47),
+        src=IPv6Address("2001:db8::1"),
+        dst=IPv6Address("2001:db8::2"),
+    )
     with pytest.raises(SchcError, match="profile limit"):
-        decompress_packet(compressed + b"\x00")
+        compress_packet(raw_over)
 
 
 def test_custom_profiles_do_not_replace_reserved_rule7() -> None:
