@@ -2859,6 +2859,8 @@ def test_rpl_messages_vector(name: str, vector: dict) -> None:
         elif expect_error == "truncation":
             with pytest.raises((PacketError, Icmpv6Error, UdpError)):
                 IPv6Packet.from_bytes(wire)
+        else:
+            pytest.fail(f"{name}: unhandled malformed expect_error {expect_error!r}")
         return
 
     msg_type = vector["type"]
@@ -3092,6 +3094,9 @@ def test_rpl_messages_vector(name: str, vector: dict) -> None:
         assert len(options) == len(expected), f"{name}: options count"
         for i, opt in enumerate(options):
             assert opt.type == expected[i]["type"], f"{name}: option {i} type"
+
+    else:
+        pytest.fail(f"{name}: unhandled rpl_messages msg_type {msg_type!r}")
 
 
 def _loadng_messages_cases():
