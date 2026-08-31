@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-5m15",
+  "title": "adaptive_sf_select does not clamp assigned_sf/return to [7,12] (latent, pre-existing)",
+  "description": "Found by security codereview of worker6-b7z9.30.3 (density threshold 8 + floors). Rust RfHealthMetrics::adaptive_sf_select (rust/lichen-core/src/rf_health.rs ~:414) takes assigned_sf: Option\u003cu8\u003e unvalidated and returns it unclamped: adaptive_sf_select(Some(0), None, None) -\u003e (0, true); Some(200) -\u003e (200, true); Some(6) -\u003e 6. The new floors only raise under bad RF; they do not bound the returned SF. Currently latent: the only callers are tests feeding schema-valid 7-12 values. But spec 2a.8/02-physical-link define ASSIGNED_SF as a DIO-signaled 1-byte field — when a future caller wires DIO signaling into this function, attacker-influenced bytes will reach radio configuration directly. Fix: clamp sf to [7,12] (SF_MIN/SF_MAX per spec 2a.8:636) at entry or before return, or validate assigned_sf and reject out-of-range. Also mirror in the C gradient.c sf_select if it has the same shape. Pre-existing (not introduced by b7z9.30.3, whose floors only mask it under bad-RF conditions).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:11:57.439218143Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T23:11:57.439218143Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5m15",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.30.3",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:11:57.581229172Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

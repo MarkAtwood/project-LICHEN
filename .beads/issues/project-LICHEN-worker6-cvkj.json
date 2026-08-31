@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-cvkj",
+  "title": "Rust rf_health: explicit-SF path bypasses post-step-6 floors; step-3 density threshold parity",
+  "description": "Child of b7z9.30 residue. rust/lichen-core/src/rf_health.rs: floors (R-02a-114: EMA_SNR\u003c-5-\u003e12; SNR\u003c0-\u003e\u003e=11; Density\u003e8-\u003e\u003e=11; Load\u003e0.8-\u003e\u003e=11) apply only via the default table when SF unassigned (:390-393); an explicitly AssignedSF bypasses them (:405-440). Also verify step-3 density constant is 8 (2a.8) not 10. Python ccp.py:241-261 applies floors except after util\u003e200 early-return — cross-check. Add boundary tests. NOTE: rust/lichen-core/src/rf_health.rs is currently DIRTY (mid-flight by another worker) — coordinate before claiming.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:16:04.949210278Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T23:16:04.949210278Z",
+  "labels": [
+    "rust",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cvkj",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.30",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:16:05.067557326Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
