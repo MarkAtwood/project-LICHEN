@@ -20,6 +20,9 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
    - Findings → `bd create` (new beads), not recursive fixes — BUT dedup first:
      `bd search "<keyword from the finding>"` — if an OPEN bead already covers the
      same file/test/defect, `bd comment <id> "<your finding>"` instead of creating a twin.
+   - Label every bead you create with its primary area: one of zephyr, renode,
+     gateway, networking, python, schc, rust, yggdrasil, hal, lci, app-interface,
+     coap, link, phy — never leave new beads unlabeled.
 5. Close: `bd close <id>`
 6. Commit: `git add <changed files> && git commit -m "fix(<area>): <what>"`
    - NEVER stage `.beads/` — bd writes the shared store directly via BEADS_DIR.
