@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-1vy1",
+  "title": "lichen-client waypoint detail-form test fails: alt encoded f16 shortest-form vs committed f64 oracle",
+  "description": "PRE-EXISTING at HEAD 65085156aa (verified in clean worktree; unrelated to kpv0.6 clippy fixes). lichen-client/tests/waypoint_vectors.rs:40 detail_share_and_collection_forms_are_byte_exact asserts 'all_fields' byte-exact against the committed oracle and fails on the alt field only: actual emits CBOR f16 shortest-form (0xf9 49 40) where the committed vector expects f64 (0xfb 40 37 00 00 00 00 00 00). Likely divergence introduced when the canonical senml wire codec (shortest-form float, see l1qw.10.5.5 notes) was applied to waypoint detail forms without regenerating the vector, or the vector is right and the encoder regressed vs Python parity. Decide per spec appendix-senml which encoding is canonical, fix encoder or regenerate vector accordingly (never code-under-test as oracle), and restore the test to green. Full actual/expected byte arrays in the round evidence; rerun: cargo test -p lichen-client --all-features --test waypoint_vectors",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:43:38.106822526Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T07:43:38.106822526Z",
+  "labels": [
+    "coap"
+  ]
+}
