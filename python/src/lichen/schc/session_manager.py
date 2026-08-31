@@ -345,13 +345,19 @@ class SchcSessionManager:
                 return False
             sender, generation, key_generation = issued[1], issued[2], issued[3]
             record = self._sender_records.get(id(sender))
+            current_generation = (
+                self._key_generation_lookup(record.remote_signer_identity)
+                if record is not None
+                else None
+            )
             return (
                 record is not None
                 and record.sender is sender
                 and record.active
                 and record.generation == generation
                 and record.key_generation is key_generation
-                and self._key_generation_lookup(record.remote_signer_identity) is key_generation
+                and key_generation is not None
+                and current_generation is key_generation
                 and self._generations.get(record.remote_signer_identity, 0) == generation
                 and iid_to_eui64(PeerIdentity.from_pubkey(record.remote_signer_identity).iid)
                 == remote_eui64
@@ -460,6 +466,8 @@ class SchcSessionManager:
 
         if receiver_limit is None:
             receiver_limit = DEFAULT_RECEIVER_LIMIT
+        if key_generation is None:
+            raise FragmentError("fragmentation sender requires a current key generation")
         sender = FragmentSender(payload, rule_id, receiver_limit)
         self._key(remote_signer_identity, key_generation, rule_id)
         with self._lock:
