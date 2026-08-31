@@ -7,10 +7,11 @@ from __future__ import annotations
 import aiocoap
 import cbor2
 import pytest
-from aiocoap import GET, Message
+from aiocoap import GET, PUT, Message
 from aiocoap.resource import Site
 
 from lichen.client.lci import normalize_raw_rx_event, normalize_raw_rx_status
+from lichen.coap.access import AccessLevel
 from lichen.coap.raw_diag import RawDiagTTL
 from lichen.coap.resources.raw_rx import (
     DiagResource,
@@ -30,7 +31,7 @@ def _site(resource: RawRxResource) -> Site:
 
 @pytest.mark.asyncio
 async def test_get_raw_rx_disabled_matches_spec_example() -> None:
-    resource = RawRxResource()
+    resource = RawRxResource(access_level=lambda request: AccessLevel.ADMIN)
     assert resource.status_map() == default_disabled_status()
     net = InMemoryNetwork()
     server = await create_lichen_context(
@@ -64,7 +65,7 @@ async def test_get_raw_rx_reports_armed_ttl() -> None:
     ok, code = ttl.arm(enabled=True, ttl_s=60)
     assert ok is True
     assert code == "2.04 Changed"
-    resource = RawRxResource(ttl)
+    resource = RawRxResource(ttl, access_level=lambda request: AccessLevel.ADMIN)
     net = InMemoryNetwork()
     server = await create_lichen_context(
         net.channel("server"), "server", site=_site(resource)
@@ -91,7 +92,7 @@ async def test_get_raw_rx_reports_armed_ttl() -> None:
 
 @pytest.mark.asyncio
 async def test_put_raw_rx_arms_and_get_reflects() -> None:
-    resource = RawRxResource()
+    resource = RawRxResource(access_level=lambda request: AccessLevel.ADMIN)
     net = InMemoryNetwork()
     server = await create_lichen_context(
         net.channel("server"), "server", site=_site(resource)
@@ -150,7 +151,7 @@ async def test_get_diag_summary() -> None:
 async def test_raw_rx_events_observe() -> None:
     import asyncio
 
-    events = RawRxEventsResource()
+    events = RawRxEventsResource(access_level=lambda request: AccessLevel.ADMIN)
     site = Site()
     site.add_resource(["diag", "raw", "rx", "events"], events)
     net = InMemoryNetwork()
@@ -184,3 +185,33 @@ async def test_raw_rx_events_observe() -> None:
     finally:
         await client.shutdown()
         await server.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_get_raw_rx_forbidden_for_standard() -> None:
+    resource = RawRxResource(access_level=lambda request: AccessLevel.STANDARD)
+    resp = await resource.render_get(Message(code=GET))
+    assert resp.code == aiocoap.FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_put_raw_rx_unauthorized_for_standard() -> None:
+    resource = RawRxResource(access_level=lambda request: AccessLevel.STANDARD)
+    resp = await resource.render_put(
+        Message(code=PUT, payload=cbor2.dumps({"enabled": True}))
+    )
+    assert resp.code == aiocoap.UNAUTHORIZED
+
+
+@pytest.mark.asyncio
+async def test_raw_rx_events_get_forbidden_for_standard() -> None:
+    events = RawRxEventsResource(access_level=lambda request: AccessLevel.STANDARD)
+    resp = await events.render_get(Message(code=GET))
+    assert resp.code == aiocoap.FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_raw_rx_fails_closed_without_level_source() -> None:
+    resource = RawRxResource()
+    resp = await resource.render_get(Message(code=GET))
+    assert resp.code == aiocoap.FORBIDDEN

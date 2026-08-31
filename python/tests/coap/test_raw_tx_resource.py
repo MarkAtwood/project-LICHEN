@@ -10,6 +10,7 @@ import pytest
 from aiocoap import Message
 from aiocoap.resource import Site
 
+from lichen.coap.access import AccessLevel
 from lichen.coap.resources.raw_tx import RawTxResource
 from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 
@@ -17,7 +18,11 @@ from lichen.coap.transport import InMemoryNetwork, create_lichen_context
 @pytest.mark.asyncio
 async def test_post_raw_tx_accepts_spec_frame() -> None:
     now = {"t": 0.0}
-    resource = RawTxResource(clock=lambda: now["t"], min_interval_s=1.0)
+    resource = RawTxResource(
+        clock=lambda: now["t"],
+        min_interval_s=1.0,
+        access_level=lambda request: AccessLevel.ADMIN,
+    )
     site = Site()
     site.add_resource(["diag", "raw", "tx"], resource)
     net = InMemoryNetwork()
@@ -57,3 +62,25 @@ async def test_post_raw_tx_accepts_spec_frame() -> None:
     finally:
         await client.shutdown()
         await server.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_post_raw_tx_requires_admin() -> None:
+    resource = RawTxResource(
+        clock=lambda: 0.0, access_level=lambda request: AccessLevel.STANDARD
+    )
+    resp = await resource.render_post(
+        Message(code=aiocoap.POST, payload=cbor2.dumps({"frame": b"\xaa"}))
+    )
+    assert resp.code == aiocoap.UNAUTHORIZED
+    assert resource.last_frame is None
+
+
+@pytest.mark.asyncio
+async def test_post_raw_tx_fails_closed_without_level_source() -> None:
+    resource = RawTxResource(clock=lambda: 0.0)
+    resp = await resource.render_post(
+        Message(code=aiocoap.POST, payload=cbor2.dumps({"frame": b"\xaa"}))
+    )
+    assert resp.code == aiocoap.UNAUTHORIZED
+    assert resource.last_frame is None
