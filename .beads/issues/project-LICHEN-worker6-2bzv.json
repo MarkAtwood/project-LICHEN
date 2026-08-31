@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-2bzv",
+  "title": "coap_oscore_fallback 13 pre-existing test failures; coap_lci_auth blocked on zcbor Kconfig",
+  "description": "From 2z8e verification on heft native_sim (v4.1.0 workspace): (1) coap_oscore_fallback test suite has 13 pre-existing FAILs (test_plain_request_keeps_cleartext, test_protect_failure_sends_protected_empty_500, test_protect_failure_twice_drops_silently, test_protected_no_context_drops, et al) - identical count with and without the static-buffer change, so pre-existing; investigate the ztest harness expectations vs coap_oscore_respond_resource's silent-drop returns (OSCORE_ERR_CONTEXT_STALE). (2) coap_lci_auth cannot BUILD on heft: LICHEN_COAP_KEYS depends on ZCBOR which is absent from the heft v4.1.0 workspace module set (the documented zcbor Kconfig-loop limitation; AGENTS.md memory entry). Requires the pinned v3.7.0 AWS builder for authoritative verification, or a Kconfig rework removing the ZCBOR dependency. prj.conf unblocks applied this round: CONFIG_COAP_SERVER_MESSAGE_SIZE=1024 + CONFIG_LICHEN_SLIP_TRANSPORT=y (both suites).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:02:15.654248983Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T03:02:15.654248983Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2bzv",
+      "depends_on_id": "project-LICHEN-worker6-2z8e",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T03:02:15.762784972Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

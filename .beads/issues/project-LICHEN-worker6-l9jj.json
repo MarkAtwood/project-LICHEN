@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-l9jj",
+  "title": "Adjudicate rule255 RX decode semantics: byte-preserving vs UDP source validation",
+  "description": "Worker1 left two contradictory test artifacts from the rule255 TX/RX split work. (1) test_headers.py::test_validate_full_ipv6_structure_precedes_address_checks PINS: decode of mcast-src + corrupt-checksum raises \"malformed source\" (UDP source validation fires on decode). (2) schc_adaptation.json vectors 62/63/64 (rule255_rx_byte_preserving_unspecified_source/multicast_source/unspecified_destination) REQUIRE: decode of invalid-source/dest packets with VALID checksums SUCCEEDS byte-preserving (\"decode succeeds even though a canonical sender could not have originated it\"). The UDP parser (UdpDatagram.from_bytes) rejects invalid sources unconditionally after zero-checksum check, so (1) and (2) cannot both hold. Resolution needed from worker6-29bu author or Mark: either the vectors expect_error slugs are wrong (should be structural messages), or the UDP source check must move behind a TX-only gate (which would break pinned test (1) for corrupt-checksum cases). Current state: emission helper widened (unspecified/multicast TX rejection in encode_rule255 — all emission_rejects tests pass); 3 vector tests fail pending adjudication. Affects: python/tests/schc/test_headers.py, python/src/lichen/schc/headers.py, test/vectors/schc_adaptation.json.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:01:16.158033314Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:05:06.157215689Z",
+  "started_at": "2026-08-31T03:05:06.157215689Z",
+  "lease_expires_at": "2026-08-31T03:10:06.157215689Z",
+  "heartbeat_at": "2026-08-31T03:05:06.157215689Z",
+  "labels": [
+    "oscore"
+  ]
+}
