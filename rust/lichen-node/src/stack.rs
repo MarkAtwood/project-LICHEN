@@ -281,7 +281,10 @@ impl<R: Radio> Stack<R> {
     /// §8.9 R-05-065; the receive-path consumer lands in the sibling slice).
     /// Gate-proof dead-code expectation: tests (compiled under --all-targets)
     /// consume this accessor, production does not until b7z9.5.2.2.
-    #[cfg_attr(not(test), expect(dead_code, reason = "RX consumer lands in b7z9.5.2.2"))]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "RX consumer lands in b7z9.5.2.2")
+    )]
     pub(crate) fn fragmentation_policy(&self) -> &lichen_schc::FragmentationPolicy<8> {
         &self.fragmentation_policy
     }
@@ -637,6 +640,13 @@ impl<R: Radio> Stack<R> {
         } else {
             ipv6
         };
+        // SECURITY (ba39 v1c2): the inner bypassed the SRH survey, so an
+        // embedded first-header RH3 must not reach secure.rs's parser
+        // unsurveyed. Deeper header chains are rejected downstream by the
+        // secure first-header allowlist.
+        if ipv6[6] == lichen_core::ipv6::next_header::ROUTING {
+            return Ok(None);
+        }
 
         Ok(Some(ReceivedIpv6 {
             ipv6,
@@ -1025,7 +1035,9 @@ mod tests {
         let mut stack = test_stack(128, 0);
         let mislabeled_window = vec![0u8; ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD + 1];
         assert_eq!(
-            stack.send_l2_payload_to(&mislabeled_window, &[0x33; 2]).await,
+            stack
+                .send_l2_payload_to(&mislabeled_window, &[0x33; 2])
+                .await,
             Err(TxError::NeedsFragmentation)
         );
         let mut stack = test_stack(128, 0);
@@ -1203,6 +1215,37 @@ mod tests {
         // Alice receives reply
         let reply = alice.receive(1000).await.unwrap().unwrap();
         assert_eq!(reply.ipv6[40], 129); // ICMPv6 Echo Reply
+    }
+
+    /// A decapsulated inner whose first next-header is 43 (RH3) is dropped,
+    /// not delivered (ba39 v1c2 bounded tunnel profile).
+    #[tokio::test]
+    async fn stack_receive_drops_tunnel_with_rh3_inner() {
+        let alice_id = Identity::from_seed(Seed::new([0x91; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x92; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        let bob_native = lichen_core::addr::ygg_addr_from_pubkey(bob.local_public_key().as_bytes());
+        // Inner with an embedded RH3 (first next-header 43).
+        let inner = tunnel_inner(
+            lichen_core::ipv6::next_header::ROUTING,
+            alice_addr_native(&alice),
+            bob_native,
+            &[43, 2, 3, 1],
+        );
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        assert!(matches!(bob.receive(1000).await, Ok(None)));
     }
 
     /// Plaintext Stack unwraps an IPv6-in-IPv6 outer addressed to it and
