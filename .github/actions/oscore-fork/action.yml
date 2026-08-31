@@ -1,0 +1,29 @@
+name: 'Provision oscore fork'
+description: >-
+  Clone the pinned LICHEN rust-oscore fork into rust/oscore-fork so the
+  [patch.crates-io] path dependency in rust/Cargo.toml resolves on fresh
+  runners (dev hosts use rust/scripts/link-oscore-fork.sh instead).
+runs:
+  using: 'composite'
+  steps:
+    - name: Clone pinned oscore fork
+      shell: bash
+      run: |
+        set -euo pipefail
+        dir="${GITHUB_WORKSPACE}/rust/oscore-fork"
+        rm -rf "$dir"
+        git init -q "$dir"
+        git -C "$dir" remote add origin https://github.com/MarkAtwood/rust-oscore.git
+        # Pinned to the fork commit whose manifest is oscore 0.1.2 with the
+        # LICHEN begin_unprotect_observe_response/master_secret additions;
+        # matches the oscore entry in rust/Cargo.lock.
+        git -C "$dir" fetch -q --depth 1 origin 76cee08654cc8cdd59e0dd9358efc2f6d5a049ec
+        git -C "$dir" checkout -q --detach FETCH_HEAD
+        # Identity check mirrors is_oscore_checkout in
+        # rust/scripts/link-oscore-fork.sh: a path dep carries no lock
+        # checksum, so the manifest name is all that separates the fork
+        # from a wrong checkout.
+        grep -q '^name = "oscore"' "$dir/Cargo.toml" || {
+          echo "error: $dir is not the oscore fork (package name mismatch)" >&2
+          exit 1
+        }
