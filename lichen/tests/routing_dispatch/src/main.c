@@ -423,6 +423,52 @@ static int test_queue_copy_gpsr_and_dtn(void)
 	return 0;
 }
 
+static int test_gradient_sf_density_threshold(void)
+{
+#if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED)
+	/* Mirrors gradient.h: sf_select itself only exists when adaptive SF
+	 * is enabled, so this test is compiled under the same condition (the
+	 * host CMake build defines it; twister builds without LICHEN_RPL
+	 * simply skip it). */
+	struct lichen_gradient_table table = {0};
+	struct lichen_gradient_entry entry = {
+		.hop_count = 1U,
+		.seq_num = 1U,
+		.source = LICHEN_GRADIENT_ANNOUNCE,
+		.expires_ms = 100000U,
+		.valid = true,
+		.sf.current_sf = 10U,
+		.sf.snr_ewma = 0, /* keep the step-4 upgrade path inactive */
+		.sf.upgrade_count = 0U,
+	};
+	const uint8_t neighbor[8] = {0x02, 0, 0, 0, 0, 0, 0, 0x5a};
+	uint8_t next_hop[16] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0,
+				0x02, 0,   0, 0, 0, 0, 0, 0x5a};
+	uint8_t sf = 0U;
+	bool tx_allowed = false;
+
+	memcpy(entry.destination_iid, neighbor, 8U);
+	memcpy(entry.next_hop, next_hop, sizeof(entry.next_hop));
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+
+	/* Spec 02a 2a.8 step 3: Density > 8 (strictly greater). Density 8 is
+	 * NOT the trigger; the SF stays at the entry's current value. */
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 8U, 0U, 0U, 1U, &sf,
+					  &tx_allowed) == 0);
+	REQUIRE(sf == 10U);
+
+	/* Density 9 crosses the threshold: SF +2, capped at 12. NOTE:
+	 * sf_select writes the result back into entry.sf.current_sf, so the
+	 * second call's baseline is the first call's result (still 10 here) —
+	 * keep the call order stable. */
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 9U, 0U, 0U, 2U, &sf,
+					  &tx_allowed) == 0);
+	REQUIRE(sf == 12U);
+	(void)tx_allowed;
+#endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
+	return 0;
+}
+
 static int run_all_tests(void)
 {
 	int ret;
@@ -436,6 +482,8 @@ static int run_all_tests(void)
 	ret = test_multicast_scope_and_boundary();
 	if (ret != 0) return ret;
 	ret = test_source_route_validation();
+	if (ret != 0) return ret;
+	ret = test_gradient_sf_density_threshold();
 	if (ret != 0) return ret;
 	return test_queue_copy_gpsr_and_dtn();
 }

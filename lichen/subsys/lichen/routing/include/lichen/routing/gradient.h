@@ -217,10 +217,10 @@ void lichen_gradient_sf_update(struct lichen_gradient_table *table,
  * @brief Select TX spreading factor for a neighbor based on tracked state.
  *
  * Implements the CCP-16 adaptive_sf_select pseudocode from
- * spec/02a-coordinated-capacity.md section 2a.7:
+ * spec/02a-coordinated-capacity.md section 2a.8:
  * 1. SF = AssignedSF (or entry.current_sf if absent)
  * 2. IF SF absent THEN SF = 10
- * 3. IF (Density > 10) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
+ * 3. IF (Density > 8) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
  * 4. IF (Neighbor.EMA_SNR > 8) AND (Density < 5) THEN SF = MAX(7, SF - 1)
  * 5. IF (Neighbor.EMA_Loss > 0.25) OR (Utilization > 200) THEN
  *       SF = MIN(12, SF + 1)
