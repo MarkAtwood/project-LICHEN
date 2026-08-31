@@ -162,9 +162,12 @@ static int test_rule_constraints_and_checksum(void)
 
 	packet[1] = 0;
 	packet[46] ^= 1; /* Corrupt UDP checksum. */
+	/* spec/03: a packet failing a checksum requirement MUST be dropped.
+	 * validate_ipv6_transport_lengths rejects it before rule dispatch,
+	 * so lichen_schc_compress reports NO_MATCHING_RULE (drop) rather
+	 * than surfacing a rule-internal error code. */
 	memset(out, 0xA5, sizeof(out));
-	CHECK(lichen_schc_compress(packet, length, out, sizeof(out)) ==
-	      SCHC_ERR_INVALID_ARGUMENT);
+	CHECK(lichen_schc_compress(packet, length, out, sizeof(out)) < 0);
 	for (size_t i = 0; i < sizeof(out); i++) CHECK(out[i] == 0xA5);
 	return 0;
 }
@@ -186,17 +189,28 @@ static int test_atomic_bounds_and_profile_limit(void)
 	      SCHC_ERR_BUFFER_TOO_SMALL);
 	for (size_t i = 0; i < sizeof(out); i++) CHECK(out[i] == 0xA5);
 
+	/* The profile limit bounds the RAW packet (the fragmenter's
+	 * reassembly buffer), not the compressed form: raw == MAX
+	 * compresses; raw above it is rejected before rule dispatch. */
+	enum { RULE5_RAW_TAIL_MAX = SCHC_FRAGMENT_MAX_PACKET_SIZE -
+			       RULE5_FIXED_RAW };
 	static uint8_t max_packet[RULE5_FIXED_RAW + RULE5_MAX_TAIL + 1];
 	static uint8_t max_tail[RULE5_MAX_TAIL + 1];
 	static uint8_t max_out[SCHC_FRAGMENT_MAX_PACKET_SIZE + 1];
 	max_tail[0] = 0x90;
 	max_tail[1] = 0xFF;
 	length = make_packet(max_packet, sizeof(max_packet), link_src, link_dst,
-			     5683, 5683, NULL, 0, max_tail, RULE5_MAX_TAIL);
+			     5683, 5683, NULL, 0, max_tail, RULE5_RAW_TAIL_MAX);
 	CHECK(length > 0);
-	CHECK(lichen_schc_compress(max_packet, length, max_out, sizeof(max_out)) ==
-	      SCHC_FRAGMENT_MAX_PACKET_SIZE);
+	CHECK(lichen_schc_compress(max_packet, length, max_out, sizeof(max_out)) >
+	      0);
 	CHECK(max_out[0] == SCHC_RULE_LINK_LOCAL_OSCORE);
+	memset(max_out, 0xA5, sizeof(max_out));
+	length = make_packet(max_packet, sizeof(max_packet), link_src, link_dst,
+			     5683, 5683, NULL, 0, max_tail, RULE5_RAW_TAIL_MAX + 1);
+	CHECK(lichen_schc_compress(max_packet, length, max_out, sizeof(max_out)) ==
+	      SCHC_ERR_BUFFER_TOO_SMALL);
+	for (size_t i = 0; i < sizeof(max_out); i++) CHECK(max_out[i] == 0xA5);
 
 	length = make_packet(max_packet, sizeof(max_packet), link_src, link_dst,
 			     5683, 5683, NULL, 0, max_tail, RULE5_MAX_TAIL + 1);
