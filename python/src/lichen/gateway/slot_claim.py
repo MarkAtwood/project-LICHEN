@@ -49,7 +49,19 @@ __all__ = [
 
 
 MAX_CLAIM_DURATION_SEC = 5 * (SUPERFRAME_DURATION_US // 1_000_000)
-"""Maximum how far ahead a claim's timestamp may be (5 superframes, GCP-6.3)."""
+"""Maximum how far ahead a claim's timestamp may be (5 superframes, GCP-6.3).
+
+Provisional: spec 6.3 step 7a fixes the tolerance at 305s (5 x 60s mesh
+superframes + 5s clock tolerance); the constant here derives from the 2s
+link-layer superframe until the claim-model decision (bead 70p7, tracked
+as vq3a(2)) lands the final wire model.
+"""
+
+STALE_CLAIM_TOLERANCE_SEC = 5
+"""Acceptable clock skew for a claim's timestamp in the past (step 7 analogue).
+
+Spec 6.3 step 7 rejects already-expired claims; the tolerance absorbs
+gateway clock skew so a claim issued moments ago is not dropped."""
 
 
 class ClaimRejectReason(Enum):
@@ -61,6 +73,7 @@ class ClaimRejectReason(Enum):
     IDENTITY_MISMATCH = auto()  # kid/gateway_iid not bound to verifying key
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
     EXPIRY_TOO_FAR = auto()  # Claim timestamp further ahead than the max horizon
+    STALE_CLAIM = auto()  # Claim timestamp older than the stale tolerance
 
 
 class AllocationMode(Enum):
@@ -326,6 +339,8 @@ def verify_slot_claim(
         now = time.time() if now_unix is None else now_unix
         if claim.timestamp > now + MAX_CLAIM_DURATION_SEC:
             return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
+        if claim.timestamp < now - STALE_CLAIM_TOLERANCE_SEC:
+            return (False, ClaimRejectReason.STALE_CLAIM)
 
     return (True, None)
 

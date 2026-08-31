@@ -759,3 +759,61 @@ class TestClaimExpiryHorizon:
         assert not is_valid
         assert reason is slot_claim.ClaimRejectReason.INVALID_SIGNATURE
 
+
+
+class TestStaleClaimBound:
+    """GCP-6.3 step 7 analogue: reject already-expired (stale) claims."""
+
+    @pytest.fixture
+    def keypair(self) -> tuple[bytes, bytes]:
+        seed = bytes.fromhex(
+            "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00"
+        )
+        return schnorr48.derive_keypair(seed)
+
+    @pytest.fixture
+    def pubkey(self, keypair: tuple[bytes, bytes]) -> bytes:
+        return keypair[1]
+
+    def _signed(
+        self, privkey: bytes, pubkey: bytes, timestamp: int | None
+    ) -> SlotClaim:
+        claim = SlotClaim(
+            gateway_iid="0011223344556677",
+            slots=(5, 6),
+            superframe_id=1000,
+            timestamp=timestamp,
+        )
+        return sign_slot_claim(claim, privkey, pubkey)
+
+    def test_fresh_timestamp_accepted(
+        self, keypair: tuple[bytes, bytes], pubkey: bytes
+    ) -> None:
+        privkey, _ = keypair
+        now = 1_900_000_000.0
+        signed = self._signed(privkey, pubkey, int(now))
+        is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
+        assert is_valid
+        assert reason is None
+
+    def test_stale_timestamp_rejected(
+        self, keypair: tuple[bytes, bytes], pubkey: bytes
+    ) -> None:
+        privkey, _ = keypair
+        now = 1_900_000_000.0
+        tolerance = slot_claim.STALE_CLAIM_TOLERANCE_SEC
+        signed = self._signed(privkey, pubkey, int(now) - tolerance - 1)
+        is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
+        assert not is_valid
+        assert reason is slot_claim.ClaimRejectReason.STALE_CLAIM
+
+    def test_timestamp_within_stale_tolerance_accepted(
+        self, keypair: tuple[bytes, bytes], pubkey: bytes
+    ) -> None:
+        privkey, _ = keypair
+        now = 1_900_000_000.0
+        tolerance = slot_claim.STALE_CLAIM_TOLERANCE_SEC
+        signed = self._signed(privkey, pubkey, int(now) - tolerance)
+        is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
+        assert is_valid
+        assert reason is None
