@@ -316,7 +316,7 @@ int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 	}
 
 	/* Step 3: High density or high utilization triggers SF +2 */
-	if (density > 10 || utilization > 150) {
+	if (density > 8 || utilization > 150) {
 		sf = LICHEN_MIN(12, sf + 2);
 	}
 

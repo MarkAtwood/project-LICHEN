@@ -445,6 +445,55 @@ static int test_dtn_expiry_zero_drop_and_expire(void)
 	return 0;
 }
 
+static int test_adaptive_sf_density_threshold(void)
+{
+#if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED)
+	struct accessor_state state = {.discovery_succeeds = true};
+	struct lichen_router router;
+	uint8_t destination[16] = {0x02, 0x00, [15] = 0x33};
+	uint8_t neighbor[16] = {0xfe, 0x80, [15] = 0x55};
+	struct lichen_gradient_entry entry = {
+		.hop_count = 1U,
+		.seq_num = 1U,
+		.source = LICHEN_GRADIENT_DATA,
+		.expires_ms = 100000U,
+	};
+	memcpy(entry.destination_iid, &destination[8], 8U);
+	memcpy(entry.next_hop, neighbor, 16U);
+	entry.sf.current_sf = 9U;
+
+	uint8_t sf = 0U;
+	bool tx_allowed = false;
+
+	/* Spec 2a.8 step 3: Density > 8 (strictly) triggers SF +2. The old
+	 * code used 10 — the 9-boundary case pins the spec value. */
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 9U, 0U, 0U, 1000U,
+					  &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+	REQUIRE(tx_allowed == true);
+
+	/* Density == 8 is not > 8: no step-3 bump. */
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U, 1001U,
+					  &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 9U);
+
+	/* Utilization > 150 still bumps +2 with low density. */
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 0U, 151U, 0U,
+					  1002U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+#endif
+	return 0;
+}
+
 static int run_all_tests(void)
 {
 	int ret;
@@ -461,7 +510,9 @@ static int run_all_tests(void)
 	if (ret != 0) return ret;
 	ret = test_queue_copy_gpsr_and_dtn();
 	if (ret != 0) return ret;
-	return test_dtn_expiry_zero_drop_and_expire();
+	ret = test_dtn_expiry_zero_drop_and_expire();
+	if (ret != 0) return ret;
+	return test_adaptive_sf_density_threshold();
 }
 
 #ifdef __ZEPHYR__
