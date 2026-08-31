@@ -717,6 +717,8 @@ def test_ipv6_malformed_vector(name: str, vector: dict) -> None:
     elif e == "invalid_source":
         p = IPv6Packet.from_bytes(wire)
         assert handle_icmpv6(p) is None
+    else:
+        pytest.fail(f"{name}: unhandled ipv6_malformed expect_error {e!r}")
 
 
 def _require_string_expect_error(vector: dict) -> None:
