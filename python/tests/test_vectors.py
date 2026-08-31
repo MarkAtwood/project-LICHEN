@@ -2485,6 +2485,10 @@ def _dao_structure(wire: bytes) -> tuple[str | None, list[tuple[int, bytes]], in
             return "unknown_option", options, origin_offset
         elif option_type == 5 and length != 18 or option_type == 6 and length != 20:
             return "bad_option_length", options, origin_offset
+        elif option_type == 5 and data[0] != 0:
+            # R-05-035 (spec 8.6): the reserved Target Flags octet MUST be
+            # zero; matches the dao_origin.py structural pass.
+            return "malformed_dao", options, origin_offset
         if origin_offset is not None and option_type != 0x12:
             return "nonterminal_option", options, origin_offset
         options.append((option_type, data))
@@ -2744,7 +2748,7 @@ def test_every_dao_origin_vector_executes_production_validator_and_manager(
 def test_dao_origin_signature_coverage_and_dodag_rules() -> None:
     vectors = [vector for _, vector in _dao_origin_signature_cases()]
     coverage = {vector["coverage"] for vector in vectors}
-    assert len(vectors) == len(coverage) == 51
+    assert len(vectors) == len(coverage) == 52
     assert {
         "d1",
         "d0_effective_dodag",
@@ -2768,6 +2772,7 @@ def test_dao_origin_signature_coverage_and_dodag_rules() -> None:
         "inconsistent_transit_sequence",
         "inconsistent_transit_lifetime",
         "unsupported_transit_e",
+        "target_flags_nonzero",
         "cross_prefix_equal",
         "cross_prefix_lower",
         "fresh_cross_prefix_target",

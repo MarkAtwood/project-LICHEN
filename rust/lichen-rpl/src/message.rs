@@ -430,11 +430,16 @@ impl From<RplError> for DaoEnvelopeError {
 
 /// Structural validity of a generalized RPL Target option body
 /// (spec/05-routing.md §8.7.1): flags and prefix-length octets present,
-/// prefix length at most 128, and at least `ceil(prefix_len / 8)` prefix
-/// octets. Whether the origin may advertise the prefix is a routing-layer
-/// decision (§8.7.2), enforced after signature verification.
+/// the reserved Target Flags octet zero (§8.6 R-05-035, matching the
+/// Python reference dao_origin.py structural pass), prefix length at
+/// most 128, and at least `ceil(prefix_len / 8)` prefix octets. Whether
+/// the origin may advertise the prefix is a routing-layer decision
+/// (§8.7.2), enforced after signature verification.
 fn is_generalized_target_body(body: &[u8]) -> bool {
-    body.len() >= 2 && body[1] <= 128 && body.len() - 2 >= usize::from(body[1].div_ceil(8))
+    body.len() >= 2
+        && body[0] == 0
+        && body[1] <= 128
+        && body.len() - 2 >= usize::from(body[1].div_ceil(8))
 }
 
 impl<'a> SignedDaoEnvelope<'a> {
