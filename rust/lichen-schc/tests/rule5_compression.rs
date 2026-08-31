@@ -163,7 +163,9 @@ fn exact_profile_boundary_is_accepted_and_one_over_is_rejected() {
     tail.push(0);
     assert!(matches!(
         compressed(&packet(&tail, &[])),
-        Err(SchcError::BufferTooSmall(_))
+        Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit"
+        ))
     ));
 }
 
