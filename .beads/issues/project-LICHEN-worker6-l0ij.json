@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-30T20:55:53.456043228Z",
   "labels": [
-    "human"
+    "human",
+    "ble"
   ],
   "dependencies": [
     {
