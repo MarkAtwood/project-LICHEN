@@ -2414,6 +2414,20 @@ async def test_node_post_commit_peer_failure_restores_bounded_one_shot_permit(
     assert node.gradient_table.lookup(destination) is not None
 
 
+def test_node_persist_path_requires_revision_anchor(
+    tmp_path,
+    identity: Identity,
+) -> None:
+    with pytest.raises(
+        ValueError, match="persistence_revision_anchor required when persist_path is set"
+    ):
+        Node(
+            identity=identity,
+            radio=cast(Any, MockRadio()),
+            config=NodeConfig(persist_path=str(tmp_path / "node-state")),
+        )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("retained", "first_sequence", "second_sequence"),

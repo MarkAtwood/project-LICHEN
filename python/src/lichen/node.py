@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from ipaddress import IPv6Address, IPv6Network
 from types import MappingProxyType
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from lichen import port_dispatch
 from lichen._sync_callbacks import reject_awaitable_result, require_sync_callable
@@ -360,6 +360,13 @@ class Node:
         )
         if self.config.rreq_jitter_min_ms > self.config.rreq_jitter_max_ms:
             raise ValueError("rreq_jitter_min_ms must not exceed rreq_jitter_max_ms")
+        if (
+            self.config.persist_path is not None
+            and self.persistence_revision_anchor is None
+        ):
+            raise ValueError(
+                "persistence_revision_anchor required when persist_path is set"
+            )
         # Create peer database with eviction checker bound to this node
         self._peer_db = PeerDatabase(
             initial_peers=self.peer_db if self.peer_db else None,
@@ -409,11 +416,10 @@ class Node:
         announce_reconciliation: set[bytes] = set()
         announce_committer: Callable[[bytes, bytes, int], None] | None = None
         if self.config.persist_path is not None:
-            assert self.persistence_revision_anchor is not None
             self._announce_persistence = AnnounceStatePersistence(
                 self.config.persist_path,
                 self.identity,
-                self.persistence_revision_anchor,
+                cast("PersistenceRevisionAnchor", self.persistence_revision_anchor),
                 allow_bootstrap=self.allow_persistence_bootstrap,
             )
             announce_seen = self._announce_persistence.floors
