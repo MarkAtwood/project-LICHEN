@@ -27,7 +27,7 @@ from lichen.rpl.dodag import (
 )
 from lichen.rpl.messages import DIO
 
-DODAG_ID = "fd00::1"
+DODAG_ID = "0200::1"
 
 P1 = IPv6Address("fe80::1")
 P2 = IPv6Address("fe80::2")
@@ -435,10 +435,11 @@ def test_unjoined_foreign_dodag_is_not_version_compared() -> None:
         version=0,
         rank=256,
         dtsn=0,
-        dodag_id="fd00::99",
+        dodag_id="0200::99",
     )
     node.process_dio(foreign, P1, link_etx=1.0)
-    assert str(node.dodag_id) == "fd00::99"
+    # str(IPv6Address) is canonical: 0200::99 renders as 200::99.
+    assert str(node.dodag_id) == "200::99"
     assert node.version == 0
     assert node.preferred_parent == P1
 
