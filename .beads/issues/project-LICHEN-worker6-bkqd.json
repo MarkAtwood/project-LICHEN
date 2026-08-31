@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-bkqd",
+  "title": "[bug] oscore C module LOG name mismatch: REGISTER(coap_oscore) vs DECLARE(oscore) - oscore test apps fail to link on v4.1.0",
+  "description": "Found while verifying the 2z8e helper port (build/oscore native_sim v4.1.0): link fails with undefined log_const_oscore from oscore_ctx.c/oscore_protect.c/oscore_replay.c. Cause: lichen/subsys/lichen/oscore/coap_oscore.c:23 does LOG_MODULE_REGISTER(coap_oscore, ...) while oscore_ctx.c:23, oscore_protect.c:22 and oscore_replay.c:17 do LOG_MODULE_DECLARE(oscore, ...) - the declared module name 'oscore' is never registered anywhere, so on v4.1.0's logging (per-name symbols) the reference dangles. Likely linked fine on older pins with different log symbol generation. Fix: one token - make the registration LOG_MODULE_REGISTER(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL) (majority DECLARE wins, 3 files vs 1). Blocks runtime testing of every oscore test app on v4.1.0 (lichen/tests/oscore, oscore_persist, oscore_schc_roundtrip, coap_oscore_fallback, coap_keys). Verification: build/oscore then links and the oscore tests run.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T01:26:20.974422996Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T01:26:20.974422996Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bkqd",
+      "depends_on_id": "project-LICHEN-worker6-2z8e",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T01:26:21.073692972Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

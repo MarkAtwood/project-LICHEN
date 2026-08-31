@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-gygz",
+  "title": "uwip.2: driver-level async CAD - lr1110 CadDone IRQ path + sim/renode emulation",
+  "description": "Child 2 of uwip (drivers). Per vdaq's audit: implement lichen-level async CAD WITHOUT touching Zephyr's struct lora_driver_api (pinned v4.1.0 zephyr/ is out-of-repo). Extend the cad_registry entry (lora_l2_tx.c:30) with a done-callback pair: lichen_lora_cad_start(dev, timeout, done_cb, user_data) -\u003e driver arms CAD; on CadDone the driver computes (busy) and invokes done_cb(dev, busy, user_data) from its own context. lr1110: split lr1110_cad_impl (currently a blocking 10ms get_status poll loop at lr1110.c:942-1010 that DISABLES DIO9) - keep the sync path, add the async path that ENABLES DIO9 with the existing CADDONE|CADDETECTED mask and routes lr1110_irq_work_handler's get_status bits (the handler already dispatches RxDone) to the done callback; standby + irq clear mirror cad_impl's tail. sim/renode parity: no real radio CAD - emulate via a short delayed work item that raises the done callback (busy=false default, or consult the sim collision model if trivial); document the emulation limit. Keep the blocking lichen_lora_cad_run path functional until uwip.3 converts csma.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T01:21:37.768605849Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T01:23:36.723189949Z",
+  "started_at": "2026-08-31T01:23:36.723189949Z",
+  "lease_expires_at": "2026-08-31T01:28:36.723189949Z",
+  "heartbeat_at": "2026-08-31T01:23:36.723189949Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gygz",
+      "depends_on_id": "project-LICHEN-worker6-uwip",
+      "type": "parent-child",
+      "created_at": "2026-08-31T01:21:37.877704931Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
