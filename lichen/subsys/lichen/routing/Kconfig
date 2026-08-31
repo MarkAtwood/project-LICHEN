@@ -96,8 +96,9 @@ config LICHEN_ROUTER_MAX_MESH_PREFIXES
 	default 4
 	help
 	  Maximum number of IPv6 prefixes that are classified as mesh-local.
-	  Includes Yggdrasil 02xx::/7 primary addresses by default plus
-	  GUA prefixes from DIO.
+	  Native Yggdrasil 0200::/8 addresses are classified directly
+	  (LICHEN_ADDR_YGGDRASIL) and do not consume a slot; extra prefixes
+	  come from runtime sources such as the RPL DODAG DIO.
 
 config LICHEN_ROUTER_DTN_BUFFER_SIZE
 	int "DTN store-and-forward buffer size (bytes)"
