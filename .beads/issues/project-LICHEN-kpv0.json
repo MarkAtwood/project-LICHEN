@@ -15,7 +15,8 @@
   "labels": [
     "coap",
     "l2",
-    "python"
+    "python",
+    "rust"
   ],
   "dependencies": [
     {
