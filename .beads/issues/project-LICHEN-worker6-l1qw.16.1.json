@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.16.1",
+  "title": "l1qw.16.1: Python SlotClaim adopts COSE_Sign1 wire format (spec payload keys 1-7, gateway_count off-wire)",
+  "description": "Child of l1qw.16 (GCP-6.5). python/src/lichen/gateway/slot_claim.py currently serializes a raw CBOR map with gateway_count and string keys (superframe_id/timestamp); spec requires a COSE_Sign1 envelope: protected bstr-wrapped {1:-65537} (reuse lichen.crypto.delegation_tokens.cose_protected_header/cose_sig_structure — proven in l1qw.26.2.1), unprotected {4: gateway 8-byte IID}, payload CBOR map with integer keys 1-7 (slots array, superframe_epoch, mode 0/1, expiry uint, gateway_iid bstr(8), claim_seq, ordinal), 48-byte Schnorr48 signature over SHA256(CBOR(Sig_structure)). gateway_count becomes a local/config parameter only (needed by compute_contiguous_slots) — NEVER on the wire. Update test/vectors/gcp_slot_claim.json vectors (coordinate with the two-tier corpus contract — both suites count them). Keep decode-time strictness (trailing bytes rejected). Sibling .16.2 mirrors in Rust; .16.3 fixes silent-discard.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:36:37.80229351Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T20:37:00.652781539Z",
+  "started_at": "2026-08-31T20:36:46.199999586Z",
+  "labels": [
+    "gcp",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.16.1",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.16",
+      "type": "parent-child",
+      "created_at": "2026-08-31T20:36:37.945824913Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-kpnp",
+  "title": "Validate puck native_sim build with LCI server on v3.7.0/CI (shared 4.1.0 workspace hits zcbor loop)",
+  "description": "Follow-up from b7z9.41.1: the puck LCI wiring (6bdacf9d2d: LICHEN_COAP_SERVER_STANDALONE + SLIP + WKC + MESSAGE_SIZE=896 + lora0 overlay alias + Kconfig select/depends fixes) was validated to Kconfig level on heft (.config shows STANDALONE/WKC/MESSAGE_SIZE=y at b7z9-41-1/puck4) but the full puck compile stops at the shared 4.1.0 workspace's zcbor Kconfig dependency loop ('depends again on RING_BUFFER'; OSCORE implies ZCBOR — documented limitation, bd memory '4.1.0-workspace-zcbor-kconfig-loop'). Validation path: (1) CI ec2-arm64 puck build (own lineage, no shared-zcbor module) must go green; or (2) the AWS v3.7.0 pinned builder per the recorded recipe. Acceptance: puck native_sim/native/64 builds + boots with 'CoAP server initialized/started' in the log and CONFIG_COAP_SERVER_WELL_KNOWN_CORE=y; ideally a GET /.well-known/core + /status smoke via the native_sim socket. Note: main.c:522 lichen_coap_server_init(NULL) is CORRECT as-is (built-in resources register statically; NULL zeroes optional app handlers) — b7z9.41.3's original premise is resolved by 6bdacf9d2d; re-scope or close .3 accordingly. Discovered from project-LICHEN-worker6-b7z9.41.1.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:28:53.364180643Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T20:28:53.364180643Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-kpnp",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.41.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:28:53.507327176Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788208620343762406-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.1",
+  "author": "opencode-worker-4",
+  "text": "Timeboxed scout+release by worker-4 (2026-08-31): decomposition of l1qw.16 is complete (.16.1/.16.2/.16.3 filed with precise scopes) but implementing this slice properly exceeds the remaining round budget — the migration touches SlotClaim fields (superframe_id-\u003esuperframe_epoch, timestamp-\u003eexpiry), to_cbor_map/from_cbor (spec integer keys 1-7, COSE_Sign1 array decode), encode_claim_canonical (payload-only signing via shared cose_sig_structure helpers), verify_slot_claim (SHA256(Sig_structure)), test/vectors/gcp_slot_claim.json AND the two-suite count contract, plus conflict-resolution call sites. File map for the next claimer: slot_claim.py:126-143 to_cbor_map (drop gateway_count here), :146-197 from_cbor (becomes COSE_Sign1 strict decode), :198-216 encode_claim_canonical (payload-only), :218-256 verify_slot_claim (alg check + sha256(Sig_structure)); shared envelope helpers public in lichen/crypto/delegation_tokens.py (cose_protected_header/cose_sig_structure, proven in l1qw.26.2.1); vector file gcp_slot_claim.json feeds two-suite counts (see wtxl.2/b862cdecd1 precedent). Releasing unclaimed — clean start, no half-migrated wire format committed.",
+  "created_at": "2026-08-31T20:37:00.343762406Z"
+}
