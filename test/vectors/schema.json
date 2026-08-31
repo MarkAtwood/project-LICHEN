@@ -4420,6 +4420,7 @@
       "type": "object",
       "required": [
         "name",
+        "input_hex",
         "output"
       ],
       "additionalProperties": false,
