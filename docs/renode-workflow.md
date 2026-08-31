@@ -460,7 +460,7 @@ jobs:
       - name: Install Python deps
         run: |
           pip install uv
-          cd python && uv sync --locked --dev
+          cd python && uv sync --locked --extra dev
 
       - name: Build firmware
         run: |
