@@ -411,7 +411,8 @@ class TestMessagesAuth:
 class TestSensorsLocationAuth:
     """POST /sensors/location is not exposed in Python (C-only), verify no handler."""
 
-    async def test_sensors_location_not_exposed(self) -> None:
+    @pytest.mark.parametrize("code", [GET, POST, PUT, DELETE], ids=["get", "post", "put", "delete"])
+    async def test_sensors_location_not_exposed(self, code: int) -> None:
         net = InMemoryNetwork()
         server = await create_lichen_context(
             net.channel("srv"),
@@ -422,11 +423,10 @@ class TestSensorsLocationAuth:
         try:
             # No method may reach the C-only resource: every verb must get
             # 4.04 (no handler) rather than 4.05 (handler without the verb).
-            for code in (GET, POST, PUT, DELETE):
-                resp = await client.request(
-                    Message(code=code, uri="coap://srv/sensors/location")
-                ).response
-                assert resp.code == NOT_FOUND
+            resp = await client.request(
+                Message(code=code, uri="coap://srv/sensors/location")
+            ).response
+            assert resp.code == NOT_FOUND
         finally:
             await client.shutdown()
             await server.shutdown()
