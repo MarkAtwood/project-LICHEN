@@ -312,3 +312,9 @@ class TestCCP13MaxTxMs:
     def test_zero_permille(self) -> None:
         # Edge case: 0 permille -> 0 ms
         assert max_tx_ms(0) == 0
+
+    def test_negative_permille_rejected(self) -> None:
+        # Negative budgets are nonsensical: max_tx_ms(-10) would yield -36000 ms.
+        for permille in (-1, -10, -1000):
+            with pytest.raises(ValueError, match="duty_permille must be non-negative"):
+                max_tx_ms(permille)

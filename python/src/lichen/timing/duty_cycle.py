@@ -80,7 +80,12 @@ def max_tx_ms(duty_permille: int) -> int:
     Returns:
         Maximum transmit time in milliseconds over the 1-hour rolling window.
         Example: max_tx_ms(10) = 36000 ms = 36 seconds per hour.
+
+    Raises:
+        ValueError: If duty_permille is negative.
     """
+    if duty_permille < 0:
+        raise ValueError("duty_permille must be non-negative")
     return (WINDOW_MS // 1000) * duty_permille
 
 
