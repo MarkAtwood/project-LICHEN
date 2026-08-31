@@ -12,7 +12,8 @@
   "labels": [
     "needs-mac",
     "oscore",
-    "tests"
+    "tests",
+    "human-only"
   ],
   "dependencies": [
     {
