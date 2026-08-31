@@ -354,6 +354,8 @@ int lichen_announce_ingest_authenticated(
 	struct announce_peer_pin *peer;
 	uint32_t observed_uptime_s;
 	uint32_t location_seq_num;
+	uint16_t prev_seq_num;
+	uint16_t prev_location_seq_num;
 	bool seq_stale_for_pin = false;
 	int ret;
 
@@ -439,6 +441,12 @@ int lichen_announce_ingest_authenticated(
 	/* SECURITY: Only update sequence state for fresh announces here. Stale
 	 * announces have their state update deferred until after notify_observers
 	 * accepts, preventing replay attacks that roll back seq_num. */
+	/* Capture the pre-ingest sequence state so a failed observer
+	 * callback can roll it back: the same-seq retry contract requires
+	 * that a callback failure does not consume the sequence number
+	 * (project-LICHEN-worker6-dp72). */
+	prev_seq_num = peer->seq_num;
+	prev_location_seq_num = peer->location_seq_num;
 	if (!seq_stale_for_pin) {
 		peer->seq_num = announce.wire_seq_num;
 		peer->location_seq_num = location_seq_num;
@@ -450,6 +458,16 @@ int lichen_announce_ingest_authenticated(
 	announce.seq_stale = seq_stale_for_pin;
 	ret = notify_observers(&announce, meta, seq_stale_for_pin);
 	if (ret < 0) {
+		k_mutex_lock(&announce_mutex, K_FOREVER);
+		/* Roll back only if no reentrant ingest advanced the state
+		 * further (k_mutex recursion permits same-thread relock):
+		 * clobbering a newer stream would re-open the replay window. */
+		if (peer->seq_num == announce.wire_seq_num &&
+		    peer->location_seq_num == location_seq_num) {
+			peer->seq_num = prev_seq_num;
+			peer->location_seq_num = prev_location_seq_num;
+		}
+		k_mutex_unlock(&announce_mutex);
 		k_mutex_unlock(&ingest_mutex);
 		return ret;
 	}
@@ -651,7 +669,10 @@ int lichen_lora_gw_announce_encode(const struct lichen_lora_gw_announce *announc
 
 /* ENOKEY may not be defined on all platforms */
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 
 /* L2 routing/control dispatch byte (spec 9.2) */
