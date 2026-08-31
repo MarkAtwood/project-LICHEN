@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-jqzc",
+  "title": "coap_slot_coord.c calls lichen_wall_clock_* with no CONFIG_LICHEN_CCP_TIME_SYNC guard",
+  "description": "Found during b7z9.8.1 review. coap_slot_coord.c:1482-1484 calls lichen_wall_clock_get()/lichen_wall_clock_valid() unguarded, but the declarations in link.h:837-844 are inside #ifdef CONFIG_LICHEN_CCP_TIME_SYNC and time_sync.c only compiles under that symbol (link/CMakeLists.txt:46). LICHEN_CCP_TIME_SYNC defaults y under LICHEN_LINK_CCP16_LOAD_BALANCING, so normal configs link; any config with SLOT_COORD=y but CCP_TIME_SYNC=n fails at compile (implicit declaration) or link. Same class of gap just fixed for coap_dtn.c in 9488b44e05 (guard + fail-open). Fix: #ifdef the calls with a clockless fallback (now_unix=0, valid=false) or add a Kconfig depends.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:57:35.177463674Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T05:57:35.177463674Z",
+  "labels": [
+    "coap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-jqzc",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:57:35.356005322Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
