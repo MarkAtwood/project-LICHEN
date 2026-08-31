@@ -1806,9 +1806,8 @@ impl AuthenticatedPeerSchcContext {
         // Spec 09 13.3 (R-09-005): canonical multicast DIO admission requires
         // hop-limit == 255 (link-local single hop), enforced by the check
         // below in parse; destination == ff02::1a is enforced by the
-        // destination gate that ran before this. Known residual divergence
-        // vs Python: the gate additionally requires a broadcast L2 addr
-        // mode, which Python does not inspect.
+        // destination gate that ran before this. The gate's checks (dst +
+        // Rule 255) exactly match the Python reference admission path.
         if ipv6[7] != 255 {
             return Err(SchcError::InvalidPacket(
                 "authenticated DIO Hop Limit must be 255",
@@ -2149,12 +2148,14 @@ fn authenticated_dio_destination_is_canonical_multicast(
 ) -> bool {
     // Spec 09 13.3 (R-09-005): authenticated admission applies to the
     // canonical multicast DIO only — destination exactly ff02::1a (all-RPL-
-    // nodes), carried uncompressed (Rule 255) in a broadcast link frame.
-    // Parity with the Python reference admission path, which rejects any
-    // other destination (authenticated_dio.py:359-360). Unicast DIOs have no
-    // authenticated admission contract in any implementation yet; admitting
-    // them here diverged from Python and let unicast-addressed DIOs mutate
-    // parent selection.
+    // nodes), carried uncompressed (Rule 255). Gate-level parity with the
+    // Python reference admission path (authenticated_dio.py:312-316,357-363),
+    // which also never inspects the link frame's address mode. Unicast-
+    // destination DIOs are rejected by the dst check (see worker6-dqeg).
+    // Residual end-to-end divergence: Python's link receive drops
+    // not-addressed-to-me frames (NOT_FOR_US) before admission, while Rust's
+    // receive_frame has no destination filter, so Rust admits a superset
+    // (Extended-to-anyone / Short frames) — see worker6-cpbe.
     const ALL_RPL_NODES: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
 
     let mut ipv6 = [0u8; SCHC_MAX_DECOMPRESSED];
@@ -2164,12 +2165,7 @@ fn authenticated_dio_destination_is_canonical_multicast(
     if length < IPV6_HEADER_LEN {
         return false;
     }
-    ipv6[24..40] == ALL_RPL_NODES
-        && frame.payload().get(1).copied() == Some(RULE_UNCOMPRESSED)
-        && matches!(
-            frame.destination_mode(),
-            lichen_link::frame::AddrMode::None | lichen_link::frame::AddrMode::Elided
-        )
+    ipv6[24..40] == ALL_RPL_NODES && frame.payload().get(1).copied() == Some(RULE_UNCOMPRESSED)
 }
 
 /// Compress a full IPv6 `packet` into `out` using the best matching SCHC rule.

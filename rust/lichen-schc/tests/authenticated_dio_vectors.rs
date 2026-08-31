@@ -286,11 +286,9 @@ fn authenticated_dio_admission_rejects_unicast_link_frame_to_receiver() {
     ipv6[24..40].copy_from_slice(&unicast);
     ipv6.extend_from_slice(&icmp);
     // Rule 255 encoding so rule-byte choice cannot confound the rejection.
-    // The frame is rejected by the tightened gate as a whole (the
-    // Extended addr mode also fails the broadcast-addr-mode conjunct); parse
-    // has no destination check, so reviving the old unicast branch or
-    // removing the gate makes this test fail — that is the regression this
-    // test pins.
+    // The frame is rejected solely by the destination conjunct (parse has no
+    // destination check), so reviving the old unicast branch or removing the
+    // gate makes this test fail — that is the regression this test pins.
     let mut encoded = [0u8; 512];
     let encoded_len = lichen_schc::encode_rule255(&ipv6, &mut encoded, usize::MAX).unwrap();
     let mut link_payload = vec![lichen_core::constants::L2_DISPATCH_SCHC];
@@ -319,4 +317,68 @@ fn authenticated_dio_admission_rejects_unicast_link_frame_to_receiver() {
         matches!(error, SchcError::InvalidPeerEvidence),
         "expected unicast link-frame rejection, got {error}"
     );
+}
+
+/// Parity with the Python reference admission path: the link frame's address
+/// mode is never inspected, so an Extended-addr (unicast L2) frame to this
+/// receiver carrying a canonical multicast DIO (dst ff02::1a, Rule 255) is
+/// admitted exactly as Python admits it (worker6-i8cd).
+#[test]
+fn authenticated_dio_admission_accepts_unicast_link_frame_with_multicast_dio() {
+    let sender_identity = Identity::from_seed(Seed::new([0x11; 32]));
+    let sender_iid = sender_identity.iid;
+    let receiver_identity = Identity::from_seed(Seed::new([0x22; 32]));
+    let receiver_iid = receiver_identity.iid;
+    let mut receiver = LinkLayer::new(receiver_identity);
+    receiver.add_peer(PeerIdentity::from_pubkey(sender_identity.pubkey));
+    let sender = LinkLayer::new(sender_identity);
+
+    let mut receiver_eui = receiver_iid;
+    receiver_eui[0] ^= 0x02;
+
+    let mut dio = vec![0u8; 24];
+    dio[2..4].copy_from_slice(&512u16.to_be_bytes());
+    dio[4] = 1 << 3;
+    dio[8..24].copy_from_slice(&DODAG_ID);
+    dio.extend_from_slice(&[0x13, 1, 3]);
+    let mut icmp = vec![155u8, 1, 0, 0];
+    icmp.extend_from_slice(&dio);
+    let mut src = [0u8; 16];
+    src[0] = 0xfe;
+    src[1] = 0x80;
+    src[8..].copy_from_slice(&sender_iid);
+    let checksum = lichen_core::checksum::upper_layer_checksum(&src, &ALL_RPL_NODES, 58, &icmp);
+    icmp[2..4].copy_from_slice(&checksum.to_be_bytes());
+    let mut ipv6 = vec![0u8; 40];
+    ipv6[0] = 0x60;
+    ipv6[4..6].copy_from_slice(&(icmp.len() as u16).to_be_bytes());
+    ipv6[6] = 58;
+    ipv6[7] = 255;
+    ipv6[8..24].copy_from_slice(&src);
+    ipv6[24..40].copy_from_slice(&ALL_RPL_NODES);
+    ipv6.extend_from_slice(&icmp);
+    let mut encoded = [0u8; 512];
+    let encoded_len = lichen_schc::encode_rule255(&ipv6, &mut encoded, usize::MAX).unwrap();
+    let mut link_payload = vec![lichen_core::constants::L2_DISPATCH_SCHC];
+    link_payload.extend_from_slice(&encoded[..encoded_len]);
+    let mut wire = vec![0u8; 160];
+    let length = sender
+        .build_frame(
+            1,
+            LinkSeqNum::new(1),
+            &receiver_eui,
+            &link_payload,
+            &mut wire,
+        )
+        .unwrap();
+    let frame = receiver.receive_frame(&wire[..length]).unwrap();
+
+    AuthenticatedPeerSchcContext::from_authenticated_dio_frame(
+        frame,
+        0,
+        &DODAG_ID,
+        1,
+        ExpectedDioRole::Peer,
+    )
+    .unwrap();
 }
