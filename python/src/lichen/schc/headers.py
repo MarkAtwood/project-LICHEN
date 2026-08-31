@@ -80,13 +80,6 @@ def _is_link_local(addr: int) -> bool:
     return addr >> 64 == _LINK_LOCAL_PREFIX64
 
 
-def _validate_ipv6_addresses(header: IPv6Header) -> None:
-    if header.src_addr.is_unspecified or header.src_addr.is_multicast:
-        raise SchcError(f"invalid IPv6 source address {header.src_addr}")
-    if header.dst_addr.is_unspecified:
-        raise SchcError("invalid unspecified IPv6 destination address")
-
-
 def validate_datagram_source_policy(src: IPv6Address) -> None:
     """Endpoint source policy, applied at origination and forwarding only.
 
@@ -147,7 +140,12 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
 
 
 def validate_full_ipv6(raw: bytes) -> bytes:
-    """Validate a complete IPv6 packet before Rule 255 delivery."""
+    """Validate a complete IPv6 packet before Rule 255 delivery.
+
+    Framing, structure, and checksums only (Rule 255 RX is byte-preserving,
+    spec/03-adaptation.md): endpoint address policy is TX-side and lives in
+    :func:`_validate_rule255_emission_endpoints`.
+    """
     if type(raw) is not bytes:
         raise SchcError("IPv6 packet must be bytes")
     if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
@@ -158,7 +156,6 @@ def validate_full_ipv6(raw: bytes) -> bytes:
         packet = IPv6Packet.from_bytes(raw, strict=True)
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
-    _validate_ipv6_addresses(packet.header)
     upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
         try:
@@ -173,14 +170,25 @@ def validate_full_ipv6(raw: bytes) -> bytes:
 def _validate_rule255_emission_endpoints(packet: IPv6Packet) -> None:
     """TX-side Rule 255 endpoint policy (spec/03-adaptation.md).
 
-    Encode must not originate loopback, IPv4-mapped, or bad-scope multicast
-    endpoints. Receive-side validation stays emission-free: looped-back and
-    multicast datagrams are legitimate RX.
+    Encode must not originate unspecified, loopback, multicast, or
+    IPv4-mapped source endpoints, nor unspecified, loopback, or IPv4-mapped
+    destination endpoints, nor out-of-scope multicast destinations.
+    Receive-side validation stays emission-free: looped-back and multicast
+    datagrams are legitimate RX.
     """
     source, destination = packet.header.src_addr, packet.header.dst_addr
-    if source.is_loopback or source.ipv4_mapped is not None:
+    if (
+        source.is_unspecified
+        or source.is_multicast
+        or source.is_loopback
+        or source.ipv4_mapped is not None
+    ):
         raise SchcError(f"invalid IPv6 source address {source}")
-    if destination.is_loopback or destination.ipv4_mapped is not None:
+    if (
+        destination.is_unspecified
+        or destination.is_loopback
+        or destination.ipv4_mapped is not None
+    ):
         raise SchcError(f"invalid IPv6 destination address {destination}")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F
