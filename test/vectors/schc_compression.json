@@ -246,6 +246,20 @@
       "packet": "60000000000c1140fe800000000000000000000000000001fe80000000000000000000000000000213881389000c000070696e67"
     },
     {
+      "name": "non_ipv6_short_input_malformed",
+      "category": "malformed_input",
+      "description": "Input shorter than an IPv6 header is not a packet: compress must reject it, never emit Rule255-wrapped garbage that Rust/Python peers fatal on at decode_rule255.",
+      "expect_error": "not_ipv6",
+      "packet": "deadbeef"
+    },
+    {
+      "name": "non_ipv6_version4_input_malformed",
+      "category": "malformed_input",
+      "description": "A version-4 buffer is not an IPv6 packet: compress must reject it like the Python and Rust references, never emit Rule255-wrapped bytes.",
+      "expect_error": "not_ipv6",
+      "packet": "4500002d000100004011f9a0c0000201c0000202163316330019aaaa40011234ff737461747573000000000000"
+    },
+    {
       "name": "coap_invalid_udp_checksum",
       "category": "malformed_input",
       "description": "A plaintext CoAP packet with a corrupted mandatory IPv6 UDP checksum is rejected rather than repaired.",

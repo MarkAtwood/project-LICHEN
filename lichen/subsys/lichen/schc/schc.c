@@ -540,18 +540,11 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	}
 
 	if (pkt_len < IPV6_HDR_LEN || ipv6_version(packet) != 6) {
-		/* Not IPv6 - uncompressed fallback */
-		/* SECURITY: Check for overflow before addition */
-		if (pkt_len > SIZE_MAX - 1) {
-			return SCHC_ERR_BUFFER_TOO_SMALL;
-		}
-		size_t needed = 1 + pkt_len;
-		if (out_len < needed) {
-			return SCHC_ERR_BUFFER_TOO_SMALL;
-		}
-		out[0] = SCHC_RULE_UNCOMPRESSED;
-		memcpy(&out[1], packet, pkt_len);
-		return (int)needed;
+		/* Contract: compress accepts full IPv6 packets only, mirroring
+		 * Python compress_packet and Rust compress which reject
+		 * non-IPv6 input. Never emit Rule255 for non-IPv6 bytes: a
+		 * Rust/Python peer fatals on them at decode_rule255. */
+		return SCHC_ERR_INVALID_ARGUMENT;
 	}
 
 	ret = validate_ipv6_transport_lengths(packet, pkt_len);

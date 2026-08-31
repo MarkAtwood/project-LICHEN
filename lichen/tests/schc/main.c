@@ -208,33 +208,32 @@ static int test_oscore_global(void)
 	);
 }
 
-static int test_uncompressed_fallback(void)
+static int test_reject_non_ipv6_input(void)
 {
-	uint8_t packet[4] = { 0xde, 0xad, 0xbe, 0xef };
-	uint8_t comp_buf[8];
-	uint8_t decomp_buf[8];
+	/* Compress accepts full IPv6 packets only (Python/Rust reference
+	 * behavior): short garbage and non-IPv6 versions must be rejected,
+	 * never emitted as Rule255 - a Rust/Python peer fatals on such
+	 * datagrams at decode_rule255. */
+	static const uint8_t garbage[4] = { 0xde, 0xad, 0xbe, 0xef };
+	uint8_t ipv4ish[45] = { 0 };
+	uint8_t comp_buf[64];
+	int n;
 
-	int n = lichen_schc_compress(packet, 4, comp_buf, sizeof(comp_buf));
-	if (n != 5) {
-		printf("  FAIL: uncompressed length (got %d, expected 5)\n", n);
-		return 0;
-	}
-	if (comp_buf[0] != 255) {
-		printf("  FAIL: uncompressed rule_id (got %d, expected 255)\n", comp_buf[0]);
-		return 0;
-	}
-	if (memcmp(&comp_buf[1], packet, 4) != 0) {
-		printf("  FAIL: uncompressed payload mismatch\n");
+	ipv4ish[0] = 0x45; /* IPv4 version 4, IHL 5 */
+
+	n = lichen_schc_compress(garbage, sizeof(garbage), comp_buf,
+				 sizeof(comp_buf));
+	if (n != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: short garbage expected SCHC_ERR_INVALID_ARGUMENT (got %d)\n",
+		       n);
 		return 0;
 	}
 
-	int m = lichen_schc_decompress(comp_buf, n, decomp_buf, sizeof(decomp_buf));
-	if (m != 4) {
-		printf("  FAIL: uncompressed decompress length (got %d, expected 4)\n", m);
-		return 0;
-	}
-	if (memcmp(decomp_buf, packet, 4) != 0) {
-		printf("  FAIL: uncompressed decompress mismatch\n");
+	n = lichen_schc_compress(ipv4ish, sizeof(ipv4ish), comp_buf,
+				 sizeof(comp_buf));
+	if (n != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: version-4 input expected SCHC_ERR_INVALID_ARGUMENT (got %d)\n",
+		       n);
 		return 0;
 	}
 
@@ -409,7 +408,7 @@ int main(void)
 	RUN_TEST(test_rpl_dao);
 	RUN_TEST(test_oscore_linklocal);
 	RUN_TEST(test_oscore_global);
-	RUN_TEST(test_uncompressed_fallback);
+	RUN_TEST(test_reject_non_ipv6_input);
 	RUN_TEST(test_unknown_rule_id);
 	RUN_TEST(test_truncated_coap_linklocal);
 	RUN_TEST(test_truncated_coap_global);
