@@ -197,49 +197,6 @@ int lichen_make_link_local(const uint8_t *iid, struct in6_addr *addr)
     return 0;
 }
 
-int lichen_make_ula(const uint8_t *prefix, const uint8_t *iid,
-                    struct in6_addr *addr)
-{
-    if (prefix == NULL || iid == NULL || addr == NULL) {
-        LOG_ERR("ipv6_addr: make_ula failed (NULL input)");
-        return -EINVAL;
-    }
-
-    /*
-     * Validate prefix is in fd00::/8 (locally-assigned ULA range).
-     *
-     * RFC 4193 ULA structure (fc00::/7):
-     *   Bits 0-6:   1111110 (fc00::/7 prefix identifier)
-     *   Bit 7:      L bit (1=local, 0=reserved for future central assignment)
-     *   Bits 8-47:  40-bit Global ID (randomly generated per site)
-     *   Bits 48-63: 16-bit Subnet ID (site-specific)
-     *
-     * The /8 prefix check means we validate all 8 bits of the first byte:
-     *   0xfd = 11111101 = fc00::/7 prefix (1111110) + L=1 (locally assigned)
-     *
-     * We only accept fd00::/8 (L=1), not fc00::/8 (L=0) which is reserved.
-     * The Global ID and Subnet ID (bytes 1-7) are site-specific and have
-     * no format constraints beyond being randomly generated per RFC 4193.
-     *
-     * Global ID validation (project-LICHEN-tvfm.100):
-     * We intentionally do NOT validate bytes 1-7 (the 40-bit Global ID + 16-bit
-     * Subnet ID). RFC 4193 Section 3.2.2 recommends pseudo-random generation,
-     * but "fd00:0000:0000::" (all-zeros Global ID) is technically valid. Using
-     * a non-random Global ID risks collision with other sites using the same
-     * simple prefix, but this is a deployment policy issue, not a protocol
-     * violation. The caller (provisioning system or config) is responsible for
-     * ensuring proper prefix selection.
-     */
-    if (prefix[0] != 0xfd) {
-        LOG_ERR("ipv6_addr: make_ula failed (invalid prefix %02x, expected fd00::/8)", prefix[0]);
-        return -EINVAL;
-    }
-
-    memcpy(addr->s6_addr, prefix, 8);
-    memcpy(&addr->s6_addr[8], iid, 8);
-    return 0;
-}
-
 int lichen_make_gua(const uint8_t *prefix, const uint8_t *iid,
                     struct in6_addr *addr)
 {
