@@ -13,6 +13,7 @@
   "close_reason": "Verified incorrect",
   "labels": [
     "l2",
-    "tests"
+    "tests",
+    "vectors"
   ]
 }
