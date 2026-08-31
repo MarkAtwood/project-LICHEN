@@ -11,7 +11,8 @@
   "updated_at": "2026-08-29T03:53:28.241799Z",
   "labels": [
     "l2",
-    "tests"
+    "tests",
+    "zephyr"
   ],
   "dependencies": [
     {
