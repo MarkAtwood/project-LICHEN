@@ -30,7 +30,7 @@ target_include_directories(schc_parity_test PRIVATE
   ../../subsys/lichen/schc
 )
 lichen_test_target(schc_parity_test)
-target_compile_options(schc_parity_test PRIVATE -Wno-error=implicit-int-conversion)
+target_compile_options(schc_parity_test PRIVATE -Wno-implicit-int-conversion)
 
 enable_testing()
 add_test(NAME schc_parity_test COMMAND schc_parity_test)

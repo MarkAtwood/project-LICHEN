@@ -1313,6 +1313,15 @@ impl<R: Radio> SecureStack<R> {
             return Err(SecureError::CorrelationMismatch);
         }
 
+        // SECURITY/AVAILABILITY COUPLING: completed_confirmable caches only
+        // the single most recent Confirmable notification, so this Duplicate
+        // path re-ACKs exactly one retransmission. That is sufficient because
+        // ObserveServer backpressure (lichen-coap observe.rs) permits at most
+        // one outstanding CON notification; retransmission exhaustion tears
+        // the relationship down. If multiple outstanding CON notifications
+        // are ever allowed, this must become a MID-keyed ACK cache or
+        // retransmitted older notifications will be dropped silently here
+        // (their OSCORE PIV replay-rejects at begin as well).
         let exact_retransmission =
             correlation
                 .completed_confirmable

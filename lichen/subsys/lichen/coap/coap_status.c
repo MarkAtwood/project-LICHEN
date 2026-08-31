@@ -488,16 +488,32 @@ static const char *trust_level_str(enum lichen_coap_trust_level trust)
 
 static bool status_snapshot_valid(const struct lichen_coap_node_status *status)
 {
+	/* Bounded termination scan: this TU builds with -std=c11
+	 * (__STRICT_ANSI__), which hides glibc's strnlen prototype, and the
+	 * Zephyr-side strnlen is not in scope for native_sim host builds.
+	 * These are fixed-size char arrays. */
 	if (status->battery_pct_valid && status->battery_pct > 100U) {
 		return false;
 	}
-	if (status->time.valid &&
-	    (strnlen(status->time.source_class,
-		     sizeof(status->time.source_class)) >=
-		     sizeof(status->time.source_class) ||
-	     strnlen(status->time.source_name, sizeof(status->time.source_name)) >=
-		     sizeof(status->time.source_name))) {
-		return false;
+	if (status->time.valid) {
+		bool class_terminated = false;
+		bool name_terminated = false;
+
+		for (size_t i = 0U; i < sizeof(status->time.source_class); i++) {
+			if (status->time.source_class[i] == '\0') {
+				class_terminated = true;
+				break;
+			}
+		}
+		for (size_t i = 0U; i < sizeof(status->time.source_name); i++) {
+			if (status->time.source_name[i] == '\0') {
+				name_terminated = true;
+				break;
+			}
+		}
+		if (!class_terminated || !name_terminated) {
+			return false;
+		}
 	}
 	if (status->dodag.valid &&
 	    ((!status->dodag.joined &&
@@ -562,13 +578,14 @@ ssize_t lichen_coap_encode_status_cbor(uint8_t *buf, size_t buf_size,
 	}
 
 	if (status->time.valid) {
-		uint8_t time_fields = 1U +
+		unsigned int time_fields = 1U +
 			(status->time.wall_clock_valid ? 1U : 0U) +
 			(status->time.source_class[0] != '\0' ? 1U : 0U) +
 			(status->time.source_name[0] != '\0' ? 1U : 0U) +
 			(status->time.age_valid ? 1U : 0U);
 
 		cbor_put_key(&ctx, "time");
+		/* Max 5 fields; file-static cbor_put_map_header takes size_t. */
 		cbor_put_map_header(&ctx, time_fields);
 		cbor_put_key(&ctx, "wall_clock_valid");
 		cbor_put_bool(&ctx, status->time.wall_clock_valid);

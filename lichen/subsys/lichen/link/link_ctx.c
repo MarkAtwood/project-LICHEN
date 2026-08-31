@@ -658,8 +658,8 @@ int lichen_link_channel_select(const uint8_t eui64[LICHEN_EUI64_LEN],
 	hash = lichen_hash_32(data, sizeof(data));
 
 	/* NChannels includes reserved CH0; hash only across data channels. */
-	n = num_channels - 1U;
-	*channel = 1 + (uint8_t)(hash % n);
+	n = (uint8_t)(num_channels - 1U);
+	*channel = (uint8_t)(1U + (hash % n));
 	return 0;
 }
 #else
@@ -689,8 +689,8 @@ int lichen_link_channel_select(const uint8_t eui64[LICHEN_EUI64_LEN],
 
 	hash = lichen_hash_32(data, sizeof(data));
 
-	n = num_channels - 1U;
-	*channel = 1 + (uint8_t)(hash % n);
+	n = (uint8_t)(num_channels - 1U);
+	*channel = (uint8_t)(1U + (hash % n));
 	return 0;
 }
 #endif
