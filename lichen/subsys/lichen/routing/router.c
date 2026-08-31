@@ -692,19 +692,16 @@ int lichen_router_route_packet(struct lichen_router *router,
 
 #if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
 	{
-		/* Prefer wire-parsed DTN option; fall back to caller-supplied hint. */
-		uint32_t dtn_expiry = view.dtn_expiry_unix;
-		bool dtn_requested = view.dtn_store_forward;
-
-		if (dtn_expiry == 0U && packet->dtn_expiry_unix != 0U) {
-			dtn_expiry = packet->dtn_expiry_unix;
-			dtn_requested = true;
-		}
-		if (next.route.decision == LICHEN_ROUTE_DROP && dtn_requested &&
-		    dtn_expiry != 0U && dtn_expiry > packet->now_unix) {
+		/* DTN intent comes solely from the wire Type=0x03 HBH option
+		 * (spec 05-routing 9.8).  R-05-080 fail-open: without a valid
+		 * wall-clock (now_unix == 0) expiry cannot be evaluated, so an
+		 * S-flagged packet is stored and nodes with valid time enforce
+		 * expiry downstream. */
+		if (next.route.decision == LICHEN_ROUTE_DROP && view.dtn_store_forward &&
+		    (packet->now_unix == 0U || view.dtn_expiry_unix > packet->now_unix)) {
 			ret = lichen_router_dtn_buffer(router, destination_iid,
 						       packet->data, packet->len,
-						       dtn_expiry, now_ms);
+						       view.dtn_expiry_unix, now_ms);
 			if (ret < 0) {
 				return ret;
 			}
