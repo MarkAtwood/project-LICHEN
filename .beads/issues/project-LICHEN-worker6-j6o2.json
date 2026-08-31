@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-j6o2",
   "title": "Python: Enforce max slot claim duration in slot_claim.py",
   "description": "Add expiry duration check to python/src/lichen/gateway/slot_claim.py:\n\nAdd validation in verify_slot_claim() or a new validate_claim_timing():\n- claim.expiry \u003c= now_unix + MAX_CLAIM_DURATION_SEC\n\nAdd ClaimRejectReason.EXPIRY_TOO_FAR.\n\nDefault MAX_CLAIM_DURATION = 5 * SUPERFRAME_SEC.\n\nAdd test case.\n\nRef: project-LICHEN-worker6-70p7",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T03:36:50.048114Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T03:36:50.048114Z",
+  "updated_at": "2026-08-31T20:51:10.542488788Z",
+  "closed_at": "2026-08-31T20:51:10.542488788Z",
+  "close_reason": "Implemented the GCP-6.3 claim-horizon bound in python/src/lichen/gateway/slot_claim.py: MAX_CLAIM_DURATION_SEC = 5 * SUPERFRAME_SEC (SUPERFRAME_DURATION_US // 1e6 from lichen.link.channel = 2s default -\u003e 10s horizon); ClaimRejectReason.EXPIRY_TOO_FAR appended (existing enum ordinals stable); verify_slot_claim gained optional now_unix (defaults to wall clock) and rejects claims whose signed timestamp exceeds now + horizon AFTER signature verification (the timestamp is part of the signed canonical CBOR, so only legitimately-signed claims can reach the check; ordering pinned by test). Bead's 'claim.expiry' mapped to the only signed time field, claim.timestamp (no expiry field exists; no wire-format change) — documented in code. Tests: 5 new cases in TestClaimExpiryHorizon (within-horizon accepted, beyond rejected, no-timestamp skip, invalid-signature precedes horizon) plus boundary; slot-claim suite 44/44, full gateway suite 254 passed; ruff clean. 3x review (kimi-k3): correctness PASS (enum stability, no circular import, existing tests unaffected, wire format untouched), security PASS (ordering locked by test, injected clock acceptable, horizon caps pre-booking griefing), edge PASS with two handoffs: now_unix docstring gap fixed in-round; timestamp-optional bypass is a spec-level policy decision — filed as new bead (dedup-checked) alongside the note that global/per-originator caps live in worker-7's 07pj (pending sync).",
   "labels": [
     "python",
     "security"
