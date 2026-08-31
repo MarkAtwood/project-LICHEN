@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-6",
   "updated_at": "2026-08-30T21:40:36.064357997Z",
   "labels": [
-    "codereview"
+    "codereview",
+    "rust"
   ],
   "dependencies": [
     {
