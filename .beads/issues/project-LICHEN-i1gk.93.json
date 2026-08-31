@@ -17,7 +17,8 @@
     "review",
     "round3",
     "security",
-    "local-ok"
+    "local-ok",
+    "human-only"
   ],
   "dependencies": [
     {
