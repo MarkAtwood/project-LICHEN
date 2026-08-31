@@ -82,7 +82,7 @@ while :; do
         # Un-stick the wave runner if it paused on credits and credits recovered
         SW=$(tmux capture-pane -t "$SESSION:sweep-all" -p -S -30 2>/dev/null | rg -c "pausing sweep" || true)
         if [ "${SW:-0}" -gt 0 ]; then
-            tmux send-keys -t "$SESSION:sweep-all" -l "scripts/spec-sweep-all.sh $FLOOR"
+            tmux send-keys -t "$SESSION:sweep-all" -l "scripts/spec-sweep-all.sh"
             sleep 0.5
             tmux send-keys -t "$SESSION:sweep-all" Enter
             echo "   wave runner resumed"
