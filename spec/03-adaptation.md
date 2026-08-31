@@ -414,8 +414,14 @@ multi-hop fallback.
 Rule 255 is reserved for uncompressed packets. All implementations MUST
 support its syntax regardless of version, but policy MUST still reject its use
 inside an incompatible DODAG. Its payload MUST be a complete,
-structurally valid IPv6 packet: version 6, exact Payload Length, no IPv6
-Fragment header, and, for UDP, exact UDP Length plus a nonzero valid checksum.
+structurally valid IPv6 packet: version 6, exact Payload Length, a consistent
+next-header chain — each header's Next Header field correctly identifies the
+following header, and the walk terminates at the first header that is not an
+IPv6 extension header, treating everything from that header onward as opaque
+payload; the walk MUST NOT recurse into encapsulated IPv6 (Next Header 41),
+whose validation is the decapsulating node's role, not the codec's — no IPv6
+Fragment header, and, for UDP, exact UDP Length plus a
+nonzero valid checksum computed over the addresses present in the packet.
 
 **Endpoint address policy (canonical TX/RX split):** The profile address
 policy defined for Rule 7 selection (Section 5.5) is an EMISSION constraint
@@ -427,9 +433,16 @@ encoder (and the compression path falling back to it) MUST reject such
 packets. Rule 255 DECODING is byte-preserving and MUST validate structure
 and checksums only: a decoder MUST NOT apply the endpoint address policy on
 receipt, because a structurally valid packet already on the link is
-preserved verbatim rather than reinterpreted or dropped as malformed. This
-split keeps the two implementation families interoperable: a packet one
-implementation cannot originate is still delivered intact by the other.
+preserved verbatim rather than reinterpreted or dropped as malformed.
+On the origination and forwarding paths, where endpoint policy is
+evaluated, integrity and structural failures report before endpoint-shape
+opinions: a packet failing both a structural or checksum check and an
+endpoint-policy check MUST be reported as a structure or checksum error.
+Validation reports are local diagnostics only and MUST NOT themselves be
+transmitted as protocol errors.
+This split keeps the two implementation families
+interoperable: a packet one implementation cannot originate is still
+delivered intact by the other.
 
 ```
 Rule 255 packet:
