@@ -12,6 +12,7 @@
   "closed_at": "2026-07-22T17:35:32.411189744Z",
   "close_reason": "Derivation for no-ULA model fixed in 06-security.md with precise normative steps matching Rust/Python/impl and test vectors. 3 codereview passes completed with all findings filed+fixed (w60o,8r3c,3r5x closed). Section ordering and cross-refs corrected. No P0-P2 remaining in this file.",
   "labels": [
-    "codereview"
+    "codereview",
+    "human-only"
   ]
 }
