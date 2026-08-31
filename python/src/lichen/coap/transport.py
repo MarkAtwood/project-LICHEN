@@ -33,11 +33,11 @@ from ipaddress import IPv6Address, ip_address
 from typing import Any
 from urllib.parse import quote, unquote
 
-import aiocoap  # type: ignore[import-untyped]  # no official stubs
+import aiocoap  # no official stubs
 from aiocoap import Message, error, interfaces
-from aiocoap.numbers import constants  # type: ignore[import-untyped]
-from aiocoap.numbers.codes import EMPTY  # type: ignore[import-untyped]
-from aiocoap.numbers.types import ACK, RST  # type: ignore[import-untyped]
+from aiocoap.numbers import constants
+from aiocoap.numbers.codes import EMPTY
+from aiocoap.numbers.types import ACK, RST
 
 from lichen.coap.params import (
     CongestionError,
@@ -729,7 +729,7 @@ class InMemoryChannel(DatagramChannel):
         self._receiver = None
 
 
-class LichenRemote(interfaces.EndpointAddress):  # type: ignore[misc]  # aiocoap lacks py.typed
+class LichenRemote(interfaces.EndpointAddress):  # aiocoap lacks py.typed
     """An aiocoap endpoint address identified by a LICHEN host string."""
 
     scheme = "coap"
@@ -791,7 +791,7 @@ class LichenRemote(interfaces.EndpointAddress):  # type: ignore[misc]  # aiocoap
         return f"<LichenRemote {self.hostinfo}>"
 
 
-class LichenTransport(interfaces.MessageInterface):  # type: ignore[misc]  # aiocoap lacks py.typed
+class LichenTransport(interfaces.MessageInterface):  # aiocoap lacks py.typed
     """A CoAP MessageInterface that carries datagrams over a DatagramChannel."""
 
     def __init__(

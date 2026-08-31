@@ -38,7 +38,7 @@ class AccessLevel(enum.Enum):
         return order.index(self) < order.index(other)
 
     def __le__(self, other: object) -> bool:
-        return self == other or self < other  # type: ignore[operator]
+        return self == other or self < other
 
 
 TRANSPORT_LEVELS: dict[str, AccessLevel] = {
