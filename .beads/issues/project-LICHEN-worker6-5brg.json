@@ -12,7 +12,8 @@
   "labels": [
     "c",
     "spec",
-    "human-only"
+    "human-only",
+    "link"
   ],
   "dependencies": [
     {
