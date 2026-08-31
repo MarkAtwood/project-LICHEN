@@ -20,7 +20,8 @@
     "rust",
     "schc",
     "spec",
-    "tests"
+    "tests",
+    "vectors"
   ],
   "dependencies": [
     {
