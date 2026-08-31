@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-6",
   "updated_at": "2026-08-31T03:23:43.41412316Z",
   "labels": [
-    "decomposed"
+    "decomposed",
+    "phy"
   ],
   "dependencies": [
     {
