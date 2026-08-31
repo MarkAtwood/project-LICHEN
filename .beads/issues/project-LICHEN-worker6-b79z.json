@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T06:28:05.897758Z",
   "labels": [
-    "app-interface"
+    "app-interface",
+    "human-only"
   ],
   "dependencies": [
     {

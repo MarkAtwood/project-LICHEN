@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-jynf",
+  "title": "Slot-claim cap denominated in CONFIG_LICHEN_CCP_SUPERFRAME_SEC but coordinator seeds duration_s from LICHEN_SUPERFRAME_DURATION_S (60) — dual source diverges",
+  "description": "Codereview finding on worker6-eaws (passes 2+3): coap_slot_coord.c:139 sets ctx-\u003esuperframe.duration_s = LICHEN_SUPERFRAME_DURATION_S (unconditional header define 60), while the new expiry cap (LICHEN_SLOT_CLAIM_MAX_DURATION_SEC) is derived from CONFIG_LICHEN_CCP_SUPERFRAME_SEC (link/Kconfig, range 1-3600). If an integrator sets CONFIG_LICHEN_CCP_SUPERFRAME_SEC=3600, the anti-squat cap silently becomes 5x3600s while superframe_id math still runs on 60s superframes - the 'N superframes' semantics mis-denominate. Help text documents the must-match invariant but nothing enforces it. Fix: initialize ctx-\u003esuperframe.duration_s from CONFIG_LICHEN_CCP_SUPERFRAME_SEC (host fallback in coap_slot_coord.h already resolves to LICHEN_SUPERFRAME_DURATION_S=60, so host behavior is unchanged); verify no other consumer of LICHEN_SUPERFRAME_DURATION_S depends on the constant staying literal. Files: lichen/subsys/lichen/coap/coap_slot_coord.c (init), lichen/subsys/lichen/coap/include/lichen/coap_slot_coord.h (comment update).",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T04:51:34.10902253Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T04:52:22.737732066Z",
+  "started_at": "2026-08-31T04:52:22.737732066Z",
+  "lease_expires_at": "2026-08-31T04:57:22.737732066Z",
+  "heartbeat_at": "2026-08-31T04:52:22.737732066Z",
+  "labels": [
+    "coap",
+    "zephyr",
+    "c"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-jynf",
+      "depends_on_id": "project-LICHEN-worker6-eaws",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T04:51:34.255100108Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
