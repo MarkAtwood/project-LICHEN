@@ -171,6 +171,7 @@ pub mod next_header {
 pub mod icmpv6_type {
     pub const DESTINATION_UNREACHABLE: u8 = 1;
     pub const PACKET_TOO_BIG: u8 = 2;
+    pub const TIME_EXCEEDED: u8 = 3;
     pub const ECHO_REQUEST: u8 = 128;
     pub const ECHO_REPLY: u8 = 129;
     pub const NEIGHBOR_SOLICITATION: u8 = 135;
@@ -742,6 +743,77 @@ impl PacketTooBig {
 
         let mtu = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]);
         Ok((Self { mtu }, &buf[4..]))
+    }
+}
+
+/// Codes carried by ICMPv6 Time Exceeded messages (RFC 4443 Section 3.3).
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeExceededCode {
+    /// Hop limit exceeded in transit.
+    HopLimitExceeded = 0,
+    /// Fragment reassembly time exceeded.
+    FragmentReassembly = 1,
+}
+
+impl TimeExceededCode {
+    /// Decode an assigned RFC 4443 Time Exceeded code.
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(Self::HopLimitExceeded),
+            1 => Some(Self::FragmentReassembly),
+            _ => None,
+        }
+    }
+}
+
+/// ICMPv6 Time Exceeded message (RFC 4443 Section 3.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimeExceeded {
+    /// Reason the hop limit was exhausted.
+    pub code: TimeExceededCode,
+}
+
+impl TimeExceeded {
+    /// Build a Time Exceeded message, including as much of
+    /// `invoking_packet` as fits within the IPv6 minimum MTU.
+    pub fn build(
+        &self,
+        src: &Addr,
+        dst: &Addr,
+        invoking_packet: &[u8],
+    ) -> Vec<u8, MAX_ICMPV6_ERROR_LEN> {
+        let quote_len = invoking_packet.len().min(MAX_INVOKING_PACKET);
+        let mut pkt = Vec::new();
+
+        pkt.push(icmpv6_type::TIME_EXCEEDED)
+            .expect("capacity pre-checked");
+        pkt.push(self.code as u8).expect("capacity pre-checked");
+        pkt.extend_from_slice(&[0, 0])
+            .expect("capacity pre-checked"); // checksum placeholder
+        pkt.extend_from_slice(&[0; 4])
+            .expect("capacity pre-checked"); // unused field
+        pkt.extend_from_slice(&invoking_packet[..quote_len])
+            .expect("capacity pre-checked");
+
+        let checksum = icmpv6_checksum(src, dst, &pkt).expect("bounded Time Exceeded message");
+        pkt[2..4].copy_from_slice(&checksum.to_be_bytes());
+
+        pkt
+    }
+
+    /// Parse the Time Exceeded body after the common type/code/checksum
+    /// header.
+    ///
+    /// The four-byte unused field is ignored as required by RFC 4443. The
+    /// caller supplies a code already decoded with
+    /// [`TimeExceededCode::from_u8`].
+    pub fn from_bytes(code: TimeExceededCode, buf: &[u8]) -> Result<(Self, &[u8]), Ipv6Error> {
+        if buf.len() < 4 {
+            return Err(TooShort::new(4, buf.len()).into());
+        }
+
+        Ok((Self { code }, &buf[4..]))
     }
 }
 
@@ -1391,6 +1463,77 @@ mod tests {
     #[test]
     fn test_packet_too_big_rejects_truncated_body() {
         let err = PacketTooBig::from_bytes(&[0, 0, 5]).unwrap_err();
+        assert_eq!(err, Ipv6Error::TooShort(TooShort::new(4, 3)));
+    }
+
+    #[test]
+    fn test_time_exceeded_matches_shared_vector() {
+        let src = Addr(hex!("0200514acffcfa9dea90556802586d37"));
+        let dst = Addr(hex!("0200389e777ace07c7d6ca08166ecd20"));
+        let invoking_packet = hex!(
+            "60000000001911400200389e777ace07c7d6ca08166ecd20
+             0200514acffcfa9dea90556802586d371633163300193098
+             7061796c6f616420666f72206572726f72"
+        );
+        let expected = hex!(
+            "0300c8500000000060000000001911400200389e777ace07
+             c7d6ca08166ecd200200514acffcfa9dea90556802586d37
+             16331633001930987061796c6f616420666f72206572726f72"
+        );
+
+        let message = TimeExceeded {
+            code: TimeExceededCode::HopLimitExceeded,
+        }
+        .build(&src, &dst, &invoking_packet);
+        assert_eq!(message.as_slice(), expected);
+        assert!(verify_icmpv6_checksum(&src, &dst, &message));
+
+        let parsed_code = TimeExceededCode::from_u8(message[1]).unwrap();
+        let (parsed, quote) =
+            TimeExceeded::from_bytes(parsed_code, &message[ICMPV6_HEADER_LEN..]).unwrap();
+        assert_eq!(parsed.code, TimeExceededCode::HopLimitExceeded);
+        assert_eq!(quote, invoking_packet);
+    }
+
+    #[test]
+    fn test_time_exceeded_code_assignments() {
+        assert_eq!(
+            TimeExceededCode::from_u8(0),
+            Some(TimeExceededCode::HopLimitExceeded)
+        );
+        assert_eq!(
+            TimeExceededCode::from_u8(1),
+            Some(TimeExceededCode::FragmentReassembly)
+        );
+        assert_eq!(TimeExceededCode::from_u8(2), None);
+    }
+
+    #[test]
+    fn test_time_exceeded_truncates_quote_to_minimum_mtu() {
+        let src = Addr::LOOPBACK;
+        let dst = Addr(hex!("00000000000000000000000000000002"));
+        let invoking_packet = [0x5au8; MAX_INVOKING_PACKET + 1];
+
+        let message = TimeExceeded {
+            code: TimeExceededCode::HopLimitExceeded,
+        }
+        .build(&src, &dst, &invoking_packet);
+        assert_eq!(message.len(), MAX_ICMPV6_ERROR_LEN);
+        assert_eq!(message[0], icmpv6_type::TIME_EXCEEDED);
+        assert!(verify_icmpv6_checksum(&src, &dst, &message));
+
+        let (_, quote) = TimeExceeded::from_bytes(
+            TimeExceededCode::HopLimitExceeded,
+            &message[ICMPV6_HEADER_LEN..],
+        )
+        .unwrap();
+        assert_eq!(quote, &invoking_packet[..MAX_INVOKING_PACKET]);
+    }
+
+    #[test]
+    fn test_time_exceeded_rejects_truncated_body() {
+        let err =
+            TimeExceeded::from_bytes(TimeExceededCode::HopLimitExceeded, &[0, 0, 0]).unwrap_err();
         assert_eq!(err, Ipv6Error::TooShort(TooShort::new(4, 3)));
     }
 

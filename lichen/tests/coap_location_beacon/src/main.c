@@ -205,6 +205,28 @@ int coap_oscore_unprotect_resource_request(
   return -ENOTSUP;
 }
 
+int coap_oscore_authorize_mutating(
+    struct coap_resource *resource, struct coap_packet *request,
+    struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+    uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
+    uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+    uint8_t *piv_out, size_t *piv_len_out, bool *is_protected) {
+  ARG_UNUSED(resource);
+  ARG_UNUSED(request);
+  ARG_UNUSED(addr);
+  ARG_UNUSED(addr_len);
+  ARG_UNUSED(expected_method);
+  ARG_UNUSED(plain_buf);
+  ARG_UNUSED(plain_buf_len);
+  ARG_UNUSED(payload_out);
+  ARG_UNUSED(payload_len_out);
+  ARG_UNUSED(ctx_out);
+  ARG_UNUSED(piv_out);
+  ARG_UNUSED(piv_len_out);
+  ARG_UNUSED(is_protected);
+  return -ENOTSUP;
+}
+
 int coap_oscore_respond_resource(
     struct coap_resource *resource, struct coap_packet *request,
     struct sockaddr *addr, socklen_t addr_len,
