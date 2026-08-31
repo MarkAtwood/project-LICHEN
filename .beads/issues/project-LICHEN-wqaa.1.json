@@ -13,7 +13,8 @@
   "close_reason": "Proposal framework ready referencing PRFAQ; NLnet currently has limited open calls (Taler/Fediversity) but draft aligns with NGI0/open internet goals when general call reopens.",
   "labels": [
     "c",
-    "coap"
+    "coap",
+    "l2"
   ],
   "dependencies": [
     {
