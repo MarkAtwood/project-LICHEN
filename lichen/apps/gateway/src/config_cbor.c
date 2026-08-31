@@ -238,6 +238,15 @@ static bool valid_source_name_bytes(const uint8_t *value, size_t len)
 	return true;
 }
 
+/* Zephyr's minimal libc does not declare strnlen(): bounded length via
+ * memchr. A string that fills the buffer without a NUL yields max. */
+static size_t config_bounded_len(const char *s, size_t max)
+{
+	const char *nul = memchr(s, '\0', max);
+
+	return nul ? (size_t)(nul - s) : max;
+}
+
 static bool valid_manual_location_config(
 	const struct lichen_gateway_manual_location_config *manual_location)
 {
@@ -251,8 +260,8 @@ static bool valid_manual_location_config(
 		return false;
 	}
 
-	name_len = strnlen(manual_location->source_name,
-			   sizeof(manual_location->source_name));
+	name_len = config_bounded_len(manual_location->source_name,
+				      sizeof(manual_location->source_name));
 	if (name_len == sizeof(manual_location->source_name)) {
 		return false;
 	}

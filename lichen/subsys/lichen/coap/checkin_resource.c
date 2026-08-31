@@ -204,19 +204,26 @@ int lichen_checkin_get_handler(struct coap_resource *resource,
 	service_tick_locked();
 	ret = lichen_checkin_list_encode(&s_service, s_payload,
 					 sizeof(s_payload), &len);
-	k_mutex_unlock(&s_lock);
-
 	if (ret != LICHEN_CHECKIN_OK) {
+		k_mutex_unlock(&s_lock);
 		LOG_ERR("check-in list encode failed: %d", ret);
 		return lichen_coap_respond(resource, request, addr, addr_len,
 					   COAP_RESPONSE_CODE_INTERNAL_ERROR,
 					   0, NULL, 0U);
 	}
 
-	return lichen_coap_respond(resource, request, addr, addr_len,
-				   COAP_RESPONSE_CODE_CONTENT,
-				   CHECKIN_CBOR_CONTENT_FORMAT, s_payload,
-				   len);
+	/* Respond while still holding s_lock: the response bytes live in
+	 * the shared s_payload staging buffer, so a second execution
+	 * context entering any GET handler between unlock and send would
+	 * overwrite them mid-flight (torn/foreign response). The respond
+	 * call only formats and transmits; it never re-enters this
+	 * module, so the hold is short and deadlock-free. */
+	ret = lichen_coap_respond(resource, request, addr, addr_len,
+				  COAP_RESPONSE_CODE_CONTENT,
+				  CHECKIN_CBOR_CONTENT_FORMAT, s_payload,
+				  len);
+	k_mutex_unlock(&s_lock);
+	return ret;
 }
 
 int lichen_rollcall_post_handler(struct coap_resource *resource,
@@ -311,19 +318,24 @@ int lichen_rollcall_get_handler(struct coap_resource *resource,
 		ret = lichen_rollcall_list_encode(&s_service, s_payload,
 						  sizeof(s_payload), &len);
 	}
-	k_mutex_unlock(&s_lock);
-
 	if (ret != LICHEN_CHECKIN_OK) {
+		k_mutex_unlock(&s_lock);
 		LOG_ERR("roll-call render failed: %d", ret);
 		return lichen_coap_respond(resource, request, addr, addr_len,
 					   COAP_RESPONSE_CODE_INTERNAL_ERROR,
 					   0, NULL, 0U);
 	}
 
-	return lichen_coap_respond(resource, request, addr, addr_len,
-				   COAP_RESPONSE_CODE_CONTENT,
-				   CHECKIN_CBOR_CONTENT_FORMAT, s_payload,
-				   len);
+	/* Respond while still holding s_lock: see the matching comment in
+	 * lichen_checkin_get_handler - the response bytes live in the
+	 * shared s_payload staging buffer and must not be overwritten
+	 * between unlock and send. */
+	ret = lichen_coap_respond(resource, request, addr, addr_len,
+				  COAP_RESPONSE_CODE_CONTENT,
+				  CHECKIN_CBOR_CONTENT_FORMAT, s_payload,
+				  len);
+	k_mutex_unlock(&s_lock);
+	return ret;
 }
 
 int lichen_checkin_config_put_handler(struct coap_resource *resource,

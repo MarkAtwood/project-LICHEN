@@ -296,6 +296,13 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
                 terminal = true;
                 break;
             }
+            next_header::IPV6_IN_IPV6 => {
+                if ipv6.len() - offset < IPV6_HEADER_LEN {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                terminal = true;
+                break;
+            }
             next_header::NO_NEXT => {
                 if offset != ipv6.len() {
                     return Err(RxError::InvalidSourceRoute);
@@ -439,4 +446,29 @@ pub(crate) fn advance_rpl_source_route(
     ipv6[24..40].copy_from_slice(&next_destination);
     ipv6[view.offset + 3] -= 1;
     Ok(Some(next_destination))
+}
+
+/// Strip an IPv6-in-IPv6 outer header (spec 05-routing 8.9 R-05-063).
+///
+/// `expected_dst` is this node's authorized primary 02xx address: the
+/// inner destination MUST match it (the E check) or the packet is rejected.
+/// Fails closed on any malformed outer or inner header.
+pub(crate) fn decapsulate_ipv6(outer: &[u8], expected_dst: [u8; 16]) -> Result<Vec<u8>, RxError> {
+    let consistent_payload_len = |packet: &[u8]| {
+        packet.len() >= IPV6_HEADER_LEN
+            && packet[0] >> 4 == 6
+            && IPV6_HEADER_LEN + usize::from(u16::from_be_bytes([packet[4], packet[5]]))
+                == packet.len()
+    };
+    if !consistent_payload_len(outer) || outer[6] != next_header::IPV6_IN_IPV6 {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    let inner = &outer[IPV6_HEADER_LEN..];
+    if !consistent_payload_len(inner) {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    if inner[24..40] != expected_dst {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    Ok(inner.to_vec())
 }
