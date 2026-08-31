@@ -9,7 +9,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:44:51.954528Z",
   "labels": [
-    "review"
+    "review",
+    "schc"
   ],
   "dependencies": [
     {
