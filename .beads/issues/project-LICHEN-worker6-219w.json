@@ -11,7 +11,8 @@
   "updated_at": "2026-08-29T02:12:06.348788Z",
   "labels": [
     "tdma",
-    "vectors"
+    "vectors",
+    "lci"
   ],
   "dependencies": [
     {
