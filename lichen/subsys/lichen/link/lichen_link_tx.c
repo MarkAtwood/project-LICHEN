@@ -134,7 +134,15 @@ int lichen_link_tx(struct lichen_link_ctx *ctx,
 	compressed_len = lichen_schc_compress(ipv6_pkt, ipv6_len,
 					      compressed, sizeof(compressed));
 	if (compressed_len < 0) {
-		return compressed_len;
+		/* Every compress failure is a caller-input rejection: policy/
+		 * structural defects, and BUFFER_TOO_SMALL when the encoded
+		 * output cannot fit the 256-byte staging buffer — which for
+		 * this link means the packet cannot fit a frame either
+		 * (LICHEN_FRAME_PAYLOAD_MAX = 250), so emitting is impossible
+		 * and Rust's caller-buffer-bounded fallback fails the same
+		 * way.  Surface the LICHEN-specific code: raw SCHC codes
+		 * (-1..-15) collide with POSIX errno values. */
+		return -LICHEN_ESCHC;
 	}
 	if ((size_t)compressed_len + 1U > sizeof(l2_payload)) {
 		return -EMSGSIZE;

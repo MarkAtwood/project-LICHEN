@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-k1en",
+  "title": "announce_store: separate-root anti-rollback rationale unenforced; identical roots accepted",
+  "description": "Found by security codereview of project-LICHEN-worker6-t8ox (P3). rust/lichen-node/src/announce_store.rs:157-158 (rationale) vs 169-173 (no validation): the doc justifies separate state/floor roots with 'a rollback snapshot cannot silently rewind both sides', but persistent() never rejects state_root == floor_root (even canonically equal paths) and does not name the same-snapshot-boundary residual risk. If both roots live on one filesystem (natural operator default), a whole-fs snapshot restore rewinds state and floor as a consistent sealed pair; load() sees no precedes() violation and serves the restored floor, silently reopening a replay window for every sequence in (restored_floor, last_seen] until origins advance. True anti-rollback needs a monotonic counter (out of scope here); minimum fix: reject canonically-equal roots in persistent() and document the same-snapshot-boundary residual risk in the module doc.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T20:49:18.741604755Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-30T20:49:18.741604755Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-k1en",
+      "depends_on_id": "project-LICHEN-worker6-t8ox",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T20:49:18.837454321Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

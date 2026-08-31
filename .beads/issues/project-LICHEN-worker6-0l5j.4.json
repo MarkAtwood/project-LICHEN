@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-0l5j.4",
+  "title": "lora_recv_async 4.1.0 migration: native_sim path (lora_loopback.c + lora_l2_rx.c)",
+  "description": "Child 1 of 0l5j (smallest, unblocks the whole ping_l2 family locally). Zephyr 4.x changed lora_recv_async/lora_recv_cb to carry void *user_data (v3.7.0 5-param cb vs v4.1.0 6-param) - lora_l2_rx.c and lora_loopback.c were on the 2-arg contract and fail -Werror on v4.1.0 native_sim. STATUS: compat layer LANDED on beads-worker-5 (commit 0l5j.4-slice: lichen/include/lichen/lora_compat.h with KERNEL_VERSION_NUMBER-conditional macros LORA_RECV_ASYNC/LORA_RECV_CB_EXTRA_ARGS/LORA_RECV_CB_PASS/LORA_RECV_CB_UNUSED/LORA_RECV_CB_PASS_VALUE/LORA_RECV_CB_USER_DATA_ARG; lora_l2_rx.c arm/re-arm/disarm + ISR sig migrated; lora_loopback.c driver API migrated with locked (cb,user_data) pair snapshot - edge-review P2 torn-pair fixed). Both lora objects compile -Werror on v4.1.0 native_sim (verified heft). REMAINING for acceptance: full ping_l2 build is blocked by the PRE-EXISTING coap breakages tracked under mt5q (worker6-ldkq coap_client send_mutex - fix exists as worker-2 commit b2d0582e10 awaiting sync; worker6-tczj coap_status.c). After those land, rebuild ping_l2 native_sim and run - no further lora work expected. lr1110/lora_sim/lora_renode are children 2-4.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:24:02.020694243Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T04:04:06.933298006Z",
+  "started_at": "2026-08-31T03:42:43.483126982Z",
+  "labels": [
+    "decomposed",
+    "phy"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0l5j.4",
+      "depends_on_id": "project-LICHEN-worker6-0l5j",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:24:02.129717791Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

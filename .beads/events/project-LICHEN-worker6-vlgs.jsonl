@@ -1,1 +1,5 @@
 {"id":"01a04aca-1ea1-756a-84b5-5e4ee6e928a3","issue_id":"project-LICHEN-worker6-vlgs","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T23:52:35.233356Z"}
+{"id":"01a055fe-14d8-746b-b81b-e64c3d27ebdb","issue_id":"project-LICHEN-worker6-vlgs","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: tests","created_at":"2026-08-31T04:05:09.976291097Z"}
+{"id":"01a055fe-1646-7d3d-b1c6-7bdcf7fd3105","issue_id":"project-LICHEN-worker6-vlgs","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: vectors","created_at":"2026-08-31T04:05:10.342868406Z"}
+{"id":"01a0560f-c113-716b-8922-c002af182c83","issue_id":"project-LICHEN-worker6-vlgs","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: lci","created_at":"2026-08-31T04:24:28.179094312Z"}
+{"id":"01a0563f-8257-7129-8614-66e4699d2278","issue_id":"project-LICHEN-worker6-vlgs","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed; test/vectors/hash_32.json exists at HEAD.","created_at":"2026-08-31T05:16:37.84707763Z"}

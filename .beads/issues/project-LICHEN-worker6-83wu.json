@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-83wu",
+  "title": "compress_mqtt_sn: add profile-limit precheck after csdw preflight merge",
+  "description": "Follow-up from emca scope decision: worker-4's fb8e7f4a70 (compress_mqtt_sn buffer-atomic preflight) is on their branch, not yet merged into beads-worker-6. emca added the profile-limit precheck (needed \u003e SCHC_FRAG_MAX_PACKET_SIZE -\u003e Err InvalidPacket, pre-write) to compress_coap/icmpv6_echo/rpl_dio/rpl_dao; compress_mqtt_sn on this tree still has the late mutate-then-check shape and would need the same 4-line profile precheck after fb8e7f4a70's preflight lands (insert after its needed\u003eout.len() check, before out[0]=RULE_MQTT_SN). Also add an over-profile sentinel test mirroring coap_compress_over_profile_leaves_buffer_untouched. Until then the MQTT-SN dispatcher path keeps the documented non-atomic carve-out on the profile-limit error only (BufferTooSmall is already atomic on worker-4's branch).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:00:33.190800129Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T06:00:33.190800129Z",
+  "labels": [
+    "rust",
+    "schc"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-83wu",
+      "depends_on_id": "project-LICHEN-worker6-emca",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T06:00:33.361185595Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

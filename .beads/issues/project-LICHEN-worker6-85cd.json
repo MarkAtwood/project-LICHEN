@@ -12,6 +12,7 @@
   "labels": [
     "codereview",
     "p2",
-    "spec-compliance"
+    "spec-compliance",
+    "coap"
   ]
 }

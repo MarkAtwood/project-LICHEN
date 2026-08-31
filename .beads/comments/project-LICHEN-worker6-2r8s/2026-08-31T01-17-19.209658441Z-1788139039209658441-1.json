@@ -1,0 +1,7 @@
+{
+  "id": "1788139039209658441-1",
+  "issue_id": "project-LICHEN-worker6-2r8s",
+  "author": "opencode-worker-6",
+  "text": "worker6: releasing - the shared helper coap_oscore_authorize_mutating does NOT exist on this tree (grep-verified zero hits); it is introduced by project-LICHEN-worker6-2z8e (adopt draft 02a8ee28fd with fmee/2m4y reconciliations), which is still open. Migrating the 6 call sites now would mean building a third helper variant, which parent l9hb explicitly forbids ('adopt/finish that helper rather than starting a third variant'). Reclaim after 2z8e lands. The 6 target sites re-confirmed present: coap_waypoints.c:926/1016/1048/1069 (note: 4 sites, bead said 2 - two are of the same gate shape), coap_location.c:1293, checkin_resource.c:146/235/340.",
+  "created_at": "2026-08-31T01:17:19.209658441Z"
+}

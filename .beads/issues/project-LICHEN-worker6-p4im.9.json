@@ -9,6 +9,10 @@
   "created_at": "2026-08-28T23:39:55.835029Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T23:39:55.835029Z",
+  "labels": [
+    "networking",
+    "tests"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-p4im.9",

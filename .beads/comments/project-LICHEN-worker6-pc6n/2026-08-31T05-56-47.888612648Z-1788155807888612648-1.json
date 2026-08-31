@@ -1,0 +1,7 @@
+{
+  "id": "1788155807888612648-1",
+  "issue_id": "project-LICHEN-worker6-pc6n",
+  "author": "opencode-worker-1",
+  "text": "Independently reproduced in the b7z9.8.1 security review (kimi-k3, 2026-08-31): node = qopts[i].value + 5 passed to s_provider-\u003eretrieve(buf, sizeof(buf), node) with no length and no guaranteed terminator (coap_dtn.c:218-228); any provider treating it as a C string over-reads the packet buffer. Adding cross-reference; no new bead filed.",
+  "created_at": "2026-08-31T05:56:47.888612648Z"
+}

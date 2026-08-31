@@ -12,6 +12,12 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T00:01:26.965755Z",
   "started_at": "2026-08-24T06:14:24.662902Z",
+  "labels": [
+    "networking",
+    "python",
+    "rust",
+    "schc"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-0t11",

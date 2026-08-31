@@ -14,7 +14,8 @@
   "close_reason": "Observation - code is correct as noted",
   "labels": [
     "owner-reserved",
-    "review"
+    "review",
+    "python"
   ],
   "dependencies": [
     {

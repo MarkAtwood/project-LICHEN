@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-ws5z",
+  "title": "Root-origin detection in mesh_to_mesh misses the root's native 02xx source address",
+  "description": "Found by 3x codereview of b7z9.4.1 (passes: correctness). gateway.rs is_root_origin compares ipv6[8..24] only against the root's link-local address, so a root-originated packet whose src is the root's native 0200::/8 address (normal src for app unicast per spec 6.1/12, e.g. gateway-originated CoAP via TUN) falls into the IPv6-in-IPv6 tunnel branch instead of the inline-SRH branch, and now receives the extra -1 forwarding decrement that spec 05-routing 8.9 reserves for packets the root forwards. Benign today (HL=64 origins, guard never trips) but a spec-precision deviation. Fix: extend is_root_origin to also match the root's native 02xx address (needs a root-native-address accessor on the node id / DODAG), or compute the forwarding decrement as u8::from(!is_root_origin). Add a test pinning src=root-native-02xx behavior. Files: rust/lichen-gateway/src/gateway.rs (~1649), possibly lichen-node node-id accessors. Discovered from project-LICHEN-worker6-b7z9.4.1.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:53:45.960512536Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T07:53:45.960512536Z",
+  "labels": [
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ws5z",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.4.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T07:53:46.294947404Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

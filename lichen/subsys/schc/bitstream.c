@@ -39,8 +39,9 @@ int schc_bit_writer_write(struct schc_bit_writer *writer,
 		int shift = remaining - bits_to_align;
 		uint8_t partial = (uint8_t)((value >> shift) & ((1U << bits_to_align) - 1));
 
-		writer->buf[writer->nbits / 8] |=
-			partial << (8 - bit_offset - bits_to_align);
+		writer->buf[writer->nbits / 8] =
+			(uint8_t)(writer->buf[writer->nbits / 8] |
+				  (partial << (8 - bit_offset - bits_to_align)));
 		writer->nbits += bits_to_align;
 		remaining -= bits_to_align;
 	}
@@ -90,8 +91,9 @@ int schc_bit_writer_write128(struct schc_bit_writer *writer,
 			int bit_idx = 7 - (src_bit % 8);
 			uint8_t bit = (value[byte_idx] >> bit_idx) & 1;
 
-			writer->buf[writer->nbits / 8] |=
-				bit << (7 - (writer->nbits % 8));
+			writer->buf[writer->nbits / 8] =
+				(uint8_t)(writer->buf[writer->nbits / 8] |
+					  (bit << (7 - (writer->nbits % 8))));
 			writer->nbits++;
 			src_bit++;
 		}
@@ -113,8 +115,9 @@ int schc_bit_writer_write128(struct schc_bit_writer *writer,
 		int bit_idx = 7 - (src_bit % 8);
 		uint8_t bit = (value[byte_idx] >> bit_idx) & 1;
 
-		writer->buf[writer->nbits / 8] |=
-			bit << (7 - (writer->nbits % 8));
+		writer->buf[writer->nbits / 8] =
+			(uint8_t)(writer->buf[writer->nbits / 8] |
+				  (bit << (7 - (writer->nbits % 8))));
 		writer->nbits++;
 		src_bit++;
 	}
@@ -211,7 +214,7 @@ int schc_bit_reader_read_bytes(struct schc_bit_reader *reader,
 		int byte_idx = i / 8;
 		int bit_idx = 7 - (i % 8);
 
-		out[byte_idx] |= bit << bit_idx;
+		out[byte_idx] = (uint8_t)(out[byte_idx] | (bit << bit_idx));
 		reader->pos++;
 	}
 

@@ -13,5 +13,8 @@
   "updated_at": "2026-08-28T03:44:29.311072Z",
   "started_at": "2026-07-22T22:54:48.400900883Z",
   "closed_at": "2026-07-25T02:34:57.382915794Z",
-  "close_reason": "Already fixed"
+  "close_reason": "Already fixed",
+  "labels": [
+    "networking"
+  ]
 }

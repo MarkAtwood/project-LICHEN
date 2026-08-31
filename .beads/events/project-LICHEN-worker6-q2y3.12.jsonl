@@ -1,2 +1,3 @@
 {"id":"01a048d4-bead-7445-bcc5-a28f2d247e00","issue_id":"project-LICHEN-worker6-q2y3.12","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T14:44:57.13328Z"}
 {"id":"01a048d4-bebf-75f7-9fa5-3f81da53968e","issue_id":"project-LICHEN-worker6-q2y3.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: review","created_at":"2026-08-28T14:44:57.151392Z"}
+{"id":"01a0560f-f4b9-7091-8496-ea1083ed5127","issue_id":"project-LICHEN-worker6-q2y3.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: schc","created_at":"2026-08-31T04:24:41.401039699Z"}

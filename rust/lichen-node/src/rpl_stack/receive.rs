@@ -9,7 +9,7 @@ use std::vec::Vec;
 use lichen_core::announce::Announce;
 use lichen_core::constants::L2_DISPATCH_ROUTING;
 use lichen_core::icmpv6::hdr_field;
-use lichen_core::ipv6::{field, IPV6_HEADER_LEN};
+use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
 use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
 use lichen_hal::{NonVolatile, Radio};
 use lichen_ipv6::Ipv6Header;
@@ -26,10 +26,10 @@ use crate::stack::{Priority, ReceivedIpv6, RxError, MAX_FRAME_SIZE};
 
 use super::error::RplReceiveError;
 use super::util::{
-    advance_rpl_source_route, bootstrap_announce_peer, dao_parts, dio_dis_destination_is_allowed,
-    eui64_link_local, ipv6_eui64, link_local_from_iid, multicast_dis_jitter, routing_announce,
-    rpl_ipv6_multicast_is_allowed, survey_routing_headers, wire_is_for_local,
-    RoutingHeaderSurvey,
+    advance_rpl_source_route, bootstrap_announce_peer, dao_parts, decapsulate_ipv6,
+    dio_dis_destination_is_allowed, eui64_link_local, ipv6_eui64, link_local_from_iid,
+    multicast_dis_jitter, routing_announce, rpl_ipv6_multicast_is_allowed, survey_routing_headers,
+    wire_is_for_local, RoutingHeaderSurvey,
 };
 use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
 
@@ -232,7 +232,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if claims_rpl && !is_rpl_ipv6(&ipv6) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
-                let received = ReceivedIpv6 {
+                let mut received = ReceivedIpv6 {
                     ipv6,
                     sender_iid: frame.sender().iid,
                     rssi: packet.rssi,
@@ -289,6 +289,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                             next_hop: eui64_link_local(next_hop),
                         }));
                     }
+                    // EGRESS DECapsulation (spec 05-routing 8.9 R-05-063): a
+                    // tunneled outer addressed to this node is unwrapped here,
+                    // with the inner destination verified against the
+                    // authorized primary 02xx address (fail-closed).
+                    if received.ipv6[6] == next_header::IPV6_IN_IPV6 {
+                        received.ipv6 = decapsulate_ipv6(&received.ipv6, self.local_rpl_addr)
+                            .map_err(RplReceiveError::Receive)?;
+                        return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
+                    }
                     return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
                 }
                 if !rpl_ipv6_multicast_is_allowed(&received.ipv6) {
@@ -338,6 +347,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid)
                 .map_err(RplReceiveError::Receive)?;
         let Some(next_destination) = next_destination else {
+            // SRH fully consumed and stripped: the former next-header chain
+            // may now start with an IPv6-in-IPv6 tunnel to unwrap (R-05-063).
+            if received.ipv6[6] == next_header::IPV6_IN_IPV6 {
+                received.ipv6 = decapsulate_ipv6(&received.ipv6, self.local_rpl_addr)
+                    .map_err(RplReceiveError::Receive)?;
+            }
             return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
         };
         if received.ipv6[7] <= 1 {

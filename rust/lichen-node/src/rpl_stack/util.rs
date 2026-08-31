@@ -19,6 +19,7 @@ use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::LinkRxError;
 use lichen_link::schnorr;
+use lichen_rpl::routing::MAX_ROUTE_HOPS;
 use lichen_schc::codec;
 
 use crate::announce::AnnounceRejectReason;
@@ -246,12 +247,15 @@ pub(crate) enum RoutingHeaderSurvey {
 
 /// Validate the extension chain and locate any RPL source-routing header.
 ///
-/// Fails closed on: inconsistent payload length, unsupported or malformed
-/// extensions, more than one Routing header, a non-RH3 routing type, misaligned
-/// or reserved-bit-violating RH3s, and grid addresses that are unspecified,
-/// multicast, duplicated, equal to the outer destination, or equal to the
-/// packet source. An in-transit RH3 (`segments_left != 0`) additionally
-/// requires `segments_left < hop_limit` (spec 05-routing 8.4 / RFC 6554).
+/// Fails closed on: inconsistent payload length, an exhausted Hop Limit, an
+/// unspecified or multicast source, unsupported or malformed extensions, a
+/// misplaced or repeated Hop-by-Hop header, more than one Routing header, a
+/// non-RH3 routing type, misaligned or compression/pad-violating RH3s, more
+/// than [`MAX_ROUTE_HOPS`] grid addresses, and grid addresses that are
+/// unspecified, multicast, duplicated, equal to the outer destination, or
+/// equal to the packet source. An in-transit RH3 (`segments_left != 0`)
+/// additionally requires `segments_left < hop_limit` (spec 05-routing 8.4 /
+/// RFC 6554).
 pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey, RxError> {
     if ipv6.len() < IPV6_HEADER_LEN || ipv6[0] >> 4 != 6 {
         return Err(RxError::InvalidSourceRoute);
@@ -263,18 +267,47 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
     let source: [u8; 16] = ipv6[8..24].try_into().expect("checked header length");
     let destination: [u8; 16] = ipv6[24..40].try_into().expect("checked header length");
     let hop_limit = ipv6[7];
+    if hop_limit == 0 {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    if source == [0; 16] || source[0] == 0xff {
+        return Err(RxError::InvalidSourceRoute);
+    }
 
     let mut next_header = ipv6[6];
     let mut offset = IPV6_HEADER_LEN;
     let mut previous_next_header_position = 6usize;
+    let mut saw_hop_by_hop = false;
+    let mut terminal = false;
     let mut routing: Option<SourceRouteView> = None;
     for _extension_count in 0..4 {
         match next_header {
-            next_header::UDP | next_header::ICMPV6 => break,
+            next_header::UDP => {
+                if ipv6.len() - offset < 8 {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                terminal = true;
+                break;
+            }
+            next_header::ICMPV6 => {
+                if ipv6.len() - offset < 4 {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                terminal = true;
+                break;
+            }
+            next_header::IPV6_IN_IPV6 => {
+                if ipv6.len() - offset < IPV6_HEADER_LEN {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                terminal = true;
+                break;
+            }
             next_header::NO_NEXT => {
                 if offset != ipv6.len() {
                     return Err(RxError::InvalidSourceRoute);
                 }
+                terminal = true;
                 break;
             }
             next_header::FRAGMENT => return Err(RxError::InvalidSourceRoute),
@@ -287,15 +320,32 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
                 if extension_end > ipv6.len() {
                     return Err(RxError::InvalidSourceRoute);
                 }
+                // RFC 8200: Hop-by-Hop Options is unique and must immediately
+                // follow the IPv6 header.
+                if next_header == next_header::HOP_BY_HOP
+                    && (saw_hop_by_hop || offset != IPV6_HEADER_LEN)
+                {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                saw_hop_by_hop |= next_header == next_header::HOP_BY_HOP;
                 if next_header == next_header::ROUTING {
-                    if routing.is_some() || routing_len < 24 || ipv6[offset + 2] != 3 {
+                    if routing.is_some() || ipv6[offset + 2] != 3 {
                         return Err(RxError::InvalidSourceRoute);
                     }
-                    if (routing_len - 8) % 16 != 0 || ipv6[offset + 4..offset + 8] != [0, 0, 0, 0]
+                    // RFC 6554 4.2: the CmprI/CmprE octet must be zero for
+                    // LICHEN's uncompressed profile and the Pad bits must be
+                    // zero whenever compression is absent; the remaining
+                    // reserved bits are ignored, matching the C router.
+                    if (routing_len - 8) % 16 != 0
+                        || ipv6[offset + 4] != 0
+                        || (ipv6[offset + 5] & 0xf0) != 0
                     {
                         return Err(RxError::InvalidSourceRoute);
                     }
                     let address_count = (routing_len - 8) / 16;
+                    if address_count > MAX_ROUTE_HOPS {
+                        return Err(RxError::InvalidSourceRoute);
+                    }
                     let segments_left = ipv6[offset + 3];
                     if usize::from(segments_left) > address_count {
                         return Err(RxError::InvalidSourceRoute);
@@ -318,8 +368,7 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
                             }
                         }
                     }
-                    if segments_left != 0 && usize::from(segments_left) >= usize::from(hop_limit)
-                    {
+                    if segments_left != 0 && usize::from(segments_left) >= usize::from(hop_limit) {
                         return Err(RxError::InvalidSourceRoute);
                     }
                     routing = Some(SourceRouteView {
@@ -336,6 +385,13 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
             }
             _ => return Err(RxError::InvalidSourceRoute),
         }
+    }
+    // Bounded embedded profile: the chain must terminate in an upper protocol
+    // within four hops; anything longer is rejected (C router -E2BIG). Without
+    // this an unsurveyed fifth header could smuggle an in-transit RH3 past
+    // forwarding precedence.
+    if !terminal {
+        return Err(RxError::InvalidSourceRoute);
     }
 
     Ok(match routing {
@@ -367,8 +423,8 @@ pub(crate) fn advance_rpl_source_route(
     }
 
     if view.segments_left == 0 {
-        let plain_payload_len = usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]]))
-            - view.routing_len;
+        let plain_payload_len =
+            usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]])) - view.routing_len;
         let mut plain = Vec::with_capacity(ipv6.len() - view.routing_len);
         plain.extend_from_slice(&ipv6[..view.offset]);
         plain[view.previous_next_header_position] = ipv6[view.offset];
@@ -390,4 +446,29 @@ pub(crate) fn advance_rpl_source_route(
     ipv6[24..40].copy_from_slice(&next_destination);
     ipv6[view.offset + 3] -= 1;
     Ok(Some(next_destination))
+}
+
+/// Strip an IPv6-in-IPv6 outer header (spec 05-routing 8.9 R-05-063).
+///
+/// `expected_dst` is this node's authorized primary 02xx address: the
+/// inner destination MUST match it (the E check) or the packet is rejected.
+/// Fails closed on any malformed outer or inner header.
+pub(crate) fn decapsulate_ipv6(outer: &[u8], expected_dst: [u8; 16]) -> Result<Vec<u8>, RxError> {
+    let consistent_payload_len = |packet: &[u8]| {
+        packet.len() >= IPV6_HEADER_LEN
+            && packet[0] >> 4 == 6
+            && IPV6_HEADER_LEN + usize::from(u16::from_be_bytes([packet[4], packet[5]]))
+                == packet.len()
+    };
+    if !consistent_payload_len(outer) || outer[6] != next_header::IPV6_IN_IPV6 {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    let inner = &outer[IPV6_HEADER_LEN..];
+    if !consistent_payload_len(inner) {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    if inner[24..40] != expected_dst {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    Ok(inner.to_vec())
 }

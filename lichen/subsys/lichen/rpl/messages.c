@@ -166,8 +166,10 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 	struct lichen_rpl_raw_opt opt;
 	struct lichen_rpl_dodag_config config;
 	struct lichen_rpl_schc_rule_version version;
+	struct lichen_rpl_dio_time dio_time;
 	bool have_config = false;
 	bool have_schc_version = false;
+	bool have_dio_time = false;
 	int ret;
 
 	if (options == NULL && options_len != 0U) {
@@ -191,6 +193,19 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 				return LICHEN_RPL_ERR_BAD_OPT;
 			}
 			have_schc_version = true;
+			break;
+		case LICHEN_RPL_OPT_DIO_TIME:
+			/* Singleton, content-validated: a DIO advertising an
+			 * out-of-range stratum, nonzero reserved, or a
+			 * NO_SYNC timestamp must not reach the time consumer
+			 * (mirror of the python/rust strict codecs). */
+			if (have_dio_time ||
+			    lichen_rpl_dio_time_parse(&dio_time, opt.data,
+						      opt.data_len) !=
+				LICHEN_RPL_OK) {
+				return LICHEN_RPL_ERR_BAD_OPT;
+			}
+			have_dio_time = true;
 			break;
 		default:
 			break;
@@ -723,13 +738,32 @@ int lichen_rpl_dio_time_parse(struct lichen_rpl_dio_time *dt,
 	if (dt == NULL || data == NULL) {
 		return LICHEN_RPL_ERR_INVALID;
 	}
+	/* Payload is exactly stratum(1)+reserved(1)+timestamp(4); trailing
+	 * bytes are a malformed option, not ignored padding. */
 	if (len < LICHEN_RPL_DIO_TIME_DATA_LEN) {
 		return LICHEN_RPL_ERR_TOO_SHORT;
 	}
+	if (len > LICHEN_RPL_DIO_TIME_DATA_LEN) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
 
+	/* Strict validation mirroring python DioTimeOption.decode and rust
+	 * DioTimeOption::from_option_data: reserved must be zero, stratum is
+	 * 0..=4, and NO_SYNC carries a zero timestamp. Validation completes
+	 * before any output is written (atomic on error, like every parser
+	 * in this file). */
+	if (data[1] != 0U) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+	if (data[0] > LICHEN_RPL_STRATUM_MAX) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+	uint32_t parsed_timestamp = sys_get_be32(&data[2]);
+	if (data[0] == LICHEN_RPL_STRATUM_NO_SYNC && parsed_timestamp != 0U) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
 	dt->stratum = data[0];
-	/* data[1] = reserved, ignored */
-	dt->timestamp = sys_get_be32(&data[2]);
+	dt->timestamp = parsed_timestamp;
 
 	return LICHEN_RPL_OK;
 }
@@ -740,6 +774,12 @@ int lichen_rpl_dio_time_write(const struct lichen_rpl_dio_time *dt,
 	size_t needed = 2 + LICHEN_RPL_DIO_TIME_DATA_LEN;
 	if (dt == NULL || buf == NULL) {
 		return LICHEN_RPL_ERR_INVALID;
+	}
+	if (dt->stratum > LICHEN_RPL_STRATUM_MAX) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+	if (dt->stratum == LICHEN_RPL_STRATUM_NO_SYNC && dt->timestamp != 0U) {
+		return LICHEN_RPL_ERR_BAD_OPT;
 	}
 	if (len < needed) {
 		return LICHEN_RPL_ERR_BUF_SMALL;

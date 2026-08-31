@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.18",
+  "title": "Zephyr C: assigned-slot TX lacks time/SFN state wiring (spec 09 14.8 pre-TX prerequisite)",
+  "description": "Spec 09 14.8 R-09-149: before a node enables assigned-slot transmission it MUST have a usable authenticated link identity and current replay state, an initialized RPL/DODAG context, and the time/SFN state required by section 14.6/14.8. Classification: PARTIAL/DIVERGENT for C - lichen/subsys/lichen/link/lichen_link_tx.c:76-113 enforces keyed/authenticated context (fail-fast -ENOKEY) and gates on tdma_tx_allowed, but contains FIXME at :99-109 stating real clock wiring is REQUIRED before synced operation - i.e. the time/SFN prerequisite is not actually wired; Python/Rust FSM prerequisites exist (python/src/lichen/timing/tdma_fsm.py, rust/lichen-gateway/src/tdma_fsm.rs) but Rust CcpFSM in rust/lichen-core/src/desync.rs:152-277 uses older CCP-13a 4-state naming (UNJOINED/JOINED/DRIFT/RECOVER) diverging from the 14.8 5-state table. Suggested placement: complete lichen_link_tx.c clock wiring per FIXME; align Rust CcpFSM naming/behavior with the 14.8 table or document the mapping.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:18.511215778Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T07:33:18.511215778Z",
+  "labels": [
+    "zephyr",
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.18",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:18.659791524Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

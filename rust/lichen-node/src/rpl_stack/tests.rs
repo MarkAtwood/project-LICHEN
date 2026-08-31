@@ -10,7 +10,7 @@ use crate::announce::MAX_TRACKED_ORIGINATORS;
 use crate::routing::{Router, ROOT_RANK};
 use crate::runtime::{RplRuntimeAction, RplRuntimeActionError, RplRuntimeConfig};
 use crate::secure::SecureStack;
-use crate::stack::{Priority, Stack, TxError, MAX_FRAME_SIZE};
+use crate::stack::{Priority, RxError, Stack, TxError, MAX_FRAME_SIZE};
 
 use lichen_core::announce::{write_announce_signed_data, AnnounceBuilder};
 use lichen_core::constants::L2_DISPATCH_ROUTING;
@@ -18,7 +18,7 @@ use lichen_core::ipv6::{field, IPV6_HEADER_LEN};
 use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::mem::MemStorage;
 use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
-use lichen_ipv6::{Addr, Ipv6Header};
+use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed;
@@ -42,8 +42,8 @@ use crate::secure::{SecureResponse, SecureResponseData};
 use super::error::{RplReceiveError, RplRuntimeReceiveError};
 use super::provisioning::provision_or_resume_root_state;
 use super::util::{
-    advance_rpl_source_route, dao_ipv6_packet, dao_parts, eui64_link_local, ipv6_eui64,
-    link_local_from_iid, multicast_dis_jitter, rpl_ipv6_packet, RPL_ALL_NODES,
+    advance_rpl_source_route, dao_ipv6_packet, dao_parts, decapsulate_ipv6, eui64_link_local,
+    ipv6_eui64, link_local_from_iid, multicast_dis_jitter, rpl_ipv6_packet, RPL_ALL_NODES,
 };
 
 struct MeshState {
@@ -422,11 +422,23 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
     let relay_one = address(&identity(61), 1);
     let relay_two = address(&identity(62), 1);
     let destination = address(&identity(63), 1);
-    let mut plain = vec![0u8; IPV6_HEADER_LEN + 8];
-    Ipv6Header::new(59, Addr(source), Addr(destination))
-        .write_to(8, &mut plain)
+    // The wrapped datagram must be chain-valid end to end: the RH3 admission
+    // survey (mirroring routing/router.c) rejects NO_NEXT followed by bytes,
+    // so the source route wraps a UDP datagram instead of a bare NO_NEXT
+    // payload.
+    let mut plain = vec![0u8; IPV6_HEADER_LEN + UDP_HEADER_LEN + 8];
+    Ipv6Header::new(next_header::UDP, Addr(source), Addr(destination))
+        .write_to((UDP_HEADER_LEN + 8) as u16, &mut plain)
         .unwrap();
-    plain[IPV6_HEADER_LEN..].copy_from_slice(b"payload!");
+    UdpHeader::new(8080, 8081)
+        .write_header_to(
+            &Addr(source),
+            &Addr(destination),
+            b"payload!",
+            &mut plain[IPV6_HEADER_LEN..],
+        )
+        .unwrap();
+    plain[IPV6_HEADER_LEN + UDP_HEADER_LEN..].copy_from_slice(b"payload!");
 
     let mut wire = [0u8; 512];
     let len =
@@ -434,7 +446,19 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
             .unwrap();
     let mut routed = wire[..len].to_vec();
     assert_eq!(&routed[24..40], &relay_one);
-    assert_eq!(&routed[40..48], &[59, 4, 3, 2, 0, 0, 0, 0]);
+    assert_eq!(
+        &routed[40..48],
+        &[
+            next_header::UDP,
+            4, // (routing_len / 8) - 1 for two grid addresses
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+        ]
+    );
     assert_eq!(&routed[48..64], &relay_two);
     assert_eq!(&routed[64..80], &destination);
     assert_eq!(routed[43], 2);
@@ -2413,5 +2437,94 @@ fn root_provisioning_rejects_mismatched_and_nonempty_partials() {
     assert!(matches!(
         Router::open_root(&nonempty_admission, root_addr),
         Err(DaoPersistentOpenError::Missing)
+    ));
+}
+
+fn plain_ipv6_packet(
+    next_header_value: u8,
+    source: [u8; 16],
+    destination: [u8; 16],
+    body: &[u8],
+) -> Vec<u8> {
+    use lichen_core::ipv6::next_header as nh;
+    let payload_len = u16::try_from(body.len()).unwrap();
+    let mut packet = vec![0u8; IPV6_HEADER_LEN + body.len()];
+    Ipv6Header::new(nh::IPV6_IN_IPV6, Addr(source), Addr(destination))
+        .write_to(payload_len, &mut packet[..IPV6_HEADER_LEN])
+        .unwrap();
+    packet[6] = next_header_value;
+    packet[IPV6_HEADER_LEN..].copy_from_slice(body);
+    packet
+}
+
+#[test]
+fn decapsulate_ipv6_strips_outer_and_verifies_inner_dst() {
+    let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);
+    let other: [u8; 16] = eui64_link_local([0x02, 9, 9, 9, 9, 9, 9, 9]);
+    let inner = plain_ipv6_packet(17, other, local, &[1, 2, 3]);
+    let outer = plain_ipv6_packet(41, other, local, &inner);
+
+    let decapsulated = decapsulate_ipv6(&outer, local).expect("valid tunnel must decapsulate");
+    assert_eq!(decapsulated, inner);
+}
+
+#[test]
+fn decapsulate_ipv6_rejects_inner_dst_mismatch() {
+    use lichen_core::ipv6::next_header as nh;
+    let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);
+    let wrong: [u8; 16] = eui64_link_local([0x02, 9, 9, 9, 9, 9, 9, 9]);
+    let inner = plain_ipv6_packet(nh::UDP, wrong, wrong, &[1, 2, 3]);
+    let outer = plain_ipv6_packet(41, wrong, local, &inner);
+
+    assert!(matches!(
+        decapsulate_ipv6(&outer, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+}
+
+#[test]
+fn decapsulate_ipv6_rejects_malformed_outer_and_inner() {
+    use lichen_core::ipv6::next_header as nh;
+    let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);
+    let peer: [u8; 16] = eui64_link_local([0x02, 9, 9, 9, 9, 9, 9, 9]);
+
+    // Outer next-header is not IPv6-in-IPv6.
+    let inner = plain_ipv6_packet(nh::UDP, peer, local, &[1]);
+    let outer = plain_ipv6_packet(nh::UDP, peer, local, &inner);
+    assert!(matches!(
+        decapsulate_ipv6(&outer, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Outer payload-length inconsistency (truncated outer).
+    let mut truncated = plain_ipv6_packet(41, peer, local, &inner);
+    let last = truncated.len() - 1;
+    truncated.truncate(last);
+    assert!(matches!(
+        decapsulate_ipv6(&truncated, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Inner payload-length inconsistency (outer consistent, inner not).
+    let mut bad_inner_len = plain_ipv6_packet(41, peer, local, &inner);
+    bad_inner_len[IPV6_HEADER_LEN + 4] = 0xff;
+    bad_inner_len[IPV6_HEADER_LEN + 5] = 0xff;
+    assert!(matches!(
+        decapsulate_ipv6(&bad_inner_len, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Inner wrong version.
+    let mut bad_version = plain_ipv6_packet(41, peer, local, &inner);
+    bad_version[IPV6_HEADER_LEN] = 0x40;
+    assert!(matches!(
+        decapsulate_ipv6(&bad_version, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Too short to contain an inner header.
+    assert!(matches!(
+        decapsulate_ipv6(&outer[..IPV6_HEADER_LEN + 4], local),
+        Err(RxError::InvalidSourceRoute)
     ));
 }

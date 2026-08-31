@@ -9,6 +9,10 @@
   "created_at": "2026-08-30T18:29:07.895599Z",
   "created_by": "opencode-worker-7",
   "updated_at": "2026-08-30T18:29:07.895599Z",
+  "labels": [
+    "rust",
+    "security"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-2dd7",

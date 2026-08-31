@@ -8,6 +8,9 @@
   "created_at": "2026-08-28T14:54:05.938619Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:54:05.938619Z",
+  "labels": [
+    "app-interface"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-vml.4",

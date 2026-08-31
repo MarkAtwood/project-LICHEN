@@ -1,2 +1,4 @@
 {"id":"01a04486-e176-7445-bcb6-8e24c75d1d79","issue_id":"project-LICHEN-worker6-h45a","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-27T18:41:25.366281Z"}
 {"id":"01a045e0-be91-74d2-8797-3a86eb478a76","issue_id":"project-LICHEN-worker6-h45a","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:59:11.889316Z"}
+{"id":"01a0560d-3a35-7822-b37b-9f37087a008a","issue_id":"project-LICHEN-worker6-h45a","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-31T04:21:42.581534466Z"}
+{"id":"01a05646-bb41-7b01-a4b8-ffca4b82cf78","issue_id":"project-LICHEN-worker6-h45a","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed; lichen/tests/schc/CMakeLists.txt has complete explicit source list.","created_at":"2026-08-31T05:24:31.169723054Z"}

@@ -134,9 +134,12 @@ int lichen_slot_coord_init(struct lichen_slot_coord_ctx *ctx,
 	memset(ctx, 0, sizeof(*ctx));
 	memcpy(ctx->local_iid, local_iid, LICHEN_IID_LEN);
 
-	/* Default superframe configuration */
+	/* Default superframe configuration. duration_s comes from the
+	 * Kconfig (single source of truth; the host fallback resolves to
+	 * LICHEN_SUPERFRAME_DURATION_S) so the superframe-denominated
+	 * claim-duration cap and the superframe math cannot diverge. */
 	ctx->superframe.time_source = LICHEN_TIME_SOURCE_NONE;
-	ctx->superframe.duration_s = LICHEN_SUPERFRAME_DURATION_S;
+	ctx->superframe.duration_s = CONFIG_LICHEN_CCP_SUPERFRAME_SEC;
 	ctx->superframe.slots_per_superframe = LICHEN_SLOTS_PER_SUPERFRAME;
 	ctx->superframe.slot_duration_ms = LICHEN_SLOT_DURATION_MS;
 	ctx->superframe.synced = false;
@@ -261,7 +264,7 @@ bool lichen_slot_coord_validate_interleaved(const uint8_t *slots,
 	}
 
 	for (uint8_t i = 0; i < slot_count; i++) {
-		uint8_t expected = ordinal + i * gateway_count;
+		uint8_t expected = (uint8_t)(ordinal + i * gateway_count);
 		if (slots[i] != expected) {
 			return false;
 		}
@@ -424,6 +427,15 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 	if (claim->expiry <= now_unix) {
 		LOG_DBG("Claim rejected: expired");
 		return LICHEN_CLAIM_REJECT_EXPIRED;
+	}
+
+	/* GCP-6.5 validation step 7 (upper bound): cap the claim lifetime
+	 * at N superframes so a compromised key cannot squat slots with a
+	 * far-future expiry (GCP-6 claim-model review). */
+	if (claim->expiry >
+	    now_unix + (uint64_t)LICHEN_SLOT_CLAIM_MAX_DURATION_SEC) {
+		LOG_DBG("Claim rejected: expiry too far in future");
+		return LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR;
 	}
 
 	/* GCP-6.5 validation step 8: claim_seq above cached high-water mark */
@@ -1491,8 +1503,8 @@ static int slots_post(struct coap_resource *resource,
 		    result == LICHEN_CLAIM_REJECT_INVALID_SIG) {
 			return 0;
 		}
-		/* spec/08 GCP-6.5: validation failures (invalid slots,
-		 * expired, replay, persist) respond 4.03 Forbidden; only
+		/* spec/08 GCP-6.5: validation failures (invalid slots, expired,
+		 * expiry too far, replay, persist) respond 4.03 Forbidden; only
 		 * conflicts override to 4.09, with the winning gateway's
 		 * claim as payload. */
 		uint8_t code = COAP_RESPONSE_CODE_FORBIDDEN;

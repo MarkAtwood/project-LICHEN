@@ -13,7 +13,8 @@
   "closed_at": "2026-07-22T16:39:31.903578755Z",
   "close_reason": "Pseudocode comment updated with explicit §2a.7.1 reference and consistent naming. All 3 codereview passes complete with no remaining P0-P2 findings (only opinion-level polish avoided per guidelines). Spec now has full normative sampling procedure.",
   "labels": [
-    "codereview"
+    "codereview",
+    "lci"
   ],
   "dependencies": [
     {

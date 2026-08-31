@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-4vy5",
+  "title": "Remaining strnlen callers will hit the minimal-libc -Werror break (gateway config_cbor, senml, adapter, tests)",
+  "description": "Follow-up from wmae (which fixed coap_config/coap_rangetest/coap_waypoints/coap_status). Zephyr's minimal libc does not declare strnlen, so any translation unit calling it fails -Werror=implicit-function-declaration under the 4.1.0 toolchain (see y0z0/wmae for the pattern and the memchr-based bounded-length helper fix). Known remaining callers per review: rust-adjacent gateway config_cbor.c:254, lichen senml.c:43, adapter.c (which has its own strnlen wrapper - check whether it compiles under a config that hides the declaration), plus test files. Sweep the repo (grep strnlen), port each to the bounded-length helper or include the proper header where a libc provides it, and consider centralizing one shared helper instead of per-file statics. Priority P3 because the affected configs are not currently built in CI.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:29:41.532110095Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T04:00:16.796928269Z",
+  "closed_at": "2026-08-31T04:00:16.796928269Z",
+  "close_reason": "Swept the remaining strnlen callers under the compiled configurations: (1) lichen/subsys/lichen/senml/senml.c string_too_long -\u003e static senml_strnlen memchr helper (max_len+1 bound, identical overflow semantics); (2) lichen/tests/app_interface/src/main.c (2 sites) -\u003e strnlen(\"test\", sizeof(role)-1) replaced with sizeof(\"test\")-1U (compile-time 4; the bound exceeds the literal length so strnlen always returned 4); (3) lichen/tests/coap_rangetest/src/main.c -\u003e local bounded_len memchr helper for the max-hop assertion. adapter.c's safe_strnlen is already a manual loop (no strnlen dependency); the gateway coap files were fixed by y0z0/wmae; no compiled-configuration callers remain. Verified on heft: ping_l2 native_sim builds (0 errors) and runs at baseline 4/7 (5fva children's failures), lichen/tests/app_interface and lichen/tests/coap_rangetest both PROJECT EXECUTION SUCCESSFUL. 3x delegated codereview: PASS - equivalence proven at each site, memchr bounds exact, helper placement/static linkage clean.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4vy5",
+      "depends_on_id": "project-LICHEN-worker6-wmae",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:29:41.630591989Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

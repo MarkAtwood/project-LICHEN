@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T05:33:11.13386Z",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "zephyr"
   ],
   "dependencies": [
     {

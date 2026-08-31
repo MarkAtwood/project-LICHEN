@@ -13,6 +13,7 @@
   "close_reason": "Fixed: initialize time_offset=0 in senml_add_float() and senml_add_bool() before setting has_time=false",
   "labels": [
     "owner-reserved",
-    "local-ok"
+    "local-ok",
+    "lci"
   ]
 }

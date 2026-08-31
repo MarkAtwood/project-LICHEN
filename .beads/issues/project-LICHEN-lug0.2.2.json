@@ -14,7 +14,8 @@
   "closed_at": "2026-07-23T05:28:03.446103012Z",
   "close_reason": "Decomposed into subtasks (lug0.2.2.1-4): imports, SRH construction, packet mod with write_to, buffer/SCHC/tests. Now an epic for consistency refactor with C impl.",
   "labels": [
-    "codereview"
+    "codereview",
+    "gateway"
   ],
   "dependencies": [
     {

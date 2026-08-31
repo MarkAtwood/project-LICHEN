@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-kpv0.3",
+  "title": "kpv0(a): make ruff check clean in python/ (84 findings)",
+  "description": "Parent: project-LICHEN-kpv0. python/ 'ruff check .' currently reports 84 errors across ~40 files (tests/test_ccp.py, tests/test_vectors.py, src/lichen/coap/resources/*, src/lichen/tui/*, scripts/mac_study.py, scripts/city_mesh_study.py, etc; 13 auto-fixable). Fix ALL findings by editing code; no config/rule downgrades, no per-line noqa masking unless the line genuinely requires it (justify each). Distribution: scripts/mac_study.py 12, scripts/city_mesh_study.py 11, coap/resources/position.py 5, coap/resources/emergency.py 5, tests/test_ccp.py 4, gateway/handoff.py 3, coap/resources/groups_collection.py 3, remainder single findings. Verify: cd python \u0026\u0026 ruff check . exits 0, and python -m pytest tests/ still passes (at least the affected subsystems).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:18:40.410286009Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T07:18:40.410286009Z",
+  "labels": [
+    "decomposed",
+    "python",
+    "coap",
+    "l2",
+    "rust",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.3",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:18:40.593306655Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -13,5 +13,8 @@
   "updated_at": "2026-08-28T03:44:34.462964Z",
   "started_at": "2026-07-22T23:26:27.23138019Z",
   "closed_at": "2026-07-25T02:27:41.309838716Z",
-  "close_reason": "Already fixed"
+  "close_reason": "Already fixed",
+  "labels": [
+    "lci"
+  ]
 }

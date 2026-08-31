@@ -1,0 +1,39 @@
+{
+  "id": "project-LICHEN-h7t5.7.5.16",
+  "title": "LICHEN L2 integration on LilyGO: link-layer TX/RX round-trip",
+  "description": "Verify LICHEN link-layer frames (MIC, replay counter) through LilyGO radio. Files: lichen/tests/lora_l2_smoke/src/main.c, lichen/tests/lora_l2_smoke/prj.conf (new). 20 lines 2 files.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:58:10.389237836Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:58:10.389237836Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "l2",
+    "board-support",
+    "bringup",
+    "firmware",
+    "hal",
+    "hardware",
+    "lilygo",
+    "local-ok",
+    "lora",
+    "owner-reserved",
+    "partner-handoff",
+    "radio",
+    "smoke-test"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-h7t5.7.5.16",
+      "depends_on_id": "project-LICHEN-h7t5.7.5",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:58:10.526048744Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

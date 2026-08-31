@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-cphf",
+  "title": "[human] Spec 05-routing 9.8: assign the IPv6 option type for the DTN S-flag HBH option",
+  "description": "While implementing b7z9.8.2.1 (HBH TLV walk): the DTN absolute-expiry option is pinned by spec as Type=0x03 (implemented in C router.c parse_ipv6_dispatch), but the DTN Flags option (S|Reserved, 1 byte, 'in IPv6 hop-by-hop options') has NO option type assigned anywhere in spec/docs (broadcast HBH is literally TBD1 in docs/spec-chapter-breakdowns.md). Cross-implementation parity (b7z9.8.3) and the S-flag parse need this value. Decision needed from Mark: pick the option type value (and whether Reserved bits must be zero on send/accept), or redefine S-flag carriage (e.g. folded into the 0x03 expiry option). Interim C behavior: expiry option parsed; S-flag not parsed; the router decision bead (b7z9.8.2.2) will treat presence of the 0x03 expiry as the store-and-forward indication until the flags option is defined.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:32:08.297412602Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T07:08:47.801550297Z",
+  "labels": [
+    "human",
+    "zephyr",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cphf",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8.2.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T06:32:08.472856631Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

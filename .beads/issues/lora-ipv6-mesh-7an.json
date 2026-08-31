@@ -12,7 +12,8 @@
   "started_at": "2026-08-28T04:46:11.704809Z",
   "labels": [
     "defer-external",
-    "owner-reserved"
+    "owner-reserved",
+    "app-interface"
   ],
   "dependencies": [
     {

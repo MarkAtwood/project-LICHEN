@@ -74,8 +74,8 @@ ZTEST(hal, test_loopback_lora_capability_when_enabled)
 
 #if IS_ENABLED(CONFIG_LORA_LOOPBACK)
 
-/* v3.7.0's lora_recv_async() has no user_data slot, so the callback context
- * is file-scope state — the same pattern any driver consumer must use. */
+/* The callback context is file-scope state — the same pattern any driver
+ * consumer must use; the 4.1.0 API's user_data slot stays NULL here. */
 static struct loopback_async_ctx {
 	atomic_t deliveries;
 	uint16_t last_len;
@@ -85,10 +85,12 @@ static struct loopback_async_ctx {
 } loopback_async_ctx;
 
 static void loopback_async_rx_cb(const struct device *dev, uint8_t *data,
-				 uint16_t size, int16_t rssi, int8_t snr)
+				 uint16_t size, int16_t rssi, int8_t snr,
+				 void *user_data)
 {
 	ARG_UNUSED(dev);
 	ARG_UNUSED(data);
+	ARG_UNUSED(user_data);
 
 	loopback_async_ctx.last_len = size;
 	loopback_async_ctx.last_rssi = rssi;
@@ -110,11 +112,11 @@ ZTEST(hal, test_loopback_recv_async_delivers_frames)
 
 	memset(&loopback_async_ctx, 0, sizeof(loopback_async_ctx));
 
-	rc = lora_recv_async(dev, loopback_async_rx_cb);
+	rc = lora_recv_async(dev, loopback_async_rx_cb, NULL);
 	zassert_equal(rc, 0, "arming async RX failed: %d", rc);
 
 	/* Double-arm conflicts with the pending reception. */
-	rc = lora_recv_async(dev, loopback_async_rx_cb);
+	rc = lora_recv_async(dev, loopback_async_rx_cb, NULL);
 	zassert_equal(rc, -EBUSY, "second arm must be -EBUSY, got %d", rc);
 
 	rc = lora_send(dev, payload, sizeof(payload));
@@ -136,9 +138,9 @@ ZTEST(hal, test_loopback_recv_async_delivers_frames)
 		      "wrong SNR: %d", loopback_async_ctx.last_snr);
 
 	/* Cancel the armed reception, then cancelling again is invalid. */
-	rc = lora_recv_async(dev, NULL);
+	rc = lora_recv_async(dev, NULL, NULL);
 	zassert_equal(rc, 0, "cancel failed: %d", rc);
-	rc = lora_recv_async(dev, NULL);
+	rc = lora_recv_async(dev, NULL, NULL);
 	zassert_equal(rc, -EINVAL, "double cancel must be -EINVAL, got %d", rc);
 }
 

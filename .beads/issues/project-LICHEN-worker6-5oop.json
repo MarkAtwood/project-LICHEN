@@ -13,6 +13,7 @@
   "started_at": "2026-08-16T18:49:35.010335Z",
   "labels": [
     "review",
-    "security"
+    "security",
+    "rust"
   ]
 }

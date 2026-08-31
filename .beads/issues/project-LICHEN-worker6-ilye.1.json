@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-ilye.1",
+  "title": "ilye(1): Python UDP parser — move endpoint validation out of UdpDatagram.from_bytes into address-policy module",
+  "description": "Slice 1 of project-LICHEN-worker6-ilye (Rule 255 RX byte-preserving decision, Mark 2026-08-30). UdpDatagram.from_bytes keeps framing + UDP checksum verification; endpoint address validation (loopback, IPv4-mapped, unspecified, multicast source, destination scope) moves out of the parser into the address-policy module so it can be applied at origination/forwarding only. Lands BEFORE slice 2 (python decode path) which depends on this refactor.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:23:22.662361476Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T08:03:35.39802986Z",
+  "closed_at": "2026-08-31T08:03:35.39802986Z",
+  "close_reason": "Landed as commit 98439900bb: UdpDatagram.from_bytes now verifies framing+zero-checksum only (src param removed); new public schc/headers.validate_datagram_source_policy owns the unspecified/multicast source policy (origination/forwarding apply it); port_dispatch._parse_udp calls it explicitly with NotUdpError contract preserved; validate_full_ipv6 and MqttSnProfile.compress_if_matching drop the src arg (policy already applied upstream by _validate_ipv6_addresses / validate_rule7_addresses, both verified same-or-stronger predicates). Tests: tests/ipv6/test_udp.py repointed (2 tests follow the check, 1 new seam test pins policy-free parsing); targeted suites green — tests/ipv6 + test_port_dispatch + test_vectors + tests/schc + tests/coap = 3184 passed; the only failures (10 rule7 vector message-drift, 1 key-address cross-impl, 2 edhoc) verified pre-existing on baseline via stash runs and filed/tracked: rule7 vector drift filed as new schc bead, key-address filed as networking bead, edhoc already tracked (up5p, human-only). Codereview 3x: pass 3 (edge-cases) DELEGATED to reviewer model kimi-k3 = PASS with evidence (14-call-site inventory, precedence unchanged, Rule 7 superset predicate, no import fallout). Passes 1 (correctness) and 2 (security) delegated but timed out (590s) — completed by worker per fallback rule: all pre-diff from_bytes(src=) sites compensated or intentionally policy-free per the Rule 255 RX decision, no stale message expectations, no bypassable RX path; PASS, no new findings. Parent ilye remains open (ilye.2 next: python decode path).",
+  "labels": [
+    "schc",
+    "python",
+    "decomposed",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ilye.1",
+      "depends_on_id": "project-LICHEN-worker6-ilye",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:23:22.83453547Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

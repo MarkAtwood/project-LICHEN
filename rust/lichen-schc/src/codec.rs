@@ -303,6 +303,8 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
                         || packet[offset + 2] != 3
                         || packet[offset + 4] != 0
                         || packet[offset + 5] != 0
+                        || packet[offset + 6] != 0
+                        || packet[offset + 7] != 0
                     {
                         return Err(SchcError::InvalidPacket(
                             "unsupported RPL source-routing header",
@@ -313,6 +315,15 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
                     if segments_left > address_count {
                         return Err(SchcError::InvalidPacket(
                             "invalid RPL source-routing segments-left",
+                        ));
+                    }
+                    if !(ext_len - 8).is_multiple_of(16) {
+                        // RFC 6554 s3: with CmprI=CmprE=Pad=0 the Hdr Ext Len
+                        // must equal 2n (ext_len = 8 + 16n addresses); a
+                        // non-canonical length is not expressible and would
+                        // shift the last-address window onto trailing bytes.
+                        return Err(SchcError::InvalidPacket(
+                            "invalid RPL source-routing header length",
                         ));
                     }
                     if segments_left != 0 {
@@ -2327,6 +2338,8 @@ mod tests {
     extern crate std;
     use std::str::FromStr;
     use std::{vec, vec::Vec};
+
+    use core::str::FromStr as _;
 
     use super::*;
 

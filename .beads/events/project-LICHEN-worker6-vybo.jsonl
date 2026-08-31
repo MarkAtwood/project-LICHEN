@@ -1,3 +1,5 @@
 {"id":"01a045d6-458b-7f2e-9b70-b9280f8c3db4","issue_id":"project-LICHEN-worker6-vybo","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T00:47:45.547996Z"}
 {"id":"01a045d6-4592-7cb2-bc89-096c1c5546bf","issue_id":"project-LICHEN-worker6-vybo","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: robustness","created_at":"2026-08-28T00:47:45.554833Z"}
 {"id":"01a045d6-4596-7557-8db4-00a5923f3807","issue_id":"project-LICHEN-worker6-vybo","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: codereview","created_at":"2026-08-28T00:47:45.558352Z"}
+{"id":"01a0560f-ed03-7e88-8e29-254515512477","issue_id":"project-LICHEN-worker6-vybo","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:24:39.427953755Z"}
+{"id":"01a0567b-452f-72d9-a013-6ad9f862bdc1","issue_id":"project-LICHEN-worker6-vybo","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-08-31T06:21:54.351187805Z"}

@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-xyt6",
+  "title": "Rust workspace cargo commands fail on Linux workers: oscore path dep + cargo target-dir point at Mac-only /Volumes paths",
+  "description": "RECREATED after shared-store data loss (original project-LICHEN-worker6-aemz filed 2026-08-31 ~04:47Z vanished from BEADS_DIR; store rolled back past it). On Linux worker boxes (no /Volumes, no sudo), any cargo command in rust/ fails: (1) rust/Cargo.toml:57 workspace dep oscore = { path = \"/Volumes/Attic/Desktop/Projects/crates/oscore\" } — the fork exists at ~/crates/oscore on this host; path needs host-appropriate wiring (Cargo.toml has no env indirection; options: per-host .cargo/config.toml replace, vendored in-repo path, or documented symlink convention); (2) rust/.cargo/config.toml target-dir /Volumes/Attic/Cache/Cargo — overridable via CARGO_TARGET_DIR, papercut only. Workaround used by worker-4: scratch mirror of rust/ + test/ under /tmp/opencode with sed-patched path. Impact: Linux workers cannot run cargo test/clippy against the real tree for any crate; rust bead verification happens off-tree. Not oscore-internals work (pure path wiring, no security semantics).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T04:59:34.612623237Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T05:17:00.873852541Z",
+  "started_at": "2026-08-31T05:16:55.494780905Z",
+  "labels": [
+    "rust"
+  ]
+}

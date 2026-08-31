@@ -2,3 +2,4 @@
 {"id":"01a045db-4bbd-7904-afc3-06526d985feb","issue_id":"project-LICHEN-worker6-l6rf.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: needs-linux","created_at":"2026-08-28T00:53:14.813592Z"}
 {"id":"01a048f1-9ec4-773f-929d-5802492047cc","issue_id":"project-LICHEN-worker6-l6rf.3","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: needs-linux","created_at":"2026-08-28T15:16:29.508476Z"}
 {"id":"01a048f1-a613-79a8-9f51-76548e7c0162","issue_id":"project-LICHEN-worker6-l6rf.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T15:16:31.379633Z"}
+{"id":"01a0560e-085c-74f6-99ca-41eabbb9a26f","issue_id":"project-LICHEN-worker6-l6rf.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-08-31T04:22:35.356326088Z"}

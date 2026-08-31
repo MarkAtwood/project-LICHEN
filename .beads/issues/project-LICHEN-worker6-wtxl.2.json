@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-wtxl.2",
+  "title": "SCHC rule7 error-message drift in test_vectors.py (wtxl family 2)",
+  "description": "Child of wtxl family (2): 10 test_vectors.py rule7* cases expected 'invalid IPv6 source address' while production raised 'invalid Rule 7 source address ::'. RESOLVED by project-LICHEN-worker6-upyr: validate_rule7_addresses (python/src/lichen/schc/headers.py) rejection texts aligned to the canonical Rust texts in fix commits 7a25ef4467 / ef4eb8de22, verified 767/767 test_vectors.py on heft. Those commits are on beads-worker-2, not yet merged into beads-worker-6/7, so the 10 cases still fail on unmerged checkouts - resolving this child requires only the routine cross-branch sync, no further code changes. Closing as superseded by upyr to avoid duplicate work; if a checkout still shows the 10 failures after the next sync, reopen against the sync, not against headers.py.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:23:11.190476918Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T22:23:31.232239039Z",
+  "closed_at": "2026-08-30T22:23:31.232239039Z",
+  "close_reason": "Superseded by project-LICHEN-worker6-upyr (closed): the rule7 rejection texts were aligned to the canonical Rust texts in 7a25ef4467/ef4eb8de22 (beads-worker-2), verified 767/767 on heft by worker2. Remaining gap on beads-worker-6/7 checkouts is only the routine cross-branch merge of beads-worker-2 - no code or vector work remains. Reopen against a sync bead if the 10 cases still fail after the next sync.",
+  "labels": [
+    "decomposed"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wtxl.2",
+      "depends_on_id": "project-LICHEN-worker6-wtxl",
+      "type": "parent-child",
+      "created_at": "2026-08-30T22:23:11.301260167Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

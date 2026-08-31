@@ -8,6 +8,11 @@
   "created_at": "2026-08-28T15:02:09.381262Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T15:02:09.381262Z",
+  "labels": [
+    "meshtastic",
+    "simulation",
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-9zfd.10",

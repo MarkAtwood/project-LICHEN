@@ -82,6 +82,7 @@ struct lora_renode_data {
 	struct k_work_delayable rx_poll;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
+	void *recv_cb_user_data;
 	const struct device *dev;
 	atomic_t modem_usage;
 	/* Delivery buffer: lives in per-instance data rather than the system
@@ -286,6 +287,7 @@ static int lora_renode_init(const struct device *dev)
 
 	data->dev = dev;
 	data->recv_cb = NULL;
+	data->recv_cb_user_data = NULL;
 	data->modem_usage = 0;
 	k_work_init_delayable(&data->rx_poll, lora_renode_rx_poll);
 
@@ -327,8 +329,14 @@ static int lora_renode_cad(const struct device *dev, k_timeout_t timeout,
 static int lora_renode_send_async(const struct device *dev, uint8_t *data,
 				  uint32_t data_len, struct k_poll_signal *async)
 {
-	ARG_UNUSED(async);
-	return lora_renode_send(dev, data, data_len);
+	int ret = lora_renode_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
 }
 
 /* Async RX poller: self-rescheduling work item. Exits (without rescheduling)
@@ -344,6 +352,7 @@ static void lora_renode_rx_poll(struct k_work *work)
 
 	k_spinlock_key_t key = k_spin_lock(&drv->rx_lock);
 	lora_recv_cb cb = drv->recv_cb;
+	void *cb_user_data = drv->recv_cb_user_data;
 
 	k_spin_unlock(&drv->rx_lock, key);
 	if (cb == NULL) {
@@ -367,7 +376,7 @@ static void lora_renode_rx_poll(struct k_work *work)
 
 			LOG_DBG("async RX: %u bytes, RSSI=%d, SNR=%d",
 				rx_len, rssi, snr);
-			cb(dev, drv->rx_buf, rx_len, rssi, snr);
+			cb(dev, drv->rx_buf, rx_len, rssi, snr, cb_user_data);
 		}
 	}
 
@@ -382,7 +391,8 @@ static void lora_renode_rx_poll(struct k_work *work)
 	}
 }
 
-static int lora_renode_recv_async(const struct device *dev, lora_recv_cb cb)
+static int lora_renode_recv_async(const struct device *dev,
+				  lora_recv_cb cb, void *user_data)
 {
 	struct lora_renode_data *drv = dev->data;
 
@@ -391,6 +401,7 @@ static int lora_renode_recv_async(const struct device *dev, lora_recv_cb cb)
 		bool was_armed = drv->recv_cb != NULL;
 
 		drv->recv_cb = NULL;
+		drv->recv_cb_user_data = NULL;
 		k_spin_unlock(&drv->rx_lock, key);
 
 		if (!was_armed) {
@@ -419,6 +430,7 @@ static int lora_renode_recv_async(const struct device *dev, lora_recv_cb cb)
 	k_spinlock_key_t key = k_spin_lock(&drv->rx_lock);
 
 	drv->recv_cb = cb;
+	drv->recv_cb_user_data = user_data;
 	k_spin_unlock(&drv->rx_lock, key);
 
 	k_work_reschedule(&drv->rx_poll, K_NO_WAIT);

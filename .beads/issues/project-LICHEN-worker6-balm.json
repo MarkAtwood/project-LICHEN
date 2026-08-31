@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-balm",
+  "title": "C vs Python diverge on unjoined-foreign-DODAG first contact (C rejects, Python adopts)",
+  "description": "Found by correctness+security codereview of zt3c.7.6 (both passes independently). Pre-existing behavioral divergence, touched by the 02xx test migration but not introduced by it. On identical input (unjoined node dodag_id=X version=5; foreign DIO same instance, dodag_id=Y != X, version=0, rank=256): C lichen_rpl_dodag_process_dio REJECTS the foreign DODAG outright — lichen/subsys/lichen/rpl/dodag.c:410-412 'if (foreign) return 0;' applies regardless of join state, and test test_unjoined_foreign_dodag_rejected (lichen/tests/rpl_dodag/main.c:455) pins rejection — while Python DodagState.process_dio ADOPTS the foreign DODAGID on first contact (self._adopt_version(dio), python/src/lichen/rpl/dodag.py:423-426; test test_unjoined_foreign_dodag_is_not_version_compared python/tests/rpl/test_dodag.py:431-444 asserts adoption). Compounding: the C comment at dodag.c:400-405 says 'An UNJOINED node may first-join a foreign DODAG' — contradicting the code below it; and the C test header (main.c:12-14) claims parity with python/tests/rpl/test_dodag.py which is false for this case. One side's semantics is wrong per RFC 6550 8.2.1/3.2.3 (a node should be able to join any DODAG it hears; C's init-pinned DODAGID assumes out-of-band provisioning). Needs a spec decision: which behavior is canonical, then fix impl+tests+comment on the other side and restore the documented cross-impl parity. All touched tests currently use 0200:: native addresses consistently on both sides.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:39:29.764777124Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T05:39:29.764777124Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-balm",
+      "depends_on_id": "project-LICHEN-zt3c.7.6",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:39:29.933086667Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

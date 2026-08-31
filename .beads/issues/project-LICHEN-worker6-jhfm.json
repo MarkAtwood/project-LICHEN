@@ -10,5 +10,8 @@
   "created_at": "2026-08-24T15:06:27.534012Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:39:21.953727Z",
-  "started_at": "2026-08-24T15:06:40.575546Z"
+  "started_at": "2026-08-24T15:06:40.575546Z",
+  "labels": [
+    "lci"
+  ]
 }

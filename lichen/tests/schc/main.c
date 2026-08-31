@@ -16,10 +16,13 @@
  */
 
 #include <lichen/schc.h>
+#include "schc_internal.h"
 #include <limits.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "schc_internal.h"
 
 /* ─── hex helpers ─────────────────────────────────────────────────────────── */
 
@@ -208,33 +211,84 @@ static int test_oscore_global(void)
 	);
 }
 
-static int test_uncompressed_fallback(void)
+static int test_reject_non_ipv6_input(void)
 {
 	uint8_t packet[4] = { 0xde, 0xad, 0xbe, 0xef };
 	uint8_t comp_buf[8];
 	uint8_t decomp_buf[8];
+	uint8_t big_comp_buf[128];
+	uint8_t big_decomp_buf[128];
+	/* Compress accepts full IPv6 packets only (Python/Rust reference
+	 * behavior): short garbage and non-IPv6 versions must be rejected,
+	 * never emitted as Rule255 - a Rust/Python peer fatals on such
+	 * datagrams at decode_rule255. */
+	static const uint8_t garbage[4] = { 0xde, 0xad, 0xbe, 0xef };
+	uint8_t ipv4ish[45] = { 0 };
+	uint8_t comp_buf[64];
+	int n;
 
-	int n = lichen_schc_compress(packet, 4, comp_buf, sizeof(comp_buf));
-	if (n != 5) {
-		printf("  FAIL: uncompressed length (got %d, expected 5)\n", n);
-		return 0;
-	}
-	if (comp_buf[0] != 255) {
-		printf("  FAIL: uncompressed rule_id (got %d, expected 255)\n", comp_buf[0]);
-		return 0;
-	}
-	if (memcmp(&comp_buf[1], packet, 4) != 0) {
-		printf("  FAIL: uncompressed payload mismatch\n");
+	ipv4ish[0] = 0x45; /* IPv4 version 4, IHL 5 */
+
+	n = lichen_schc_compress(garbage, sizeof(garbage), comp_buf,
+				 sizeof(comp_buf));
+	if (n != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: short garbage expected SCHC_ERR_INVALID_ARGUMENT (got %d)\n",
+		       n);
 		return 0;
 	}
 
 	int m = lichen_schc_decompress(comp_buf, n, decomp_buf, sizeof(decomp_buf));
-	if (m != 4) {
-		printf("  FAIL: uncompressed decompress length (got %d, expected 4)\n", m);
+	/* Rule 255 RX validates the payload as a complete IPv6 packet, so a
+	 * non-IPv6 payload must be rejected at decompress even though the
+	 * compress side still emits it (worker-6-7v5f fixes the emit). */
+	if (m >= 0) {
+		printf("  FAIL: non-IPv6 rule255 payload decoded (%d)\n", m);
 		return 0;
 	}
-	if (memcmp(decomp_buf, packet, 4) != 0) {
-		printf("  FAIL: uncompressed decompress mismatch\n");
+
+	/* Legitimate fallback: a valid IPv6 packet whose ports match no rule
+	 * round-trips byte-preserving. */
+	uint8_t v6[52];
+	memset(v6, 0, sizeof(v6));
+	v6[0] = 0x60;
+	v6[5] = 12;
+	v6[6] = 17;
+	v6[7] = 64;
+	memcpy(&v6[8], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+		      "\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&v6[24], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			"\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	v6[40] = 0x13;
+	v6[41] = 0x88; /* src port 5000: matches no rule */
+	v6[42] = 0x13;
+	v6[43] = 0x89; /* dst port 5001 */
+	v6[44] = 0;
+	v6[45] = 12;
+	memcpy(&v6[48], "ping", 4);
+	uint16_t checksum = 0;
+	if (udp_checksum(&v6[8], &v6[24], 5000, 5001, &v6[48], 4,
+			 &checksum) != SCHC_OK) {
+		printf("  FAIL: udp_checksum helper\n");
+		return 0;
+	}
+	v6[46] = (uint8_t)(checksum >> 8);
+	v6[47] = (uint8_t)(checksum & 0xff);
+
+	n = lichen_schc_compress(v6, sizeof(v6), big_comp_buf,
+				 sizeof(big_comp_buf));
+	if (n != (int)sizeof(v6) + 1 || big_comp_buf[0] != 255) {
+		printf("  FAIL: valid fallback emit (got %d)\n", n);
+		return 0;
+	}
+	m = lichen_schc_decompress(big_comp_buf, n, big_decomp_buf,
+				   sizeof(big_decomp_buf));
+	if (m != (int)sizeof(v6) || memcmp(big_decomp_buf, v6, sizeof(v6)) != 0) {
+		printf("  FAIL: valid fallback round-trip (got %d)\n", m);
+	n = lichen_schc_compress(ipv4ish, sizeof(ipv4ish), comp_buf,
+				 sizeof(comp_buf));
+	if (n != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: version-4 input expected SCHC_ERR_INVALID_ARGUMENT (got %d)\n",
+		       n);
 		return 0;
 	}
 
@@ -375,6 +429,66 @@ static int test_reject_bad_udp_len(void)
 	return 1;
 }
 
+static int test_validator_direct_call_self_defense(void)
+{
+	/* Direct-call contract of validate_ipv6_transport_lengths (internal
+	 * validator, schc_internal.h): must be self-defending regardless of
+	 * caller guarantees - truncation shorter than the IPv6 header must
+	 * reject without reading past the buffer (regression guard for the
+	 * latent stack OOB tracked by project-LICHEN-worker6-nyx7), and a
+	 * non-IPv6 version must reject without relying on the caller's
+	 * version check (bead project-LICHEN-worker6-uylk), mirroring the
+	 * internal checks of the Python and Rust validators. */
+	static const uint8_t truncated[4] = { 0x60, 0x00, 0x00, 0x00 };
+	static const uint8_t version4[40] = { [0] = 0x45, [6] = 59 };
+	/* version nibble 4 with a chain-terminating next-header so the version
+	 * check is the ONLY rejection path: pre-uylk code returned SCHC_OK
+	 * here (non-UDP terminal, zero payload length consistent), so this
+	 * fixture discriminates a revert of the self-check. */
+	static const uint8_t minimal_v6[40] = { [0] = 0x60, [6] = 59 };
+	uint8_t coap[64];
+	size_t coap_len;
+	int ret;
+
+	coap_len = hex_decode(
+		"6000000000131140fe800000000000000000000000000001"
+		"fe80000000000000000000000000000216331633001328dd"
+		"40011234ff737461747573",
+		coap, sizeof(coap));
+	if (coap_len == 0) {
+		printf("  FAIL: hex decode error\n");
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(truncated, sizeof(truncated));
+	if (ret != SCHC_ERR_NO_MATCHING_RULE) {
+		printf("  FAIL: truncated input expected SCHC_ERR_NO_MATCHING_RULE (got %d)\n",
+		       ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(version4, sizeof(version4));
+	if (ret != SCHC_ERR_NO_MATCHING_RULE) {
+		printf("  FAIL: version-4 input expected SCHC_ERR_NO_MATCHING_RULE (got %d)\n",
+		       ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(minimal_v6, sizeof(minimal_v6));
+	if (ret != SCHC_OK) {
+		printf("  FAIL: minimal version-6 header expected SCHC_OK (got %d)\n", ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(coap, coap_len);
+	if (ret != SCHC_OK) {
+		printf("  FAIL: valid CoAP packet expected SCHC_OK (got %d)\n", ret);
+		return 0;
+	}
+
+	return 1;
+}
+
 static int test_uncompressed_length_exceeds_int(void)
 {
 	static const uint8_t packet = 0;
@@ -383,6 +497,79 @@ static int test_uncompressed_length_exceeds_int(void)
 	int ret = lichen_schc_compress(&packet, pkt_len, &out, SIZE_MAX);
 
 	ASSERT_EQ(ret, SCHC_ERR_BUFFER_TOO_SMALL, "uncompressed int length overflow");
+	return 1;
+}
+
+static int test_rule255_fallback_profile_ceiling(void)
+{
+	/* A valid version-6 packet that matches no rule falls back to Rule
+	 * 255; its encoded output (1 + raw) must fit the profile ceiling.
+	 * TCP next-header matches no rule, so payload length drives raw size:
+	 * raw 22553 encodes to 22554 (exactly the ceiling); raw 22554 would
+	 * encode to 22555 and must be rejected (Rust encode_rule255 parity). */
+	static uint8_t packet[SCHC_FRAGMENT_MAX_PACKET_SIZE];
+	uint8_t comp_buf[SCHC_FRAGMENT_MAX_PACKET_SIZE + 2];
+	size_t pkt_len;
+
+	memset(packet, 0, sizeof(packet));
+	packet[0] = 0x60; /* version 6, TC/FL zero */
+	packet[6] = 6;    /* TCP: no compression rule matches */
+	/* src/dst fe80::1 / fe80::2 (policy-clean), payload = 22553 - 40. */
+	memcpy(&packet[8], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&packet[24], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			    "\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	packet[4] = (uint8_t)((22553u - 40u) >> 8);
+	packet[5] = (uint8_t)((22553u - 40u) & 0xff);
+
+	pkt_len = 22553;
+	int ret = lichen_schc_compress(packet, pkt_len, comp_buf, sizeof(comp_buf));
+	ASSERT_EQ(ret, SCHC_FRAGMENT_MAX_PACKET_SIZE, "fallback at ceiling");
+	ASSERT_EQ(comp_buf[0], SCHC_RULE_UNCOMPRESSED, "fallback rule id");
+
+	pkt_len = 22554;
+	packet[5] = (uint8_t)((22554u - 40u) & 0xff);
+	memset(comp_buf, 0xA5, sizeof(comp_buf));
+	ret = lichen_schc_compress(packet, pkt_len, comp_buf, sizeof(comp_buf));
+	ASSERT_EQ(ret, SCHC_ERR_BUFFER_TOO_SMALL, "fallback over ceiling");
+	ASSERT_EQ(comp_buf[0], 0xA5, "fallback over ceiling atomic");
+	return 1;
+}
+
+static int test_rule255_ingress_profile_ceiling(void)
+{
+	/* Decompress ingress enforces the encoded-SCHC-packet profile ceiling
+	 * for every rule including Rule 255 (mirrors Rust decompress,
+	 * codec.rs:2270): exactly-ceiling input decodes; ceiling+1 rejects
+	 * without touching the output buffer. */
+	static uint8_t data[SCHC_FRAGMENT_MAX_PACKET_SIZE + 1];
+	static uint8_t out[SCHC_FRAGMENT_MAX_PACKET_SIZE];
+	static uint8_t sentinel[SCHC_FRAGMENT_MAX_PACKET_SIZE];
+
+	memset(data, 0x41, sizeof(data));
+	data[0] = SCHC_RULE_UNCOMPRESSED;
+	/* Payload must be a valid IPv6 packet (Rule 255 RX contract): build a
+	 * TCP packet (no UDP checksum needed) filling the ceiling exactly.
+	 * data[1..41] is the IPv6 header, payload 22553 - 40 = 22513 bytes. */
+	data[1] = 0x60;
+	data[5] = (uint8_t)((22553u - 40u) >> 8);
+	data[6] = (uint8_t)((22553u - 40u) & 0xff);
+	data[7] = 6; /* next header: TCP */
+	memcpy(&data[9], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			"\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&data[25], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	memset(sentinel, 0xA5, sizeof(sentinel));
+
+	int m = lichen_schc_decompress(data, SCHC_FRAGMENT_MAX_PACKET_SIZE,
+				       out, sizeof(out));
+	ASSERT_EQ(m, SCHC_FRAGMENT_MAX_PACKET_SIZE - 1, "rule255 at ceiling");
+
+	memset(out, 0xA5, sizeof(out));
+	m = lichen_schc_decompress(data, SCHC_FRAGMENT_MAX_PACKET_SIZE + 1,
+				   out, sizeof(out));
+	ASSERT_EQ(m, SCHC_ERR_BUFFER_TOO_SMALL, "rule255 over ceiling");
+	ASSERT_MEM_EQ(out, sentinel, sizeof(out), "rule255 over ceiling atomic");
 	return 1;
 }
 
@@ -409,7 +596,8 @@ int main(void)
 	RUN_TEST(test_rpl_dao);
 	RUN_TEST(test_oscore_linklocal);
 	RUN_TEST(test_oscore_global);
-	RUN_TEST(test_uncompressed_fallback);
+	RUN_TEST(test_reject_non_ipv6_input);
+	RUN_TEST(test_validator_direct_call_self_defense);
 	RUN_TEST(test_unknown_rule_id);
 	RUN_TEST(test_truncated_coap_linklocal);
 	RUN_TEST(test_truncated_coap_global);
@@ -417,6 +605,8 @@ int main(void)
 	RUN_TEST(test_reject_bad_ipv6_payload_len);
 	RUN_TEST(test_reject_bad_udp_len);
 	RUN_TEST(test_uncompressed_length_exceeds_int);
+	RUN_TEST(test_rule255_fallback_profile_ceiling);
+	RUN_TEST(test_rule255_ingress_profile_ceiling);
 
 	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
 

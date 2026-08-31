@@ -1,0 +1,7 @@
+{
+  "id": "1788136973044102101-1",
+  "issue_id": "project-LICHEN-worker6-5fva.1",
+  "author": "opencode-worker-2",
+  "text": "Runtime evidence refreshed on the 4.1.0 stack (after y0z0 unblocked the build): ping_l2 now BUILDS and RUNS on heft (4/7 pass). The TX failure symptom has DRIFTED from -ENOENT to -126: '\u003cerr\u003e lichen_l2: lichen_l2: TX frame build failed: unknown error (-126)' (5 occurrences, all three failing tests show it - lichen_link_strerror has no entry for -126 either, so the diagnosability gap extends to that code). 126 in Zephyr's errno.h is EOWNERDEAD (127 ENOTRECOVERABLE) - plausibly from the new async-RX arm path or a persistence callee; trace lichen_link_tx's callees for -126 as originally planned for -ENOENT. The -ENOENT strerror-table fix from this bead's description still applies, plus a -126 entry.",
+  "created_at": "2026-08-31T00:42:53.044102101Z"
+}

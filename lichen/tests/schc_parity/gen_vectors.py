@@ -42,6 +42,19 @@ def require_keys(vector: dict[str, object], required: set[str], optional: set[st
         )
 
 
+def require_string_expect_error(vector: dict[str, object]) -> None:
+    """expect_error must be a nonempty snake_case string when present.
+
+    The generated C table encodes it as presence-as-bool, so a JSON false
+    or empty string would silently invert rejection semantics instead of
+    failing closed. Mirrors the corpus schema (string, ^[a-z0-9_]+$).
+    """
+    if "expect_error" in vector:
+        value = vector["expect_error"]
+        if not isinstance(value, str) or not re.fullmatch(r"[a-z0-9_]+", value):
+            fail(f"{vector.get('name', '<unnamed>')}.expect_error must be a nonempty snake_case string")
+
+
 def c_array(name: str, data: bytes) -> str:
     values = ", ".join(f"0x{byte:02x}" for byte in data) or "0"
     return f"static const uint8_t {name}[] = {{ {values} }};"
@@ -80,6 +93,7 @@ def load(path: Path) -> list[dict[str, object]]:
             require_keys(
                 vector, common | {"category", "packet", "expect_error"}, description
             )
+            require_string_expect_error(vector)
             decode_hex(vector["packet"], f"{name}.packet")
         elif category == "malformed":
             require_keys(
@@ -87,6 +101,7 @@ def load(path: Path) -> list[dict[str, object]]:
                 common | {"category", "rule_id", "compressed", "expect_error"},
                 description,
             )
+            require_string_expect_error(vector)
             decode_hex(vector["compressed"], f"{name}.compressed")
         elif category == "size_boundary":
             require_keys(
@@ -102,6 +117,7 @@ def load(path: Path) -> list[dict[str, object]]:
                 },
                 {"expect_error", "description"},
             )
+            require_string_expect_error(vector)
             decode_hex(vector["compressed_prefix"], f"{name}.compressed_prefix")
             for field, maximum in (
                 ("tail_byte", 255),
@@ -135,7 +151,12 @@ def load(path: Path) -> list[dict[str, object]]:
 
 def generate(vectors: list[dict[str, object]]) -> str:
     lines = [
-        "/* Generated from test/vectors/schc_compression.json; do not edit. */",
+        "/* Generated from test/vectors/schc_compression.json; do not edit.",
+        " * Committed artifact and sole include source for the schc_parity suite.",
+        " * Regenerate after editing the JSON (from the repository root):",
+        " *   python3 lichen/tests/schc_parity/gen_vectors.py \\",
+        " *     test/vectors/schc_compression.json \\",
+        " *     lichen/tests/schc_parity/schc_parity_vectors.h */",
         "#ifndef LICHEN_SCHC_PARITY_VECTORS_H",
         "#define LICHEN_SCHC_PARITY_VECTORS_H",
         "#include <stdbool.h>",
@@ -182,11 +203,34 @@ def generate(vectors: list[dict[str, object]]) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print(f"usage: {Path(sys.argv[0]).name} INPUT.json OUTPUT.h", file=sys.stderr)
+    args = sys.argv[1:]
+    check = "--check" in args
+    args = [a for a in args if a != "--check"]
+    if len(args) != 2:
+        print(
+            f"usage: {Path(sys.argv[0]).name} [--check] INPUT.json HEADER.h",
+            file=sys.stderr,
+        )
         return 2
-    vectors = load(Path(sys.argv[1]))
-    Path(sys.argv[2]).write_text(generate(vectors), encoding="utf-8")
+    vectors = load(Path(args[0]))
+    generated = generate(vectors)
+    if check:
+        # Freshness guard: the committed header must equal generator output,
+        # else the C parity leg silently tests a stale vector corpus.
+        try:
+            current = Path(args[1]).read_text(encoding="utf-8")
+        except OSError as error:
+            print(f"stale or unreadable vector header: {error}", file=sys.stderr)
+            return 1
+        if current != generated:
+            print(
+                f"out-of-date vector header: {args[1]} "
+                "(regenerate with gen_vectors.py and commit the result)",
+                file=sys.stderr,
+            )
+            return 1
+        return 0
+    Path(args[1]).write_text(generated, encoding="utf-8")
     return 0
 
 

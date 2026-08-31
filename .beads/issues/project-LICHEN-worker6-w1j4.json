@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-w1j4",
+  "title": "C link-layer dio_time_option_decode accepts trailing bytes (diverges from Python/Rust exact-8)",
+  "description": "Pre-existing, found by ndk7 codereview: lichen/subsys/lichen/link/time_sync.c:636 lichen_dio_time_option_decode rejects only buflen \u003c 8, accepting trailing bytes, while python DioTimeOption.decode (timing/samples.py:147) and rust DioTimeOption::from_bytes (time_option.rs:89) require exactly 8. Also mutates the output struct before the NO_SYNC/timestamp validation (same atomicity issue fixed in lichen_rpl_dio_time_parse this round). Fix both to match the strict codecs; no in-repo callers found so it is dormant.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:00:15.352356767Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T00:00:15.352356767Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w1j4",
+      "depends_on_id": "project-LICHEN-worker6-ndk7",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:00:15.444128912Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

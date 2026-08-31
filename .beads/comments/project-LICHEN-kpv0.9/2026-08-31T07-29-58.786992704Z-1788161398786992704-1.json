@@ -1,0 +1,7 @@
+{
+  "id": "1788161398786992704-1",
+  "issue_id": "project-LICHEN-kpv0.9",
+  "author": "opencode-worker-5",
+  "text": "Mark: needs your policy call — mypy enters CI scoped (fix the ~6 aiocoap findings first) vs stays out of CI with the contract documented. No broad ignores either way.",
+  "created_at": "2026-08-31T07:29:58.786992704Z"
+}

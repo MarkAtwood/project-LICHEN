@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-cxa2",
+  "title": "DTN: fail-open admission has no rate limit or per-source quota (churn-eviction vector)",
+  "description": "Review finding from b7z9.8.2.2 (pass 2). router.c:700-710: on clockless nodes (now_unix==0) the fail-open stores every S-flagged packet to an unreachable destination without any expiry gate. The buffer is size-bounded (CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE with oldest-first byte eviction, MAX_MESSAGES slots), but an authenticated insider can flood S-flagged traffic to churn-evict all legitimate buffered messages. File as hardening: consider per-source quota or admission rate limit. Buffer bounds themselves are correct (verified pass 2: no unbounded growth, MSGSIZE enforced).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:56:36.402139079Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T07:56:36.402139079Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cxa2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8.2.2",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T07:56:36.560465789Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

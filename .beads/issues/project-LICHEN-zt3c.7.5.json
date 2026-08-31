@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-zt3c.7.5",
+  "title": "Update Zephyr routing decisions for 02xx:: prefix",
+  "description": "Update routing table lookups and forwarding decisions to route 02xx:: traffic correctly. Remove any ULA-specific routing logic. Files: lichen/subsys/lichen/routing/router.c, lichen/subsys/lichen/routing/include/lichen/routing/router.h. ~15 lines across 1-2 files. Depends on zt3c.7.4.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:27.43823894Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:41:53.783353197Z",
+  "closed_at": "2026-08-31T05:41:53.783353197Z",
+  "close_reason": "Re-closing after store sync reverted the round-1 close (status came back open, no assignee, no close reason). Work unchanged and verified: routing decisions for 02xx:: were already 02xx-correct (classify exact 0x02 -\u003e LICHEN_ADDR_YGGDRASIL, local-mesh-first, RPL upward fallback; no ULA logic in lichen/subsys/lichen/routing/); the only residue was the LICHEN_ROUTER_MAX_MESH_PREFIXES help text, fixed in commit 3193e837d2 ('fix(routing): drop ULA/GUA-era Kconfig help text'), verified 41/41 twister cases (routing_dispatch/gpsr/fwd_buffer, native_sim+qemu_x86) and 3x Kimi K3 codereview PASS. Discovered work previously filed: worker6-tiw2 (routing_announce retry regression).",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "l2",
+    "gateway",
+    "global",
+    "local-ok",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zt3c.7.5",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:27.573223415Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

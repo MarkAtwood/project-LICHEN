@@ -25,7 +25,10 @@
 #include <lichen/meshcore/limits.h>
 
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 
 LOG_MODULE_REGISTER(gateway_meshcore_adapter, LOG_LEVEL_INF);

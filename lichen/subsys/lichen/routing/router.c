@@ -259,6 +259,10 @@ int lichen_router_route(struct lichen_router *router,
 }
 
 #define IPV6_FIXED_HEADER_LEN 40U
+#define IPV6_HBH_OPT_PAD1 0U
+#define IPV6_HBH_OPT_DTN 0x03U
+#define IPV6_HBH_OPT_DTN_DATA_LEN 5U
+#define IPV6_HBH_OPT_DTN_FLAG_S 0x80U
 #define IPV6_NH_HOP_BY_HOP 0U
 #define IPV6_NH_UDP 17U
 #define IPV6_NH_ROUTING 43U
@@ -280,6 +284,8 @@ struct ipv6_dispatch_view {
 	uint8_t source_route_segments_left;
 	size_t source_route_header_offset;
 	size_t source_route_address_offset;
+	bool dtn_store_forward;
+	uint32_t dtn_expiry_unix;
 };
 
 static bool addr_is_zero(const uint8_t addr[16])
@@ -386,6 +392,52 @@ static int parse_ipv6_dispatch(const uint8_t *data, size_t len,
 		size_t extension_len = ((size_t)data[offset + 1U] + 1U) * 8U;
 		if (extension_len < 8U || extension_len > len - offset) {
 			return -EMSGSIZE;
+		}
+
+		if (next_header == IPV6_NH_HOP_BY_HOP) {
+			/* Walk HBH option TLVs (RFC 8200 §4.2). */
+			size_t opt_off = offset + 2U;
+			size_t opt_end = offset + extension_len;
+			bool saw_dtn = false;
+
+			while (opt_off < opt_end) {
+				if (data[opt_off] == IPV6_HBH_OPT_PAD1) {
+					opt_off++;
+					continue;
+				}
+				if (opt_end - opt_off < 2U) {
+					return -EMSGSIZE;
+				}
+				uint8_t opt_type = data[opt_off];
+				uint8_t opt_len = data[opt_off + 1U];
+
+				if ((size_t)opt_len > opt_end - opt_off - 2U) {
+					return -EMSGSIZE;
+				}
+				if (opt_type == IPV6_HBH_OPT_DTN) {
+					if (saw_dtn || opt_len != IPV6_HBH_OPT_DTN_DATA_LEN) {
+						return -EBADMSG;
+					}
+					saw_dtn = true;
+					uint8_t flags = data[opt_off + 2U];
+
+					view->dtn_store_forward =
+						(flags & IPV6_HBH_OPT_DTN_FLAG_S) != 0U;
+					view->dtn_expiry_unix =
+						((uint32_t)data[opt_off + 3U] << 24) |
+						((uint32_t)data[opt_off + 4U] << 16) |
+						((uint32_t)data[opt_off + 5U] << 8) |
+						(uint32_t)data[opt_off + 6U];
+				} else {
+					/* RFC 8200: action bits [7:6] for unrecognized. */
+					uint8_t action = opt_type >> 6;
+
+					if (action != 0U) {
+						return -EPROTONOSUPPORT;
+					}
+				}
+				opt_off += 2U + (size_t)opt_len;
+			}
 		}
 
 		if (next_header == IPV6_NH_ROUTING) {
@@ -639,15 +691,23 @@ int lichen_router_route_packet(struct lichen_router *router,
 	}
 
 #if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
-	if (next.route.decision == LICHEN_ROUTE_DROP && packet->dtn_expiry_unix != 0U &&
-	    packet->dtn_expiry_unix > packet->now_unix) {
-		ret = lichen_router_dtn_buffer(router, destination_iid, packet->data,
-					      packet->len, packet->dtn_expiry_unix, now_ms);
-		if (ret < 0) {
-			return ret;
+	{
+		/* DTN intent comes solely from the wire Type=0x03 HBH option
+		 * (spec 05-routing 9.8).  R-05-080 fail-open: without a valid
+		 * wall-clock (now_unix == 0) expiry cannot be evaluated, so an
+		 * S-flagged packet is stored and nodes with valid time enforce
+		 * expiry downstream. */
+		if (next.route.decision == LICHEN_ROUTE_DROP && view.dtn_store_forward &&
+		    (packet->now_unix == 0U || view.dtn_expiry_unix > packet->now_unix)) {
+			ret = lichen_router_dtn_buffer(router, destination_iid,
+						       packet->data, packet->len,
+						       view.dtn_expiry_unix, now_ms);
+			if (ret < 0) {
+				return ret;
+			}
+			next.route.decision = LICHEN_ROUTE_STORE_DTN;
+			next.path = LICHEN_ROUTE_PATH_DTN;
 		}
-		next.route.decision = LICHEN_ROUTE_STORE_DTN;
-		next.path = LICHEN_ROUTE_PATH_DTN;
 	}
 #endif
 

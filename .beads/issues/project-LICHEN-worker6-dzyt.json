@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-dzyt",
+  "title": "uwip.3: convert lora_l2_tx CSMA to async CAD continuation; delete blocking lichen_lora_cad_run",
+  "description": "Child 3 of uwip (consumes uwip.2). csma.c already exposes the two-phase lichen_csma_cad_begin/lichen_csma_cad_complete API - the CSMA engine is continuation-ready; only lichen_l2_tx.c's csma_cad callback (lora_l2_tx.c:109-115) still blocks in lichen_lora_cad_run. Convert: csma_cad becomes cad-begin (returns 0 with CAD in flight); the cad_registry done-callback computes the verdict and drives lichen_csma_cad_complete + the TX continuation. Delete lichen_lora_cad_run and the blocking poll path once csma.c stops using it. Preserve: CSMA-suppressed and state-recheck early returns, modem_mutex/tx_buf_mutex span, tx_pending arbitration, stop() cancellation semantics. Tests: ping_l2 native_sim on heft must build and run with the CSMA path exercised (CONFIG_LICHEN_LORA_CCA enabled variant) and no regression in the 4 passing tests; add a unit test for the async cad continuation if csma.c's structure permits.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T01:21:38.043127609Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T05:27:43.929238473Z",
+  "started_at": "2026-08-31T04:08:54.922582809Z",
+  "labels": [
+    "hal",
+    "l2"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-dzyt",
+      "depends_on_id": "project-LICHEN-worker6-uwip",
+      "type": "parent-child",
+      "created_at": "2026-08-31T01:21:38.183839378Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

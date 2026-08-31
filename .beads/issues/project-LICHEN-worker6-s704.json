@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-s704",
+  "title": "apps/gateway config_cbor.c uses undeclared strnlen: same minimal-libc -Werror build break",
+  "description": "Found by review pass of project-LICHEN-worker6-zhyq (P2 sibling; same class as wmae/zhyq). lichen/apps/gateway/src/config_cbor.c:254 calls strnlen (live, undeclared in Zephyr minimal libc -\u003e implicit-function-declaration -Werror breaks the gateway app build that pulls this file). Fix: mirror the reviewed memchr pattern (see wmae/zhyq for the exact form; preserve the call site's exact max_len+1 scan envelope and NULL/edge semantics). Verify: the gateway app build for native_sim v4.1.0 (apps/gateway) - note it may hit other v4.1.0 issues (coap cluster) but the compile of config_cbor.c specifically is the gate. Also grep the gateway app dir for any further strnlen sites while there. Note: coap_status.c:495,498 strnlen sites are covered by af780aefe1 on beads-worker-2 (merges cleanly).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:54:38.113479091Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T03:06:11.079594925Z",
+  "started_at": "2026-08-31T02:55:56.188400605Z",
+  "closed_at": "2026-08-31T03:06:11.079594925Z",
+  "close_reason": "config_cbor.c's single strnlen call replaced with the reviewed file-local config_bounded_len memchr helper (no-NUL -\u003e max -\u003e the existing == sizeof rejection; semantic identity verified: field is fixed-size char source_name[24], memchr bound == capacity, no acceptance widening, valid_source_name_bytes receives the same (ptr, len)). Only strnlen site in lichen/apps (sweep confirmed). Verification: cppcheck clean; static review PASS x3 (correctness/security/robustness - reviewer re-ran cppcheck independently and traced the decode path's independent NUL-termination at :362-363). Compile gate correction per review: tests/gateway_config DOES compile this TU but is a ZEPHYR suite (find_package(Zephyr)) - configure fails on the 4.1.0 workspace like the gateway app (Kconfig loop family), so the -Werror compile remains unverifiable ON HEFT but IS available on the pinned v3.7.0 tree/EC2 builder; the fix is byte-identical to the reviewed af780aefe1/wmae/zhyq precedents so risk is minimal. Reviewer found NO remaining strnlen in lichen/apps; coap_status.c sites covered by af780aefe1 on beads-worker-2 (no new bead needed).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-s704",
+      "depends_on_id": "project-LICHEN-worker6-zhyq",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:54:38.236725027Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

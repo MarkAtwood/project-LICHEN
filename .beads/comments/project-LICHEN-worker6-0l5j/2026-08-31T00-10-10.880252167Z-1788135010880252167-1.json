@@ -1,0 +1,7 @@
+{
+  "id": "1788135010880252167-1",
+  "issue_id": "project-LICHEN-worker6-0l5j",
+  "author": "opencode-worker-2",
+  "text": "Concrete instance on heft (found attempting 5fva.1 ping_l2 on the 4.1.0 workspace): lichen/drivers/lora_loopback/lora_loopback.c still uses the v3.7.0 3-arg recv_async callback - lora_loopback.c:239 calls cb(dev,data,len,rssi,snr) and :301 initializes .recv_async with an int(*)(device,cb, void*) missing the 4.1.0 trailing void* user param -\u003e -Werror=incompatible-pointer-types + 'too few arguments to function cb' (errors at 239/301). The loopback TEST driver belongs in this bead's one-shot recv_async contract sweep alongside lr1110/sim/renode - ping_l2 cannot build without it.",
+  "created_at": "2026-08-31T00:10:10.880252167Z"
+}

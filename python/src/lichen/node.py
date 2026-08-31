@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from ipaddress import IPv6Address, IPv6Network
 from types import MappingProxyType
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from lichen import port_dispatch
 from lichen._sync_callbacks import reject_awaitable_result, require_sync_callable
@@ -43,8 +43,8 @@ from lichen.announce.scheduler import (
 )
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.gradient import GRADIENT_TIMEOUT_MS, GradientTable
-from lichen.ipv6.addr import iid_to_eui64
-from lichen.ipv6.packet import IPv6Packet, NextHeader
+from lichen.ipv6.addr import iid_to_eui64, make_link_local
+from lichen.ipv6.packet import IPv6Packet, NextHeader, PacketError
 from lichen.l2_payload import (
     L2_ROUTING_TYPE_ANNOUNCE,
     L2PayloadKind,
@@ -360,6 +360,13 @@ class Node:
         )
         if self.config.rreq_jitter_min_ms > self.config.rreq_jitter_max_ms:
             raise ValueError("rreq_jitter_min_ms must not exceed rreq_jitter_max_ms")
+        if (
+            self.config.persist_path is not None
+            and self.persistence_revision_anchor is None
+        ):
+            raise ValueError(
+                "persistence_revision_anchor required when persist_path is set"
+            )
         # Create peer database with eviction checker bound to this node
         self._peer_db = PeerDatabase(
             initial_peers=self.peer_db if self.peer_db else None,
@@ -389,10 +396,9 @@ class Node:
         )
 
         if self.config.rpl_instance_id is not None:
-            assert self.config.rpl_dodag_id is not None
             self.dodag = DodagState(
                 rpl_instance_id=self.config.rpl_instance_id,
-                dodag_id=self.config.rpl_dodag_id,
+                dodag_id=cast("IPv6Address", self.config.rpl_dodag_id),
                 version=self.config.rpl_dodag_version,
                 node_address=yggdrasil_address(self.identity.pubkey),
             )
@@ -409,11 +415,10 @@ class Node:
         announce_reconciliation: set[bytes] = set()
         announce_committer: Callable[[bytes, bytes, int], None] | None = None
         if self.config.persist_path is not None:
-            assert self.persistence_revision_anchor is not None
             self._announce_persistence = AnnounceStatePersistence(
                 self.config.persist_path,
                 self.identity,
-                self.persistence_revision_anchor,
+                cast("PersistenceRevisionAnchor", self.persistence_revision_anchor),
                 allow_bootstrap=self.allow_persistence_bootstrap,
             )
             announce_seen = self._announce_persistence.floors
@@ -867,7 +872,7 @@ class Node:
             await self._process_announce(body, rx.sender, rx.rssi_dbm)
             return
 
-        is_fragment = bool(payload) and payload[0] in (0x78, 0x79)
+        is_fragment = bool(payload) and payload[0] in RULE_IDS
 
         # SCHC-compressed IPv6 data packet: decompress, route, relay or deliver.
         if kind != L2PayloadKind.SCHC and not is_fragment:
@@ -1036,6 +1041,16 @@ class Node:
         now_ms: int,
     ) -> None:
         """Consume one RH3 segment and relay (RFC 6554); never deliver locally."""
+        # SECURITY: an in-transit datagram must be addressed to this node
+        # (outer destination = our native or link-local address). Anything else
+        # would turn this node into a generic RH3 redirector for datagrams the
+        # C router drops (mirror of router.c / Rust process_source_route).
+        if packet.header.dst_addr not in (
+            self.router.node_address,
+            make_link_local(self.identity.iid),
+        ):
+            logger.debug("dropping in-transit source-routed packet not addressed to this node")
+            return
         try:
             advanced, next_hop = advance_source_route(packet)
         except RoutingError as error:
@@ -1073,10 +1088,15 @@ class Node:
         """Classify a candidate DIO without consuming its authenticated receipt."""
         try:
             packet = IPv6Packet.from_bytes(decompress_packet(schc), strict=True)
-        except (SchcError, TypeError, ValueError):
+        except (PacketError, SchcError, TypeError, ValueError):
             return False
+        # RPL control rides ICMPv6 immediately after the IPv6 header (mirrors
+        # the C/Rust ``ipv6[6] == 58`` classification): a datagram whose chain
+        # carries extension headers is never RPL control and must fall through
+        # to source-route admission instead of being consumed here.
         return (
-            packet.header.next_header == NextHeader.ICMPV6
+            not packet.extension_headers
+            and packet.header.next_header == NextHeader.ICMPV6
             and len(packet.payload) >= 2
             and packet.payload[0] == RPL_ICMPV6_TYPE
             and packet.payload[1] == int(RplCode.DIO)

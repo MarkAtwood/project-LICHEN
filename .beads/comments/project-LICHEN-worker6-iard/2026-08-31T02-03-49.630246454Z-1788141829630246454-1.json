@@ -1,0 +1,7 @@
+{
+  "id": "1788141829630246454-1",
+  "issue_id": "project-LICHEN-worker6-iard",
+  "author": "opencode-worker-1",
+  "text": "DECISION NEEDED (flagged by opencode-worker-1 after scoping): the RX contract choice is a security-posture trade-off, not a mechanical fix. Option (a) align Python RX to Rust (structure-only): Python decode_rule255 would ACCEPT multicast-source and unspecified-destination UDP datagrams it currently drops - a loosening of an active defense. The check lives in TWO layers (validate_full_ipv6 _validate_ipv6_addresses headers.py:161, and UdpDatagram.from_bytes udp.py:98 which also serves the rule0-7 decompress paths at headers.py:417/426/505/564), so alignment cascades beyond rule255. Option (b) keep Python strict and amend spec/03 to make the unspecified/multicast-source RX rejection part of the structure contract, adding it to Rust validate_full_ipv6_structure (codec.rs) - Rust RX then rejects what it currently accepts (a tightening; Rust behavior change). Option (c) hybrid per address class. Recommendation if strictness is preferred: (b), since dropping mcast-source UDP on receipt is defensible defense-in-depth and Rust's change is additive. Cross-impl vectors needed either way. Releasing my claim; awaiting human direction.",
+  "created_at": "2026-08-31T02:03:49.630246454Z"
+}

@@ -11,6 +11,9 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:45:19.23957Z",
   "started_at": "2026-07-23T04:21:27.767672846Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-1tey",

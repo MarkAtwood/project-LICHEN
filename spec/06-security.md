@@ -1252,6 +1252,28 @@ and 7.5: an AEAD nonce is never reused with the same key, and recovered context
 state neither reuses a prior Sender Sequence Number nor accepts a prior
 message.
 
+**Observe Notifications (Partial IV Policy) — deliberate RFC 8613 deviation:**
+
+LICHEN deviates from RFC 8613 Section 4.1.3.5 for Observe notifications. The
+RFC permits a server to omit the Partial IV in the first notification of an
+observation (deriving the nonce from the registration request). LICHEN
+implementations MUST NOT do this: every Observe notification MUST carry a
+fresh, nonzero Partial IV, and receivers MUST reject any notification lacking
+one.
+
+Rationale: the LICHEN OSCORE context shares the registration request's PIV
+across the observation lifetime rather than consuming it one-shot, so deriving
+a first-notification nonce from the request PIV would alias the AEAD nonce
+across notifications. Fail-closed rejection is the safer profile.
+
+Consequences: (1) LICHEN servers (Rust and C) MUST always include a fresh
+Partial IV per notification. (2) A foreign RFC 8613-compliant server that
+exercises the first-notification omission is incompatible with LICHEN
+receivers; interop vectors pin the fresh-PIV requirement (no
+first-notification-omission case is valid). This restriction applies to the
+observe profile only; ordinary request/response exchanges follow RFC 8613
+unchanged.
+
 ### 15.4. Known Limitations
 
 1. **No perfect forward secrecy:** Static ECDH keys

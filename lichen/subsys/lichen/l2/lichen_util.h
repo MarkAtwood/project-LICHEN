@@ -81,8 +81,8 @@ uint32_t lichen_hash_32(const uint8_t *data, size_t len);
  * Covered error codes:
  *   POSIX: EINVAL, ENOMEM, EMSGSIZE, EOVERFLOW, EALREADY, EIO, ENODEV,
  *          ENETDOWN, EBUSY, EAGAIN, ECANCELED, ENODATA, ESRCH, ENOBUFS,
- *          ETIMEDOUT, ENOSPC
- *   LICHEN: LICHEN_EAUTH
+ *          ETIMEDOUT, ENOSPC, ENOKEY
+ *   LICHEN: LICHEN_EAUTH, LICHEN_ESCHC
  *
  * @param err Negative error code from lichen_link_tx/rx
  * @return Human-readable string (never NULL)
@@ -156,6 +156,12 @@ static inline const char *lichen_link_strerror(int err)
 #if HAVE_LICHEN_ERRNO
     case -LICHEN_EAUTH:
         return "authentication failed";
+    case -LICHEN_ESCHC:
+        return "schc compression rejected packet";
+#endif
+#ifdef ENOKEY
+    case -ENOKEY:
+        return "no signing key";
 #endif
     default:
         return "unknown error";

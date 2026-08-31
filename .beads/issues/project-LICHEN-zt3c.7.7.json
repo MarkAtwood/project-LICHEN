@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-zt3c.7.7",
+  "title": "Add ztest coverage for 02xx:: address and routing",
+  "description": "Add new ztest cases validating 02xx:: address assignment, prefix advertisement via RPL, and global routing path. ~20 lines in 1 test file. Depends on children 3-5.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:30.863383104Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:56:13.950806071Z",
+  "closed_at": "2026-08-31T03:56:13.950806071Z",
+  "close_reason": "Merged into zt3c.7.6 to maintain file-disjointness (both touch test files).",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "tests",
+    "gateway",
+    "global",
+    "local-ok",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zt3c.7.7",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:30.971235602Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

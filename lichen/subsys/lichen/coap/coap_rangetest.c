@@ -466,7 +466,12 @@ int lichen_traceroute_encode(uint8_t *buf, size_t buf_size,
 	enc_key(&e, "hops");
 	enc_array(&e, hop_count);
 	for (size_t i = 0U; i < hop_count; i++) {
-		size_t addr_len = strnlen(hops[i].addr, sizeof(hops[i].addr));
+		/* Zephyr's minimal libc does not declare strnlen(): bounded
+		 * length via memchr. */
+		const char *nul = memchr(hops[i].addr, '\0',
+					 sizeof(hops[i].addr));
+		size_t addr_len = nul ? (size_t)(nul - hops[i].addr)
+				      : sizeof(hops[i].addr);
 
 		if (!isfinite(hops[i].rssi) || !isfinite(hops[i].rtt_ms) ||
 		    addr_len == 0U || addr_len >= sizeof(hops[i].addr)) {

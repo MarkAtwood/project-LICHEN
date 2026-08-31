@@ -13,6 +13,9 @@
   "started_at": "2026-06-13T02:24:45Z",
   "closed_at": "2026-06-13T02:37:54Z",
   "close_reason": "airtime_us() now raises ValueError for negative payload_len (transmission.py). Test: test_negative_payload_raises.",
+  "labels": [
+    "phy"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-6tf",

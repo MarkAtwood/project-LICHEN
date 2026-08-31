@@ -1,0 +1,218 @@
+{
+  "$schema": "./srh_admission.schema.json",
+  "format_version": 2,
+  "name": "srh_admission",
+  "description": "Cross-implementation RFC 6554 source-route admission vectors: forwarding precedence for in-transit RH3 datagrams and router-level rejection of malformed or non-canonical source routes.",
+  "spec": "RFC 6554 Sections 4.1 and 4.2; RFC 8200 Sections 4.3 and 4.4; LICHEN spec/05-routing.md Section 8.4; C reference parse_ipv6_dispatch in lichen/subsys/lichen/routing/router.c",
+  "verdicts": {
+    "admit_in_transit": "admitted with segments_left != 0: RFC 6554 forwarding precedence, relay to the next segment, never deliver locally",
+    "admit_consumed": "admitted with no in-transit RH3: deliverable at the outer destination",
+    "reject": "dropped outright at admission"
+  },
+  "cases": [
+    {
+      "name": "udp_no_routing_header",
+      "description": "Plain UDP datagram without any Routing header is deliverable at its destination.",
+      "packet": "600000000008114002000000000000000000000000000001020000000000000000000000000000040000000000080000",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "in_transit_two_segments",
+      "description": "RH3 with segments_left 2 at relay A has forwarding precedence and must be relayed, never delivered locally.",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000002110403020000000002000000000000000000000000000003020000000000000000000000000000040000000000080000",
+      "verdict": "admit_in_transit"
+    },
+    {
+      "name": "consumed_at_final",
+      "description": "RH3 with segments_left 0 at the final destination is deliverable; the RFC 6554 swap-back keeps grid addresses distinct from the outer destination.",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000004110403000000000002000000000000000000000000000002020000000000000000000000000000030000000000080000",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "degenerate_zero_address_consumed",
+      "description": "A minimal 8-octet RH3 with segments_left 0 and an empty grid is admitted (the C router admits Routing header lengths down to 8 octets).",
+      "packet": "6000000000102b40020000000000000000000000000000010200000000000000000000000000000411000300000000000000000000080000",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "reserved_ignored_octets_admitted",
+      "description": "RFC 6554 4.2: the low nibble of the Pad/Reserved octet and Reserved octets 6-7 are ignored when CmprI/CmprE and Pad are zero.",
+      "packet": "6000000000302b4002000000000000000000000000000001020000000000000000000000000000041104030000017f2a02000000000000000000000000000002020000000000000000000000000000030000000000080000",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "hop_by_hop_then_routing_in_transit",
+      "description": "A leading Hop-by-Hop header followed by an in-transit RH3 is admitted.",
+      "packet": "600000000028004002000000000000000000000000000001020000000000000000000000000000032b000000000000001102030100000000020000000000000000000000000000040000000000080000",
+      "verdict": "admit_in_transit"
+    },
+    {
+      "name": "dest_options_pair_admitted",
+      "description": "Repeated Destination Options headers are tolerated (only Hop-by-Hop is unique).",
+      "packet": "6000000000183c4002000000000000000000000000000001020000000000000000000000000000043c0000000000000011000000000000000000000000080000",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "next_header_none_empty",
+      "description": "No-Next-Header termination with no trailing bytes is admitted.",
+      "packet": "6000000000003b400200000000000000000000000000000102000000000000000000000000000004",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "reject_grid_equals_outer_destination",
+      "description": "RH3 grid containing the outer destination is rejected (router-level final-address check).",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000002110403020000000002000000000000000000000000000003020000000000000000000000000000020000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_grid_equals_source",
+      "description": "RH3 grid containing the packet source is rejected (forwarding loop).",
+      "packet": "6000000000202b4002000000000000000000000000000001020000000000000000000000000000021102030100000000020000000000000000000000000000010000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_grid_unspecified",
+      "description": "RH3 grid containing the unspecified address is rejected.",
+      "packet": "6000000000202b4002000000000000000000000000000001020000000000000000000000000000021102030100000000000000000000000000000000000000000000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_grid_multicast",
+      "description": "RH3 grid containing a multicast address is rejected.",
+      "packet": "6000000000202b4002000000000000000000000000000001020000000000000000000000000000021102030100000000ff0200000000000000000000000000010000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_duplicate_grid",
+      "description": "RH3 grid repeating an address is rejected.",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000002110403020000000002000000000000000000000000000003020000000000000000000000000000030000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_segments_left_exceeds_addresses",
+      "description": "segments_left greater than the RH3 address count is rejected.",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000002110403030000000002000000000000000000000000000003020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_segments_left_gte_hop_limit",
+      "description": "In-transit RH3 with segments_left >= hop_limit cannot complete the route and is rejected (spec 05-routing 8.4).",
+      "packet": "6000000000302b020200000000000000000000000000000102000000000000000000000000000002110403020000000002000000000000000000000000000003020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_hop_limit_zero",
+      "description": "A datagram with an exhausted Hop Limit is rejected before any routing decision.",
+      "packet": "600000000008110002000000000000000000000000000001020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_source_unspecified",
+      "description": "A datagram whose source address is unspecified is rejected.",
+      "packet": "600000000008114000000000000000000000000000000000020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_source_multicast",
+      "description": "A datagram whose source address is multicast is rejected.",
+      "packet": "6000000000081140ff020000000000000000000000000001020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_routing_type_two",
+      "description": "A Routing header whose type is not 3 is rejected (LICHEN admits only RH3).",
+      "packet": "6000000000202b4002000000000000000000000000000001020000000000000000000000000000021102020100000000020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_second_routing_header",
+      "description": "A second Routing header is rejected: RFC 8200 4.4 processes only the first and layered RH3s create ambiguous checksum scope.",
+      "packet": "6000000000582b4002000000000000000000000000000001020000000000000000000000000000042b040300000000000200000000000000000000000000000202000000000000000000000000000003110403000000000002000000000000000000000000000002020000000000000000000000000000030000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_misaligned_address_grid",
+      "description": "A Routing header whose address grid is not a multiple of 16 octets is rejected: this 32-octet header carries a 24-byte grid.",
+      "packet": "6000000000282b40020000000000000000000000000000010200000000000000000000000000000411030300000000000200000000000000000000000000000200000000000000000000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_four_extension_chain",
+      "description": "Four extension headers before the upper protocol exceed the bounded embedded profile and are rejected (C router -E2BIG).",
+      "packet": "6000000000283c4002000000000000000000000000000001020000000000000000000000000000043c000000000000003c000000000000003c0000000000000011000000000000000000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_routing_header_beyond_chain_bound",
+      "description": "An in-transit RH3 placed beyond the three-header chain bound is rejected, never admitted past unexamined headers.",
+      "packet": "6000000000383c4002000000000000000000000000000001020000000000000000000000000000023c000000000000003c000000000000002b000000000000001102030100000000020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_truncated_udp",
+      "description": "A datagram whose UDP terminal header is shorter than eight octets is rejected (C router -EMSGSIZE).",
+      "packet": "6000000000041140020000000000000000000000000000010200000000000000000000000000000400000000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_truncated_icmpv6",
+      "description": "A datagram whose ICMPv6 terminal header is shorter than four octets is rejected (C router -EMSGSIZE).",
+      "packet": "6000000000023a4002000000000000000000000000000001020000000000000000000000000000040000",
+      "verdict": "reject"
+    },
+    {
+      "name": "icmpv6_upper_admitted",
+      "description": "An ICMPv6 datagram (RPL control and diagnostics ride ICMPv6) without a Routing header is deliverable at its destination.",
+      "packet": "6000000000063a400200000000000000000000000000000102000000000000000000000000000004800000000000",
+      "verdict": "admit_consumed"
+    },
+    {
+      "name": "reject_cmpr_octet_nonzero",
+      "description": "A nonzero CmprI/CmprE octet is rejected (LICHEN's profile is uncompressed).",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000004110403000100000002000000000000000000000000000002020000000000000000000000000000030000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_pad_nibble_nonzero",
+      "description": "Nonzero Pad bits are rejected whenever CmprI/CmprE are zero (RFC 6554 4.2).",
+      "packet": "6000000000302b400200000000000000000000000000000102000000000000000000000000000004110403000010000002000000000000000000000000000002020000000000000000000000000000030000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_max_addresses_exceeded",
+      "description": "A nine-address RH3 grid exceeds the eight-hop LICHEN route bound and is rejected.",
+      "packet": "6000000000a02b40020000000000000000000000000000010200000000000000000000000000000411120300000000000200000000000000000000000000001102000000000000000000000000000012020000000000000000000000000000130200000000000000000000000000001402000000000000000000000000000015020000000000000000000000000000160200000000000000000000000000001702000000000000000000000000000018020000000000000000000000000000190000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_hop_by_hop_not_first",
+      "description": "A Hop-by-Hop header that does not immediately follow the IPv6 header is rejected (RFC 8200 4.3).",
+      "packet": "6000000000403c40020000000000000000000000000000010200000000000000000000000000000400000000000000002b00000000000000110403000000000002000000000000000000000000000002020000000000000000000000000000030000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_second_hop_by_hop",
+      "description": "A repeated Hop-by-Hop header is rejected (RFC 8200 4.3).",
+      "packet": "60000000001800400200000000000000000000000000000102000000000000000000000000000004000000000000000011000000000000000000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_fragment_header",
+      "description": "A Fragment header is rejected: SCHC fragmentation belongs below IPv6 and dual reassembly is ambiguous.",
+      "packet": "6000000000102c40020000000000000000000000000000010200000000000000000000000000000411000000000000000000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_next_header_none_with_payload",
+      "description": "No-Next-Header followed by trailing bytes is rejected: the bytes belong to no protocol and cannot be delivered.",
+      "packet": "6000000000083b4002000000000000000000000000000001020000000000000000000000000000040000000000080000",
+      "verdict": "reject"
+    },
+    {
+      "name": "reject_unsupported_upper_protocol",
+      "description": "A TCP payload is rejected: the LICHEN constrained profile admits only UDP and ICMPv6 upper protocols.",
+      "packet": "60000000000406400200000000000000000000000000000102000000000000000000000000000004aabbccdd",
+      "verdict": "reject"
+    }
+  ]
+}

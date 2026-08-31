@@ -2,3 +2,4 @@
 {"id":"01a00dd4-5809-7bb0-bc8c-1691dc2e892f","issue_id":"project-LICHEN-worker6-qefi","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: bug","created_at":"2026-08-17T03:46:55.113767Z"}
 {"id":"01a00dd4-5811-755b-bbc5-8d2a46c8cfc2","issue_id":"project-LICHEN-worker6-qefi","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: codereview","created_at":"2026-08-17T03:46:55.121351Z"}
 {"id":"01a045e1-3868-7923-939c-a5c4ef26d5cf","issue_id":"project-LICHEN-worker6-qefi","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:59:43.0806Z"}
+{"id":"01a05610-4566-73ef-9ee9-8bd720b727b9","issue_id":"project-LICHEN-worker6-qefi","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-31T04:25:02.054259622Z"}

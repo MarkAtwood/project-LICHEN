@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T05:33:18.596113Z",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "hal"
   ],
   "dependencies": [
     {

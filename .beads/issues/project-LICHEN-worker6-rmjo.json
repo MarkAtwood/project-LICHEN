@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-rmjo",
+  "title": "ping_l2: commit the coap_status.c compile fix (strnlen implicit declaration + sign-compare) - fixed on heft but never landed",
+  "description": "Found during xqvj build verification (native_sim v4.1.0, build/ping_l2): lichen/subsys/lichen/coap/coap_status.c:495-498 fails -Werror: :495 implicit declaration of strnlen (did you mean strlen - Zephyr minimal libc lacks strnlen), :496 and :498 sign-compare (int vs long unsigned int). The xqvj bead states worker7 already fixed coap_status.c on heft (strnlen strict-ISO + conversion) but that fix was never committed/pushed - HEAD still has the broken code. Port the heft fix (or reimplement: replace strnlen with an explicit bounded loop and cast the size_t comparisons), verify ping_l2 native_sim build progresses past coap_status.c.obj. Coordinate with worker7 for the exact diff.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:44:48.000795277Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T00:46:44.82863674Z",
+  "closed_at": "2026-08-31T00:46:44.82863674Z",
+  "close_reason": "Duplicate of project-LICHEN-worker6-y0z0 (closed): the coap_status.c strnlen/sign-compare fix IS committed - beads-worker-2 commit af780aefe1 'fix(coap): replace undeclared strnlen in coap_status.c' (memchr-based status_bounded_len helper replacing strnlen, size_t comparisons fixing sign-compare - the 'reimplement' option this bead offers). Verified on heft: ping_l2 native_sim/native/64 now configures, compiles past coap_status.c.obj, links and runs (4/7 pass; the 3 runtime failures are 5fva children's scope). The unpushed-worker7-fix concern is moot: no dependency on worker7's uncommitted diff. Branch integration to main happens via the normal merge process.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rmjo",
+      "depends_on_id": "project-LICHEN-worker6-xqvj",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:44:48.13046591Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

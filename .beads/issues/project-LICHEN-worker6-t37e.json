@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-t37e",
+  "title": "link-oscore-fork.sh: validate candidates are the oscore package; honor pre-existing valid symlinks",
+  "description": "P2 findings from xyt6.1 pass-2 review: (1) candidate validation only checks for a Cargo.toml, not that the manifest declares package name = oscore - a wrong clone silently becomes the crypto dependency (path deps carry no lock checksum); (2) a user-managed symlink pointing at a valid checkout at a non-candidate path is silently overwritten when any candidate exists. Fix: is_oscore_checkout() checks manifest name = oscore; pre-loop early-accept honors any existing symlink resolving to a valid checkout (dangling links still fall through to repoint).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:50:56.910795827Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T05:56:59.437440843Z",
+  "closed_at": "2026-08-31T05:56:59.437440843Z",
+  "close_reason": "Fixed: (1) is_oscore_checkout() greps the candidate/link/real-dir manifest for '^name = \"oscore\"' before accepting - a wrong clone is rejected (sandbox-verified: symlink to a non-oscore package dir is repointed to the real fork); (2) pre-loop early-accept honors any existing symlink resolving to a valid oscore checkout even at non-candidate paths (sandbox-verified with different path spelling), dangling links still fall through and get repointed. Consolidated re-review by reviewer model: fixes verified complete, one comment-accuracy nit fixed (CI provisioning documented as NOT wired, tracked by mbzu).",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t37e",
+      "depends_on_id": "project-LICHEN-worker6-xyt6.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:50:57.070890592Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

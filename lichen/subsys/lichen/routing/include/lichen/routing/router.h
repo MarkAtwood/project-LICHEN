@@ -148,9 +148,9 @@ struct lichen_route_packet {
 	bool destination_coords_valid;
 	int32_t destination_lat_e7;
 	int32_t destination_lon_e7;
-	/** Optional absolute expiry for DTN fallback; zero disables fallback. */
-	uint32_t dtn_expiry_unix;
-	/** Current Unix time, required when dtn_expiry_unix is non-zero. */
+	/** Current Unix time used for DTN expiry enforcement; 0 means no
+	 * valid wall-clock (R-05-080 fail-open: S-flagged packets are
+	 * stored without an expiry check). */
 	uint32_t now_unix;
 };
 

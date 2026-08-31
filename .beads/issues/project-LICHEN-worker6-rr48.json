@@ -9,6 +9,9 @@
   "created_at": "2026-08-26T18:16:42.444978Z",
   "created_by": "grok",
   "updated_at": "2026-08-26T18:16:42.444978Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-rr48",

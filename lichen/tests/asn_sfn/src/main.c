@@ -210,10 +210,10 @@ static bool test_synchronized_hop_channel_bounds(void) {
       data[5] = (uint8_t)(sfn >> 8);
       data[6] = (uint8_t)(sfn >> 16);
       data[7] = (uint8_t)(sfn >> 24);
-      expected = n_channels <= 1U
+      expected = (uint8_t)(n_channels <= 1U
                      ? 0U
-                     : (uint8_t)(1U + lichen_hash_32(data, sizeof(data)) %
-                                          (uint32_t)(n_channels - 1U));
+                     : 1U + lichen_hash_32(data, sizeof(data)) %
+                                 (uint32_t)(n_channels - 1U));
       CHECK(lichen_sync_hop_channel(sfn, 0U, n_channels) == expected,
             "channel mismatch for count=%u sfn=%u", n_channels, sfn);
       CHECK(n_channels <= 1U ? expected == 0U

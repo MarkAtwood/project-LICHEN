@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-rx1k",
+  "title": "vector generator --check masks directory-safety guard failures as out-of-date staleness",
+  "description": "Converged finding of all 3 codereview passes on wtxl.1 (this exact conflation forced the wtxl P1 diagnosis round; recurs on any group-writable checkout - umask 002 recreates 0775 and nothing in-repo enforces 0755 on test/vectors/). Causal chain verified in code: --check calls read_bounded_exact -\u003e _open_owned_directory rejects a dir with st_mode \u0026 0o022 (test/vectors/atomic_json.py:106-108, intentional guard per bead zhqf) -\u003e RuntimeError swallowed by 'except (FileNotFoundError, RuntimeError): current = None' -\u003e None != generated -\u003e 'out-of-date vector file' verdict with the same exit code and message as genuine staleness. Affected sites (19): generate_packet_walkthrough.py:429-435, generate_authenticated_schc_dio.py:375-383, generate_tunnel_authorization.py:580-588, generate_ipv6_addresses.py:122-130, generate_ipv6_icmpv6.py:216-224, generate_packets_timing.py:1676-1686, plus the same copied pattern in generate.py family: asn_sfn, capability_announcements, dao_origin_signature, delegation_tokens, forwarding_buffer, gcp_handoff_cose_sign1, link_frame_signed_modes, relay_signer_chain, root_dio_signature, rpl_route_state, schc_tile_sizing, wire_format_v2, announce_signed_data. Fix: catch FileNotFoundError alone; let RuntimeError (or any guard failure) propagate or exit distinctly with the guard's own message (e.g. 'vector artifact unsafe: ...'); add one regression test asserting a 0775 parent yields the unsafe-directory diagnostic rather than out-of-date. Secondary risk if unfixed: phantom staleness verdicts train operators to regenerate on demand, eroding the freshness check's value as a real-drift alarm. Operator note until fixed: fresh checkout + chmod 755 test/vectors before any generator run (also in bd remember vector-generators-on-fresh-checkouts).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:46:58.895595226Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T22:46:58.895595226Z",
+  "labels": [
+    "codereview",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rx1k",
+      "depends_on_id": "project-LICHEN-worker6-wtxl.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:46:58.998403363Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

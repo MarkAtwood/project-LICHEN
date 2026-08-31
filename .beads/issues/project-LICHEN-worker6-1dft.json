@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-1dft",
+  "title": "C generic schc_decompress Rule255 path lacks the global 22554 ingress ceiling Rust enforces",
+  "description": "Found by security codereview pass of project-LICHEN-worker6-qn87 (P3, pre-existing; production-unreachable today). Rust decompress rejects data.len() \u003e SCHC_FRAG_MAX_PACKET_SIZE for ALL rules including 255 (rust/lichen-schc/src/codec.rs:2270-2274) - the encoded-SCHC-packet profile ceiling is enforced at ingress. C generic dispatcher lichen/subsys/schc/schc.c schc_decompress rule255 branch (~:152-165, post-qn87 line numbers) checks only INT_MAX and out_len - a rule255 data blob up to INT_MAX is admitted if the buffer allows. The lichen rule decompressors DO cap (schc_decompress.c:22,104,203,284,339,370,456), so only the generic uncompressed path diverges. Unreachable in production today: lichen_link_rx.c:351 bounds schc_len \u003c= LICHEN_FRAME_PAYLOAD_MAX (250); the SCHC reassembler's limit gate (subsys/schc/schc.c ~:679) is test/fuzz-only in this tree. Fix: mirror Rust - reject data_len \u003e SCHC_FRAGMENT_MAX_PACKET_SIZE in the generic decompress dispatcher (or document the caller-side ceiling contract in schc.h if a profile may legitimately want larger). Also cosmetic: lichen/tests/schc/main.c test_uncompressed_length_exceeds_int now exercises the fallback-ceiling branch (post-qn87) rather than the int-overflow guard; consider renaming to test_fallback_output_profile_ceiling or splitting the INT_MAX case.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:34:22.588274927Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-30T22:49:58.852899294Z",
+  "started_at": "2026-08-30T22:35:40.740168746Z",
+  "closed_at": "2026-08-30T22:49:58.852899294Z",
+  "close_reason": "Generic decompress dispatcher schc_decompress now rejects data_len \u003e SCHC_FRAGMENT_MAX_PACKET_SIZE (22554) at ingress with SCHC_ERR_BUFFER_TOO_SMALL, mirroring Rust decompress (codec.rs:2270, same strict \u003e and same 22554 constant) - closing the rule255/uncompressed path that previously admitted blobs up to INT_MAX. Behavior-neutral for all six lichen per-rule decompressors (they already cap identically, verified at schc_decompress.c:22,104,203,284,370,456) and unreachable from production RX (lichen_link_rx schc_len \u003c= 249 frame bound; reassembler caps at its own limit \u003c= 22554 and delivers raw without calling the dispatcher) - pure defense-in-depth per the bead. New pin test_rule255_ingress_profile_ceiling: exactly-ceiling rule255 decodes (22553), ceiling+1 rejects with full-buffer atomicity (sentinel memcmp). Reviewers also caught that the ceiling made the payload_len \u003e INT_MAX guard dead code - removed per no-dead-code rule (limits.h still needed by compress) - and added a comment documenting the deliberate C error-code choice (BUFFER_TOO_SMALL, matching the per-rule convention; Rust uses InvalidPacket at this site). Verified on heft: all 18 C host suites green (clang+ASan/UBSan; schc 17/17), cppcheck clean; three-impl ingress agreement confirmed (C schc.h:122, Rust constants.rs:28, Python fragment.py:39 all 22554). 3x codereview: no P0-P2 on the delta. Findings filed: 5rvk (P2 - C rule255 fallback skips payload structural validation that Rust/Python enforce; pre-existing divergence now test-pinned).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1dft",
+      "depends_on_id": "project-LICHEN-worker6-qn87",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:34:22.69899425Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

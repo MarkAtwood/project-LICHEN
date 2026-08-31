@@ -152,8 +152,11 @@ static int parse_record_key(const char *key, size_t *slot, int *entry) {
 static int collect_record(const char *key, const uint8_t *value,
                           size_t value_len, void *user) {
   struct settings_backend_ctx *backend = user;
-  size_t slot;
-  int entry;
+  /* parse_record_key() writes both out-params on every success path, but
+   * GCC 13 -Wmaybe-uninitialized cannot prove it across the call; the
+   * initializers are inert because use is gated on ret == 0. */
+  size_t slot = 0;
+  int entry = 0;
   int ret = parse_record_key(key, &slot, &entry);
 
   if (ret != 0 || value == NULL) {

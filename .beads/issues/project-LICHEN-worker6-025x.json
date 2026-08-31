@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-025x",
+  "title": "Test fixtures still mint fd00:: node addresses (routing_gpsr, routing_fwd_buffer, rpl_dao_auth make_ula helpers)",
+  "description": "Cosmetic residue found by edge-case codereview of zt3c.7.4. lichen/tests/routing_gpsr/src/main.c:31 make_ula(), lichen/tests/routing_fwd_buffer/src/main.c:32, lichen/tests/rpl_dao_auth/src/main.c:69 address() still name/mint fd00:: node addresses. The addresses are identity-opaque in those tests (all 41 twister cases passed in round zt3c.7.5 with them), so this is naming/doc alignment with the fd00-dropped convention (cf. rpl_dodag/main.c:501 where fd00 is now documented as the foreign-mesh probe). Rename helpers + update comments; no behavioral expectation.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:09:28.548249455Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T06:09:28.548249455Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-025x",
+      "depends_on_id": "project-LICHEN-zt3c.7.4",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T06:09:28.706168588Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

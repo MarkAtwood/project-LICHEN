@@ -12,7 +12,9 @@
     "integration",
     "hardware",
     "test",
-    "defer-external"
+    "defer-external",
+    "gateway",
+    "blocked:hardware"
   ],
   "dependencies": [
     {

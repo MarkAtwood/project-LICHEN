@@ -13,6 +13,9 @@
   "started_at": "2026-06-13T02:49:00Z",
   "closed_at": "2026-06-13T02:56:52Z",
   "close_reason": "Added an anyio.Lock serializing each request/response exchange in SimRadio (connect/transmit/receive/get_time); concurrent ops no longer interleave _send/_recv and mismatch responses (sim_client.py). Test: test_concurrent_operations_are_serialized, with a recording stream proven to fail (SimRadioError: response mismatch) when the lock is removed.",
+  "labels": [
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-1gg",

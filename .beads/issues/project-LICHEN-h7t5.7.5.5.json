@@ -1,0 +1,41 @@
+{
+  "id": "project-LICHEN-h7t5.7.5.5",
+  "title": "RX path validation: receive packet on LilyGO LoRa",
+  "description": "Validate receive path: configure RX continuous, inject packet from known-good sender or simulator bridge, verify RSSI/SNR/payload. Requires hardware or Renode. ~15 lines in 1 test file. Depends on child 3.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:54:28.133363163Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T04:00:17.055165467Z",
+  "closed_at": "2026-08-31T04:00:17.055165467Z",
+  "close_reason": "Duplicate — superseded by .13-.16 which include explicit file paths per file-disjoint constraint.",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "tests",
+    "board-support",
+    "bringup",
+    "firmware",
+    "hal",
+    "hardware",
+    "lilygo",
+    "local-ok",
+    "lora",
+    "owner-reserved",
+    "partner-handoff",
+    "radio",
+    "smoke-test"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-h7t5.7.5.5",
+      "depends_on_id": "project-LICHEN-h7t5.7.5",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:54:28.262094294Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

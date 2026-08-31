@@ -8,6 +8,9 @@
   "created_at": "2026-08-28T14:48:13.620099Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:48:13.620099Z",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-sxe.4",

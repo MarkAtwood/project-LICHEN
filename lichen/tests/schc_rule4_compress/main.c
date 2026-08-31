@@ -142,23 +142,25 @@ static int test_tail_and_atomic_bounds(void)
 
 static int test_profile_limit(void)
 {
-	enum { FIXED_RAW = 64, FIXED_COMPRESSED = 37,
-	       TAIL_EXACT = SCHC_FRAGMENT_MAX_PACKET_SIZE - FIXED_COMPRESSED };
-	static uint8_t packet[FIXED_RAW + TAIL_EXACT + 1];
-	static uint8_t tail[TAIL_EXACT + 1];
+	enum { FIXED_RAW = 64U, FIXED_COMPRESSED = 37U,
+	       /* The profile limit bounds the RAW packet (the fragmenter's
+		* reassembly buffer), not the compressed form: a packet of
+		* exactly SCHC_FRAGMENT_MAX_PACKET_SIZE raw octets compresses;
+		* anything above is rejected before rule dispatch. */
+	       TAIL_MAX = SCHC_FRAGMENT_MAX_PACKET_SIZE - FIXED_RAW };
+	static uint8_t packet[FIXED_RAW + TAIL_MAX + 1];
+	static uint8_t tail[TAIL_MAX + 1];
 	static uint8_t out[SCHC_FRAGMENT_MAX_PACKET_SIZE + 1];
 	size_t len = make_dao(packet, sizeof(packet), src_canonical, dst_canonical,
-			      64, 0, 0x40, 0, 5, dodag_canonical,
-			      tail, TAIL_EXACT);
-	CHECK(lichen_schc_compress(packet, len, out, sizeof(out)) ==
-	      SCHC_FRAGMENT_MAX_PACKET_SIZE);
+			      64, 0, 0x40, 0, 5, dodag_canonical, tail, TAIL_MAX);
 
-	len = make_dao(packet, sizeof(packet), src_canonical, dst_canonical,
-		       64, 0, 0x40, 0, 5, dodag_canonical,
-		       tail, TAIL_EXACT + 1);
+	CHECK(lichen_schc_compress(packet, len, out, sizeof(out)) > 0);
 	memset(out, 0xA5, sizeof(out));
-	CHECK(lichen_schc_compress(packet, len, out, sizeof(out)) < 0);
-	CHECK(out[0] == 0xA5);
+	len = make_dao(packet, sizeof(packet), src_canonical, dst_canonical,
+		       64, 0, 0x40, 0, 5, dodag_canonical, tail, TAIL_MAX + 1);
+	CHECK(lichen_schc_compress(packet, len, out, sizeof(out)) ==
+	      SCHC_ERR_BUFFER_TOO_SMALL);
+	for (size_t i = 0; i < sizeof(out); i++) CHECK(out[i] == 0xA5);
 	return 0;
 }
 

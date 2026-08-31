@@ -50,6 +50,7 @@ enum schc_error {
 	SCHC_ERR_ACK_MALFORMED = -12,
 	SCHC_ERR_ACK_NONCANONICAL = -13,
 	SCHC_ERR_ACK_UNASSIGNED = -14,
+	SCHC_ERR_INVALID_ENDPOINT = -15,
 };
 
 struct schc_rule;
@@ -85,6 +86,14 @@ struct schc_profile {
 	size_t rule_count;
 	uint8_t uncompressed_rule_id;
 	bool use_uncompressed_fallback;
+	/**
+	 * Optional Rule 255 payload validator (RX contract).
+	 *
+	 * Called by schc_decompress on the uncompressed fallback payload
+	 * before it is copied out; a negative return rejects the packet.
+	 * Profiles without one accept any payload (raw byte-preserving).
+	 */
+	int (*validate_payload)(const uint8_t *payload, size_t payload_len);
 };
 
 /**

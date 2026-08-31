@@ -13,5 +13,8 @@
   "updated_at": "2026-08-28T03:42:21.981244Z",
   "started_at": "2026-07-22T20:09:00.709469731Z",
   "closed_at": "2026-07-25T01:30:37.226151054Z",
-  "close_reason": "Already fixed"
+  "close_reason": "Already fixed",
+  "labels": [
+    "zephyr"
+  ]
 }

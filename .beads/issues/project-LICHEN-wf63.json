@@ -12,6 +12,9 @@
   "started_at": "2026-07-25T02:35:38.210471432Z",
   "closed_at": "2026-07-25T02:36:21.582554632Z",
   "close_reason": "Closed",
+  "labels": [
+    "lci"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wf63",

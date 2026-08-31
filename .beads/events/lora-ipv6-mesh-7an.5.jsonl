@@ -1,3 +1,4 @@
 {"id":"01a046b2-0bec-7d0f-96e9-65a4ce57a6ce","issue_id":"lora-ipv6-mesh-7an.5","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T04:47:48.716857Z"}
 {"id":"01a046b2-0bf4-79cb-99c2-66eef9de5ac5","issue_id":"lora-ipv6-mesh-7an.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: defer-external","created_at":"2026-08-28T04:47:48.724643Z"}
 {"id":"01a046b2-0c30-7386-ac8c-390146177250","issue_id":"lora-ipv6-mesh-7an.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: owner-reserved","created_at":"2026-08-28T04:47:48.784231Z"}
+{"id":"01a05606-1045-795d-8eab-71df5ca2c950","issue_id":"lora-ipv6-mesh-7an.5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: app-interface","created_at":"2026-08-31T04:13:53.093614951Z"}

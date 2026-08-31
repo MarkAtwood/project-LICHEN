@@ -13,5 +13,8 @@
   "updated_at": "2026-08-28T03:42:37.76518Z",
   "started_at": "2026-06-23T19:23:56Z",
   "closed_at": "2026-06-23T19:30:27Z",
-  "close_reason": "Closed"
+  "close_reason": "Closed",
+  "labels": [
+    "app-interface"
+  ]
 }

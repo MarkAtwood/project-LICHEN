@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-t82l",
+  "title": "Gateway root DODAG ID should be the root's key-derived native 0200:: address",
+  "description": "Follow-up from zt3c.7.4 (2 review passes flagged it as the upgrade path; the bead only flipped the family). gateway_rpl_init (lichen/apps/gateway/src/main.c:141-148) now hardcodes DODAG ID 0200::1 (was fd00::1). Per the addressing model (spec 04-network 6.1, AGENTS.md 'native /128 derive from the node Ed25519 public key') and the zt3c.7.6 ztest doc ('DODAG_ID is the root's key-derived global address'), the root should advertise its own key-derived ygg address as DODAG ID. Available primitives: lichen_link_copy_identity(ctx, NULL, NULL, ygg_addr, \u0026has_key) (link_ctx.h:422) and lichen_yggdrasil_addr() (l2/ipv6_addr.c:359, used by lichen_l2_init.c:783-792). No L2 accessor exists for the app layer to fetch its own ygg addr - adding one (e.g. lichen_lora_l2_copy_ygg()) touches l2 API owned by zt3c.7.2 worker; coordinate there. Also fold in: lichen_rpl_root_set_prefix() (rpl_root.c:265) is currently dead (only call site is the TODO at main.c:201) - decide its role in prefix delegation wiring. Key may not be loaded when gateway_rpl_init runs (lichen_l2_init.c:781 comment) - needs init-order handling. Constrain to CONFIG_LORA_LICHEN_GATEWAY_RPL_ROOT builds.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:09:23.174767639Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T06:09:23.174767639Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t82l",
+      "depends_on_id": "project-LICHEN-zt3c.7.4",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T06:09:23.337144779Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

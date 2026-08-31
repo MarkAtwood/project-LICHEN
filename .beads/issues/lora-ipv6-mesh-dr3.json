@@ -13,6 +13,9 @@
   "started_at": "2026-06-13T02:24:46Z",
   "closed_at": "2026-06-13T02:37:54Z",
   "close_reason": "PcapngWriter.__init__ wraps header-block writes in try/except that closes the handle and re-raises on failure (pcap.py). Test: test_closes_file_on_init_failure asserts the file object is closed.",
+  "labels": [
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-dr3",

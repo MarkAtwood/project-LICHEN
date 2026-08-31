@@ -2,13 +2,21 @@
   "id": "project-LICHEN-worker6-982e",
   "title": "Register lichen-schc link_layer_integration test with required-features",
   "description": "cargo test -p lichen-schc with default features fails to compile: tests/link_layer_integration.rs is auto-discovered (no [[test]] entry in rust/lichen-schc/Cargo.toml) and uses std-only APIs (FragmentationPolicy::accept_peer, AuthenticatedFragmentReceiver::new, lichen_link::identity) without a crate-level cfg gate. Introduced when commit f8cdaec2b3 touched the file; Cargo.toml has [[test]] entries with required-features = [\"std\", \"raw-fragment-codec\"] for the other four integration tests but none for this one. Fix: add [[test]] name = \"link_layer_integration\" required-features = [\"std\", \"raw-fragment-codec\"] (or a #![cfg(feature = \"std\")] gate). Verified 2026-08-29: 12 compile errors under default features; full suite passes with --features std,test-utils,raw-fragment-codec.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T00:02:02.61493Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T00:02:02.61493Z",
+  "updated_at": "2026-08-31T04:59:58.985190976Z",
+  "closed_at": "2026-08-31T04:59:58.985190976Z",
+  "close_reason": "Re-close (2nd re-apply; store keeps reverting — concurrent sync race in shared BEADS_DIR). Fix: commit fe4000ddce, [[test]] link_layer_integration required-features std+raw-fragment-codec; verified 7/7 with features, target excluded under default features; 3x review PASS. Full record preserved in project-LICHEN-worker6-swlf description.",
+  "labels": [
+    "l2",
+    "rust",
+    "schc",
+    "tests"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-982e",

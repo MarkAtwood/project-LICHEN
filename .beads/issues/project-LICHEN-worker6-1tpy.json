@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-1tpy",
+  "title": "Sync firmware/bridge-zephyr vendored lichen_l2 copy with jfzk error-code changes (LICHEN_ESCHC, ENOKEY=126, crash_info skip)",
+  "description": "Found by security review pass of project-LICHEN-worker6-jfzk (P2). firmware/bridge-zephyr/subsys/lichen/lichen_l2.c is a vendored copy of the L2 tx path and still carries the pre-jfzk behavior its parent bead fixed: (1) crash_info_store(CRASH_STATE_CORRUPTION) for every negative lichen_link_tx return - policy rejections (-LICHEN_ESCHC semantics) and keyless state (-ENOKEY) are mislabeled as corruption there (:87-96 area); (2) its local to_zephyr_errno leaks raw SCHC/201 codes to the Zephyr net stack (:989-993 area); (3) its vendored lichen_util.h strerror lacks the new cases. Fix: mirror the jfzk edits - LICHEN_ESCHC (201) in its errno header, the policy-rejection mapping in lichen_link_tx's compress step, the crash_info skip for -LICHEN_ESCHC/-ENOKEY, the -EINVAL Zephyr mapping, and the strerror cases - or re-vendor the updated files wholesale if the vendored tree tracks upstream files 1:1. Verify the bridge-zephyr firmware builds for its target (Zephyr env required - not available on heft, see the v3.7.0 tree note) before closing.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:49:01.152013053Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T02:01:38.541283956Z",
+  "started_at": "2026-08-31T01:59:55.154211582Z",
+  "closed_at": "2026-08-31T02:01:38.541283956Z",
+  "close_reason": "Rescoped: the bead's premise (the mislabel 'persists in that firmware') is FALSE - firmware/bridge-zephyr does not compile the vendored subsys. Evidence: bridge-zephyr/CMakeLists.txt target_sources(app PRIVATE src/main.c) ONLY; the vendored firmware/bridge-zephyr/subsys/lichen/*.c (incl. the stale lichen_l2.c with the pre-jfzk mislabel at :87-96/:989-993) are a non-compiled reference snapshot; the build uses the live lichen module (build/zephyr_modules.txt active; L2 headers included from ../../lichen/subsys/lichen/l2). The LIVE tx path carries the jfzk fixes (lichen_util.h strerror has LICHEN_ESCHC/ENOKEY; lichen_l2_tx.c skips crash_info for -LICHEN_ESCHC/-ENOKEY/-EMSGSIZE; lichen_l2_core.c maps -LICHEN_ESCHC -\u003e -EINVAL; lichen_link_tx returns -LICHEN_ESCHC) - so the bridge firmware cannot exhibit the mislabel. The 5rvk-round reviewer's finding that bridge-zephyr vendors no schc sources is consistent. Behavior verification on heft is N/A for the vendored copy (not compiled); the live-module behavior is pinned by the l2_key_selection host tests (jfzk/50t0 rounds). Residual snapshot-drift concern filed as a P4 optional-hygiene bead (decide sync-vs-delete-vs-document; no action taken per the workspace leave-alone default). No code change this round - verification-only closure; 3x codereview N/A (no delta).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1tpy",
+      "depends_on_id": "project-LICHEN-worker6-jfzk",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:49:01.267841637Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

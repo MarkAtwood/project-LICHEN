@@ -2,15 +2,18 @@
   "id": "project-LICHEN-worker6-eaws",
   "title": "C: Enforce max slot claim duration in coap_slot_coord.c",
   "description": "Add check in lichen_slot_coord_process_claim() after the expiry \u003e now check:\n\nif (claim-\u003eexpiry \u003e now_unix + SLOT_CLAIM_MAX_DURATION_SEC) {\n    return LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR;\n}\n\nUse CONFIG_LICHEN_CCP_SUPERFRAME_SEC * N (default N=5).\nAdd Kconfig: CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES\nAdd test case for rejection.\n\nRef: project-LICHEN-worker6-70p7",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T03:35:41.262419Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T03:35:41.262419Z",
+  "updated_at": "2026-08-31T05:36:56.763660788Z",
+  "closed_at": "2026-08-31T05:36:56.763660788Z",
+  "close_reason": "Implemented: process_claim() rejects claims with expiry \u003e now + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (CONFIG_LICHEN_CCP_SUPERFRAME_SEC 60 x CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES 5 = 300s) with new enum LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR=9, mapped to 4.03 in slots_post. New Kconfigs in link/Kconfig and coap/Kconfig; header constants use the house #ifndef fallback pattern so host builds work. Host test fixtures retargeted expiry 3000-\u003e1250 (inside cap) + new test_expiry_too_far covering reject-at-cap+1, not-applied assertion, and inclusive boundary accept at cap. 152/152 checks, UBSan clean. 3x codereview delegated to reviewer (correctness PASS; security: 1 P3; edge: 2 findings) - all findings filed and fixed, 3x re-review on fixes all PASS (converged). Notes: (1) spec/08 GCP-6.5 still says only expiry\u003enow - spec update belongs to parent 70p7; (2) Kconfig parse not verified locally (no kconfiglib) - CI/twister will confirm; (3) pre-existing lint-c.sh failures on Zephyr-side files on this box (no Zephyr headers) verified identical on HEAD.",
   "labels": [
     "C",
-    "security"
+    "security",
+    "zephyr"
   ]
 }

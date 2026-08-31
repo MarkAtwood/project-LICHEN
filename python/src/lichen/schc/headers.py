@@ -131,9 +131,19 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
         data = ext.data
         if len(data) + 2 < 24 or data[0] != 3 or data[2] != 0 or data[3] != 0:
             raise SchcError("unsupported RPL source-routing header")
+        if data[4] != 0 or data[5] != 0:
+            # RFC 6554 s3: Reserved octets 6-7 follow CmprI/CmprE/Pad and
+            # MUST be zero (data[4:6] = packet octets 6-7).
+            raise SchcError("invalid RPL source-routing reserved octets")
         segments_left = data[1]
         if segments_left > (len(data) - 6) // 16:
             raise SchcError("invalid RPL source-routing segments-left")
+        if (len(data) - 6) % 16 != 0:
+            # RFC 6554 s3: with CmprI=CmprE=Pad=0 the Hdr Ext Len must equal
+            # 2n (ext_len = 8 + 16n addresses); a non-canonical length is
+            # not expressible and would shift the last-address window onto
+            # trailing bytes.
+            raise SchcError("invalid RPL source-routing header length")
         if segments_left != 0:
             upper_dst = IPv6Address(data[-16:])
     return upper_dst
