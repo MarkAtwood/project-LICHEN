@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.12.1",
+  "title": "C TDMA: implement DesyncFSM core states/transitions (spec 09 14.7 R-09-133)",
+  "description": "Smallest child of b7z9.12. Add the desync recovery FSM to lichen/subsys/lichen/link/tdma.c + ctx header, mirroring python/src/lichen/timing/sfn.py:77-125 DesyncFSM and rust/lichen-core/src/desync.rs:82-150: states SYNCED -\u003e DESYNCED (SFN wrap + invalid time provider), DESYNCED -\u003e RECOVERING (valid beacon ts \u003e= floor matching SFN), RECOVERING -\u003e SYNCED after 3 consecutive valid beacons, RECOVERING -\u003e DESYNCED on timeout/invalid ts; RECOVERING timeout RECOMMENDED 3 superframes (constant + documented). Host-testable state machine (extend the tdma host test if one exists, else tests/routing_dispatch-style standalone or a new lichen/tests dir following test_common.cmake). Python tests python/tests/timing/test_sfn.py:284-297 are the behavioral oracle. Discovered from project-LICHEN-worker6-b7z9.12.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:38:48.600972822Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T22:38:48.600972822Z",
+  "labels": [
+    "tdma",
+    "zephyr",
+    "decomposed",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.12.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.12",
+      "type": "parent-child",
+      "created_at": "2026-08-31T22:38:48.768046398Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
