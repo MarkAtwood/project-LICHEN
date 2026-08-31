@@ -3,12 +3,12 @@
   "title": "Specs: update all docs from 0200::/8 to 0200::/7 Yggdrasil compat",
   "description": "Update all spec documents to reflect real Yggdrasil addressing:\n- 01-architecture.md\n- 03-adaptation.md (SCHC rules may need update)\n- 04-network.md (fix SHA-256 -\u003e remove, use Yggdrasil algorithm description)\n- 05-routing.md\n- 06-security.md\n\nChange /8 to /7 everywhere. Remove SHA-512 derivation description, replace with Yggdrasil AddrForKey reference. Ensure SCHC rules accept both 02xx and 03xx first bytes.",
   "status": "open",
-  "priority": 2,
+  "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T23:46:10.50497Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T23:46:10.50497Z",
+  "updated_at": "2026-08-31T05:16:49.342911391Z",
   "labels": [
     "schc"
   ]

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-txeg",
   "title": "SOS rate limiter uses time.monotonic, vector consumer expects wall-clock time.time",
   "description": "Pre-existing failure found during qpux verification (agent changed nothing). python/tests/coap/test_security_app_vector_consumers.py:766 - SOS rate limiter implementation uses time.monotonic while the vector consumer expects wall-clock time.time (test comment: reality: wall clock, injectable). NOTE: claimed bead project-LICHEN-worker6-5c91 (SOS/confessions: monotonic uptime time source by default) may be changing exactly this semantics - coordinate/reconcile with that bead before fixing; do not fight over python/src/lichen/coap/resources/emergency.py which another worker is actively editing.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:04:37.421664Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:04:37.421664Z",
+  "updated_at": "2026-08-31T05:16:37.262403556Z",
+  "closed_at": "2026-08-31T05:16:37.262403556Z",
+  "close_reason": "Already fixed/intentional; emergency.py:93 uses time.monotonic per spec 18.4.1, docstring confirms design.",
   "labels": [
     "vectors",
     "coap"

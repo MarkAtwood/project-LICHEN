@@ -2,3 +2,4 @@
 {"id":"01a055fe-6d41-74e6-92c7-188377b93bb9","issue_id":"project-LICHEN-worker6-mx8y","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: coap","created_at":"2026-08-31T04:05:32.609322162Z"}
 {"id":"01a055fe-6ea5-71b2-b9f0-0ab1fd9142a4","issue_id":"project-LICHEN-worker6-mx8y","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: l2","created_at":"2026-08-31T04:05:32.965112596Z"}
 {"id":"01a055fe-7025-7d00-98e8-a51ccfdcd602","issue_id":"project-LICHEN-worker6-mx8y","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: tdma","created_at":"2026-08-31T04:05:33.349853831Z"}
+{"id":"01a0563f-8471-77a5-8dd0-ea9debafabaa","issue_id":"project-LICHEN-worker6-mx8y","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Obsolete: superseded by nwjl.3; COSE_Sign1 envelope makes has_signature structurally redundant. Bead's own comment confirms.","created_at":"2026-08-31T05:16:38.385502616Z"}

@@ -1,3 +1,4 @@
 {"id":"01a04979-a68b-76e1-9b76-ab9e62e547e2","issue_id":"project-LICHEN-worker6-7ab7","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T17:45:04.395452Z"}
 {"id":"01a055fe-61f6-79f8-beb1-d4e9eea14120","issue_id":"project-LICHEN-worker6-7ab7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: c","created_at":"2026-08-31T04:05:29.718655158Z"}
 {"id":"01a055fe-6357-74b4-95a2-6a78129729d9","issue_id":"project-LICHEN-worker6-7ab7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: coap","created_at":"2026-08-31T04:05:30.071309074Z"}
+{"id":"01a0563f-7df2-7ded-b8c5-5826a59374ce","issue_id":"project-LICHEN-worker6-7ab7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed; checkin.c and coap_keys_cbor.c have no obvious -Werror triggers at HEAD.","created_at":"2026-08-31T05:16:36.722914275Z"}

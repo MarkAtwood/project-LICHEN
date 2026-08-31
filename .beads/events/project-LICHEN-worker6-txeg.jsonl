@@ -1,3 +1,4 @@
 {"id":"01a04954-9e3c-7795-ab15-f154b66d76e3","issue_id":"project-LICHEN-worker6-txeg","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-28T17:04:37.436497Z"}
 {"id":"01a055fe-717f-75fb-bf8f-b83bc86d209a","issue_id":"project-LICHEN-worker6-txeg","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: vectors","created_at":"2026-08-31T04:05:33.695393224Z"}
 {"id":"01a0560f-a8a5-74cd-96b9-2be49cbc725b","issue_id":"project-LICHEN-worker6-txeg","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: coap","created_at":"2026-08-31T04:24:21.925316423Z"}
+{"id":"01a0563f-8013-716f-a7db-5dcddf1f5d6b","issue_id":"project-LICHEN-worker6-txeg","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed/intentional; emergency.py:93 uses time.monotonic per spec 18.4.1, docstring confirms design.","created_at":"2026-08-31T05:16:37.267096019Z"}

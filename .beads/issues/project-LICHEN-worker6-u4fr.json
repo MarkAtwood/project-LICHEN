@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-u4fr",
   "title": "[review] key store skips TOFU binding validation when persistence not initialized",
   "description": "P2. coap_keys_store.c:369-378 lichen_key_store_put() validates trust/IID-pubkey binding ONLY when s_persistence_ready. Admin PUT on a node that never ran lichen_key_store_init() accepts arbitrary iid/pubkey pairs incl garbage trust; no later path re-validates RAM state. Integrity checks must not be conditional on persistence. Fix: validate binding unconditionally, degrade only persistence. Found during 6mij.2.2 verification review.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-28T05:31:53.440072Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T23:37:54.121273Z",
+  "updated_at": "2026-08-31T05:19:20.577695668Z",
   "started_at": "2026-08-28T05:34:09.130701Z",
+  "closed_at": "2026-08-31T05:19:20.577695668Z",
+  "close_reason": "Verified, no code change needed: the unconditional trust/IID-pubkey binding validation in lichen_key_store_put() (validate before persistence, degrade only persistence) already landed in commit 660b9bf3bf (2026-08-28, with tests added in the same commit) but the bead was never closed. Executed the never-before-run tests on native_sim/native/64 (Zephyr 4.1.0 + zcbor 0.9.1 module): tests/coap_keys 37/37 PASS incl. test_put_get_roundtrip (put-without-init publishes to RAM without persisting), test_put_rejects_garbage_trust_without_persistence, test_put_rejects_binding_mismatch_without_persistence, test_put_ready_path_validates_and_persists; tests/coap_keys_lifecycle 9/9 PASS. Side fix required for the build: GCC13 maybe-uninitialized in coap_keys_settings.c (bead 3xjz, commit 6345effe51). Codereview 3x on coap_keys_settings.c: pass1 correctness kimi-k3 PASS; pass2 security kimi-k3 timed out twice (600s/420s) - done by worker, no findings; pass3 edge-cases kimi-k3: 1 latent P3 finding filed as project-LICHEN-worker6-t4pr (MAX_ENTRIES vs 2-digit record keys; unreachable today, Kconfig range 4-16).",
   "labels": [
     "local-ok",
     "zephyr"
