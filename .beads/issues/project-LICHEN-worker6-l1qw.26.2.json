@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.26.2",
+  "title": "l1qw.26b: adopt COSE_Sign1 invitation envelope (alg -65537, bstr-wrapped protected header, kid=inviter IID, invitee_iid check)",
+  "description": "Child of l1qw.26 (spec 18.8.2): replace the canonical-CBOR string-keyed preimage invitation with COSE_Sign1 per RFC 9052: protected header bstr-wrapped 47A1013A00010000 ({1:-65537}), unprotected kid = inviter 8-byte IID, payload CBOR map with integer keys 1-7, signature over SHA256(CBOR(Sig_structure)) with Schnorr48-Ed25519. Share envelope code with python/src/lichen/crypto/delegation_tokens.py:72-100. Invitee validation: alg check, invitee_iid == own IID. Depends on .26a landing (ledger). Landable with updated groups_membership vectors.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:12:47.955263363Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T19:12:47.955263363Z",
+  "labels": [
+    "lci",
+    "apps",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.26.2",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.26",
+      "type": "parent-child",
+      "created_at": "2026-08-31T19:12:48.097183731Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}
