@@ -1,0 +1,7 @@
+{
+  "id": "1788202572027151752-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-3",
+  "text": "ROUND 2 — REJECTION SITE PINNED: the leaf's process_authenticated_dio fails at the FIRST gate: AuthenticatedPeerSchcContext::from_authenticated_dio_frame(frame, rpl_instance_id, dodag_id, NON_STORING_MOP, expected_role) returns Err (lichen-schc) — before frame/join/decompress/parse checks. Diagnosed via per-site panic markers in router.rs process_authenticated_dio (reverted after capture). The ctx builder validates the authenticated DIO frame against (rpl_instance_id, dodag_id, MOP=non-storing, expected_role=Root|Peer by ygg_addr(sender)==dodag_id). NEXT (focused read, no build): diff from_authenticated_dio_frame's expectations (lichen-schc) against (a) the root's DIO wire form produced by rpl_ipv6_packet/process_dio transmit at main (instance id, dodagid option, MOP bits) and (b) the failing tests' leaf provisioning (does the test leaf's dodag_id/instance match the root's? tests.rs:1099 region — leaf stacks provisioned via RplStack::provision_* with which dodag_id?). If the TEST leaf's dodag_id/instance predates the tightened ctx requirements, the tests need updating to the spec'd admission contract (R-09-005, Python authenticated_dio.py parity) — verify against Python parity before touching tests. Worktree ~/wt-0l4q (origin/main, oscore-fork linked) remains warm on heft.",
+  "created_at": "2026-08-31T18:56:12.027151752Z"
+}
