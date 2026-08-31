@@ -12,7 +12,8 @@
   "labels": [
     "l2",
     "rust",
-    "schc"
+    "schc",
+    "tests"
   ],
   "dependencies": [
     {
