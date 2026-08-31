@@ -12,6 +12,9 @@
   "started_at": "2026-07-25T02:27:54.699998001Z",
   "closed_at": "2026-07-25T02:28:04.501202364Z",
   "close_reason": "Verified incorrect",
+  "labels": [
+    "lci"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-kovn",
