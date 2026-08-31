@@ -13,7 +13,8 @@
     "c",
     "coap",
     "l2",
-    "simulation"
+    "simulation",
+    "tests"
   ],
   "dependencies": [
     {
