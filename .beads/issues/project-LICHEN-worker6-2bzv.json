@@ -13,7 +13,8 @@
     "c",
     "coap",
     "oscore",
-    "tests"
+    "tests",
+    "zephyr"
   ],
   "dependencies": [
     {
