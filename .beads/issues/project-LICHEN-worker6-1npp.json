@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-1npp",
   "title": "SCHC profile ceiling off-by-one: C emits 22555-byte Rule255 datagram peers reject; 31-byte reject band vs peers",
   "description": "P2, found by kimi correctness and kimi edge-cases passes of project-LICHEN-worker6-hahk. lichen/subsys/lichen/schc/schc.c:538-540 caps compress INPUT at SCHC_FRAGMENT_MAX_PACKET_SIZE (22554) but the ceiling is on the ENCODED datagram including the rule byte (per size_boundary vectors; Rust codec.rs:2258). Two divergences: (a) pkt_len == 22554 passes the \u003e check and the fallback emit (lichen/subsys/schc/schc.c:125-131) writes 1 + 22554 = 22555 bytes - one over the ceiling; Rust decode_rule255 (codec.rs:1460) and Python decode_rule255 (headers.py:206) reject len \u003e 22554, so C emits a datagram peers drop (silent TX blackhole at the boundary); (b) conversely well-formed compressible inputs in (22554, 22585] (rule-0 encoded size = pkt_len - 31) are accepted by Rust enforce_encoded_profile_limit (codec.rs:2181) and Python (headers.py:872-873) but rejected by C's input cap - fail-closed, local-only. Pre-existing (blame 660b9bf3bf), adjacent to the hahk gate. Fix: drop the input cap, enforce needed \u003e SCHC_FRAGMENT_MAX_PACKET_SIZE at the two Rule255 emit sites and per-rule encoded-size checks, mirroring Rust's structure; pin both boundary directions with size_boundary vectors and rerun the parity gate.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T21:40:04.432218204Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-08-30T21:40:04.432218204Z",
+  "updated_at": "2026-08-31T01:58:41.25613098Z",
+  "closed_at": "2026-08-31T01:58:41.25613098Z",
+  "close_reason": "Fixed by qn87 (commit 78974ee1ee, this branch): the compress-side raw-input cap at SCHC_FRAGMENT_MAX_PACKET_SIZE was removed and the ceiling is now enforced on the ENCODED output including the rule byte - exactly the divergence this bead described. Case (a): pkt_len == 22554 rule-unmatched -\u003e fallback needs 1+22554 = 22555 \u003e 22554 -\u003e SCHC_ERR_BUFFER_TOO_SMALL, no over-ceiling emission (pinned by tests/schc test_rule255_fallback_profile_ceiling: 22553 -\u003e 22554 OK, 22554 -\u003e rejected). Case (b): compressible inputs in (22554, 22585] -\u003e the rule compressors' own fixed+tail \u003e SCHC_FRAGMENT_MAX_PACKET_SIZE checks reject with BUFFER_TOO_SMALL -\u003e link surfaces -LICHEN_ESCHC -\u003e dropped; the rule1-6 profile-limit suites pin the boundary mechanics (raw 22569 -\u003e 22554 OK, 22570 -\u003e rejected). The reject band now matches Rust/Python (both reject encoded \u003e 22554): no blackhole, no silent TX. Also verified this round: rust parity (shared_vectors 3/3 on the 61-vector corpus) and the rule255 RX ingress ceiling (1dft). Verified on heft: all 18 C host suites green (clang+ASan/UBSan), python test_vectors 780/780. Note: the bead text cited schc.c:538-540 which existed pre-qn87; the cap is gone and the fix supersedes it.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-1npp",
