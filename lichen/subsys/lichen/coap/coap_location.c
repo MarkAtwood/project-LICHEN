@@ -1287,32 +1287,27 @@ static int sensors_location_get(struct coap_resource *resource,
 static int sensors_location_post(struct coap_resource *resource,
                                  struct coap_packet *request,
                                  struct sockaddr *addr, socklen_t addr_len) {
-  uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
-  uint8_t piv[OSCORE_PIV_MAX_LEN];
-  size_t piv_len = 0;
-  struct oscore_ctx *oscore_ctx = NULL;
-  const uint8_t *payload = NULL;
-  uint16_t payload_len = 0;
-  bool is_protected = false;
+  struct coap_oscore_unprotect_result oscore;
   int ret;
 
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
-                                       COAP_METHOD_POST, oscore_plain_buf,
-                                       sizeof(oscore_plain_buf), &payload,
-                                       &payload_len, &oscore_ctx, piv,
-                                       &piv_len, &is_protected);
+                                       COAP_METHOD_POST, oscore.plainbuf,
+                                       sizeof(oscore.plainbuf), &oscore.payload,
+                                       &oscore.payload_len, &oscore.ctx,
+                                       oscore.piv, &oscore.piv_len,
+                                       &oscore.is_protected);
   if (ret != 0) {
     return ret;
   }
-  if (payload == NULL || payload_len == 0) {
-    return coap_oscore_send_protected(resource, request, addr, addr_len,
-                                      oscore_ctx, piv, piv_len,
-                                      COAP_RESPONSE_CODE_BAD_REQUEST);
+  if (oscore.payload == NULL || oscore.payload_len == 0) {
+    return coap_oscore_respond_resource(resource, request, addr, addr_len,
+                                        &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
+                                        0, NULL, 0);
   }
-  LOG_INF("crowd map /sensors/location POST (%u bytes)", payload_len);
-  return coap_oscore_send_protected(resource, request, addr, addr_len,
-                                    oscore_ctx, piv, piv_len,
-                                    COAP_RESPONSE_CODE_CREATED);
+  LOG_INF("crowd map /sensors/location POST (%u bytes)", oscore.payload_len);
+  return coap_oscore_respond_resource(resource, request, addr, addr_len,
+                                      &oscore, COAP_RESPONSE_CODE_CREATED, 0,
+                                      NULL, 0);
 }
 
 static const char *const sensors_location_path[] = {"sensors", "location",

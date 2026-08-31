@@ -302,8 +302,8 @@ Implementations on constrained devices MAY use constant-time trial verification
 over a bounded peer table when the trust store is small, but MUST still enforce
 the pin-on-first-verified-contact and reject-on-mismatch rules above.
 
-Relay nodes that re-sign frames (see 4.6) populate their own SIID and sign with
-their own key. A downstream receiver pins the relay's (SIID, key) binding, not
+Relay nodes that re-sign frames (see spec/06-security.md Section 8.4) populate
+their own SIID and sign with their own key. A downstream receiver pins the relay's (SIID, key) binding, not
 the origin's. End-to-end origin authentication, when required, uses the DAO
 Origin Signature profile at the application layer (see spec/06-security.md).
 

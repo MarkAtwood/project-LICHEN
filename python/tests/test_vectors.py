@@ -28,6 +28,7 @@ import pytest
 from jsonschema import Draft7Validator
 
 from lichen.announce.coords import decode_coords, encode_coords
+from lichen.announce.messages import AnnounceError, AnnounceMessage
 from lichen.channel_plan import ChannelEntry, ChannelPlan
 from lichen.channel_plan import hash_32 as channel_plan_hash_32
 from lichen.constants import PORT_MQTT_SN
@@ -213,7 +214,6 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
-        "schc_compression.json",
     ],
 )
 def test_vector_file_schema(filename: str) -> None:
@@ -684,6 +684,12 @@ def _announce_coords_cases():
     doc = _load("announce_coords.json")
     assert doc["format_version"] == 2
     return [(v["name"], v) for v in doc["vectors"]]
+
+
+def _announce_length_caps_cases():
+    doc = _load("announce_length_caps.json")
+    assert doc["format_version"] == 2
+    return [(v["name"], v) for v in doc["vectors"]["length_caps"]]
 
 
 def _meshcore_cases():
@@ -1704,6 +1710,19 @@ def test_announce_coords_vector(name: str, vector: dict) -> None:
 
     assert int.from_bytes(encoded[1:5], "big", signed=True) == vector["latitude_e7"]
     assert int.from_bytes(encoded[5:9], "big", signed=True) == vector["longitude_e7"]
+
+
+@pytest.mark.parametrize("name,vector", _announce_length_caps_cases())
+def test_announce_length_caps_vector(name: str, vector: dict) -> None:
+    wire = bytes.fromhex(vector["wire"])
+    expected = vector["expected"]
+    if expected["action"] == "accept":
+        announce = AnnounceMessage.from_bytes(wire)
+        assert len(announce.app_data) == expected["app_data_len"]
+    else:
+        assert expected["reason"] == "too_long"
+        with pytest.raises(AnnounceError, match="too long"):
+            AnnounceMessage.from_bytes(wire)
 
 
 def test_node_address_vectors_match_python_implementation() -> None:
@@ -4781,9 +4800,9 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             assert decompress_packet(compressed) == raw, name
         else:
             error_pattern = {
-                "invalid_source_address": "invalid IPv6 source address",
-                "invalid_destination_address": "invalid IPv6 destination address",
-                "invalid_destination_scope": "invalid IPv6 destination multicast scope",
+                "invalid_source_address": "invalid Rule 7 source address",
+                "invalid_destination_address": "invalid Rule 7 destination address",
+                "invalid_destination_scope": "invalid Rule 7 multicast destination scope",
             }[vector["expect_error"]]
             with pytest.raises(SchcError, match=error_pattern):
                 validate_rule7_addresses(source, destination)
@@ -4830,6 +4849,33 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             # structurally valid with a valid checksum, so decode succeeds
             # even though a canonical sender could not have originated it.
             assert decode_rule255(b"\xff" + raw) == raw, name
+
+    elif category == "rule255_rx_structural_reject":
+        # Structural address constraints are rejected in BOTH directions
+        # (spec 03-adaptation.md two-tier contract): the emission policy
+        # forbids originating them and the decoder's structural validation
+        # rejects them before byte preservation.
+        source = IPv6Address(vector["source_ipv6"])
+        destination = IPv6Address(vector["destination_ipv6"])
+        udp = UdpDatagram(PORT_MQTT_SN, 5000, b"lichen255").to_bytes(source, destination)
+        raw = (
+            IPv6Header(
+                src_addr=source,
+                dst_addr=destination,
+                next_header=NextHeader.UDP,
+                payload_length=len(udp),
+                hop_limit=64,
+            ).to_bytes()
+            + udp
+        )
+        error_pattern = {
+            "invalid_source_address": "invalid IPv6 source address",
+            "invalid_destination_address": "invalid IPv6 destination address",
+        }[vector["expect_error"]]
+        with pytest.raises(SchcError, match=error_pattern):
+            encode_rule255(raw)
+        with pytest.raises(SchcError, match=error_pattern):
+            decode_rule255(b"\xff" + raw)
 
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
@@ -5486,7 +5532,6 @@ _PENDING_EXPLICIT_SCHEMA_POLICY = frozenset({
         "groups_membership_sequences.json",
         "groups_messaging.json",
         "groups_rekey.json",
-        "hash_32.json",
         "ipso_smart_objects.json",
         "ipv6-addresses.json",
         "ipv6-icmpv6.json",

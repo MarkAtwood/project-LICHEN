@@ -43,6 +43,7 @@ jobs:
         working-directory: rust
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -56,6 +57,7 @@ jobs:
         working-directory: rust
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -72,6 +74,7 @@ jobs:
         working-directory: rust
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -87,6 +90,7 @@ jobs:
         working-directory: rust
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

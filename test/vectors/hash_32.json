@@ -1,24 +1,110 @@
 {
   "format_version": 2,
-  "description": "Test vectors for lichen_hash_32 FNV-1a32 primitive (basis=0x811c9dc5, for each byte h=(h^b)*0x01000193 mod 2^32). Used for TDMA slots, CCP channel/hop/load_factor selection per spec/02a-coordinated-capacity.md:123. Matches Rust lichen-core::lichen_hash_32, Python _hash_32 exactly. Independent external arithmetic oracle (no LICHEN code). All impls MUST match.",
+  "name": "hash_32",
+  "description": "FNV-1a 32-bit (basis 0x811c9dc5, prime 0x01000193) over byte strings, the hash LICHEN uses for TDMA slot and channel selection. Inputs are recorded as lowercase hex of the exact byte sequence hashed: EUI-64 and DODAG ID identifiers in network byte order, integer fields (SFN, epoch) in big-endian at u16/u32/u64 widths, and composite seed||field buffers. Byte-order probes contrast big- and little-endian encodings of the same integer and must hash differently. The edge vectors are the published FNV reference values; the generator oracle pins against them before emitting LICHEN-domain vectors. Expected values come from this standalone oracle, not LICHEN code; the keyed LICH-basis variant in lichen.crypto.identity is a different function and is not covered here.",
+  "spec": "spec/02a-coordinated-capacity.md#2a2-tdma-slots-and-hash-selection",
   "vectors": [
     {
-      "name": "empty",
-      "input": "",
-      "output": "0x811c9dc5",
-      "description": "hash_32(b\"\") = 0x811c9dc5"
+      "name": "empty_input",
+      "description": "[edge] Published FNV reference: hashing the empty string yields the basis.",
+      "input_hex": "",
+      "output": "0x811c9dc5"
     },
     {
-      "name": "test_string",
-      "input": "test",
-      "output": "0xafd071e5",
-      "description": "hash_32(b\"test\") = 0xafd071e5"
+      "name": "ascii_a",
+      "description": "[edge] Published FNV reference single-byte vector.",
+      "input_hex": "61",
+      "output": "0xe40c292c"
     },
     {
-      "name": "zero_pubkey",
-      "input_hex": "0000000000000000000000000000000000000000000000000000000000000000",
-      "output": "0x0b2ae445",
-      "description": "hash_32(0x00*32) = 0x0b2ae445"
+      "name": "ascii_foobar",
+      "description": "[edge] Published FNV reference multi-byte vector.",
+      "input_hex": "666f6f626172",
+      "output": "0xbf9cf968"
+    },
+    {
+      "name": "eui64_all_zeros",
+      "description": "[eui64] All-zero EUI-64.",
+      "input_hex": "0000000000000000",
+      "output": "0x9be17165"
+    },
+    {
+      "name": "eui64_all_ones",
+      "description": "[eui64] All-ones EUI-64.",
+      "input_hex": "ffffffffffffffff",
+      "output": "0x6cae0a5d"
+    },
+    {
+      "name": "eui64_mixed",
+      "description": "[eui64] Mixed-pattern EUI-64.",
+      "input_hex": "deadbeefcafebabe",
+      "output": "0xa4e045d3"
+    },
+    {
+      "name": "u16_be_max",
+      "description": "[integer_be] u16 field 0xffff in big-endian (two-byte width).",
+      "input_hex": "ffff",
+      "output": "0xd11ebca3"
+    },
+    {
+      "name": "u32_be_one",
+      "description": "[integer_be] SFN 1 as u32 big-endian.",
+      "input_hex": "00000001",
+      "output": "0x4a95f382"
+    },
+    {
+      "name": "u32_be_max",
+      "description": "[integer_be] SFN/epoch 0xffffffff as u32 big-endian.",
+      "input_hex": "ffffffff",
+      "output": "0xe3160fb1"
+    },
+    {
+      "name": "u32_le_one_probe",
+      "description": "[integer_le] Little-endian encoding of integer 1; must differ from u32_be_one.",
+      "input_hex": "01000000",
+      "output": "0xfb69b604"
+    },
+    {
+      "name": "u64_be_one",
+      "description": "[integer_be] u64 field 1 in big-endian (eight-byte width).",
+      "input_hex": "0000000000000001",
+      "output": "0x9ae16fd2"
+    },
+    {
+      "name": "u64_be_mixed",
+      "description": "[integer_be] u64 field 0x0123456789abcdef in big-endian (eight-byte width).",
+      "input_hex": "0123456789abcdef",
+      "output": "0xf33f1185"
+    },
+    {
+      "name": "dodag16_all_zeros",
+      "description": "[dodag_id] All-zero 16-byte DODAG ID.",
+      "input_hex": "00000000000000000000000000000000",
+      "output": "0x69691905"
+    },
+    {
+      "name": "dodag16_all_ones",
+      "description": "[dodag_id] All-ones 16-byte DODAG ID.",
+      "input_hex": "ffffffffffffffffffffffffffffffff",
+      "output": "0x360779f5"
+    },
+    {
+      "name": "dodag16_mixed",
+      "description": "[dodag_id] Mixed-pattern 16-byte DODAG ID (0x00..0x0f).",
+      "input_hex": "000102030405060708090a0b0c0d0e0f",
+      "output": "0xc8fff215"
+    },
+    {
+      "name": "mixed_eui64_plus_sfn_be",
+      "description": "[mixed] Composite input-shape probe: EUI-64 followed by u32 value 1 big-endian. Slot selection adds SFN numerically and must not hash a concatenation; this vector pins the raw primitive on such buffers only.",
+      "input_hex": "deadbeefcafebabe00000001",
+      "output": "0x13578e70"
+    },
+    {
+      "name": "mixed_dodag16_plus_epoch_be",
+      "description": "[mixed] Composite input-shape probe: 16-byte DODAG ID followed by u32 value 1 big-endian.",
+      "input_hex": "000102030405060708090a0b0c0d0e0f00000001",
+      "output": "0x802e3cd2"
     }
   ]
 }

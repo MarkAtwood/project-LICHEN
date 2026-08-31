@@ -4,6 +4,12 @@ use crate::error::{BufferTooSmall, TooShort};
 pub const ANNOUNCE_TYPE: u8 = 0x01;
 pub const SIGNATURE_LENGTH: usize = 48;
 pub const MAX_ANNOUNCE_HOPS: u8 = 15;
+/// Announce wire cap per spec 05-routing §9.2 (R-05-068): the 254-byte signed
+/// link body also carries the 4-byte link header, 8-byte signer id, and
+/// 48-byte link signature (the routing dispatch is accounted separately).
+pub const MAX_ANNOUNCE_WIRE_LENGTH: usize = 193;
+/// App Data cap: wire budget minus the 93-byte fixed header.
+pub const MAX_ANNOUNCE_APP_DATA: usize = MAX_ANNOUNCE_WIRE_LENGTH - FIXED_LENGTH;
 /// Domain separator for the canonical Announce signature transcript.
 pub const ANNOUNCE_SIGNING_DOMAIN: &[u8; 19] = b"LICHEN-ANNOUNCE-v1\0";
 /// Bytes before application data in the canonical signature transcript.
@@ -18,6 +24,7 @@ pub enum AnnounceError {
     BufferTooSmall(BufferTooSmall),
     InvalidChannel(u8),
     AppDataTooLong(usize),
+    TooLong(usize),
 }
 
 impl core::fmt::Display for AnnounceError {
@@ -28,8 +35,17 @@ impl core::fmt::Display for AnnounceError {
             Self::BufferTooSmall(e) => core::fmt::Display::fmt(e, f),
             Self::InvalidChannel(c) => write!(f, "invalid rx_channel: {} (must be 0-7)", c),
             Self::AppDataTooLong(len) => {
-                write!(f, "Announce application data length {len} exceeds u16")
+                write!(
+                    f,
+                    "Announce application data length {len} exceeds limit {}",
+                    MAX_ANNOUNCE_APP_DATA
+                )
             }
+            Self::TooLong(len) => write!(
+                f,
+                "Announce wire length {len} exceeds limit {}",
+                MAX_ANNOUNCE_WIRE_LENGTH
+            ),
         }
     }
 }
@@ -68,6 +84,12 @@ pub struct Announce<'a> {
 }
 
 impl<'a> Announce<'a> {
+    /// Parse an announce from dispatch-stripped announce bytes (the canonical
+    /// C/Python `from_bytes` contract). Leniency: a leading routing-dispatch
+    /// byte (`L2_DISPATCH_ROUTING`) is also accepted and stripped first, so a
+    /// full 194-byte L2 routing payload parses. Caps apply post-strip: the
+    /// announce bytes MUST NOT exceed `MAX_ANNOUNCE_WIRE_LENGTH` and App Data
+    /// MUST NOT exceed `MAX_ANNOUNCE_APP_DATA` (spec 05-routing 9.2).
     pub fn from_bytes(data: &'a [u8]) -> Result<Self, AnnounceError> {
         let data = if !data.is_empty() && data[0] == L2_DISPATCH_ROUTING {
             if data.len() < FIXED_LENGTH + 1 {
@@ -79,6 +101,9 @@ impl<'a> Announce<'a> {
         };
         if data.len() < FIXED_LENGTH {
             return Err(TooShort::new(FIXED_LENGTH, data.len()).into());
+        }
+        if data.len() > MAX_ANNOUNCE_WIRE_LENGTH {
+            return Err(AnnounceError::TooLong(data.len()));
         }
         if data[0] != ANNOUNCE_TYPE {
             return Err(AnnounceError::WrongType(data[0]));
@@ -148,6 +173,9 @@ pub fn write_announce_signed_data(
     if rx_channel >= 8 {
         return Err(AnnounceError::InvalidChannel(rx_channel));
     }
+    if app_data.len() > MAX_ANNOUNCE_APP_DATA {
+        return Err(AnnounceError::AppDataTooLong(app_data.len()));
+    }
     let app_len =
         u16::try_from(app_data.len()).map_err(|_| AnnounceError::AppDataTooLong(app_data.len()))?;
     let len = ANNOUNCE_SIGNED_FIXED_LENGTH + app_data.len();
@@ -180,6 +208,9 @@ impl<'a> AnnounceBuilder<'a> {
     pub fn write_to(&self, out: &mut [u8]) -> Result<usize, AnnounceError> {
         if self.rx_channel >= 8 {
             return Err(AnnounceError::InvalidChannel(self.rx_channel));
+        }
+        if self.app_data.len() > MAX_ANNOUNCE_APP_DATA {
+            return Err(AnnounceError::AppDataTooLong(self.app_data.len()));
         }
         let total = FIXED_LENGTH + self.app_data.len();
         if out.len() < total {
@@ -351,5 +382,65 @@ mod tests {
         assert_eq!(builder.originator_iid, a.originator_iid);
         assert_eq!(builder.pubkey, a.pubkey);
         assert_eq!(builder.signature, a.signature);
+    }
+
+    #[test]
+    fn max_wire_length_accepted() {
+        // 93 fixed + 100 app data = 193 (exactly at the spec cap).
+        let mut w = [0u8; MAX_ANNOUNCE_WIRE_LENGTH];
+        w[0] = 1;
+        w[1] = 2;
+        let a = Announce::from_bytes(&w).unwrap();
+        assert_eq!(a.app_data.len(), MAX_ANNOUNCE_APP_DATA);
+    }
+
+    #[test]
+    fn over_wire_length_rejected() {
+        let w = [0u8; MAX_ANNOUNCE_WIRE_LENGTH + 1];
+        assert_eq!(
+            Announce::from_bytes(&w),
+            Err(AnnounceError::TooLong(MAX_ANNOUNCE_WIRE_LENGTH + 1))
+        );
+    }
+
+    #[test]
+    fn builder_app_data_cap() {
+        let base = AnnounceBuilder {
+            originator_iid: &[0; 8],
+            pubkey: &[0; 32],
+            seq_num: 0,
+            hop_count: 0,
+            rx_channel: 0,
+            signature: &[0; 48],
+            app_data: &[0; MAX_ANNOUNCE_APP_DATA],
+        };
+        let mut out = [0u8; MAX_ANNOUNCE_WIRE_LENGTH];
+        assert_eq!(base.write_to(&mut out).unwrap(), MAX_ANNOUNCE_WIRE_LENGTH);
+
+        let over = AnnounceBuilder {
+            app_data: &[0; MAX_ANNOUNCE_APP_DATA + 1],
+            ..base
+        };
+        let mut bigger = [0u8; FIXED_LENGTH + MAX_ANNOUNCE_APP_DATA + 1];
+        assert_eq!(
+            over.write_to(&mut bigger),
+            Err(AnnounceError::AppDataTooLong(MAX_ANNOUNCE_APP_DATA + 1))
+        );
+    }
+
+    #[test]
+    fn signed_data_app_data_cap() {
+        let mut out = [0u8; 256];
+        assert_eq!(
+            write_announce_signed_data(
+                &[0; 8],
+                &[0; 32],
+                0,
+                0,
+                &[0; MAX_ANNOUNCE_APP_DATA + 1],
+                &mut out,
+            ),
+            Err(AnnounceError::AppDataTooLong(MAX_ANNOUNCE_APP_DATA + 1))
+        );
     }
 }

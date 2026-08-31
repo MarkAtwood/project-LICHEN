@@ -88,6 +88,51 @@ int coap_oscore_unprotect_resource_request(
 	return 0;
 }
 
+int coap_oscore_authorize_mutating(
+	struct coap_resource *resource, struct coap_packet *request,
+	struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+	uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
+	uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+	uint8_t *piv_out, size_t *piv_len_out, bool *is_protected)
+{
+	uint16_t len = 0U;
+	const uint8_t *payload;
+
+	ARG_UNUSED(resource);
+	ARG_UNUSED(request);
+	ARG_UNUSED(addr);
+	ARG_UNUSED(addr_len);
+	last_unprotect_method = expected_method;
+	*is_protected = oscore_protect;
+	*ctx_out = NULL;
+	*piv_len_out = 0;
+	if (oscore_protect) {
+		if (plain_buf == NULL || plain_buf_len == 0U) {
+			return COAP_RESPONSE_CODE_BAD_REQUEST;
+		}
+		payload = coap_packet_get_payload(request, &len);
+		if (payload != NULL && len > 0U) {
+			if (len > plain_buf_len) {
+				return COAP_RESPONSE_CODE_UNAUTHORIZED;
+			}
+			memcpy(plain_buf, payload, len);
+			*payload_out = plain_buf;
+			*payload_len_out = len;
+		} else {
+			*payload_out = plain_buf;
+			*payload_len_out = 0U;
+		}
+		return 0;
+	}
+	if (!lichen_coap_is_local_admin(addr, addr_len)) {
+		return COAP_RESPONSE_CODE_UNAUTHORIZED;
+	}
+	payload = coap_packet_get_payload(request, &len);
+	*payload_out = (uint8_t *)payload;
+	*payload_len_out = len;
+	return 0;
+}
+
 int coap_oscore_respond_resource(
 	struct coap_resource *resource, struct coap_packet *request,
 	struct sockaddr *addr, socklen_t addr_len,

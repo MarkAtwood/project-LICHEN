@@ -145,7 +145,12 @@ def test_rule6_accepts_exact_profile_maximum_and_rejects_one_over() -> None:
 
     restored = decompress_packet(exact_bytes)
     assert len(exact_bytes) == MAX_PACKET_SIZE
-    assert compress_packet(restored) == exact_bytes
+    # Raw-bound contract (spec/03): the decompressed datagram of a
+    # MAX_PACKET_SIZE-encoded packet is larger than the raw ceiling
+    # (encoded tail is carried verbatim), so re-compressing it MUST be
+    # rejected by the raw-packet bound rather than re-encoding.
+    with pytest.raises(SchcError, match="profile limit"):
+        compress_packet(restored)
 
     overlong = exact_bytes + b"\x00"
     with pytest.raises(SchcError, match="profile limit"):

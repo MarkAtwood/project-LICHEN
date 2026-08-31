@@ -24,6 +24,7 @@ struct ExpectedCounts {
     endpoint_direction: usize,
     rule7_address_policy: usize,
     rule255_endpoint_policy: usize,
+    rule255_rx_structural_reject: usize,
     #[cfg_attr(
         not(all(feature = "raw-fragment-codec", feature = "test-utils")),
         allow(dead_code)
@@ -582,6 +583,7 @@ fn test_schc_adaptation_vectors() {
     let mut endpoint_direction_count = 0;
     let mut rule7_address_policy_count = 0;
     let mut rule255_endpoint_policy_count = 0;
+    let mut rule255_rx_structural_reject_count = 0;
     #[cfg(all(feature = "raw-fragment-codec", feature = "test-utils"))]
     let mut duplicate_idempotence_count = 0;
 
@@ -1103,6 +1105,59 @@ fn test_schc_adaptation_vectors() {
                 }
             }
 
+            "rule255_rx_structural_reject" => {
+                use std::net::Ipv6Addr;
+                use std::str::FromStr;
+
+                rule255_rx_structural_reject_count += 1;
+                let source = Ipv6Addr::from_str(
+                    vector
+                        .source_ipv6
+                        .as_deref()
+                        .expect("Rule 255 vector source address"),
+                )
+                .expect("valid Rule 255 source literal")
+                .octets();
+                let destination = Ipv6Addr::from_str(
+                    vector
+                        .destination_ipv6
+                        .as_deref()
+                        .expect("Rule 255 vector destination address"),
+                )
+                .expect("valid Rule 255 destination literal")
+                .octets();
+                assert!(!vector.expect_valid.unwrap_or(true), "{}", name);
+
+                let wire = rule7_udp_packet(source, destination);
+                let encode_error = match lichen_schc::encode_rule255(
+                    &wire,
+                    &mut vec![0u8; wire.len() + 1],
+                    usize::MAX,
+                ) {
+                    Err(error) => error,
+                    Ok(_) => panic!("{}: structural reject was encoded", name),
+                };
+                let fragment = match vector.expect_error.as_deref() {
+                    Some("invalid_source_address") => "source",
+                    Some("invalid_destination_address") => "destination",
+                    other => panic!("{}: unknown slug {:?}", name, other),
+                };
+                assert!(
+                    matches!(&encode_error, lichen_schc::SchcError::InvalidPacket(message)
+                        if message.contains(fragment)),
+                    "{}: encode error {:?}",
+                    name,
+                    encode_error
+                );
+                let mut decoded = vec![0u8; wire.len()];
+                let mut rx_input = vec![0xffu8];
+                rx_input.extend_from_slice(&wire);
+                assert!(matches!(
+                    lichen_schc::decode_rule255(&rx_input, &mut decoded, usize::MAX),
+                    Err(lichen_schc::SchcError::InvalidPacket(message))
+                        if message.contains(fragment)
+                ));
+            }
             "rule255_endpoint_policy" => {
                 use std::net::Ipv6Addr;
                 use std::str::FromStr;
@@ -1463,6 +1518,12 @@ fn test_schc_adaptation_vectors() {
         failures.push(format!(
             "Expected {} Rule 7 address-policy vectors (per metadata), found {}",
             expected.rule7_address_policy, rule7_address_policy_count
+        ));
+    }
+    if rule255_rx_structural_reject_count != expected.rule255_rx_structural_reject {
+        failures.push(format!(
+            "Expected {} Rule 255 RX structural-reject vectors (per metadata), found {}",
+            expected.rule255_rx_structural_reject, rule255_rx_structural_reject_count
         ));
     }
     if rule255_endpoint_policy_count != expected.rule255_endpoint_policy {

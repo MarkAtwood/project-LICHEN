@@ -172,11 +172,14 @@ def test_rule6_requires_both_canonical_yggdrasil_addresses(
 
 
 def test_rule6_accepts_exact_profile_maximum_and_rejects_one_over() -> None:
-    exact_tail = b"\x90\xff" + bytes(MAX_PACKET_SIZE - 39)
+    # Raw-bound contract (spec/03): raw == MAX_PACKET_SIZE compresses; raw
+    # one octet above is rejected before rule dispatch.
+    raw_per_tail_byte = len(_packet(b"\x90\xff\x00")) - 3
+    exact_tail = b"\x90\xff" + bytes(MAX_PACKET_SIZE - raw_per_tail_byte - 2)
     packet = _packet(exact_tail)
     compressed = compress_packet(packet)
 
-    assert len(compressed) == MAX_PACKET_SIZE
+    assert len(packet) == MAX_PACKET_SIZE
     assert compressed[0] == 6
     assert decompress_packet(compressed) == packet
 

@@ -154,6 +154,37 @@ int coap_oscore_unprotect_resource_request(
   return 0;
 }
 
+int coap_oscore_authorize_mutating(
+    struct coap_resource *resource, struct coap_packet *request,
+    struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+    uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
+    uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
+    uint8_t *piv_out, size_t *piv_len_out, bool *is_protected) {
+  ARG_UNUSED(resource);
+  ARG_UNUSED(request);
+  ARG_UNUSED(addr);
+  ARG_UNUSED(addr_len);
+  last_expected_method = expected_method;
+  *is_protected = protected_request;
+  *ctx_out = NULL;
+  *piv_len_out = 0;
+  if (protected_request) {
+    if (request_payload_len > plain_buf_len) {
+      return COAP_RESPONSE_CODE_UNAUTHORIZED;
+    }
+    memcpy(plain_buf, request_payload, request_payload_len);
+    *payload_out = plain_buf;
+    *payload_len_out = (uint16_t)request_payload_len;
+    return 0;
+  }
+  if (!local_admin) {
+    return COAP_RESPONSE_CODE_UNAUTHORIZED;
+  }
+  *payload_out = (uint8_t *)request_payload;
+  *payload_len_out = (uint16_t)request_payload_len;
+  return 0;
+}
+
 int coap_oscore_respond_resource(
     struct coap_resource *resource, struct coap_packet *request,
     struct sockaddr *addr, socklen_t addr_len,
@@ -315,9 +346,12 @@ ZTEST(coap_waypoints, test_validation_and_handler_policy) {
   request_payload_len = sizeof(minimal_vector);
   local_admin = false;
   protected_request = false;
-  zassert_ok(lichen_waypoints_post_handler(
-      &resource, &request, (struct sockaddr *)&peer, sizeof(peer)));
-  zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED);
+  /* New contract: the helper returns the denial code for the dispatcher
+   * to send; no response is recorded by the handler itself. */
+  zassert_equal(
+      lichen_waypoints_post_handler(&resource, &request,
+                                    (struct sockaddr *)&peer, sizeof(peer)),
+      COAP_RESPONSE_CODE_UNAUTHORIZED);
   protected_request = true;
   zassert_ok(lichen_waypoints_post_handler(
       &resource, &request, (struct sockaddr *)&peer, sizeof(peer)));
@@ -467,9 +501,10 @@ ZTEST(coap_waypoints, test_detail_delete_auth_rollback_and_idempotence) {
 
   local_admin = false;
   protected_request = false;
-  zassert_ok(lichen_waypoint_detail_delete_handler(
-      &resource, &request, (struct sockaddr *)&peer, sizeof(peer)));
-  zassert_equal(response_code, COAP_RESPONSE_CODE_UNAUTHORIZED);
+  zassert_equal(lichen_waypoint_detail_delete_handler(
+                    &resource, &request, (struct sockaddr *)&peer,
+                    sizeof(peer)),
+                COAP_RESPONSE_CODE_UNAUTHORIZED);
   zassert_equal(lichen_waypoints_count(), 1U);
 
   protected_request = true;

@@ -1585,7 +1585,9 @@ async fn relay_forwards_original_source_and_signed_body() {
         &forwarded.ipv6[field::SRC_OFFSET..field::DST_OFFSET],
         &leaf_addr
     );
-    assert_eq!(forwarded.ipv6[7], 63);
+    // RPL control originates with hop limit 255 (RFC 6550 / R-09-005);
+    // the relay decrements exactly once.
+    assert_eq!(forwarded.ipv6[7], 254);
     assert_eq!(dao_parts(&forwarded.ipv6).unwrap().1, signed);
 }
 
