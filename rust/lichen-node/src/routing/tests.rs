@@ -1998,8 +1998,8 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     let mut unsigned = manager.build_dao(root_addr.into());
     // Locate the RPL Target option (type 5, data length 18) and set its
     // reserved flags octet (option data[0], two bytes after the type) before
-    // signing, so rejection happens at semantic parsing, not signature
-    // verification.
+    // signing, so the signature itself is valid and rejection is purely
+    // structural.
     let target_opt = unsigned
         .windows(2)
         .position(|w| w == [OPT_RPL_TARGET, 18])
@@ -2014,14 +2014,21 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     )
     .unwrap();
 
-    let verified = SignatureVerifiedDao::verify_signature(
-        &wire,
-        origin,
-        RPL_INSTANCE_ID,
-        root_addr,
-        Some(identity.pubkey),
-    )
-    .unwrap();
+    // Nonzero Target flags must reject the DAO at the structural stage:
+    // the signed envelope parse (is_generalized_target_body) fails closed
+    // before any crypto or route-state work. The extract_updates screen in
+    // lichen-rpl/src/routing.rs stays as defense in depth for raw-DAO paths
+    // that bypass the envelope.
+    assert!(matches!(
+        SignatureVerifiedDao::verify_signature(
+            &wire,
+            origin,
+            RPL_INSTANCE_ID,
+            root_addr,
+            Some(identity.pubkey),
+        ),
+        Err(lichen_rpl::verify::DaoVerifyError::Malformed(_))
+    ));
     let mut storage = lichen_hal::storage::mem::MemStorage::new();
     let (mut root, mut state) = Router::provision_root(&mut storage, root_addr).unwrap();
     let mut admission =
@@ -2029,21 +2036,6 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     admission
         .admit(&mut storage, *identity.pubkey.as_bytes())
         .unwrap();
-
-    assert!(
-        matches!(
-            root.process_signature_verified_dao_at_ms(
-                &verified,
-                verified.origin_iid(),
-                &mut state,
-                &mut storage,
-                0,
-                &admission,
-            ),
-            Err(DaoProcessError::RouteRejected)
-        ),
-        "nonzero Target flags must reject the DAO"
-    );
 
     // No route-state or replay-floor mutation: the same logical DAO with
     // zero flags and the SAME origin sequence still applies as new.
