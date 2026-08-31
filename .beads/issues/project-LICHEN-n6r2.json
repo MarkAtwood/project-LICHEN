@@ -13,6 +13,7 @@
   "closed_at": "2026-07-22T15:09:20.334483772Z",
   "close_reason": "Size calc now explicit 3 bits for 6-value mapping, verified against rules.py:81 and FieldDescriptor. Pass2 clean.",
   "labels": [
-    "codereview"
+    "codereview",
+    "schc"
   ]
 }
