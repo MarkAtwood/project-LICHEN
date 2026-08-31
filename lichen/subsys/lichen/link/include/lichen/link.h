@@ -230,6 +230,21 @@ struct lichen_frame {
 };
 
 #ifdef CONFIG_LICHEN_TDMA
+/**
+ * @brief Desync recovery FSM states per spec/09-packets-timing.md 14.7
+ * (R-09-133)
+ */
+enum lichen_desync_state {
+	LICHEN_DESYNC_SYNCED = 0,    /**< Normal operation */
+	LICHEN_DESYNC_DESYNCED,      /**< SFN wrap with invalid time provider */
+	LICHEN_DESYNC_RECOVERING,    /**< Listening for consecutive valid beacons */
+};
+
+/** Consecutive valid beacons required to recover (spec 14.7: 3) */
+#define LICHEN_DESYNC_RECOVERY_BEACONS 3u
+/** Bounded RECOVERING listen timeout (superframes), RECOMMENDED 3 per 14.7
+ * (oracle name: python timing.sfn TDMA_BEACON_TIMEOUT_SUPERFRAMES) */
+#define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3u
 struct lichen_tdma_ctx {
 	uint32_t superframe;
 	uint8_t slot;
@@ -238,7 +253,45 @@ struct lichen_tdma_ctx {
 	bool synced;
 	enum lichen_ccp_state ccp_state;     /**< CCP FSM state */
 	uint8_t missed_beacons;              /**< Consecutive missed beacon count */
+	enum lichen_desync_state desync_state; /**< Desync recovery FSM state */
+	uint8_t desync_consecutive_valid;    /**< Consecutive valid beacons in RECOVERING */
+	uint8_t desync_missed_superframes;   /**< Missed superframes in RECOVERING */
 };
+
+/**
+ * @brief Process an SFN wrap: DESYNCED when the time provider is invalid.
+ *
+ * No-op in DESYNCED/RECOVERING. Resets the recovery counters on transition.
+ *
+ * @param[in,out] tdma       TDMA context
+ * @param[in]     time_valid True when the wall-clock provider is valid
+ * @return The new desync state
+ */
+enum lichen_desync_state
+lichen_desync_on_sfn_wrap(struct lichen_tdma_ctx *tdma, bool time_valid);
+
+/**
+ * @brief Process a beacon result: drives the DESYNCED -> RECOVERING ->
+ * SYNCED recovery path; an invalid beacon in RECOVERING returns to DESYNCED.
+ *
+ * @param[in,out] tdma  TDMA context
+ * @param[in]     valid True when the beacon is valid (floor-checked, SFN match)
+ * @return The new desync state
+ */
+enum lichen_desync_state lichen_desync_on_beacon(struct lichen_tdma_ctx *tdma,
+						  bool valid);
+
+/**
+ * @brief Advance the bounded RECOVERING listen timeout by one superframe.
+ *
+ * After LICHEN_DESYNC_RECOVERING_TIMEOUT_SUPERFRAMES missed superframes in
+ * RECOVERING, the FSM returns to DESYNCED. No-op in other states.
+ *
+ * @param[in,out] tdma TDMA context
+ * @return The new desync state
+ */
+enum lichen_desync_state
+lichen_desync_on_missed_superframe(struct lichen_tdma_ctx *tdma);
 
 /**
  * @brief Process a CCP FSM event and transition state.

@@ -5,6 +5,10 @@
 # controller device, which is not instantiated on the 32-bit native_sim build
 # (link fails with "undefined reference to __device_dts_ord_*"). The 64-bit
 # target links and runs it; that coverage runs in the EC2 ARM64 CI job.
+common:
+  # R-APPC-009 (spec/appendix-c-safety.md): ASan+UBSan on native_sim builds.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
 tests:
   net.lichen.ble_app_owner:
     platform_allow:

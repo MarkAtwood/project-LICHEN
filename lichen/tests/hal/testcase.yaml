@@ -3,6 +3,8 @@
 
 tests:
   lichen.hal.native_defaults:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - hal
@@ -15,6 +17,8 @@ tests:
       - native_sim/native/64
       - qemu_x86
   lichen.hal.reset_reboot_enabled:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - hal
@@ -30,6 +34,8 @@ tests:
     extra_configs:
       - CONFIG_REBOOT=y
   lichen.hal.reset_hwinfo_enabled:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - hal
@@ -45,6 +51,8 @@ tests:
     extra_configs:
       - CONFIG_HWINFO=y
   lichen.hal.reset_reboot_hwinfo_enabled:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - hal
@@ -71,7 +79,7 @@ tests:
       - native_sim
       - native_sim/native/64
     extra_args:
-      - CONF_FILE=prj.conf;prj_lora_loopback.conf
+      - CONF_FILE=prj.conf;prj_lora_loopback.conf;../../tests/sanitizers.conf
       - DTC_OVERLAY_FILE=boards/native_sim_lora_loopback.overlay
   lichen.hal.absent_power_qemu:
     tags:
@@ -86,6 +94,8 @@ tests:
       - CONFIG_LICHEN_HAS_BATTERY=n
       - CONFIG_LICHEN_HAS_PMIC=n
   lichen.hal.battery_adc:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - hal
@@ -108,6 +118,8 @@ tests:
       - CONFIG_LICHEN_HAS_BATTERY=y
       - CONFIG_LICHEN_HAS_PMIC=n
   lichen.hal.power_providers:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - hal

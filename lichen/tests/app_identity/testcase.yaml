@@ -3,6 +3,8 @@
 
 tests:
   net.lichen.app_identity.ipv6_off:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     tags:
       - lichen
       - app_identity
@@ -29,4 +31,4 @@ tests:
       - native_sim/native/64
       - qemu_x86
     extra_args:
-      - EXTRA_CONF_FILE=ipv6_on.conf
+      - EXTRA_CONF_FILE=ipv6_on.conf;../../tests/sanitizers.conf

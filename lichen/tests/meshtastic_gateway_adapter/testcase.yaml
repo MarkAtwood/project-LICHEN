@@ -3,6 +3,9 @@ common:
     - lichen
     - meshtastic
     - gateway
+  # R-APPC-009 (spec/appendix-c-safety.md): ASan+UBSan on native_sim builds.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
 tests:
   net.lichen.meshtastic_gateway_adapter.native:
     platform_allow:
