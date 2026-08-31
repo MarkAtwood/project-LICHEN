@@ -11,7 +11,8 @@
   "labels": [
     "c",
     "hal",
-    "networking"
+    "networking",
+    "simulation"
   ],
   "dependencies": [
     {
