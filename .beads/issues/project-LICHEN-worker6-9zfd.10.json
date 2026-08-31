@@ -9,7 +9,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T15:02:09.381262Z",
   "labels": [
-    "meshtastic"
+    "meshtastic",
+    "simulation"
   ],
   "dependencies": [
     {
