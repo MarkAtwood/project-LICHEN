@@ -196,10 +196,13 @@ def test_rule1_decompresses_independently_encoded_field_extremes_and_tail() -> N
 
 
 def test_rule1_accepts_exact_profile_maximum_and_rejects_one_over() -> None:
-    exact_tail = bytes(MAX_PACKET_SIZE - 37)
+    # Raw-bound contract (spec/03): raw == MAX_PACKET_SIZE compresses; raw
+    # one octet above is rejected before rule dispatch.
+    raw_per_tail_byte = len(_coap_packet(tail=b"\x00")) - 1
+    exact_tail = bytes(MAX_PACKET_SIZE - raw_per_tail_byte)
     exact_packet = _coap_packet(tail=exact_tail)
     exact_compressed = compress_packet(exact_packet)
-    assert len(exact_compressed) == MAX_PACKET_SIZE
+    assert len(exact_packet) == MAX_PACKET_SIZE
     assert exact_compressed[0] == 1
     assert decompress_packet(exact_compressed) == exact_packet
 

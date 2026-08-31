@@ -28,6 +28,7 @@ import pytest
 from jsonschema import Draft7Validator
 
 from lichen.announce.coords import decode_coords, encode_coords
+from lichen.announce.messages import AnnounceError, AnnounceMessage
 from lichen.channel_plan import ChannelEntry, ChannelPlan
 from lichen.channel_plan import hash_32 as channel_plan_hash_32
 from lichen.constants import PORT_MQTT_SN
@@ -684,6 +685,12 @@ def _announce_coords_cases():
     doc = _load("announce_coords.json")
     assert doc["format_version"] == 2
     return [(v["name"], v) for v in doc["vectors"]]
+
+
+def _announce_length_caps_cases():
+    doc = _load("announce_length_caps.json")
+    assert doc["format_version"] == 2
+    return [(v["name"], v) for v in doc["vectors"]["length_caps"]]
 
 
 def _meshcore_cases():
@@ -1704,6 +1711,19 @@ def test_announce_coords_vector(name: str, vector: dict) -> None:
 
     assert int.from_bytes(encoded[1:5], "big", signed=True) == vector["latitude_e7"]
     assert int.from_bytes(encoded[5:9], "big", signed=True) == vector["longitude_e7"]
+
+
+@pytest.mark.parametrize("name,vector", _announce_length_caps_cases())
+def test_announce_length_caps_vector(name: str, vector: dict) -> None:
+    wire = bytes.fromhex(vector["wire"])
+    expected = vector["expected"]
+    if expected["action"] == "accept":
+        announce = AnnounceMessage.from_bytes(wire)
+        assert len(announce.app_data) == expected["app_data_len"]
+    else:
+        assert expected["reason"] == "too_long"
+        with pytest.raises(AnnounceError, match="too long"):
+            AnnounceMessage.from_bytes(wire)
 
 
 def test_node_address_vectors_match_python_implementation() -> None:

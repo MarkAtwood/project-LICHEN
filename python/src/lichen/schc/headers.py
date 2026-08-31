@@ -886,6 +886,15 @@ def compress_packet(raw: bytes, profiles: tuple[PacketProfile, ...] = DEFAULT_PR
     # Validate transport structure and checksums once before any profile elides
     # fields. Valid field non-matches continue to Rule 255; malformed packets do
     # not get repaired by compression.
+    # The profile ceiling (lichen.schc.fragment.MAX_PACKET_SIZE, the
+    # fragmenter's reassembly buffer) bounds the RAW packet on both
+    # directions: a datagram larger than the receiver can reassemble is
+    # undeliverable regardless of how well it compresses. Mirrors the C
+    # lichen_schc_compress and Rust compress raw-packet guards.
+    if len(raw) > MAX_PACKET_SIZE:
+        raise SchcError(
+            f"SCHC packet exceeds profile limit: {len(raw)} > {MAX_PACKET_SIZE}"
+        )
     validate_full_ipv6(raw)
     _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(raw, strict=True))
     mqtt_sn = MQTT_SN_PROFILE.compress_if_matching(raw)

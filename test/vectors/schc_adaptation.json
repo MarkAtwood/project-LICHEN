@@ -669,7 +669,11 @@
       "window": 0,
       "c_bit": 0,
       "bitmap_description": "FCN 62 received, FCN 61 missing, unassigned FCN 60..1 zero, final All-1 received in the rightmost position",
-      "assigned_fcns": [62, 61, 63],
+      "assigned_fcns": [
+        62,
+        61,
+        63
+      ],
       "received_bitmap_bits": "10",
       "unassigned_zero_bits": 60,
       "final_all_1_received": true,

@@ -97,7 +97,12 @@ int coap_oscore_respond_resource(struct coap_resource *resource,
 {
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
 	if (result->is_protected) {
-		uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
+		/* Single shared response buffer: the CoAP server dispatches
+		 * requests from one thread, matching the static-buffers
+		 * pattern used across the coap subsystem (coap_server.c,
+		 * coap_status.c). A 1 KiB+ stack frame is too large for the
+		 * constrained thread stacks. */
+		static uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 		struct coap_packet resp;
 		int ret;
 

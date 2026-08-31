@@ -430,19 +430,36 @@ NOT originate a packet whose source is unspecified, loopback, multicast, or
 IPv4-mapped, nor one whose destination is unspecified, loopback,
 IPv4-mapped, or a multicast address with a scope outside 2-14. A Rule 255
 encoder (and the compression path falling back to it) MUST reject such
-packets. Rule 255 DECODING is byte-preserving and MUST validate structure
-and checksums only: a decoder MUST NOT apply the endpoint address policy on
-receipt, because a structurally valid packet already on the link is
-preserved verbatim rather than reinterpreted or dropped as malformed.
+packets. Rule 255 DECODING is byte-preserving with respect to the emission
+policy: a decoder MUST validate structure and checksums plus the structural
+address constraints (an unspecified or multicast source and an unspecified
+destination are invalid on receipt as well as on emission), but MUST NOT
+re-apply the emission-only constraints (loopback, IPv4-mapped, or multicast
+destination scope outside 2-14). A structurally valid packet whose only
+defect is an emission-policy violation is preserved verbatim rather than
+reinterpreted or dropped as malformed, because a packet one implementation
+cannot originate is still delivered intact by the other.
 On the origination and forwarding paths, where endpoint policy is
 evaluated, integrity and structural failures report before endpoint-shape
 opinions: a packet failing both a structural or checksum check and an
 endpoint-policy check MUST be reported as a structure or checksum error.
 Validation reports are local diagnostics only and MUST NOT themselves be
 transmitted as protocol errors.
-This split keeps the two implementation families
-interoperable: a packet one implementation cannot originate is still
-delivered intact by the other.
+
+**Profile size ceiling (canonical raw-packet bound):**
+`SCHC_FRAGMENT_MAX_PACKET_SIZE` (126 tiles x 179 bytes = 22554 octets) is the
+fragmenter's reassembly buffer. It bounds the RAW, uncompressed IPv6 packet
+in BOTH directions and applies to every rule, including Rule 255: a sender
+MUST NOT compress a packet whose raw size exceeds the ceiling, and a
+receiver's reassembly buffer is sized to the same bound. A raw packet at the
+ceiling MUST compress (whatever rule or fallback matches); a raw packet one
+octet above it MUST be rejected before rule dispatch. The ENCODED form of an
+at-the-ceiling packet is always smaller than the raw packet (every rule,
+including the byte-preserving fallback, emits at most `1 + raw` octets) and
+additionally MUST fit the applicable single-frame or fragment transport
+limits. Implementations MUST NOT substitute the encoded size for the raw
+size in this bound: a raw packet above the ceiling is undeliverable through
+fragmentation regardless of how well it compresses.
 
 ```
 Rule 255 packet:
