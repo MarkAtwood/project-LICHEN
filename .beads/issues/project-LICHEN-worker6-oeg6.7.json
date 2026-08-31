@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T00:56:21.023526Z",
   "labels": [
-    "python"
+    "python",
+    "rust"
   ],
   "dependencies": [
     {
