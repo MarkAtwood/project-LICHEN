@@ -396,10 +396,9 @@ class Node:
         )
 
         if self.config.rpl_instance_id is not None:
-            assert self.config.rpl_dodag_id is not None
             self.dodag = DodagState(
                 rpl_instance_id=self.config.rpl_instance_id,
-                dodag_id=self.config.rpl_dodag_id,
+                dodag_id=cast("IPv6Address", self.config.rpl_dodag_id),
                 version=self.config.rpl_dodag_version,
                 node_address=yggdrasil_address(self.identity.pubkey),
             )

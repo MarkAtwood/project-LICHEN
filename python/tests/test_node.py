@@ -2428,6 +2428,18 @@ def test_node_persist_path_requires_revision_anchor(
         )
 
 
+def test_node_partial_rpl_admission_config_is_rejected(identity: Identity) -> None:
+    with pytest.raises(
+        ValueError,
+        match="RPL admission requires instance ID, DODAG ID, and expected DIO role",
+    ):
+        Node(
+            identity=identity,
+            radio=cast(Any, MockRadio()),
+            config=NodeConfig(rpl_instance_id=5),
+        )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("retained", "first_sequence", "second_sequence"),
