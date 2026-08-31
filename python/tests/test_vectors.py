@@ -5526,7 +5526,6 @@ _PENDING_EXPLICIT_SCHEMA_POLICY = frozenset({
         "root_dio_signature.json",
         "route_selection.json",
         "rpl_route_state.json",
-        "schc_compression.json",
         "schc_fragment.json",
         "schc_session_security.json",
         "senml_location.json",
