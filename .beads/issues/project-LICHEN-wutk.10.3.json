@@ -12,7 +12,8 @@
   "labels": [
     "c",
     "oscore",
-    "spec"
+    "spec",
+    "human-only"
   ],
   "dependencies": [
     {
