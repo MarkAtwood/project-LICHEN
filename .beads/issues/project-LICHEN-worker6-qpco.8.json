@@ -10,7 +10,8 @@
   "updated_at": "2026-08-28T14:53:50.7613Z",
   "labels": [
     "l2",
-    "python"
+    "python",
+    "tdma"
   ],
   "dependencies": [
     {
