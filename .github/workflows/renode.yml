@@ -44,7 +44,7 @@ jobs:
       - name: Install Python dependencies
         working-directory: python
         run: |
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run Renode server tests (no firmware)
@@ -189,7 +189,7 @@ jobs:
       - name: Install Python test dependencies
         working-directory: python
         run: |
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run Renode boot + TX test

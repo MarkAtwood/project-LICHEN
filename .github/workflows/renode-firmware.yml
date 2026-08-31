@@ -106,7 +106,7 @@ jobs:
       - name: Install Python deps
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run single-node Renode test
@@ -145,7 +145,7 @@ jobs:
       - name: Install Python deps
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run 2-node Renode test
