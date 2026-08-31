@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T05:22:34.100148Z",
   "labels": [
-    "rust"
+    "rust",
+    "security"
   ],
   "dependencies": [
     {
