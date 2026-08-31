@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-2lei",
   "title": "Rust: rfc6554_route_crosses_two_relays_and_restores_packet fails on main",
   "description": "Pre-existing failure confirmed at HEAD 978da4e (independent of b7z9.4.2 changes). survey_routing_headers (rust/lichen-node/src/rpl_stack/util.rs) NO_NEXT arm requires offset == packet length, but the test builds a plain nh=59 packet with an 8-byte payload and source-routes it via add_rpl_source_route; every advance_rpl_source_route relay step then surveys the RH3-followed-by-NO_NEXT-with-payload chain and returns InvalidSourceRoute. Decide: (a) tolerate NO_NEXT with trailing payload (accept, treat as opaque payload) or (b) change the test to use a real upper-layer next-header (e.g. UDP). Run: cargo test -p lichen-node --features std --lib rpl_stack::tests::rfc6554_route",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T07:27:28.278857634Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-31T17:22:58.729280458Z",
+  "updated_at": "2026-08-31T18:44:21.781731407Z",
+  "closed_at": "2026-08-31T18:44:21.781731407Z",
+  "close_reason": "Cannot reproduce at current main or on beads-worker-7: 'cargo test -p lichen-node --features std --lib rfc6554' passes (rpl_stack::tests::rfc6554_route_crosses_two_relays_and_restores_packet ok); worker-6 independently confirmed non-repro at main 91c70269c1 (comment on this bead, 2026-08-31 07:37). The failure was diagnosed against HEAD 978da4e before the survey_routing_headers NO_NEXT/payload behavior changed (b7z9.4.2 lineage) — the current code accepts NO_NEXT-with-trailing-payload source-routed relays. Note: the rpl_stack lib suite has 7 OTHER pre-existing failures (multicast_dio_and_dis_are_received, dao_radio_failure_retains_exact_finalized_bytes, relay_forwards_original_source_and_signed_body, leaf_send_allocates_each_update_and_restart_advances_sequence, unrelated_rpl_multicast_does_not_consume_sender_replay_state, rpl_dispatch_rejects_invalid_ipv6_length_and_checksum, three_rpl_stacks_send_leaf_dao_via_preferred_parent) — tracked under worker6-5fva/dp72 family, NOT this bead. Reopen with a fresh repro (branch+commit+command) if it recurs.",
   "labels": [
     "rust",
     "networking"
