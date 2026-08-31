@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-o8dp",
   "title": "l1qw.24(a): C waypoint bounds 32/256 + structured 5.03 CBOR body",
   "description": "Child of worker6-l1qw.24 (spec 18.3.2, R-12-029/030): lichen/subsys/lichen/coap/coap_waypoints.c — LICHEN_WAYPOINT_MAX 8U flat (coap_waypoints.h:16) must become global 256 with per-originator 32 tracking (add originator accounting to the waypoint table), and the full-table POST must return 5.03 with CBOR body {reason: 'waypoint_limit', per_originator: 32, global: 256} instead of bare 5.03 NULL payload (coap_waypoints.c:994-998). Host test: extend the coap_waypoints host test dir if present under lichen/tests/ (create cases: 33rd per-originator POST rejected, 257th global rejected, diagnostic body bytes).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T19:54:49.151120241Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-08-31T19:54:49.151120241Z",
+  "updated_at": "2026-08-31T20:26:50.300859404Z",
+  "closed_at": "2026-08-31T20:26:50.300859404Z",
+  "close_reason": "Landed per spec 18.3.2 R-12-029/030: (1) LICHEN_WAYPOINT_MAX 8-\u003e256 global with a new LICHEN_WAYPOINT_PER_ORIGINATOR_MAX 32; (2) per-originator enforcement moved AFTER creator defaulting inside lichen_waypoints_create (count-by-creator scan under s_mutex); (3) full-table POST returns 5.03 with the structured CBOR body {reason: waypoint_limit, per_originator: 32, global: 256} (content-format CBOR 60), bare 5.03 retained for other errors; (4) host ztest additions: 33rd-per-originator rejection, originator isolation, 257th-global rejection, exact 5.03 body bytes, plus fill-loop creator rotation for the new caps. Reviewer findings from pass 1 all fixed in-revision: P0 CBOR text-header byte (0x68 -\u003e 0x6e) in both producer and expected-body, P1 staging converted to a shared mutex-guarded static s_staged with pointer semantics across create/update/delete/init (no ~76KB stack copies), P2 ordering normalized-then-scan, pagination digit caps widened (multi-digit offset/limit up to 256, digits 0-9, parsed bound check) restoring reachability of entries 16+. Verified: native_sim host suite 11/11 green (west build + zephyr.exe). Re-review (kimi-k3 consolidated correctness+security): all four fixes verified complete, no aliasing hazards, init/pre-mutex write pattern confirmed benign, no remaining defects. RAM-budget concern (two ~76KB static images vs STM32WL 64KB) filed as its own bead for Mark.",
   "labels": [
     "coap"
   ],

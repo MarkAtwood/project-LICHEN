@@ -6,6 +6,7 @@
 mod error;
 mod provisioning;
 mod receive;
+mod root_sig;
 mod runtime;
 mod secure;
 mod transmit;

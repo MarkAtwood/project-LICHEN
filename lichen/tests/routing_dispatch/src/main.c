@@ -829,6 +829,113 @@ static int test_dtn_hbh_option_parsing(void)
 	}
 #endif
 
+	/* 13. Nonzero reserved bits in the S-flag option: reserved bits are
+	 * ignored on receive (spec 09 13.3 fold) — the S-flag still stores. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt11[64];
+		size_t pkt11_len = make_dtn_hbh_packet(pkt11, sizeof(pkt11),
+						       0x80U | 0x7FU, 200U);
+		REQUIRE(pkt11_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt11, .len = pkt11_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 17U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+		REQUIRE(router.dtn_buffer_bytes == pkt11_len);
+	}
+#endif
+
+	/* 14. Garbage expiry (beyond the signed half-space): the wrap-safe
+	 * signed comparison rejects it — no store, no wraparound ambiguity. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt12[64];
+		size_t pkt12_len = make_dtn_hbh_packet(pkt12, sizeof(pkt12),
+						       0x80U, 100U + 0x80000000U);
+		REQUIRE(pkt12_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt12, .len = pkt12_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 18U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_DROP);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
+	/* 15. HBH extension header not immediately after the IPv6 header
+	 * (DEST_OPTIONS first, then HBH) -> -EBADMSG (RFC 8200 4.3). */
+	{
+		uint8_t pkt13[64];
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		memset(pkt13, 0, sizeof(pkt13));
+		pkt13[0] = 0x60U;
+		pkt13[5] = 24U; /* payload = 8 dest-opt + 8 HBH + 8 UDP */
+		pkt13[6] = 60U; /* Destination Options first */
+		pkt13[7] = 8U;
+		memcpy(&pkt13[8], source_address, 16U);
+		pkt13[24] = 0x03U; /* external destination */
+		pkt13[39] = 2U;
+		pkt13[40] = 0U;  /* dest-opt next = HBH */
+		pkt13[41] = 0U;  /* len 0 -> 8 bytes */
+		pkt13[48] = 17U; /* HBH next = UDP */
+		pkt13[49] = 0U;
+		pkt13[56] = 0x16U;
+		pkt13[57] = 0x33U;
+		pkt13[58] = 0x16U;
+		pkt13[59] = 0x33U;
+		pkt13[61] = 8U;
+		input = (struct lichen_route_packet) {
+			.data = pkt13, .len = sizeof(pkt13), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 19U, &result) == -EBADMSG);
+	}
+	/* 16. Forward path with the DTN option present: a known gradient
+	 * routes the packet (FORWARD) — store-and-forward only applies to
+	 * DROP outcomes, and the absolute expiry governs storage instead of
+	 * the hop limit. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt14[64];
+		uint8_t next_hop[16] = {0xfe, 0x80, [15] = 0x44};
+		size_t pkt14_len = make_dtn_hbh_packet(pkt14, sizeof(pkt14),
+						       0x80U, 200U);
+		REQUIRE(pkt14_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		uint8_t external_dst[16] = {0x02, 0x00, [15] = 0x77};
+		REQUIRE(install_gradient(&router, external_dst, next_hop,
+					 LICHEN_GRADIENT_DATA) == 0);
+		/* Re-point the injected destination at the 02xx target the
+		 * gradient describes (YGGDRASIL address class). */
+		pkt14[24] = 0x02U;
+		pkt14[39] = 0x77U;
+		input = (struct lichen_route_packet) {
+			.data = pkt14, .len = pkt14_len,
+			.ingress = LICHEN_ROUTE_INGRESS_MESH,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 20U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_FORWARD);
+		REQUIRE(result.path == LICHEN_ROUTE_PATH_GRADIENT);
+		REQUIRE(result.forward_hop_limit == 7U); /* 8 - 1 forwarded hop */
+		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
 	return 0;
 }
 
