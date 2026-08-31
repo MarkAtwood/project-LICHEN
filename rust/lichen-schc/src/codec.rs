@@ -1428,6 +1428,15 @@ pub fn encode_rule255(
     out: &mut [u8],
     single_frame_limit: usize,
 ) -> Result<usize, SchcError> {
+    // Raw-packet profile bound (see compress); independent of the encoded
+    // single_frame_limit check below.
+    if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(BufferTooSmall::new(
+            packet.len(),
+            SCHC_FRAG_MAX_PACKET_SIZE,
+        )
+        .into());
+    }
     validate_full_ipv6(packet)?;
     let needed = packet.len().saturating_add(1);
     let profile_limit = single_frame_limit.min(SCHC_FRAG_MAX_PACKET_SIZE);
@@ -2157,6 +2166,17 @@ fn authenticated_dio_destination_is_local(
 /// Falls back to rule 255 (uncompressed: rule byte + raw packet) if no rule
 /// matches. Returns the number of bytes written to `out`.
 pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
+    // The profile ceiling bounds the RAW packet (the fragmenter's reassembly
+    // buffer) on both directions: a datagram larger than the receiver can
+    // reassemble is undeliverable regardless of how well it compresses.
+    // Mirrors the C lichen_schc_compress raw-packet guard.
+    if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(BufferTooSmall::new(
+            packet.len(),
+            SCHC_FRAG_MAX_PACKET_SIZE,
+        )
+        .into());
+    }
     validate_full_ipv6(packet)?;
 
     // Every v3 compressed rule elides Traffic Class and Flow Label as zero.
@@ -2589,27 +2609,32 @@ mod tests {
     fn mqtt_sn_profile_size_boundary() {
         let src = hex("fe800000000000000000000000000001");
         let dst = hex("fe800000000000000000000000000002");
-        // Link-local Rule 7 has a canonical 21-byte encoded prefix, so the
-        // largest SCHC packet carries 22,533 payload bytes and reconstructs a
-        // 22,581-byte IPv6 packet.
-        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        // The profile ceiling bounds the RAW packet (the fragmenter's
+        // reassembly buffer) on both directions: raw == MAX compresses
+        // (encoded = raw - 27); raw == MAX + 1 is rejected before rule
+        // dispatch.
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 48];
         let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
-        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 27);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 27);
         compressed.truncate(compressed_len);
         let mut restored = vec![0u8; packet.len()];
         let restored_len = decompress(&compressed, &mut restored).unwrap();
         assert_eq!(&restored[..restored_len], packet.as_slice());
 
-        compressed.push(0);
+        let one_over = mqtt_packet(
+            &src,
+            &dst,
+            PORT_MQTT_SN,
+            5000,
+            &[0u8; SCHC_FRAG_MAX_PACKET_SIZE - 47],
+        );
         assert!(matches!(
-            decompress(&compressed, &mut restored),
-            Err(SchcError::InvalidPacket(
-                "SCHC packet exceeds profile limit"
-            ))
+            compress(&one_over, &mut compressed),
+            Err(SchcError::BufferTooSmall(_))
         ));
     }
 
@@ -2617,12 +2642,13 @@ mod tests {
     fn mqtt_sn_reconstruction_bound_is_caller_buffer() {
         let src = hex("fe800000000000000000000000000001");
         let dst = hex("fe800000000000000000000000000002");
-        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 48];
         let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 27);
         compressed.truncate(compressed_len);
 
         // The exactly maximal encoded packet reconstructs to 22,581 bytes; a
@@ -2667,14 +2693,17 @@ mod tests {
     fn coap_rule0_profile_size_boundary() {
         // Rules 0/5 carry a fixed 22-byte residue, so the exact 22,554-byte
         // encoded maximum is 1 (rule ID) + 22 (residue) + 22,531 (tail) and
-        // reconstructs to 22,583 raw IPv6 bytes (40 + 8 + 4 + tail).
-        let payload_len = SCHC_FRAG_MAX_PACKET_SIZE - 24;
+        // The profile ceiling bounds the RAW packet (the fragmenter's
+        // reassembly buffer): raw == MAX compresses via rule 0 (encoded =
+        // raw - 29); raw above it is rejected before rule dispatch.
+        // coap_len includes the payload marker byte, which rule 0 drops.
+        let payload_len = SCHC_FRAG_MAX_PACKET_SIZE - 53;
         let packet = coap_rule0_packet(payload_len);
-        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 29);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 29);
         assert_eq!(compressed[0], RULE_LINK_LOCAL_COAP);
         compressed.truncate(compressed_len);
 
@@ -2691,8 +2720,8 @@ mod tests {
             Err(SchcError::BufferTooSmall(_))
         ));
 
-        // One encoded byte over the ceiling is rejected at ingress.
-        compressed.push(0);
+        // An encoded packet over the ceiling is rejected at ingress.
+        compressed.resize(SCHC_FRAG_MAX_PACKET_SIZE + 1, 0);
         assert!(matches!(
             decompress(&compressed, &mut restored),
             Err(SchcError::InvalidPacket(
@@ -2700,15 +2729,13 @@ mod tests {
             ))
         ));
 
-        // Compressor-side: one raw byte more encodes to 22,555 bytes and is
-        // rejected by the encoded profile ceiling.
+        // Compressor-side: one raw byte more exceeds the raw-packet
+        // reassembly bound and is rejected before rule dispatch.
         let over = coap_rule0_packet(payload_len + 1);
         let mut bigger = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE + 1];
         assert!(matches!(
             compress(&over, &mut bigger),
-            Err(SchcError::InvalidPacket(
-                "SCHC packet exceeds profile limit"
-            ))
+            Err(SchcError::BufferTooSmall(_))
         ));
     }
 
@@ -2737,15 +2764,16 @@ mod tests {
 
     #[test]
     fn icmpv6_rule2_profile_size_boundary() {
-        // Rule 2 carries a fixed 22-byte residue: 1 + 22 + 22,531 tail is the
-        // exact 22,554-byte encoded maximum and reconstructs to 22,579 bytes.
-        let tail_len = SCHC_FRAG_MAX_PACKET_SIZE - 23;
+        // The profile ceiling bounds the RAW packet (the fragmenter's
+        // reassembly buffer): raw == MAX compresses via rule 2 (encoded =
+        // raw - 25); raw above it is rejected before rule dispatch.
+        let tail_len = SCHC_FRAG_MAX_PACKET_SIZE - 48;
         let packet = icmpv6_echo_packet(tail_len);
-        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 25);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 25);
         assert_eq!(compressed[0], RULE_ICMPV6_ECHO);
         compressed.truncate(compressed_len);
 
@@ -2760,7 +2788,7 @@ mod tests {
             Err(SchcError::BufferTooSmall(_))
         ));
 
-        compressed.push(0);
+        compressed.resize(SCHC_FRAG_MAX_PACKET_SIZE + 1, 0);
         assert!(matches!(
             decompress(&compressed, &mut restored),
             Err(SchcError::InvalidPacket(

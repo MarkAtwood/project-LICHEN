@@ -431,6 +431,21 @@ preserved verbatim rather than reinterpreted or dropped as malformed. This
 split keeps the two implementation families interoperable: a packet one
 implementation cannot originate is still delivered intact by the other.
 
+**Profile size ceiling (canonical raw-packet bound):**
+`SCHC_FRAGMENT_MAX_PACKET_SIZE` (126 tiles x 179 bytes = 22554 octets) is the
+fragmenter's reassembly buffer. It bounds the RAW, uncompressed IPv6 packet
+in BOTH directions and applies to every rule, including Rule 255: a sender
+MUST NOT compress a packet whose raw size exceeds the ceiling, and a
+receiver's reassembly buffer is sized to the same bound. A raw packet at the
+ceiling MUST compress (whatever rule or fallback matches); a raw packet one
+octet above it MUST be rejected before rule dispatch. The ENCODED form of an
+at-the-ceiling packet is always smaller than the raw packet (every rule,
+including the byte-preserving fallback, emits at most `1 + raw` octets) and
+additionally MUST fit the applicable single-frame or fragment transport
+limits. Implementations MUST NOT substitute the encoded size for the raw
+size in this bound: a raw packet above the ceiling is undeliverable through
+fragmentation regardless of how well it compresses.
+
 ```
 Rule 255 packet:
 +----------+-----------------+
