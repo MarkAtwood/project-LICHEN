@@ -24,6 +24,9 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 
 - `blocked:hardware` label — needs physical bench hardware
 - `needs-linux` label — work it via `ssh heft` (local Linux builder); EC2 only if heft lacks the toolchain
+- `oscore` label or anything touching oscore/EDHOC internals (upstream `rust-oscore`
+  repo, `~/crates/oscore` on either host, or security semantics of `rust/lichen-oscore`)
+  — SKIP: very high bar, human-only. File your findings as a new bead for Mark instead.
 - More than ~5 minutes of complexity — decompose FIRST (Yegge's rule). A leaf bead is
   ONE narrow change: one function fixed, one behavior added, one test written —
   typically ≤20 lines across 1–2 files. Create children with
