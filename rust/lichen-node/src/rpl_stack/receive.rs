@@ -28,8 +28,7 @@ use super::error::RplReceiveError;
 use super::util::{
     advance_rpl_source_route, bootstrap_announce_peer, dao_parts, dio_dis_destination_is_allowed,
     eui64_link_local, ipv6_eui64, link_local_from_iid, multicast_dis_jitter, routing_announce,
-    rpl_ipv6_multicast_is_allowed, survey_routing_headers, wire_is_for_local,
-    RoutingHeaderSurvey,
+    rpl_ipv6_multicast_is_allowed, survey_routing_headers, wire_is_for_local, RoutingHeaderSurvey,
 };
 use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
 

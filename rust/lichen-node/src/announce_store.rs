@@ -954,5 +954,4 @@ mod tests {
         std::fs::remove_dir_all(state_root).unwrap();
         std::fs::remove_dir_all(floor_root).unwrap();
     }
-
 }
