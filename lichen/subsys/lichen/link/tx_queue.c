@@ -12,6 +12,13 @@
  *   - Explicit backpressure (ENOBUFS, not silent drop)
  */
 
+/* Strict -std=c2x/c11 host builds hide clockid_t/CLOCK_MONOTONIC unless the
+ * POSIX feature-test macro is defined before ANY libc header is included
+ * (pthread.h inside lichen/tx_queue.h pulls <time.h> in early). */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <lichen/tx_queue.h>
 #include <lichen/errno.h>
 #include <string.h>

@@ -40,7 +40,19 @@ enum senml_label {
 
 static bool string_too_long(const char *str, size_t max_len)
 {
-	return str != NULL && strnlen(str, max_len + 1) > max_len;
+	/* Bounded termination scan: strict -std=c11 hides glibc's strnlen
+	 * prototype in host builds. */
+	size_t i;
+
+	if (str == NULL) {
+		return false;
+	}
+	for (i = 0U; i <= max_len; i++) {
+		if (str[i] == '\0') {
+			return false;
+		}
+	}
+	return true;
 }
 
 static int validate_name(const char *name)
