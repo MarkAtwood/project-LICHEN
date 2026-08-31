@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T21:05:33.394030551Z",
   "labels": [
     "codereview",
-    "human-only"
+    "human-only",
+    "gateway"
   ],
   "dependencies": [
     {
