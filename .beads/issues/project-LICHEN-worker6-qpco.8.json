@@ -12,7 +12,8 @@
     "l2",
     "python",
     "tdma",
-    "tests"
+    "tests",
+    "vectors"
   ],
   "dependencies": [
     {
