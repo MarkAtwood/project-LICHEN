@@ -357,6 +357,42 @@ ZTEST(routing_announce, test_ingest_rejects_stale_seq_and_bad_pubkey_pin)
 		      -EACCES);
 }
 
+ZTEST(routing_announce, test_get_pinned_pubkey_returns_pinned_identity)
+{
+	uint8_t app_data[9];
+	uint8_t announce[LICHEN_ANNOUNCE_MIN_LEN + sizeof(app_data)];
+	uint8_t originator_iid[8];
+	uint8_t pinned_pubkey[LICHEN_ANNOUNCE_PUBKEY_LEN];
+	uint8_t expected_pubkey[LICHEN_ANNOUNCE_PUBKEY_LEN];
+	uint8_t unknown_iid[8] = {0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99};
+	struct callback_state state = { 0 };
+	size_t len;
+
+	build_coords(app_data, 300000000, 400000000);
+	zassert_ok(lichen_announce_register_app_data_observer(capture_callback,
+							      &state));
+
+	len = build_signed_announce(announce, sizeof(announce), seed_a, 20U,
+				    0U, app_data, sizeof(app_data));
+	zassert_ok(lichen_announce_ingest_authenticated(announce, len, NULL));
+	memcpy(originator_iid, &announce[5], sizeof(originator_iid));
+	/* Wire layout: originator IID at [5], pubkey follows at [5+8]. */
+	memcpy(expected_pubkey, &announce[5 + LICHEN_ANNOUNCE_IID_LEN],
+	       sizeof(expected_pubkey));
+
+	/* The pinned identity's pubkey is retrievable by IID (92dv.1: the
+	 * verification-key source for the DAO Origin Signature check). */
+	zassert_true(lichen_announce_get_pinned_pubkey(originator_iid,
+						      pinned_pubkey));
+	zassert_equal(memcmp(pinned_pubkey, expected_pubkey,
+			     LICHEN_ANNOUNCE_PUBKEY_LEN), 0);
+
+	/* Unknown IID: fail closed without writing the output buffer. */
+	memset(pinned_pubkey, 0, sizeof(pinned_pubkey));
+	zassert_false(lichen_announce_get_pinned_pubkey(unknown_iid,
+							pinned_pubkey));
+}
+
 ZTEST(routing_announce, test_stale_seq_requires_reset_aware_observer)
 {
 	uint8_t app_data[9];
