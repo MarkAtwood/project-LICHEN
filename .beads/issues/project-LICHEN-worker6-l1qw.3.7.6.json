@@ -15,7 +15,8 @@
     "schc",
     "link",
     "security",
-    "local-ok"
+    "local-ok",
+    "human-only"
   ],
   "dependencies": [
     {
