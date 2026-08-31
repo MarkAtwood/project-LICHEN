@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-mnk4",
+  "title": "Wire oscore-fork provisioning into fuzz/interop/ec2-arm64/mutation workflows",
+  "description": "Same defect class as mbzu: fuzz.yml, interop.yml, ec2-arm64.yml, mutation.yml also run cargo in the rust workspace but have no step materializing rust/oscore-fork, so [patch.crates-io] path dep fails at manifest load on fresh runners. Composite action .github/actions/oscore-fork already exists (created for ci.yml); add '- uses: ./.github/actions/oscore-fork' after checkout in each cargo job. Verify each workflow's working-directory/cd layout and fuzz-crate isolation before wiring.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:30:01.242450937Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T07:30:01.242450937Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-mnk4",
+      "depends_on_id": "project-LICHEN-worker6-mbzu",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T07:30:01.373369569Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
