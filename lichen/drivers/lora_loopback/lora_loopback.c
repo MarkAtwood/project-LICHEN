@@ -51,6 +51,7 @@ struct lora_loopback_data {
 	struct k_work rx_work;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
+	void *recv_cb_user_data;
 	struct loopback_packet rx_pkt;
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_t sent_packets;
@@ -222,6 +223,7 @@ static void lora_loopback_rx_work(struct k_work *work)
 	while (drained++ < LOOPBACK_QUEUE_DEPTH) {
 		k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
 		lora_recv_cb cb = data->recv_cb;
+		void *cb_user_data = data->recv_cb_user_data;
 
 		k_spin_unlock(&data->rx_lock, key);
 
@@ -237,7 +239,8 @@ static void lora_loopback_rx_work(struct k_work *work)
 		atomic_inc(&data->received_packets);
 #endif
 		cb(dev, data->rx_pkt.data, data->rx_pkt.len,
-		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR);
+		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR,
+		   cb_user_data);
 	}
 
 	/* Queue still has work: re-queue ourselves (Zephyr re-submission of a
@@ -246,7 +249,7 @@ static void lora_loopback_rx_work(struct k_work *work)
 }
 
 static int lora_loopback_recv_async(const struct device *dev,
-				    lora_recv_cb cb)
+				    lora_recv_cb cb, void *user_data)
 {
 	struct lora_loopback_data *data = dev->data;
 
@@ -255,6 +258,7 @@ static int lora_loopback_recv_async(const struct device *dev,
 		bool was_armed = data->recv_cb != NULL;
 
 		data->recv_cb = NULL;
+		data->recv_cb_user_data = NULL;
 		k_spin_unlock(&data->rx_lock, key);
 		return was_armed ? 0 : -EINVAL;
 	}
@@ -266,6 +270,7 @@ static int lora_loopback_recv_async(const struct device *dev,
 		return -EBUSY;
 	}
 	data->recv_cb = cb;
+	data->recv_cb_user_data = user_data;
 	k_spin_unlock(&data->rx_lock, key);
 
 	/* Deliver anything already queued (sent before arming). */

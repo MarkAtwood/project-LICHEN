@@ -174,6 +174,7 @@ struct lr1110_data {
 	 * serializes async_cb mutations between the API, the cancel path,
 	 * and the work handler's self-disarm. */
 	lora_recv_cb         async_cb;
+	void *                async_cb_user_data;
 	struct k_spinlock    cb_lock;
 	atomic_t             modem_usage;
 	/* Delivery buffer for the irq_work handler — per-instance data
@@ -272,6 +273,7 @@ static void lr1110_irq_work_handler(struct k_work *work)
 	 * path. */
 	k_spinlock_key_t key = k_spin_lock(&data->cb_lock);
 	lora_recv_cb cb = data->async_cb;
+	void *cb_user_data = data->async_cb_user_data;
 
 	k_spin_unlock(&data->cb_lock, key);
 
@@ -311,7 +313,7 @@ static void lr1110_irq_work_handler(struct k_work *work)
 			if (len > 0) {
 				LOG_DBG("async RX: %u bytes, rssi=%d, snr=%d",
 					len, rssi, snr);
-				cb(lr1110_dev, data->rx_buf, len, rssi, snr);
+				cb(lr1110_dev, data->rx_buf, len, rssi, snr, cb_user_data);
 			}
 		} else {
 			LOG_ERR("async rx: payload too large (%u) or buffer status failed",
@@ -328,6 +330,7 @@ static void lr1110_irq_work_handler(struct k_work *work)
 		bool was_armed = data->async_cb != NULL;
 
 		data->async_cb = NULL;
+		data->async_cb_user_data = NULL;
 		k_spin_unlock(&data->cb_lock, key);
 		if (was_armed) {
 			lr1110_modem_release(data);
@@ -811,7 +814,8 @@ static void lr1110_async_rx_rearm(struct lr1110_data *data)
 	(void)lr1110_hal_get_last_error();
 }
 
-static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb)
+static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
+				  void *user_data)
 {
 	if (dev == NULL) {
 		return -EINVAL;
@@ -826,6 +830,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb)
 		bool was_armed = drv->async_cb != NULL;
 
 		drv->async_cb = NULL;
+		drv->async_cb_user_data = NULL;
 		k_spin_unlock(&drv->cb_lock, key);
 		if (!was_armed) {
 			return -EINVAL;
@@ -905,6 +910,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb)
 	k_spinlock_key_t key = k_spin_lock(&drv->cb_lock);
 
 	drv->async_cb = cb;
+	drv->async_cb_user_data = user_data;
 	k_spin_unlock(&drv->cb_lock, key);
 
 	/* Enable DIO9 after SetRx: the ISR/work path is the async RX
@@ -918,6 +924,7 @@ fail:
 	fail_key = k_spin_lock(&drv->cb_lock);
 
 	drv->async_cb = NULL;
+	drv->async_cb_user_data = NULL;
 	k_spin_unlock(&drv->cb_lock, fail_key);
 	if (acquired) {
 		lr1110_modem_release(drv);
@@ -1063,6 +1070,7 @@ static int lr1110_init(const struct device *dev)
 	k_sem_init(&data->radio_sem, 0, 1);
 	k_work_init(&data->irq_work, lr1110_irq_work_handler);
 	data->async_cb = NULL;
+	data->async_cb_user_data = NULL;
 	data->modem_usage = 0;
 
 	gpio_init_callback(&data->dio9_cb, lr1110_dio9_isr,

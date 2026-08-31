@@ -69,6 +69,7 @@ struct lora_sim_data {
 	struct k_sem rx_go;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
+	void *recv_cb_user_data;
 	const struct device *dev;
 	bool rx_thread_started;
 	struct k_thread rx_thread;
@@ -469,6 +470,7 @@ static int lora_sim_init(const struct device *dev)
 	data->fd = -1;
 	data->dev = dev;
 	data->recv_cb = NULL;
+	data->recv_cb_user_data = NULL;
 	data->rx_thread_started = false;
 	data->modem_usage = 0;
 	k_sem_init(&data->rx_go, 0, 1);
@@ -540,6 +542,7 @@ static void lora_sim_rx_thread_fn(void *p1, void *p2, void *p3)
 		while (true) {
 			k_spinlock_key_t key = k_spin_lock(&drv->rx_lock);
 			lora_recv_cb cb = drv->recv_cb;
+			void *cb_user_data = drv->recv_cb_user_data;
 
 			k_spin_unlock(&drv->rx_lock, key);
 			if (cb == NULL) {
@@ -595,6 +598,7 @@ static void lora_sim_rx_thread_fn(void *p1, void *p2, void *p3)
 			 * this window was in flight must not deliver. */
 			key = k_spin_lock(&drv->rx_lock);
 			cb = drv->recv_cb;
+			cb_user_data = drv->recv_cb_user_data;
 			k_spin_unlock(&drv->rx_lock, key);
 			if (cb == NULL) {
 				break;
@@ -603,7 +607,7 @@ static void lora_sim_rx_thread_fn(void *p1, void *p2, void *p3)
 			LOG_DBG("async RX: %u bytes, rssi=%d, snr=%d",
 				payload_len, rssi, snr_x10 / 10);
 			cb(dev, buf + 3, payload_len, rssi,
-			   (int8_t)(snr_x10 / 10));
+			   (int8_t)(snr_x10 / 10), cb_user_data);
 		}
 
 		/* Disarm (including self-disarm on dead link) and free the
@@ -611,12 +615,14 @@ static void lora_sim_rx_thread_fn(void *p1, void *p2, void *p3)
 		k_spinlock_key_t key = k_spin_lock(&drv->rx_lock);
 
 		drv->recv_cb = NULL;
+		drv->recv_cb_user_data = NULL;
 		k_spin_unlock(&drv->rx_lock, key);
 		sim_modem_release(drv);
 	}
 }
 
-static int lora_sim_recv_async(const struct device *dev, lora_recv_cb cb)
+static int lora_sim_recv_async(const struct device *dev, lora_recv_cb cb,
+			       void *user_data)
 {
 	if (dev == NULL) {
 		return -EINVAL;
@@ -628,6 +634,7 @@ static int lora_sim_recv_async(const struct device *dev, lora_recv_cb cb)
 		bool was_armed = drv->recv_cb != NULL;
 
 		drv->recv_cb = NULL;
+		drv->recv_cb_user_data = NULL;
 		k_spin_unlock(&drv->rx_lock, key);
 
 		if (!was_armed) {
@@ -667,6 +674,7 @@ static int lora_sim_recv_async(const struct device *dev, lora_recv_cb cb)
 	k_spinlock_key_t key = k_spin_lock(&drv->rx_lock);
 
 	drv->recv_cb = cb;
+	drv->recv_cb_user_data = user_data;
 	k_spin_unlock(&drv->rx_lock, key);
 
 	k_sem_give(&drv->rx_go);
