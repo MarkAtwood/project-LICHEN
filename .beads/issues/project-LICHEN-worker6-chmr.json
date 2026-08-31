@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T21:10:22.526615467Z",
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-30T21:10:22.526615467Z",
+  "labels": [
+    "human-only"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-chmr",
