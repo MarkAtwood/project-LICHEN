@@ -416,12 +416,16 @@ support its syntax regardless of version, but policy MUST still reject its use
 inside an incompatible DODAG. Its payload MUST be a complete,
 structurally valid IPv6 packet: version 6, exact Payload Length, a consistent
 next-header chain — each header's Next Header field correctly identifies the
-following header, and the walk terminates at the first header that is not an
-IPv6 extension header, treating everything from that header onward as opaque
-payload; the walk MUST NOT recurse into encapsulated IPv6 (Next Header 41),
-whose validation is the decapsulating node's role, not the codec's — no IPv6
-Fragment header, and, for UDP, exact UDP Length plus a
-nonzero valid checksum computed over the addresses present in the packet.
+following header, and the walk continues only through the TLV-style IPv6
+extension headers: Hop-by-Hop Options (Next Header 0), Routing (43), and
+Destination Options (60). The walk terminates at the first header outside
+that set, treating everything from that header onward as opaque payload;
+every other Next Header value therefore ends the walk, including encapsulated
+IPv6 (41), whose validation is the decapsulating node's role, not the
+codec's, and the IPsec headers AH (51) and ESP (50), which are payload here.
+An IPv6 Fragment header (44) is malformed. For UDP, the payload MUST have
+exact UDP Length plus a nonzero valid checksum computed over the addresses
+present in the packet.
 
 **Endpoint address policy (canonical TX/RX split):** The profile address
 policy defined for Rule 7 selection (Section 5.5) is an EMISSION constraint
