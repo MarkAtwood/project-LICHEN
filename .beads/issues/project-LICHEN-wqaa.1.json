@@ -19,7 +19,8 @@
     "oscore",
     "rust",
     "schc",
-    "spec"
+    "spec",
+    "tests"
   ],
   "dependencies": [
     {
