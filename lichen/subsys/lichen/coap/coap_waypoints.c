@@ -86,13 +86,21 @@ static bool utf8_valid(const uint8_t *s, size_t len) {
   return true;
 }
 
+/* Zephyr's minimal libc does not declare strnlen(): bounded length via
+ * memchr. Returns max when no NUL lies within the first max bytes. */
+static size_t bounded_len(const char *s, size_t max) {
+  const char *nul = memchr(s, '\0', max);
+
+  return nul ? (size_t)(nul - s) : max;
+}
+
 static bool text_valid(const char *s, size_t max, bool allow_empty) {
   size_t len;
 
   if (s == NULL) {
     return false;
   }
-  len = strnlen(s, max + 1U);
+  len = bounded_len(s, max + 1U);
   return len <= max && (allow_empty || len > 0U) &&
          utf8_valid((const uint8_t *)s, len);
 }

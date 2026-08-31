@@ -133,9 +133,18 @@ static const char *role_to_str(enum lichen_config_role role)
 	}
 }
 
+/* Zephyr's minimal libc does not declare strnlen(): bounded length via
+ * memchr. Returns max when no NUL lies within the first max bytes. */
+static size_t bounded_len(const char *s, size_t max)
+{
+	const char *nul = memchr(s, '\0', max);
+
+	return nul ? (size_t)(nul - s) : max;
+}
+
 static bool node_config_is_valid(const struct lichen_config_node *config)
 {
-	return strnlen(config->name, sizeof(config->name)) < sizeof(config->name) &&
+	return bounded_len(config->name, sizeof(config->name)) < sizeof(config->name) &&
 	       role_to_str(config->role) != NULL;
 }
 
@@ -234,7 +243,7 @@ size_t lichen_config_encode_node_cbor(uint8_t *buf, size_t buf_size,
 	}
 
 	/* Provider-owned snapshots are fixed-size fields, not trusted C strings. */
-	name_len = strnlen(config->name, sizeof(config->name));
+	name_len = bounded_len(config->name, sizeof(config->name));
 	role = role_to_str(config->role);
 	if (!node_config_is_valid(config)) {
 		return 0;
@@ -617,11 +626,13 @@ static bool identity_short_fingerprint(const uint8_t pubkey[32], char out[24])
 static bool identity_strings_are_bounded(
 	const struct lichen_config_identity *identity)
 {
-	return strnlen(identity->link_local, sizeof(identity->link_local)) <
+	return bounded_len(identity->link_local,
+			   sizeof(identity->link_local)) <
 		       sizeof(identity->link_local) &&
-	       strnlen(identity->primary, sizeof(identity->primary)) <
+	       bounded_len(identity->primary, sizeof(identity->primary)) <
 		       sizeof(identity->primary) &&
-	       strnlen(identity->gua, sizeof(identity->gua)) < sizeof(identity->gua);
+	       bounded_len(identity->gua, sizeof(identity->gua)) <
+		       sizeof(identity->gua);
 }
 
 /* Encode identity information */
