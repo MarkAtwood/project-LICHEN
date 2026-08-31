@@ -11,7 +11,8 @@
   "updated_at": "2026-08-27T17:06:34.472014Z",
   "started_at": "2026-08-26T19:08:54.157816Z",
   "labels": [
-    "c"
+    "c",
+    "coap"
   ],
   "dependencies": [
     {
