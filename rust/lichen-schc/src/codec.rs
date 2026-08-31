@@ -1603,7 +1603,7 @@ impl<const MAX_PEERS: usize> PeerContextAuthority<MAX_PEERS> {
     ) -> Result<AuthenticatedPeerSchcContext, SchcError> {
         if !evidence.is_current()
             || evidence.receipt().monotonic_millis().is_none()
-            || !authenticated_dio_destination_is_local(evidence, &self.local_eui64)
+            || !authenticated_dio_destination_is_canonical_multicast(evidence, &self.local_eui64)
         {
             return Err(SchcError::InvalidPeerEvidence);
         }
@@ -1804,10 +1804,11 @@ impl AuthenticatedPeerSchcContext {
             ));
         }
         // Spec 09 13.3 (R-09-005): canonical multicast DIO admission requires
-        // hop-limit == 255 (link-local single hop), as the Python reference
-        // admission path enforces. Note: Python additionally requires
-        // dst == ff02::1a exactly; the Rust path accepts any L2-local
-        // destination (tracked divergence, see worker6-b7z9.15).
+        // hop-limit == 255 (link-local single hop), enforced by the check
+        // below in parse; destination == ff02::1a is enforced by the
+        // destination gate that ran before this. Known residual divergence
+        // vs Python: the gate additionally requires a broadcast L2 addr
+        // mode, which Python does not inspect.
         if ipv6[7] != 255 {
             return Err(SchcError::InvalidPacket(
                 "authenticated DIO Hop Limit must be 255",
@@ -1931,8 +1932,10 @@ impl AuthenticatedPeerSchcContext {
         expected_mop: u8,
         expected_role: ExpectedDioRole,
     ) -> Result<Self, SchcError> {
-        if !authenticated_dio_destination_is_local(frame.link_evidence(), &frame.receiving_eui64())
-        {
+        if !authenticated_dio_destination_is_canonical_multicast(
+            frame.link_evidence(),
+            &frame.receiving_eui64(),
+        ) {
             return Err(SchcError::InvalidPeerEvidence);
         }
         let mut context = Self::parse_authenticated_dio_evidence(
@@ -2140,10 +2143,18 @@ impl AuthenticatedPeerSchcContext {
     }
 }
 
-fn authenticated_dio_destination_is_local(
+fn authenticated_dio_destination_is_canonical_multicast(
     frame: lichen_link::AuthenticatedLinkFrame<'_>,
-    local_eui64: &[u8; 8],
+    _local_eui64: &[u8; 8],
 ) -> bool {
+    // Spec 09 13.3 (R-09-005): authenticated admission applies to the
+    // canonical multicast DIO only — destination exactly ff02::1a (all-RPL-
+    // nodes), carried uncompressed (Rule 255) in a broadcast link frame.
+    // Parity with the Python reference admission path, which rejects any
+    // other destination (authenticated_dio.py:359-360). Unicast DIOs have no
+    // authenticated admission contract in any implementation yet; admitting
+    // them here diverged from Python and let unicast-addressed DIOs mutate
+    // parent selection.
     const ALL_RPL_NODES: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
 
     let mut ipv6 = [0u8; SCHC_MAX_DECOMPRESSED];
@@ -2153,38 +2164,12 @@ fn authenticated_dio_destination_is_local(
     if length < IPV6_HEADER_LEN {
         return false;
     }
-    let destination = &ipv6[24..40];
-    let mut local_iid = *local_eui64;
-    local_iid[0] ^= 0x02;
-    let local_link = [
-        0xfe,
-        0x80,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        local_iid[0],
-        local_iid[1],
-        local_iid[2],
-        local_iid[3],
-        local_iid[4],
-        local_iid[5],
-        local_iid[6],
-        local_iid[7],
-    ];
-
-    if destination == ALL_RPL_NODES {
-        return frame.payload().get(1).copied() == Some(RULE_UNCOMPRESSED)
-            && matches!(
-                frame.destination_mode(),
-                lichen_link::frame::AddrMode::None | lichen_link::frame::AddrMode::Elided
-            );
-    }
-    destination == local_link
-        && frame.destination_mode() == lichen_link::frame::AddrMode::Extended
-        && frame.destination() == local_eui64
+    ipv6[24..40] == ALL_RPL_NODES
+        && frame.payload().get(1).copied() == Some(RULE_UNCOMPRESSED)
+        && matches!(
+            frame.destination_mode(),
+            lichen_link::frame::AddrMode::None | lichen_link::frame::AddrMode::Elided
+        )
 }
 
 /// Compress a full IPv6 `packet` into `out` using the best matching SCHC rule.

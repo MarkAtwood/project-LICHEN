@@ -202,9 +202,10 @@ fn vector_peer_authority(
     let mut source = [0u8; 16];
     source[..8].copy_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0]);
     source[8..].copy_from_slice(&peer_iid);
-    let mut destination = [0u8; 16];
-    destination[..8].copy_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0]);
-    destination[8..].copy_from_slice(&local_iid);
+    // Canonical multicast DIO (spec 09 13.3): admission requires destination
+    // exactly ff02::1a in a broadcast link frame; the previous unicast
+    // link-local destination shape is no longer admitted.
+    let destination: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
 
     let mut dio = vec![0u8; 27];
     dio[2..4].copy_from_slice(&512u16.to_be_bytes());
@@ -235,8 +236,8 @@ fn vector_peer_authority(
     peer_eui64[0] ^= 0x02;
     let evidence = AuthenticatedLinkFrame::from_test_parts(
         &link_payload,
-        &local_eui,
-        AddrMode::Extended,
+        &[],
+        AddrMode::None,
         peer_signer,
         peer_eui64,
         0,
