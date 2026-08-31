@@ -1049,6 +1049,15 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if needed > out.len() {
         return Err(BufferTooSmall::new(needed, out.len()).into());
     }
+    // Profile ceiling: encoded Rule 7 (MQTT-SN) output may not exceed the
+    // fragmenter reassembly bound. Checked pre-write so this error is
+    // buffer-atomic too (the dispatcher's post-write
+    // enforce_encoded_profile_limit never fires for this rule).
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
 
     out[0] = RULE_MQTT_SN;
 
@@ -2687,6 +2696,33 @@ mod tests {
         assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
         let mut exact = vec![0xAAu8; 38];
         assert_eq!(compress(&packet, &mut exact).unwrap(), 38);
+    }
+
+    #[test]
+    fn mqtt_sn_compress_over_profile_leaves_buffer_untouched() {
+        // needed = 1 (rule) + 20 (residue) + 22,534 (tail) = 22,555, one byte
+        // over the 22,554-byte profile ceiling. The pre-write profile precheck
+        // rejects before any byte is written, so the sentinel buffer survives.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21 + 1];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        let needed = 1 + 20 + payload.len();
+        assert_eq!(needed, SCHC_FRAG_MAX_PACKET_SIZE + 1);
+        let mut out = vec![0xAAu8; needed];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        // Boundary: exactly at the ceiling still encodes (also covered by
+        // mqtt_sn_profile_size_boundary's round trip).
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        let mut out = vec![0xAAu8; needed - 1];
+        assert_eq!(compress(&packet, &mut out).unwrap(), needed - 1);
     }
 
     fn coap_rule0_packet(payload_len: usize) -> Vec<u8> {
