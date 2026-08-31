@@ -12,7 +12,8 @@
   "labels": [
     "c",
     "l2",
-    "tdma"
+    "tdma",
+    "zephyr"
   ],
   "dependencies": [
     {
