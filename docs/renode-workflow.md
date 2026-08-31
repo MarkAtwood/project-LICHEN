@@ -57,7 +57,10 @@ cd renode
 
 ```bash
 renode --version
-# Expected: Renode, version X.X.X
+# Expected for the pinned CI install (1.16.1 portable tarball):
+#   Renode v1.16.1.<build>  —  e.g. Renode v1.16.1.16908, build d66b0c2a-202602160923
+# The <build> suffix varies per artifact; "v1.16.1." is the stable prefix.
+# 1.16.1 is what CI pins and the fleet AMI ships; nightly/brew are untested.
 ```
 
 ## Running Single-Node Simulation
