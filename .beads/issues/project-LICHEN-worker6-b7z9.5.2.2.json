@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.5.2.2",
+  "title": "b7z9.5.2b: Node RX fragment wiring — AuthenticatedFragmentReceiver into Stack::receive + peer-context authority",
+  "description": "Second child of b7z9.5.2, lands after b7z9.5.2.1 (policy field) and b7z9.5.3 decision on peer authority. Requires bringing PeerContextAuthority/AuthenticatedPeerSchcContext plumbing into the node Stack (currently absent — decompress_authenticated_frame uses the failure-tracker only): map LinkLayer pinned PeerIdentity pubkeys to AuthenticatedPeerSchcContext, derive the AuthenticatedFragmentationPermit from FragmentationPolicy admission, then wire Stack::receive: fragment-kind L2 payloads (after L2 verify) feed the receiver bounded by the policy; expire_due hook on the receive loop; completed datagrams proceed into decompress_authenticated_frame; incomplete/expiring state dropped Ok(None) per spec; ReceiverResult controls (ACKs) need the TX path from b7z9.5.3 — if TX is unavailable, document drop semantics rather than dead-ends. Loopback-pair tests: fragment from a FragmentSender over loopback radios, reassemble, decompress, deliver; incomplete -\u003e Ok(None); policy exhaustion -\u003e clean rejection. DO NOT START until b7z9.5.2.1 lands and the peer-authority source (rpl_stack secure vs new plumbing) is decided.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:51:45.960407939Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T17:51:45.960407939Z",
+  "labels": [
+    "rust",
+    "schc",
+    "gateway",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.5.2.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.5.2",
+      "type": "parent-child",
+      "created_at": "2026-08-31T17:51:46.12296611Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

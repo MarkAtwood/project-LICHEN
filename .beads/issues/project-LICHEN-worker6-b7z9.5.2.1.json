@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.5.2.1",
+  "title": "b7z9.5.2a: Node Stack gains a bounded FragmentationPolicy field (RX seam plumbing, no receive wiring)",
+  "description": "Smallest landable child of b7z9.5.2 (R-05-065 RX reassembly). Add a FragmentationPolicy\u003cMAX_PEERS\u003e field to rust/lichen-node/src/stack.rs Stack (const generic, e.g. 8), constructed in Stack::new (FragmentationPolicy::new() may fail — decide construction-time panic vs Result; match Stack::new's existing assert style), plus a pub(crate)/pub accessor for the RX wiring slice and expire_due integration. NO receive() wiring in this slice, no peer-context authority (that is .2b), no tests beyond construction/green suite. Scout note from 2026-08-31: Stack currently has NO PeerContextAuthority/AuthenticatedPeerSchcContext plumbing (decompress_authenticated_frame uses the failure-tracker path only), so the receiver cannot be constructed from Stack state today — hence this seam-first decomposition; permits are minted by the policy itself (fragment.rs:371/400) at admission time.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-4",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:51:38.029997995Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T17:51:51.309788605Z",
+  "started_at": "2026-08-31T17:51:51.309788605Z",
+  "lease_expires_at": "2026-08-31T17:56:51.309788605Z",
+  "heartbeat_at": "2026-08-31T17:51:51.309788605Z",
+  "labels": [
+    "rust",
+    "schc",
+    "gateway",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.5.2.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.5.2",
+      "type": "parent-child",
+      "created_at": "2026-08-31T17:51:38.209189423Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

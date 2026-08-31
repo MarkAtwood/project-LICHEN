@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-64l2",
+  "title": "tunnel_authorization.json drifted from its generator (--check reports out-of-date)",
+  "description": "Pre-existing failure found while working sz1s (unrelated; reproduces with the sz1s diff reverted): python tests/gateway/test_tunnel_auth_vectors.py::test_tunnel_authorization_generator_is_fresh runs test/vectors/generate_tunnel_authorization.py --check which reports 'out-of-date vector file: tunnel_authorization.json'. Someone changed the generator or the JSON without regenerating; the committed vector file no longer matches what the generator produces. Investigate which side moved (git log on both), regenerate or revert as appropriate, and note whether the wrong_algorithm negative case (authorizations[9], protected_hex a10139ffff) is preserved. Also re-check test_authorization_intermediates_use_independent_oracle which asserts the VALID case uses a1013a00010000.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:52:28.230262513Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T18:01:50.651982273Z",
+  "started_at": "2026-08-31T18:01:50.651982273Z",
+  "lease_expires_at": "2026-08-31T18:06:50.651982273Z",
+  "heartbeat_at": "2026-08-31T18:01:50.651982273Z",
+  "labels": [
+    "python",
+    "gateway",
+    "codereview"
+  ]
+}
