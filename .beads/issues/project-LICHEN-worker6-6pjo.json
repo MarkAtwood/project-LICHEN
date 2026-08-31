@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T00:50:51.690446Z",
   "labels": [
-    "gateway"
+    "gateway",
+    "oscore"
   ],
   "dependencies": [
     {
