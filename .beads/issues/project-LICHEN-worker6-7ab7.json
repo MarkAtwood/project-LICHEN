@@ -8,5 +8,8 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:45:04.259285Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:45:04.259285Z"
+  "updated_at": "2026-08-28T17:45:04.259285Z",
+  "labels": [
+    "c"
+  ]
 }
