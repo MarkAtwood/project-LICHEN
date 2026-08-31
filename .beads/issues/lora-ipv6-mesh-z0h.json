@@ -12,5 +12,8 @@
   "updated_at": "2026-08-28T03:42:38.340187Z",
   "started_at": "2026-07-25T02:26:39.972936299Z",
   "closed_at": "2026-05-27T05:52:31Z",
-  "close_reason": "Added section 5.7: DIO advertises rule version, Rule 255 reserved for uncompressed fallback. spec/03-adaptation.md"
+  "close_reason": "Added section 5.7: DIO advertises rule version, Rule 255 reserved for uncompressed fallback. spec/03-adaptation.md",
+  "labels": [
+    "schc"
+  ]
 }
