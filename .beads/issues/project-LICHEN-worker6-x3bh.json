@@ -11,7 +11,6 @@
   "updated_at": "2026-08-28T00:47:29.079684Z",
   "labels": [
     "correctness",
-    "codereview",
-    "human-only"
+    "codereview"
   ]
 }
