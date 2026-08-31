@@ -62,7 +62,12 @@ def adaptive_duty_permille(density: int, region: int) -> int:
 
     Returns:
         Duty cycle budget in permille of the 1-hour rolling window.
+
+    Raises:
+        ValueError: If density is negative.
     """
+    if density < 0:
+        raise ValueError("density must be non-negative")
     strict_region = region != REGION_US
     if density > 8:
         return 5 if strict_region else 10
