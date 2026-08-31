@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.11.1",
+  "title": "C hal: two-slot redundant-record primitive (encode/provision/open/update) mirroring rust lichen-hal storage.rs",
+  "description": "Smallest child of b7z9.11 (foundation for 64-bit DAO Origin Sequence persistence). Port the Rust two-slot primitive to C: rust/lichen-hal/src/storage.rs:120-248 — encode_slot(magic[4], version u8, generation u64 BE, len u32 BE, payload, crc32 trailer), SLOT_HEADER_LEN 20 + SLOT_TRAILER_LEN 4 (+24 overhead), provision_redundant (fails Exists if either key present), open_redundant (newest-generation valid slot; Missing vs Corrupt taxonomy), update_redundant (writes the OPPOSITE slot at generation+1; Stale when current doesn't match storage; Exhausted at u64 generation wrap). C placement: lichen/subsys/lichen/hal/ (storage helper) using the C NonVolatile API (whatever lichen_hal_storage_* / NonVolatile ops replay_settings.c/epoch_persist.c use). Keys 'rpl.tx.a'/'rpl.tx.b', magic 'DTX2' live in the CALLER (rpl dao tx child), not the primitive. Host tests via MemStorage: empty-\u003eMissing, corrupt-\u003eCorrupt, provision, update alternation, stale detection, generation wrap, rollback on write failure. CRC32: C equivalent of the Rust crc32 must match bit-exactly (cross-check with a Rust-computed vector). Discovered from project-LICHEN-worker6-b7z9.11.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:43:10.575589684Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T23:43:10.575589684Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.11.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.11",
+      "type": "parent-child",
+      "created_at": "2026-08-31T23:43:10.716369124Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}
