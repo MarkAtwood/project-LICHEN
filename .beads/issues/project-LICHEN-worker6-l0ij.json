@@ -12,7 +12,8 @@
   "labels": [
     "human",
     "ble",
-    "coap"
+    "coap",
+    "gateway"
   ],
   "dependencies": [
     {
