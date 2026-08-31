@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T05:20:08.694132Z",
   "labels": [
-    "l2"
+    "l2",
+    "spec"
   ],
   "dependencies": [
     {
