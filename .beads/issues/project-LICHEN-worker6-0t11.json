@@ -15,7 +15,8 @@
   "labels": [
     "networking",
     "python",
-    "rust"
+    "rust",
+    "schc"
   ],
   "dependencies": [
     {
