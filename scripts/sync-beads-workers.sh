@@ -139,11 +139,27 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
     fi
 done
 
-# Commit beads flat-file updates in main (workers wrote them via symlink)
+# Commit beads flat-file updates in main (workers wrote them via symlink).
+# This checkpoint is REQUIRED even though one ran before the merge loop:
+# workers (and this script's own merge handling) write to the store working
+# tree continuously; any close written after the pre-loop checkpoint would
+# otherwise be discarded by the LAST merge's normalization if the final
+# commit here did not exist. Commit immediately after the loop, and again
+# right before exit, so the window for losing a write is one script step.
 if [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
     git commit -m "chore(beads): sync from workers"
     echo "Main: committed beads sync"
+fi
+
+# Final checkpoint: capture anything written during merge handling above
+# (conflict-path checkouts, worker writes racing the loop) so the next run's
+# normalization cannot rewind a close that has already been reported to a
+# worker (bead project-LICHEN-worker6-bd8h, recurring revert pattern).
+if [ -n "$(git status --porcelain .beads/)" ]; then
+    git add .beads/
+    git commit -m "chore(beads): checkpoint store writes after merge loop" --quiet &&
+        echo "checkpointed post-merge store writes"
 fi
 
 if [ ${#conflicted[@]} -gt 0 ]; then
