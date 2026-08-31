@@ -872,7 +872,7 @@ class Node:
             await self._process_announce(body, rx.sender, rx.rssi_dbm)
             return
 
-        is_fragment = bool(payload) and payload[0] in (0x78, 0x79)
+        is_fragment = bool(payload) and payload[0] in RULE_IDS
 
         # SCHC-compressed IPv6 data packet: decompress, route, relay or deliver.
         if kind != L2PayloadKind.SCHC and not is_fragment:

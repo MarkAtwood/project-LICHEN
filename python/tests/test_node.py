@@ -64,6 +64,7 @@ from lichen.rpl.dodag import DodagRole
 from lichen.rpl.messages import DIO, RPL_ICMPV6_TYPE, RplCode
 from lichen.schc.fragment import (
     MAX_ACK_REQUESTS,
+    RULE_IDS,
     TILE_SIZE,
     Fragment,
     FragmentError,
@@ -1057,6 +1058,48 @@ async def test_production_schc_ingress_notifies_once_and_success_resets(
         await node._process_received(malformed)
     assert notifications == [peer.pubkey, peer.pubkey]
     assert delivered == [(wrap_schc_payload(compress_packet(raw)), peer)]
+
+
+@pytest.mark.asyncio
+async def test_fragment_dispatch_tracks_rule_ids_constant(
+    identity: Identity,
+    radio: MockRadio,
+    peer_identity: Identity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = Node(identity=identity, radio=radio, config=NodeConfig())
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+    sender_control: list[RxFrame] = []
+    monkeypatch.setattr(
+        node.link,
+        "accept_authenticated_schc_sender_control",
+        lambda rx: sender_control.append(rx),
+    )
+
+    def reject_reassembly(_rx: RxFrame) -> None:
+        raise FragmentError("reassembly not expected in this test")
+
+    monkeypatch.setattr(node.link, "accept_authenticated_schc_fragment", reject_reassembly)
+
+    # A raw fragment dispatch (first byte in RULE_IDS) enters the fragment branch.
+    fragment_payload = bytes([RULE_IDS[0], 0x00])
+    await node._process_received(_verified_rx(fragment_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == []
+
+    # A non-rule first byte without the SCHC dispatch is application delivery.
+    plain_payload = bytes([0x70, 0xAA])
+    await node._process_received(_verified_rx(plain_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == [(plain_payload, peer)]
+
+    # Detection consults the module-level RULE_IDS constant, not hardcoded bytes.
+    monkeypatch.setattr("lichen.node.RULE_IDS", (0x70,))
+    await node._process_received(_verified_rx(fragment_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == [(plain_payload, peer), (fragment_payload, peer)]
 
 
 @pytest.mark.asyncio
