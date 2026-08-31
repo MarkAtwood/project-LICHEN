@@ -1990,7 +1990,11 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     use lichen_rpl::routing::DaoAdmissionState;
     // R-05-035 (spec/05-routing.md §8.6): the reserved Target Flags octet
     // MUST be zero; nonzero rejects the DAO before any route-state mutation.
-    // Python reference: dao_origin.py rejects len != 18 or data[0] != 0.
+    // Python reference: dao_origin.py rejects len != 18 or data[0] != 0 at
+    // the structural stage. The envelope guard (is_generalized_target_body)
+    // enforces this before signature verification, so the properly signed
+    // nonzero-flags DAO is still rejected structurally; the extract_updates
+    // check remains as defense in depth for raw-DAO paths.
     let identity = Identity::from_seed(Seed::new([3; 32]));
     let root_addr = [0x56; 16];
     let origin = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
@@ -1998,8 +2002,8 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     let mut unsigned = manager.build_dao(root_addr.into());
     // Locate the RPL Target option (type 5, data length 18) and set its
     // reserved flags octet (option data[0], two bytes after the type) before
-    // signing, so rejection happens at semantic parsing, not signature
-    // verification.
+    // signing, so the wire is cryptographically valid and only the flags
+    // byte distinguishes it from an accepted DAO.
     let target_opt = unsigned
         .windows(2)
         .position(|w| w == [OPT_RPL_TARGET, 18])
@@ -2014,14 +2018,20 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     )
     .unwrap();
 
-    let verified = SignatureVerifiedDao::verify_signature(
-        &wire,
-        origin,
-        RPL_INSTANCE_ID,
-        root_addr,
-        Some(identity.pubkey),
-    )
-    .unwrap();
+    assert!(
+        matches!(
+            SignatureVerifiedDao::verify_signature(
+                &wire,
+                origin,
+                RPL_INSTANCE_ID,
+                root_addr,
+                Some(identity.pubkey),
+            ),
+            Err(DaoVerifyError::Malformed(_))
+        ),
+        "nonzero Target flags must reject the DAO at the structural stage"
+    );
+
     let mut storage = lichen_hal::storage::mem::MemStorage::new();
     let (mut root, mut state) = Router::provision_root(&mut storage, root_addr).unwrap();
     let mut admission =
@@ -2029,21 +2039,6 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     admission
         .admit(&mut storage, *identity.pubkey.as_bytes())
         .unwrap();
-
-    assert!(
-        matches!(
-            root.process_signature_verified_dao_at_ms(
-                &verified,
-                verified.origin_iid(),
-                &mut state,
-                &mut storage,
-                0,
-                &admission,
-            ),
-            Err(DaoProcessError::RouteRejected)
-        ),
-        "nonzero Target flags must reject the DAO"
-    );
 
     // No route-state or replay-floor mutation: the same logical DAO with
     // zero flags and the SAME origin sequence still applies as new.
