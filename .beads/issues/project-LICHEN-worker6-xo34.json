@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-xo34",
   "title": "Dispatcher must send coap_oscore_authorize_mutating failure codes; handlers now return them unsent",
   "description": "Found during wgyl migration self-review (passes 2-3 done by worker-2 after the delegated reviewer timed out; per the loop fallback rule). After migrating six mutating handlers (dtn/config/server) to coap_oscore_authorize_mutating (2z8e helper), an authorization failure returns the CoAP response code to the caller - per the helper's documented contract 'returns a CoAP response code the dispatcher sends'. BEHAVIOR CHANGE: the old inline gate sent a plain 4.01 via coap_oscore_respond_resource for unauthenticated non-admin clients; the migrated handlers return the code up the stack, and Zephyr's coap dispatch ignores positive handler returns - so the 4.01 is NOT sent (silent drop). For the unknown-peer sub-case a silent drop matches the pre-migration behavior (unprotect returned UNAUTHORIZED which the handler returned up), so the drop is consistent there; but the unauthenticated-plain-client case changes from a visible 4.01 to silence. OSCORE norms tolerate silence (the client's retransmission/timeout covers it) and silence avoids revealing gateway state, but the l9hb epic's 'dispatch level' design must own this: either (a) the dispatcher gains positive-code sending (then document), or (b) the silent-drop is standardized in spec/17 and the handler comments, or (c) handlers send the failure response themselves (plain via send_protected NULL-ctx) - decision needed before the fleet relies on it. All six migrated sites currently use (b)-compatible return-the-code.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T03:35:22.880549834Z",
   "created_by": "opencode-worker-2",
-  "updated_at": "2026-08-31T03:35:22.880549834Z",
+  "updated_at": "2026-08-31T05:49:02.57295409Z",
+  "closed_at": "2026-08-31T05:49:02.57295409Z",
+  "close_reason": "Obsolete: coap_oscore_authorize_mutating never implemented at HEAD; grep finds 0 matches in lichen/.",
   "labels": [
     "coap",
     "oscore"

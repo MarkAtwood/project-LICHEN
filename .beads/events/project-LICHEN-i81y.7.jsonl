@@ -1,1 +1,2 @@
 {"id":"01a045de-24ca-78e1-b363-347754b3f265","issue_id":"project-LICHEN-i81y.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:56:21.450582Z"}
+{"id":"01a05659-8e7b-7da6-a1b9-b0d52b279655","issue_id":"project-LICHEN-i81y.7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Obsolete; lichen/subsys/lichen/rpl/routing.c no longer exists at HEAD. Positive-finding record for deleted code.","created_at":"2026-08-31T05:45:04.891896537Z"}
