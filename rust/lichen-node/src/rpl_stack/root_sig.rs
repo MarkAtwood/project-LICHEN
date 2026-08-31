@@ -19,6 +19,8 @@
 
 use ciborium::value::Value;
 use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey};
+#[cfg(feature = "std")]
+use lichen_rpl::root_seq_cache::RootSeqCache;
 
 /// COSE algorithm ID for Schnorr48-Ed25519 (private use range).
 pub const SCHNORR48_ED25519_ALG: i128 = -65537;
@@ -60,7 +62,9 @@ pub enum RootSigError {
     KidMismatch,
     DodagIdMismatch,
     SignatureLength,
+    SignatureInvalid,
     Expired,
+    ReplayDetected,
     InstanceMismatch,
     VersionMismatch,
     RankMismatch,
@@ -76,8 +80,10 @@ impl RootSigError {
             Self::Algorithm => "algorithm_invalid",
             Self::KidMismatch => "kid_mismatch",
             Self::DodagIdMismatch => "dodagid_mismatch",
-            Self::SignatureLength => "signature_invalid",
+            Self::SignatureLength => "signature_length",
+            Self::SignatureInvalid => "signature_invalid",
             Self::Expired => "expired",
+            Self::ReplayDetected => "replay_detected",
             Self::InstanceMismatch => "instance_mismatch",
             Self::VersionMismatch => "version_mismatch",
             Self::RankMismatch => "rank_mismatch",
@@ -260,23 +266,129 @@ impl DecodedRootSig {
         })
     }
 
-    /// Checks that need only the signer pubkey and the clock: `kid`-to-IID
-    /// binding, DODAGID-to-pubkey binding, expiry. Signature verification
-    /// and replay consumption layer on top (b7z9.37.1.2(b)).
-    pub fn verify_structural(
-        &self,
-        pubkey: &[u8; 32],
-        current_time: u64,
-    ) -> Result<RootSigPayload, RootSigError> {
+    /// Binding checks that need only the signer pubkey: `kid`-to-IID and
+    /// DODAGID-to-pubkey. Signature verification and expiry layer on top in
+    /// the oracle's order (see [`Self::verify`]).
+    pub fn verify_structural(&self, pubkey: &[u8; 32]) -> Result<(), RootSigError> {
         if self.root_iid != iid_from_pubkey_bytes(pubkey) {
             return Err(RootSigError::KidMismatch);
         }
         if self.payload.dodag_id != ygg_addr_from_pubkey(pubkey) {
             return Err(RootSigError::DodagIdMismatch);
         }
+        Ok(())
+    }
+
+    /// Canonical CBOR re-encoding of the payload (Python oracle signs
+    /// `payload.to_cbor()` — a re-encoding from the parsed fields — not the
+    /// wire bytes, so non-canonical wire payload diverges from the oracle
+    /// and MUST be re-encoded here for parity).
+    fn canonical_payload(&self) -> Result<std::vec::Vec<u8>, RootSigError> {
+        let value = Value::Map(std::vec![
+            (
+                Value::Integer(1.into()),
+                Value::Bytes(self.payload.dodag_id.to_vec())
+            ),
+            (
+                Value::Integer(2.into()),
+                Value::Integer(self.payload.instance.into())
+            ),
+            (
+                Value::Integer(3.into()),
+                Value::Integer(self.payload.version.into())
+            ),
+            (
+                Value::Integer(4.into()),
+                Value::Integer(self.payload.rank.into())
+            ),
+            (
+                Value::Integer(5.into()),
+                Value::Integer(self.payload.expiry.into())
+            ),
+            (
+                Value::Integer(6.into()),
+                Value::Integer(self.payload.root_seq.into())
+            ),
+            (
+                Value::Integer(7.into()),
+                Value::Integer(self.payload.mop.into())
+            ),
+        ]);
+
+        let mut out = std::vec::Vec::new();
+        ciborium::ser::into_writer(&value, &mut out).map_err(|_| RootSigError::Decode)?;
+        Ok(out)
+    }
+
+    /// Rebuild the COSE Sig_structure with the CANONICAL protected header
+    /// (matching the Python oracle, which ignores any extra fields a forged
+    /// header may carry) and verify the Schnorr48 signature over
+    /// SHA-256(Sig_structure).
+    #[cfg(feature = "std")]
+    pub fn verify_signature(&self, pubkey: &[u8; 32]) -> Result<(), RootSigError> {
+        use sha2::{Digest, Sha256};
+
+        const CANONICAL_PROTECTED: [u8; 7] = [0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00];
+        let payload = self.canonical_payload()?;
+        // payload is ~40-90 bytes, always in the two-byte 0x58 length form
+        // and always under 256.
+        if payload.len() > 255 {
+            return Err(RootSigError::Decode);
+        }
+        let mut sig_structure = std::vec::Vec::with_capacity(15 + payload.len());
+        sig_structure.extend_from_slice(&[0x84, 0x6a]);
+        sig_structure.extend_from_slice(b"Signature1");
+        sig_structure.push(0x40 | CANONICAL_PROTECTED.len() as u8); // bstr header
+        sig_structure.extend_from_slice(&CANONICAL_PROTECTED);
+        sig_structure.push(0x40);
+        sig_structure.push(0x58);
+        sig_structure.push(payload.len() as u8);
+        sig_structure.extend_from_slice(&payload);
+        let digest = Sha256::digest(&sig_structure);
+        if lichen_link::schnorr::verify(
+            &lichen_link::keys::PublicKey::new(*pubkey),
+            &digest,
+            &self.signature,
+        ) {
+            Ok(())
+        } else {
+            Err(RootSigError::SignatureInvalid)
+        }
+    }
+
+    /// Full receiver verification in the Python oracle's order: bindings,
+    /// signature, expiry, replay (consuming the RootSeqCache), then DIO
+    /// cross-checks. Only a fully verified signature is admitted into the
+    /// cache (caller contract from b7z9.37.3.1).
+    #[cfg(feature = "std")]
+    pub fn verify(
+        &self,
+        pubkey: &[u8; 32],
+        current_time: u64,
+        dio: Option<&DioFields>,
+        seq_cache: &mut RootSeqCache,
+    ) -> Result<RootSigPayload, RootSigError> {
+        self.verify_structural(pubkey)?;
+        self.verify_signature(pubkey)?;
         if self.payload.expiry <= current_time {
             return Err(RootSigError::Expired);
         }
+        match seq_cache.cached(self.payload.dodag_id, self.payload.instance) {
+            Some(cached) if self.payload.root_seq <= cached => {
+                return Err(RootSigError::ReplayDetected);
+            }
+            _ => {}
+        }
+        if let Some(dio) = dio {
+            self.cross_check(dio)?;
+        }
+        seq_cache
+            .accept(
+                self.payload.dodag_id,
+                self.payload.instance,
+                self.payload.root_seq,
+            )
+            .map_err(|_| RootSigError::ReplayDetected)?;
         Ok(self.payload)
     }
 
@@ -315,12 +427,13 @@ impl DecodedRootSig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lichen_rpl::root_seq_cache::RootSeqCache;
     use std::vec;
     use std::vec::Vec;
 
     // Fixtures from test/vectors/root_dio_signature.json (external oracle).
-    const VALID_COSE_SIGN1: &str = "d28447a1013a00010000a10448203df4662ab81f5a5825a7015002203df4662ab81f203df4662ab81f5a0200030104190100051a677485800601070258304f9a6d7554edcaf70301635bddb2618a5e7165bb02e9ff1ec86f276bcfff356ba61171e0cef7861ce3a6be76c6d7fd00";
-    const VALID_PUBKEY: [u8; 32] = [
+    pub(crate) const VALID_COSE_SIGN1: &str = "d28447a1013a00010000a10448203df4662ab81f5a5825a7015002203df4662ab81f203df4662ab81f5a0200030104190100051a677485800601070258304f9a6d7554edcaf70301635bddb2618a5e7165bb02e9ff1ec86f276bcfff356ba61171e0cef7861ce3a6be76c6d7fd00";
+    pub(crate) const VALID_PUBKEY: [u8; 32] = [
         0xe7, 0xa9, 0x6e, 0xf0, 0x7e, 0x66, 0xea, 0x92, 0x37, 0xf0, 0x3a, 0x46, 0x74, 0xbb, 0xf4,
         0x3a, 0x8c, 0x1c, 0x9e, 0xb2, 0x7e, 0xdd, 0x23, 0x9f, 0xb5, 0xac, 0x09, 0x87, 0x35, 0xaf,
         0xb0, 0xdf,
@@ -334,7 +447,7 @@ mod tests {
         0x04, 0x87,
     ];
 
-    fn decode_hex(value: &str) -> Vec<u8> {
+    pub(crate) fn decode_hex(value: &str) -> Vec<u8> {
         (0..value.len())
             .step_by(2)
             .map(|index| u8::from_str_radix(&value[index..index + 2], 16).unwrap())
@@ -355,26 +468,29 @@ mod tests {
         assert_eq!(decoded.payload.root_seq, 1);
         assert_eq!(decoded.payload.mop, 2);
 
-        let payload = decoded
-            .verify_structural(&VALID_PUBKEY, 1_735_689_599)
-            .unwrap();
-        assert_eq!(payload.root_seq, 1);
+        decoded.verify_structural(&VALID_PUBKEY).unwrap();
 
         let dio = DioFields {
-            dodag_id: Some(payload.dodag_id),
+            dodag_id: Some(decoded.payload.dodag_id),
             instance: Some(0),
             version: Some(1),
             rank: Some(256),
             mop: Some(2),
         };
-        decoded.cross_check(&dio).unwrap();
+        let mut cache = RootSeqCache::default();
+        let payload = decoded
+            .verify(&VALID_PUBKEY, 1_735_689_599, Some(&dio), &mut cache)
+            .unwrap();
+        assert_eq!(payload.root_seq, 1);
+        assert_eq!(cache.cached(decoded.payload.dodag_id, 0), Some(1));
     }
 
     #[test]
     fn expiry_boundary_rejects_equal_timestamp() {
         let decoded = DecodedRootSig::from_cose_sign1(&decode_hex(VALID_COSE_SIGN1)).unwrap();
+        let mut cache = RootSeqCache::default();
         assert_eq!(
-            decoded.verify_structural(&VALID_PUBKEY, 1_735_689_600),
+            decoded.verify(&VALID_PUBKEY, 1_735_689_600, None, &mut cache),
             Err(RootSigError::Expired)
         );
     }
@@ -396,7 +512,7 @@ mod tests {
             DecodedRootSig::from_cose_sign1(&decode_hex(KID_MISMATCH_COSE_SIGN1)).unwrap();
         assert_eq!(decoded.root_iid, [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(
-            decoded.verify_structural(&VALID_PUBKEY, 1_735_689_599),
+            decoded.verify_structural(&VALID_PUBKEY),
             Err(RootSigError::KidMismatch)
         );
     }
@@ -406,7 +522,7 @@ mod tests {
         let decoded =
             DecodedRootSig::from_cose_sign1(&decode_hex(IMPERSONATION_COSE_SIGN1)).unwrap();
         assert_eq!(
-            decoded.verify_structural(&ATTACKER_PUBKEY, 1_735_689_599),
+            decoded.verify_structural(&ATTACKER_PUBKEY),
             Err(RootSigError::DodagIdMismatch)
         );
     }
@@ -519,5 +635,72 @@ mod tests {
             DecodedRootSig::from_cose_sign1(&nested),
             Err(RootSigError::Decode)
         );
+    }
+}
+
+#[cfg(test)]
+mod full_verify_tests {
+    use super::tests::*;
+    use super::*;
+    use lichen_rpl::root_seq_cache::RootSeqCache;
+
+    #[test]
+    fn replay_is_rejected_and_cache_is_not_regressed() {
+        let decoded = DecodedRootSig::from_cose_sign1(&decode_hex(VALID_COSE_SIGN1)).unwrap();
+        let mut cache = RootSeqCache::default();
+        decoded
+            .verify(&VALID_PUBKEY, 1_735_689_599, None, &mut cache)
+            .unwrap();
+        assert_eq!(
+            decoded.verify(&VALID_PUBKEY, 1_735_689_599, None, &mut cache),
+            Err(RootSigError::ReplayDetected)
+        );
+        assert_eq!(cache.cached(decoded.payload.dodag_id, 0), Some(1));
+    }
+
+    #[test]
+    fn tampered_signature_is_rejected_and_does_not_touch_cache() {
+        // Vector root_dio_signature_tampered: signature byte 0 flipped.
+        let decoded = DecodedRootSig::from_cose_sign1(&decode_hex("d28447a1013a00010000a10448203df4662ab81f5a5825a7015002203df4662ab81f203df4662ab81f5a0200030104190100051a677485800601070258304e9a6d7554edcaf70301635bddb2618a5e7165bb02e9ff1ec86f276bcfff356ba61171e0cef7861ce3a6be76c6d7fd00")).unwrap();
+        decoded.verify_structural(&VALID_PUBKEY).unwrap();
+        assert_eq!(
+            decoded.verify_signature(&VALID_PUBKEY),
+            Err(RootSigError::SignatureInvalid)
+        );
+        let mut cache = RootSeqCache::default();
+        assert_eq!(
+            decoded.verify(&VALID_PUBKEY, 1_735_689_599, None, &mut cache),
+            Err(RootSigError::SignatureInvalid)
+        );
+        assert_eq!(cache.cached(decoded.payload.dodag_id, 0), None);
+    }
+
+    #[test]
+    fn zero_signature_is_rejected() {
+        // Vector root_dio_signature_zero: the valid vector with an
+        // all-zero signature (last 48 bytes zeroed).
+        let mut blob = decode_hex(VALID_COSE_SIGN1);
+        let sig_start = blob.len() - 48;
+        blob[sig_start..].fill(0);
+        let decoded = DecodedRootSig::from_cose_sign1(&blob).unwrap();
+        assert_eq!(
+            decoded.verify_signature(&VALID_PUBKEY),
+            Err(RootSigError::SignatureInvalid)
+        );
+    }
+
+    #[test]
+    fn cross_check_failure_does_not_consume_cache() {
+        let decoded = DecodedRootSig::from_cose_sign1(&decode_hex(VALID_COSE_SIGN1)).unwrap();
+        let mut cache = RootSeqCache::default();
+        let dio = DioFields {
+            version: Some(2),
+            ..DioFields::default()
+        };
+        assert_eq!(
+            decoded.verify(&VALID_PUBKEY, 1_735_689_599, Some(&dio), &mut cache),
+            Err(RootSigError::VersionMismatch)
+        );
+        assert_eq!(cache.cached(decoded.payload.dodag_id, 0), None);
     }
 }
