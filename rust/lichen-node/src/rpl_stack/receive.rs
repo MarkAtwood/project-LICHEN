@@ -296,6 +296,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     if received.ipv6[6] == next_header::IPV6_IN_IPV6 {
                         received.ipv6 = decapsulate_ipv6(&received.ipv6, self.local_rpl_addr)
                             .map_err(RplReceiveError::Receive)?;
+                        // SECURITY (ba39 v1c2): the inner datagram bypassed the
+                        // survey, so an inner whose FIRST next-header is 43
+                        // (RH3) would reach secure.rs's parser without the
+                        // survey's grid constraints or in-transit rejection —
+                        // drop it. Deeper header chains are rejected
+                        // downstream by the secure first-header allowlist.
+                        if received.ipv6[6] == next_header::ROUTING {
+                            return Ok(None);
+                        }
                         return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
                     }
                     return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
@@ -352,6 +361,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             if received.ipv6[6] == next_header::IPV6_IN_IPV6 {
                 received.ipv6 = decapsulate_ipv6(&received.ipv6, self.local_rpl_addr)
                     .map_err(RplReceiveError::Receive)?;
+                // SECURITY (ba39 v1c2): same bounded-profile rule for the
+                // SRH-consumed tunnel path — an inner whose FIRST
+                // next-header is 43 (RH3) is dropped rather than parsed
+                // unsurveyed; deeper chains are rejected downstream.
+                if received.ipv6[6] == next_header::ROUTING {
+                    return Ok(None);
+                }
             }
             return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
         };
