@@ -12,6 +12,7 @@
   "labels": [
     "c",
     "coap",
-    "tdma"
+    "tdma",
+    "tests"
   ]
 }
