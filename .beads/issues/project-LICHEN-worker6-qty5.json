@@ -11,7 +11,8 @@
   "updated_at": "2026-08-29T02:55:34.09197Z",
   "labels": [
     "networking",
-    "rust"
+    "rust",
+    "tests"
   ],
   "dependencies": [
     {
