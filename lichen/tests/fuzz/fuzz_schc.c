@@ -127,26 +127,10 @@ static void fuzz_reassembler(const uint8_t *data, size_t size)
 	}
 	uint8_t packet[FUZZ_REASSEMBLY_BUF_SIZE];
 	struct schc_reassembler reassembler;
-	struct schc_reassembler_config config = {
-		.rule_id = (uint8_t)(config_byte & 0x0F),
-		.dtag = 0,
-		.dtag_bits = 0,
-		.window_bits = (uint8_t)(((config_byte >> 4) & 0x03) + 1),
-		.fcn_bits = (uint8_t)(((config_byte >> 6) & 0x03) + 1),
-		.tile_size = 32,
-		.mode = SCHC_FRAGMENT_ACK_ON_ERROR,
-	};
-
-	if (config.window_bits > 7 || config.fcn_bits > 7 ||
-	    config.dtag_bits + config.window_bits + config.fcn_bits > 8) {
-		config.dtag_bits = 0;
-		config.window_bits = 1;
-		config.fcn_bits = 6;
-	}
-
-	int ret = schc_reassembler_init(&reassembler, &config,
-					packet, sizeof(packet));
-	if (ret != SCHC_OK) {
+	/* The current engine derives rule/window/FCN from each message's
+	 * header bytes; the reassembler only needs storage and a bound. */
+	if (schc_reassembler_init(&reassembler, packet, sizeof(packet),
+				  SCHC_FRAGMENT_DEFAULT_RECEIVER_LIMIT) != SCHC_OK) {
 		return;
 	}
 	uint8_t response[10];
