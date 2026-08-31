@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T16:43:19.03319Z",
   "labels": [
     "ble",
-    "networking"
+    "networking",
+    "tests"
   ],
   "dependencies": [
     {
