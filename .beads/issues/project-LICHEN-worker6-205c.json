@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-205c",
   "title": "cppcheck: 3 remaining style/portability findings block R-APPC-011 gate (shiftNegativeLHS, unsignedPositive, badBitmaskCheck)",
   "description": "Completes the gate-redness picture surfaced while working worker6-ajt4 (uninitvar trio fixed there) and worker6-b7z9.48 (suppressions wiring). With the curated suppressions loaded and both tool-limitation artifacts added (unknownMacro lora_renode.c DT macro; preprocessorErrorDirective ipv6_addr.h __has_include — both added to lichen/.cppcheck-suppressions with rationale in ajt4's round), exactly 3 findings remain, all code-level: (1) lichen/subsys/lichen/link/rf_health.c:46 shiftNegativeLHS — 'diff \u003e\u003e ALPHA' on int32_t EMA accumulator; arithmetic shift of negative is intentional (division would change rounding for negative SNR deltas) — needs either an inline-suppr with that rationale or a restructure via __builtin alternatives; (2) lichen/subsys/lichen/meshtastic/adapter_parse.c:232 unsignedPositive — 'field \u003e= 0U' redundant when field is unsigned; remove the redundant test (verify field's type first); (3) lichen/subsys/lichen/rpl/messages.c:442 badBitmaskCheck — cppcheck misreads 'kd = (a\u003c\u003c7) | (b\u003c\u003c6) | (flags \u0026 0x3F)' as OR-with-zero; likely FP, needs inline-suppr or restructure. After all three: the CI-form invocation 'cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --inline-suppr --suppress=missingIncludeSystem --suppress=unmatchedSuppression --suppressions-list=lichen/.cppcheck-suppressions --std=c11 -I lichen/include -I lichen/subsys/lichen lichen/subsys/ lichen/lib/ lichen/drivers/' must exit 0. Ground truth pre-this-work: the gate exited 1 with the 2 tool-limitation errors + 3 uninitvar (fixed in ajt4) + these 3 — i.e. CI cppcheck was already red before any wiring change.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T18:21:19.054363543Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-08-31T19:11:15.020082765Z",
+  "updated_at": "2026-08-31T19:23:23.857997155Z",
+  "closed_at": "2026-08-31T19:23:23.857997155Z",
+  "close_reason": "RE-CLOSE (store write lost again — bd8h). Completed and committed as 57319ec805 on beads-worker-7: R-APPC-011 gate exits 0; rf_health.c UB fixes (multiply not negative-left-shift; clamp before rounding); adapter_parse.c tautology removed; messages.c badBitmaskCheck in curated suppressions with accurate rationale. 3x codereview PASS; 5 host suites green; follow-up worker6-whry filed.",
   "labels": [
     "c-safety"
   ],

@@ -1,0 +1,7 @@
+{
+  "id": "1788204992345253408-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 diagnosis round complete (released at timebox): root cause is the deliberate admission-contract tightening (85a1f1d218 + 3d104a10cd, Python-parity), not a production bug — production admission matches the Python reference. The six failures are stale fixtures delivering DIOs unicast / in shapes the canonical-multicast contract rejects. Full per-test rework plan filed as the child follow-up bead. Bisection evidence: green at 5beefd7b295, red by 48940e0975 (sync merge window); main tip 13152d6e78 still red with the same 6 (302 passed).",
+  "created_at": "2026-08-31T19:36:32.345253408Z"
+}
