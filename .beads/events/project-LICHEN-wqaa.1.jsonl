@@ -10,3 +10,4 @@
 {"id":"01a055fd-096a-7c48-b4c0-e288e58fac42","issue_id":"project-LICHEN-wqaa.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-08-31T04:04:01.514806447Z"}
 {"id":"01a055fd-0b41-7b74-a27c-8ffe4a113337","issue_id":"project-LICHEN-wqaa.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: oscore","created_at":"2026-08-31T04:04:01.985751646Z"}
 {"id":"01a055fd-0ce9-706d-820f-ebbcfdebceea","issue_id":"project-LICHEN-wqaa.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-08-31T04:04:02.409029287Z"}
+{"id":"01a055fd-0e7f-7261-ad77-9efd29cb6528","issue_id":"project-LICHEN-wqaa.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: schc","created_at":"2026-08-31T04:04:02.815157153Z"}
