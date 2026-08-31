@@ -28,6 +28,18 @@ function(lichen_test_target target)
         CONFIG_LICHEN_LINK_MAX_NEIGHBORS=16
     )
 
+    # Vendored third-party sources are not held to the project's
+    # -Wconversion discipline (monocypher's integer plumbing is upstream
+    # style; patching it per gcc version is unmaintainable).
+    get_target_property(_lichen_test_sources ${target} SOURCES)
+    foreach(_lichen_source IN LISTS _lichen_test_sources)
+        get_filename_component(_lichen_name "${_lichen_source}" NAME)
+        if(_lichen_name MATCHES "^monocypher")
+            set_source_files_properties("${_lichen_source}" PROPERTIES
+                COMPILE_OPTIONS "-Wno-conversion")
+        endif()
+    endforeach()
+
     # Hardening flags - NO EXCEPTIONS
     # -std=c23 needs GCC 14+/current clang; older GCC accepts c2x for the
     # same standard draft.
