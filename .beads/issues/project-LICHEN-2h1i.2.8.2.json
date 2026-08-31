@@ -14,7 +14,8 @@
   "close_reason": "Created as child to scope lichen-oscore Group OSCORE (RFC 9203) and dead-drop E2E context support",
   "labels": [
     "oscore",
-    "spec"
+    "spec",
+    "human-only"
   ],
   "dependencies": [
     {
