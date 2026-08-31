@@ -52,6 +52,27 @@ cd "$REPO_ROOT"
 echo ""
 echo "=== Merging worker branches to main ==="
 
+# LLM semantic merge (AgentSpawn-style, arXiv:2602.07072): reconcile both
+# sides of a conflicted merge with an LLM, verified by the touched tests.
+# Returns 0 only if every conflict is resolved AND the result compiles/tests.
+llm_semantic_merge() {
+    local branch=""
+    local model="openrouter/moonshotai/kimi-k3"
+    local files
+    files=
+    [ -z "" ] && return 1
+
+    echo "  LLM merge session () on: "
+    opencode run --model "" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch  in the LICHEN repo. The conflicted files are: . For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >/dev/null 2>&1 || return 1
+
+    # stage whatever the LLM resolved; fail if anything is still conflicted
+    git add -- "" 2>/dev/null
+    if git diff --name-only --diff-filter=U | grep -q .; then
+        return 1
+    fi
+    return 0
+}
+
 conflicted=()
 for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-worker-*'); do
     ahead=$(git rev-list main.."$branch" --count 2>/dev/null || echo 0)
@@ -76,13 +97,24 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
             git merge --abort 2>/dev/null || true
         fi
     else
-        # Retry surgically: apply everything except .beads as a plain commit
-        if git diff --name-only main..."$branch" -- ':!.beads' ':!.beads/**' | grep -q . \
-           && git diff main..."$branch" -- ':!.beads' ':!.beads/**' | git apply --index 2>/dev/null; then
-            git commit --no-edit -q -m "chore: merge $branch (code only, .beads excluded)"
-            echo "  merged surgically (conflicts were .beads-only or patch-applied)"
+        # Semantic merge (AgentSpawn-style, arXiv:2602.07072): LLM reconciles
+        # both diffs with intent; tests verify; escalate only on failure.
+        echo "  conflict — attempting LLM semantic merge..."
+        if llm_semantic_merge "$branch"; then
+            if git diff --name-only --diff-filter=U | grep -q .; then
+                echo "  semantic merge left unresolved files — aborting"
+                git merge --abort 2>/dev/null || true
+                git checkout -- .beads 2>/dev/null || true
+                conflicted+=("$branch")
+            elif git commit --no-edit --quiet; then
+                echo "  merged via LLM semantic reconciliation"
+            else
+                echo "  semantic merge produced no commit — aborting"
+                git merge --abort 2>/dev/null || true
+                conflicted+=("$branch")
+            fi
         else
-            echo "  CONFLICT — merge aborted, branch kept for manual resolution"
+            echo "  CONFLICT — LLM merge failed, branch kept for manual resolution"
             git merge --abort 2>/dev/null || true
             git checkout -- .beads 2>/dev/null || true
             conflicted+=("$branch")

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.20",
+  "title": "Border router NTS/Roughtime client and LCI time proxy absent (spec 09 14.6 SHOULDs)",
+  "description": "Spec 09 14.6 Border Router Responsibilities R-09-126,129: border routers with internet connectivity SHOULD run NTS client (preferred) or Roughtime client, and SHOULD provide NTS/Roughtime proxy for LCI clients. Classification: NOT-IMPLEMENTED - no NTS (RFC 8915) or Roughtime client/proxy code found anywhere in rust/, lichen/, python/ (grep for nts/roughtime hits only spec text, stratum enums, and Python python/src/lichen/timing/time_sync.py protocol-stratum mapping constants _PROTOCOL_STRATUM:140-142 which are sample-validation, not clients). This breaks the documented Network time-source path: the source-classes table (14.6) lists NTS/Roughtime as the internet-source examples and strata 2/3 exist in every codec, but no implementation can currently source them. Related SHOULDs that ARE implemented: floor validation before advertising (C time_sync.c, Python verifier), DIO time advertisement codecs (all languages, packets-timing.json), CoAP status exposure (lichen/apps/gateway/src/status_cbor.c:254-376; rust/lichen-gateway/src/time_status.rs). Suggested placement: rust/lichen-gateway (BR binary) - NTS-KE + NTP/NTS client, Roughtime client, and a CoAP proxy resource under LCI; stratum 2/3 already defined.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:19.583424357Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T07:33:19.583424357Z",
+  "labels": [
+    "gateway",
+    "time-sync",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.20",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:19.794750743Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

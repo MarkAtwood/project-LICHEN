@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.13",
+  "title": "Zephyr C: time-provider trust machinery (spec 09 14.6) absent - simplified time_sync only",
+  "description": "Spec 09 14.6 R-09-024..035, 036..061, 072..121: candidate sample provenance retention (immutable evidence issued at provider/verifier boundary, no caller-promoted booleans), provision verifier (44-octet Board-Identity||Record-Version||Epoch record, rollback binding version+epoch+digest, virgin-store marker minted once + atomically consumed, admin capability for replace/clear, sync non-reentrant hooks, distinct diagnostics), one monotonic-clock capability + opaque clock-domain binding for LinkLayer/provider/verifier/tracker, one-use receipts -\u003e sealed immutable authenticated-DIO results, correction bounds (per-step, cumulative, 1e6 ppm cap, overflow-safe), replay barriers (one-use issuance consumed on first consideration, barrier before option compare, stable opaque generation keys), serialized tracker with live-floor re-evaluation on every read/transition. Classification: implemented+tested in Python ONLY (python/src/lichen/timing/provisioning.py, stratum.py, samples.py, source.py, time_sync.py; python/src/lichen/link/link_layer.py, dio_handler.py, receipts.py; tests python/tests/timing/test_time_sync.py ~2500 lines) - C/Zephyr lichen/subsys/lichen/link/time_sync.c implements only simplified subset (wall clock/floor/source classes/desync, no provenance evidence, no provision verifier, no receipts, no correction/replay policy); Rust lichen-link implements codecs/tables/floor only. Suggested placement: port provision verifier + tracker to lichen/subsys/lichen/link (persistent storage via NVS) or scope-documented decision that C nodes run reduced trust model; coordinate with human - large surface.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:15.65751298Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T07:33:15.65751298Z",
+  "labels": [
+    "zephyr",
+    "time-sync",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.13",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:15.792710993Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
