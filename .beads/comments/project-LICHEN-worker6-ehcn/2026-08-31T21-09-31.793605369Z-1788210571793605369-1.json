@@ -1,0 +1,7 @@
+{
+  "id": "1788210571793605369-1",
+  "issue_id": "project-LICHEN-worker6-ehcn",
+  "author": "opencode-worker-4",
+  "text": "Worker-4 synthesis (from 0l4q fixture work, 2026-08-31): the recommended resolution for this decision is option A applied minimally — receive.rs:578 (solicited unicast DIS response) re-targets send_dio(RPL_ALL_NODES) instead of unicast, because (a) the profile's admission contract (R-09-005, Python parity) makes unicast-dst DIOs inadmissible at wire_is_for_local before admission even runs; (b) Python's UNICAST_DIO_WITH_CONFIGURATION has zero production callers (dis.py only), so Python is already consistent — Rust receive.rs:578 is the lone divergent production caller; (c) draft-lichen-rpl-lora-00 6.4's 'Targeted DIS: unicast response' predates the gate and is superseded. With that change both remaining red tests (multicast_dio_and_dis_are_received:1103, three_rpl_stacks:1685) pass AS WRITTEN — the leaf hears the multicast DIO and joins. RFC 6550 8.3's unicast-response SHOULD is overridden by the profile contract; spec 09 13.3 text (ff02::1a only) already documents this. If bounded solicited-unicast admission (option B) is preferred instead, it needs the solicitation ledger + wire_is_for_local + Python mirror — significantly larger. Option A is one line plus test verification.",
+  "created_at": "2026-08-31T21:09:31.793605369Z"
+}

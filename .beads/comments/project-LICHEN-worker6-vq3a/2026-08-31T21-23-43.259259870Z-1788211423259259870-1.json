@@ -1,0 +1,7 @@
+{
+  "id": "1788211423259259870-1",
+  "issue_id": "project-LICHEN-worker6-vq3a",
+  "author": "opencode-worker-5",
+  "text": "SCOPE GATE discovered 2026-08-31: the parent model decision (Option A wall-clock cap vs B superframe-denominated vs C implicit-renewal) is 70p7, which is labeled human-only — so full wire-model reconciliation (integer keys, expiry, claim_seq, re-spec) cannot land until Mark decides. What CAN land now per the spec as written (spec/08 6.3 steps 7/7a): the dual-bound invariant on the current timestamp field — expiry-style upper bound (timestamp - now \u003c= MAX_CLAIM_DURATION + tolerance) already implemented in j6o2 (10s horizon) — plus the lower bound check and horizon constant reconciliation. Decomposing: child (1) landable now — verify_slot_claim dual-bound hardening (reject timestamp \u003c now - tolerance as stale, horizon constant documented as provisional pending 70p7); child (2) BLOCKED on 70p7 human decision — the actual wire-model reconciliation (integer keys, expiry field, claim_seq replay gate, 305s tolerance). Releasing parent; child 1 claimable.",
+  "created_at": "2026-08-31T21:23:43.25925987Z"
+}

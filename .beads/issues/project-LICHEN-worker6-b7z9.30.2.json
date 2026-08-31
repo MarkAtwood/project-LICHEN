@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.30.2",
+  "title": "C gradient: implement post-step-6 minimum-SF floors a-d (spec 02a 2a.8)",
+  "description": "Child of b7z9.30. Spec 2a.8: after step 6, the Downgrade (MUST increase SF) column applies as minimum-SF floors in order: a. EMA_SNR \u003c -5 THEN SF=12; b. EMA_SNR \u003c 0 THEN SF=MAX(11,SF); c. Density \u003e 8 THEN SF=MAX(11,SF); d. LoadFactor \u003e 0.8 THEN SF=MAX(11,SF). Absent from lichen/subsys/lichen/routing/gradient.c lichen_gradient_sf_select. Needs a load_factor input (function currently lacks one — signature change; check callers incl. Rust FFI and TDMA). Order matters (a then b then c then d, each MAX against the running SF). Unit tests per floor + combined. Land after the step-3 threshold child. Discovered from project-LICHEN-worker6-b7z9.30.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:25:56.902784788Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T21:25:56.902784788Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "ccp15",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.30.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.30",
+      "type": "parent-child",
+      "created_at": "2026-08-31T21:25:57.090341076Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

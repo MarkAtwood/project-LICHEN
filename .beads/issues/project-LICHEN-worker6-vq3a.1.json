@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-vq3a.1",
+  "title": "vq3a(1): slot-claim dual time bound (stale + horizon) on current timestamp field",
+  "description": "Parent: project-LICHEN-worker6-vq3a. Landable slice pending 70p7's human decision: in python/src/lichen/gateway/slot_claim.py verify_slot_claim, add the LOWER bound (reject timestamp \u003c now - STALE_CLAIM_TOLERANCE_SEC for stale/replayed-adjacent claims; step 7 analogue) alongside j6o2's upper bound; rename/document MAX_CLAIM_DURATION_SEC as provisional (spec 6.3 step 7a says 305s with the 60s superframe; current constant uses the 2s link superframe — add a comment citing 70p7/vq3a(2) for the final constant). Tests: stale-claim rejection, boundary at exactly now, documented provisional horizon. No wire-format change.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:23:43.547915048Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T21:23:44.624725883Z",
+  "started_at": "2026-08-31T21:23:44.624725883Z",
+  "lease_expires_at": "2026-08-31T21:28:44.624725883Z",
+  "heartbeat_at": "2026-08-31T21:23:44.624725883Z",
+  "labels": [
+    "decomposed",
+    "python",
+    "gateway",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vq3a.1",
+      "depends_on_id": "project-LICHEN-worker6-vq3a",
+      "type": "parent-child",
+      "created_at": "2026-08-31T21:23:43.681508351Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
