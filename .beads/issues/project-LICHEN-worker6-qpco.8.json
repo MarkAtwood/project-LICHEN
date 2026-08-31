@@ -11,7 +11,8 @@
   "labels": [
     "l2",
     "python",
-    "tdma"
+    "tdma",
+    "tests"
   ],
   "dependencies": [
     {
