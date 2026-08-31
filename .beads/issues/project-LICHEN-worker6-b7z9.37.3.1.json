@@ -1,0 +1,35 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.3.1",
+  "title": "b7z9.37.3(i): RootSeqCache module in lichen-rpl (replay + wrap fail-closed)",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37.3 (spec/06-security.md:668,687). Standalone rust/lichen-rpl/src/root_seq_cache.rs: RootSeqCache keyed by (dodag_id [u8;16], instance u8); accept(record) only when root_seq strictly greater than the cached value for that key (equal-or-lower = replay; any non-increase also enforces the MUST-NOT-WRAP rule since a post-wrap counter appears lower); missing key = first observation, accepted. Follow lichen-rpl crate conventions (see dao_timing.rs/table.rs for collection style; check no_std posture of siblings). Unit tests: replay of equal seq rejected, lower rejected, post-wrap lower rejected, per-(dodag_id,instance) isolation, first-observation accepted, distinct instances independent. No wiring — sibling (ii) integrates into RplStack; child .1 consumes at receiver validation.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T18:34:36.167672536Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T18:34:37.472311724Z",
+  "started_at": "2026-08-31T18:34:37.472311724Z",
+  "lease_expires_at": "2026-08-31T18:39:37.472311724Z",
+  "heartbeat_at": "2026-08-31T18:34:37.472311724Z",
+  "labels": [
+    "decomposed",
+    "rust",
+    "rpl",
+    "python",
+    "security",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.3.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.3",
+      "type": "parent-child",
+      "created_at": "2026-08-31T18:34:36.31594144Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
