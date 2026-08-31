@@ -466,6 +466,13 @@ int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 
+	/* Self-defending: do not rely on callers to have checked the version
+	 * (mirrors Rust validate_full_ipv6_structure and Python
+	 * IPv6Header.from_bytes, which both validate it internally). */
+	if (ipv6_version(packet) != 6) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
 	declared_payload_len = ipv6_payload_len(packet);
 	if (declared_payload_len != pkt_len - IPV6_HDR_LEN) {
 		return SCHC_ERR_NO_MATCHING_RULE;

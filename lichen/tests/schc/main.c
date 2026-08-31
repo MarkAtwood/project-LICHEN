@@ -16,6 +16,7 @@
  */
 
 #include <lichen/schc.h>
+#include "schc_internal.h"
 #include <limits.h>
 #include <string.h>
 #include <stdio.h>
@@ -374,6 +375,66 @@ static int test_reject_bad_udp_len(void)
 	return 1;
 }
 
+static int test_validator_direct_call_self_defense(void)
+{
+	/* Direct-call contract of validate_ipv6_transport_lengths (internal
+	 * validator, schc_internal.h): must be self-defending regardless of
+	 * caller guarantees - truncation shorter than the IPv6 header must
+	 * reject without reading past the buffer (regression guard for the
+	 * latent stack OOB tracked by project-LICHEN-worker6-nyx7), and a
+	 * non-IPv6 version must reject without relying on the caller's
+	 * version check (bead project-LICHEN-worker6-uylk), mirroring the
+	 * internal checks of the Python and Rust validators. */
+	static const uint8_t truncated[4] = { 0x60, 0x00, 0x00, 0x00 };
+	static const uint8_t version4[40] = { [0] = 0x45, [6] = 59 };
+	/* version nibble 4 with a chain-terminating next-header so the version
+	 * check is the ONLY rejection path: pre-uylk code returned SCHC_OK
+	 * here (non-UDP terminal, zero payload length consistent), so this
+	 * fixture discriminates a revert of the self-check. */
+	static const uint8_t minimal_v6[40] = { [0] = 0x60, [6] = 59 };
+	uint8_t coap[64];
+	size_t coap_len;
+	int ret;
+
+	coap_len = hex_decode(
+		"6000000000131140fe800000000000000000000000000001"
+		"fe80000000000000000000000000000216331633001328dd"
+		"40011234ff737461747573",
+		coap, sizeof(coap));
+	if (coap_len == 0) {
+		printf("  FAIL: hex decode error\n");
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(truncated, sizeof(truncated));
+	if (ret != SCHC_ERR_NO_MATCHING_RULE) {
+		printf("  FAIL: truncated input expected SCHC_ERR_NO_MATCHING_RULE (got %d)\n",
+		       ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(version4, sizeof(version4));
+	if (ret != SCHC_ERR_NO_MATCHING_RULE) {
+		printf("  FAIL: version-4 input expected SCHC_ERR_NO_MATCHING_RULE (got %d)\n",
+		       ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(minimal_v6, sizeof(minimal_v6));
+	if (ret != SCHC_OK) {
+		printf("  FAIL: minimal version-6 header expected SCHC_OK (got %d)\n", ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(coap, coap_len);
+	if (ret != SCHC_OK) {
+		printf("  FAIL: valid CoAP packet expected SCHC_OK (got %d)\n", ret);
+		return 0;
+	}
+
+	return 1;
+}
+
 static int test_uncompressed_length_exceeds_int(void)
 {
 	static const uint8_t packet = 0;
@@ -409,6 +470,7 @@ int main(void)
 	RUN_TEST(test_oscore_linklocal);
 	RUN_TEST(test_oscore_global);
 	RUN_TEST(test_reject_non_ipv6_input);
+	RUN_TEST(test_validator_direct_call_self_defense);
 	RUN_TEST(test_unknown_rule_id);
 	RUN_TEST(test_truncated_coap_linklocal);
 	RUN_TEST(test_truncated_coap_global);
