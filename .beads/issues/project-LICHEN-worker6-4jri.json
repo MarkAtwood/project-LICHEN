@@ -3,13 +3,13 @@
   "title": "Consume canonical GCP-3 key-rotation vectors in Python",
   "description": "P2 interop review after yzir canonicalization: gcp3_trust_models.json now fixes the domain || old key || old IID || new key || BE64 sequence transcript and regenerated signatures, but no Python test consumes those rotation entries. Add a Python production-oracle consumer that checks transcript bytes, Schnorr verdict, and TrustStore accept/reject behavior for every rotation vector so Rust/vector changes cannot silently diverge.",
   "status": "open",
-  "priority": 2,
+  "priority": 3,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T17:48:53.475121Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:38:20.533818Z",
+  "updated_at": "2026-08-31T05:24:32.846617927Z",
   "started_at": "2026-08-24T17:49:03.208853Z",
   "labels": [
     "gateway"

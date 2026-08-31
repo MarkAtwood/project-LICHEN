@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.8",
+  "title": "C DTN uses uptime as Unix time (violates clockless-node MUST); DTN S-flag HBH option absent",
+  "description": "Spec 05-routing.md §9.8 (R-05-080): 'Nodes without valid wall-clock time MUST NOT drop messages based on expiry timestamp alone; they SHOULD forward or store messages and let downstream nodes with valid time enforce expiry.' Violation: C lichen/subsys/lichen/coap/coap_dtn.c:53-56 dtn_get_unix_time() returns k_uptime_get()/1000 (uptime AS Unix time), used for expiry at :62,:89,:283 and TTL at :159-160 — a clockless node will drop/expire against uptime. Directly contradicts docs/firmware-time-provider.md:110-111 ('Never synthesize Unix time from uptime'); the real wall-clock provider exists (lichen/subsys/lichen/link/time_sync.c:770 lichen_wall_clock_valid) but is not wired into DTN. Also: the DTN wire format (S flag in IPv6 hop-by-hop options; App Data Type 0x03 absolute expiry) is absent in all three implementations — C packet-\u003edtn_expiry_unix is caller-populated and only test code populates it (lichen/tests/routing_dispatch/src/main.c:395); docs/spec-chapter-breakdowns.md:415-417 lists HBH option work as pending. Fix: wire lichen_wall_clock_valid into DTN expiry decisions (fail-open to store/forward when invalid), implement S-flag/HBH expiry option, add vectors.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:25:46.346887554Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:25:46.346887554Z",
+  "labels": [
+    "spec-gap",
+    "firmware",
+    "zephyr",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.8",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:25:46.490376294Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
