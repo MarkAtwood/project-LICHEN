@@ -11,6 +11,7 @@
   "updated_at": "2026-08-27T22:10:48.646945Z",
   "labels": [
     "codereview",
-    "correctness"
+    "correctness",
+    "python"
   ]
 }
