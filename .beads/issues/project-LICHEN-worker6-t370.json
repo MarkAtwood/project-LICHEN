@@ -14,7 +14,8 @@
     "coap",
     "l2",
     "simulation",
-    "tests"
+    "tests",
+    "zephyr"
   ],
   "dependencies": [
     {
