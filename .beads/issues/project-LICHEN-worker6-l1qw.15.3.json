@@ -10,6 +10,9 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T20:16:59.774552Z",
   "started_at": "2026-08-28T03:12:20.944466Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-l1qw.15.3",
