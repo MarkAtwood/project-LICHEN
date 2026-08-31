@@ -84,3 +84,45 @@ async def test_post_raw_tx_fails_closed_without_level_source() -> None:
     )
     assert resp.code == aiocoap.UNAUTHORIZED
     assert resource.last_frame is None
+
+
+@pytest.mark.asyncio
+async def test_post_raw_tx_rejects_beyond_local_without_opt_in() -> None:
+    resource = RawTxResource(
+        clock=lambda: 0.0,
+        access_level=lambda request: AccessLevel.ADMIN,
+        beyond_local_detector=lambda request: True,
+    )
+    resp = await resource.render_post(
+        Message(code=aiocoap.POST, payload=cbor2.dumps({"frame": b"\xaa"}))
+    )
+    assert resp.code == aiocoap.FORBIDDEN
+    assert resource.last_frame is None
+
+
+@pytest.mark.asyncio
+async def test_post_raw_tx_allows_beyond_local_with_opt_in() -> None:
+    resource = RawTxResource(
+        clock=lambda: 0.0,
+        access_level=lambda request: AccessLevel.ADMIN,
+        beyond_local_detector=lambda request: True,
+        expose_beyond_local=True,
+    )
+    resp = await resource.render_post(
+        Message(code=aiocoap.POST, payload=cbor2.dumps({"frame": b"\xaa"}))
+    )
+    assert resp.code == aiocoap.CHANGED
+    assert resource.last_frame == b"\xaa"
+
+
+@pytest.mark.asyncio
+async def test_post_raw_tx_local_remote_passes_guard() -> None:
+    resource = RawTxResource(
+        clock=lambda: 0.0,
+        access_level=lambda request: AccessLevel.ADMIN,
+        beyond_local_detector=lambda request: False,
+    )
+    resp = await resource.render_post(
+        Message(code=aiocoap.POST, payload=cbor2.dumps({"frame": b"\xaa"}))
+    )
+    assert resp.code == aiocoap.CHANGED

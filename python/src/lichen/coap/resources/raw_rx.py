@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from aiocoap import BAD_REQUEST, CHANGED, Message, resource
@@ -13,6 +14,7 @@ from lichen.coap.resources.base import (
     CBOR,
     AccessLevelResolver,
     _cbor_response,
+    beyond_local_denied,
     denied_response,
 )
 from lichen.coap.resources.cbor_validation import _decode_single_cbor
@@ -45,14 +47,23 @@ class RawRxResource(resource.Resource):
         ttl: RawDiagTTL | None = None,
         *,
         access_level: AccessLevelResolver | None = None,
+        beyond_local_detector: Callable[[Message], bool] | None = None,
+        expose_beyond_local: bool = False,
     ) -> None:
         super().__init__()
         self.ttl = ttl if ttl is not None else RawDiagTTL()
         self.include_payload = False
         self._access_level = access_level
+        self._beyond_local_detector = beyond_local_detector
+        self._expose_beyond_local = expose_beyond_local
 
     def _denied(self, request: Message, method: str) -> Message | None:
-        return denied_response(self._access_level, request, method, self._ACCESS_RESOURCE)
+        return (
+            beyond_local_denied(
+                self._beyond_local_detector, self._expose_beyond_local, request
+            )
+            or denied_response(self._access_level, request, method, self._ACCESS_RESOURCE)
+        )
 
     async def render_get(self, request: Message) -> Message:
         denied = self._denied(request, "GET")
@@ -103,9 +114,17 @@ class RawRxEventsResource(resource.ObservableResource):
 
     _ACCESS_RESOURCE = "/diag/raw/rx/events"
 
-    def __init__(self, *, access_level: AccessLevelResolver | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        access_level: AccessLevelResolver | None = None,
+        beyond_local_detector: Callable[[Message], bool] | None = None,
+        expose_beyond_local: bool = False,
+    ) -> None:
         super().__init__()
         self._access_level = access_level
+        self._beyond_local_detector = beyond_local_detector
+        self._expose_beyond_local = expose_beyond_local
         self._last: dict[str, Any] = {}
 
     def publish(self, event: dict[str, Any]) -> None:
@@ -115,9 +134,9 @@ class RawRxEventsResource(resource.ObservableResource):
         self.updated_state()
 
     async def render_get(self, request: Message) -> Message:
-        denied = denied_response(
-            self._access_level, request, "GET", self._ACCESS_RESOURCE
-        )
+        denied = beyond_local_denied(
+            self._beyond_local_detector, self._expose_beyond_local, request
+        ) or denied_response(self._access_level, request, "GET", self._ACCESS_RESOURCE)
         if denied is not None:
             return denied
         return _cbor_response(dict(self._last))
