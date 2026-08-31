@@ -137,62 +137,60 @@ int lichen_checkin_post_handler(struct coap_resource *resource,
 				struct coap_packet *request,
 				struct sockaddr *addr, socklen_t addr_len)
 {
-	struct coap_oscore_unprotect_result oscore;
+	uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
 	struct lichen_checkin c;
 	enum lichen_checkin_error detail = LICHEN_CHECKIN_OK;
 	uint8_t code;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len,
-						     COAP_METHOD_POST, &oscore);
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, oscore_plain_buf,
+					     sizeof(oscore_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
 	}
-	if (!oscore.is_protected &&
-	    !lichen_coap_is_local_admin(addr, addr_len)) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_UNAUTHORIZED,
-						    0, NULL, 0U);
+	if (payload == NULL || payload_len == 0U) {
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
-	if (oscore.payload == NULL || oscore.payload_len == 0U) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0U);
-	}
-	ret = lichen_checkin_from_cbor(oscore.payload, oscore.payload_len, &c);
+	ret = lichen_checkin_from_cbor(payload, payload_len, &c);
 	if (ret != LICHEN_CHECKIN_OK) {
 		LOG_WRN("check-in rejected: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0U);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 	/* An OSCORE-protected request is bound to its source address
 	 * (the context lookup keys on the address IID), so the
 	 * self-asserted node must be that address. */
-	if (oscore.is_protected &&
+	if (is_protected &&
 	    !node_matches_peer(c.node, addr, addr_len)) {
 		LOG_WRN("check-in node does not match source");
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_FORBIDDEN,
-						    0, NULL, 0U);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_FORBIDDEN);
 	}
 
 	k_mutex_lock(&s_lock, K_FOREVER);
 	service_tick_locked();
-	code = lichen_checkin_post(&s_service, oscore.payload,
-				   oscore.payload_len, &detail);
+	code = lichen_checkin_post(&s_service, payload,
+				   payload_len, &detail);
 	k_mutex_unlock(&s_lock);
 
 	if (code != LICHEN_CHECKIN_CODE_CHANGED) {
 		LOG_WRN("check-in rejected: %d", detail);
 	}
-	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, code, 0, NULL, 0U);
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+				    oscore_ctx, piv, piv_len, code);
 }
 
 int lichen_checkin_get_handler(struct coap_resource *resource,
@@ -225,49 +223,48 @@ int lichen_rollcall_post_handler(struct coap_resource *resource,
 				 struct coap_packet *request,
 				 struct sockaddr *addr, socklen_t addr_len)
 {
-	struct coap_oscore_unprotect_result oscore;
+	uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
 	struct lichen_rollcall_req req;
 	char creator_text[LICHEN_ROLLCALL_CREATOR_MAX];
 	enum lichen_checkin_error detail = LICHEN_CHECKIN_OK;
 	uint8_t code;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len,
-						     COAP_METHOD_POST, &oscore);
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, oscore_plain_buf,
+					     sizeof(oscore_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
 	}
-	if (!oscore.is_protected &&
-	    !lichen_coap_is_local_admin(addr, addr_len)) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_UNAUTHORIZED,
-						    0, NULL, 0U);
-	}
-	if (oscore.payload == NULL || oscore.payload_len == 0U) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0U);
+	if (payload == NULL || payload_len == 0U) {
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 	const char *creator = peer_identity_text(creator_text,
 						 sizeof(creator_text), addr,
 						 addr_len);
-	ret = lichen_rollcall_req_from_cbor(oscore.payload,
-					    oscore.payload_len, &req);
+	ret = lichen_rollcall_req_from_cbor(payload,
+					    payload_len, &req);
 	if (ret != LICHEN_CHECKIN_OK) {
 		LOG_WRN("roll-call rejected: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0U);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 	k_mutex_lock(&s_lock, K_FOREVER);
 	service_tick_locked();
-	code = lichen_rollcall_post_ex(&s_service, oscore.payload,
-				       oscore.payload_len, creator,
+	code = lichen_rollcall_post_ex(&s_service, payload,
+				       payload_len, creator,
 				       &detail);
 	k_mutex_unlock(&s_lock);
 
@@ -276,8 +273,8 @@ int lichen_rollcall_post_handler(struct coap_resource *resource,
 	} else if (code != LICHEN_CHECKIN_CODE_CREATED) {
 		LOG_WRN("roll-call rejected: %d", detail);
 	}
-	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, code, 0, NULL, 0U);
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+				    oscore_ctx, piv, piv_len, code);
 }
 
 int lichen_rollcall_get_handler(struct coap_resource *resource,
@@ -333,38 +330,37 @@ int lichen_checkin_config_put_handler(struct coap_resource *resource,
 				      struct coap_packet *request,
 				      struct sockaddr *addr, socklen_t addr_len)
 {
-	struct coap_oscore_unprotect_result oscore;
+	uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
 	struct lichen_checkin_config cfg;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len,
-						     COAP_METHOD_PUT, &oscore);
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_PUT, oscore_plain_buf,
+					     sizeof(oscore_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
 	}
-	if (!oscore.is_protected &&
-	    !lichen_coap_is_local_admin(addr, addr_len)) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_UNAUTHORIZED,
-						    0, NULL, 0U);
-	}
-	if (oscore.payload == NULL || oscore.payload_len == 0U) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0U);
+	if (payload == NULL || payload_len == 0U) {
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
-	ret = lichen_checkin_config_from_cbor(oscore.payload,
-					      oscore.payload_len, &cfg);
+	ret = lichen_checkin_config_from_cbor(payload,
+					      payload_len, &cfg);
 	if (ret != LICHEN_CHECKIN_OK) {
 		LOG_WRN("check-in config rejected: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0U);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+						    oscore_ctx, piv, piv_len,
+          COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 	k_mutex_lock(&s_lock, K_FOREVER);
@@ -373,7 +369,8 @@ int lichen_checkin_config_put_handler(struct coap_resource *resource,
 	k_mutex_unlock(&s_lock);
 
 	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, COAP_RESPONSE_CODE_CHANGED,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_CHANGED,
 					    0, NULL, 0U);
 }
 

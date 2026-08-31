@@ -924,25 +924,34 @@ static int send_created(struct coap_resource *resource,
 int lichen_waypoints_post_handler(struct coap_resource *resource,
                                   struct coap_packet *request,
                                   struct sockaddr *addr, socklen_t addr_len) {
-  struct coap_oscore_unprotect_result oscore;
+  uint8_t oscore_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
+  uint8_t piv[OSCORE_PIV_MAX_LEN];
+  size_t piv_len = 0;
+  struct oscore_ctx *oscore_ctx = NULL;
+  const uint8_t *payload = NULL;
+  uint16_t payload_len = 0;
+  bool is_protected = false;
   struct lichen_waypoint candidate;
   struct lichen_waypoint created;
   char actor[LICHEN_WAYPOINT_CREATOR_MAX + 1U] = {0};
   bool local_admin;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
-      resource, request, addr, addr_len, COAP_METHOD_POST, &oscore);
+  ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+                                       COAP_METHOD_POST, oscore_plain_buf,
+                                       sizeof(oscore_plain_buf), &payload,
+                                       &payload_len, &oscore_ctx, piv,
+                                       &piv_len, &is_protected);
   if (ret != 0) {
     return ret;
   }
   ret = request_actor(addr, addr_len, actor, &local_admin);
-  if (ret < 0 || (!local_admin && !oscore.is_protected)) {
-    return coap_oscore_respond_resource(
-        resource, request, addr, addr_len, &oscore,
-        COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
+  if (ret < 0 || (!local_admin && !is_protected)) {
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_UNAUTHORIZED);
   }
-  if (!oscore.is_protected) {
+  if (!is_protected) {
     int content_format =
         coap_get_option_int(request, COAP_OPTION_CONTENT_FORMAT);
 
@@ -952,46 +961,45 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
           COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
     }
   }
-  if (oscore.payload == NULL || oscore.payload_len == 0U) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
-                                        0, NULL, 0);
+  if (payload == NULL || payload_len == 0U) {
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_BAD_REQUEST);
   }
-  if (oscore.payload_len > WAYPOINT_POST_MAX) {
-    return coap_oscore_respond_resource(
-        resource, request, addr, addr_len, &oscore,
-        COAP_RESPONSE_CODE_REQUEST_TOO_LARGE, 0, NULL, 0);
+  if (payload_len > WAYPOINT_POST_MAX) {
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_REQUEST_TOO_LARGE);
   }
-  if (decode_waypoint(oscore.payload, oscore.payload_len, &candidate, false) <
-      0) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
-                                        0, NULL, 0);
+  if (decode_waypoint(payload, payload_len, &candidate, false) < 0) {
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_BAD_REQUEST);
   }
   if (candidate.creator[0] != '\0' && !local_admin &&
       !creator_matches_peer(candidate.creator, addr, addr_len)) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_FORBIDDEN,
-                                        0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_FORBIDDEN);
   }
   if (candidate.creator[0] == '\0') {
     strncpy(candidate.creator, actor, sizeof(candidate.creator) - 1U);
   }
   ret = lichen_waypoints_create(&candidate, &created);
   if (ret == -EEXIST) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_CONFLICT, 0,
-                                        NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_CONFLICT);
   }
   if (ret == -EINVAL) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
-                                        0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_BAD_REQUEST);
   }
   if (ret < 0) {
-    return coap_oscore_respond_resource(
-        resource, request, addr, addr_len, &oscore,
-        COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE, 0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE);
   }
   return send_created(resource, request, addr, addr_len, &oscore, created.id);
 }
@@ -1068,52 +1076,59 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
                                           struct coap_packet *request,
                                           struct sockaddr *addr,
                                           socklen_t addr_len) {
-  struct coap_oscore_unprotect_result oscore;
+  uint8_t piv[OSCORE_PIV_MAX_LEN];
+  size_t piv_len = 0;
+  struct oscore_ctx *oscore_ctx = NULL;
+  const uint8_t *payload = NULL;
+  uint16_t payload_len = 0;
+  bool is_protected = false;
   char actor[LICHEN_WAYPOINT_CREATOR_MAX + 1U] = {0};
   char id[LICHEN_WAYPOINT_ID_MAX + 1U];
   bool local_admin;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
-      resource, request, addr, addr_len, COAP_METHOD_DELETE, &oscore);
+  ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+                                       COAP_METHOD_DELETE, NULL, 0, &payload,
+                                       &payload_len, &oscore_ctx, piv,
+                                       &piv_len, &is_protected);
   if (ret != 0) {
     return ret;
   }
-  if (oscore.payload_len != 0U) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
-                                        0, NULL, 0);
+  if (payload_len != 0U) {
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_BAD_REQUEST);
   }
   if (extract_detail_id(request, id) < 0) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_NOT_FOUND,
-                                        0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_NOT_FOUND);
   }
   ret = request_actor(addr, addr_len, actor, &local_admin);
-  if (ret < 0 || (!local_admin && !oscore.is_protected)) {
-    return coap_oscore_respond_resource(
-        resource, request, addr, addr_len, &oscore,
-        COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
+  if (ret < 0 || (!local_admin && !is_protected)) {
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_UNAUTHORIZED);
   }
   ret = lichen_waypoints_delete(id, actor, local_admin);
   if (ret == -ENOENT) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_NOT_FOUND,
-                                        0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_NOT_FOUND);
   }
   if (ret == -EACCES) {
-    return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                        &oscore, COAP_RESPONSE_CODE_FORBIDDEN,
-                                        0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_FORBIDDEN);
   }
   if (ret < 0) {
-    return coap_oscore_respond_resource(
-        resource, request, addr, addr_len, &oscore,
-        COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE, 0, NULL, 0);
+    return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                      oscore_ctx, piv, piv_len,
+                                      COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE);
   }
-  return coap_oscore_respond_resource(resource, request, addr, addr_len,
-                                      &oscore, COAP_RESPONSE_CODE_DELETED, 0,
-                                      NULL, 0);
+  return coap_oscore_send_protected(resource, request, addr, addr_len,
+                                    oscore_ctx, piv, piv_len,
+                                    COAP_RESPONSE_CODE_DELETED);
 }
 
 #if IS_ENABLED(CONFIG_LICHEN_COAP_WAYPOINTS)
