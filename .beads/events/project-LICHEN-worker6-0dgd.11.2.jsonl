@@ -3,3 +3,4 @@
 {"id":"01a055f3-7676-7858-941c-c2432815d85a","issue_id":"project-LICHEN-worker6-0dgd.11.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: decomposed","created_at":"2026-08-31T03:53:34.070548194Z"}
 {"id":"01a055f3-7679-749c-b0e1-407c59450c57","issue_id":"project-LICHEN-worker6-0dgd.11.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: tdma","created_at":"2026-08-31T03:53:34.073303209Z"}
 {"id":"01a055f3-767c-70a1-85cf-7ac6d56b1a6c","issue_id":"project-LICHEN-worker6-0dgd.11.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-31T03:53:34.076042418Z"}
+{"id":"01a055f6-0010-71e3-88ed-a98ff5bfb252","issue_id":"project-LICHEN-worker6-0dgd.11.2","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Merged into 0dgd.11.1 to maintain file-disjointness (both touch link_ctx.c).","created_at":"2026-08-31T03:56:20.368124588Z"}

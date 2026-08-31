@@ -1,3 +1,4 @@
 {"id":"01a055df-d2a0-7ac2-8f78-37a90fc312c6","issue_id":"project-LICHEN-worker6-e7h0","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-31T03:32:06.944706829Z"}
 {"id":"01a055df-d2a5-7742-8bac-b5d3d7243810","issue_id":"project-LICHEN-worker6-e7h0","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-31T03:32:06.949477749Z"}
 {"id":"01a055df-d2aa-7570-b7c2-3a4476638145","issue_id":"project-LICHEN-worker6-e7h0","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: decomposed","created_at":"2026-08-31T03:32:06.954374265Z"}
+{"id":"01a055f8-d66b-7346-a151-3cb951e12690","issue_id":"project-LICHEN-worker6-e7h0","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Decomposition pass complete. See session report.","created_at":"2026-08-31T03:59:26.315215798Z"}

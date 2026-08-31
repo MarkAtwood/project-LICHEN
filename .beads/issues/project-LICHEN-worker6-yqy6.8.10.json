@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-worker6-yqy6.8.10",
   "title": "qemu_x86: Time provider with host clock",
-  "description": "Validate time provider on qemu_x86 using QEMU virtual clock. Test time submit and snapshot APIs. ~15 lines in 1 test file. Depends on child 1.",
+  "description": "Validate time provider on qemu_x86 using QEMU virtual clock. Test time submit and snapshot APIs. Files: lichen/tests/time_provider_qemu/src/main.c, lichen/tests/time_provider_qemu/prj.conf (all new). ~15 lines across 2 files. Depends on yqy6.8.7.",
   "status": "open",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T03:53:31.509498484Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T03:53:31.509498484Z",
+  "updated_at": "2026-08-31T03:56:49.513955341Z",
   "labels": [
     "zephyr",
     "decomposed",

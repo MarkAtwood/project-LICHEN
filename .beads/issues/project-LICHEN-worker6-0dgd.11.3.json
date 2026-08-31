@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-worker6-0dgd.11.3",
   "title": "Add ztest for channel_select_sync GNSS and fallback paths",
-  "description": "Add ztest coverage for lichen_link_channel_select_sync() exercising both GNSS-valid and GNSS-invalid paths, verifying deterministic channel output. ~20 lines in 1 test file. Depends on children 1-2.",
+  "description": "Add ztest coverage for lichen_link_channel_select_sync() exercising both GNSS-valid and GNSS-invalid paths, verifying deterministic channel output. Files: lichen/tests/channel_select/src/main.c (new test dir). ~20 lines in 1 test file. Depends on 0dgd.11.1.",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T03:53:38.309647274Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T03:53:38.309647274Z",
+  "updated_at": "2026-08-31T03:56:22.286486164Z",
   "labels": [
     "zephyr",
     "decomposed",

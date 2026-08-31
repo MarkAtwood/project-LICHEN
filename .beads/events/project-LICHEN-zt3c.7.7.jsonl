@@ -6,3 +6,4 @@
 {"id":"01a055f3-6a01-70f1-b5fa-ee5aba34fc7a","issue_id":"project-LICHEN-zt3c.7.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: global","created_at":"2026-08-31T03:53:30.881062698Z"}
 {"id":"01a055f3-6a03-7b2b-9e65-571d811e2bc2","issue_id":"project-LICHEN-zt3c.7.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-31T03:53:30.883733844Z"}
 {"id":"01a055f3-6a06-764b-81fb-3095f7b82441","issue_id":"project-LICHEN-zt3c.7.7","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-08-31T03:53:30.886413267Z"}
+{"id":"01a055f5-e701-7b76-92f8-ad5ebd473435","issue_id":"project-LICHEN-zt3c.7.7","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Merged into zt3c.7.6 to maintain file-disjointness (both touch test files).","created_at":"2026-08-31T03:56:13.95375263Z"}

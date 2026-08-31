@@ -14,3 +14,4 @@
 {"id":"01a055f4-3569-71b8-891e-401cc570ec72","issue_id":"project-LICHEN-h7t5.7.5.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: partner-handoff","created_at":"2026-08-31T03:54:22.953114734Z"}
 {"id":"01a055f4-356c-7159-a45e-8fd2394ecc3e","issue_id":"project-LICHEN-h7t5.7.5.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: radio","created_at":"2026-08-31T03:54:22.956090307Z"}
 {"id":"01a055f4-356f-70f5-8b1a-5ce8ba2a0c2b","issue_id":"project-LICHEN-h7t5.7.5.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: smoke-test","created_at":"2026-08-31T03:54:22.959064202Z"}
+{"id":"01a055f9-9ad2-7d6c-9378-378ac608653d","issue_id":"project-LICHEN-h7t5.7.5.3","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate — superseded by .13-.16 which include explicit file paths per file-disjoint constraint.","created_at":"2026-08-31T04:00:16.594880844Z"}

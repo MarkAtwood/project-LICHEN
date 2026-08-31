@@ -9,3 +9,4 @@
 {"id":"01a055f4-39be-76e9-90a1-ccee2876608c","issue_id":"project-LICHEN-9c4y.11.4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: meshcore","created_at":"2026-08-31T03:54:24.062453403Z"}
 {"id":"01a055f4-39c0-7e08-b44e-6e5bc7911b52","issue_id":"project-LICHEN-9c4y.11.4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: mobile-test","created_at":"2026-08-31T03:54:24.064920166Z"}
 {"id":"01a055f4-39c3-78c5-8b02-d1fea8b6d926","issue_id":"project-LICHEN-9c4y.11.4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: owner-reserved","created_at":"2026-08-31T03:54:24.067575409Z"}
+{"id":"01a055f9-924f-7190-9135-491aac8b88df","issue_id":"project-LICHEN-9c4y.11.4","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Duplicate — superseded by .7-.11 which include explicit file paths per file-disjoint constraint.","created_at":"2026-08-31T04:00:14.415104045Z"}

@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-zt3c.7.4",
   "title": "Update RPL dodag prefix handling for 02xx::",
-  "description": "Update lichen_rpl_dodag prefix advertisement and acceptance to use 02xx:: Yggdrasil prefix instead of ULA fd00::. ~15 lines in 1-2 files (dodag.c + dodag.h). Depends on child 3.",
+  "description": "Update lichen_rpl_dodag prefix advertisement and acceptance to use 02xx:: Yggdrasil prefix instead of ULA fd00::. Files: lichen/subsys/lichen/rpl/dodag.c, lichen/subsys/lichen/rpl/include/lichen/rpl_dodag.h, lichen/subsys/lichen/rpl/rpl_prefix.c. ~15 lines across 2-3 files. Depends on zt3c.7.2.",
   "status": "open",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T03:53:25.482603143Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T03:53:25.482603143Z",
+  "updated_at": "2026-08-31T03:56:03.523447924Z",
   "labels": [
     "zephyr",
     "decomposed",
