@@ -78,9 +78,17 @@ for i in $(seq 1 $NUM_WORKERS); do
         continue
     fi
 
-    echo "Launching worker $i in $WORKTREE"
+    # Area affinity per worker (disjoint-ish routing; workers fall back to any
+    # ready bead when their pool is empty — see worker prompt affinity rule).
+    case $i in
+        1|2) AFFINITY="zephyr,renode" ;;
+        3)   AFFINITY="gateway,networking" ;;
+        4)   AFFINITY="python,schc" ;;
+        5)   AFFINITY="rust,yggdrasil" ;;
+        6)   AFFINITY="hal,lci,app-interface" ;;
+        *)   AFFINITY="" ;;  # worker7: free-range burner
+    esac
     # Unattended workers: allow the tool surface, deny the catastrophic few.
-    # Allow-list covers paths AGENTS.md already sanctions (Attic tmp/zephyr/cache/Developer).
     WORKER_POLICY='{"permission":{"edit":"allow","webfetch":"allow","bash":{"*":"allow","rm -rf *":"deny","sudo *":"deny","git push*":"deny"}}}'
     # Zephyr toolchain env per host (Mac Attic layout vs heft Developer layout),
     # so Zephyr beads work regardless of shell context. ~/.opencode/bin is kept
@@ -90,7 +98,7 @@ for i in $(seq 1 $NUM_WORKERS); do
     else
         ZEPHYR_ENV="ZEPHYR_SDK_INSTALL_DIR=$HOME/Developer/zephyr-sdk/zephyr-sdk-0.16.8 ZEPHYR_BASE=$HOME/Developer/lichen-workspace/project-LICHEN/zephyr PATH=$HOME/Developer/lichen-venv/bin:$HOME/.opencode/bin:$PATH"
     fi
-    CMD="env $ZEPHYR_ENV OPENCODE_CONFIG_CONTENT='$WORKER_POLICY' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i opencode"
+    CMD="env $ZEPHYR_ENV OPENCODE_CONFIG_CONTENT='$WORKER_POLICY' BEADS_DIR=$REPO_ROOT/.beads BEADS_ACTOR=opencode-worker-$i OPENCODE_BEADS_LOOP=$i LICHEN_AFFINITY='$AFFINITY' opencode"
     if tmux has-session -t "$SESSION" 2>/dev/null; then
         tmux new-window -d -t "$SESSION:" -n "worker$i" -c "$WORKTREE" "$CMD"
     else
