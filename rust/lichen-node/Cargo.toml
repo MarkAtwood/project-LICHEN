@@ -16,6 +16,7 @@ log = ["dep:log", "lichen-core/log", "lichen-hal/log", "lichen-link/log", "liche
 raw-rpl-test-api = []
 
 [dependencies]
+ciborium = { version = "0.2", default-features = false }
 lichen-core = { path = "../lichen-core" }
 lichen-hal = { path = "../lichen-hal" }
 lichen-link = { path = "../lichen-link" }
