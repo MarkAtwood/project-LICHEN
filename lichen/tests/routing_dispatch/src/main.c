@@ -727,6 +727,12 @@ static int test_dtn_hbh_option_parsing(void)
 		REQUIRE(lichen_router_route_packet(&router, &input, 13U, &result) == 0);
 		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
 		REQUIRE(router.dtn_buffer_bytes == pkt7_len);
+
+		/* dtn_expire flushes the expiry==0 fail-open store once valid
+		 * wall-clock arrives (documented bpyr interplay: the record is
+		 * purged, not re-queued for downstream enforcement). */
+		REQUIRE(lichen_router_dtn_expire(&router, 100U) == 1);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
 	}
 #endif
 
@@ -751,6 +757,54 @@ static int test_dtn_hbh_option_parsing(void)
 		REQUIRE(lichen_router_route_packet(&router, &input, 14U, &result) == 0);
 		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
 		REQUIRE(router.dtn_buffer_bytes == pkt8_len);
+	}
+#endif
+
+	/* 11. S-flag with expiry==0 at a VALID clock: the zero deadline is
+	 * already past (0 <= now) → silent drop, nothing stored. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt9[64];
+		size_t pkt9_len = make_dtn_hbh_packet(pkt9, sizeof(pkt9),
+						      0x80U, 0U);
+		REQUIRE(pkt9_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt9, .len = pkt9_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 15U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_DROP);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
+	/* 12. lichen_router_dtn_expire boundary matrix: not-due keeps the
+	 * record, expiry==now flushes it (signed diff <= 0). */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt10[64];
+		size_t pkt10_len = make_dtn_hbh_packet(pkt10, sizeof(pkt10),
+						       0x80U, 200U);
+		REQUIRE(pkt10_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt10, .len = pkt10_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 16U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+
+		REQUIRE(lichen_router_dtn_expire(&router, 199U) == 0);
+		REQUIRE(router.dtn_buffer_bytes == pkt10_len);
+		REQUIRE(lichen_router_dtn_expire(&router, 200U) == 1);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
 	}
 #endif
 
