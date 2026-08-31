@@ -36,6 +36,10 @@
 #include <lichen/senml.h>
 #include <lichen/oscore.h>
 #include <lichen/coap_oscore.h>
+
+/* Plaintext staging for the mutating handlers' authorize helper (the old
+ * per-handler unprotect result carried an equivalent on-stack buffer). */
+static uint8_t server_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
 #include <lichen/l2/ipv6_addr.h>
 #include <lichen/transport/slip_transport.h>
 
@@ -175,46 +179,47 @@ static int config_put(struct coap_resource *resource,
 		      struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
 {
-	struct coap_oscore_unprotect_result oscore;
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
 	int ret;
 
 	if (s_handlers.config_put == NULL) {
 		return COAP_RESPONSE_CODE_NOT_FOUND;
 	}
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len, COAP_METHOD_PUT,
-						     &oscore);
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_PUT,
+					     server_plain_buf,
+					     sizeof(server_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
 	}
-	if (!oscore.is_protected &&
-	    !lichen_coap_is_local_admin(addr, addr_len)) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_UNAUTHORIZED,
-						    0, NULL, 0);
+
+	if (payload == NULL || payload_len == 0) {
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
-	if (oscore.payload == NULL || oscore.payload_len == 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
-	}
-
-	ret = s_handlers.config_put(oscore.payload, oscore.payload_len);
+	ret = s_handlers.config_put(payload, payload_len);
 	if (ret < 0) {
 		LOG_ERR("Config PUT callback failed: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
-	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, COAP_RESPONSE_CODE_CHANGED,
-					    0, NULL, 0);
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  COAP_RESPONSE_CODE_CHANGED);
 }
 
 static const char * const config_path[] = { "config", NULL };
@@ -306,12 +311,19 @@ static int msg_inbox_post(struct coap_resource *resource,
 	uint32_t msg_id = 0;
 	int ret;
 
-	struct coap_oscore_unprotect_result oscore;
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len, COAP_METHOD_POST,
-						     &oscore);
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, server_plain_buf,
+					     sizeof(server_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) return ret;
-	if (!oscore.is_protected && !lichen_coap_is_local_admin(addr, addr_len)) {
+	if (!is_protected && !lichen_coap_is_local_admin(addr, addr_len)) {
 		return lichen_coap_respond(resource, request, addr, addr_len,
 					   COAP_RESPONSE_CODE_UNAUTHORIZED,
 					   0, NULL, 0);
@@ -321,20 +333,20 @@ static int msg_inbox_post(struct coap_resource *resource,
 		return COAP_RESPONSE_CODE_NOT_FOUND;
 	}
 
-	if (oscore.payload == NULL || oscore.payload_len == 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+	if (payload == NULL || payload_len == 0) {
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
-	ret = s_handlers.msg_post(oscore.payload, oscore.payload_len, &msg_id);
+	ret = s_handlers.msg_post(payload, payload_len, &msg_id);
 	if (ret < 0) {
 		LOG_ERR("Message POST callback failed: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr, addr_len,
-						    &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE

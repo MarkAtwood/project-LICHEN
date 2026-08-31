@@ -750,65 +750,62 @@ static int config_put(struct coap_resource *resource,
 		      struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
 {
-	struct coap_oscore_unprotect_result oscore;
 	struct lichen_config_node node_cfg;
+	uint8_t node_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len, COAP_METHOD_PUT,
-						     &oscore);
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_PUT,
+					     node_plain_buf,
+					     sizeof(node_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
-	}
-	if (!oscore.is_protected &&
-	    !lichen_coap_is_local_admin(addr, addr_len)) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_UNAUTHORIZED,
-						    0, NULL, 0);
 	}
 
 	const struct lichen_config_provider *p = lichen_coap_config_provider_get();
 	if (p == NULL || p->node_get == NULL ||
 	    p->node_set == NULL) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_NOT_FOUND,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_NOT_FOUND);
 	}
 
-	if (oscore.payload == NULL || oscore.payload_len == 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+	if (payload == NULL || payload_len == 0) {
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 	/* Get current config for partial update */
 	ret = p->node_get(&node_cfg);
 	if (ret < 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_INTERNAL_ERROR);
 	}
 	if (!node_config_is_valid(&node_cfg)) {
 		LOG_ERR("node_get returned invalid configuration");
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_INTERNAL_ERROR);
 	}
 
 	/* Decode update (merges with current values) */
-	ret = lichen_config_decode_node_cbor(oscore.payload, oscore.payload_len,
+	ret = lichen_config_decode_node_cbor(payload, payload_len,
 					     &node_cfg);
 	if (ret < 0) {
 		LOG_WRN("Invalid config CBOR");
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 	/* Apply update */
@@ -826,16 +823,15 @@ static int config_put(struct coap_resource *resource,
 			response_code = COAP_RESPONSE_CODE_INTERNAL_ERROR;
 		}
 		LOG_WRN("Config update failed: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    response_code,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len, response_code);
 	}
 
 	LOG_INF("Config updated: name='%s' role=%d", node_cfg.name, node_cfg.role);
-	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, COAP_RESPONSE_CODE_CHANGED,
-					    0, NULL, 0);
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  COAP_RESPONSE_CODE_CHANGED);
 }
 
 /* GET /config/radio handler */
@@ -874,65 +870,62 @@ static int config_radio_put(struct coap_resource *resource,
 			    struct coap_packet *request,
 			    struct sockaddr *addr, socklen_t addr_len)
 {
-	struct coap_oscore_unprotect_result oscore;
 	struct lichen_config_radio radio_cfg;
+	uint8_t radio_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
-						     addr_len, COAP_METHOD_PUT,
-						     &oscore);
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_PUT,
+					     radio_plain_buf,
+					     sizeof(radio_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
 	if (ret != 0) {
 		return ret;
-	}
-	if (!oscore.is_protected &&
-	    !lichen_coap_is_local_admin(addr, addr_len)) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_UNAUTHORIZED,
-						    0, NULL, 0);
 	}
 
 	const struct lichen_config_provider *p = lichen_coap_config_provider_get();
 	if (p == NULL || p->radio_get == NULL ||
 	    p->radio_set == NULL) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_NOT_FOUND,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_NOT_FOUND);
 	}
 
-	if (oscore.payload == NULL || oscore.payload_len == 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+	if (payload == NULL || payload_len == 0) {
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 	/* Get current config for partial update */
 	ret = p->radio_get(&radio_cfg);
 	if (ret < 0) {
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_INTERNAL_ERROR);
 	}
 	if (!radio_config_is_valid(&radio_cfg)) {
 		LOG_ERR("radio_get returned invalid configuration");
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_INTERNAL_ERROR,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_INTERNAL_ERROR);
 	}
 
 	/* Decode update */
-	ret = lichen_config_decode_radio_cbor(oscore.payload, oscore.payload_len,
+	ret = lichen_config_decode_radio_cbor(payload, payload_len,
 					      &radio_cfg);
 	if (ret < 0) {
 		LOG_WRN("Invalid radio config CBOR");
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    COAP_RESPONSE_CODE_BAD_REQUEST,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr, addr_len,
+					    oscore_ctx, piv, piv_len,
+					    COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 
 	/* Apply update */
@@ -948,17 +941,16 @@ static int config_radio_put(struct coap_resource *resource,
 			response_code = COAP_RESPONSE_CODE_INTERNAL_ERROR;
 		}
 		LOG_WRN("Radio config update failed: %d", ret);
-		return coap_oscore_respond_resource(resource, request, addr,
-						    addr_len, &oscore,
-						    response_code,
-						    0, NULL, 0);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len, response_code);
 	}
 
 	LOG_INF("Radio config updated: freq=%u sf=%d tx=%d",
 		radio_cfg.freq_khz, radio_cfg.sf, radio_cfg.tx_power_dbm);
-	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, COAP_RESPONSE_CODE_CHANGED,
-					    0, NULL, 0);
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  COAP_RESPONSE_CODE_CHANGED);
 }
 
 /* GET /config/identity handler */
