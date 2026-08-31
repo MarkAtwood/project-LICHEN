@@ -37,8 +37,7 @@ Checks: >
   -misc-header-include-cycle,
   -bugprone-not-null-terminated-result,
   -clang-diagnostic-conversion,
-  -clang-analyzer-optin.core.EnumCastOutOfRange,
-  -cppcoreguidelines-pro-bounds-pointer-arithmetic
+  -clang-analyzer-optin.core.EnumCastOutOfRange
 
 # Checks disabled in the 2mla curation (lora_ipv6_mesh-2mla):
 #   misc-include-cleaner: Zephyr umbrella headers (kernel.h et al) make
