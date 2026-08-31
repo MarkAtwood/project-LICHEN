@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.26",
+  "title": "Group invitation envelope diverges: canonical-CBOR document instead of COSE_Sign1 Schnorr48 (spec 18.8.2)",
+  "description": "Spec 12-apps.md 18.8.2: Invitations use COSE_Sign1 (RFC 9052) with Schnorr48-Ed25519 alg -65537, protected header bstr-wrapped 47A1013A00010000, unprotected kid = inviter 8-byte IID, payload CBOR map with integer keys 1-7 (group_id, group_name, mcast, role, expiry, invitee_iid, nonce), signature over SHA256(CBOR(Sig_structure)); invitee validation includes alg check, invitee_iid == own IID, and a per-inviter nonce ledger (ring buffer 32 entries, RAM-only). Classification: divergent. Evidence: Python implements a canonical-CBOR invitation document with string-keyed preimage signing (python/src/lichen/group_membership.py:90-121, python/src/lichen/coap/resources/groups_invite.py:65-115; vectors groups_membership.json) - no COSE envelope, no alg -65537 check, no invitee_iid check at the invite resource, replay ledger is an unbounded per-group identity-hash dict (groups_collection.py:199-214,504-509) instead of a 32-entry nonce ring. The exact COSE machinery exists in each stack for other features (rust/lichen-gateway/src/tunnel_auth.rs:17,511-524; python/src/lichen/crypto/delegation_tokens.py:72-100) and cbor2 confirms 47a1013a00010000 == bstr-wrapped {1:-65537}. Suggested placement: python/src/lichen/coap/resources/groups_invite.py + group_membership.py (adopt COSE_Sign1 envelope, share code with delegation_tokens.py); add invitation COSE vectors; Rust/C invitation handling absent entirely. Refs R-12-062, R-12-063, R-12-064.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T12:36:49.772351201Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T12:36:49.772351201Z",
+  "labels": [
+    "apps",
+    "spec-gap",
+    "lci",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.26",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-08-31T12:36:49.864531709Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
