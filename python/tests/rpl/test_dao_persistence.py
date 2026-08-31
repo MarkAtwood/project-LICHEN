@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import threading
@@ -174,6 +175,111 @@ class TestMemoryPersistence:
 
 class TestTwoSlotFilePersistence:
     """Tests for crash-safe two-slot file persistence."""
+
+    class _FileStateRevisionAnchor:
+        """File-backed StateRevisionAnchor stored OUTSIDE base_dir.
+
+        Production anchors must be durable external storage (bead 3u3o);
+        this test double proves the fail-closed contract that depends on it.
+        """
+
+        def __init__(self, file_path: Path) -> None:
+            self._path = file_path
+            self._states: dict[bytes, AnchoredState] = {}
+            if self._path.exists():
+                self._states = {
+                    bytes.fromhex(key): AnchoredState(
+                        value[0], bytes.fromhex(value[1])
+                    )
+                    for key, value in json.loads(
+                        self._path.read_text()
+                    ).items()
+                }
+
+        def read(self, key: bytes) -> AnchoredState | None:
+            return self._states.get(key)
+
+        def advance(
+            self, key: bytes, expected: AnchoredState | None, state: AnchoredState
+        ) -> None:
+            if self._states.get(key) != expected:
+                raise RuntimeError("anchor compare-and-advance failed")
+            if expected is not None and state.revision != expected.revision + 1:
+                raise RuntimeError("anchor revision did not advance exactly")
+            self._states[key] = state
+            self._path.write_text(
+                json.dumps(
+                    {key.hex(): [state.revision, state.digest.hex()]
+                     for key, state in self._states.items()}
+                )
+            )
+
+    def test_total_deletion_fails_closed_with_durable_external_anchor(
+        self, tmp_path: Path
+    ) -> None:
+        """With a durable anchor OUTSIDE base_dir, deleting every protected
+        file (slots + catalog) after a committed floor fails closed — the
+        first-DAO-bootstrap fail-open path is unreachable (3u3o).
+
+        The old signed-DAO replay attack requires the anchor to die with the
+        protected directory; the anchor survives here, so load_rx_floor must
+        raise instead of returning None.
+        """
+        anchor_path = tmp_path / "external-anchor.json"  # outside base_dir
+        base_dir = tmp_path / "state"
+        base_dir.mkdir()
+        anchor = self._FileStateRevisionAnchor(anchor_path)
+        persistence = _RealTwoSlotFilePersistence(
+            base_dir,
+            revision_anchor=anchor,
+            anchor_key=_DAO_ANCHOR_KEY,
+            allow_tx_bootstrap=True,
+            fail_closed=False,  # even the legacy flag must fail closed here
+        )
+        digest = compute_dao_digest(b"dao one")
+        persistence.store_rx_floor(TEST_PUBKEY, 100, digest)
+        assert persistence.load_rx_floor(TEST_PUBKEY) is not None
+
+        # Attacker deletes ALL protected state in base_dir.
+        for path in base_dir.iterdir():
+            path.unlink()
+        assert not any(base_dir.iterdir())
+
+        # Either the slot anchor or the catalog anchor detects the deletion;
+        # both are durable external state that survived the wipe.
+        with pytest.raises(
+            DaoPersistenceError,
+            match="was deleted",
+        ):
+            persistence.load_rx_floor(TEST_PUBKEY)
+        # fail-closed, not fail-open: the old signed-DAO replay window never
+        # re-opens because the anchor records the prior commit.
+
+    def test_total_deletion_fail_open_without_durable_anchor(
+        self, tmp_path: Path
+    ) -> None:
+        """Counterfactual pin: with the anchor co-located inside base_dir
+        (the test helper pattern), total deletion degrades to the
+        first-DAO-bootstrap fail-open (returns None). This is why production
+        anchors MUST live outside base_dir — documented on the constructor.
+        """
+        base_dir = tmp_path
+        persistence = TwoSlotFilePersistence(base_dir, fail_closed=False)
+        digest = compute_dao_digest(b"dao one")
+        persistence.store_rx_floor(TEST_PUBKEY, 100, digest)
+        assert persistence.load_rx_floor(TEST_PUBKEY) is not None
+        # Wipe everything (files and the helper's anchor registry): the
+        # co-located anchor dies together with the protected state, exactly
+        # like a file anchor stored inside base_dir.
+        for path in base_dir.iterdir():
+            if path.is_file():
+                path.unlink()
+        _DAO_ANCHORS.pop(base_dir, None)
+        # Fresh construction (new anchor instance, no surviving record):
+        # the fail-open path is reachable only in this configuration, which
+        # is why production anchors must be external and durable.
+        fresh = TwoSlotFilePersistence(base_dir, fail_closed=False)
+        assert fresh.load_rx_floor(TEST_PUBKEY) is None
 
     def test_is_crash_safe(self, tmp_path: Path) -> None:
         """TwoSlotFilePersistence explicitly reports it IS crash-safe."""
