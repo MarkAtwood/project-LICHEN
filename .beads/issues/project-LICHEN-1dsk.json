@@ -13,6 +13,9 @@
   "started_at": "2026-07-22T14:21:16.610307956Z",
   "closed_at": "2026-07-22T14:22:43.123983242Z",
   "close_reason": "Added structured debug logs to start_transmission() and _handle_tx_start_delayed() with sim_id/node_id/payload_len/node_state/queue_size/jitter_enabled/current_time; updated lr1110_lora_send tx start in PHY; verified with pytest test_simulation_logging.py (3/3 passed)",
+  "labels": [
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-1dsk",
