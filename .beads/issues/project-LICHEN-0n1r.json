@@ -11,6 +11,9 @@
   "started_at": "2026-07-22T15:10:01.49289248Z",
   "closed_at": "2026-07-22T15:13:23.406610494Z",
   "close_reason": "Fixed register with oscore_init first per AGENTS.md graph, added SenML pack + DTN buffer setup (static, no alloc), replaced payload memcpy with senml_encode_cbor in post handler. CMake+header+coap_dtn.c updated. West build for senml/coap succeeded. 3 codereview passes converged with all P0-P4 addressed and filed. Conventional commit done.",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-0n1r",
