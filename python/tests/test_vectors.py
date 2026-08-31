@@ -5289,3 +5289,193 @@ def test_replay_window_logical_counter_vectors() -> None:
             assert computed > other_counter, (
                 f"Ordering violation: {computed} should be > {other_counter}"
             )
+
+
+_PENDING_EXPLICIT_SCHEMA_POLICY = frozenset({
+        "access_levels.json",
+        "announce_relay.json",
+        "announce_signed_data.json",
+        "ble_gatt_reassembly.json",
+        "br_multicast_filter.json",
+        "broadcast_rate_limiting.json",
+        "bufferbloat_congestion.json",
+        "capability_announcements.json",
+        "ccp-interference.json",
+        "ccp16-hop.json",
+        "ccp16_ema_loss_threshold.json",
+        "ccp16_load_balance.json",
+        "ccp16_utilization.json",
+        "ccp4_regional_channel_plans.json",
+        "ccp5_coordination_mechanism_negotiation.json",
+        "ccp7_holdover.json",
+        "ccp9_rendezvous.json",
+        "ccp_beacon_sig_gate.json",
+        "ccp_ema_update_integer.json",
+        "ccp_load_balancing.json",
+        "ccp_select_channel_endianness.json",
+        "ccp_sfn_wrap_slot_hash.json",
+        "ccp_slot_hash_carry.json",
+        "ccp_slot_map_validation.json",
+        "ccp_tdma.json",
+        "checkin_rollcall.json",
+        "coap_messages.json",
+        "coap_observe_sequence.json",
+        "coap_option_malformed.json",
+        "coap_rd.json",
+        "coap_token_validation.json",
+        "coap_transport.json",
+        "confessions_rate.json",
+        "constrained_node_time.json",
+        "core_link_format.json",
+        "dad_hash_clarification.json",
+        "delegation_tokens.json",
+        "dio_time_option_malformed.json",
+        "dodag_version_authorization.json",
+        "edhoc.json",
+        "edhoc_export_rfc9529.json",
+        "epoch_rollover.json",
+        "forwarding.json",
+        "forwarding_buffer.json",
+        "frame_length_boundaries.json",
+        "gateway_reachability.json",
+        "gcp3_trust_models.json",
+        "gcp_handoff_cose_sign1.json",
+        "gcp_iid_comparison.json",
+        "gcp_psk_oscore.json",
+        "gcp_slot_claim.json",
+        "gradient_entry.json",
+        "gradient_table.json",
+        "group_oscore_key.json",
+        "groups_cbor.json",
+        "groups_membership.json",
+        "groups_membership_sequences.json",
+        "groups_messaging.json",
+        "groups_rekey.json",
+        "hash_32.json",
+        "ipso_smart_objects.json",
+        "ipv6-addresses.json",
+        "ipv6-icmpv6.json",
+        "keystore_cbor.json",
+        "keystore_iid.json",
+        "lci_config.json",
+        "lci_identity.json",
+        "lci_radio_config.json",
+        "lci_raw_diag.json",
+        "lci_routing_table.json",
+        "lci_status.json",
+        "loadng.json",
+        "lr_fhss.json",
+        "lr_fhss_capability.json",
+        "messaging.json",
+        "mic_length_selector.json",
+        "neighbors_cbor.json",
+        "no_silent_drops.json",
+        "node-addresses.json",
+        "node_address.json",
+        "oscore_context_parity.json",
+        "oscore_cross_exchange.json",
+        "oscore_key_update.json",
+        "oscore_schc_roundtrip.json",
+        "packet_walkthrough.json",
+        "packets-formats.json",
+        "packets-timing.json",
+        "port_dispatch.json",
+        "position_cache.json",
+        "position_observe.json",
+        "position_privacy_auth.json",
+        "presence_cbor.json",
+        "propagation.json",
+        "raw_diag_ttl.json",
+        "receipt_cbor.json",
+        "root_authorization.json",
+        "root_dio_signature.json",
+        "route_selection.json",
+        "rpl_route_state.json",
+        "schc_compression.json",
+        "schc_fragment.json",
+        "schc_session_security.json",
+        "senml_location.json",
+        "sf_assignment.json",
+        "short_addr_assignment.json",
+        "short_addr_dad.json",
+        "slip_framing.json",
+        "sos_cbor.json",
+        "sos_rate_limiting.json",
+        "sos_signature.json",
+        "source_route_hop_limit.json",
+        "suite_negotiation.json",
+        "tdma_ccp_fsm.json",
+        "tx_queue_bounded.json",
+        "tx_queue_expiry.json",
+        "tx_queue_implementation.json",
+        "tx_queue_priority.json",
+        "waypoint.json",
+        "yggdrasil-derivation.json",
+        "yggdrasil.json",
+        "yggdrasil_address.json",
+})
+
+
+def test_all_vector_documents_have_explicit_schema_policy() -> None:
+    """Every vector document must have an explicit schema policy.
+
+    Three buckets, no silent omissions (project-LICHEN-worker6-ojzg):
+      * shared: validates against schema.json,
+      * family: a per-family <stem>.schema.json exists and validates,
+      * pending: explicitly listed here until a family schema is written.
+    A new vector document that lands in none of these buckets fails this
+    test and must be given a policy consciously.
+    """
+    docs = sorted(
+        p.name
+        for p in VECTORS_DIR.glob("*.json")
+        if p.name != "schema.json" and not p.name.endswith(".schema.json")
+    )
+    shared_schema = _load("schema.json")
+    validator = Draft7Validator(shared_schema)
+
+    for name in docs:
+        if name in _PENDING_EXPLICIT_SCHEMA_POLICY:
+            continue
+        doc = _load(name)
+        errors = sorted(validator.iter_errors(doc), key=lambda e: e.path)
+        if errors:
+            family = VECTORS_DIR / (Path(name).stem + ".schema.json")
+            assert family.exists(), (
+                f"{name}: no schema policy ({len(errors)} shared-schema "
+                "errors, no per-family schema) - add a family schema or list "
+                f"it in _PENDING_EXPLICIT_SCHEMA_POLICY: {errors[0].message}"
+            )
+            fam_errors = sorted(
+                Draft7Validator(json.loads(family.read_text())).iter_errors(doc),
+                key=lambda e: e.path,
+            )
+            assert not fam_errors, [e.message for e in fam_errors]
+    # NOTE: family docs that also pass the shared schema (e.g. compact_cot)
+    # are enforced against their FAMILY schema only here; the drift loop
+    # below re-derives inventory and must not be relied on for enforcement.
+
+    # The explicit pending inventory must match reality exactly: re-derive
+    # every document's status (independent of the declared list) - entries
+    # that grew a schema (or now pass the shared schema) must be removed
+    # from the list, and every genuinely pending document must be listed.
+    actually_pending = set()
+    for name in docs:
+        doc = _load(name)
+        family = VECTORS_DIR / (Path(name).stem + ".schema.json")
+        if family.exists():
+            fam_errors = sorted(
+                Draft7Validator(json.loads(family.read_text())).iter_errors(doc),
+                key=lambda e: e.path,
+            )
+            assert not fam_errors, [e.message for e in fam_errors]
+            continue
+        if list(validator.iter_errors(doc)):
+            actually_pending.add(name)
+    assert actually_pending == _PENDING_EXPLICIT_SCHEMA_POLICY, (
+        "pending schema-policy inventory drifted; update "
+        "_PENDING_EXPLICIT_SCHEMA_POLICY (added: "
+        f"{sorted(actually_pending - _PENDING_EXPLICIT_SCHEMA_POLICY)}, "
+        "satisfied: "
+        f"{sorted(_PENDING_EXPLICIT_SCHEMA_POLICY - actually_pending)})"
+    )
