@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-hrkk",
+  "title": "Document coap_waypoints local_creator capacity contract (\u003e= CREATOR_MAX+1 readable bytes)",
+  "description": "Found by robustness review pass of project-LICHEN-worker6-wmae (P3, pre-existing). coap_waypoints.c:197 text_valid(config-\u003elocal_creator, CREATOR_MAX, ...) reads up to CREATOR_MAX+1 bytes via memchr (formerly strnlen) from a caller-supplied const char * (header coap_waypoints.h:52 documents the pointer but not the required readable capacity). Behavior is correct today (memchr stops at the first NUL; byte CREATOR_MAX is touched only when the first CREATOR_MAX bytes are non-NUL, identical envelope to the old strnlen), but the \u003e= CREATOR_MAX+1 readable-bytes contract is implied only. Fix: one doc-comment on the header field/param stating the caller must provide at least CREATOR_MAX+1 readable bytes (or NUL-terminate earlier), matching how the fixed-size fields document their bounds. Pre-existing, no behavior change; do along any waypoints-touching bead (2r8s/wgyl family).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:45:41.711285393Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T02:45:41.711285393Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hrkk",
+      "depends_on_id": "project-LICHEN-worker6-wmae",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:45:41.846566234Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

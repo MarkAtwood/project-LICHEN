@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-zhyq",
+  "title": "senml.c uses undeclared strnlen: same minimal-libc -Werror build break as wmae, different subsystem",
+  "description": "Found by robustness review pass of project-LICHEN-worker6-wmae (P2 sibling of the coap strnlen break). lichen/subsys/lichen/senml/senml.c:43 - live call strnlen(str, max_len + 1) inside string_too_long (used by validate_name/validate_unit). Zephyr's minimal libc does not declare strnlen, so any build pulling senml.c breaks with implicit-function-declaration -Werror, same class as the coap files fixed in wmae/af780aefe1. senml.c is compiled by senml/CMakeLists.txt:9 (its own subsystem, so the coap-level helper pattern does not reach it). Fix: mirror the reviewed pattern in-place - static senml_bounded_len(s, max) memchr helper; the call site is strnlen(str, max_len + 1) so no-NUL must yield max_len + 1 (the string_too_long comparison then rejects). Verify: build whatever app/suite pulls senml.c on native_sim v4.1.0 (or host-compile the file standalone) - note the zcbor stub gap (0whw) may block some apps; senml.c itself includes only zephyr/senml headers? confirm its include set compiles standalone.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:45:41.384309411Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T02:45:41.384309411Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-zhyq",
+      "depends_on_id": "project-LICHEN-worker6-wmae",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:45:41.514399087Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
