@@ -16,7 +16,8 @@
     "owner-reserved",
     "review",
     "round1",
-    "local-ok"
+    "local-ok",
+    "networking"
   ],
   "dependencies": [
     {
