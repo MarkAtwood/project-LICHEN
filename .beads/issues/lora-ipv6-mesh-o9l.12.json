@@ -10,7 +10,8 @@
   "updated_at": "2026-08-28T14:55:20.448343Z",
   "labels": [
     "l2",
-    "oscore"
+    "oscore",
+    "security"
   ],
   "dependencies": [
     {
