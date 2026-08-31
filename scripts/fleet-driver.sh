@@ -55,7 +55,7 @@ while :; do
     if [ "$READY" -eq 0 ]; then
         echo "   ready queue empty — nothing to dispatch"
     elif [ "$CREDITS" -lt "$FLOOR" ]; then
-        echo "   credits $$CREDITS below floor $$FLOOR — rounds paused (auto-topup will replenish)"
+        echo "   credits $CREDITS below floor $FLOOR — rounds paused (auto-topup will replenish)"
     else
         for i in 1 2 3 4 5 6 7; do
             WIN="$SESSION:worker$i"
