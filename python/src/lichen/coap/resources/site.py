@@ -16,6 +16,7 @@ from lichen.coap.params import (
     check_congestion_allows,
     congestion_service_unavailable,
 )
+from lichen.coap.position_privacy import PositionPrivacyPolicy
 from lichen.coap.resources.base import NodeInfo
 from lichen.coap.resources.confessions import ConfessionsDetailsResource, ConfessionsResource
 from lichen.coap.resources.deaddrop import DeadDropDetailsResource, DeadDropResource
@@ -40,6 +41,10 @@ from lichen.coap.resources.node_resources import (
 )
 from lichen.coap.resources.position import PositionCacheResource
 from lichen.coap.resources.presence import PresenceCacheResource, PresenceResource
+from lichen.coap.resources.privacy_config import (
+    PrivacyAllowedPeersResource,
+    PrivacyConfigResource,
+)
 from lichen.coap.resources.proxy import ProxyResource
 from lichen.coap.resources.resource_directory import ResourceDirectoryResource
 from lichen.coap.resources.senml import (
@@ -140,6 +145,8 @@ def build_site(
     location_resource: SenMLLocationResource | None = None,
     position_beacon_resource: PositionBeaconResource | None = None,
     position_cache_resource: PositionCacheResource | None = None,
+    privacy_policy: PositionPrivacyPolicy | None = None,
+    privacy_allow_writes: bool = False,
     metrics_resource: SenMLMetricsResource | None = None,
     presence_resource: PresenceResource | None = None,
     presence_cache_resource: PresenceCacheResource | None = None,
@@ -213,6 +220,14 @@ def build_site(
         site.add_resource(["pos"], position_beacon_resource)
     if position_cache_resource is not None:
         site.add_resource(["pos", "cache"], position_cache_resource)
+    if privacy_policy is not None:
+        site.add_resource(["config", "privacy"], PrivacyConfigResource(privacy_policy))
+        site.add_resource(
+            ["config", "privacy", "allowed"],
+            PrivacyAllowedPeersResource(
+                privacy_policy, allow_writes=privacy_allow_writes
+            ),
+        )
     if metrics_resource is not None:
         site.add_resource(["metrics"], metrics_resource)
     if presence_resource is not None:
