@@ -148,7 +148,7 @@ class KeyRotationAttestation:
 
     COSE_Sign1 structure:
     [
-        h'a10139ffff',          ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
+        h'a1013a00010000',      ; protected: {1: -65537} (alg: Schnorr48-Ed25519)
         {4: h'<old-iid>'},      ; unprotected: {kid: old key's 8-byte IID}
         h'<payload>',           ; CBOR-encoded KeyRotationAttestationPayload
         h'<48-byte signature>'  ; Schnorr48 signature (by OLD key)
