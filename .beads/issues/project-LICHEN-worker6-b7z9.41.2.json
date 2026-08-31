@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.41.2",
+  "title": "Puck: enable CONFIG_LICHEN_SLIP_TRANSPORT on the constrained board confs (SLIP MUST)",
+  "description": "Child 2 of b7z9.41 (spec/11-lci.md 17.7: constrained node MUST implement SLIP framing). CONFIG_LICHEN_SLIP_TRANSPORT is enabled only on lichen/apps/puck/boards/rak4631_nrf52840.conf:18-19; missing on t1000_e_nrf52840.conf (which instead sets CONFIG_LICHEN_NATIVE=y per R-11-001 deprecation note — do NOT remove NATIVE here, separate finding), t_echo, r1_neo, thinknode (verify exact board list via ls lichen/apps/puck/boards/). Add CONFIG_LICHEN_SLIP_TRANSPORT=y to each constrained-board conf. Note the a2a2 dependency: LICHEN_COAP_KEYS depends on SLIP_TRANSPORT — enabling SLIP makes KEYS available but KEYS itself stays gated by its own prj.conf setting. Verify: puck native_sim build still green + one board-conf compile check if the SDK allows (nrf52840 cross-compile), else Kconfig-level validation via the native_sim build with the board conf fragments applied. Discovered from project-LICHEN-worker6-b7z9.41.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:10:06.642266107Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T20:10:06.642266107Z",
+  "labels": [
+    "lci",
+    "zephyr",
+    "decomposed",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.41.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.41",
+      "type": "parent-child",
+      "created_at": "2026-08-31T20:10:06.77170615Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

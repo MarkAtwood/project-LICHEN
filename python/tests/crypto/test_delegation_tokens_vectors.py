@@ -23,8 +23,8 @@ from lichen.crypto.delegation_tokens import (
     DelegationScope,
     DelegationToken,
     DelegationTokenPayload,
-    _build_sig_structure,
-    _encode_protected_header,
+    cose_sig_structure,
+    cose_protected_header,
 )
 from lichen.crypto.schnorr48 import verify
 
@@ -65,7 +65,7 @@ class TestProtectedHeader:
     @pytest.mark.parametrize("vector", get_vectors(), ids=lambda v: v["name"])
     def test_protected_header(self, vector: dict[str, Any]) -> None:
         """Protected header encodes algorithm correctly."""
-        protected = _encode_protected_header()
+        protected = cose_protected_header()
         assert protected.hex() == vector["protected_header"]
 
         # Verify decoded form
@@ -111,7 +111,7 @@ class TestSigStructure:
         """Sig_structure matches RFC 9052 encoding."""
         protected = bytes.fromhex(vector["protected_header"])
         payload = bytes.fromhex(vector["payload_cbor"])
-        sig_structure = _build_sig_structure(protected, payload)
+        sig_structure = cose_sig_structure(protected, payload)
         assert sig_structure.hex() == vector["sig_structure"]
 
         # Verify decoded layout

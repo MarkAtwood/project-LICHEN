@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-cmwv",
   "title": "Rust: decapsulate IPv6-in-IPv6 in plaintext Stack::receive path",
   "description": "b7z9.4.2 wired egress decap into the RPL receive path (receive.rs, both Absent local-delivery and SRH-consumed branches) but not Stack::receive (rust/lichen-node/src/stack.rs:527-584). There the survey now admits nh=41 packets addressed to the local address and hands the still-encapsulated outer to upper layers (which ignore it). Stack lacks local_rpl_addr; expected_dst could be the already-computed local_native (lichen_core::addr::ygg_addr_from_pubkey) if that is the authorized primary 02xx for that path. Reuse rpl_stack::util::decapsulate_ipv6. Add unit tests mirroring tests.rs decapsulate cases.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T08:08:30.790368737Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-31T08:08:30.790368737Z",
+  "updated_at": "2026-08-31T19:44:21.154101754Z",
+  "closed_at": "2026-08-31T19:44:21.154101754Z",
+  "close_reason": "Verification-close: already implemented at main. Stack::receive (rust/lichen-node/src/stack.rs:623-632) performs the egress decapsulation exactly as the bead specified: outer nh=41 (IPV6_IN_IPV6 — the const from b7z9.4.1, which also landed) addressed to the stack is unwrapped via rpl_stack::util::decapsulate_ipv6(\u0026ipv6, local_native), fail-closed on inner-dst mismatch, with local_native = the authorized primary 02xx (ygg_addr_from_pubkey) — mirroring the RPL receive path per spec 05-routing 8.9 R-05-063. Unit tests exist and pass at main tip: stack_receive_decapsulates_tunnel_with_local_inner_dst (+ sibling IPV6_IN_IPV6 cases, tests.rs:1204+). Landed via b7z9.4.2's chain (3725304fe0 et al). No code change needed.",
   "labels": [
     "rust",
     "networking"

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-mhn9",
+  "title": "l1qw.24(c): shared waypoint limit vectors (waypoint_limit 5.03 diagnostic)",
+  "description": "Child of worker6-l1qw.24: add limit vectors to test/vectors/waypoint.json (or a new waypoint_limits.json following schema conventions) covering the 5.03 waypoint_limit diagnostic: per-originator boundary (32 accepted/33 rejected) and global boundary (256/257), with the exact CBOR diagnostic bytes {reason: 'waypoint_limit', per_originator: 32, global: 256}. Consume from Python (waypoints resource tests) and C host test after l1qw.24(a)/(b) land. Note: vector files need generator-or-hand-authored determinism; announce-style files without generators are established precedent.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:54:49.807166835Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T19:54:49.807166835Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-mhn9",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.24",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:54:49.911758371Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
