@@ -1319,14 +1319,18 @@ class LinkLayer:
         if self._exhausted:
             raise OverflowError("link tuple exhaustion")
         from ..l2_payload import L2PayloadKind, classify_l2_payload, l2_payload_body
+        from ..schc.fragment import RULE_IDS
 
         if (
             classify_l2_payload(payload) is L2PayloadKind.SCHC
             and (wrapped_body := l2_payload_body(payload))
-            and wrapped_body[0] in (0x78, 0x79)
+            and wrapped_body[0] in RULE_IDS
         ):
-            raise ValueError("SCHC fragmentation Rules 0x78/0x79 are raw link dispatches")
-        if payload and payload[0] in (0x78, 0x79):
+            rules_text = "/".join(f"0x{rule:02x}" for rule in RULE_IDS)
+            raise ValueError(
+                f"SCHC fragmentation Rules {rules_text} are raw link dispatches"
+            )
+        if payload and payload[0] in RULE_IDS:
             from ..schc.fragment import (
                 Ack,
                 FragmentError,
