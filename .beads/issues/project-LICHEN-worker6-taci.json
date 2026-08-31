@@ -11,7 +11,8 @@
   "updated_at": "2026-08-30T16:54:31.780065Z",
   "labels": [
     "ble",
-    "tests"
+    "tests",
+    "python"
   ],
   "dependencies": [
     {
