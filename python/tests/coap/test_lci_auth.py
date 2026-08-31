@@ -26,6 +26,7 @@ from aiocoap import (
     CHANGED,
     CONTENT,
     CREATED,
+    DELETE,
     GET,
     METHOD_NOT_ALLOWED,
     NOT_FOUND,
@@ -419,10 +420,13 @@ class TestSensorsLocationAuth:
         )
         client = await create_lichen_context(net.channel("cli"), "cli")
         try:
-            resp = await client.request(
-                Message(code=GET, uri="coap://srv/sensors/location")
-            ).response
-            assert resp.code == NOT_FOUND
+            # No method may reach the C-only resource: every verb must get
+            # 4.04 (no handler) rather than 4.05 (handler without the verb).
+            for code in (GET, POST, PUT, DELETE):
+                resp = await client.request(
+                    Message(code=code, uri="coap://srv/sensors/location")
+                ).response
+                assert resp.code == NOT_FOUND
         finally:
             await client.shutdown()
             await server.shutdown()
