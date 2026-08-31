@@ -11,7 +11,8 @@
   "updated_at": "2026-08-29T23:37:30.100436Z",
   "started_at": "2026-08-28T17:07:52.408103Z",
   "labels": [
-    "tests"
+    "tests",
+    "human-only"
   ],
   "dependencies": [
     {
