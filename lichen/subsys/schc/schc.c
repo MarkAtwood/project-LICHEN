@@ -171,6 +171,13 @@ int schc_decompress(const struct schc_profile *profile,
 		if (out_len < payload_len) {
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}
+		if (profile->validate_payload != NULL) {
+			int vret = profile->validate_payload(payload,
+							     payload_len);
+			if (vret < 0) {
+				return vret;
+			}
+		}
 		memcpy(out, payload, payload_len);
 		return (int)payload_len;
 	}
