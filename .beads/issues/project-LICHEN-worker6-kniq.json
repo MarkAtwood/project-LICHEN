@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-6",
   "updated_at": "2026-08-30T21:04:53.395736258Z",
   "labels": [
-    "codereview"
+    "codereview",
+    "gateway"
   ],
   "dependencies": [
     {
