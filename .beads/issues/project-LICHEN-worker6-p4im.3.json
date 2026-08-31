@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T23:39:52.603755Z",
   "labels": [
-    "tests"
+    "tests",
+    "zephyr"
   ],
   "dependencies": [
     {
