@@ -224,20 +224,29 @@ static void on_coap_response(void *user_data, int status, uint8_t code,
 #endif /* CONFIG_LICHEN_L2 */
 
 /* --------------------------------------------------------------------------
- * Hardware watchdog — resilience against radio-driver lockups
+ * Hardware watchdog — resilience against main-thread lockups
  *
- * A LoRa TX/RX can wedge the main thread (e.g. a radio SPI transaction that
+ * A LoRa TX can wedge the main thread (e.g. a radio SPI transaction that
  * never completes when USB-CDC EasyDMA contends with the SPIM). We can't feed
  * the watchdog straight from the main loop: a normal RX wait blocks up to 5 s,
  * so a main-loop-granular watchdog needs a ~20 s timeout — slow recovery that
  * makes host monitoring painful (long USB drop-outs).
  *
- * Instead we track a "progress" heartbeat that the radio driver bumps from
- * inside its poll loops (via the weak lichen_radio_progress() hook it calls),
- * plus the main loop each iteration. A k_timer feeds the SoC watchdog only
- * while the heartbeat is fresh. Normal multi-second RX/TX waits keep bumping
- * the heartbeat so they don't trip it; a genuine stall stops the bumps and the
- * watchdog resets within a few seconds.
+ * We track a "progress" heartbeat. Sources (async RX semantics, sb0b):
+ *   - the main loop, each iteration (the dominant feeder in the common case),
+ *   - the L2 async RX path: every successful recv_async arm and every
+ *     received packet (lora_l2_rx.c). Deliberately NOT the re-arm retry
+ *     attempts — a retry storm would keep the heartbeat fresh while the
+ *     radio path is actually dead, masking wedges. While the radio sits
+ *     idle and armed, silence does not bump the heartbeat; liveness of the
+ *     whole radio path is instead inferred by the application from traffic.
+ *
+ * The k_timer feeds the SoC watchdog only while the heartbeat is fresh; a
+ * genuine main-loop stall stops the main-loop kicks and the watchdog resets
+ * within a few seconds. Note the narrowed contract vs the old RX-thread
+ * design: the watchdog guards the MAIN thread, not the radio driver's RX
+ * liveness (a wedged lora_send() holding modem_mutex is reported through
+ * the phase/heartbeat trails, not the WDT).
  *
  * The feeder runs from a k_timer (system-clock ISR), NOT a thread: under heavy
  * USB-CDC contention the CDC work queue can starve a cooperative feeder thread,
@@ -246,9 +255,10 @@ static void on_coap_response(void *user_data, int status, uint8_t code,
  * -------------------------------------------------------------------------- */
 
 /* WDT_STALL_MS must exceed the longest legitimately-blocking main-loop step
- * that does NOT bump the heartbeat — i.e. the SX126x RX k_poll wait (the LR1110
- * RX/TX poll loops bump continuously). We cap the RX window at RX_WINDOW_MS
- * (< WDT_STALL_MS) so a normal RX never looks like a stall. */
+ * that does NOT bump the heartbeat. With async RX the main loop only performs
+ * short, bounded waits between kicks (the radio path runs in its own work
+ * items and does not bump during idle-armed silence). We cap the RX window at
+ * RX_WINDOW_MS (< WDT_STALL_MS) so a normal RX never looks like a stall. */
 #define WDT_TIMEOUT_MS   4000   /* SoC reset if not fed for this long */
 #define WDT_STALL_MS     4000   /* feeder withholds the feed after no progress this long */
 #define WDT_FEED_MS      500    /* feeder cadence */
