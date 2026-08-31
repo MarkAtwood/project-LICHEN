@@ -79,12 +79,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         )
         .ok_or(TxError::BufferTooSmall)?;
         let l2_destination = ipv6_l2_destination(control_destination);
-        // RPL DIO is control traffic (P1)
+        // RPL DIO is control traffic (P1) and is carried uncompressed
+        // (Rule 255): the authenticated-DIO admission gate accepts only
+        // Rule 255 frames (spec 09 13.3 R-09-005).
         self.stack
-            .send_ipv6_to(
+            .send_ipv6_uncompressed_to(
                 &packet,
                 l2_destination.as_ref().map_or(&[], <[u8; 8]>::as_slice),
-                Priority::Routing,
             )
             .await
     }

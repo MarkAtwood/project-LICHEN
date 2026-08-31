@@ -11,7 +11,7 @@ use std::vec;
 use std::vec::Vec;
 
 use lichen_core::addr::NodeId;
-use lichen_core::constants::{L2_DISPATCH_SCHC, PORT_COAP};
+use lichen_core::constants::{L2_DISPATCH_SCHC, PORT_COAP, RULE_UNCOMPRESSED};
 use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
 use lichen_hal::Radio;
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP_HEADER_LEN};
@@ -468,6 +468,28 @@ impl<R: Radio> Stack<R> {
         let schc_len = codec::compress(ipv6, &mut schc).map_err(|_| TxError::SchcCompress)?;
         let mut l2_payload = [0u8; 201];
         let l2_data = wrap_schc_payload(&schc[..schc_len], &mut l2_payload)?;
+
+        self.send_l2_payload_to(l2_data, dst_addr).await
+    }
+
+    /// Send an IPv6 packet carried uncompressed (SCHC Rule 255).
+    ///
+    /// Canonical multicast DIOs MUST be carried uncompressed: the
+    /// authenticated-DIO admission gate accepts only Rule 255 frames
+    /// (spec 09 13.3 R-09-005; Python authenticated_dio.py parity).
+    pub(crate) async fn send_ipv6_uncompressed_to(
+        &mut self,
+        ipv6: &[u8],
+        dst_addr: &[u8],
+    ) -> Result<(), TxError> {
+        if ipv6.len() > 254 {
+            return Err(TxError::BufferTooSmall);
+        }
+        let mut schc = [0u8; 256];
+        schc[0] = RULE_UNCOMPRESSED;
+        schc[1..1 + ipv6.len()].copy_from_slice(ipv6);
+        let mut l2_payload = [0u8; 257];
+        let l2_data = wrap_schc_payload(&schc[..1 + ipv6.len()], &mut l2_payload)?;
 
         self.send_l2_payload_to(l2_data, dst_addr).await
     }

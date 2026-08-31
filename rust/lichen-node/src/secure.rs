@@ -502,6 +502,21 @@ impl<R: Radio> SecureStack<R> {
         self.stack.send_ipv6_to(ipv6, destination, priority).await
     }
 
+    /// Send an IPv6 packet carried uncompressed (SCHC Rule 255).
+    ///
+    /// Canonical multicast DIOs MUST be carried uncompressed: the
+    /// authenticated-DIO admission gate accepts only Rule 255 frames
+    /// (spec 09 13.3 R-09-005; Python authenticated_dio.py parity).
+    pub(crate) async fn send_ipv6_uncompressed_to(
+        &mut self,
+        ipv6: &[u8],
+        destination: &[u8],
+    ) -> Result<(), TxError> {
+        self.stack
+            .send_ipv6_uncompressed_to(ipv6, destination)
+            .await
+    }
+
     pub(crate) async fn send_ipv6_to_route(
         &mut self,
         ipv6: &[u8],
