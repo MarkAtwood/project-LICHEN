@@ -2032,6 +2032,15 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
         "nonzero Target flags must reject the DAO at the structural stage"
     );
 
+    // Raw (pre-verification) ingest must also reject: the node-side mirror
+    // enforces the R-05-035 flags check on unverified DAO bytes (defense in
+    // depth alongside lichen-rpl extract_updates).
+    assert_eq!(
+        dao_parents_for_source(&wire, &origin),
+        None,
+        "raw ingest must reject nonzero Target flags"
+    );
+
     let mut storage = lichen_hal::storage::mem::MemStorage::new();
     let (mut root, mut state) = Router::provision_root(&mut storage, root_addr).unwrap();
     let mut admission =
