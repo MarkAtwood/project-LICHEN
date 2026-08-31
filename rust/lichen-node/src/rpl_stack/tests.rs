@@ -654,16 +654,20 @@ async fn join_leaf<R: Radio, L: Radio, S: NonVolatile>(
         .await
         .unwrap()
         .is_some());
+    // Canonical multicast DIO delivery (spec 09 13.3 R-09-005): dst
+    // ff02::1a, broadcast L2, Rule 255 uncompressed, hop 255 — the only
+    // shape the authenticated-DIO admission gate accepts.
+    const RPL_ALL_RPL_NODES: [u8; 16] =
+        [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
     sender
-        .send_ipv6_to(
+        .send_ipv6_uncompressed_to(
             &dio_packet_from(
                 link_local_from_iid(root_identity.iid),
-                link_local_from_iid(leaf_addr[8..].try_into().unwrap()),
+                RPL_ALL_RPL_NODES,
                 root_addr,
                 ROOT_RANK,
             ),
-            &ipv6_eui64(leaf_addr),
-            Priority::Routing,
+            &[],
         )
         .await
         .unwrap();
