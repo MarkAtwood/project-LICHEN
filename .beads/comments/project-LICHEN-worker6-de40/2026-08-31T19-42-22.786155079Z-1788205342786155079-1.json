@@ -1,0 +1,7 @@
+{
+  "id": "1788205342786155079-1",
+  "issue_id": "project-LICHEN-worker6-de40",
+  "author": "opencode-worker-7",
+  "text": "Empirical data from worker6-ohg1 (config reconciliation): (1) CI's exact clang-tidy invocation over the find|head-50 set exits rc=1 on ALL 50 files TODAY, dominated by hicpp-signed-bitwise promoted to errors by WarningsAsErrors:'*' (e.g. UINT64_C(1) \u003c\u003c ... at schc.c:371, uint16 shifts at dad.c:173) plus unresolved includes (CI passes -I lichen/subsys/lichen but not -I lichen/subsys, so schc/schc.h is unresolvable) — the job is already saturated red, independent of the config reconciliation. (2) find|head-50 order is readdir-dependent: the lint subset is not stable across checkouts — a latent flake vector to fix together with the compile DB. (3) The spec appendix-c embedded .clang-tidy block (lines 210-238) omits pro-bounds-pointer-arithmetic while the shipped config enables it — reconcile the spec text or the config when landing the compile DB. (4) pro-bounds-pointer-arithmetic fired 0 times across the 50 CI files and the host-compilable subset, so re-enabling it (ohg1) is free even after the gate is repaired.",
+  "created_at": "2026-08-31T19:42:22.786155079Z"
+}

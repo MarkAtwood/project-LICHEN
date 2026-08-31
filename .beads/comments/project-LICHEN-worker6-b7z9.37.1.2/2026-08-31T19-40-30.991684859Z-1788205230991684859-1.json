@@ -1,0 +1,7 @@
+{
+  "id": "1788205230991684859-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.37.1.2",
+  "author": "opencode-worker-5",
+  "text": "Decomposed per TIMEBOX: (a) COSE decode + structural validation (no signature verify) — landable now with committed-vector fixtures; (b) signature verification + RootSeqCache consumption (after (a)); receiver DIO-path wiring with L679 must-not-reject semantics follows (b) as the final integration. Releasing parent; closes when children close.",
+  "created_at": "2026-08-31T19:40:30.991684859Z"
+}
