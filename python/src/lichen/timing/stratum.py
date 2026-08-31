@@ -622,6 +622,15 @@ class StratumTracker:
             replay_key = (signer, generation)
             if counter <= self.__network_high_water.get(replay_key, -1):
                 return self._reject("network-replay-counter-not-new")
+            # Authorization gate BEFORE the barrier insert: an unauthorized
+            # peer can never adopt, so its DIOs must not consume or order
+            # LRU slots - otherwise enough attacker keys evict a victim
+            # signer's high-water and reopen the replay window. The same
+            # predicates _rejection enforces; reasons are identical.
+            if SourceClass.NETWORK not in self.__policy.accepted_wall_clock_sources:
+                return self._reject("network-transport-not-authorized")
+            if signer not in self.__policy.authorized_network_peers:
+                return self._reject("network-peer-not-authorized-for-time")
             # Consideration, including rejection, advances the replay barrier.
             for old_key in tuple(self.__network_high_water):
                 if old_key[0] == signer and old_key[1] is not generation:
