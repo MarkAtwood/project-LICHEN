@@ -356,6 +356,131 @@ int lichen_coap_oscore_respond(struct coap_resource *resource,
 	return coap_resource_send(resource, &resp, addr, addr_len, NULL);
 }
 
+int coap_oscore_send_protected(struct coap_resource *resource,
+			       struct coap_packet *request,
+			       struct sockaddr *addr, socklen_t addr_len,
+			       struct oscore_ctx *ctx,
+			       const uint8_t *piv, size_t piv_len,
+			       uint8_t code)
+{
+	/* Static per the project response-buffer pattern (zg2d, 2m4y): the
+	 * CoAP server dispatch serializes resource handlers. */
+	static uint8_t buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX + OSCORE_TAG_LEN];
+	struct coap_packet resp;
+	int ret;
+
+	if (ctx == NULL || piv == NULL || piv_len == 0) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   code, 0, NULL, 0);
+	}
+	ret = coap_oscore_protect_response(ctx, piv, piv_len, request, code,
+					   NULL, 0, &resp, buf, sizeof(buf));
+	if (ret < 0) {
+		/* A protected request must never receive a cleartext reply
+		 * (project invariant, coap_oscore.c:104-113).  Retry once
+		 * with a protected empty 5.00 through the same context and
+		 * drop silently if that also fails, mirroring
+		 * coap_oscore_respond_resource's protect-failure path. */
+		ret = coap_oscore_protect_response(ctx, piv, piv_len, request,
+						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
+						   NULL, 0, &resp, buf,
+						   sizeof(buf));
+		if (ret < 0) {
+			LOG_ERR("OSCORE empty 5.00 protect failed (%d), dropping response", ret);
+			return OSCORE_ERR_CONTEXT_STALE;
+		}
+	}
+	return coap_resource_send(resource, &resp, addr, addr_len, NULL);
+}
+
+int coap_oscore_authorize_mutating(struct coap_resource *resource,
+				   struct coap_packet *request,
+				   struct sockaddr *addr, socklen_t addr_len,
+				   uint8_t expected_method,
+				   uint8_t *plain_buf, size_t plain_buf_len,
+				   const uint8_t **payload_out,
+				   uint16_t *payload_len_out,
+				   struct oscore_ctx **ctx_out,
+				   uint8_t *piv_out, size_t *piv_len_out,
+				   bool *is_protected)
+{
+	uint8_t peer_eui64[8] = {0};
+
+	*payload_out = NULL;
+	*payload_len_out = 0;
+	*ctx_out = NULL;
+	*piv_len_out = 0;
+	*is_protected = false;
+
+	if (addr_len >= sizeof(struct sockaddr_in6) &&
+	    addr->sa_family == AF_INET6) {
+		const struct sockaddr_in6 *in6 =
+			(const struct sockaddr_in6 *)addr;
+		memcpy(peer_eui64, &in6->sin6_addr.s6_addr[8], 8);
+		lichen_eui64_to_iid(peer_eui64, peer_eui64);
+	}
+
+#ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
+	*is_protected = coap_oscore_is_protected(request);
+	if (*is_protected) {
+		struct oscore_ctx *found_ctx = NULL;
+		uint8_t orig_code;
+		uint8_t opts[32];
+		size_t opt_len = sizeof(opts);
+		size_t pbuf_len = plain_buf_len;
+		size_t ppiv_len = OSCORE_PIV_MAX_LEN;
+		uint8_t *plain_dst = plain_buf;
+		uint8_t scratch;
+		int r;
+
+		if (plain_dst == NULL || pbuf_len == 0) {
+			/* fmee: unprotect always writes plaintext; callers
+			 * that pass no buffer (no payload expected) get a
+			 * fail-closed scratch so a payload-carrying request
+			 * fails the capacity check instead of smashing NULL.
+			 */
+			plain_dst = &scratch;
+			pbuf_len = sizeof(scratch);
+		}
+		if (oscore_ctx_get_by_eui64(peer_eui64, &found_ctx) != OSCORE_OK ||
+		    found_ctx == NULL) {
+			/* The dispatcher sends the returned code; never
+			 * double-send here, and never return the send
+			 * status (0) or the caller would treat the
+			 * unknown peer as authorized. */
+			return COAP_RESPONSE_CODE_UNAUTHORIZED;
+		}
+		r = coap_oscore_unprotect_request(found_ctx, request, &orig_code,
+						  opts, &opt_len,
+						  plain_dst, &pbuf_len,
+						  piv_out, &ppiv_len);
+		if (r != 0) {
+			return COAP_RESPONSE_CODE_UNAUTHORIZED;
+		}
+		if (orig_code != expected_method) {
+			return COAP_RESPONSE_CODE_NOT_ALLOWED;
+		}
+		if (plain_buf == NULL && pbuf_len > 0) {
+			/* No-payload caller: a decrypted payload cannot be
+			 * published (the scratch is function-local). */
+			return COAP_RESPONSE_CODE_BAD_REQUEST;
+		}
+		*ctx_out = found_ctx;
+		*piv_len_out = ppiv_len;
+		/* The fail-closed scratch never escapes: callers that passed
+		 * no buffer get a NULL payload (len 0) on success. */
+		*payload_out = (plain_dst != &scratch) ? plain_dst : NULL;
+		*payload_len_out = (uint16_t)pbuf_len;
+		return 0;
+	}
+#endif
+	if (!lichen_coap_is_local_admin(addr, addr_len)) {
+		return COAP_RESPONSE_CODE_UNAUTHORIZED;
+	}
+	*payload_out = coap_packet_get_payload(request, payload_len_out);
+	return 0;
+}
+
 int coap_oscore_send_unauthorized(struct coap_resource *resource,
 				  struct coap_packet *request,
 				  struct sockaddr *addr, socklen_t addr_len)
