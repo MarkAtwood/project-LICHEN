@@ -12,6 +12,7 @@
   "closed_at": "2026-07-25T01:31:07.076160773Z",
   "close_reason": "Verified incorrect",
   "labels": [
-    "l2"
+    "l2",
+    "tests"
   ]
 }
