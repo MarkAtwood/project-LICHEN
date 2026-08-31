@@ -15,7 +15,8 @@
     "exhaustive",
     "owner-reserved",
     "review",
-    "local-ok"
+    "local-ok",
+    "link"
   ],
   "dependencies": [
     {

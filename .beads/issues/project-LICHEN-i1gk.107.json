@@ -16,7 +16,8 @@
     "owner-reserved",
     "review",
     "round4",
-    "local-ok"
+    "local-ok",
+    "link"
   ],
   "dependencies": [
     {
