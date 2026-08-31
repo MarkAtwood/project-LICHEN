@@ -13,6 +13,9 @@
   "started_at": "2026-07-25T02:26:38.286690233Z",
   "closed_at": "2026-06-25T04:47:47Z",
   "close_reason": "SenML codec, profiles, and observable resources implemented; all tests passing",
+  "labels": [
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "lora_ipv6_mesh-ebkn",
