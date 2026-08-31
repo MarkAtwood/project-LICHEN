@@ -11,6 +11,7 @@
   "updated_at": "2026-08-29T23:37:57.582277Z",
   "started_at": "2026-08-29T04:18:55.428102Z",
   "labels": [
-    "gateway"
+    "gateway",
+    "oscore"
   ]
 }
