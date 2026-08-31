@@ -13,7 +13,8 @@
   "close_reason": "Already fixed",
   "labels": [
     "oscore",
-    "security"
+    "security",
+    "human-only"
   ],
   "dependencies": [
     {
