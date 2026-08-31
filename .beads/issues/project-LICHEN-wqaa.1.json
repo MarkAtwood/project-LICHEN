@@ -21,7 +21,8 @@
     "schc",
     "spec",
     "tests",
-    "vectors"
+    "vectors",
+    "zephyr"
   ],
   "dependencies": [
     {
