@@ -170,9 +170,9 @@ def _validate_rule255_emission_endpoints(packet: IPv6Packet) -> None:
     multicast datagrams are legitimate RX.
     """
     source, destination = packet.header.src_addr, packet.header.dst_addr
-    if source.is_loopback or source.ipv4_mapped is not None:
+    if source.is_unspecified or source.is_loopback or source.is_multicast or source.ipv4_mapped is not None:
         raise SchcError(f"invalid IPv6 source address {source}")
-    if destination.is_loopback or destination.ipv4_mapped is not None:
+    if destination.is_unspecified or destination.is_loopback or destination.ipv4_mapped is not None:
         raise SchcError(f"invalid IPv6 destination address {destination}")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F
@@ -188,8 +188,11 @@ def _validate_single_frame_limit(limit: int | None) -> None:
 def encode_rule255(raw: bytes, *, single_frame_limit: int | None = None) -> bytes:
     """Encode a validated full IPv6 packet with sender-selected Rule 255."""
     _validate_single_frame_limit(single_frame_limit)
+    try:
+        _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(raw, strict=True))
+    except PacketError as error:
+        raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
     validated = validate_full_ipv6(raw)
-    _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(validated, strict=True))
     if len(validated) > MAX_PACKET_SIZE - 1:
         raise SchcError(f"Rule 255 raw IPv6 packet exceeds {MAX_PACKET_SIZE - 1} bytes")
     encoded = bytes((RULE_ID_UNCOMPRESSED,)) + validated
