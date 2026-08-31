@@ -26,13 +26,14 @@ def _envelope(
     invitee_iid: bytes = INVITEE_IID,
     inviter: Identity = INVITER,
     nonce: bytes = bytes(8),
+    expires: int = 600,
 ) -> bytes:
     invitation = GroupInvitationCose(
         group_id="0200::abcd",
         group_name="Rescue Team",
         mcast="ff15::20",
         role="member",
-        expires=600,
+        expires=expires,
         invitee_iid=invitee_iid,
         nonce=nonce,
         inviter_iid=inviter.iid,
@@ -183,3 +184,119 @@ def test_malformed_envelopes_are_rejected() -> None:
         verify_invitation_cose(cbor2.dumps([1, 2, 3]), INVITER.pubkey, INVITEE_IID)
     with pytest.raises(MembershipError):
         verify_invitation_cose("not bytes", INVITER.pubkey, INVITEE_IID)  # type: ignore[arg-type]
+
+
+# ─── resource wiring: POST /groups/invite with a COSE envelope ───────────────
+
+import aiocoap  # noqa: E402
+from lichen.coap.resources.groups_collection import (  # noqa: E402
+    GroupsCollectionResource,
+    GroupsItemResource,
+)
+from lichen.coap.resources.groups_invite import GroupsInviteResource  # noqa: E402
+
+from collections import deque  # noqa: E402
+
+OWNER_ADDR = "0200::1111"
+LEAF_ADDR = "0200::4444"
+
+
+def _cose_resource(*, clock, owner=INVITER):
+    from lichen.crypto.identity import _pubkey_to_iid
+
+    collection = GroupsCollectionResource(clock=clock)
+    collection.groups["0200::abcd"] = {
+        "group_id": "0200::abcd",
+        "name": "Rescue Team",
+        "mcast": "ff15::20",
+        "owner": OWNER_ADDR,
+        "members": {},
+        "join_key": b"k" * 32,
+    }
+    invitee_identity = Identity.from_seed(b"\x44" * 32)
+    resource_obj = GroupsInviteResource(
+        collection=collection,
+        invitee=LEAF_ADDR,
+        node_id=LEAF_ADDR,
+        node_pubkey=invitee_identity.pubkey,
+        pubkeys={OWNER_ADDR: owner.pubkey, LEAF_ADDR: invitee_identity.pubkey},
+    )
+    return collection, resource_obj, _pubkey_to_iid(invitee_identity.pubkey)
+
+
+def _cose_post(envelope: bytes) -> aiocoap.Message:
+    request = aiocoap.Message(code=aiocoap.POST, payload=cbor2.dumps(envelope))
+    request.oscore_context_id = OWNER_ADDR
+    return request
+
+
+def test_cose_invitation_accepted_then_nonce_replay_rejected() -> None:
+    from collections import deque
+
+    fixed = 1716742800.0
+    collection, resource_obj, invitee_iid = _cose_resource(clock=lambda: fixed)
+    envelope = _envelope(invitee_iid=invitee_iid, expires=int(fixed) + 600)
+    import asyncio
+
+    response = asyncio.run(resource_obj.render_post(_cose_post(envelope)))
+    assert response.code == aiocoap.CHANGED
+    ring = collection.invitation_nonce_ring[INVITER.iid]
+    assert isinstance(ring, deque) and len(ring) == 1
+    # Same nonce again -> replay -> FORBIDDEN.
+    response = asyncio.run(resource_obj.render_post(_cose_post(envelope)))
+    assert response.code == aiocoap.FORBIDDEN
+    # Fresh nonce + distinct grant (expires shifts the document identity):
+    # accepted until the ring saturates at 32 per inviter; the oldest nonce
+    # is evicted, so the very first nonce would be re-acceptable now (ring
+    # semantics, R-12-064) — here we only pin the bound.
+    for i in range(40):
+        response = asyncio.run(
+            resource_obj.render_post(
+                _cose_post(
+                    _envelope(
+                        invitee_iid=invitee_iid,
+                        nonce=f"{i:08d}".encode(),
+                        expires=int(fixed) + 601 + i,
+                    )
+                )
+            )
+        )
+        assert response.code == aiocoap.CHANGED
+    ring = collection.invitation_nonce_ring[INVITER.iid]
+    assert len(ring) == 32
+    assert bytes(8) not in ring  # evicted (oldest)
+
+
+def test_cose_invitation_expired_is_rejected() -> None:
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 8, 31, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+    collection, resource_obj, invitee_iid = _cose_resource(clock=lambda: now)
+    from lichen.group_membership import GroupInvitationCose as Cose
+
+    invitation = Cose(
+        group_id="0200::abcd",
+        group_name="Rescue Team",
+        mcast="ff15::20",
+        role="member",
+        expires=int(now) - 1,
+        invitee_iid=invitee_iid,
+        nonce=bytes(8),
+        inviter_iid=INVITER.iid,
+        signature=b"",
+    )
+    stale = encode_invitation_cose(invitation, INVITER)
+    import asyncio
+
+    response = asyncio.run(resource_obj.render_post(_cose_post(stale)))
+    assert response.code == aiocoap.FORBIDDEN
+
+
+def test_cose_invitation_wrong_invitee_is_rejected() -> None:
+    fixed = 1716742800.0
+    collection, resource_obj, _ = _cose_resource(clock=lambda: fixed)
+    other = bytes(range(0x50, 0x58))
+    import asyncio
+
+    response = asyncio.run(resource_obj.render_post(_cose_post(_envelope(invitee_iid=other))))
+    assert response.code == aiocoap.FORBIDDEN
