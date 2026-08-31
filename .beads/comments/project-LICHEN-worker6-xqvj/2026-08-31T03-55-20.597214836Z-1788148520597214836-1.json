@@ -1,0 +1,7 @@
+{
+  "id": "1788148520597214836-1",
+  "issue_id": "project-LICHEN-worker6-xqvj",
+  "author": "opencode-worker-7",
+  "text": "Exact fix for the coap_client.c blockers (found during 0l5j.4 build verification): Zephyr v4.1.0 renamed the client mutex - struct coap_client now has 'struct k_mutex lock' (zephyr/include/zephyr/net/coap_client.h:114), not 'send_mutex' (that was v3.7.0). coap_client.c:181/192 use s_client.send_mutex - convert with the repo's KERNEL_VERSION pattern (same as lichen/include/lichen/lora_compat.h): #if KERNEL_VERSION_NUMBER \u003e= 0x040000 use s_client.lock, else s_client.send_mutex. After that, ping_l2 native_sim builds fully (verified this round: the recv_async errors are gone via 0l5j.4's lora_compat.h migration; coap_client was the ONLY remaining error pair).",
+  "created_at": "2026-08-31T03:55:20.597214836Z"
+}

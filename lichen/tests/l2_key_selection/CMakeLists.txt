@@ -40,6 +40,7 @@ add_executable(l2_key_selection_test
 target_include_directories(l2_key_selection_test PRIVATE
   ${LICHEN_LINK_DIR}/include
   ${LICHEN_SCHC_DIR}/include
+  ${LICHEN_SCHC_DIR}
   ${SCHC_CORE_DIR}/include
   ${LICHEN_CRYPTO_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/../../include

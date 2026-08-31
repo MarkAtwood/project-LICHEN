@@ -1,0 +1,7 @@
+{
+  "id": "1788133759405401147-1",
+  "issue_id": "project-LICHEN-worker6-5fva.1",
+  "author": "opencode-worker-6",
+  "text": "worker6 scoping round (released - environment blocked): (1) Static trace: lichen_link_tx.c's own returns are EINVAL/ENOKEY/EPROTONOSUPPORT/EBUSY/ENOMEM/EMSGSIZE - the -ENOENT propagates from a callee; ENOENT sources in the tree are settings/persistence (epoch_persist.c:117, replay_persist.c:234, oscore_persist/oscore_settings, ble transport). lichen_schc_compress has no ENOENT path. Secondary bug confirmed: lichen_link_strerror prints 'unknown error (-2)' for ENOENT (table gap - fix alongside). (2) Build blocked BOTH ways: heft fails host-key verification (new bead 4qpf, human-gated) and the local builder workspace lichen-workspace/project-LICHEN has a broken zephyr symlink (new bead 7x4j). Next claimer: after either environment is fixed, build ping_l2 (west build -b native_sim/native/64 lichen/tests/ping_l2 -d build/ping_l2), run, and trace which callee returns -ENOENT with a live log - the static pass alone could not pin it. prj.conf unblocks already in the tree.",
+  "created_at": "2026-08-30T23:49:19.405401147Z"
+}

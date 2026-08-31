@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-yqy6.8.8",
+  "title": "qemu_x86: Loopback LoRa radio",
+  "description": "Validate LICHEN_RADIO_MODEL_LOOPBACK on qemu_x86. Verify self-TX/RX round-trip through loopback driver. Files: lichen/tests/lora_loopback_qemu/src/main.c, lichen/tests/lora_loopback_qemu/prj.conf, lichen/tests/lora_loopback_qemu/testcase.yaml (all new). ~15 lines across 3 files. Depends on yqy6.8.7.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:23.56276992Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:56:49.041755424Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "hal",
+    "needs-linux"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yqy6.8.8",
+      "depends_on_id": "project-LICHEN-worker6-yqy6.8",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:23.665901433Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

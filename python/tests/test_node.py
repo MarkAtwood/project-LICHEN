@@ -64,6 +64,7 @@ from lichen.rpl.dodag import DodagRole
 from lichen.rpl.messages import DIO, RPL_ICMPV6_TYPE, RplCode
 from lichen.schc.fragment import (
     MAX_ACK_REQUESTS,
+    RULE_IDS,
     TILE_SIZE,
     Fragment,
     FragmentError,
@@ -1057,6 +1058,48 @@ async def test_production_schc_ingress_notifies_once_and_success_resets(
         await node._process_received(malformed)
     assert notifications == [peer.pubkey, peer.pubkey]
     assert delivered == [(wrap_schc_payload(compress_packet(raw)), peer)]
+
+
+@pytest.mark.asyncio
+async def test_fragment_dispatch_tracks_rule_ids_constant(
+    identity: Identity,
+    radio: MockRadio,
+    peer_identity: Identity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = Node(identity=identity, radio=radio, config=NodeConfig())
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+    sender_control: list[RxFrame] = []
+    monkeypatch.setattr(
+        node.link,
+        "accept_authenticated_schc_sender_control",
+        lambda rx: sender_control.append(rx),
+    )
+
+    def reject_reassembly(_rx: RxFrame) -> None:
+        raise FragmentError("reassembly not expected in this test")
+
+    monkeypatch.setattr(node.link, "accept_authenticated_schc_fragment", reject_reassembly)
+
+    # A raw fragment dispatch (first byte in RULE_IDS) enters the fragment branch.
+    fragment_payload = bytes([RULE_IDS[0], 0x00])
+    await node._process_received(_verified_rx(fragment_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == []
+
+    # A non-rule first byte without the SCHC dispatch is application delivery.
+    plain_payload = bytes([0x70, 0xAA])
+    await node._process_received(_verified_rx(plain_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == [(plain_payload, peer)]
+
+    # Detection consults the module-level RULE_IDS constant, not hardcoded bytes.
+    monkeypatch.setattr("lichen.node.RULE_IDS", (0x70,))
+    await node._process_received(_verified_rx(fragment_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == [(plain_payload, peer), (fragment_payload, peer)]
 
 
 @pytest.mark.asyncio
@@ -2104,7 +2147,6 @@ async def test_ipv6_forwarding_enforces_hop_limit_boundary(
             next_header=NextHeader.NO_NEXT_HEADER,
             hop_limit=hop_limit,
         ),
-        payload=b"bounded",
     ).to_bytes()
     encoded = wrap_schc_payload(b"\x02test")
     compressed_inputs: list[bytes] = []
@@ -2144,7 +2186,7 @@ async def test_ipv6_forwarding_enforces_hop_limit_boundary(
         assert forwarded.header.hop_limit == forwarded_hop_limit
         assert forwarded.header.src_addr == source
         assert forwarded.header.dst_addr == destination
-        assert forwarded.payload == b"bounded"
+        assert forwarded.payload == b""
     assert source not in node.gradient_table
 
 
@@ -2174,7 +2216,6 @@ async def test_local_delivery_enforces_hop_limit_boundary(
             next_header=NextHeader.NO_NEXT_HEADER,
             hop_limit=hop_limit,
         ),
-        payload=b"consume",
     ).to_bytes()
     encoded = wrap_schc_payload(b"\x02test")
 
@@ -2412,6 +2453,32 @@ async def test_node_post_commit_peer_failure_restores_bounded_one_shot_permit(
     await node._process_announce(relay_announce.to_bytes(), peer_identity, -80)
     assert len(radio.tx_history) == relayed_count  # fail-closed without a permit
     assert node.gradient_table.lookup(destination) is not None
+
+
+def test_node_persist_path_requires_revision_anchor(
+    tmp_path,
+    identity: Identity,
+) -> None:
+    with pytest.raises(
+        ValueError, match="persistence_revision_anchor required when persist_path is set"
+    ):
+        Node(
+            identity=identity,
+            radio=cast(Any, MockRadio()),
+            config=NodeConfig(persist_path=str(tmp_path / "node-state")),
+        )
+
+
+def test_node_partial_rpl_admission_config_is_rejected(identity: Identity) -> None:
+    with pytest.raises(
+        ValueError,
+        match="RPL admission requires instance ID, DODAG ID, and expected DIO role",
+    ):
+        Node(
+            identity=identity,
+            radio=cast(Any, MockRadio()),
+            config=NodeConfig(rpl_instance_id=5),
+        )
 
 
 @pytest.mark.asyncio
@@ -2674,7 +2741,6 @@ def _relay_test_packet(*, src: IPv6Address, dst: IPv6Address, hop_limit: int) ->
             next_header=NextHeader.NO_NEXT_HEADER,
             hop_limit=hop_limit,
         ),
-        payload=b"stable-application-packet",
     ).to_bytes()
 
 

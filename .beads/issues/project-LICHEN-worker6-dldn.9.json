@@ -9,6 +9,9 @@
   "created_at": "2026-08-28T04:53:55.016648Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T04:53:55.016648Z",
+  "labels": [
+    "zephyr"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-dldn.9",

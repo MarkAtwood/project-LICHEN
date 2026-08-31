@@ -405,6 +405,7 @@ mod tests {
     use lichen_link::keys::Seed;
     use lichen_link::schnorr::sign;
     use std::format;
+    use std::string::String;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     fn make_identity(seed_byte: u8) -> Identity {
@@ -1264,6 +1265,101 @@ mod tests {
             .is_none());
 
         drop(foreign);
+        remove_roots(&state_root, &floor_root);
+    }
+
+    #[test]
+    fn rolled_back_durable_state_fails_admission_closed() {
+        // Restored older state snapshot behind a newer durable floor (whole-
+        // state-root snapshot rollback): the processor must fail closed for
+        // the pinned IID and never adopt any sequence from the regressed
+        // record, matching the store-level contract.
+        let counter = AtomicU64::new(4000);
+        let (state_root, floor_root) = unique_test_roots("rollback", &counter);
+        let identity = make_identity(0x31);
+        let hex_iid: String = identity.iid.iter().map(|b| format!("{b:02x}")).collect();
+        let state_record = state_root
+            .join("announce-trust")
+            .join(format!("announce-pin-{hex_iid}"));
+        let mut processor = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
+        );
+        let mut buf = [0u8; 256];
+
+        // Accept seq 100, snapshot the sealed state record, then accept 200.
+        let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        assert!(
+            processor
+                .process(&announce, link_local(0xAA), 1000)
+                .accepted
+        );
+        let snapshot = std::fs::read(&state_record).unwrap();
+        let len = make_signed_announce(&identity, 200, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        assert!(
+            processor
+                .process(&announce, link_local(0xAA), 2000)
+                .accepted
+        );
+        drop(processor);
+
+        // Roll the sealed state record back to the seq-100 snapshot. The
+        // durable floor still holds 200, so load() fails closed. The record
+        // is restored with FileStorage's hardened 0600 mode so the read path
+        // exercises the genuine precedes check, not a private-file rejection.
+        std::fs::write(&state_record, &snapshot).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&state_record, std::fs::Permissions::from_mode(0o600))
+                .unwrap();
+        }
+        let mut rolled_back = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
+        );
+        assert!(rolled_back.pinned_pubkey_for(&identity.iid).is_none());
+        // Pin the exact failure mode: the store rejects the regressed record
+        // as Corrupt (seal-valid state behind the durable floor), not as an
+        // artifact of the raw-file restore (Io).
+        use crate::announce_store::AnnounceStoreError;
+        assert_eq!(
+            rolled_back.trust_store.borrow_mut().load(&identity.iid),
+            Err(AnnounceStoreError::Corrupt)
+        );
+
+        // An intermediate replay (old < seq < floor) is refused...
+        let len = make_signed_announce(&identity, 150, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        let result = rolled_back.process(&announce, link_local(0xAA), 3000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::PersistenceError)
+        );
+
+        // ...and so is a strictly newer sequence: the regressed record is
+        // unusable (fail closed beats fail open).
+        let len = make_signed_announce(&identity, 250, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+        let result = rolled_back.process(&announce, link_local(0xAA), 4000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::PersistenceError)
+        );
+        let mut destination = [0u8; 16];
+        destination[..8].copy_from_slice(&ula_prefix());
+        destination[8..].copy_from_slice(&identity.iid);
+        assert!(rolled_back
+            .gradient_table_mut()
+            .lookup(&destination, 4000)
+            .is_none());
+
         remove_roots(&state_root, &floor_root);
     }
 }

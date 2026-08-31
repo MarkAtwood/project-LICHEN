@@ -454,6 +454,47 @@ async def test_option_mismatch_rejection_consumes_network_replay_high_water() ->
 
 
 @pytest.mark.asyncio
+async def test_unauthorized_transport_dio_does_not_consume_replay_barrier() -> None:
+    """8c0b: a DIO that fails time authorization must not consume the network
+    replay barrier. The unauthorized-period consideration is refused without
+    touching the LRU, so once the operator authorizes the transport the SAME
+    sealed DIO (same counter) is adoptable instead of being poisoned as a
+    replay of a consideration that could never have succeeded."""
+    option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
+    clock, radio, link, verifier, authenticated = await _dio_time_setup(1, option)
+    admin = TimeAdmin("network-policy-admin")
+    state = StratumTracker(
+        authorities=(verifier,),
+        policy=policy(SourceClass.GNSS),  # NETWORK transport not accepted yet
+        floor_authority=EpochFloorAuthority(FLOOR),
+        clock=clock.capability,
+        admin=admin,
+    )
+
+    sample = verifier.verify(authenticated)
+    assert not state.consider(option, sample=sample)
+    assert state.last_rejection_reason == "network-transport-not-authorized"
+
+    # Re-considering the SAME counter is still the authorization rejection:
+    # the barrier was not consumed while the transport was unauthorized.
+    reissued = verifier.verify(authenticated)
+    assert reissued.evidence.replay_counter == sample.evidence.replay_counter
+    assert not state.consider(option, sample=reissued)
+    assert state.last_rejection_reason == "network-transport-not-authorized"
+
+    # The operator authorizes the network transport: the SAME DIO (same
+    # counter) is now adoptable - not poisoned as a replay.
+    state.replace_policy(
+        admin,
+        policy(SourceClass.GNSS, SourceClass.NETWORK, peers=frozenset({REMOTE.pubkey})),
+    )
+    reissued2 = verifier.verify(authenticated)
+    assert reissued2.evidence.replay_counter == sample.evidence.replay_counter
+    assert state.consider(option, sample=reissued2)
+    assert state.current_time() is not None
+
+
+@pytest.mark.asyncio
 async def test_repeated_dio_time_verify_same_counter_rejected() -> None:
     option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
     clock, _radio, _link, verifier, authenticated = await _dio_time_setup(1, option)

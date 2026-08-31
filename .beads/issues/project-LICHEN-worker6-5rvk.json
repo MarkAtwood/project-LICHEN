@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-5rvk",
+  "title": "C generic Rule255 fallback decodes without payload validation; Rust/Python validate full IPv6 structure (cross-impl divergence)",
+  "description": "Found by robustness review pass of project-LICHEN-worker6-1dft (P2, pre-existing - NOT introduced by the ingress-ceiling change; the new test pins the lenient behavior so it looks like a parity test). C generic dispatcher rule255/uncompressed fallback (lichen/subsys/schc/schc.c, post-ceiling) is a bare memcpy of the payload: it accepts EMPTY payloads and non-IPv6 bytes and returns success. Rust decode_rule255 (rust/lichen-schc/src/codec.rs:1459-1468) runs validate_full_ipv6_structure on the payload (version 6, exact lengths, ext-header walk, UDP checksums); Python decode_rule255 (python/src/lichen/schc/headers.py:201-213) runs validate_full_ipv6. So data_len==1 rule255 -\u003e C returns 0 (success with zero-length delivery; lichen_link_rx.c:353 only tests ret\u003c0 so it would report success with out_len 0), Rust/Python return errors. Per spec/03-adaptation.md Rule255: 'Its payload MUST be a complete, structurally valid IPv6 packet'. Fix: mirror Rust/Python - route the generic fallback payload through the same structural validation (the C per-rule decompressors' validate_ipv6_transport_lengths/validate_ipv6_header_chain machinery exists in schc_helpers.c; reuse it for the rule255 payload), keeping the RX/TX address-policy split (emission policy NOT applied on receipt). Decide the zero-payload/short-payload edge (\u003c IPV6_HDR_LEN -\u003e reject as malformed). Then re-pin tests/schc test_rule255_ingress_profile_ceiling with a NON-IPv6 payload to assert rejection parity with Rust/Python (current 0x41-fill vector would flip from accepted to rejected). Coordinate with hahk/7v5f (non-IPv6 Rule255 emission on the compress side) - same spec sentence governs both directions.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:49:37.374316553Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T01:15:12.601199436Z",
+  "closed_at": "2026-08-31T01:15:12.601199436Z",
+  "close_reason": "C generic Rule255 fallback now validates the payload, closing the cross-impl divergence: Rust decode_rule255 and Python decode_rule255 validate full IPv6 structure while C was a bare memcpy. Design: schc_profile gains an optional validate_payload hook (schc.h, documented; NULL = raw byte-preserving for test/fuzz profiles) - the lichen profile sets it to lichen_rule255_validate_payload (static wrapper over validate_ipv6_transport_lengths: structure + UDP checksums, NO endpoint address policy per the canonical TX/RX split), and schc_decompress's rule255 branch calls it after its own arg/ceiling/out_len checks and BEFORE the memcpy, so precedence pinned by existing tests is preserved (NULL-out -\u003e BUFFER_TOO_SMALL; over-ceiling -\u003e BUFFER_TOO_SMALL; then payload validation; all prior failure codes from 1dft/qn87 intact). Atomicity: out untouched on validation failure. All 5 profile initializers use designated init (new member defaults NULL) - no ABI break; fuzz/schc_generic profiles unchanged. Pins: tests/schc test_uncompressed_fallback now asserts non-IPv6 rule255 payload REJECTED at decompress (compress still emits pending the 7v5f merge) + a valid no-rule-match IPv6 UDP packet round-trips byte-preserving; test_rule255_ingress_profile_ceiling's at-ceiling payload rebuilt as a valid TCP packet (0x41 fill is no longer decodable). Verified on heft: all 18 C host suites green (schc 17/17, parity 59/59; clang+ASan/UBSan), python test_vectors 778/778, rust lichen-schc --features std 12/12 targets green incl shared_vectors; cppcheck clean. 3x codereview: no P0-P2. Findings: bkl1 (P3 merge hazard - when 7v5f merges, its test_reject_non_ipv6_input replaces test_uncompressed_fallback; the decompress-side assertions must be re-homed with a hand-built ff frame); reviewer also found 1tpy's premise needs re-verification on the merged tree (firmware/bridge-zephyr vendors only L2 files, not schc sources, and its vendored subsys is not compiled per 1www.61 - 1tpy should be rescoped to the lichen_l2.c sync only).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5rvk",
+      "depends_on_id": "project-LICHEN-worker6-1dft",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:49:37.481147326Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

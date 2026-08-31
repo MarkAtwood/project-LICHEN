@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-nahh",
+  "title": "Dead config: CONTENTION_BACKOFF_MIN/MAX_MS consumed by nothing; help text mismatches implemented CSMA",
+  "description": "lichen/subsys/lichen/link/Kconfig:222-243 defines CONFIG_LICHEN_TDMA_CONTENTION_BACKOFF_MIN_MS/MAX_MS and link.h:91-92 defines same-named macros (100/1000). NOTHING consumes either form — grep across lichen/, firmware/, rust/, python/ finds zero references besides the definition sites; no CONFIG_-prefixed use anywhere. The actual CSMA engine (csma.c) implements binary exponential backoff: uniform slot draw over 2^exponent windows * LICHEN_CSMA_BACKOFF_UNIT_MS(10ms), exponent capped by LICHEN_CSMA_BACKOFF_MAX_EXPONENT(5) — not the 'uniform random in [min_ms, max_ms)' the Kconfig help promises. So the tunables are silent no-ops (user trap) and the help text misdocuments the algorithm. Found while verifying worker6-o45y: its UB premise is false precisely because there is no consuming random-selection code. Decision needed (Mark): (a) wire the Kconfig symbols into the engine as window bounds and add the MIN\u003cMAX BUILD_ASSERT o45y asked for, or (b) delete the dead Kconfig symbols + link.h macros and fix help text. Note: link.h macros carry spec/02a references and are public API surface; deletion needs owner sign-off. Cross-language conformance tests (lichen/tests/csma_constants, rust/lichen-core/tests/csma_constants_vectors.rs) pin the LICHEN_CSMA_* constants, not these.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T04:12:30.493234666Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T04:12:30.493234666Z",
+  "labels": [
+    "zephyr",
+    "codereview",
+    "local-ok",
+    "c"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nahh",
+      "depends_on_id": "project-LICHEN-worker6-o45y",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T04:12:30.653589201Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

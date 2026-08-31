@@ -7,8 +7,9 @@
  *
  * Standalone IPv6 address construction utilities:
  * - Link-local: fe80::<IID>
- * - Native primary: key-derived 0200::/8 address (/128 per node)
- * - ULA/GUA for compatibility and prefix delegation
+ * - Native primary: key-derived 0200::/8 address (/128 per node), via
+ *   lichen_yggdrasil_addr() (Yggdrasil AddrForKey profile, spec section 12)
+ * - GUA for compatibility and prefix delegation
  *
  * IID derivation (spec 6.2):
  * - From EUI-64: flip the U/L bit per RFC 4291
@@ -262,24 +263,6 @@ bool lichen_ipv6_multicast_scope_is_transmittable(uint8_t scope);
  * @return 0 on success, -EINVAL if NULL pointer
  */
 int lichen_make_link_local(const uint8_t *iid, struct in6_addr *addr);
-
-/**
- * @brief Construct ULA address from prefix and IID
- *
- * Combines a fd00::/8 prefix with the IID.
- *
- * Note: Only fd00::/8 is accepted, not the full fc00::/7 ULA range.
- * Per RFC 4193, fc00::/8 (L=0) is reserved; only fd00::/8 (L=1) is
- * allocated for locally-assigned ULAs.
- *
- * @param prefix 64-bit prefix (first 8 bytes, must be in fd00::/8)
- * @param iid Interface identifier (8 bytes)
- * @param addr Output IPv6 address
- *
- * @return 0 on success, -EINVAL if prefix not in fd00::/8
- */
-int lichen_make_ula(const uint8_t *prefix, const uint8_t *iid,
-                    struct in6_addr *addr);
 
 /**
  * @brief Construct GUA address from prefix and IID

@@ -16,7 +16,8 @@
     "owner-reserved",
     "review",
     "untrusted-input",
-    "local-ok"
+    "local-ok",
+    "human-only"
   ],
   "dependencies": [
     {

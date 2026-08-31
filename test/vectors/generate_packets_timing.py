@@ -881,6 +881,12 @@ def packets_timing_vectors() -> list[dict[str, object]]:
             "seq_advance_valid": is_valid_dao_sequence(2, prev_max=1),
             "seq_no_advance_invalid": is_valid_dao_sequence(1, prev_max=1),
             "seq_max_valid_terminal": is_valid_dao_sequence(0xFFFFFFFFFFFFFFFF),
+            "seq_max_after_floor_valid": is_valid_dao_sequence(
+                0xFFFFFFFFFFFFFFFF, prev_max=100
+            ),
+            "seq_after_max_invalid": is_valid_dao_sequence(
+                1, prev_max=0xFFFFFFFFFFFFFFFF
+            ),
         }
     )
 

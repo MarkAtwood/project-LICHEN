@@ -78,7 +78,13 @@ class UdpDatagram:
         return without_checksum[:6] + checksum.to_bytes(2, "big") + self.payload
 
     @classmethod
-    def from_bytes(cls, data: bytes, src: IPv6Address | None = None) -> UdpDatagram:
+    def from_bytes(cls, data: bytes) -> UdpDatagram:
+        """Parse one datagram, verifying framing only (no endpoint policy).
+
+        Endpoint address policy is not a parser concern (spec/03-adaptation.md
+        Rule 255 RX decision): it is applied at origination and forwarding via
+        :func:`lichen.schc.headers.validate_datagram_source_policy`.
+        """
         if len(data) < UDP_HEADER_LENGTH:
             raise UdpError(f"UDP datagram too short: {len(data)} bytes")
         src_port = int.from_bytes(data[0:2], "big")
@@ -94,8 +100,6 @@ class UdpDatagram:
             raise UdpError(f"UDP length {length} != {len(data)} bytes present")
         if checksum == 0:
             raise UdpError("checksum is zero (mandatory for IPv6 per RFC 8200 8.1)")
-        if src is not None and (src.is_unspecified or src.is_multicast):
-            raise UdpError(f"malformed source: {src}")
         return cls(src_port, dst_port, data[UDP_HEADER_LENGTH:], checksum)
 
     @staticmethod

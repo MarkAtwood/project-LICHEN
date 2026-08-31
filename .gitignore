@@ -64,3 +64,6 @@ artifacts-*.txt
 
 # Test caches
 .hypothesis/
+
+# ctest artifacts created when ctest runs outside a build dir
+Testing/

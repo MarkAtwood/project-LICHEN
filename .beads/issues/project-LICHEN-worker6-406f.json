@@ -12,6 +12,7 @@
   "labels": [
     "bug",
     "codereview",
-    "local-ok"
+    "local-ok",
+    "zephyr"
   ]
 }

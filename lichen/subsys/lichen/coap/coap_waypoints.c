@@ -92,7 +92,13 @@ static bool text_valid(const char *s, size_t max, bool allow_empty) {
   if (s == NULL) {
     return false;
   }
-  len = strnlen(s, max + 1U);
+  /* Zephyr's minimal libc does not declare strnlen(): bounded length via
+   * memchr. */
+  {
+    const char *nul = memchr(s, '\0', max + 1U);
+
+    len = nul ? (size_t)(nul - s) : max + 1U;
+  }
   return len <= max && (allow_empty || len > 0U) &&
          utf8_valid((const uint8_t *)s, len);
 }

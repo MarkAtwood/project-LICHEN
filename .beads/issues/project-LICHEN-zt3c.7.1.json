@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-zt3c.7.1",
+  "title": "Remove ULA Kconfig symbols from lichen Kconfig",
+  "description": "Remove CONFIG_LICHEN_IPV6_ULA_PREFIX and related ULA Kconfig symbols. Update any help text referencing ULA. ~10 lines in 1 file. No deps.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:14.826499095Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:55:55.129431195Z",
+  "closed_at": "2026-08-31T03:55:55.129431195Z",
+  "close_reason": "No CONFIG_LICHEN_IPV6_ULA_PREFIX or related ULA Kconfig symbols exist in lichen/. Grep confirms only ipv6_addr.c/h contain ULA code. This child was created from a wrong assumption.",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "kconfig",
+    "gateway",
+    "global",
+    "local-ok",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zt3c.7.1",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:14.944858113Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

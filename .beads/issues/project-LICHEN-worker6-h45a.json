@@ -2,15 +2,18 @@
   "id": "project-LICHEN-worker6-h45a",
   "title": "Repair standalone SCHC host test link source list",
   "description": "lichen/tests/schc/CMakeLists.txt compiles generic and LICHEN SCHC sources but omits the helper/compress/decompress implementation files required by lichen/subsys/lichen/schc/schc.c. The focused host build reaches link then fails with unresolved ipv6_version, compress_coap, decompress_coap, ICMPv6/RPL helpers, etc. Add the authoritative source/library wiring without duplicate implementations. Acceptance: clean host build links and schc_test runs all vectors successfully.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T18:41:25.357587Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T18:41:25.357587Z",
+  "updated_at": "2026-08-31T05:24:31.162239049Z",
+  "closed_at": "2026-08-31T05:24:31.162239049Z",
+  "close_reason": "Already fixed; lichen/tests/schc/CMakeLists.txt has complete explicit source list.",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "zephyr"
   ],
   "dependencies": [
     {

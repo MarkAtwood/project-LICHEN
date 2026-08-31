@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-kpv0.5",
+  "title": "kpv0(c): cargo fmt 3 hunks in rpl_stack/util.rs (after b7z9.4.2 lands)",
+  "description": "Parent: project-LICHEN-kpv0. rust/lichen-node/src/rpl_stack/util.rs has 3 cargo fmt hunks (291,318,367) inside the survey_routing_headers region (259-394) that ready bead project-LICHEN-worker6-b7z9.4.2 targets. LAND AFTER b7z9.4.2 merges to avoid mid-flight conflicts. Then rustfmt util.rs, verify cargo fmt --all --check is fully clean across rust/ (completes kpv0(b)), cargo check -p lichen-node. Whitespace-only.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:18:56.868547038Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T07:18:56.868547038Z",
+  "labels": [
+    "decomposed",
+    "rust",
+    "coap",
+    "l2",
+    "python",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.5",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:18:57.047809988Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

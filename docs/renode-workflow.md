@@ -453,14 +453,15 @@ jobs:
 
       - name: Install Renode
         run: |
-          wget https://builds.renode.io/renode-latest.linux-portable.tar.gz
-          tar xf renode-latest.linux-portable.tar.gz
+          wget https://builds.renode.io/renode-1.16.1.linux-portable.tar.gz
+          echo "1a532d4b5b82de0dd154970c401e0c7b0e498d17304b2cecc007e306c8f9617c  renode-1.16.1.linux-portable.tar.gz" | sha256sum -c -
+          tar xf renode-1.16.1.linux-portable.tar.gz
           echo "$PWD/renode_*_portable" >> $GITHUB_PATH
 
       - name: Install Python deps
         run: |
-          pip install uv
-          cd python && uv sync --locked --dev
+          pip install "uv>=0.11,<0.12"
+          cd python && uv sync --locked --extra dev
 
       - name: Build firmware
         run: |

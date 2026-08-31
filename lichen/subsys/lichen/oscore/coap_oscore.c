@@ -20,7 +20,7 @@
 #include <lichen/coap_server.h>
 #include <lichen/l2/ipv6_addr.h>
 
-LOG_MODULE_REGISTER(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
+LOG_MODULE_DECLARE(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
 
 /* Static buffer for OSCORE ciphertext to avoid large stack usage on constrained
  * devices (fixes project-LICHEN-zg2d). Size matches CONFIG + tag. */
@@ -97,7 +97,12 @@ int coap_oscore_respond_resource(struct coap_resource *resource,
 {
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
 	if (result->is_protected) {
-		uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
+		/* Single shared response buffer: the CoAP server dispatches
+		 * requests from one thread, matching the static-buffers
+		 * pattern used across the coap subsystem (coap_server.c,
+		 * coap_status.c). A 1 KiB+ stack frame is too large for the
+		 * constrained thread stacks. */
+		static uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 		struct coap_packet resp;
 		int ret;
 

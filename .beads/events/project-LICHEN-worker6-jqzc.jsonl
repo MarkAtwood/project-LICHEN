@@ -1,0 +1,3 @@
+{"id":"01a05665-014f-7dbf-9e90-11a9262f724c","issue_id":"project-LICHEN-worker6-jqzc","event_type":"created","actor":"opencode-worker-1","old_value":"","new_value":"","created_at":"2026-08-31T05:57:35.183902054Z"}
+{"id":"01a05665-0154-76fa-87c3-648b41325a37","issue_id":"project-LICHEN-worker6-jqzc","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: coap","created_at":"2026-08-31T05:57:35.188458781Z"}
+{"id":"01a05665-0157-7265-9cba-55721cf52762","issue_id":"project-LICHEN-worker6-jqzc","event_type":"label_added","actor":"opencode-worker-1","comment":"Added label: zephyr","created_at":"2026-08-31T05:57:35.191158747Z"}

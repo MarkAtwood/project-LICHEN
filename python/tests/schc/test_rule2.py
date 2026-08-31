@@ -228,17 +228,21 @@ def test_rule2_checksum_nonmatch_is_not_normalized() -> None:
 
 
 def test_rule2_accepts_exact_profile_ceiling() -> None:
-    payload = bytes(MAX_PACKET_SIZE - 23)
+    # Raw-bound contract (spec/03): raw == MAX_PACKET_SIZE compresses; raw
+    # one octet above is rejected before rule dispatch.
+    raw_per_payload_byte = len(_echo_packet(b"\x00")) - 1
+    payload = bytes(MAX_PACKET_SIZE - raw_per_payload_byte)
     packet = _echo_packet(payload)
+    assert len(packet) == MAX_PACKET_SIZE
     compressed = compress_packet(packet)
-    assert len(compressed) == MAX_PACKET_SIZE
     assert compressed[:23] == CANONICAL_REQUEST_COMPRESSED[:23]
     assert decompress_packet(compressed) == packet
 
 
 def test_rule2_rejects_packet_beyond_profile_ceiling() -> None:
+    raw_per_payload_byte = len(_echo_packet(b"\x00")) - 1
     with pytest.raises(SchcError, match="profile limit"):
-        compress_packet(_echo_packet(bytes(MAX_PACKET_SIZE - 22)))
+        compress_packet(_echo_packet(bytes(MAX_PACKET_SIZE - raw_per_payload_byte + 1)))
 
 
 @pytest.mark.parametrize("wire_length", range(1, 23))

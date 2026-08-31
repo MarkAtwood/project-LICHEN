@@ -2,3 +2,4 @@
 {"id":"01a04537-1a5a-7eb9-892f-995c8ec3534e","issue_id":"project-LICHEN-worker6-8lbq","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: codereview","created_at":"2026-08-27T21:53:54.266965Z"}
 {"id":"01a04537-1a5f-7589-92de-535734e324ad","issue_id":"project-LICHEN-worker6-8lbq","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: p2","created_at":"2026-08-27T21:53:54.271377Z"}
 {"id":"01a04537-1a63-7084-b78a-ab0b4be0a96a","issue_id":"project-LICHEN-worker6-8lbq","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: python","created_at":"2026-08-27T21:53:54.275034Z"}
+{"id":"01a05643-27ba-7d7f-a58d-17db28bbc3f6","issue_id":"project-LICHEN-worker6-8lbq","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already fixed; node.py:87 imports RULE_IDS from lichen.schc.fragment, line 102 uses data[0] not in RULE_IDS.","created_at":"2026-08-31T05:20:36.794886421Z"}

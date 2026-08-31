@@ -1,0 +1,41 @@
+{
+  "id": "project-LICHEN-h7t5.7.5.3",
+  "title": "Validate RF switch and TCXO control on LilyGO SX1262",
+  "description": "Verify DIO2-as-RF-switch and TCXO voltage control in DTS overlay. SX1262 variants differ on RF switch wiring. Confirm sx126x_set_dio2_as_rf_switch_ctrl and tcxo-voltage DTS property match board. ~10 lines in 1 overlay file. Depends on child 1.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:54:22.914066377Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T04:00:16.590421335Z",
+  "closed_at": "2026-08-31T04:00:16.590421335Z",
+  "close_reason": "Duplicate — superseded by .13-.16 which include explicit file paths per file-disjoint constraint.",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "sx126x",
+    "board-support",
+    "bringup",
+    "firmware",
+    "hal",
+    "hardware",
+    "lilygo",
+    "local-ok",
+    "lora",
+    "owner-reserved",
+    "partner-handoff",
+    "radio",
+    "smoke-test"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-h7t5.7.5.3",
+      "depends_on_id": "project-LICHEN-h7t5.7.5",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:54:23.047431141Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

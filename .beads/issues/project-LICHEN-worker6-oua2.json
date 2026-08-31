@@ -12,6 +12,7 @@
   "updated_at": "2026-08-30T16:58:57.030443Z",
   "started_at": "2026-08-16T18:39:11.07122Z",
   "labels": [
-    "review"
+    "review",
+    "human-only"
   ]
 }

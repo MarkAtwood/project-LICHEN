@@ -13,7 +13,8 @@
   "labels": [
     "security",
     "input-validation",
-    "review"
+    "review",
+    "networking"
   ],
   "dependencies": [
     {

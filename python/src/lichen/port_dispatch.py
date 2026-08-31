@@ -25,6 +25,8 @@ from lichen.constants import (
 )
 from lichen.ipv6.packet import IPv6Packet, NextHeader, PacketError
 from lichen.ipv6.udp import UdpDatagram, UdpError
+from lichen.schc.codec import SchcError
+from lichen.schc.headers import validate_datagram_source_policy
 
 
 class AppProtocol(StrEnum):
@@ -128,8 +130,9 @@ def _parse_udp(ipv6: bytes) -> tuple[IPv6Packet, UdpDatagram]:
         packet = IPv6Packet.from_bytes(ipv6, strict=True)
         if packet.header.next_header != NextHeader.UDP:
             raise NotUdpError("IPv6 packet does not carry UDP")
-        datagram = UdpDatagram.from_bytes(packet.payload, packet.header.src_addr)
-    except (PacketError, UdpError) as exc:
+        validate_datagram_source_policy(packet.header.src_addr)
+        datagram = UdpDatagram.from_bytes(packet.payload)
+    except (PacketError, UdpError, SchcError) as exc:
         raise NotUdpError(f"invalid IPv6/UDP datagram: {exc}") from exc
     if not UdpDatagram.verify_checksum(
         packet.header.src_addr,

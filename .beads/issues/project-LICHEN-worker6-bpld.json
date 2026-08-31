@@ -14,7 +14,8 @@
   "started_at": "2026-08-24T05:16:37.332491Z",
   "labels": [
     "codereview",
-    "time-sync"
+    "time-sync",
+    "python"
   ],
   "dependencies": [
     {

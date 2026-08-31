@@ -372,6 +372,29 @@ fix issue → 3x review → file findings → fix those → 3x review → ...
 
 ---
 
+## Threat Model
+
+**Radio adversary only**: replay, forgery, downgrade, and key establishment
+over the air. Everything else is out of scope — do not add or demand defenses
+outside it, and do not cite them in reviews:
+
+- **NO side-channel or timing requirements.** Never write or request
+  constant-time code; never flag timing as an issue.
+- **NO zeroization guarantees.** No physical, cold-boot, or memory-disclosure
+  attackers. Single-tenant embedded, no multi-process, state actors excluded.
+  (Zeroize deps in `lichen-oscore` are hygiene, not guarantees.)
+- **Python**: never flag constant-time comparisons or memory zeroization —
+  the interpreter and GC make both meaningless.
+- **Rust**: use crates that handle it internally (`subtle`, `zeroize`,
+  `ring`) — never write custom constant-time or zeroization code.
+- **C/Zephyr**: keep it simple; revisit only if the hardware threat model
+  changes.
+
+Separate from the threat model: **oscore/EDHOC internals have a very high,
+human-only edit bar** (upstream `rust-oscore`, `~/crates/oscore` on any host,
+security semantics of `rust/lichen-oscore`). That bar exists for protocol
+correctness and the audited baseline — not side channels.
+
 ## Coding Guidelines
 
 ### Rust

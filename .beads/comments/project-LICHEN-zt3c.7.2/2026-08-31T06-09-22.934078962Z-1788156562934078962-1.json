@@ -1,0 +1,7 @@
+{
+  "id": "1788156562934078962-1",
+  "issue_id": "project-LICHEN-zt3c.7.2",
+  "author": "opencode-worker-3",
+  "text": "Found during zt3c.7.4 codereview (2 independent passes): lichen_make_ula() (lichen/subsys/lichen/l2/ipv6_addr.c:200-235, decl ipv6_addr.h:281) hard-enforces fd00::/8 and now has ZERO production callers (test fixtures only) - dead w.r.t. the no-ULA spec model. In scope for this bead's file: delete it or explicitly mark ULA-config-only when doing the 02xx conversion here.",
+  "created_at": "2026-08-31T06:09:22.934078962Z"
+}

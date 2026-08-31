@@ -196,6 +196,10 @@ void rpl_dao_write_base(uint8_t *rpl, uint8_t instance,
 /* ─── validation (schc_helpers.c) ────────────────────────────────────────── */
 
 int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len);
+/* Enforce the TX emission endpoint address policy.  Caller MUST pass a
+ * packet of at least IPV6_HDR_LEN bytes (the compress gate guarantees this;
+ * the RX path must not call this — see spec/03-adaptation.md TX/RX split). */
+int validate_ipv6_address_policy(const uint8_t *packet);
 bool schc_coap_has_valid_oscore(uint8_t first_byte,
 				const uint8_t *tail, size_t tail_len);
 

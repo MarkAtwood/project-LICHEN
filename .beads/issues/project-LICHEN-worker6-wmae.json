@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-wmae",
+  "title": "coap_config/coap_rangetest/coap_waypoints still call strnlen: same minimal-libc -Werror break as y0z0",
+  "description": "Scope note from correctness codereview of project-LICHEN-worker6-y0z0 (which fixed coap_status.c only): strnlen is not declared by Zephyr's minimal libc under the 4.1.0 toolchain (implicit-function-declaration -Werror breaks any build pulling these files). Remaining call sites: lichen/subsys/lichen/coap/coap_config.c:138,237,620-624, coap_rangetest.c:469, coap_waypoints.c:95. They compile today only because ping_l2's config does not pull those translation units; the gateway/app builds that do will break identically. Fix: mirror y0z0's status_bounded_len memchr helper (or a shared coap-level helper) at each site; keep the \u003e= sizeof(...) invalid-string semantics. Naturally bundled with the 2r8s/wgyl handler migrations that touch the same files.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:44:08.735455196Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T02:46:06.414529113Z",
+  "closed_at": "2026-08-31T02:46:06.414529113Z",
+  "close_reason": "strnlen replaced with the reviewed memchr pattern in the three remaining files: (1) coap_config.c - static config_bounded_len helper (mirrors af780aefe1's status_bounded_len exactly) used at node_config_is_valid, the encode path name_len, and identity_strings_are_bounded (3 sites); (2) coap_rangetest.c - inline memchr in the hops loop (no-NUL -\u003e sizeof -\u003e the \u003e= sizeof rejection, identical semantics); (3) coap_waypoints.c text_valid - memchr over max+1 (no-NUL -\u003e max+1 -\u003e len\u003c=max false -\u003e invalid, byte-identical outcomes at every boundary per review). Semantic equivalence verified per site by the reviewer incl. bounds (every caller passes max = sizeof(field) or max+1 == capacity - memchr cannot read past fixed-size fields; acceptance boundaries identical in both directions). Verified on heft: coap_rangetest and coap_waypoints native_sim apps BUILD OK under the app -Werror flags (the exact failure mode this bead describes); cppcheck clean on all three. coap_config APP cannot build on the 4.1.0 workspace for a PRE-EXISTING unrelated reason (zcbor module stub lacks zcbor_decode.h - filed 0whw), so that file's -Werror gate is unverifiable here; its edit mirrors the reviewed af780aefe1 pattern exactly. 3x codereview: no P0-P2 on the delta. Findings filed: zhyq (P2 SIBLING - same undeclared strnlen live in lichen/subsys/lichen/senml/senml.c:43, different subsystem, needs its own fix), hrkk (P3 - document the local_creator \u003e= CREATOR_MAX+1 capacity contract), 0whw (P3 - the zcbor stub gap blocking the coap_config app build). Consolidation note from review: per-file static accepted for this bead (mirrors af780aefe1); hoist to a shared coap_bounded_len after the worker-2 merge riding the 2r8s/wgyl migrations (a 5th variant exists in meshcore/adapter.c safe_strnlen - include it in any consolidation).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wmae",
+      "depends_on_id": "project-LICHEN-worker6-y0z0",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:44:08.836100644Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

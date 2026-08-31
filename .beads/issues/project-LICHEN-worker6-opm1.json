@@ -10,5 +10,8 @@
   "created_at": "2026-08-24T17:36:01.469844Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:38:22.741996Z",
-  "started_at": "2026-08-24T17:36:14.808099Z"
+  "started_at": "2026-08-24T17:36:14.808099Z",
+  "labels": [
+    "networking"
+  ]
 }

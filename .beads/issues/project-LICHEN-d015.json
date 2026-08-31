@@ -14,7 +14,8 @@
   "close_reason": "done",
   "labels": [
     "owner-reserved",
-    "local-ok"
+    "local-ok",
+    "link"
   ],
   "dependencies": [
     {

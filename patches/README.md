@@ -30,15 +30,34 @@ loramac-node contents (`loramac-node-local.patch`):
 
 # Local Rust crate patches
 
-The `[patch.crates-io]` entry in `rust/Cargo.toml` points `oscore` at a local
-clone (machine-specific path; on the Mac `/Volumes/Attic/Desktop/Projects/
-crates/oscore`, on this Linux box `/home/mark/crates/oscore`). The workspace
-calls two APIs that upstream `MarkAtwood/rust-oscore` does not ship yet; both
-are ported locally and captured in `rust-oscore-local.patch` (apply with
-`git apply rust-oscore-local.patch` from the clone root, on top of upstream
-`main` at `7434512`):
+**Status since 2026-08-30:** `oscore` is **vendored in-tree** at
+`rust/crates/oscore` (commit `61540bccff`) — the `rust/Cargo.toml`
+`[patch.crates-io]` entry points there, and nothing applies
+`rust-oscore-local.patch` anymore. The vendored crate carries upstream v0.1.2
+content (its manifest version field is still 0.1.0; the vendoring commit did
+not bump it). It ships:
 
-| API | What / why |
-|---|---|
-| `Context::begin_unprotect_observe_response` | Observe-notification unprotect (RFC 8613 §4.2). Notifications share the registration request's PIV, so the one-response-per-request guard must not apply (`PendingResponse::consume_request_piv`); a fresh explicit PIV is mandatory (a request-derived nonce would alias across notifications). Implemented as a `begin_unprotect_response_inner` core with two thin public wrappers — one crypto path. Pinned by the crate unit test `observe_notifications_share_request_piv_and_require_fresh_piv` and the workspace test `protected_observe_registration_notifications_retries_blocks_and_reset`. |
-| `Context::master_secret` | Read-only accessor used by gateway trust tests to assert PSK-derived contexts agree. |
+- `Context::begin_unprotect_observe_response` — observe-notification unprotect
+  (RFC 8613 §4.2). Notifications share the registration request's PIV, so the
+  one-response-per-request guard must not apply; a fresh explicit PIV is
+  mandatory because a request-derived nonce would alias across notifications;
+  the notification PIV replay window is enforced.
+- `Context::master_secret` — read-only accessor for gateway trust tests.
+
+Replay-window semantics are pinned by the crate unit tests
+`observe_replay_window_accepts_out_of_order_once_and_rejects_old` and its
+ordinary-path twin `ordinary_replay_window_accepts_out_of_order_once_and_rejects_old`,
+run standalone from `rust/crates/oscore` (the vendored manifest carries an
+empty `[workspace]` table so in-place `cargo test` works). The observe flow is
+additionally pinned by the workspace test
+`protected_observe_registration_notifications_retries_blocks_and_reset`.
+
+`rust-oscore-local.patch` is retained **as a historical record only** of the
+interim port that lived in the machine-local clone (upstream `main` at
+`7434512` + port, superseded by v0.1.2's dedicated `received_response_piv`
+window design). Do **not** apply it. Removing the file entirely is pending a
+maintainer decision (bd `project-LICHEN-worker6-s549`); the same bead tracks
+deleting the uncompiled dead modules (`src/context.rs`, `src/protect.rs`,
+`src/unprotect.rs`, `src/option.rs`, `src/crypto.rs`, `src/group.rs`,
+`src/types.rs`, `src/tests.rs`) from the vendored/external crate source.
+Upstream pushes of the crate need Mark's explicit authorization.

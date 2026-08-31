@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-nuz5",
+  "title": "secure_transport RH3 validation diverges from aligned survey (blackholes HBH+RH3 downward traffic)",
+  "description": "Security codereview of project-LICHEN-worker6-xyix: rust/lichen-node/src/secure.rs secure_transport (secure.rs:1932-1950) rejects any RH3 not in first position, requires routing_len \u003e= 24, and requires octets 6-7 plus the pad low nibble to be zero. The aligned survey (rpl_stack/util.rs) and the C router admit HBH-then-RH3, the 8-octet degenerate RH3, and ignored reserved bits (pinned by srh_admission.json vectors hop_by_hop_then_routing_in_transit, degenerate_zero_address_consumed, reserved_ignored_octets_admitted). receive.rs:244 runs secure_datagram_from_received before the survey on every non-RPL datagram, so RPL relays drop legitimately shaped downward traffic where C forwards it (availability divergence, and a survey-vs-gate contradiction within one binary). Fix: align secure_transport's RH3 parsing/validation with survey_routing_headers policy.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:10:58.973743151Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T22:10:58.973743151Z",
+  "labels": [
+    "networking",
+    "rust",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-nuz5",
+      "depends_on_id": "project-LICHEN-worker6-xyix",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:10:59.084599662Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

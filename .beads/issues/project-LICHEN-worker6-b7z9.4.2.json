@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.4.2",
+  "title": "Rust egress decapsulation: IPv6-in-IPv6 outer at E with inner-dst verification",
+  "description": "Child of b7z9.4 (spec 05-routing 8.9 R-05-063). No Rust runtime implements egress decapsulation: survey_routing_headers (rust/lichen-node/src/rpl_stack/util.rs:259-394) has no next-header-41 case and errors InvalidSourceRoute. Add: on encountering next_header IPV6_IN_IPV6 (const from sibling bead) at the END of the outer SRH walk, parse the inner IPv6 header, verify inner dst == this node's authorized primary 02xx (E check), then return/propagate the inner packet for continued processing (coordinate with the caller's contract in rpl_stack). Fail-closed on malformed inner header. Unit tests: valid decap, inner-dst mismatch rejected, malformed inner rejected. Files: rust/lichen-node/src/rpl_stack/util.rs + ingress caller. After: lichen-core IPV6_IN_IPV6 const.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:11:40.643043001Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T08:08:43.26937607Z",
+  "started_at": "2026-08-31T07:12:33.2926979Z",
+  "closed_at": "2026-08-31T08:08:43.26937607Z",
+  "close_reason": "Egress decap implemented: next_header::IPV6_IN_IPV6 const in lichen-core; survey_routing_headers now terminates on nh=41; decapsulate_ipv6 helper (fail-closed inner parse + inner-dst==local_rpl_addr E check) wired into both rpl_stack receive branches (Absent local delivery + SRH-consumed). 3 unit tests (valid decap, inner-dst mismatch, malformed outer/inner incl. inner payload-len mismatch). cargo test lichen-node: 295 pass; sole failure rfc6554_route_crosses_two_relays is pre-existing at HEAD, filed separately. Reviewer passes: pass 1 (correctness) via kimi-k3 found dead-wire + test-gap, both fixed; passes 2 (security) and 3 (edge) fell back to self-review because opencode run timed out twice (900s). Self-review notes: decap reached only when outer dst is local/multicast; inner-dst must equal local_rpl_addr; all indexing bounds-checked; malformed inner errors without panic. Follow-up filed: Stack::receive plaintext path decap (P2). Also removed dead [patch.crates-io] oscore path (adjudicated by janitor bead; crates.io oscore 0.1.2 pulls cleanly, lichen-oscore --all-features check+tests pass).",
+  "labels": [
+    "gateway",
+    "rust",
+    "networking",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.4.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.4",
+      "type": "parent-child",
+      "created_at": "2026-08-31T06:11:40.78894118Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

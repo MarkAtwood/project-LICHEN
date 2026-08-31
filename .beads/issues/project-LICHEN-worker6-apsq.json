@@ -9,6 +9,9 @@
   "created_at": "2026-08-29T00:59:30.295889Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T00:59:30.295889Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-apsq",

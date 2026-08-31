@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-ilye",
+  "title": "Spec decision + impl: Rule 255 RX is byte-preserving; endpoint policy is TX/forwarding-only",
+  "description": "DECIDED (Mark, 2026-08-30): Rule 255 decode MUST verify framing and integrity (header structure, next-header chain, UDP checksum over the addresses present) and MUST be byte-preserving on success. Endpoint address policy (loopback, IPv4-mapped, unspecified, multicast source, destination scope) MUST NOT be applied at decode; it applies at packet origination and at the forwarding decision. A datagram with a verifying checksum but policy-invalid endpoints is accepted by the codec and handled by the forwarding plane. Rationale: layering (codec = codec), RX epistemics (frame already consumed airtime; link signature authenticates the peer; policy drops happen at forwarding with the auth trail intact), error priority (integrity/structural failures report before endpoint-shape opinions). SPEC AMENDMENT: spec/03-adaptation.md Rule 255 section gets the normative paragraph above. IMPL SLICES: (1) UDP parser — move endpoint source validation out of UdpDatagram.from_bytes into the address-policy module (framing + checksum stay); (2) python decode path — no endpoint checks beyond structure+checksum (validates vectors rule255_rx_byte_preserving_*); (3) pinned dual-defect test test_validate_full_ipv6_structure_precedes_address_checks — expected messages updated: corrupt-checksum + invalid-source now reports checksum (integrity first), documented precedence change; (4) rust codec.rs — same reclassification (endpoint checks TX-only); (5) C compress gate — same; (6) spec/03-adaptation.md — add the normative paragraph. NOTE: rust codec.rs:363-366 ordering within structural checks is unchanged. The rule255_endpoint_policy vectors in schc_adaptation.json were CORRECT as worker-1 wrote them.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:19:07.383715502Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:19:07.383715502Z",
+  "labels": [
+    "spec",
+    "schc",
+    "decomposed"
+  ]
+}

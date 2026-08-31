@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-ptmp",
+  "title": "test_vector_file_schema does not gate schc_compression.json; schema schc_vector definition is stale against the live corpus",
+  "description": "P3, found by kimi edge-cases codereview pass of project-LICHEN-worker6-5o7x. python/tests/test_vectors.py:190-216 parametrizes test_vector_file_schema over a corpus list that omits test/vectors/schc_compression.json, so the corpus schema gate never runs on it. It cannot simply be added: test/vectors/schema.json's schc_vector definition (schema.json:797-849) has additionalProperties: false and lacks properties the live corpus now carries (category values malformed_input/malformed/size_boundary/fallback, expect_error, compressed_prefix, tail_byte, tail_length, expected_packet_size) - adding the file to the gate would fail on ~30 rows, so the omission is load-bearing drift, not an oversight to toggle. Mitigation already landed in 5o7x: gen_vectors.py and the python consumers now enforce nonempty snake_case expect_error and fail closed on type drift, and rust serde Option\u003cString\u003e fails closed; but the generator validates only its own field set, not the full schema (e.g. unknown fields in round_trip rows, missing descriptions, rule_id ranges are checked, but description/type constraints per category are not). Fix: update schema.json schc_vector to model the live corpus (all five categories with their field sets, expect_error string pattern, size_boundary numeric ranges), then add schc_compression.json to the test_vector_file_schema parametrization and make the whole corpus schema-clean. Sizeable schema work - decompose if it exceeds a slice.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:46:11.526059941Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T02:08:12.438318221Z",
+  "closed_at": "2026-08-31T02:08:12.438318221Z",
+  "close_reason": "Fixed. test/vectors/schema.json definitions.schc_vector rewritten from a single lax object (with a vestigial, provably-unreachable expect if-then) into a oneOf of five strict variants mirroring gen_vectors.py's per-category require_keys tables exactly: plain round-trip {name,rule_id,packet,compressed}+description; fallback (+category const, category optional per gen via plain/fallback branch split); malformed_input {name,category,packet,expect_error}; malformed {name,category,rule_id,compressed,expect_error}; size_boundary {name,category,rule_id,compressed_prefix,tail_byte,tail_length,expected_packet_size}+optional expect_error/description - with bounds rule_id 0-255, tail_byte 0-255, tail_length 0-22554, expected_packet_size 0-65535, expect_error ^[a-z0-9_]+\\$ pattern, hex-typed byte fields. python test_vector_file_schema now gates schc_compression.json (was the only SCHC corpus outside the gate). Codereview 3x per step 4 (reviewer model): correctness kimi-k3 PASS with empirical evidence (jsonschema 4.26 Draft7: corpus 0 errors; 51/51 rows match exactly one branch; A/B old-vs-new across all 21 gated corpora PLUS the bare-array ccp16-desync consumer: every file unchanged except the intended 1-\u003e0 on schc_compression; the old expect if-then was unreachable since additionalProperties:false rejected any expect key anyway; gen_vectors.py still accepts); edge-cases kimi-k3 PASS (unexpected category values fail the whole schema via the outer union - probed all ~30 vector definitions; fallback-with/without-category mirrors gen optionality; boundary values exact incl. bool-vs-integer guards; empty-hex and dollar-newline-regex asymmetries vs gen fail closed downstream twice - canonical-corpus load test + CMake regeneration - so not filed); security: claude-opus-4-5 down (err_47c89296 - 7th opus failure today) so kimi-k3 fallback per protocol - PASS (all drift classes rejected by synthetic probes incl. smuggled expect_error; oneOf pairwise-disjoint by construction with an empirical all-corpus sweep showing zero multi-branch matches; schc_vector reachable only from schema.json roots, other corpora untouched - bonus finding: wire_format_v2.json rows legitimately match branch 1 and pass even ungated). Gates on heft: python 777/777 (incl. the newly gated corpus); C schc_parity regenerated + PASS (clang, ASan/UBSan); rust corpus consumers unaffected (corpus bytes unchanged).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ptmp",
+      "depends_on_id": "project-LICHEN-worker6-5o7x",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T00:46:11.637341984Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

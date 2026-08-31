@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-lgn1",
+  "title": "Direct-child forwarding path (route.len()==1) forwards verbatim with no Hop Limit decrement",
+  "description": "Found by 3x codereview of b7z9.4.1 (passes: correctness + edge-cases). In Gateway::mesh_to_mesh (rust/lichen-gateway/src/gateway.rs ~1645-1646), a packet for a direct RPL child (route.len()==1) is forwarded verbatim: no RFC 8200 forwarding decrement, no HL\u003c=1 discard. After b7z9.4.1 the tunnel path (indirect children) correctly applies the forwarding decrement + Segments-Left charge, making the two forwarding paths of the same function mutually inconsistent. Note: pre-existing, outside R-05-066 scope (no SRH/tunnel on the direct-child path); decide whether the normal forwarding decrement applies there and add tests (HL=1 arrival must be dropped per RFC 8200 sec 5.3). Same question applies to the link-local verbatim path (~1630). Files: rust/lichen-gateway/src/gateway.rs. Discovered from project-LICHEN-worker6-b7z9.4.1.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:53:56.581300261Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T07:53:56.581300261Z",
+  "labels": [
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-lgn1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.4.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T07:53:56.732991796Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -11,6 +11,9 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:41:53.972856Z",
   "started_at": "2026-08-24T11:35:01.827726Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-2rqi",

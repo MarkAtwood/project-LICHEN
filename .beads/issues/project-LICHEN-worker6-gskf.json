@@ -9,6 +9,12 @@
   "created_at": "2026-08-28T15:38:33.409996Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T15:38:33.409996Z",
+  "labels": [
+    "c",
+    "l2",
+    "tdma",
+    "zephyr"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-gskf",

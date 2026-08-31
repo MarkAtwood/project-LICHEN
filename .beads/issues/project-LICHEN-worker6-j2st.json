@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-j2st",
+  "title": "Missing Rust/Python counterpart for C relayed-own-source drop on the non-RH3 forward path",
+  "description": "Security codereview of project-LICHEN-worker6-xyix: C drops relayed datagrams claiming the node's own IPv6 source (router.c:497-502). Rust forward branch (rust/lichen-node/src/rpl_stack/receive.rs:267-291) and Python forward branch (python/src/lichen/node.py) check only next-hop relations. Add the own-source drop to both forward paths with unit tests.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:11:14.607430216Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-30T22:11:14.607430216Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-j2st",
+      "depends_on_id": "project-LICHEN-worker6-xyix",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:11:14.715090384Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

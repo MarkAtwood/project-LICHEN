@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-au9y",
+  "title": "ICMPv6 computed-zero checksum convention diverges: C reconstructs 0xFFFF, Python/Rust keep 0x0000",
+  "description": "P3, found during project-LICHEN-worker6-5b1y (the UDP sibling of this divergence). ICMPv6 computed-zero checksum reconstruct convention diverges across implementations: C icmpv6_checksum (lichen/subsys/lichen/schc/schc_checksum.c:100-106) maps computed-zero to 0xFFFF via finalize_checksum; python icmpv6_checksum (python/src/lichen/ipv6/icmpv6.py:79-88) keeps 0x0000 (raw complement, no or-0xFFFF); rust has TWO icmpv6 checksum helpers: codec.rs icmpv6_checksum_parts (rust/lichen-schc/src/codec.rs:650-655) routes through ones_complement_sum which maps zero-\u003e0xFFFF (so the LIVE decompress agrees with C), while headers.rs icmpv6_checksum (rust/lichen-schc/src/headers.rs:237-242) keeps 0x0000 (agrees with python). Correction over the initial description: rust codec.rs DOES map (verified by kimi correctness pass of 5b1y); the divergence is python-vs-C/rust-live on the wire, plus a rust-internal inconsistency between its two checksum helpers. For ICMPv6 a zero checksum is legal (the RFC 8200 8.1 zero-prohibition is UDP-specific) and both wire values verify as valid when the true checksum is zero, so there is no rejection asymmetry - but reconstructed byte streams differ (rule-2 echo round trip of a computed-zero packet: C and rust live path emit 0xFFFF, python emits 0x0000), failing byte-identical round-trip assertions for that packet class (~1/65536 per distinct packet; no existing corpus row hits it - checked: icmpv6 echo vectors have nonzero computed checksums). Fix needs a coordinated convention decision (map or not for ICMPv6 - RFC is silent) applied to C finalize_checksum, python icmpv6, AND BOTH rust helpers (headers.rs icmpv6_checksum plus a decision whether ones_complement_sum should grow a protocol-scoped variant), then pin with a shared rule-2 vector whose ICMPv6 checksum computes to zero. Do NOT scope-creep 5b1y's UDP fix: that one is protocol-correct as-is.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:42:30.620739757Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T23:08:36.933130279Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-au9y",
+      "depends_on_id": "project-LICHEN-worker6-5b1y",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:42:30.732624781Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

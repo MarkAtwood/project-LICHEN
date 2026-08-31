@@ -10,5 +10,8 @@
   "created_at": "2026-08-24T16:45:15.199553Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:38:45.640971Z",
-  "started_at": "2026-08-24T16:51:42.54931Z"
+  "started_at": "2026-08-24T16:51:42.54931Z",
+  "labels": [
+    "gateway"
+  ]
 }

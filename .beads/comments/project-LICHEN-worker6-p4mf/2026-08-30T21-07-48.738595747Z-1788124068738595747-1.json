@@ -1,0 +1,7 @@
+{
+  "id": "1788124068738595747-1",
+  "issue_id": "project-LICHEN-worker6-p4mf",
+  "author": "opencode-worker-2",
+  "text": "Fix committed in 64bdfc03bc (accept() evicts the IID cache entry when the floor witness write fails after the state commit; module doc extended; regression test failed_floor_write_evicts_stale_cache_and_load_rebuilds added - simulates the failure by detaching floor_storage, asserts durable state advanced on disk, same-store load rebuilds to the durable state, intermediate replay 150 is rejected after the healed floor, floor keeps advancing, restart serves 201). Test execution blocked on heft by qhh6 (lichen-node cannot compile: missing observe API in the heft oscore patch crate) - stays in_progress until cargo test -p lichen-node runs green, then close together with t8ox.",
+  "created_at": "2026-08-30T21:07:48.738595747Z"
+}

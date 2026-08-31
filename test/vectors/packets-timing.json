@@ -245,7 +245,9 @@
       "seq_1_valid": true,
       "seq_advance_valid": true,
       "seq_no_advance_invalid": false,
-      "seq_max_valid_terminal": true
+      "seq_max_valid_terminal": true,
+      "seq_max_after_floor_valid": true,
+      "seq_after_max_invalid": false
     },
     {
       "name": "data_traffic_intervals",

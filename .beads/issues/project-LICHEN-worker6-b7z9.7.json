@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.7",
+  "title": "Announce pin table overflow policy: spec 9.3 LRU-evict MUST vs TOFU no-evict (Python/C reject)",
+  "description": "Spec 05-routing.md §9.3 (R-05-074): 'Implementations MUST bound the announce pin table to at most 128 entries. On overflow, implementations MUST evict the least-recently-updated entry (LRU by last announce timestamp).' Three implementations, three policies: Rust lichen-node/src/announce.rs:23 MAX_TRACKED_ORIGINATORS=64 with LRU eviction (evict_pinned_if_needed :359, tested lru_eviction :1002); Python python/src/lichen/announce/processor.py:162-168 rejects new pins when full (PIN_TABLE_FULL) — LRU code unreachable; C lichen/subsys/lichen/routing/announce.c:408-427 returns -ENOSPC with comment 'TOFU pins (spec 8.6) must not be silently evicted'. Intra-spec tension: §8.6 DAO pin semantics ('Receipt of a DAO MUST NOT create or replace an Announce pin') plus TOFU no-evict posture vs §9.3 explicit LRU-evict MUST. Needs (1) editorial reconcile of spec 9.3 vs 8.6, (2) alignment of Python/C to the resolution. Do NOT silently pick a side — see docs/spec-coverage-05-routing-flagged.md.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:25:45.794745717Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:25:45.794745717Z",
+  "labels": [
+    "spec-gap",
+    "announce",
+    "routing",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.7",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:25:45.960498473Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

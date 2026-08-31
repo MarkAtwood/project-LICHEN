@@ -1,0 +1,7 @@
+{
+  "id": "1788135011355021989-1",
+  "issue_id": "project-LICHEN-worker6-mt5q",
+  "author": "opencode-worker-2",
+  "text": "Concrete 4.1.0 build instances from attempting 5fva.1 (ping_l2) on heft against the 4.1.0 workspace: (1) lora_loopback recv_async 3-arg callback vs 4.1.0 API (0l5j scope, errors lora_loopback.c:239/301); (2) coap_client.c send_mutex removed upstream (new bead). Environment note: the workspace was missing the manifest-imported tinycrypt project (modules/crypto/tinycrypt not cloned) which made every LICHEN Kconfig select TINYCRYPT abort configuration with Kconfig warnings-as-errors; tinycrypt is now cloned at the manifest pin 1012a3eb and must be passed via ZEPHYR_EXTRA_MODULES alongside the lichen module (west update tinycrypt alone is refused for import-resolved projects). After those two code fixes ping_l2 should configure+build; the three runtime -ENOENT failures (5fva children) remain to be debugged.",
+  "created_at": "2026-08-31T00:10:11.355021989Z"
+}

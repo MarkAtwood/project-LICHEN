@@ -342,6 +342,45 @@ static int test_source_route_validation(void)
 	return 0;
 }
 
+/* Build an IPv6/UDP packet carrying a Type=0x03 DTN HBH option padded to
+ * a 16-byte HBH (spec 05-routing 9.8).  Returns the packet length, or 0
+ * if the buffer is too small (callers must REQUIRE a non-zero length). */
+static size_t make_dtn_hbh_packet(uint8_t *buf, size_t buf_len,
+				  uint8_t flags, uint32_t expiry_unix)
+{
+	const size_t total = 64U;
+
+	if (buf == NULL || buf_len < total) {
+		return 0U;
+	}
+	memset(buf, 0, total);
+	buf[0] = 0x60U;
+	buf[4] = (uint8_t)((total - 40U) >> 8);
+	buf[5] = (uint8_t)(total - 40U);
+	buf[6] = 0U; /* HBH */
+	buf[7] = 8U;
+	memcpy(&buf[8], source_address, 16U);
+	buf[24] = 0x03U; /* external 02xx-style destination, unreachable */
+	buf[39] = 2U;
+	buf[40] = 17U; /* next = UDP */
+	buf[41] = 1U;  /* hdr_ext_len=1 → 16 bytes */
+	buf[42] = 0x03U;
+	buf[43] = 5U;
+	buf[44] = flags;
+	buf[45] = (uint8_t)(expiry_unix >> 24);
+	buf[46] = (uint8_t)(expiry_unix >> 16);
+	buf[47] = (uint8_t)(expiry_unix >> 8);
+	buf[48] = (uint8_t)expiry_unix;
+	buf[49] = 0x01U; /* PadN */
+	buf[50] = 5U;
+	buf[56] = 0x16U;
+	buf[57] = 0x33U;
+	buf[58] = 0x16U;
+	buf[59] = 0x33U;
+	buf[61] = 8U;
+	return total;
+}
+
 static int test_queue_copy_gpsr_and_dtn(void)
 {
 	struct accessor_state state = {.discovery_succeeds = true};
@@ -388,17 +427,309 @@ static int test_queue_copy_gpsr_and_dtn(void)
 #if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
 	configure_router(&router, &state);
 	state.discovery_succeeds = false;
-	uint8_t external[16] = {0x03, [15] = 2U};
-	(void)make_udp_packet(packet, sizeof(packet), source_address, external, 8U);
+	uint8_t dtn_packet[64];
+	size_t dtn_len = make_dtn_hbh_packet(dtn_packet, sizeof(dtn_packet),
+					     0x80U, 200U);
+	REQUIRE(dtn_len != 0U);
 	input = (struct lichen_route_packet) {
-		.data = packet, .len = sizeof(packet), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
-		.dtn_expiry_unix = 200U, .now_unix = 100U,
+		.data = dtn_packet, .len = dtn_len, .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		.now_unix = 100U,
 	};
 	REQUIRE(lichen_router_route_packet(&router, &input, 3U, &result) == 0);
 	REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
 	REQUIRE(result.path == LICHEN_ROUTE_PATH_DTN);
-	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
+	REQUIRE(router.dtn_buffer_bytes == dtn_len);
 #endif
+	return 0;
+}
+
+static int test_dtn_hbh_option_parsing(void)
+{
+	struct lichen_router router;
+	struct accessor_state state = { .joined = false, .discovery_succeeds = false };
+	struct lichen_packet_route_result result;
+	struct lichen_route_packet input;
+	uint8_t packet[64];
+	size_t pkt_len;
+	uint8_t external[16] = {0x03, [15] = 2U};
+
+	configure_router(&router, &state);
+
+	/* 1. Well-formed DTN option: S-flag set, expiry = 200 (0x000000C8).
+	 *    16-byte HBH (hdr_ext_len=1) → 14 option bytes available.
+	 */
+	{
+		const size_t hbh_len = 16U;
+		const size_t total = 40U + hbh_len + 8U;
+
+		REQUIRE(sizeof(packet) >= total);
+		memset(packet, 0, total);
+		packet[0] = 0x60U;
+		packet[4] = (uint8_t)((hbh_len + 8U) >> 8);
+		packet[5] = (uint8_t)(hbh_len + 8U);
+		packet[6] = 0U;  /* HBH */
+		packet[7] = 8U;
+		memcpy(&packet[8], source_address, 16U);
+		memcpy(&packet[24], external, 16U);
+		packet[40] = 17U; /* next = UDP */
+		packet[41] = 1U;  /* hdr_ext_len=1 → 16 bytes */
+		/* DTN option at offset 42: type=0x03, len=5, flags=0x80, expiry=200 */
+		packet[42] = 0x03U;
+		packet[43] = 5U;
+		packet[44] = 0x80U; /* S-flag */
+		packet[45] = 0x00U;
+		packet[46] = 0x00U;
+		packet[47] = 0x00U;
+		packet[48] = 0xC8U; /* 200 */
+		/* PadN to fill remaining 7 bytes: type=1, len=5, 5 zero bytes */
+		packet[49] = 0x01U;
+		packet[50] = 5U;
+		/* bytes 51..55 already zero (pad data) */
+		/* UDP at offset 56 */
+		packet[56] = 0x16U;
+		packet[57] = 0x33U;
+		packet[58] = 0x16U;
+		packet[59] = 0x33U;
+		packet[61] = 8U;
+		pkt_len = total;
+	}
+
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = pkt_len,
+		.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		.now_unix = 100U,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 5U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+	REQUIRE(result.path == LICHEN_ROUTE_PATH_DTN);
+#endif
+
+	/* 2. S-flag clear → no store-and-forward even with valid expiry. */
+	packet[44] = 0x00U; /* clear S-flag */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	router.dtn_buffer_bytes = 0U;
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = pkt_len,
+		.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		.now_unix = 100U,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 6U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_DROP);
+#endif
+
+	/* 3. Duplicate DTN option → reject. */
+	{
+		const size_t hbh_len = 24U;
+		const size_t total = 40U + hbh_len + 8U;
+		uint8_t pkt2[80];
+
+		REQUIRE(sizeof(pkt2) >= total);
+		memset(pkt2, 0, total);
+		pkt2[0] = 0x60U;
+		pkt2[4] = (uint8_t)((hbh_len + 8U) >> 8);
+		pkt2[5] = (uint8_t)(hbh_len + 8U);
+		pkt2[6] = 0U;
+		pkt2[7] = 8U;
+		memcpy(&pkt2[8], source_address, 16U);
+		memcpy(&pkt2[24], external, 16U);
+		pkt2[40] = 17U;
+		pkt2[41] = 2U; /* hdr_ext_len=2 → 24 bytes */
+		/* First DTN option */
+		pkt2[42] = 0x03U;
+		pkt2[43] = 5U;
+		pkt2[44] = 0x80U;
+		pkt2[45] = 0U; pkt2[46] = 0U; pkt2[47] = 0U; pkt2[48] = 0xC8U;
+		/* Second DTN option (duplicate) */
+		pkt2[49] = 0x03U;
+		pkt2[50] = 5U;
+		pkt2[51] = 0x80U;
+		pkt2[52] = 0U; pkt2[53] = 0U; pkt2[54] = 0U; pkt2[55] = 200U;
+		/* Pad remaining */
+		pkt2[56] = 0x01U;
+		pkt2[57] = 5U;
+		/* UDP */
+		pkt2[64] = 0x16U; pkt2[65] = 0x33U;
+		pkt2[66] = 0x16U; pkt2[67] = 0x33U;
+		pkt2[69] = 8U;
+		input = (struct lichen_route_packet) {
+			.data = pkt2, .len = total,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		int rc = lichen_router_route_packet(&router, &input, 7U, &result);
+		REQUIRE(rc == -EBADMSG);
+	}
+
+	/* 4. Wrong length for DTN option → reject. */
+	packet[43] = 4U; /* should be 5, not 4 */
+	input = (struct lichen_route_packet) {
+		.data = packet, .len = pkt_len,
+		.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 8U, &result) == -EBADMSG);
+	packet[43] = 5U; /* restore */
+
+	/* 5. Pad1 before DTN option parses correctly. */
+	{
+		const size_t hbh_len = 16U;
+		const size_t total = 40U + hbh_len + 8U;
+		uint8_t pkt3[64];
+
+		REQUIRE(sizeof(pkt3) >= total);
+		memset(pkt3, 0, total);
+		pkt3[0] = 0x60U;
+		pkt3[4] = (uint8_t)((hbh_len + 8U) >> 8);
+		pkt3[5] = (uint8_t)(hbh_len + 8U);
+		pkt3[6] = 0U;
+		pkt3[7] = 8U;
+		memcpy(&pkt3[8], source_address, 16U);
+		memcpy(&pkt3[24], external, 16U);
+		pkt3[40] = 17U;
+		pkt3[41] = 1U; /* 16 bytes */
+		/* Pad1 at offset 42 */
+		pkt3[42] = 0x00U;
+		/* DTN at offset 43 */
+		pkt3[43] = 0x03U;
+		pkt3[44] = 5U;
+		pkt3[45] = 0x80U; /* S-flag */
+		pkt3[46] = 0x00U;
+		pkt3[47] = 0x00U;
+		pkt3[48] = 0x01U;
+		pkt3[49] = 0x00U; /* expiry = 256 */
+		/* PadN to fill remaining 6 bytes: type=1 len=4 + 4 zero */
+		pkt3[50] = 0x01U;
+		pkt3[51] = 4U;
+		/* UDP */
+		pkt3[56] = 0x16U; pkt3[57] = 0x33U;
+		pkt3[58] = 0x16U; pkt3[59] = 0x33U;
+		pkt3[61] = 8U;
+
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+		router.dtn_buffer_bytes = 0U;
+		input = (struct lichen_route_packet) {
+			.data = pkt3, .len = total,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 9U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+#endif
+	}
+
+	/* 6. Unrecognized option with action=00 (skip) followed by DTN. */
+	{
+		const size_t hbh_len = 16U;
+		const size_t total = 40U + hbh_len + 8U;
+		uint8_t pkt4[64];
+
+		REQUIRE(sizeof(pkt4) >= total);
+		memset(pkt4, 0, total);
+		pkt4[0] = 0x60U;
+		pkt4[4] = (uint8_t)((hbh_len + 8U) >> 8);
+		pkt4[5] = (uint8_t)(hbh_len + 8U);
+		pkt4[6] = 0U;
+		pkt4[7] = 8U;
+		memcpy(&pkt4[8], source_address, 16U);
+		memcpy(&pkt4[24], external, 16U);
+		pkt4[40] = 17U;
+		pkt4[41] = 1U;
+		/* Unknown option type 0x1e (action=00 → skip), len=3 */
+		pkt4[42] = 0x1eU;
+		pkt4[43] = 3U;
+		/* 3 bytes data (44,45,46) */
+		/* DTN at offset 47 */
+		pkt4[47] = 0x03U;
+		pkt4[48] = 5U;
+		pkt4[49] = 0x80U;
+		pkt4[50] = 0U; pkt4[51] = 0U; pkt4[52] = 0U; pkt4[53] = 0xC8U;
+		/* Pad1 at 54, Pad1 at 55 to fill */
+		/* UDP */
+		pkt4[56] = 0x16U; pkt4[57] = 0x33U;
+		pkt4[58] = 0x16U; pkt4[59] = 0x33U;
+		pkt4[61] = 8U;
+
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+		router.dtn_buffer_bytes = 0U;
+		input = (struct lichen_route_packet) {
+			.data = pkt4, .len = total,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 10U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+#endif
+	}
+
+	/* 7. Unrecognized option with action=10 (discard) → reject. */
+	{
+		const size_t hbh_len = 8U;
+		const size_t total = 40U + hbh_len + 8U;
+		uint8_t pkt5[64];
+
+		REQUIRE(sizeof(pkt5) >= total);
+		memset(pkt5, 0, total);
+		pkt5[0] = 0x60U;
+		pkt5[5] = (uint8_t)(hbh_len + 8U);
+		pkt5[6] = 0U;
+		pkt5[7] = 8U;
+		memcpy(&pkt5[8], source_address, 16U);
+		memcpy(&pkt5[24], external, 16U);
+		pkt5[40] = 17U;
+		pkt5[41] = 0U; /* 8 bytes */
+		/* Unknown type 0x8e: action bits = 10 → discard silently */
+		pkt5[42] = 0x8eU;
+		pkt5[43] = 4U;
+		/* UDP */
+		pkt5[48] = 0x16U; pkt5[49] = 0x33U;
+		pkt5[50] = 0x16U; pkt5[51] = 0x33U;
+		pkt5[53] = 8U;
+		input = (struct lichen_route_packet) {
+			.data = pkt5, .len = total,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 11U, &result)
+			== -EPROTONOSUPPORT);
+	}
+
+	/* 8. Expired DTN option at valid wall-clock → drop silently. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt6[64];
+		size_t pkt6_len = make_dtn_hbh_packet(pkt6, sizeof(pkt6),
+						      0x80U, 50U);
+		REQUIRE(pkt6_len != 0U);
+
+		router.dtn_buffer_bytes = 0U;
+		input = (struct lichen_route_packet) {
+			.data = pkt6, .len = pkt6_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 12U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_DROP);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
+	/* 9. R-05-080 fail-open: no valid wall-clock → store despite expiry=0. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt7[64];
+		size_t pkt7_len = make_dtn_hbh_packet(pkt7, sizeof(pkt7),
+						      0x80U, 0U);
+		REQUIRE(pkt7_len != 0U);
+
+		router.dtn_buffer_bytes = 0U;
+		input = (struct lichen_route_packet) {
+			.data = pkt7, .len = pkt7_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 13U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+		REQUIRE(router.dtn_buffer_bytes == pkt7_len);
+	}
+#endif
+
 	return 0;
 }
 
@@ -416,7 +747,9 @@ static int run_all_tests(void)
 	if (ret != 0) return ret;
 	ret = test_source_route_validation();
 	if (ret != 0) return ret;
-	return test_queue_copy_gpsr_and_dtn();
+	ret = test_queue_copy_gpsr_and_dtn();
+	if (ret != 0) return ret;
+	return test_dtn_hbh_option_parsing();
 }
 
 #ifdef __ZEPHYR__

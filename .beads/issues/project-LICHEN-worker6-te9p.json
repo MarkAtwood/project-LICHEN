@@ -2,13 +2,18 @@
   "id": "project-LICHEN-worker6-te9p",
   "title": "checkin.c lichen_rollcall_render exceeds 2KB stack budget on x86_64-zephyr-elf",
   "description": "lichen/subsys/lichen/coap/checkin.c:1773 lichen_rollcall_render() measures 3424 bytes of stack on the local x86_64-zephyr-elf gcc, tripping the house -Werror=stack-usage=2048 policy (lichen/zephyr/CMakeLists.txt -Wstack-usage=2048). Any local qemu_x86 twister build with CONFIG_LICHEN_CHECKIN=y (default y under LICHEN_COAP) fails to compile. CI (native_sim/native/64 host gcc) measures under the limit, so only local runs are affected. Discovered while building lichen/tests/coap_oscore_fallback (bd project-LICHEN-worker6-sncn): the suite had to set CONFIG_LICHEN_CHECKIN=n to build. Fix options: restructure rollcall_render to shrink its frame, or add a per-file -Wno-error=stack-usage= exception like the vendored Monocypher one in subsys/lichen/crypto/CMakeLists.txt. Parity evidence: HEAD worktree fails the same suites identically.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T19:01:06.60491Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T19:01:06.60491Z",
+  "updated_at": "2026-08-31T05:43:50.712501645Z",
+  "closed_at": "2026-08-31T05:43:50.712501645Z",
+  "close_reason": "Duplicate of project-LICHEN-worker6-dyrj (same root cause: lichen_rollcall_render 3424B stack vs 2048B -Werror=stack-usage).",
+  "labels": [
+    "zephyr"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-te9p",

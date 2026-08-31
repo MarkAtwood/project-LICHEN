@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.1",
+  "title": "RPL DIO/DAO rate limit (30 msg/min per source IID) not implemented",
+  "description": "Spec 05-routing.md §8.4.5 (R-05-029): 'Receivers MUST rate-limit RPL control message (DIO/DAO) processing to at most 30 messages per minute per source IID. Messages exceeding this limit MAY be dropped before signature verification.' Evidence: no DIO/DAO per-source rate limiter exists in Rust (rust/lichen-node), C (lichen/subsys/lichen/rpl), or Python (python/src/lichen/rpl) — repo-wide search found only unrelated SOS/deaddrop/DIS limiters (C DIS limiter at lichen/subsys/lichen/rpl/rpl_dis.c:133 is DIS-only). No test vector. Suggested placement: RPL stack ingest path — Rust rust/lichen-node/src/rpl_stack/receive.rs, C lichen/subsys/lichen/rpl/, Python python/src/lichen/rpl/. Spec text: https://github.com/ file spec/05-routing.md:295-299.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:24:25.304438798Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:24:25.304438798Z",
+  "labels": [
+    "spec-gap",
+    "routing",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:24:25.482659018Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

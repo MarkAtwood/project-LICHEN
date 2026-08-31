@@ -12,5 +12,8 @@
   "updated_at": "2026-08-28T03:42:31.058673Z",
   "started_at": "2026-06-18T19:08:35Z",
   "closed_at": "2026-06-18T19:14:01Z",
-  "close_reason": "Fixed via half-duplex enforcement: start_transmission() now ends a node's previous in-flight transmission before starting a new one, so a single radio never has two overlapping signals in the medium (which self-collided at receivers). _handle_tx_end made robust to the superseded transmission's stale TxEndEvent (only retires the node's current tx). test_partition_rule_blocks_cross_group passes; test_rapid_tx_causes_collision rewritten as test_back_to_back_tx_is_half_duplex (a node's new TX supersedes its own in-flight one — multi-node collisions still covered by test_multiple_transmitters_collision). CI now runs the FULL suite with nothing deselected (839 passed)."
+  "close_reason": "Fixed via half-duplex enforcement: start_transmission() now ends a node's previous in-flight transmission before starting a new one, so a single radio never has two overlapping signals in the medium (which self-collided at receivers). _handle_tx_end made robust to the superseded transmission's stale TxEndEvent (only retires the node's current tx). test_partition_rule_blocks_cross_group passes; test_rapid_tx_causes_collision rewritten as test_back_to_back_tx_is_half_duplex (a node's new TX supersedes its own in-flight one — multi-node collisions still covered by test_multiple_transmitters_collision). CI now runs the FULL suite with nothing deselected (839 passed).",
+  "labels": [
+    "python"
+  ]
 }

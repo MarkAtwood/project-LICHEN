@@ -429,11 +429,20 @@ static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len,
 		if (next_header == IPV6_NH_ROUTING &&
 		    (ext_len < 24u ||
 		     packet[offset + 2u] != IPV6_ROUTING_TYPE_RPL_SRH ||
-		     packet[offset + 4u] != 0u || packet[offset + 5u] != 0u)) {
+		     packet[offset + 4u] != 0u || packet[offset + 5u] != 0u ||
+		     packet[offset + 6u] != 0u || packet[offset + 7u] != 0u)) {
 			return SCHC_ERR_NO_MATCHING_RULE;
 		}
 		if (next_header == IPV6_NH_ROUTING &&
 		    (size_t)packet[offset + 3u] > (ext_len - 8u) / SCHC_IPV6_ADDR_LEN) {
+			return SCHC_ERR_NO_MATCHING_RULE;
+		}
+		if (next_header == IPV6_NH_ROUTING &&
+		    (ext_len - 8u) % SCHC_IPV6_ADDR_LEN != 0u) {
+			/* RFC 6554 s3: with CmprI=CmprE=Pad=0 the Hdr Ext Len
+			 * must equal 2n (ext_len = 8 + 16n addresses); a
+			 * non-canonical length is not expressible and would
+			 * shift the last-address window onto trailing bytes. */
 			return SCHC_ERR_NO_MATCHING_RULE;
 		}
 		if (next_header == IPV6_NH_ROUTING && packet[offset + 3u] != 0u) {
@@ -450,6 +459,34 @@ static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len,
 	return SCHC_OK;
 }
 
+int validate_ipv6_address_policy(const uint8_t *packet)
+{
+	const uint8_t *src = &packet[SCHC_IPV6_SRC_OFFSET];
+	const uint8_t *dst = &packet[SCHC_IPV6_DST_OFFSET];
+
+	/* Emission endpoint address policy (spec/03-adaptation.md, "Endpoint
+	 * address policy (canonical TX/RX split)"): applies to every
+	 * in-profile transmitted packet, including the Rule 255 fallback for
+	 * version-6 packets.  The pre-IPv6 fallback in lichen_schc_compress
+	 * is tracked separately.  The receive path validates structure only
+	 * and MUST NOT apply this policy. */
+	if (is_unspecified(src) || is_loopback(src) || src[0] == 0xff ||
+	    is_ipv4_mapped(src)) {
+		return SCHC_ERR_INVALID_ENDPOINT;
+	}
+	if (is_unspecified(dst) || is_loopback(dst) || is_ipv4_mapped(dst)) {
+		return SCHC_ERR_INVALID_ENDPOINT;
+	}
+	if (dst[0] == 0xff) {
+		int scope = dst[1] & 0x0f;
+
+		if (scope < 2 || scope > 14) {
+			return SCHC_ERR_INVALID_ENDPOINT;
+		}
+	}
+	return SCHC_OK;
+}
+
 int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 {
 	size_t final_offset;
@@ -463,6 +500,13 @@ int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 	uint16_t expected_checksum;
 
 	if (pkt_len < IPV6_HDR_LEN) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
+	/* Self-defending: do not rely on callers to have checked the version
+	 * (mirrors Rust validate_full_ipv6_structure and Python
+	 * IPv6Header.from_bytes, which both validate it internally). */
+	if (ipv6_version(packet) != 6) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 

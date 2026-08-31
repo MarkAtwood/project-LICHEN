@@ -1,15 +1,20 @@
 {
   "id": "project-LICHEN-worker6-l1qw.4.7.2.8",
   "title": "Rust: Time Exceeded",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-07-25T03:45:51.668077Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:35:27.55085Z",
+  "updated_at": "2026-08-31T04:53:58.00277373Z",
   "started_at": "2026-08-25T23:15:00.38482Z",
+  "closed_at": "2026-08-31T04:53:58.00277373Z",
+  "close_reason": "Re-close (3rd): work committed d93192782c; prior closes did not persist in shared store.",
+  "labels": [
+    "rust"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-l1qw.4.7.2.8",

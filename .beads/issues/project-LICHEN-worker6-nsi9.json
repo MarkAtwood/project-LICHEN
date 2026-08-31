@@ -2,13 +2,19 @@
   "id": "project-LICHEN-worker6-nsi9",
   "title": "Non-string or variant SOS type values fall through and activate",
   "description": "python/src/lichen/coap/resources/emergency.py:213-216: the cancel branch matches body['type'] == 'cancel' exactly. A bytes-typed CBOR type (b'cancel' != 'cancel', verified) or variant token ('Cancel') falls through the pass into the ACTIVATION path, so a properly-signed cancel with a mis-encoded type returns CREATED and activates. Security-neutral today (signature must verify over that exact core, so only the originator's own mis-encoding is affected; C parity: sos_alert.c:403-410 uses exact strcmp). Fix: strict-type the branch (isinstance str) and/or whitelist activation types {sos, medical, security, fire} and reject unknown types with 4.00 instead of silently reinterpreting.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T18:05:15.871141Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-30T18:05:15.871141Z",
+  "updated_at": "2026-08-31T05:43:51.415287315Z",
+  "closed_at": "2026-08-31T05:43:51.415287315Z",
+  "close_reason": "Already fixed; render_post validates from_hex as 16-char hex (lines 219-224) and timestamp as finite non-negative (lines 225-231) before activation.",
+  "labels": [
+    "python",
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-nsi9",

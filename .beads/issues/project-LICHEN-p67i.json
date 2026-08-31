@@ -12,6 +12,9 @@
   "started_at": "2026-07-22T17:25:28.538482587Z",
   "closed_at": "2026-07-25T01:10:23.448320686Z",
   "close_reason": "Already fixed",
+  "labels": [
+    "rust"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-p67i",

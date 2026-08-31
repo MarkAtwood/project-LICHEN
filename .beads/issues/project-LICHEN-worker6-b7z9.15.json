@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.15",
+  "title": "Rust DIO admission: hop-limit 255 check missing (spec 09 13.3)",
+  "description": "Spec 09 13.3 R-09-005: a canonical multicast DIO MUST pass complete Rule 255 IPv6 validation including hop-limit before parent-selection or routing mutation. Classification: DIVERGENT - Python enforces hop_limit == 255 (python/src/lichen/rpl/authenticated_dio.py:362-363); the Rust admission path rust/lichen-schc/src/codec.rs:1761-1871 AuthenticatedPeerSchcContext::parse_authenticated_dio_evidence checks dispatch 0x14, Next Header 58, source/signer binding, ICMPv6 155/1, checksum, DODAGID/MOP/role, Rule-Version option - but has NO hop-limit check (grep: hop_limit appears only in SCHC codec field coding, lines 689-1338, not in the admission path). Test builders use 255 but it is not enforced. Suggested placement: add hop_limit == 255 validation to parse_authenticated_dio_evidence in rust/lichen-schc/src/codec.rs + a rejection test in rust/lichen-schc/tests/authenticated_dio_vectors.rs (mirror python/tests/rpl/test_authenticated_dio_security.py). Note second smaller divergence for same site: Python requires dst exactly ff02::1a, Rust admits ff02::1a broadcast or unicast-to-local-link (codec.rs:2108-2153 authenticated_dio_destination_is_local) - see flagged doc.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:16.916965032Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:13:56.711248759Z",
+  "started_at": "2026-08-31T08:13:56.711248759Z",
+  "lease_expires_at": "2026-08-31T08:18:56.711248759Z",
+  "heartbeat_at": "2026-08-31T08:13:56.711248759Z",
+  "labels": [
+    "rust",
+    "schc",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.15",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:17.08393726Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

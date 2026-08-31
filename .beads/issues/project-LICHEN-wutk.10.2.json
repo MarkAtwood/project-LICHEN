@@ -9,6 +9,12 @@
   "created_at": "2026-08-29T02:35:59.44952Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T06:50:48.941321Z",
+  "labels": [
+    "c",
+    "oscore",
+    "spec",
+    "human-only"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wutk.10.2",

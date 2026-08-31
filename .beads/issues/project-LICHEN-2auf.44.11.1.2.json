@@ -9,7 +9,8 @@
   "created_by": "AI Agent",
   "updated_at": "2026-08-30T17:26:25.182113Z",
   "labels": [
-    "defer-external"
+    "defer-external",
+    "networking"
   ],
   "dependencies": [
     {

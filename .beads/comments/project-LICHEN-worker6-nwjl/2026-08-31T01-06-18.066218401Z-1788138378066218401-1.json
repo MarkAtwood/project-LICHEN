@@ -1,0 +1,7 @@
+{
+  "id": "1788138378066218401-1",
+  "issue_id": "project-LICHEN-worker6-nwjl",
+  "author": "opencode-worker-2",
+  "text": "Verification evidence for children 5/6 (from a source+runtime audit; the C-side security work this parent describes IS present): (1) signature covers the full CBOR claim payload including the slots array (payload encoder emits claim-\u003eslots[i]; process_claim digests the entire cose_payload and schnorr48-verifies - a modified slots array breaks verification); (2) step 7 expiry\u003enow with the unsynced-clock fail-closed gate present; (3) step 8 claim_seq high-water with settings-backed persistence present. Runtime on heft gcc-14: lichen/tests/coap_slot_claim host suite 100% pass (needs -DCMAKE_C_FLAGS=-Wno-error=conversion for the pre-existing gcc-14 nit filed as v1bd), lichen/tests/slot_claim_settings 100% pass. Remaining for 5/6: author the gcp_slot_claim_cose_sign1.json vector corpus (replay/expiry/mutation cases) with its generator, then the three-impl parity review; watch for a python-side slot-claim mirror (parity target).",
+  "created_at": "2026-08-31T01:06:18.066218401Z"
+}

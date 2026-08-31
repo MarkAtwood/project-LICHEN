@@ -28,7 +28,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
-#include <zephyr/version.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_client.h>
@@ -118,20 +117,6 @@ int lichen_coap_client_init(void)
  * Race prevention: completed flag is set atomically. Whichever path
  * (callback or timeout) sets it first owns the ctx and frees it.
  */
-
-/*
- * The internal `struct coap_client` mutex guarding the request slots is
- * named `send_mutex` through Zephyr v3.7.0 and renamed `lock` in v4.0.0
- * (which also drops `response_ready`).  Both generations are in fleet
- * use: v3.7.0 is the documented CI pin, v4.1.0 is what this repository's
- * `lichen/west.yml` manifest materializes.
- */
-#if defined(ZEPHYR_VERSION_CODE) && ZEPHYR_VERSION_CODE >= ZEPHYR_VERSION(4, 0, 0)
-#define LICHEN_COAP_CLIENT_LOCK(client) (&(client)->lock)
-#else
-#define LICHEN_COAP_CLIENT_LOCK(client) (&(client)->send_mutex)
-#endif
-
 struct request_ctx {
 	lichen_coap_response_cb callback;
 	void *user_data;
@@ -181,21 +166,20 @@ static void request_ctx_cancel_timeout_sync(struct request_ctx *ctx)
 
 static void request_ctx_cancel_coap_slot(struct request_ctx *ctx)
 {
-	/* WARNING: Internal Zephyr coap_client access.
-	 * Relies on struct coap_client { ... struct k_mutex send_mutex (renamed
-	 * `lock` in v4.0.0, see LICHEN_COAP_CLIENT_LOCK); ... struct
-	 * coap_client_internal_request requests[CONFIG_COAP_CLIENT_MAX_REQUESTS]; ... }
-	 * layout, including request_ongoing, coap_request.cb/user_data,
-	 * is_observe, and in_callback fields (present in v3.7.0 and v4.1.0).
+	/* WARNING: Internal Zephyr coap_client access (v4.1.0).
+	 * Relies on struct coap_client { ... struct k_mutex lock; ... struct coap_client_internal_request requests[CONFIG_COAP_CLIENT_MAX_REQUESTS]; ... } layout,
+	 * including request_ongoing, coap_request.cb/user_data, is_observe, and in_callback fields.
 	 * Used to neuter pending callback after timeout to avoid use-after-free on ctx.
 	 * After nullifying the slot, spins waiting for any in-flight callback to complete
 	 * so that the caller can safely free ctx without a concurrent use-after-free.
 	 * Update or replace with public API if Zephyr changes internals. See net/coap_client.c.
+	 * The 3.7.0-era member send_mutex was renamed to lock upstream in 4.1.0.
+	 * Pinned to Zephyr v4.1.0 per AGENTS.md initialization graph.
 	 */
 	size_t match_idx[ARRAY_SIZE(s_client.requests)];
 	size_t n_match = 0;
 
-	k_mutex_lock(LICHEN_COAP_CLIENT_LOCK(&s_client), K_FOREVER);
+	k_mutex_lock(&s_client.lock, K_FOREVER);
 	for (size_t i = 0; i < ARRAY_SIZE(s_client.requests); i++) {
 		if (s_client.requests[i].request_ongoing &&
 		    s_client.requests[i].coap_request.user_data == ctx) {
@@ -206,7 +190,7 @@ static void request_ctx_cancel_coap_slot(struct request_ctx *ctx)
 			match_idx[n_match++] = i;
 		}
 	}
-	k_mutex_unlock(LICHEN_COAP_CLIENT_LOCK(&s_client));
+	k_mutex_unlock(&s_client.lock);
 
 	/*
 	 * Spin-wait for any in-flight callback that already read cb/user_data

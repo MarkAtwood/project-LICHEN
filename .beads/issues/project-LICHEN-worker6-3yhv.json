@@ -9,6 +9,11 @@
   "created_at": "2026-08-30T16:46:48.892898Z",
   "created_by": "opencode-worker-4",
   "updated_at": "2026-08-30T16:46:48.892898Z",
+  "labels": [
+    "c",
+    "coap",
+    "tdma"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-3yhv",

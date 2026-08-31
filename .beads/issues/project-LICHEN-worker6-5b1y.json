@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-5b1y",
+  "title": "Rust decompress-side finalize_checksum lacks computed-zero to 0xFFFF mapping; reconstructed UDP datagram can emit illegal wire 0x0000",
+  "description": "P2, out-of-scope note from kimi edge-cases codereview pass of project-LICHEN-worker6-hahk. rust/lichen-schc/src/headers.rs:203-209 finalize lacks the computed-zero -\u003e 0xFFFF mapping that C (lichen/subsys/lichen/schc/schc_checksum.c:62 finalize_checksum) and Python (python/src/lichen/schc/udp.py:77 or 0xFFFF) implement, and headers.rs:466 uses it for packet reconstruction on decompress. A UDP datagram whose true checksum computes to 0x0000 (legal; RFC 768/8200 require transmitting it as 0xFFFF) would be reconstructed by Rust emitting the illegal wire value 0x0000, where C and Python emit 0xFFFF - cross-impl divergence on the decompress/reconstruct path. Compress-side (ones_complement_sum codec.rs:602-613) is correct. Fix: apply the same mapping in headers.rs finalize (or route reconstruction through the compress-side checksum), pin with a shared vector whose UDP checksum computes to zero, rerun the parity gate.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:41:14.710067547Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-30T23:24:52.614931468Z",
+  "started_at": "2026-08-30T22:29:58.195392866Z",
+  "closed_at": "2026-08-30T23:24:52.614931468Z",
+  "close_reason": "Fixed and pinned, with a correction to the original premise. CORRECTION: the live rust decompress path (lichen_schc::decompress -\u003e decompress_coap -\u003e udp_checksum_parts -\u003e ones_complement_sum, codec.rs:602-613) ALREADY mapped computed-zero to 0xFFFF - there was no wire divergence on the production path. The actual gap was in the secondary public reconstruct API: headers.rs PacketProfile::build -\u003e build_coap_udp -\u003e udp_checksum -\u003e finalize (headers.rs:203-209), which lacked the mapping and is reachable via the re-exported PacketProfile trait (lib.rs:46-49) though it has no in-tree production caller (verified: only fuzz targets call .parse, one codec.rs test calls .build). Fix: headers.rs udp_checksum now maps computed-zero to 0xFFFF (RFC 768; mirrors C finalize_checksum schc_checksum.c:53-63 and python UdpDatagram.to_bytes udp.py:77), deliberately UDP-scoped - icmpv6_checksum stays raw-complement to match python (C diverges on ICMPv6, filed au9y with corrected rust-internal split details). Pinned by: (1) new shared vector schc_compression.json coap_linklocal_computed_zero_checksum (rule-0 round trip, wire 0xFFFF, true checksum zero; packet hex built with a from-scratch RFC 1071 oracle, compressed bytes from python reference, consumed generically by all three suites - it discriminates mapped vs unmapped reconstruct and would catch any future regression of the live path onto an unmapped helper); (2) new headers.rs unit test coap_linklocal_computed_zero_checksum_round_trip (parse-\u003ebuild byte-identity + explicit checksum field FF FF). Gates: python 770/770; rust cargo test -p lichen-schc --features std all suites green (82 lib incl. new test), no_std build clean, clippy -D warnings clean; C schc_parity PASS (clang+ASan/UBSan, regenerates from JSON). Codereview 3x per step 4 (reviewer model): correctness kimi-k3 PASS (independent RFC 1071 recompute, residue bit layout hand-verified, confirmed live path unchanged); edge-cases kimi-k3 PASS (odd-payload pad path consistent across all 4 impls incl. lichen-core/src/udp.rs:166-167 which also maps; rule-1 global variant uses the same mapped sum; rust ICMPv6 internal split matches corrected au9y; vector CoAP shape valid); security: claude-opus-4-5 down all round (server errors err_9a376cc7, err_45a17586 - 4 opus failures today) so kimi-k3 fallback ran per protocol: wire-0x0000 acceptance gates confirmed load-bearing in all three impls, checksum is recomputed never copied so no attacker-controlled field injection, no weakening of udp_zero_checksum_malformed. New finding filed: au9y (P3 ICMPv6 computed-zero convention divergence C vs python/rust-headers, needs coordinated decision) - description corrected by the correctness pass before close.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5b1y",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:41:14.797664164Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

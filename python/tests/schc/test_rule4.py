@@ -218,11 +218,14 @@ def test_rule4_rejects_truncated_or_semantically_invalid_residue() -> None:
 
 
 def test_rule4_enforces_encoded_profile_size_boundary() -> None:
-    exact_tail = bytes(MAX_PACKET_SIZE - len(_CANONICAL_COMPRESSED))
+    # Raw-bound contract (spec/03): raw == MAX_PACKET_SIZE compresses; raw
+    # one octet above is rejected before rule dispatch.
+    raw_per_tail_byte = len(_dao_packet(tail=b"\x00")) - 1
+    exact_tail = bytes(MAX_PACKET_SIZE - raw_per_tail_byte)
     exact_packet = _dao_packet(tail=exact_tail)
     exact_compressed = compress_packet(exact_packet)
 
-    assert len(exact_compressed) == MAX_PACKET_SIZE
+    assert len(exact_packet) == MAX_PACKET_SIZE
     assert exact_compressed[: len(_CANONICAL_COMPRESSED)] == _CANONICAL_COMPRESSED
     assert decompress_packet(exact_compressed) == exact_packet
 

@@ -1,1 +1,3 @@
 {"id":"01a045dd-7b4e-7c8e-b311-e149b1f26ade","issue_id":"project-LICHEN-i1gk.107","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:55:38.062827Z"}
+{"id":"01a05607-cb55-7e46-8475-5809d42bfcfe","issue_id":"project-LICHEN-i1gk.107","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-08-31T04:15:46.517937275Z"}
+{"id":"01a05669-3396-77e7-afb6-be6842ebe94d","issue_id":"project-LICHEN-i1gk.107","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Obsolete: deinit join timeout for RX thread; thread removed by sb0b","created_at":"2026-08-31T06:02:10.19851971Z"}

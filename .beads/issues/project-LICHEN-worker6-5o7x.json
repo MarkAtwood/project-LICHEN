@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-5o7x",
+  "title": "schc_parity gen_vectors.py treats expect_error as presence-only; a false value silently inverts rejection semantics",
+  "description": "P3 hardening, found by worker5 subagent robustness pass of project-LICHEN-worker6-hahk. lichen/tests/schc_parity/gen_vectors.py:176 generates the C table with 'true' if 'expect_error' in vector - presence-based, not value-based. Empirically probed: a corpus with expect_error: false generates C expecting REJECTION (inverted); Python's consumer is also value-agnostic (test_vectors.py:722-731 - malformed_input ignores the value entirely, size_boundary checks presence not truthiness). The two consumers are consistent with each other so no live divergence today, but a future expect_error: false silently inverts meaning instead of failing closed. Everything else in the generator is fail-closed (verified by probe: unknown category, missing/extra fields, missing expect_error, duplicate JSON keys, bad/empty hex all exit 1 -\u003e CMake FATAL_ERROR; CMAKE_CONFIGURE_DEPENDS covers JSON + generator; C main.c default: result=1 treats unknown kinds as failure). Fix: require expect_error to be a nonempty string when present (sibling corpus ipv6_malformed.json uses string error enums) and reject otherwise, in both gen_vectors.py and the Python consumers.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:40:48.509434543Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T00:46:12.102649074Z",
+  "started_at": "2026-08-31T00:29:42.501122046Z",
+  "closed_at": "2026-08-31T00:46:12.102649074Z",
+  "close_reason": "Fixed and pinned. gen_vectors.py now requires expect_error to be a nonempty snake_case string (re.fullmatch r'[a-z0-9_]+', mirroring the corpus schema's documented pattern) whenever present, wired into load() for malformed_input and malformed (required key) and size_boundary (optional key); a JSON false/number/empty string now fails at generation time (CMake FATAL_ERROR) instead of generating a C table with inverted rejection semantics. Python consumer test_schc_vector hardened: _require_string_expect_error guards the malformed_input, size_boundary, and malformed branches. Rust consumer needs no change: serde Option\u003cString\u003e fails closed on non-string values (verified by reviewer reading shared_vectors.rs:30,59-64; JSON null maps to None by standard Option semantics but is rejected by the generator and python guards before the corpus ships). Pinned by 4 new tests in python/tests/test_vectors.py: canonical corpus loads + generates; expect_error False/None/''/1 all rejected; string value maps to presence-true in generate() output; missing key on malformed_input still fails via require_keys. Gates on heft: python test_vectors.py 776/776; C schc_parity regenerated + PASS (clang, ASan/UBSan); rust shared_vectors 3/3 (worktree oscore redirect, not committed). Codereview 3x per step 4 (reviewer model): correctness kimi-k3 - 1 finding (docstring claimed the schema pattern without enforcing it), fixed by enforcing the pattern (all 13 corpus values conform - verified by scan); edge-cases kimi-k3 - same finding plus surfaced the pre-existing schema-gate gap (filed as a new discovered bead), rust serde fail-closed confirmed; security: claude-opus-4-5 down (err_bdfafa93 - 6th opus failure today) so kimi-k3 fallback per protocol - PASS (inversion hole closed at configure time; no silent non-string path; genuinely-rejecting rows cannot be masked; sentinel assertions intact).",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5o7x",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:40:48.595690104Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

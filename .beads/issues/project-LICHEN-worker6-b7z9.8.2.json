@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.8.2",
+  "title": "DTN C: implement S-flag hop-by-hop expiry option (App Data Type 0x03 absolute expiry)",
+  "description": "Child of b7z9.8. The DTN wire format (S flag in IPv6 hop-by-hop options carrying absolute expiry, App Data Type 0x03) is absent in the C implementation: packet-\u003edtn_expiry_unix is caller-populated and only test code populates it (lichen/tests/routing_dispatch/src/main.c:395); docs/spec-chapter-breakdowns.md:415-417 lists HBH option work as pending. Implement per spec 05-routing.md 9.8: parse/format the HBH expiry option in the C routing path so forwarded DTN messages carry absolute expiry instead of relying on caller plumbing. Must land AFTER b7z9.8.1 (wall-clock fail-open) so expiry semantics are settled; sibling parity in Rust/Python is b7z9.8.3.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:35:13.219961898Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T05:35:13.219961898Z",
+  "labels": [
+    "zephyr",
+    "networking",
+    "firmware",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.8.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:35:13.427093637Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

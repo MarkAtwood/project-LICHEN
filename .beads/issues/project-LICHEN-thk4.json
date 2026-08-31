@@ -13,5 +13,8 @@
   "updated_at": "2026-08-28T03:42:22.420105Z",
   "started_at": "2026-07-22T20:07:58.824082361Z",
   "closed_at": "2026-07-25T01:30:07.425656644Z",
-  "close_reason": "Closed"
+  "close_reason": "Closed",
+  "labels": [
+    "python"
+  ]
 }

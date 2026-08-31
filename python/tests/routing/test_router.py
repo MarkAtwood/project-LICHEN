@@ -40,9 +40,12 @@ def make_packet(dst: str, src: str = "fe80::1") -> IPv6Packet:
             src_addr=IPv6Address(src),
             dst_addr=IPv6Address(dst),
             next_header=17,  # UDP
-            payload_length=0,
+            payload_length=8,
         ),
-        payload=b"",
+        # Minimal RFC 768 UDP header (ports 0, length 8, zero checksum):
+        # the admission survey mirrors the C router in rejecting truncated
+        # transport headers.
+        payload=b"\x00\x00\x00\x00\x00\x08\x00\x00",
     )
 
 

@@ -1,0 +1,7 @@
+{
+  "id": "1788161855527603288-1",
+  "issue_id": "project-LICHEN-worker6-pgsl",
+  "author": "opencode-worker-4",
+  "text": "Codereview (ilye.6 pass 1, delegated to reviewer model) pinpointed the normative root of this: spec/03-adaptation.md:184-186 'A well-formed packet that fails only a Rule 7 matching requirement MUST use another matching rule or Rule 255' — 'matching requirement' is undefined and naturally includes the 5.5 endpoint address policy, which directly contradicts :431-433 'A Rule 255 encoder (and the compression path falling back to it) MUST reject such packets'. Under that reading the Rule 255 outlet this bead assumes does not exist and both MUSTs cannot hold; under the narrow (field-table-only) reading the policy-failure case is unstated at the Rule 7 selection point. Fix direction: scope the term, e.g. 'fails only a Rule 7 field-matching requirement of the table above, and satisfies the emission address policy' — or adjudicate that policy-failing packets are genuinely un-sendable and rewrite 184-186 accordingly.",
+  "created_at": "2026-08-31T07:37:35.527603288Z"
+}

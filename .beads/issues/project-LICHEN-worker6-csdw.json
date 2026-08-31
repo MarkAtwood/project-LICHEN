@@ -2,13 +2,19 @@
   "id": "project-LICHEN-worker6-csdw",
   "title": "Rust compress writes out buffer before failing: error returns leave partial bytes (decompress is atomic)",
   "description": "Confirmed empirically (discovered-from project-LICHEN-worker6-xuc8, robustness pass). compress_mqtt_sn (rust/lichen-schc/src/codec.rs:1014-1047) sets out[0]=RULE_MQTT_SN (:1017), zero-fills out[1..] via BitWriter (:143), writes residue and copies tail BEFORE the needed\u003eout.len() check (:1044); enforce_encoded_profile_limit (:2161) fires only after full encoding written. Probe: input needing 121 bytes with 25-byte out -\u003e Err(BufferTooSmall) with all 25 bytes modified, out[0]=0x07; over-profile input with 40000-byte out -\u003e Err(profile limit) with all 40000 bytes written. decompress side is fully atomic on error (0 bytes modified) and Python is atomic by construction. No current in-repo caller reads out after Err (checked link.rs:263, decompress_authenticated_frame_tracked) so impact is latent, but the compress/decompress asymmetry is undocumented and any caller assuming error implies untouched buffer gets stale/garbage bytes. Fix: size-check before first write in compress_mqtt_sn (and audit other per-rule compress fns for the same pattern), or document the contract explicitly plus a regression test asserting buffer-untouched-on-error.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T16:37:08.260221Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-08-30T16:37:08.260221Z",
+  "updated_at": "2026-08-31T05:21:36.053554951Z",
+  "closed_at": "2026-08-31T05:21:36.053554951Z",
+  "close_reason": "Fixed compress_mqtt_sn per the bead's primary fix option: total encoded size (1 rule byte + branch-determined residue ceil: 154 bits -\u003e 20 bytes link-local, 282 bits -\u003e 36 full) is now computed BEFORE any write to out; Err(BufferTooSmall) returns with the buffer completely untouched, matching decompress's atomic error contract. This also removes the subtler mutation the bead's probe missed: BitWriter::new does buf.fill(0) on out[1..], so even zero writes zeroed the residue region. Added regression test mqtt_sn_compress_error_leaves_buffer_untouched (link-local 25-needed vs 24-out, full-address 38 vs 37, 0xAA sentinel asserted unchanged, exact-size success controls pin the arithmetic). Validation (scratch mirror of beads-worker-4; in-tree cargo still blocked by xyt6): full features 170/0, default 119/0, cargo fmt clean, clippy --all-targets clean. 3x codereview (correctness/security/edge-cases via Kimi K3): all PASS — reviewer verified Ok-path bytes identical to the old code, error-payload (needed, available) semantics preserved for every reachable case, and NoMatchingRule/BufferTooSmall dispatcher precedence unchanged. Audit of the bead's 'other per-rule compress fns' clause completed: compress_coap, compress_icmpv6_echo, compress_rpl_dio, compress_rpl_dao retain mutate-then-check, and the dispatcher's enforce_encoded_profile_limit converts Ok-\u003eErr after full writes — both filed as project-LICHEN-worker6-emca (discovered-from this bead) rather than expanding this slice.",
+  "labels": [
+    "rust",
+    "schc"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-csdw",

@@ -1,0 +1,7 @@
+{
+  "id": "1788155456265847545-1",
+  "issue_id": "project-LICHEN-worker6-trsk",
+  "author": "opencode-worker-6",
+  "text": "Cargo.lock churn confirmation from xyt6.1 work (2026-08-31): Mac fork is 0.1.0 (via /Volumes/Attic/.../crates/oscore), Linux fork is 0.1.2 (~/crates/oscore); path deps record version but not source, so the tracked rust/Cargo.lock flips between hosts on every cargo run until the forks are reconciled to one commit. The xyt6.1 commit ships the 0.1.2 lock from this Linux host; Mac will rewrite it back until reconciliation. Any --locked/--frozen CI step will fail on whichever host mismatches.",
+  "created_at": "2026-08-31T05:50:56.265847545Z"
+}

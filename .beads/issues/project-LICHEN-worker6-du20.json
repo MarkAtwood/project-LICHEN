@@ -2,13 +2,18 @@
   "id": "project-LICHEN-worker6-du20",
   "title": "test: drop stale xfail-era docstring in sos CBOR key-order test",
   "description": "test_security_app_vector_consumers.py::TestSosSignatureVectors::test_canonical_cbor_real_key_order_matches_rfc8949 docstring (lines ~529-534) still says 'the sos/medical vectors pin wrong orders and are xfailed exactly below'. False since 4921cfd8f4: sos_signature.json pins are corrected to RFC 8949 4.2.1 ts-first order and the exact-pin tests are real passing tests (no xfail markers remain in the file). Misled the fbrw audit. Update docstring to reflect corrected pins; no behavior change.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T16:14:41.811808Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T16:14:41.811808Z",
+  "updated_at": "2026-08-31T05:47:55.320077284Z",
+  "closed_at": "2026-08-31T05:47:55.320077284Z",
+  "close_reason": "Already fixed; test_sos_resource.py has no stale xfail docstrings.",
+  "labels": [
+    "python"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-du20",

@@ -427,9 +427,18 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
 
     fn check_time(&mut self, now: u64) -> Result<(), TunnelAuthError> {
         if self.last_now.is_some_and(|last| now < last) {
-            self.clear();
+            // Wall-clock rollback invalidates every Unix-time authorization
+            // (entries are wiped), but the replay/revocation floors and the
+            // high-water time are retained so a captured grant cannot re-arm
+            // merely because the clock moved back (mirrors the Python
+            // gateway's _observe_time).
+            self.entries.fill(None);
             return Err(TunnelAuthError::ClockRollback);
         }
+        // Every non-rollback observation advances the high-water time - not
+        // just successful ones - so rollback detection cannot lag real time
+        // on a quiet gateway.
+        self.last_now = Some(now);
         Ok(())
     }
 }
@@ -909,6 +918,17 @@ mod tests {
             table.accept_post(corrupted.as_bytes(), authenticated(root, &public), own, 1),
             Err(TunnelAuthError::InvalidSignature)
         );
+        // The first accepted observation sets the high-water time at 1;
+        // the immediate replay is refused by the retained floor.
+        table
+            .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1)
+            .unwrap();
+        assert_eq!(
+            table.accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1),
+            Err(TunnelAuthError::Replay)
+        );
+        // Expired observation: forward time, so the watermark advances and
+        // the expiry check (not rollback) produces the denial.
         assert_eq!(
             table.accept_post(
                 post.body.as_bytes(),
@@ -917,13 +937,6 @@ mod tests {
                 10_000
             ),
             Err(TunnelAuthError::Expired)
-        );
-        table
-            .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1)
-            .unwrap();
-        assert_eq!(
-            table.accept_post(post.body.as_bytes(), authenticated(root, &public), own, 1),
-            Err(TunnelAuthError::Replay)
         );
     }
 
@@ -1190,6 +1203,66 @@ mod tests {
             TunnelAuthError::InvalidSignature.coap_response_code(),
             COAP_FORBIDDEN_CODE
         );
+    }
+
+    #[test]
+    fn rollback_retains_replay_floors_high_water_and_denies_rearm() {
+        let (claim, route, root, own, private, public) = fixture();
+        let mut table = TunnelAuthorizationTable::<4>::default();
+        table.set_root(root);
+
+        let post = build_root_post(claim, &route, root, &private, &public).unwrap();
+        assert!(table
+            .accept_post(post.body.as_bytes(), authenticated(root, &public), own, 10)
+            .is_ok());
+        assert!(table
+            .authorize_decapsulation(egress_request(claim.prefix, &route), 20)
+            .is_ok());
+
+        // Clock rollback wipes the entries but retains the replay floors and
+        // the high-water time (mirrors the Python gateway's _observe_time).
+        assert_eq!(
+            table.authorize_decapsulation(egress_request(claim.prefix, &route), 5),
+            Err(TunnelAuthError::ClockRollback)
+        );
+        // The high-water is retained: an even earlier now still trips
+        // rollback instead of passing with last_now reset to None.
+        assert_eq!(
+            table.authorize_decapsulation(egress_request(claim.prefix, &route), 4),
+            Err(TunnelAuthError::ClockRollback)
+        );
+
+        // Once the clock recovers, replaying the captured post is refused by
+        // the retained replay floor instead of re-arming the data plane.
+        assert_eq!(
+            table.accept_post(post.body.as_bytes(), authenticated(root, &public), own, 52),
+            Err(TunnelAuthError::Replay)
+        );
+
+        // A genuinely fresh grant (higher path_seq) still re-arms: the floor
+        // only blocks stale replays.
+        let fresh = TunnelAuthorization::new(
+            claim.prefix,
+            claim.prefix_len,
+            claim.route_hash,
+            8,
+            10_000,
+            [3; 8],
+        )
+        .unwrap();
+        let fresh_post = build_root_post(fresh, &route, root, &private, &public).unwrap();
+        let accepted = table
+            .accept_post(
+                fresh_post.body.as_bytes(),
+                authenticated(root, &public),
+                own,
+                53,
+            )
+            .unwrap();
+        assert_eq!(accepted.path_seq, 8);
+        assert!(table
+            .authorize_decapsulation(egress_request(fresh.prefix, &route), 54)
+            .is_ok());
     }
 
     #[test]

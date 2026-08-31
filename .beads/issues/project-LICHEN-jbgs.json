@@ -11,5 +11,8 @@
   "updated_at": "2026-08-28T03:45:18.546859Z",
   "started_at": "2026-07-25T02:54:47.666851683Z",
   "closed_at": "2026-07-22T16:14:29.733725477Z",
-  "close_reason": "Pass 2 complete, no P0/P1"
+  "close_reason": "Pass 2 complete, no P0/P1",
+  "labels": [
+    "coap"
+  ]
 }

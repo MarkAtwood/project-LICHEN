@@ -6,16 +6,23 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 ## Loop
 
 1. Get next: `bd ready | head -1` → `bd update <id> --claim`
+   - AFFINITY (when LICHEN_AFFINITY is set): first try your labels — for each
+     comma-separated label, `bd ready --label <label> --json` and take the first
+     bead. If all your label pools are empty, claim any ready bead (work-stealing).
 2. Read: `bd show <id>`
 3. Fix, run tests
 4. Codereview 3x on files you touched (correctness / security / edge) —
    DO NOT review with your own model. Delegate each pass to the reviewer:
    `opencode run --agent plan -m openrouter/moonshotai/kimi-k3 "Code review pass <correctness|security|edge-cases> on <touched files>. Read the changes, report only real defects with file:line. Answer with PASS or a numbered findings list."`
    - Reviewer is read-only (`plan` agent); it never edits files.
-   - If the bead touches crypto/security/concurrency (`lichen-oscore`, `schnorr`,
-     `rpl`, keys, handshake, replay) use `-m anthropic/claude-opus-4-5` instead.
+   - Kimi K3 is the reviewer for ALL passes including crypto/security/concurrency.
    - If `opencode run` fails (no API access, timeout), do the pass yourself and note it in the close reason.
-   - Findings → `bd create` (new beads), not recursive fixes
+   - Findings → `bd create` (new beads), not recursive fixes — BUT dedup first:
+     `bd search "<keyword from the finding>"` — if an OPEN bead already covers the
+     same file/test/defect, `bd comment <id> "<your finding>"` instead of creating a twin.
+   - Label every bead you create with its primary area: one of zephyr, renode,
+     gateway, networking, python, schc, rust, yggdrasil, hal, lci, app-interface,
+     coap, link, phy — never leave new beads unlabeled.
 5. Close: `bd close <id>`
 6. Commit: `git add <changed files> && git commit -m "fix(<area>): <what>"`
    - NEVER stage `.beads/` — bd writes the shared store directly via BEADS_DIR.
@@ -25,7 +32,25 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
 
 - `blocked:hardware` label — needs physical bench hardware
 - `needs-linux` label — work it via `ssh heft` (local Linux builder); EC2 only if heft lacks the toolchain
-- Too complex (>50 lines needed) — decompose with `bd create`, close parent, pick next
+- `oscore` label or anything touching oscore/EDHOC internals (upstream `rust-oscore`
+  repo, `~/crates/oscore` on either host, or security semantics of `rust/lichen-oscore`)
+  — SKIP: very high bar, human-only. File your findings as a new bead for Mark instead.
+- More than ~5 minutes of complexity — decompose FIRST (Yegge's rule). A leaf bead is
+  ONE narrow change: one function fixed, one behavior added, one test written —
+  typically ≤20 lines across 1–2 files. Create children with
+  `bd create --parent <id> "<slice>" --description="..." --label decomposed`
+  — as many as the work actually needs (don't force a count), each independently
+  landable. If a child must land after another, say so in its description.
+  NEVER close the parent while children are open — it closes when they do.
+  Release the parent (`bd update <id> --status open --assignee ""`) and claim a child.
+  If you cannot write the full child set in one pass, release the parent UNCHANGED
+  (no half-decompositions) with a note explaining why, and move on.
+  Never close any bead that has open children.
+- TIMEBOX (applies MID-bead): if a bead runs past ~15 minutes it is too big —
+  STOP: commit the coherent slice done so far, file follow-up beads for the remainder
+  (discovered-from this bead, noting what is already done), release the original
+  (`bd update <id> --status open --assignee ""`), and end your round. Grinding is a
+  protocol violation — the swarm wants small landable pieces, not heroes.
 - Stuck >5 min — release and move on
 
 ## Dirty file check (after claiming bead)
@@ -34,6 +59,11 @@ After `bd show <id>`, identify target files from the bead description/tags.
 Run `git status --short` on those paths. If any show uncommitted changes you
 didn't make, release the bead and pick another — that file is mid-edit by
 another agent. Unrelated dirty files in other subsystems are fine to ignore.
+
+Also check RECENTLY MERGED work: `git log main --since="2 hours ago" --name-only`.
+If another worker's commit in the last 2 hours touched the same files your bead
+targets, release the bead — the files are mid-flight by another agent and your
+work would conflict at sync. Pick a bead in a different area.
 
 `bd ready` already filters deferred and dependency-blocked beads.
 Beads commands run against the shared store via BEADS_DIR — do not

@@ -150,20 +150,22 @@ fn rule6_requires_both_current_yggdrasil_prefixes() {
 
 #[test]
 fn exact_profile_boundary_is_accepted_and_one_over_is_rejected() {
-    let mut tail = vec![0u8; MAX_PACKET_SIZE - 37];
+    // The profile ceiling bounds the RAW packet (the fragmenter's
+    // reassembly buffer), not the encoded form: raw == MAX compresses
+    // (encoded = raw - 15); raw == MAX + 1 is rejected before rule
+    // dispatch.
+    let mut tail = vec![0u8; MAX_PACKET_SIZE - 52];
     tail[0] = 0x90;
     tail[1] = 0xff;
     let exact_packet = packet(&tail, &SRC, &DST);
     let exact = compressed(&exact_packet).unwrap();
-    assert_eq!(exact.len(), MAX_PACKET_SIZE);
+    assert_eq!(exact.len(), MAX_PACKET_SIZE - 15);
     assert_eq!(exact[0], RULE_GLOBAL_OSCORE);
 
     tail.push(0);
     assert!(matches!(
         compressed(&packet(&tail, &SRC, &DST)),
-        Err(SchcError::InvalidPacket(
-            "SCHC packet exceeds profile limit"
-        ))
+        Err(SchcError::BufferTooSmall(_))
     ));
 }
 

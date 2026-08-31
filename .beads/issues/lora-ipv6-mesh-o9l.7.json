@@ -8,6 +8,11 @@
   "created_at": "2026-08-28T14:55:13.152868Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:55:13.152868Z",
+  "labels": [
+    "coap",
+    "l2",
+    "security"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-o9l.7",

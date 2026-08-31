@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-r2ns",
+  "title": "5pod rollback test: raw fs::write creates the restored record 0644, not FileStorage's 0600 - test may pass via Io instead of the precedes path",
+  "description": "Found by security codereview of the new processor-level rollback test in project-LICHEN-worker6-5pod. rust/lichen-node/src/announce.rs rolled_back_durable_state_fails_admission_closed writes the restored snapshot with std::fs::write (default 0644, umask-dependent), but FileStorage.read verifies private-file mode 0600 (verify_private_file). If the mode check fires, load() returns Err(Io) and the processor maps any store error to PersistenceError - so the test would keep passing even if the precedes logic regressed, pinning the wrong code path. Fix: after fs::write, set mode 0600 (announce_store.rs tests' write_record_raw pattern: fs::write + set_permissions(0o600)), making the restored record indistinguishable from a FileStorage-written one so the test exercises the genuine precedes-fails-closed path.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T22:56:51.116481924Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-30T23:05:25.926356905Z",
+  "started_at": "2026-08-30T22:56:59.905451827Z",
+  "closed_at": "2026-08-30T23:05:25.926356905Z",
+  "close_reason": "Fixed in the 5pod test: the restored snapshot record is now written with FileStorage's hardened 0600 mode (fs::write + set_permissions 0o600, unix-gated, matching announce_store.rs write_record_raw pattern), and the test additionally pins the exact store-level failure mode: assert_eq!(trust_store.load(iid), Err(AnnounceStoreError::Corrupt)) - so the test can only pass via the genuine precedes-fails-closed path; a permission-based Io rejection would now fail loudly, and the edge-cases reviewer confirmed every alternative Corrupt source (length, seal, half-present) is unreachable with a byte-exact sealed snapshot.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-r2ns",
+      "depends_on_id": "project-LICHEN-worker6-5pod",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T22:56:51.202159497Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

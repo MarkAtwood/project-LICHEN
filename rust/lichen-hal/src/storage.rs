@@ -598,9 +598,7 @@ pub mod fs {
         {
             use std::os::unix::fs::PermissionsExt;
             if metadata.permissions().mode() & 0o7777 != 0o700 {
-                return Err(private_state_error(
-                    "state directory must have mode 0700",
-                ));
+                return Err(private_state_error("state directory must have mode 0700"));
             }
         }
         verify_effective_owner(&metadata, "state directory")
@@ -610,7 +608,9 @@ pub mod fs {
     /// 0600 file described by `metadata` (no symlink swap, no mode drift).
     fn verify_private_file(path: &Path, metadata: &fs::Metadata, label: &str) -> io::Result<()> {
         if !metadata.file_type().is_file() {
-            return Err(private_state_error(format!("{label} is not a regular file")));
+            return Err(private_state_error(format!(
+                "{label} is not a regular file"
+            )));
         }
         #[cfg(unix)]
         {
@@ -620,9 +620,9 @@ pub mod fs {
                 || path_metadata.dev() != metadata.dev()
                 || path_metadata.ino() != metadata.ino()
             {
-                return Err(private_state_error(
-                    format!("{label} path changed or is a symbolic link"),
-                ));
+                return Err(private_state_error(format!(
+                    "{label} path changed or is a symbolic link"
+                )));
             }
             if metadata.permissions().mode() & 0o7777 != 0o600 {
                 return Err(private_state_error(format!("{label} must have mode 0600")));
@@ -651,14 +651,14 @@ pub mod fs {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     #[cfg(feature = "std")]
     use super::fs::FileStorage;
+    use super::*;
+    use mem::MemStorage;
     #[cfg(feature = "std")]
     use std::fs;
     #[cfg(feature = "std")]
     use std::io;
-    use mem::MemStorage;
 
     #[test]
     fn seed_round_trip() {

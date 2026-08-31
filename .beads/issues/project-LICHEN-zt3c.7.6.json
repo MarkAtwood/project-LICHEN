@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-zt3c.7.6",
+  "title": "Update and add ztest coverage for 02xx:: addressing",
+  "description": "Remove ULA fd00:: test assertions and replace with 02xx:: equivalents. Add new ztest cases validating 02xx:: address assignment, prefix advertisement via RPL, and global routing path. Files: lichen/tests/rpl_dodag/src/main.c (or equivalent address/routing test). ~20 lines in 1-2 test files. Depends on zt3c.7.2, zt3c.7.4, zt3c.7.5.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:29.986064529Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:40:02.66109344Z",
+  "closed_at": "2026-08-31T05:40:02.66109344Z",
+  "close_reason": "02xx:: ztest coverage complete; ULA fd00 test addresses removed. (1) lichen/tests/rpl_dodag/main.c: all DODAG-ID setters flipped 0xfd,0x00 -\u003e 0x02,0x00 (0200::1, foreign 0200::99, root) with parity comment updated to match python/tests/rpl/test_dodag.py; new test test_native_0200_dodag_global_path pins native-0200 DODAG join (state-change ret=1 contract), advertised 02xx prefix identity retention byte-exact, fe80 preferred parent (global path via parent), and a legacy-ULA fd00::/8 foreign-DODAG probe rejected without DTSN advance (foreign check precedes rank, dodag.c:410-412). (2) lichen/tests/rpl_routing/src/main.c address() helper out[0]=0xfd -\u003e 0x02 aligning with the already-0200-based rpl_route_state vectors. (3) python/tests/rpl/test_dodag.py DODAG_ID fd00::1 -\u003e 0200::1, foreign fd00::99 -\u003e 0200::99, foreign-adoption assertion uses RFC 5952 canonical str '200::99' (ipaddress drops the leading zero) with comment. Verification: rpl_dodag host build (clang, sanitizers) 23/23; west twister rpl_routing native_sim PASS (platform_allow limits it to native_sim); pytest python/tests/rpl 751 passed. 3x codereview delegated to Kimi K3: correctness PASS-with-findings, security PASS, edge-cases PASS. Findings: vacuous self-comparison assert in my new test removed during the round (own new code, pre-close); real finding filed as project-LICHEN-worker6-balm: pre-existing C-vs-Python divergence on unjoined-foreign-DODAG first contact (C rejects, Python adopts) + contradictory C comment, needs spec decision - not fixed here (would change production semantics on one side).",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "tests",
+    "gateway",
+    "global",
+    "local-ok",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zt3c.7.6",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:30.118265916Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

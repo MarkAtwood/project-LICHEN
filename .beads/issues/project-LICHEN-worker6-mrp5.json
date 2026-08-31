@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-mrp5",
+  "title": "Host C tests fail to build on gcc-13: pre-existing -Werror=conversion warnings unmasked by the -std=c2x fallback",
+  "description": "Found while validating ndk7: lichen/tests/cmake/test_common.cmake now falls back -std=c23 -\u003e -std=c2x (gcc 13.3 rejects c23), which unmasked pre-existing -Werror=conversion failures in host tests: lichen/subsys/lichen/link/schnorr48.c:306 (breaks lichen/tests/schnorr48) and frame.c:73,206 (breaks lichen/tests/frame). Both source files last touched in 660b9bf3bf, unrelated to ndk7. Fix the conversion warnings (explicit casts) so schnorr48 and frame host tests build on gcc-13 Linux hosts; Apple clang was unaffected because it accepts -std=c23.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T00:00:19.873849832Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T00:54:38.807990149Z",
+  "started_at": "2026-08-31T00:36:00.90356864Z",
+  "closed_at": "2026-08-31T00:54:38.807990149Z",
+  "close_reason": "Completed the cited scope and unblocked the broader host-test build on gcc-13. (1) frame.c:73 mic_length and :207 llsec construction, plus schnorr48.c:306 mic_selector: value-range-safe explicit casts replacing implicit promotion-then-narrow; delta review verified bit-exact equivalence for all inputs (LLSEC_MIC_LEN_SHIFT=2, mask 0x1c confines bits 2-4; mic_length enum 0..1; mic_selector field 0..7 with only the \u003e1U check downstream). (2) test_common.cmake: per-source -Wno-conversion exemption for vendored monocypher*.c inside lichen_test_target (rule ordering verified last-wins after the global -Wconversion; only the two vendored sources match the ^monocypher regex; project-owned sources keep full -Wconversion discipline). This also unblocked schnorr48_interop (0 errors) in addition to the cited pair. (3) Validation on heft gcc-13: frame_test 18/18, schnorr48_test 9/9, schnorr48_interop builds clean. Remaining project-owned conversion sites (pubkey_to_iid main.c:305, coap_slot_coord.c:264, and the wider sweep) filed as the long-tail follow-up 8mgv; monocypher itself compiles clean under the exemption. 3-lens delta review verdict: delta code bit-exact, correctly scoped, fully verified."
+}

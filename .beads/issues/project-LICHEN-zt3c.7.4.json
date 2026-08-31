@@ -1,0 +1,35 @@
+{
+  "id": "project-LICHEN-zt3c.7.4",
+  "title": "Update RPL dodag prefix handling for 02xx::",
+  "description": "Update lichen_rpl_dodag prefix advertisement and acceptance to use 02xx:: Yggdrasil prefix instead of ULA fd00::. Files: lichen/subsys/lichen/rpl/dodag.c, lichen/subsys/lichen/rpl/include/lichen/rpl_dodag.h, lichen/subsys/lichen/rpl/rpl_prefix.c. ~15 lines across 2-3 files. Depends on zt3c.7.2.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-3",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:25.482603143Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:10:06.678387956Z",
+  "started_at": "2026-08-31T08:06:29.763707808Z",
+  "closed_at": "2026-08-31T08:10:06.678387956Z",
+  "close_reason": "No-op completion: the fd00:: ULA coupling this bead targeted is already gone from lichen/subsys/lichen/rpl/{dodag.c,rpl_dodag.h,rpl_prefix.c} — the C RPL core is prefix-agnostic (DODAGID opaque 16B, DAO Target encoding length-generic per rpl_messages.h:430-445) and never hardcoded fd00. The migration landed via sibling-bead commits on beads-worker-3: 90ae5e2410 (rpl ztests to 02xx, closed .7.6/.7.7), 05ad7ba628 (gateway root DODAG ID 0200::), 3193e837d2 (Kconfig text, .7.1), with .7.3/.7.5 also closed. Sweep of lichen/subsys + rpl/routing tests finds zero fd00 minters outside the fixture helpers already tracked in 025x; rpl_dodag test at main.c:501 now asserts legacy-ULA DODAG_IDs are foreign. C and Python consistently treat DODAGID acceptance as opaque (dodag.c:406 vs dodag.py:413) — no cross-impl divergence. Verified: rpl_dodag host suite 23/23 PASS (gcc-14, incl. 'native 0200 DODAG global path' and 'unjoined foreign DODAG rejected'). Codereview: prior session ran 2 independent passes on this bead's area (findings -\u003e .7.2 comment on 025x-related make_ula, since addressed); this round produced zero new diff, so no new review passes required. Parent zt3c.7 now has all children closed.",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "l2",
+    "gateway",
+    "global",
+    "local-ok",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zt3c.7.4",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:25.60185003Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

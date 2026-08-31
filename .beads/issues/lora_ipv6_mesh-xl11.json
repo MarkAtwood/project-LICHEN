@@ -12,5 +12,8 @@
   "updated_at": "2026-08-28T03:44:40.123705Z",
   "started_at": "2026-07-25T02:26:38.641054686Z",
   "closed_at": "2026-06-25T04:47:51Z",
-  "close_reason": "Full link-frame dissector written (LLSec, Epoch, SeqNum, Addr, SCHC, MIC) and pcap.py docstring corrected"
+  "close_reason": "Full link-frame dissector written (LLSec, Epoch, SeqNum, Addr, SCHC, MIC) and pcap.py docstring corrected",
+  "labels": [
+    "link"
+  ]
 }

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-3xjz",
+  "title": "coap_keys_settings.c: GCC13 maybe-uninitialized Werror breaks native_sim build",
+  "description": "collect_record() locals slot/entry fed parse_record_key() out-params; GCC 13 (heft, gcc 13.3) -Werror=maybe-uninitialized flags use at coap_keys_settings.c:170/:162 where GCC 12 did not. Blocks building tests/coap_keys and coap_keys_lifecycle on native_sim/native/64. Fix (landed this round with u4fr verification): initialize slot=0/entry=0 with comment; inert because use is gated on ret==0. Verified: coap_keys 37/37 PASS, coap_keys_lifecycle 9/9 PASS on native_sim/native/64 (Zephyr 4.1.0 workspace, zcbor 0.9.1 registered).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:18:31.565646291Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T05:19:20.017277825Z",
+  "closed_at": "2026-08-31T05:19:20.017277825Z",
+  "close_reason": "Fixed in 6345effe51 (init slot=0/entry=0 with explanatory comment). Verified on native_sim/native/64: tests/coap_keys 37/37 PASS, tests/coap_keys_lifecycle 9/9 PASS. Env note: required zcbor module (0.9.1, manifest-pinned SHA 9b07780a) shallow-cloned to ~/GIT/zcbor and registered via ZEPHYR_EXTRA_MODULES since the shared heft 4.1.0 workspace lacks modules/lib/zcbor and west update zcbor is refused (project-imports).",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3xjz",
+      "depends_on_id": "project-LICHEN-worker6-u4fr",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:18:31.782443488Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

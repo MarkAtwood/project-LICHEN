@@ -12,6 +12,9 @@
   "started_at": "2026-07-22T16:47:18.89402533Z",
   "closed_at": "2026-07-22T16:48:19.471046182Z",
   "close_reason": "Added 8 dedicated test vectors exercising all branches in select_channel_timing (blacklist, dwell \u003c MIN_DWELL_MS, hysteresis, SNR/PER combos); full branch coverage confirmed via generator and pytest",
+  "labels": [
+    "lci"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-7bc3",

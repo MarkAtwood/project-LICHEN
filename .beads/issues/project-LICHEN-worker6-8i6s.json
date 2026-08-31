@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-8i6s",
+  "title": "coap_oscore_fallback native_sim runtime failures: suite_setup client bind fails (-2, SLIP no UART) on v4.1.0 - pre-existing, independent of bkqd log fix",
+  "description": "Found while verifying project-LICHEN-worker6-bkqd on heft (native_sim/native/64, v4.1.0 workspace, ZEPHYR_EXTRA_MODULES). After bkqd's log fix the app LINKS (previously undefined log_const_oscore) but ALL tests fail in suite_setup: 'client bind failed: -2' + 'getsockname failed: -22' at src/main.c:159/163 - the CoAP client's UDP socket setup fails because SLIP transport has no UART device on native_sim ('SLIP transport: no UART device available' warning right before). The oscore subsystem itself initializes fine ('oscore: OSCORE initialized (8 contexts max)' - also proves the single log registration). This is the v4.1.0-native-sim cousin of the t370 v3.7.0 coap test-infra cluster (SLIP/UDP test setup), NOT a regression from bkqd (log-module changes cannot affect socket binds). Fix direction: give the test app a loopback/SLIP-less network setup or enable the native_sim SLIP UART device in its prj.conf/boards, mirroring whatever the working coap test apps do on the pinned tree. Tracked separately from t370 because the tree pin differs (v4.1.0 local workspace vs pinned v3.7.0).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:23:23.182825546Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T02:23:23.182825546Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8i6s",
+      "depends_on_id": "project-LICHEN-worker6-bkqd",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:23:23.287674936Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

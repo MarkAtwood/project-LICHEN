@@ -9,6 +9,9 @@
   "created_at": "2026-08-29T00:59:29.980855Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T00:59:29.980855Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-7gvp",

@@ -11,6 +11,9 @@
   "created_by": "AI Agent",
   "updated_at": "2026-08-28T03:42:03.056971Z",
   "started_at": "2026-07-24T22:26:26.001449219Z",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-dsrv",

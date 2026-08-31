@@ -80,11 +80,15 @@ def _is_link_local(addr: int) -> bool:
     return addr >> 64 == _LINK_LOCAL_PREFIX64
 
 
-def _validate_ipv6_addresses(header: IPv6Header) -> None:
-    if header.src_addr.is_unspecified or header.src_addr.is_multicast:
-        raise SchcError(f"invalid IPv6 source address {header.src_addr}")
-    if header.dst_addr.is_unspecified:
-        raise SchcError("invalid unspecified IPv6 destination address")
+def validate_datagram_source_policy(src: IPv6Address) -> None:
+    """Endpoint source policy, applied at origination and forwarding only.
+
+    The UDP parser verifies framing and integrity only (Rule 255 RX
+    byte-preserving decision, spec/03-adaptation.md): callers that originate
+    or forward a datagram apply this check explicitly.
+    """
+    if src.is_unspecified or src.is_multicast:
+        raise SchcError(f"invalid datagram source address {src}")
 
 
 def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> None:
@@ -127,16 +131,31 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
         data = ext.data
         if len(data) + 2 < 24 or data[0] != 3 or data[2] != 0 or data[3] != 0:
             raise SchcError("unsupported RPL source-routing header")
+        if data[4] != 0 or data[5] != 0:
+            # RFC 6554 s3: Reserved octets 6-7 follow CmprI/CmprE/Pad and
+            # MUST be zero (data[4:6] = packet octets 6-7).
+            raise SchcError("invalid RPL source-routing reserved octets")
         segments_left = data[1]
         if segments_left > (len(data) - 6) // 16:
             raise SchcError("invalid RPL source-routing segments-left")
+        if (len(data) - 6) % 16 != 0:
+            # RFC 6554 s3: with CmprI=CmprE=Pad=0 the Hdr Ext Len must equal
+            # 2n (ext_len = 8 + 16n addresses); a non-canonical length is
+            # not expressible and would shift the last-address window onto
+            # trailing bytes.
+            raise SchcError("invalid RPL source-routing header length")
         if segments_left != 0:
             upper_dst = IPv6Address(data[-16:])
     return upper_dst
 
 
 def validate_full_ipv6(raw: bytes) -> bytes:
-    """Validate a complete IPv6 packet before Rule 255 delivery."""
+    """Validate a complete IPv6 packet before Rule 255 delivery.
+
+    Framing, structure, and checksums only (Rule 255 RX is byte-preserving,
+    spec/03-adaptation.md): endpoint address policy is TX-side and lives in
+    :func:`_validate_rule255_emission_endpoints`.
+    """
     if type(raw) is not bytes:
         raise SchcError("IPv6 packet must be bytes")
     if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
@@ -147,11 +166,10 @@ def validate_full_ipv6(raw: bytes) -> bytes:
         packet = IPv6Packet.from_bytes(raw, strict=True)
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
-    _validate_ipv6_addresses(packet.header)
     upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
         try:
-            UdpDatagram.from_bytes(packet.payload, packet.header.src_addr)
+            UdpDatagram.from_bytes(packet.payload)
         except UdpError as error:
             raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
         if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
@@ -162,14 +180,25 @@ def validate_full_ipv6(raw: bytes) -> bytes:
 def _validate_rule255_emission_endpoints(packet: IPv6Packet) -> None:
     """TX-side Rule 255 endpoint policy (spec/03-adaptation.md).
 
-    Encode must not originate loopback, IPv4-mapped, or bad-scope multicast
-    endpoints. Receive-side validation stays emission-free: looped-back and
-    multicast datagrams are legitimate RX.
+    Encode must not originate unspecified, loopback, multicast, or
+    IPv4-mapped source endpoints, nor unspecified, loopback, or IPv4-mapped
+    destination endpoints, nor out-of-scope multicast destinations.
+    Receive-side validation stays emission-free: looped-back and multicast
+    datagrams are legitimate RX.
     """
     source, destination = packet.header.src_addr, packet.header.dst_addr
-    if source.is_loopback or source.ipv4_mapped is not None:
+    if (
+        source.is_unspecified
+        or source.is_multicast
+        or source.is_loopback
+        or source.ipv4_mapped is not None
+    ):
         raise SchcError(f"invalid IPv6 source address {source}")
-    if destination.is_loopback or destination.ipv4_mapped is not None:
+    if (
+        destination.is_unspecified
+        or destination.is_loopback
+        or destination.ipv4_mapped is not None
+    ):
         raise SchcError(f"invalid IPv6 destination address {destination}")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F
@@ -558,7 +587,7 @@ class MqttSnProfile:
             raise SchcError("Rule 7 IPv6 payload length mismatch")
         udp_bytes = raw[HEADER_LENGTH:]
         try:
-            udp = UdpDatagram.from_bytes(udp_bytes, header.src_addr)
+            udp = UdpDatagram.from_bytes(udp_bytes)
         except UdpError as error:
             raise SchcError(f"invalid Rule 7 UDP datagram: {error}") from error
         if not UdpDatagram.verify_checksum(header.src_addr, header.dst_addr, udp_bytes):
@@ -857,6 +886,15 @@ def compress_packet(raw: bytes, profiles: tuple[PacketProfile, ...] = DEFAULT_PR
     # Validate transport structure and checksums once before any profile elides
     # fields. Valid field non-matches continue to Rule 255; malformed packets do
     # not get repaired by compression.
+    # The profile ceiling (lichen.schc.fragment.MAX_PACKET_SIZE, the
+    # fragmenter's reassembly buffer) bounds the RAW packet on both
+    # directions: a datagram larger than the receiver can reassemble is
+    # undeliverable regardless of how well it compresses. Mirrors the C
+    # lichen_schc_compress and Rust compress raw-packet guards.
+    if len(raw) > MAX_PACKET_SIZE:
+        raise SchcError(
+            f"SCHC packet exceeds profile limit: {len(raw)} > {MAX_PACKET_SIZE}"
+        )
     validate_full_ipv6(raw)
     _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(raw, strict=True))
     mqtt_sn = MQTT_SN_PROFILE.compress_if_matching(raw)

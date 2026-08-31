@@ -8,7 +8,12 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T16:26:40.494075Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T16:26:40.494075Z",
+  "updated_at": "2026-08-31T05:27:46.86527605Z",
+  "started_at": "2026-08-31T04:07:29.824180664Z",
+  "labels": [
+    "networking",
+    "rust"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-nhtn",

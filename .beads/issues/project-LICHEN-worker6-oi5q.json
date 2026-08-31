@@ -1,14 +1,17 @@
 {
   "id": "project-LICHEN-worker6-oi5q",
   "title": "Incomplete memory wipe: provisioned_seed bytes not zeroed before dereference, crypto material remains in memory until GC (provisioning.py:652)",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-26T17:19:22.454584Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-26T17:19:22.454584Z",
+  "updated_at": "2026-08-31T05:24:31.835345675Z",
+  "closed_at": "2026-08-31T05:24:31.835345675Z",
+  "close_reason": "Obsolete per crypto-consttime-zeroize-policy: Python zeroize is theater. Rust provisioning.rs calls .zeroize() on provisioned_seed.",
   "labels": [
-    "bug"
+    "bug",
+    "zephyr"
   ]
 }

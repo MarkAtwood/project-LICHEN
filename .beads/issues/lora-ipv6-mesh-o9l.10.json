@@ -8,6 +8,10 @@
   "created_at": "2026-08-28T14:55:17.358198Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:55:17.358198Z",
+  "labels": [
+    "tdma",
+    "hal"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-o9l.10",
