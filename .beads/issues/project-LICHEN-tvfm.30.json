@@ -17,7 +17,8 @@
     "exhaustive",
     "owner-reserved",
     "review",
-    "round1"
+    "round1",
+    "link"
   ],
   "dependencies": [
     {
