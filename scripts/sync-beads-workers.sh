@@ -62,11 +62,13 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
     echo "Merging $branch ($ahead commits ahead)..."
 
     if git merge --no-commit --no-ff "$branch" >/dev/null 2>&1; then
-        # Normalize: beads store lives in main only; discard branch-side .beads entries
-        if git diff --cached --name-only -- .beads | grep -q .; then
-            git checkout HEAD -- .beads 2>/dev/null || git rm -r --cached --ignore-unmatch .beads >/dev/null 2>&1
-            git checkout HEAD -- .beads 2>/dev/null || true
-        fi
+        # Normalize: beads store lives in main only; discard branch-side .beads entries.
+        # rust/crates/oscore was vendored-then-removed (registry dep 0.1.2): worker
+        # branches from before the deletion re-add stale copies — drop them too.
+        git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
+        git checkout HEAD -- .beads 2>/dev/null || true
+        git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
+        git checkout HEAD -- .beads 2>/dev/null || true
         if git commit --no-edit --quiet; then
             echo "  merged (code only)"
         else
