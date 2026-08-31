@@ -9,6 +9,9 @@
   "created_at": "2026-08-31T01:14:38.527161777Z",
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-31T01:14:38.527161777Z",
+  "labels": [
+    "schc"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-bkl1",
