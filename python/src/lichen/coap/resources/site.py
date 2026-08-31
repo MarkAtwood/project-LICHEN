@@ -49,6 +49,7 @@ from lichen.coap.resources.senml import (
     SenMLSensorsResource,
 )
 from lichen.coap.transport import EndpointPolicy
+from lichen.gateway.tunnel_auth import TunnelAuthorizationTable
 from lichen.link.tx_queue import Priority
 
 
@@ -156,6 +157,7 @@ def build_site(
     config_allow_writes: bool = False,
     radio_config_allow_writes: bool = False,
     congestion_provider: CongestionProvider | None = None,
+    tunnel_authorizations: TunnelAuthorizationTable | None = None,
 ) -> resource.Site:
     """Build an aiocoap Site exposing the LICHEN node resources.
 
@@ -240,6 +242,11 @@ def build_site(
         site.add_resource(["rollcall"], rollcall_resource)
     if checkin_resource is not None:
         site.add_resource(["checkin"], checkin_resource)
+    if tunnel_authorizations is not None:
+        from lichen.coap.resources.tunnel_auth import TUNNEL_AUTH_PATH, TunnelAuthResource
+
+        site.add_resource(list(TUNNEL_AUTH_PATH), TunnelAuthResource(tunnel_authorizations))
+
     if deaddrop_resource is not None:
         site.add_resource(["deaddrop"], deaddrop_resource)
         site.add_resource(["deaddrop"], DeadDropDetailsResource(deaddrop_resource))
