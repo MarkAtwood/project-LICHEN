@@ -23,6 +23,7 @@ members = [
     # Board-specific firmware (no_std targets)
     "lichen-firmware/wio-e5",
 ]
+exclude = ["oscore-fork"]
 
 # Default members excludes embedded firmware (requires cross-compilation)
 default-members = [
@@ -52,6 +53,8 @@ version = "0.1.0"
 license = "GPL-3.0-or-later"
 rust-version = "1.81.0"
 
-# Patch crates.io dependencies with local versions for Schnorr48 EDHOC support
+# Patch crates.io dependencies with local versions for Schnorr48 EDHOC support.
+# oscore-fork is a per-host gitignored symlink to the fork checkout (outside
+# this repo); create it with scripts/link-oscore-fork.sh before cargo commands.
 [patch.crates-io]
-oscore = { path = "/Volumes/Attic/Desktop/Projects/crates/oscore" }
+oscore = { path = "oscore-fork" }
