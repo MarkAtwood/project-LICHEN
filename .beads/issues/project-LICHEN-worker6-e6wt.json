@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T06:10:27.854312Z",
   "labels": [
-    "gateway"
+    "gateway",
+    "rust"
   ],
   "dependencies": [
     {
