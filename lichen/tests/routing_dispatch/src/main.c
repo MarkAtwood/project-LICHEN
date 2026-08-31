@@ -439,6 +439,27 @@ static int test_queue_copy_gpsr_and_dtn(void)
 	REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
 	REQUIRE(result.path == LICHEN_ROUTE_PATH_DTN);
 	REQUIRE(router.dtn_buffer_bytes == dtn_len);
+
+	/* R-05-080 fail-open: an expiry==0 record (stored by a clockless
+	 * ingester without a validated deadline) must survive every local
+	 * expire sweep; downstream nodes with valid time enforce it. */
+	configure_router(&router, &state);
+	uint8_t failopen_dst[16] = {0x03, [15] = 3U};
+	REQUIRE(lichen_router_dtn_buffer(&router, failopen_dst, packet,
+					 sizeof(packet), 0U, 0U) == 0);
+	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
+	REQUIRE(lichen_router_dtn_expire(&router, 0U) == 0);
+	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
+	REQUIRE(lichen_router_dtn_expire(&router, 300U) == 0);
+	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
+
+	/* Positive control: an absolute-deadline record does expire. */
+	uint8_t deadline_dst[16] = {0x03, [15] = 4U};
+	REQUIRE(lichen_router_dtn_buffer(&router, deadline_dst, packet,
+					 sizeof(packet), 250U, 0U) == 0);
+	REQUIRE(router.dtn_buffer_bytes == 2U * sizeof(packet));
+	REQUIRE(lichen_router_dtn_expire(&router, 300U) == 1);
+	REQUIRE(router.dtn_buffer_bytes == sizeof(packet));
 #endif
 	return 0;
 }

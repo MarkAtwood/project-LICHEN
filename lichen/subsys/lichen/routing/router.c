@@ -1273,6 +1273,14 @@ int lichen_router_dtn_expire(struct lichen_router *router, uint32_t now_unix)
 		if (!m->valid) {
 			continue;
 		}
+		/* R-05-080 fail-open: expiry==0 marks a record stored by a
+		 * clockless node that could not validate an absolute
+		 * deadline; expiry is enforced downstream by nodes with
+		 * valid time. Flushing it here would defeat that handoff,
+		 * so expiry==0 is never treated as already-expired. */
+		if (m->expiry_unix == 0U) {
+			continue;
+		}
 		/* Use signed comparison for timestamp wraparound safety */
 		if ((int32_t)(m->expiry_unix - now_unix) <= 0) {
 			router->dtn_buffer_bytes -= m->len;
