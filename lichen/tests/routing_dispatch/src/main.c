@@ -470,8 +470,8 @@ static int test_adaptive_sf_density_threshold(void)
 	configure_router(&router, &state);
 	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
 	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
-					  &destination[8], 9U, 0U, 0U, 1000U,
-					  &sf, &tx_allowed) == 0);
+					  &destination[8], 9U, 0U, 0U, 0U,
+					  1000U, &sf, &tx_allowed) == 0);
 	REQUIRE(sf == 11U);
 	REQUIRE(tx_allowed == true);
 
@@ -479,17 +479,113 @@ static int test_adaptive_sf_density_threshold(void)
 	configure_router(&router, &state);
 	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
 	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
-					  &destination[8], 8U, 0U, 0U, 1001U,
-					  &sf, &tx_allowed) == 0);
+					  &destination[8], 8U, 0U, 0U, 0U,
+					  1001U, &sf, &tx_allowed) == 0);
 	REQUIRE(sf == 9U);
 
 	/* Utilization > 150 still bumps +2 with low density. */
 	configure_router(&router, &state);
 	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
 	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
-					  &destination[8], 0U, 151U, 0U,
+					  &destination[8], 0U, 151U, 0U, 0U,
 					  1002U, &sf, &tx_allowed) == 0);
 	REQUIRE(sf == 11U);
+#endif
+	return 0;
+}
+
+static int test_adaptive_sf_floors(void)
+{
+#if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED)
+	struct accessor_state state = {.discovery_succeeds = true};
+	struct lichen_router router;
+	uint8_t destination[16] = {0x02, 0x00, [15] = 0x34};
+	uint8_t neighbor[16] = {0xfe, 0x80, [15] = 0x56};
+	struct lichen_gradient_entry entry = {
+		.hop_count = 1U,
+		.seq_num = 1U,
+		.source = LICHEN_GRADIENT_DATA,
+		.expires_ms = 100000U,
+	};
+	memcpy(entry.destination_iid, &destination[8], 8U);
+	memcpy(entry.next_hop, neighbor, 16U);
+
+	uint8_t sf = 0U;
+	bool tx_allowed = false;
+
+	/* Spec 2a.8 post-step-6 floors, in order a-d. Each case re-seeds a
+	 * fresh router/entry so the previous floor's stored SF cannot leak.
+	 * density=8 and utilization=0 keep steps 3 and 5 out of the way. */
+
+	/* Floor a: EMA_SNR < -5 forces SF = 12. */
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = -6;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U, 0U,
+					  2000U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 12U);
+
+	/* Floor b: -5 <= EMA_SNR < 0 raises SF to at least 11. */
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = -1;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U, 0U,
+					  2001U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Boundary: EMA_SNR = 0 triggers neither a nor b. */
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = 0;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U, 0U,
+					  2002U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 9U);
+
+	/* Floor c: Density > 8 raises SF to at least 11. Start at 7: step 3
+	 * raises 7 -> 9, then the floor raises 9 -> 11. */
+	entry.sf.current_sf = 7U;
+	entry.sf.snr_ewma = 5;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 9U, 0U, 0U, 0U,
+					  2003U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Density == 8 with positive SNR: no step-3 bump, no floor c. */
+	entry.sf.current_sf = 7U;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U, 0U,
+					  2004U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 7U);
+
+	/* Floor d: LoadFactor >= 0.8 raises SF to at least 11. */
+	entry.sf.current_sf = 7U;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U,
+					  52429U, 2005U, &sf,
+					  &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Load factor just below 0.8 (52428 = 0.79998) applies no floor. */
+	entry.sf.current_sf = 7U;
+	configure_router(&router, &state);
+	REQUIRE(lichen_gradient_update(&router.gradient_table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&router.gradient_table,
+					  &destination[8], 8U, 0U, 0U,
+					  52428U, 2006U, &sf,
+					  &tx_allowed) == 0);
+	REQUIRE(sf == 7U);
 #endif
 	return 0;
 }
@@ -512,7 +608,9 @@ static int run_all_tests(void)
 	if (ret != 0) return ret;
 	ret = test_dtn_expiry_zero_drop_and_expire();
 	if (ret != 0) return ret;
-	return test_adaptive_sf_density_threshold();
+	ret = test_adaptive_sf_density_threshold();
+	if (ret != 0) return ret;
+	return test_adaptive_sf_floors();
 }
 
 #ifdef __ZEPHYR__
