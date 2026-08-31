@@ -19,6 +19,7 @@ import re
 import sys
 import threading
 import zlib
+from collections import Counter
 from ipaddress import IPv6Address
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -212,6 +213,7 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
+        "schc_compression.json",
     ],
 )
 def test_vector_file_schema(filename: str) -> None:
@@ -715,15 +717,30 @@ def test_ipv6_malformed_vector(name: str, vector: dict) -> None:
     elif e == "invalid_source":
         p = IPv6Packet.from_bytes(wire)
         assert handle_icmpv6(p) is None
+    else:
+        pytest.fail(f"{name}: unhandled ipv6_malformed expect_error {e!r}")
+
+
+def _require_string_expect_error(vector: dict) -> None:
+    """Corpus drift guard: expect_error must be a nonempty string when
+    present. The C parity generator encodes it as presence-as-bool, so a
+    false or empty value would silently invert rejection semantics."""
+    if "expect_error" in vector:
+        value = vector["expect_error"]
+        assert isinstance(value, str) and value, (
+            f"{vector['name']}: expect_error must be a nonempty string"
+        )
 
 
 @pytest.mark.parametrize("name,vector", _schc_cases())
 def test_schc_vector(name: str, vector: dict) -> None:
     if vector.get("category") == "malformed_input":
+        _require_string_expect_error(vector)
         with pytest.raises(SchcError):
             compress_packet(bytes.fromhex(vector["packet"]))
         return
     if vector.get("category") == "size_boundary":
+        _require_string_expect_error(vector)
         compressed = (
             bytes.fromhex(vector["compressed_prefix"])
             + bytes([vector["tail_byte"]]) * vector["tail_length"]
@@ -736,6 +753,7 @@ def test_schc_vector(name: str, vector: dict) -> None:
         return
     compressed = bytes.fromhex(vector["compressed"])
     if vector.get("category") == "malformed":
+        _require_string_expect_error(vector)
         with pytest.raises((SchcError, ValueError)):
             decompress_packet(compressed)
         return
@@ -743,6 +761,69 @@ def test_schc_vector(name: str, vector: dict) -> None:
     assert compress_packet(packet) == compressed, f"compress drift: {name}"
     assert decompress_packet(compressed) == packet, f"decompress drift: {name}"
     assert compressed[0] == vector["rule_id"]
+
+
+def _load_gen_vectors_module():
+    """Import the C parity generator from its standalone script location."""
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[2] / "lichen" / "tests" / "schc_parity" / "gen_vectors.py"
+    spec = importlib.util.spec_from_file_location("schc_parity_gen_vectors", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_corpus(tmp_path: Path, vectors: list[dict]) -> Path:
+    path = tmp_path / "corpus.json"
+    path.write_text(json.dumps({"format_version": 2, "vectors": vectors}), encoding="utf-8")
+    return path
+
+
+def test_gen_vectors_accepts_canonical_corpus(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vectors = gen.load(VECTORS_DIR / "schc_compression.json")
+    header = gen.generate(vectors)
+    malformed = [v for v in vectors if v.get("category") == "malformed_input"]
+    assert malformed, "canonical corpus must keep malformed_input rows"
+    for vector in malformed:
+        assert str(vector["name"]) in header
+        assert "'true' if 'expect_error'" not in header  # generated, not template
+
+
+def test_gen_vectors_rejects_non_string_expect_error(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    base = {
+        "name": "row",
+        "category": "malformed_input",
+        "packet": "deadbeef",
+    }
+    for bad in (False, None, "", 1):
+        vector = dict(base, expect_error=bad)
+        with pytest.raises(ValueError, match="expect_error must be a nonempty snake_case string"):
+            gen.load(_write_corpus(tmp_path, [vector]))
+
+
+def test_gen_vectors_accepts_string_expect_error(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vector = {
+        "name": "row",
+        "category": "malformed_input",
+        "packet": "deadbeef",
+        "expect_error": "not_ipv6",
+        "description": "short garbage",
+    }
+    header = gen.generate([vector])  # generate() maps presence-as-bool for
+    # string expect_error; load()-level acceptance is covered by the
+    # canonical corpus test above, which contains string expect_error rows.
+    assert "true }" in header
+
+
+def test_gen_vectors_rejects_missing_expect_error_on_malformed_input(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vector = {"name": "row", "category": "malformed_input", "packet": "deadbeef"}
+    with pytest.raises(ValueError, match="field mismatch"):
+        gen.load(_write_corpus(tmp_path, [vector]))
 
 
 @pytest.mark.parametrize("name,vector", _rule_versioning_cases())
@@ -2780,6 +2861,8 @@ def test_rpl_messages_vector(name: str, vector: dict) -> None:
         elif expect_error == "truncation":
             with pytest.raises((PacketError, Icmpv6Error, UdpError)):
                 IPv6Packet.from_bytes(wire)
+        else:
+            pytest.fail(f"{name}: unhandled malformed expect_error {expect_error!r}")
         return
 
     msg_type = vector["type"]
@@ -3013,6 +3096,9 @@ def test_rpl_messages_vector(name: str, vector: dict) -> None:
         assert len(options) == len(expected), f"{name}: options count"
         for i, opt in enumerate(options):
             assert opt.type == expected[i]["type"], f"{name}: option {i} type"
+
+    else:
+        pytest.fail(f"{name}: unhandled rpl_messages msg_type {msg_type!r}")
 
 
 def _loadng_messages_cases():
@@ -4878,10 +4964,14 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             expected = Ack(rule_id, window, complete=True).to_bytes()
             assert wire == expected, f"{name}: ACK complete mismatch"
 
+    else:
+        pytest.fail(f"{name}: unknown schc_adaptation category {category!r}")
+
 
 def test_schc_adaptation_vector_coverage() -> None:
     """Verify schc_adaptation.json covers all required categories."""
-    cases = _schc_adaptation_cases()
+    doc = _load("schc_adaptation.json")
+    cases = [(v["name"], v) for v in doc["vectors"]]
     categories = {vector["category"] for _, vector in cases}
     expected = {
         "rejection",
@@ -4899,6 +4989,51 @@ def test_schc_adaptation_vector_coverage() -> None:
     }
     missing = expected - categories
     assert not missing, f"Missing categories: {missing}"
+
+    # Per-category count guard shared with the Rust suite: the committed
+    # expected_counts table is the cross-implementation oracle, so a row
+    # added or mis-categorized in the JSON fails loudly in both suites.
+    # Key semantics mirror the Rust counters: "p0" counts P0-priority rows,
+    # "endpoint_direction" counts category fragmentation_endpoint_direction,
+    # and "duplicate_idempotence" counts the receive_tile_0_then_tile_0_again
+    # single_active scenario.
+    declared = dict(doc["expected_counts"])
+    counted = Counter(vector["category"] for _, vector in cases)
+    p0_declared = declared.pop("p0", None)
+    if p0_declared is not None:
+        p0_counted = sum(1 for _, vector in cases if vector.get("priority") == "P0")
+        assert p0_counted == p0_declared, (
+            f"priority P0: counted {p0_counted}, expected_counts declares {p0_declared}"
+        )
+    endpoint_direction_declared = declared.pop("endpoint_direction", None)
+    if endpoint_direction_declared is not None:
+        counted["fragmentation_endpoint_direction"] = counted.pop(
+            "fragmentation_endpoint_direction", 0
+        )
+        assert (
+            counted["fragmentation_endpoint_direction"] == endpoint_direction_declared
+        ), (
+            f"category fragmentation_endpoint_direction: "
+            f"counted {counted['fragmentation_endpoint_direction']}, "
+            f"expected_counts declares {endpoint_direction_declared}"
+        )
+    duplicate_declared = declared.pop("duplicate_idempotence", None)
+    if duplicate_declared is not None:
+        duplicate_counted = sum(
+            1
+            for _, vector in cases
+            if vector.get("category") == "single_active"
+            and vector.get("scenario") == "receive_tile_0_then_tile_0_again"
+        )
+        assert duplicate_counted == duplicate_declared, (
+            f"duplicate_idempotence: counted {duplicate_counted}, "
+            f"expected_counts declares {duplicate_declared}"
+        )
+    for category, count in declared.items():
+        assert counted.get(category, 0) == count, (
+            f"category {category}: counted {counted.get(category, 0)}, "
+            f"expected_counts declares {count}"
+        )
 
     # Verify P0 vectors are present
     p0_vectors = [v for _, v in cases if v.get("priority") == "P0"]

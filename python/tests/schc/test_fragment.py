@@ -44,6 +44,7 @@ from lichen.schc.fragment import (
     MAX_SENDER_SESSION_RECORDS,
     MIC_LENGTH,
     RETRANSMISSION_TIMEOUT_SECONDS,
+    RULE_IDS,
     SESSION_IDLE_TIMEOUT_SECONDS,
     TILE_SIZE,
     WINDOW_SIZE,
@@ -2009,6 +2010,36 @@ def test_fragment_sender_validates_before_allocation_and_seals_wire_once() -> No
                 Priority.BULK,
             )
         )
+
+
+def test_link_fragment_dispatch_and_guard_track_rule_ids_constant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = SessionHarness(-1)
+    harness.authorize_schc()
+    probe_rule = RULE_IDS[1]
+
+    # Default constant: a raw fragment dispatch enters the fragment branch,
+    # which rejects non-Extended destinations before anything else.
+    with pytest.raises(ValueError, match="Extended-unicast destination"):
+        asyncio.run(harness.local_link.send(bytes([probe_rule, 0x01])))
+
+    # Default constant: a SCHC-wrapped body with a fragment rule ID is
+    # rejected as a double wrap.
+    with pytest.raises(ValueError, match="raw link dispatches"):
+        asyncio.run(harness.local_link.send(wrap_schc_payload(bytes([probe_rule, 0x00]))))
+
+    # Narrow the constant: both the guard and the dispatch branch follow it
+    # instead of hardcoded literals.
+    monkeypatch.setattr("lichen.schc.fragment.RULE_IDS", (0x7A,))
+    try:
+        asyncio.run(harness.local_link.send(bytes([probe_rule, 0x01])))
+    except ValueError as exc:
+        assert "Extended-unicast destination" not in str(exc)
+    try:
+        asyncio.run(harness.local_link.send(wrap_schc_payload(bytes([probe_rule, 0x00]))))
+    except ValueError as exc:
+        assert "raw link dispatches" not in str(exc)
 
 
 @pytest.mark.parametrize(
