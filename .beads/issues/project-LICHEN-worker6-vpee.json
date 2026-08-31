@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T02:11:47.333116Z",
   "labels": [
-    "tdma"
+    "tdma",
+    "zephyr"
   ],
   "dependencies": [
     {

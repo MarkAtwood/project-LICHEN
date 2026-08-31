@@ -12,6 +12,7 @@
   "labels": [
     "codereview",
     "documentation",
-    "test_edhoc.py"
+    "test_edhoc.py",
+    "zephyr"
   ]
 }
