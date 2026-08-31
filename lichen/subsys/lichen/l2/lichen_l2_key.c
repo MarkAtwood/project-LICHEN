@@ -87,6 +87,19 @@ void lichen_l2_set_gradient_table(struct lichen_gradient_table *table)
 }
 #endif
 
+/* Boot-epoch latch (RAM): the FIRST load_key of a boot adopts its random
+ * epoch as the boot epoch; later loads are pinned UP to it (never down) so
+ * the epoch never moves backward within a boot. Without this, each
+ * load_key's fresh random epoch can move the epoch backward (e.g.
+ * 177 -> 142), which replay-window holders correctly reject as stale.
+ * Only used in non-REPLAY_PERSIST builds: with replay persistence the
+ * settings-derived boot epoch is pinned by the branch below.
+ * (project-LICHEN-worker6-07s1) */
+#if !defined(CONFIG_LICHEN_LINK_REPLAY_PERSIST)
+static uint8_t s_boot_epoch;
+static bool s_boot_epoch_valid;
+#endif
+
 int lichen_l2_load_key(const uint8_t seed[32], uint8_t pubkey[32])
 {
 	int ret;
@@ -148,6 +161,21 @@ int lichen_l2_load_key(const uint8_t seed[32], uint8_t pubkey[32])
 	}
 	if (ret == 0) {
 		ret = lichen_link_load_key(&link_ctx, seed);
+	}
+	if (ret == 0) {
+		/* Pin the boot epoch on every load (see s_boot_epoch latch):
+		 * the first load adopts its random epoch; later loads are
+		 * pinned UP to it (never down — a higher ctx epoch means the
+		 * seq-wrap advanced it, and restoring a lower epoch would
+		 * mute the node and reuse consumed tuples). */
+		if (!s_boot_epoch_valid) {
+			s_boot_epoch = link_ctx.epoch;
+			s_boot_epoch_valid = true;
+		} else if (link_ctx.epoch < s_boot_epoch) {
+			ret = lichen_link_set_epoch(&link_ctx, s_boot_epoch);
+		} else if (link_ctx.epoch > s_boot_epoch) {
+			s_boot_epoch = link_ctx.epoch;
+		}
 	}
 #endif
 	if (ret == 0) {
