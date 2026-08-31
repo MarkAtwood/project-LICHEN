@@ -21,7 +21,10 @@
 #include "meshcore_adapter.h"
 
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 
 #define WORKER_STACK_SIZE 1024

@@ -422,6 +422,36 @@
       "description": "Reserved-scope multicast destination is invalid on a transmitted link",
       "packet": "60000000000c114020010db8000000000000000000000001ff0f000000000000000000000000000113881389000ccd2970696e67",
       "expect_error": "invalid_destination_scope"
+    },
+    {
+      "name": "rule255_dual_defect_mcast_source_zero_checksum_malformed",
+      "category": "malformed_input",
+      "description": "Multicast source with zero UDP checksum (structure and address both invalid)",
+      "packet": "60000000000c1140ff02000000000000000000000000000120010db800000000000000000000000113881389000c000070696e67",
+      "expect_error": "dual_defect"
+    },
+    {
+      "name": "rule255_dual_defect_loopback_source_bad_checksum_malformed",
+      "category": "malformed_input",
+      "description": "Loopback source with corrupt UDP checksum (structure and address both invalid)",
+      "packet": "60000000000c11400000000000000000000000000000000120010db800000000000000000000000113881389000c333970696e67",
+      "expect_error": "dual_defect"
+    },
+    {
+      "name": "rule255_rx_bad_checksum_malformed",
+      "category": "malformed",
+      "description": "Rule 255 RX: UDP checksum must be validated on the fallback payload",
+      "rule_id": 255,
+      "compressed": "ff60000000000c1140fe800000000000000000000000000001fe80000000000000000000000000000213881389000c03ef70696e67",
+      "expect_error": "invalid_udp_checksum"
+    },
+    {
+      "name": "rule255_rx_fragment_header_malformed",
+      "category": "malformed",
+      "description": "Rule 255 RX: IPv6 Fragment headers are malformed in the fallback payload",
+      "rule_id": 255,
+      "compressed": "ff60000000000c2c40fe800000000000000000000000000001fe80000000000000000000000000000213881389000cfcef70696e67",
+      "expect_error": "unsupported_fragment_header"
     }
   ]
 }

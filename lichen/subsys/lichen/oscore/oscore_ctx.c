@@ -20,7 +20,10 @@
 #include <tinycrypt/constants.h>
 #include <tinycrypt/sha256.h>
 
-LOG_MODULE_DECLARE(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
+/* This always-compiled file registers the shared "oscore" log module;
+ * coap_oscore.c (conditionally compiled under CONFIG_COAP_SERVER) and the
+ * other oscore files declare it. */
+LOG_MODULE_REGISTER(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
 
 /* Context storage */
 struct oscore_ctx s_contexts[CONFIG_LICHEN_OSCORE_MAX_CONTEXTS];

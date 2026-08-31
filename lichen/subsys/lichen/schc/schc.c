@@ -514,11 +514,23 @@ static const struct schc_rule lichen_schc_rules[] = {
 	},
 };
 
+/* Rule 255 RX payload validator: the fallback payload must be a complete,
+ * structurally valid IPv6 packet — structure and checksums only, NO endpoint
+ * address policy (canonical TX/RX split, spec/03-adaptation.md).  Mirrors
+ * Rust decode_rule255 (validate_full_ipv6_structure) and Python
+ * decode_rule255 (validate_full_ipv6). */
+static int lichen_rule255_validate_payload(const uint8_t *payload,
+					   size_t payload_len)
+{
+	return validate_ipv6_transport_lengths(payload, payload_len);
+}
+
 static const struct schc_profile lichen_schc_profile = {
 	.rules = lichen_schc_rules,
 	.rule_count = sizeof(lichen_schc_rules) / sizeof(lichen_schc_rules[0]),
 	.uncompressed_rule_id = SCHC_RULE_UNCOMPRESSED,
 	.use_uncompressed_fallback = true,
+	.validate_payload = lichen_rule255_validate_payload,
 };
 
 /* ─── public API ──────────────────────────────────────────────────────────── */
@@ -583,5 +595,6 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 int lichen_schc_decompress(const uint8_t *data, size_t data_len,
 			   uint8_t *out, size_t out_len)
 {
-	return schc_decompress(&lichen_schc_profile, data, data_len, out, out_len);
+	return schc_decompress(&lichen_schc_profile, data, data_len,
+			       out, out_len);
 }

@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "schc_internal.h"
+
 /* ─── hex helpers ─────────────────────────────────────────────────────────── */
 
 static int hex_to_byte(char c)
@@ -213,6 +215,8 @@ static int test_uncompressed_fallback(void)
 	uint8_t packet[4] = { 0xde, 0xad, 0xbe, 0xef };
 	uint8_t comp_buf[8];
 	uint8_t decomp_buf[8];
+	uint8_t big_comp_buf[128];
+	uint8_t big_decomp_buf[128];
 
 	int n = lichen_schc_compress(packet, 4, comp_buf, sizeof(comp_buf));
 	if (n != 5) {
@@ -229,12 +233,52 @@ static int test_uncompressed_fallback(void)
 	}
 
 	int m = lichen_schc_decompress(comp_buf, n, decomp_buf, sizeof(decomp_buf));
-	if (m != 4) {
-		printf("  FAIL: uncompressed decompress length (got %d, expected 4)\n", m);
+	/* Rule 255 RX validates the payload as a complete IPv6 packet, so a
+	 * non-IPv6 payload must be rejected at decompress even though the
+	 * compress side still emits it (worker-6-7v5f fixes the emit). */
+	if (m >= 0) {
+		printf("  FAIL: non-IPv6 rule255 payload decoded (%d)\n", m);
 		return 0;
 	}
-	if (memcmp(decomp_buf, packet, 4) != 0) {
-		printf("  FAIL: uncompressed decompress mismatch\n");
+
+	/* Legitimate fallback: a valid IPv6 packet whose ports match no rule
+	 * round-trips byte-preserving. */
+	uint8_t v6[52];
+	memset(v6, 0, sizeof(v6));
+	v6[0] = 0x60;
+	v6[5] = 12;
+	v6[6] = 17;
+	v6[7] = 64;
+	memcpy(&v6[8], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+		      "\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&v6[24], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			"\x00\x00\x00\x00\x00\x00\x00\x02", 16);
+	v6[40] = 0x13;
+	v6[41] = 0x88; /* src port 5000: matches no rule */
+	v6[42] = 0x13;
+	v6[43] = 0x89; /* dst port 5001 */
+	v6[44] = 0;
+	v6[45] = 12;
+	memcpy(&v6[48], "ping", 4);
+	uint16_t checksum = 0;
+	if (udp_checksum(&v6[8], &v6[24], 5000, 5001, &v6[48], 4,
+			 &checksum) != SCHC_OK) {
+		printf("  FAIL: udp_checksum helper\n");
+		return 0;
+	}
+	v6[46] = (uint8_t)(checksum >> 8);
+	v6[47] = (uint8_t)(checksum & 0xff);
+
+	n = lichen_schc_compress(v6, sizeof(v6), big_comp_buf,
+				 sizeof(big_comp_buf));
+	if (n != (int)sizeof(v6) + 1 || big_comp_buf[0] != 255) {
+		printf("  FAIL: valid fallback emit (got %d)\n", n);
+		return 0;
+	}
+	m = lichen_schc_decompress(big_comp_buf, n, big_decomp_buf,
+				   sizeof(big_decomp_buf));
+	if (m != (int)sizeof(v6) || memcmp(big_decomp_buf, v6, sizeof(v6)) != 0) {
+		printf("  FAIL: valid fallback round-trip (got %d)\n", m);
 		return 0;
 	}
 
@@ -434,6 +478,17 @@ static int test_rule255_ingress_profile_ceiling(void)
 
 	memset(data, 0x41, sizeof(data));
 	data[0] = SCHC_RULE_UNCOMPRESSED;
+	/* Payload must be a valid IPv6 packet (Rule 255 RX contract): build a
+	 * TCP packet (no UDP checksum needed) filling the ceiling exactly.
+	 * data[1..41] is the IPv6 header, payload 22553 - 40 = 22513 bytes. */
+	data[1] = 0x60;
+	data[5] = (uint8_t)((22553u - 40u) >> 8);
+	data[6] = (uint8_t)((22553u - 40u) & 0xff);
+	data[7] = 6; /* next header: TCP */
+	memcpy(&data[9], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			"\x00\x00\x00\x00\x00\x00\x00\x01", 16);
+	memcpy(&data[25], "\xfe\x80\x00\x00\x00\x00\x00\x00"
+			  "\x00\x00\x00\x00\x00\x00\x00\x02", 16);
 	memset(sentinel, 0xA5, sizeof(sentinel));
 
 	int m = lichen_schc_decompress(data, SCHC_FRAGMENT_MAX_PACKET_SIZE,

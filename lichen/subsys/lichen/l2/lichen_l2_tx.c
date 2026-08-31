@@ -151,7 +151,18 @@ static int lichen_l2_send_inner(struct net_if *iface, struct net_pkt *pkt)
 	if (ret < 0) {
 		LOG_ERR("lichen_l2: TX frame build failed: %s (%d)",
 			lichen_link_strerror(ret), ret);
-		crash_info_store(CRASH_STATE_CORRUPTION, __LINE__, (uint32_t)(-ret));
+		/* Caller-input rejections (SCHC policy/structural via
+		 * -LICHEN_ESCHC, unkeyed state via -ENOKEY, packet too large
+		 * for the link frame via -EMSGSIZE) are operational
+		 * conditions, not corruption: a datagram the profile refuses
+		 * to encode or that cannot fit a link frame must not be
+		 * recorded as a crash reason.  Everything else keeps the
+		 * corruption record. */
+		if (ret != -LICHEN_ESCHC && ret != -ENOKEY &&
+		    ret != -EMSGSIZE) {
+			crash_info_store(CRASH_STATE_CORRUPTION, __LINE__,
+					 (uint32_t)(-ret));
+		}
 		k_mutex_unlock(&tx_mutex);
 		return lichen_l2_to_zephyr_errno(ret);
 	}
