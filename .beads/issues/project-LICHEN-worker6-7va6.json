@@ -10,5 +10,8 @@
   "created_at": "2026-08-24T15:52:17.103415Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:38:58.543714Z",
-  "started_at": "2026-08-24T15:52:22.001584Z"
+  "started_at": "2026-08-24T15:52:22.001584Z",
+  "labels": [
+    "rust"
+  ]
 }
