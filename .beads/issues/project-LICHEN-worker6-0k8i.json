@@ -9,6 +9,10 @@
   "created_at": "2026-08-30T03:57:17.298613Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T03:57:17.298613Z",
+  "labels": [
+    "gateway",
+    "tdma"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-0k8i",

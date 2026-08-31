@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-24vh",
+  "title": "lichen-schc link_layer_integration test target does not compile: sb0b-family APIs missing",
+  "description": "Pre-existing on beads-worker-7 (verified with the delta stashed): cargo test -p lichen-schc --test link_layer_integration fails with 12 errors - unresolved imports lichen_link::identity / lichen_link::link_layer / lichen_link::Seed / lichen_schc::link, no AuthenticatedPeerSchcContext::from_authenticated_dio_frame, no FragmentationPolicy::accept_peer, no AuthenticatedFragmentReceiver::new. The test file (merged in 660b9bf3bf) depends on sb0b-family lib APIs that live on unmerged worker branches. Blocks cargo test -p lichen-schc from running that target; every other lichen-schc target passes. Fix: land the sb0b API surface (owner Mark Atwood per sb0b) or gate the test target until the APIs exist.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:46:28.261168272Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T02:46:28.261168272Z",
+  "labels": [
+    "l2",
+    "rust",
+    "schc",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-24vh",
+      "depends_on_id": "project-LICHEN-worker6-ly9b",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:46:28.367420399Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

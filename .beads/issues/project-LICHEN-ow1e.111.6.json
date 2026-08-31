@@ -13,7 +13,8 @@
     "lichen-rpl",
     "owner-reserved",
     "review",
-    "workspace-api"
+    "workspace-api",
+    "networking"
   ],
   "dependencies": [
     {

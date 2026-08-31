@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-89z7",
+  "title": "RH3 policy shared laxity: Reserved octets 6-7 and non-canonical Hdr Ext Len unchecked in C, Python, and Rust alike",
+  "description": "P3, found by worker5 subagent correctness pass of project-LICHEN-worker6-hahk. RFC 6554 s3 reserves RH3 octets 6-7 (16 bits after CmprI/CmprE/Pad) but all three implementations check only octets 4-5: C schc_helpers.c:432 (packet[offset+4]==0 \u0026\u0026 packet[offset+5]==0), Python headers.py:128 (data[2],data[3] where data = packet[offset+2:]), Rust codec.rs:301-310. A packet with nonzero Reserved octets 6-7 is accepted everywhere; functionally harmless (addresses start at octet 8; upper_destination read end-16 unaffected). Related laxity: address count uses floor division ((ext_len-8)/16 in C :436, (len(data)-6)//16 in Python :131, same in Rust :311), so a non-canonical Hdr Ext Len (e.g. HEL=3, 1 address + 8 trailing octets) is accepted with upper_destination landing on address-low-half + trailing garbage; RFC 6554 requires HEL == 2n when CmprI=CmprE=Pad=0, so HEL=3 is not expressible. Sender/receiver stay checksum-consistent (both use last-16), so this is RFC-conformance laxity, not a parity divergence. Fix needs COORDINATED changes in all three implementations plus new vectors (reserved-octets-nonzero, hel-non-canonical); C matches the references exactly today so no cross-impl break - decide whether njdx's canonical policy intended full Reserved-zero and tighten everywhere or document the shared laxity.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:40:04.579904135Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T04:05:18.835581633Z",
+  "started_at": "2026-08-31T02:10:15.594997215Z",
+  "closed_at": "2026-08-31T04:05:18.835581633Z",
+  "close_reason": "Re-close: store merge resurrected pre-close state (same as hahk). The close stands with full evidence: RH3 canonical form enforced across C/python/rust (reserved octets 6-7 + (ext_len-8)%16), 3 corpus vectors incl. new positive two-address fallback, commit fd3386b342, 3x reviewer passes PASS (formula recompute, torn-vector fix, multi-address coverage), bdac closed as false alarm. See prior close reason for full detail.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-89z7",
+      "depends_on_id": "project-LICHEN-worker6-hahk",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:40:04.703641125Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

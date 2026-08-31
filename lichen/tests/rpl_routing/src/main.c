@@ -27,7 +27,8 @@ static uint8_t dodag[16];
 static void address(uint8_t out[16], uint8_t id)
 {
 	memset(out, 0, 16);
-	out[0] = 0xfd;
+	/* Native 0200::/8 addresses (fd00:: ULA dropped per zt3c.7). */
+	out[0] = 0x02;
 	out[15] = id;
 }
 

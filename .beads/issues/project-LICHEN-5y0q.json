@@ -10,7 +10,8 @@
   "updated_at": "2026-08-28T03:42:09.076981Z",
   "started_at": "2026-07-23T04:19:08.354229752Z",
   "labels": [
-    "codereview"
+    "codereview",
+    "link"
   ],
   "dependencies": [
     {

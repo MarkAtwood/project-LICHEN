@@ -12,6 +12,7 @@
   "updated_at": "2026-08-24T06:35:29.868783Z",
   "started_at": "2026-08-24T06:30:20.705149Z",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "zephyr"
   ]
 }

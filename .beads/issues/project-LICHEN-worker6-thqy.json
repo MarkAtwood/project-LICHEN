@@ -12,6 +12,7 @@
   "updated_at": "2026-08-30T16:58:54.161125Z",
   "started_at": "2026-08-16T18:47:10.969255Z",
   "labels": [
-    "review"
+    "review",
+    "rust"
   ]
 }

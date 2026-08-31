@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-r8ti",
+  "title": "gateway oscore recipient store: deleting BOTH state and floor files resets the replay window (dual-FS compromise residual)",
+  "description": "Found by 3x codereview of the recipient-store heal (9liz), security pass. gateway.rs:447-458: (None,None) is interpreted as 'never seen' and returns empty, so an attacker who deletes both recipient-\u003chex\u003e (state FS) and recipient-\u003chex\u003e-floor (floor FS) for a previously-initialized context resets the replay window; subsequent genuine captured ciphertexts are accepted in ascending PIV order (capture-history replay incl. re-executable GCP commands). Every PARTIAL attack fails closed (delete state only -\u003e Corrupt; stale state vs floor -\u003e Corrupt; swaps/forges/truncates -\u003e Corrupt; heal cannot elevate trust). Production requires the floor root on a different filesystem (verify_independent_rollback_root dev() check, lichend.rs:1408-1425), so full reset needs compromise of two independent rollback domains - the inherent limit of software-only anti-rollback (no monotonic counter), RFC 8613 s7.5-class residual. Action: document the residual explicitly in the threat-model section of the gateway docs; consider optionally recording a 'context ever-initialized' tombstone on the floor FS so single-FS deletion plus independent-FS state deletion cannot recreate the (None,None) fresh appearance.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:05:00.794061636Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:05:00.794061636Z",
+  "labels": [
+    "codereview",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-r8ti",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:05:00.912947004Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

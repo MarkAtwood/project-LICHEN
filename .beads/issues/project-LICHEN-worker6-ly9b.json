@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ly9b",
+  "title": "C/Rust SCHC compress profile-limit divergence: C bounds raw packet, Rust bounds encoded output",
+  "description": "P1 cross-implementation contract divergence exposed by project-LICHEN-worker6-gswp. C lichen_schc_compress (lichen/subsys/lichen/schc/schc.c:538) rejects raw pkt_len \u003e SCHC_FRAGMENT_MAX_PACKET_SIZE (22554 = 126*179, the fragmenter reassembly bound) BEFORE dispatch. Rust compress (rust/lichen-schc/src/codec.rs:2159) has no raw bound; only the ENCODED output is limited (enforce_encoded_profile_limit codec.rs:2287-2294); raw is bounded at decompress (codec.rs:2270). Empirical: raw = 22555 rule5-shaped -\u003e C returns SCHC_ERR_BUFFER_TOO_SMALL, Rust accepts Ok(22526). Rust's own tests ASSERT the Rust verdicts (rule5_compression.rs:150-166 tail 22531, rule6_compression.rs:152-170 tail 22517 -\u003e raw 22569 = MAX+15 accepted with encoded == MAX) and pass; the C tests now assert C verdicts for the same wire inputs. Opposite verdicts in the band raw in (22554, 22583]. spec/03 does not state explicitly whether the 22554 ceiling bounds the raw packet or the encoded form. Needs a tracked spec decision, then fix ONE implementation + its tests on both sides; until then the band is an interop hazard (same wire input, opposite verdicts). Related: the C-side tests were corrected this round (gswp) to pin the C raw-bound contract; the Rust tests pin the encoded-bound contract.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T02:19:42.479599688Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T02:46:54.79142781Z",
+  "started_at": "2026-08-31T02:22:00.610899655Z",
+  "closed_at": "2026-08-31T02:46:54.79142781Z",
+  "close_reason": "Resolved per the tracked spec decision: SCHC_FRAGMENT_MAX_PACKET_SIZE (22554) bounds the RAW packet in BOTH directions for every rule including Rule 255 (it is the fragmenter's reassembly buffer - a datagram the receiver cannot reassemble is undeliverable regardless of compression). Documented in spec/03-adaptation.md as 'Profile size ceiling (canonical raw-packet bound)' adjacent to the TX/RX endpoint-policy split. Implementation changes: (1) Rust compress() and encode_rule255() gained the raw-packet guard (BufferTooSmall) mirroring C lichen_schc_compress; Rust decompress keeps its encoded-input bound. (2) Python compress_packet gained the same raw guard (headers.py; encode_rule255 already raw-bounded at MAX_PACKET_SIZE-1). (3) Tests aligned to the new contract: Rust rule5/rule6 integration boundary tests (raw == MAX accepts with encoded = raw - 29/-15, raw == MAX+1 rejects BufferTooSmall) and four codec lib tests (mqtt_sn x2, coap_rule0, icmpv6_rule2) rewritten from the encoded-bound arithmetic (raw MAX+15..+29) to the raw-bound arithmetic with empirical encoded sizes (rule0 marker byte excluded, encoded = raw - 29); overlong-decompress checks now resize past the ceiling. Python rule1-6 + headers_rules boundary tests rewritten with measured per-tail-byte raw formulas, and the rule6_decompression MAX-encoded round-trip now asserts the raw-bound rejection on re-compress (its old premise - decompress MAX-encoded then recompress identical - is impossible under the raw bound since the restored datagram is MAX+15). Validation: rust lichen-schc lib 81 green, rule5/6/adaptation/shared targets green (link_layer_integration target pre-broken at HEAD without this delta - filed 24vh); python tests/schc 1378 green; C suites untouched and green. Follow-up already tracking the remaining encoded-vs-raw nuance for fragment-layer limits: none needed beyond ly9b's spec text; the Rust tests' encoded == raw-29/-15 relationships are pinned empirically.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ly9b",
+      "depends_on_id": "project-LICHEN-worker6-gswp",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T02:19:42.570889122Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

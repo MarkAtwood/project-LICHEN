@@ -11,6 +11,9 @@
   "created_by": "AI Agent",
   "updated_at": "2026-08-28T03:44:17.49394Z",
   "started_at": "2026-07-25T02:56:58.742799643Z",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-fmee",

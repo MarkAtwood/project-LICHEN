@@ -10,5 +10,8 @@
   "created_at": "2026-07-23T05:39:05.194103587Z",
   "created_by": "AI Agent",
   "updated_at": "2026-08-30T17:34:12.567583Z",
-  "started_at": "2026-07-24T16:15:29.995076531Z"
+  "started_at": "2026-07-24T16:15:29.995076531Z",
+  "labels": [
+    "yggdrasil"
+  ]
 }

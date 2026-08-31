@@ -13,7 +13,8 @@
   "close_reason": "Implemented: Added /status/queues CoAP endpoint with queue_stats struct per spec (status_cbor.h/c), CBOR encoder, and observable CoAP resource (main.c). Returns placeholder zeros pending tx_queue integration - filed project-LICHEN-4fx0 for that.",
   "labels": [
     "owner-reserved",
-    "local-ok"
+    "local-ok",
+    "coap"
   ],
   "dependencies": [
     {

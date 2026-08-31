@@ -3,12 +3,16 @@
   "title": "Cross-validate Rust provisioning against Python reference",
   "description": "After integration (.3-.6 complete), verify Rust BRProvisioningSession produces identical outputs to Python.\n\n## Reference\n- Python: python/src/lichen/crypto/provisioning.py (BRProvisioningSession)\n- Python tests: python/tests/crypto/test_provisioning.py\n\n## Validation\n1. Same EDHOC session with same seeds -\u003e same master secret\n2. Same plaintext seed -\u003e same encrypted payload\n3. Rust can decrypt Python-encrypted payloads and vice versa\n4. Error cases match (invalid payloads rejected identically)\n\n## Deliverable\nEither shared test vectors in test/vectors/provisioning.json, or a cross-call test that runs both implementations.",
   "status": "open",
-  "priority": 2,
+  "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T00:56:21.023526Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T00:56:21.023526Z",
+  "updated_at": "2026-08-31T05:16:52.133981066Z",
+  "labels": [
+    "python",
+    "rust"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-oeg6.7",

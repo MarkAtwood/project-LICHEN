@@ -450,6 +450,34 @@ static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len,
 	return SCHC_OK;
 }
 
+int validate_ipv6_address_policy(const uint8_t *packet)
+{
+	const uint8_t *src = &packet[SCHC_IPV6_SRC_OFFSET];
+	const uint8_t *dst = &packet[SCHC_IPV6_DST_OFFSET];
+
+	/* Emission endpoint address policy (spec/03-adaptation.md, "Endpoint
+	 * address policy (canonical TX/RX split)"): applies to every
+	 * in-profile transmitted packet, including the Rule 255 fallback for
+	 * version-6 packets.  The pre-IPv6 fallback in lichen_schc_compress
+	 * is tracked separately.  The receive path validates structure only
+	 * and MUST NOT apply this policy. */
+	if (is_unspecified(src) || is_loopback(src) || src[0] == 0xff ||
+	    is_ipv4_mapped(src)) {
+		return SCHC_ERR_INVALID_ENDPOINT;
+	}
+	if (is_unspecified(dst) || is_loopback(dst) || is_ipv4_mapped(dst)) {
+		return SCHC_ERR_INVALID_ENDPOINT;
+	}
+	if (dst[0] == 0xff) {
+		int scope = dst[1] & 0x0f;
+
+		if (scope < 2 || scope > 14) {
+			return SCHC_ERR_INVALID_ENDPOINT;
+		}
+	}
+	return SCHC_OK;
+}
+
 int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 {
 	size_t final_offset;

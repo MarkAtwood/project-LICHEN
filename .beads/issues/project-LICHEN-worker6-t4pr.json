@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-t4pr",
+  "title": "coap_keys_settings: BUILD_ASSERT guard for MAX_ENTRIES vs 2-digit record keys",
+  "description": "Edge-case review finding (u4fr round): parse_record_key() hard-codes exactly two entry digits (coap_keys_settings.c:141-145) and rejects e100+; make_key() uses %02d (coap_keys_settings.c:~292) which silently widens past two digits. If CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES were ever raised above 100, saves would write records that fail load with -EBADMSG on every boot. Latent only: Kconfig range is 4 16 (lichen/subsys/lichen/coap/Kconfig ~line 258), so unreachable today. Cheap insurance: BUILD_ASSERT(CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES \u003c= 100) near make_key/parse, or a Kconfig-level comment. Not urgent.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:18:24.070560489Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T05:18:24.070560489Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-t4pr",
+      "depends_on_id": "project-LICHEN-worker6-u4fr",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:18:24.196602272Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

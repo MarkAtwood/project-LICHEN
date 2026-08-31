@@ -2301,7 +2301,10 @@ fn enforce_encoded_profile_limit(length: usize) -> Result<usize, SchcError> {
 #[cfg(test)]
 mod tests {
     extern crate std;
+    use std::str::FromStr;
     use std::{vec, vec::Vec};
+
+    use core::str::FromStr as _;
 
     use super::*;
 

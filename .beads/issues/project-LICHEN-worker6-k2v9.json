@@ -1,7 +1,7 @@
 {
   "id": "project-LICHEN-worker6-k2v9",
   "title": "[review] lora_l2_tx.c:354 ignores lichen_csma_tx_complete result and passes raw lora_send ret (positive) to it",
-  "description": "P2, discovered-from worker6-c4m7 (same wedge class). lichen/subsys/lichen/l2/lora_l2_tx.c:354 does (void)lichen_csma_tx_complete(&lora_data.csma, ret) where ret is the raw lora_send() result, which can be POSITIVE (bytes sent). tx_complete rejects tx_status>0 with -EINVAL BEFORE csma_try_lock (csma.c:216), so the machine stays in LICHEN_CSMA_TX_ALLOWED -> subsequent acquire calls return -EALREADY forever, same self-wedge as the c4m7 CCA gate bug, on the radio-boundary CSMA path. Also ignores CANCELLED (authorizes nothing here but the machine ends CANCELLED — actually safe phase-wise) and -EBUSY/-EPROTO (strand TX_ALLOWED). Suggested fix: normalize status (ret < 0 ? ret : 0), check the result like link_cca.c now does, and consider the same in-lock fail-closed validation for tx_complete in csma.c that c4m7 added for cad_complete (needs design care: marking ERROR after a physically successful TX is wrong bookkeeping; normalize at the caller). File is outside the c4m7 task allowlist, so tracked here.",
+  "description": "P2, discovered-from worker6-c4m7 (same wedge class). lichen/subsys/lichen/l2/lora_l2_tx.c:354 does (void)lichen_csma_tx_complete(\u0026lora_data.csma, ret) where ret is the raw lora_send() result, which can be POSITIVE (bytes sent). tx_complete rejects tx_status\u003e0 with -EINVAL BEFORE csma_try_lock (csma.c:216), so the machine stays in LICHEN_CSMA_TX_ALLOWED -\u003e subsequent acquire calls return -EALREADY forever, same self-wedge as the c4m7 CCA gate bug, on the radio-boundary CSMA path. Also ignores CANCELLED (authorizes nothing here but the machine ends CANCELLED — actually safe phase-wise) and -EBUSY/-EPROTO (strand TX_ALLOWED). Suggested fix: normalize status (ret \u003c 0 ? ret : 0), check the result like link_cca.c now does, and consider the same in-lock fail-closed validation for tx_complete in csma.c that c4m7 added for cad_complete (needs design care: marking ERROR after a physically successful TX is wrong bookkeeping; normalize at the caller). File is outside the c4m7 task allowlist, so tracked here.",
   "status": "open",
   "priority": 2,
   "issue_type": "bug",
@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T17:41:29.552741Z",
   "labels": [
-    "local-ok"
+    "local-ok",
+    "zephyr"
   ],
   "dependencies": [
     {

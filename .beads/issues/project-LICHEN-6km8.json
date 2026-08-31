@@ -12,5 +12,8 @@
   "updated_at": "2026-08-28T03:44:33.217451Z",
   "started_at": "2026-07-22T16:10:00.023835591Z",
   "closed_at": "2026-07-22T16:10:00.464076729Z",
-  "close_reason": "Fixed CCP coap rpl bounds init style per rules; lints/tests passed; no test changes; parallel subagents used; init graph followed; no comments added"
+  "close_reason": "Fixed CCP coap rpl bounds init style per rules; lints/tests passed; no test changes; parallel subagents used; init graph followed; no comments added",
+  "labels": [
+    "coap"
+  ]
 }

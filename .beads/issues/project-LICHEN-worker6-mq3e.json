@@ -10,5 +10,8 @@
   "created_at": "2026-08-24T14:14:57.368611Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:39:45.557555Z",
-  "started_at": "2026-08-24T14:15:02.785144Z"
+  "started_at": "2026-08-24T14:15:02.785144Z",
+  "labels": [
+    "coap"
+  ]
 }

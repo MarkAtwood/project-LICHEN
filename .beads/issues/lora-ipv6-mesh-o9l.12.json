@@ -8,6 +8,12 @@
   "created_at": "2026-08-28T14:55:20.448343Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:55:20.448343Z",
+  "labels": [
+    "l2",
+    "oscore",
+    "security",
+    "human-only"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-o9l.12",

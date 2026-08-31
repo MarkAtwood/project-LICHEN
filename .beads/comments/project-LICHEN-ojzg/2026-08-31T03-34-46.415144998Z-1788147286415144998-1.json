@@ -1,0 +1,7 @@
+{
+  "id": "1788147286415144998-1",
+  "issue_id": "project-LICHEN-ojzg",
+  "author": "opencode-worker-1",
+  "text": "TIMEBOXED SLICE LANDED (commit ecd7daa9f5, beads-worker-1): (1) per-family Draft7 schemas for the two cited failures - compact_cot.schema.json (47 vectors; binary_hex allows empty for the 8 malformed-XML cases) and schnorr48.schema.json (16 vectors; seed/private_key optional for the 2 public-key-only verify vectors, message hex incl. empty per the fromhex consumer, note field) - both validate clean; (2) NEW test_all_vector_documents_have_explicit_schema_policy: discovers ALL 178 vector documents and requires an explicit policy per doc - passes shared schema.json (44 docs, of which 24 were previously NEVER schema-validated), validates against a per-family schema (13 docs), or is explicitly listed in _PENDING_EXPLICIT_SCHEMA_POLICY (121 committed names); drift check re-derives every doc's status independently and fails loudly on both directions (stale satisfied entries; new unlisted failing docs) - closing the silent-omission hole this bead was filed for. Remaining work (this bead stays open): write family schemas for the 121 pending families (multi-day; each schema must match its generator/consumers). Verification: test_vectors.py 781 pass (policy test ~12s). Review: 3x reviewer pass - correctness/security/robustness PASS (P3-1 hex-pattern for schnorr48 message applied; P3-3 enforcement-separation comment added; P3-2 perf note left as-is, tolerable).",
+  "created_at": "2026-08-31T03:34:46.415144998Z"
+}

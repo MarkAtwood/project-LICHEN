@@ -514,11 +514,23 @@ static const struct schc_rule lichen_schc_rules[] = {
 	},
 };
 
+/* Rule 255 RX payload validator: the fallback payload must be a complete,
+ * structurally valid IPv6 packet — structure and checksums only, NO endpoint
+ * address policy (canonical TX/RX split, spec/03-adaptation.md).  Mirrors
+ * Rust decode_rule255 (validate_full_ipv6_structure) and Python
+ * decode_rule255 (validate_full_ipv6). */
+static int lichen_rule255_validate_payload(const uint8_t *payload,
+					   size_t payload_len)
+{
+	return validate_ipv6_transport_lengths(payload, payload_len);
+}
+
 static const struct schc_profile lichen_schc_profile = {
 	.rules = lichen_schc_rules,
 	.rule_count = sizeof(lichen_schc_rules) / sizeof(lichen_schc_rules[0]),
 	.uncompressed_rule_id = SCHC_RULE_UNCOMPRESSED,
 	.use_uncompressed_fallback = true,
+	.validate_payload = lichen_rule255_validate_payload,
 };
 
 /* ─── public API ──────────────────────────────────────────────────────────── */
@@ -535,9 +547,12 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	if (out == NULL) {
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
-	if (pkt_len > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
-		return SCHC_ERR_BUFFER_TOO_SMALL;
-	}
+	/* No raw-input profile cap on the compression path: a compressible
+	 * packet may legitimately be larger than SCHC_FRAGMENT_MAX_PACKET_SIZE
+	 * (raw > compressed).  The 22554-byte ceiling applies to the encoded
+	 * SCHC packet — enforced here on the fallback paths and by the rule
+	 * compressors, and on the receive side by decompress; every write is
+	 * bounded by out_len. */
 
 	if (pkt_len < IPV6_HDR_LEN || ipv6_version(packet) != 6) {
 		/* Not IPv6 - uncompressed fallback */
@@ -546,6 +561,11 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}
 		size_t needed = 1 + pkt_len;
+		/* Mirrors Rust encode_rule255: the fallback's encoded output is
+		 * a complete SCHC packet and must fit the profile ceiling. */
+		if (needed > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
+			return SCHC_ERR_BUFFER_TOO_SMALL;
+		}
 		if (out_len < needed) {
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}
@@ -554,7 +574,17 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 		return (int)needed;
 	}
 
+	/* Structure/checksum validation first, then the emission endpoint
+	 * address policy — mirroring Rust validate_full_ipv6 (codec.rs:363-366)
+	 * and Python's TX wrappers (encode_rule255, headers.py:188-189) so
+	 * dual-defect packets report the same error class as Rust (Python
+	 * raises one SchcError class for both stages). */
 	ret = validate_ipv6_transport_lengths(packet, pkt_len);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = validate_ipv6_address_policy(packet);
 	if (ret < 0) {
 		return ret;
 	}
@@ -565,5 +595,6 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 int lichen_schc_decompress(const uint8_t *data, size_t data_len,
 			   uint8_t *out, size_t out_len)
 {
-	return schc_decompress(&lichen_schc_profile, data, data_len, out, out_len);
+	return schc_decompress(&lichen_schc_profile, data, data_len,
+			       out, out_len);
 }

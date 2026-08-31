@@ -135,7 +135,12 @@ def load(path: Path) -> list[dict[str, object]]:
 
 def generate(vectors: list[dict[str, object]]) -> str:
     lines = [
-        "/* Generated from test/vectors/schc_compression.json; do not edit. */",
+        "/* Generated from test/vectors/schc_compression.json; do not edit.",
+        " * Committed artifact and sole include source for the schc_parity suite.",
+        " * Regenerate after editing the JSON (from the repository root):",
+        " *   python3 lichen/tests/schc_parity/gen_vectors.py \\",
+        " *     test/vectors/schc_compression.json \\",
+        " *     lichen/tests/schc_parity/schc_parity_vectors.h */",
         "#ifndef LICHEN_SCHC_PARITY_VECTORS_H",
         "#define LICHEN_SCHC_PARITY_VECTORS_H",
         "#include <stdbool.h>",
@@ -182,11 +187,34 @@ def generate(vectors: list[dict[str, object]]) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print(f"usage: {Path(sys.argv[0]).name} INPUT.json OUTPUT.h", file=sys.stderr)
+    args = sys.argv[1:]
+    check = "--check" in args
+    args = [a for a in args if a != "--check"]
+    if len(args) != 2:
+        print(
+            f"usage: {Path(sys.argv[0]).name} [--check] INPUT.json HEADER.h",
+            file=sys.stderr,
+        )
         return 2
-    vectors = load(Path(sys.argv[1]))
-    Path(sys.argv[2]).write_text(generate(vectors), encoding="utf-8")
+    vectors = load(Path(args[0]))
+    generated = generate(vectors)
+    if check:
+        # Freshness guard: the committed header must equal generator output,
+        # else the C parity leg silently tests a stale vector corpus.
+        try:
+            current = Path(args[1]).read_text(encoding="utf-8")
+        except OSError as error:
+            print(f"stale or unreadable vector header: {error}", file=sys.stderr)
+            return 1
+        if current != generated:
+            print(
+                f"out-of-date vector header: {args[1]} "
+                "(regenerate with gen_vectors.py and commit the result)",
+                file=sys.stderr,
+            )
+            return 1
+        return 0
+    Path(args[1]).write_text(generated, encoding="utf-8")
     return 0
 
 

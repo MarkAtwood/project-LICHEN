@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-dp72",
+  "title": "routing_announce: test_callback_failure_allows_same_seq_retry fails at HEAD (native_sim)",
+  "description": "Pre-existing failure, discovered while verifying b7z9.8.2.1 (which only touched router.c parse_ipv6_dispatch - announce ingest does not call it). On native_sim/native/64 (Zephyr 4.1.0 workspace, worker1 checkout @ 5080c04904+): lichen/tests/routing_announce main.c:431 lichen_announce_ingest_authenticated(announce, len, NULL) is expected non-zero (callback-failure path) but returns 0, so the same-seq retry path is not exercised as asserted. 8/9 other tests pass. Repro: west build -b native_sim/native/64 lichen/tests/routing_announce -t run. Likely cause: ingest no longer fails when the auth callback pointer is NULL (guard removed or inverted in announce.c) - needs triage; the test or the code may be wrong.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:07:23.013759114Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T06:07:23.013759114Z",
+  "labels": [
+    "zephyr",
+    "networking"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-burh",
+  "title": "link-oscore-fork.sh: HOME-unset guard + document in-repo invocation only",
+  "description": "P3 findings from xyt6.1 pass-3 review: (1) set -u aborts with HOME: unbound variable in minimal environments before the candidate-list diagnostics - guard with HOME:- fallback; (2) invocation through a symlinked copy of the script resolves rust_dir to the symlink's parent and creates the link in the wrong place - document invoke-by-in-repo-path in the header (portable symlink resolution is awkward without readlink -f on macOS).",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:50:57.274629698Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T05:56:58.476430204Z",
+  "closed_at": "2026-08-31T05:56:58.476430204Z",
+  "close_reason": "Fixed: (1) HOME:- fallback in candidates array so set -u environments get the candidate-list error instead of an unbound-variable abort (verified with env -u HOME: clean error, exit 1); (2) header documents invoke-by-in-repo-path limitation. Verified in sandbox: all 7 behavior paths (fresh link, idempotent rerun, foreign valid symlink honored, dangling repointed, wrong-target repointed, real-dir honored/rejected, no-candidates error).",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-burh",
+      "depends_on_id": "project-LICHEN-worker6-xyt6.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:50:57.433187106Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

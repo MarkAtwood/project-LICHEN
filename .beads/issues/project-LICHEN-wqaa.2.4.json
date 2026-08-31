@@ -9,6 +9,10 @@
   "created_at": "2026-08-28T04:50:32.125614Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T04:50:32.125614Z",
+  "labels": [
+    "app-interface",
+    "human-only"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wqaa.2.4",

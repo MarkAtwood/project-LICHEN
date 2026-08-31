@@ -1,0 +1,7 @@
+{
+  "id": "1788136265989109182-1",
+  "issue_id": "project-LICHEN-worker6-5fva.1",
+  "author": "opencode-worker-7",
+  "text": "TIMEBOX handoff (worker7 round): ping_l2 runtime diagnosis is blocked BEHIND compile blockers, all now precisely enumerated. Fixed this round (worker7 branch, coap_status.c): strnlen implicit-declaration (strict-ISO hides glibc prototype; replaced with bounded termination scans, semantics identical) + time_fields conversion warning; file now compiles clean in the native_sim build. Remaining blockers BEFORE -ENOENT can be reproduced at runtime: (a) coap_client.c:181 send_mutex struct drift - filed as project-LICHEN-worker6-xqvj; (b) recv_async 3-arg contract migration at lora_l2_rx.c:139/310/380 and lora_loopback.c:239/301 - that is project-LICHEN-worker6-0l5j scope. Root-cause candidates for the -ENOENT itself remain per the bead description: epoch_persist.c:117 / replay_persist.c:234 / oscore persistence paths, plus the missing ENOENT entry in lichen_link_strerror (secondary diagnosability item, still open). Build recipe verified working on heft: source ~/Developer/lichen-env.sh; west build -b native_sim/native/64 lichen/tests/ping_l2 -d build/ping_l2 from the main checkout (with coap_status.c fix applied - lands via worker7 merge).",
+  "created_at": "2026-08-31T00:31:05.989109182Z"
+}

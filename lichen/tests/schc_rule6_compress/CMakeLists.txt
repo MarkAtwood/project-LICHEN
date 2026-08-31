@@ -23,7 +23,7 @@ target_include_directories(schc_rule6_compress_test PRIVATE
 )
 lichen_test_target(schc_rule6_compress_test)
 target_compile_options(schc_rule6_compress_test PRIVATE
-  -Wno-error=implicit-int-conversion
+  -Wno-implicit-int-conversion
 )
 
 enable_testing()

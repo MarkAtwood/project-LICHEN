@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T18:29:58.415216Z",
   "created_by": "opencode-worker-7",
   "updated_at": "2026-08-30T18:29:58.415216Z",
+  "labels": [
+    "l2"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-cvko",

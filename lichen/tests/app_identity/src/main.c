@@ -12,7 +12,10 @@
 #include <lichen/link_ctx.h>
 
 #ifndef ENOKEY
-#define ENOKEY ENOENT
+/* Match lichen/errno.h: ENOKEY is its own condition, not ENOENT (Linux value 126). */
+#ifndef ENOKEY
+#define ENOKEY 126
+#endif
 #endif
 
 static const uint8_t test_eui64[LICHEN_EUI64_LEN] = {

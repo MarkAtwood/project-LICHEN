@@ -11,6 +11,9 @@
   "created_by": "Mark Frost",
   "updated_at": "2026-08-28T03:44:28.054977Z",
   "started_at": "2026-07-19T17:54:49Z",
+  "labels": [
+    "zephyr"
+  ],
   "dependencies": [
     {
       "issue_id": "lora_ipv6_mesh-lkip",

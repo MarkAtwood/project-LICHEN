@@ -12,11 +12,16 @@ Claim the next ready bead, complete it fully (tests, 3x codereview with findings
 Exactly one bead this round.`
 
 async function roundPrompt(cwd: string): Promise<string> {
+  let text = ""
   try {
-    const text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
-    if (text.trim()) return text
+    text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
   } catch {}
-  return ROUND_PROMPT_FALLBACK
+  if (!text.trim()) text = ROUND_PROMPT_FALLBACK
+  const affinity = process.env.LICHEN_AFFINITY
+  if (affinity) {
+    text += `\nAFFINITY (LICHEN_AFFINITY=${affinity}): prefer beads labeled one of these — check \`bd ready --label <label> --json\` per label first. If none ready, take any ready bead.`
+  }
+  return text
 }
 
 const NEW_SESSION_EVERY = 6

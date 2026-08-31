@@ -302,7 +302,7 @@ int main(void)
 		}
 
 		/* Single byte: -EINVAL, terminated empty. */
-		one[0] = 0xa5;
+		one[0] = (char)0xa5;
 		if (lichen_ipv6_addr_to_str(&str_addr, one, sizeof(one)) !=
 		    -EINVAL ||
 		    one[0] != '\0') {

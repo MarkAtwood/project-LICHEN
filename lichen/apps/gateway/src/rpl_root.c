@@ -109,6 +109,10 @@ struct lichen_rpl_root {
 	struct lichen_rpl_dao_root_state root_state;
 	uint8_t prefix[16];
 	uint8_t prefix_len;
+	/* Root's own link-local address; DIOs originate from it (the DODAGID
+	 * is the root's 02xx:: Yggdrasil address and must not be reused as
+	 * the link-local IID). */
+	uint8_t self_addr[16];
 	struct net_if *iface;
 };
 
@@ -128,6 +132,7 @@ struct lichen_rpl_root *lichen_rpl_root_init(struct lichen_rpl_root *root, struc
 	lichen_trickle_start(&root->trickle, 0, 0);
 	memcpy(root->prefix, dodag_id, 16);
 	root->prefix_len = 128;
+	memcpy(root->self_addr, node_addr, sizeof(root->self_addr));
 	root->iface = iface;
 	return root;
 }
@@ -158,11 +163,9 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 	uint8_t buf[IPV6_HDR_LEN + ICMPV6_HDR_LEN + LICHEN_RPL_DIO_BASE_LEN + 2 + LICHEN_RPL_DODAG_CONFIG_DATA_LEN];
 	uint8_t src[16], dst[16] = RPL_MULTICAST_ADDR;
 
-	/* Build link-local source address from DODAG ID (IID portion) */
-	memset(src, 0, 16);
-	src[0] = 0xFE;
-	src[1] = 0x80;
-	memcpy(&src[8], &root->dodag.dodag_id[8], 8);
+	/* DIOs originate from the root's own link-local address */
+	uint8_t src[16], dst[16] = RPL_MULTICAST_ADDR;
+	memcpy(src, root->self_addr, 16);
 
 	/* Build DODAG config option */
 	struct lichen_rpl_dodag_config dcfg;
@@ -242,8 +245,9 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 		return false;
 	}
 
-	LOG_DBG("DIO sent (rank=%u, dodag_id=fd00::%02x%02x)",
-		dio.rank, dio.dodag_id[14], dio.dodag_id[15]);
+	LOG_DBG("DIO sent (rank=%u, dodag_id=%02x%02x:...:%02x%02x)",
+		dio.rank, dio.dodag_id[0], dio.dodag_id[1],
+		dio.dodag_id[14], dio.dodag_id[15]);
 	return true;
 }
 

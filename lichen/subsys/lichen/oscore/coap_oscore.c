@@ -20,7 +20,7 @@
 #include <lichen/coap_server.h>
 #include <lichen/l2/ipv6_addr.h>
 
-LOG_MODULE_REGISTER(coap_oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
+LOG_MODULE_DECLARE(oscore, CONFIG_LICHEN_OSCORE_LOG_LEVEL);
 
 /* Static buffer for OSCORE ciphertext to avoid large stack usage on constrained
  * devices (fixes project-LICHEN-zg2d). Size matches CONFIG + tag. */

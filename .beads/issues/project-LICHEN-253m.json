@@ -12,7 +12,8 @@
   "updated_at": "2026-08-28T04:49:52.090348Z",
   "started_at": "2026-07-22T21:31:52.624736398Z",
   "labels": [
-    "defer-external"
+    "defer-external",
+    "gateway"
   ],
   "dependencies": [
     {

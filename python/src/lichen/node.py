@@ -43,8 +43,8 @@ from lichen.announce.scheduler import (
 )
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.gradient import GRADIENT_TIMEOUT_MS, GradientTable
-from lichen.ipv6.addr import iid_to_eui64
-from lichen.ipv6.packet import IPv6Packet, NextHeader
+from lichen.ipv6.addr import iid_to_eui64, make_link_local
+from lichen.ipv6.packet import IPv6Packet, NextHeader, PacketError
 from lichen.l2_payload import (
     L2_ROUTING_TYPE_ANNOUNCE,
     L2PayloadKind,
@@ -1036,6 +1036,16 @@ class Node:
         now_ms: int,
     ) -> None:
         """Consume one RH3 segment and relay (RFC 6554); never deliver locally."""
+        # SECURITY: an in-transit datagram must be addressed to this node
+        # (outer destination = our native or link-local address). Anything else
+        # would turn this node into a generic RH3 redirector for datagrams the
+        # C router drops (mirror of router.c / Rust process_source_route).
+        if packet.header.dst_addr not in (
+            self.router.node_address,
+            make_link_local(self.identity.iid),
+        ):
+            logger.debug("dropping in-transit source-routed packet not addressed to this node")
+            return
         try:
             advanced, next_hop = advance_source_route(packet)
         except RoutingError as error:
@@ -1073,10 +1083,15 @@ class Node:
         """Classify a candidate DIO without consuming its authenticated receipt."""
         try:
             packet = IPv6Packet.from_bytes(decompress_packet(schc), strict=True)
-        except (SchcError, TypeError, ValueError):
+        except (PacketError, SchcError, TypeError, ValueError):
             return False
+        # RPL control rides ICMPv6 immediately after the IPv6 header (mirrors
+        # the C/Rust ``ipv6[6] == 58`` classification): a datagram whose chain
+        # carries extension headers is never RPL control and must fall through
+        # to source-route admission instead of being consumed here.
         return (
-            packet.header.next_header == NextHeader.ICMPV6
+            not packet.extension_headers
+            and packet.header.next_header == NextHeader.ICMPV6
             and len(packet.payload) >= 2
             and packet.payload[0] == RPL_ICMPV6_TYPE
             and packet.payload[1] == int(RplCode.DIO)

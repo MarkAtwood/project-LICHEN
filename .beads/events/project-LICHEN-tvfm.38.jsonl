@@ -2,3 +2,4 @@
 {"id":"01a045db-02b8-7a41-8ff4-1ea275198017","issue_id":"project-LICHEN-tvfm.38","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: needs-linux","created_at":"2026-08-28T00:52:56.120673Z"}
 {"id":"01a048f2-8fe4-7a87-a421-acef0301a1ca","issue_id":"project-LICHEN-tvfm.38","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: needs-linux","created_at":"2026-08-28T15:17:31.236691Z"}
 {"id":"01a048f2-9866-7013-8ff0-2ee07f341b19","issue_id":"project-LICHEN-tvfm.38","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T15:17:33.414005Z"}
+{"id":"01a05668-cf77-7aad-974a-ee3b46c172e5","issue_id":"project-LICHEN-tvfm.38","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Fixed: rx_mutex released before net_pkt_rx_alloc in new code","created_at":"2026-08-31T06:01:44.56770131Z"}

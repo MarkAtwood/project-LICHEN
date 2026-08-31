@@ -302,8 +302,8 @@ static int validate_signed_frame_profile(uint8_t length, uint8_t llsec,
 {
 	static const uint8_t dst_lengths[] = { 0U, 2U, 8U, 0U };
 	uint8_t addr_mode = llsec & LLSEC_ADDR_MODE_MASK;
-	uint8_t mic_selector =
-		(llsec & LLSEC_MIC_SELECTOR_MASK) >> LLSEC_MIC_SELECTOR_SHIFT;
+	uint8_t mic_selector = (uint8_t)((llsec & LLSEC_MIC_SELECTOR_MASK) >>
+					 LLSEC_MIC_SELECTOR_SHIFT);
 	size_t expected_length;
 
 	/* The frame signature API is intentionally signed-profile-only.  S and

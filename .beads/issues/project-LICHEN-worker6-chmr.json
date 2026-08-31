@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-chmr",
+  "title": "SOS origin sequence tracker LRU eviction reopens the replay window (amplifier of 2m0f); pin the active alert's origin entry",
+  "description": "Found by security codereview pass of project-LICHEN-worker6-r7hs (P3, amplifier of 2m0f - fold into 2m0f's fix scope or fix together). python/src/lichen/coap/resources/sos_origin.py OriginSequenceTracker (:191-204) is an OrderedDict max_origins=256 with popitem(last=False) eviction. Entries are insertable by UNAUTHENTICATED sources: an attacker generates a fresh keypair, picks from_hex = own IID (self-consistent, passes the :219-224 binding), signs a self-addressed activate, and the fresh source key has a fresh rate budget (per-source at :263) and no tracker entry (vacuous gate per 2m0f), so accept() at emergency.py:272 inserts. 256 such inserts evict the REAL active origin's high-water entry; then a single captured legitimate origin activate (broadcast, any overhearing node has it) replays through the vacuous last_seen()=None gate and re-animates a ghost SOS alert (false emergency display/relay). Attack cost: 256 cheap self-signed POSTs + one captured broadcast. Fix direction: when fixing 2m0f, do NOT simply reject unseen origins - that would strand the legit origin after eviction; instead pin the active alert's origin entry against eviction (refresh/LRU-touch on each accept or explicit pin while self._active), and consider unauthenticated-insert hardening (e.g. only tracker-accept after envelope validation succeeds, which accept already is - the issue is eviction, not insert). Pin with a test: flood 256 fresh origins while an alert is active, then replay the captured activate and assert 4.01.\n\nADJUDICATED (Mark, 2026-08-30): pin-while-active is the primary fix.\n(1) The active alert's origin entry is PINNED against LRU eviction —\nLRU-touch (refresh) on each accept, or explicit pin while self._active.\nThe 256-insert flood then evicts only stale entries; the legit origin's\nreplay gate survives and the ghost-alert replay is rejected.\n(2) SECONDARY: insert tracker entries only after envelope validation\nsucceeds (reduces unauthenticated-insert surface).\nLand with 2m0f's fix scope per the original note. human-only released:\npython SOS resource code, fleet-implementable with the flood+replay\nacceptance test.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:10:22.526615467Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T06:05:52.260785767Z",
+  "labels": [
+    "fleet-implementable"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-chmr",
+      "depends_on_id": "project-LICHEN-worker6-2m0f",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:10:22.641986873Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

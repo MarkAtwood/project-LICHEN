@@ -26,15 +26,6 @@
 #include <lichen/coap_oscore.h>
 #include <lichen/coap_server.h>
 
-/* Zephyr's minimal libc does not declare strnlen(): bounded length via
- * memchr. Returns max when no NUL lies within the first max bytes. */
-static size_t bounded_len(const char *s, size_t max)
-{
-	const char *nul = memchr(s, '\0', max);
-
-	return nul ? (size_t)(nul - s) : max;
-}
-
 #define RANGETEST_SENML_CBOR_MAX 192U
 /* Traceroute worst case: map(1) + "hops"(5) + array(1) + 8 x 83 bytes per
  * max-length hop (map(1) + "addr"(5) + 2+45 addr + "rssi"(5) + f64(9) +
@@ -475,8 +466,12 @@ int lichen_traceroute_encode(uint8_t *buf, size_t buf_size,
 	enc_key(&e, "hops");
 	enc_array(&e, hop_count);
 	for (size_t i = 0U; i < hop_count; i++) {
-		size_t addr_len = bounded_len(hops[i].addr,
-					      sizeof(hops[i].addr));
+		/* Zephyr's minimal libc does not declare strnlen(): bounded
+		 * length via memchr. */
+		const char *nul = memchr(hops[i].addr, '\0',
+					 sizeof(hops[i].addr));
+		size_t addr_len = nul ? (size_t)(nul - hops[i].addr)
+				      : sizeof(hops[i].addr);
 
 		if (!isfinite(hops[i].rssi) || !isfinite(hops[i].rtt_ms) ||
 		    addr_len == 0U || addr_len >= sizeof(hops[i].addr)) {

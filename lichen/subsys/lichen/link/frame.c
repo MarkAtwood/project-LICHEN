@@ -70,7 +70,8 @@ int lichen_frame_parse(struct lichen_frame *frame,
 
 	/* Only selectors 0b000 and 0b001 are defined; both mean no MIC on an
 	 * unsigned frame. Selectors 0b010-0b111 are reserved. */
-	uint8_t mic_length = (llsec & LLSEC_MIC_LEN_MASK) >> LLSEC_MIC_LEN_SHIFT;
+	uint8_t mic_length =
+		(uint8_t)((llsec & LLSEC_MIC_LEN_MASK) >> LLSEC_MIC_LEN_SHIFT);
 	if (mic_length > LICHEN_MIC_64) {
 		return -EINVAL;
 	}
@@ -202,9 +203,10 @@ int lichen_frame_write(const struct lichen_frame *frame,
 
 	/* LLSec byte — selector encoded from mic_length; signed frames set
 	 * both the S and SI bits. */
-	uint8_t llsec = frame->addr_mode & LLSEC_ADDR_MODE_MASK;
-	llsec |= ((uint8_t)frame->mic_length << LLSEC_MIC_LEN_SHIFT) &
-		 LLSEC_MIC_LEN_MASK;
+	uint8_t llsec = (uint8_t)(frame->addr_mode & LLSEC_ADDR_MODE_MASK);
+	llsec = (uint8_t)(llsec | (((uint8_t)frame->mic_length
+				    << LLSEC_MIC_LEN_SHIFT) &
+				   LLSEC_MIC_LEN_MASK));
 	if (frame->signature_present) {
 		llsec |= LLSEC_SIG_PRESENT | LLSEC_SIID_PRESENT;
 	}

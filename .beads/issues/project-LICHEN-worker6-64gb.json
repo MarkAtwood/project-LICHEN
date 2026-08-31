@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-64gb",
+  "title": "node.py: rpl_dodag_id check is an -O-bypassable assert",
+  "description": "Sibling of project-LICHEN-worker6-fatl: python/src/lichen/node.py used 'assert self.config.rpl_dodag_id is not None' when config.rpl_instance_id is set, before constructing DodagState(dodag_id=...) whose dodag_id is typed non-optional IPv6Address (python/src/lichen/rpl/dodag.py:273). Premise corrected during work: _validate_rpl_config() (node.py:472-498) already fail-closes partial RPL admission config with an explicit ValueError before that point, so the assert was dead code and the -O hole did not exist. Fix: remove dead assert, narrow with cast('IPv6Address', ...), add first regression coverage for the partial-config rejection. (Recreate: original bead project-LICHEN-worker6-2kga was created 2026-08-31T04:49, claimed, worked, and closed, but the shared dolt store reverted and lost it.)",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:08:24.462276095Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T05:08:46.43727332Z",
+  "closed_at": "2026-08-31T05:08:46.43727332Z",
+  "close_reason": "Completed: removed the dead assert at the DodagState call site (node.py:396-404); dodag_id narrowed with cast('IPv6Address', ...) backed by _validate_rpl_config's exact-type check (node.py:488). Premise corrected: the -O hole did NOT exist — _validate_rpl_config() already raised ValueError for partial RPL admission config before the call site (verified under python3 -O); the assert was unreachable. Added test_node_partial_rpl_admission_config_is_rejected (test_node.py:2431), first coverage of that rejection path. test_node.py 135 passed; ruff clean; 0 mypy errors in node.py. 3x codereview via reviewer model (kimi-k3): correctness PASS (after one transient timeout, retried), security PASS, edge-cases no findings. Code commit follows on beads-worker-5. (This bead recreates project-LICHEN-worker6-2kga, lost to a shared-store revert.)",
+  "labels": [
+    "python"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-ythw",
+  "title": "oscore observe notifications have no effective replay window: PIV check reads response_window but commit writes replay_window",
+  "description": "Found by 3x codereview of the rust-oscore observe port (9liz unblock work; two reviewers converged independently, one with an empirical scratch test). In /home/mark/crates/oscore/src/lib.rs (machine-local clone, captured in patches/rust-oscore-local.patch): begin_unprotect_response_inner checks the response/notification PIV with is_response_reuse (~lib.rs:1308), which reads response_seq/response_window — but that window is only ever written by mark_response_used from the SERVER-side no-PIV branch of protect_response (~lib.rs:1111). PendingResponse::commit writes the PIV into the inbound REQUEST replay window via update_replay_window (lib.rs:259-261). Check window != commit window, so on a client the checked window is never initialized and is_response_reuse is always false: a captured notification (or explicit-PIV response) replays indefinitely at the OSCORE layer (AEAD intact). The doc comment on begin_unprotect_observe_response claims 'freshness is enforced by the response Partial IV replay window' — that enforcement does not exist. Ordinary responses are masked by the request-PIV one-shot guard; observe deliberately skips it (by design), leaving notifications as the one unprotected class. In-tree impact contained: lichen-node commits unconditionally but lichen-coap ObserveClient::process rejects Duplicate/Stale via the authenticated Class-E Observe sequence (lichen-coap/src/observe.rs:678-697). Fix direction: check the notification/response PIV with is_replay (the recipient window commit already writes — self-consistent, since response PIVs and request PIVs share the peer sender-seq space per RFC 8613; mirrors the pre-port unprotect.rs:199 design), or commit into response_window via mark_response_used. Must fix in the local clone + regenerate patches/rust-oscore-local.patch + add a notification-replay test; upstream push of the crate needs Mark's authorization.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:04:18.78844401Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T22:59:00.801670101Z",
+  "started_at": "2026-08-30T22:20:24.606146981Z",
+  "closed_at": "2026-08-30T22:59:00.801670101Z",
+  "close_reason": "Fixed by the concurrent observe-port evolution that landed during this round's review: the external clone committed 26f2b32 (v0.1.2, HEAD 76cee08) with a stronger design than the one this bead's fix direction sketched, and the workspace vendored it (rust/crates/oscore, commit 61540bccff; rust/Cargo.toml [patch.crates-io] -\u003e crates/oscore). Mechanism: dedicated received_response_piv window (lib.rs:1473 is_received_response_piv_reuse / mark_received_response_piv) checked at begin for ALL explicit-PIV responses (lib.rs:1312, not observe-gated) and advanced only in commit (lib.rs:260-265, sole success path); ordinary no-PIV one-shot guard unchanged. This closes the ythw hole (notification PIV checked against a window that was never written client-side) and additionally gives ordinary explicit-PIV responses response-PIV replay protection. Verified this round: vendored crate 100 tests green with edhoc-schnorr48 (incl. observe_replay_window_accepts_out_of_order_once_and_rejects_old pinning out-of-order-fresh admit / exact replay Err(Replay) / beyond-window reject, and observe_failure_and_dropped_pending_do_not_advance_replay_state); lichen-node 294 lib tests + integration suites green; CoAP exact-retransmission Duplicate path confirmed to short-circuit before decryption (secure.rs:1316-1328). 3x codereview passes (correctness/security/robustness) on both the interim patch design and shipped HEAD: no P0-P2 on the shipped mechanism; artifact-governance P2s (stale patches/rust-oscore-local.patch + stale README linkage paragraph) filed as project-LICHEN-worker6-8r5b. My own interim clone-side fix (response_window via mark_response_used) was deliberately discarded in favor of the shipped received_response_piv design - preserved in clone history 26f2b32 lineage.",
+  "labels": [
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ythw",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:04:18.899784915Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

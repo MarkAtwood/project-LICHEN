@@ -1,0 +1,30 @@
+{
+  "id": "lora_ipv6_mesh-3iwp.2",
+  "title": "Create nrf52840_lichen DTS with LoRa and console",
+  "description": "Create nrf52840_lichen.dts with SPI-bound SX1262 lora0 alias, UART console, and Renode-appropriate memory/peripheral nodes. Files: lichen/boards/renode/nrf52840_lichen/nrf52840_lichen.dts (new). ~20 lines in 1 file. Depends on 3iwp.1.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:24.989664238Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:56:39.42087584Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "dts",
+    "blocked:hardware",
+    "needs-linux",
+    "renode"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "lora_ipv6_mesh-3iwp.2",
+      "depends_on_id": "lora_ipv6_mesh-3iwp",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:25.099914032Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -16,7 +16,8 @@
     "owner-reserved",
     "review",
     "review-r2",
-    "local-ok"
+    "local-ok",
+    "networking"
   ],
   "dependencies": [
     {

@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-nuxe",
+  "title": "cargo update + audit across Rust workspace (post-heft-migration)",
+  "description": "Unpin-and-upgrade pass. Finding: NO exact pins exist in the workspace (verified 2026-08-30 — zero '=x.y' versions, zero git rev/branch/tag deps across 20 crates / 67 deps), so this is a Cargo.lock refresh (cargo update) plus optional deliberate major-version bumps. CONSTRAINTS: (1) rust-version MSRV is 1.81.0 in rust/Cargo.toml — after update, verify no crate requires newer rustc; downgrade offenders or bump MSRV deliberately. (2) Coordinate: no other worker may touch Cargo.toml/Cargo.lock during this bead — claim it and note it in a comment so others skip rust deps. (3) Run gates: cargo build --workspace, cargo test --workspace, cargo clippy --workspace -- -D warnings, cargo audit; MSRV check via cargo +1.81.0 check if available. (4) Timing: execute during a calm window (no in-flight rust beads);heft fleet runner or Mac both fine. (5) Commit as one 'chore(deps): cargo update' commit with audit summary in the message. Escalate any crate whose upgrade breaks compilation rather than force-fixing — file follow-up beads.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T20:08:43.639257Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-30T20:08:43.639257Z",
+  "labels": [
+    "rust"
+  ]
+}

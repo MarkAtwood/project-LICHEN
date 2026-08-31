@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T18:05:57.402815Z",
   "created_by": "opencode-worker-6",
   "updated_at": "2026-08-30T18:05:57.402815Z",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-zb3w",

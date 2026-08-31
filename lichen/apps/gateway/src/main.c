@@ -18,6 +18,7 @@
 #include <lichen/hal.h>
 #if IS_ENABLED(CONFIG_LORA_LICHEN_GATEWAY_RPL_ROOT)
 #include "rpl_root.h"
+#include <lichen/app_identity/app_identity.h>
 #include <lichen/l2/ipv6_addr.h>
 #include <lichen/l2/lora_l2.h>
 #include <zephyr/net/net_if.h>
@@ -134,18 +135,22 @@ static struct net_mgmt_event_callback s_wifi_mgmt_cb;
 static int gateway_rpl_init(void) {
 	int ret = 0;
 #if IS_ENABLED(CONFIG_LORA_LICHEN_GATEWAY_RPL_ROOT)
-	uint8_t dodag_id[16] = {0};
+	uint8_t dodag_id[16];
 	uint8_t self_eui64[8];
 	uint8_t iid[8];
 	struct in6_addr ll_addr;
 
-	if (IS_ENABLED(CONFIG_LICHEN_GATEWAY_PREFIX_DELEGATION)) {
-		dodag_id[0] = 0xfd;
-		dodag_id[1] = 0x00;
-	} else {
-		dodag_id[0] = 0xfd;
+	/* spec/05-routing.md 8.4.1: the advertised DODAGID is the root's
+	 * canonical 0200::/8 Yggdrasil address derived from the root public
+	 * key. Require a published identity instead of fabricating a ULA
+	 * fd00:: prefix. */
+	struct lichen_app_identity_self self;
+	ret = lichen_app_identity_copy_self(&self);
+	if (ret != 0 || !self.has_public_key) {
+		LOG_ERR("RPL root needs a published node identity (err=%d)", ret);
+		return ret != 0 ? ret : -ENOENT;
 	}
-	dodag_id[15] = 0x01;
+	memcpy(dodag_id, self.ygg_addr, sizeof(dodag_id));
 
 	ret = lichen_lora_l2_copy_eui64(self_eui64);
 	if (ret != 0) {

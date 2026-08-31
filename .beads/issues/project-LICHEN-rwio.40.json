@@ -15,7 +15,8 @@
     "owner-reserved",
     "readability",
     "review",
-    "local-ok"
+    "local-ok",
+    "link"
   ],
   "dependencies": [
     {

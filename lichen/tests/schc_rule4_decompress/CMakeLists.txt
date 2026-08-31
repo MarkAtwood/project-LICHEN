@@ -23,7 +23,7 @@ target_include_directories(schc_rule4_decompress_test PRIVATE
 )
 lichen_test_target(schc_rule4_decompress_test)
 target_compile_options(schc_rule4_decompress_test PRIVATE
-  -Wno-error=implicit-int-conversion
+  -Wno-implicit-int-conversion
 )
 
 enable_testing()

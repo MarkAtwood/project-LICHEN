@@ -13,6 +13,7 @@
   "closed_at": "2026-07-25T01:11:39.299997324Z",
   "close_reason": "Already fixed",
   "labels": [
-    "codereview"
+    "codereview",
+    "coap"
   ]
 }

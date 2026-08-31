@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ak2o",
+  "title": "gateway oscore load() performs heal FS writes inside the radio ingress path (latency under FS failure)",
+  "description": "Found by 3x codereview of the recipient-store heal (9liz), robustness pass. is_replay()/load() are read-shaped APIs but can perform a heal write (fsync+rename, gateway.rs:463) synchronously inside packet dispatch (~1360-1380), and on persistent heal-write failure every packet for that context pays 2 file reads + 2 schnorr48 keypair derivations + 2 verifies + 1 failed sign. Bounded per call, no amplification, and fail-closed is correct - but under a degraded FS the radio loop stalls per packet. If gateway latency budgets tighten, move the heal write off the hot path (background repair or defer to accept()) without changing the fail-closed semantics pinned by the 9liz tests.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:05:55.057174647Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:05:55.057174647Z",
+  "labels": [
+    "codereview",
+    "human-only"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ak2o",
+      "depends_on_id": "project-LICHEN-worker6-9liz",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:05:55.174581002Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

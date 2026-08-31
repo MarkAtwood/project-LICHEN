@@ -18,7 +18,7 @@ use lichen_core::ipv6::{field, IPV6_HEADER_LEN};
 use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::mem::MemStorage;
 use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
-use lichen_ipv6::{Addr, Ipv6Header};
+use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed;
@@ -422,11 +422,23 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
     let relay_one = address(&identity(61), 1);
     let relay_two = address(&identity(62), 1);
     let destination = address(&identity(63), 1);
-    let mut plain = vec![0u8; IPV6_HEADER_LEN + 8];
-    Ipv6Header::new(59, Addr(source), Addr(destination))
-        .write_to(8, &mut plain)
+    // The wrapped datagram must be chain-valid end to end: the RH3 admission
+    // survey (mirroring routing/router.c) rejects NO_NEXT followed by bytes,
+    // so the source route wraps a UDP datagram instead of a bare NO_NEXT
+    // payload.
+    let mut plain = vec![0u8; IPV6_HEADER_LEN + UDP_HEADER_LEN + 8];
+    Ipv6Header::new(next_header::UDP, Addr(source), Addr(destination))
+        .write_to((UDP_HEADER_LEN + 8) as u16, &mut plain)
         .unwrap();
-    plain[IPV6_HEADER_LEN..].copy_from_slice(b"payload!");
+    UdpHeader::new(8080, 8081)
+        .write_header_to(
+            &Addr(source),
+            &Addr(destination),
+            b"payload!",
+            &mut plain[IPV6_HEADER_LEN..],
+        )
+        .unwrap();
+    plain[IPV6_HEADER_LEN + UDP_HEADER_LEN..].copy_from_slice(b"payload!");
 
     let mut wire = [0u8; 512];
     let len =
@@ -434,7 +446,19 @@ fn rfc6554_route_crosses_two_relays_and_restores_packet() {
             .unwrap();
     let mut routed = wire[..len].to_vec();
     assert_eq!(&routed[24..40], &relay_one);
-    assert_eq!(&routed[40..48], &[59, 4, 3, 2, 0, 0, 0, 0]);
+    assert_eq!(
+        &routed[40..48],
+        &[
+            next_header::UDP,
+            4, // (routing_len / 8) - 1 for two grid addresses
+            3,
+            2,
+            0,
+            0,
+            0,
+            0
+        ]
+    );
     assert_eq!(&routed[48..64], &relay_two);
     assert_eq!(&routed[64..80], &destination);
     assert_eq!(routed[43], 2);

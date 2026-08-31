@@ -2,13 +2,18 @@
   "id": "project-LICHEN-worker6-6gtq",
   "title": "Remove duplicate FileKeyStore base directory assignment",
   "description": "P4 robustness: FileKeyStore.__init__ assigns self._base_dir = Path(base_dir) twice consecutively. Remove the duplicate during the current persistence hardening convergence pass and verify Ruff/mypy.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T16:29:34.496134Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T03:44:46.789991Z",
-  "started_at": "2026-08-24T16:29:45.491613Z"
+  "updated_at": "2026-08-31T05:47:56.531907428Z",
+  "started_at": "2026-08-24T16:29:45.491613Z",
+  "closed_at": "2026-08-31T05:47:56.531907428Z",
+  "close_reason": "Already fixed; FileKeyStore.__init__ has single self._base_dir assignment at line 278.",
+  "labels": [
+    "python"
+  ]
 }

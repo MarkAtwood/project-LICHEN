@@ -264,7 +264,7 @@ bool lichen_slot_coord_validate_interleaved(const uint8_t *slots,
 	}
 
 	for (uint8_t i = 0; i < slot_count; i++) {
-		uint8_t expected = ordinal + i * gateway_count;
+		uint8_t expected = (uint8_t)(ordinal + i * gateway_count);
 		if (slots[i] != expected) {
 			return false;
 		}

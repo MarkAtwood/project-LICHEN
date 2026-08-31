@@ -201,6 +201,46 @@ static int test_dio_strict_atomicity(void)
 		  LICHEN_RPL_DIO_BASE_LEN + sizeof(config)),
 		  LICHEN_RPL_ERR_BAD_OPT, "reserved config flag accepted");
 
+	/* DIO Time Option (0x15) is a validated singleton at DIO RX: a
+	 * content-valid option is accepted, malformed content or a duplicate
+	 * is rejected (bd project-LICHEN-worker6-ndk7). Vector literals from
+	 * test/vectors/packets-timing.json "dio_time_option". */
+	{
+		static const uint8_t dio_time_valid[] = { 0x15, 0x06, 0x03, 0x00,
+							  0x65, 0x53, 0xf1, 0x00 };
+		static const uint8_t dio_time_stratum_five[] = { 0x15, 0x06, 0x05,
+								 0x00, 0x65, 0x53,
+								 0xf1, 0x00 };
+		static const uint8_t dio_time_reserved[] = { 0x15, 0x06, 0x03,
+							     0x01, 0x65, 0x53,
+							     0xf1, 0x00 };
+
+		memcpy(&wire[LICHEN_RPL_DIO_BASE_LEN], dio_time_valid,
+		       sizeof(dio_time_valid));
+		ASSERT_EQ(lichen_rpl_dio_parse(&parsed, wire,
+			  LICHEN_RPL_DIO_BASE_LEN + sizeof(dio_time_valid)),
+			  LICHEN_RPL_OK, "content-valid DIO Time rejected");
+		memcpy(&wire[LICHEN_RPL_DIO_BASE_LEN], dio_time_stratum_five,
+		       sizeof(dio_time_stratum_five));
+		ASSERT_EQ(lichen_rpl_dio_parse(&parsed, wire,
+			  LICHEN_RPL_DIO_BASE_LEN + sizeof(dio_time_stratum_five)),
+			  LICHEN_RPL_ERR_BAD_OPT, "stratum 5 DIO Time accepted");
+		memcpy(&wire[LICHEN_RPL_DIO_BASE_LEN], dio_time_reserved,
+		       sizeof(dio_time_reserved));
+		ASSERT_EQ(lichen_rpl_dio_parse(&parsed, wire,
+			  LICHEN_RPL_DIO_BASE_LEN + sizeof(dio_time_reserved)),
+			  LICHEN_RPL_ERR_BAD_OPT, "reserved DIO Time accepted");
+		memcpy(&wire[LICHEN_RPL_DIO_BASE_LEN], dio_time_valid,
+		       sizeof(dio_time_valid));
+		memcpy(&wire[LICHEN_RPL_DIO_BASE_LEN + sizeof(dio_time_valid)],
+		       dio_time_valid, sizeof(dio_time_valid));
+		ASSERT_EQ(lichen_rpl_dio_parse(&parsed, wire,
+			  LICHEN_RPL_DIO_BASE_LEN + 2U * sizeof(dio_time_valid)),
+			  LICHEN_RPL_ERR_BAD_OPT, "duplicate DIO Time accepted");
+		ASSERT_EQ(lichen_rpl_dio_parse(&parsed, valid, sizeof(valid)),
+			  LICHEN_RPL_OK, "time options corrupted baseline");
+	}
+
 	/* Semantic, option, and capacity errors leave serialized output intact. */
 	memset(wire, 0xa5, sizeof(wire));
 	memcpy(before, wire, sizeof(wire));

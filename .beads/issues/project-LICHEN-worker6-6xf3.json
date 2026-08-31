@@ -12,6 +12,7 @@
   "labels": [
     "C",
     "security",
-    "blocked:spec"
+    "blocked:spec",
+    "zephyr"
   ]
 }

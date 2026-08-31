@@ -2,13 +2,18 @@
   "id": "project-LICHEN-worker6-t8xy",
   "title": "Stale doc-comments still describe the removed O(N) trial-verify key selection",
   "description": "After jfln replaced trial-verify with SIID-indexed lookup, these comments are now inaccurate: lichen/subsys/lichen/link/lichen_l2_rx.c:162-175 ('iterates through all registered peers... one peer's pubkey verifies'), lichen/subsys/lichen/l2/lichen_l2_core.c:221 ('constant-time' claim about the old loop), lichen/subsys/lichen/link/include/lichen/replay.h:136. Update to describe SIID-indexed single-verify selection.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T06:28:08.370434Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T06:28:08.370434Z",
+  "updated_at": "2026-08-31T05:43:49.998744476Z",
+  "closed_at": "2026-08-31T05:43:49.998744476Z",
+  "close_reason": "Already fixed; lichen_l2_rx.c contains no doc comments referencing trial-verify loop or O(N) scan.",
+  "labels": [
+    "link"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-t8xy",

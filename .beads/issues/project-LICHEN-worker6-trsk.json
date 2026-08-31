@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-trsk",
+  "title": "rust-oscore: reconcile Mac observe implementation with heft port and push upstream to MarkAtwood/rust-oscore",
+  "description": "Residual of qhh6. Two independent implementations of Context::begin_unprotect_observe_response now exist: (1) the original in the Mac clone /Volumes/Attic/Desktop/Projects/crates/oscore/src/lib.rs (bead 2hn1 work, 2026-08-28, never committed); (2) the heft port in /home/mark/crates/oscore/src/lib.rs, captured as patches/rust-oscore-local.patch on top of origin/main 7434512 (validated: oscore crate 61/61 tests, lichen-node observe suite, full lichen-gateway suite; reviewed 3x under 9liz - findings ythw P1 replay-window mismatch and xhnx P2 dual-role window apply to both implementations). Upstream push is an upstream write: needs Mark's explicit authorization. Suggested sequence: diff Mac original vs heft port, reconcile into one implementation (fix ythw/xhnx in it), commit+push to the fork, then git pull on heft and retire the local patch; keep patches/README.md updated. Optional follow-up once pushed: make rust/Cargo.toml [patch] machine-agnostic (note: cargo does not support [patch] in .cargo/config.toml; realistic options are a stable relative clone location on both machines or vendoring) so workers stop carrying the uncommitted path swap.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-30T21:10:01.277518995Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-30T21:10:01.277518995Z",
+  "labels": [
+    "coap",
+    "oscore"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-trsk",
+      "depends_on_id": "project-LICHEN-worker6-qhh6",
+      "type": "discovered-from",
+      "created_at": "2026-08-30T21:10:01.422339486Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

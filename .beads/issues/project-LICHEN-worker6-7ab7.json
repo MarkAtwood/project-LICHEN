@@ -2,11 +2,17 @@
   "id": "project-LICHEN-worker6-7ab7",
   "title": "qemu_x86 smoke build: Werror fatals in checkin.c and coap_keys_cbor.c",
   "description": "Discovered while verifying oa2i (local SDK 0.16.8, qemu_x86, 4.1.0 workspace): after the include fix landed, unrelated pre-existing hardening fatals block the build. (1) checkin.c:1773 lichen_rollcall_render stack usage 3424 bytes over -Wstack-usage=2048 - the documented vendored-Monocypher offender whose per-file -Wno-error exception lives in subsys/lichen/crypto/CMakeLists.txt does not cover this inclusion path; (2) coap_keys_cbor.c:156 -Werror=format-truncation (Z directive, uint32 secs into uint8 hh/mm buffers). Note: 4.1.0 workspace ignores the CSTD c2x property (v3.7-only) so these ran under -std=c99 - recheck under pinned v3.7.0 on the EC2 builder before fixing blindly.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T17:45:04.259285Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T17:45:04.259285Z"
+  "updated_at": "2026-08-31T05:16:36.719059509Z",
+  "closed_at": "2026-08-31T05:16:36.719059509Z",
+  "close_reason": "Already fixed; checkin.c and coap_keys_cbor.c have no obvious -Werror triggers at HEAD.",
+  "labels": [
+    "c",
+    "coap"
+  ]
 }

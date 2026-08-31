@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.6",
+  "title": "Rust announce codec missing 193-byte announce / 100-byte app-data caps",
+  "description": "Spec 05-routing.md §9.2 (R-05-068): 'the announce MUST NOT exceed 193 bytes and App Data MUST NOT exceed 100 bytes' (254-byte signed link body budget minus 4-byte link header, 8-byte signer id, 48-byte link sig). Divergent: C enforces (lichen/subsys/lichen/routing/include/lichen/announce.h:30-32 MAX_LEN 193U/MAX_APP_DATA_LEN 100, parse reject announce.c:261) and Python enforces (python/src/lichen/announce/messages.py:16-17, from_bytes rejects \u003e193) with tests; Rust lichen-core/src/announce.rs from_bytes accepts app_data up to u16::MAX (AppDataTooLong only at \u003e65535, announce.rs:152) and no 193 constant exists; node RX only has an incidental 256-byte transcript buffer bound (lichen-node/src/announce.rs:162). Cross-implementation parity divergence: Rust admits announces C/Python reject. Fix: add MAX_ANNOUNCE_WIRE_LENGTH=193 / MAX_APP_DATA=100 to lichen-core codec + vector.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:25:45.286452331Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:25:45.286452331Z",
+  "labels": [
+    "spec-gap",
+    "rust",
+    "core"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.6",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:25:45.451363113Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

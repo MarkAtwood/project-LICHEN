@@ -84,7 +84,7 @@ def _validate_ipv6_addresses(header: IPv6Header) -> None:
     if header.src_addr.is_unspecified or header.src_addr.is_multicast:
         raise SchcError(f"invalid IPv6 source address {header.src_addr}")
     if header.dst_addr.is_unspecified:
-        raise SchcError(f"invalid IPv6 destination address {header.dst_addr}")
+        raise SchcError("invalid unspecified IPv6 destination address")
 
 
 def validate_rule7_addresses(source: IPv6Address, destination: IPv6Address) -> None:
@@ -135,16 +135,8 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
     return upper_dst
 
 
-def _validate_ipv6_structure(raw: bytes) -> IPv6Packet:
-    """Validate IPv6 structure and checksums only (receive-side contract).
-
-    Per spec/03-adaptation.md the Rule 255 TX/RX split makes decoding
-    byte-preserving: a decoder MUST NOT apply the endpoint address policy on
-    receipt, because a structurally valid packet already on the link is
-    preserved verbatim rather than dropped as malformed. This enforces
-    version, length, the extension-header chain, and UDP length plus checksum
-    (over the RFC 2460 s8.1 upper-layer destination) — nothing more.
-    """
+def validate_full_ipv6(raw: bytes) -> bytes:
+    """Validate a complete IPv6 packet before Rule 255 delivery."""
     if type(raw) is not bytes:
         raise SchcError("IPv6 packet must be bytes")
     if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
@@ -157,21 +149,15 @@ def _validate_ipv6_structure(raw: bytes) -> IPv6Packet:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
     upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
-        # Structure only: UDP length field and the zero-checksum refusal.
-        # UdpDatagram.from_bytes applies its malformed-source endpoint check
-        # only when a source is passed, so none is given here.
         try:
-            UdpDatagram.from_bytes(packet.payload)
+            UdpDatagram.from_bytes(packet.payload, packet.header.src_addr)
         except UdpError as error:
             raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
         if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
             raise SchcError("invalid Rule 255 IPv6 UDP checksum")
-    return packet
-
-
-def validate_full_ipv6(raw: bytes) -> bytes:
-    """Validate a complete IPv6 packet before Rule 255 delivery."""
-    packet = _validate_ipv6_structure(raw)
+    # Address checks last so dual-defect packets report the structural error
+    # first, mirroring Rust validate_full_ipv6 (codec.rs:363-366) and the C
+    # compress gate order.
     _validate_ipv6_addresses(packet.header)
     return raw
 
@@ -184,9 +170,9 @@ def _validate_rule255_emission_endpoints(packet: IPv6Packet) -> None:
     multicast datagrams are legitimate RX.
     """
     source, destination = packet.header.src_addr, packet.header.dst_addr
-    if source.is_loopback or source.ipv4_mapped is not None:
+    if source.is_unspecified or source.is_loopback or source.is_multicast or source.ipv4_mapped is not None:
         raise SchcError(f"invalid IPv6 source address {source}")
-    if destination.is_loopback or destination.ipv4_mapped is not None:
+    if destination.is_unspecified or destination.is_loopback or destination.ipv4_mapped is not None:
         raise SchcError(f"invalid IPv6 destination address {destination}")
     if destination.is_multicast:
         scope = destination.packed[1] & 0x0F
@@ -202,8 +188,11 @@ def _validate_single_frame_limit(limit: int | None) -> None:
 def encode_rule255(raw: bytes, *, single_frame_limit: int | None = None) -> bytes:
     """Encode a validated full IPv6 packet with sender-selected Rule 255."""
     _validate_single_frame_limit(single_frame_limit)
+    try:
+        _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(raw, strict=True))
+    except PacketError as error:
+        raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
     validated = validate_full_ipv6(raw)
-    _validate_rule255_emission_endpoints(IPv6Packet.from_bytes(validated, strict=True))
     if len(validated) > MAX_PACKET_SIZE - 1:
         raise SchcError(f"Rule 255 raw IPv6 packet exceeds {MAX_PACKET_SIZE - 1} bytes")
     encoded = bytes((RULE_ID_UNCOMPRESSED,)) + validated
@@ -226,10 +215,7 @@ def decode_rule255(data: bytes, *, single_frame_limit: int | None = None) -> byt
         raise SchcError(
             f"Rule 255 packet is {len(data)} bytes, exceeds single frame limit {single_frame_limit}"
         )
-    # Byte-preserving receive path: structure and checksums only, no
-    # endpoint address policy (spec/03-adaptation.md TX/RX split).
-    _validate_ipv6_structure(data[1:])
-    return data[1:]
+    return validate_full_ipv6(data[1:])
 
 
 def _is_global(addr: int) -> bool:

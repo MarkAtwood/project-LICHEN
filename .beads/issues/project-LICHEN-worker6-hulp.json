@@ -12,6 +12,7 @@
   "labels": [
     "code-review",
     "tx_queue",
-    "local-ok"
+    "local-ok",
+    "zephyr"
   ]
 }

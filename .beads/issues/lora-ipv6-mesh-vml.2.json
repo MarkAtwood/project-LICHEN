@@ -8,6 +8,9 @@
   "created_at": "2026-08-28T14:53:59.733247Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:53:59.733247Z",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "lora-ipv6-mesh-vml.2",

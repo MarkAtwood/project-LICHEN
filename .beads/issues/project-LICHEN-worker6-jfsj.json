@@ -10,5 +10,8 @@
   "created_at": "2026-08-24T10:32:04.913781Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:43:37.563947Z",
-  "started_at": "2026-08-24T10:32:21.787861Z"
+  "started_at": "2026-08-24T10:32:21.787861Z",
+  "labels": [
+    "schc"
+  ]
 }

@@ -14,6 +14,9 @@
   "started_at": "2026-07-22T20:19:41.963591101Z",
   "closed_at": "2026-07-25T01:27:43.334331643Z",
   "close_reason": "Already fixed",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-s82x",

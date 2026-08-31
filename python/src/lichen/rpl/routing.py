@@ -436,12 +436,43 @@ def survey_source_route(packet: IPv6Packet) -> bool:
     precedence: it must be relayed to the next segment, never delivered
     locally.
 
-    Raises :class:`RoutingError` on policy violations: more than one Routing
-    header, a malformed RH3, a grid address that is unspecified, multicast,
-    duplicated, equal to the outer destination, or equal to the packet source,
-    or ``segments_left >= hop_limit`` for an in-transit header
-    (spec/05-routing.md 8.4).
+    Raises :class:`RoutingError` on policy violations: an exhausted Hop Limit,
+    a source address that is unspecified or multicast, an unsupported
+    upper-layer protocol (LICHEN admits UDP, ICMPv6, and No-Next-Header only
+    when no bytes follow), a Hop-by-Hop Options header that is misplaced or
+    repeated, more than one Routing header, a malformed RH3, a grid address
+    that is unspecified, multicast, duplicated, equal to the outer
+    destination, or equal to the packet source, or ``segments_left >=
+    hop_limit`` for an in-transit header (spec/05-routing.md 8.4).
     """
+    if packet.header.hop_limit == 0:
+        raise RoutingError("hop_limit_exhausted")
+    if packet.header.src_addr.is_unspecified or packet.header.src_addr.is_multicast:
+        raise RoutingError("invalid packet source address")
+    upper = packet.header.next_header
+    if upper not in (NextHeader.UDP, NextHeader.ICMPV6) and not (
+        upper == NextHeader.NO_NEXT_HEADER and not packet.payload
+    ):
+        raise RoutingError(f"unsupported upper-layer protocol {upper}")
+    if upper == NextHeader.UDP and len(packet.payload) < 8:
+        raise RoutingError("truncated UDP header")
+    if upper == NextHeader.ICMPV6 and len(packet.payload) < 4:
+        raise RoutingError("truncated ICMPv6 header")
+    if len(packet.extension_headers) > 3:
+        # Bounded embedded profile: at most three extension headers may precede
+        # the upper protocol (C router rejects longer chains with -E2BIG).
+        # Without this cap an unsurveyed header beyond the bound could smuggle
+        # an in-transit RH3 past forwarding precedence.
+        raise RoutingError("extension header chain exceeds the bounded profile")
+    hop_by_hop_positions = [
+        index
+        for index, ext in enumerate(packet.extension_headers)
+        if ext.header_type == NextHeader.HOP_BY_HOP
+    ]
+    if any(index != 0 for index in hop_by_hop_positions):
+        raise RoutingError(
+            "Hop-by-Hop Options header must immediately follow the IPv6 header"
+        )
     routing_headers = [
         ext for ext in packet.extension_headers if ext.header_type == NextHeader.ROUTING
     ]

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.10",
+  "title": "Path Control mask ignores configured PCS in Rust/C (fixed full-octet mask)",
+  "description": "Spec 05-routing.md §8.8 (R-05-062): 'The root MUST mask bits outside the configured PCS + 1 active bits, then compare each candidate's most-preferred active non-empty Path Control subfield in PC1, PC2, PC3, PC4 order. It MUST NOT compare complete Path Control octets or individual bits numerically.' Divergent: Rust rust/lichen-node/src/rpl_stack/routing.rs:1717-1723 path_control_rank masks with fixed PATH_CONTROL_SIZE=7 const (comment: 'LICHEN fixed RPL profile activates all eight Path Control bits (PCS=7)') instead of the PCS value received in the DODAG Configuration option; C uses LICHEN_RPL_PATH_CONTROL_MASK 0xffU (lichen/subsys/lichen/rpl/include/lichen/rpl_routing.h:56) + path_control_priority (rpl_dao_process.c:563-571). Only Python honors configured PCS (python/src/lichen/rpl/dao_paths.py:41-51 path_control_rank masks (0xFF \u003c\u003c (7-pcs)) \u0026 0xFF). Subfield ordering and no-active-bit atomic rejection are implemented in all three. Fix: thread the DODAG Config PCS value into Path Control ranking in Rust + C (or document fixed PCS=7 as profile decision and update spec).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:25:47.317867227Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T05:25:47.317867227Z",
+  "labels": [
+    "spec-gap",
+    "rpl",
+    "rust",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.10",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T05:25:47.454845378Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

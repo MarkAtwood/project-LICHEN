@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-swlf",
+  "title": "lichen-schc lib tests fail to compile in every configuration: Ipv6Addr::from_str without FromStr import",
+  "description": "RECREATED after shared-store data loss (original project-LICHEN-worker6-7v3f created ~03:35Z 2026-08-31 vanished from BEADS_DIR mid-round; store rolled back past it). Discovered during 982e verification. cargo test -p lichen-schc failed compiling the lib test target in ALL configurations: 6x E0599 Ipv6Addr::from_str missing trait import at rust/lichen-schc/src/codec.rs:2837/2840/2868/2871/2887/2890. FIXED same round by worker-4, commit d8478e092c: added 'use std::str::FromStr;' to the #[cfg(test)] mod tests. Verified: default features 81/0, full features 169/0, fmt clean, clippy clean both configs; 3x Kimi K3 review no defects.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T04:59:21.86837062Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T04:59:22.610584459Z",
+  "closed_at": "2026-08-31T04:59:22.610584459Z",
+  "close_reason": "Already fixed by commit d8478e092c (use std::str::FromStr in codec.rs test module). Bead recreated solely to preserve the record after store rollback; see description for full validation.",
+  "labels": [
+    "schc",
+    "rust",
+    "tests"
+  ]
+}

@@ -14,6 +14,10 @@
   "started_at": "2026-07-22T20:25:14.852156119Z",
   "closed_at": "2026-07-22T20:29:28.902686459Z",
   "close_reason": "Broken into sub-issues afbk.1.1-5 for parallel implementation",
+  "labels": [
+    "gateway",
+    "hal"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-afbk.1",

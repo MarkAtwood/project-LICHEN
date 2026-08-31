@@ -9,6 +9,11 @@
   "created_at": "2026-08-29T02:55:34.09197Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T02:55:34.09197Z",
+  "labels": [
+    "networking",
+    "rust",
+    "tests"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-qty5",

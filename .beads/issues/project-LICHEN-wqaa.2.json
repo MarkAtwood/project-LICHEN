@@ -11,6 +11,9 @@
   "started_at": "2026-07-24T21:42:32.796861374Z",
   "closed_at": "2026-07-22T14:43:50.297916248Z",
   "close_reason": "Shuttleworth fellowship proposal framework prepared using PRFAQ as base. Aligns with open knowledge and freedom focus.",
+  "labels": [
+    "app-interface"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-wqaa.2",

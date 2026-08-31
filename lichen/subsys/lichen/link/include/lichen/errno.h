@@ -89,12 +89,14 @@
 
 #endif /* __ZEPHYR__ */
 
-/* ENOKEY is not exposed by every Zephyr errno configuration. */
+/* ENOKEY is not exposed by every Zephyr errno configuration.  Value matches
+ * the Linux/asm-generic table (126) so TUs that pull the system errno.h and
+ * TUs that see only this header agree; it must NOT alias ENOENT (2) — the
+ * keyless-TX rejection is a distinct condition.  Note: Zephyr's minimal-libc
+ * errno table has no ENOKEY and gives 126 to ENETRESET; no LICHEN code
+ * compares ENETRESET. */
 #ifndef ENOKEY
-#ifndef ENOENT
-#define ENOENT 2
-#endif
-#define ENOKEY ENOENT
+#define ENOKEY 126
 #endif
 
 /*
@@ -111,5 +113,15 @@
  * - No peer public key available for signature verification
  */
 #define LICHEN_EAUTH 200
+
+/**
+ * SCHC compression rejected the packet.
+ *
+ * Returned by lichen_link_tx when the compression profile refuses to encode
+ * the packet (structural defect or emission endpoint policy).  A caller-input
+ * rejection, not a transport or memory failure: the raw SCHC error codes
+ * (-1..-15) collide with POSIX errno values and are not passed through.
+ */
+#define LICHEN_ESCHC 201
 
 #endif /* LICHEN_ERRNO_H_ */

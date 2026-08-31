@@ -3,12 +3,16 @@
   "title": "Delegation delivery: CoAP provisioning + persistence for prefix delegations (spec 8.7.2)",
   "description": "Spec 05-routing.md 8.7.2 defines how the root DELIVERS delegations: POST coap://[delegate]/.well-known/prefix-delegation, Content-Format application/cose cose-sign1, OSCORE root-delegate pairwise context, COSE_Sign1 payload {prefix, prefix_len, delegate_iid, E flag, delegation_seq, expiry}; node verifies root signature, delegation_seq \u003e cached, caches by (prefix, prefix_len); root SHOULD send delegation on capability announce (spec 8.12 bit 1) or admin config. Nothing implements this. Scope: CoAP resource on root + handler on delegate, delegation_seq persistence, expiry enforcement, OSCORE requirement. The in-flight Rust PrefixDelegations table explicitly documents 'Provisioning and persistence out of scope; operator API seeded, re-seeded after restart' - this bead closes that gap per spec. Cross-impl alignment with python delegation_tokens.py. Decomposed from project-LICHEN-2auf.44.9.2.",
   "status": "open",
-  "priority": 2,
+  "priority": 3,
   "issue_type": "feature",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T23:58:49.549407Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-28T23:58:49.549407Z",
+  "updated_at": "2026-08-31T05:16:52.867459448Z",
+  "labels": [
+    "coap",
+    "spec"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-kwa3",

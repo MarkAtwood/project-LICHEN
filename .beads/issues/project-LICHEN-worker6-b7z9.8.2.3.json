@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.8.2.3",
+  "title": "DTN HBH: ztest matrix for S-flag/expiry parse + DTN routing path",
+  "description": "Child of b7z9.8.2, after .2.2. tests/routing_dispatch: malformed HBH options (bad TLV length, unknown-type action bits, HBH not first, nonzero reserved in S-flag option), S-flag with valid/zero/garbage expiry, forward path with expiry present (hop-limit interplay - spec says S-F messages carry absolute expiry INSTEAD of relying on hop limit), DTN store decision using wire expiry vs caller field. Land with suite green.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:00:18.921275872Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T06:00:18.921275872Z",
+  "labels": [
+    "zephyr",
+    "tests",
+    "firmware",
+    "networking",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.8.2.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8.2",
+      "type": "parent-child",
+      "created_at": "2026-08-31T06:00:19.122073377Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

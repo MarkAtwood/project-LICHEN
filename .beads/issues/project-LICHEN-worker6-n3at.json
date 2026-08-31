@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-n3at",
+  "title": "deaddrop/confessions rate limiter: spoofable single-byte key, runs after expensive unprotect",
+  "description": "Found in security review of b7z9.8.1 (both pre-existing, not introduced by that fix). coap_dtn.c: (1) The limiter keys on peer_eui64[7] - one byte derived from the UNAUTHENTICATED IPv6 source address (sin6_addr.s6_addr[8..15] -\u003e lichen_eui64_to_iid); OSCORE authenticates the key material, not the source address, and nothing binds the IID to the OSCORE identity. 256 buckets enable: rotating source IIDs to evade the limiter and flood the DTN buffer (oldest-first eviction then flushes legitimate messages - and on a clockless fail-open node attacker entries never expire), spoofing a victim's iid7 to suppress them at one msg/window, or saturating all buckets (4.29 for everyone). Non-INET6/short addrs collapse into shared bucket 0. (2) The limit check runs AFTER coap_oscore_unprotect_resource_request (AEAD verify) and parse_recipient, so the expensive path is unthrottled at line rate - CPU/battery exhaustion on constrained nodes. Fix direction: key the limiter on the authenticated OSCORE sender identity when protected, and check before unprotect/parse where the key does not depend on their output.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:56:47.377016629Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-08-31T05:56:47.377016629Z",
+  "labels": [
+    "coap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-n3at",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:56:47.532451497Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

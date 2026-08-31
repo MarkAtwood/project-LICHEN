@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-emca",
+  "title": "Rust SCHC: remaining non-atomic compress error paths — sibling per-rule compressors and dispatcher profile limit",
+  "description": "Remainder of the compress-atomicity audit from project-LICHEN-worker6-csdw (fixed for compress_mqtt_sn in commit d8478e092c; reviewer scope-note confirmed). Two clusters still violate 'Err leaves out untouched' (decompress is atomic; Python is atomic by construction): (1) Sibling per-rule compressors retain mutate-then-check: compress_coap (codec.rs:731), compress_icmpv6_echo (:829), compress_rpl_dio (:871), compress_rpl_dao (:923, late check at :960-966). Each writes out[0]=RULE and zero-fills via BitWriter::new before its needed\u003eout.len() check. Fix each the csdw way: branch-computable residue size checked before first mutation + regression test asserting sentinel buffer untouched on error. (2) Dispatcher compress() (codec.rs:2196 etc.): enforce_encoded_profile_limit (:2304) converts Ok(n) to Err('SCHC packet exceeds profile limit') AFTER the per-rule fn fully wrote the buffer — probe: 40000-byte out, over-profile input -\u003e Err with all 40000 bytes written. Needs per-rule pre-check or a documented non-atomic carve-out for this one error, consistently across Rust and Python (check python/src/lichen/schc headers.py compress_packet behavior for the same over-profile path before deciding). No current in-repo caller reads out after Err (csdw checked link.rs:263, decompress_authenticated_frame_tracked), so impact is latent contract robustness, not an active bug. Label schc (primary), rust.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T05:21:24.006516972Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T05:21:24.006516972Z",
+  "labels": [
+    "schc",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-emca",
+      "depends_on_id": "project-LICHEN-worker6-csdw",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T05:21:24.171760831Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

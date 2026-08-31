@@ -12,6 +12,13 @@
   "started_at": "2026-07-22T04:53:01.533421118Z",
   "closed_at": "2026-07-22T05:01:50.14746729Z",
   "close_reason": "Restored ASan/UBSan + no-skip host gates via CMake/prj.conf updates, test script/CI fixes; ran+fixed cargo test/pytest/west -t run with sanitizers; fixed all Ruff/Clippy/rustdoc/fmt/cov/mypy issues without ignores or weakening; conventional commit",
+  "labels": [
+    "coap",
+    "l2",
+    "python",
+    "rust",
+    "tests"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-kpv0",

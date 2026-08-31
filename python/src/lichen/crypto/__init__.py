@@ -15,10 +15,10 @@
 """
 
 from .capability_announcements import (
+    SCHNORR48_ED25519_ALG,
     Capability,
     CapabilityAnnouncement,
     CapabilityPayload,
-    SCHNORR48_ED25519_ALG,
     create_capability_announcement,
     decode_cose_sign1_announcement,
     verify_capability_announcement,
@@ -35,12 +35,13 @@ from .delegation_tokens import (
 )
 from .edhoc import EdhocInitiator, EdhocResponder, OscoreContext
 from .identity import Identity, PeerIdentity
-from .root_dio_signature import (
-    RootDioSignature,
-    RootDioSignaturePayload,
-    create_root_dio_signature,
-    decode_root_dio_signature,
-    verify_root_dio_signature,
+from .key_persistence import (
+    FileKeyStore,
+    KeyPersistenceError,
+    KeyStore,
+    MemoryKeyStore,
+    StoredSeed,
+    TrustStorePersistence,
 )
 from .key_rotation_attestation import (
     KeyRotationAttestation,
@@ -49,14 +50,6 @@ from .key_rotation_attestation import (
     decode_key_rotation_attestation,
     get_new_iid,
     verify_key_rotation_attestation,
-)
-from .key_persistence import (
-    FileKeyStore,
-    KeyPersistenceError,
-    KeyStore,
-    MemoryKeyStore,
-    StoredSeed,
-    TrustStorePersistence,
 )
 from .oscore import (
     MAX_OSCORE_SEQUENCE_NUMBER,
@@ -73,6 +66,13 @@ from .provisioning import (
     ProvisioningError,
     ProvisioningPayload,
     ProvisioningState,
+)
+from .root_dio_signature import (
+    RootDioSignature,
+    RootDioSignaturePayload,
+    create_root_dio_signature,
+    decode_root_dio_signature,
+    verify_root_dio_signature,
 )
 from .trust import (
     DerivationMismatchError,
