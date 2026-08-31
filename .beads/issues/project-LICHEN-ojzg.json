@@ -13,7 +13,8 @@
   "closed_at": "2026-07-25T01:28:49.184130101Z",
   "close_reason": "Already fixed",
   "labels": [
-    "vectors"
+    "vectors",
+    "python"
   ],
   "dependencies": [
     {
