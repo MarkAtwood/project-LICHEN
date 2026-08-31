@@ -9,5 +9,8 @@
   "created_at": "2026-08-29T04:17:58.377665Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T23:37:30.684797Z",
-  "started_at": "2026-08-29T04:18:55.737681Z"
+  "started_at": "2026-08-29T04:18:55.737681Z",
+  "labels": [
+    "oscore"
+  ]
 }
