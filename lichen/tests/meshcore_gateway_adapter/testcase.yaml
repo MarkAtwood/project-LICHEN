@@ -3,6 +3,8 @@
 
 tests:
   net.lichen.meshcore_gateway_adapter:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     platform_allow:
       - native_sim
       - native_sim/native/64
@@ -17,4 +19,4 @@ tests:
       - native_sim/native/64
     tags: meshcore gateway settings nvs
     extra_args:
-      - CONF_FILE=prj.conf;prj_settings_nvs.conf
+      - CONF_FILE=prj.conf;prj_settings_nvs.conf;../../tests/sanitizers.conf

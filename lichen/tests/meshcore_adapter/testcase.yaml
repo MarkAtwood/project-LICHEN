@@ -3,6 +3,8 @@
 
 tests:
   net.lichen.meshcore_adapter:
+    extra_conf_files:
+    - ../../tests/sanitizers.conf
     platform_allow:
       - native_sim
       - native_sim/native/64
@@ -13,4 +15,4 @@ tests:
       - native_sim/native/64
     tags: meshcore app-identity
     extra_args:
-      - CONF_FILE=prj.conf;prj_identity.conf
+      - CONF_FILE=prj.conf;prj_identity.conf;../../tests/sanitizers.conf

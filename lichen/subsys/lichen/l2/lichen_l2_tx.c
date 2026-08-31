@@ -111,11 +111,15 @@ static int lichen_l2_send_inner(struct net_if *iface, struct net_pkt *pkt)
 	 * - Schnorr-48 signature (always applied when has_key is set)
 	 * - Returns -ENOKEY if has_key is not set (no unsigned frames)
 	 */
-	size_t frame_len = 0;
+	size_t frame_len = sizeof(tx_frame_buf);
 	/*
-	 * Zero-initialize frame_len so that if lichen_link_tx() returns an
-	 * error without writing frame_len, the frame_len == 0 check below
-	 * catches it (project-LICHEN-i1gk.102).
+	 * lichen_link_tx() takes the output buffer CAPACITY in *out_len
+	 * (in/out contract, link.h) and returns the built frame length in
+	 * it. A zero init here tripped the link layer's minimum-buffer
+	 * check, failing every TX with -ENOMEM before any radio work
+	 * (worker6-5fva.1). On error the link layer does not write
+	 * frame_len, so it keeps the capacity value; the ret < 0 branch
+	 * below returns before frame_len is ever used.
 	 *
 	 * NULL dst_eui64 = broadcast (no destination address in frame header).
 	 *
