@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-31T01:20:08.408848579Z",
   "labels": [
-    "hal"
+    "hal",
+    "l2"
   ],
   "dependencies": [
     {
