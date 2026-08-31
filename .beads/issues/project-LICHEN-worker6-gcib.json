@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-3",
   "updated_at": "2026-08-30T18:02:16.890015Z",
   "labels": [
-    "l2"
+    "l2",
+    "zephyr"
   ],
   "dependencies": [
     {
