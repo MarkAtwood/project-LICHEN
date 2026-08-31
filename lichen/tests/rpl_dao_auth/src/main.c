@@ -150,7 +150,8 @@ static const struct lichen_rpl_dao_snapshot *find_snapshot(
 
 /* Raw generalized RPL Target option: [5, 2+n, flags, prefix_len, prefix...].
  * Writes prefix_len and exactly n prefix octets so non-canonical bodies
- * (extra host bits, nonzero reserved flags) can exercise the 8.7.1 rules. */
+ * (extra host bits) can exercise the 8.7.1 rules, and nonzero reserved
+ * flags can exercise the 8.6 R-05-035 reject. */
 static void add_raw_target(uint8_t *buf, size_t *len, uint8_t flags,
 			   uint8_t prefix_len, const uint8_t *prefix,
 			   size_t prefix_bytes)
@@ -569,14 +570,19 @@ static int test_gate_generalized_body_literals(void)
 	ASSERT_EQ(route_present_bytes(installed), true, "canonical /64 route");
 	ASSERT_TRUE(find_snapshot(installed) != NULL, "canonical /64 snapshot");
 
-	/* Nonzero reserved flags are ignored per spec 8.7.1. */
+	/* Nonzero reserved flags reject the DAO (spec 8.6 R-05-035) with
+	 * zero state mutation. The 8.7.1 ignore-rule belongs to the future
+	 * .44.9 generalized model, not current conformance. */
 	fresh_manager();
 	len = dao_begin(dao, 1);
 	add_raw_target(dao, &len, 0x1f, 128, origin, 16);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
+	struct lichen_rpl_dao_root_state flags_saved = root_state;
 	ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, true, NULL, 0),
-		  LICHEN_RPL_DAO_APPLIED, "reserved flags rejected");
+		  LICHEN_RPL_DAO_REJECTED, "nonzero Target flags accepted");
+	ASSERT_MEM_EQ(&root_state, &flags_saved, sizeof(root_state),
+		      "nonzero flags DAO mutated routing state");
 
 	/* /127 boundary encoding: the low bit of the final octet is ignored,
 	 * then the canonical /127 is installed. */
