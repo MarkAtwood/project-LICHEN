@@ -154,15 +154,16 @@ static uint16_t udp_checksum(const struct net_ipv6_hdr *ipv6,
  * Tolerates -EALREADY so the helper stays safe on an un-wiped context. */
 static void reprovision_after_reinit(void)
 {
-	uint8_t eui64[8];
+	uint8_t peer_eui64[8];
 	int ret;
 
-	ret = lichen_lora_l2_copy_eui64(eui64);
-	zassert_equal(ret, 0, "reinit: copy EUI-64: %d", ret);
 	ret = lichen_l2_test_load_key(test_seed, test_pubkey);
 	zassert_true(ret == 0 || ret == -EALREADY,
 		     "reinit: load signing key: %d", ret);
-	ret = lichen_peer_add(eui64, test_pubkey);
+	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
+	zassert_equal(ret, 0, "reinit: pubkey to iid: %d", ret);
+	peer_eui64[0] |= 0x02; /* wire/extended form == frame SIID */
+	ret = lichen_peer_add(peer_eui64, test_pubkey);
 	zassert_true(ret == 0 || ret == -EALREADY,
 		     "reinit: peer add: %d", ret);
 }
@@ -197,7 +198,14 @@ static void *ping_l2_setup(void)
 	 * transmission outright (bead 2auf.21), so loading one would only
 	 * break every TX path this suite exercises. */
 
-	ret = lichen_peer_add(eui64, test_pubkey);
+	/* Peers are keyed by the canonical key-derived EUI-64 (frame SIID:
+	 * sha512(pubkey)[0:8] with U/L set), not by the device hardware ID
+	 * — lichen_link_rx.c SIID lookup misses otherwise (-LICHEN_EAUTH). */
+	uint8_t peer_eui64[8];
+	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
+	zassert_equal(ret, 0, "failed to derive canonical peer EUI-64: %d", ret);
+	peer_eui64[0] |= 0x02;
+	ret = lichen_peer_add(peer_eui64, test_pubkey);
 	zassert_equal(ret, 0, "failed to add self peer: %d", ret);
 
 	make_link_local_from_eui64(eui64, &test_ll_addr);
