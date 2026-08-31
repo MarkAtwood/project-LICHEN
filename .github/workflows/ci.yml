@@ -115,7 +115,7 @@ jobs:
             --inline-suppr \
             --suppress=missingIncludeSystem \
             --suppress=unmatchedSuppression \
-            --suppress=syntaxError \
+            --suppressions-list=lichen/.cppcheck-suppressions \
             --std=c11 \
             -I lichen/include \
             -I lichen/subsys/lichen \

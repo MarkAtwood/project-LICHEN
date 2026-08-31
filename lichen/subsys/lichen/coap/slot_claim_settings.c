@@ -246,7 +246,9 @@ int lichen_slot_claim_seq_commit(const uint8_t iid[LICHEN_IID_LEN],
 		reserved = true;
 	}
 
-	strcpy(name, SETTINGS_ROOT "/");
+	/* R-APPC-014: no strcpy — fixed-size copy of the literal prefix
+	 * (including its NUL, which iid_to_name immediately overwrites). */
+	memcpy(name, SETTINGS_ROOT "/", sizeof(SETTINGS_ROOT "/"));
 	iid_to_name(iid, &name[sizeof(SETTINGS_ROOT)]);
 	sys_put_le32(seq, value);
 	ret = settings_save_one(name, value, sizeof(value));
