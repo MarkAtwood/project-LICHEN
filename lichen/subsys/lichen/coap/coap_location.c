@@ -1171,6 +1171,13 @@ int lichen_position_cache_encode(int64_t now_ms, uint8_t *out,
   return (int)writer.len;
 }
 
+/* Structured 4.01 body (spec 18.2.4, l1qw.32):
+ * {error: "oscore_required", mode: "<privacy-mode>"}. */
+static int respond_oscore_required(struct coap_resource *resource,
+				   struct coap_packet *request,
+				   struct sockaddr *addr, socklen_t addr_len,
+				   enum lichen_position_privacy_mode mode);
+
 static int sensors_location_get(struct coap_resource *resource,
                                 struct coap_packet *request,
                                 struct sockaddr *addr, socklen_t addr_len) {
@@ -1226,18 +1233,18 @@ static int sensors_location_get(struct coap_resource *resource,
     observe = coap_get_option_int(request, COAP_OPTION_OBSERVE);
   }
   if (observe >= 0) {
-    bool public;
 
     if (observe > 1) {
       return lichen_coap_respond(resource, request, addr, addr_len,
                                  COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
     }
+    enum lichen_position_privacy_mode mode;
+
     k_mutex_lock(&position_observe_mutex, K_FOREVER);
-    public = position_observe.privacy == LICHEN_POSITION_PRIVACY_PUBLIC;
+    mode = position_observe.privacy;
     k_mutex_unlock(&position_observe_mutex);
-    if (!public) {
-      return lichen_coap_respond(resource, request, addr, addr_len,
-                                 COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
+    if (mode != LICHEN_POSITION_PRIVACY_PUBLIC) {
+      return respond_oscore_required(resource, request, addr, addr_len, mode);
     }
     token_len = coap_header_get_token(request, token);
     if (observe == 0 && token_len > 0U &&
@@ -1315,6 +1322,40 @@ static const char *const sensors_location_path[] = {"sensors", "location",
                                                     NULL};
 static const char *const position_cache_path[] = {"pos", "cache", NULL};
 
+static int respond_oscore_required(struct coap_resource *resource,
+				   struct coap_packet *request,
+				   struct sockaddr *addr, socklen_t addr_len,
+				   enum lichen_position_privacy_mode mode) {
+	static const char *const names[] = {
+		"public", "group", "private", "off",
+	};
+	uint8_t body[64];
+	struct cbor_writer w = {
+		.buf = body,
+		.cap = sizeof(body),
+	};
+	const char *name;
+
+	if (mode > LICHEN_POSITION_PRIVACY_OFF) {
+		mode = LICHEN_POSITION_PRIVACY_OFF;
+	}
+	name = names[mode];
+
+	cbor_put_value(&w, 0xa0U, 2U);
+	cbor_put_text(&w, "error");
+	cbor_put_text(&w, "oscore_required");
+	cbor_put_text(&w, "mode");
+	cbor_put_text(&w, name);
+	if (w.overflow) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED, 0,
+					   NULL, 0);
+	}
+	return lichen_coap_respond(resource, request, addr, addr_len,
+				   COAP_RESPONSE_CODE_UNAUTHORIZED, 60U, body,
+				   w.len);
+}
+
 static int position_cache_get(struct coap_resource *resource,
                               struct coap_packet *request,
                               struct sockaddr *addr, socklen_t addr_len) {
@@ -1323,8 +1364,11 @@ static int position_cache_get(struct coap_resource *resource,
                                          sizeof(payload));
 
   if (len == -EACCES) {
-    return lichen_coap_respond(resource, request, addr, addr_len,
-                               COAP_RESPONSE_CODE_UNAUTHORIZED, 0, NULL, 0);
+    enum lichen_position_privacy_mode mode;
+    k_mutex_lock(&position_cache_mutex, K_FOREVER);
+    mode = position_cache.privacy;
+    k_mutex_unlock(&position_cache_mutex);
+    return respond_oscore_required(resource, request, addr, addr_len, mode);
   }
   if (len < 0) {
     return lichen_coap_respond(resource, request, addr, addr_len,
