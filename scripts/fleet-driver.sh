@@ -40,6 +40,15 @@ pane_busy() {  # exit 0 (true) only when the pane shows a running generation
     tmux capture-pane -t "$SESSION:$1" -p -S -5 2>/dev/null | rg -q "esc interrupt"
 }
 
+wait_ready() {  # poll until the worker pane shows the model banner (input-ready)
+    local win="$1" n
+    for n in $(seq 1 20); do
+        tmux capture-pane -t "$win" -p 2>/dev/null | rg -q "Build ·" && return 0
+        sleep 2
+    done
+    return 1
+}
+
 worker_in_progress() {  # worker number; count of that actor's in_progress beads
     BEADS_DIR="$BEADS_DIR" bd list --status in_progress --assignee "opencode-worker-$1" --json 2>/dev/null | jq "length" 2>/dev/null || echo 0
 }
