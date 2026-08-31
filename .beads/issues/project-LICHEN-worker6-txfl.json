@@ -11,6 +11,9 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T03:44:13.714081Z",
   "started_at": "2026-08-24T11:34:31.12097Z",
+  "labels": [
+    "link"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-txfl",
