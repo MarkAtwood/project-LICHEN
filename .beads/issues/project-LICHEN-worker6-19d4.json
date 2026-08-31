@@ -12,6 +12,7 @@
   "labels": [
     "l2",
     "rust",
-    "security"
+    "security",
+    "tests"
   ]
 }
