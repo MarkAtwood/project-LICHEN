@@ -751,6 +751,30 @@ static int test_dtn_hbh_option_parsing(void)
 	}
 #endif
 
+	/* 10. uint32 unix-time wraparound: expiry just past the 2^32 boundary
+	 * vs now just before it — the wrap-safe signed comparison (same form
+	 * as lichen_router_dtn_expire) must treat expiry as in the future. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt8[64];
+		size_t pkt8_len = make_dtn_hbh_packet(pkt8, sizeof(pkt8),
+						      0x80U, 5U);
+		REQUIRE(pkt8_len != 0U);
+
+		/* Fresh buffer: earlier cases exhausted the 4 DTN slots. */
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt8, .len = pkt8_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = UINT32_MAX - 10U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 14U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+		REQUIRE(router.dtn_buffer_bytes == pkt8_len);
+	}
+#endif
+
 	return 0;
 }
 

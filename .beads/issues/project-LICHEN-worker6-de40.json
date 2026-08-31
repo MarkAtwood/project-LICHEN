@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-de40",
+  "title": "b7z9.47(b): CI clang-tidy full coverage via compile_commands.json",
+  "description": "Sibling child of worker6-b7z9.47(a) (R-APPC-010). CI (.github/workflows/ci.yml:130-136) runs clang-tidy on 'find ... | head -50' with -p /dev/null — arbitrary 50-file coverage and no compile database, so Zephyr-heavy files produce include errors instead of real findings. Fix: generate compile_commands.json in CI (CMake ZEPHYR_EXPORT_COMPILE_COMMANDS or a bearer/cmake pass over the standalone test dirs; Zephyr files need the west/Zephyr env — consider scoping to a curated per-directory compile DB or a twister step that exports it), then run clang-tidy over the COMPLETE subsys/lib/drivers file list with that DB. Verify: job green, coverage count reported, no include-error noise. Landable only after (a).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:34:57.47391625Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T19:34:57.47391625Z",
+  "labels": [
+    "ci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-de40",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.47",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:34:57.64722109Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

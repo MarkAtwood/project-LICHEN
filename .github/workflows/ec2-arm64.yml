@@ -45,9 +45,13 @@ jobs:
         env:
           ZEPHYR_TOOLCHAIN_VARIANT: host
         run: |
-          # ARM64-native tests - no 32-bit emulation needed
+          # ARM64-native tests - no 32-bit emulation needed.
+          # R-APPC-009: every native_sim test builds with ASan/UBSan
+          # (EXTRA_CONF_FILE resolves ../sanitizers.conf from each depth-1
+          # test dir under lichen/tests/).
           west twister -T lichen/tests -p native_sim/native/64 \
-            --inline-logs --overflow-as-errors -j$(nproc)
+            --inline-logs --overflow-as-errors -j$(nproc) \
+            -x EXTRA_CONF_FILE=../sanitizers.conf
         timeout-minutes: 45
 
       - name: Upload twister results

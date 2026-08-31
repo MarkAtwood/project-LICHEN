@@ -1,0 +1,7 @@
+{
+  "id": "1788204235338443760-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-3",
+  "text": "ROUND 6 — MAJOR PROGRESS: suite 30/31 (was 25/31). Root cause of the 5 DAO-flavored failures was the shared join_leaf helper sending a compressed unicast bootstrap DIO; fixed with canonical_dio_packet (Rule 255 + ff02::1a + DIO serialization's built-in Rule-Version v3 — NOTE: Dio::write_to already serializes the rule-version option; do NOT append [0x13,1,3] manually or the gate returns DuplicateRuleVersion). The dual schc_ctx diagnostic technique (match + panic with err Debug) pinpointed it in one run. Also migrated three_rpl_stacks' unicast send_dio(relay_addr/leaf_addr) to multicast. LAST FAILURE: three_rpl_stacks now progresses past all DIO assertions to tests.rs:1742 — leaf AnnouncementAccepted (peer.iid == leaf_identity.iid) assertion fails; next session continues the stale-test migration assertion-by-assertion (announce/DAO flow after multicast join — verify the leaf's join state and announcement sequence numbers against the multicast DIO path). Branch fix-dio-unicast-dis-0l4q now has 4 commits (e2adf9f3cf, 2f424bfd42, + this WIP) on top of origin/main; worktree ~/wt-0l4q warm.",
+  "created_at": "2026-08-31T19:23:55.33844376Z"
+}

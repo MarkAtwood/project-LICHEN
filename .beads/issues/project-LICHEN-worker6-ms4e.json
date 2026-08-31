@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-ms4e",
+  "title": "Roll out extra_conf_files sanitizers wiring to remaining native_sim testcase.yamls + CI",
+  "description": "Follow-up from b7z9.50.4 (acceptance met: one native_sim build verified sanitized on heft — west build -p always -b native_sim/native/64 lichen/tests/routing_dispatch -DEXTRA_CONF_FILE=\u003cabs\u003e/lichen/tests/sanitizers.conf with ZEPHYR_EXTRA_MODULES pinned: CONFIG_ASAN=y CONFIG_UBSAN=y, 47 asan/ubsan symbols in zephyr.elf, routing_dispatch suite PASS under sanitizers; pattern testcase.yaml extra_conf_files: ../../tests/sanitizers.conf landed for routing_dispatch). Remaining: (1) add the same 2-line extra_conf_files entry to every lichen/tests/*/testcase.yaml that runs on native_sim (~40 dirs, mechanical; SKIP tests whose platform_allow excludes native_sim); (2) optionally extend .github/workflows/ec2-arm64.yml's twister sweep with nothing extra (per-testcase wiring covers it) but verify the full -T lichen/tests sweep green with sanitizers in CI — do NOT use a global -x EXTRA_CONF_FILE passthrough: app_identity/testcase.yaml already sets EXTRA_CONF_FILE (ipv6_on.conf) and would collide; (3) LOCAL VALIDATION TRAP: on the shared heft workspace, twister resolves the lichen module from the shared checkout (different lineage than worker checkouts) — mixed-tree builds fail on missing headers (lichen/routing/router.h observed); validate via a single-lineage checkout or the module-pinned direct west build recipe. (4) sanitizers.conf header should document the extra_conf_files mechanism once the rollout lands. Discovered from project-LICHEN-worker6-b7z9.50.4.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:25:40.800780538Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T19:25:40.800780538Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ms4e",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.50.4",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:25:40.9435263Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

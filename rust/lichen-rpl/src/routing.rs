@@ -1876,4 +1876,44 @@ mod tests {
         assert_eq!(state.local_seq(), 1);
         assert_eq!(state.bump_local_seq(), 2);
     }
+
+    #[test]
+    fn extract_updates_rejects_nonzero_target_flags() {
+        // R-05-035 (spec/05-routing.md §8.6): the reserved Target Flags
+        // octet MUST be zero; the raw (pre-verification) ingest path must
+        // reject a nonzero-flags Target. The node-side mirror
+        // (dao_parents_for_source) is pinned in lichen-node routing tests;
+        // this pins the lichen-rpl defense-in-depth check itself.
+        let dodag = ll(1);
+        let origin = ll(2);
+        let parent = ll(3);
+        let manager = DaoManager::new(Ipv6Addr::from(origin), 0, Ipv6Addr::from(dodag));
+
+        let build_dao = |target_flags: u8| {
+            let mut dao_bytes = vec![0u8, 0x40, 0, 1];
+            dao_bytes.extend_from_slice(&dodag);
+            dao_bytes.extend_from_slice(&[OPT_RPL_TARGET, 18, target_flags, 128]);
+            dao_bytes.extend_from_slice(&origin);
+            dao_bytes.extend_from_slice(&[OPT_TRANSIT_INFO, 20, 0, 0x80, 1, 255]);
+            dao_bytes.extend_from_slice(&parent);
+            dao_bytes
+        };
+
+        let rejected_bytes = build_dao(0x01);
+        let rejected = Dao::from_bytes(&rejected_bytes).unwrap();
+        assert!(
+            manager
+                .extract_updates(&rejected, &rejected_bytes)
+                .is_none(),
+            "nonzero Target flags must reject the raw DAO"
+        );
+
+        let accepted_bytes = build_dao(0x00);
+        let accepted = Dao::from_bytes(&accepted_bytes).unwrap();
+        let (updates, update_count) = manager
+            .extract_updates(&accepted, &accepted_bytes)
+            .expect("zero-flags Target extracts");
+        assert_eq!(update_count, 1);
+        assert_eq!(updates[0].as_ref().unwrap().target, Ipv6Addr::from(origin));
+    }
 }
