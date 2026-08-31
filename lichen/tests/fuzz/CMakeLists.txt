@@ -18,23 +18,35 @@ set(LINK_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link)
 # Common warning flags (disable AppleClang nullability warnings in headers)
 set(FUZZ_WARN_FLAGS -Wall -Wextra -Werror -Wno-nullability-completeness)
 
+# LICHEN_FUZZ_FORCE_STANDALONE: skip libFuzzer even when the runtime is
+# available. CI uses this for deterministic driver semantics (the standalone
+# drivers take "iterations seed" argv; libFuzzer binaries take -flags and
+# corpus dirs). AppleClang hosts still auto-detect standalone.
+option(LICHEN_FUZZ_FORCE_STANDALONE "Skip libFuzzer even when available" OFF)
+
 # Check if libFuzzer runtime is available
 include(CheckCSourceCompiles)
-set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer")
-check_c_source_compiles("
-  #include <stdint.h>
-  #include <stddef.h>
-  int LLVMFuzzerTestOneInput(const uint8_t *d, size_t s) { return 0; }
-" HAVE_LIBFUZZER)
-unset(CMAKE_REQUIRED_FLAGS)
+if(LICHEN_FUZZ_FORCE_STANDALONE)
+  set(HAVE_LIBFUZZER FALSE)
+else()
+  set(CMAKE_REQUIRED_FLAGS "-fsanitize=fuzzer")
+  check_c_source_compiles("
+    #include <stdint.h>
+    #include <stddef.h>
+    int LLVMFuzzerTestOneInput(const uint8_t *d, size_t s) { return 0; }
+  " HAVE_LIBFUZZER)
+  unset(CMAKE_REQUIRED_FLAGS)
+endif()
 
 if(HAVE_LIBFUZZER)
   # Full libFuzzer build
-  set(FUZZ_FLAGS -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
+  set(FUZZ_FLAGS -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all
+    -fno-omit-frame-pointer)
   message(STATUS "libFuzzer available: building with -fsanitize=fuzzer")
 else()
   # Standalone build with sanitizers (for AppleClang without libFuzzer runtime)
-  set(FUZZ_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+  set(FUZZ_FLAGS -fsanitize=address,undefined -fno-sanitize-recover=all
+    -fno-omit-frame-pointer)
   set(FUZZ_STANDALONE_DEF FUZZ_STANDALONE)
   message(STATUS "libFuzzer not available: building standalone fuzzers")
 endif()
