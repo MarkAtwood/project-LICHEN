@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T05:09:02.977453Z",
   "labels": [
-    "c"
+    "c",
+    "coap"
   ],
   "dependencies": [
     {
