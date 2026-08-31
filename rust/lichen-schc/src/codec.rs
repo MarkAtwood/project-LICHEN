@@ -792,6 +792,11 @@ fn compress_coap(packet: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     if needed > out.len() {
         return Err(BufferTooSmall::new(needed, out.len()).into());
     }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
     out[0] = rule_id;
 
     let mut w = BitWriter::new(&mut out[1..]);
@@ -843,9 +848,26 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     let icmp_seq = u16::from_be_bytes([icmp[6], icmp[7]]);
     let tail = &icmp[8..];
 
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + icmp_type(8)
+    // + id(16) + seq(16) = 176.
+    const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 16 + 16;
+    let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_ICMPV6_ECHO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -857,12 +879,8 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     w.write(icmp_id as u128, 16)?;
     w.write(icmp_seq as u128, 16)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), RESIDUE_BITS.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -892,9 +910,26 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let dodagid = u128::from_be_bytes(rpl[8..24].try_into().expect("DODAGID is 16 bytes"));
     let tail = &rpl[24..];
 
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + instance(8)
+    // + version(8) + rank(16) + gmop(8) + dtsn(8) + dodagid(128) = 312.
+    const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 8 + 16 + 8 + 8 + 128;
+    let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_RPL_DIO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -909,12 +944,8 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(dtsn as u128, 8)?;
     w.write(dodagid, 128)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), RESIDUE_BITS.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -942,9 +973,26 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let dodagid = u128::from_be_bytes(rpl[4..20].try_into().expect("DODAGID is 16 bytes"));
     let tail = &rpl[20..];
 
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + instance(8)
+    // + kd_flags(8) + seq(8) + dodagid(128) = 288.
+    const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 8 + 8 + 128;
+    let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_RPL_DAO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -957,12 +1005,8 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(seq as u128, 8)?;
     w.write(dodagid, 128)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), RESIDUE_BITS.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -2194,8 +2238,10 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
             } else {
                 RULE_LINK_LOCAL_COAP
             };
-            if let Ok(n) = compress_coap(packet, out, rule) {
-                return enforce_encoded_profile_limit(n);
+            match compress_coap(packet, out, rule) {
+                Ok(n) => return enforce_encoded_profile_limit(n),
+                Err(SchcError::NoMatchingRule) => {}
+                Err(error) => return Err(error),
             }
         }
         // Yggdrasil (02xx::/8) addresses use rules 1/6 (120-bit compression)
@@ -2206,8 +2252,10 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
         } else {
             RULE_GLOBAL_COAP
         };
-        if let Ok(n) = compress_coap(packet, out, rule) {
-            return enforce_encoded_profile_limit(n);
+        match compress_coap(packet, out, rule) {
+            Ok(n) => return enforce_encoded_profile_limit(n),
+            Err(SchcError::NoMatchingRule) => {}
+            Err(error) => return Err(error),
         }
     } else if nh == 58 && packet.len() >= 40 + 4 {
         // ICMPv6 — verify checksum before selecting rules 2/3/4.
@@ -2226,22 +2274,28 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
             && is_link_local_64(dst)
             && packet.len() >= 40 + 8
         {
-            if let Ok(n) = compress_icmpv6_echo(packet, out) {
-                return enforce_encoded_profile_limit(n);
+            match compress_icmpv6_echo(packet, out) {
+                Ok(n) => return enforce_encoded_profile_limit(n),
+                Err(SchcError::NoMatchingRule) => {}
+                Err(error) => return Err(error),
             }
         } else if icmp_type == 155 && is_link_local_64(src) && is_link_local_64(dst) {
             if icmp_code == 1 && packet.len() >= 40 + 4 + 24 {
                 // DIO
-                if let Ok(n) = compress_rpl_dio(packet, out) {
-                    return enforce_encoded_profile_limit(n);
+                match compress_rpl_dio(packet, out) {
+                    Ok(n) => return enforce_encoded_profile_limit(n),
+                    Err(SchcError::NoMatchingRule) => {}
+                    Err(error) => return Err(error),
                 }
             } else if icmp_code == 2 && packet.len() >= 40 + 4 + 20 {
                 // DAO — only rule 4 if D flag set
                 // packet[45] = offset 40 (IPv6) + 4 (ICMPv6 header) + 1 (instance) = K/D/flags byte
                 let kd_flags = packet[45];
                 if kd_flags & 0x40 != 0 {
-                    if let Ok(n) = compress_rpl_dao(packet, out) {
-                        return enforce_encoded_profile_limit(n);
+                    match compress_rpl_dao(packet, out) {
+                        Ok(n) => return enforce_encoded_profile_limit(n),
+                        Err(SchcError::NoMatchingRule) => {}
+                        Err(error) => return Err(error),
                     }
                 }
             }
@@ -2766,6 +2820,93 @@ mod tests {
                 "SCHC packet exceeds profile limit"
             ))
         ));
+    }
+
+    #[test]
+    fn coap_compress_error_leaves_buffer_untouched() {
+        // Rule 0 residue is a fixed 22 bytes; tail is the 0xFF marker plus
+        // payload. One output byte short must fail without mutating the
+        // caller buffer, not even the rule byte or BitWriter zero-fill.
+        let packet = coap_rule0_packet(64);
+        let mut out = vec![0xAAu8; 1 + 22 + 64];
+        assert!(matches!(
+            compress_coap(&packet, &mut out, RULE_LINK_LOCAL_COAP),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn coap_compress_over_profile_leaves_buffer_untouched() {
+        // One encoded byte over the 22,554-byte ceiling must fail before any
+        // write: the dispatcher's profile error is pre-write atomic.
+        let packet = coap_rule0_packet(SCHC_FRAG_MAX_PACKET_SIZE - 23);
+        let mut out = vec![0xAAu8; SCHC_FRAG_MAX_PACKET_SIZE + 100];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn icmpv6_echo_compress_error_leaves_buffer_untouched() {
+        let packet = icmpv6_echo_packet(8);
+        let mut out = vec![0xAAu8; 1 + 22 + 7]; // residue is 22 bytes; one short
+        assert!(matches!(
+            compress_icmpv6_echo(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn rpl_dio_compress_error_leaves_buffer_untouched() {
+        let packet = rpl_dio_packet(28 + 4); // 4-byte tail
+        let mut out = vec![0xAAu8; 1 + 39 + 3]; // residue is 39 bytes; one short
+        assert!(matches!(
+            compress_rpl_dio(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn rpl_dao_compress_error_leaves_buffer_untouched() {
+        // DAO base: instance + K/D flags (D set) + reserved + seq + DODAGID.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let tail_len = 4;
+        let icmp_len = 4 + 20 + tail_len;
+        let mut packet = vec![0u8; IPV6_HEADER_LEN + icmp_len];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&(icmp_len as u16).to_be_bytes());
+        packet[6] = 58;
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&src);
+        packet[24..40].copy_from_slice(&dst);
+        packet[40] = 155;
+        packet[41] = 2;
+        packet[44] = 0; // instance
+        packet[45] = 0x40; // K/D flags: D set
+        packet[46] = 0; // reserved
+        packet[47] = 1; // seq
+        packet[48..64].copy_from_slice(&src); // DODAGID
+        let checksum = icmpv6_checksum_parts(
+            packet[8..24].try_into().unwrap(),
+            packet[24..40].try_into().unwrap(),
+            &[&packet[40..]],
+        );
+        packet[42..44].copy_from_slice(&checksum.to_be_bytes());
+
+        let mut out = vec![0xAAu8; 1 + 36 + 3]; // residue is 36 bytes; one short
+        assert!(matches!(
+            compress_rpl_dao(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
     }
 
     fn uncompressed_packet(len: usize) -> Vec<u8> {
