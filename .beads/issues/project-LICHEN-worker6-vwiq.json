@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T06:09:49.984129Z",
   "labels": [
-    "security"
+    "security",
+    "human-only"
   ],
   "dependencies": [
     {

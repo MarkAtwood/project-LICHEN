@@ -10,6 +10,7 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T17:14:54.696627Z",
   "labels": [
-    "oscore"
+    "oscore",
+    "human-only"
   ]
 }

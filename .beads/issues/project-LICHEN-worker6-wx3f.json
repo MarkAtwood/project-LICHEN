@@ -11,6 +11,7 @@
   "updated_at": "2026-08-28T20:51:18.591137Z",
   "labels": [
     "security",
-    "tests"
+    "tests",
+    "human-only"
   ]
 }

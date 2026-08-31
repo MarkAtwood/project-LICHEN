@@ -8,6 +8,9 @@
   "created_at": "2026-08-28T14:53:39.298074Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T14:53:39.298074Z",
+  "labels": [
+    "human-only"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-qpco.6",
