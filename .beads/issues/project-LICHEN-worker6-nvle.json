@@ -9,6 +9,9 @@
   "created_at": "2026-08-31T02:01:28.175060049Z",
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-31T02:01:28.175060049Z",
+  "labels": [
+    "zephyr"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-nvle",
