@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T19:14:01.493097Z",
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-30T19:14:01.493097Z",
+  "labels": [
+    "gateway"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-s8s6",

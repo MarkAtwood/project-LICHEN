@@ -1,2 +1,3 @@
 {"id":"01a053b5-2cdd-7ca2-ab10-8c9558249d0e","issue_id":"project-LICHEN-worker6-yiss","event_type":"created","actor":"opencode-worker-1","old_value":"","new_value":"","created_at":"2026-08-30T17:26:17.565829Z"}
 {"id":"01a055fd-6620-7d79-bd2e-55d6306fb550","issue_id":"project-LICHEN-worker6-yiss","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: tests","created_at":"2026-08-31T04:04:25.248884482Z"}
+{"id":"01a0560e-e0af-7dec-ae6d-2ea186f83c42","issue_id":"project-LICHEN-worker6-yiss","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: gateway","created_at":"2026-08-31T04:23:30.735913612Z"}

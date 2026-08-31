@@ -10,7 +10,8 @@
   "created_by": "opencode-worker-1",
   "updated_at": "2026-08-30T17:26:17.539562Z",
   "labels": [
-    "tests"
+    "tests",
+    "gateway"
   ],
   "dependencies": [
     {
