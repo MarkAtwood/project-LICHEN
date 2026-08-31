@@ -11,7 +11,8 @@
   "updated_at": "2026-08-28T17:14:37.03975Z",
   "labels": [
     "coap",
-    "l2"
+    "l2",
+    "tdma"
   ],
   "dependencies": [
     {
