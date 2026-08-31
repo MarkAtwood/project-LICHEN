@@ -7,6 +7,7 @@ use std::collections::{HashSet, VecDeque};
 
 use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::iid_from_pubkey;
+use lichen_rpl::root_seq_cache::RootSeqCache;
 use lichen_rpl::routing::{
     DaoAdmissionState, DaoAdmissionUpdateError, DaoPersistentOpenError, DaoProvisionError,
     DaoTxState,
@@ -55,6 +56,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
+            root_seqs: RootSeqCache::default(),
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
@@ -94,6 +96,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
+            root_seqs: RootSeqCache::default(),
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
@@ -132,6 +135,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
+            root_seqs: RootSeqCache::default(),
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
@@ -181,6 +185,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
+            root_seqs: RootSeqCache::default(),
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
