@@ -16,7 +16,8 @@
   "labels": [
     "security",
     "review",
-    "ultracode"
+    "ultracode",
+    "python"
   ],
   "dependencies": [
     {

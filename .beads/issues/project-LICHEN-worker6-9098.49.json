@@ -14,7 +14,8 @@
   "labels": [
     "correctness",
     "review",
-    "ultracode"
+    "ultracode",
+    "python"
   ],
   "dependencies": [
     {
