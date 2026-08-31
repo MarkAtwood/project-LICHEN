@@ -698,7 +698,8 @@ int lichen_router_route_packet(struct lichen_router *router,
 		 * S-flagged packet is stored and nodes with valid time enforce
 		 * expiry downstream. */
 		if (next.route.decision == LICHEN_ROUTE_DROP && view.dtn_store_forward &&
-		    (packet->now_unix == 0U || view.dtn_expiry_unix > packet->now_unix)) {
+		    (packet->now_unix == 0U ||
+		     (int32_t)(view.dtn_expiry_unix - packet->now_unix) > 0)) {
 			ret = lichen_router_dtn_buffer(router, destination_iid,
 						       packet->data, packet->len,
 						       view.dtn_expiry_unix, now_ms);
