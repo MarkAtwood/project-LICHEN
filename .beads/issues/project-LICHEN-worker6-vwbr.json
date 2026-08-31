@@ -11,6 +11,7 @@
   "updated_at": "2026-08-15T15:28:42.648461Z",
   "labels": [
     "review",
-    "local-ok"
+    "local-ok",
+    "rust"
   ]
 }
