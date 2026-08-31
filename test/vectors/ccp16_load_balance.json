@@ -335,7 +335,7 @@
     {
       "category": "adaptive_sf",
       "name": "adaptive_sf_density_10_sf_plus_2",
-      "description": "Density > 10 triggers SF += 2.",
+      "description": "Density > 8 triggers SF += 2.",
       "input": {
         "assigned_sf": 10,
         "density": 11,
@@ -348,7 +348,7 @@
         "sf": 12,
         "tx_allowed": true
       },
-      "oracle_note": "Per spec step 3: IF Density > 10 THEN SF = MIN(12, SF + 2). 10 + 2 = 12."
+      "oracle_note": "Per spec 02a 2a.8 step 3: IF Density > 8 THEN SF = MIN(12, SF + 2). 10 + 2 = 12."
     },
     {
       "category": "adaptive_sf",
@@ -605,7 +605,7 @@
     {
       "category": "adaptive_sf",
       "name": "adaptive_sf_critical_density_sf12",
-      "description": "Density > 20 (critical) is handled via density > 10 rule to SF += 2.",
+      "description": "Density > 20 (critical) is handled via density > 8 rule to SF += 2.",
       "input": {
         "assigned_sf": 10,
         "density": 25,
