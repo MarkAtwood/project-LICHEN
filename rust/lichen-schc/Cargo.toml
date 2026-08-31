@@ -53,4 +53,4 @@ required-features = ["std"]
 
 [[test]]
 name = "link_layer_integration"
-required-features = ["std"]
+required-features = ["std", "raw-fragment-codec"]

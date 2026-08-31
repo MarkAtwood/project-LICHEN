@@ -4707,8 +4707,8 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             # Canonical emission policy (spec 03-adaptation.md Rule 255 TX/RX
             # split): the compressor MUST NOT originate policy-invalid
             # endpoints via Rule 255 fallback either. (Message text is not
-            # pinned here: unspecified endpoints are caught by the structural
-            # receive-side check before the emission policy runs.)
+            # pinned here: unspecified endpoints are caught by the Rule 255
+            # emission policy, which raises before the packet is encoded.)
             with pytest.raises(SchcError):
                 compress_packet(raw)
 

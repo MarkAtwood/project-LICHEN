@@ -1031,13 +1031,41 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + addr_mode(1) + addresses + direction(1)
+    // + other_port(16); link-local writes two 64-bit IIDs, full writes two
+    // 128-bit addresses.
+    let link_local = is_link_local_64(src) && is_link_local_64(dst);
+    let residue_bits: usize = if link_local {
+        8 + 1 + 64 + 64 + 1 + 16
+    } else {
+        8 + 1 + 128 + 128 + 1 + 16
+    };
+    let needed = 1 + residue_bits.div_ceil(8) + tail.len();
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    // Profile ceiling: encoded Rule 7 (MQTT-SN) output may not exceed the
+    // fragmenter reassembly bound. Checked pre-write so this error is
+    // buffer-atomic too (the dispatcher's post-write
+    // enforce_encoded_profile_limit never fires for this rule).
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_MQTT_SN;
 
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
 
     // Address compression: same logic as CoAP rules
-    if is_link_local_64(src) && is_link_local_64(dst) {
+    if link_local {
         let src_iid = u64::from_be_bytes(src[8..16].try_into().expect("IID is 8 bytes"));
         let dst_iid = u64::from_be_bytes(dst[8..16].try_into().expect("IID is 8 bytes"));
         w.write(0, 1)?; // Address mode: 0 = link-local
@@ -1055,12 +1083,8 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(direction as u128, 1)?;
     w.write(other_port as u128, 16)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), residue_bits.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -2636,6 +2660,71 @@ mod tests {
         ));
         let mut exact = vec![0u8; packet.len()];
         assert_eq!(decompress(&compressed, &mut exact).unwrap(), packet.len());
+    }
+
+    #[test]
+    fn mqtt_sn_compress_error_leaves_buffer_untouched() {
+        // Compress must be atomic on error, matching decompress: an
+        // Err(BufferTooSmall) may not modify any byte of the output buffer,
+        // not even the rule byte or the BitWriter zero-fill.
+        let link_local_src = hex("fe800000000000000000000000000001");
+        let link_local_dst = hex("fe800000000000000000000000000002");
+        // needed = 1 (rule) + 20 (residue) + 4 (tail) = 25
+        let packet = mqtt_packet(
+            &link_local_src,
+            &link_local_dst,
+            PORT_MQTT_SN,
+            5000,
+            b"ping",
+        );
+        let mut out = vec![0xAAu8; 24];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        let mut exact = vec![0xAAu8; 25];
+        assert_eq!(compress(&packet, &mut exact).unwrap(), 25);
+
+        // Full-address branch: needed = 1 + 36 (residue) + 1 (tail) = 38
+        let global_src = hex("20010000000000000000000000000001");
+        let global_dst = hex("20010000000000000000000000000002");
+        let packet = mqtt_packet(&global_src, &global_dst, PORT_MQTT_SN, 5000, b"x");
+        let mut out = vec![0xAAu8; 37];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        let mut exact = vec![0xAAu8; 38];
+        assert_eq!(compress(&packet, &mut exact).unwrap(), 38);
+    }
+
+    #[test]
+    fn mqtt_sn_compress_over_profile_leaves_buffer_untouched() {
+        // needed = 1 (rule) + 20 (residue) + 22,534 (tail) = 22,555, one byte
+        // over the 22,554-byte profile ceiling. The pre-write profile precheck
+        // rejects before any byte is written, so the sentinel buffer survives.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21 + 1];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        let needed = 1 + 20 + payload.len();
+        assert_eq!(needed, SCHC_FRAG_MAX_PACKET_SIZE + 1);
+        let mut out = vec![0xAAu8; needed];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        // Boundary: exactly at the ceiling still encodes (also covered by
+        // mqtt_sn_profile_size_boundary's round trip).
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        let mut out = vec![0xAAu8; needed - 1];
+        assert_eq!(compress(&packet, &mut out).unwrap(), needed - 1);
     }
 
     fn coap_rule0_packet(payload_len: usize) -> Vec<u8> {
