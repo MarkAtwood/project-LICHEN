@@ -16,7 +16,8 @@
     "coap",
     "l2",
     "networking",
-    "oscore"
+    "oscore",
+    "rust"
   ],
   "dependencies": [
     {
