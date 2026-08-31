@@ -114,9 +114,12 @@ bool lichen_dtn_buffer_message(struct lichen_dtn_buffer *buf,
 		return false;
 	}
 
-	/* Reject already-expired messages.  Wrap-safe signed comparison,
-	 * same form as lichen_router_dtn_expire (year-2106 consistency). */
-	if ((int32_t)(expiry_unix - now_unix) <= 0) {
+	/* Reject already-expired messages. expiry_unix == 0 is the R-05-080
+	 * fail-open sentinel ("no validated deadline" from a clockless
+	 * ingester, see dtn.h) and is always admitted. All other values use
+	 * a wrap-safe signed comparison, same form as
+	 * lichen_router_dtn_expire (year-2106 consistency). */
+	if (expiry_unix != 0U && (int32_t)(expiry_unix - now_unix) <= 0) {
 		return false;
 	}
 
@@ -306,6 +309,17 @@ uint16_t lichen_dtn_expire_old(struct lichen_dtn_buffer *buf, uint32_t now_unix)
 			continue;
 		}
 
+		/* R-05-080 fail-open: expiry_unix == 0 marks a record stored
+		 * by a clockless node that could not validate an absolute
+		 * deadline; expiry is enforced downstream by nodes with valid
+		 * time. Flushing it here would defeat that handoff, so 0 is
+		 * never treated as already-expired. */
+		if (msg->expiry_unix == 0U) {
+			continue;
+		}
+
+		/* Wrap-safe signed comparison, same form as
+		 * lichen_router_dtn_expire (year-2106 consistency). */
 		if ((int32_t)(msg->expiry_unix - now_unix) <= 0) {
 			buf->current_bytes -= message_size(msg);
 			msg->valid = false;

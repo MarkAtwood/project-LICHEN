@@ -18,6 +18,7 @@
 #include <lichen/routing/dtn.h>
 #include <lichen/senml.h>
 #include <lichen/l2/ipv6_addr.h>
+#include <lichen/link.h>
 
 LOG_MODULE_REGISTER(lichen_coap_dtn, CONFIG_LICHEN_COAP_DEADDROP_LOG_LEVEL);
 
@@ -55,11 +56,11 @@ static bool parse_recipient(const uint8_t *payload, size_t len,
  * R-05-080: a node without valid wall-clock time MUST NOT drop messages
  * based on expiry timestamp alone; docs/firmware-time-provider.md:
  * never synthesize Unix time from uptime). When the clock is invalid,
- * expiry sweeps are skipped and the store path uses DTN_NO_EXPIRY so
+ * expiry sweeps are skipped and the store path uses the expiry==0
+ * fail-open sentinel ("no validated deadline", see routing/dtn.h) so
  * the message is held for downstream nodes with valid time to enforce
- * expiry. */
-#define DTN_NO_EXPIRY UINT32_MAX
-
+ * expiry. Guarded because time_sync.c only links with
+ * CONFIG_LICHEN_CCP_TIME_SYNC. */
 static bool dtn_wall_clock(uint32_t *unix_time)
 {
 #ifdef CONFIG_LICHEN_CCP_TIME_SYNC
@@ -184,19 +185,20 @@ static int deaddrop_post(struct coap_resource *resource,
 		}
 	}
 	uint32_t now = 0U;
-	uint32_t expiry = DTN_NO_EXPIRY;
+	uint32_t expiry = 0U;
 
 	/* Clockless node (R-05-080): no valid wall clock means no local
-	 * expiry decision - store with the no-expiry sentinel and let
-	 * downstream nodes with valid time enforce. now stays 0 (the
-	 * honest "no time"), which the buffer accepts because
-	 * DTN_NO_EXPIRY > 0. */
+	 * expiry decision - store with the expiry==0 fail-open sentinel
+	 * ("no validated deadline", dtn.h) and let downstream nodes with
+	 * valid time enforce. now stays 0 (the honest "no time"); the
+	 * buffer admits the record because the sentinel bypasses the
+	 * expiry check. */
 	if (dtn_wall_clock(&now)) {
 		/* Saturate to the sentinel on wrap (clock near UINT32_MAX
-		 * or garbage-but-valid time): fail open, never store an
-		 * already-expired or accidentally never-expiring value. */
+		 * or garbage-but-valid time): fail open, never store a
+		 * wrapped already-expired value. */
 		expiry = (now > UINT32_MAX - LICHEN_DTN_DEFAULT_TTL_SEC)
-				 ? DTN_NO_EXPIRY
+				 ? 0U
 				 : now + LICHEN_DTN_DEFAULT_TTL_SEC;
 	}
 	bool ok = lichen_dtn_buffer_message(&s_dtn_buf, payload, payload_len,
