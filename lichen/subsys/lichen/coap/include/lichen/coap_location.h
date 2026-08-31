@@ -155,6 +155,28 @@ int lichen_position_cache_encode(int64_t now_ms,
 
 /** Set read privacy for /pos/cache; non-public modes fail closed. */
 int lichen_position_cache_set_privacy(enum lichen_position_privacy_mode mode);
+/* Spec 18.2.4 (l1qw.32): the allowed-peer list replaces the single-peer
+ * whitelist. Peers are 8-byte link-local IIDs. The list governs group-mode
+ * position reads; it is empty (deny-all non-public) by default. */
+#define LICHEN_POSITION_ALLOWED_PEERS_MAX 8U
+
+size_t lichen_position_privacy_allowed_count(void);
+int lichen_position_privacy_allowed_get(size_t index, uint8_t iid[8]);
+int lichen_position_privacy_allowed_set(const uint8_t (*iids)[8], size_t count);
+bool lichen_position_privacy_allowed(const uint8_t iid[8]);
+enum lichen_position_privacy_mode lichen_position_privacy_mode(void);
+const char *lichen_position_privacy_mode_name(enum lichen_position_privacy_mode mode);
+
+/* /config/privacy resource handlers (spec 18.2.4, l1qw.32(b)); test-visible. */
+struct coap_resource;
+struct coap_packet;
+int lichen_config_privacy_get_handler(struct coap_resource *resource,
+				      struct coap_packet *request,
+				      struct sockaddr *addr, socklen_t addr_len);
+int lichen_config_privacy_allowed_put_handler(
+	struct coap_resource *resource, struct coap_packet *request,
+	struct sockaddr *addr, socklen_t addr_len);
+
 
 /** Configure deterministic beacon state without starting Zephyr work. */
 int lichen_position_beacon_configure(

@@ -657,8 +657,7 @@ async fn join_leaf<R: Radio, L: Radio, S: NonVolatile>(
     // Canonical multicast DIO delivery (spec 09 13.3 R-09-005): dst
     // ff02::1a, broadcast L2, Rule 255 uncompressed, hop 255 — the only
     // shape the authenticated-DIO admission gate accepts.
-    const RPL_ALL_RPL_NODES: [u8; 16] =
-        [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
+    const RPL_ALL_RPL_NODES: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
     sender
         .send_ipv6_uncompressed_to(
             &dio_packet_from(
@@ -2461,6 +2460,61 @@ fn plain_ipv6_packet(
     packet[6] = next_header_value;
     packet[IPV6_HEADER_LEN..].copy_from_slice(body);
     packet
+}
+
+/// ba39 v1c2: a decapsulated inner datagram that still carries an RH3 is
+/// dropped at the local-delivery decap site instead of being parsed without
+/// the survey's grid constraints (bounded tunnel profile).
+#[tokio::test]
+async fn tunneled_inner_with_rh3_is_dropped_at_local_delivery() {
+    let attacker_id = identity(113);
+    let leaf_id = identity(114);
+    let leaf_addr = address(&leaf_id, 1);
+    let attacker_addr = root_address(&attacker_id);
+    let relay = link_local_from_iid([0x02, 9, 9, 9, 9, 9, 9, 9]);
+    let (attacker_radio, leaf_radio) = LoopbackRadio::pair();
+    let mut attacker = Stack::new_default_epoch(attacker_radio, attacker_id.clone());
+    attacker.add_peer(PeerIdentity::from_pubkey(leaf_id.pubkey));
+    let mut leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_id.clone());
+    leaf_stack.add_peer(PeerIdentity::from_pubkey(attacker_id.pubkey));
+    let prefix = root_address(&attacker_id)[..8].try_into().unwrap();
+    let mut leaf = RplStack::provision_leaf(
+        leaf_stack,
+        leaf_addr,
+        root_address(&attacker_id),
+        announces(prefix),
+        MemStorage::new(),
+    )
+    .unwrap();
+
+    // Inner: an ordinary datagram whose next-header is 43 (RH3) with
+    // segments left > 0 — an embedded routing header that must never reach
+    // secure.rs's parser without the survey's constraints.
+    let attacker_native = root_address(&attacker_id);
+    let mut body: Vec<u8> = vec![43, 2, 3, 1];
+    body.extend_from_slice(&relay);
+    body.extend_from_slice(b"x");
+    let inner = plain_ipv6_packet(43, attacker_native, leaf_addr, &body);
+    let outer = plain_ipv6_packet(41, attacker_addr, leaf_addr, &inner);
+
+    // Absent/local-delivery decap site).
+    let outer = plain_ipv6_packet(41, attacker_addr, leaf_addr, &inner);
+
+    attacker
+        .send_ipv6_raw(&outer, Priority::Routing)
+        .await
+        .unwrap();
+    let outcome = leaf.receive(1, 100).await.unwrap();
+    assert!(
+        outcome.is_none() || matches!(outcome, Some(RplReceiveOutcome::RplRejected)),
+        "inner-with-RH3 tunnel must not be delivered: {outcome:?}"
+    );
+    // The list of delivered/rejected outcomes must never include the inner
+    // being handed to upper layers as an ordinary datagram.
+    assert!(!matches!(
+        outcome,
+        Some(RplReceiveOutcome::DeliveredIpv6(_))
+    ));
 }
 
 #[test]
