@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-j9j3",
+  "title": "C lichen_schc_compress reports raw-bound violation as BUFFER_TOO_SMALL",
+  "description": "Codereview finding (P3) from ba39 3-pass review. lichen/subsys/lichen/schc/schc.c raw-packet ceiling guard (pkt_len \u003e SCHC_FRAGMENT_MAX_PACKET_SIZE) returns SCHC_ERR_BUFFER_TOO_SMALL; a caller keying on BUFFER_TOO_SMALL to grow-and-retry would retry an undeliverable datagram. Rust/Python classify it as a profile-limit error (InvalidPacket). C has a flat error taxonomy; decide whether to add a dedicated code (e.g. SCHC_ERR_PROFILE_LIMIT) or document the conflation. Discovered-from: project-LICHEN-worker6-ba39",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:06:02.365193736Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:06:02.365193736Z"
+}

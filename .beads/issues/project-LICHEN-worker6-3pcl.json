@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-3pcl",
+  "title": "ping_l2: loopback packet-path wait times out after TX capacity fix",
+  "description": "Follow-up from 5fva.1. After commit 237dc35064 (frame_len capacity fix) + 84908feee9 (re-provision + drop legacy link key), test_full_l2_loopback_ping advances past all frame-build errors: TX frames now build and transmit, but wait_for_packet_path times out after 10s — the RX side of the loopback path (lichen_lora_l2 loopback RX -\u003e lichen_l2_input -\u003e ping reply -\u003e TX) is never observed. Debug the loopback RX pipeline on native_sim (heft): radio loopback driver delivers TX frame to RX callback? SCHC decompress + replay + peer auth on the reply path? Logs show no RX frame delivered within the wait window. Partial state: suite now 4/7 (was 3/7 at start of chain).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:51:13.718329631Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T08:51:13.718329631Z",
+  "labels": [
+    "tests",
+    "l2"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3pcl",
+      "depends_on_id": "project-LICHEN-worker6-5fva.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T08:51:13.967600895Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

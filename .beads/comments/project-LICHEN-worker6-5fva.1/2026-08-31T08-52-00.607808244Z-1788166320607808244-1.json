@@ -1,0 +1,7 @@
+{
+  "id": "1788166320607808244-1",
+  "issue_id": "project-LICHEN-worker6-5fva.1",
+  "author": "opencode-worker-3",
+  "text": "TIMEBOX release round 2: found a THIRD root cause beyond the two from last round — lichen_l2_tx.c passed frame_len=0 as the in:capacity param to lichen_link_tx (link.h contract: In: buffer size, Out: frame length), guaranteeing -ENOMEM on EVERY link TX; this is a production-path bug on main, fixed in 237dc35064 (frame_len = sizeof(tx_frame_buf), comment corrected). Validation on heft (main checkout + patches): frame build now succeeds and frames transmit (full_l2_loopback_ping went from instant fail to a 10s real packet-path wait). Remaining drift filed as 3pcl (loopback RX wait timeout) and vn0t (test isolation: -ECANCELED leak + LoRa-not-running); suite currently 4/7. Reviews: pass 1 (correctness) earlier round caught the errno-alias duplicate-case; this round's l2_tx change is a 1-line capacity init with corrected comment — self-reviewed against link.h contract + validated by the suite progressing exactly as the contract predicts. Follow-ups: 3pcl, vn0t; store-reliability flagged for Mark in biod.",
+  "created_at": "2026-08-31T08:52:00.607808244Z"
+}

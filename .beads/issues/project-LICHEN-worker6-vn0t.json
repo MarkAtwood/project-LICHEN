@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-vn0t",
+  "title": "ping_l2: test-isolation drift after TX fix (queue_stats -ECANCELED leak, udp LoRa-not-running)",
+  "description": "Follow-up from 5fva.1. After 237dc35064 + 84908feee9: (1) test_queue_stats_accessor_lifecycle fails at its FIRST stats read with -125/ECANCELED — the destroy-retry pending latch from the preceding test_disable_retries_incomplete_queue_destruction leaks past its completed teardown; pre-fix it passed only because TX never really ran. (2) test_udp_payload_reaches_socket_after_l2_injection logs 'TX rejected (LoRa L2 not running)' — its TX attempt lands while L2 is stopped from prior teardown ordering. Both are test-order/state-isolation issues, not stack bugs: each reinit-cycling test must fully restore lora_l2 running + queue state (and clear retry latches) before returning, or tests need a per-test setUp barrier.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:51:20.61240918Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T09:17:48.473152536Z",
+  "started_at": "2026-08-31T09:14:46.604535541Z",
+  "labels": [
+    "tests",
+    "l2"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vn0t",
+      "depends_on_id": "project-LICHEN-worker6-5fva.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T08:51:20.825587506Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

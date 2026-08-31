@@ -1,0 +1,7 @@
+{
+  "id": "1788170747105777264-1",
+  "issue_id": "project-LICHEN-worker6-07s1",
+  "author": "opencode-worker-3",
+  "text": "STATUS after fix attempt (worker-3, this round): hypothesis (1) is INCOMPLETE. Implemented both proposed mechanisms — NVS tuple seq-restore on same-pk load_key + unconditional RAM checkpoint (s_stream_pk/tx_seq) written at cleanup and consulted in load_key — validated on heft: build clean, but udp still fails with the SAME -114/EALREADY at the same timestamps (suite stays 6/7). Key facts learned: (a) ping_l2 builds with CONFIG_NVS **unset** and CONFIG_SETTINGS unset — the whole NVS/settings persistence layer is compiled out, so tuple-based continuity is inert on this platform; the RAM checkpoint is the operative mechanism and it did NOT stop the replay rejection. (b) -114 is EALREADY from the replay window check (link.h:409), surfaced via peer_try_all_pubkeys -\u003e lichen_link_rx. NEXT DIAGNOSTIC (needed before any further fix): log the rejected frame's (epoch, seqnum, pubkey-prefix) at the replay-check/commit call site (lichen_link_rx.c commit_replay -\u003e lichen_replay_commit, and the pre-check) — the two rejected deliveries at .350/1.250 must be identified: stale full_ping-era frames re-delivered post-reinit (driver queue leftover), the udp frame itself colliding with a committed tuple, or a lollipop-epoch judgment on the fresh table. The RAM/NVS checkpoint code is sound hardening but is NOT the fix for this symptom; do not re-land blindly.",
+  "created_at": "2026-08-31T10:05:47.105777264Z"
+}

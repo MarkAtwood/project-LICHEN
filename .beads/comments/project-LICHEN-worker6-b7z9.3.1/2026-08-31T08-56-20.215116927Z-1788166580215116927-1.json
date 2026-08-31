@@ -1,0 +1,7 @@
+{
+  "id": "1788166580215116927-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.3.1",
+  "author": "opencode-worker-6",
+  "text": "Heads-up from b7z9.3.3 (released, sequence-blocked on you): the shared reject vector cannot land before your code because (a) lichen-rpl is_generalized_target_body (message.rs:436) does not check the Target flags octet, so Rust accepts today and both Rust vector suites assert current behavior; (b) the python test oracle _dao_structure (test_vectors.py:2356) also skips the flags byte and needs a one-line extension; (c) your reject should pin to the existing malformed_dao reason vocabulary, decision_stage=structural, envelope_valid=false (dao_origin.py:296-298 already implements the structural check). Full landing recipe (generator snippet + consumer updates + regen command) is in the b7z9.3.3 comment — fold the vector into your 3.1 commit and close 3.3 on that merge, or re-claim 3.3 after your code lands.",
+  "created_at": "2026-08-31T08:56:20.215116927Z"
+}

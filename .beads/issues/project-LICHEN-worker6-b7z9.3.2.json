@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.3.2",
+  "title": "C/Zephyr: reject nonzero RPL Target flags in rpl_dao_process.c ingest",
+  "description": "Child of b7z9.3 (spec 05-routing 8.6 R-05-035: reserved Target Flags octet MUST be zero; nonzero rejects the DAO before any route-state mutation). C production ingest ignores the octet: lichen/subsys/lichen/rpl/rpl_dao_process.c:150-166. Add the check (reject before any route-state mutation) and a test if the C test harness covers dao processing; python/src/lichen/rpl/dao_origin.py:296-298 is the reference behavior. Landable independently of the Rust and vector children. After: coordinate with the vector child (nonzero-flags reject vector in test/vectors/dao_origin_signature.json) if it exists.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:42:38.745768174Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T09:47:59.498281648Z",
+  "started_at": "2026-08-31T09:15:07.049980787Z",
+  "closed_at": "2026-08-31T09:47:59.498281648Z",
+  "close_reason": "Wired R-05-035 (spec 05-routing 8.6: reserved Target Flags octet MUST be zero, nonzero rejects before any route-state mutation) into the C DAO ingest: extract_updates (lichen/subsys/lichen/rpl/rpl_dao_process.c) now rejects opt.data[0] != 0 alongside the existing structural checks. Corrected the rpl_dao_auth host test oracle: the previous case asserted nonzero flags (0x1f) ACCEPTED citing the future 8.7.1 ignore-rule; now expects LICHEN_RPL_DAO_REJECTED with zero state mutation via the file's established saved-root_state/ASSERT_MEM_EQ pattern — a legitimate oracle fix per spec 8.6 + 8.7 preamble ('8.7.1 reserved for future .44.9 work, not part of .44.7 conformance') and cross-impl consensus (Rust ingest landed in b7z9.3.1, Python dao_origin.py:297). Verified no other C test or production path relies on flags-acceptance (reviewer sweep: rpl_routing manual targets flags=0, lichen_rpl_target_write hardcodes 0, strict parser messages.c:653 already rejects). Host tests: rpl_dao_auth, rpl_dao_sequence, rpl_messages, rpl_dodag all pass; rpl_routing/rpl_dao_timing are west/twister tests (not host-runnable) but inspection shows no flags-behavior dependency. cppcheck clean. Codereview 3x delegated to kimi-k3: correctness PASS (no P0-P2; test-oracle fix ruled legitimate-not-weakening), security PASS (no unguarded path, rejection precedes replay/snapshot mutation, DAO-ACK suppressed on REJECTED, DoS surface reduced), edge-cases PASS (data_len\u003c2 OOB-safe short-circuit, len-2 body correctly malformed, ASSERT_MEM_EQ coverage traced meaningful). Findings: stale 8.7.1-citing comments -\u003e add_raw_target comment fixed in-diff; messages.c validate_dao_options comment filed as blwt (P3).",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "rpl",
+    "rust",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.3.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.3",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:42:39.02843808Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

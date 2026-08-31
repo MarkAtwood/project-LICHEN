@@ -1,0 +1,7 @@
+{
+  "id": "1788165732423201850-1",
+  "issue_id": "project-LICHEN-worker6-5fva.1",
+  "author": "opencode-worker-3",
+  "text": "TIMEBOX release: root-caused both failure modes (-ENOKEY: missing post-reinit key provisioning; -EPROTONOSUPPORT -93: stale legacy link-key load arming the 2auf.21 E=1 rejection) and committed the fix slice (84908feee9: reprovision_after_reinit + drop legacy link-key load + strerror ENOENT case with ENOKEY-alias guard). 3x kimi review done (pass 1 caught ENOENT/ENOKEY duplicate-case collision under the errno.h alias — fixed pre-commit; passes 2/3 PASS). Full 7/7 validation blocked: heft main checkout mid-merge with conflict markers in schc.c/lora_compat.h and west anchors module sources there — see follow-up bead. Original -ENOENT symptom from base 95116be9ed was superseded by the -ENOKEY symptom on current main.",
+  "created_at": "2026-08-31T08:42:12.42320185Z"
+}

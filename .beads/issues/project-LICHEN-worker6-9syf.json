@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-9syf",
+  "title": "Pin mutmut version in mutation.yml",
+  "description": "Review finding (kyzm round): .github/workflows/mutation.yml:93 now pins uv (\u003e=0.11,\u003c0.12) but still installs mutmut unpinned. A mutmut major release could break the mutation-testing workflow output format/API. Pin mutmut with a bounded range consistent with repo conventions (\u003e=x,\u003cy) — check the locally used mutmut version for the lower bound. Discovered from kyzm.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:53:45.889491246Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T09:03:42.964554827Z",
+  "started_at": "2026-08-31T08:54:53.053713351Z",
+  "closed_at": "2026-08-31T09:03:42.964554827Z",
+  "close_reason": "Pinned mutmut in .github/workflows/mutation.yml:93: 'pip install \"uv\u003e=0.11,\u003c0.12\" \"mutmut\u003e=2.4,\u003c3\"'. Range chosen from evidence: the workflow uses the mutmut 2.x CLI (--paths-to-mutate --runner --no-progress; results; html; .mutmut-cache) and mutmut 3.0.0 removed results/html (verified against PyPI source) — the \u003c3 ceiling is load-bearing, not cosmetic; latest 2.x is 2.5.1, latest overall 3.7.0. Pin is operative: mutmut is absent from pyproject.toml/uv.lock, so uv run mutmut resolves the pip-installed executable. 3x review (kimi-k3): correctness PASS (reviewer verified every flag against mutmut 2.4.1 and 2.5.1 source, python 3.12 compatible), security PASS (satisfiable, none yanked, strict improvement; advisory on cargo-mutants filed as new bead), edge-cases: timeout then retry PASS — mechanics confirmed (pip installs to system python, uv sync --locked only manages the venv so it never prunes the install, uv PATH-fallback behavior itself pinned by the uv bound).",
+  "labels": [
+    "python",
+    "codereview"
+  ]
+}

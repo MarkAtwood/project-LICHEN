@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.23",
+  "title": "Beacon channel_mask parsed but local intersection never computed (spec 02a 2a.2)",
+  "description": "Requirement (R-02a-008, MUST): 'channel_mask u32 (bit 0=CH0); local intersection computed.' Classification: divergent — the field is parsed/serialized in Rust (rust/lichen-core/src/tdma_beacon.rs:51,101,124) but no implementation computes the local intersection of the advertised mask with the regional plan / hardware-permitted channels; Python python/src/lichen/channel_plan.py:84 validate_channel_mask is the plan-mask validator, a different feature; no intersection code in C or Python. Suggested placement: compute intersection at beacon ingestion before SelectChannel/NChannels derivation, feeding 2a.3.1 NChannels; vector coverage would belong in ccp_tdma.json or ccp4_regional_channel_plans.json. From spec-coverage sweep 2026-08-31 (docs/spec-coverage.md R-02a-008).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:31:22.80415666Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:31:22.80415666Z",
+  "labels": [
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.23",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:31:22.957734887Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

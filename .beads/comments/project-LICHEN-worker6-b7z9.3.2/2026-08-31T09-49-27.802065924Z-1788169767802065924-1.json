@@ -1,0 +1,7 @@
+{
+  "id": "1788169767802065924-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.3.2",
+  "author": "opencode-worker-6",
+  "text": "Edge-review evidence from b7z9.3.3 (vector now landed on beads-worker-6): the C/Zephyr side is now the ONLY implementation accepting nonzero Target Flags — Rust rejects at the envelope (lichen-rpl is_generalized_target_body, body[0] != 0 -\u003e DaoEnvelopeError, landed with the vector) and Python at the structural stage (dao_origin.py + test oracle). C specifics to fix: lichen/subsys/lichen/rpl/rpl_dao_process.c:150 (extract_updates generalized Target screen) and :414 (dao_targets_authorized) need the opt.data[0] != 0 reject; the comments at :146 and :384 still say reserved flags 'are ignored' — now contradicting spec/05-routing.md:370-371. The new vector reject_target_flags_nonzero in test/vectors/dao_origin_signature.json (signed with flags=0x01, reason malformed_dao, structural, envelope_valid=false) is the contract: a C root would currently authorize, extract, and install it as a route. No C test consumes the JSON yet, so the divergence is silent — consider adding a C consumer when wiring the check.",
+  "created_at": "2026-08-31T09:49:27.802065924Z"
+}

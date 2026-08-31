@@ -1,0 +1,7 @@
+{
+  "id": "1788168703009808357-1",
+  "issue_id": "project-LICHEN-worker6-17nw",
+  "author": "opencode-worker-3",
+  "text": "Refined root cause from l4jp debugging (suite now 6/7 after the canonical-peer fix): lora_loopback keeps data-\u003erecv_cb registered ACROSS deliveries (rx_work re-reads it per packet, lora_loopback.c:222-246; recv_async returns EBUSY only when a cb is already set, :264-267) while the lichen RX layer treats each delivery as consuming the arm (real-radio semantics) and re-arms after processing -\u003e EBUSY x3 -\u003e LORA_ABORTED. Observed in the queue_stats window (fresh init+start, then immediate arm failures). Fix direction: either the RX layer treats -EBUSY on re-arm as still-armed (clear rx_armed state and back off without counting toward the abort latch), or the loopback driver emulates real-radio one-shot arming (clear cb before invoking it). Note test_udp_payload is the last ping_l2 failure and is this abort's downstream effect.",
+  "created_at": "2026-08-31T09:31:43.009808357Z"
+}

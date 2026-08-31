@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-cr11",
+  "title": "Dead export lichen_coap_oscore_respond retains 1KiB stack frame",
+  "description": "Codereview finding (P3, pre-existing) from ba39 3-pass review. lichen/subsys/lichen/oscore/coap_oscore.c:339 lichen_coap_oscore_respond has no callers (header decl + doc mention only) and retains a CONFIG_COAP_SERVER_MESSAGE_SIZE stack frame; the same rationale that moved its sibling to a static buffer (b4daab401f) applies. Pre-existing dead code - requires explicit owner decision to delete or adopt. Discovered-from: project-LICHEN-worker6-ba39",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:06:02.711167674Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:06:02.711167674Z"
+}
