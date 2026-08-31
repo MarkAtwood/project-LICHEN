@@ -12,7 +12,8 @@
   "labels": [
     "l2",
     "tdma",
-    "vectors"
+    "vectors",
+    "networking"
   ],
   "dependencies": [
     {

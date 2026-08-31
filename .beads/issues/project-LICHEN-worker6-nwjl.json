@@ -13,6 +13,7 @@
   "labels": [
     "ble",
     "l2",
-    "tdma"
+    "tdma",
+    "networking"
   ]
 }

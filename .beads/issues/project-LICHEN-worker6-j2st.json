@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T22:11:14.607430216Z",
   "created_by": "opencode-worker-7",
   "updated_at": "2026-08-30T22:11:14.607430216Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-j2st",
