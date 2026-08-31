@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-zt3c.7.2",
+  "title": "Remove ULA address init from IPv6 init path",
+  "description": "Remove lichen_make_ula() call and ULA net_if_ipv6_addr_add from IPv6 init in lichen/subsys/lichen/ipv6/. Nodes should only have fe80:: link-local + 02xx:: Yggdrasil global. ~15 lines across 1-2 files. Depends on child 1 (Kconfig removal).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:20.146770132Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:53:20.146770132Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "l2",
+    "gateway",
+    "global",
+    "local-ok",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-zt3c.7.2",
+      "depends_on_id": "project-LICHEN-zt3c.7",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:20.259325072Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

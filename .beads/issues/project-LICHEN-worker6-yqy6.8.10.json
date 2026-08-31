@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-yqy6.8.10",
+  "title": "qemu_x86: Time provider with host clock",
+  "description": "Validate time provider on qemu_x86 using QEMU virtual clock. Test time submit and snapshot APIs. ~15 lines in 1 test file. Depends on child 1.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:53:31.509498484Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:53:31.509498484Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "hal",
+    "needs-linux"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yqy6.8.10",
+      "depends_on_id": "project-LICHEN-worker6-yqy6.8",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:53:31.60344573Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

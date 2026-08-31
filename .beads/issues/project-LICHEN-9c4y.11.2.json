@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-9c4y.11.2",
+  "title": "MeshCore smoke test: firmware build and flash procedure",
+  "description": "Document and validate the firmware build command for MeshCore-compatible LICHEN puck. Include west build command, flash command, expected CONFIG_ settings. ~15 lines in 1 script/doc file. No deps.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T03:54:16.78686757Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T03:54:16.78686757Z",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "tests",
+    "app-interface",
+    "firmware",
+    "hardware",
+    "local-ok",
+    "meshcore",
+    "mobile-test",
+    "owner-reserved"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-9c4y.11.2",
+      "depends_on_id": "project-LICHEN-9c4y.11",
+      "type": "parent-child",
+      "created_at": "2026-08-31T03:54:16.892004879Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
