@@ -9,6 +9,9 @@
   "created_at": "2026-08-30T22:42:30.620739757Z",
   "created_by": "opencode-worker-5",
   "updated_at": "2026-08-30T23:08:36.933130279Z",
+  "labels": [
+    "networking"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-au9y",

@@ -8,5 +8,8 @@
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T16:58:38.124259Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T16:58:38.124259Z"
+  "updated_at": "2026-08-27T16:58:38.124259Z",
+  "labels": [
+    "networking"
+  ]
 }
