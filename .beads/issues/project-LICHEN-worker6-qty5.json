@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-29T02:55:34.09197Z",
   "labels": [
-    "networking"
+    "networking",
+    "rust"
   ],
   "dependencies": [
     {
