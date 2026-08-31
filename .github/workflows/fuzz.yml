@@ -104,7 +104,7 @@ jobs:
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
 
       - name: Install system deps
-        run: sudo apt-get install -y --no-install-recommends cmake ninja-build gcc gcc-multilib
+        run: sudo apt-get install -y --no-install-recommends clang cmake ninja-build gcc gcc-multilib
 
       - name: Install west
         run: pip install west
@@ -136,15 +136,24 @@ jobs:
       - name: west zephyr-export
         run: west zephyr-export
 
-      - name: Run fuzz tests (if exist)
+      - name: Run C fuzz harnesses (standalone ASan/UBSan)
         env:
           ZEPHYR_TOOLCHAIN_VARIANT: host
         run: |
-          if [ -d lichen/tests/fuzz ]; then
-            west twister -T lichen/tests/fuzz -p native_sim --inline-logs
-          else
-            echo "No Zephyr fuzz tests yet"
+          # The C harnesses (fuzz_frame, fuzz_schnorr48, fuzz_schc) are plain
+          # C libFuzzer/standalone binaries (lichen/tests/fuzz/CMakeLists.txt),
+          # not Zephyr apps — twister cannot discover them. Build standalone
+          # with sanitizers and run each over a fixed iteration count
+          # (R-APPC-013: all untrusted-input parsers are fuzz-tested).
+          if [ ! -f lichen/tests/fuzz/CMakeLists.txt ]; then
+            echo "No C fuzz harnesses yet"
+            exit 0
           fi
+          cmake -B build-fuzz -S lichen/tests/fuzz -DCMAKE_C_COMPILER=clang
+          cmake --build build-fuzz
+          ./build-fuzz/fuzz_frame 5000 20260831
+          ./build-fuzz/fuzz_schnorr48 2000 20260831
+          ./build-fuzz/fuzz_schc 20000 20260831
         timeout-minutes: 15
 
   integration-stress:
