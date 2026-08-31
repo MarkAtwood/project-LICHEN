@@ -10,7 +10,8 @@
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-30T07:26:09.471808Z",
   "labels": [
-    "coap"
+    "coap",
+    "rust"
   ],
   "dependencies": [
     {
