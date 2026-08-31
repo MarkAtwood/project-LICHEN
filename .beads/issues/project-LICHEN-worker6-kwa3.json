@@ -9,6 +9,9 @@
   "created_at": "2026-08-28T23:58:49.549407Z",
   "created_by": "Mark Atwood",
   "updated_at": "2026-08-28T23:58:49.549407Z",
+  "labels": [
+    "coap"
+  ],
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-kwa3",
