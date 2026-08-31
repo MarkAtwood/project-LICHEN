@@ -299,9 +299,24 @@ static int lora_loopback_init(const struct device *dev)
 	return 0;
 }
 
+static int lora_loopback_send_async(const struct device *dev, uint8_t *data,
+				    uint32_t data_len,
+				    struct k_poll_signal *async)
+{
+	int ret = lora_loopback_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
+}
+
 static const struct lora_driver_api lora_loopback_api = {
 	.config     = lora_loopback_config,
 	.send       = lora_loopback_send,
+	.send_async = lora_loopback_send_async,
 	.recv       = lora_loopback_recv,
 	.recv_async = lora_loopback_recv_async,
 };

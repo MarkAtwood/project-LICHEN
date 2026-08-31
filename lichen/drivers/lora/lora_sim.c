@@ -513,8 +513,14 @@ static int lora_sim_cad(const struct device *dev, k_timeout_t timeout,
 static int lora_sim_send_async(const struct device *dev, uint8_t *data,
 			       uint32_t data_len, struct k_poll_signal *async)
 {
-	ARG_UNUSED(async);
-	return lora_sim_send(dev, data, data_len);
+	int ret = lora_sim_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
 }
 
 /* Consecutive failed exchanges before the RX thread disarms itself. The

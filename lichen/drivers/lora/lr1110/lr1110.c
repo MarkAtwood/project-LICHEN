@@ -606,8 +606,14 @@ static int lr1110_lora_send(const struct device *dev, uint8_t *data,
 static int lr1110_lora_send_async(const struct device *dev, uint8_t *data,
 				  uint32_t data_len, struct k_poll_signal *async)
 {
-	ARG_UNUSED(async);
-	return lr1110_lora_send(dev, data, data_len);
+	int ret = lr1110_lora_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
 }
 
 static int lr1110_recv_impl(const struct device *dev, uint8_t *data,

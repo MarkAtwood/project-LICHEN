@@ -30,6 +30,12 @@ struct lichen_lora_cad_entry {
 static struct lichen_lora_cad_entry cad_registry[LICHEN_LORA_CAD_REGISTRY_SIZE];
 K_MUTEX_DEFINE(cad_registry_mutex);
 
+/* TX_DONE completion for the async LoRa TX API. The signal is reset before
+ * each arm and raised by the driver when the radio finishes (or fails); the
+ * poll-wait converts it back into the synchronous public TX contract. */
+static struct k_poll_signal tx_done_signal =
+    K_POLL_SIGNAL_INITIALIZER(tx_done_signal);
+
 int lichen_lora_cad_register(const struct device *dev,
                              lichen_lora_cad_fn callback)
 {
@@ -189,14 +195,14 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
     }
 
     /*
-     * Check state atomically without mutex. The lora_send() call below blocks
-     * for the entire TX airtime (~500ms at SF10/255 bytes). Holding lora_mutex
+     * Check state atomically without mutex. The TX below occupies the radio
+     * for the entire airtime (~500ms at SF10/255 bytes). Holding lora_mutex
      * during this period would starve the RX thread, which needs the mutex to
      * snapshot its callback pointer.
      *
      * This is safe because:
      * - State is atomic_t, reads are naturally atomic
-     * - lora_send() is thread-safe (Zephyr driver serializes internally)
+     * - The driver serializes TX internally (Zephyr LoRa API contract)
      * - If stop() races with send(), the driver handles in-flight TX
      *
      * State coverage (project-LICHEN-tvfm.92):
@@ -349,7 +355,27 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
         return -ENETDOWN;
     }
 
-    ret = lora_send(lora_data.lora_dev, tx_buf, (uint32_t)pop_len);
+    /*
+     * Async TX (4.1.0 API): arm lora_send_async() with a completion signal
+     * and wait for TX_DONE. The public path stays synchronous - callers get
+     * the final radio status on return - but the wait is a k_poll (no
+     * k_sleep yields), and only from thread context.
+     */
+    __ASSERT_NO_MSG(!k_is_in_isr());
+    struct k_poll_event tx_done = K_POLL_EVENT_STATIC_INITIALIZER(
+        K_POLL_TYPE_SIGNAL, K_POLL_MODE_NOTIFY_ONLY, &tx_done_signal, 0);
+
+    k_poll_signal_reset(&tx_done_signal);
+    ret = lora_send_async(lora_data.lora_dev, tx_buf, (uint32_t)pop_len,
+                          &tx_done_signal);
+    if (ret == 0) {
+        unsigned int signaled = 0;
+        int status = 0;
+
+        k_poll(&tx_done, 1, K_FOREVER);
+        k_poll_signal_check(&tx_done_signal, &signaled, &status);
+        ret = (signaled != 0U) ? status : -EIO;
+    }
     if (lora_data.cca_enabled) {
         (void)lichen_csma_tx_complete(&lora_data.csma, ret);
     }

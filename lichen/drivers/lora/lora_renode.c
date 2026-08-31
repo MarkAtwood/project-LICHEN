@@ -329,8 +329,14 @@ static int lora_renode_cad(const struct device *dev, k_timeout_t timeout,
 static int lora_renode_send_async(const struct device *dev, uint8_t *data,
 				  uint32_t data_len, struct k_poll_signal *async)
 {
-	ARG_UNUSED(async);
-	return lora_renode_send(dev, data, data_len);
+	int ret = lora_renode_send(dev, data, data_len);
+
+	if (async != NULL) {
+		/* The underlying send is synchronous: completion fires before
+		 * this call returns (poll-safe, no deferred context). */
+		k_poll_signal_raise(async, ret);
+	}
+	return ret;
 }
 
 /* Async RX poller: self-rescheduling work item. Exits (without rescheduling)
