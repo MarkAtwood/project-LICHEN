@@ -265,6 +265,7 @@ int lichen_router_route(struct lichen_router *router,
 #define IPV6_HBH_OPT_DTN_FLAG_S 0x80U
 #define IPV6_NH_HOP_BY_HOP 0U
 #define IPV6_NH_UDP 17U
+#define IPV6_NH_IPV6_IN_IPV6 41U
 #define IPV6_NH_ROUTING 43U
 #define IPV6_NH_FRAGMENT 44U
 #define IPV6_NH_ICMPV6 58U
@@ -286,6 +287,8 @@ struct ipv6_dispatch_view {
 	size_t source_route_address_offset;
 	bool dtn_store_forward;
 	uint32_t dtn_expiry_unix;
+	/* Spec 05-routing 8.9 (R-05-063): nh=41 IPv6-in-IPv6 tunnel payload. */
+	bool is_tunnel;
 };
 
 static bool addr_is_zero(const uint8_t addr[16])
@@ -367,6 +370,18 @@ static int parse_ipv6_dispatch(const uint8_t *data, size_t len,
 				return -EBADMSG;
 			}
 			view->upper_next_header = next_header;
+			return 0;
+		}
+		if (next_header == IPV6_NH_IPV6_IN_IPV6) {
+			/* Spec 05-routing 8.9 (R-05-063): post-SRH-consumption
+			 * tunnel payload — the SRH was stripped at the final
+			 * hop and next_header promoted to 41. The decap and
+			 * inner re-dispatch happen in route_packet_checked. */
+			if (offset != IPV6_FIXED_HEADER_LEN) {
+				return -EBADMSG;
+			}
+			view->upper_next_header = next_header;
+			view->is_tunnel = true;
 			return 0;
 		}
 		if (next_header == IPV6_NH_FRAGMENT) {
@@ -523,10 +538,10 @@ static void set_drop(struct lichen_packet_route_result *result)
 	result->route.decision = LICHEN_ROUTE_DROP;
 }
 
-int lichen_router_route_packet(struct lichen_router *router,
-			       const struct lichen_route_packet *packet,
-			       uint32_t now_ms,
-			       struct lichen_packet_route_result *result)
+static int route_packet_checked(struct lichen_router *router,
+				const struct lichen_route_packet *packet,
+				uint32_t now_ms, uint8_t depth,
+				struct lichen_packet_route_result *result)
 {
 	struct ipv6_dispatch_view view;
 	struct lichen_packet_route_result next;
@@ -540,6 +555,42 @@ int lichen_router_route_packet(struct lichen_router *router,
 	ret = parse_ipv6_dispatch(packet->data, packet->len, &view);
 	if (ret < 0) {
 		return ret;
+	}
+
+	/* Spec 05-routing 8.9 (R-05-063): egress decapsulation.  The outer
+	 * was addressed to this node and its SRH is already consumed
+	 * (nh=41); validate the inner header and re-dispatch it.  Nested
+	 * tunnels are outside the bounded profile. */
+	if (view.is_tunnel) {
+		const uint8_t *inner = packet->data + IPV6_FIXED_HEADER_LEN;
+		size_t inner_len = packet->len - IPV6_FIXED_HEADER_LEN;
+		uint16_t inner_payload_len;
+		struct lichen_route_packet inner_packet;
+
+		if (depth > 0U || inner_len < IPV6_FIXED_HEADER_LEN ||
+		    inner[0] >> 4 != 6U) {
+			return -EBADMSG;
+		}
+		inner_payload_len = (uint16_t)((uint16_t)inner[4] << 8 | inner[5]);
+		if ((size_t)inner_payload_len != inner_len - IPV6_FIXED_HEADER_LEN) {
+			return -EBADMSG;
+		}
+		if (memcmp(&inner[24], router->node_address,
+			   sizeof(router->node_address)) != 0) {
+			return -EBADMSG;
+		}
+		inner_packet = (struct lichen_route_packet) {
+			.data = inner,
+			.len = inner_len,
+			.ingress = packet->ingress,
+			.multicast_peering = packet->multicast_peering,
+			.destination_coords_valid = packet->destination_coords_valid,
+			.destination_lat_e7 = packet->destination_lat_e7,
+			.destination_lon_e7 = packet->destination_lon_e7,
+			.now_unix = packet->now_unix,
+		};
+		return route_packet_checked(router, &inner_packet, now_ms,
+					    (uint8_t)(depth + 1U), result);
 	}
 
 	set_drop(&next);
@@ -714,6 +765,14 @@ int lichen_router_route_packet(struct lichen_router *router,
 
 	*result = next;
 	return 0;
+}
+
+int lichen_router_route_packet(struct lichen_router *router,
+			       const struct lichen_route_packet *packet,
+			       uint32_t now_ms,
+			       struct lichen_packet_route_result *result)
+{
+	return route_packet_checked(router, packet, now_ms, 0U, result);
 }
 
 int lichen_router_queue_pending(struct lichen_router *router,

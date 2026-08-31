@@ -748,6 +748,12 @@ static int test_dtn_hbh_option_parsing(void)
 		REQUIRE(lichen_router_route_packet(&router, &input, 13U, &result) == 0);
 		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
 		REQUIRE(router.dtn_buffer_bytes == pkt7_len);
+
+		/* dtn_expire flushes the expiry==0 fail-open store once valid
+		 * wall-clock arrives (documented bpyr interplay: the record is
+		 * purged, not re-queued for downstream enforcement). */
+		REQUIRE(lichen_router_dtn_expire(&router, 100U) == 1);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
 	}
 #endif
 
@@ -775,6 +781,155 @@ static int test_dtn_hbh_option_parsing(void)
 	}
 #endif
 
+	/* 11. S-flag with expiry==0 at a VALID clock: the zero deadline is
+	 * already past (0 <= now) → silent drop, nothing stored. */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt9[64];
+		size_t pkt9_len = make_dtn_hbh_packet(pkt9, sizeof(pkt9),
+						      0x80U, 0U);
+		REQUIRE(pkt9_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt9, .len = pkt9_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 15U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_DROP);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
+	/* 12. lichen_router_dtn_expire boundary matrix: not-due keeps the
+	 * record, expiry==now flushes it (signed diff <= 0). */
+#if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	{
+		uint8_t pkt10[64];
+		size_t pkt10_len = make_dtn_hbh_packet(pkt10, sizeof(pkt10),
+						       0x80U, 200U);
+		REQUIRE(pkt10_len != 0U);
+
+		configure_router(&router, &state);
+		state.discovery_succeeds = false;
+		input = (struct lichen_route_packet) {
+			.data = pkt10, .len = pkt10_len,
+			.ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+			.now_unix = 100U,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 16U, &result) == 0);
+		REQUIRE(result.route.decision == LICHEN_ROUTE_STORE_DTN);
+
+		REQUIRE(lichen_router_dtn_expire(&router, 199U) == 0);
+		REQUIRE(router.dtn_buffer_bytes == pkt10_len);
+		REQUIRE(lichen_router_dtn_expire(&router, 200U) == 1);
+		REQUIRE(router.dtn_buffer_bytes == 0U);
+	}
+#endif
+
+	return 0;
+}
+
+/* Spec 05-routing 8.9 (R-05-063): egress decapsulation of IPv6-in-IPv6
+ * tunnels (post-SRH-consumption outer, nh=41) with fail-closed inner
+ * verification against this node's authorized primary address. */
+static int test_ipv6_in_ipv6_egress_decap(void)
+{
+	struct lichen_router router;
+	struct accessor_state state = { .joined = false, .discovery_succeeds = false };
+	struct lichen_packet_route_result result;
+	struct lichen_route_packet input;
+	uint8_t inner[48];
+	uint8_t outer[88];
+
+	configure_router(&router, &state);
+	state.discovery_succeeds = false;
+
+	/* 1. Valid tunnel: inner addressed to this node delivers locally. */
+	(void)make_udp_packet(inner, sizeof(inner), source_address, node_address, 64U);
+	memset(outer, 0, sizeof(outer));
+	outer[0] = 0x60U;
+	outer[5] = 48U; /* payload_len = inner length */
+	outer[6] = 41U;
+	outer[7] = 64U;
+	outer[8] = 0x02U;
+	outer[9] = 0x00U;
+	outer[15] = 0x02U;
+	memcpy(&outer[24], node_address, 16U);
+	memcpy(&outer[40], inner, sizeof(inner));
+
+	input = (struct lichen_route_packet) {
+		.data = outer, .len = sizeof(outer), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+	};
+	REQUIRE(lichen_router_route_packet(&router, &input, 1U, &result) == 0);
+	REQUIRE(result.route.decision == LICHEN_ROUTE_DELIVER_LOCAL);
+
+	/* 2. Inner destination is not the authorized primary -> fail closed. */
+	{
+		uint8_t foreign[16];
+		uint8_t inner2[48];
+		uint8_t outer2[88];
+
+		memcpy(foreign, node_address, 16U);
+		foreign[15] = 0xffU;
+		(void)make_udp_packet(inner2, sizeof(inner2), source_address, foreign, 64U);
+		memcpy(outer2, outer, 40U);
+		memcpy(&outer2[40], inner2, sizeof(inner2));
+		input = (struct lichen_route_packet) {
+			.data = outer2, .len = sizeof(outer2), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 2U, &result) == -EBADMSG);
+	}
+
+	/* 3. Inner payload-length inconsistent with the actual inner length. */
+	{
+		uint8_t outer3[88];
+
+		memcpy(outer3, outer, sizeof(outer3));
+		outer3[45] = 9U; /* inner payload_len = 9, actual 8 -> inconsistent */
+		input = (struct lichen_route_packet) {
+			.data = outer3, .len = sizeof(outer3), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 3U, &result) == -EBADMSG);
+	}
+
+	/* 4. Nested tunnel (nh=41 inside nh=41) -> outside bounded profile. */
+	{
+		uint8_t inner_tunnel[88];
+		uint8_t outer4[128];
+
+		memcpy(inner_tunnel, outer, sizeof(outer));
+		memset(outer4, 0, sizeof(outer4));
+		outer4[0] = 0x60U;
+		outer4[5] = sizeof(inner_tunnel);
+		outer4[6] = 41U;
+		outer4[7] = 64U;
+		outer4[8] = 0x02U;
+		outer4[9] = 0x00U;
+		outer4[15] = 0x02U;
+		memcpy(&outer4[24], node_address, 16U);
+		memcpy(&outer4[40], inner_tunnel, sizeof(inner_tunnel));
+		input = (struct lichen_route_packet) {
+			.data = outer4, .len = sizeof(outer4), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 4U, &result) == -EBADMSG);
+	}
+
+	/* 5. Truncated inner (inner_len < 40) -> fail closed. */
+	{
+		uint8_t outer5[60];
+
+		memcpy(outer5, outer, 40U);
+		memset(&outer5[40], 0, 20U);
+		outer5[5] = 20U; /* payload_len = 20: inner is only 20 bytes */
+		input = (struct lichen_route_packet) {
+			.data = outer5, .len = sizeof(outer5), .ingress = LICHEN_ROUTE_INGRESS_LOCAL,
+		};
+		REQUIRE(lichen_router_route_packet(&router, &input, 5U, &result) == -EBADMSG);
+	}
+
 	return 0;
 }
 
@@ -794,7 +949,11 @@ static int run_all_tests(void)
 	if (ret != 0) return ret;
 	ret = test_queue_copy_gpsr_and_dtn();
 	if (ret != 0) return ret;
-	return test_dtn_hbh_option_parsing();
+	ret = test_dtn_hbh_option_parsing();
+	if (ret != 0) return ret;
+	ret = test_ipv6_in_ipv6_egress_decap();
+	if (ret != 0) return ret;
+	return 0;
 }
 
 #ifdef __ZEPHYR__
