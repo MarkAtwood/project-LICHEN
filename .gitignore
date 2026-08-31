@@ -67,3 +67,7 @@ artifacts-*.txt
 
 # ctest artifacts created when ctest runs outside a build dir
 Testing/
+
+# Fuzz harness build outputs (lichen/tests/fuzz is a standalone CMake project)
+lichen/tests/fuzz/build/
+lichen/tests/fuzz/*.o
