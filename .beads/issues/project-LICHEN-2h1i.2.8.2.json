@@ -13,7 +13,8 @@
   "closed_at": "2026-07-22T14:40:31.71043984Z",
   "close_reason": "Created as child to scope lichen-oscore Group OSCORE (RFC 9203) and dead-drop E2E context support",
   "labels": [
-    "oscore"
+    "oscore",
+    "spec"
   ],
   "dependencies": [
     {
