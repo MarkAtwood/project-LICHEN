@@ -404,6 +404,32 @@ mod tests {
     }
 
     #[test]
+    fn dispatch_prefix_leniency_pins_rust_only_contract() {
+        // Rust from_bytes accepts an optional leading routing-dispatch byte
+        // (parser leniency); C and Python take dispatch-stripped announce
+        // bytes only and would reject these inputs by contract, so this
+        // behavior is pinned here instead of in shared vectors. See bead
+        // worker6-y3s5 (adjudicated: document leniency, keep C/Python
+        // stripped-only).
+        // Max on-air shape: dispatch + max-size announce = 194 bytes total.
+        let mut prefixed = [0u8; 1 + MAX_ANNOUNCE_WIRE_LENGTH];
+        prefixed[0] = L2_DISPATCH_ROUTING;
+        prefixed[1] = 1;
+        prefixed[2] = 2;
+        let a = Announce::from_bytes(&prefixed).unwrap();
+        assert_eq!(a.app_data.len(), MAX_ANNOUNCE_APP_DATA);
+
+        // One byte more than the on-air maximum: dispatch + oversized
+        // announce still rejects on the post-strip length.
+        let mut oversized = [0u8; 1 + MAX_ANNOUNCE_WIRE_LENGTH + 1];
+        oversized[0] = L2_DISPATCH_ROUTING;
+        assert_eq!(
+            Announce::from_bytes(&oversized),
+            Err(AnnounceError::TooLong(MAX_ANNOUNCE_WIRE_LENGTH + 1))
+        );
+    }
+
+    #[test]
     fn builder_app_data_cap() {
         let base = AnnounceBuilder {
             originator_iid: &[0; 8],
