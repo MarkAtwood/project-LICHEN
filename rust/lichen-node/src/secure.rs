@@ -643,9 +643,7 @@ impl<R: Radio> SecureStack<R> {
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
-        uri_path: &[&str],
-        token: &[u8],
-        method: MessageCode,
+        request: SecureRequestData<'_>,
         transfer: &mut SecureBlock1Transfer,
         store: &mut S,
     ) -> Result<RequestCorrelation, SecureError> {
@@ -670,10 +668,8 @@ impl<R: Radio> SecureStack<R> {
                 },
                 peer_iid,
                 SecureRequestData {
-                    uri_path,
-                    token,
-                    method,
                     payload: &payload,
+                    ..request
                 },
                 None,
                 Some(BlockRequestOption::Block1 { block, size1 }),
@@ -2514,9 +2510,12 @@ mod tests {
                 .send_secure_block1(
                     &bob_addr,
                     &bob_iid,
-                    &["ota"],
-                    &[0xa1],
-                    MessageCode::PUT,
+                    SecureRequestData {
+                        uri_path: &["ota"],
+                        token: &[0xa1],
+                        method: MessageCode::PUT,
+                        payload: &[],
+                    },
                     &mut upload,
                     &mut alice_store,
                 )

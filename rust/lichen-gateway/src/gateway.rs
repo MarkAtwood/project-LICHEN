@@ -1524,12 +1524,9 @@ impl Gateway {
     }
 
     fn superframe_id_at(unix_timestamp: u64, duration_s: u16) -> u64 {
-        let duration = u64::from(duration_s);
-        if duration == 0 {
-            0
-        } else {
-            unix_timestamp / duration
-        }
+        unix_timestamp
+            .checked_div(u64::from(duration_s))
+            .unwrap_or(0)
     }
 
     /// SCHC-compress an IPv6 packet from the upstream TUN device for the mesh.
