@@ -2,3 +2,4 @@
 {"id":"01a05513-8038-7507-9406-4579da91c1cd","issue_id":"project-LICHEN-worker6-4qpf","event_type":"label_added","actor":"opencode-worker-6","comment":"Added label: human","created_at":"2026-08-30T23:48:56.504339413Z"}
 {"id":"01a055fc-ccd9-738c-9beb-e9c639be3d33","issue_id":"project-LICHEN-worker6-4qpf","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-31T04:03:46.009242797Z"}
 {"id":"01a055fc-ce3e-77f4-8f6e-e428e7b7b5d5","issue_id":"project-LICHEN-worker6-4qpf","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: simulation","created_at":"2026-08-31T04:03:46.366522689Z"}
+{"id":"01a0560a-1b17-7d09-a225-c5c99c5198f8","issue_id":"project-LICHEN-worker6-4qpf","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: blocked:hardware","created_at":"2026-08-31T04:18:18.007855348Z"}

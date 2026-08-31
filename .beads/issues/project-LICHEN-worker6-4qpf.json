@@ -12,6 +12,7 @@
   "labels": [
     "human",
     "security",
-    "simulation"
+    "simulation",
+    "blocked:hardware"
   ]
 }
