@@ -334,6 +334,39 @@ def test_rule255_decode_is_byte_preserving_despite_emission_policy() -> None:
     assert decode_rule255(b"\xff" + raw) == raw
 
 
+def _with_corrupt_udp_checksum(raw: bytes) -> bytes:
+    corrupt = bytearray(raw)
+    corrupt[HEADER_LENGTH + 6 : HEADER_LENGTH + 8] = b"\xbe\xef"
+    return bytes(corrupt)
+
+
+def test_validate_full_ipv6_structure_precedes_address_checks() -> None:
+    """Dual-defect precedence (spec/03-adaptation.md Rule 255).
+
+    Integrity and structural failures report before endpoint-shape opinions:
+    a packet failing both a checksum check and an endpoint-policy check is
+    reported as a checksum error, and the decode path applies no endpoint
+    policy at all (byte-preserving RX).
+    """
+    # Corrupt checksum alone: the failure names the checksum, not endpoints.
+    corrupt = _with_corrupt_udp_checksum(_build_packet(_coap_request()))
+    with pytest.raises(SchcError, match="checksum"):
+        decode_rule255(b"\xff" + corrupt)
+
+    # Dual defect: corrupt checksum + emission-invalid source. Both receive
+    # and origination paths report the checksum error; neither opines on the
+    # source address.
+    dual = _with_corrupt_udp_checksum(
+        _build_packet(_coap_request(), src=IPv6Address("::1"))
+    )
+    with pytest.raises(SchcError, match="checksum") as excinfo:
+        decode_rule255(b"\xff" + dual)
+    assert "source" not in str(excinfo.value)
+    with pytest.raises(SchcError, match="checksum") as excinfo:
+        encode_rule255(dual)
+    assert "source" not in str(excinfo.value)
+
+
 def _rule255_schc_bytes(encoded_length: int) -> bytes:
     data_length = encoded_length - 1 - 40 - 8
     icmp = (
