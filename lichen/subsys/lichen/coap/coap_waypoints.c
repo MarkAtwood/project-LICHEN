@@ -32,6 +32,10 @@
 #define FIELD_EXPIRES BIT(10)
 
 static struct lichen_waypoint_store_image s_store;
+/* Mutex-guarded staging image for atomic create/update/delete; never on
+ * the stack: at LICHEN_WAYPOINT_MAX 256 the image is far too large for
+ * Zephyr thread stacks. */
+static struct lichen_waypoint_store_image s_staged;
 static struct lichen_waypoint_config s_config;
 static char s_local_creator[LICHEN_WAYPOINT_CREATOR_MAX + 1U];
 static K_MUTEX_DEFINE(s_mutex);
@@ -187,10 +191,7 @@ static int persist(const struct lichen_waypoint_store_image *image) {
 }
 
 int lichen_waypoints_init(const struct lichen_waypoint_config *config) {
-  struct lichen_waypoint_store_image image = {
-      .format_version = WAYPOINT_STORE_FORMAT,
-      .next_id = 1U,
-  };
+  struct lichen_waypoint_store_image *image = &s_staged;
   int ret;
 
   if (config == NULL ||
@@ -198,20 +199,20 @@ int lichen_waypoints_init(const struct lichen_waypoint_config *config) {
     return -EINVAL;
   }
   if (config->load != NULL) {
-    ret = config->load(&image);
+    ret = config->load(image);
     if (ret > 0) {
       return -EIO;
     }
     if (ret < 0 && ret != -ENOENT) {
       return ret;
     }
-    if (ret == 0 && image_validate(&image) < 0) {
+    if (ret == 0 && image_validate(image) < 0) {
       return -EBADMSG;
     }
     if (ret == -ENOENT) {
-      memset(&image, 0, sizeof(image));
-      image.format_version = WAYPOINT_STORE_FORMAT;
-      image.next_id = 1U;
+      memset(image, 0, sizeof(*image));
+      image->format_version = WAYPOINT_STORE_FORMAT;
+      image->next_id = 1U;
     }
   }
   k_mutex_lock(&s_mutex, K_FOREVER);
@@ -219,7 +220,7 @@ int lichen_waypoints_init(const struct lichen_waypoint_config *config) {
   strncpy(s_local_creator, config->local_creator, sizeof(s_local_creator) - 1U);
   s_local_creator[sizeof(s_local_creator) - 1U] = '\0';
   s_config.local_creator = s_local_creator;
-  s_store = image;
+  s_store = *image;
   s_initialized = true;
   k_mutex_unlock(&s_mutex);
   return 0;
@@ -279,9 +280,29 @@ static bool actor_can_mutate(const struct lichen_waypoint *waypoint,
          (actor != NULL && strcmp(actor, waypoint->creator) == 0);
 }
 
+/* Structured 5.03 diagnostic body (spec 18.3.2 R-12-030):
+ * {reason: "waypoint_limit", per_originator: 32, global: 256}. */
+static const uint8_t waypoint_limit_body[] = {
+    0xa3, 0x66, 'r', 'e', 'a', 's', 'o', 'n', 0x6e, 'w', 'a', 'y', 'p', 'o',
+    'i', 'n', 't', '_', 'l', 'i', 'm', 'i', 't', 0x6e, 'p', 'e', 'r', '_',
+    'o', 'r', 'i', 'g', 'i', 'n', 'a', 't', 'o', 'r', 0x18, 0x20, 0x65, 'g',
+    'l', 'o', 'b', 'a', 'l', 0x19, 0x01, 0x00,
+};
+
+static size_t waypoint_count_by_creator(const char *creator) {
+  size_t count = 0U;
+
+  for (size_t i = 0U; i < s_store.count; i++) {
+    if (strcmp(s_store.entries[i].creator, creator) == 0) {
+      count++;
+    }
+  }
+  return count;
+}
+
 int lichen_waypoints_create(const struct lichen_waypoint *candidate,
                             struct lichen_waypoint *created) {
-  struct lichen_waypoint_store_image staged;
+  struct lichen_waypoint_store_image *const staged = &s_staged;
   struct lichen_waypoint value;
   int ret;
 
@@ -299,21 +320,21 @@ int lichen_waypoints_create(const struct lichen_waypoint *candidate,
     ret = -ENOSPC;
     goto out;
   }
-  staged = s_store;
+  *staged = s_store;
   if (value.id[0] == '\0') {
-    if (staged.next_id > 999U) {
+    if (staged->next_id > 999U) {
       ret = -EOVERFLOW;
       goto out;
     }
     int written =
-        snprintf(value.id, sizeof(value.id), "wpt-%03u", staged.next_id);
+        snprintf(value.id, sizeof(value.id), "wpt-%03u", staged->next_id);
 
     if (written < 0 || (size_t)written >= sizeof(value.id)) {
       ret = -EOVERFLOW;
       goto out;
     }
-    staged.next_id++;
-    if (staged.next_id == 0U) {
+    staged->next_id++;
+    if (staged->next_id == 0U) {
       ret = -EOVERFLOW;
       goto out;
     }
@@ -321,8 +342,8 @@ int lichen_waypoints_create(const struct lichen_waypoint *candidate,
     ret = -EINVAL;
     goto out;
   }
-  for (size_t i = 0U; i < staged.count; i++) {
-    if (strcmp(staged.entries[i].id, value.id) == 0) {
+  for (size_t i = 0U; i < staged->count; i++) {
+    if (strcmp(staged->entries[i].id, value.id) == 0) {
       ret = -EEXIST;
       goto out;
     }
@@ -330,6 +351,13 @@ int lichen_waypoints_create(const struct lichen_waypoint *candidate,
   if (value.creator[0] == '\0') {
     strncpy(value.creator, s_config.local_creator, sizeof(value.creator) - 1U);
     value.creator[sizeof(value.creator) - 1U] = '\0';
+  }
+  /* Per-originator cap applies to the effective (defaulted) creator
+   * (spec 18.3.2 R-12-029). */
+  if (waypoint_count_by_creator(value.creator) >=
+      LICHEN_WAYPOINT_PER_ORIGINATOR_MAX) {
+    ret = -ENOSPC;
+    goto out;
   }
   if (value.created == 0U && s_config.now != NULL) {
     value.created = s_config.now();
@@ -339,12 +367,12 @@ int lichen_waypoints_create(const struct lichen_waypoint *candidate,
     ret = -EINVAL;
     goto out;
   }
-  staged.entries[staged.count++] = value;
-  ret = persist(&staged);
+  staged->entries[staged->count++] = value;
+  ret = persist(staged);
   if (ret < 0) {
     goto out;
   }
-  s_store = staged;
+  s_store = *staged;
   *created = value;
   ret = 0;
 out:
@@ -355,7 +383,7 @@ out:
 int lichen_waypoints_update(const char *id,
                             const struct lichen_waypoint *replacement,
                             const char *actor, bool local_admin) {
-  struct lichen_waypoint_store_image staged;
+  struct lichen_waypoint_store_image *const staged = &s_staged;
   struct lichen_waypoint value;
   int ret = -ENOENT;
 
@@ -367,31 +395,31 @@ int lichen_waypoints_update(const char *id,
     ret = -ENODEV;
     goto out;
   }
-  staged = s_store;
-  for (size_t i = 0U; i < staged.count; i++) {
-    if (strcmp(staged.entries[i].id, id) != 0) {
+  *staged = s_store;
+  for (size_t i = 0U; i < staged->count; i++) {
+    if (strcmp(staged->entries[i].id, id) != 0) {
       continue;
     }
-    if (!actor_can_mutate(&staged.entries[i], actor, local_admin)) {
+    if (!actor_can_mutate(&staged->entries[i], actor, local_admin)) {
       ret = -EACCES;
       goto out;
     }
     value = *replacement;
-    strncpy(value.id, staged.entries[i].id, sizeof(value.id) - 1U);
+    strncpy(value.id, staged->entries[i].id, sizeof(value.id) - 1U);
     value.id[sizeof(value.id) - 1U] = '\0';
-    strncpy(value.creator, staged.entries[i].creator,
+    strncpy(value.creator, staged->entries[i].creator,
             sizeof(value.creator) - 1U);
     value.creator[sizeof(value.creator) - 1U] = '\0';
-    value.created = staged.entries[i].created;
-    value.version = staged.entries[i].version + 1U;
+    value.created = staged->entries[i].created;
+    value.version = staged->entries[i].version + 1U;
     if (value.version == 0U || waypoint_validate(&value, true) < 0) {
       ret = -EINVAL;
       goto out;
     }
-    staged.entries[i] = value;
-    ret = persist(&staged);
+    staged->entries[i] = value;
+    ret = persist(staged);
     if (ret == 0) {
-      s_store = staged;
+      s_store = *staged;
     }
     goto out;
   }
@@ -402,7 +430,7 @@ out:
 
 int lichen_waypoints_delete(const char *id, const char *actor,
                             bool local_admin) {
-  struct lichen_waypoint_store_image staged;
+  struct lichen_waypoint_store_image *const staged = &s_staged;
   int ret = -ENOENT;
 
   if (!id_valid(id)) {
@@ -413,22 +441,22 @@ int lichen_waypoints_delete(const char *id, const char *actor,
     ret = -ENODEV;
     goto out;
   }
-  staged = s_store;
-  for (size_t i = 0U; i < staged.count; i++) {
-    if (strcmp(staged.entries[i].id, id) != 0) {
+  *staged = s_store;
+  for (size_t i = 0U; i < staged->count; i++) {
+    if (strcmp(staged->entries[i].id, id) != 0) {
       continue;
     }
-    if (!actor_can_mutate(&staged.entries[i], actor, local_admin)) {
+    if (!actor_can_mutate(&staged->entries[i], actor, local_admin)) {
       ret = -EACCES;
       goto out;
     }
-    memmove(&staged.entries[i], &staged.entries[i + 1U],
-            (staged.count - i - 1U) * sizeof(staged.entries[0]));
-    staged.count--;
-    memset(&staged.entries[staged.count], 0, sizeof(staged.entries[0]));
-    ret = persist(&staged);
+    memmove(&staged->entries[i], &staged->entries[i + 1U],
+            (staged->count - i - 1U) * sizeof(staged->entries[0]));
+    staged->count--;
+    memset(&staged->entries[staged->count], 0, sizeof(staged->entries[0]));
+    ret = persist(staged);
     if (ret == 0) {
-      s_store = staged;
+      s_store = *staged;
     }
     goto out;
   }
@@ -757,24 +785,38 @@ static int parse_pagination(const struct coap_packet *request, size_t *offset,
     size_t prefix;
     unsigned int bit;
 
-    if (len == 8U && memcmp(value, "offset=", 7U) == 0) {
+    if (len >= 8U && len <= 10U && memcmp(value, "offset=", 7U) == 0) {
       prefix = 7U;
       bit = BIT(0);
-    } else if (len == 7U && memcmp(value, "limit=", 6U) == 0) {
+    } else if (len >= 7U && len <= 9U && memcmp(value, "limit=", 6U) == 0) {
       prefix = 6U;
       bit = BIT(1);
     } else {
       return -EBADMSG;
     }
-    if ((seen & bit) != 0U || value[prefix] < '0' || value[prefix] > '8' ||
+    if ((seen & bit) != 0U || value[prefix] < '0' || value[prefix] > '9' ||
         (bit == BIT(1) && value[prefix] == '0')) {
       return -EBADMSG;
     }
     seen |= bit;
-    if (bit == BIT(0)) {
-      *offset = value[prefix] - '0';
-    } else {
-      *limit = value[prefix] - '0';
+    for (size_t d = prefix; d < len; d++) {
+      if (value[d] < '0' || value[d] > '9') {
+        return -EBADMSG;
+      }
+    }
+    {
+      size_t parsed = 0U;
+      for (size_t d = prefix; d < len; d++) {
+        parsed = parsed * 10U + (size_t)(value[d] - '0');
+      }
+      if (parsed > LICHEN_WAYPOINT_MAX) {
+        return -EBADMSG;
+      }
+      if (bit == BIT(0)) {
+        *offset = parsed;
+      } else {
+        *limit = parsed;
+      }
     }
   }
   return 0;
@@ -990,6 +1032,15 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
     return coap_oscore_respond_resource(resource, request, addr, addr_len,
                                         &oscore, COAP_RESPONSE_CODE_BAD_REQUEST,
                                         0, NULL, 0);
+  }
+  if (ret == -ENOSPC) {
+    /* Spec 18.3.2 R-12-030: the full-table POST carries a structured
+     * diagnostic body instead of a bare 5.03. */
+    return coap_oscore_respond_resource(
+        resource, request, addr, addr_len, &oscore,
+        COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE,
+        CBOR_CONTENT_FORMAT, waypoint_limit_body,
+        sizeof(waypoint_limit_body));
   }
   if (ret < 0) {
     return coap_oscore_respond_resource(
