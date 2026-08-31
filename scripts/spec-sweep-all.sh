@@ -5,7 +5,7 @@
 # Usage: scripts/spec-sweep-all.sh [credit_floor]
 set -u
 REPO_ROOT=$(git rev-parse --show-toplevel)
-FLOOR="${1:-150}"
+FLOOR="${1:-15}"
 OPUS_MODEL="openrouter/anthropic/claude-opus-4.5"
 FLASH_MODEL="${LICHEN_SWEEP_MODEL:-openrouter/z-ai/glm-5.3-flash}"
 export OPENCODE_CONFIG_CONTENT='{"permission":{"edit":"allow","webfetch":"allow","bash":{"*":"allow","rm -rf *":"deny","sudo *":"deny","git push*":"deny"}}}'
@@ -45,7 +45,7 @@ for SECTION in $SECTIONS; do
 
     CREDITS=$(remaining_credits)
     if [ "$CREDITS" -lt "$FLOOR" ]; then
-        echo "credit floor hit ($CREDITS < $FLOOR) — pausing sweep. Rerun to resume."
+        echo "credit floor hit ($CREDITS < $FLOOR — topup fires at $15) — pausing sweep. Rerun to resume."
         exit 3
     fi
 
