@@ -12,7 +12,8 @@
   "labels": [
     "gateway",
     "oscore",
-    "rust"
+    "rust",
+    "tests"
   ],
   "dependencies": [
     {
