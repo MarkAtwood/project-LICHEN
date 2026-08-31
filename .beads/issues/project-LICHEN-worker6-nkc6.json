@@ -12,6 +12,7 @@
   "labels": [
     "coap",
     "oscore",
-    "tdma"
+    "tdma",
+    "tests"
   ]
 }
