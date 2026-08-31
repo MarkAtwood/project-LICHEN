@@ -40,7 +40,10 @@ enum senml_label {
 
 static bool string_too_long(const char *str, size_t max_len)
 {
-	return str != NULL && strnlen(str, max_len + 1) > max_len;
+	/* Zephyr's minimal libc does not declare strnlen(): bounded scan via
+	 * memchr.  A string with no NUL within max_len + 1 bytes is too
+	 * long; NULL is not an error here (matches the old short-circuit). */
+	return str != NULL && memchr(str, '\0', max_len + 1) == NULL;
 }
 
 static int validate_name(const char *name)
