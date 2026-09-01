@@ -208,36 +208,184 @@ static int test_oscore_global(void)
 	);
 }
 
+/* Direct decompress feed for a Rule-255 frame: ff + raw payload bytes. */
+static int rule255_decompress(const uint8_t *payload, size_t len, uint8_t *out,
+			      size_t out_len)
+{
+	uint8_t frame[300];
+
+	if (len + 1 > sizeof(frame)) {
+		return -1;
+	}
+	frame[0] = 255;
+	memcpy(&frame[1], payload, len);
+	return lichen_schc_decompress(frame, len + 1, out, out_len);
+}
+
 static int test_uncompressed_fallback(void)
 {
-	uint8_t packet[4] = { 0xde, 0xad, 0xbe, 0xef };
-	uint8_t comp_buf[8];
-	uint8_t decomp_buf[8];
+	/* Minimal valid IPv6/UDP packet (48 bytes): spec/03 requires the
+	 * Rule-255 payload to be a complete, structurally valid IPv6 packet,
+	 * so the fallback round-trip must use a real packet, not arbitrary
+	 * bytes. Payload: UDP 10883 -> 5000, length 8, valid checksum.
+	 * (Whether compress() routes a given packet to the rule-255 fallback
+	 * is the compress gate's concern - bead 7v5f/hahk; this test feeds
+	 * the Rule-255 frame to decompress directly.) */
+	static const uint8_t packet[48] = {
+		0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40, /* ver6, len 8, NH 17, hop 64 */
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, /* src 2001:db8::1 */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, /* dst 2001:db8::2 */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x66, 0x5e, /* UDP hdr + checksum */
+	};
+	uint8_t decomp_buf[64];
 
-	int n = lichen_schc_compress(packet, 4, comp_buf, sizeof(comp_buf));
-	if (n != 5) {
-		printf("  FAIL: uncompressed length (got %d, expected 5)\n", n);
+	int m = rule255_decompress(packet, sizeof(packet), decomp_buf,
+				   sizeof(decomp_buf));
+	if (m != (int)sizeof(packet)) {
+		printf("  FAIL: uncompressed decompress length (got %d, expected %zu)\n",
+		       m, sizeof(packet));
 		return 0;
 	}
-	if (comp_buf[0] != 255) {
-		printf("  FAIL: uncompressed rule_id (got %d, expected 255)\n", comp_buf[0]);
-		return 0;
-	}
-	if (memcmp(&comp_buf[1], packet, 4) != 0) {
-		printf("  FAIL: uncompressed payload mismatch\n");
-		return 0;
-	}
-
-	int m = lichen_schc_decompress(comp_buf, n, decomp_buf, sizeof(decomp_buf));
-	if (m != 4) {
-		printf("  FAIL: uncompressed decompress length (got %d, expected 4)\n", m);
-		return 0;
-	}
-	if (memcmp(decomp_buf, packet, 4) != 0) {
+	if (memcmp(decomp_buf, packet, sizeof(packet)) != 0) {
 		printf("  FAIL: uncompressed decompress mismatch\n");
 		return 0;
 	}
 
+	return 1;
+}
+
+static int test_rule255_rejects_non_ipv6(void)
+{
+	/* The old behavior copied any payload verbatim; a non-IPv6 payload is
+	 * not a complete structurally valid IPv6 packet (spec/03). */
+	static const uint8_t payload[4] = { 0xde, 0xad, 0xbe, 0xef };
+	uint8_t out[64];
+
+	int ret = rule255_decompress(payload, sizeof(payload), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for non-IPv6 rule-255 payload (got %d)\n",
+		       ret);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_rule255_rejects_fragment_header(void)
+{
+	/* Valid IPv6 header whose next-header chain contains the IPv6 Fragment
+	 * header (44): LICHEN fragments at the SCHC layer, so RX must reject. */
+	static const uint8_t pkt[] = {
+		0x60, 0x00, 0x00, 0x00, 0x00, 0x10, 0x2c, 0x40, /* len 16, NH 44 (0x2c) */
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, /* Fragment: NH 17, res, off 0, id 1 */
+		0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x66, 0x5e, /* UDP hdr + valid checksum */
+	};
+	uint8_t out[64];
+
+	int ret = rule255_decompress(pkt, sizeof(pkt), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for Fragment header (got %d)\n",
+		       ret);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_rule255_rh3_final_dst_checksum(void)
+{
+	/* Positive RH3 case: segments_left=1, so the UDP checksum
+	 * pseudo-header destination is the FINAL SRH address
+	 * (2001:db8::3), not the outer packet destination
+	 * (2001:db8::2) - RFC 2460 section 8.1 via RFC 6554. */
+	static const uint8_t pkt[] = {
+		0x60, 0x00, 0x00, 0x00, 0x00, 0x20, 0x2b, 0x40, /* len 32, NH 43 */
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, /* src 2001:db8::1 */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, /* outer dst 2001:db8::2 */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		0x11, 0x02, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, /* RH3: NH 17, len 2, type 3, sl 1, rsv */
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00, /* final addr 2001:db8::3 */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+		0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x66, 0x5d, /* checksum over final dst */
+	};
+	uint8_t out[128];
+
+	int ret = rule255_decompress(pkt, sizeof(pkt), out, sizeof(out));
+	if (ret != (int)sizeof(pkt)) {
+		printf("  FAIL: RH3 final-dst packet must decode byte-preserving (got %d, expected %zu)\n",
+		       ret, sizeof(pkt));
+		return 0;
+	}
+	if (memcmp(out, pkt, sizeof(pkt)) != 0) {
+		printf("  FAIL: RH3 final-dst round-trip mismatch\n");
+		return 0;
+	}
+	return 1;
+}
+
+static int test_rule255_rejects_non_rh3_routing(void)
+{
+	/* Routing header with type 0 (deprecated, RFC 5095): must reject. */
+	static const uint8_t pkt[] = {
+		0x60, 0x00, 0x00, 0x00, 0x00, 0x10, 0x2b, 0x40, /* len 16, NH 43 (0x2b) */
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Routing: NH 17, len 0, type 0 */
+		0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x66, 0x5e,
+	};
+	uint8_t out[64];
+
+	int ret = rule255_decompress(pkt, sizeof(pkt), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for non-RH3 routing header (got %d)\n",
+		       ret);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_rule255_rejects_bad_udp_checksum(void)
+{
+	/* Same valid packet as the fallback round-trip but with the UDP
+	 * checksum field corrupted (0x665e -> 0x665f). */
+	static const uint8_t pkt[] = {
+		0x60, 0x00, 0x00, 0x00, 0x00, 0x08, 0x11, 0x40,
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+		0x2a, 0x83, 0x13, 0x88, 0x00, 0x08, 0x66, 0x5f, /* checksum + 1 */
+	};
+	uint8_t out[64];
+
+	int ret = rule255_decompress(pkt, sizeof(pkt), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for bad UDP checksum (got %d)\n",
+		       ret);
+		return 0;
+	}
+	return 1;
+}
+
+static int test_rule255_rejects_truncated(void)
+{
+	/* Fewer than 40 bytes can never be a complete IPv6 header. */
+	static const uint8_t pkt[20] = { 0x60 };
+	uint8_t out[64];
+
+	int ret = rule255_decompress(pkt, sizeof(pkt), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for truncated rule-255 payload (got %d)\n",
+		       ret);
+		return 0;
+	}
 	return 1;
 }
 
@@ -410,6 +558,12 @@ int main(void)
 	RUN_TEST(test_oscore_linklocal);
 	RUN_TEST(test_oscore_global);
 	RUN_TEST(test_uncompressed_fallback);
+	RUN_TEST(test_rule255_rejects_non_ipv6);
+	RUN_TEST(test_rule255_rejects_fragment_header);
+	RUN_TEST(test_rule255_rh3_final_dst_checksum);
+	RUN_TEST(test_rule255_rejects_non_rh3_routing);
+	RUN_TEST(test_rule255_rejects_bad_udp_checksum);
+	RUN_TEST(test_rule255_rejects_truncated);
 	RUN_TEST(test_unknown_rule_id);
 	RUN_TEST(test_truncated_coap_linklocal);
 	RUN_TEST(test_truncated_coap_global);
