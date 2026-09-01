@@ -1,7 +1,0 @@
-{"id":"01a05ae8-7eac-7698-b863-159a240a25d7","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-01T02:59:41.356433863Z"}
-{"id":"01a05ae8-7eb1-71e8-bc1d-431ed87837d0","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-09-01T02:59:41.361125646Z"}
-{"id":"01a05ae8-7eb5-77cb-b4f9-2cd50bbdb3b7","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: link","created_at":"2026-09-01T02:59:41.365511696Z"}
-{"id":"01a05ae8-7eb9-7eaf-b543-a0f57aa0e319","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-09-01T02:59:41.369963588Z"}
-{"id":"01a05ae8-7ebe-7a4e-80b5-4f1d8df5db63","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: schc","created_at":"2026-09-01T02:59:41.374676457Z"}
-{"id":"01a05ae8-7ec3-744d-86d5-ef10996b30a8","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-09-01T02:59:41.379283179Z"}
-{"id":"01a05ae8-7ec7-7eb3-80ca-4ac294814ab0","issue_id":"project-LICHEN-worker6-l1qw.3.7.6.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-09-01T02:59:41.383964614Z"}

@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-ypqg",
   "title": "C hal: two-slot redundant-record storage layer (provision/open/update) over an ops vtable",
   "description": "Remaining slice of b7z9.11.1 after codec (x04u). Port rust/lichen-hal/src/storage.rs provision_redundant/open_redundant/update_redundant to C in lichen/subsys/lichen/hal/hal_storage_redundant.c, storage-agnostic via an ops vtable in the project style (cf. struct lichen_replay_store_ops in replay_persist.h): read(user,key,out,cap,*len) -\u003e 0 found / 1 missing / -errno; write(user,key,value,len). Semantics per Rust: provision fails if either key present (Exists), writes slot A generation 1; open returns newest valid generation with Missing vs Corrupt taxonomy and buffer-too-small; update re-parses both slots, rejects Stale when caller's (generation,slot) doesn't match current, Exhausted at u64 generation max, writes the OPPOSITE slot at generation+1. Keys 'rpl.tx.a'/'rpl.tx.b' and magic 'DTX2' stay with the CALLER (child b7z9.11.2), not the primitive. Host tests in lichen/tests/hal_storage_redundant: empty-\u003eMissing, corrupt-\u003eCorrupt, provision Exists, update alternation a/b/a, stale detection, generation wrap (u64 max), rollback... note Rust has no explicit rollback (write failure -\u003e Storage error, old slot intact) - pin that. Test double-write failure path.",
-  "status": "closed",
+  "status": "open",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T00:42:19.016666865Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-01T02:02:25.771923373Z",
-  "closed_at": "2026-09-01T02:02:25.771923373Z",
-  "close_reason": "Duplicate of the already-landed two-slot primitive: lichen/subsys/lichen/hal/redundant_slot.c/.h + CMake wiring committed as fda3af992f on beads-worker-7 (child of b7z9.11.1, which this bead's own discovered-from references — b7z9.11.1 is CLOSED). Committed host tests: lichen/tests/redundant_slot/ (a2ct, commit 367cc730b2) covering empty-\u003eMissing, provision/-EEXIST, alternation, Stale (corrupt + slot-drop), Corrupt (both-slots), EOVERFLOW wrap, rollback on write failure, and the CRC32 bit-exactness pin vs the Rust crc32 (trailer 0xBD88FA92 for the DTX2/gen1/'123456789' record). API-style differences vs this bead's sketch (ops vtable read returning 0/1/-errno vs my read returning len/0/-errno; placement redundant_slot.c vs hal_storage_redundant.c) are immaterial — the committed primitive satisfies the same contract (provision Exists, newest-valid open with Missing/Corrupt taxonomy, opposite-slot update at generation+1, Stale mismatch, u64 wrap terminal). b7z9.11.2 (DAO TX state machine) consumes the committed redundant_slot.h. Do not implement a second primitive.",
+  "updated_at": "2026-09-01T01:08:56.203691745Z",
   "labels": [
     "zephyr",
     "hal"

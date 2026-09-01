@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-aglf",
   "title": "sx12xx modem-hold semantics break TX once async RX is armed; L2 needs driver-level arbitration contract",
   "description": "Found by 3x codereview of project-LICHEN-worker6-sb0b (all three reviewers converged, P0). Upstream sx12xx (v3.7.0, incl. patches/zephyr-v3.7.0-local.patch which does not touch modem semantics): sx12xx_lora_recv_async() takes modem_acquire() and holds modem_usage=BUSY for the entire armed lifetime; sx12xx_ev_rx_done() auto-re-arms Radio.Rx(0) and never releases. Consequences once L2 arms async RX (sb0b): every lora_send() fails -EBUSY at the driver's modem_acquire (all TX dead on Heltec/T-Deck/nRF SX12xx boards); L2-level modem_mutex/tx_pending arbitration does not help because the driver never consults them. Note the driver ALSO silently overwrites the callback on double-arm (opposite of loopback's -EBUSY). Fix options: (a) L2 wraps TX with explicit disarm (recv_async(dev,NULL)) + re-arm under its existing modem_mutex, or (b) drivers release the modem between async frames and L2 keeps one-shot re-arm, or (c) driver-level arbitration with a written contract in lora_l2.h. Coordinate with the TX-side async refactor (child of project-LICHEN-worker6-9hfe) before choosing. Also verify modem_release clears async_rx_cb (suspected pre-existing leak). Test-only loopback half of this was fixed inside sb0b (one-shot delivery).",
-  "status": "closed",
+  "status": "open",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T18:02:10.56827Z",
   "created_by": "opencode-worker-3",
-  "updated_at": "2026-09-01T02:31:16.605612373Z",
-  "closed_at": "2026-09-01T02:31:16.605612373Z",
-  "close_reason": "Already fixed. Option (a) implemented: L2 uses tx_pending + modem_mutex for half-duplex TX/RX arbitration. TX raises tx_pending before sending; RX re-arm checks tx_pending and defers while set; both sides wrap driver calls in modem_mutex. Contract documented in lora_l2.c:70-101. The bead was filed from codereview but the fix landed before it was closed.",
+  "updated_at": "2026-08-30T18:02:10.56827Z",
   "labels": [
     "l2",
     "zephyr"

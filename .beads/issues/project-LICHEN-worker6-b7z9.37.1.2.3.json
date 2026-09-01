@@ -8,9 +8,9 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T20:42:05.858147312Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-09-01T03:05:27.500441801Z",
-  "closed_at": "2026-09-01T03:05:27.500441801Z",
-  "close_reason": "Re-closing (repeat store-resurrection): completed and committed as 299331f306 'feat(rpl): wire root-sig verification into DIO receive' — verify_dio_root_signature in receive.rs (2 call/defn sites verified in tree), L679 Baseline/Reject mapping, TOFU trust-store lookup via pinned_pubkey_for, wall_clock_unix seam, cross-check-before-cache ordering (reviewer-caught bug fixed). No new work existed.",
+  "updated_at": "2026-09-01T05:05:02.336249453Z",
+  "closed_at": "2026-09-01T05:05:02.336249453Z",
+  "close_reason": "Re-closing (mass store-resurrection 2026-09-01): this bead's work is landed and verified in tree — commits and child closures documented in prior rounds (receiver wiring 299331f306, tunnel-auth resource 74ef8a5076, replay cache 3bae1a20c6, decode aa13cf22e4, etc.). No new work existed; reopen only if sync reveals a regression.",
   "labels": [
     "decomposed",
     "rust",

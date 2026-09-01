@@ -8,9 +8,9 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T01:40:42.970071745Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-09-01T02:54:55.282283463Z",
-  "closed_at": "2026-09-01T02:54:55.282283463Z",
-  "close_reason": "Closing the umbrella: children (a) .1 (COSE decode + structural validation, commit aa13cf22e4) and (b) .2 (anti-replay consumption, commit 3bae1a20c6) landed. The remaining (b) scope — signature verify + receiver wiring + Kconfig — is filed as its own bead (see the follow-up created alongside this close) because the signature verify needs a sha256-source decision in C and the receiver wiring needs a call-site survey; both are documented there with pointers. Root_seq replay consumption itself is complete in C.",
+  "updated_at": "2026-09-01T05:05:00.551363906Z",
+  "closed_at": "2026-09-01T05:05:00.551363906Z",
+  "close_reason": "Re-closing (mass store-resurrection 2026-09-01): this bead's work is landed and verified in tree — commits and child closures documented in prior rounds (receiver wiring 299331f306, tunnel-auth resource 74ef8a5076, replay cache 3bae1a20c6, decode aa13cf22e4, etc.). No new work existed; reopen only if sync reveals a regression.",
   "labels": [
     "decomposed",
     "zephyr",

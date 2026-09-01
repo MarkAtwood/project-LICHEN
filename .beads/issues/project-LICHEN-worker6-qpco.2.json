@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-qpco.2",
   "title": "Rust: GCP Slot Claim COSE_Sign1",
   "description": "Implement GCP Slot Claim COSE_Sign1 in Rust using coset. Algorithm -65537, integer-keyed payload, RFC 9052 Sig_structure.",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:39:16.840976Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T04:13:41.238925221Z",
-  "closed_at": "2026-09-01T04:13:41.238925221Z",
-  "close_reason": "Superseded by l1qw.16.2 (has actionable description: resources.rs COSE_Sign1 envelope, alg -65537, payload keys 1-7)",
+  "updated_at": "2026-08-27T23:39:16.840976Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-qpco.2",

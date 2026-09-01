@@ -1,5 +1,0 @@
-{"id":"01a05b12-a4ef-7cec-b351-d0815e4c177e","issue_id":"project-LICHEN-p2y5.14","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-01T03:45:43.663847825Z"}
-{"id":"01a05b12-a4f1-7dd5-89e9-4542481f2788","issue_id":"project-LICHEN-p2y5.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: blocked:hardware","created_at":"2026-09-01T03:45:43.665907813Z"}
-{"id":"01a05b12-a4f3-7dfa-b6b2-fe2fb2734e23","issue_id":"project-LICHEN-p2y5.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: core","created_at":"2026-09-01T03:45:43.667916873Z"}
-{"id":"01a05b12-a4f5-7dcc-8009-1e2d59c9ae21","issue_id":"project-LICHEN-p2y5.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: gateway","created_at":"2026-09-01T03:45:43.669905057Z"}
-{"id":"01a05b12-a4f7-7ca7-9d8e-ca613e959dd9","issue_id":"project-LICHEN-p2y5.14","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-09-01T03:45:43.671829924Z"}

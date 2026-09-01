@@ -1,7 +1,0 @@
-{
-  "id": "1788228045640461433-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.30.7",
-  "author": "opencode-worker-1",
-  "text": "Worker1 dedup note: this adjudication was executed via project-LICHEN-worker6-g7p7 (closed): spec 02a 2a.8 (Density \u003e 8) held normative; spec 02-physical-link.md and cross-refs aligned; code updated to \u003e8 (worker2 commits) and ccp16.json already pinned \u003e8; remaining stale \u003e10 oracle sites tracked under knb6. Recommend closing if you concur.",
-  "created_at": "2026-09-01T02:00:45.640461433Z"
-}
