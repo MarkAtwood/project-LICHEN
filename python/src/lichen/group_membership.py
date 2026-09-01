@@ -377,3 +377,43 @@ def parse_removal(document: dict[str, Any]) -> GroupRemoval:
         signature=signature,
         reason=reason,
     )
+
+
+def promote_admin(
+    roster: GroupRoster, actor: str, node: str
+) -> GroupRoster:
+    """Promote a member to admin (spec 18.8.2: owner only).
+
+    Raises:
+        MembershipError: if actor is not the owner or node is not a member.
+    """
+    if actor != roster.owner:
+        raise MembershipError("only the owner can promote admins")
+    if node not in roster.members:
+        raise MembershipError(f"{node} is not a member")
+    if node in roster.admins:
+        raise MembershipError(f"{node} is already an admin")
+    return GroupRoster(
+        owner=roster.owner,
+        admins=roster.admins | {node},
+        members=roster.members,
+    )
+
+
+def demote_admin(
+    roster: GroupRoster, actor: str, node: str
+) -> GroupRoster:
+    """Demote an admin to member (spec 18.8.2: owner only).
+
+    Raises:
+        MembershipError: if actor is not the owner or node is not an admin.
+    """
+    if actor != roster.owner:
+        raise MembershipError("only the owner can demote admins")
+    if node not in roster.admins:
+        raise MembershipError(f"{node} is not an admin")
+    return GroupRoster(
+        owner=roster.owner,
+        admins=roster.admins - {node},
+        members=roster.members,
+    )
