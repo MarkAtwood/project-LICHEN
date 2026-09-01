@@ -4870,8 +4870,11 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             # even though a canonical sender could not have originated it.
             assert decode_rule255(b"\xff" + raw) == raw, name
 
-    elif category == "rule255_rx_byte_preserving_address":
-        # Byte-preserving RX: decode succeeds, emission policy (TX-only) still rejects
+    elif category == "rule255_rx_structural_reject":
+        # Structural address constraints are rejected in BOTH directions
+        # (spec 03-adaptation.md two-tier contract): the emission policy
+        # forbids originating them and the decoder's structural validation
+        # rejects them before byte preservation.
         source = IPv6Address(vector["source_ipv6"])
         destination = IPv6Address(vector["destination_ipv6"])
         udp = UdpDatagram(PORT_MQTT_SN, 5000, b"lichen255").to_bytes(source, destination)
@@ -4885,9 +4888,14 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             ).to_bytes()
             + udp
         )
-        assert decode_rule255(b"\xff" + raw) == raw, name
-        with pytest.raises(SchcError, match="invalid IPv6"):
+        error_pattern = {
+            "invalid_source_address": "invalid IPv6 source address",
+            "invalid_destination_address": "invalid IPv6 destination address",
+        }[vector["expect_error"]]
+        with pytest.raises(SchcError, match=error_pattern):
             encode_rule255(raw)
+        with pytest.raises(SchcError, match=error_pattern):
+            decode_rule255(b"\xff" + raw)
 
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
