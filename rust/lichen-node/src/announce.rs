@@ -1218,6 +1218,60 @@ mod tests {
     }
 
     #[test]
+    fn relayed_replay_rejected_after_restart_regardless_of_relay_addr() {
+        let counter = AtomicU64::new(4000);
+        let (state_root, floor_root) = unique_test_roots("relay-replay", &counter);
+        let identity = make_identity(0x31);
+
+        let mut buf = [0u8; 256];
+        let len = make_signed_announce(&identity, 100, 3, 0, &[], &mut buf);
+        let announce = Announce::from_bytes(&buf[..len]).unwrap();
+
+        {
+            let mut processor = AnnounceProcessor::with_trust_store(
+                GradientTable::new(64),
+                ula_prefix(),
+                AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
+            );
+            // Direct delivery pins the origin and raises the floor to 100.
+            assert!(processor.process(&announce, link_local(0xAA), 1000).accepted);
+        }
+
+        // Restart: the pin and the seq-100 floor are durable.
+        let mut restarted = AnnounceProcessor::with_trust_store(
+            GradientTable::new(64),
+            ula_prefix(),
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
+        );
+        assert_eq!(
+            restarted.pinned_pubkey_for(&identity.iid),
+            Some(identity.pubkey)
+        );
+
+        // The same origin-signed announce replayed as a relayed frame
+        // (hop_count incremented in transit, signature untouched since
+        // hop_count is outside the signed data) from a DIFFERENT
+        // authenticated relay is still rejected: the durable floor binds
+        // the originator IID, not the receiving address.
+        let relayed_len = make_signed_announce(&identity, 100, 4, 0, &[], &mut buf);
+        let relayed = Announce::from_bytes(&buf[..relayed_len]).unwrap();
+        let result = restarted.process(&relayed, link_local(0x77), 2000);
+        assert!(!result.accepted);
+        assert_eq!(
+            result.reject_reason,
+            Some(AnnounceRejectReason::StaleSeqNum)
+        );
+
+        // A strictly newer announce arriving through the same relay admits.
+        let newer_len = make_signed_announce(&identity, 101, 4, 0, &[], &mut buf);
+        let newer = Announce::from_bytes(&buf[..newer_len]).unwrap();
+        let result = restarted.process(&newer, link_local(0x77), 3000);
+        assert!(result.accepted, "{:?}", result.reject_reason);
+
+        remove_roots(&state_root, &floor_root);
+    }
+
+    #[test]
     fn corrupt_durable_record_fails_admission_closed() {
         let counter = AtomicU64::new(2000);
         let (state_root, floor_root) = unique_test_roots("corrupt", &counter);
