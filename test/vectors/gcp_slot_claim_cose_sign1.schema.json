@@ -1,0 +1,156 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GCP-6.5 slot-claim COSE_Sign1 admission corpus (spec/08 9.8)",
+  "type": "object",
+  "required": [
+    "vector_type",
+    "format_version",
+    "description",
+    "oracle",
+    "constants",
+    "claims"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "vector_type": {
+      "const": "gcp_slot_claim_cose_sign1"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "oracle": {
+      "type": "object",
+      "required": [
+        "basis",
+        "implementation",
+        "generator_command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "implementation": {
+          "type": "string"
+        },
+        "generator_command": {
+          "type": "string"
+        }
+      }
+    },
+    "constants": {
+      "type": "object",
+      "required": [
+        "protected_alg_hex",
+        "decoy_alg_hex",
+        "cose_key_kid",
+        "signature_len"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protected_alg_hex": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{2})+$"
+        },
+        "decoy_alg_hex": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{2})+$"
+        },
+        "cose_key_kid": {
+          "type": "integer"
+        },
+        "signature_len": {
+          "const": 48
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "gateway_seed_hex",
+          "gateway_public_key_hex",
+          "gateway_iid_hex",
+          "claim_seq",
+          "expiry",
+          "now_unix",
+          "clock_valid",
+          "payload_hex",
+          "signature_hex",
+          "protected_alg_hex",
+          "cose_sign1_hex",
+          "expect"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "gateway_seed_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "gateway_public_key_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "gateway_iid_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "claim_seq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expiry": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "now_unix": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "clock_valid": {
+            "type": "boolean"
+          },
+          "payload_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "signature_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "protected_alg_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "cose_sign1_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "expect": {
+            "enum": [
+              "admit",
+              "reject_replay",
+              "reject_expired",
+              "reject_signature",
+              "reject_alg"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

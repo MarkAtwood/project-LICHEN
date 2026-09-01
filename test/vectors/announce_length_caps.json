@@ -1,0 +1,43 @@
+{
+  "$schema": "./schema.json",
+  "format_version": 2,
+  "name": "Announce length caps",
+  "description": "Announce wire-length and App Data caps (spec 05-routing 9.2, R-05-068): the announce MUST NOT exceed 193 bytes and App Data MUST NOT exceed 100 bytes (254-byte signed link body minus 4-byte link header, 8-byte signer id, 48-byte link signature, and 1-byte routing dispatch). Wires are dispatch-stripped announce bytes; parse must accept exactly-at-cap and reject one-past-cap.",
+  "spec": "spec/05-routing.md section 9.2",
+  "constants": {
+    "MAX_ANNOUNCE_WIRE_LENGTH": 193,
+    "MAX_ANNOUNCE_APP_DATA": 100,
+    "FIXED_LENGTH": 93
+  },
+  "vectors": {
+    "length_caps": [
+      {
+        "name": "min_length_accepted",
+        "description": "93-byte announce with no App Data is accepted",
+        "wire": "010200000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "expected": {
+          "action": "accept",
+          "app_data_len": 0
+        }
+      },
+      {
+        "name": "max_length_accepted",
+        "description": "193-byte announce with 100 bytes of App Data is accepted",
+        "wire": "010200000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expected": {
+          "action": "accept",
+          "app_data_len": 100
+        }
+      },
+      {
+        "name": "over_wire_cap_rejected",
+        "description": "194-byte announce (101 bytes of App Data) exceeds both the 193-byte wire cap and the 100-byte App Data cap and is rejected",
+        "wire": "010200000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expected": {
+          "action": "reject",
+          "reason": "too_long"
+        }
+      }
+    ]
+  }
+}

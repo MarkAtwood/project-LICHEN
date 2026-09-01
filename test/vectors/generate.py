@@ -2341,14 +2341,24 @@ def ccp16_vectors() -> list[dict]:
 
     def _v(name, desc, epoch, density, snr, now, load=0, nch=3):
         h = _hop_hash(eui, epoch)
-        if density > 20 or snr < -5:
+        # Full AdaptiveSFSelect (spec 2a.8): default SF 10, pseudocode
+        # steps (density > 8 -> +2; good SNR + low density -> -1;
+        # load > 0.8 -> +1), then the threshold-table floors.
+        sf = 10
+        if density > 8:
+            sf = min(12, sf + 2)
+        if snr > 8 and density < 5:
+            sf = max(7, sf - 1)
+        if load > 0.8:
+            sf = min(12, sf + 1)
+        if snr < -5:
             sf = 12
-        elif density > 8 or snr < 0 or load > 0.8:
-            sf = 11
-        elif density < 5 and snr > 8:
-            sf = 9
-        else:
-            sf = 10
+        if snr < 0:
+            sf = max(11, sf)
+        if density > 8:
+            sf = max(11, sf)
+        if load > 0.8:
+            sf = max(11, sf)
         ch = 0 if density > 8 or nch <= 1 else (1 + (h % (nch - 1)))
         inp = {
             "eui64": "0011223344556677",
@@ -2649,7 +2659,7 @@ def _ccp15_adaptive_sf(
 ) -> tuple[int, bool]:
     """Independent transcription of AdaptiveSFSelect and its threshold table."""
     sf = assigned_sf
-    if density > 10 or utilization > 150:
+    if density > 8 or utilization > 150:
         sf = min(12, sf + 2)
     if ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)

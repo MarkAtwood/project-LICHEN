@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Announce wire-length and App Data caps (spec/05-routing.md 9.2, R-05-068)",
+  "type": "object",
+  "required": [
+    "$schema",
+    "format_version",
+    "name",
+    "description",
+    "spec",
+    "constants",
+    "vectors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "format_version": {
+      "const": 2
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "spec": {
+      "type": "string"
+    },
+    "constants": {
+      "type": "object",
+      "required": [
+        "MAX_ANNOUNCE_WIRE_LENGTH",
+        "MAX_ANNOUNCE_APP_DATA",
+        "FIXED_LENGTH"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "MAX_ANNOUNCE_WIRE_LENGTH": {
+          "const": 193
+        },
+        "MAX_ANNOUNCE_APP_DATA": {
+          "const": 100
+        },
+        "FIXED_LENGTH": {
+          "const": 93
+        }
+      }
+    },
+    "vectors": {
+      "type": "object",
+      "required": [
+        "length_caps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "length_caps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "description",
+              "wire",
+              "expected"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$"
+              },
+              "description": {
+                "type": "string"
+              },
+              "wire": {
+                "type": "string",
+                "pattern": "^(?:[0-9a-f]{2})*$"
+              },
+              "expected": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "accept",
+                      "reject"
+                    ]
+                  },
+                  "app_data_len": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "action": {
+                          "const": "accept"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "app_data_len"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "action": {
+                          "const": "reject"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "reason"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

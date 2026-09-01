@@ -1937,10 +1937,23 @@ def test_ccp16_sf_ema_load_factor_hash32_logic(desc: str, vector: dict) -> None:
     # production code behavior. The now field is vector metadata, not a value
     # computed by any function under test.
 
-    # SF table implementation vs oracle.
+    # AdaptiveSFSelect full rule vs oracle (spec 2a.8): pseudocode steps
+    # then the threshold-table floors — NOT the table-only form.
     snr_ema = i.get("snr_ema", i.get("snr_db", 5.0))
     load_factor = i.get("load_factor", 0.0)
-    sf = adaptive_sf_for_metrics(density, snr_ema, load_factor)
+    sf = 10
+    if density > 8:
+        sf = min(12, sf + 2)
+    if snr_ema > 8 and density < 5:
+        sf = max(7, sf - 1)
+    if load_factor > 0.8:
+        sf = min(12, sf + 1)
+    if snr_ema < -5:
+        sf = 12
+    if snr_ema < 0:
+        sf = max(11, sf)
+    if density > 8:
+        sf = max(11, sf)
     assert sf == o["sf"], f"adaptive_sf drift: {name}"
 
 
