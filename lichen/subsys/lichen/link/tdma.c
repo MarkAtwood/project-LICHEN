@@ -176,6 +176,15 @@ int lichen_ccp_fsm_event(struct lichen_tdma_ctx *tdma, enum lichen_ccp_event eve
 		} else if (event == LICHEN_CCP_EVENT_RPL_VERSION) {
 			tdma->ccp_state = LICHEN_CCP_DRIFTING;
 			tdma->synced = false;
+			/* Spec 2a.5.4 / R-02a-045: a DODAG version change
+			 * MUST reset the SFN relative to the new root
+			 * (python on_version_change sfn_reset=True). Also
+			 * clear desync recovery counters that depended on
+			 * the prior version (2a.5.4 step 2).
+			 */
+			tdma->superframe = 0;
+			tdma->desync_consecutive_valid = 0;
+			tdma->desync_missed_superframes = 0;
 		}
 		break;
 
