@@ -34,6 +34,7 @@
 #include <zephyr/net/net_ip.h>
 #include <lichen/coap_server.h>
 #include <lichen/senml.h>
+#include <lichen/sos_alert.h>
 #include <lichen/oscore.h>
 #include <lichen/coap_oscore.h>
 
@@ -438,6 +439,76 @@ COAP_RESOURCE_DEFINE(lichen_msg_inbox, lichen_coap_server, {
 	.path = msg_inbox_path,
 	.user_data = &((struct coap_core_metadata) {
 		.attributes = msg_inbox_attrs,
+	}),
+});
+
+/*
+ * /sos resource (spec/18.4, R-12-041): POST accepts a CBOR SOS alert; GET
+ * returns the SOS service status. Verification (Schnorr48
+ * verify-before-rebroadcast) and rate limiting are wired by beads
+ * l1qw.25.2/l1qw.25.3 before this acceptance point processes alerts.
+ */
+static int sos_post(struct coap_resource *resource,
+		    struct coap_packet *request,
+		    struct sockaddr *addr, socklen_t addr_len)
+{
+	uint8_t payload[LICHEN_COAP_SERVER_MAX_PAYLOAD];
+	uint16_t payload_len;
+	struct sos_alert alert;
+	int ret;
+
+	ARG_UNUSED(resource);
+
+	payload_len = 0;
+	payload[0] = 0U;
+	ret = coap_packet_get_payload(request, &payload, &payload_len);
+	if (ret < 0 || payload_len == 0U) {
+		return COAP_RESPONSE_CODE_BAD_REQUEST;
+	}
+
+	ret = sos_alert_from_cbor(payload, payload_len, &alert);
+	if (ret != 0) {
+		LOG_WRN("SOS alert parse failed: %d", ret);
+		return COAP_RESPONSE_CODE_BAD_REQUEST;
+	}
+
+	/* Acceptance point: l1qw.25.2 (Schnorr48 verify) and l1qw.25.3
+	 * (sos_ratelimit_check) gate rebroadcast before processing. */
+
+	return lichen_coap_respond(resource, request, addr, addr_len,
+				   COAP_RESPONSE_CODE_CHANGED,
+				   CBOR_CONTENT_FORMAT, NULL, 0);
+}
+
+static int sos_get(struct coap_resource *resource,
+		   struct coap_packet *request,
+		   struct sockaddr *addr, socklen_t addr_len)
+{
+	/* R-12-041 status retrieval: minimal CBOR map {s: "ready"} until
+	 * the SOS state store lands with the verify/ratelimit slices. */
+	static const uint8_t status_body[] = { 0xA1, 0x61, 0x73, 0xF5 }; /* {"s": true} */
+
+	ARG_UNUSED(request);
+
+	return lichen_coap_respond(resource, request, addr, addr_len,
+				   COAP_RESPONSE_CODE_CONTENT,
+				   CBOR_CONTENT_FORMAT, status_body,
+				   sizeof(status_body));
+}
+
+static const char * const sos_path[] = { "sos", NULL };
+static const char * const sos_attrs[] = {
+	"rt=\"sos\"",
+	"ct=\"60\"",
+	NULL,
+};
+
+COAP_RESOURCE_DEFINE(lichen_sos, lichen_coap_server, {
+	.get = sos_get,
+	.post = sos_post,
+	.path = sos_path,
+	.user_data = &((struct coap_core_metadata) {
+		.attributes = sos_attrs,
 	}),
 });
 
