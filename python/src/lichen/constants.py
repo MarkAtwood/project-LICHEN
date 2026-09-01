@@ -69,3 +69,8 @@ SCHC_RCS_BYTES: int = 4
 SCHC_RETRANSMISSION_TIMEOUT_S: int = 10
 SCHC_MAX_ACK_REQUESTS: int = 4
 SCHC_INACTIVITY_TIMEOUT_S: int = 60
+
+# Spec 02a 2a.10.3 (proposed, R-02a-117 family): rolling RF metrics window.
+RF_METRICS_WINDOW_SF: int = 32
+# Spec 02a 2a.10.4 (proposed): interference escape threshold (tenths).
+INTERFERENCE_ESCAPE_TENTHS: int = 1000

@@ -247,6 +247,11 @@ int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 			      bool *out_tx_allowed);
 #endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
 
+/* Spec 02a 2a.10.3 (proposed): rolling RF metrics window in superframes. */
+#define LICHEN_RF_METRICS_WINDOW_SF 32U
+/* Spec 02a 2a.10.4 (proposed): interference escape threshold (tenths). */
+#define LICHEN_INTERFERENCE_ESCAPE_TENTHS 1000U
+
 #ifdef __cplusplus
 }
 #endif
