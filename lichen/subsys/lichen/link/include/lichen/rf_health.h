@@ -53,3 +53,23 @@ uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
 					  int8_t rssi_ema_dbm);
 void lichen_rf_health_reset(struct lichen_rf_health *h);
 #endif /* LICHEN_RF_HEALTH_H_ */
+
+/** Rolling-window TX-time BusyPercent sampler (spec 2a.10.3, R-02a-131).
+ *  TX-time based occupancy; MUST NOT use RSSI-derived values.
+ *  Window: RF_METRICS_WINDOW_SF superframes of slot_duration_ms each. */
+#define LICHEN_BUSY_PERCENT_WINDOW_SF 32
+#define LICHEN_BUSY_PERCENT_MAX_ENTRIES 32
+
+struct lichen_busy_percent_sampler {
+	/** Per-superframe TX airtime (ms) inside the current window. */
+	uint64_t sf[LICHEN_BUSY_PERCENT_MAX_ENTRIES];
+	uint32_t airtime_ms[LICHEN_BUSY_PERCENT_MAX_ENTRIES];
+	uint64_t current_sf;
+	uint8_t count;
+};
+
+void lichen_busy_percent_init(struct lichen_busy_percent_sampler *s);
+void lichen_busy_percent_record(struct lichen_busy_percent_sampler *s,
+				uint64_t superframe, uint32_t airtime_ms);
+uint8_t lichen_busy_percent(struct lichen_busy_percent_sampler *s,
+			    uint32_t slot_duration_ms);

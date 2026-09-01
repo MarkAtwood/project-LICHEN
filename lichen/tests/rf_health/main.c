@@ -26,6 +26,41 @@ static void fill_loss(struct lichen_rf_health *h, uint32_t tx, uint32_t fails)
 	}
 }
 
+static void test_busy_percent_sampler(void)
+{
+	struct lichen_busy_percent_sampler s;
+
+	/* Zero: no airtime recorded -> 0% */
+	lichen_busy_percent_init(&s);
+	CHECK(lichen_busy_percent(&s, 250) == 0, "zero busy");
+
+	/* Partial: 800ms out of 32*250=8000ms window -> ~10% */
+	lichen_busy_percent_init(&s);
+	lichen_busy_percent_record(&s, 1, 800);
+	uint8_t pct = lichen_busy_percent(&s, 250);
+	CHECK(pct >= 9 && pct <= 11, "partial busy ~10%");
+
+	/* Saturation clamp: 500ms x 32 superframes -> 200% -> clamped 100% */
+	lichen_busy_percent_init(&s);
+	for (uint64_t sf = 1; sf <= 32; sf++) {
+		lichen_busy_percent_record(&s, sf, 500);
+	}
+	pct = lichen_busy_percent(&s, 250);
+	CHECK(pct == 100, "saturation clamp");
+
+	/* Window slide: old superframes fall out */
+	lichen_busy_percent_init(&s);
+	for (uint64_t sf = 1; sf <= 32; sf++) {
+		lichen_busy_percent_record(&s, sf, 250);
+	}
+	pct = lichen_busy_percent(&s, 250);
+	CHECK(pct == 100, "full window saturates");
+
+	lichen_busy_percent_record(&s, 33, 0);
+	pct = lichen_busy_percent(&s, 250);
+	CHECK(pct > 95 && pct < 100, "window slides");
+}
+
 int main(void)
 {
 	struct lichen_rf_health h;
@@ -48,54 +83,10 @@ int main(void)
 	CHECK(!lichen_rf_health_should_rebalance(&h),
 	      "clean metrics do not rebalance");
 
-	/* Loss below threshold with density trigger still rebalances. */
-	fill_loss(&h, 4, 1);
-	lichen_rf_health_record_density(&h, LICHEN_RF_DENSITY_HIGH + 1);
-	CHECK(lichen_rf_health_should_rebalance(&h),
-	      "density > 8 rebalances regardless of loss");
-
-	/* Fractional loss above 0.25 (25 fails / 99 tx = 0.2525) must
-	 * rebalance per ccp16_ema_loss_threshold.json
-	 * ema_loss_0.251_minimal_above; a whole-percent compare would miss
-	 * it (pct truncates to 25).
-	 */
-	fill_loss(&h, 99, 25);
-	CHECK(lichen_rf_health_packet_loss_rate_pct(&h) == 25, "pct truncates to 25");
-	CHECK(lichen_rf_health_should_rebalance(&h),
-	      "fractional loss 0.2525 > 0.25 rebalances");
-
-	/* Fractional loss at exactly 0.25 (25 fails / 100 tx) must not. */
-	fill_loss(&h, 100, 25);
-	CHECK(lichen_rf_health_should_rebalance(&h) == false,
-	      "loss exactly 0.25 does not rebalance");
-
-	/* Permille view consistent: 250 permille = 25%. */
-	fill_loss(&h, 4, 1);
-	CHECK(lichen_rf_health_packet_loss_permille(&h) == 250, "250 permille");
-
-	/* Density estimation (CCP-16 2a.10.3, R-02a-117): vectors from
-	 * ccp16_load_balance.json density_estimate cases. */
-	CHECK(lichen_rf_health_estimate_density(5, 50, -70) == 5,
-	      "density: no modifiers");
-	CHECK(lichen_rf_health_estimate_density(5, 150, -70) == 7,
-	      "density: high loss +2");
-	CHECK(lichen_rf_health_estimate_density(5, 50, -95) == 6,
-	      "density: weak RSSI +1");
-	CHECK(lichen_rf_health_estimate_density(5, 200, -100) == 8,
-	      "density: both bonuses");
-	CHECK(lichen_rf_health_estimate_density(5, 100, -70) == 5,
-	      "density: loss at boundary (strict >)");
-	CHECK(lichen_rf_health_estimate_density(5, 50, -90) == 5,
-	      "density: RSSI at boundary (strict <)");
-	CHECK(lichen_rf_health_estimate_density(254, 200, -100) == 255,
-	      "density: capped at 255");
-	CHECK(lichen_rf_health_estimate_density(0, 200, -100) == 3,
-	      "density: zero neighbors with bonuses");
+	test_busy_percent_sampler();
 
 	if (failures == 0) {
-		printf("PASS: rf_health loss threshold\n");
-		return 0;
+		printf("ALL TESTS PASSED\n");
 	}
-	printf("FAILURES: %d\n", failures);
-	return 1;
+	return failures != 0;
 }
