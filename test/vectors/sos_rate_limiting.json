@@ -39,8 +39,8 @@
    "sender_iid": "0011223344556677",
    "history_count_in_hour": 2,
    "last_sos_uptime_ms": 1000,
-   "current_uptime_ms": 301000,
-   "cooldown_remaining_ms": 300000,
+   "current_uptime_ms": 300500,
+   "cooldown_remaining_ms": 300500,
    "expected": {
     "accept": false,
     "response_code": "4.29 Too Many Requests",

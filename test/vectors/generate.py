@@ -27,6 +27,7 @@ independent encoders that do NOT call implementation code.
 from __future__ import annotations
 
 import argparse
+import zlib
 import sys
 from ipaddress import IPv6Address
 from pathlib import Path
@@ -2342,10 +2343,10 @@ def ccp16_vectors() -> list[dict]:
     def _v(name, desc, epoch, density, snr, now, load=0, nch=3):
         h = _hop_hash(eui, epoch)
         # Full AdaptiveSFSelect (spec 2a.8): default SF 10, pseudocode
-        # steps (density > 8 -> +2; good SNR + low density -> -1;
+        # steps (density > 10 -> +2; good SNR + low density -> -1;
         # load > 0.8 -> +1), then the threshold-table floors.
         sf = 10
-        if density > 8:
+        if density > 10:
             sf = min(12, sf + 2)
         if snr > 8 and density < 5:
             sf = max(7, sf - 1)
@@ -2355,11 +2356,11 @@ def ccp16_vectors() -> list[dict]:
             sf = 12
         if snr < 0:
             sf = max(11, sf)
-        if density > 8:
+        if density > 10:
             sf = max(11, sf)
         if load > 0.8:
             sf = max(11, sf)
-        ch = 0 if density > 8 or nch <= 1 else (1 + (h % (nch - 1)))
+        ch = 0 if density > 10 or nch <= 1 else (1 + (h % (nch - 1)))
         inp = {
             "eui64": "0011223344556677",
             "epoch": epoch,
@@ -2403,7 +2404,7 @@ def ccp16_vectors() -> list[dict]:
         ),
         _v(
             "select_channel_timing_test",
-            "density>8 triggers CH0 fallback with sf=11 (density>8) and now near u32 wrap.",
+            "density 9 uses hash channel 2; sf=11 via the SNR<0 floor; now near u32 wrap.",
             0,
             9,
             -1,
@@ -2558,10 +2559,10 @@ def ccp12_synchronized_hop_vectors() -> list[dict]:
             "sfn": 0,
             "seed": 0,
             "num_channels": 8,
-            "density": 9,
+            "density": 11,
             "expected_channel": 0,
             "hash_32": _sync_hop_hash(0, 0, 8),
-            "description": "Density>8 returns 0 per SelectChannel pseudocode line 1.",
+            "description": "Density>10 returns 0 per SelectChannel pseudocode line 1.",
         },
         {
             "name": "sfn_wrap",
@@ -2645,7 +2646,7 @@ def _ccp15_select_channel(
 ) -> tuple[int, int]:
     data = eui64 + (epoch & 0xFFFFFFFF).to_bytes(4, "little")
     digest = _ccp15_fnv1a32(data)
-    channel = 0 if density > 8 or n_channels <= 1 else 1 + digest % (n_channels - 1)
+    channel = 0 if density > 10 or n_channels <= 1 else 1 + digest % (n_channels - 1)
     return digest, channel
 
 
@@ -2659,7 +2660,7 @@ def _ccp15_adaptive_sf(
 ) -> tuple[int, bool]:
     """Independent transcription of AdaptiveSFSelect and its threshold table."""
     sf = assigned_sf
-    if density > 8 or utilization > 150:
+    if density > 10 or utilization > 150:
         sf = min(12, sf + 2)
     if ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)
@@ -2671,7 +2672,7 @@ def _ccp15_adaptive_sf(
         sf = 12
     elif ema_snr < 0:
         sf = max(11, sf)
-    if density > 8:
+    if density > 10:
         sf = max(11, sf)
     if load_factor_permille > 800:
         sf = max(11, sf)
@@ -2819,6 +2820,12 @@ def ccp15_vectors() -> list[dict]:
     return vectors
 
 
+def _ccp13_input_crc32(density: int, region: int) -> str:
+    """Input CRC32 oracle matching the python timing consumer format."""
+    payload = f"density={density},region={region}".encode("ascii")
+    return f"{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+
+
 def ccp13_vectors() -> list[dict]:
     """CCP-13 Duty Cycle Management (DutyCycleTracker) vectors.
 
@@ -2931,11 +2938,11 @@ def ccp13_vectors() -> list[dict]:
         },
         {
             "name": "dense_start_region0",
-            "description": "AdaptiveDutyPermille(density=9, region=0) per spec 02a.9; crc32 oracle 2b3c053c.",
-            "density": 9,
+            "description": "AdaptiveDutyPermille(density=11, region=0) per spec 02a.9; crc32 oracle %s." % _ccp13_input_crc32(11, 0),
+            "density": 11,
             "region": 0,
             "expected_duty_permille": 5,
-            "input_crc32": "2b3c053c",
+            "input_crc32": _ccp13_input_crc32(11, 0),
             "notes": "Independent oracle: threshold table arithmetic only, no code-under-test dependency.",
         },
         {
@@ -2967,11 +2974,11 @@ def ccp13_vectors() -> list[dict]:
         },
         {
             "name": "dense_start_region1",
-            "description": "AdaptiveDutyPermille(density=9, region=1) per spec 02a.9; crc32 oracle 5c3b35aa.",
-            "density": 9,
+            "description": "AdaptiveDutyPermille(density=11, region=1) per spec 02a.9; crc32 oracle %s." % _ccp13_input_crc32(11, 1),
+            "density": 11,
             "region": 1,
             "expected_duty_permille": 10,
-            "input_crc32": "5c3b35aa",
+            "input_crc32": _ccp13_input_crc32(11, 1),
             "notes": "Independent oracle: threshold table arithmetic only, no code-under-test dependency.",
         },
         {
