@@ -484,11 +484,9 @@ static int sos_get(struct coap_resource *resource,
 		   struct coap_packet *request,
 		   struct sockaddr *addr, socklen_t addr_len)
 {
-	/* R-12-041 status retrieval: minimal CBOR map {s: "ready"} until
+	/* R-12-041 status retrieval: minimal CBOR map {"s": true} until
 	 * the SOS state store lands with the verify/ratelimit slices. */
 	static const uint8_t status_body[] = { 0xA1, 0x61, 0x73, 0xF5 }; /* {"s": true} */
-
-	ARG_UNUSED(request);
 
 	return lichen_coap_respond(resource, request, addr, addr_len,
 				   COAP_RESPONSE_CODE_CONTENT,
