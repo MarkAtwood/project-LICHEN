@@ -355,12 +355,12 @@ static int msg_inbox_post(struct coap_resource *resource,
 	}
 
 #ifdef CONFIG_LICHEN_COAP_SERVER_OSCORE
-	if (oscore.is_protected && oscore.ctx != NULL && oscore.piv_len > 0) {
+	if (is_protected && oscore_ctx != NULL && piv_len > 0) {
 		/* OSCORE response with Location-Path options */
 		uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 		struct coap_packet resp;
-		int r = coap_oscore_protect_response(oscore.ctx, oscore.piv,
-						     oscore.piv_len, request,
+		int r = coap_oscore_protect_response(oscore_ctx, piv, piv_len,
+						     request,
 						     COAP_RESPONSE_CODE_CREATED,
 						     NULL, 0, &resp, buf, sizeof(buf));
 		if (r < 0) {
