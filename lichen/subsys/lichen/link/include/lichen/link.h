@@ -86,6 +86,23 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
 
 #define LICHEN_TDMA_GUARD_MS 50 /* spec/02a-coordinated-capacity.md §2a.2: guard "MUST be 50 for this revision"; ccp_tdma.json guard_ms=50 */
 #define LICHEN_TDMA_SLOT_MS 250 /* spec/02a-coordinated-capacity.md §2a.2 Slot=(fnv1a32(EUI64)+u32(SFN)) mod n via lichen_hash_32; epoch MUST NOT enter the hash */
+/* Merge resolution: HEAD left this block empty; beads-worker-2 added the
+ * TDMA/CCP timing constants below. Intents are compatible — keep the added
+ * block, no HEAD content was removed. */
+#define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3 /* BEACON_TIMEOUT per 09-packets-timing.md FSM */
+
+/* Desync recovery timing constants (spec/09-packets-timing.md 14.7/2a.6.3).
+ * T_DRIFT_MAX: superframes in DRIFT before RECOVER. T_GIVE_UP: superframes
+ * in RECOVER before UNJOINED. Consumed by lichen_recovery_countdown_init_default. */
+#define LICHEN_T_DRIFT_MAX_SUPERFRAMES 6
+#define LICHEN_T_GIVE_UP_SUPERFRAMES 10
+
+/* 2a.6.3 startup/rejoin timing parameters (spec 2a.6.3 table). */
+#define LICHEN_LISTEN_PERIOD_MIN_S 30
+#define LICHEN_LISTEN_PERIOD_MAX_S 60
+#define LICHEN_DELAY_PER_NODE_S 5
+#define LICHEN_MAX_STARTUP_DELAY_S 300
+#define LICHEN_REJOIN_TIMEOUT_SUPERFRAMES 10
 #define LICHEN_TDMA_CONTENTION_RETRIES 5 /* Max DAO retransmissions in contention slot */
 #define LICHEN_TDMA_CONTENTION_BACKOFF_MIN_MS 100 /* CSMA min backoff */
 #define LICHEN_TDMA_CONTENTION_BACKOFF_MAX_MS 1000 /* CSMA max backoff */
