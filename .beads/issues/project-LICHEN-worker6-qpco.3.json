@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-qpco.3",
   "title": "Zephyr: GCP Slot Claim COSE_Sign1",
   "description": "Implement GCP Slot Claim COSE_Sign1 in Zephyr C using zcbor. Algorithm -65537, integer-keyed payload, RFC 9052 Sig_structure.",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:39:20.554413Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T04:13:41.716118801Z",
-  "closed_at": "2026-09-01T04:13:41.716118801Z",
-  "close_reason": "Superseded by l1qw.16.4 (has actionable description: C gcp_trust SLOT_CLAIM: prefix to COSE_Sign1 migration)",
+  "updated_at": "2026-08-27T23:39:20.554413Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-qpco.3",

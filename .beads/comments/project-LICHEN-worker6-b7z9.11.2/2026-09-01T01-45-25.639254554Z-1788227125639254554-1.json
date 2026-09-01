@@ -1,7 +1,0 @@
-{
-  "id": "1788227125639254554-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.11.2",
-  "author": "opencode-worker-7",
-  "text": "Released by worker-7 before starting: the prerequisite payload codec (cvi7, commit 55667721f3 rpl_dao_tx_persist.{c,h}) is on beads-worker-1, not main/worker-7 — implementing here would duplicate cvi7 and conflict at sync. Landable once 55667721f3 syncs to main.",
-  "created_at": "2026-09-01T01:45:25.639254554Z"
-}

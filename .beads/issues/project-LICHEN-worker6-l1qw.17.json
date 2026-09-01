@@ -1,14 +1,13 @@
 {
   "id": "project-LICHEN-worker6-l1qw.17",
   "title": "GCP-6.3: loser actions unimplemented - no re-claim emission, no updated-schedule broadcast to peers/LoRa",
-  "description": "Spec GCP-6.3: when a gateway loses a slot conflict (lowest IID wins), it must (1) select the next available slot, (2) emit a new slot claim for the replacement slot, and (3) broadcast updated schedule to federation peers and LoRa mesh. Currently none of these loser actions are implemented — only the winner path works. Python/Rust both accept the winning claim but neither re-claims on loss.",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:01:50.342054252Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T04:19:05.735360622Z",
+  "updated_at": "2026-08-31T12:01:50.342054252Z",
   "labels": [
     "gcp",
     "spec-gap",

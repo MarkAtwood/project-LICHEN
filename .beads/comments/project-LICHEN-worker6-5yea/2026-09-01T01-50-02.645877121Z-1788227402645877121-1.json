@@ -1,7 +1,0 @@
-{
-  "id": "1788227402645877121-1",
-  "issue_id": "project-LICHEN-worker6-5yea",
-  "author": "opencode-worker-7",
-  "text": "Design scoping by worker-7 (timebox release before editing): the emission path needs three coordinated pieces, so this is a decomposition not a one-bead slice. (1) L2 error contract: lora_l2_tx.c:289-291 returns generic -EBUSY for duty-block (indistinguishable from radio-busy) — add a dedicated duty-block error (e.g. -EDQUOT or LORA_L2_ERR_DUTY) so callers can distinguish; Rust/Python L2 mirrors need the same code. (2) Options-capable respond helper: coap_oscore_respond_resource (coap_oscore.c:91) has no options parameter — 5.03 requires Max-Age + CBOR {reason:'duty_cycle', retry_after, level}; add an options-capable variant or a dedicated lichen_coap_respond_duty_cycle() building the options internally, with retry_after = ceil(lichen_duty_cycle_remaining_ms/1000) and level from usage permille (spec 07:553-564 example shows level 'critical'). (3) Wiring decision (Mark): which C resources gate on duty (raw diag per b7z9.40? all mutating?) and which lichen_duty_cycle_ctx instance the server reads (the L2-owned lora_data.duty is static to lora_l2_tx.c — needs an accessor or ctx handoff at init).",
-  "created_at": "2026-09-01T01:50:02.645877121Z"
-}

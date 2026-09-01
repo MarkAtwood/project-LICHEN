@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-worker6-l1qw.27",
   "title": "Group admin promotion/demotion endpoint absent (spec 18.8.2 Admin Delegation)",
-  "description": "Spec 18.8.2: POST /groups/{gid}/admin endpoint for promoting/demoting group members to admin role. Only the group creator or an existing admin can promote. No endpoint exists in any implementation. Implement with OSCORE authentication and admin-authority verification.",
+  "description": "Spec 12-apps.md 18.8.2: Only owner can promote/demote admins (POST /groups/{gid}/admins with action promote/demote). Classification: not-implemented. Evidence: no /admins resource in any stack (python/src/lichen/coap/resources/groups_collection.py has no admins route; admins arise only via admin-role invitations at join_key groups_collection.py:788-791; rust/lichen-gateway/src/membership.rs has role types but no endpoint; C none). Suggested placement: python/src/lichen/coap/resources/groups_collection.py + python/src/lichen/group_membership.py role authority; then Rust/C parity. Refs R-12-061.",
   "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:36:50.101592621Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T04:19:06.972811829Z",
+  "updated_at": "2026-08-31T12:36:50.101592621Z",
   "labels": [
     "apps",
     "spec-gap",

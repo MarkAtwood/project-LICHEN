@@ -1,14 +1,13 @@
 {
   "id": "project-LICHEN-worker6-l1qw.21",
   "title": "GCP-6.5: claim_seq high-water cache - spec requires \u003c=64 entries with LRU eviction; C=8 fail-closed, Rust=256 fail-closed, no LRU anywhere",
-  "description": "Spec GCP-6.5: claim_seq high-water cache must hold \u003c=64 entries with LRU eviction. C CONFIG_LICHEN_SLOT_CLAIM_SEQ_CACHE_SIZE=8 with fail-closed (rejects unknown gateways when full). Rust uses 256-entry HashMap with fail-closed. Neither implements LRU eviction. Fix: add LRU eviction in both, set capacity to 64 per spec.",
   "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:02:31.141716109Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T04:19:06.235624049Z",
+  "updated_at": "2026-08-31T12:02:31.141716109Z",
   "labels": [
     "gcp",
     "spec-gap",

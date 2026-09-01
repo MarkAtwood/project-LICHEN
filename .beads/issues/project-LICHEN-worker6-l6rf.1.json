@@ -2,14 +2,13 @@
   "id": "project-LICHEN-worker6-l6rf.1",
   "title": "Python: Path transition thresholds",
   "description": "Add PATH_SWITCH_HYSTERESIS, PATH_SWITCH_HOLD_TIME, PREFER_LORA config. Implement hysteresis and hold time in parent selection logic.",
-  "status": "deferred",
+  "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:19:45.884184Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T04:11:33.793788044Z",
-  "defer_until": "2026-11-01T00:00:00-07:00",
+  "updated_at": "2026-08-27T23:19:45.884184Z",
   "labels": [
     "networking"
   ],

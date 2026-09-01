@@ -8,9 +8,9 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T20:42:05.858147312Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-09-01T03:05:27.500441801Z",
-  "closed_at": "2026-09-01T03:05:27.500441801Z",
-  "close_reason": "Re-closing (repeat store-resurrection): completed and committed as 299331f306 'feat(rpl): wire root-sig verification into DIO receive' — verify_dio_root_signature in receive.rs (2 call/defn sites verified in tree), L679 Baseline/Reject mapping, TOFU trust-store lookup via pinned_pubkey_for, wall_clock_unix seam, cross-check-before-cache ordering (reviewer-caught bug fixed). No new work existed.",
+  "updated_at": "2026-09-01T05:39:45.299905169Z",
+  "closed_at": "2026-09-01T05:39:45.299905169Z",
+  "close_reason": "test",
   "labels": [
     "decomposed",
     "rust",

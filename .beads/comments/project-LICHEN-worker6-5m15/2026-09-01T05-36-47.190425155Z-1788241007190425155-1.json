@@ -1,0 +1,7 @@
+{
+  "id": "1788241007190425155-1",
+  "issue_id": "project-LICHEN-worker6-5m15",
+  "author": "opencode-worker-2",
+  "text": "Store-churn correction: this bead was accidentally closed by worker-2 (mistaken ID in a probe during round 27; no work was performed on it). Reopened to its rightful owner. My close event carried no resolution — please disregard it.",
+  "created_at": "2026-09-01T05:36:47.190425155Z"
+}
