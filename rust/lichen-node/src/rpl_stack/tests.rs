@@ -2484,6 +2484,63 @@ fn plain_ipv6_packet(
 /// ba39 v1c2: a decapsulated inner datagram that still carries an RH3 is
 /// dropped at the local-delivery decap site instead of being parsed without
 /// the survey's grid constraints (bounded tunnel profile).
+/// b7z9.16.1(a): the DAO TX scheduler idles until the leaf joins, then
+/// schedules the initial DAO within 0-2 s of the join (R-09-017).
+#[tokio::test]
+async fn dao_tx_scheduler_idles_then_schedules_on_join() {
+    let root_id = identity(81);
+    let leaf_id = identity(82);
+    let root_addr = root_address(&root_id);
+    let leaf_addr = address(&leaf_id, 1);
+    let (root_radio, leaf_radio) = LoopbackRadio::pair();
+    let mut root = Stack::new_default_epoch(root_radio, root_id.clone());
+    root.add_peer(PeerIdentity::from_pubkey(leaf_id.pubkey));
+    let mut leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_id.clone());
+    leaf_stack.add_peer(PeerIdentity::from_pubkey(root_id.pubkey));
+    let prefix = root_addr[..8].try_into().unwrap();
+    let mut leaf = RplStack::provision_leaf(
+        leaf_stack,
+        leaf_addr,
+        root_addr,
+        announces(prefix),
+        MemStorage::new(),
+    )
+    .unwrap();
+
+    // Not joined: idle.
+    assert_eq!(leaf.dao_tx_advance(1_000), DaoTxAdvance::Idle);
+
+    // Join via the announce + DIO exchange (rpl_dispatch fixture).
+    join_leaf(&mut root, &mut leaf, &root_id, root_addr, leaf_addr).await;
+
+    // Joined: the leaf received a DIO (DioReceived) during join. The
+    // scheduler now holds the Initial phase; the join consumed part of
+    // the 0-2 s window, so poll at now_ms and later.
+    let first = leaf.dao_tx_advance(2_000);
+    let second = leaf.dao_tx_advance(2_500);
+    match (first, second) {
+        (DaoTxAdvance::NotYet { remaining_ms }, DaoTxAdvance::NotYet { .. }) => {
+            assert!(remaining_ms >= 1 && remaining_ms <= 2_000);
+        }
+        (DaoTxAdvance::Due, _) | (_, DaoTxAdvance::Due) => {}
+        other => panic!("unexpected scheduler state: {other:?}"),
+    }
+
+    // Joined: the initial DAO is scheduled 0-2 s out (R-09-017), then due.
+    let first = leaf.dao_tx_advance(2_000);
+    let second = leaf.dao_tx_advance(2_500);
+    match (first, second) {
+        (DaoTxAdvance::NotYet { remaining_ms }, DaoTxAdvance::NotYet { .. }) => {
+            // deadline in [2000, 4000] -> remaining in [1, 2000]
+            assert!(remaining_ms >= 1 && remaining_ms <= 2_000);
+        }
+        (DaoTxAdvance::Due, _) | (_, DaoTxAdvance::Due) => {
+            // random offset 0 -> immediately due at now_ms >= deadline
+        }
+        other => panic!("unexpected scheduler state: {other:?}"),
+    }
+}
+
 #[test]
 fn decapsulate_ipv6_strips_outer_and_verifies_inner_dst() {
     let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);

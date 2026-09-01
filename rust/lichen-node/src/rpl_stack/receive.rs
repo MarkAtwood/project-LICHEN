@@ -553,11 +553,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 }
                 // RootSeqCache consumption: post-verification per the
                 // b7z9.37.3.1 caller contract; replay rejects the DIO.
-                if let Err(_) = self.root_seqs_mut().accept(
-                    decoded.payload.dodag_id,
-                    decoded.payload.instance,
-                    decoded.payload.root_seq,
-                ) {
+                if self
+                    .root_seqs_mut()
+                    .accept(
+                        decoded.payload.dodag_id,
+                        decoded.payload.instance,
+                        decoded.payload.root_seq,
+                    )
+                    .is_err()
+                {
                     return Ok(RplReceiveOutcome::RplRejected);
                 }
                 if decoded.cross_check(&fields).is_err() {

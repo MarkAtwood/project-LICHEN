@@ -22,6 +22,9 @@ use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::PeerAuthState;
 use lichen_rpl::root_seq_cache::RootSeqCache;
+
+mod dao_tx_sched;
+use dao_tx_sched::{DaoTxAdvance, DaoTxPhase, DaoTxScheduler};
 use lichen_rpl::routing::{DaoAdmissionState, DaoTxState};
 
 use crate::announce::AnnounceProcessor;
@@ -114,6 +117,8 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
     root_seqs: RootSeqCache,
+    /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
+    dao_tx_sched: DaoTxScheduler,
     routing_now_ms: u64,
     generation: u64,
     direct_neighbors: HashSet<[u8; 8]>,
@@ -157,6 +162,30 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// being fulfilled and must be removed.
     pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
         &mut self.root_seqs
+    }
+
+    /// Advance the DAO TX scheduler and detect the join transition
+    /// (spec 09 14.2). On the first advance with the node joined and the
+    /// scheduler idle, the initial DAO is scheduled 0-2 s out (R-09-017).
+    /// Returns the scheduler outcome for the TX path (wired in b7z9.16.1(b)).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "DAO TX consumer lands in b7z9.16.1(b)")
+    )]
+    pub(crate) fn dao_tx_advance(&mut self, now_ms: u64) -> DaoTxAdvance {
+        let joined = self.rpl.router.is_joined();
+        if !joined {
+            self.dao_tx_sched = DaoTxScheduler::new();
+            return DaoTxAdvance::Idle;
+        }
+        if matches!(self.dao_tx_sched.phase(), DaoTxPhase::Idle) {
+            // Join transition: schedule the initial DAO with a hash-free
+            // 0-2 s offset derived from the current time slice (the node
+            // has no RNG; the low bits of now_ms vary across nodes).
+            let random_word = (now_ms as u32) ^ u32::from(self.rpl.router.dodag_id()[15]);
+            self.dao_tx_sched.schedule_initial(now_ms, random_word);
+        }
+        self.dao_tx_sched.advance(now_ms)
     }
 
     /// Cached highest accepted `root_seq` for the key, if observed.
