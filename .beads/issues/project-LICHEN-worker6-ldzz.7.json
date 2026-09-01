@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-ldzz.7",
+  "title": "diag.7: GPS — PPS interrupt verification",
+  "description": "After first GPS fix (GGA fix quality \u003e 0), start a 10s timer. If PPS GPIO interrupt count is still 0 when timer fires, report DIAG_GPS_NO_PPS with the expected pin. Log the PPS rate when working (should be 1.000 Hz ± 1%). Detects wrong PPS GPIO or interrupt config.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T05:18:44.376677664Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T05:18:44.376677664Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ldzz.7",
+      "depends_on_id": "project-LICHEN-worker6-ldzz",
+      "type": "parent-child",
+      "created_at": "2026-09-01T05:18:44.5077057Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-ldzz.7",
+      "depends_on_id": "project-LICHEN-worker6-ldzz.1",
+      "type": "blocks",
+      "created_at": "2026-09-01T05:18:56.284127069Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

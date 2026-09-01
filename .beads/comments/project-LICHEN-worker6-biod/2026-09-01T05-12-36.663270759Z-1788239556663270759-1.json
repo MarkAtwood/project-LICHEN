@@ -1,0 +1,7 @@
+{
+  "id": "1788239556663270759-1",
+  "issue_id": "project-LICHEN-worker6-biod",
+  "author": "opencode-worker-7",
+  "text": "More bd8h forensics from worker-7: this round the write-loss escalated from close-revert to FULL RECORD LOSS — project-LICHEN-worker6-b7z9.25.3 vanished entirely from the shared store after I closed it (parent b7z9.25 children list went from [b7z9.25.3,...] to []). I recreated a tombstone (37ad, closed) referencing commit d2ddd3278d so the family accounting stays accurate. Total losses this session from my closes: b9u3 (re-closed), 81a8 (re-closed x2), b7z9.15 (re-closed), b7z9.46 (re-closed), b7z9.30.1 (re-closed), 8rm3 (re-closed), b7z9.48 (re-closed), bpyr (re-closed), y3s5 (re-closed), wtxl.4/wtxl.5/wtxl (re-closed), 205c (re-closed), and 25.3 (record lost, tombstoned as 37ad). All losses preserved committed evidence on beads-worker-7. Hypothesis worth checking: the shared-store writer may be a two-phase commit where the second phase (fsync/rename of issues.jsonl) races a concurrent reader that rewrites the file from a pre-close in-memory snapshot — the pattern 'close sticks briefly then reverts' matches a lost update rather than a failed write.",
+  "created_at": "2026-09-01T05:12:36.663270759Z"
+}
