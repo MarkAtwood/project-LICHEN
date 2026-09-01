@@ -115,7 +115,7 @@ packet.
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
 | Imin | 4 seconds | Allow network stabilization |
-| Imax | 17 minutes | Reduce steady-state overhead |
+| Imax | 17.07 minutes (1024 s) | Reduce steady-state overhead; Imin 4 s × 2^8 doublings |
 | k | 10 | Suppress redundant DIOs |
 
 ### 14.2. DAO Timing
