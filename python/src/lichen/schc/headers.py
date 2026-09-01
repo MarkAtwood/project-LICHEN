@@ -149,13 +149,53 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
     return upper_dst
 
 
+def _validate_udp_structure(packet: IPv6Packet) -> None:
+    """Enforce UDP framing and checksums without re-interpreting addresses.
+
+    Keeps the UdpDatagram length and zero-checksum structure checks; the
+    address bytes are read only for the RFC 2460 section 8.1 pseudo-header.
+    """
+    upper_dst = _validate_routing_headers(packet)
+    if packet.header.next_header == UDP_NEXT_HEADER:
+        try:
+            UdpDatagram.from_bytes(packet.payload)
+        except UdpError as error:
+            raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
+        if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
+            raise SchcError("invalid Rule 255 IPv6 UDP checksum")
+
+
+def validate_ipv6_structure(raw: bytes) -> bytes:
+    """Validate IPv6 framing, extension headers, and checksums only.
+
+    Receive-side (byte-preserving Rule 255 decode) contract per the
+    rule255-rx-decode decision (spec/03-adaptation.md): no endpoint address
+    policy is applied on receipt; a well-framed packet with valid checksums
+    is preserved verbatim regardless of its addresses.
+    """
+    if type(raw) is not bytes:
+        raise SchcError("IPv6 packet must be bytes")
+    if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
+        raise SchcError(
+            f"IPv6 packet length must be {HEADER_LENGTH}..{_MAX_IPV6_PACKET_SIZE}, got {len(raw)}"
+        )
+    try:
+        packet = IPv6Packet.from_bytes(raw, strict=True)
+    except PacketError as error:
+        raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
+    _validate_udp_structure(packet)
+    return raw
+
+
 def validate_full_ipv6(raw: bytes) -> bytes:
     """Validate a complete IPv6 packet for Rule 255 delivery.
 
     Checks framing, structure, and checksums only.  Endpoint address policy
     (unspecified/multicast source, unspecified destination, loopback,
     IPv4-mapped, multicast-destination-scope) is enforced on the TX side by
-    :func:`_validate_rule255_emission_endpoints`.  The RX decode path is
+    :func:`_validate_rule255_emission_endpoints` per the canonical TX/RX
+    split in spec/03-adaptation.md.  The RX decode path (``decode_rule255``)
+    validates structure only via :func:`validate_ipv6_structure` and is
     byte-preserving: a well-framed packet with a valid checksum is accepted
     regardless of endpoint addresses (spec/03-adaptation.md Rule 255 RX).
     """
@@ -169,14 +209,14 @@ def validate_full_ipv6(raw: bytes) -> bytes:
         packet = IPv6Packet.from_bytes(raw, strict=True)
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
-    upper_dst = _validate_routing_headers(packet)
-    if packet.header.next_header == UDP_NEXT_HEADER:
-        try:
-            UdpDatagram.from_bytes(packet.payload)
-        except UdpError as error:
-            raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
-        if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
-            raise SchcError("invalid Rule 255 IPv6 UDP checksum")
+    # Structure and checksums only, via the shared _validate_udp_structure
+    # helper (the beads-worker-7 factoring; byte-identical to HEAD's former
+    # inline code). The other side's _validate_ipv6_addresses call is dropped:
+    # HEAD replaced that helper with validate_datagram_source_policy and moved
+    # its unspecified/multicast-source and unspecified-destination classes
+    # into the widened TX-side _validate_rule255_emission_endpoints, keeping
+    # this validator (and the RX path) byte-preserving per spec/03-adaptation.md.
+    _validate_udp_structure(packet)
     return raw
 
 
@@ -241,7 +281,7 @@ def decode_rule255(data: bytes, *, single_frame_limit: int | None = None) -> byt
         raise SchcError(
             f"Rule 255 packet is {len(data)} bytes, exceeds single frame limit {single_frame_limit}"
         )
-    return validate_full_ipv6(data[1:])
+    return validate_ipv6_structure(data[1:])
 
 
 def _is_global(addr: int) -> bool:

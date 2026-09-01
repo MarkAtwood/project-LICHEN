@@ -441,15 +441,19 @@ NOT originate a packet whose source is unspecified, loopback, multicast, or
 IPv4-mapped, nor one whose destination is unspecified, loopback,
 IPv4-mapped, or a multicast address with a scope outside 2-14. A Rule 255
 encoder (and the compression path falling back to it) MUST reject such
-packets. Rule 255 DECODING is byte-preserving with respect to the emission
-policy: a decoder MUST validate structure and checksums plus the structural
-address constraints (an unspecified or multicast source and an unspecified
-destination are invalid on receipt as well as on emission), but MUST NOT
-re-apply the emission-only constraints (loopback, IPv4-mapped, or multicast
-destination scope outside 2-14). A structurally valid packet whose only
-defect is an emission-policy violation is preserved verbatim rather than
-reinterpreted or dropped as malformed, because a packet one implementation
-cannot originate is still delivered intact by the other.
+packets. Rule 255 DECODING is byte-preserving (rule255-rx-decode decision,
+2026-08-31, FINAL): a decoder MUST validate structure and checksums only and
+MUST NOT apply any part of the endpoint address policy on receipt, because a
+structurally valid packet already on the link is preserved verbatim rather
+than reinterpreted or dropped as malformed. This split keeps the two
+implementation families interoperable: a packet one implementation cannot
+originate is still delivered intact by the other.
+<!-- Merge resolution note: the receipt-side rule above follows the adjudicated
+rule255-rx-decode decision (2026-08-31, FINAL; spec/decisions.jsonl) — address
+validation is TX-only — superseding the older "structural address constraints
+on receipt" wording. The error-precedence sentences below are retained because
+they are scoped to origination/forwarding (TX) paths, where the decision does
+evaluate endpoint policy. -->
 On the origination and forwarding paths, where endpoint policy is
 evaluated, integrity and structural failures report before endpoint-shape
 opinions: a packet failing both a structural or checksum check and an

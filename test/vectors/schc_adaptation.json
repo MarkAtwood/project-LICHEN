@@ -822,7 +822,7 @@
       "destination_ipv6": "2001:db8::1",
       "expect_valid": false,
       "expect_error": "invalid_source_address",
-      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations rejected in BOTH directions (emission and decode-time structural validation)."
+      "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
     },
     {
       "name": "rule255_rx_reject_multicast_source",
@@ -833,7 +833,7 @@
       "destination_ipv6": "2001:db8::1",
       "expect_valid": false,
       "expect_error": "invalid_source_address",
-      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations rejected in BOTH directions (emission and decode-time structural validation)."
+      "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
     },
     {
       "name": "rule255_rx_reject_unspecified_destination",
@@ -844,7 +844,7 @@
       "destination_ipv6": "::",
       "expect_valid": false,
       "expect_error": "invalid_destination_address",
-      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations rejected in BOTH directions (emission and decode-time structural validation)."
+      "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
     }
   ]
 }
