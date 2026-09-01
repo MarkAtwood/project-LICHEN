@@ -1,12 +1,12 @@
 {
   "id": "project-LICHEN-worker6-ldzz",
   "title": "Hardware bringup diagnostics: firmware self-test and anomaly detection",
-  "description": "Add a lichen_diag module that detects common hardware bringup failures at runtime and reports structured diagnostics via CoAP GET /diag and UART console. Each subsystem hooks into the diagnostic ring with specific anomaly detectors. Goal: first-boot on a new board tells you exactly what's wrong instead of silently failing. Covers: radio (SX1262 SPI/GPIO/PA/TCXO), GPS (UART/fix/PPS), display (SPI contention), power (ADC cal/drain), and fleet-level (clock drift, asymmetric links, version skew).",
+  "description": "Hardware adaptation module: detect and adapt to board-level variation at runtime. Every detector is paired with an adapter — the firmware handles the difference and reports what it did via CoAP GET /diag and UART. Ships in all production firmware (CONFIG_LICHEN_DIAG=y). No bringup-only mode: a 'bringup problem' and a 'board rev B GPIO change' look identical to the firmware. See AGENTS.md 'Hardware Adaptation' section for full design context.",
   "status": "open",
   "priority": 1,
   "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T05:18:06.262873021Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T05:18:06.262873021Z"
+  "updated_at": "2026-09-01T05:27:56.121166204Z"
 }
