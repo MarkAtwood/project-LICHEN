@@ -97,7 +97,7 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
 #define LICHEN_T_DRIFT_MAX_SUPERFRAMES 6
 #define LICHEN_T_GIVE_UP_SUPERFRAMES 10
 
-/* 2a.6.3 startup/rejoin timing parameters (spec 2a.6.3 table). */
+/* 2a.6.3 startup/rejoin timing parameters (spec/02a-coordinated-capacity.md 2a.6.3 table). */
 #define LICHEN_LISTEN_PERIOD_MIN_S 30
 #define LICHEN_LISTEN_PERIOD_MAX_S 60
 #define LICHEN_DELAY_PER_NODE_S 5
