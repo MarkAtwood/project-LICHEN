@@ -56,4 +56,44 @@ uint8_t lichen_rpl_sf_assignment_parse(const uint8_t *data, size_t len);
 uint8_t lichen_rpl_sf_effective(const struct lichen_rpl_sf_assignment *s,
 				const uint8_t iid[8]);
 
+/* ------------------------------------------------------------------ */
+/* Gateway least-loaded SF tracker (rust GatewaySfTracker parity).     */
+/* ------------------------------------------------------------------ */
+
+#define LICHEN_SF_TRACKER_CAPACITY 32u
+
+/** Per-SF node assignment tracker for a gateway (bead b7z9.71). */
+struct lichen_rpl_sf_tracker {
+	uint8_t iids[LICHEN_SF_TRACKER_CAPACITY][8];
+	uint8_t node_sf[LICHEN_SF_TRACKER_CAPACITY];
+	uint8_t count;
+};
+
+/** Initialize an empty tracker. */
+void lichen_rpl_sf_tracker_init(struct lichen_rpl_sf_tracker *t);
+
+/**
+ * Register a node at a given SF (removes any prior assignment for the
+ * same IID first). Returns false when sf is not in 7..=12, iid is NULL,
+ * or the tracker is full (LICHEN_SF_TRACKER_CAPACITY).
+ */
+bool lichen_rpl_sf_tracker_register(struct lichen_rpl_sf_tracker *t,
+				    const uint8_t iid[8], uint8_t sf);
+
+/** Remove a node from tracking. */
+void lichen_rpl_sf_tracker_unregister(struct lichen_rpl_sf_tracker *t,
+				      const uint8_t iid[8]);
+
+/** Node count per SF as out[0]=SF7 .. out[5]=SF12. */
+void lichen_rpl_sf_tracker_load(const struct lichen_rpl_sf_tracker *t,
+				uint32_t out[6]);
+
+/**
+ * Assign the least-loaded SF for a new node and register it.
+ * Returns the assigned SF (7..=12), or 0 when iid is NULL.
+ */
+uint8_t lichen_rpl_sf_tracker_assign(struct lichen_rpl_sf_tracker *t,
+				     const uint8_t iid[8]);
+
+
 #endif /* LICHEN_RPL_SF_ASSIGNMENT_H_ */

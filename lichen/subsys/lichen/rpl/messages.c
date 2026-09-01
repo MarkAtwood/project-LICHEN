@@ -16,6 +16,7 @@
 #include <zephyr/sys/byteorder.h>
 
 #include <lichen/rpl_messages.h>
+#include <lichen/rpl_sf_assignment.h>
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
 
@@ -173,6 +174,7 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 	 * ROOT_DIO_SIGNATURE from beads-worker-5; both validators required). */
 	bool have_dio_time = false;
 	bool have_root_sig = false;
+	bool have_assigned_sf = false;
 	int ret;
 
 	if (options == NULL && options_len != 0U) {
@@ -219,6 +221,15 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 				return LICHEN_RPL_ERR_BAD_OPT;
 			}
 			have_root_sig = true;
+			break;
+		/* ASSIGNED_SF (spec 02 3.4, R-02-008): singleton, exactly one
+		 * byte of SF value; content validated via the shared codec. */
+		case LICHEN_RPL_OPT_ASSIGNED_SF:
+			if (have_assigned_sf || opt.data_len != 1U ||
+			    lichen_rpl_sf_assignment_parse(opt.data, 3U) == 0U) {
+				return LICHEN_RPL_ERR_BAD_OPT;
+			}
+			have_assigned_sf = true;
 			break;
 		default:
 			break;
