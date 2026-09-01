@@ -5,6 +5,7 @@ use core::net::Ipv6Addr;
 use std::vec::Vec;
 
 use lichen_core::constants::RPL_INSTANCE_ID;
+use lichen_core::sf_assignment::make_assigned_sf_option;
 use lichen_hal::NonVolatile;
 use lichen_link::{
     keys::PublicKey,
@@ -167,6 +168,12 @@ pub struct Router {
     pub(crate) trickle: TrickleTimer,
     pub(crate) dao_manager: DaoManager,
     pub(crate) neighbors: NeighborTable,
+    /// Gateway-side least-loaded SF assignment tracker (spec 02 3.4
+    /// R-02-016). None on non-root routers; the 0x14 ASSIGNED_SF option
+    /// is emitted only when a tracker is installed. std-only: the
+    /// lichen-core tracker type itself is #[cfg(feature = "std")].
+    #[cfg(feature = "std")]
+    pub(crate) sf_tracker: Option<lichen_core::sf_assignment::GatewaySfTracker>,
     pub(crate) dodag_id: [u8; 16],
     pub(crate) dodag_config: DodagConfig,
     pub(crate) last_now_ms: u64,
@@ -200,6 +207,7 @@ impl Router {
                 Ipv6Addr::from(dodag_id),
             ),
             neighbors: NeighborTable::new(),
+            sf_tracker: None,
             dodag_id,
             dodag_config,
             last_now_ms: 0,
@@ -242,6 +250,7 @@ impl Router {
             trickle,
             dao_manager,
             neighbors: NeighborTable::new(),
+            sf_tracker: None,
             dodag_id,
             dodag_config,
             last_now_ms: 0,
@@ -886,6 +895,26 @@ impl Router {
             return 0;
         };
         let mut length = base_len + config_len;
+        // ASSIGNED_SF (spec 02 3.4 R-02-016): the border router attaches
+        // its per-node assignment to every DIO it originates. Only root
+        // routers with an installed tracker emit; the gateway registers
+        // joined nodes and least-loads the assignment (GatewaySfTracker).
+        if let (Some(tracker), true) = (&self.sf_tracker, self.dodag.is_root()) {
+            let assigned = tracker
+                .load_by_sf()
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, load)| **load)
+                .map(|(i, _)| 7u8 + i as u8);
+            if let Some(sf) = assigned {
+                if let Ok(option) = make_assigned_sf_option(sf) {
+                    if length + option.len() <= out.len() {
+                        out[length..length + option.len()].copy_from_slice(&option);
+                        length += option.len();
+                    }
+                }
+            }
+        }
         if let Some(authorization) = authorization {
             let Ok(authorization_len) = authorization.write_to(&mut out[length..]) else {
                 return 0;
@@ -893,6 +922,13 @@ impl Router {
             length += authorization_len;
         }
         length
+    }
+
+    /// Install the gateway SF assignment tracker (border routers only;
+    /// enables ASSIGNED_SF option emission in subsequent DIO builds).
+    #[cfg(feature = "std")]
+    pub fn install_sf_tracker(&mut self, tracker: lichen_core::sf_assignment::GatewaySfTracker) {
+        self.sf_tracker = Some(tracker);
     }
 
     /// Get the route path for a destination (root only).
@@ -1197,4 +1233,45 @@ pub(crate) fn dao_parents_for_source(
 #[cfg(test)]
 fn same_interface(a: &[u8; 16], b: &[u8; 16]) -> bool {
     a[8..] == b[8..]
+}
+
+#[cfg(all(test, feature = "std"))]
+mod sf_emission_tests {
+    use super::*;
+
+    #[test]
+    fn root_dio_without_tracker_has_no_assigned_sf_option() {
+        let mut router = Router::new_root([0xAA; 16]);
+        let link = LinkLayer::new(lichen_link::identity::Identity::from_seed(
+            lichen_link::keys::Seed::new([7u8; 32]),
+        ));
+        let mut out = [0u8; 128];
+        let len = router.build_authenticated_dio(&mut out, &link);
+        assert!(len > 0);
+        assert!(
+            !out[..len]
+                .windows(3)
+                .any(|w| w[0] == lichen_core::constants::DIO_OPTION_ASSIGNED_SF),
+            "no 0x14 option without an installed tracker"
+        );
+    }
+
+    #[test]
+    fn root_dio_with_tracker_carries_assigned_sf_option() {
+        let mut router = Router::new_root([0xAA; 16]);
+        let mut tracker = lichen_core::sf_assignment::GatewaySfTracker::new();
+        tracker.assign_sf([0x01; 8]);
+        router.install_sf_tracker(tracker);
+        let link = LinkLayer::new(lichen_link::identity::Identity::from_seed(
+            lichen_link::keys::Seed::new([9u8; 32]),
+        ));
+        let mut out = [0u8; 128];
+        let len = router.build_authenticated_dio(&mut out, &link);
+        assert!(len > 0);
+        // The 0x14 option (type, len 1, sf 7..=12) must appear before the
+        // signature-bearing authorization option.
+        assert!(out[..len]
+            .windows(3)
+            .any(|w| w[0] == 0x14 && w[1] == 1 && (7..=12).contains(&w[2])));
+    }
 }
