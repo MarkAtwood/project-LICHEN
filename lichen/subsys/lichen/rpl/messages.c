@@ -168,6 +168,7 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 	struct lichen_rpl_schc_rule_version version;
 	bool have_config = false;
 	bool have_schc_version = false;
+	bool have_root_sig = false;
 	int ret;
 
 	if (options == NULL && options_len != 0U) {
@@ -191,6 +192,16 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 				return LICHEN_RPL_ERR_BAD_OPT;
 			}
 			have_schc_version = true;
+			break;
+		case LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE:
+			/* Root DIO Signature (spec 06 8.10.1): singleton,
+			 * COSE_Sign1 blob carried byte-transparent; COSE decode
+			 * and signature verification are receiver-side. */
+			if (have_root_sig || opt.data_len < LICHEN_RPL_ROOT_DIO_SIGNATURE_MIN_LEN ||
+			    opt.data_len > LICHEN_RPL_ROOT_DIO_SIGNATURE_MAX_LEN) {
+				return LICHEN_RPL_ERR_BAD_OPT;
+			}
+			have_root_sig = true;
 			break;
 		default:
 			break;
