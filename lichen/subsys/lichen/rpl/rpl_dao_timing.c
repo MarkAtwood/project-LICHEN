@@ -167,7 +167,7 @@ int lichen_rpl_dao_retry_timer_schedule_next(
   uint32_t selected;
   int ret;
 
-  if (timer == NULL || delay_ms == NULL) {
+  if (timer == NULL) {
     return -EINVAL;
   }
   if (timer->armed) {
@@ -183,7 +183,9 @@ int lichen_rpl_dao_retry_timer_schedule_next(
   timer->deadline_ms = now_ms + selected;
   timer->attempts++;
   timer->armed = true;
-  *delay_ms = selected;
+  if (delay_ms != NULL) {
+    *delay_ms = selected;
+  }
   return 0;
 }
 
