@@ -20,6 +20,7 @@ add_executable(rpl_root_sig_test
   src/main.c
   ${RPL_SRC_DIR}/messages.c
   ${RPL_SRC_DIR}/root_dio_sig.c
+  ${RPL_SRC_DIR}/root_dio_replay.c
   ${LINK_SRC}/identity_addr.c
   ${CRYPTO_SRC}/monocypher.c
   ${CRYPTO_SRC}/monocypher-ed25519.c

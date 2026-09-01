@@ -12,6 +12,7 @@
 
 #include <lichen/rpl_messages.h>
 #include <lichen/rpl_root_dio_sig.h>
+#include <lichen/root_dio_replay.h>
 
 static int tests_run;
 static int tests_passed;
@@ -309,6 +310,71 @@ static int test_root_sig_decode_rejects_garbage(void)
 	return 1;
 }
 
+
+
+static const uint8_t cache_dodag_a[16] = { 0x20, 0x30, 0x31, 0x32, 0x33, 0x34,
+					   0x35, 0x36, 0x37, 0x38, 0x39, 0x3a,
+					   0x3b, 0x3c, 0x3d, 0x3e };
+static const uint8_t cache_dodag_b[16] = { 0x21, 0x30, 0x31, 0x32, 0x33, 0x34,
+					   0x35, 0x36, 0x37, 0x38, 0x39, 0x3a,
+					   0x3b, 0x3c, 0x3d, 0x3e };
+
+static int test_replay_cache_first_observation_admitted(void)
+{
+	struct root_dio_replay_cache cache;
+	root_dio_replay_cache_init(&cache);
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 7),
+		  ROOT_SIG_OK, "first admitted");
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 9),
+		  ROOT_SIG_OK, "higher admitted");
+	return 1;
+}
+
+static int test_replay_cache_rejects_equal_and_lower(void)
+{
+	struct root_dio_replay_cache cache;
+	root_dio_replay_cache_init(&cache);
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 9),
+		  ROOT_SIG_OK, "admit 9");
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 9),
+		  -ROOT_SIG_ERR_REPLAY_DETECTED, "equal replay");
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 8),
+		  -ROOT_SIG_ERR_REPLAY_DETECTED, "lower replay");
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 1),
+		  -ROOT_SIG_ERR_REPLAY_DETECTED, "post-wrap rejected");
+	return 1;
+}
+
+static int test_replay_cache_keys_isolated(void)
+{
+	struct root_dio_replay_cache cache;
+	root_dio_replay_cache_init(&cache);
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 0, 5),
+		  ROOT_SIG_OK, "A/0");
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_b, 0, 5),
+		  ROOT_SIG_OK, "B/0 first");
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, cache_dodag_a, 1, 5),
+		  ROOT_SIG_OK, "A/1 first");
+	return 1;
+}
+
+static int test_replay_cache_full_table_fails_closed(void)
+{
+	struct root_dio_replay_cache cache;
+	uint8_t dodag[16];
+
+	root_dio_replay_cache_init(&cache);
+	for (size_t i = 0; i < LICHEN_ROOT_DIO_REPLAY_MAX_KEYS; i++) {
+		memset(dodag, (int)i, 16);
+		ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, dodag, 0, 1),
+			  ROOT_SIG_OK, "fill");
+	}
+	memset(dodag, (int)LICHEN_ROOT_DIO_REPLAY_MAX_KEYS, 16);
+	ASSERT_EQ(root_dio_replay_cache_check_and_admit(&cache, dodag, 0, 1),
+		  -ROOT_SIG_ERR_REPLAY_DETECTED, "full");
+	return 1;
+}
+
 int main(void)
 {
 	run_test(test_option_constants_in_sync_with_spec);
@@ -321,6 +387,10 @@ int main(void)
 	run_test(test_root_sig_structural_ok_and_expiry);
 	run_test(test_root_sig_structural_rejects_mismatches);
 	run_test(test_root_sig_decode_rejects_garbage);
+	run_test(test_replay_cache_first_observation_admitted);
+	run_test(test_replay_cache_rejects_equal_and_lower);
+	run_test(test_replay_cache_keys_isolated);
+	run_test(test_replay_cache_full_table_fails_closed);
 
 	printf("%d/%d passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;
