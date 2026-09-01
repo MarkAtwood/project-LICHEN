@@ -63,4 +63,101 @@ struct lichen_rpl_dao_tx_header {
 bool lichen_rpl_dao_tx_parse(const uint8_t *payload, size_t payload_len,
 			     struct lichen_rpl_dao_tx_header *header);
 
+/* ------------------------------------------------------------------ */
+/* DAO TX state: boot-time open/provision over the two-slot primitive  */
+/* (C port of rust lichen-rpl persistence.rs DaoTxState, bead          */
+/* b7z9.11.2; spec 09 14.2 R-09-014/016).                              */
+/* ------------------------------------------------------------------ */
+
+#include <lichen/hal_storage_redundant.h>
+
+#define LICHEN_DAO_TX_SLOT_KEY_A LICHEN_DAO_TX_KEYS_0
+#define LICHEN_DAO_TX_SLOT_KEY_B LICHEN_DAO_TX_KEYS_1
+
+/** Persisted DAO TX state after a successful open. */
+struct lichen_rpl_dao_tx_state {
+	struct lichen_hal_storage_value current;
+	uint8_t public_key[32];
+	uint8_t local_origin[16];
+	uint8_t rpl_instance_id;
+	uint8_t dodag_id[16];
+	uint64_t last_reserved;
+	uint8_t last_signed_dao[LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	size_t last_signed_dao_len;
+};
+
+/** open outcomes (negative = error, matching Rust taxonomy). */
+enum lichen_rpl_dao_tx_open_status {
+	LICHEN_DAO_TX_OPEN_OK = 0,
+	LICHEN_DAO_TX_OPEN_MISSING = -1,
+	LICHEN_DAO_TX_OPEN_CORRUPT = -2,
+	LICHEN_DAO_TX_OPEN_KEY_MISMATCH = -3,
+	LICHEN_DAO_TX_OPEN_SCOPE_MISMATCH = -4,
+	LICHEN_DAO_TX_OPEN_STORAGE_ERROR = -5,
+};
+
+/** provision outcomes. */
+enum lichen_rpl_dao_tx_provision_status {
+	LICHEN_DAO_TX_PROVISION_OK = 0,
+	LICHEN_DAO_TX_PROVISION_ALREADY = -1,
+	LICHEN_DAO_TX_PROVISION_CORRUPT = -2,
+	LICHEN_DAO_TX_PROVISION_STORAGE_ERROR = -3,
+};
+
+/**
+ * Load the newest valid TX state. Keys rpl.tx.a/rpl.tx.b, magic "DTX2".
+ * Validates the persisted key and scope (local_origin, instance, dodag)
+ * against the expected values. Requires last_signed_dao_len capacity of
+ * nothing: the signed bytes are copied into state (max 255).
+ */
+enum lichen_rpl_dao_tx_open_status lichen_rpl_dao_tx_open(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	const uint8_t expected_key[32], const uint8_t local_origin[16],
+	uint8_t rpl_instance_id, const uint8_t dodag_id[16],
+	struct lichen_rpl_dao_tx_state *state);
+
+/**
+ * Provision an absent TX state at sequence 0 with empty signed bytes.
+ * ALREADY when a valid state exists for any key; CORRUPT when a record
+ * exists but is unparseable (mirrors the Rust Exists->Corrupt mapping).
+ */
+enum lichen_rpl_dao_tx_provision_status lichen_rpl_dao_tx_provision(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	const uint8_t expected_key[32], const uint8_t local_origin[16],
+	uint8_t rpl_instance_id, const uint8_t dodag_id[16],
+	struct lichen_rpl_dao_tx_state *state);
+
+/** reserve_next / clear_transmitted outcomes. */
+enum lichen_rpl_dao_tx_tx_status {
+	LICHEN_DAO_TX_TX_OK = 0,
+	LICHEN_DAO_TX_TX_INVALID_STATE = -1,
+	LICHEN_DAO_TX_TX_EXHAUSTED = -2,
+	LICHEN_DAO_TX_TX_STORAGE_ERROR = -3,
+	/* Storage state changed under the caller (re-open and retry);
+	 * distinct from INVALID_STATE per the Rust taxonomy. */
+	LICHEN_DAO_TX_TX_STALE = -4,
+	LICHEN_DAO_TX_TX_CORRUPT = -5,
+};
+
+/**
+ * Reserve the next origin sequence: persist generation+1 carrying
+ * sequence = last_reserved + 1 BEFORE the DAO is built (crash-safe
+ * ordering; rust reserve_next). Returns the reserved sequence via *next.
+ * EXHAUSTED at u64 max (no wrap).
+ */
+enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_reserve_next(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
+	size_t record_len, uint64_t *next);
+
+/**
+ * Clear the exact retry bytes after successful transmission: persist
+ * the same sequence with empty signed bytes. INVALID_STATE when no
+ * signed bytes are pending.
+ */
+enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_clear_transmitted(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
+	size_t record_len);
+
 #endif /* LICHEN_RPL_DAO_TX_PERSIST_H_ */
