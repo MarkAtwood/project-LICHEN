@@ -118,9 +118,9 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
     root_seqs: RootSeqCache,
-    wall_clock_unix: Option<fn() -> u64>,
     /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
     dao_tx_sched: DaoTxScheduler,
+    wall_clock_unix: Option<fn() -> u64>,
     routing_now_ms: u64,
     generation: u64,
     direct_neighbors: HashSet<[u8; 8]>,
@@ -163,6 +163,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     pub fn set_wall_clock_unix(&mut self, clock: fn() -> u64) {
         self.wall_clock_unix = Some(clock);
     }
+
     /// Receiver-side trust state: only record sequences from DIOs whose root
     /// signature has passed verification (see `RootSeqCache` caller contract).
     /// The root-signature receiver validation consumes this at the DIO path.
@@ -176,11 +177,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Advance the DAO TX scheduler and detect the join transition
     /// (spec 09 14.2). On the first advance with the node joined and the
     /// scheduler idle, the initial DAO is scheduled 0-2 s out (R-09-017).
-    /// Returns the scheduler outcome for the TX path (wired in b7z9.16.1(b)).
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "DAO TX consumer lands in b7z9.16.1(b)")
-    )]
+    /// Returns the scheduler outcome for the TX path.
     pub(crate) fn dao_tx_advance(&mut self, now_ms: u64) -> DaoTxAdvance {
         let joined = self.rpl.router.is_joined();
         if !joined {

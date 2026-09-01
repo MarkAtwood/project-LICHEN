@@ -2633,7 +2633,8 @@ mod tests {
 
     #[test]
     fn signature_failed_slot_claim_is_silently_discarded() {
-        let mut coordinator = coordinator([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x09, 0, 0, 0, 0, 0, 0, 1]);
+        let mut coordinator =
+            coordinator([0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x09, 0, 0, 0, 0, 0, 0, 1]);
 
         // GCP-6.3: a claim whose signature fails MUST be silently discarded —
         // an indistinguishable empty 2.04, never a 4.01 protocol error.

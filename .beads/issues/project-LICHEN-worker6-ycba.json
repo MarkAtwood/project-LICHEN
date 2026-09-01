@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-ycba",
   "title": "coap_keys overlay build broken: zcbor include + missing COAP_KEYS_MAX_ENTRIES Kconfig",
   "description": "Pre-existing build breakage (found while compile-verifying 9trv's DTN budget retune): west build of lichen/tests/coap_keys with overlay-deaddrop-proof.conf fails (1) coap_dtn.c:10 zcbor_decode.h: No such file or directory — the overlay build lacks the zcbor module include path (the subsys CMakeLists adds it only under some config), (2) coap_server.c:353 'oscore' undeclared — a guarded code path referencing oscore without the declaration, (3) src/main.c:70 CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES undeclared — the test's own Kconfig symbol was renamed/removed. The overlay exists precisely as the compile/link proof for the deaddrop resource chain (bd 4xln), so the chain cannot be compile-verified until fixed.",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T00:39:43.36299826Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-09-01T06:44:45.290060207Z",
-  "closed_at": "2026-09-01T06:44:45.290060207Z",
-  "close_reason": "Resolved as far as agent work can go; final root cause is workspace-level (oscore-bar). Fixed this round-set: (1) coap_server.c msg_post referenced an undeclared 'oscore' struct — replaced with the in-scope is_protected/oscore_ctx/piv_len locals (4b815b88c1); (2) prj.conf needed CONFIG_ZCBOR=y — added. REMAINING (refined diagnosis on the bead): LICHEN_COAP_KEYS depends on ZCBOR, but the zcbor module is not declared in the build's west module list, so CONFIG_ZCBOR resolves as unknown and LICHEN_COAP_KEYS falls to n -\u003e CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES undeclared. The zcbor module declaration lives in the workspace/manifest (heft/AWS builder) — outside this repo, needs Mark/human. The same missing-module gap caused the coap_dtn.c zcbor-include failure in the overlay build.",
+  "updated_at": "2026-09-01T01:08:56.194017594Z",
   "labels": [
     "zephyr",
     "coap"

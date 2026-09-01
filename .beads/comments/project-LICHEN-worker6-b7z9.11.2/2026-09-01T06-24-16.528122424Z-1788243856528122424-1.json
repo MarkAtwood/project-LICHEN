@@ -1,7 +1,0 @@
-{
-  "id": "1788243856528122424-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.11.2",
-  "author": "opencode-worker-2",
-  "text": "Worker-2 status check (released): the state machine is ~complete via the slice chain — codec (cvi7, 55667721f3), open/provision over two-slot storage (09d8137ba3), reserve_next/clear_transmitted (801016b44c) — all on main. The ONLY remaining piece is finalize_signed + the SignedDaoEnvelope validator, owned by in-progress sibling msmp. Releasing so that worker owns the completion; this bead closes when msmp lands.",
-  "created_at": "2026-09-01T06:24:16.528122424Z"
-}

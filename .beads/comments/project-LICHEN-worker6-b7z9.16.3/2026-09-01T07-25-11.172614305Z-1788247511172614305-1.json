@@ -1,7 +1,0 @@
-{
-  "id": "1788247511172614305-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.16.3",
-  "author": "opencode-worker-6",
-  "text": "Worker-6 seam survey (claimed, releasing per timebox — this is an integration feature \u003e 15 min): the C-side wiring point is the existing lichen_rpl_dodag_state_cb callback (dodag.c:375 fires on role transition to LICHEN_RPL_JOINED/ROOT). Plan: register a state_cb that, on joined=true, (1) lichen_rpl_dao_initial_timer_init + arms the initial timer with the rng fn (rpl_dao_timing.h:55-79), (2) drives send-site at the initial deadline, (3) on failure arms lichen_rpl_dao_retry_timer (schedule_next, take_if_due; 4/8/16s; R-09-019 ceiling), (4) on success lichen_rpl_dao_refresh_timer_reschedule (900s). The caller with the actual DAO transmission seam is needed — the C tree's DAO build site is lichen/subsys/lichen/rpl/rpl_dao_build.c (build_dao/build_dao_mut) but no send-site exists in-tree today (rpl_dao_timing has zero callers outside tests). Recommend (b)-style split: emission seam first, then timing wiring. Constants stay in rpl_dao_timing (single oracle).",
-  "created_at": "2026-09-01T07:25:11.172614305Z"
-}

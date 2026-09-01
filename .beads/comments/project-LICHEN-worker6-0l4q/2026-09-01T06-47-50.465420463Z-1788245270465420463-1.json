@@ -1,7 +1,0 @@
-{
-  "id": "1788245270465420463-1",
-  "issue_id": "project-LICHEN-worker6-0l4q",
-  "author": "opencode-worker-6",
-  "text": "Worker-6 verification at synced HEAD 844d59a6e1: lichen-node lib suite 333/333 GREEN (all 6 formerly-failing rpl_stack tests included). The fix chain that resolved this family: the canonical-multicast DIO admission contract (85a1f3cd era) plus the solicited-DIO response change (jittered multicast trickle response, option (a) of the ehcn decision) — the last holdout (three_rpl_stacks) went green with the multicast-trickle landing. Suite verified repeatedly this session. Bead is owned by worker-4; closing with evidence.",
-  "created_at": "2026-09-01T06:47:50.465420463Z"
-}

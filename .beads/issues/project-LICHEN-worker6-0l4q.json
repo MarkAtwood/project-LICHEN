@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-0l4q",
   "title": "Rust main is red: 6 rpl_stack tests fail at main tip 9440ea90ea (multicast DIO/DIS/DAO suite)",
   "description": "Found by beads-worker-4 after merging main (merge had zero conflicts; my diff touched nothing in rpl_stack; verified identical failures on main directly — 301 passed / 6 failed, same set). Failing tests (rust/lichen-node/src/rpl_stack/tests.rs): dao_radio_failure_retains_exact_finalized_bytes, leaf_send_allocates_each_update_and_restart_advances_sequence, relay_forwards_original_source_and_signed_body, rpl_dispatch_rejects_invalid_ipv6_length_and_checksum, three_rpl_stacks_send_leaf_dao_via_preferred_parent, multicast_dio_and_dis_are_received. Symptom of the latter: leaf.receive(1,1) no longer yields RplEvent::DioReceived (tests.rs:1099) — a DIO that used to be admitted is now rejected. Suspect the recent rpl admission/wire commits: 89cd460c0c (carry canonical multicast DIOs uncompressed), 623b13d54b (RPL control sends hop limit 255), 6008e4eed8 (RFC 6554 forwarding precedence parity + SRH admission vectors) — likely the tests' DIO/DIS construction (hop limit, wire form, or admission evidence) predates the tightened admission. Fix: update the 6 tests' frame construction to the new canonical admission requirements, or if a rejection is genuinely over-tight, file the divergence for adjudication. Owners of those commits (worker-1/worker-6) are best placed; filing because main's rust suite is red for every worker.",
-  "status": "closed",
+  "status": "open",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T18:28:08.946570034Z",
   "created_by": "opencode-worker-4",
-  "updated_at": "2026-09-01T06:47:50.939602225Z",
-  "closed_at": "2026-09-01T06:47:50.939602225Z",
-  "close_reason": "Resolved upstream and verified: at synced HEAD 844d59a6e1 the full lichen-node lib suite is 333/333 GREEN — all six formerly-failing rpl_stack tests (dao_radio_failure, leaf_send, relay_forwards, rpl_dispatch, three_rpl_stacks, multicast_dio_and_dis) pass. Root cause was the canonical-multicast DIO admission contract (85a1f1cd, Python-parity per R-09-005) invalidating stale fixtures; resolved by the multicast-trickle DIO response change (option (a) of the ehcn decision) landed via worker-3's e2adf9f3cf line and subsequent merges. Fixtures were reconciled on the way (b7z9.30-family work, 5byi diagnosis rounds). Suite green at 333/333; no red to fix — closing with evidence.",
+  "updated_at": "2026-08-31T22:25:18.622920279Z",
   "labels": [
     "rust",
     "networking"

@@ -2,16 +2,14 @@
   "id": "project-LICHEN-worker6-7gvk",
   "title": "ccp16 generator oracle diverges from implementation on step-4 (consistency vector expects 9, implementation gives 8)",
   "description": "Pre-existing discrepancy surfaced while fixing worker6-b7z9.30.1 (density threshold 10-\u003e8 in python/src/lichen/ccp.py adaptive_sf_select). The generator _v (test/vectors/generate.py:2342-2377, ccp16_vectors) computes sf from the adaptive_sf TABLE path only, while the implementations run the full pseudocode INCLUDING step-4 (EMA_SNR \u003e 8 AND Density \u003c 5 -\u003e SF-1). For the synchronized_hop_channel_consistency vector (density=3, snr=12): generator says sf=9 (table), implementation says sf=8 (9 then step-4 -1) — verified via PYTHONPATH=python/src probe both before and after the threshold change, so this is NOT caused by b7z9.30.1. Fix: make _v model the full pseudocode (steps 3-5 + post-step-6 floors per spec 2a.8, mirroring ccp.py/gradient.c/rf_health.rs), regenerate ccp16.json, and re-check test_adaptive_sf_select_ccp16 + test_ccp16_vectors_match_generator together. Careful: ccp16-hop.json shares _hop_hash oracle machinery — check whether ccp16-hop vectors also carry sf expectations before regenerating.",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T23:59:18.264783681Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-09-01T08:08:58.18050342Z",
+  "updated_at": "2026-09-01T00:08:46.177368948Z",
   "started_at": "2026-09-01T00:06:30.142015549Z",
-  "closed_at": "2026-09-01T08:08:58.18050342Z",
-  "close_reason": "Resolved as NOT-A-BUG (verification round; bead released since it was never claimed by me). The reported discrepancy 'generator says 9, implementation gives 8' does not reproduce at the current tip: (1) lichen/tests/nmea_l76k verified separately; (2) probed python/src/lichen/ccp.py adaptive_sf_select at the exact vector inputs — synchronized_hop_channel_consistency (density=3, snr=12) yields sf=9, matching the generator's _v table path (density\u003c5 AND snr\u003e8 -\u003e 9); (3) full sweep of ALL ccp16.json vector rows against the implementation: zero mismatches ('All ccp16 rows match the implementation'); (4) the intermediate row (density=9, snr=-1) also matches the generator table (sf=11), confirming the impl's density\u003e8 threshold composes correctly with the pseudocode; (5) per worker-7's caution, ccp16-hop.json was checked — none of its 10 vectors carry sf expectations, so no regeneration is needed there. The generate.py _v oracle and the implementations agree at the current tip; the original probe evidence predates the b7z9.30.1 threshold reconciliation. Residual note: the generator's table-path modeling remains a latent-fidelity concern if a future vector exercises a case where pseudocode step-4 and the threshold table compose differently (e.g. high density + good SNR: pseudocode SF-1 then table floor 11) — the generator would need the full pseudocode model at that point. File was left clean; no commit needed (verification-only round).",
   "labels": [
     "ccp15"
   ],

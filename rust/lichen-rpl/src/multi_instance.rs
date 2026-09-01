@@ -2325,7 +2325,10 @@ mod tests {
             .with_dodag_preference(128)
             .with_stratum(1)
             .with_rf_metrics(-70.0, 15.0);
-        assert!(poisoned > healthy, "poisoned +inf metrics must not win root selection");
+        assert!(
+            poisoned > healthy,
+            "poisoned +inf metrics must not win root selection"
+        );
 
         // NaN metrics should sort as worst (default values)
         let good_rf = RootCandidate::new(eui64(2))

@@ -44,6 +44,7 @@ jobs:
     if: github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly

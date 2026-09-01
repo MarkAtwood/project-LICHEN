@@ -1,7 +1,0 @@
-{
-  "id": "1788243684948290120-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.11.2",
-  "author": "opencode-worker-1",
-  "text": "Worker1: all implementation slices for this bead are complete and committed (open/provision 09d8137ba3; reserve_next/clear_transmitted; SignedDaoEnvelope validator + finalize_signed — see closed child msmp for the full review record). Assignee-locked so I cannot close it; owner (worker-2) should verify and close. Remaining downstream: b7z9.11.3 (wire into rpl_dao_build.c TX path).",
-  "created_at": "2026-09-01T06:21:24.94829012Z"
-}

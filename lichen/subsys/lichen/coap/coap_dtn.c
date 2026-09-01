@@ -23,6 +23,8 @@
 
 LOG_MODULE_REGISTER(lichen_coap_dtn, CONFIG_LICHEN_COAP_DEADDROP_LOG_LEVEL);
 
+#define LICHEN_DEADDROP_ID_MAX 12U
+
 static struct lichen_deaddrop_provider *s_provider;
 static struct lichen_dtn_buffer s_dtn_buf;
 static K_MUTEX_DEFINE(s_dtn_buf_mutex);
@@ -415,7 +417,7 @@ static int confessions_get(struct coap_resource *resource,
 		size_t idx = (start + i) % CONFESSIONS_SLOTS;
 		/* vd field: the ring buffer itself is the stable storage for
 		 * the record lifetime (SenML data cap 1536 >= 768). */
-		int r = senml_add_data(&out, SENML_KEY_CONFESSIONS, NULL,
+		int r = senml_add_data(&out, SENML_KEY_CONFESSIONS,
 				       s_confessions[idx],
 				       s_confessions_len[idx]);
 		if (r < 0) {
@@ -481,7 +483,7 @@ static int confessions_post(struct coap_resource *resource,
 		return coap_oscore_send_protected(resource, request, addr,
 						  addr_len, oscore_ctx, piv,
 						  piv_len,
-						  COAP_RESPONSE_CODE_REQUEST_ENTITY_TOO_LARGE);
+						  COAP_RESPONSE_CODE_REQUEST_TOO_LARGE);
 	}
 	uint32_t now_ms = k_uptime_get_32();
 	uint8_t iid7 = peer_eui64[7];
@@ -554,11 +556,61 @@ uint16_t lichen_dtn_expire_periodic(void)
 	return expired;
 }
 
+/* Spec 18.9: GET /deaddrop/<id> retrieves one specific drop. The id is
+ * matched against the SenML bn (base name) embedded in the stored payload. */
+static int deaddrop_by_id_get(struct coap_resource *resource,
+			      struct coap_packet *request,
+			      struct sockaddr *addr, socklen_t addr_len)
+{
+	if (s_provider == NULL || s_provider->retrieve == NULL) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_NOT_FOUND, 0, NULL, 0);
+	}
+	char id[LICHEN_DEADDROP_ID_MAX + 1U] = {0};
+	struct coap_option paths[4];
+	int pcount = coap_find_options(request, COAP_OPTION_URI_PATH, paths, 4);
+	for (int i = 0; i < pcount; i++) {
+		if (paths[i].len > 0U && paths[i].len <= LICHEN_DEADDROP_ID_MAX &&
+		    memcmp(paths[i].value, "deaddrop", 8U) != 0) {
+			size_t copy = MIN(paths[i].len, LICHEN_DEADDROP_ID_MAX);
+			memcpy(id, paths[i].value, copy);
+			id[copy] = '\0';
+			break;
+		}
+	}
+	if (id[0] == '\0') {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_BAD_REQUEST, 0, NULL, 0);
+	}
+	k_mutex_lock(&s_dtn_buf_mutex, K_FOREVER);
+	uint8_t buf[256];
+	int len = s_provider->retrieve(buf, sizeof(buf), id);
+	k_mutex_unlock(&s_dtn_buf_mutex);
+	if (len <= 0) {
+		/* Spec 18.9: 4.04 conceals existence for private drops. */
+		return lichen_coap_respond(resource, request, addr, addr_len,
+				    COAP_RESPONSE_CODE_NOT_FOUND, 0, NULL, 0);
+	}
+	return lichen_coap_respond(resource, request, addr, addr_len,
+			    COAP_RESPONSE_CODE_CONTENT,
+			    SENML_CBOR_CONTENT_FORMAT, buf, (size_t)len);
+}
+
 static const char *const deaddrop_path[] = { "deaddrop", NULL };
 COAP_RESOURCE_DEFINE(lichen_deaddrop, lichen_coap_server, {
 	.get = deaddrop_get,
 	.post = deaddrop_post,
 	.path = deaddrop_path,
+});
+
+/* Spec 18.9: GET /deaddrop/<id> for a specific drop. The id is the drop id
+ * returned in the POST Location-Path. The '+' is a single-level URI
+ * wildcard (CONFIG_COAP_URI_WILDCARD, selected by LICHEN_COAP_DEADDROP);
+ * the handler extracts the concrete id from the request options. */
+static const char *const deaddrop_by_id_path[] = { "deaddrop", "+", NULL };
+COAP_RESOURCE_DEFINE(lichen_deaddrop_by_id, lichen_coap_server, {
+	.get = deaddrop_by_id_get,
+	.path = deaddrop_by_id_path,
 });
 
 static const char *const confessions_path[] = { "confessions", NULL };

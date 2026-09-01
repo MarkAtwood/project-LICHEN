@@ -38,6 +38,11 @@ pub fn initial_startup_delay(nodes_heard: u32) -> u32 {
 }
 
 /// Desync recovery states (§14.7).
+/// Bounded RECOVERING listen timeout in superframes (spec 09 14.7
+/// RECOMMENDED; parity with C LICHEN_DESYNC_RECOVERY_BEACONS and python
+/// TDMA_BEACON_TIMEOUT_SUPERFRAMES).
+const RECOVERY_BEACONS: u8 = 3;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DesyncState {
     /// Node is synchronized with the network.
@@ -82,6 +87,7 @@ pub enum DesyncState {
 pub struct DesyncFSM {
     state: DesyncState,
     consecutive_valid: u8,
+    missed_superframes: u8,
 }
 
 impl Default for DesyncFSM {
@@ -96,6 +102,7 @@ impl DesyncFSM {
         Self {
             state: DesyncState::Synced,
             consecutive_valid: 0,
+            missed_superframes: 0,
         }
     }
 
@@ -116,6 +123,7 @@ impl DesyncFSM {
         if !time_valid && self.state == DesyncState::Synced {
             self.state = DesyncState::Desynced;
             self.consecutive_valid = 0;
+            self.missed_superframes = 0;
         }
         self.state
     }
@@ -132,20 +140,39 @@ impl DesyncFSM {
             DesyncState::Desynced if valid && wall_clock_valid => {
                 self.state = DesyncState::Recovering;
                 self.consecutive_valid = 1;
+                self.missed_superframes = 0;
             }
             DesyncState::Recovering => {
                 if valid {
                     self.consecutive_valid += 1;
-                    if self.consecutive_valid >= 3 {
+                    self.missed_superframes = 0;
+                    if self.consecutive_valid >= RECOVERY_BEACONS {
                         self.state = DesyncState::Synced;
                         self.consecutive_valid = 0;
                     }
                 } else {
                     self.state = DesyncState::Desynced;
                     self.consecutive_valid = 0;
+                    self.missed_superframes = 0;
                 }
             }
             _ => {}
+        }
+        self.state
+    }
+
+    /// Advance the bounded RECOVERING listen timeout by one superframe
+    /// (spec 09 14.7: 3-superframe RECOMMENDED; parity with C tdma.c and
+    /// python timing/sfn.py). No-op outside RECOVERING.
+    pub fn on_missed_superframe(&mut self) -> DesyncState {
+        if self.state != DesyncState::Recovering {
+            return self.state;
+        }
+        self.missed_superframes += 1;
+        if self.missed_superframes >= RECOVERY_BEACONS {
+            self.state = DesyncState::Desynced;
+            self.consecutive_valid = 0;
+            self.missed_superframes = 0;
         }
         self.state
     }
@@ -521,5 +548,53 @@ mod tests {
         assert_eq!(initial_startup_delay(60), 300);
         assert_eq!(initial_startup_delay(100), 300);
         assert_eq!(initial_startup_delay(1000), 300);
+    }
+    #[test]
+    fn recovering_bounded_timeout_returns_to_desynced() {
+        let mut fsm = DesyncFSM::new();
+        // Lose sync first (SYNCED -> DESYNCED on sfn wrap without clock).
+        assert_eq!(fsm.on_sfn_wrap(false), DesyncState::Desynced);
+        // Enter RECOVERING: valid beacon + wall clock.
+        let st = fsm.on_beacon(true, true);
+        assert_eq!(st, DesyncState::Recovering);
+        // 2 missed superframes: still RECOVERING (timeout is 3).
+        for _ in 0..2 {
+            let st = fsm.on_missed_superframe();
+            assert_eq!(st, DesyncState::Recovering);
+        }
+        // 3rd missed superframe: DESYNCED, counters reset.
+        let st = fsm.on_missed_superframe();
+        assert_eq!(st, DesyncState::Desynced);
+        // Recovery still possible afterwards.
+        let st = fsm.on_beacon(true, true);
+        assert_eq!(st, DesyncState::Recovering);
+    }
+
+    #[test]
+    fn missed_superframe_is_noop_outside_recovering() {
+        let mut fsm = DesyncFSM::new();
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+        // DESYNCED also unaffected.
+        let mut fsm = DesyncFSM::new();
+        fsm.on_sfn_wrap(false);
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Desynced);
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Desynced);
+    }
+
+    #[test]
+    fn valid_beacon_resets_missed_counter_in_recovering() {
+        let mut fsm = DesyncFSM::new();
+        assert_eq!(fsm.on_sfn_wrap(false), DesyncState::Desynced);
+        fsm.on_beacon(true, true);
+        fsm.on_missed_superframe();
+        fsm.on_missed_superframe();
+        // A valid beacon resets the missed counter; 3 consecutive valid
+        // beacons still reach SYNCED despite interleaved misses.
+        let st = fsm.on_beacon(true, false);
+        assert_eq!(st, DesyncState::Recovering);
+        let st = fsm.on_beacon(true, false);
+        let st = fsm.on_beacon(true, false);
+        assert_eq!(st, DesyncState::Synced);
     }
 }

@@ -18,7 +18,7 @@
 //!
 //! # Caller contract
 //!
-//! [`Self::accept`] MUST only be called for a DIO whose root signature has
+//! [`RootSeqCache::accept`] MUST only be called for a DIO whose root signature has
 //! already passed verification (`verify_root_dio_signature` semantics):
 //! the sequence high-water mark is trust state, and admitting attacker-
 //! claimed `(dodag_id, instance)` keys before verification would let an

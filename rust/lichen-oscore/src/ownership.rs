@@ -53,7 +53,7 @@ pub enum OwnershipError<E> {
 /// Fixed-capacity registry enforcing exclusive live ownership of OSCORE
 /// contexts by durable record ([`ContextId`]).
 ///
-/// See the [module documentation](self) for the ownership contract.
+/// See this module's documentation for the ownership contract.
 #[derive(Debug)]
 pub struct OwnershipRegistry<const N: usize = DEFAULT_CAPACITY> {
     live: Vec<ContextId, N>,

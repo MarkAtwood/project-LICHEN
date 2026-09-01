@@ -24,7 +24,8 @@ use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
-use lichen_oscore::{Context, SenderStateStore};
+use lichen_oscore::types::{ContextId, SenderSequenceState};
+use lichen_oscore::{Context, ContextStateStore, SenderStateStore};
 use lichen_rpl::message::{DaoOriginSignature, Dio, SignedDaoEnvelope};
 use lichen_rpl::routing::{
     DaoAdmissionState, DaoPersistentOpenError, DaoProvisionError, DaoTxError, DaoTxState,
@@ -74,20 +75,17 @@ struct RuntimeRadioState {
 struct RuntimeRadio(Arc<Mutex<RuntimeRadioState>>);
 
 #[derive(Default)]
-struct TestOscoreStore(Option<(lichen_oscore::ContextId, lichen_oscore::SenderSequenceState)>);
+struct TestOscoreStore(Option<(ContextId, SenderSequenceState)>);
 
 impl SenderStateStore for TestOscoreStore {
     type Error = ();
 
-    fn load(
-        &mut self,
-        context_id: &lichen_oscore::ContextId,
-    ) -> Result<Option<lichen_oscore::SenderSequenceState>, Self::Error> {
+    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(Some(
             self.0
                 .filter(|(stored_context, _)| stored_context == context_id)
                 .map_or(
-                    lichen_oscore::SenderSequenceState {
+                    SenderSequenceState {
                         next_sequence: 0,
                         exhausted: false,
                     },
@@ -98,15 +96,54 @@ impl SenderStateStore for TestOscoreStore {
 
     fn compare_exchange(
         &mut self,
-        context_id: &lichen_oscore::ContextId,
-        expected: Option<lichen_oscore::SenderSequenceState>,
-        next: lichen_oscore::SenderSequenceState,
+        context_id: &ContextId,
+        expected: Option<SenderSequenceState>,
+        next: SenderSequenceState,
     ) -> Result<bool, Self::Error> {
         if self.load(context_id)? != expected {
             return Ok(false);
         }
         self.0 = Some((*context_id, next));
         Ok(true)
+    }
+}
+
+impl ContextStateStore for TestOscoreStore {
+    type Error = ();
+
+    fn load_sender(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+    ) -> Result<Option<lichen_oscore::SenderSequenceState>, Self::Error> {
+        // Return the initial seq-0 state (restore_existing needs non-Missing).
+        Ok(Some(lichen_oscore::SenderSequenceState {
+            next_sequence: 0,
+            exhausted: false,
+        }))
+    }
+
+    fn compare_exchange_sender(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+        _expected: Option<lichen_oscore::SenderSequenceState>,
+        _next: lichen_oscore::SenderSequenceState,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+
+    fn load_recipient(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+    ) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+
+    fn save_recipient(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+        _state: &lichen_oscore::RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
@@ -1706,7 +1743,6 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         .await
         .unwrap();
     let relay_outcome = relay.receive(1, 0).await.unwrap();
-    std::eprintln!("PROBE relay outcome: {:?}", relay_outcome);
     assert!(matches!(
         relay_outcome,
         Some(RplReceiveOutcome::AnnouncementAccepted { relayed: true, .. })

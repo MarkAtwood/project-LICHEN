@@ -217,7 +217,7 @@ impl BusyPercentSampler {
 /// Tracks TX failures vs total TX attempts per superframe inside the
 /// [`RF_METRICS_WINDOW_SF`] rolling window and reports
 /// `failures / total * 1000`. Feeds
-/// [`RfHealthMetrics::interference_score_tenths`](RfHealthMetrics::interference_score_tenths)
+/// [`interference_score_tenths`]
 /// via the existing loss-rate consumers.
 #[derive(Debug, Clone, Default)]
 pub struct PacketErrorPermilleTracker {

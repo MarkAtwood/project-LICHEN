@@ -2,16 +2,14 @@
   "id": "project-LICHEN-worker6-5byi",
   "title": "0l4q reconciliation: rework 6 rpl_stack test fixtures to the canonical-multicast DIO admission contract",
   "description": "Follow-up from 0l4q bisection+diagnosis (worker-6, released at timebox). Root cause chain: admission was deliberately tightened to the canonical multicast DIO contract (85a1f1d218 'DIO admission requires multicast dst ff02::1a' matching Python authenticated_dio.py:359-360; partially reconciled by 3d104a10cd 'admit unicast-delivered multicast DIOs'), introduced to main in the 5beefd7b295..48940e0975 sync window (bisected). The six failing tests predate the contract and deliver DIOs in ways admission now rejects. Per-test plan: (1) leaf_send_allocates_each_update_and_restart_advances_sequence / relay_forwards_original_source_and_signed_body / three_rpl_stacks_send_leaf_dao_via_preferred_parent / dao_radio_failure_retains_exact_finalized_bytes — these use join_leaf/dio_packet_from with UNICAST leaf-addressed DIOs (dio_packet_from(root, leaf_link_local,...) via send_ipv6_to); rework delivery to canonical multicast (dst ff02::1a, broadcast L2 AddrMode::None, Rule 255 uncompressed, hop 255 — multicast_dio_and_dis_use_broadcast_l2_destination shows root.send_dio(multicast) already does this correctly) or re-pin expectations where unicast-admission was the asserted contract (no longer exists per R-09-005). (2) multicast_dio_and_dis_are_received — first multicast receive+join PASSES; the invalid-options loop (dio_packet_with_raw_version_options, tests.rs:~1099) fails: reconcile the inconsistent-DioReceived expectations with Rule-255 admission requirements. (3) rpl_dispatch_rejects_invalid_ipv6_length_and_checksum — re-verify which rejection stage the malformed cases now hit. The production admission code is SPEC-CORRECT (Python parity) — fix fixtures, not admission. Useful helper: root.send_dio(multicast) emits the canonical wire shape; leaf-side LoopbackRadio pair delivery already proven in the passing first half of multicast_dio_and_dis_are_received.",
-  "status": "closed",
+  "status": "open",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T19:36:31.863053316Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-09-01T06:48:20.588809313Z",
+  "updated_at": "2026-08-31T19:57:58.341415042Z",
   "started_at": "2026-08-31T19:37:47.827451662Z",
-  "closed_at": "2026-09-01T06:48:20.588809313Z",
-  "close_reason": "Resolved upstream — closing with evidence: at synced HEAD 844d59a6e1 the full lichen-node lib suite is 333/333 GREEN, meaning the six formerly-failing fixtures now pass without any remaining rework. The diagnosis rounds this bead drove (0-indexed retry ladder, DodagScopeMismatch probe, split-admission bisection) culminated in the multicast-trickle DIO response change (option (a) of ehcn) which resolved the family upstream — the fixture rework this bead planned became unnecessary when the production admission contract settled to admit the new delivery shape. Per-test plan in the bead comments is retained for history. Suite green at 333/333; closing as superseded by upstream resolution.",
   "labels": [
     "rust",
     "rpl"

@@ -40,7 +40,31 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         observed_now_ms: u64,
     ) -> Result<RplRuntimePoll, RplRuntimeActionError> {
         self.routing_now_ms = self.routing_now_ms.max(observed_now_ms);
+        // DAO TX scheduler (b7z9.16.1): a due leaf DAO preempts the poll so
+        // the executor sees DaoTransmit before the receive window opens.
+        if matches!(
+            self.dao_tx_advance(observed_now_ms),
+            crate::rpl_stack::dao_tx_sched::DaoTxAdvance::Due
+        ) {
+            return Ok(RplRuntimePoll {
+                now_ms: observed_now_ms,
+                maintenance: None,
+                action: RplRuntimeAction::DaoTransmit,
+                generation: self.generation,
+            });
+        }
         runtime.poll(&mut self.rpl, observed_now_ms, self.generation)
+    }
+
+    /// Complete a completed DaoTransmit action (executor already sent the DAO).
+    pub fn runtime_complete_dao_transmit(
+        &mut self,
+        runtime: &mut RplRuntime,
+        observed_now_ms: u64,
+    ) -> Result<(), RplRuntimeActionError> {
+        self.routing_now_ms = self.routing_now_ms.max(observed_now_ms);
+        runtime.complete_dao_transmit(&mut self.rpl, observed_now_ms, self.generation)?;
+        Ok(())
     }
 
     /// Complete a planned receive using a clock sampled after the radio await.

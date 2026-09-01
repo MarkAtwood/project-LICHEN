@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 // Re-export everything from the oscore crate
+pub use oscore::types::{self, SenderStateStore};
 pub use oscore::{
     // Functions
     request_identifiers,

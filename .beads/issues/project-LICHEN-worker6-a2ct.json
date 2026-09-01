@@ -2,15 +2,13 @@
   "id": "project-LICHEN-worker6-a2ct",
   "title": "Committed host test for redundant_slot.c (two-slot primitive)",
   "description": "Follow-up from worker6-b7z9.11.1: the two-slot redundant-record primitive (lichen/subsys/lichen/hal/redundant_slot.c) is verified by a standalone gcc harness but has no committed host test. Add lichen/tests/redundant_slot/ (CMakeLists via ../cmake/test_common.cmake, prj.conf, testcase.yaml, src/main.c) covering: empty-\u003eMissing, provision (+Exists on re-provision), open newest/alternation, corrupt-current -\u003e Stale, corrupt-both -\u003e EIO, stale via slot drop, generation wrap (-EOVERFLOW), rollback on write failure, and the CRC32 cross-check vector (Rust crc32 '123456789' -\u003e 0xCBF43926; provision a record and assert the trailer bytes). The standalone harness logic is in the worker6-b7z9.11.1 close reason thread.",
-  "status": "closed",
+  "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T00:49:37.430658776Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-09-01T06:50:52.050271364Z",
-  "closed_at": "2026-09-01T06:50:52.050271364Z",
-  "close_reason": "RE-CLOSE (store write lost — bd8h, recurring). Completed and committed as 367cc730b2 on beads-worker-7: lichen/tests/redundant_slot/ host test dir (CMakeLists + src/main.c) covering CRC32 bit-exactness vs Rust crc32 (trailer 0xBD88FA92), Missing/Exists/Stale/EIO/EOVERFLOW/rollback semantics for the two-slot primitive. Full CMake configure+build+ctest green. Reviewer P0 (src/main.c path) fixed pre-commit.",
+  "updated_at": "2026-09-01T01:08:56.173632194Z",
   "labels": [
     "zephyr"
   ],
