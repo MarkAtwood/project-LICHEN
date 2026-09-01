@@ -69,3 +69,7 @@ SCHC_RCS_BYTES: int = 4
 SCHC_RETRANSMISSION_TIMEOUT_S: int = 10
 SCHC_MAX_ACK_REQUESTS: int = 4
 SCHC_INACTIVITY_TIMEOUT_S: int = 60
+
+# CCP-15 metrics (spec/02a-coordinated-capacity.md 2a.10.3/2a.10.4/2a.10.6)
+RF_METRICS_WINDOW_SF: int = 32  # Rolling metrics window in superframes
+INTERFERENCE_ESCAPE_TENTHS: int = 1000  # Interference-score escape threshold
