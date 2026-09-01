@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -774,6 +775,33 @@ static int consume_one(const struct rpl_message_vector *v)
 	}
 }
 
+
+
+static void test_assigned_sf_write_parse_roundtrip(void)
+{
+	uint8_t buf[8];
+	/* Valid SF boundary values */
+	for (uint8_t sf = 7; sf <= 12; sf++) {
+		int ret = lichen_rpl_assigned_sf_write(sf, buf, sizeof(buf));
+		assert(ret == 3);
+		assert(buf[0] == LICHEN_RPL_OPT_ASSIGNED_SF);
+		assert(buf[1] == LICHEN_RPL_ASSIGNED_SF_DATA_LEN);
+		assert(buf[2] == sf);
+	}
+
+	/* Out-of-range values still write (the caller validates SF range) */
+	int ret = lichen_rpl_assigned_sf_write(6, buf, sizeof(buf));
+	(void)ret;
+	assert(ret == 3 && buf[2] == 6);
+	ret = lichen_rpl_assigned_sf_write(13, buf, sizeof(buf));
+	assert(ret == 3 && buf[2] == 13);
+
+	/* NULL buffer */
+	assert(lichen_rpl_assigned_sf_write(9, NULL, sizeof(buf)) < 0);
+
+	printf("test_assigned_sf_write_parse_roundtrip: PASS\n");
+}
+
 int main(void)
 {
 	unsigned int i;
@@ -785,6 +813,8 @@ int main(void)
 
 	printf("RPL message vector tests\n");
 	printf("========================\n\n");
+
+	test_assigned_sf_write_parse_roundtrip();
 	tests_run++;
 	printf("  dio_strict_atomicity...");
 	if (test_dio_strict_atomicity()) {
