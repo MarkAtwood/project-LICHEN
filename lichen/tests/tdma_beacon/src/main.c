@@ -25,7 +25,8 @@ static const uint8_t WIRE[] = {
 static void test_parse_vector(void)
 {
 	struct lichen_beacon_header h;
-	assert(lichen_beacon_parse_header(WIRE, sizeof(WIRE), &h) == 0);
+	assert(lichen_beacon_header_parse(WIRE, sizeof(WIRE), &h) ==
+	       LICHEN_BEACON_OK);
 	assert(h.epoch == 1);
 	assert(h.num_slots == 16);
 	assert(h.sfn == 12345);
@@ -43,8 +44,9 @@ static void test_serialize_roundtrip(void)
 	struct lichen_beacon_header h;
 	uint8_t out[24];
 
-	assert(lichen_beacon_parse_header(WIRE, 24, &h) == 0);
-	assert(lichen_beacon_serialize_header(&h, out) == 24);
+	assert(lichen_beacon_header_parse(WIRE, 24, &h) == LICHEN_BEACON_OK);
+	assert(lichen_beacon_header_serialize(&h, out, sizeof(out)) ==
+	       LICHEN_BEACON_OK);
 	assert(memcmp(out, WIRE, 24) == 0);
 }
 
@@ -55,35 +57,42 @@ static void test_reserved_flag_rejected(void)
 
 	memcpy(bad_wire, WIRE, 24);
 	bad_wire[13] = 0x10; /* reserved bit 4 */
-	assert(lichen_beacon_parse_header(bad_wire, 24, &h) ==
-	       LICHEN_BEACON_ERR_RESERVED);
+	assert(lichen_beacon_header_parse(bad_wire, 24, &h) ==
+	       LICHEN_BEACON_RESERVED_FLAG_SET);
 
 	struct lichen_beacon_header bad = { .flags = 0x20 };
 	uint8_t tmp[24];
-	assert(lichen_beacon_serialize_header(&bad, tmp) ==
-	       LICHEN_BEACON_ERR_RESERVED);
+	assert(lichen_beacon_header_serialize(&bad, tmp, sizeof(tmp)) ==
+	       LICHEN_BEACON_RESERVED_FLAG_SET);
 }
 
 static void test_short_buffer_rejected(void)
 {
 	struct lichen_beacon_header h;
-	assert(lichen_beacon_parse_header(WIRE, 23, &h) ==
-	       LICHEN_BEACON_ERR_SHORT);
-	assert(lichen_beacon_signature_bytes(WIRE, 71) == NULL);
-	assert(lichen_beacon_signature_bytes(WIRE, 72) != NULL);
-	assert(lichen_beacon_signed_data(WIRE, 72) != NULL);
+	uint8_t full[72];
+	size_t signed_len = 0;
+
+	memcpy(full, WIRE, sizeof(WIRE));
+	memset(&full[sizeof(WIRE)], 0, sizeof(full) - sizeof(WIRE));
+	assert(lichen_beacon_header_parse(WIRE, 23, &h) ==
+	       LICHEN_BEACON_TOO_SHORT);
+	assert(lichen_beacon_signature_bytes(full, sizeof(full) - 1) == NULL);
+	assert(lichen_beacon_signature_bytes(full, sizeof(full)) != NULL);
+	assert(lichen_beacon_signed_data(full, sizeof(full), &signed_len) ==
+		       &full[0] &&
+	       signed_len == sizeof(WIRE));
 }
 
 static void test_null_guards(void)
 {
 	struct lichen_beacon_header h;
 	uint8_t tmp[24];
-	assert(lichen_beacon_parse_header(NULL, 24, &h) ==
-	       LICHEN_BEACON_ERR_SHORT);
-	assert(lichen_beacon_parse_header(WIRE, 24, NULL) ==
-	       LICHEN_BEACON_ERR_SHORT);
-	assert(lichen_beacon_serialize_header(NULL, tmp) ==
-	       LICHEN_BEACON_ERR_SHORT);
+	assert(lichen_beacon_header_parse(NULL, 24, &h) ==
+	       LICHEN_BEACON_TOO_SHORT);
+	assert(lichen_beacon_header_parse(WIRE, 24, NULL) ==
+	       LICHEN_BEACON_TOO_SHORT);
+	assert(lichen_beacon_header_serialize(NULL, tmp, sizeof(tmp)) ==
+	       LICHEN_BEACON_TOO_SHORT);
 	assert(lichen_beacon_signature_bytes(NULL, 72) == NULL);
 }
 
