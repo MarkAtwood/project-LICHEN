@@ -2,6 +2,7 @@
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
 #include <lichen/sf_assignment.h>
+#include <lichen/rpl_messages.h>
 #include <lichen/link.h>
 
 #include <string.h>
