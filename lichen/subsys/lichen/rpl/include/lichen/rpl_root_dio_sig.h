@@ -30,6 +30,7 @@
 #define ROOT_SIG_ERR_VERSION_MISMATCH 7
 #define ROOT_SIG_ERR_RANK_MISMATCH 8
 #define ROOT_SIG_ERR_MOP_MISMATCH 9
+#define ROOT_SIG_ERR_SIGNATURE 10
 
 /** Decoded Root DIO Signature payload (CBOR map keys 1-7). */
 struct root_dio_sig_payload {
@@ -84,6 +85,25 @@ int root_dio_sig_decode(const uint8_t *data, size_t len,
  * @param dio_mop         MOP from the carrying DIO
  * @return ROOT_SIG_OK, or a ROOT_SIG_ERR_* failure reason
  */
+
+/**
+ * @brief Verify the Schnorr48 signature over the rebuilt COSE Sig_structure.
+ *
+ * Rebuilds Sig_structure with the CANONICAL protected header
+ * (a1013a00010000), hashes it with the injected sha256 (digest = SHA-256 of
+ * the structure, matching python sha256(sig_structure)), and verifies via
+ * schnorr48_verify. Byte-parity with the committed vectors' sig_structure
+ * field.
+ *
+ * @param sig      Decoded signature
+ * @param pubkey   32-byte signer public key
+ * @param sha256   Hash function: (input, len, out[32]) returning 0 on success
+ * @return ROOT_SIG_OK, or -ROOT_SIG_ERR_SIGNATURE on verification failure
+ */
+int root_dio_sig_verify_signature(const struct root_dio_sig *sig,
+				  const uint8_t *pubkey,
+				  int (*sha256)(const uint8_t *input,
+						size_t len, uint8_t out[32]));
 int root_dio_sig_verify_structural(
 	const struct root_dio_sig *sig, const uint8_t *pubkey, size_t pubkey_len,
 	uint64_t now_unix, const uint8_t *dio_dodag_id, uint8_t dio_instance,

@@ -14,6 +14,8 @@
 #include <lichen/rpl_root_dio_sig.h>
 
 #include <lichen/link_ctx.h>
+#include <lichen/schnorr48.h>
+#include <lichen/schnorr48.h>
 
 #include <string.h>
 
@@ -282,6 +284,117 @@ int root_dio_sig_decode(const uint8_t *data, size_t len,
 		return -ROOT_SIG_ERR_DECODE;
 	}
 
+	return ROOT_SIG_OK;
+}
+
+/** Minimal-length CBOR uint head (RFC 8949 4.2.1 shortest-form). */
+static size_t root_sig_put_uint(uint8_t *out, uint64_t value)
+{
+	if (value <= 23U) {
+		out[0] = (uint8_t)value;
+		return 1U;
+	}
+	if (value <= 0xffU) {
+		out[0] = 0x18U;
+		out[1] = (uint8_t)value;
+		return 2U;
+	}
+	if (value <= 0xffffU) {
+		out[0] = 0x19U;
+		out[1] = (uint8_t)(value >> 8U);
+		out[2] = (uint8_t)value;
+		return 3U;
+	}
+	out[0] = 0x1aU;
+	out[1] = (uint8_t)(value >> 24U);
+	out[2] = (uint8_t)(value >> 16U);
+	out[3] = (uint8_t)(value >> 8U);
+	out[4] = (uint8_t)value;
+	return 5U;
+}
+
+/**
+ * @brief Re-encode the decoded payload as canonical CBOR (python parity:
+ *        payload.to_cbor() re-encodes from parsed fields, key order 1-7,
+ *        shortest-form integers and bstr headers per RFC 8949 4.2.1).
+ */
+static int root_dio_sig_payload_cbor(const struct root_dio_sig_payload *p,
+				     uint8_t *out, size_t out_len)
+{
+	size_t n = 0;
+
+	if (out_len < 64U) {
+		return -ROOT_SIG_ERR_DECODE;
+	}
+	out[n++] = 0xa7; /* map(7) */
+	out[n++] = 0x01; /* key 1 */
+	out[n++] = 0x50; /* bstr(16) */
+	memcpy(&out[n], p->dodag_id, 16U);
+	n += 16U;
+	n += root_sig_put_uint(&out[n], 2U);
+	n += root_sig_put_uint(&out[n], p->instance);
+	n += root_sig_put_uint(&out[n], 3U);
+	n += root_sig_put_uint(&out[n], p->version);
+	n += root_sig_put_uint(&out[n], 4U);
+	n += root_sig_put_uint(&out[n], p->rank);
+	n += root_sig_put_uint(&out[n], 5U);
+	n += root_sig_put_uint(&out[n], p->expiry);
+	n += root_sig_put_uint(&out[n], 6U);
+	n += root_sig_put_uint(&out[n], p->root_seq);
+	n += root_sig_put_uint(&out[n], 7U);
+	n += root_sig_put_uint(&out[n], p->mop);
+	return (int)n;
+}
+
+/**
+ * @brief Verify the Schnorr48 signature over the rebuilt COSE Sig_structure.
+ *
+ * Sig_structure = ["Signature1", canonical_protected, bstr(0), payload]
+ * where canonical_protected is a1013a00010000 and payload is the canonical
+ * re-encoding of the decoded payload fields (python parity). The digest is
+ * SHA-256 of the structure; schnorr48_verify checks it against the pubkey.
+ */
+int root_dio_sig_verify_signature(const struct root_dio_sig *sig,
+				  const uint8_t *pubkey,
+				  int (*sha256)(const uint8_t *input,
+						size_t len, uint8_t out[32]))
+{
+	uint8_t payload[80];
+	uint8_t structure[128];
+	uint8_t digest[32];
+	static const uint8_t context[] = "Signature1";
+	static const uint8_t canonical_protected[7] = { 0xa1, 0x01, 0x3a, 0x00,
+							0x01, 0x00, 0x00 };
+	size_t n = 0;
+	int payload_len;
+
+	if (sig == NULL || pubkey == NULL || sha256 == NULL) {
+		return -ROOT_SIG_ERR_SIGNATURE;
+	}
+	payload_len = root_dio_sig_payload_cbor(&sig->payload, payload,
+						sizeof(payload));
+	if (payload_len < 0 || payload_len > 255) {
+		return -ROOT_SIG_ERR_SIGNATURE;
+	}
+	structure[n++] = 0x84;
+	structure[n++] = 0x6a;
+	memcpy(&structure[n], context, sizeof(context) - 1U);
+	n += sizeof(context) - 1U;
+	structure[n++] = 0x47;
+	memcpy(&structure[n], canonical_protected, sizeof(canonical_protected));
+	n += sizeof(canonical_protected);
+	structure[n++] = 0x40;
+	structure[n++] = 0x58;
+	structure[n++] = (uint8_t)payload_len;
+	memcpy(&structure[n], payload, (size_t)payload_len);
+	n += (size_t)payload_len;
+	if (sha256(structure, n, digest) != 0) {
+		return -ROOT_SIG_ERR_SIGNATURE;
+	}
+	if (!schnorr48_verify(pubkey, digest, 32U, sig->signature,
+			      sizeof(sig->signature))) {
+		return -ROOT_SIG_ERR_SIGNATURE;
+	}
 	return ROOT_SIG_OK;
 }
 
