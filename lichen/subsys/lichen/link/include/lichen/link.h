@@ -90,6 +90,10 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
  * TDMA/CCP timing constants below. Intents are compatible — keep the added
  * block, no HEAD content was removed. */
 #define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3 /* BEACON_TIMEOUT per 09-packets-timing.md FSM */
+/* Merge resolution: HEAD and beads-worker-7 define the same two recovery
+ * thresholds with identical values (6, 10); HEAD additionally defines the
+ * 2a.6.3 startup/rejoin constants below. HEAD is a strict superset of
+ * worker-7, so keep HEAD — worker-7's intent is fully preserved. */
 
 /* Desync recovery timing constants (spec/09-packets-timing.md 14.7/2a.6.3).
  * T_DRIFT_MAX: superframes in DRIFT before RECOVER. T_GIVE_UP: superframes
@@ -563,8 +567,6 @@ uint8_t lichen_tdma_compute_slot(
  */
 bool lichen_slot_map_validate(const uint8_t *slots, size_t len,
 			      uint8_t num_slots);
-#endif /* CONFIG_LICHEN_TDMA */
-
 
 /**
  * @brief Validate the CCP-7 guard budget.
@@ -580,6 +582,12 @@ bool lichen_tdma_guard_budget_sufficient(uint64_t guard,
 					 uint64_t peer_jitter,
 					 uint64_t propagation,
 					 uint64_t margin);
+/* Merge resolution: keep this declaration inside CONFIG_LICHEN_TDMA — its
+ * definition in tdma.c is gated the same way. The merge base had a stray
+ * #endif after this function, which unbalanced the block; the auto-merge
+ * then left the CONFIG_LICHEN_TDMA block unclosed. Close it here at the
+ * correct place (beads-worker-7's correct placement). */
+#endif
 
 uint32_t lichen_hash_32(const uint8_t *_Nonnull data, size_t len);
 
