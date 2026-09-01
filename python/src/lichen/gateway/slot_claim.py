@@ -45,6 +45,7 @@ __all__ = [
     "resolve_slot_conflict",
     "validate_interleaved_pattern",
     "verify_slot_claim",
+    "SlotClaimReplayCache",
 ]
 
 
@@ -70,7 +71,10 @@ class ClaimRejectReason(Enum):
     MISSING_SIGNATURE = auto()  # No signature provided
     INVALID_SIGNATURE = auto()  # Signature failed verification
     INVALID_CLAIM_DATA = auto()  # Malformed claim structure
+    # Merged: keep both reject causes — HEAD binds the claim to the key,
+    # beads-worker-7 gates replays by high-water.
     IDENTITY_MISMATCH = auto()  # kid/gateway_iid not bound to verifying key
+    REPLAY = auto()  # claim_seq/superframe at or below the stored high-water
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
     EXPIRY_TOO_FAR = auto()  # Claim timestamp further ahead than the max horizon
     STALE_CLAIM = auto()  # Claim timestamp older than the stale tolerance
@@ -279,9 +283,37 @@ def encode_claim_canonical(claim: SlotClaim) -> bytes:
     return cbor2.dumps(payload, canonical=True)
 
 
+class SlotClaimReplayCache:
+    """Per-gateway-IID replay high-water (GCP-6.5 step 8, l1qw.20.2).
+
+    Tracks the highest superframe_id accepted per gateway IID and rejects
+    claims at or below it. State is in-memory only; persistence across
+    restarts is the l1qw.20.1/NVS follow-up (mirrors Rust slot.rs
+    last_seen semantics).
+    """
+
+    def __init__(self) -> None:
+        self._highwater: dict[str, int] = {}
+
+    def check_and_update(
+        self, gateway_iid: str, superframe_id: int
+    ) -> tuple[bool, ClaimRejectReason | None]:
+        """Advance the high-water for *gateway_iid*.
+
+        Returns (True, None) and stores the new high-water when the claim
+        strictly advances it; returns (False, REPLAY) otherwise.
+        """
+        previous = self._highwater.get(gateway_iid)
+        if previous is not None and superframe_id <= previous:
+            return (False, ClaimRejectReason.REPLAY)
+        self._highwater[gateway_iid] = superframe_id
+        return (True, None)
+
+
 def verify_slot_claim(
     claim: SlotClaim,
     gateway_pubkey: bytes,
+    replay_cache: SlotClaimReplayCache | None = None,
     now_unix: float | None = None,
 ) -> tuple[bool, ClaimRejectReason | None]:
     """Verify Schnorr48 signature on slot claim.
@@ -296,6 +328,11 @@ def verify_slot_claim(
     Args:
         claim: SlotClaim to verify
         gateway_pubkey: 32-byte Ed25519 public key of claiming gateway
+        replay_cache: Optional per-gateway claim high-water (l1qw.20.2).
+            When provided, the claim's superframe_id must strictly advance
+            the stored high-water for its gateway IID. Signature checks run
+            first per GCP-6.3, so the replay state is only consumed by
+            signature-valid claims.
         now_unix: Current Unix timestamp for the claim-horizon check;
             defaults to the wall clock. Claims with a timestamp further
             than MAX_CLAIM_DURATION_SEC ahead are rejected EXPIRY_TOO_FAR.
@@ -343,6 +380,16 @@ def verify_slot_claim(
             return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
         if claim.timestamp < now - STALE_CLAIM_TOLERANCE_SEC:
             return (False, ClaimRejectReason.STALE_CLAIM)
+
+    # Replay gate (l1qw.20.2, beads-worker-7): consumed only after the
+    # horizon check, so a horizon-rejected claim never advances the
+    # high-water.
+    if replay_cache is not None:
+        ok, reason = replay_cache.check_and_update(
+            claim.gateway_iid, claim.superframe_id
+        )
+        if not ok:
+            return (False, reason)
 
     return (True, None)
 
