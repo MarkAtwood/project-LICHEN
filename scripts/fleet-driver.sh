@@ -59,6 +59,38 @@ EMPTY_N=0
 while :; do
     CREDITS=$(remaining_credits)
     echo "── driver $(date '+%F %T') credits=$CREDITS ──"
+    # Burn ceiling marker (Mark: $2000 is the 'tell me' line). Marker only —
+    # never pauses the fleet.
+    if [ -f "$REPO_ROOT/.fleet-burn-2000" ]; then :; else
+        TOTAL_USED=$(python3 - <<'PY'
+import json, os, urllib.request
+try:
+    c = json.load(open(os.path.expanduser("~/.config/opencode/opencode.json")))
+    def find(d):
+        if isinstance(d, dict):
+            for k, v in d.items():
+                if k == "apiKey" and isinstance(v, str) and v.startswith("sk-or-"):
+                    return v
+                r = find(v)
+                if r: return r
+        elif isinstance(d, list):
+            for x in d:
+                r = find(x)
+                if r: return r
+        return None
+    key = find(c)
+    req = urllib.request.Request("https://openrouter.ai/api/v1/credits", headers={"Authorization": "Bearer " + key})
+    d = json.load(urllib.request.urlopen(req, timeout=30)).get("data", {})
+    print(int(float(d.get("total_usage", 0))))
+except Exception:
+    print(0)
+PY
+)
+        if [ "$TOTAL_USED" -ge 2000 ]; then
+            date '+%F %T' > "$REPO_ROOT/.fleet-burn-2000"
+            BEADS_DIR="$BEADS_DIR" bd create --title="[info] Burn reached 2000 USD (ceiling reached)" --description="Total OpenRouter usage crossed the 2000 USD watch line. Fleet continues per policy; marker on record. Remaining ready-queue size decides whether the work fits the budget - see bd stats." -t task -p 4 --json >/dev/null 2>&1
+        fi
+    fi
     READY=$(BEADS_DIR="$BEADS_DIR" bd ready --json 2>/dev/null | jq "length" 2>/dev/null || echo 0)
 
     if [ "$READY" -eq 0 ]; then
