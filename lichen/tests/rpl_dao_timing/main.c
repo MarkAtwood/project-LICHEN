@@ -335,7 +335,119 @@ static bool test_refresh_wrap_boundary(void) {
   return true;
 }
 
+/* Composite transmission loop (spec 09 14.2; bead b7z9.16(c)): initial
+ * jittered window -> bounded 4/8/16 s retries -> 900 s refresh cadence,
+ * driven entirely by injected time and a scripted RNG. */
+static bool test_tx_loop_initial_retry_refresh(void) {
+  struct scripted_rng rng = {.words = (const uint32_t[]){0U},
+                             .count = 1U,
+                             .next = 0U,
+                             .result = 0};
+  struct lichen_rpl_dao_tx_loop loop;
+  uint16_t delay = 0;
+
+  /* RNG word 0 -> delay 0 ms (0 + 0 % 2001). */
+  CHECK(lichen_rpl_dao_tx_loop_init(&loop, 1000U, scripted_random, &rng,
+                                    &delay),
+        "loop init");
+  CHECK(delay == 0U, "initial delay from scripted rng");
+  CHECK(lichen_rpl_dao_tx_loop_phase(&loop) ==
+            LICHEN_RPL_DAO_TX_LOOP_INITIAL,
+        "phase INITIAL after init");
+
+  /* Not due before the window elapses. */
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&loop, 999U), "not due at 999");
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 1000U), "due at 1000");
+  /* Gate consumed exactly once. */
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&loop, 1001U), "gate consumed once");
+
+  /* Failure -> retry sequence 4/8/16 s. */
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 1000U, false);
+  CHECK(lichen_rpl_dao_tx_loop_phase(&loop) ==
+            LICHEN_RPL_DAO_TX_LOOP_RETRYING,
+        "phase RETRYING after failure");
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&loop, 1000U + 3999U),
+        "retry 0 not due early");
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 1000U + 4000U),
+        "retry 0 due at +4 s");
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 5000U, false);
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 5000U + 8000U),
+        "retry 1 due at +8 s");
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 13000U, false);
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 13000U + 16000U),
+        "retry 2 due at +16 s");
+
+  /* Success -> refresh cadence starts at the success time. */
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 29000U, true);
+  CHECK(lichen_rpl_dao_tx_loop_phase(&loop) ==
+            LICHEN_RPL_DAO_TX_LOOP_REFRESH,
+        "phase REFRESH after success");
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&loop, 29000U + 899999U),
+        "refresh not due before 900 s");
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 29000U + 900000U),
+        "refresh due at +900 s");
+
+  /* Refresh failure -> retries restart; success mid-retry starts a new
+   * refresh period. */
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 29000U + 900000U, false);
+  CHECK(lichen_rpl_dao_tx_loop_phase(&loop) ==
+            LICHEN_RPL_DAO_TX_LOOP_RETRYING,
+        "refresh failure -> RETRYING");
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 29000U + 904000U, true);
+  CHECK(lichen_rpl_dao_tx_loop_phase(&loop) ==
+            LICHEN_RPL_DAO_TX_LOOP_REFRESH,
+        "mid-retry success -> new refresh period");
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&loop, 29000U + 904000U + 899999U),
+        "new refresh not due early");
+
+  /* Early successful refresh reschedules from the success time. */
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 29000U + 904000U + 900000U),
+        "second refresh due");
+  lichen_rpl_dao_tx_loop_on_send_result(&loop, 29000U + 904000U + 900100U,
+                                        true);
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&loop, 29000U + 904000U + 1800100U),
+        "rescheduled refresh not due at old deadline");
+  CHECK(lichen_rpl_dao_tx_loop_poll(&loop, 29000U + 904000U + 900100U + 900000U),
+        "rescheduled refresh due 900 s after success");
+
+  /* Exhaustion: three failures in RETRYING -> IDLE, poll stays false. */
+  struct lichen_rpl_dao_tx_loop exhausted;
+  struct scripted_rng rng2 = {.words = (const uint32_t[]){0U},
+                              .count = 1U,
+                              .next = 0U,
+                              .result = 0};
+  CHECK(lichen_rpl_dao_tx_loop_init(&exhausted, 0U, scripted_random, &rng2,
+                                    &delay),
+        "exhaustion loop init");
+  CHECK(lichen_rpl_dao_tx_loop_poll(&exhausted, 0U), "initial due");
+  lichen_rpl_dao_tx_loop_on_send_result(&exhausted, 0U, false);
+  (void)lichen_rpl_dao_tx_loop_poll(&exhausted, 4000U);
+  lichen_rpl_dao_tx_loop_on_send_result(&exhausted, 4000U, false);
+  (void)lichen_rpl_dao_tx_loop_poll(&exhausted, 12000U);
+  lichen_rpl_dao_tx_loop_on_send_result(&exhausted, 12000U, false);
+  (void)lichen_rpl_dao_tx_loop_poll(&exhausted, 28000U);
+  lichen_rpl_dao_tx_loop_on_send_result(&exhausted, 28000U, false);
+  CHECK(lichen_rpl_dao_tx_loop_phase(&exhausted) ==
+            LICHEN_RPL_DAO_TX_LOOP_IDLE,
+        "exhausted retries -> IDLE");
+  CHECK(!lichen_rpl_dao_tx_loop_poll(&exhausted, UINT32_MAX),
+        "IDLE loop never polls due");
+
+  /* NULL guards. */
+  CHECK(!lichen_rpl_dao_tx_loop_poll(NULL, 0U), "NULL poll rejected");
+  lichen_rpl_dao_tx_loop_on_send_result(NULL, 0U, true);
+  CHECK(lichen_rpl_dao_tx_loop_phase(NULL) ==
+            LICHEN_RPL_DAO_TX_LOOP_IDLE,
+        "NULL phase query -> IDLE");
+
+  tests_run++;
+  return true;
+}
+
 static bool run_all_tests(void) {
+  if (!test_tx_loop_initial_retry_refresh()) {
+    return false;
+  }
   return test_exact_mapping_and_rejection_boundary() &&
          test_injected_rng_and_fail_closed_bounds() &&
          test_one_shot_deadlines_and_wrap() &&

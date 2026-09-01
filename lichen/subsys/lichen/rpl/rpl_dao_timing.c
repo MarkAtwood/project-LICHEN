@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
+#include <string.h>
 
 #define DAO_INITIAL_DELAY_OUTCOMES                                             \
   (LICHEN_RPL_DAO_INITIAL_DELAY_MAX_MS - LICHEN_RPL_DAO_INITIAL_DELAY_MIN_MS + \
@@ -266,3 +267,106 @@ void lichen_rpl_dao_refresh_timer_reset(
 #undef DAO_RANDOM_ACCEPTANCE_LIMIT
 #undef DAO_U32_OUTCOMES
 #undef DAO_INITIAL_DELAY_OUTCOMES
+
+/* ------------------------------------------------------------------ */
+/* DAO transmission loop (spec 09 14.2 composite state machine).       */
+/* ------------------------------------------------------------------ */
+
+int lichen_rpl_dao_tx_loop_init(struct lichen_rpl_dao_tx_loop *loop,
+				uint32_t now_ms, lichen_rpl_dao_rng_fn rng,
+				void *rng_user, uint16_t *delay_ms)
+{
+	if (loop == NULL) {
+		return -EINVAL;
+	}
+	memset(loop, 0, sizeof(*loop));
+	loop->phase = LICHEN_RPL_DAO_TX_LOOP_INITIAL;
+	loop->rng = rng;
+	loop->rng_user = rng_user;
+	return lichen_rpl_dao_initial_timer_start(&loop->initial, now_ms, rng,
+						  rng_user, delay_ms);
+}
+
+bool lichen_rpl_dao_tx_loop_poll(struct lichen_rpl_dao_tx_loop *loop,
+				 uint32_t now_ms)
+{
+	if (loop == NULL) {
+		return false;
+	}
+	switch (loop->phase) {
+	case LICHEN_RPL_DAO_TX_LOOP_INITIAL:
+		return lichen_rpl_dao_initial_timer_take_if_due(&loop->initial,
+								now_ms);
+	case LICHEN_RPL_DAO_TX_LOOP_RETRYING:
+		return lichen_rpl_dao_retry_timer_take_if_due(&loop->retry,
+							      now_ms);
+	case LICHEN_RPL_DAO_TX_LOOP_REFRESH:
+		return lichen_rpl_dao_refresh_timer_take_if_due(&loop->refresh,
+								now_ms);
+	case LICHEN_RPL_DAO_TX_LOOP_IDLE:
+		return false;
+	}
+	return false;
+}
+
+void lichen_rpl_dao_tx_loop_on_send_result(
+	struct lichen_rpl_dao_tx_loop *loop, uint32_t now_ms, bool success)
+{
+	if (loop == NULL) {
+		return;
+	}
+	if (success) {
+		if (loop->phase == LICHEN_RPL_DAO_TX_LOOP_IDLE) {
+			/* Terminal state: retries were exhausted; only the
+			 * caller re-opens origination (re-init on a route
+			 * change). A late success callback must not revive
+			 * the loop. */
+			return;
+		}
+		if (loop->phase == LICHEN_RPL_DAO_TX_LOOP_REFRESH) {
+			/* Early/successful refresh restarts the 900 s
+			 * period (lichen_rpl_dao_refresh_timer_reschedule
+			 * semantics). */
+			(void)lichen_rpl_dao_refresh_timer_reschedule(
+				&loop->refresh, now_ms);
+			return;
+		}
+		loop->phase = LICHEN_RPL_DAO_TX_LOOP_REFRESH;
+		(void)lichen_rpl_dao_refresh_timer_start(&loop->refresh,
+							 now_ms);
+		return;
+	}
+	switch (loop->phase) {
+	case LICHEN_RPL_DAO_TX_LOOP_INITIAL:
+		loop->phase = LICHEN_RPL_DAO_TX_LOOP_RETRYING;
+		lichen_rpl_dao_retry_timer_init(&loop->retry);
+		(void)lichen_rpl_dao_retry_timer_schedule_next(
+			&loop->retry, now_ms, NULL);
+		break;
+	case LICHEN_RPL_DAO_TX_LOOP_RETRYING:
+		if (lichen_rpl_dao_retry_timer_schedule_next(&loop->retry,
+							     now_ms,
+							     NULL) ==
+		    -ENOENT) {
+			loop->phase = LICHEN_RPL_DAO_TX_LOOP_IDLE;
+		}
+		break;
+	case LICHEN_RPL_DAO_TX_LOOP_REFRESH:
+		loop->phase = LICHEN_RPL_DAO_TX_LOOP_RETRYING;
+		lichen_rpl_dao_retry_timer_init(&loop->retry);
+		(void)lichen_rpl_dao_retry_timer_schedule_next(&loop->retry,
+							       now_ms, NULL);
+		break;
+	case LICHEN_RPL_DAO_TX_LOOP_IDLE:
+		break;
+	}
+}
+
+enum lichen_rpl_dao_tx_loop_phase
+lichen_rpl_dao_tx_loop_phase(const struct lichen_rpl_dao_tx_loop *loop)
+{
+	if (loop == NULL) {
+		return LICHEN_RPL_DAO_TX_LOOP_IDLE;
+	}
+	return loop->phase;
+}
