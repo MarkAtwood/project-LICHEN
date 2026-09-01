@@ -10,6 +10,11 @@
 
 set -e
 
+# This script's checkpoint and merge commits are the only legitimate writers
+# of .beads/ (the pre-commit hook blocks worker-side store staging, bead
+# biod); opt this process out of the hook.
+export BEADS_ALLOW_STORE_COMMIT=1
+
 REPO_ROOT=$(git rev-parse --show-toplevel)
 WORKTREE_BASE="/Volumes/Attic/Desktop/Projects/lichen-workers"
 
@@ -95,6 +100,16 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
     ahead=$(git rev-list main.."$branch" --count 2>/dev/null || echo 0)
     if [ "$ahead" -eq 0 ]; then
         continue
+    fi
+
+    # Per-branch checkpoint: closes written after the pre-loop checkpoint
+    # (e.g. during the previous branch's kimi session) must be committed
+    # BEFORE this branch's normalization rewinds .beads to HEAD, or they
+    # are destroyed (bead biod — the measured loss mechanism).
+    if [ -n "$(git status --porcelain .beads/)" ]; then
+        git add .beads/
+        git commit -m "chore(beads): per-branch store checkpoint" --quiet ||
+            true
     fi
 
     echo "Merging $branch ($ahead commits ahead)..."

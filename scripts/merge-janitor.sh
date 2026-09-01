@@ -18,6 +18,9 @@ MODEL="openrouter/moonshotai/kimi-k3"
 STATE_DIR="/tmp/lichen-merge-janitor-state"
 export PATH="$HOME/.opencode/bin:$PATH"
 export BEADS_DIR="${BEADS_DIR:-$REPO_ROOT/.beads}"
+# This script's merge commits are legitimate .beads/ writers (the pre-commit
+# hook blocks worker-side store staging, bead biod); opt out of the hook.
+export BEADS_ALLOW_STORE_COMMIT=1
 mkdir -p "$STATE_DIR"
 
 remaining_credits() {
@@ -61,6 +64,12 @@ janitor_merge_branch() {
     if [ -f "$REPO_ROOT/.git/MERGE_HEAD" ]; then
         echo "   janitor: merge already in flight — skipping this cycle"
         return 2
+    fi
+    # Per-branch checkpoint: pending store writes must be committed before
+    # this branch's normalization rewinds .beads to HEAD (bead biod).
+    if [ -n "$(git -C "$REPO_ROOT" status --porcelain .beads/)" ]; then
+        git -C "$REPO_ROOT" add .beads/
+        git -C "$REPO_ROOT" commit -m "chore(beads): per-branch store checkpoint" --quiet || true
     fi
     # Sweep debris from interrupted earlier merge cycles: locally modified
     # files that this branch's merge would rewrite anyway. Without this, a
