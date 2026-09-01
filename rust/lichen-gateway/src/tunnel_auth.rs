@@ -14,7 +14,7 @@ pub const DEFAULT_AUTHORIZATION_CAPACITY: usize = 256;
 pub const MAX_ROUTE_HOPS: usize = 8;
 pub const COAP_FORBIDDEN_CODE: u8 = 0x83;
 
-const PROTECTED: &[u8; 7] = b"\xa1\x01\x3a\x00\x01\x00\x00";
+pub(crate) const PROTECTED: &[u8; 7] = b"\xa1\x01\x3a\x00\x01\x00\x00";
 
 /// Exact reason an authorization or data-plane decision was denied.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -619,24 +619,24 @@ fn prefix_is_canonical(prefix: &[u8; 16], prefix_len: u8) -> bool {
     prefix[first_unused..].iter().all(|byte| *byte == 0)
 }
 
-struct Writer<'a> {
+pub(crate) struct Writer<'a> {
     output: &'a mut [u8],
     position: usize,
 }
 
 impl<'a> Writer<'a> {
-    fn new(output: &'a mut [u8]) -> Self {
+    pub(crate) fn new(output: &'a mut [u8]) -> Self {
         Self {
             output,
             position: 0,
         }
     }
 
-    fn position(&self) -> usize {
+    pub(crate) fn position(&self) -> usize {
         self.position
     }
 
-    fn byte(&mut self, value: u8) -> Result<(), TunnelAuthError> {
+    pub(crate) fn byte(&mut self, value: u8) -> Result<(), TunnelAuthError> {
         let slot = self
             .output
             .get_mut(self.position)
@@ -646,7 +646,7 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    fn bytes(&mut self, value: &[u8]) -> Result<(), TunnelAuthError> {
+    pub(crate) fn bytes(&mut self, value: &[u8]) -> Result<(), TunnelAuthError> {
         let end = self
             .position
             .checked_add(value.len())
@@ -659,7 +659,7 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    fn head(&mut self, major: u8, value: u64) -> Result<(), TunnelAuthError> {
+    pub(crate) fn head(&mut self, major: u8, value: u64) -> Result<(), TunnelAuthError> {
         match value {
             0..=23 => self.byte((major << 5) | value as u8),
             24..=0xff => {
@@ -681,36 +681,36 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn uint(&mut self, value: u64) -> Result<(), TunnelAuthError> {
+    pub(crate) fn uint(&mut self, value: u64) -> Result<(), TunnelAuthError> {
         self.head(0, value)
     }
 
-    fn bstr(&mut self, value: &[u8]) -> Result<(), TunnelAuthError> {
+    pub(crate) fn bstr(&mut self, value: &[u8]) -> Result<(), TunnelAuthError> {
         self.head(2, value.len() as u64)?;
         self.bytes(value)
     }
 
-    fn tstr(&mut self, value: &[u8]) -> Result<(), TunnelAuthError> {
+    pub(crate) fn tstr(&mut self, value: &[u8]) -> Result<(), TunnelAuthError> {
         self.head(3, value.len() as u64)?;
         self.bytes(value)
     }
 }
 
-struct Reader<'a> {
+pub(crate) struct Reader<'a> {
     input: &'a [u8],
     position: usize,
 }
 
 impl<'a> Reader<'a> {
-    fn new(input: &'a [u8]) -> Self {
+    pub(crate) fn new(input: &'a [u8]) -> Self {
         Self { input, position: 0 }
     }
 
-    fn finished(&self) -> bool {
+    pub(crate) fn finished(&self) -> bool {
         self.position == self.input.len()
     }
 
-    fn byte(&mut self) -> Result<u8, TunnelAuthError> {
+    pub(crate) fn byte(&mut self) -> Result<u8, TunnelAuthError> {
         let value = *self
             .input
             .get(self.position)
@@ -719,7 +719,7 @@ impl<'a> Reader<'a> {
         Ok(value)
     }
 
-    fn exact(&mut self, expected: u8) -> Result<(), TunnelAuthError> {
+    pub(crate) fn exact(&mut self, expected: u8) -> Result<(), TunnelAuthError> {
         if self.byte()? == expected {
             Ok(())
         } else {
@@ -727,7 +727,7 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn head(&mut self, expected_major: u8) -> Result<u64, TunnelAuthError> {
+    pub(crate) fn head(&mut self, expected_major: u8) -> Result<u64, TunnelAuthError> {
         let first = self.byte()?;
         if first >> 5 != expected_major {
             return Err(TunnelAuthError::MalformedCbor);
@@ -772,11 +772,11 @@ impl<'a> Reader<'a> {
         Ok(value)
     }
 
-    fn uint(&mut self) -> Result<u64, TunnelAuthError> {
+    pub(crate) fn uint(&mut self) -> Result<u64, TunnelAuthError> {
         self.head(0)
     }
 
-    fn uint_exact(&mut self, expected: u64) -> Result<(), TunnelAuthError> {
+    pub(crate) fn uint_exact(&mut self, expected: u64) -> Result<(), TunnelAuthError> {
         if self.uint()? == expected {
             Ok(())
         } else {
@@ -784,7 +784,7 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn bstr(&mut self) -> Result<&'a [u8], TunnelAuthError> {
+    pub(crate) fn bstr(&mut self) -> Result<&'a [u8], TunnelAuthError> {
         let length = usize::try_from(self.head(2)?).map_err(|_| TunnelAuthError::MalformedCbor)?;
         self.take(length)
     }
