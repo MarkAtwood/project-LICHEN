@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.82",
+  "title": "wio-e5 firmware derive_iid uses raw seed bytes, not SHA-512(pubkey) (spec 8.5/8.7 IID MUST)",
+  "description": "Requirement R-06-014 (spec-coverage matrix docs/spec-coverage/06-security-part1.md): IID = SHA-512(pubkey)[0:8] with iid[0] \u0026= 0b1111_1101; MUST be SHA-512, not SHA-256.\n\nClassification: divergent (bringup-only firmware).\n\nEvidence: rust/lichen-firmware/wio-e5/src/main.rs:33-39 — derive_iid copies raw seed[0:8] and clears U/L bit, never hashes the pubkey. The ponytail comment misstates the upgrade path: 'real impl uses SHA256' — the canonical derivation is SHA-512(pubkey) at rust/lichen-core/src/addr.rs:86-92 (iid_from_pubkey_bytes), which is no_std and matches test/vectors/yggdrasil-derivation.json.\n\nImpact: a future flash of this firmware would derive an IID incompatible with all other stacks and with the canonical vectors; the stale comment invites a wrong 'fix' to SHA-256.\n\nSuggested placement: wio-e5 main.rs should call lichen_core::addr::iid_from_pubkey_bytes (lichen-core is already a dependency via NodeId import at main.rs:23); replace the hardcoded seed with flash-backed storage per the existing TODO. Correct the ponytail comment to SHA-512(pubkey) even if the code fix is deferred. Also flagged in docs/spec-coverage/06-security-part1-flagged.md A16.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T16:28:34.685531255Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T16:28:34.685531255Z",
+  "labels": [
+    "security",
+    "spec-gap",
+    "firmware",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.82",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T16:28:34.84662568Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
