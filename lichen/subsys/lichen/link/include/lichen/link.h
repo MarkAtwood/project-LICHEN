@@ -87,6 +87,10 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
 #define LICHEN_TDMA_GUARD_MS 50 /* spec/02a-coordinated-capacity.md §2a.2: guard "MUST be 50 for this revision"; ccp_tdma.json guard_ms=50 */
 #define LICHEN_TDMA_SLOT_MS 250 /* spec/02a-coordinated-capacity.md §2a.2 Slot=(fnv1a32(EUI64)+u32(SFN)) mod n via lichen_hash_32; epoch MUST NOT enter the hash */
 #define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3 /* BEACON_TIMEOUT per 09-packets-timing.md FSM */
+/* Recovery countdown thresholds (spec 02a 2a.6.3; defaults per
+ * recovery_countdown.h drift_max=6, give_up=10). */
+#define LICHEN_T_DRIFT_MAX_SUPERFRAMES 6
+#define LICHEN_T_GIVE_UP_SUPERFRAMES 10
 #define LICHEN_TDMA_CONTENTION_RETRIES 5 /* Max DAO retransmissions in contention slot */
 #define LICHEN_TDMA_CONTENTION_BACKOFF_MIN_MS 100 /* CSMA min backoff */
 #define LICHEN_TDMA_CONTENTION_BACKOFF_MAX_MS 1000 /* CSMA max backoff */
@@ -496,8 +500,6 @@ uint8_t lichen_tdma_compute_slot(
  */
 bool lichen_slot_map_validate(const uint8_t *slots, size_t len,
 			      uint8_t num_slots);
-#endif /* CONFIG_LICHEN_TDMA */
-
 
 /**
  * @brief Validate the CCP-7 guard budget.
