@@ -291,8 +291,7 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
                     if routing.is_some() || routing_len < 24 || ipv6[offset + 2] != 3 {
                         return Err(RxError::InvalidSourceRoute);
                     }
-                    if (routing_len - 8) % 16 != 0 || ipv6[offset + 4..offset + 8] != [0, 0, 0, 0]
-                    {
+                    if (routing_len - 8) % 16 != 0 || ipv6[offset + 4..offset + 8] != [0, 0, 0, 0] {
                         return Err(RxError::InvalidSourceRoute);
                     }
                     let address_count = (routing_len - 8) / 16;
@@ -318,8 +317,7 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
                             }
                         }
                     }
-                    if segments_left != 0 && usize::from(segments_left) >= usize::from(hop_limit)
-                    {
+                    if segments_left != 0 && usize::from(segments_left) >= usize::from(hop_limit) {
                         return Err(RxError::InvalidSourceRoute);
                     }
                     routing = Some(SourceRouteView {
@@ -367,8 +365,8 @@ pub(crate) fn advance_rpl_source_route(
     }
 
     if view.segments_left == 0 {
-        let plain_payload_len = usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]]))
-            - view.routing_len;
+        let plain_payload_len =
+            usize::from(u16::from_be_bytes([ipv6[4], ipv6[5]])) - view.routing_len;
         let mut plain = Vec::with_capacity(ipv6.len() - view.routing_len);
         plain.extend_from_slice(&ipv6[..view.offset]);
         plain[view.previous_next_header_position] = ipv6[view.offset];
