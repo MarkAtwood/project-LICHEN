@@ -148,6 +148,26 @@ static uint16_t udp_checksum(const struct net_ipv6_hdr *ipv6,
 	return checksum == 0 ? 0xffff : checksum;
 }
 
+/* lichen_l2 disable/enable wipes link_ctx crypto state by design
+ * (project-LICHEN-rwio.1): re-provision the deterministic test identity so
+ * tests running after a reinit cycle see the same state ping_l2_setup built.
+ * Tolerates -EALREADY so the helper stays safe on an un-wiped context. */
+static void reprovision_after_reinit(void)
+{
+	uint8_t peer_eui64[8];
+	int ret;
+
+	ret = lichen_l2_test_load_key(test_seed, test_pubkey);
+	zassert_true(ret == 0 || ret == -EALREADY,
+		     "reinit: load signing key: %d", ret);
+	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
+	zassert_equal(ret, 0, "reinit: pubkey to iid: %d", ret);
+	peer_eui64[0] |= 0x02; /* wire/extended form == frame SIID */
+	ret = lichen_peer_add(peer_eui64, test_pubkey);
+	zassert_true(ret == 0 || ret == -EALREADY,
+		     "reinit: peer add: %d", ret);
+}
+
 static void *ping_l2_setup(void)
 {
 	uint8_t eui64[8];
@@ -174,12 +194,18 @@ static void *ping_l2_setup(void)
 	zassert_not_null(net_if_ipv6_addr_lookup_by_iface(test_iface, &primary_addr),
 			 "key load did not install primary address");
 
-	/* NOTE: no legacy link key is loaded here. lichen_link_tx() rejects
-	 * has_link_key contexts with -EPROTONOSUPPORT (E=1 frames have no
-	 * coordinated design, bead 2auf.21), so a loaded link key would
-	 * break every signed-frame TX this suite exercises. */
+	/* No legacy LLSec link key here: lichen_link_tx rejects E=1 keyed
+	 * transmission outright (bead 2auf.21), so loading one would only
+	 * break every TX path this suite exercises. */
 
-	ret = lichen_peer_add(eui64, test_pubkey);
+	/* Peers are keyed by the canonical key-derived EUI-64 (frame SIID:
+	 * sha512(pubkey)[0:8] with U/L set), not by the device hardware ID
+	 * — lichen_link_rx.c SIID lookup misses otherwise (-LICHEN_EAUTH). */
+	uint8_t peer_eui64[8];
+	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
+	zassert_equal(ret, 0, "failed to derive canonical peer EUI-64: %d", ret);
+	peer_eui64[0] |= 0x02;
+	ret = lichen_peer_add(peer_eui64, test_pubkey);
 	zassert_equal(ret, 0, "failed to add self peer: %d", ret);
 
 	make_link_local_from_eui64(eui64, &test_ll_addr);
@@ -201,23 +227,6 @@ static void *ping_l2_setup(void)
 	build_udp_packet(expected_udp_packet, &expected_udp_packet_len);
 
 	return NULL;
-}
-
-/*
- * The suite setup runs once, but tests that toggle the interface
- * (test_disable_retries_incomplete_queue_destruction: net_if_down/up)
- * wipe and re-create the link context mid-suite, clearing has_key.
- * ztest also does not guarantee source order, so any test that transmits
- * must restore the key itself. Same seed => same pubkey => the peer table
- * entry added in setup stays valid. On replay-persist builds an already
- * keyed context reports -EALREADY, which counts as restored.
- */
-static void ensure_tx_key(void)
-{
-	int ret = lichen_l2_test_load_key(test_seed, test_pubkey);
-
-	zassert_true(ret == 0 || ret == -EALREADY,
-		     "key (re)load failed: %d", ret);
 }
 
 static void build_ping_packet(uint8_t *packet, size_t *packet_len)
@@ -406,8 +415,6 @@ ZTEST(ping_l2, test_full_l2_loopback_ping)
 	struct lora_loopback_test_stats loop_before;
 	int ret;
 
-	ensure_tx_key();
-
 	/* Let startup MLD/ND frames drain before measuring the packet under test. */
 	k_sleep(K_MSEC(100));
 
@@ -429,7 +436,6 @@ ZTEST(ping_l2, test_l2_publish_app_identity_uses_link_context_key)
 {
 	struct lichen_app_identity_self self;
 
-	ensure_tx_key();
 	lichen_app_identity_test_reset();
 	zassert_ok(lichen_l2_publish_app_identity("LICHEN", "LICHEN"));
 	zassert_ok(lichen_app_identity_copy_self(&self));
@@ -446,8 +452,6 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	uint8_t rx_buf[sizeof(coap_test_payload)];
 	int sock;
 	int ret;
-
-	ensure_tx_key();
 
 	k_sleep(K_MSEC(100));
 
@@ -566,6 +570,7 @@ ZTEST(ping_l2, test_queue_stats_accessor_lifecycle)
 
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
+	reprovision_after_reinit();
 }
 
 ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
@@ -624,6 +629,7 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
+	reprovision_after_reinit();
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);

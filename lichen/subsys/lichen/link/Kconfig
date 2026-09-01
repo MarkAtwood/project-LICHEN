@@ -152,7 +152,7 @@ config LICHEN_LINK_CCP16_LOAD_BALANCING
 	help
 	  Enable CCP-16 coordinated capacity features: density-aware
 	  channel selection in lichen_link_channel_select() (control
-	  channel 0 when density > 8 per
+	  channel 0 when density > 10 per
 	  spec/02a-coordinated-capacity.md:121). Required by TDMA slot
 	  scheduling and CCP time sync. Explicitly selects SCHC and link
 	  epoch features for TDMA/multi-channel operation.

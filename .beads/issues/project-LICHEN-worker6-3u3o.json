@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-3u3o",
   "title": "DAO RX floor catalog requires durably-anchored state outside base_dir; enforce/document",
   "description": "Security review of worker6-bidu fix: if dao_rx_catalog.bin, both per-key slot files, AND the anchor state are all absent, load_rx_floor degrades to first-DAO bootstrap and old signed DAOs replay. Slot files and catalog live in the same directory with identical permissions, so any actor able to delete slots can delete the catalog; protection only holds when StateRevisionAnchor is externally durable. Fix: enforce or document that production construction requires a durable anchor stored outside base_dir (e.g. requires_durable_anchor flag or gateway-config assertion) and add a test asserting the fail-open path is unreachable with the durable anchor. Ref dao_persistence.py:625-627,722-725,992-1007.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T08:35:50.798311Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T08:35:50.798311Z",
+  "updated_at": "2026-08-31T23:25:54.528279203Z",
+  "closed_at": "2026-08-31T23:25:54.528279203Z",
+  "close_reason": "Landed (commit this round): the DAO RX floor durable-anchor contract is documented and test-pinned per the bead. (1) Constructor docstring on DaoReplayFloorStore: production anchors MUST be durable storage OUTSIDE base_dir — all protected state (slots+catalog) lives in base_dir so an actor able to delete one can delete all; with a durable external anchor, total deletion fails closed ('initialized RX floor was deleted' from the slot anchor, or 'DAO RX floor catalog was deleted' with slots restored); only a co-located/volatile anchor permits the first-DAO-bootstrap fail-open. (2) New _FileStateRevisionAnchor test double (file-backed anchor OUTSIDE base_dir, with working JSON round-trip) + test (a): store a floor, delete EVERY file in base_dir (fail_closed=False too) -\u003e load_rx_floor RAISES, never None — the old-signed-DAO replay window cannot re-open. (3) Counterfactual test (b): with the co-located helper anchor, files+anchor registry wiped and a FRESH store constructed -\u003e load_rx_floor returns None — the genuine fail-open path, exactly the configuration production must avoid. Suite 109 passed. Reviews: pass 1 FAILED with 3 real findings (illusory counterfactual, broken JSON reload, wrong quoted message) — ALL fixed and re-verified (verification pass PASS with the fail-open path traced to the un-anchored first-load); pass 2 same finding + confirmed the doc contract matches spec 8.6; pass 3 caught the ruff import-order error (fixed via --fix).",
   "labels": [
     "networking"
   ],

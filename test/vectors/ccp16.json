@@ -45,7 +45,7 @@
     },
     {
       "name": "select_channel_timing_test",
-      "description": "density>8 triggers CH0 fallback with sf=11 (density>8) and now near u32 wrap.",
+      "description": "density 9 uses hash channel 2; sf=11 via the SNR<0 floor; now near u32 wrap.",
       "type": "slot_selection",
       "input": {
         "eui64": "0011223344556677",
@@ -56,10 +56,10 @@
       },
       "output": {
         "hash_32": 2271500941,
-        "channel": 0,
-        "expected_channel": 0,
+        "channel": 2,
+        "expected_channel": 2,
         "sf": 11,
-        "select_channel": 0,
+        "select_channel": 2,
         "now": 4294967280
       }
     },
@@ -197,10 +197,10 @@
       },
       "output": {
         "hash_32": 2531237210,
-        "channel": 0,
-        "expected_channel": 0,
-        "sf": 11,
-        "select_channel": 0,
+        "channel": 1,
+        "expected_channel": 1,
+        "sf": 10,
+        "select_channel": 1,
         "now": 3000
       }
     },

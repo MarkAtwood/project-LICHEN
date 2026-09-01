@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-vi0a",
+  "title": "Remove committed CMake build tree from lichen/tests/tx_queue/build",
+  "description": "Found by kimi-k3 correctness review of yrk9 (non-blocking, same artifact class): lichen/tests/tx_queue/build/ is a committed CMake build tree (5 tracked files: CMakeCache.txt, CMakeConfigureLog.yaml, TargetDirectories.txt, cmake.check_cache, cmake_install.cmake). Same hygiene issue as the fuzz artifacts removed in f49835b68c: stale cache paths (likely AppleClang), repo bloat, flavor-diagnosis confusion. Fix: git rm -r lichen/tests/tx_queue/build + extend .gitignore (lichen/tests/tx_queue/build/), after grep-verifying nothing references the committed paths. Also consider a repo-wide scan for other committed build/ or *.o trees under lichen/ (git ls-files | grep -E '(^|/)build/|\\.o$'). Discovered from project-LICHEN-worker6-yrk9.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "chore",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:00:12.627777995Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T20:08:12.441935996Z",
+  "started_at": "2026-08-31T20:01:27.41593329Z",
+  "closed_at": "2026-08-31T20:08:12.441935996Z",
+  "close_reason": "Removed both committed build trees from lichen/tests/tx_queue: build/ (5 files: CMakeCache.txt, CMakeConfigureLog.yaml, TargetDirectories.txt with /Users/markatwood paths, cmake.check_cache, cmake_install.cmake) and build-tsan/CMakeFiles/cmake.check_cache (predated the existing build-tsan/ gitignore rule) — commit b7438728dd, 7 files, -2359 lines. .gitignore extended with lichen/tests/tx_queue/build/ (build-tsan/ already covered). Pre-removal reference sweep: only self-references inside the removed files. Post-removal verification: clean-tree cmake+build+ctest of tx_queue — 100% tests passed 1/1 (sources self-sufficient; committed caches were never inputs). Codereview 3x delegated to kimi-k3: correctness PASS (deletion set exact, gitignore correct and non-overreaching — noted the explicit rule is redundant with pre-existing generic rules but harmless intent documentation since tracked files are unaffected by gitignore), security PASS (no scope leakage, tree state clean), edge PASS (no dependents, commit boundary sensible with firmware/bridge-zephyr/build + build_test_schnorr48 correctly excluded and filed as follow-up).",
+  "labels": [
+    "c-safety"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vi0a",
+      "depends_on_id": "project-LICHEN-worker6-yrk9",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:00:12.730492193Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

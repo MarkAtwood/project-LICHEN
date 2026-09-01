@@ -209,10 +209,12 @@ static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
 #endif
 
 /* Deliver queued packets to the registered async callback. Runs in system
- * workqueue context; the callback may cancel (recv_async(NULL)) — cancel-then
- * re-arm also works — both handled by re-reading recv_cb each packet. The
- * drain is capped per run so a send flood cannot monopolize the workqueue;
- * excess packets are picked up by the re-submitted work item. */
+ * workqueue context. Arming is ONE-SHOT: each delivery consumes the
+ * registration (recv_cb cleared) and the upper layer re-arms after
+ * processing, matching upstream sx12xx semantics where RX_DONE disarms the
+ * receiver. A callback cancel (recv_async(NULL)) is honored at the next
+ * delivery check. The drain is capped per run so a send flood cannot
+ * monopolize the workqueue. */
 static void lora_loopback_rx_work(struct k_work *work)
 {
 	struct lora_loopback_data *data =
@@ -232,6 +234,30 @@ static void lora_loopback_rx_work(struct k_work *work)
 		}
 
 		if (k_msgq_get(&data->rx_queue, &data->rx_pkt, K_NO_WAIT) != 0) {
+			return;
+		}
+
+		/* One-shot arming (upstream sx12xx semantics: RX_DONE disarms
+		 * the receiver) — consume the registration before invoking the
+		 * callback so the upper layer's post-processing re-arm does
+		 * not fail with -EBUSY and abort the module
+		 * (project-LICHEN-worker6-17nw). The clear is gated on the
+		 * registration being unchanged: a cancel (recv_async(NULL))
+		 * or cancel+re-arm racing this window must not have its new
+		 * registration clobbered, and a canceled callback must not
+		 * fire. */
+		key = k_spin_lock(&data->rx_lock);
+		bool still_armed = (data->recv_cb == cb);
+		if (still_armed) {
+			data->recv_cb = NULL;
+			data->recv_cb_user_data = NULL;
+		}
+		k_spin_unlock(&data->rx_lock, key);
+
+		if (!still_armed) {
+			/* Canceled between snapshot and dequeue: drop the
+			 * packet, exactly as a real radio discards a frame
+			 * received after disarm. */
 			return;
 		}
 

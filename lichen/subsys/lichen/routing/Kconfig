@@ -117,6 +117,16 @@ config LICHEN_ROUTER_DTN_MAX_MESSAGES
 	  Maximum number of messages that can be stored in the DTN buffer.
 	  Each message slot has overhead beyond the data itself.
 
+config LICHEN_ROUTER_DTN_MAX_PER_SOURCE
+	int "Maximum DTN buffered messages per source IID"
+	depends on LICHEN_ROUTER
+	depends on LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
+	default 2
+	help
+	  Caps store-and-forward buffering per source IID so a single
+	  (authenticated) sender cannot churn-evict every other source's
+	  buffered messages (project-LICHEN-worker6-cxa2).
+
 config LICHEN_ROUTER_FORWARDING_BUFFER
 	bool "Forwarding buffer with backpressure (spec appendix-bufferbloat)"
 	depends on LICHEN_ROUTER
@@ -168,10 +178,11 @@ config LICHEN_DTN
 config LICHEN_DTN_MAX_BYTES
 	int "DTN buffer maximum size in bytes"
 	depends on LICHEN_DTN
-	default 65536
+	default 8192
 	help
-	  Maximum buffer size in bytes. Spec 9.8 suggests 64KB for routers.
-	  Constrained devices should use a smaller value or disable DTN.
+	  Total stored-bytes budget for the DTN buffer. Spec 18.9 deaddrop:
+	  8 KB (leaf); border routers override to 32 KB. (Spec 9.8's 64 KB
+	  applies to router store-and-forward, not the deaddrop budget.)
 
 config LICHEN_DTN_MAX_MESSAGES
 	int "DTN buffer maximum message count"

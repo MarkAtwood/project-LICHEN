@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.1.2",
+  "title": "b7z9.37.1(ii): Rust root-sig COSE verification primitive + receiver wiring",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37.1. THE BIG SLICE — needs design decisions first, do not blind-code: (1) CBOR decode approach for COSE_Sign1 (no CBOR crate in workspace today; senml-cbor is SenML-specific; hand-rolled minimal decoder must be fuzzed per AGENTS.md or a vetted dep added — decide); (2) Schnorr48 verify source in Rust (lichen-rpl has no lichen-crypto dep; oscore-fork mentions Schnorr48 — oscore is human-only territory, calling its public API may be OK but check dep edges); (3) wire verify semantics per python/src/lichen/crypto/root_dio_signature.py verify_root_dio_signature:278-362 (alg -65537, kid==source IID, dodagid==AddrForKey(pubkey), expiry, seq\u003ecached via RootSeqCache from b7z9.37.3.2, DIO field cross-checks) against all 14 cases of test/vectors/root_dio_signature.json (valid/tampered/zero/impersonation/kid-mismatch/wrong-alg). Receiver MUST NOT reject DIOs solely for missing capability (L679). Consumes b7z9.37.3.2's root_seqs_mut (remove its interim expect(dead_code)).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:15:06.081019287Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-01T00:07:09.470353263Z",
+  "started_at": "2026-08-31T19:26:18.328802334Z",
+  "labels": [
+    "decomposed",
+    "rust",
+    "security",
+    "python",
+    "rpl",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.1.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.1",
+      "type": "parent-child",
+      "created_at": "2026-08-31T19:15:06.240709677Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

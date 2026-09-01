@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.45",
+  "title": "Spec 07 10.2.4: C senders never back off on 5.03; C lacks duty-cycle 5.03 load-shedding (Rust+Python conformant)",
+  "description": "Spec 07 (spec/07-transport-app.md:566): 'Senders receiving 5.03 MUST back off for the indicated duration.' Context (:553-564): load-shedding response is 5.03 Service Unavailable + Max-Age: \u003cseconds\u003e + Content-Format CBOR {reason: duty_cycle, retry_after: N, level: \u003clevel\u003e}. Sweep rows R-07-032 (divergent MUST) + R-07-031 (divergent detail): C implements neither the sender backoff nor the duty-cycle 5.03 emission. Evidence: (a) Python implemented+tested: client backoff python/src/lichen/client/ip_coap.py DEFAULT_503_BACKOFF_S=60 :25, enforce_503_backoff :80, _peer_backoffs :110, refuse-during-backoff :237-245 + tests python/tests/client/test_ip_coap.py:295-408 (Max-Age parse, payload retry_after, default, during-backoff raise, clear); server emission python/src/lichen/coap/params.py:239-292 congestion_service_unavailable + resources/site.py:111-130 CongestionAwareSite; vector test/vectors/coap_transport.json load_shedding_503. (b) Rust implemented+tested: rust/lichen-coap/src/client.rs DEFAULT_503_BACKOFF_S=60 :35, MAX_BACKOFF_S=3600 DoS cap :37-40, per-peer backoff state :159,217-254, retry_after from Max-Age :74-82 + in-file tests :648-720. (c) C: coap_client.c has ZERO 5.03/backoff/retry handling (rg clean); C emits generic 5.03s for unrelated capacity policies (coap_status.c:961, coap_waypoints.c:997,1120, coap_location.c:1248, coap_rangetest.c:836-890, coap/Kconfig:554) but none carries the duty-cycle CBOR body or Max-Age retry hint. Suggested placement: lichen/subsys/lichen/coap/coap_client.c response handling (parse 5.03 + Max-Age, per-peer backoff timer); duty-cycle-gated 5.03 emission path for C CoAP servers wired to hal_duty congestion state.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T15:21:13.071289304Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T21:42:46.453045062Z",
+  "started_at": "2026-08-31T21:40:09.35061787Z",
+  "labels": [
+    "transport",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.45",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T15:21:13.198423579Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

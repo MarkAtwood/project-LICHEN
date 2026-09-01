@@ -1,0 +1,7 @@
+{
+  "id": "1788203901820599796-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-3",
+  "text": "ROUND 5: the five remaining failures share the join_leaf/bootstrap DIO helper (tests.rs:639-680) — it sent the bootstrap DIO COMPRESSED (Rule 3) with a UNICAST fe80 destination via send_ipv6_to, both violating the canonical contract. Committed WIP on fix-dio-unicast-dis-0l4q (2f424bfd42): new canonical_dio_packet helper (Rule 255 carrier via send_ipv6_uncompressed_to + l2 broadcast, dst ff02::1a, sole [0x13,1,3] rule-version option — mirroring lichen-rpl/src/dodag.rs:1613 production form) + the earlier unicast-DIS trickle fix (e2adf9f3cf). Suite: 26/31, the five DAO-flavored tests still reject at the SAME leaf admission point. REMAINING (next session, single focus): the rejection is now INSIDE parse_authenticated_dio_evidence (codec.rs, after the multicast destination check passes) — instrument its sub-checks (expected_source fe80::+signer.iid binding, ICMPv6 checksum, rule-version v3 exact bytes, instance-id/dodag-id/mop/role fields) with panic markers the same way; one run identifies the failing sub-check. Also audit: three_rpl_stacks still has send_dio(relay_addr)/send_dio(leaf_addr) unicast DIO responses at tests.rs:~1691/1697 (production send_dio is now canonical-multicast-capable — switch those to send_dio(multicast) after the helper rejection is solved). Worktree branch holds both commits; warm target; oscore-fork linked.",
+  "created_at": "2026-08-31T19:18:21.820599796Z"
+}

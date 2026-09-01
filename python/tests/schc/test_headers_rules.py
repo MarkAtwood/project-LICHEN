@@ -95,30 +95,29 @@ def test_rule255_maximum_is_encoded_schc_size() -> None:
 
 @pytest.mark.parametrize("profile", ["rule2", "rule7"])
 def test_compressed_packet_ceiling_applies_after_encoding(profile: str) -> None:
+    """Raw-bound contract (spec/03): raw == MAX_PACKET_SIZE compresses;
+    raw one octet above is rejected before rule dispatch."""
     from lichen.ipv6.icmpv6 import EchoRequest
 
     if profile == "rule2":
-        encoded_overhead = 23
         make_raw = lambda data_len: _icmpv6_ipv6(  # noqa: E731
             LL_SRC,
             LL_DST,
             EchoRequest(identifier=1, sequence=1, data=bytes(data_len)).to_message(),
         )
     else:
-        encoded_overhead = 21
-
         def make_raw(data_len: int) -> bytes:
             udp = UdpDatagram(10883, 20000, bytes(data_len)).to_bytes(LL_SRC, LL_DST)
             header = IPv6Header(LL_SRC, LL_DST, NextHeader.UDP, payload_length=len(udp)).to_bytes()
             return header + udp
 
-    exact = compress_packet(make_raw(MAX_PACKET_SIZE - encoded_overhead))
-    assert len(exact) == MAX_PACKET_SIZE
+    exact = compress_packet(make_raw(MAX_PACKET_SIZE - 48))
+    assert len(exact) < MAX_PACKET_SIZE
     assert exact[0] == (2 if profile == "rule2" else 7)
-    assert decompress_packet(exact) == make_raw(MAX_PACKET_SIZE - encoded_overhead)
+    assert decompress_packet(exact) == make_raw(MAX_PACKET_SIZE - 48)
 
     with pytest.raises(SchcError, match="profile limit"):
-        compress_packet(make_raw(MAX_PACKET_SIZE - encoded_overhead + 1))
+        compress_packet(make_raw(MAX_PACKET_SIZE - 47))
 
 
 def test_rpl_dio_rule3_round_trip() -> None:

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-pqxd",
+  "title": "Coverage: SRH-consumed decap site (receive.rs:352-359) lacks a tunnel-with-RH3-inner test",
+  "description": "Coverage follow-up from v1c2 (correctness reviewer): the v1c2 hardening added first-next-header-43 drops at BOTH decap sites in receive.rs, but the new integration test only drives site 1 (Absent/local-delivery path). Site 2 (SRH-consumed path, receive.rs:352-359 process_source_route advance branch) shares the same guard but needs its own test: build an outer with an SRH whose segments_left reaches 0 at the gateway/local hop, inner carrying first-NH 43, assert non-delivery. Mirror the site-1 test tunneled_inner_with_rh3_is_dropped_at_local_delivery.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:35:29.630359694Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T22:35:29.630359694Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pqxd",
+      "depends_on_id": "project-LICHEN-worker6-v1c2",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T22:35:29.737918561Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

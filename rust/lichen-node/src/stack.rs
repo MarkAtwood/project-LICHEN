@@ -11,7 +11,7 @@ use std::vec;
 use std::vec::Vec;
 
 use lichen_core::addr::NodeId;
-use lichen_core::constants::{L2_DISPATCH_SCHC, PORT_COAP};
+use lichen_core::constants::{L2_DISPATCH_SCHC, PORT_COAP, RULE_UNCOMPRESSED};
 use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
 use lichen_hal::Radio;
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP_HEADER_LEN};
@@ -68,6 +68,11 @@ impl From<Priority> for u8 {
 const MAX_EXTENDED_SCHC_SIZE: usize = 185;
 // Broadcast/elided frames omit the destination but still carry the signer EUI-64.
 const MAX_ELIDED_SCHC_SIZE: usize = 193;
+// Signed-frame payload capacity for a 2-byte-destination frame (AddrMode
+// elided, 2-byte address): 254-byte body - 4 fixed - 2 dst - 8 signer - 48 MIC.
+// build_frame is the final authority; this pre-check mirrors it so oversized
+// payloads report NeedsFragmentation instead of a late FrameEncode.
+const ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD: usize = 192;
 
 /// TX path error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +84,10 @@ pub enum TxError {
     SchcCompress,
     /// Link layer frame encoding failed.
     FrameEncode,
+    /// Compressed SCHC payload exceeds one frame's capacity (spec
+    /// 05-routing.md §8.9 R-05-065). The datagram must be carried by SCHC
+    /// fragmentation, which the TX path does not wire up yet.
+    NeedsFragmentation,
     /// Radio transmission failed.
     RadioTx,
     /// Buffer too small for message.
@@ -89,6 +98,9 @@ pub enum TxError {
     SequenceExhausted,
     /// No next hop is available for the destination.
     NoRoute,
+    /// Link-layer signing key not provisioned on this stack (-ENOKEY parity
+    /// with lichen_link_tx.c pre-TX gate).
+    NoKey,
     /// Plaintext CoAP is forbidden on the production transmit path.
     PlaintextCoap,
     /// IPv6 extension headers are unsupported by the production router.
@@ -101,11 +113,15 @@ impl core::fmt::Display for TxError {
             Self::CoapEncode => write!(f, "CoAP encoding failed"),
             Self::SchcCompress => write!(f, "SCHC compression failed"),
             Self::FrameEncode => write!(f, "frame encoding failed"),
+            Self::NeedsFragmentation => {
+                write!(f, "payload exceeds one frame; SCHC fragmentation required")
+            }
             Self::RadioTx => write!(f, "radio TX failed"),
             Self::BufferTooSmall => write!(f, "buffer too small"),
             Self::QueueFull => write!(f, "forwarding queue full"),
             Self::SequenceExhausted => write!(f, "link-layer sequence exhausted"),
             Self::NoRoute => write!(f, "no route to destination"),
+            Self::NoKey => write!(f, "link-layer signing key not provisioned"),
             Self::PlaintextCoap => write!(f, "plaintext CoAP is forbidden"),
             Self::UnsupportedIpv6Extension => write!(f, "IPv6 extension header is unsupported"),
         }
@@ -211,8 +227,12 @@ pub struct Stack<R: Radio> {
     channel: u8,
     schc_failure_tracker: lichen_schc::RuleVersionFailureTracker<64>,
     schc_failure_notifications: u64,
+    /// Bounded fragmentation-session policy (spec/05-routing.md §8.9
+    /// R-05-065). Seam for the RX reassembly slice: receive() wiring lands in
+    /// the sibling bead; the policy itself enforces MAX_PEERS without
+    /// hot-path allocation.
+    pub(crate) fragmentation_policy: lichen_schc::FragmentationPolicy<8>,
 }
-
 #[cfg(feature = "std")]
 impl<R: Radio> Stack<R> {
     /// Create a new stack with the given radio, identity, and epoch.
@@ -247,6 +267,8 @@ impl<R: Radio> Stack<R> {
             schc_failure_tracker: lichen_schc::RuleVersionFailureTracker::new(3)
                 .expect("fixed SCHC failure threshold and capacity are nonzero"),
             schc_failure_notifications: 0,
+            fragmentation_policy: lichen_schc::FragmentationPolicy::new()
+                .expect("fixed fragmentation peer capacity is nonzero"),
         }
     }
 
@@ -257,6 +279,18 @@ impl<R: Radio> Stack<R> {
     #[cfg(test)]
     pub fn new_default_epoch(radio: R, identity: lichen_link::identity::Identity) -> Self {
         Self::new(radio, identity, 128, 0)
+    }
+
+    /// Bounded fragmentation-session policy (RX seam for spec/05-routing.md
+    /// §8.9 R-05-065; the receive-path consumer lands in the sibling slice).
+    /// Gate-proof dead-code expectation: tests (compiled under --all-targets)
+    /// consume this accessor, production does not until b7z9.5.2.2.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "RX consumer lands in b7z9.5.2.2")
+    )]
+    pub(crate) fn fragmentation_policy(&self) -> &lichen_schc::FragmentationPolicy<8> {
+        &self.fragmentation_policy
     }
 
     /// Get the local node ID.
@@ -465,6 +499,28 @@ impl<R: Radio> Stack<R> {
         self.send_l2_payload_to(l2_data, dst_addr).await
     }
 
+    /// Send an IPv6 packet carried uncompressed (SCHC Rule 255).
+    ///
+    /// Canonical multicast DIOs MUST be carried uncompressed: the
+    /// authenticated-DIO admission gate accepts only Rule 255 frames
+    /// (spec 09 13.3 R-09-005; Python authenticated_dio.py parity).
+    pub(crate) async fn send_ipv6_uncompressed_to(
+        &mut self,
+        ipv6: &[u8],
+        dst_addr: &[u8],
+    ) -> Result<(), TxError> {
+        if ipv6.len() > 254 {
+            return Err(TxError::BufferTooSmall);
+        }
+        let mut schc = [0u8; 256];
+        schc[0] = RULE_UNCOMPRESSED;
+        schc[1..1 + ipv6.len()].copy_from_slice(ipv6);
+        let mut l2_payload = [0u8; 257];
+        let l2_data = wrap_schc_payload(&schc[..1 + ipv6.len()], &mut l2_payload)?;
+
+        self.send_l2_payload_to(l2_data, dst_addr).await
+    }
+
     pub(crate) async fn send_ipv6_to_route(
         &mut self,
         ipv6: &[u8],
@@ -486,13 +542,20 @@ impl<R: Radio> Stack<R> {
         l2_payload: &[u8],
         dst_addr: &[u8],
     ) -> Result<(), TxError> {
-        let max_payload = if dst_addr.len() == 8 {
-            MAX_EXTENDED_SCHC_SIZE + 1
-        } else {
-            MAX_ELIDED_SCHC_SIZE + 1
+        // Spec 02a 4.4 pre-TX gate parity (lichen_link_tx.c:63-106). The
+        // Rust link layer takes its signing identity at construction
+        // (mandatory), so -ENOKEY's unkeyed-context state is unreachable;
+        // the TDMA latch below covers the C time/sync gate's Rust analog.
+        let max_payload = match dst_addr.len() {
+            8 => MAX_EXTENDED_SCHC_SIZE + 1,
+            // build_frame's true 2-byte-dst signed-frame capacity (ctbn).
+            2 => ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD,
+            // Broadcast (empty dst) and other lengths keep the legacy bound;
+            // build_frame remains the final authority for those shapes.
+            _ => MAX_ELIDED_SCHC_SIZE + 1,
         };
         if l2_payload.len() > max_payload {
-            return Err(TxError::FrameEncode);
+            return Err(TxError::NeedsFragmentation);
         }
         let (epoch, seqnum) = self.try_next_link_tuple()?;
         let mut wire = [0u8; MAX_FRAME_SIZE];
@@ -574,6 +637,23 @@ impl<R: Radio> Stack<R> {
                 if !view.in_transit() => {}
             Ok(crate::rpl_stack::util::RoutingHeaderSurvey::Absent) => {}
             _ => return Ok(None),
+        }
+
+        // EGRESS DECapsulation (spec 05-routing 8.9 R-05-063): a tunneled
+        // outer addressed to this stack is unwrapped here, with the inner
+        // destination verified against the authorized primary 02xx address
+        // (fail-closed), mirroring the RPL receive path.
+        let ipv6 = if ipv6[6] == lichen_core::ipv6::next_header::IPV6_IN_IPV6 {
+            crate::rpl_stack::util::decapsulate_ipv6(&ipv6, local_native)?
+        } else {
+            ipv6
+        };
+        // SECURITY (ba39 v1c2): the inner bypassed the SRH survey, so an
+        // embedded first-header RH3 must not reach secure.rs's parser
+        // unsurveyed. Deeper header chains are rejected downstream by the
+        // secure first-header allowlist.
+        if ipv6[6] == lichen_core::ipv6::next_header::ROUTING {
+            return Ok(None);
         }
 
         Ok(Some(ReceivedIpv6 {
@@ -873,7 +953,92 @@ fn wrap_schc_payload<'a>(schc: &[u8], out: &'a mut [u8]) -> Result<&'a [u8], TxE
     Ok(&out[..1 + schc.len()])
 }
 
-#[cfg(all(test, feature = "std"))]
+/// Spec 05-routing §8.9 (R-05-066): decrement the inner packet's Hop Limit
+/// when the root encapsulates it in IPv6-in-IPv6 for RPL source routing.
+///
+/// When `forwarding` is true (the root is forwarding, not originating, the
+/// inner packet) the additional normal forwarding decrement applies first.
+/// Returns false — leaving the packet unchanged — when the Hop Limit would
+/// underflow or the initial Segments Left is not strictly less than the Hop
+/// Limit remaining after any forwarding decrement (the route MUST NOT be
+/// emitted in that case).
+pub fn decrement_inner_hop_limit(
+    inner: &mut [u8],
+    initial_segments_left: u8,
+    forwarding: bool,
+) -> bool {
+    let Some(hl) = inner.get_mut(7) else {
+        return false;
+    };
+    let forward_decrement = u8::from(forwarding);
+    let Some(after_forward) = hl.checked_sub(forward_decrement) else {
+        return false;
+    };
+    if initial_segments_left >= after_forward {
+        return false;
+    }
+    *hl = after_forward - initial_segments_left;
+    true
+}
+
+/// Parsed DTN hop-by-hop option (spec 05-routing.md 9.8): option type 0x03,
+/// S-flag (bit 7 of byte 2), absolute expiry as u32 big-endian.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DtnSFlag {
+    pub s_flag: bool,
+    pub expiry_unix: u32,
+}
+
+/// Expiry decision per spec 05-routing.md 9.8 clockless rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DtnExpiryDecision {
+    DropSilently,
+    StoreOrForward,
+}
+
+pub fn decide_expiry(expiry_unix: u32, now_unix: u32, wall_clock_valid: bool) -> DtnExpiryDecision {
+    if wall_clock_valid && expiry_unix < now_unix {
+        DtnExpiryDecision::DropSilently
+    } else {
+        DtnExpiryDecision::StoreOrForward
+    }
+}
+
+/// Walk the IPv6 hop-by-hop options chain for the DTN option (type 0x03).
+/// `payload` is the post-IPv6-header body starting at the first next-header.
+/// Returns None when absent or malformed (fail-closed per 9.8).
+pub fn find_dtn_hbh_option(next_header: u8, payload: &[u8]) -> Option<DtnSFlag> {
+    if next_header != 0 {
+        return None;
+    }
+    let mut pos = 0usize;
+    while pos + 2 <= payload.len() {
+        let opt_type = payload[pos];
+        let opt_len = payload[pos + 1] as usize;
+        let data_start = pos + 2;
+        let data_end = data_start + opt_len;
+        if data_end > payload.len() {
+            return None;
+        }
+        if opt_type == 0x03 {
+            // Wire layout per dtn_sflag_hbh.json: [S-flag+reserved byte,
+            // expiry u32 BE] = 5 bytes.
+            let data = &payload[data_start..data_end];
+            if data.len() != 5 {
+                return None;
+            }
+            let s_flag = data[0] & 0x80 != 0;
+            let expiry_unix = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+            return Some(DtnSFlag {
+                s_flag,
+                expiry_unix,
+            });
+        }
+        pos = data_end;
+    }
+    None
+}
+
 mod tests {
     use super::*;
     use lichen_hal::loopback::LoopbackRadio;
@@ -888,6 +1053,46 @@ mod tests {
         let identity = Identity::from_seed(Seed::new([0x01; 32]));
         let (radio, _) = LoopbackRadio::pair();
         Stack::new(radio, identity, epoch, seq)
+    }
+
+    // Spec 05-routing §8.9 (R-05-066) inner Hop Limit tunnel decrement.
+    #[test]
+    fn inner_hop_limit_decrements_forwarding_plus_segments_left() {
+        let mut inner = [0u8; 40];
+        inner[7] = 64;
+        assert!(decrement_inner_hop_limit(&mut inner, 3, true));
+        assert_eq!(inner[7], 60, "64 - 1 (forward) - 3 (SL)");
+    }
+
+    #[test]
+    fn inner_hop_limit_decrement_without_forwarding_decrement() {
+        let mut inner = [0u8; 40];
+        inner[7] = 10;
+        assert!(decrement_inner_hop_limit(&mut inner, 4, false));
+        assert_eq!(inner[7], 6);
+    }
+
+    #[test]
+    fn inner_hop_limit_zero_is_rejected() {
+        let mut inner = [0u8; 40];
+        inner[7] = 0;
+        assert!(!decrement_inner_hop_limit(&mut inner, 1, true));
+        assert_eq!(inner[7], 0, "packet unchanged on rejection");
+    }
+
+    #[test]
+    fn segments_left_equal_to_remaining_hop_limit_is_rejected() {
+        // After the forwarding decrement only 2 remain; SL 2 is not < 2.
+        let mut inner = [0u8; 40];
+        inner[7] = 3;
+        assert!(!decrement_inner_hop_limit(&mut inner, 2, true));
+        assert_eq!(inner[7], 3, "packet unchanged on rejection");
+    }
+
+    #[test]
+    fn short_buffer_is_rejected() {
+        let mut inner = [0u8; 7];
+        assert!(!decrement_inner_hop_limit(&mut inner, 1, true));
     }
 
     #[test]
@@ -913,6 +1118,71 @@ mod tests {
         );
         assert_eq!(stack.try_next_link_tuple(), Err(TxError::SequenceExhausted));
         assert_eq!(stack.try_next_link_tuple(), Err(TxError::SequenceExhausted));
+    }
+
+    #[tokio::test]
+    async fn fragmentation_policy_seam_is_constructed_and_expired() {
+        // RX seam (R-05-065): the stack owns a bounded fragmentation policy;
+        // expire_due on an empty policy is a no-op success.
+        let stack = test_stack(128, 0);
+        assert_eq!(stack.fragmentation_policy().expire_due(0), Ok(0));
+    }
+
+    #[tokio::test]
+    async fn oversized_l2_payload_reports_needs_fragmentation_without_consuming_tuple() {
+        let mut stack = test_stack(128, 0);
+        let before = stack.seqnum;
+        // Extended (8-byte) destination: capacity is MAX_EXTENDED_SCHC_SIZE + 1.
+        let oversized = vec![0u8; MAX_EXTENDED_SCHC_SIZE + 2];
+        assert_eq!(
+            stack.send_l2_payload_to(&oversized, &[0x22; 8]).await,
+            Err(TxError::NeedsFragmentation)
+        );
+        assert_eq!(
+            stack.seqnum, before,
+            "capacity check must not consume a link tuple"
+        );
+    }
+
+    #[tokio::test]
+    async fn extended_destination_exactly_at_capacity_still_sends() {
+        let mut stack = test_stack(128, 0);
+        let exact = vec![0u8; MAX_EXTENDED_SCHC_SIZE + 1];
+        assert_eq!(stack.send_l2_payload_to(&exact, &[0x22; 8]).await, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn elided_destination_capacity_boundary_is_pinned() {
+        // 2-byte-destination frames: the seam pre-check mirrors build_frame's
+        // signed-frame capacity (ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD = 192).
+        // 193..195 reject at the seam as NeedsFragmentation without consuming
+        // a link tuple; 192 still sends.
+        let mut stack = test_stack(128, 0);
+        let before = stack.seqnum;
+        let oversized = vec![0u8; MAX_ELIDED_SCHC_SIZE + 2];
+        assert_eq!(
+            stack.send_l2_payload_to(&oversized, &[0x33; 2]).await,
+            Err(TxError::NeedsFragmentation)
+        );
+        assert_eq!(stack.seqnum, before);
+        let mut stack = test_stack(128, 0);
+        let mislabeled_window = vec![0u8; ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD + 1];
+        assert_eq!(
+            stack
+                .send_l2_payload_to(&mislabeled_window, &[0x33; 2])
+                .await,
+            Err(TxError::NeedsFragmentation)
+        );
+        let mut stack = test_stack(128, 0);
+        let exact = vec![0u8; ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD];
+        assert_eq!(stack.send_l2_payload_to(&exact, &[0x33; 2]).await, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn undersized_l2_payload_passes_the_capacity_seam() {
+        let mut stack = test_stack(128, 0);
+        let payload = [0u8; 40];
+        assert_eq!(stack.send_l2_payload_to(&payload, &[0x22; 8]).await, Ok(()));
     }
 
     #[test]
@@ -1080,6 +1350,150 @@ mod tests {
         assert_eq!(reply.ipv6[40], 129); // ICMPv6 Echo Reply
     }
 
+    /// A decapsulated inner whose first next-header is 43 (RH3) is dropped,
+    /// not delivered (ba39 v1c2 bounded tunnel profile).
+    #[tokio::test]
+    async fn stack_receive_drops_tunnel_with_rh3_inner() {
+        let alice_id = Identity::from_seed(Seed::new([0x91; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x92; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        let bob_native = lichen_core::addr::ygg_addr_from_pubkey(bob.local_public_key().as_bytes());
+        // Inner with an embedded RH3 (first next-header 43).
+        let inner = tunnel_inner(
+            lichen_core::ipv6::next_header::ROUTING,
+            alice_addr_native(&alice),
+            bob_native,
+            &[43, 2, 3, 1],
+        );
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        assert!(matches!(bob.receive(1000).await, Ok(None)));
+    }
+
+    /// Plaintext Stack unwraps an IPv6-in-IPv6 outer addressed to it and
+    /// delivers the inner packet (spec 05-routing 8.9 R-05-063).
+    #[tokio::test]
+    async fn stack_receive_decapsulates_tunnel_with_local_inner_dst() {
+        let alice_id = Identity::from_seed(Seed::new([0x11; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x22; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        let bob_native = lichen_link::ygg_addr_from_pubkey(bob.local_public_key().as_bytes());
+        let inner = tunnel_inner(
+            lichen_core::ipv6::next_header::UDP,
+            alice_addr_native(&alice),
+            bob_native,
+            &[1, 2, 3],
+        );
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        let frame = bob.receive(1000).await.unwrap().unwrap();
+        assert_eq!(frame.ipv6, inner);
+    }
+
+    #[tokio::test]
+    async fn stack_receive_rejects_tunnel_with_foreign_inner_dst() {
+        let alice_id = Identity::from_seed(Seed::new([0x33; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x44; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        // Inner claims a destination that is not Bob's authorized primary.
+        let inner = tunnel_inner(
+            lichen_core::ipv6::next_header::UDP,
+            alice_addr_native(&alice),
+            alice_addr_native(&alice),
+            &[1],
+        );
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        assert!(matches!(
+            bob.receive(1000).await,
+            Err(RxError::InvalidSourceRoute)
+        ));
+    }
+
+    #[tokio::test]
+    async fn stack_receive_rejects_tunnel_with_malformed_inner() {
+        let alice_id = Identity::from_seed(Seed::new([0x55; 32]));
+        let bob_id = Identity::from_seed(Seed::new([0x66; 32]));
+        let (radio_a, radio_b) = LoopbackRadio::pair();
+        let mut alice = Stack::new(radio_a, alice_id.clone(), 128, 0);
+        alice.add_peer(PeerIdentity::from_pubkey(bob_id.pubkey));
+        let mut bob = Stack::new(radio_b, bob_id.clone(), 128, 0);
+        bob.add_peer(PeerIdentity::from_pubkey(alice_id.pubkey));
+
+        // Inner payload length disagrees with the wire length.
+        let mut inner = tunnel_inner(
+            lichen_core::ipv6::next_header::UDP,
+            alice_addr_native(&alice),
+            alice_addr_native(&bob),
+            &[1, 2, 3],
+        );
+        inner[4..6].copy_from_slice(&99u16.to_be_bytes());
+        let outer = tunnel_inner(
+            lichen_core::ipv6::next_header::IPV6_IN_IPV6,
+            alice.local_addr().0,
+            bob.local_addr().0,
+            &inner,
+        );
+
+        alice.send_ipv6_raw(&outer, Priority::Normal).await.unwrap();
+        assert!(matches!(
+            bob.receive(1000).await,
+            Err(RxError::InvalidSourceRoute)
+        ));
+    }
+
+    /// Build an IPv6 packet from native 02xx (or link-local) addresses.
+    fn tunnel_inner(
+        next_header_value: u8,
+        source: [u8; 16],
+        destination: [u8; 16],
+        body: &[u8],
+    ) -> Vec<u8> {
+        let mut packet = vec![0u8; IPV6_HEADER_LEN + body.len()];
+        Ipv6Header::new(next_header_value, Addr(source), Addr(destination))
+            .write_to(body.len() as u16, &mut packet[..IPV6_HEADER_LEN])
+            .unwrap();
+        packet[IPV6_HEADER_LEN..].copy_from_slice(body);
+        packet
+    }
+
+    fn alice_addr_native(stack: &Stack<LoopbackRadio>) -> [u8; 16] {
+        lichen_link::ygg_addr_from_pubkey(stack.local_public_key().as_bytes())
+    }
+
     #[tokio::test]
     async fn raw_coap_rejects_payload_beyond_ipv6_buffer() {
         let mut stack = test_stack(128, 0);
@@ -1102,4 +1516,45 @@ mod tests {
             tuple_state
         );
     }
+}
+
+#[test]
+fn dtn_sflag_option_parses_layout() {
+    // Vector oracle: test/vectors/dtn_sflag_hbh.json sflag_set_layout
+    // [0x03, 0x05, 0x80, expiry u32 BE].
+    let hbh_body = [0x03, 0x05, 0x80, 0x65, 0x53, 0xf6, 0x00];
+    let parsed = find_dtn_hbh_option(0, &hbh_body);
+    let parsed = parsed.expect("S-flag set option must parse");
+    assert!(parsed.s_flag);
+    assert_eq!(parsed.expiry_unix, 1700001280);
+}
+
+#[test]
+fn dtn_sflag_clear_option_parses_without_store_intent() {
+    // sflag_clear: flags byte 0x00.
+    let hbh_body = [0x03, 0x05, 0x00, 0x65, 0x53, 0xf6, 0x00];
+    let parsed = find_dtn_hbh_option(0, &hbh_body).expect("parses");
+    assert!(!parsed.s_flag);
+    assert_eq!(parsed.expiry_unix, 1700001280);
+}
+
+#[test]
+fn dtn_hbh_wrong_length_rejected() {
+    // wrong_length_rejected: data len 4 instead of 5.
+    let hbh_body = [0x03, 0x04, 0x80, 0x65, 0x53, 0xf6];
+    assert!(find_dtn_hbh_option(0, &hbh_body).is_none());
+}
+
+#[test]
+fn dtn_expiry_decision_clockless_fail_open() {
+    // clockless_fail_open: no wall clock -> never drop on expiry alone.
+    assert_eq!(
+        decide_expiry(1_000_000_000, 500, false),
+        DtnExpiryDecision::StoreOrForward
+    );
+    // expired_with_valid_clock: valid wall clock past expiry -> drop.
+    assert_eq!(
+        decide_expiry(1_000, 2_000, true),
+        DtnExpiryDecision::DropSilently
+    );
 }

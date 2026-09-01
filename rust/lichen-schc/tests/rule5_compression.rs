@@ -148,12 +148,16 @@ fn valid_oscore_option_forms_select_rule5() {
 
 #[test]
 fn exact_profile_boundary_is_accepted_and_one_over_is_rejected() {
-    let mut tail = vec![0u8; MAX_PACKET_SIZE - 23];
+    // The profile ceiling bounds the RAW packet (the fragmenter's
+    // reassembly buffer), not the encoded form: raw == MAX compresses
+    // (encoded = raw - 29); raw == MAX + 1 is rejected before rule
+    // dispatch.
+    let mut tail = vec![0u8; MAX_PACKET_SIZE - 52];
     tail[0] = 0x90;
     tail[1] = 0xff;
     let exact_packet = packet(&tail, &[]);
     let exact = compressed(&exact_packet).unwrap();
-    assert_eq!(exact.len(), MAX_PACKET_SIZE);
+    assert_eq!(exact.len(), MAX_PACKET_SIZE - 29);
     assert_eq!(exact[0], RULE_LINK_LOCAL_OSCORE);
 
     tail.push(0);

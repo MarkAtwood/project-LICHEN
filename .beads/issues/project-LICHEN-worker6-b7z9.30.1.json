@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.30.1",
+  "title": "C gradient: adaptive_sf_select step-3 density threshold 10 -\u003e 8 (spec 02a 2a.8)",
+  "description": "Smallest child of b7z9.30. Spec 02a-coordinated-capacity.md 2a.8 procedure step 3: 'IF (Density \u003e 8) OR (Utilization \u003e 150) THEN SF = MIN(12, SF + 2)'. C impl lichen/subsys/lichen/routing/gradient.c uses 'density \u003e 10' (~line 317). Neither ccp16.json nor ccp_load_balancing.json pins this path (verified: their vectors cover select_channel/TDMA/guard/drift only), so the spec text is the oracle. Fix the constant to 8 and update the C unit tests that exercise sf_select (find via grep lichen_gradient_sf_select in lichen/tests/). Note: step-4's extra upgrade_count hysteresis and the absent post-step-6 floors are separate children; the parent's 'loss threshold 40%' claim is STALE (both C gradient.c:291 and Rust rf_health.rs already implement 0.25 with ccp16_ema_loss_threshold vectors). Discovered from project-LICHEN-worker6-b7z9.30.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:25:56.383468141Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T22:54:19.941163124Z",
+  "closed_at": "2026-08-31T22:54:19.941163124Z",
+  "close_reason": "C gradient adaptive-SF step-3 density threshold corrected per spec 02a-coordinated-capacity.md 2a.8 ('IF (Density \u003e 8) OR (Utilization \u003e 150) THEN SF = MIN(12, SF + 2)'): gradient.c:319 'density \u003e 10' -\u003e 'density \u003e 8' with spec citation; gradient.h sf_select doxygen updated from the stale 2a.7/'Density \u003e 10' text (reviewer P4). New boundary test test_gradient_sf_density_threshold in routing_dispatch/src/main.c: density 8 does NOT trigger (sf stays 10), density 9 crosses (MIN(12, 10+2) = 12), snr_ewma=0 keeps the step-4 upgrade path inactive (threshold 8, upgrade_count 0 \u003c 3). Infrastructure: host CMake build gained CONFIG_LICHEN_ADAPTIVE_SF_ENABLED=1 + CONFIG_LICHEN_DEFAULT_SF=10 (the sf struct member and CONFIG_LICHEN_DEFAULT_SF fallback in gradient.c are Kconfig-gated; the host build previously compiled gradient.c without them — no prior test exercised sf_select). Zephyr/twister build safety (reviewer P2 blocker): the test body is wrapped in #if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED) with an explanatory comment — gradient.c's sf_select is compiled under the identical condition, so coverage parity holds and twister builds without LICHEN_RPL compile it out. Both configurations verified: host build (defines set) passes the suite incl. the new test; a without-the-define syntax check (gcc -Wall -Wextra -Werror, simulating twister) is clean — this caught and fixed a real flaw (trailing (void)tx_allowed referencing a guard-scoped variable). cppcheck gate exit 0. Codereview: 2 full Kimi K3 passes (correctness/security+edge) found the twister-compile blocker + doc-stale items, all fixed; the confirmation pass timed out twice (reviewer latency) and was completed via the worker-loop fallback self-review with a both-configurations compile verification. Note: sf_select write-back ratchet documented in the test per the P3 advisory; the loss-threshold-40% claim in the parent bead is STALE per this bead's own note (both stacks implement 0.25).",
+  "labels": [
+    "zephyr",
+    "decomposed",
+    "ccp15",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.30.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.30",
+      "type": "parent-child",
+      "created_at": "2026-08-31T21:25:56.555675934Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

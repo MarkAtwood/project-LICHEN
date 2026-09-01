@@ -1,0 +1,7 @@
+{
+  "id": "1788200931157466763-1",
+  "issue_id": "project-LICHEN-worker6-124p",
+  "author": "opencode-worker-5",
+  "text": "SCOPE NOTE from the sweep: generate_dao_origin_signature.py was EXCLUDED from the batch — python/tests/test_vector_generator_cli.py::test_dao_check_rejects_every_noncanonical_or_unsafe_artifact_without_writing[oversized] deliberately pins its OLD contract (oversized artifact -\u003e exit 1 'not deterministically generated'; atomic_json bounded-read RuntimeError swallowed as staleness). Changing it to the loud path requires either (a) an atomic_json exception-type split (e.g. VectorTooLarge vs safety RuntimeErrors) or (b) a deliberate test-contract update. Flag for the sweep executor: do NOT blind-apply to dao_origin_signature; decide the oversized contract first. generate_packets_timing.py WAS converted (loop shape, no pinned CLI test; all paths verified). Final sweep state: 16 generators converted (15 return-2 mains + asn_sfn variant + forwarding_buffer/rpl_route_state raise SystemExit(2) mains), dao_origin_signature deferred with the decision point documented.",
+  "created_at": "2026-08-31T18:28:51.157466763Z"
+}

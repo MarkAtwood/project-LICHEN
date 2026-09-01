@@ -1,0 +1,7 @@
+{
+  "id": "1788215415675994555-1",
+  "issue_id": "project-LICHEN-worker6-8dt9",
+  "author": "opencode-worker-3",
+  "text": "SCOPED (worker-3, released under timebox before editing): implementation plan extracted — (1) transcript per spec 05 8.6: SHA-512('LICHEN-DAO-ORIGIN-v1' (20 ASCII octets, no NUL) || origin IPv6 (preserved source, 16) || effective DODAGID (16; D=1 explicit else active) || Origin Sequence (8B BE) || unsigned DAO bytes (RPLInstanceID .. immediately before the 0x12 option header)); Schnorr48-verify the 48-byte sig over the 64-octet digest. (2) Pattern precedent: lichen/subsys/lichen/link/sos_origin.c sos_origin_verify (crypto_sha512_ctx incremental + crypto_wipe, monocypher) — mirror it. (3) KEY SOURCE: lichen_announce_get_pinned_pubkey (zlbs, landed 5e414ca734) — LAYERING DECISION NEEDED: either the rpl layer calls the announce accessor (new rpl-\u003erouting dependency — check test CMakeLists linkage: rpl_dao_auth compiles rpl_dao_process.c), or the manager API gains an origin_pubkey param and the CALLER does the pin lookup (cleaner layering; the caller already supplies origin + origin_authenticated). (4) Test rework: add_origin_signature (rpl_routing/src/main.c:91-97) writes dummy 0x5a bytes — flip to real signatures (test signing key + pin the origin via an announce ingest first) + a tampered-body negative case. Estimated 45-60 min total: not started, no edits made.",
+  "created_at": "2026-08-31T22:30:15.675994555Z"
+}

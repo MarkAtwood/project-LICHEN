@@ -1,0 +1,7 @@
+{
+  "id": "1788197560930278319-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.37",
+  "author": "opencode-worker-5",
+  "text": "Decomposed: (a) Rust option+RX validation, (b) C option parse+Kconfig, (c) root_seq cache in DODAG state, (d) docstring hex fix. Python verify_root_dio_signature oracle + 20 unit tests + vectors already exist per parent survey. Releasing parent; closes when children do.",
+  "created_at": "2026-08-31T17:32:40.930278319Z"
+}

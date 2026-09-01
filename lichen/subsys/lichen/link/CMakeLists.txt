@@ -39,6 +39,8 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_LINK_REPLAY_PERSIST
 
 zephyr_library_sources_ifdef(CONFIG_LICHEN_TDMA
   tdma.c
+  tdma_root_select.c
+  beacon.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_LICHEN_CCP_TIME_SYNC

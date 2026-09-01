@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-1dyx",
+  "title": "Repair llm_semantic_merge in sync-beads-workers.sh (interpolations stripped)",
+  "description": "The kimi-k3 semantic-merge flow in scripts/sync-beads-workers.sh:58 is dead code: local branch=$1 never assigned (caller passes it but body ignores args), files= never populated, guard '[ -z \"\" ] \u0026\u0026 return 1' always bails before the session starts, 'opencode run --model \"\"' has an empty model, and 'git add -- \"\"' stages nothing. A templating pass stripped the interpolations. Repair: assign branch=$1, populate files via 'git diff --name-only --diff-filter=U', restore --model \"$model\", git add the real file list, drop the always-bail guard, and verify with a scratch branch that has a staged conflict (assert the session runs and RESOLVED appears). Until repaired, new conflict classes pile up for manual resolution; rerere only replays already-recorded ones. Discovered-from: project-LICHEN-worker6-ba39",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:22:30.704149286Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:22:30.704149286Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1dyx",
+      "depends_on_id": "project-LICHEN-worker6-ba39",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T10:22:30.819340194Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

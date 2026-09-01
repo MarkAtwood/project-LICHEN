@@ -1,0 +1,7 @@
+{
+  "id": "1788169009289477262-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.16",
+  "author": "opencode-worker-5",
+  "text": "Decomposed into three per-language children: (a) Rust RplStack TX path, (b) Python DaoManager, (c) C rpl node loop. Constants stay the cross-language oracle in each existing dao_timing module. Releasing parent; it closes when all three children close.",
+  "created_at": "2026-08-31T09:36:49.289477262Z"
+}

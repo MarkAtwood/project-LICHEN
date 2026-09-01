@@ -13,7 +13,7 @@ Normative pseudocode (spec §3.5):
         nbr.samples = nbr.samples + 1
     select_tx_sf(nbr, density, utilization):
         sf = nbr.assigned_sf or 10
-        if density > 10 or utilization > 150:
+        if density > 8 or utilization > 150:
             sf = min(12, sf + 2)
         if nbr.ema_snr > 8 and density < 5:
             sf = max(7, sf - 1)
@@ -85,7 +85,7 @@ def adaptive_sf_for_metrics(
     snr = int(snr_ema) if isinstance(snr_ema, int) else int(snr_ema)
     if density > 20 or snr < -5:
         return 12
-    if density > 8 or snr < 0 or load_factor > 0.8:
+    if density > 10 or snr < 0 or load_factor > 0.8:
         return 11
     if density < 5 and snr > 8:
         return 9
@@ -101,7 +101,7 @@ def select_tx_sf(
 
     Uses the normative two-tier approach matching Rust RfHealthMetrics:
     ticket tier 1 is the table (adaptive_sf), tier 2 is pseudocode adjustments.
-    When called with explicit density/utilization the pseudocode density>10
+    When called with explicit density/utilization the pseudocode density>8
     branch is engaged; otherwise the table result is authoritative for the
     SF9/SF11 expectations in the spec (density=3->SF9, density=12->SF11).
 
@@ -122,8 +122,9 @@ def select_tx_sf(
         )
         sf = table_sf
         # When not explicit pseudocode path, table is the answer for classic vectors
-        # Detect implicit call (density provides table context, not pseudocode density>10)
-        # Heuristic: if caller provides utilization <=150 and density <=10, return table directly
+        # Detect implicit call (density provides table context, not pseudocode
+        # density>8). Heuristic: if caller provides utilization <=150 and
+        # density <=8, return table directly.
         # This preserves backward compat for SF9/SF11 load_balancing cases.
         if density <= 10 and utilization <= 150 and nbr.ema_loss <= 0.25:
             # Check if pseudocode would change SF beyond table for these inputs
@@ -134,7 +135,7 @@ def select_tx_sf(
         sf = nbr.baseline_sf
     # Tier 2: pseudocode adjustments (explicit mode)
     explicit = True  # select_tx_sf is always explicit per spec pseudocode
-    if (explicit and density > 10) or utilization > 150:
+    if (explicit and density > 8) or utilization > 150:
         sf = min(12, sf + 2)
     if explicit and nbr.ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)

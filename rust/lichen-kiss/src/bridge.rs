@@ -469,6 +469,7 @@ mod tests {
             epoch: 5,
             seqnum: LinkSeqNum::new(100),
             dst_addr: &[],
+            signer_eui64: &[],
             payload: b"test",
             mic: &mic,
             addr_mode: AddrMode::None,

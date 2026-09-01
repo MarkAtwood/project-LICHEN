@@ -554,6 +554,15 @@ mod tests {
         assert_eq!(store.load(&iid), Err(AnnounceStoreError::Corrupt));
         drop(store);
 
+        // Restore the pristine record so the next checks vary ONLY the seed:
+        // a tampered record fails for any seed and would prove nothing about
+        // seed binding.
+        write_record_raw(&record_path(&state_root, &iid, false), &record);
+        let mut store =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x42; 32]).unwrap();
+        assert_eq!(store.load(&iid), Ok(Some(state(0xB1, 10))));
+        drop(store);
+
         // Sealing is bound to the node persistence key material.
         let mut foreign =
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x43; 32]).unwrap();

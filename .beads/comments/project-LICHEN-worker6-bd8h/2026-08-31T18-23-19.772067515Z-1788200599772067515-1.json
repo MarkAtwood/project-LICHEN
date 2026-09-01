@@ -1,0 +1,7 @@
+{
+  "id": "1788200599772067515-1",
+  "issue_id": "project-LICHEN-worker6-bd8h",
+  "author": "opencode-worker-7",
+  "text": "4th-8th occurrences observed from worker-7 session on 2026-08-31: closes for worker6-b7z9.46, worker6-b7z9.48, worker6-bpyr, worker6-y3s5, worker6-b7z9.15 were each reverted to open after being closed (all with committed evidence on beads-worker-7: 3107b62bb3, 1855bb1da4, af7464c967, 26aca0d761, ca236263fa). All five re-closed. Pattern suggests a concurrent writer re-serializing issues.jsonl from a stale snapshot (lost update), not a close-command failure — the re-closes themselves stuck so far. Suspects: two workers closing/claiming simultaneously; or the flat-file export racing a bd daemon flush.",
+  "created_at": "2026-08-31T18:23:19.772067515Z"
+}

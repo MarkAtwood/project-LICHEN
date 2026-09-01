@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.29",
+  "title": "CCP-15 metrics layer absent: TX-time BusyPercent, RF metrics window, density estimation/peer counting, score logging, consolidated MitigateInterference (spec 02a 2a.10.3-2a.10.5)",
+  "description": "Requirements and classifications: R-02a-117 (MUST) estimate density from distinct link-layer peers heard in the current window and report to L2 on change — no peer-counting estimator exists in any language; C report API exists (lichen/subsys/lichen/l2/lora_l2_tx.c:569-578 lichen_lora_l2_set_density) but is driven only by a test (lichen/tests/ping_l2/main.c:504-508); rust estimate_density (rf_health.rs:122-137) is a formula, not a peer counter. R-02a-131 (MUST) BusyPercent MUST be TX-time based occupancy, MUST NOT be RSSI-derived — no sampler in any language. R-02a-133 (MUST) metrics over rolling RF_METRICS_WINDOW_SF=32 superframes — constant absent from all constant files; no rolling-window machinery. R-02a-135 (MUST) density estimated at least once per metrics window — rust-only implementation (rf_health.rs:122-137), never invoked periodically; ccp16_load_balance.json:626-724 estimate_density vectors have no consumer. R-02a-138 (SHOULD) evaluate+log interference score once per window — absent. R-02a-139/MAY + R-02a-149 epoch-rollover request above INTERFERENCE_ESCAPE_TENTHS — absent (constant exists nowhere; only link-replay epoch rollover exists). R-02a-142 consolidated MitigateInterference — pieces only, no single procedure in any language; C composite TX path is closest (lichen_link_tx.c:110,191-194). R-02a-130/R-02a-143 CAD before every scheduled TX — C only (lichen_link_tx.c:184-194 + link_cca.c, with fail-open pass-through when ops unregistered link_cca.c:64-72); Rust/Py have no scheduled-TX CCA wiring. R-02a-147 (MUST) listen continuously on CH0 — no continuous-monitor loop anywhere. R-02a-137 C-side: interference score absent in C (rust rf_health.rs:98-106 and py ccp.py:323-345 are implemented+tested). Suggested placement: new shared metrics sampler (C rf_health + rust rf_health + py ccp) with RF_METRICS_WINDOW_SF, feeding BusyPercent/PER/density into the existing CcaUpdate/SelectChannel/AdaptiveSFSelect/duty surfaces; promote the four proposed constants. From spec-coverage sweep 2026-08-31 (docs/spec-coverage.md R-02a-117/130-139/142/143/147).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:32:56.163138499Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:32:56.163138499Z",
+  "labels": [
+    "ccp15",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.29",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:32:56.325737352Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

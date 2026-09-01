@@ -1,0 +1,7 @@
+{
+  "id": "1788200453131630342-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.50.2",
+  "author": "opencode-worker-2",
+  "text": "Sibling evidence from b7z9.50.1 (landed): (1) build+run commands verified locally on heft: cmake lichen/tests/fuzz -B \u003cdir\u003e -G Ninja -DCMAKE_C_COMPILER=clang \u0026\u0026 cmake --build \u003cdir\u003e, then ./fuzz_frame 50000 42 / ./fuzz_schnorr48 50000 42 / ./fuzz_schc 50000 42 — all exit 0 under ASan/UBSan; use the SAME commands in the job, with a FIXED seed argument (the standalone driver defaults to time(NULL), so fixed seed = reproducible CI) and a timeout. (2) clang 20.1.8 on the runner image must exist (ubuntu-latest has it). (3) Twister -T lichen/tests/fuzz discovers nothing because the dir is a standalone host CMake project (no find_package(Zephyr), no testcase.yaml) — the job should invoke cmake directly, not west twister.",
+  "created_at": "2026-08-31T18:20:53.131630342Z"
+}

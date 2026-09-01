@@ -19,8 +19,8 @@ from lichen.crypto.delegation_tokens import (
     DelegationScope,
     DelegationToken,
     DelegationTokenPayload,
-    _encode_protected_header,
     check_delegation_scope,
+    cose_protected_header,
     create_delegation_token,
     decode_delegation_token,
     verify_delegation_token,
@@ -219,7 +219,7 @@ class TestDelegationToken:
 
     def test_protected_header_format(self) -> None:
         """Test protected header encodes correctly per spec."""
-        protected = _encode_protected_header()
+        protected = cose_protected_header()
         decoded = cbor2.loads(protected)
         assert decoded == {COSE_ALG_LABEL: SCHNORR48_ED25519_ALG}
 
@@ -572,7 +572,7 @@ class TestCoseSign1Decoding:
 
     def test_invalid_kid_length(self) -> None:
         """Test that wrong kid length is rejected."""
-        protected = _encode_protected_header()
+        protected = cose_protected_header()
         payload = DelegationTokenPayload(
             delegate=bytes(8),
             scope=1,

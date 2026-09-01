@@ -22,9 +22,9 @@ use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::LinkLayer;
 use lichen_oscore::{
-    request_identifiers, validate_option, Context, ContextId, ContextStoreError, OscoreError,
-    RequestIdentifiers, ReservationError, SenderStateStore, COAP_OPTION_OSCORE, PIV_MAX_LEN,
-    TAG_LEN,
+    request_identifiers, validate_option, Context, ContextId, ContextStateStore, ContextStoreError,
+    OscoreError, RequestIdentifiers, ReservationError, COAP_OPTION_OSCORE,
+    PIV_MAX_LEN, TAG_LEN,
 };
 
 use crate::stack::{Priority, ReceivedIpv6, RxError, Stack, TxError};
@@ -502,6 +502,21 @@ impl<R: Radio> SecureStack<R> {
         self.stack.send_ipv6_to(ipv6, destination, priority).await
     }
 
+    /// Send an IPv6 packet carried uncompressed (SCHC Rule 255).
+    ///
+    /// Canonical multicast DIOs MUST be carried uncompressed: the
+    /// authenticated-DIO admission gate accepts only Rule 255 frames
+    /// (spec 09 13.3 R-09-005; Python authenticated_dio.py parity).
+    pub(crate) async fn send_ipv6_uncompressed_to(
+        &mut self,
+        ipv6: &[u8],
+        destination: &[u8],
+    ) -> Result<(), TxError> {
+        self.stack
+            .send_ipv6_uncompressed_to(ipv6, destination)
+            .await
+    }
+
     pub(crate) async fn send_ipv6_to_route(
         &mut self,
         ipv6: &[u8],
@@ -539,7 +554,7 @@ impl<R: Radio> SecureStack<R> {
     /// `peer_iid` is the authoritative binding between the IPv6 peer identity and
     /// this context. Installing a context under the wrong IID authenticates that
     /// incorrect binding after otherwise valid OSCORE decryption.
-    pub fn register_fresh_context<S: SenderStateStore>(
+    pub fn register_fresh_context<S: ContextStateStore>(
         &mut self,
         peer_iid: [u8; 8],
         context: Context,
@@ -554,9 +569,9 @@ impl<R: Radio> SecureStack<R> {
 
     /// Restore and install an existing OSCORE context.
     ///
-    /// Unlike [`register_fresh_context`], this does not perform atomic registration
+    /// Unlike [`Self::register_fresh_context`], this does not perform atomic registration
     /// since the context was previously registered with the store.
-    pub fn restore_context<S: SenderStateStore>(
+    pub fn restore_context<S: ContextStateStore>(
         &mut self,
         peer_iid: [u8; 8],
         context: Context,
@@ -587,7 +602,7 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Send an OSCORE-protected GET after atomically reserving its sender sequence.
-    pub async fn send_secure_get<S: SenderStateStore>(
+    pub async fn send_secure_get<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -614,7 +629,7 @@ impl<R: Radio> SecureStack<R> {
     /// Send an OSCORE-protected CoAP request with an explicit inner method and
     /// payload. This is the authenticated client boundary used by gateway
     /// coordination integration.
-    pub async fn send_secure_request<S: SenderStateStore>(
+    pub async fn send_secure_request<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -639,13 +654,11 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Send the next independently protected Block1 request.
-    pub async fn send_secure_block1<S: SenderStateStore>(
+    pub async fn send_secure_block1<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
-        uri_path: &[&str],
-        token: &[u8],
-        method: MessageCode,
+        request: SecureRequestData<'_>,
         transfer: &mut SecureBlock1Transfer,
         store: &mut S,
     ) -> Result<RequestCorrelation, SecureError> {
@@ -670,10 +683,8 @@ impl<R: Radio> SecureStack<R> {
                 },
                 peer_iid,
                 SecureRequestData {
-                    uri_path,
-                    token,
-                    method,
                     payload: &payload,
+                    ..request
                 },
                 None,
                 Some(BlockRequestOption::Block1 { block, size1 }),
@@ -725,7 +736,7 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Send the next independently protected Block2 request.
-    pub async fn send_secure_block2<S: SenderStateStore>(
+    pub async fn send_secure_block2<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -805,7 +816,7 @@ impl<R: Radio> SecureStack<R> {
     ///
     /// The encrypted request carries GET + Observe=0 + Uri-Path. `registration_timeout_ms`
     /// bounds the registering state until the first authenticated response arrives.
-    pub async fn send_secure_observe<S: SenderStateStore>(
+    pub async fn send_secure_observe<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -854,7 +865,7 @@ impl<R: Radio> SecureStack<R> {
     ///
     /// On successful transmission, call [`SecureObserveCorrelation::cancel`] on the existing
     /// relationship. Its response uses ordinary one-shot correlation semantics.
-    pub async fn send_secure_observe_cancel<S: SenderStateStore>(
+    pub async fn send_secure_observe_cancel<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -884,7 +895,7 @@ impl<R: Radio> SecureStack<R> {
         .await
     }
 
-    pub(crate) async fn send_secure_get_to<S: SenderStateStore>(
+    pub(crate) async fn send_secure_get_to<S: ContextStateStore>(
         &mut self,
         route: SecureRoute<'_>,
         peer_iid: &[u8; 8],
@@ -908,7 +919,7 @@ impl<R: Radio> SecureStack<R> {
         .await
     }
 
-    async fn send_secure_request_to<S: SenderStateStore>(
+    async fn send_secure_request_to<S: ContextStateStore>(
         &mut self,
         route: SecureRoute<'_>,
         peer_iid: &[u8; 8],
@@ -1398,7 +1409,7 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Protect and send a response bound to a decrypted request.
-    pub async fn send_secure_response<S: SenderStateStore>(
+    pub async fn send_secure_response<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -1422,7 +1433,7 @@ impl<R: Radio> SecureStack<R> {
         .await
     }
 
-    pub(crate) async fn send_secure_response_to<S: SenderStateStore>(
+    pub(crate) async fn send_secure_response_to<S: ContextStateStore>(
         &mut self,
         route: SecureRoute<'_>,
         peer_iid: &[u8; 8],
@@ -2083,10 +2094,10 @@ mod tests {
         fail: bool,
     }
 
-    impl SenderStateStore for RecordingStore {
+    impl ContextStateStore for RecordingStore {
         type Error = ();
 
-        fn load(
+        fn load_sender(
             &mut self,
             context_id: &ContextId,
         ) -> Result<Option<SenderSequenceState>, Self::Error> {
@@ -2097,7 +2108,7 @@ mod tests {
             })
         }
 
-        fn compare_exchange(
+        fn compare_exchange_sender(
             &mut self,
             context_id: &ContextId,
             expected: Option<SenderSequenceState>,
@@ -2118,6 +2129,20 @@ mod tests {
             self.record = Some((*context_id, next));
             self.events.lock().unwrap().push("persist");
             Ok(true)
+        }
+
+        fn load_recipient(
+            &mut self,
+            _: &ContextId,
+        ) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+            Ok(None)
+        }
+        fn save_recipient(
+            &mut self,
+            _: &ContextId,
+            _: &lichen_oscore::RecipientReplayState,
+        ) -> Result<(), Self::Error> {
+            Ok(())
         }
     }
 
@@ -2523,9 +2548,12 @@ mod tests {
                 .send_secure_block1(
                     &bob_addr,
                     &bob_iid,
-                    &["ota"],
-                    &[0xa1],
-                    MessageCode::PUT,
+                    SecureRequestData {
+                        uri_path: &["ota"],
+                        token: &[0xa1],
+                        method: MessageCode::PUT,
+                        payload: &[],
+                    },
                     &mut upload,
                     &mut alice_store,
                 )

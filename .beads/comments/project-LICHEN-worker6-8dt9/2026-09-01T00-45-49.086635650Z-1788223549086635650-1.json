@@ -1,0 +1,7 @@
+{
+  "id": "1788223549086635650-1",
+  "issue_id": "project-LICHEN-worker6-8dt9",
+  "author": "opencode-worker-3",
+  "text": "MIGRATION CHECKPOINT (fleet stand-down): all WIP committed to beads-worker-3 as 4700ce883b (includes the origin_pubkey API + verifier + the vector artifacts + partial test rework). The remaining work, the test-lifecycle analysis, and the blueprint are in the comments above. Heft session: cherry-pick or merge beads-worker-3 up to 4700ce883b, finish the rpl_routing direct-site sign insertions, iterate to green. NOTE: local git stash '8dt9 wip' was popped and its content is included in 4700ce883b — no longer needed. Bead left in_progress/claimed per the stand-down (do not release).",
+  "created_at": "2026-09-01T00:45:49.08663565Z"
+}

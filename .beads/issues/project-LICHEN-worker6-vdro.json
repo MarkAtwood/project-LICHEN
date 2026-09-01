@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-vdro",
+  "title": "kpv0.7(a): strict rustdoc -D warnings clean across workspace except lichen-oscore",
+  "description": "Child of kpv0.7. Fix every rustdoc --cfg docsrs -D warnings error in all crates except lichen-oscore (that one is kpv0.7(b), human-routed). Original 13 errors at convergence HEAD cascade into more once earlier crates document: fixed addr.rs (6 bracket-link escapes), identity.rs (1), coap/client.rs (4 URI templates), client/deaddrop.rs (1), cli/main.rs (1), kiss/slip.rs (2 unresolvable module-doc links -\u003e code spans), node/secure.rs (Self-qualified method link), gateway aprs_is.rs + discovery.rs + slot.rs (private-item and bracket links). Verify with RUSTDOCFLAGS='--cfg docsrs -D warnings' cargo +nightly doc --no-deps --all-features: only lichen-oscore errors may remain.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-6",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:22:34.39891957Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T08:39:21.455419848Z",
+  "started_at": "2026-08-31T08:22:57.252760173Z",
+  "closed_at": "2026-08-31T08:39:21.455419848Z",
+  "close_reason": "Strict rustdoc --cfg docsrs -D warnings now clean for every workspace crate except lichen-oscore (human-routed sibling bead, kpv0.7(b)). 12 original convergence-HEAD errors fixed plus 8 more exposed by the cascade once earlier crates could document: lichen-core/addr.rs (6 bracket-escapes), lichen-link/identity.rs (1), lichen-coap/client.rs (4 URI templates), lichen-client/deaddrop.rs (1), lichen-cli/main.rs (1), lichen-kiss/slip.rs (2 module-doc links unresolvable even to existing pub fns -\u003e code spans), lichen-node/secure.rs (Self-qualified sibling-method link), lichen-gateway aprs_is.rs (private-const link -\u003e code span) + discovery.rs (stale link -\u003e code span AND corrected the same bullet to name the actual re-export GatewayTimeMasterCandidate, which the old text misdescribed) + slot.rs (bracket expression -\u003e code span). No allow() attrs, no lint downgrades, comments only. Tests: 1246 lib tests green across core/link/coap/client/gateway/node; kiss+cli compile clean (kiss lib-test blocked by pre-existing bridge.rs LichenFrame break, filed separately). Reviews: security pass by reviewer (kimi-k3) = PASS; correctness and edge-cases passes done by worker (opencode run failed: first attempt shell-timeout, retry died on 'Failed to execute statement' infra error) — self-pass verified all 10 edits are comment-only with preserved semantics, no doctest fences added, remaining escaped/bracket docs (client.rs:282-297, aprs_is.rs:176) are rustdoc-clean and out of scope.",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vdro",
+      "depends_on_id": "project-LICHEN-kpv0.7",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T08:22:34.655720726Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

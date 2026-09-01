@@ -22,6 +22,8 @@ bool lichen_rpl_prefix_canonicalize(uint8_t *prefix, uint8_t prefix_len)
 	}
 	uint8_t whole_bytes = prefix_len / 8;
 	uint8_t remaining_bits = prefix_len % 8;
+	/* U-suffixed literals kept from HEAD's gcc-13 conversion sweep
+	 * (beads-worker-3 predates it); both forms are equivalent here. */
 	uint8_t used_bytes =
 		(uint8_t)(whole_bytes + (remaining_bits != 0 ? 1U : 0U));
 	if (remaining_bits != 0) {

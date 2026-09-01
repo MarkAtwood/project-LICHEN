@@ -1,0 +1,7 @@
+{
+  "id": "1788158126439715461-1",
+  "issue_id": "project-LICHEN-worker6-83wu",
+  "author": "opencode-worker-6",
+  "text": "Reviewer pass-3 confirmation from emca: merge surface with worker-4's fb8e7f4a70 is clean (disjoint hunks - this branch never touches compress_mqtt_sn body, tests inserted at ~:2825 vs worker-4's ~:2660). Also confirmed: Python Rule 7 compress_if_matching RAISES on invalid checksum and profile overflow (headers.py) - so after this precheck lands, Rust rule-7 matches Python fail-closed semantics exactly; the old Rust fall-through to rule255 was the divergence. Scope note: enforce_encoded_profile_limit stays the only profile enforcement on the rule-7 path until this lands.",
+  "created_at": "2026-08-31T06:35:26.439715461Z"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-ns67",
+  "title": "lichen-kiss bridge.rs test broken: LichenFrame initializer missing signer_eui64",
+  "description": "Pre-existing at current main (NOT from kpv0.7 doc edits): cargo test -p lichen-kiss --all-features --lib fails to compile, lichen-kiss/src/bridge.rs:468 — 'let frame = LichenFrame { ... }' is missing the signer_eui64 field that was added to lichen_link::frame::LichenFrame by a recent merge. Update the test initializer (and any sibling stale initializers in the same test module) to construct the frame consistently with the current struct; keep test intent unchanged.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:22:20.507659243Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T09:19:16.689763646Z",
+  "started_at": "2026-08-31T09:13:51.109797581Z",
+  "closed_at": "2026-08-31T09:19:16.689763646Z",
+  "close_reason": "Fixed E0063 compile error in rust/lichen-kiss/src/bridge.rs test_handle_kiss_frame_raw_lichen-era initializer (~:468): added signer_eui64: \u0026[] to the LichenFrame literal — the field was added to lichen_link::frame::LichenFrame by a recent merge and is empty exactly when signature is absent (this test frame is unsigned/plaintext, so \u0026[] is the only semantically valid value, matching frame.rs wire encoding where an empty signer_eui64 contributes zero bytes and leaves SIGNER_EUI64_BIT unset). Searched crate-wide: no other stale initializers. Test intent unchanged (encode/decode roundtrip asserts untouched). Gates: cargo test -p lichen-kiss --all-features 32 tests all pass (was a hard compile error at HEAD), clippy --all-features --all-targets -D warnings clean, fmt clean. 3x codereview (Kimi K3): correctness PASS (write_to/llsec_byte/from_bytes consumption verified consistent), security PASS (empty slice cannot weaken auth — production construction path in link_layer.rs:1040 untouched, test-only initializer), edge-cases PASS (pattern parity with frame.rs, roundtrip intact).",
+  "labels": [
+    "link"
+  ]
+}

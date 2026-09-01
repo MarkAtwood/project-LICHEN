@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-6kfx",
+  "title": "Gate Zephyr SDK tarball downloads with checksums in CI workflows",
+  "description": "Review finding (wkya round, converged from two passes): .github/workflows/renode.yml:130 and renode-firmware.yml:39 download Zephyr SDK tarballs with no hash verification — same defect class as the Renode download fixed in wkya (one-line 'echo \u003csha256\u003e  \u003cfile\u003e | sha256sum -c -' after wget, hash computed from the actual upstream artifact). Pre-existing, out of wkya's Renode scope; tracked so it is not lost.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:42:12.597521607Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T08:49:19.246173591Z",
+  "started_at": "2026-08-31T08:44:43.149651051Z",
+  "closed_at": "2026-08-31T08:49:19.246173591Z",
+  "close_reason": "Hash-gated both Zephyr SDK downloads: .github/workflows/renode.yml:131 and renode-firmware.yml:40 now run 'echo c323afcd...  zephyr-sdk-0.16.8_linux-x86_64_minimal.tar.xz | sha256sum -c -' between wget and tar. Hash double-sourced: computed from the downloaded artifact AND matches upstream sdk-ng v0.16.8 published sha256.sum (two independent oracles agree); gate command executed live against the real artifact (OK). 3x review (kimi-k3): correctness PASS (format, fail-stop under bash -eo pipefail incl. truncated wget, placement correct for both extraction styles, YAML safe), security PASS (no cache on these steps to poison, strict improvement, no TOCTOU of consequence), edge-cases PASS with full enumeration: every wget/curl in both workflow files is now checksum-gated (6/6); remaining fetches are actions/*, apt signed repos, or uv sync --locked. No new findings — converged clean.",
+  "labels": [
+    "python",
+    "codereview"
+  ]
+}

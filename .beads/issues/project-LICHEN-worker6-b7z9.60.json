@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.60",
+  "title": "CCP: TDMA beacon wire format gaps (C absent, Python no pack, Rust no verify gate)",
+  "description": "DIVERGENT/PARTIAL. Req 2a.2: fixed-format uncompressed TDMA beacon with exact byte layout (epoch u32 BE@0, num_slots u8@4, sfn@5, timestamp@9, flags@13, rx_chains@14, setup_window u16@15, occupied_time u16@17, guard=50@19, channel_mask u32@20 bit0=CH0 + local intersection, CBOR options @24+ per CDDL incl pow_challenge, Schnorr48 beacon_sig over bytes 0..E-48). Evidence: RUST rust/lichen-core/src/tdma_beacon.rs:83-268 has parse/serialize + ccp_beacon_format.json test (lichen-node/tests/ccp_beacon_format.rs:47) but exposes signed_data/signature_bytes (:151-174) with NO beacon_sig verify-gate function; PYTHON python/tests/timing/test_ccp_beacon_format.py:168-208 asserts layout from vector but python/src has NO pack/unpack/beacon_sig path (rg pack_beacon|beacon_sig in python/src = zero); C lichen/subsys/lichen has NO beacon format at all (rg beacon_sig|setup_window|occupied_time|channel_mask|rx_chains = zero hits; nearest LICHEN_SIG_LEN 48 link.h:85). Also unimplemented anywhere: channel_mask local intersection (2a.2), local-intersection computation, pow_challenge CDDL field. Suggested placement: C: new lichen/subsys/lichen/link/beacon.c; Python: python/src/lichen/sim/tdma.py or link/slot_coordination.py pack/verify; Rust: add verify gate in lichen-core/src/tdma_beacon.rs + wire into lichen-rpl beacon acceptance.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T09:31:34.87274897Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:12:07.681880116Z",
+  "labels": [
+    "ccp",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.60",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T09:31:34.997230626Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

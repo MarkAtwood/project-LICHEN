@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <lichen/rpl_messages.h>
+#include <lichen/rpl_dao_tx_persist.h>
 
 /* Nullability annotations for pointer safety (Clang/GCC compatibility) */
 #ifndef __has_feature
@@ -538,6 +539,17 @@ enum lichen_rpl_dao_process_result {
  * an ISR. A bound root-state object remains exclusively owned by and must
  * outlive its manager.
  */
+/** Durable 64-bit origin-sequence binding (spec 09 14.2
+ * R-09-009/010): when bound, build_dao_mut reserves the next sequence
+ * from the two-slot TX state (persisted BEFORE transmission) and gates
+ * origination on it; missing/corrupt state stops origination. */
+struct lichen_rpl_dao_tx_binding {
+	const struct lichen_hal_storage_ops *_Nullable ops;
+	void *_Nullable user;
+	struct lichen_rpl_dao_tx_state *_Nullable state;
+	bool require_persisted;
+};
+
 struct lichen_rpl_dao_manager {
 	uint8_t node_address[16];
 	uint8_t rpl_instance_id;
@@ -551,6 +563,7 @@ struct lichen_rpl_dao_manager {
 	bool has_last_dao_update;
 
 	struct lichen_rpl_dao_root_state *_Nullable root_state;
+	struct lichen_rpl_dao_tx_binding tx_binding;
 	struct k_mutex lock;
 };
 
@@ -570,6 +583,29 @@ int lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *_Nonnull dm,
 				const uint8_t *_Nonnull node_address,
 				uint8_t rpl_instance_id,
 				const uint8_t *_Nonnull dodag_id);
+/**
+ * @brief Bind a durable 64-bit origin-sequence TX state to the manager.
+ *
+ * When bound with require_persisted=true, every subsequent build_dao
+ * reserves the next sequence from the two-slot TX state (persisted
+ * before transmission, R-09-009/010) and gates origination on it: a
+ * missing/corrupt/unreservable state stops origination (build returns
+ * LICHEN_RPL_ERR_TX_STATE) instead of falling back to the RAM lollipop.
+ * The DAO base carries the low byte of the reserved sequence; the full
+ * 64-bit value rides the 0x12 Origin Signature option at finalize time.
+ *
+ * @param dm     DAO manager
+ * @param ops    Storage ops (NULL unbinds)
+ * @param user   Storage user context
+ * @param state  Opened TX state (from lichen_rpl_dao_tx_open)
+ * @return LICHEN_RPL_OK, or LICHEN_RPL_ERR_INVALID on NULL dm/state
+ *         when ops is non-NULL.
+ */
+int lichen_rpl_dao_manager_bind_tx_state(
+	struct lichen_rpl_dao_manager *_Nonnull dm,
+	const struct lichen_hal_storage_ops *_Nullable ops, void *_Nullable user,
+	struct lichen_rpl_dao_tx_state *_Nullable state);
+
 
 /**
  * @brief Initialize DAO manager for root node.
@@ -701,7 +737,7 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
  * MUST be @p origin's own canonical /128 or an exact prefix delegation to
  * @p origin (lichen_rpl_prefix_delegate(), spec/05-routing.md 8.7.1-8.7.2);
  * a foreign prefix is rejected before any route or snapshot mutation. Passing
- * @p origin as NULL or @p origin_authenticated as false fails closed: the
+ * @p origin as NULL or @p origin_pubkey as NULL fails closed: the
  * DAO is rejected without mutating routing state.
  *
  * @note Root processing fails closed unless caller-owned root state was bound
@@ -712,14 +748,17 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
  * @param len       Length of DAO bytes
  * @param now       Current timestamp for lifetime tracking
  * @param origin    Verified DAO origin address (16 bytes), NULL if unknown
- * @param origin_authenticated True once the caller authenticated the origin
+ * @param origin_pubkey 32-byte pinned public key of @p origin (from
+ *        lichen_announce_get_pinned_pubkey()), NULL if not pinned. The DAO
+ *        Origin Signature (0x12) is verified against this key; NULL fails
+ *        closed.
  * @return true if a route was installed, false otherwise
  */
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull dm,
 					const uint8_t *_Nonnull dao_bytes, size_t len,
 					uint32_t now,
 					const uint8_t *_Nullable origin,
-					bool origin_authenticated);
+					const uint8_t *_Nullable origin_pubkey);
 
 /**
  * Process a DAO and report rejection, mutation, or exact idempotent replay.
@@ -729,7 +768,7 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull 
  * Source Address and every RPL Target MUST be its own canonical /128 or an
  * exact prefix delegation to it (spec/05-routing.md 8.7); foreign prefixes
  * are rejected before any mutation, and a NULL @p origin or false
- * @p origin_authenticated fails closed. This blocking API is
+ * @p origin_pubkey fails closed. This blocking API is
  * thread-context only and MUST NOT be called from an ISR.
  *
  * If ack_buf is non-NULL and ack_buf_len >= 20, and the DAO has the ACK
@@ -740,7 +779,7 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull 
 enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	struct lichen_rpl_dao_manager *_Nonnull dm,
 	const uint8_t *_Nonnull dao_bytes, size_t len, uint32_t now,
-	const uint8_t *_Nullable origin, bool origin_authenticated,
+	const uint8_t *_Nullable origin, const uint8_t *_Nullable origin_pubkey,
 	uint8_t *_Nullable ack_buf, size_t ack_buf_len);
 
 /**

@@ -71,10 +71,10 @@
       "sfn": 0,
       "seed": 0,
       "num_channels": 8,
-      "density": 9,
+      "density": 11,
       "expected_channel": 0,
       "hash_32": 2615243109,
-      "description": "Density>8 returns 0 per SelectChannel pseudocode line 1."
+      "description": "Density>10 returns 0 per SelectChannel pseudocode line 1."
     },
     {
       "name": "sfn_wrap",

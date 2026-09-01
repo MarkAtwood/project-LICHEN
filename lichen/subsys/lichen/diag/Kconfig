@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+config LICHEN_DIAG
+	bool "Hardware diagnostics event ring"
+	depends on LICHEN_COAP_SERVER
+	default y
+	# GET /diag encodes with zcbor (same pattern as SENML/COAP above).
+	imply ZCBOR
+	help
+	  Rolling ring buffer of diagnostic events (timestamp, subsystem,
+	  event code, detail, message) callable from any subsystem via
+	  lichen_diag_report(). Each event prints human-readable over the
+	  console; GET /diag returns the recent events as a CBOR array for
+	  remote inspection (spec 18.x LCI diagnostics family).
+
+config LICHEN_DIAG_CAPACITY
+	int "Diagnostic event ring capacity"
+	depends on LICHEN_DIAG
+	default 32
+	range 4 256
+	help
+	  Number of events retained in the ring. Oldest events are
+	  overwritten first.

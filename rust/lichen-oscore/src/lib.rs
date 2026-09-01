@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 // Re-export everything from the oscore crate
+pub use oscore::types::{self, SenderStateStore};
 pub use oscore::{
     // Functions
     request_identifiers,
@@ -35,6 +36,8 @@ pub use oscore::{
     ReservationError,
     ReservedSender,
     SenderSequenceState,
+    RecipientReplayState,
+    ContextStateStore,
     SenderStateStore,
     // Constants
     ALG_AEAD,
@@ -98,7 +101,7 @@ pub struct KeyUpdateState {
 /// The compare-and-swap MUST update both the active-context pointer and the
 /// initial sender state as one durable transaction. A torn update could either
 /// reactivate retired keys or reuse an OSCORE nonce after recovery.
-pub trait KeyUpdateStore: SenderStateStore {
+pub trait KeyUpdateStore: ContextStateStore {
     /// Load the durable active-context pointer.
     fn load_key_update(&mut self) -> Result<Option<KeyUpdateState>, Self::Error>;
 
@@ -258,14 +261,14 @@ struct KeyUpdateRegistration<'a, S> {
     replacement: KeyUpdateState,
 }
 
-impl<S: KeyUpdateStore> SenderStateStore for KeyUpdateRegistration<'_, S> {
+impl<S: KeyUpdateStore> ContextStateStore for KeyUpdateRegistration<'_, S> {
     type Error = S::Error;
 
-    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
-        self.store.load(context_id)
+    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+        self.store.load_sender(context_id)
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         context_id: &ContextId,
         expected: Option<SenderSequenceState>,
@@ -276,6 +279,14 @@ impl<S: KeyUpdateStore> SenderStateStore for KeyUpdateRegistration<'_, S> {
         }
         self.store
             .compare_exchange_key_update(self.expected, self.replacement, next)
+    }
+
+    fn load_recipient(&mut self, context_id: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> {
+        self.store.load_recipient(context_id)
+    }
+
+    fn save_recipient(&mut self, context_id: &ContextId, state: &RecipientReplayState) -> Result<(), Self::Error> {
+        self.store.save_recipient(context_id, state)
     }
 }
 

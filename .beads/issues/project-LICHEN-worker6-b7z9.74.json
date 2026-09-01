@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.74",
+  "title": "TX_SF announcement + RF-metrics DIO signaling absent (CCP-16 MUSTs, spec 02 3.5)",
+  "description": "Reqs R-02-026, R-02-027. NOT-IMPLEMENTED. R-02-026: Gateways and nodes MUST announce current TX_SF in DIO options and Announce messages (1-byte field; absence means SF10) — rg tx_sf/current_tx_sf: zero implementation hits; no SF field in Announce construction (rust/lichen-rpl/src/announce.rs, C routing/announce.c, python link/ announce modules). R-02-027: ASSIGNED_SF and per-neighbor RF metrics (EMA SNR alpha=1/4, loss rate) MUST be signaled in DIO per CCP-16 — no DIO option carries EMA/density/utilization in any impl (C DIO registry rpl_messages.h:59-70 has no RF-metrics option). ASSIGNED_SF emission itself is tracked in sibling bead b7z9.71. Suggested placement: DIO option codecs in all three impls + announce app_data field; keep 1-byte absence-means-SF10 rule.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:26:22.15053249Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:26:22.15053249Z",
+  "labels": [
+    "ccp",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.74",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:26:22.27427204Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-dbsf",
+  "title": "rpl: memset one-past-end in dao_targets_authorized at /128 (pre-existing)",
+  "description": "Noted by nie1 review pass 3 (pre-existing, not introduced by f9d16eac3b): in dao_targets_authorized (rpl_dao_process.c), the canonical /128 target path memsets \u0026canonical[16] with size 0 (memset(\u0026prefix[16],0,16-used_bytes) where used_bytes==16) — technically one-past-end pointer arithmetic (UB by the standard, benign in practice since size is 0). Same pattern may exist in other canonicalize-then-copy sites. Cleanup: guard or restructure to avoid the one-past-end pointer.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:46:09.978734251Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T23:46:09.978734251Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-dbsf",
+      "depends_on_id": "project-LICHEN-worker6-nie1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:46:10.187567892Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

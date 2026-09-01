@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-17nw",
+  "title": "lora_l2: recv_async re-arm gives up after 3 EBUSY attempts and aborts the module",
+  "description": "Found while debugging vn0t. After a single RX authentication failure in the ping_l2 loopback run, the RX thread logs 'recv_async arm failed (-16 EBUSY), retrying' 3 times (10ms apart) then 'giving up, deinit/init required' — leaving the module in ABORTED so every later TX returns -ENETDOWN and every stats read -ECANCELED until a full deinit/init cycle. A transient EBUSY (loopback TX/RX overlap arming the radio while busy) should not brick the radio: either retry with backoff for longer / indefinitely while the module is enabled, or re-arm lazily on the next TX completion. File under robustness; interacts with the -200 auth failure (vn0t follow-up) but is an independent state-machine defect.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-3",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:17:40.531485529Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T09:44:24.280267513Z",
+  "started_at": "2026-08-31T09:33:27.205182447Z",
+  "closed_at": "2026-08-31T09:44:24.280267513Z",
+  "close_reason": "Fixed in cf9afa78a1 (on top of origin/main's lora_loopback which gained the upstream user_data param). Root cause: the loopback driver kept data-\u003erecv_cb registered ACROSS deliveries while the lichen RX layer re-arms after each processed packet (mandatory for real sx12xx radios where RX_DONE disarms) — every re-arm hit -EBUSY (driver rejects double-arm) and after 3 tries the RX layer set LORA_ABORTED, bricking the module until deinit/init. Fix: one-shot arming in rx_work — each delivery consumes the registration (recv_cb/cb_user_data cleared under rx_lock BEFORE invoking), gated on the registration being unchanged so a racing recv_async(NULL)/re-arm is never clobbered and a canceled callback never fires (canceled in-flight packet is dropped, matching post-disarm discard). Validated on heft: no arm-failure/abort logs remain, module stays up across all reinit cycles, suite 6/7. Reviews: pass 1 found the clear TOCTOU, pass 3 found the cancel-race/UAF variant — both closed by the gated clear (verification pass PASS); pass 2 (security) PASS. The remaining udp failure is a separate replay-rejection issue filed as a follow-up bead.",
+  "labels": [
+    "l2"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-17nw",
+      "depends_on_id": "project-LICHEN-worker6-vn0t",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T09:17:40.731050207Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

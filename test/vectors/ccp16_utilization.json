@@ -138,7 +138,7 @@
       "output": {
         "sf": 12,
         "tx_allowed": true,
-        "sf_adjustment_reason": "density > 10 triggers SF += 2"
+        "sf_adjustment_reason": "density > 8 triggers SF += 2 (spec 02a 2a.8)"
       }
     },
     {
@@ -149,7 +149,7 @@
         "density": 5,
         "utilization": 100,
         "ema_snr": 5.0,
-        "ema_loss": 0.30
+        "ema_loss": 0.3
       },
       "output": {
         "sf": 11,
@@ -165,7 +165,7 @@
         "density": 5,
         "utilization": 151,
         "ema_snr": 5.0,
-        "ema_loss": 0.30
+        "ema_loss": 0.3
       },
       "output": {
         "sf": 12,

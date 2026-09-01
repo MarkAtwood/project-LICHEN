@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.1.2.1",
+  "title": "b7z9.37.1.2(a): root-sig COSE decode + structural validation in lichen-node",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37.1.2 (decisions recorded on parent comment: ciborium 0.2, lichen-link::schnorr for alpha-2, AddrForKey=SHA-512 ygg_addr_from_pubkey precedent). New rust/lichen-node/src/rpl_stack/root_sig.rs: decode COSE_Sign1 (tag-18 array(4): protected map alg==-65537, unprotected kid 8-byte IID, payload CBOR map keys 1-7 -\u003e RootSigPayload {dodag_id [u8;16], instance u8, version u8, rank u16, expiry u64, root_seq u64, mop u8}, signature 48B) via ciborium; structural checks WITHOUT signature verify: IID binding (sha512(pubkey)[:8] \u00260xfd bit per identity.py:138), DODAGID binding (== ygg_addr_from_pubkey, router.rs:109), expiry \u003e now, DIO cross-checks (instance/version/rank/mop) with error strings matching the Python oracle (IID_MISMATCH, DODAG_ID_MISMATCH, EXPIRED, *_MISMATCH). Tests from committed root_dio_signature.json fixtures (valid basic, wrong_algorithm, kid_mismatch, impersonation-\u003eDodagIdMismatch, rank/expiry cases). Add ciborium = 0.2 to lichen-node.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:40:30.104658577Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T20:22:20.436856939Z",
+  "closed_at": "2026-08-31T20:22:20.436856939Z",
+  "close_reason": "Implemented rust/lichen-node/src/rpl_stack/root_sig.rs (+mod registration, +ciborium dep): COSE_Sign1 root-DIO-sig decode and structural validation per the Python oracle (verify_root_dio_signature structural subset). Decode: tag-18 array(4), protected alg==-65537, kid 8-byte IID, signature 48 bytes, payload CBOR map keys 1-7 -\u003e RootSigPayload with strict range checks (negatives rejected for unsigned fields, mop\u003e7 and expiry==0 rejected per oracle __post_init__). Cross-impl hardening beyond decode-leniency: duplicate CBOR labels rejected fail-closed (Python dict last-wins would diverge), trailing bytes rejected (cbor2.loads semantics; ciborium's reader stops after one value) via a slice-advancing decode_exact, deep-nesting handled by ciborium's 256 recursion limit -\u003e Decode (pinned by test). Structural checks (no signature/replay yet — bead .2(b)): kid-to-IID via lichen_core::addr::iid_from_pubkey_bytes, DODAGID == ygg_addr_from_pubkey (L-binding), expiry \u003e now inclusive-reject, DioFields cross-checks (all optional, skipped when None) with error strings matching vector expected.error. Tests 10: committed vector fixtures (valid basic, wrong_algorithm, kid_mismatch decode-vs-verify layering per oracle, impersonation, expiry boundary, per-field cross-checks, garbage, trailing bytes, deep nesting, duplicate labels). Gates: no-default-features host check OK; MCU-target riscv32imc check blocks on PRE-EXISTING lichen-link fetch_update failure (baseline-verified via stash; filed as gd5b with reviewer CI-gate recommendation) — hence ciborium pinned default-features=false (P2 no_std fix, reviewer-verified) so host builds cannot mask it. clippy -D warnings clean except pre-existing secure.rs (kpv0.6); fmt clean except pre-existing util.rs hunks (kpv0.5). 3x review (kimi-k3) across the slice: correctness findings (duplicate labels P2, mop range P3, SignatureLength P4) all fixed; security finding (trailing-data divergence) fixed; edge nits (deep-nesting pin, full-consumption) fixed; final convergence PASS on the ciborium no_std fix.",
+  "labels": [
+    "decomposed",
+    "rust",
+    "security",
+    "python",
+    "rpl",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.1.2.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.1.2",
+      "type": "parent-child",
+      "created_at": "2026-08-31T19:40:30.273928358Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

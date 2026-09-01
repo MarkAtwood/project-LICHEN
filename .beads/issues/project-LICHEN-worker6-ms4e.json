@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ms4e",
+  "title": "Roll out extra_conf_files sanitizers wiring to remaining native_sim testcase.yamls + CI",
+  "description": "Follow-up from b7z9.50.4 (acceptance met: one native_sim build verified sanitized on heft — west build -p always -b native_sim/native/64 lichen/tests/routing_dispatch -DEXTRA_CONF_FILE=\u003cabs\u003e/lichen/tests/sanitizers.conf with ZEPHYR_EXTRA_MODULES pinned: CONFIG_ASAN=y CONFIG_UBSAN=y, 47 asan/ubsan symbols in zephyr.elf, routing_dispatch suite PASS under sanitizers; pattern testcase.yaml extra_conf_files: ../../tests/sanitizers.conf landed for routing_dispatch). Remaining: (1) add the same 2-line extra_conf_files entry to every lichen/tests/*/testcase.yaml that runs on native_sim (~40 dirs, mechanical; SKIP tests whose platform_allow excludes native_sim); (2) optionally extend .github/workflows/ec2-arm64.yml's twister sweep with nothing extra (per-testcase wiring covers it) but verify the full -T lichen/tests sweep green with sanitizers in CI — do NOT use a global -x EXTRA_CONF_FILE passthrough: app_identity/testcase.yaml already sets EXTRA_CONF_FILE (ipv6_on.conf) and would collide; (3) LOCAL VALIDATION TRAP: on the shared heft workspace, twister resolves the lichen module from the shared checkout (different lineage than worker checkouts) — mixed-tree builds fail on missing headers (lichen/routing/router.h observed); validate via a single-lineage checkout or the module-pinned direct west build recipe. (4) sanitizers.conf header should document the extra_conf_files mechanism once the rollout lands. Discovered from project-LICHEN-worker6-b7z9.50.4.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:25:40.800780538Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T19:50:54.332645269Z",
+  "closed_at": "2026-08-31T19:50:54.332645269Z",
+  "close_reason": "R-APPC-009 sanitizers wiring rolled out to every native_sim test: 74 lichen/tests/*/testcase.yaml files updated (routing_dispatch landed last round; this commit wires the remaining 73 + 4 collision-class files re-wired in-place: 66 common-block insertions, 4 in-place semicolon appends to their own CONF_FILE/EXTRA_CONF_FILE lists, 3 no-SPDX files re-inserted with proper common blocks, 7 duplicate-common regressions from my first pass caught by review and merged back into the original block with tags preserved, 8 unwired sibling scenarios wired per-scenario). Audit: 75/75 native_sim scenarios wired, 0 unwired; all 74 testcase.yamls YAML-valid; CONFIG_ASAN depends on ARCH_POSIX so the conf is inert for qemu_x86-only tests. Mechanism proof (round 10): twister merges the conf via testcase extra_conf_files ('Merged configuration .../sanitizers.conf') and -fsanitize=address,undefined lands on the compile line; full compile+run green proof for one build (routing_dispatch, direct module-pinned west build, 47 asan/ubsan symbols, suite PASS). Kconfig merge-order semantics for the 4 collision appends (later position = override authority) reviewer-confirmed against zephyr cmake/modules/kconfig.cmake. Codereview: 3x kimi-k3 passes on the bulk diff (correctness: caught the 7 duplicate-common regressions + sibling-scenario gaps — both fixed; security: merge-order override semantics CONFIRMED, parser coverage value noted; edge: no misfires, no unscoped files, samples sound) + 1 consolidated verification pass on the fix delta (PASS; two non-blocking style observations). Residual for CI: the single-lineage ec2-arm64 sweep run is the final green proof (local validation on the shared heft workspace trips the documented mixed-tree module-resolution trap; recipes in the bead description and b7z9.50.4).",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ms4e",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.50.4",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:25:40.9435263Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

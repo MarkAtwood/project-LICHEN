@@ -3,7 +3,7 @@
 
 //! Production OSCORE -> SCHC Rule 5 -> OSCORE integration coverage.
 
-use lichen_oscore::{Context, ContextId, OscoreError, SenderSequenceState, SenderStateStore};
+use lichen_oscore::{Context, ContextId, OscoreError, SenderSequenceState, ContextStateStore, RecipientReplayState};
 use lichen_schc::{compress, decompress, SchcError};
 use serde::Deserialize;
 use std::fs;
@@ -22,14 +22,14 @@ impl Store {
     }
 }
 
-impl SenderStateStore for Store {
+impl ContextStateStore for Store {
     type Error = core::convert::Infallible;
 
-    fn load(&mut self, _: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(&mut self, _: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self.0)
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         _: &ContextId,
         expected: Option<SenderSequenceState>,
@@ -41,6 +41,9 @@ impl SenderStateStore for Store {
         self.0 = Some(next);
         Ok(true)
     }
+
+    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
+    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
 }
 
 #[derive(Deserialize)]

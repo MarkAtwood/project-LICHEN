@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-er31",
+  "title": "Rust link receive_frame lacks Python's NOT_FOR_US destination-address filter",
+  "description": "Found by security codereview of worker6-i8cd (addr-mode parity fix). Python's link receive path drops frames not addressed to the local node before any higher-layer processing: _wire_is_for_local (python/src/lichen/link/link_layer.py:419-443) returns false for AddrMode.EXTENDED when dst_addr != local_eui64, enforced at receive (link_layer.py:1613, ReceiveError.NOT_FOR_US). Rust's receive_frame (rust/lichen-link/src/link_layer.rs:1085-1223) has NO destination-address filter — any signed, replay-fresh frame is accepted regardless of destination; consumers see frames addressed to third parties. End-to-end effect: Rust admits/propagates a superset of Python's accepted traffic. Exploitability is low (frames still need a configured peer's valid Schnorr48 signature and fresh replay counter) but it is a real cross-impl divergence at the link boundary and weakens least-privilege delivery (unicast frames to other nodes should not be processed locally). Decide contract: (a) add the destination filter to Rust receive_frame (mirror NOT_FOR_US semantics incl. broadcast AddrMode::None/Elided acceptance and promiscuous/test escape hatch), or (b) document Rust as intentionally promiscuous at link layer and filter at consumers. Note interplay with bridge/kiss and loopback paths when choosing.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:50:57.781801566Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T09:50:57.781801566Z",
+  "labels": [
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-er31",
+      "depends_on_id": "project-LICHEN-worker6-i8cd",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T09:50:57.924107334Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ from lichen.schc.fragment import (
     receiver_abort,
     sender_abort,
 )
-from lichen.schc.session_manager import SchcSessionManager
+from lichen.schc.session_manager import SchcSessionManager, _SessionRecord
 from lichen.timing.time_sync import MonotonicClock
 
 LOCAL_NODE = Identity.from_seed(bytes(range(32)))
@@ -195,3 +195,42 @@ def test_active_sender_timeout_transition_issues_one_use_ack_request() -> None:
     assert request == ack_request(rule, sender.final_window())
     assert harness.manager.consume_fragment_wire(request, _eui64(REMOTE_IDENTITY))
     assert not harness.manager.consume_fragment_wire(request, _eui64(REMOTE_IDENTITY))
+
+
+def test_create_sender_rejects_none_key_generation() -> None:
+    harness = _Harness()
+    with pytest.raises(FragmentError, match="current key generation"):
+        harness.manager.create_sender(b"lichen", REMOTE_IDENTITY, None)
+    assert harness.manager._prepared == {}
+    assert harness.manager._records == {}
+
+
+def test_keyless_stranger_fragment_wire_is_never_consumable() -> None:
+    harness = _Harness()
+    sender = FragmentSender(b"lichen")
+    record = _SessionRecord(
+        sender=sender,
+        remote_signer_identity=STRANGER_IDENTITY,
+        rule_id=0x78,
+        generation=0,
+        key_generation=None,
+        fragments=tuple(sender._fragments),
+        high_water=0,
+        idle_expires_at=harness.now + 60.0,
+    )
+    harness.manager._sender_records[id(sender)] = record
+    wire = harness.manager._issue_fragment_wire_unlocked(sender, record, sender._fragments[0])
+    assert not harness.manager.consume_fragment_wire(wire, _eui64(STRANGER_IDENTITY))
+
+
+def test_authenticated_fragment_wire_is_one_use_consumable() -> None:
+    harness = _Harness()
+    harness.install_generation(REMOTE_IDENTITY)
+    sender = harness.manager.create_sender(
+        b"lichen", REMOTE_IDENTITY, harness.generations[REMOTE_IDENTITY]
+    )
+    wires = harness.manager.activate_and_start(sender)
+    assert wires
+    for wire in wires:
+        assert harness.manager.consume_fragment_wire(wire, _eui64(REMOTE_IDENTITY))
+        assert not harness.manager.consume_fragment_wire(wire, _eui64(REMOTE_IDENTITY))

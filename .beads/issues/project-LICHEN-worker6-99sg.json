@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-99sg",
+  "title": "b7z9.36(d): re-announce capabilities to the new root after root change (spec 06-security.md:1005-1008)",
+  "description": "Child of b7z9.36: nodes MUST re-announce capabilities to the new root after detecting a root change in DIO (grep re_announce = 0 hits today). Implement the re-announce trigger on DODAG root change in the node stacks (python + rust + C as applicable) with tests. Coordinate with the (a)-(c) resource/table shapes.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:29:57.872207567Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T23:29:57.872207567Z",
+  "labels": [
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-99sg",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.36",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:29:58.048708804Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

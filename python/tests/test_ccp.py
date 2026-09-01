@@ -10,6 +10,9 @@ from pathlib import Path
 import pytest
 
 from lichen.ccp import (
+    BusyPercentSampler,
+    PacketErrorPermilleTracker,
+    PeerDensityTracker,
     adaptive_sf_select,
     ema_update,
     ema_update_integer,
@@ -19,6 +22,7 @@ from lichen.ccp import (
     slot_hash,
     synchronized_hop,
 )
+from lichen.constants import RF_METRICS_WINDOW_SF, TDMA_SLOT_MS
 
 VECTORS_DIR = Path(__file__).parent.parent.parent / "test" / "vectors"
 
@@ -100,11 +104,11 @@ def test_select_channel_endianness(name: str, vector: dict) -> None:
 
 
 def test_select_channel_density_fallback():
-    """select_channel returns 0 when density > 8."""
+    """select_channel returns 0 when density > 10."""
     eui64 = bytes.fromhex("0011223344556677")
-    # density > 8 should return CH0
-    assert select_channel(eui64, epoch=0, density=9, n_channels=8) == 0
-    assert select_channel(eui64, epoch=0, density=10, n_channels=8) == 0
+    # density > 10 should return CH0
+    assert select_channel(eui64, epoch=0, density=11, n_channels=8) == 0
+    assert select_channel(eui64, epoch=0, density=10, n_channels=8) == 4
     assert select_channel(eui64, epoch=0, density=100, n_channels=8) == 0
 
 
@@ -363,7 +367,11 @@ def test_ccp16_load_balance_channel_selection(name: str, vector: dict) -> None:
     n_channels = inp["n_channels"]
 
     channel = select_channel(eui64, epoch, density, n_channels)
-    assert channel == out["channel"], f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
+    # Resolution: kept HEAD's single-f-string parenthesized form; beads-worker-5
+    # made the same line-wrap change but with split f-strings (same intent).
+    assert channel == out["channel"], (
+        f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
+    )
 
 
 def _ccp16_load_balance_slot_cases():
@@ -450,7 +458,11 @@ def test_ccp16_load_balance_synchronized_hop(name: str, vector: dict) -> None:
         n_channels=inp.get("n_channels", 8),
     )
 
-    assert channel == out["channel"], f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
+    # Resolution: kept HEAD's form; beads-worker-5's version was identical
+    # except for stray blank lines inside the parens (editing artifact).
+    assert channel == out["channel"], (
+        f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
+    )
     assert sf == out["sf"], f"{name}: SF mismatch (got {sf}, expected {out['sf']})"
     assert tx_allowed == out["tx_allowed"], f"{name}: tx_allowed mismatch"
 
@@ -473,7 +485,102 @@ def test_ccp16_load_balance_vector_coverage():
         cat = v.get("category", "unknown")
         category_counts[cat] = category_counts.get(cat, 0) + 1
 
-    assert category_counts.get("channel_selection", 0) >= 5, "Need at least 5 channel selection vectors"
-    assert category_counts.get("tdma_slot", 0) >= 5, "Need at least 5 TDMA slot vectors"
-    assert category_counts.get("adaptive_sf", 0) >= 10, "Need at least 10 adaptive SF vectors"
-    assert category_counts.get("density_estimate", 0) >= 5, "Need at least 5 density estimate vectors"
+    # HEAD's multi-line assert formatting, plus beads-worker-7's new
+    # TestPeerDensityTracker class below (both intents compatible).
+    # beads-worker-5 applied the identical parenthesization to these asserts,
+    # so no content from its side is lost here.
+    assert category_counts.get("channel_selection", 0) >= 5, (
+        "Need at least 5 channel selection vectors")
+    assert category_counts.get("tdma_slot", 0) >= 5, (
+        "Need at least 5 TDMA slot vectors")
+    assert category_counts.get("adaptive_sf", 0) >= 10, (
+        "Need at least 10 adaptive SF vectors")
+    assert category_counts.get("density_estimate", 0) >= 5, (
+        "Need at least 5 density estimate vectors")
+
+
+class TestPeerDensityTracker:
+    """Rolling-window peer tracker (b7z9.29.2, R-02a-117)."""
+
+    def test_distinct_peers_and_window_prune(self) -> None:
+        t = PeerDensityTracker()
+        for peer in (1, 2, 3):
+            t.record_peer((peer,) * 8, 1)
+        t.record_peer((1,) * 8, 2)  # repeat: distinct only
+        assert t.peer_count() == 3
+
+        # Window slides past: current 40, window start 8.
+        t.record_peer((9,) * 8, 40)
+        assert t.peer_count() == 1
+
+    def test_density_matches_formula_vectors(self) -> None:
+        t = PeerDensityTracker()
+        for i in range(5):
+            t.record_peer((i,) * 8, 1)
+        assert t.estimate_density(50, -70) == 5
+        assert t.estimate_density(150, -70) == 7
+        assert t.estimate_density(150, -100) == 8
+        for i in range(253):
+            t.record_peer((i, 0xEE, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66), 3)
+        assert t.estimate_density(200, -100) == 255
+
+
+class TestBusyPercentSampler:
+    """TX-time BusyPercent sampler (b7z9.29.3, R-02a-131)."""
+
+    def test_partial_and_window_slide(self) -> None:
+        s = BusyPercentSampler()
+        s.record_tx_airtime(0, TDMA_SLOT_MS * 2)
+        pct = s.busy_percent(TDMA_SLOT_MS)
+        assert 6 <= pct <= 7, pct
+
+        # Window slide: old entries drop.
+        s.record_tx_airtime(100, 0)
+        assert s.busy_percent(TDMA_SLOT_MS) == 0
+
+
+    def test_saturation_and_zero_duration(self) -> None:
+        s = BusyPercentSampler()
+        for sf in range(RF_METRICS_WINDOW_SF):
+            s.record_tx_airtime(sf, TDMA_SLOT_MS)
+        assert s.busy_percent(TDMA_SLOT_MS) == 100
+        s.record_tx_airtime(RF_METRICS_WINDOW_SF + 1, TDMA_SLOT_MS * 2)
+        assert s.busy_percent(TDMA_SLOT_MS) == 100
+        assert s.busy_percent(0) == 0
+
+
+class TestPacketErrorPermilleTracker:
+    """PacketErrorPermille tracker (b7z9.29.4, R-02a-133)."""
+
+    def test_rolling_window_permille(self) -> None:
+        t = PacketErrorPermilleTracker()
+        t.record_attempt(0, False)
+        t.record_attempt(0, False)
+        t.record_attempt(0, True)
+        t.record_attempt(1, False)
+        t.record_attempt(1, True)
+        t.record_attempt(1, True)
+        for _ in range(4):
+            t.record_attempt(2, False)
+        assert t.packet_error_permille() == 300
+
+        # Window slide: SF 100 (success) retained at current 100
+        # (1 attempt, 0 failed) -> 0 via the division path.
+        t.record_attempt(100, False)
+        assert t.packet_error_permille() == 0
+
+        # Empty-window branch: fresh tracker -> 0 via the early return.
+        assert PacketErrorPermilleTracker().packet_error_permille() == 0
+
+    def test_boundary_and_all_failure(self) -> None:
+        t = PacketErrorPermilleTracker()
+        t.record_attempt(0, False)
+        t.record_attempt(100, False)
+        t.record_attempt(131, True)
+        # Window at current=131 retains sf > 99: SF 100 (success) and
+        # SF 131 (fail) -> 1 fail of 2 -> 500.
+        assert t.packet_error_permille() == 500
+        t.record_attempt(132, True)
+        # current=132: SF 100 drops (100+32=132 > 132 false), leaving SF 131
+        # and SF 132 (both failures) -> 2 fails of 2 -> 1000.
+        assert t.packet_error_permille() == 1000

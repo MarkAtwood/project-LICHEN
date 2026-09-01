@@ -86,7 +86,14 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
 
 #define LICHEN_TDMA_GUARD_MS 50 /* spec/02a-coordinated-capacity.md §2a.2: guard "MUST be 50 for this revision"; ccp_tdma.json guard_ms=50 */
 #define LICHEN_TDMA_SLOT_MS 250 /* spec/02a-coordinated-capacity.md §2a.2 Slot=(fnv1a32(EUI64)+u32(SFN)) mod n via lichen_hash_32; epoch MUST NOT enter the hash */
+/* Merge resolution: HEAD left this block empty; beads-worker-2 added the
+ * TDMA/CCP timing constants below. Intents are compatible — keep the added
+ * block, no HEAD content was removed. */
 #define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3 /* BEACON_TIMEOUT per 09-packets-timing.md FSM */
+/* Merge resolution: HEAD and beads-worker-7 define the same two recovery
+ * thresholds with identical values (6, 10); HEAD additionally defines the
+ * 2a.6.3 startup/rejoin constants below. HEAD is a strict superset of
+ * worker-7, so keep HEAD — worker-7's intent is fully preserved. */
 
 /* Desync recovery timing constants (spec/09-packets-timing.md 14.7/2a.6.3).
  * T_DRIFT_MAX: superframes in DRIFT before RECOVER. T_GIVE_UP: superframes
@@ -547,6 +554,21 @@ uint8_t lichen_tdma_compute_slot(
 	const uint8_t eui64[_Nonnull 8], uint32_t sfn, uint8_t num_slots);
 
 /**
+ * @brief Validate a beacon slot_map (spec 02a 2a.2, R-02a-008 family).
+ *
+ * A slot_map is valid when every entry is within [0, num_slots) and the
+ * entries are strictly ascending (sorted, no duplicates). An empty map is
+ * valid.
+ *
+ * @param slots     Slot indices from the beacon (may be NULL when len is 0)
+ * @param len       Number of entries in @p slots
+ * @param num_slots Total slots in the superframe (upper bound, exclusive)
+ * @return true when the slot_map is well-formed
+ */
+bool lichen_slot_map_validate(const uint8_t *slots, size_t len,
+			      uint8_t num_slots);
+
+/**
  * @brief Validate the CCP-7 guard budget.
  *
  * All arguments use the same caller-selected time unit.  The guard is
@@ -560,6 +582,11 @@ bool lichen_tdma_guard_budget_sufficient(uint64_t guard,
 					 uint64_t peer_jitter,
 					 uint64_t propagation,
 					 uint64_t margin);
+/* Merge resolution: keep this declaration inside CONFIG_LICHEN_TDMA — its
+ * definition in tdma.c is gated the same way. The merge base had a stray
+ * #endif after this function, which unbalanced the block; the auto-merge
+ * then left the CONFIG_LICHEN_TDMA block unclosed. Close it here at the
+ * correct place (beads-worker-7's correct placement). */
 #endif
 
 uint32_t lichen_hash_32(const uint8_t *_Nonnull data, size_t len);

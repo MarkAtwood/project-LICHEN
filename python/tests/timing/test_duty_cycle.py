@@ -256,16 +256,24 @@ class TestCCP13AdaptiveDutyPermille:
         assert adaptive_duty_permille(2, REGION_EU) == 20
 
     def test_region0_moderate(self) -> None:
-        # 3 <= density <= 8 -> 10 permille
+        # 3 <= density <= 10 -> 10 permille
         assert adaptive_duty_permille(3, REGION_EU) == 10
         assert adaptive_duty_permille(5, REGION_EU) == 10
-        assert adaptive_duty_permille(8, REGION_EU) == 10
+        assert adaptive_duty_permille(10, REGION_EU) == 10
 
     def test_region0_dense(self) -> None:
-        # density > 8 -> 5 permille
-        assert adaptive_duty_permille(9, REGION_EU) == 5
+        # density > 10 -> 5 permille
+        assert adaptive_duty_permille(11, REGION_EU) == 5
         assert adaptive_duty_permille(100, REGION_EU) == 5
         assert adaptive_duty_permille(255, REGION_EU) == 5
+
+    def test_negative_density_rejected(self) -> None:
+        # Negative density is a caller bug: fail loud, not open to the
+        # sparse budget (a negative count previously returned 20 or 50).
+        for density in (-1, -10, -255):
+            for region in (REGION_EU, REGION_US):
+                with pytest.raises(ValueError, match="density must be non-negative"):
+                    adaptive_duty_permille(density, region)
 
     # Region 1 (US/CA - lenient)
     def test_region1_sparse(self) -> None:
@@ -274,14 +282,14 @@ class TestCCP13AdaptiveDutyPermille:
         assert adaptive_duty_permille(2, REGION_US) == 50
 
     def test_region1_moderate(self) -> None:
-        # 3 <= density <= 8 -> 20 permille
+        # 3 <= density <= 10 -> 20 permille
         assert adaptive_duty_permille(3, REGION_US) == 20
         assert adaptive_duty_permille(5, REGION_US) == 20
-        assert adaptive_duty_permille(8, REGION_US) == 20
+        assert adaptive_duty_permille(10, REGION_US) == 20
 
     def test_region1_dense(self) -> None:
-        # density > 8 -> 10 permille
-        assert adaptive_duty_permille(9, REGION_US) == 10
+        # density > 10 -> 10 permille
+        assert adaptive_duty_permille(11, REGION_US) == 10
         assert adaptive_duty_permille(100, REGION_US) == 10
         assert adaptive_duty_permille(200, REGION_US) == 10
 
@@ -289,7 +297,7 @@ class TestCCP13AdaptiveDutyPermille:
         # Unknown regions should use strict budget (region 0)
         assert adaptive_duty_permille(0, 255) == 20  # sparse
         assert adaptive_duty_permille(5, 255) == 10  # moderate
-        assert adaptive_duty_permille(10, 255) == 5  # dense
+        assert adaptive_duty_permille(11, 255) == 5  # dense
 
 
 class TestCCP13MaxTxMs:
@@ -312,3 +320,9 @@ class TestCCP13MaxTxMs:
     def test_zero_permille(self) -> None:
         # Edge case: 0 permille -> 0 ms
         assert max_tx_ms(0) == 0
+
+    def test_negative_permille_rejected(self) -> None:
+        # Negative budgets are nonsensical: max_tx_ms(-10) would yield -36000 ms.
+        for permille in (-1, -10, -1000):
+            with pytest.raises(ValueError, match="duty_permille must be non-negative"):
+                max_tx_ms(permille)

@@ -1,0 +1,7 @@
+{
+  "id": "1788223790018775992-1",
+  "issue_id": "project-LICHEN-worker6-upk4",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 refinement (one real code fix landed: coap_server.c msg_post referenced an undeclared 'oscore' struct — replaced with the in-scope locals is_protected/oscore_ctx/piv_len, matching the config_put twin; prj.conf + CONFIG_ZCBOR=y also added). REMAINING ROOT CAUSE, refined: LICHEN_COAP_KEYS now depends on ZCBOR (coap/Kconfig:238), but the zcbor MODULE is not in the workspace build's module list (Kconfig sources modules/zcbor/Kconfig only when the module is declared; the generated autoconf has no CONFIG_ZCBOR), so CONFIG_ZCBOR=y is an unknown symbol and LICHEN_COAP_KEYS resolves to n -\u003e CONFIG_LICHEN_COAP_KEYS_MAX_ENTRIES undeclared -\u003e main.c:70 fails. This is a workspace/manifest-level gap (zcbor module must be declared where west can see it, or the lichen Kconfig must vendor the include path), not a prj.conf symbol fix. The coap_dtn.c zcbor include failure in the overlay build is the same root cause. Once the module is available, the overlay build should configure and the deaddrop chain compile-verify.",
+  "created_at": "2026-09-01T00:49:50.018775992Z"
+}

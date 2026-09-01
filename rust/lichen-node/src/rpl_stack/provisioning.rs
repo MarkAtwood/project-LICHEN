@@ -5,8 +5,10 @@
 
 use std::collections::{HashSet, VecDeque};
 
+use crate::rpl_stack::dao_tx_sched::DaoTxScheduler;
 use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::iid_from_pubkey;
+use lichen_rpl::root_seq_cache::RootSeqCache;
 use lichen_rpl::routing::{
     DaoAdmissionState, DaoAdmissionUpdateError, DaoPersistentOpenError, DaoProvisionError,
     DaoTxState,
@@ -55,6 +57,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
+            root_seqs: RootSeqCache::default(),
+            dao_tx_sched: DaoTxScheduler::new(),
+            wall_clock_unix: None,
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
@@ -94,6 +99,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: None,
+            root_seqs: RootSeqCache::default(),
+            dao_tx_sched: DaoTxScheduler::new(),
+            wall_clock_unix: None,
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
@@ -132,6 +140,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
+            root_seqs: RootSeqCache::default(),
+            dao_tx_sched: DaoTxScheduler::new(),
+            wall_clock_unix: None,
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),
@@ -181,6 +192,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             local_control_addr: control_addr,
             bootstrap_peers: VecDeque::new(),
             dao_admissions: Some(admissions),
+            root_seqs: RootSeqCache::default(),
+            dao_tx_sched: DaoTxScheduler::new(),
+            wall_clock_unix: None,
             routing_now_ms: 0,
             generation: 1,
             direct_neighbors: HashSet::new(),

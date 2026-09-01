@@ -37,21 +37,26 @@ if [[ -z "$FILES" ]]; then
     exit 0
 fi
 
+# cppcheck matches --suppressions-list entries against the scanned paths;
+# the curated list is repo-relative, so scan with repo-relative paths from
+# the project root (git --staged and explicit args are already lichen/...).
+FILES="${FILES//"$PROJECT_ROOT"\//}"
+
 ERRORS=0
 
 # Run cppcheck
 echo -e "${YELLOW}Running cppcheck...${NC}"
 if command -v cppcheck &>/dev/null; then
-    if ! cppcheck --enable=warning,style,performance,portability \
+    if ! (cd "$PROJECT_ROOT" && cppcheck --enable=warning,style,performance,portability \
         --error-exitcode=1 \
         --inline-suppr \
         --suppress=missingIncludeSystem \
         --suppress=unmatchedSuppression \
-        --suppress=syntaxError \
+        --suppressions-list="$LICHEN_DIR/.cppcheck-suppressions" \
         --std=c11 \
         -I "$LICHEN_DIR/include" \
         -I "$LICHEN_DIR/subsys/lichen" \
-        $FILES 2>&1; then
+        $FILES 2>&1); then
         ERRORS=$((ERRORS + 1))
     fi
     echo -e "${GREEN}cppcheck: done${NC}"
@@ -65,10 +70,10 @@ echo -e "${YELLOW}Running clang-tidy...${NC}"
 if command -v clang-tidy &>/dev/null; then
     for f in $FILES; do
         if [[ "$f" == *.c ]]; then
-            if ! clang-tidy "$f" \
+            if ! (cd "$PROJECT_ROOT" && clang-tidy "$f" \
                 --config-file="$LICHEN_DIR/.clang-tidy" \
                 -p /dev/null \
-                -- -I "$LICHEN_DIR/include" -I "$LICHEN_DIR/subsys/lichen" -std=c11 2>&1; then
+                -- -I "$LICHEN_DIR/include" -I "$LICHEN_DIR/subsys/lichen" -std=c11 2>&1); then
                 ERRORS=$((ERRORS + 1))
             fi
         fi

@@ -105,16 +105,25 @@ def test_rule5_decompresses_independently_encoded_fields_and_tail() -> None:
 
 
 def test_rule5_accepts_exact_profile_maximum_and_rejects_one_over() -> None:
-    exact_tail = b"\x90\xff" + bytes(MAX_PACKET_SIZE - 25)
+    # Raw-bound contract (spec/03): raw == MAX_PACKET_SIZE compresses; raw
+    # one octet above is rejected before rule dispatch.
+    raw_per_tail_byte = len(_packet(b"\x90\xff\x00")) - 3
+    exact_tail = b"\x90\xff" + bytes(MAX_PACKET_SIZE - raw_per_tail_byte - 2)
     exact_packet = _packet(exact_tail)
     exact_compressed = compress_packet(exact_packet)
 
-    assert len(exact_compressed) == MAX_PACKET_SIZE
+    assert len(exact_packet) == MAX_PACKET_SIZE
     assert exact_compressed[0] == 5
     assert decompress_packet(exact_compressed) == exact_packet
 
+    # Rule 5's encoded form at the raw ceiling is smaller than the ceiling
+    # (encoded = raw - 29), so push the encoded packet past it to pin the
+    # decompress-side bound.
+    overlong = exact_compressed + bytes(
+        MAX_PACKET_SIZE - len(exact_compressed) + 1
+    )
     with pytest.raises(SchcError, match="profile limit"):
-        decompress_packet(exact_compressed + b"\x00")
+        decompress_packet(overlong)
 
 
 def test_rule5_rejects_every_truncated_residue() -> None:

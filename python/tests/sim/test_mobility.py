@@ -6,7 +6,16 @@ from __future__ import annotations
 
 import math
 
-from lichen.sim.mobility import MobilityManager, RandomWaypoint, WaypointState
+import pytest
+
+from lichen.sim.mobility import (
+    RPGM,
+    GroupMobility,
+    ManhattanGrid,
+    MobilityManager,
+    RandomWaypoint,
+    WaypointState,
+)
 from lichen.sim.node import SimNode
 
 
@@ -56,22 +65,30 @@ class TestRandomWaypoint:
         assert abs(distance - 10.0) < 0.01
 
     def test_pauses_at_waypoint(self) -> None:
-        # Use a small area so we reach waypoint quickly
+        # Degenerate bounds (10,10,10,10) are invalid under the new
+        # min<max validation; use a tiny valid area that the fast pattern
+        # crosses within one step.
         pattern = RandomWaypoint(
-            area_bounds=(10, 10, 10, 10),  # All waypoints at (10, 10)
+            area_bounds=(9.0, 10.0, 9.0, 10.0),
             speed_m_s=100.0,  # Fast
             pause_time_us=2_000_000,  # 2 second pause
             seed=42,
         )
         node = SimNode(id="test", position=(0.0, 0.0, 0.0))
 
-        # Step until we reach the waypoint
-        pattern.step(node, dt_us=1_000_000)
+        # Waypoints now vary within the 1x1 area (seeded RNG), so assert
+        # pause behavior rather than a fixed corner: step until PAUSED with a
+        # nonzero pause budget, then verify the node rests inside bounds.
+        for _ in range(200):
+            pattern.step(node, dt_us=1_000_000)
+            if pattern._state == WaypointState.PAUSED and pattern._pause_remaining_us > 0:
+                break
 
-        # Node should be at (10, 10)
         x, y, _ = node.position
-        assert abs(x - 10.0) < 0.01
-        assert abs(y - 10.0) < 0.01
+        assert 9.0 <= x <= 10.0
+        assert 9.0 <= y <= 10.0
+        assert pattern._state == WaypointState.PAUSED
+        assert pattern._pause_remaining_us > 0
 
         # Pattern should now be paused
         assert pattern._state == WaypointState.PAUSED
@@ -256,3 +273,62 @@ class TestMobilityManager:
         # Both nodes should have moved
         for nid, node in nodes.items():
             assert node.position != initial_pos[nid]
+
+
+class TestFiniteConfigValidation:
+    """NaN/inf must fail construction, not poison geometry silently."""
+
+    @pytest.mark.parametrize("speed", [float("nan"), float("inf"), float("-inf"), -1.0, 0.0])
+    def test_random_waypoint_rejects_bad_speed(self, speed: float) -> None:
+        with pytest.raises(ValueError, match="speed_m_s"):
+            RandomWaypoint(area_bounds=(0, 100, 0, 100), speed_m_s=speed)
+
+    @pytest.mark.parametrize(
+        "bounds",
+        [
+            (float("nan"), 100, 0, 100),
+            (0, float("inf"), 0, 100),
+            (0, 100, float("nan"), 100),
+            (0, 100, 0, -float("inf")),
+            (10, 10, 10, 10),  # degenerate: min == max
+        ],
+    )
+    def test_random_waypoint_rejects_bad_bounds(self, bounds: tuple[float, ...]) -> None:
+        with pytest.raises(ValueError, match="area_bounds"):
+            RandomWaypoint(area_bounds=bounds, speed_m_s=1.0)  # type: ignore[arg-type]
+
+    def test_random_waypoint_rejects_negative_pause(self) -> None:
+        with pytest.raises(ValueError, match="pause_time_us"):
+            RandomWaypoint(area_bounds=(0, 100, 0, 100), pause_time_us=-1)
+
+    def test_nan_bounds_poisoned_geometry_is_now_rejected(self) -> None:
+        # Regression pin for the codereview finding: NaN bounds previously
+        # constructed cleanly (nan <= 0 is False) and wrote NaN into
+        # set_position; construction must now fail closed.
+        with pytest.raises(ValueError, match="finite"):
+            RandomWaypoint(
+                area_bounds=(float("nan"), float("nan"), 0.0, 100.0), speed_m_s=1.0
+            )
+
+    def test_group_mobility_rejects_nan_speed(self) -> None:
+        with pytest.raises(ValueError, match="speed_m_s"):
+            GroupMobility(
+                area_bounds=(0, 100, 0, 100),
+                speed_m_s=float("nan"),
+                group_size=3,
+            )
+
+    def test_rpgm_rejects_inf_speed(self) -> None:
+        with pytest.raises(ValueError, match="speed_m_s"):
+            RPGM(area_bounds=(0, 100, 0, 100), speed_m_s=float("inf"))
+
+    def test_manhattan_grid_rejects_nan_spacing(self) -> None:
+        with pytest.raises(ValueError, match="spacing_m"):
+            ManhattanGrid(area_bounds=(0, 100, 0, 100), spacing_m=float("nan"))
+
+    @pytest.mark.parametrize("speed", [float("nan"), float("inf"), 0.0, -1.0])
+    def test_manhattan_grid_rejects_bad_speed(self, speed: float) -> None:
+        # Wave-4 addendum (bead e1ct): ManhattanGrid speed_m_s=NaN passes bare
+        # comparisons and poisons positions via ratio math; must be rejected.
+        with pytest.raises(ValueError, match="speed_m_s"):
+            ManhattanGrid(area_bounds=(0, 100, 0, 100), speed_m_s=speed)

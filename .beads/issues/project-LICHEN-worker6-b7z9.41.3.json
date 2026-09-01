@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.41.3",
+  "title": "Puck: register /config + /status handlers with the standalone CoAP server (replace lichen_coap_server_init(NULL))",
+  "description": "Child 3 of b7z9.41 (spec/11-lci.md 17.7 R-11-050..053). lichen/apps/puck/src/main.c:522 calls lichen_coap_server_init(NULL) under CONFIG_LICHEN_COAP_SERVER_STANDALONE, so /config and /status answer 4.04. The resources are implemented+tested (lichen/tests/coap_config, coap_status_get; vectors lci_config.json, lci_status.json) but puck registers no handlers. Work: understand the standalone server's handler/provider contract (lichen/subsys/lichen/coap/coap_server.c + include), register the config/status handlers (and whatever provider struct they need) in puck main.c, mirror how the gateway or the modular (non-standalone) path registers them. Verify: puck native_sim build green + a runtime check on native_sim that GET /config and /status return content (2.05/4.04-as-appropriate per R-11-050 semantics — read the spec rows first) instead of 4.04; vectors must stay authoritative. Largest child — may decompose further if the provider contract is rich. Discovered from project-LICHEN-worker6-b7z9.41.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:10:07.073513815Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T20:58:50.003937377Z",
+  "started_at": "2026-08-31T20:58:49.550241742Z",
+  "closed_at": "2026-08-31T20:58:50.003937377Z",
+  "close_reason": "Store-regression re-close (see ba39 round-14 evidence comment): this bead was completed and closed in prior rounds with full verification and 3x codereview records intact in the close history. Work is on beads-worker-2 and/or origin/main (b7z9.50 fuzz/CI commits 6470607894/5e0fb42035; b7z9.41 family 6bdacf9d2d + covered-children closures). No new work required; verify against those records before reopening.",
+  "labels": [
+    "lci",
+    "zephyr",
+    "decomposed",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.41.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.41",
+      "type": "parent-child",
+      "created_at": "2026-08-31T20:10:07.228201478Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788205275984317253-1",
+  "issue_id": "project-LICHEN-worker6-5byi",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 diagnosis refinement (released at timebox): the failing tests fail LATER than admission — probe on multicast_dio_and_dis_are_received shows the root's post-DIS trickle DIO IS canonically admitted (multicast dst + Rule 255 gate passes; the 3d104a10cd parity fix works) and the rejection comes from INSIDE DodagState::process_dio (DioOutcome::Rejected -\u003e RplRejected at receive.rs:497). Admission layer is therefore exonerated; the regression is in DODAG processing semantics introduced in the 5beefd7b295..48940e0975 sync window (candidate causes: commit_admitted_dio/process_dio changes — rank comparison at dodag.rs:462 'dio.rank \u003e= self.rank', candidate_admissible thresholds, or version handling; ROOT_RANK=256, leaf joins at chosen_cost per select_parent). Next diagnostic step for the owner: probe process_dio's reject branch for the post-DIS DIO (e.g. temporarily log which of the Rejected arms fires for a joined leaf receiving its parent's consistent DIO), then reconcile that branch with the tests' consistent-retransmission expectation (trickle retransmissions legitimately re-send identical DIO content).",
+  "created_at": "2026-08-31T19:41:15.984317253Z"
+}

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.47",
+  "title": "clang-tidy CI covers first 50 files with -p /dev/null; config drifts from spec appendix-c (R-APPC-010)",
+  "description": "spec/appendix-c-safety.md R-APPC-010: 'All C code MUST pass clang-tidy with this configuration' (WarningsAsErrors '*', CI command over lichen/subsys/lichen/**/*.c lichen/lib/**/*.c lichen/drivers/**/*.c). Sweep classification: divergent. (1) CI scope: .github/workflows/ci.yml:130-136 runs 'find lichen/subsys lichen/lib lichen/drivers -name *.c | head -50' — only the first 50 files — with '-p /dev/null' (no compile database). (2) Config drift: lichen/.clang-tidy (header cites the policy, :5) adds documented suppressions beyond the spec list: -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling :32, -misc-redundant-expression :35, -misc-header-include-cycle :37, -bugprone-not-null-terminated-result :38, -clang-diagnostic-conversion :39, -clang-analyzer-optin.core.EnumCastOutOfRange :40; and contains a contradictory duplicate (cppcoreguidelines-pro-bounds-pointer-arithmetic enabled :15, disabled :41 — later entry wins). Local scripts/lint-c.sh:63-76 does cover all subsys/lib/drivers files. Suggested placement: generate compile_commands.json in CI and run clang-tidy over the complete file list (drop head -50); reconcile the duplicate check entry; either update spec appendix or trim the added suppressions. Full row in docs/spec-coverage.md (spec/appendix-c-safety.md sweep 2026-08-31).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T16:04:20.31197267Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T19:58:06.888774158Z",
+  "labels": [
+    "spec-gap",
+    "c-safety",
+    "ci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.47",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T16:04:20.410664607Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

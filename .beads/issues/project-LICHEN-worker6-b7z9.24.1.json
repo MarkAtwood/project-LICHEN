@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.24.1",
+  "title": "C TDMA: reset SFN on RPL version change (spec 02a 2a.5 R-02a-045/022)",
+  "description": "Smallest child of b7z9.24. tdma.c:111-114 lichen_ccp_fsm_event reaches DRIFTING on LICHEN_CCP_EVENT_RPL_VERSION but never resets SFN; spec 2a.5 R-02a-045/022: an RPL version change MUST reset the SFN relative to the new root. Fix: in the RPL_VERSION arm reset tdma-\u003esuperframe (and derived slot) to the new root's SFN-0 baseline consistent with lichen_tdma_init's placeholder semantics. Extend the tdma host test (tdma_guard_budget or routing_dispatch) to pin: version-change event -\u003e superframe reset + state transition. Discovered from project-LICHEN-worker6-b7z9.24.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:17:35.836113045Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-09-01T01:40:55.742387466Z",
+  "started_at": "2026-09-01T01:18:11.346696456Z",
+  "closed_at": "2026-09-01T01:40:55.742387466Z",
+  "close_reason": "SFN reset on RPL version change landed (commit 74cc8914b4): (1) lichen_tdma_ctx gains uint8_t eui64[8] copied at lichen_tdma_init (the CCP FSM has no ctx access, so the node EUI64 is stored for slot recomputation); (2) the CCP FSM RPL_VERSION arm (SYNCED state) additionally resets tdma-\u003esuperframe = 0 and recomputes tdma-\u003eslot = lichen_tdma_compute_slot(tdma-\u003eeui64, 0, n_slots) — the SFN-0 placeholder baseline; real hash(EUI64)+SFN slot is installed by the next valid beacon; (3) test pinned in tdma_guard_budget: init -\u003e INIT -\u003e VALID_BEACON -\u003e SYNCED, superframe=77/slot=6 forced, RPL_VERSION -\u003e DRIFTING + synced=false + superframe=0 + slot==compute_slot(eui64,0,n_slots). Review-note resolution: the RPL_VERSION reset test EXISTS in the diff and passes (reviewers ran before the file settled or missed it); the imprecise 'consistent with init' comment was refined (the slot is the retained SFN-0 baseline from the stored EUI64). Verification: host build+run all asserts green; ZEPHYR native_sim routing_dispatch build green. Codereview 3x delegated to kimi-k3: pass 2 verdict deterministic-reset/degraded-to-contention/EUI64-no-hazard all clear; pass 3 comment-precision fix applied. Sibling b7z9.24.2 (root-selection ordered criteria module, port of python select_root) remains for the full 2a.5 feature.",
+  "labels": [
+    "tdma",
+    "zephyr",
+    "decomposed",
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.24.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.24",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:17:35.984746395Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.28",
+  "title": "Root key rotation: three divergent attestation formats, no schedule-state clear on rotation, revocation not wired to beacon path (spec 02a 2a.5.5.3)",
+  "description": "Requirements: R-02a-072 (MUST) nodes MUST receive and validate a key-rotation attestation signed by the OLD key before accepting beacons from the new IID as the same logical root — divergent: Python implements COSE_Sign1 per 06-security 8.7.4 (python/src/lichen/crypto/key_rotation_attestation.py:224,265, alg -65537, + TrustStore.rotate_key trust.py:572-707 with seq anti-replay; 27 tests python/tests/crypto/test_key_rotation_attestation.py), but Rust uses a raw 'KEY_ROTATE:'||pubkey message with no COSE/sequence/expiry (rust/lichen-link/src/trust.rs:160-184) and C a raw transcript with rotation_sequence but no COSE/expiry (lichen/subsys/lichen/gcp/gcp_trust.c:170-253, no test harness). R-02a-074 (MUST) clear cached slot_map, SFN and schedule state upon accepting rotation — not-implemented in any language (python trust.py:696-699 replaces the trust entry only; no join point to slot_map/SFN anywhere). R-02a-075 (MUST for OOB-capable nodes) mark root key revoked — Python only (trust.py:709-729, tests test_trust.py:372-411); Rust/C have no root-key revocation (tunnel-scoped only). R-02a-076 revoked root beacons MUST be discarded — Python TrustStore rejects revoked peers but the L2 beacon path uses pinned keys and never consults revocation (python/src/lichen/link/link_layer.py:1804-1826); not wired in Rust/C. Suggested placement: unify attestation on the Python COSE_Sign1 format (8.7.4) or spec-amend; add rotation -\u003e schedule-state-clear hook in TDMA/RPL join state; plumb revocation check into the frame-verify path. From spec-coverage sweep 2026-08-31 (docs/spec-coverage.md R-02a-072..076).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:32:33.372388588Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:32:33.372388588Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.28",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:32:33.514454678Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

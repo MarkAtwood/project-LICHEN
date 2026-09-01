@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-ulum",
+  "title": "l1qw.32(b): C 4.01 oscore_required body + /config/privacy resources (coap_location/coap_config)",
+  "description": "C side of worker6-l1qw.32 (spec 18.2.4): lichen/subsys/lichen/coap/coap_location.c must return 4.01 with CBOR body {error: 'oscore_required', mode: ...} for unauthenticated non-public queries (response codes exist at :1238-1241/:1325-1328 — add the body), and lichen/subsys/lichen/coap/coap_config.c (or a sibling resource) must expose /config/privacy (GET mode) and /config/privacy/allowed (PUT {peers:[...]}) replacing the single-peer whitelist. Host test in lichen/tests/coap_location_beacon or a new dir. Coordinate the body shape with l1qw.32(a) Python.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:02:52.432574043Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T21:31:05.904778123Z",
+  "started_at": "2026-08-31T21:05:33.065739793Z",
+  "closed_at": "2026-08-31T21:31:05.904778123Z",
+  "close_reason": "Partial completion, remainder filed as its own bead. LANDED: the structured 4.01 body (spec 18.2.4) in coap_location.c — respond_oscore_required() emits {error: oscore_required, mode: \u003cpublic|group|private|off\u003e} as CBOR (36 bytes for private) with content-format 60 and an overflow fallback to the bare code; wired at both previously-bare sites (position observe handler and position_cache_get -EACCES), each reading its OWN state source (position_observe.privacy vs position_cache.privacy — the cache-site mismatch was caught by the byte-exact test and fixed). The byte-exact host test now asserts the 36-byte body for the private mode. ALSO FIXED: the coap_location_beacon host test could not configure at all (Kconfig RING_BUFFER tangle + unresolvable TEST_RANDOM_GENERATOR on native_sim — filed as upk4); prj.conf updated (COAP_SERVER/RING_BUFFER restored, TEST_RANDOM_GENERATOR dropped) and the suite is green 14/14 on native_sim. NOT LANDED (filed): /config/privacy resources. Reviews: correctness found the orphaned bool public declaration (fixed in-revision), security PASS with TOCTOU/mutex analysis clean, edge-cases verified CBOR byte-exactness and clamp safety. Build verified via native_sim: coap_location_beacon suite 14/14.",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ulum",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.32",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T21:02:52.5437768Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

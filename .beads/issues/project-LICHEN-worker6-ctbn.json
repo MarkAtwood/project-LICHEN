@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-ctbn",
+  "title": "stack.rs elided-dst capacity pre-check grants 194 but build_frame's true elided-dst limit is 192 (mislabeled FrameEncode window)",
+  "description": "Latent defect surfaced by b7z9.5.1 codereview (pass 3 edge, reviewer model; boundary pinned empirically in the new elided_destination_capacity_boundary_is_pinned test). send_l2_payload_to's pre-check (rust/lichen-node/src/stack.rs:496-499) grants MAX_ELIDED_SCHC_SIZE + 1 = 194 bytes for any non-8-byte destination, but the link layer accepts 2-byte destinations (AddrMode::from_addr_len, rust/lichen-link/src/frame.rs:44) whose true frame capacity is 192. A 193- or 194-byte payload to a 2-byte dst passes the seam pre-check, then fails build_frame with FrameTooLarge -\u003e TxError::FrameEncode (stack.rs:511) instead of the new TxError::NeedsFragmentation. Failure is safe (reject, no state consumed except... verify tuple consumption on the late path) but mislabeled, and no current caller passes 2-byte dsts. Fix options: match on dst length to grant the true per-mode bound, or tighten the else branch to 192 with a comment. The fragmentation wiring beads (b7z9.5.2/.3) will consume NeedsFragmentation, so the label must be accurate before they land.",
+  "status": "closed",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:53:52.297275574Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T19:02:44.694300936Z",
+  "closed_at": "2026-08-31T19:02:44.694300936Z",
+  "close_reason": "Landed as fix(node) commit on beads-worker-4. send_l2_payload_to's capacity pre-check now matches on dst length: 8-byte dst keeps 186 (MAX_EXTENDED_SCHC_SIZE+1), 2-byte dst uses new const ELIDED_TWO_BYTE_DST_FRAME_PAYLOAD=192 derived from build_frame's signed-frame accounting (MAX_FRAME_BODY 254 - 4 fixed - 2 dst - 8 signer - 48 MIC, frame.rs:259-262), broadcast/other lengths keep the legacy 194 bound with build_frame as final authority (unchanged DIO path). This closes the 193-194 mislabel window: oversized payloads to 2-byte dsts now report TxError::NeedsFragmentation at the seam instead of a late FrameEncode — required label accuracy before b7z9.5.3 consumes the variant. Boundary test updated: 193 rejects NeedsFragmentation, 192 sends Ok, 195 rejects without tuple consumption. Gates: cargo test -p lichen-node --lib green for the touched suite (elided_destination_capacity_boundary_is_pinned ok); clippy -p lichen-node --all-features -D warnings clean. Codereview: delegated pass timed out (300s, reviewer wandered into schnorr48 registry) — self-completed per fallback: derivation verified against frame.rs body_len formula, no legitimate caller affected (193-194 payloads previously failed at build_frame anyway), broadcast bound untouched, test assertions match. Note: 6 unrelated rpl_stack failures persist on this branch == main tip, tracked in 0l4q (worker-3 claimed).",
+  "labels": [
+    "rust",
+    "schc"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ctbn",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.5.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T09:53:52.462927191Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

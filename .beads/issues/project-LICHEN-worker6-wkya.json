@@ -1,0 +1,18 @@
+{
+  "id": "project-LICHEN-worker6-wkya",
+  "title": "Real CI workflows download Renode from GitHub releases without hash check",
+  "description": "Review finding (woo7 round): .github/workflows/renode.yml:26,112 and renode-firmware.yml:94,132 download renode-1.16.1.linux-portable.tar.gz from github.com/renode/renode/releases with NO hash verification, while docs/renode-workflow.md:456-457 now pins builds.renode.io artifact + sha256 (1a532d4b...). Same version, two sources: the GitHub-release artifact bytes may differ from the builds.renode.io tarball, so the docs hash cannot be assumed to cover the CI download. Pin/verify a hash for the GitHub-release artifact in the real workflows (compute it from the actual release asset). GitHub releases are also more durable than the builds server (retraction risk differs). Discovered from woo7.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:10:46.42330134Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T18:56:14.451950459Z",
+  "closed_at": "2026-08-31T18:56:14.451950459Z",
+  "close_reason": "Re-closing (repeat store-resurrection): work verified in tree (07d80f909f / ef5ade997e / f3c3c970a1). No new work existed.",
+  "labels": [
+    "python",
+    "codereview"
+  ]
+}

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-dp72",
   "title": "routing_announce: test_callback_failure_allows_same_seq_retry fails at HEAD (native_sim)",
   "description": "Pre-existing failure, discovered while verifying b7z9.8.2.1 (which only touched router.c parse_ipv6_dispatch - announce ingest does not call it). On native_sim/native/64 (Zephyr 4.1.0 workspace, worker1 checkout @ 5080c04904+): lichen/tests/routing_announce main.c:431 lichen_announce_ingest_authenticated(announce, len, NULL) is expected non-zero (callback-failure path) but returns 0, so the same-seq retry path is not exercised as asserted. 8/9 other tests pass. Repro: west build -b native_sim/native/64 lichen/tests/routing_announce -t run. Likely cause: ingest no longer fails when the auth callback pointer is NULL (guard removed or inverted in announce.c) - needs triage; the test or the code may be wrong.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T06:07:23.013759114Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-31T06:07:23.013759114Z",
+  "updated_at": "2026-08-31T20:17:29.019425454Z",
+  "closed_at": "2026-08-31T20:17:29.019425454Z",
+  "close_reason": "Fixed (commit on beads-worker-3): the test's contract is correct — a failed observer callback must NOT consume the announce sequence number. Root cause: ingest updated peer-\u003eseq_num BEFORE notify_observers, so after the callback-failure (-EINVAL) the same-seq retry was judged stale (announce_seq_newer(7,7) false) and the non-reset observer filtered (-EALREADY, calls=1). Fix: capture the pre-ingest (seq, location_seq) and roll back under announce_mutex on notify failure (ingest_mutex held throughout — no observable window). REVIEW hardening from 3 kimi-k3 passes: (a) rollback is now conditional (only if the stream state still equals what this ingest wrote) — a reentrant observer that accepted a newer announce between update and failure would otherwise have its state clobbered, re-opening a replay window (security-relevant edge, pass 3); (b) prev_* typed uint16_t to match the fields; stale path needs no rollback (deferred update untouched — verified). TOFU new-peer rollback restores seq 0 with the pin retained (pre-existing pin-retention policy, no degraded replay protection). Passes 1+2 PASS (lock ordering ingest-\u003eannounce matches the documented order; signature re-verified on retry; no seq-rollback replay window). VALIDATED: routing_announce native_sim on heft 9/9 SUITE SUCCEEDED (was 8/9).",
   "labels": [
     "zephyr",
     "networking"

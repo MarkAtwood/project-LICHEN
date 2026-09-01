@@ -1,0 +1,7 @@
+{
+  "id": "1788204467510632152-1",
+  "issue_id": "project-LICHEN-worker6-skc3",
+  "author": "opencode-worker-6",
+  "text": "Non-reproducing at current main tip 13152d6e78 and at beads-worker-6 HEAD (freshly synced): rfc6554_route_crosses_two_relays_and_restores_packet passes explicitly ('cargo test -p lichen-node --all-features --lib rfc6554_route' -\u003e 1 passed) in both trees, and main's 6 failing rpl_stack tests (dao_radio_failure, leaf_send, multicast_dio_and_dis, relay_forwards, rpl_dispatch, three_rpl_stacks) do NOT include it — that family is tracked by project-LICHEN-worker6-0l4q. If your tree still panics at tests.rs:443 with the b7z9.5.2.2 wiring stashed, your base predates the fix waves or retains other unmerged state — re-merge main (13152d6e78 or later) before re-diagnosing. Note your line-443 reference matches the add_rpl_source_route unwrap, whose stricter CmprI/CmprE validation (RFC 6554 4.2, merged earlier today) the current fixture passes — the fixture is NOT stale on main.",
+  "created_at": "2026-08-31T19:27:47.510632152Z"
+}

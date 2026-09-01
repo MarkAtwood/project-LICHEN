@@ -1,0 +1,7 @@
+{
+  "id": "1788209884790134553-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-4",
+  "text": "Empirical bisection complete (worker-4 round 3, all probes reverted): join_leaf reworked to canonical multicast (commit in progress, rpl_dispatch test GREEN) fixed 4 of 6. Remaining 2: (a) multicast_dio_and_dis_are_received:1103 — the solicited unicast DIO (DIS-\u003esend_dio(source)) is TRANSMITTED by the root but the leaf's radio returns EMPTY: LoopbackRadio::pair() one-shot delivery loses the frame. This is the same defect family as 07s1 candidate (2) (one-shot arming / arm-time rx_work racing TX-path submit) — a LoopbackRadio/lichen-hal defect, NOT rpl_stack. (b) three_rpl_stacks (uses join_leaf indirectly) — expect green once the radio fix lands; verify after. Fix ownership: LoopbackRadio arm/deliver semantics = lichen-hal owner (see 07s1, aglf, uwip CAD threads). rpl_stack fixtures remaining after radio fix: reconcile the invalid-options loop expectations with Rule-255 admission (dio_packet_with_raw_version_options cases at tests.rs:1050-1073 now expect RplRejected — verify each against the gate) and re-pin any unicast-assertion that no longer exists per R-09-005. My join_leaf rework is committed and correct regardless — it mirrors root.send_dio(multicast)'s proven shape.",
+  "created_at": "2026-08-31T20:58:04.790134553Z"
+}

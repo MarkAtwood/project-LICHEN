@@ -64,6 +64,7 @@ from lichen.rpl.dodag import DodagRole
 from lichen.rpl.messages import DIO, RPL_ICMPV6_TYPE, RplCode
 from lichen.schc.fragment import (
     MAX_ACK_REQUESTS,
+    RULE_IDS,
     TILE_SIZE,
     Fragment,
     FragmentError,
@@ -1057,6 +1058,48 @@ async def test_production_schc_ingress_notifies_once_and_success_resets(
         await node._process_received(malformed)
     assert notifications == [peer.pubkey, peer.pubkey]
     assert delivered == [(wrap_schc_payload(compress_packet(raw)), peer)]
+
+
+@pytest.mark.asyncio
+async def test_fragment_dispatch_tracks_rule_ids_constant(
+    identity: Identity,
+    radio: MockRadio,
+    peer_identity: Identity,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = Node(identity=identity, radio=radio, config=NodeConfig())
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+    sender_control: list[RxFrame] = []
+    monkeypatch.setattr(
+        node.link,
+        "accept_authenticated_schc_sender_control",
+        lambda rx: sender_control.append(rx),
+    )
+
+    def reject_reassembly(_rx: RxFrame) -> None:
+        raise FragmentError("reassembly not expected in this test")
+
+    monkeypatch.setattr(node.link, "accept_authenticated_schc_fragment", reject_reassembly)
+
+    # A raw fragment dispatch (first byte in RULE_IDS) enters the fragment branch.
+    fragment_payload = bytes([RULE_IDS[0], 0x00])
+    await node._process_received(_verified_rx(fragment_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == []
+
+    # A non-rule first byte without the SCHC dispatch is application delivery.
+    plain_payload = bytes([0x70, 0xAA])
+    await node._process_received(_verified_rx(plain_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == [(plain_payload, peer)]
+
+    # Detection consults the module-level RULE_IDS constant, not hardcoded bytes.
+    monkeypatch.setattr("lichen.node.RULE_IDS", (0x70,))
+    await node._process_received(_verified_rx(fragment_payload, peer))
+    assert len(sender_control) == 1
+    assert delivered == [(plain_payload, peer), (fragment_payload, peer)]
 
 
 @pytest.mark.asyncio
@@ -2412,6 +2455,32 @@ async def test_node_post_commit_peer_failure_restores_bounded_one_shot_permit(
     assert node.gradient_table.lookup(destination) is not None
 
 
+def test_node_persist_path_requires_revision_anchor(
+    tmp_path,
+    identity: Identity,
+) -> None:
+    with pytest.raises(
+        ValueError, match="persistence_revision_anchor required when persist_path is set"
+    ):
+        Node(
+            identity=identity,
+            radio=cast(Any, MockRadio()),
+            config=NodeConfig(persist_path=str(tmp_path / "node-state")),
+        )
+
+
+def test_node_partial_rpl_admission_config_is_rejected(identity: Identity) -> None:
+    with pytest.raises(
+        ValueError,
+        match="RPL admission requires instance ID, DODAG ID, and expected DIO role",
+    ):
+        Node(
+            identity=identity,
+            radio=cast(Any, MockRadio()),
+            config=NodeConfig(rpl_instance_id=5),
+        )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("retained", "first_sequence", "second_sequence"),
@@ -2813,3 +2882,73 @@ def test_relay_seen_lru_eviction(node: Node) -> None:
     # Verify newest payloads remain
     for i in range(evicted_count, RELAY_SEEN_MAX_SIZE + 1):
         assert payloads[i] in node._relay_seen, f"payload-{i:03d} should remain"
+
+
+async def test_non_announce_routing_frame_is_not_delivered_to_application() -> None:
+    """Routing subtypes other than ANNOUNCE are node traffic, not app data."""
+    identity = Identity.generate()
+    peer_identity = Identity.generate()
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    node = Node(identity=identity, radio=MockRadio())
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+
+    # A hypothetical non-ANNOUNCE routing subtype (e.g. 0x02) must be consumed
+    # by the node, never forwarded to the application callback.
+    routing_other = bytes([L2_DISPATCH_ROUTING, 0x02]) + b"payload"
+    await node._process_received(_verified_rx(routing_other, peer))
+    assert delivered == []
+
+    # An empty-body routing frame is malformed and equally dropped.
+    routing_empty = bytes([L2_DISPATCH_ROUTING])
+    await node._process_received(_verified_rx(routing_empty, peer))
+    assert delivered == []
+
+
+async def test_announce_routing_frames_still_reach_announce_handling() -> None:
+    """ANNOUNCE frames keep their dedicated handling (no regression)."""
+    identity = Identity.generate()
+    peer_identity = Identity.generate()
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    node = Node(identity=identity, radio=MockRadio())
+
+    handled: list[tuple[bytes, PeerIdentity]] = []
+
+    async def record_announce(body: bytes, sender: PeerIdentity, rssi_dbm: int) -> None:
+        handled.append((body, sender, rssi_dbm))
+
+    node._process_announce = record_announce  # type: ignore[method-assign]
+
+    routing_announce = bytes([L2_DISPATCH_ROUTING, 0x01]) + b"\x00" * 8
+    await node._process_received(_verified_rx(routing_announce, peer))
+    assert handled == [(routing_announce[1:], peer, -90)]
+
+
+async def test_empty_and_truncated_dispatch_frames_are_not_delivered() -> None:
+    """Frame-level rules (draft-lichen-link-01 section 3.1): empty PLD carries
+    nothing and a defined dispatch value MUST be at least 2 bytes."""
+    identity = Identity.generate()
+    peer_identity = Identity.generate()
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    node = Node(identity=identity, radio=MockRadio())
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+
+    await node._process_received(_verified_rx(b"", peer))  # empty PLD: legal, nothing to deliver
+    await node._process_received(_verified_rx(bytes([0x14]), peer))  # truncated SCHC dispatch
+    await node._process_received(_verified_rx(bytes([0x15]), peer))  # truncated routing dispatch
+    assert delivered == []
+
+
+async def test_undefined_dispatch_still_reaches_application() -> None:
+    """Undefined dispatch values remain the application extension point."""
+    identity = Identity.generate()
+    peer_identity = Identity.generate()
+    peer = PeerIdentity.from_pubkey(peer_identity.pubkey)
+    node = Node(identity=identity, radio=MockRadio())
+    delivered: list[tuple[bytes, PeerIdentity]] = []
+    node.set_on_receive(lambda payload, sender: delivered.append((payload, sender)))
+
+    experimental = bytes([0x99]) + b"custom"
+    await node._process_received(_verified_rx(experimental, peer))
+    assert delivered == [(experimental, peer)]

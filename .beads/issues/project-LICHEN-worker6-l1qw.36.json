@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.36",
+  "title": "12-apps: waypoint /routes resource (18.3.3)",
+  "description": "spec/12-apps.md 18.3.3 defines ordered waypoint routes {id,name,waypoints[],distance_m,created,creator} with /routes, /routes/{id} using the same CRUD pattern as waypoints. No /routes waypoint resource exists in Python, Rust, or C (only routing-table /status/routes). Listed as planned P2 in docs/spec-chapter-breakdowns.md:1583-1585. Suggested placement: mirror waypoints.py / coap_waypoints.c. See docs/spec-coverage/12-apps.md R-12-027.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:47:59.698870946Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:47:59.698870946Z",
+  "labels": [
+    "apps",
+    "spec-gap",
+    "lci",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.36",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:47:59.829531984Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

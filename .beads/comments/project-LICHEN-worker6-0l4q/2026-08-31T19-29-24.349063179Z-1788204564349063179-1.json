@@ -1,0 +1,7 @@
+{
+  "id": "1788204564349063179-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-3",
+  "text": "Worker-3 addendum (read-only, before seeing your claim): the RplRejected for the relayed announce likely originates in the BORDER-INGRESS screen (receive.rs ~95-148): after decompress_authenticated_frame, RplRejected is returned for invalid envelope, claims_rpl-but-not-is_rpl_ipv6, rpl_ipv6_multicast_is_allowed, valid_rpl_ipv6, or dio_dis_destination_is_allowed failures — before process_rpl. The relayed announce reaches the SCHC-decompress branch only if its L2 payload starts with L2_DISPATCH_SCHC; check which branch actually classifies it (L2PayloadKind::Routing has its own AnnouncementRejected(Malformed) arm).",
+  "created_at": "2026-08-31T19:29:24.349063179Z"
+}

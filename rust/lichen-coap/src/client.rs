@@ -180,12 +180,12 @@ impl CoapClient {
         Self::default()
     }
 
-    /// GET coap://[addr][path].
+    /// GET `coap://[addr][path]`.
     pub async fn get(&mut self, addr: SocketAddr, path: &str) -> Result<Response, ClientError> {
         self.request(addr, MessageCode::GET, path, None).await
     }
 
-    /// POST coap://[addr][path] with CBOR body.
+    /// POST `coap://[addr][path]` with CBOR body.
     pub async fn post(
         &mut self,
         addr: SocketAddr,
@@ -196,7 +196,7 @@ impl CoapClient {
             .await
     }
 
-    /// PUT coap://[addr][path] with CBOR body.
+    /// PUT `coap://[addr][path]` with CBOR body.
     pub async fn put(
         &mut self,
         addr: SocketAddr,
@@ -206,7 +206,7 @@ impl CoapClient {
         self.request(addr, MessageCode::PUT, path, Some(body)).await
     }
 
-    /// DELETE coap://[addr][path].
+    /// DELETE `coap://[addr][path]`.
     pub async fn delete(&mut self, addr: SocketAddr, path: &str) -> Result<Response, ClientError> {
         self.request(addr, MessageCode::DELETE, path, None).await
     }

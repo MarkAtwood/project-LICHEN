@@ -1,0 +1,132 @@
+{
+  "vector_type": "tunnel_encapsulation",
+  "format_version": 1,
+  "description": "IPv6-in-IPv6 tunnel encapsulation/decapsulation conformance for spec/05-routing.md 8.9 (R-05-063/R-05-066): root-side inner Hop-Limit decrement with hop-budget rejection, and fail-closed E-side decapsulation with inner-destination verification.",
+  "oracle": {
+    "basis": "spec/05-routing.md 8.9 (R-05-063, R-05-066) + RFC 2473 model",
+    "implementation": "independent generator; no lichen package imports",
+    "generator_command": "python3 test/vectors/generate_tunnel_encapsulation.py test/vectors/tunnel_encapsulation.json"
+  },
+  "constants": {
+    "outer_hop_limit": 64,
+    "outer_next_header": 43,
+    "inner_next_header": 41,
+    "forwarding_decrement": 1
+  },
+  "encapsulation": [
+    {
+      "name": "encap_two_hops",
+      "description": "orig HL=64, num_addrs=2 -> inner HL=61",
+      "original_hop_limit": 64,
+      "num_addrs": 2,
+      "root_addr_hex": "02000000000000000000000000000001",
+      "route_hops_hex": [
+        "02000000000000000000000000000002",
+        "02000000000000000000000000000003",
+        "02000000000000000000000000000004"
+      ],
+      "inner_packet_hex": "6000000000091140fe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_encapsulated_hex": "6000000000592b40020000000000000000000000000000010200000000000000000000000000000229040302000000000200000000000000000000000000000302000000000000000000000000000004600000000009113dfe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_inner_hop_limit": 61,
+      "expect": "encapsulate"
+    },
+    {
+      "name": "encap_one_hop",
+      "description": "orig HL=64, num_addrs=1 -> inner HL=62",
+      "original_hop_limit": 64,
+      "num_addrs": 1,
+      "root_addr_hex": "02000000000000000000000000000001",
+      "route_hops_hex": [
+        "02000000000000000000000000000002",
+        "02000000000000000000000000000004"
+      ],
+      "inner_packet_hex": "6000000000091140fe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_encapsulated_hex": "6000000000492b400200000000000000000000000000000102000000000000000000000000000002290203010000000002000000000000000000000000000004600000000009113efe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_inner_hop_limit": 62,
+      "expect": "encapsulate"
+    },
+    {
+      "name": "encap_min_hl_ok",
+      "description": "orig HL=5, num_addrs=2 -> inner HL=2",
+      "original_hop_limit": 5,
+      "num_addrs": 2,
+      "root_addr_hex": "02000000000000000000000000000001",
+      "route_hops_hex": [
+        "02000000000000000000000000000002",
+        "02000000000000000000000000000003",
+        "02000000000000000000000000000004"
+      ],
+      "inner_packet_hex": "6000000000091105fe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_encapsulated_hex": "6000000000592b400200000000000000000000000000000102000000000000000000000000000002290403020000000002000000000000000000000000000003020000000000000000000000000000046000000000091102fe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_inner_hop_limit": 2,
+      "expect": "encapsulate"
+    },
+    {
+      "name": "encap_reject_sl_equals_hl",
+      "description": "initial Segments Left (2) >= Hop Limit after forwarding decrement (2) \u2014 no route",
+      "original_hop_limit": 3,
+      "num_addrs": 2,
+      "root_addr_hex": "02000000000000000000000000000001",
+      "route_hops_hex": [
+        "02000000000000000000000000000002",
+        "02000000000000000000000000000003",
+        "02000000000000000000000000000004"
+      ],
+      "inner_packet_hex": "6000000000091103fe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expect": "no_route"
+    },
+    {
+      "name": "encap_reject_sl_above_hl",
+      "description": "initial Segments Left (3) >= Hop Limit after forwarding decrement (1) \u2014 no route",
+      "original_hop_limit": 2,
+      "num_addrs": 3,
+      "root_addr_hex": "02000000000000000000000000000001",
+      "route_hops_hex": [
+        "02000000000000000000000000000002",
+        "02000000000000000000000000000003",
+        "02000000000000000000000000000003",
+        "02000000000000000000000000000004"
+      ],
+      "inner_packet_hex": "6000000000091102fe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expect": "no_route"
+    }
+  ],
+  "decapsulation": [
+    {
+      "name": "decap_valid",
+      "description": "well-formed tunnel addressed to this node unwraps",
+      "outer_packet_hex": "60000000003129400200000000000000000000000000000102000000000000000000000000000004600000000009113cfe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_dst_hex": "02000000000000000000000000000004",
+      "expected_inner_hex": "600000000009113cfe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expect": "decapsulate"
+    },
+    {
+      "name": "decap_inner_dst_mismatch",
+      "description": "inner destination is not the authorized primary \u2014 reject",
+      "outer_packet_hex": "60000000003129400200000000000000000000000000000102000000000000000000000000000004600000000009113cfe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_dst_hex": "020000000000000000000000000000ff",
+      "expect": "reject"
+    },
+    {
+      "name": "decap_inner_len_inconsistent",
+      "description": "inner IPv6 payload-length inconsistent with frame \u2014 reject",
+      "outer_packet_hex": "600000000031294002000000000000000000000000000001020000000000000000000000000000046000000000ff113cfe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_dst_hex": "02000000000000000000000000000004",
+      "expect": "reject"
+    },
+    {
+      "name": "decap_outer_not_ipv6_in_ipv6",
+      "description": "outer next_header is not 41 \u2014 reject",
+      "outer_packet_hex": "60000000003111400200000000000000000000000000000102000000000000000000000000000004600000000009113cfe80000000000000000000000000000a02000000000000000000000000000004161600080000e93800",
+      "expected_dst_hex": "02000000000000000000000000000004",
+      "expect": "reject"
+    },
+    {
+      "name": "decap_inner_truncated",
+      "description": "inner header truncated \u2014 reject",
+      "outer_packet_hex": "60000000003129400200000000000000000000000000000102000000000000000000000000000004600000000009113cfe80",
+      "expected_dst_hex": "02000000000000000000000000000004",
+      "expect": "reject"
+    }
+  ]
+}

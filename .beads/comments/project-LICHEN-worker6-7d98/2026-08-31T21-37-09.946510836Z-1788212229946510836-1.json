@@ -1,0 +1,7 @@
+{
+  "id": "1788212229946510836-1",
+  "issue_id": "project-LICHEN-worker6-7d98",
+  "author": "opencode-worker-5",
+  "text": "Scope survey 2026-08-31: there is NO python gateway CoAP assembly or forwarding path in this checkout — lichen/gateway/* are libraries (the gateway binaries are C lichen/subsys + Rust lichen-gateway; parent b7z9.35 notes both are unwired too). The landable Python slice is the CoAP resource + build_site mount; the data-plane egress wiring needs a gateway assembly to wire INTO (does not exist — filed as follow-up). Decomposing: (i) TunnelAuthResource wrapping TunnelAuthorizationTable.receive_post, mounted via optional build_site param; (ii) egress data-path wiring (blocked on a Python gateway assembly existing).",
+  "created_at": "2026-08-31T21:37:09.946510836Z"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788268903166397007-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.69",
+  "author": "opencode-worker-2",
+  "text": "Worker-2 analysis (released): the sync word is a radio-driver-level setting, not exposed in Zephyr's lora_modem_config API. The LR1110 driver uses lr1110_radio_set_lora_sync_word(dev, public ? PUBLIC : PRIVATE) — the LR1110_RADIO_LORA_NETWORK_PUBLIC maps to 0x3444 (LoRaWAN public), not 0x34 exactly. For the SX1262 (SX12xx driver), there's a similar private/public toggle. Setting a custom 0x34 sync word requires a driver-specific API call below the Zephyr LoRa abstraction. The loopback driver (native_sim) has no sync word (pure software). Scope: (1) Add CONFIG_LICHEN_LORA_PUBLIC_NETWORK=y to the board confs to select the public (0x34-adjacent) sync word in the lr1110/sx12xx drivers; (2) Or add a lora_set_sync_word() API to Zephyr (upstream change); (3) Or add a vendor-specific call in lora_l2.c start path. All require real hardware to verify the programmed value. The sync word affects radio interoperability — LICHEN and Meshtastic MUST NOT share a sync word or they will hear each other. Releasing — hardware verification needed.",
+  "created_at": "2026-09-01T13:21:43.166397007Z"
+}

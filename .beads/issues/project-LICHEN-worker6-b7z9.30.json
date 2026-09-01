@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.30",
+  "title": "C/Zephyr: adaptive_sf_select steps and post-step-6 SF floors absent; loss threshold 40% vs 25% (spec 02a 2a.8)",
+  "description": "Requirements: R-02a-113 (MUST) AdaptiveSFSelect steps (absent SF -\u003e 10; Density\u003e8 or Utilization\u003e150 -\u003e +2; EMA_SNR\u003e8 and Density\u003c5 -\u003e -1; EMA_Loss\u003e0.25 or Utilization\u003e200 or LoadFactor\u003e0.8 -\u003e +1 with Utilization\u003e200 returning (12,false)) — C implements only the threshold table (lichen/subsys/lichen/link/rf_health.c:100-115 lichen_rf_health_adaptive_sf), no select procedure; Python python/src/lichen/ccp.py:226-243 and Rust rust/lichen-core/src/rf_health.rs:411-438 are implemented+tested (ccp16_utilization.json). R-02a-114 (MUST) post-step-6 floors (EMA_SNR\u003c-5 -\u003e 12; SNR\u003c0 -\u003e \u003e=11; Density\u003e8 -\u003e \u003e=11; Load\u003e0.8 -\u003e \u003e=11) — C table-only; Rust applies floors only via the default table when SF unassigned, an explicit AssignedSF bypasses them (rf_health.rs:390-393 vs :405-440); Python applies except after util\u003e200 early-return (ccp.py:241-261). R-02a-112 divergence — C lichen_rf_health_should_rebalance uses loss \u003e 40% (rf_health.c:121) vs Rust \u003e 25% (rf_health.rs:446) and the 0.25 spec threshold pinned by ccp16_ema_loss_threshold.json. Also note spec-internal conflict: 2a.8 step 3 says Density \u003e 8 but 02-physical-link.md:115 and all implementations use Density \u003e 10 (ccp16.json encodes \u003e10). Suggested placement: implement adaptive_sf_select + floors in lichen/subsys/lichen/link/rf_health.c; fix C loss threshold to 0.25; apply floors on the explicit-SF path in Rust; resolve the 8-vs-10 spec conflict (02a vs 02-physical-link). C rf_health currently has no test suite — add lichen/tests/rf_health. From spec-coverage sweep 2026-08-31 (docs/spec-coverage.md R-02a-112/113/114/148).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:33:08.6997922Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T11:44:40.879526877Z",
+  "closed_at": "2026-09-01T11:44:40.879526877Z",
+  "close_reason": "C loss rebalance threshold fixed per R-02a-112: lichen_rf_health_should_rebalance loss arm now fires at \u003e 25% (was \u003e 40%). Implementation note: the packet_loss_rate_fp function returns percent-in-Q16.16 (failures*100\u003c\u003c16/tx), so the threshold is 25\u003c\u003c16 = 1638400 — not the fraction-in-Q16.16 16384; strictly-greater semantics (exactly 25% does not fire). Standalone behavioral harness: 3/12 (exactly 25%) no-fire; 4/13 (\u003e25%) fires; 3/10 (30%) fires — the last is the key case that distinguishes old-40% from new-25%. This was the last outstanding item in the b7z9.30 scope: adaptive_sf_select + floors already landed in C via my b7z9.30.1 (density threshold + floors a-d in gradient.c) and the threshold-table implementation was already present; Rust explicit-SF floor application already landed (b7z9.30.3) and Rust/C loss thresholds now agree at 0.25. Verification: standalone harness green under -Wall -Wextra -Werror; cppcheck gate exit 0. Codereview (Kimi K3): narrow pass confirmed unit conversion (percent-in-Q16.16, 25% = 1638400), strictly-greater boundary, and density/load arms untouched.",
+  "labels": [
+    "zephyr",
+    "ccp15",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.30",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:33:08.8568029Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

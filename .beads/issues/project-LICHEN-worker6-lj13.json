@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-lj13",
+  "title": "Remove remaining committed build trees: firmware/bridge-zephyr/build and build_test_schnorr48",
+  "description": "Repo-wide scan during vi0a (tx_queue cleanup) found two more committed build trees beyond tx_queue (removed in b7438728dd) and fuzz (removed in f49835b68c): (1) firmware/bridge-zephyr/build/ — Zephyr build residue (CMakeCache.txt, CMakeConfigureLog.yaml, cmake.check_cache, Kconfig.modules, Kconfig.sysbuild.modules, lichen/build_epoch.conf, sysbuild_modules.txt, zephyr_modules.txt, zephyr_settings.txt); (2) build_test_schnorr48/ at repo root — CMakeFiles/schnorr48_test.dir/main.c.o. Same hygiene class: stale cache paths, repo bloat, flavor-diagnosis confusion. Fix: verify nothing references these paths (scripts/, .github/, docs/), git rm -r both, extend .gitignore (firmware/bridge-zephyr/build/, build_test_schnorr48/), and do a final repo-wide scan (git ls-files | grep -E '(^|/)(build|build-tsan)/|\\.o$') to confirm zero remaining. Discovered from project-LICHEN-worker6-vi0a.",
+  "status": "closed",
+  "priority": 3,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:08:11.894270305Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T20:57:15.16463888Z",
+  "closed_at": "2026-08-31T20:57:15.16463888Z",
+  "close_reason": "Complete (two commits): f32aa42ff2 removed firmware/bridge-zephyr/build (9 files) + build_test_schnorr48 (12 files incl a committed ELF); 05f37ac269 removed the 48-file remainder my first scan missed — three root-level Zephyr build trees build_heltec_gw/ (18), build-test/ (16), build_gateway_heltec/ (14): Kconfig fragments, generated devicetree/zephyr files, CMakeCache, sysbuild/zephyr_modules/settings, build_epoch.conf — plus gitignore entries for all five tree names. Honest correction trail: my round-14 close draft claimed 'zero remaining' from a scan pattern that missed differently-named trees (build_heltec_gw etc.); the delegated correctness pass caught it ('cannot be called final while 48 residue files remain tracked') and this round fixed it. Final verification: precise residue scan (build-dir names, CMakeCache, .ninja, CMakeFiles, .o) = 0; schnorr48 host cmake test builds and passes 1/1 from the clean tree; reference sweep over scripts/.github/lichen/firmware/docs = clean; pass 2 ran a secret scan over all deleted content (clean, no history-scrub concern). Codereview 3x delegated to kimi-k3 across both commits: pass1 correctness found the gap (fixed) + cosmetic gitignore redundancy (documented, harmless — duplicates pre-existing build_*/ rules); pass2 security clean (no secrets, no scope leakage); pass3 edge clean (gitignore depth convention matches file, nested .gitignores cannot interact). Follow-ups in the chain: vi0a (done), lj13 (this), no further residue.",
+  "labels": [
+    "c-safety"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-lj13",
+      "depends_on_id": "project-LICHEN-worker6-vi0a",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:08:12.014172247Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

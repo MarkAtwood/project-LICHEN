@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-41at",
+  "title": "lichen-rpl routing.rs doc comment claims sender-to-target authorization precedes replay check; code runs it after",
+  "description": "Found by kimi-k3 security review of b7z9.3.1 (pre-existing, not introduced by that diff). rust/lichen-rpl/src/routing.rs:564-565 doc comment on process_signature_verified claims sender-to-target authorization 'precedes replay', but sender_is_authorized runs at routing.rs:669, after the replay check at routing.rs:627-640. The comment contradicts the code on exactly the ordering property the R-05-035 flags rejection relies on (replay classification before semantic parse). Fix: correct the doc comment (replay classification precedes prefix authorization and sender authorization; semantic parse precedes route-state mutation only), or reorder the code if the comment reflects the intended spec semantics — check spec/05-routing.md 8.6/8.7 ordering requirements first and pick whichever matches. Files: rust/lichen-rpl/src/routing.rs. Discovered from project-LICHEN-worker6-b7z9.3.1.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:13:40.665611072Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T09:13:40.665611072Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-41at",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.3.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T09:13:40.814732425Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

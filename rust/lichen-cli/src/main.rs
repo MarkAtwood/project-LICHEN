@@ -1,6 +1,6 @@
 //! lichen — LICHEN node CLI.
 //!
-//! Connects to a node via CoAP over UDP (default [::1]:5683) and provides
+//! Connects to a node via CoAP over UDP (default `[::1]:5683`) and provides
 //! commands for status, neighbors, messaging, keys, config, and position.
 //!
 //! Examples:

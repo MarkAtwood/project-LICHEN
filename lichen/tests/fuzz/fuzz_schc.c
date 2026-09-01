@@ -128,9 +128,13 @@ static void fuzz_reassembler(const uint8_t *data, size_t size)
 	uint8_t packet[FUZZ_REASSEMBLY_BUF_SIZE];
 	struct schc_reassembler reassembler;
 
-	/* Vary the reassembly limit with the fuzz input across the whole
+	/* The current engine derives rule/window/FCN from each message's
+	 * header bytes; the reassembler only needs storage and a bound.
+	 * Vary the reassembly limit with the fuzz input across the whole
 	 * valid argument range 1..capacity, including the edges (limit 1,
-	 * first regular-tile limit 179, limit == capacity). schc_reassembler_init's
+	 * first regular-tile limit 179, limit == capacity); the fixed
+	 * SCHC_FRAGMENT_DEFAULT_RECEIVER_LIMIT sits inside this range, so
+	 * that coverage point is preserved. schc_reassembler_init's
 	 * argument rejection is covered by the schc_reassembly host tests. */
 	size_t limit = (size_t)(data[0] | ((size_t)data[1] << 8)) %
 		       (FUZZ_REASSEMBLY_BUF_SIZE + 1U);

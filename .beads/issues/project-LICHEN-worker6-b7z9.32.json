@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.32",
+  "title": "Observe fresh-PIV policy (spec 15.3): C and Python lack receiver-side rejection of PIV-less notifications; C fresh-PIV response API unwired",
+  "description": "Requirement (spec/06-security.md:1260-1270, deliberate RFC 8613 deviation): every Observe notification MUST carry a fresh nonzero Partial IV, and receivers MUST reject any notification lacking one; LICHEN servers (Rust and C) MUST always include a fresh Partial IV per notification. Classification: implemented+tested (Rust); not-implemented (C and Python receiver side); implemented+untested (C server API). Evidence: Rust rust/oscore-fork/src/lib.rs:1245-1318 begin_unprotect_observe_response rejects observe with piv_len==0, observe tests lib.rs:3360-3520; rust/lichen-node/src/secure.rs:3117. C: oscore_protect_response_with_piv (lichen/subsys/lichen/oscore/oscore_protect.c:885, fresh-PIV 669-743) has no in-repo caller outside subsystem tests; receiver-side observe PIV check absent. Python: no receiver-side rejection (relies on aiocoap defaults). Suggested placement: C oscore unprotect observe path + CoAP observe wiring; Python oscore/coap receiver. human-only: oscore internals edit bar; do not plan a fix without human decision.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:17:07.541056641Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:17:07.541056641Z",
+  "labels": [
+    "spec-gap",
+    "oscore",
+    "coap",
+    "human-only",
+    "zephyr",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.32",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T10:17:07.660415494Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

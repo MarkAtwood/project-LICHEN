@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-p0mp",
+  "title": "b7z9.40(c): raw TX rejects PHY/regulatory constraint violations (R-11-028)",
+  "description": "Child of b7z9.40. spec/11-lci.md 17.5.4 R-11-028: raw TX MUST reject frames/overrides violating configured PHY/regulatory constraints. Today Python caps frame length only (raw_tx.py:51); there is no radio-override validation surface; Rust HAL TxPower caps are unwired primitives (rust/lichen-hal/src/lib.rs:223-262). Design needed: define the constraint surface (region TX-power caps, duty cycle, datarate/modulation bounds) and a validation seam in the raw TX path; tests for violating overrides. Largest child; needs a constraint-surface design decision — flag to Mark if the regulatory model is ambiguous.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T18:03:07.912773799Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T18:03:07.912773799Z",
+  "labels": [
+    "lci",
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p0mp",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.40",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T18:03:08.042266206Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

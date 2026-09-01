@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.14",
+  "title": "Density-aware startup (spec 09 14.8): absent in C, partial in Rust, first DIO/DIS wiring unproven",
+  "description": "Spec 09 14.8 boot-storm block R-09-134..139: nodes MUST implement density-aware startup - boot listen-only random uniform [LISTEN_PERIOD_MIN=30s, LISTEN_PERIOD_MAX=60s]; count unique nodes heard deduplicated by EUI-64/short address from announces/DIOs/DIS/valid frames; initial_delay = min(MAX_STARTUP_DELAY=300s, nodes_heard * DELAY_PER_NODE=5s); delay random(0, initial_delay) before first transmission; scaled delay MUST apply to first announce, first DIO, and first DIS. Classification: Python implemented+tested (python/src/lichen/timing/startup_delay.py:22-199 BootStormMitigation.observe_node dedup + compute_startup_delay_s; tests python/tests/test_startup_delay.py:100-177; first-announce wiring python/src/lichen/announce/scheduler.py:276-279); Rust partial (rust/lichen-core/src/desync.rs:13-38 initial_startup_delay constants+formula+tests only - no listen period, no node-heard tracking); C/Zephyr NOT-IMPLEMENTED (no LISTEN_PERIOD*/nodes_heard/startup-delay symbols anywhere in lichen/subsys). No implementation applies the delay to first DIO or first DIS (only first announce evidenced). MAY shorten-listen-if-idle-15s also absent everywhere (MAY, not filed separately). Suggested placement: C - add boot-time listen/defer state to lichen/subsys/lichen/link before first TX; Rust - extend lichen-node boot path; both + verify first DIO/DIS deferral.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:16.288209864Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T07:33:16.288209864Z",
+  "labels": [
+    "zephyr",
+    "rust",
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.14",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:16.470143471Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

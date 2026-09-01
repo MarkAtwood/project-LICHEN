@@ -62,9 +62,14 @@ def adaptive_duty_permille(density: int, region: int) -> int:
 
     Returns:
         Duty cycle budget in permille of the 1-hour rolling window.
+
+    Raises:
+        ValueError: If density is negative.
     """
+    if density < 0:
+        raise ValueError("density must be non-negative")
     strict_region = region != REGION_US
-    if density > 8:
+    if density > 10:
         return 5 if strict_region else 10
     if density < 3:
         return 20 if strict_region else 50
@@ -80,7 +85,12 @@ def max_tx_ms(duty_permille: int) -> int:
     Returns:
         Maximum transmit time in milliseconds over the 1-hour rolling window.
         Example: max_tx_ms(10) = 36000 ms = 36 seconds per hour.
+
+    Raises:
+        ValueError: If duty_permille is negative.
     """
+    if duty_permille < 0:
+        raise ValueError("duty_permille must be non-negative")
     return (WINDOW_MS // 1000) * duty_permille
 
 

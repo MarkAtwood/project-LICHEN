@@ -406,6 +406,19 @@ def generate() -> DaoVectorDocument:
                 ),
             ),
             rejected(
+                "reject_target_flags_nonzero",
+                "target_flags_nonzero",
+                dao(bytes([5, 18, 0x01, 128]) + ORIGIN, transit(PARENT_1)),
+                42,
+                "malformed_dao",
+                "structural",
+                envelope_valid=False,
+                description=(
+                    "R-05-035 (spec 8.6): the reserved Target Flags octet "
+                    "MUST be zero; nonzero rejects at the structural stage."
+                ),
+            ),
+            rejected(
                 "reject_unknown_key",
                 "unknown_key",
                 single,

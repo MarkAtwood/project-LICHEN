@@ -239,9 +239,9 @@ def test_ccp16_hop_sim_select_channel(name: str) -> None:
 
 def test_ccp16_hop_density_high_ch0() -> None:
     vec = _case(CCP16_HOP, "density_high_ch0")
-    assert vec["density"] == 9
+    assert vec["density"] == 11
     # ccp.select_channel implements the density gate of the same 02a pseudocode:
-    # density > 8 forces CH0 before any hashing (EUI/epoch are irrelevant here).
+    # density > 10 forces CH0 before any hashing (EUI/epoch are irrelevant here).
     ch = ccp_select_channel(eui64=bytes(8), epoch=0, density=vec["density"],
                             n_channels=vec["num_channels"])
     assert ch == vec["expected_channel"] == 0
@@ -301,7 +301,7 @@ def test_desync_on_sfn_wrap() -> None:
     # The wrap with invalid time engages the desync recovery state machine...
     assert fsm.on_sfn_wrap(time_valid=False) is DesyncState.DESYNCED
     # ...whose recovery half re-locks on valid beacons.
-    assert fsm.on_beacon(valid=True) is DesyncState.RECOVERING
+    assert fsm.on_beacon(valid=True, wall_clock_valid=True) is DesyncState.RECOVERING
 
 
 def test_multi_root_version_conflict_desync() -> None:
@@ -348,16 +348,16 @@ def test_desync_recovery_beacon_revalidate_real_fsm() -> None:
     fsm.on_sfn_wrap(time_valid=False)
     assert fsm.state is DesyncState.DESYNCED
     # First valid beacon: state resets into RECOVERING with streak 1.
-    assert fsm.on_beacon(valid=True) is DesyncState.RECOVERING
+    assert fsm.on_beacon(valid=True, wall_clock_valid=True) is DesyncState.RECOVERING
     assert fsm.consecutive_valid == 1
     # Second beacon: still recovering. Third consecutive: fully synced/joined.
-    assert fsm.on_beacon(valid=True) is DesyncState.RECOVERING
-    assert fsm.on_beacon(valid=True) is DesyncState.SYNCED
+    assert fsm.on_beacon(valid=True, wall_clock_valid=True) is DesyncState.RECOVERING
+    assert fsm.on_beacon(valid=True, wall_clock_valid=True) is DesyncState.SYNCED
     # A bad beacon during recovery drops the node back to DESYNCED.
     fsm2 = DesyncFSM()
     fsm2.on_sfn_wrap(time_valid=False)
-    fsm2.on_beacon(valid=True)
-    assert fsm2.on_beacon(valid=False) is DesyncState.DESYNCED
+    fsm2.on_beacon(valid=True, wall_clock_valid=True)
+    assert fsm2.on_beacon(valid=False, wall_clock_valid=True) is DesyncState.DESYNCED
 
 
 def test_desync_recovery_first_beacon_vector_literal() -> None:
@@ -365,7 +365,7 @@ def test_desync_recovery_first_beacon_vector_literal() -> None:
     vec = _case(CCP16_DESYNC, "desync_recovery_beacon_revalidate")
     fsm = DesyncFSM()
     fsm.on_sfn_wrap(time_valid=False)
-    state = fsm.on_beacon(valid=True)  # exactly one valid beacon
+    state = fsm.on_beacon(valid=True, wall_clock_valid=True)  # exactly one valid beacon
     assert state is {"recovering": DesyncState.RECOVERING}[vec["expected"]]
 
 

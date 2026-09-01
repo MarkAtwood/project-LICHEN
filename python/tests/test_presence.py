@@ -234,10 +234,19 @@ class TestAutomaticStatus:
         assert updated.activity == "working"
 
     def test_low_battery_flag_when_below_ten(self) -> None:
-        # Spec 18.5.3: low_battery must be True when battery < 10
+        # Spec 18.5.3: apply_automatic_status must SET low_battery=True when
+        # battery < 10. The bead's true-oracle input (battery=9, flag unset)
+        # is unconstructible through Presence.__post_init__ (the consistency
+        # validator forbids exactly that state), so the input is built via
+        # object.__setattr__ — deliberately inconsistent, documented here —
+        # which makes "derive" and "preserve" distinguishable: if the function
+        # copied the flag instead of computing it, the output would be None.
         current = Presence(
             status="available", ts=_T0, battery=LOW_BATTERY_PCT - 1, low_battery=True
         )
+        # Bypass the frozen constructor validation to unset the flag AFTER
+        # construction, producing the bead's deliberately-inconsistent input.
+        object.__setattr__(current, "low_battery", None)
         updated = apply_automatic_status(current, _T0)
         assert updated.status == "available"
         assert updated.battery == 9

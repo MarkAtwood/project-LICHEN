@@ -78,6 +78,11 @@ pub const OPT_RPL_TARGET_DESCRIPTOR: u8 = 9;
 pub const OPT_DAO_ORIGIN_SIGNATURE: u8 = 0x12;
 /// Root-signed, relayable DODAGVersionNumber authorization option.
 pub const OPT_DODAG_VERSION_AUTHORIZATION: u8 = 0x16;
+/// Provisional Root DIO Signature option (spec 06 8.10.1: wire type TBD).
+///
+/// 0x17 follows the provisional assignments above; keep in sync with the C
+/// implementation (bead b7z9.37.2) until the spec assigns a permanent type.
+pub const OPT_ROOT_DIO_SIGNATURE: u8 = 0x17;
 pub const DAO_ORIGIN_SIGNATURE_DATA_LEN: usize = 56;
 pub const DAO_ORIGIN_SIGNATURE_LEN: usize = 58;
 pub const DODAG_VERSION_AUTHORIZATION_DATA_LEN: usize = 81;
@@ -403,6 +408,52 @@ impl<'a> DaoOriginSignature<'a> {
     }
 }
 
+/// Structural floor for a COSE_Sign1 Root DIO Signature option payload.
+///
+/// A valid blob always carries the CBOR tag + array framing, a protected
+/// header, an unprotected header with `kid`, a payload of at least the seven
+/// fixed `RootDioSignaturePayload` fields, and a 50-byte-encoded 48-byte
+/// signature — comfortably above this floor. Full COSE validation is the
+/// receiver's job (bead b7z9.37.1(ii)); this bound only rejects garbage.
+pub const ROOT_DIO_SIGNATURE_MIN_LEN: usize = 64;
+
+/// Maximum COSE_Sign1 blob an option can carry (RPL option length is u8).
+pub const ROOT_DIO_SIGNATURE_MAX_LEN: usize = 255;
+
+/// Parsed Root DIO Signature option: the raw COSE_Sign1 blob (spec 06 8.10.1).
+///
+/// Byte-transparent by design — decoding and verifying the COSE structure is
+/// the receiver validation step, not the wire-format layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RootDioSignature<'a> {
+    pub cose_sign1: &'a [u8],
+}
+
+impl<'a> RootDioSignature<'a> {
+    pub fn from_bytes(data: &'a [u8]) -> Result<Self, RplError> {
+        if data.len() < ROOT_DIO_SIGNATURE_MIN_LEN {
+            return Err(RplError::InvalidOption);
+        }
+        Ok(Self { cose_sign1: data })
+    }
+
+    pub fn write_to(cose_sign1: &[u8], out: &mut [u8]) -> Result<usize, RplError> {
+        if cose_sign1.len() < ROOT_DIO_SIGNATURE_MIN_LEN
+            || cose_sign1.len() > ROOT_DIO_SIGNATURE_MAX_LEN
+        {
+            return Err(RplError::InvalidOption);
+        }
+        let total = 2 + cose_sign1.len();
+        if out.len() < total {
+            return Err(BufferTooSmall::new(total, out.len()).into());
+        }
+        out[0] = OPT_ROOT_DIO_SIGNATURE;
+        out[1] = cose_sign1.len() as u8;
+        out[2..total].copy_from_slice(cose_sign1);
+        Ok(total)
+    }
+}
+
 /// Structurally valid signed DAO borrowing the exact signed wire prefix.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SignedDaoEnvelope<'a> {
@@ -430,9 +481,11 @@ impl From<RplError> for DaoEnvelopeError {
 
 /// Structural validity of a generalized RPL Target option body
 /// (spec/05-routing.md §8.7.1): flags and prefix-length octets present,
-/// prefix length at most 128, and at least `ceil(prefix_len / 8)` prefix
-/// octets. Whether the origin may advertise the prefix is a routing-layer
-/// decision (§8.7.2), enforced after signature verification.
+/// the reserved Target Flags octet zero (§8.6 R-05-035, matching the
+/// Python reference dao_origin.py structural pass), prefix length at
+/// most 128, and at least `ceil(prefix_len / 8)` prefix octets. Whether
+/// the origin may advertise the prefix is a routing-layer decision
+/// (§8.7.2), enforced after signature verification.
 fn is_generalized_target_body(body: &[u8]) -> bool {
     body.len() >= 2
         && body[0] == 0
@@ -1779,5 +1832,57 @@ mod tests {
             "expected at least 11 DAO-ACK vectors, got {}",
             executed
         );
+    }
+    // ── Root DIO Signature option (spec 06 8.10.1, wire type provisional) ────
+
+    // Byte-exact fixture: test/vectors/root_dio_signature.json case
+    // root_dio_signature_valid_basic (external oracle, committed vectors).
+    const VECTOR_COSE_SIGN1: &str = "d28447a1013a00010000a10448203df4662ab81f5a5825a7015002203df4662ab81f203df4662ab81f5a0200030104190100051a677485800601070258304f9a6d7554edcaf70301635bddb2618a5e7165bb02e9ff1ec86f276bcfff356ba61171e0cef7861ce3a6be76c6d7fd00";
+
+    #[test]
+    fn root_dio_signature_round_trips_vector_bytes() {
+        let blob = decode_hex(VECTOR_COSE_SIGN1);
+        assert_eq!(blob.first(), Some(&0xd2));
+
+        let parsed = RootDioSignature::from_bytes(&blob).unwrap();
+        assert_eq!(parsed.cose_sign1, &blob[..]);
+
+        let mut buf = [0u8; 2 + ROOT_DIO_SIGNATURE_MAX_LEN];
+        let n = RootDioSignature::write_to(parsed.cose_sign1, &mut buf).unwrap();
+        assert_eq!(n, 2 + blob.len());
+        assert_eq!(buf[0], OPT_ROOT_DIO_SIGNATURE);
+        assert_eq!(buf[1], blob.len() as u8);
+        assert_eq!(&buf[2..n], &blob[..]);
+
+        // The option survives OptionIter with type and bytes intact.
+        let raw = OptionIter::new(&buf[..n]).next().unwrap().unwrap();
+        assert_eq!(raw.opt_type, OPT_ROOT_DIO_SIGNATURE);
+        assert_eq!(raw.data, &blob[..]);
+    }
+
+    #[test]
+    fn root_dio_signature_rejects_too_short() {
+        let blob = decode_hex(VECTOR_COSE_SIGN1);
+        for len in [0usize, 1, ROOT_DIO_SIGNATURE_MIN_LEN - 1] {
+            assert!(RootDioSignature::from_bytes(&blob[..len]).is_err());
+        }
+        assert!(RootDioSignature::from_bytes(&blob).is_ok());
+    }
+
+    #[test]
+    fn root_dio_signature_write_rejects_over_max_and_small_buffer() {
+        let over_max = [0u8; ROOT_DIO_SIGNATURE_MAX_LEN + 1];
+        let mut buf = [0u8; 512];
+        assert!(RootDioSignature::write_to(&over_max, &mut buf).is_err());
+
+        let blob = decode_hex(VECTOR_COSE_SIGN1);
+        let mut tiny = [0u8; 2 + ROOT_DIO_SIGNATURE_MIN_LEN - 1];
+        assert!(RootDioSignature::write_to(&blob, &mut tiny).is_err());
+
+        // Max-length blob is accepted and round-trips (length field is u8).
+        let at_max = [0xABu8; ROOT_DIO_SIGNATURE_MAX_LEN];
+        let n = RootDioSignature::write_to(&at_max, &mut buf).unwrap();
+        assert_eq!(n, 2 + ROOT_DIO_SIGNATURE_MAX_LEN);
+        assert_eq!(buf[1], ROOT_DIO_SIGNATURE_MAX_LEN as u8);
     }
 }

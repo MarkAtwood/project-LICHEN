@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-cdfb",
+  "title": "host suites compiling vendored monocypher need -Wno-error=conversion for gcc-14 builds",
+  "description": "Companion to v1bd (which fixed coap_slot_claim + schnorr48). Other host CMake suites that compile lichen/subsys/lichen/crypto/monocypher*.c directly will trip the same -Werror=conversion under gcc-14 (e.g. monocypher.c:1740) unless they add the per-source set_source_files_properties -Wno-error=conversion exclusion (mirroring the Zephyr build's project-wide flag). Sweep lichen/tests/*/CMakeLists.txt for monocypher sources and apply the two-line exclusion where missing.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:02:16.145018803Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T09:02:16.145018803Z",
+  "labels": [
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cdfb",
+      "depends_on_id": "project-LICHEN-worker6-v1bd",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T09:02:16.301961154Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

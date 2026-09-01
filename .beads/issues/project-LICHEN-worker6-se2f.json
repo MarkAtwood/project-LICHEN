@@ -1,0 +1,24 @@
+{
+  "id": "project-LICHEN-worker6-se2f",
+  "title": "Spec-coverage matrix missing for spec/drafts/draft-lichen-schnorr-00.md",
+  "description": "The 2026-08-31 sweep-all run produced coverage matrices for every swept section EXCEPT spec/drafts/draft-lichen-schnorr-00.md (48-byte Schnorr signatures; the sweep log reported 'no matrix produced for draft-lichen-schnorr-00'). That draft is CRITICAL per AGENTS.md (test vectors in its Appendix A are canonical). Produce the same requirements-extraction matrix (R-xxx rows, C/Rs/Py evidence, status+confidence) into docs/spec-coverage.md and a matching -flagged.md set, following the established format. Reference impl: python/src/lichen/crypto/schnorr48.py; vectors: test/vectors/schnorr48.json. Discovered-from: project-LICHEN-worker6-ba39",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:31:30.486722875Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T19:33:26.309675097Z",
+  "closed_at": "2026-08-31T19:33:26.309675097Z",
+  "close_reason": "Already completed on main: commit 9541ccfdfd 'docs: spec-coverage sweep matrices and flagged sets (2026-08-31)' produced the draft-lichen-schnorr-00 matrix (docs/spec-coverage.md contains the R-SCHORR rows — 14 schnorr references) plus docs/spec-coverage-draft-schnorr48-flagged.md (header states 'Gap beads filed for this section: 0 — every MUST is implemented and vector-tested'). This matches the bead's acceptance (same requirements-extraction format: R-xxx rows, C/Rs/Py evidence, status+confidence, flagged set). Nothing to do; bead was stale relative to main.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-se2f",
+      "depends_on_id": "project-LICHEN-worker6-ba39",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T17:31:30.64164113Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ use std::vec::Vec;
 use lichen_core::announce::Announce;
 use lichen_core::constants::L2_DISPATCH_ROUTING;
 use lichen_core::icmpv6::hdr_field;
-use lichen_core::ipv6::{field, IPV6_HEADER_LEN};
+use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
 use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
 use lichen_hal::{NonVolatile, Radio};
 use lichen_ipv6::Ipv6Header;
@@ -25,11 +25,16 @@ use crate::secure::secure_datagram_from_received;
 use crate::stack::{Priority, ReceivedIpv6, RxError, MAX_FRAME_SIZE};
 
 use super::error::RplReceiveError;
+use super::root_sig::{DecodedRootSig, DioFields};
+// Merge resolution: both intents are required by the merged body below —
+// HEAD's `decapsulate_ipv6` (egress/SRH-consumed tunnel decapsulation,
+// R-05-063) and beads-worker-7's `RPL_ALL_NODES` (solicited DIS responses
+// re-targeted to the canonical multicast DIO address per R-09-005).
 use super::util::{
-    advance_rpl_source_route, bootstrap_announce_peer, dao_parts, dio_dis_destination_is_allowed,
-    eui64_link_local, ipv6_eui64, link_local_from_iid, multicast_dis_jitter, routing_announce,
-    rpl_ipv6_multicast_is_allowed, survey_routing_headers, wire_is_for_local,
-    RoutingHeaderSurvey,
+    advance_rpl_source_route, bootstrap_announce_peer, dao_parts, decapsulate_ipv6,
+    dio_dis_destination_is_allowed, eui64_link_local, ipv6_eui64, link_local_from_iid,
+    multicast_dis_jitter, routing_announce, rpl_ipv6_multicast_is_allowed, survey_routing_headers,
+    wire_is_for_local, RoutingHeaderSurvey, RPL_ALL_NODES,
 };
 use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
 
@@ -232,7 +237,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if claims_rpl && !is_rpl_ipv6(&ipv6) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
-                let received = ReceivedIpv6 {
+                let mut received = ReceivedIpv6 {
                     ipv6,
                     sender_iid: frame.sender().iid,
                     rssi: packet.rssi,
@@ -289,6 +294,24 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                             next_hop: eui64_link_local(next_hop),
                         }));
                     }
+                    // EGRESS DECapsulation (spec 05-routing 8.9 R-05-063): a
+                    // tunneled outer addressed to this node is unwrapped here,
+                    // with the inner destination verified against the
+                    // authorized primary 02xx address (fail-closed).
+                    if received.ipv6[6] == next_header::IPV6_IN_IPV6 {
+                        received.ipv6 = decapsulate_ipv6(&received.ipv6, self.local_rpl_addr)
+                            .map_err(RplReceiveError::Receive)?;
+                        // SECURITY (ba39 v1c2): the inner datagram bypassed the
+                        // survey, so an inner whose FIRST next-header is 43
+                        // (RH3) would reach secure.rs's parser without the
+                        // survey's grid constraints or in-transit rejection —
+                        // drop it. Deeper header chains are rejected
+                        // downstream by the secure first-header allowlist.
+                        if received.ipv6[6] == next_header::ROUTING {
+                            return Ok(None);
+                        }
+                        return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
+                    }
                     return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
                 }
                 if !rpl_ipv6_multicast_is_allowed(&received.ipv6) {
@@ -338,6 +361,19 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             advance_rpl_source_route(&mut received.ipv6, current_destination, sender_iid)
                 .map_err(RplReceiveError::Receive)?;
         let Some(next_destination) = next_destination else {
+            // SRH fully consumed and stripped: the former next-header chain
+            // may now start with an IPv6-in-IPv6 tunnel to unwrap (R-05-063).
+            if received.ipv6[6] == next_header::IPV6_IN_IPV6 {
+                received.ipv6 = decapsulate_ipv6(&received.ipv6, self.local_rpl_addr)
+                    .map_err(RplReceiveError::Receive)?;
+                // SECURITY (ba39 v1c2): same bounded-profile rule for the
+                // SRH-consumed tunnel path — an inner whose FIRST
+                // next-header is 43 (RH3) is dropped rather than parsed
+                // unsurveyed; deeper chains are rejected downstream.
+                if received.ipv6[6] == next_header::ROUTING {
+                    return Ok(None);
+                }
+            }
             return Ok(Some(RplReceiveOutcome::DeliveredIpv6(received)));
         };
         if received.ipv6[7] <= 1 {
@@ -462,11 +498,31 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     ) -> Result<RplReceiveOutcome, RplReceiveError> {
         if received.ipv6.get(IPV6_HEADER_LEN + 1).copied() == Some(rpl_code::DIO) {
             let body_offset = IPV6_HEADER_LEN + hdr_field::BODY_OFFSET;
-            let Ok(_dio) = lichen_rpl::message::Dio::from_bytes(
-                received.ipv6.get(body_offset..).unwrap_or_default(),
-            ) else {
+            let dio_body = received.ipv6.get(body_offset..).unwrap_or_default();
+            let Ok(dio) = lichen_rpl::message::Dio::from_bytes(dio_body) else {
                 return Ok(RplReceiveOutcome::RplRejected);
             };
+            // Root-signature defense-in-depth (spec 06 8.10.1): verify the
+            // COSE option when present. Absence (or a missing trust pin or
+            // wall clock) falls back to link-layer baseline per L679 — DIOs
+            // MUST NOT be rejected for missing capability. Forged, tampered,
+            // or replayed signatures ARE rejected. Verification lives in
+            // verify_dio_root_signature: it binds the signature to the
+            // TOFU-pinned root key (superseding the link-sender-pubkey-only
+            // inline variant) and runs the DIO-header cross-checks BEFORE
+            // mutating the root-seq cache, so a mismatched carrier cannot
+            // burn the root's current sequence.
+            let dio_fields = DioFields {
+                dodag_id: Some(dio.dodag_id),
+                instance: Some(dio.rpl_instance_id),
+                version: Some(dio.version),
+                rank: Some(dio.rank),
+                mop: Some(dio.mode_of_operation),
+            };
+            if let DioRootSigOutcome::Reject = self.verify_dio_root_signature(dio_body, &dio_fields)
+            {
+                return Ok(RplReceiveOutcome::RplRejected);
+            }
             let rssi = received
                 .rssi
                 .and_then(|value| i8::try_from(value).ok())
@@ -560,7 +616,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     }
                     return Ok(RplReceiveOutcome::Rpl(RplEvent::DisReceived));
                 }
-                self.send_dio(source)
+                // Solicited DIS response: re-target to the canonical
+                // multicast DIO address (RPL_ALL_NODES, ff02::1a). Per the
+                // R-09-005 admission contract (Python parity, worker6-ehcn
+                // option (A)) a unicast-destination DIO would be
+                // inadmissible at wire_is_for_local before admission even
+                // runs — and the leaf still joins by hearing the multicast
+                // DIO. RFC 6550 8.3's unicast-response SHOULD is overridden
+                // by the profile contract.
+                self.send_dio(RPL_ALL_NODES)
                     .await
                     .map_err(RplReceiveError::Transmit)?;
                 Ok(RplReceiveOutcome::Rpl(RplEvent::DisReceived))
@@ -568,5 +632,117 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             RplEvent::None => Ok(RplReceiveOutcome::RplRejected),
             event => Ok(RplReceiveOutcome::Rpl(event)),
         }
+    }
+}
+
+/// Outcome of root-signature validation for one received DIO.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DioRootSigOutcome {
+    /// Signature verified and sequence admitted to the cache.
+    Verified,
+    /// Process the DIO on link-layer baseline alone (spec L679): no option,
+    /// no trust pin for the root yet, or expiry indistinguishable/elapsed.
+    Baseline,
+    /// Forged, tampered, malformed, or replayed signature: reject the DIO.
+    Reject,
+}
+
+impl<R: Radio, S: NonVolatile> RplStack<R, S> {
+    /// Validate a root-signature option in a received DIO body, if present.
+    ///
+    /// Spec 06 §8.10.1 receiver steps with the L679 fallback: DIOs without
+    /// the option, without a pinned root key, or with an elapsed/unassessable
+    /// expiry are processed on link-layer baseline; forged, tampered, and
+    /// replayed signatures reject the DIO.
+    fn verify_dio_root_signature(
+        &mut self,
+        dio_body: &[u8],
+        dio_fields: &DioFields,
+    ) -> DioRootSigOutcome {
+        use lichen_rpl::message::{OptionIter, OPT_ROOT_DIO_SIGNATURE};
+
+        let options_offset = lichen_rpl::message::Dio::SERIALIZED_LEN;
+        let Some(options) = dio_body.get(options_offset..) else {
+            return DioRootSigOutcome::Baseline;
+        };
+        let mut signature: Option<&[u8]> = None;
+        for option in OptionIter::new(options) {
+            let Ok(option) = option else {
+                return DioRootSigOutcome::Reject;
+            };
+            if option.opt_type == OPT_ROOT_DIO_SIGNATURE {
+                if signature.is_some() {
+                    // Duplicate root-signature options: malformed.
+                    return DioRootSigOutcome::Reject;
+                }
+                signature = Some(option.data);
+            }
+        }
+        let Some(blob) = signature else {
+            return DioRootSigOutcome::Baseline; // no option: L679 baseline
+        };
+
+        let decoded = match DecodedRootSig::from_cose_sign1(blob) {
+            Ok(decoded) => decoded,
+            Err(_) => return DioRootSigOutcome::Reject,
+        };
+
+        // Trust-store lookup: TOFU pin keyed by the signer IID (the COSE kid).
+        let Some(pubkey) = self.announces.pinned_pubkey_for(&decoded.root_iid) else {
+            // Spec fresh-node flow: accept on link-layer baseline and cache
+            // the root IID for later pinning (handled by announce processing).
+            return DioRootSigOutcome::Baseline;
+        };
+
+        if decoded.verify_structural(pubkey.as_bytes()).is_err() {
+            // kid/DODAGID do not bind to the pinned key: forged identity.
+            return DioRootSigOutcome::Reject;
+        }
+        if decoded.verify_signature(pubkey.as_bytes()).is_err() {
+            // Tampered signature: reject, never admit to the seq cache.
+            return DioRootSigOutcome::Reject;
+        }
+
+        // Expiry: without a wall clock the check is unassessable; spec maps
+        // "expired" to baseline (treat as unsigned), so an unassessable clock
+        // degrades the same way rather than trusting the signature.
+        let now_unix = match self.wall_clock_unix {
+            Some(clock) => clock(),
+            None => return DioRootSigOutcome::Baseline,
+        };
+        if decoded.payload.expiry <= now_unix {
+            return DioRootSigOutcome::Baseline;
+        }
+
+        // DIO header cross-checks bind the signed payload to the carrier.
+        // They run BEFORE any cache mutation: only a fully validated DIO may
+        // admit its root_seq (an attacker must not burn the root's current
+        // seq by racing a genuine payload onto a mismatched carrier).
+        if decoded.cross_check(dio_fields).is_err() {
+            return DioRootSigOutcome::Reject;
+        }
+
+        // Replay: root_seq must strictly exceed the cached high-water mark.
+        let cached = self
+            .root_seqs
+            .cached(decoded.payload.dodag_id, decoded.payload.instance);
+        if let Some(cached) = cached {
+            if decoded.payload.root_seq <= cached {
+                return DioRootSigOutcome::Reject;
+            }
+        }
+        if self
+            .root_seqs
+            .accept(
+                decoded.payload.dodag_id,
+                decoded.payload.instance,
+                decoded.payload.root_seq,
+            )
+            .is_err()
+        {
+            return DioRootSigOutcome::Reject;
+        }
+
+        DioRootSigOutcome::Verified
     }
 }

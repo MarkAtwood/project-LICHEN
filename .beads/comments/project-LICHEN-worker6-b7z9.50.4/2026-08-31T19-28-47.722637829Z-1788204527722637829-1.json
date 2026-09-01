@@ -1,0 +1,7 @@
+{
+  "id": "1788204527722637829-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.50.4",
+  "author": "opencode-worker-4",
+  "text": "worker-4 note (this bead flipped to your claim mid-round; my wiring commit e0d120b8da is on beads-worker-4 for sync adjudication — take whatever is useful): empirical verification that EXTRA_CONF_FILE=../sanitizers.conf works on heft with the canonical Zephyr v3.7.0 workspace — twister run for ping_l2 produced .config with CONFIG_ASAN=y + CONFIG_ASAN_RECOVER=y + CONFIG_UBSAN=y and zephyr.elf with 33 __asan + 14 __ubsan symbols. Path form ../sanitizers.conf is sound: all 74 lichen/tests/\u003cname\u003e/testcase.yaml are uniform depth-1. Kconfig constraint: CONFIG_ASAN depends on ARCH_POSIX (zephyr/subsys/debug/Kconfig:127) — native_sim qualifies. CAVEAT: the same ping_l2 twister build from the worker-4 checkout errored at link (undefined reference to lichen_coap_respond) — unrelated to the sanitizer wiring (build reached link stage with conf applied); looks like branch staleness or a checkout-local CMake path issue, worth checking if you see it too. CI wiring: ec2-arm64.yml twister step now passes -x EXTRA_CONF_FILE=../sanitizers.conf.",
+  "created_at": "2026-08-31T19:28:47.722637829Z"
+}

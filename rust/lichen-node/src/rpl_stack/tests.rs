@@ -10,7 +10,7 @@ use crate::announce::MAX_TRACKED_ORIGINATORS;
 use crate::routing::{Router, ROOT_RANK};
 use crate::runtime::{RplRuntimeAction, RplRuntimeActionError, RplRuntimeConfig};
 use crate::secure::SecureStack;
-use crate::stack::{Priority, Stack, TxError, MAX_FRAME_SIZE};
+use crate::stack::{Priority, RxError, Stack, TxError, MAX_FRAME_SIZE};
 
 use lichen_core::announce::{write_announce_signed_data, AnnounceBuilder};
 use lichen_core::constants::L2_DISPATCH_ROUTING;
@@ -24,7 +24,8 @@ use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
-use lichen_oscore::{Context, SenderStateStore};
+use lichen_oscore::types::{ContextId, SenderSequenceState};
+use lichen_oscore::{Context, ContextStateStore, SenderStateStore};
 use lichen_rpl::message::{DaoOriginSignature, Dio, SignedDaoEnvelope};
 use lichen_rpl::routing::{
     DaoAdmissionState, DaoPersistentOpenError, DaoProvisionError, DaoTxError, DaoTxState,
@@ -42,8 +43,8 @@ use crate::secure::{SecureResponse, SecureResponseData};
 use super::error::{RplReceiveError, RplRuntimeReceiveError};
 use super::provisioning::provision_or_resume_root_state;
 use super::util::{
-    advance_rpl_source_route, dao_ipv6_packet, dao_parts, eui64_link_local, ipv6_eui64,
-    link_local_from_iid, multicast_dis_jitter, rpl_ipv6_packet, RPL_ALL_NODES,
+    advance_rpl_source_route, dao_ipv6_packet, dao_parts, decapsulate_ipv6, eui64_link_local,
+    ipv6_eui64, link_local_from_iid, multicast_dis_jitter, rpl_ipv6_packet, RPL_ALL_NODES,
 };
 
 struct MeshState {
@@ -74,20 +75,17 @@ struct RuntimeRadioState {
 struct RuntimeRadio(Arc<Mutex<RuntimeRadioState>>);
 
 #[derive(Default)]
-struct TestOscoreStore(Option<(lichen_oscore::ContextId, lichen_oscore::SenderSequenceState)>);
+struct TestOscoreStore(Option<(ContextId, SenderSequenceState)>);
 
 impl SenderStateStore for TestOscoreStore {
     type Error = ();
 
-    fn load(
-        &mut self,
-        context_id: &lichen_oscore::ContextId,
-    ) -> Result<Option<lichen_oscore::SenderSequenceState>, Self::Error> {
+    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(Some(
             self.0
                 .filter(|(stored_context, _)| stored_context == context_id)
                 .map_or(
-                    lichen_oscore::SenderSequenceState {
+                    SenderSequenceState {
                         next_sequence: 0,
                         exhausted: false,
                     },
@@ -98,15 +96,54 @@ impl SenderStateStore for TestOscoreStore {
 
     fn compare_exchange(
         &mut self,
-        context_id: &lichen_oscore::ContextId,
-        expected: Option<lichen_oscore::SenderSequenceState>,
-        next: lichen_oscore::SenderSequenceState,
+        context_id: &ContextId,
+        expected: Option<SenderSequenceState>,
+        next: SenderSequenceState,
     ) -> Result<bool, Self::Error> {
         if self.load(context_id)? != expected {
             return Ok(false);
         }
         self.0 = Some((*context_id, next));
         Ok(true)
+    }
+}
+
+impl ContextStateStore for TestOscoreStore {
+    type Error = ();
+
+    fn load_sender(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+    ) -> Result<Option<lichen_oscore::SenderSequenceState>, Self::Error> {
+        // Return the initial seq-0 state (restore_existing needs non-Missing).
+        Ok(Some(lichen_oscore::SenderSequenceState {
+            next_sequence: 0,
+            exhausted: false,
+        }))
+    }
+
+    fn compare_exchange_sender(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+        _expected: Option<lichen_oscore::SenderSequenceState>,
+        _next: lichen_oscore::SenderSequenceState,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
+    }
+
+    fn load_recipient(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+    ) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+
+    fn save_recipient(
+        &mut self,
+        _context_id: &lichen_oscore::ContextId,
+        _state: &lichen_oscore::RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
@@ -654,16 +691,19 @@ async fn join_leaf<R: Radio, L: Radio, S: NonVolatile>(
         .await
         .unwrap()
         .is_some());
+    // Canonical multicast DIO delivery (spec 09 13.3 R-09-005): dst
+    // ff02::1a, broadcast L2, Rule 255 uncompressed, hop 255 — the only
+    // shape the authenticated-DIO admission gate accepts.
+    const RPL_ALL_RPL_NODES: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
     sender
-        .send_ipv6_to(
+        .send_ipv6_uncompressed_to(
             &dio_packet_from(
                 link_local_from_iid(root_identity.iid),
-                link_local_from_iid(leaf_addr[8..].try_into().unwrap()),
+                RPL_ALL_RPL_NODES,
                 root_addr,
                 ROOT_RANK,
             ),
-            &ipv6_eui64(leaf_addr),
-            Priority::Routing,
+            &[],
         )
         .await
         .unwrap();
@@ -998,6 +1038,10 @@ async fn multicast_dio_and_dis_use_broadcast_l2_destination() {
     assert_eq!(frame.addr_mode, AddrMode::None);
     assert!(frame.dst_addr.is_empty());
 
+    // Solicited (unicast-named) DIO requests are re-targeted to the
+    // all-RPL-nodes multicast group per R-09-005 (option A of the ehcn
+    // decision): unicast-dst DIOs are inadmissible, so the wire shape is
+    // identical to the trickle DIO.
     root.send_dio(unicast).await.unwrap();
     let len = observer
         .receive(0, &mut wire, 1)
@@ -1006,8 +1050,8 @@ async fn multicast_dio_and_dis_use_broadcast_l2_destination() {
         .unwrap()
         .len;
     let frame = LichenFrame::from_bytes(&wire[..len]).unwrap();
-    assert_eq!(frame.addr_mode, AddrMode::Extended);
-    assert_eq!(frame.dst_addr, ipv6_eui64(unicast));
+    assert_eq!(frame.addr_mode, AddrMode::None);
+    assert!(frame.dst_addr.is_empty());
 }
 
 #[tokio::test]
@@ -1585,7 +1629,9 @@ async fn relay_forwards_original_source_and_signed_body() {
         &forwarded.ipv6[field::SRC_OFFSET..field::DST_OFFSET],
         &leaf_addr
     );
-    assert_eq!(forwarded.ipv6[7], 63);
+    // RPL control originates with hop limit 255 (RFC 6550 / R-09-005);
+    // the relay decrements exactly once.
+    assert_eq!(forwarded.ipv6[7], 254);
     assert_eq!(dao_parts(&forwarded.ipv6).unwrap().1, signed);
 }
 
@@ -1675,13 +1721,13 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
             LinkRxError::UnknownSender
         )))
     ));
-    root.send_dio(relay_addr).await.unwrap();
+    root.send_dio(RPL_ALL_NODES).await.unwrap();
     assert!(matches!(
         relay.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
     ));
 
-    relay.send_dio(leaf_addr).await.unwrap();
+    relay.send_dio(RPL_ALL_NODES).await.unwrap();
     assert!(matches!(
         leaf.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
@@ -1696,12 +1742,24 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     leaf.send_announce(&signed_announce(&leaf_identity, 1), 0)
         .await
         .unwrap();
+    let relay_outcome = relay.receive(1, 0).await.unwrap();
     assert!(matches!(
-        relay.receive(1, 0).await.unwrap(),
+        relay_outcome,
         Some(RplReceiveOutcome::AnnouncementAccepted { relayed: true, .. })
     ));
+    // The root first hears the relay's multicast DIO echo: as the DODAG
+    // root it rejects foreign DIOs, consuming one receive cycle. Then it
+    // processes the relayed leaf announce.
+    let _ = root.receive(1, 0).await;
+    let root_outcome = root.receive(1, 0).await.unwrap();
+    let peer_ok = matches!(
+        &root_outcome,
+        Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
+            if peer.iid == leaf_identity.iid
+    );
+    assert!(peer_ok, "root did not accept the relayed leaf announce");
     assert!(matches!(
-        root.receive(1, 0).await.unwrap(),
+        root_outcome,
         Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
             if peer.iid == leaf_identity.iid
     ));
@@ -1731,6 +1789,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     ));
 
     relay.send_dao().await.unwrap();
+    // Drain the relay's multicast DIO echo the root heard before the DAO.
+    let _ = root.receive(1, 0).await;
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
     assert!(
         matches!(
@@ -2438,4 +2498,184 @@ fn root_provisioning_rejects_mismatched_and_nonempty_partials() {
         Router::open_root(&nonempty_admission, root_addr),
         Err(DaoPersistentOpenError::Missing)
     ));
+}
+
+fn plain_ipv6_packet(
+    next_header_value: u8,
+    source: [u8; 16],
+    destination: [u8; 16],
+    body: &[u8],
+) -> Vec<u8> {
+    use lichen_core::ipv6::next_header as nh;
+    let payload_len = u16::try_from(body.len()).unwrap();
+    let mut packet = vec![0u8; IPV6_HEADER_LEN + body.len()];
+    Ipv6Header::new(nh::IPV6_IN_IPV6, Addr(source), Addr(destination))
+        .write_to(payload_len, &mut packet[..IPV6_HEADER_LEN])
+        .unwrap();
+    packet[6] = next_header_value;
+    packet[IPV6_HEADER_LEN..].copy_from_slice(body);
+    packet
+}
+
+/// ba39 v1c2: a decapsulated inner datagram that still carries an RH3 is
+/// dropped at the local-delivery decap site instead of being parsed without
+/// the survey's grid constraints (bounded tunnel profile).
+/// b7z9.16.1(a): the DAO TX scheduler idles until the leaf joins, then
+/// schedules the initial DAO within 0-2 s of the join (R-09-017).
+#[tokio::test]
+async fn dao_tx_scheduler_idles_then_schedules_on_join() {
+    let root_id = identity(81);
+    let leaf_id = identity(82);
+    let root_addr = root_address(&root_id);
+    let leaf_addr = address(&leaf_id, 1);
+    let (root_radio, leaf_radio) = LoopbackRadio::pair();
+    let mut root = Stack::new_default_epoch(root_radio, root_id.clone());
+    root.add_peer(PeerIdentity::from_pubkey(leaf_id.pubkey));
+    let mut leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_id.clone());
+    leaf_stack.add_peer(PeerIdentity::from_pubkey(root_id.pubkey));
+    let prefix = root_addr[..8].try_into().unwrap();
+    let mut leaf = RplStack::provision_leaf(
+        leaf_stack,
+        leaf_addr,
+        root_addr,
+        announces(prefix),
+        MemStorage::new(),
+    )
+    .unwrap();
+
+    // Not joined: idle.
+    assert_eq!(leaf.dao_tx_advance(1_000), DaoTxAdvance::Idle);
+
+    // Join via the announce + DIO exchange (rpl_dispatch fixture).
+    join_leaf(&mut root, &mut leaf, &root_id, root_addr, leaf_addr).await;
+
+    // Joined: the leaf received a DIO (DioReceived) during join. The
+    // scheduler now holds the Initial phase; the join consumed part of
+    // the 0-2 s window, so poll at now_ms and later.
+    let first = leaf.dao_tx_advance(2_000);
+    let second = leaf.dao_tx_advance(2_500);
+    match (first, second) {
+        (DaoTxAdvance::NotYet { remaining_ms }, DaoTxAdvance::NotYet { .. }) => {
+            assert!(remaining_ms >= 1 && remaining_ms <= 2_000);
+        }
+        (DaoTxAdvance::Due, _) | (_, DaoTxAdvance::Due) => {}
+        other => panic!("unexpected scheduler state: {other:?}"),
+    }
+
+    // Joined: the initial DAO is scheduled 0-2 s out (R-09-017), then due.
+    let first = leaf.dao_tx_advance(2_000);
+    let second = leaf.dao_tx_advance(2_500);
+    match (first, second) {
+        (DaoTxAdvance::NotYet { remaining_ms }, DaoTxAdvance::NotYet { .. }) => {
+            // deadline in [2000, 4000] -> remaining in [1, 2000]
+            assert!(remaining_ms >= 1 && remaining_ms <= 2_000);
+        }
+        (DaoTxAdvance::Due, _) | (_, DaoTxAdvance::Due) => {
+            // random offset 0 -> immediately due at now_ms >= deadline
+        }
+        other => panic!("unexpected scheduler state: {other:?}"),
+    }
+}
+
+#[test]
+fn decapsulate_ipv6_strips_outer_and_verifies_inner_dst() {
+    let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);
+    let other: [u8; 16] = eui64_link_local([0x02, 9, 9, 9, 9, 9, 9, 9]);
+    let inner = plain_ipv6_packet(17, other, local, &[1, 2, 3]);
+    let outer = plain_ipv6_packet(41, other, local, &inner);
+
+    let decapsulated = decapsulate_ipv6(&outer, local).expect("valid tunnel must decapsulate");
+    assert_eq!(decapsulated, inner);
+}
+
+#[test]
+fn decapsulate_ipv6_rejects_inner_dst_mismatch() {
+    use lichen_core::ipv6::next_header as nh;
+    let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);
+    let wrong: [u8; 16] = eui64_link_local([0x02, 9, 9, 9, 9, 9, 9, 9]);
+    let inner = plain_ipv6_packet(nh::UDP, wrong, wrong, &[1, 2, 3]);
+    let outer = plain_ipv6_packet(41, wrong, local, &inner);
+
+    assert!(matches!(
+        decapsulate_ipv6(&outer, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+}
+
+#[test]
+fn decapsulate_ipv6_rejects_malformed_outer_and_inner() {
+    use lichen_core::ipv6::next_header as nh;
+    let local: [u8; 16] = eui64_link_local([0x02, 1, 2, 3, 4, 5, 6, 7]);
+    let peer: [u8; 16] = eui64_link_local([0x02, 9, 9, 9, 9, 9, 9, 9]);
+
+    // Outer next-header is not IPv6-in-IPv6.
+    let inner = plain_ipv6_packet(nh::UDP, peer, local, &[1]);
+    let outer = plain_ipv6_packet(nh::UDP, peer, local, &inner);
+    assert!(matches!(
+        decapsulate_ipv6(&outer, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Outer payload-length inconsistency (truncated outer).
+    let mut truncated = plain_ipv6_packet(41, peer, local, &inner);
+    let last = truncated.len() - 1;
+    truncated.truncate(last);
+    assert!(matches!(
+        decapsulate_ipv6(&truncated, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Inner payload-length inconsistency (outer consistent, inner not).
+    let mut bad_inner_len = plain_ipv6_packet(41, peer, local, &inner);
+    bad_inner_len[IPV6_HEADER_LEN + 4] = 0xff;
+    bad_inner_len[IPV6_HEADER_LEN + 5] = 0xff;
+    assert!(matches!(
+        decapsulate_ipv6(&bad_inner_len, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Inner wrong version.
+    let mut bad_version = plain_ipv6_packet(41, peer, local, &inner);
+    bad_version[IPV6_HEADER_LEN] = 0x40;
+    assert!(matches!(
+        decapsulate_ipv6(&bad_version, local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+
+    // Too short to contain an inner header.
+    assert!(matches!(
+        decapsulate_ipv6(&outer[..IPV6_HEADER_LEN + 4], local),
+        Err(RxError::InvalidSourceRoute)
+    ));
+}
+
+#[test]
+fn root_seq_cache_is_reachable_from_stack_state() {
+    let local = identity(251);
+    let local_addr = address(&local, 1);
+    let prefix = local_addr[..8].try_into().unwrap();
+    let (radio, _receiver) = LoopbackRadio::pair();
+    let mut stack = RplStack::provision_root(
+        Stack::new_default_epoch(radio, local),
+        local_addr,
+        local_addr,
+        announces(prefix),
+        MemStorage::new(),
+    )
+    .unwrap();
+
+    let dodag_a = [0x20u8; 16];
+    let dodag_b = [0x21u8; 16];
+    assert_eq!(stack.root_seq_cached(dodag_a, 0), None);
+
+    // Mutations through the receiver-facing accessor land in stack state.
+    stack.root_seqs.accept(dodag_a, 0, 5).unwrap();
+    stack.root_seqs.accept(dodag_b, 0, 5).unwrap();
+    assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
+    assert_eq!(stack.root_seq_cached(dodag_b, 0), Some(5));
+
+    // Replay via the stack API is rejected and leaves state untouched.
+    assert!(stack.root_seqs.accept(dodag_a, 0, 5).is_err());
+    assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
+    assert_eq!(stack.root_seq_cached(dodag_a, 1), None);
 }

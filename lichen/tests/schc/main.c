@@ -16,6 +16,7 @@
  */
 
 #include <lichen/schc.h>
+#include "schc_internal.h"
 #include <limits.h>
 #include <string.h>
 #include <stdio.h>
@@ -210,32 +211,36 @@ static int test_oscore_global(void)
 	);
 }
 
-static int test_uncompressed_fallback(void)
+static int test_reject_non_ipv6_input(void)
 {
-	uint8_t packet[4] = { 0xde, 0xad, 0xbe, 0xef };
 	uint8_t comp_buf[8];
 	uint8_t decomp_buf[8];
 	uint8_t big_comp_buf[128];
 	uint8_t big_decomp_buf[128];
+	/* Compress accepts full IPv6 packets only (Python/Rust reference
+	 * behavior): short garbage and non-IPv6 versions must be rejected,
+	 * never emitted as Rule255 - a Rust/Python peer fatals on such
+	 * datagrams at decode_rule255. */
+	static const uint8_t garbage[4] = { 0xde, 0xad, 0xbe, 0xef };
+	uint8_t ipv4ish[45] = { 0 };
+	int n;
 
-	int n = lichen_schc_compress(packet, 4, comp_buf, sizeof(comp_buf));
-	if (n != 5) {
-		printf("  FAIL: uncompressed length (got %d, expected 5)\n", n);
-		return 0;
-	}
-	if (comp_buf[0] != 255) {
-		printf("  FAIL: uncompressed rule_id (got %d, expected 255)\n", comp_buf[0]);
-		return 0;
-	}
-	if (memcmp(&comp_buf[1], packet, 4) != 0) {
-		printf("  FAIL: uncompressed payload mismatch\n");
+	ipv4ish[0] = 0x45; /* IPv4 version 4, IHL 5 */
+
+	n = lichen_schc_compress(garbage, sizeof(garbage), comp_buf,
+				 sizeof(comp_buf));
+	if (n != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: short garbage expected SCHC_ERR_INVALID_ARGUMENT (got %d)\n",
+		       n);
 		return 0;
 	}
 
-	int m = lichen_schc_decompress(comp_buf, n, decomp_buf, sizeof(decomp_buf));
 	/* Rule 255 RX validates the payload as a complete IPv6 packet, so a
-	 * non-IPv6 payload must be rejected at decompress even though the
-	 * compress side still emits it (worker-6-7v5f fixes the emit). */
+	 * non-IPv6 rule255 wire (rule byte + garbage) must be rejected by the
+	 * payload validator itself — not by a length/ceiling accident. */
+	static const uint8_t bad_rule255[5] = { 0xff, 0xde, 0xad, 0xbe, 0xef };
+	int m = lichen_schc_decompress(bad_rule255, sizeof(bad_rule255),
+				       decomp_buf, sizeof(decomp_buf));
 	if (m >= 0) {
 		printf("  FAIL: non-IPv6 rule255 payload decoded (%d)\n", m);
 		return 0;
@@ -279,6 +284,14 @@ static int test_uncompressed_fallback(void)
 				   sizeof(big_decomp_buf));
 	if (m != (int)sizeof(v6) || memcmp(big_decomp_buf, v6, sizeof(v6)) != 0) {
 		printf("  FAIL: valid fallback round-trip (got %d)\n", m);
+		return 0;
+	}
+
+	n = lichen_schc_compress(ipv4ish, sizeof(ipv4ish), comp_buf,
+				 sizeof(comp_buf));
+	if (n != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: version-4 input expected SCHC_ERR_INVALID_ARGUMENT (got %d)\n",
+		       n);
 		return 0;
 	}
 
@@ -419,6 +432,74 @@ static int test_reject_bad_udp_len(void)
 	return 1;
 }
 
+static int test_validator_direct_call_self_defense(void)
+{
+	/* Direct-call contract of validate_ipv6_transport_lengths (internal
+	 * validator, schc_internal.h): must be self-defending regardless of
+	 * caller guarantees - truncation shorter than the IPv6 header must
+	 * reject without reading past the buffer (regression guard for the
+	 * latent stack OOB tracked by project-LICHEN-worker6-nyx7), and a
+	 * non-IPv6 version must reject without relying on the caller's
+	 * version check (bead project-LICHEN-worker6-uylk), mirroring the
+	 * internal checks of the Python and Rust validators. */
+	static const uint8_t truncated[4] = { 0x60, 0x00, 0x00, 0x00 };
+	static const uint8_t version4[40] = { [0] = 0x45, [6] = 59 };
+	/* version nibble 4 with a chain-terminating next-header so the version
+	 * check is the ONLY rejection path: pre-uylk code returned SCHC_OK
+	 * here (non-UDP terminal, zero payload length consistent), so this
+	 * fixture discriminates a revert of the self-check. Addresses are
+	 * valid link-locals: the structural address constraints (unspecified
+	 * or multicast source, unspecified destination) must not fire on this
+	 * fixture — it targets the version self-check only. */
+	static const uint8_t minimal_v6[40] = { [0] = 0x60,
+						[6] = 59,
+						[8] = 0xfe,
+						[9] = 0x80,
+						[24] = 0xfe,
+						[25] = 0x80 };
+	uint8_t coap[64];
+	size_t coap_len;
+	int ret;
+
+	coap_len = hex_decode(
+		"6000000000131140fe800000000000000000000000000001"
+		"fe80000000000000000000000000000216331633001328dd"
+		"40011234ff737461747573",
+		coap, sizeof(coap));
+	if (coap_len == 0) {
+		printf("  FAIL: hex decode error\n");
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(truncated, sizeof(truncated));
+	if (ret != SCHC_ERR_NO_MATCHING_RULE) {
+		printf("  FAIL: truncated input expected SCHC_ERR_NO_MATCHING_RULE (got %d)\n",
+		       ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(version4, sizeof(version4));
+	if (ret != SCHC_ERR_NO_MATCHING_RULE) {
+		printf("  FAIL: version-4 input expected SCHC_ERR_NO_MATCHING_RULE (got %d)\n",
+		       ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(minimal_v6, sizeof(minimal_v6));
+	if (ret != SCHC_OK) {
+		printf("  FAIL: minimal version-6 header expected SCHC_OK (got %d)\n", ret);
+		return 0;
+	}
+
+	ret = validate_ipv6_transport_lengths(coap, coap_len);
+	if (ret != SCHC_OK) {
+		printf("  FAIL: valid CoAP packet expected SCHC_OK (got %d)\n", ret);
+		return 0;
+	}
+
+	return 1;
+}
+
 static int test_uncompressed_length_exceeds_int(void)
 {
 	static const uint8_t packet = 0;
@@ -526,7 +607,8 @@ int main(void)
 	RUN_TEST(test_rpl_dao);
 	RUN_TEST(test_oscore_linklocal);
 	RUN_TEST(test_oscore_global);
-	RUN_TEST(test_uncompressed_fallback);
+	RUN_TEST(test_reject_non_ipv6_input);
+	RUN_TEST(test_validator_direct_call_self_defense);
 	RUN_TEST(test_unknown_rule_id);
 	RUN_TEST(test_truncated_coap_linklocal);
 	RUN_TEST(test_truncated_coap_global);

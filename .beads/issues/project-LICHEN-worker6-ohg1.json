@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ohg1",
+  "title": "b7z9.47(a): reconcile duplicate pro-bounds-pointer-arithmetic entry in .clang-tidy",
+  "description": "Smallest child of worker6-b7z9.47 (R-APPC-010 clang-tidy conformance). lichen/.clang-tidy enables cppcoreguidelines-pro-bounds-pointer-arithmetic at :15 (spec-mandated CERT rule) and disables it again at :41 as the last entry — later entry wins, so the check is silently OFF, contradicting the header's policy citation. The trailing disable is UNDOCUMENTED (the 2mla rationale comment block lists 7 other suppressions but not this one). Fix: remove the undocumented trailing disable so the spec-mandated check is active; empirically measure impact on the host-compilable C subset (freestanding files like link_ctx.c/time_sync.c/rf_health.c/router.c); fix any findings or file them. Do NOT attempt the CI compile-DB/head-50 work — that is the sibling child.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:34:57.160583509Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T20:25:34.70574052Z",
+  "closed_at": "2026-08-31T20:25:34.70574052Z",
+  "close_reason": "RE-CLOSE (store write lost — bd8h pattern). Completed and committed as a1ed56fd9a on beads-worker-7: removed the undocumented duplicate -cppcoreguidelines-pro-bounds-pointer-arithmetic disable from lichen/.clang-tidy (spec-mandated check now active; 0 findings on host-compilable subset and CI head-50 set — re-enable is free). Sibling worker6-de40 owns CI compile-DB work and carries the empirical notes.",
+  "labels": [
+    "c-safety"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ohg1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.47",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:34:57.284619756Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

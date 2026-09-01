@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-4hnk",
+  "title": "coap_dtn.c dtn_wall_clock: valid()/get() pair is non-atomic — racy invalidation yields bogus near-epoch store expiry",
+  "description": "Found by kimi-k3 correctness+security review of b7z9.8.1 (applies to main's landed fix 9488b44e05, whose dtn_wall_clock uses the same lichen_wall_clock_valid() then lichen_wall_clock_get() pair). Each call independently re-locks s_wall_clock_lock and re-snapshots (time_sync.c:770-790). If validity lapses between the two calls (holdover expiry, lichen_wall_clock_invalidate), get() returns 0U while the wrapper returns true with *unix_now==0. In the store path (deaddrop_post) that stores expiry=0+LICHEN_DTN_DEFAULT_TTL_SEC=86400 — a bogus 1970 expiry the next valid-clock sweep silently drops: fail-closed for that message, contradicting the R-05-080 fail-open intent in the race window. Sweep paths with now=0 are harmless (nothing expires). Fix: read validity and timestamp atomically with one public call — lichen_wall_clock_snapshot_get((uint64_t)now_ms,\u0026snap), check snap.wall_clock_valid, use snap.unix_time — as done in the rejected b7z9.8.1 duplicate diff. Files: lichen/subsys/lichen/coap/coap_dtn.c (~dtn_wall_clock). Priority P3: microsecond race window, availability wart only. Discovered from project-LICHEN-worker6-b7z9.8.1.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:39:39.794490459Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T08:39:39.794490459Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4hnk",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T08:39:40.050862204Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

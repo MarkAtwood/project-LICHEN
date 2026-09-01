@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-grgg",
+  "title": "b7z9.49(a): enable CONFIG_THREAD_ANALYZER trio in lichen/tests prj.confs (CI builds)",
+  "description": "Unambiguous slice of worker6-b7z9.49: spec appendix-c R-APPC-007 qualifies thread-analyzer with '(CI and debug builds)'. lichen/tests/*/prj.conf ARE the CI builds (nightly twister), so add to every lichen/tests/*/prj.conf: CONFIG_THREAD_ANALYZER=y, CONFIG_THREAD_ANALYZER_USE_PRINTK=y, CONFIG_THREAD_ANALYZER_AUTO=n (matching the spec block; AUTO=n so CI doesn't spam). Do NOT touch app prj.confs (gateway/puck/bridge) — that is the flagged-ambiguity child. Verify: one representative native_sim build on heft (source ~/Developer/lichen-env.sh; west build -b native_sim/native/64 lichen/tests/\u003cpick\u003e with the new conf) proving the symbols resolve and the build stays green; list every file touched.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:44:50.773788048Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T19:53:17.755855967Z",
+  "started_at": "2026-08-31T19:44:59.060115801Z",
+  "closed_at": "2026-08-31T19:53:17.755855967Z",
+  "close_reason": "Enabled the spec-mandated thread-analyzer trio across ALL 74 lichen/tests/*/prj.conf (CI builds per spec appendix-c-safety.md:169-172 'CI and debug builds'): CONFIG_THREAD_ANALYZER=y, CONFIG_THREAD_ANALYZER_USE_PRINTK=y, CONFIG_THREAD_ANALYZER_AUTO=n. Empirical verification on heft (Zephyr v3.7.0): (1) representative native_sim/native/64 build of lichen/tests/util green — Kconfig silently drops the symbols there because THREAD_ANALYZER depends on !ARCH_POSIX (a Zephyr limitation: native_sim can never carry the analyzer; 2 Kconfig warnings per build are the honest trace of that); (2) representative qemu_x86 build green with all three symbols ACTIVE in .config (CONFIG_THREAD_ANALYZER=y confirmed) — qemu_x86 is the non-POSIX CI target where the MUST bites. App prj.confs deliberately untouched (flagged-ambiguity child worker6-4ny8 needs Mark's scope ruling). Reviews: correctness+security pass (Kimi K3) — runtime expectations safe (AUTO=n never spawns the analyzer thread; no test-output expectations violated); edge pass — idempotency byte-verified (74 identical 5-line appends, exactly one CONFIG_THREAD_ANALYZER=y per file), trailing newlines preserved. Reviewer P4 (dangling R-APPC-007 citation in 74 comments) fixed by rewording to the resolvable spec:lines citation before commit. Known limitation recorded: qemu_x86 carries the enforcement, native_sim cannot (Zephyr !ARCH_POSIX).",
+  "labels": [
+    "zephyr",
+    "c-safety"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-grgg",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.49",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T19:44:50.91690046Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

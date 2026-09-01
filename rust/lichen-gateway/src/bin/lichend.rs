@@ -943,6 +943,13 @@ async fn forward_mesh_to_upstream<T: TunLike>(
             if gw.is_local_mesh(&dst) {
                 return gw.mesh_to_mesh(&ipv6).await;
             }
+            if dst[0] == 0xff && !gw.multicast_peering_enabled() {
+                // Spec 04-network 6.3.4: a border router MUST NOT forward
+                // mesh multicasts to the internet without explicitly
+                // configured multicast peering.
+                info!("mesh multicast destination stays in the mesh (6.3.4)");
+                return None;
+            }
         }
         if let Some(t) = tun {
             if let Err(e) = t.send_pkt(&ipv6).await {

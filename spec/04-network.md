@@ -208,6 +208,37 @@ Rationale:
 **Exception:** Explicitly configured multicast peering between meshes
 (future work -- requires multicast routing protocol like PIM).
 
+#### 6.3.5. Forwarding-Plane Endpoint Policy (Martian Filtering)
+
+Rule 255 reception (Adaptation profile, Section 5.5) is byte-preserving: a
+structurally valid packet is accepted at link intake even when its endpoint
+addresses violate the emission policy, so the two implementation families
+stay interoperable. Endpoint address policy therefore attaches to packet
+origination (an emission constraint, enforced at encode time) and to the
+forwarding decision, which every router MUST apply before relaying a packet
+whose destination is not this node:
+
+| Endpoint | Policy-invalid values |
+|----------|----------------------|
+| Source | Unspecified (`::`), loopback (`::1`), multicast (`ff00::/8`), IPv4-mapped (`::ffff:0:0/96`) |
+| Destination | Unspecified (`::`), loopback (`::1`), IPv4-mapped (`::ffff:0:0/96`), multicast with scope outside 2-14 |
+
+A router MUST NOT forward a packet whose source or destination is
+policy-invalid under this table. The packet is dropped at the forwarding
+decision and reported locally (log/counter); a router MUST NOT transmit a
+protocol error (ICMPv6 or otherwise) about the rejection onto the mesh,
+because the packet never entered the local stack and echoing policy
+failures would amplify the traffic the filter exists to contain.
+
+Structural validation keeps precedence over policy, mirroring the
+error-precedence rule of the Adaptation profile: a packet that fails
+header, length, or checksum validation is dropped as malformed at intake
+regardless of its endpoint addresses; the policy check above applies only
+to packets that are structurally valid. Policy-invalid packets destined to
+this node are delivered to the local stack, which reports them locally and
+MUST NOT re-transmit them, so an originator can learn its own
+emission-policy violations without the mesh amplifying them.
+
 ### 6.4. ICMPv6
 
 Standard ICMPv6 (RFC 4443) for:

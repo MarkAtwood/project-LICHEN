@@ -62,7 +62,16 @@ DESYNC_CONSTANTS: dict[str, int] = {
     "LISTEN_PERIOD_MAX_S": 60,
     "DELAY_PER_NODE_S": 5,
     "MAX_STARTUP_DELAY_S": 300,
+    # Spec 2a.6.2 (decision guard-ppm): SYNCED + drift_ppm > GUARD_PPM ->
+    # DESYNCED. Matches C LICHEN_DRIFT_MAX_HOLDOVER_PPM (5000U, link.h:656)
+    # and Rust holdover_expired guard (lichen-link tdma_clock.rs).
+    "GUARD_PPM": 5000,
 }
+
+
+def holdover_expired(measured_drift_ppm: int, guard_ppm: int = 5000) -> bool:
+    """Return True when |drift_ppm| exceeds the guard (Rust tdma_clock parity)."""
+    return abs(measured_drift_ppm) > guard_ppm
 
 
 def initial_startup_delay(nodes_heard: int) -> int:
@@ -95,12 +104,20 @@ class DesyncFSM:
             self.missed_superframes = 0
         return self.state
 
-    def on_beacon(self, valid: bool) -> DesyncState:
-        if self.state == DesyncState.DESYNCED and valid:
-            self.state = DesyncState.RECOVERING
-            self.consecutive_valid = 1
-            self.missed_superframes = 0
-        elif self.state == DesyncState.RECOVERING:
+    def on_beacon(self, valid: bool, wall_clock_valid: bool) -> DesyncState:
+        """Handle beacon reception.
+
+        Per R-02a-084 the node MUST NOT leave DESYNCED unless
+        wall_clock_valid=true, so an otherwise-valid beacon in DESYNCED is
+        ignored while the wall clock is unsynced.
+        """
+        if self.state == DesyncState.DESYNCED:
+            if valid and wall_clock_valid:
+                self.state = DesyncState.RECOVERING
+                self.consecutive_valid = 1
+                self.missed_superframes = 0
+            return self.state
+        if self.state == DesyncState.RECOVERING:
             if valid:
                 self.consecutive_valid += 1
                 self.missed_superframes = 0
@@ -111,6 +128,19 @@ class DesyncFSM:
                 self.state = DesyncState.DESYNCED
                 self.consecutive_valid = 0
                 self.missed_superframes = 0
+        return self.state
+
+    def on_drift(self, drift_ppm: int) -> DesyncState:
+        """Handle an excessive clock drift measurement.
+
+        Per 2a.6.2 (decision guard-ppm): SYNCED + drift_ppm > GUARD_PPM ->
+        DESYNCED, triggering epoch_floor revalidation by the caller.
+        """
+        guard = DESYNC_CONSTANTS["GUARD_PPM"]
+        if abs(drift_ppm) > guard:
+            self.state = DesyncState.DESYNCED
+            self.consecutive_valid = 0
+            self.missed_superframes = 0
         return self.state
 
     def on_missed_superframe(self) -> DesyncState:

@@ -4,8 +4,10 @@
 //! Production ownership and dispatch for the std RPL stack.
 
 mod error;
+mod dao_tx_timing;
 mod provisioning;
 mod receive;
+mod root_sig;
 mod runtime;
 mod secure;
 mod transmit;
@@ -20,6 +22,10 @@ use std::vec::Vec;
 use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::PeerAuthState;
+use lichen_rpl::root_seq_cache::RootSeqCache;
+
+mod dao_tx_sched;
+use dao_tx_sched::{DaoTxAdvance, DaoTxPhase, DaoTxScheduler};
 use lichen_rpl::routing::{DaoAdmissionState, DaoTxState};
 
 use crate::announce::AnnounceProcessor;
@@ -111,6 +117,10 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     local_control_addr: [u8; 16],
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
+    root_seqs: RootSeqCache,
+    /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
+    dao_tx_sched: DaoTxScheduler,
+    wall_clock_unix: Option<fn() -> u64>,
     routing_now_ms: u64,
     generation: u64,
     direct_neighbors: HashSet<[u8; 8]>,
@@ -142,6 +152,52 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// this value; reprovision or reset increments it to invalidate stale runtimes.
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// Install a Unix-seconds wall clock for root-signature expiry checks.
+    ///
+    /// Without a wall clock, root-signature expiry cannot be evaluated; the
+    /// receiver then treats every well-formed signature as unexpired (a
+    /// documented limitation — spec 06 §8.10.1 "expired -> treat as unsigned"
+    /// needs a real clock to distinguish).
+    pub fn set_wall_clock_unix(&mut self, clock: fn() -> u64) {
+        self.wall_clock_unix = Some(clock);
+    }
+
+    /// Receiver-side trust state: only record sequences from DIOs whose root
+    /// signature has passed verification (see `RootSeqCache` caller contract).
+    /// The root-signature receiver validation consumes this at the DIO path.
+    /// Interim `dead_code` expectation: the receiver call site lands with the
+    /// root-signature validation bead (b7z9.37.1); the expectation then stops
+    /// being fulfilled and must be removed.
+    pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
+        &mut self.root_seqs
+    }
+
+    /// Advance the DAO TX scheduler and detect the join transition
+    /// (spec 09 14.2). On the first advance with the node joined and the
+    /// scheduler idle, the initial DAO is scheduled 0-2 s out (R-09-017).
+    /// Returns the scheduler outcome for the TX path.
+    pub(crate) fn dao_tx_advance(&mut self, now_ms: u64) -> DaoTxAdvance {
+        let joined = self.rpl.router.is_joined();
+        if !joined {
+            self.dao_tx_sched = DaoTxScheduler::new();
+            return DaoTxAdvance::Idle;
+        }
+        if matches!(self.dao_tx_sched.phase(), DaoTxPhase::Idle) {
+            // Join transition: schedule the initial DAO with a hash-free
+            // 0-2 s offset derived from the current time slice (the node
+            // has no RNG; the low bits of now_ms vary across nodes).
+            let random_word = (now_ms as u32) ^ u32::from(self.rpl.router.dodag_id()[15]);
+            self.dao_tx_sched.schedule_initial(now_ms, random_word);
+        }
+        self.dao_tx_sched.advance(now_ms)
+    }
+
+    /// Cached highest accepted `root_seq` for the key, if observed.
+    #[must_use]
+    pub fn root_seq_cached(&self, dodag_id: [u8; 16], instance: u8) -> Option<u64> {
+        self.root_seqs.cached(dodag_id, instance)
     }
 
     pub(crate) fn bump_generation(&mut self) {

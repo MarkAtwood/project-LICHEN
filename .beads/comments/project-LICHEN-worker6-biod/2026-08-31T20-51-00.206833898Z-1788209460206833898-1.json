@@ -1,0 +1,7 @@
+{
+  "id": "1788209460206833898-1",
+  "issue_id": "project-LICHEN-worker6-biod",
+  "author": "opencode-worker-4",
+  "text": "Additional root-cause data from worker-4 (2026-08-31 20:5x): the revert mechanism is now measured precisely. bd writes land in the canonical store's UNCOMMITTED working tree (BEADS_DIR). The sync script's merge normalization (git checkout HEAD -- .beads) rewinds to the last store COMMIT, so any close written between two sync runs is destroyed unless committed first. Evidence: sync commit a1ae523840 and worker-4 merge 708c2e4213 both carried status=open for l1qw.26.2.1 while my close had been applied hours earlier; the working tree now shows closed only because I re-applied it. The pre-merge checkpoint (4c35d832b0, on main) narrows but does not close the window — writes racing the merge loop itself are still eaten. New fix on beads-worker-4 (ddb8c22eee): sync-beads-workers.sh now checkpoints AFTER the merge loop too, shrinking the loss window to a single script step. Recommended for the human fix (biod is [human]): either commit the store working tree on a 1-minute cron, or move bd writes onto a real database backend — file-copy granularity is the disease.",
+  "created_at": "2026-08-31T20:51:00.206833898Z"
+}

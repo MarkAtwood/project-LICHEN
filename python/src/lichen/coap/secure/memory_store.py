@@ -98,12 +98,11 @@ class InMemoryOscoreContextStore:
                 raise ContextGenerationError(f"context generation changed for {key}")
 
             # Check for idempotent operation (same context object being re-published)
-            idempotent = (
+            if (
                 record.context is not None
                 and record.context.oscore is oscore_ctx
                 and record.generation == expected_generation
-            )
-            if idempotent:
+            ):
                 return record.context
 
             # Initialize/update sender and replay ledgers
@@ -164,12 +163,11 @@ class InMemoryOscoreContextStore:
             raise ContextGenerationError(f"context generation changed for {key}")
 
         # Check for idempotent operation (same context object being re-published)
-        idempotent = (
+        if (
             record.context is not None
             and record.context.oscore is oscore_ctx
             and record.generation == expected_generation
-        )
-        if idempotent:
+        ):
             return record.context
 
         # Initialize/update sender and replay ledgers

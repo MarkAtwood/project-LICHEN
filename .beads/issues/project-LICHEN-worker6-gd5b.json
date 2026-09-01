@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-gd5b",
+  "title": "lichen-link no_std build broken on MCU targets: Atomic fetch_update missing (evidence.rs:196)",
+  "description": "Found while verifying b7z9.37.1.2.1 (ciborium no_std wiring): cargo check -p lichen-node --no-default-features --target riscv32imc-unknown-none-elf fails at lichen-link/src/evidence.rs:196 'no method named fetch_update found for struct Atomic\u003cT\u003e' — reproduces at baseline WITHOUT the ciborium change (stash-verified). NEXT_CLOCK_DOMAIN Atomic\u003cT\u003e (portable-atomic style) lacks fetch_update on this target/feature combination; either use the proper portable-atomic feature flag, or swap to a critical-section/IRQ-safe CAS pattern. Blocks all MCU-target no_std gates for lichen-node dependents. riscv32imc-unknown-none-elf is installed locally so the gate is runnable.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-6",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:19:18.20542415Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T20:46:02.668195243Z",
+  "started_at": "2026-08-31T20:28:02.871086249Z",
+  "closed_at": "2026-08-31T20:46:02.668195243Z",
+  "close_reason": "Fixed: no_std MCU build for lichen-node (riscv32imc gate) now passes end-to-end. Root cause: core::sync::atomic on no-CAS targets (riscv32imc, thumbv6m) exposes Atomic\u003cu32\u003e without RMW methods, so the three owner/domain counters using fetch_update (lichen-link evidence.rs:196 NEXT_CLOCK_DOMAIN, lichen-schc codec.rs:1660 NEXT_PEER_AUTHORITY_OWNER, fragment.rs:280 NEXT_FRAGMENTATION_POLICY_OWNER) failed to compile. Fix: portable-atomic 1 (critical-section feature, default-features off) added to lichen-link and lichen-schc; the three counters use portable_atomic::AtomicU32 with PaOrdering aliases — native atomics on CAS-capable targets, critical-section contract on no-CAS MCU targets (the platform provides the impl). Preserved: the cfg-gated AtomicU64 (std-only) and AtomicBool load/store paths unchanged; exhaustion semantics identical (checked_add filter, never wraps, zero never issued). Verified: cargo check -p lichen-node --no-default-features --target riscv32imc-unknown-none-elf green (the full original gate); host tests green (lichen-schc 89, lichen-link 93/1/1); clippy --all-features -D warnings clean; fmt clean. CI: added rust-mcu-no-std job (oscore-fork provisioning + riscv32imc target check) per the reviewer recommendation so the no_std path cannot silently regress. Reviews: correctness/security/edge-cases (kimi-k3) all PASS — reviewers verified Ordering re-export identity (portable-atomic 1.14 re-exports core Ordering), CI job scoping (no-CAS check graph pulls link+schc), no remaining CAS-gated call sites workspace-wide; the alias-source inconsistency they flagged as cosmetic was unified in-commit.",
+  "labels": [
+    "rust",
+    "link",
+    "codereview"
+  ]
+}

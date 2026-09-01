@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.48",
+  "title": "cppcheck runners never load curated .cppcheck-suppressions; syntaxError suppressed globally (spec appendix-c R-APPC-011)",
+  "description": "spec/appendix-c-safety.md R-APPC-011 (cppcheck, Mandatory): run with '--error-exitcode=1 ... --suppressions-list=lichen/.cppcheck-suppressions'; 'Correctness classes (uninitvar, comparePointers, syntaxError outside known files) always fail the build.' Sweep classification: divergent. Both runners (.github/workflows/ci.yml:105-121 and scripts/lint-c.sh:44-56) pass --error-exitcode=1 and --inline-suppr but NEVER --suppressions-list=lichen/.cppcheck-suppressions, so the curated file is unwired; instead both suppress syntaxError globally on the command line, contradicting the 'syntaxError outside known files always fail' contract (the curated file confines syntaxError suppressions to 5 known macro-heavy files, lichen/.cppcheck-suppressions:13-17). Scope is lichen/subsys+lib+drivers only vs the spec command's 'lichen/' (apps/ and tests/ unscanned). Suggested placement: add --suppressions-list=lichen/.cppcheck-suppressions and drop the global --suppress=syntaxError in ci.yml and scripts/lint-c.sh; decide whether apps/tests enter scope. Full row in docs/spec-coverage.md (spec/appendix-c-safety.md sweep 2026-08-31).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T16:04:31.314085842Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T18:23:05.611823082Z",
+  "closed_at": "2026-08-31T18:23:05.611823082Z",
+  "close_reason": "RE-CLOSE (store write lost — bd8h, recurring). Completed and committed as 1855bb1da4 on beads-worker-7: curated lichen/.cppcheck-suppressions wired into both cppcheck runners (ci.yml + scripts/lint-c.sh), global --suppress=syntaxError dropped, lint-c.sh path normalization to repo-relative for suppression matching, clang-tidy loop wrapped in project-root subshell. See commit and prior close reason for full verification and review notes.",
+  "labels": [
+    "spec-gap",
+    "c-safety",
+    "ci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.48",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T16:04:31.436982616Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

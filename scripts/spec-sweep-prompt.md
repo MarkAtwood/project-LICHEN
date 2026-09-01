@@ -2,9 +2,30 @@
 
 You are performing the requirements-extraction pass for ONE section of the
 LICHEN protocol spec. The .beads/ directory is the live shared store — NEVER
-stage or commit it. You MAY edit only `docs/spec-coverage.md` and file beads.
+stage or commit it. You MAY edit only the TWO output files named below and
+file beads. Do not edit any other file (source, spec, tests — evidence goes
+in the matrix, not the code).
 
 INPUT: the spec section file given to you (e.g. spec/05-routing.md).
+
+## Step 0 — Check adjudicated decisions
+
+Before starting the sweep, read `spec/decisions.jsonl`. Each line is a
+JSON object recording a human-adjudicated design decision. For each decision
+whose `specs` array includes the section you are sweeping:
+
+1. Run the `verify.grep` check (if present): the pattern MUST match in the
+   specified file. If it doesn't, the spec has regressed — **fix the spec
+   file to match the decision** before proceeding with the sweep.
+2. Run the `verify.grep_absent` check (if present): the pattern MUST NOT
+   appear in the specified file. If it does, the spec has regressed — fix it.
+3. If a decision's `verify` target is a source file (not a spec file), verify
+   it but do not modify source — file a bead if it has regressed.
+
+Decisions in this file are FINAL. Do not re-adjudicate them, question them,
+or file beads that contradict them. If a requirement in the spec text
+conflicts with a recorded decision, the decision wins and the spec text
+should be updated to match.
 
 ## Step 1 — Extract
 
@@ -32,7 +53,10 @@ tests. No evidence = ambiguous, not implemented.
 
 ## Step 3 — Coverage matrix
 
-Append to docs/spec-coverage.md a section:
+WRITE (create) your section matrix to `docs/spec-coverage/<SECTION_STEM>.md`
+(e.g. `docs/spec-coverage/05-routing.md` for spec/05-routing.md) — this exact
+path is what the wave runner checks; appending anywhere else loses your work.
+The file starts with:
 
     ## <spec file> — coverage (sweep <date>)
     | Req | Spec text (trimmed) | Status | Evidence | Confidence |
@@ -52,7 +76,8 @@ MAYs: never file. oscore/EDHOC semantics: label `human-only`, never plan a fix.
 
 ## Step 5 — Flagged set for Opus verification
 
-Write docs/spec-coverage-<section>-flagged.md: every requirement where
+Write `docs/spec-coverage/<SECTION_STEM>-flagged.md` (e.g.
+`docs/spec-coverage/05-routing-flagged.md`): every requirement where
 (a) confidence was low, (b) classification was ambiguous or divergent, or
 (c) the section is 06-security or concerns oscore/EDHOC semantics.
 For each: the requirement, your classification, your evidence, and the

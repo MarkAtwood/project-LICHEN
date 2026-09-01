@@ -110,13 +110,8 @@ Primary embedded target: **Zephyr RTOS** (native IPv6 stack).
 Every node derives two IPv6 addresses from its Ed25519 public key:
 
 ```
-<<<<<<< HEAD
-Link-local: fe80::1234:5678:9abc:def0          (always)
-Primary:    0200:1234:5678:9abc::1234:5678:9abc:def0 (Yggdrasil-derived, always)
-=======
 Link-local:  fe80::<key-derived IID>           (control plane)
 Native:      0200::/8 key-derived /128         (application unicast)
->>>>>>> 47566351ab2de672253d7dd43a621df6ba7fdebf
 ```
 
 The native address routes locally without a gateway. Its format is compatible

@@ -2002,8 +2002,9 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     let mut unsigned = manager.build_dao(root_addr.into());
     // Locate the RPL Target option (type 5, data length 18) and set its
     // reserved flags octet (option data[0], two bytes after the type) before
-    // signing, so the wire is cryptographically valid and only the flags
-    // byte distinguishes it from an accepted DAO.
+    // signing, so the wire is cryptographically valid; only the flags
+    // byte distinguishes it from an accepted DAO, and rejection is purely
+    // structural.
     let target_opt = unsigned
         .windows(2)
         .position(|w| w == [OPT_RPL_TARGET, 18])
@@ -2018,6 +2019,10 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
     )
     .unwrap();
 
+    // The signed envelope parse (is_generalized_target_body) fails closed
+    // before any crypto or route-state work; the extract_updates screen in
+    // lichen-rpl/src/routing.rs stays as defense in depth for raw-DAO paths
+    // that bypass the envelope.
     assert!(
         matches!(
             SignatureVerifiedDao::verify_signature(
@@ -2031,7 +2036,6 @@ fn nonzero_target_flags_dao_rejected_before_state_mutation() {
         ),
         "nonzero Target flags must reject the DAO at the structural stage"
     );
-
     // Raw (pre-verification) ingest must also reject: the node-side mirror
     // enforces the R-05-035 flags check on unverified DAO bytes (defense in
     // depth alongside lichen-rpl extract_updates).

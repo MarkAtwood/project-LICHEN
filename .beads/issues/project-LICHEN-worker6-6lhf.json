@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-6lhf",
+  "title": "Committed host test + cross-impl vectors for the 5.03 backoff payload parser",
+  "description": "Follow-up from worker6-81a8 codereview: the hand-rolled CBOR scanner lichen_coap_backoff_duration_s (lichen/subsys/lichen/coap/backoff.c) currently has zero committed test coverage — the behavioral check was a standalone gcc harness during the round. Add: (1) a host test (extend lichen/tests/coap_client or a tiny standalone dir following lichen/tests/cmake/test_common.cmake) covering: the canonical duty-cycle payload {reason:'duty_cycle', retry_after, level} both orders, retry_after in short form and 2-byte (0x19) form up to the 3600 cap, malformed payloads (non-map, bstr value, negative int, truncated 0x19, long-form keys) all falling back to 60, payload absent -\u003e 60; (2) optionally a shared vector file pinning the exact payload bytes + expected durations for Rust/Python parity (the Python ip_coap and Rust client backoff durations should agree on the same wire 5.03).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:45:17.745003255Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T23:45:17.745003255Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6lhf",
+      "depends_on_id": "project-LICHEN-worker6-81a8",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:45:17.915975786Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

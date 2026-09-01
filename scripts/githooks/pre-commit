@@ -1,0 +1,22 @@
+#!/bin/bash
+# Block accidental staging of the shared beads store (bead biod).
+#
+# The store (.beads/) is main-checkout-only: bd writes it directly via
+# BEADS_DIR, the sync loop commits it. Worker commits that carry .beads/
+# content poison merges — the sync loop's normalization then has to rewind
+# .beads, which destroys concurrent store writes (the measured data-loss
+# mechanism). Reject the staging here so the junk never enters history.
+#
+# Automation (sync-beads-workers.sh, merge-janitor.sh) opts out via
+# BEADS_ALLOW_STORE_COMMIT=1 — their checkpoint and merge commits are the
+# only legitimate writers of .beads/.
+if [ "${BEADS_ALLOW_STORE_COMMIT:-0}" = "1" ]; then
+    exit 0
+fi
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^\.beads/\|^rust/crates/oscore/'; then
+    echo "COMMIT REJECTED: staged changes touch .beads/ or rust/crates/oscore/" >&2
+    echo "The beads store is main-only (bead biod). Unstage and recommit:" >&2
+    echo "  git restore --staged .beads rust/crates/oscore" >&2
+    exit 1
+fi
+exit 0

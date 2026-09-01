@@ -11,6 +11,8 @@ zephyr_library_sources(
 	hal_location.c
 	hal_power.c
 	hal_reset.c
+	hal_time.c
+	redundant_slot.c
 	hal_storage_redundant.c
 hal_time.c
 )

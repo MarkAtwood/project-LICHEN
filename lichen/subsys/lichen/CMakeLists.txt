@@ -4,6 +4,7 @@
 # LICHEN protocol subsystem for Zephyr
 
 add_subdirectory_ifdef(CONFIG_LICHEN_COAP coap)
+add_subdirectory_ifdef(CONFIG_LICHEN_DIAG diag)
 if(CONFIG_LICHEN_COMPACT_COT_PLI OR CONFIG_LICHEN_COMPACT_COT_CHAT)
   add_subdirectory(compact_cot)
 endif()

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.42",
+  "title": "12-apps: messaging ts semantics — wall_clock_valid gating and ts=0 acceptance (18.1.1)",
+  "description": "spec/12-apps.md 18.1.1 Timestamp Semantics: senders SHOULD include ts only when their time provider reports wall_clock_valid=true; receivers MAY accept ts absent or ts=0 as 'time unknown'; TTL expiry comparisons need wall-clock, and clockless nodes SHOULD NOT enforce TTL expiry. No implementation evidence: Python validates ts type only (messaging.py:374-377); C msg struct has no ttl field (lichen/subsys/lichen/coap/include/lichen/coap_msg.h:70-83); no wall_clock_valid signal anywhere. SH-level gap; file covers the whole timestamp/ttl semantic cluster. See docs/spec-coverage/12-apps.md R-12-008/009.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:48:15.812510034Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:48:15.812510034Z",
+  "labels": [
+    "apps",
+    "spec-gap",
+    "lci",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.42",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:48:15.925522675Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

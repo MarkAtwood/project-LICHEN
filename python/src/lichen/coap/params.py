@@ -65,7 +65,7 @@ class CoapParams:
         base = self.ack_timeout
         # MAX_TRANSMIT_SPAN = ACK_TIMEOUT * (2^(MAX_RETRANSMIT) -1) * ACK_RANDOM_FACTOR
         max_span = base * ((2**self.max_retransmit) - 1) * self.ack_random_factor
-        return max_span + self.default_leisure
+        return float(max_span + self.default_leisure)
 
 
 LICHEN_PARAMS = CoapParams()

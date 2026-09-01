@@ -1,0 +1,7 @@
+{"id":"01a0572d-b6a5-742e-ab9f-2af0750b548f","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"created","actor":"opencode-worker-5","old_value":"","new_value":"","created_at":"2026-08-31T09:36:48.8052752Z"}
+{"id":"01a0572d-b6aa-7040-bee4-6b7d7c46090c","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: decomposed","created_at":"2026-08-31T09:36:48.810018902Z"}
+{"id":"01a0572d-b6ae-7d3c-b418-f53356dd3331","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: rpl","created_at":"2026-08-31T09:36:48.814868414Z"}
+{"id":"01a0572d-b6b3-77e1-a2f1-bb93af527919","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: zephyr","created_at":"2026-08-31T09:36:48.819517792Z"}
+{"id":"01a0572d-b6b8-738e-b937-32c716c4c643","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: python","created_at":"2026-08-31T09:36:48.824234203Z"}
+{"id":"01a0572d-b6bc-7e96-b56d-9dfdf656582a","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: rust","created_at":"2026-08-31T09:36:48.828957534Z"}
+{"id":"01a0572d-b6c1-79c0-b8ad-75d8bb85c9da","issue_id":"project-LICHEN-worker6-b7z9.16.3","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: spec-gap","created_at":"2026-08-31T09:36:48.833640453Z"}

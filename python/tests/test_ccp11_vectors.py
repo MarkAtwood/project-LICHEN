@@ -44,27 +44,27 @@ def test_ccp11_dynamic_channel_selection(vector: dict[str, Any]) -> None:
 
 
 def test_ccp11_density_boundary_coverage() -> None:
-    """Verify CCP-11 vectors cover the critical density=8 boundary."""
+    """Verify CCP-11 vectors cover the critical density=10 boundary."""
     names = {v["name"] for v in _VECTORS}
     densities = {v["input"]["density"] for v in _VECTORS}
 
     # Critical boundary tests must exist
-    assert "density_8_boundary_no_fallback" in names
-    assert "density_9_triggers_ch0_fallback" in names
+    assert "density_10_boundary_no_fallback" in names
+    assert "density_11_triggers_ch0_fallback" in names
 
     # Must have both sides of the boundary
-    assert 8 in densities, "Missing density=8 boundary test"
-    assert 9 in densities, "Missing density=9 (first fallback) test"
+    assert 10 in densities, "Missing density=10 boundary test"
+    assert 11 in densities, "Missing density=11 (first fallback) test"
 
 
 def test_ccp11_ch0_fallback_vectors_correct() -> None:
     """Verify CH0 fallback vectors return channel 0."""
-    fallback_vectors = [v for v in _VECTORS if v["input"]["density"] > 8]
+    fallback_vectors = [v for v in _VECTORS if v["input"]["density"] > 10]
     assert len(fallback_vectors) >= 2, "Need at least 2 CH0 fallback test cases"
 
     for v in fallback_vectors:
         assert v["expected"]["channel"] == 0, (
-            f"{v['name']}: density {v['input']['density']} > 8 should return CH0"
+            f"{v['name']}: density {v['input']['density']} > 10 should return CH0"
         )
 
 

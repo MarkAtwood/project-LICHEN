@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-yh7c",
+  "title": "mesh_to_mesh RH3/encapsulation branch selector trusts TUN source address — root spoof steers packets into RH3 without the 8.9 tunnel verification",
+  "description": "P2 security finding from codereview of worker6-b7z9.4.1 (pre-existing selector, NOT introduced by that diff). rust/lichen-gateway/src/gateway.rs mesh_to_mesh chooses between RH3 insertion and IPv6-in-IPv6 encapsulation via ipv6[8..24] == root_addr (the packet's SOURCE bytes) — upstream_to_mesh performs no source validation, and an internet-side sender controls those bytes entirely. The root's link-local address is broadcast as the DIO source and key-derived (not secret). Consequences: (1) a sender spoofing src == root_addr steers into add_rpl_source_route (RH3), skipping the 8.9 inner-HL tunnel decrement (arrives with 255-SL lifetime instead of 254-SL) — minor; (2) MAJOR: the emitted packet bears a spoofed root source address end-to-end, violating spec 8.9's MUST that packets the root did NOT originate use IPv6-in-IPv6 — the tunnel is what lets E verify the inner destination (inner-dst verification tracked separately in worker6-b7z9.4.2); the RH3 path bypasses it. Also is_host_route at the branch is dead code (route.last()==dst already guaranteed by the early return). The false premise 'mesh_to_mesh is only reached from the upstream_to_mesh TUN path' is corrected in the code comment; forward_mesh_to_upstream (lichend.rs:944) hairpins mesh-\u003emesh through the same selector with link-authenticated but not root-bound inner sources. Fix direction: track actual local origination — a parameter/flag set only by the code path that injects root-originated packets (or verify the inner source via the trust store before RH3), and treat TUN/mesh-ingress src==root_addr as spoof (drop or force tunnel). Coordination: worker6-b7z9.4.2 owns the inner-dst verification at E; this bead owns the gateway-side branch selection.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:59:23.45264239Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-08-31T20:59:23.45264239Z",
+  "labels": [
+    "gateway",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-yh7c",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.4.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:59:23.594589445Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788163461272097244-1",
+  "issue_id": "project-LICHEN-worker6-025x",
+  "author": "opencode-worker-3",
+  "text": "Corroborated by zt3c.7.2 codereview pass 1 (correctness): routing_fwd_buffer/src/main.c:29-34 and routing_gpsr/src/main.c:31-36 local make_ula() helpers still construct fd00::/8 while rpl_routing/src/main.c:30 was already migrated to 0200::/8 per zt3c.7 — inconsistent fixture addressing may make nodes look like a foreign mesh to the code under test. Library lichen_make_ula() is now deleted (zt3c.7.2); these static test helpers are unaffected but remain the last fd00 minters.",
+  "created_at": "2026-08-31T08:04:21.272097244Z"
+}

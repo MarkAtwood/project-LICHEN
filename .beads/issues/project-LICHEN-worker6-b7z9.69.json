@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.69",
+  "title": "[BUG] Sync word 0x34 defined but never programmed onto any radio (spec 02 sec 3.2)",
+  "description": "Req R-02-006 (spec 02-physical-link.md 3.2): Sync Word default 0x34, distinct from Meshtastic 0x2B. DIVERGENT: constant exists but no driver uses it. Evidence: rust/lichen-core/src/constants.rs:4 LORA_SYNC_WORD=0x34 has zero callers; C lichen/subsys/lichen/l2/lora_l2.c:299-303 sets no sync word and leaves Zephyr public_network=false (Semtech private sync byte, not 0x34); python radio/phy_params.py:30 is config-only. All 0x34 assertions live in the LCI /config/radio CBOR store (rust/lichen-client/src/radio_config.rs, lichen/tests/coap_config/main.c:328, test/vectors/lci_radio_config.json) — config surface, not radio programming. Interop-critical: impls may not share a sync word on hardware. Suggested placement: C lichen/subsys/lichen/l2/lora_l2.c modem config (+ lr1110 driver sync API if needed); rust lichen-embassy radio setup; add a test asserting the programmed value.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:25:45.407157475Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:25:45.407157475Z",
+  "labels": [
+    "phy",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.69",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:25:45.538042372Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

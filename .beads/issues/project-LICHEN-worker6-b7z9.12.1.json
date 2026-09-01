@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.12.1",
+  "title": "C TDMA: implement DesyncFSM core states/transitions (spec 09 14.7 R-09-133)",
+  "description": "Smallest child of b7z9.12. Add the desync recovery FSM to lichen/subsys/lichen/link/tdma.c + ctx header, mirroring python/src/lichen/timing/sfn.py:77-125 DesyncFSM and rust/lichen-core/src/desync.rs:82-150: states SYNCED -\u003e DESYNCED (SFN wrap + invalid time provider), DESYNCED -\u003e RECOVERING (valid beacon ts \u003e= floor matching SFN), RECOVERING -\u003e SYNCED after 3 consecutive valid beacons, RECOVERING -\u003e DESYNCED on timeout/invalid ts; RECOVERING timeout RECOMMENDED 3 superframes (constant + documented). Host-testable state machine (extend the tdma host test if one exists, else tests/routing_dispatch-style standalone or a new lichen/tests dir following test_common.cmake). Python tests python/tests/timing/test_sfn.py:284-297 are the behavioral oracle. Discovered from project-LICHEN-worker6-b7z9.12.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:38:48.600972822Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T23:13:45.169584574Z",
+  "closed_at": "2026-08-31T23:13:45.169584574Z",
+  "close_reason": "C DesyncFSM landed (commit eda353bf65): enum lichen_desync_state (SYNCED/DESYNCED/RECOVERING) + ctx fields + three entry points (lichen_desync_on_sfn_wrap/on_beacon/on_missed_superframe) in tdma.c, all inside the CONFIG_LICHEN_TDMA ifdef. Transitions mirror the Python oracle (timing/sfn.py DesyncFSM) exactly: SYNCED-\u003eDESYNCED on SFN wrap with invalid time provider (no-op in other states); DESYNCED-\u003eRECOVERING on first valid beacon (count 1); RECOVERING valid beacons increment count (resetting missed-superframes) and 3 consecutive -\u003e SYNCED; invalid beacon in RECOVERING -\u003e DESYNCED (counters reset); bounded RECOVERING listen timeout 3 missed superframes -\u003e DESYNCED (no-op outside RECOVERING). Constants split per review: LICHEN_DESYNC_RECOVERY_BEACONS (recovery threshold) vs LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES (listen timeout, oracle-traceable name) — the two 14.7 parameters no longer share one constant. Host test test_desync_fsm (tdma_guard_budget) pins: init NULL-ctx guard + init-based fixture (not memset), wrap-invalid -\u003e DESYNCED, wrap-valid no-op, valid-\u003eRECOVERING count 1, invalid-\u003eDESYNCED reset, 3-valid-\u003eSYNCED reset, wrap no-op in DESYNCED, NULL guards on all three entry points, valid-beacon-in-RECOVERING resets missed while preserving consecutive count (sfn.py:115-116), timeout 3-missed-\u003eDESYNCED, no-op outside RECOVERING. Verification: host build+run all asserts green; ZEPHYR native_sim routing_dispatch build green (header consumed by TDMA-enabled builds). Codereview 3x delegated to kimi-k3: transitions/counter-resets/NULL-guards/header-placement confirmed defect-free; findings all P4 test-completeness items (constant split, oracle naming, NULL tests, no-op coverage, interleave coverage, init fixture) — ALL six fixed in this commit. Follow-ups: sibling .2 (SFN-wrap/epoch-floor wiring + desync vectors) owns the signal integration.",
+  "labels": [
+    "tdma",
+    "zephyr",
+    "decomposed",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.12.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.12",
+      "type": "parent-child",
+      "created_at": "2026-08-31T22:38:48.768046398Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

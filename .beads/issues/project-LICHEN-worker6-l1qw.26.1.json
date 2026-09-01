@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.26.1",
+  "title": "l1qw.26a: group invitation replay ledger becomes per-inviter 32-entry nonce ring (RAM-only)",
+  "description": "Child of l1qw.26 (spec 18.8.2, R-12-064): replace the unbounded per-group identity-hash nonce dict (python/src/lichen/group_membership.py / groups_collection.py:199-214,504-509) with the spec-mandated per-inviter nonce ring buffer of 32 entries, RAM-only. Behavior change is spec-directed (old nonces eventually forgotten; bounded memory). Keep the existing rejection semantics for a nonce still resident in the ring; update/extend the groups_membership tests for ring eviction semantics (34th distinct nonce evicts the oldest; evicted nonce becomes acceptable again ONLY as the spec's ring dictates). Do NOT touch the envelope format in this slice (that is .26b).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T19:12:47.419099333Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T20:49:22.876098634Z",
+  "started_at": "2026-08-31T19:12:58.713708094Z",
+  "closed_at": "2026-08-31T20:49:22.876098634Z",
+  "close_reason": "Re-close (store revert; folded into .26.2.2 per recorded rescoping — ring implemented in the COSE resource path, tested). See prior close reason.",
+  "labels": [
+    "lci",
+    "apps",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.26.1",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.26",
+      "type": "parent-child",
+      "created_at": "2026-08-31T19:12:47.591175504Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

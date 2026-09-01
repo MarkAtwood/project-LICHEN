@@ -23,8 +23,8 @@ from lichen.crypto.delegation_tokens import (
     DelegationScope,
     DelegationToken,
     DelegationTokenPayload,
-    _build_sig_structure,
-    _encode_protected_header,
+    cose_protected_header,
+    cose_sig_structure,
 )
 from lichen.crypto.schnorr48 import verify
 
@@ -65,7 +65,7 @@ class TestProtectedHeader:
     @pytest.mark.parametrize("vector", get_vectors(), ids=lambda v: v["name"])
     def test_protected_header(self, vector: dict[str, Any]) -> None:
         """Protected header encodes algorithm correctly."""
-        protected = _encode_protected_header()
+        protected = cose_protected_header()
         assert protected.hex() == vector["protected_header"]
 
         # Verify decoded form
@@ -111,7 +111,7 @@ class TestSigStructure:
         """Sig_structure matches RFC 9052 encoding."""
         protected = bytes.fromhex(vector["protected_header"])
         payload = bytes.fromhex(vector["payload_cbor"])
-        sig_structure = _build_sig_structure(protected, payload)
+        sig_structure = cose_sig_structure(protected, payload)
         assert sig_structure.hex() == vector["sig_structure"]
 
         # Verify decoded layout
@@ -285,3 +285,55 @@ class TestAdminScopeRestrictions:
         # Verify owner-only bits are present
         scope = vector["scope"]
         assert scope & DelegationScope.DISTRIBUTE_KEY
+
+
+class TestFromCborTypeValidation:
+    """from_cbor must reject wrong-typed fields instead of mis-validating them."""
+
+    @staticmethod
+    def _payload_map() -> dict[Any, Any]:
+        payload = DelegationTokenPayload(
+            delegate=bytes(range(8)),
+            scope=DelegationScope.DISTRIBUTE_KEY,
+            resource="group/A",
+            expiry=1_800_000_000,
+            seq=7,
+        )
+        return cbor2.loads(payload.to_cbor())
+
+    def test_valid_round_trip(self) -> None:
+        payload = DelegationTokenPayload.from_cbor(cbor2.dumps(self._payload_map()))
+        assert payload.delegate == bytes(range(8))
+        assert payload.scope == int(DelegationScope.DISTRIBUTE_KEY)
+        assert payload.resource == "group/A"
+        assert payload.expiry == 1_800_000_000
+        assert payload.seq == 7
+
+    def test_rejects_non_map(self) -> None:
+        with pytest.raises(TypeError, match="CBOR map"):
+            DelegationTokenPayload.from_cbor(cbor2.dumps([1, 2, 3]))
+
+    def test_rejects_wrong_field_types(self) -> None:
+        from lichen.crypto.delegation_tokens import (
+            _PAYLOAD_DELEGATE,
+            _PAYLOAD_EXPIRY,
+            _PAYLOAD_RESOURCE,
+            _PAYLOAD_SCOPE,
+            _PAYLOAD_SEQ,
+        )
+
+        cases = [
+            (_PAYLOAD_DELEGATE, "12345678", "delegate must be bytes"),
+            (_PAYLOAD_SCOPE, True, "scope must be an integer"),
+            (_PAYLOAD_SCOPE, "7", "scope must be an integer"),
+            (_PAYLOAD_RESOURCE, 5, "resource must be a string"),
+            (_PAYLOAD_EXPIRY, "soon", "expiry must be an integer"),
+            (_PAYLOAD_EXPIRY, True, "expiry must be an integer"),
+            (_PAYLOAD_SEQ, 1.5, "seq must be an integer"),
+            (_PAYLOAD_SEQ, True, "seq must be an integer"),
+        ]
+        for key, value, message in cases:
+            payload_map = self._payload_map()
+            payload_map[key] = value
+            with pytest.raises(TypeError, match=message):
+                DelegationTokenPayload.from_cbor(cbor2.dumps(payload_map))

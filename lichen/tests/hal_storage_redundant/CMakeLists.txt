@@ -4,6 +4,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(hal_storage_redundant_test C)
 
+# Common test config (sanitizers + hardening + CONFIG_* defaults)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/test_common.cmake)
 
 add_executable(hal_storage_redundant_test
@@ -15,6 +16,8 @@ target_include_directories(hal_storage_redundant_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
 )
 
+# Apply sanitizers and hardening
+lichen_test_target(hal_storage_redundant_test)
 lichen_test_target(hal_storage_redundant_test)
 target_link_libraries(hal_storage_redundant_test PRIVATE pthread)
 

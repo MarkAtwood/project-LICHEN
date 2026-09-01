@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -45,7 +46,7 @@ jobs:
       - name: Install Python deps
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run Python→Rust interop tests
@@ -69,7 +70,7 @@ jobs:
       - name: Install Python deps
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run multi-node tests
@@ -87,6 +88,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -96,7 +98,7 @@ jobs:
       - name: Install Python deps
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Regenerate vectors (should be no-op)
@@ -169,6 +171,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -178,7 +181,7 @@ jobs:
       - name: Install deps
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Generate wire samples from Python
@@ -267,7 +270,7 @@ jobs:
       - name: Test announce coordinate encoding
         run: |
           cd python
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
           uv run pytest tests/test_vectors.py -v -k announce
 

@@ -1717,7 +1717,7 @@ class TestDutyCycleAndRemoveNode:
 
 
 class TestDensityAwareStartup:
-    """listen_period_us and log(1+heard) backoff."""
+    """listen_period_us consumption and the spec-linear density backoff."""
 
     def test_isolated_node_has_zero_density_delay(self) -> None:
         """heard=0 → log(1+0)=0 so the density term is always 0."""
@@ -1731,24 +1731,27 @@ class TestDensityAwareStartup:
         node = sim.add_node("n", 0.0, 0.0, 0.0)
         assert sim.calculate_startup_delay(node) == 0
 
-    def test_density_delay_is_log_not_linear(self) -> None:
-        """heard=10 is scaled by log(11), not by 11."""
-        import math
-
+    def test_density_delay_is_spec_linear_capped(self) -> None:
+        """heard=10 -> initial_delay = min(300, 10*5) = 50 s; the uniform
+        draw is bounded by the spec cap (b7z9.55: sim conforms to the spec
+        formula, replacing the earlier log1p divergence)."""
         sim = Simulation(
-            sim_id="density-log",
+            sim_id="density-linear",
             density_aware_startup=True,
             listen_period_us=0,
-            density_scale_factor=1000.0,
+            density_scale_factor=0.0,
             seed=1,
         )
         node = sim.add_node("n", 0.0, 0.0, 0.0)
         node.heard_set.update(str(i) for i in range(10))
         delay = sim.calculate_startup_delay(node)
-        log_cap = int(1000.0 * math.log1p(10))
-        linear_cap = int(1000.0 * 11)
-        assert 0 <= delay <= log_cap
-        assert log_cap < linear_cap
+        spec_cap_us = 50 * 1_000_000  # min(300, 10*5) = 50 s
+        assert 0 <= delay <= spec_cap_us
+        # heard=100 -> capped at 300 s, same as heard=10 beyond the cap.
+        node2 = sim.add_node("n2", 0.0, 0.0, 0.0)
+        node2.heard_set.update(str(i) for i in range(100))
+        delay100 = sim.calculate_startup_delay(node2)
+        assert 0 <= delay100 <= 300 * 1_000_000
 
     def test_listen_period_delays_first_tx(self) -> None:
         """listen_period_us is consumed before the first TX is queued."""

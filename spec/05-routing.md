@@ -101,6 +101,14 @@ Keywords per RFC 2119. Device classes:
 | LOADng relay | SHOULD | MUST | MUST |
 | Gradient table (§11) | MUST | MUST | MUST |
 
+**Forwarding-plane endpoint policy:** every relaying decision applies the
+martian filter of the Network Layer chapter (Section 6.3.5): a router MUST
+NOT forward a packet whose source or destination is policy-invalid, MUST
+drop it at the forwarding decision, and MUST report the rejection locally
+without transmitting a protocol error onto the mesh. Link intake stays
+byte-preserving; the policy attaches to origination and to the forwarding
+decision only.
+
 **Extended Features (Routers Only):**
 
 | Feature | Constrained | Router | BR |
@@ -956,12 +964,21 @@ For 02xx destinations, Yggdrasil fallback is attempted before DTN buffering. DTN
 
 **Message Header Extension:**
 
+Store-and-forward uses a single IPv6 hop-by-hop option (Type=0x03, 5 bytes)
+carrying both the S-flag and absolute expiry:
+
 ```
-DTN Flags (1 byte in IPv6 hop-by-hop options):
+DTN Option (Type=0x03, Length=5, in IPv6 hop-by-hop options):
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Type=0x03 | Length=5 | Flags | Expiry (4 bytes, UTC)      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Flags byte:
 +-+-+-+-+-+-+-+-+
 |S|   Reserved  |
 +-+-+-+-+-+-+-+-+
 S = Store-and-forward requested
+Reserved bits MUST be zero on send, MUST be ignored on receive.
 ```
 
 **Absolute TTL:**
@@ -972,13 +989,6 @@ comparison requires valid wall-clock time from the firmware time provider
 (see `docs/firmware-time-provider.md`). Nodes without valid wall-clock time
 MUST NOT drop messages based on expiry timestamp alone; they SHOULD forward
 or store messages and let downstream nodes with valid time enforce expiry.
-
-```
-App Data (DTN expiry):
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-| Type=0x03 | Expiry (4 bytes, UTC)     |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
 
 **Storage Policy:**
 

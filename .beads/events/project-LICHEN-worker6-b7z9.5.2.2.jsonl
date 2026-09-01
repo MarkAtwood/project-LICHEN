@@ -1,0 +1,5 @@
+{"id":"01a058f2-db2d-78e9-8705-1c598f17a6a7","issue_id":"project-LICHEN-worker6-b7z9.5.2.2","event_type":"created","actor":"opencode-worker-4","old_value":"","new_value":"","created_at":"2026-08-31T17:51:45.965586954Z"}
+{"id":"01a058f2-db32-788b-9c28-d19bd67cd4b4","issue_id":"project-LICHEN-worker6-b7z9.5.2.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: rust","created_at":"2026-08-31T17:51:45.970561043Z"}
+{"id":"01a058f2-db37-7827-881c-d45e100a2c93","issue_id":"project-LICHEN-worker6-b7z9.5.2.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: schc","created_at":"2026-08-31T17:51:45.975535685Z"}
+{"id":"01a058f2-db3c-7915-bc9e-c8b2ef9d8c1e","issue_id":"project-LICHEN-worker6-b7z9.5.2.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: gateway","created_at":"2026-08-31T17:51:45.980596989Z"}
+{"id":"01a058f2-db41-7615-86d4-08a9957fc300","issue_id":"project-LICHEN-worker6-b7z9.5.2.2","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: spec-gap","created_at":"2026-08-31T17:51:45.985399988Z"}

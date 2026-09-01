@@ -795,57 +795,126 @@
       "description": "Lowercase hex-encoded byte string (may be empty)."
     },
     "schc_vector": {
-      "type": "object",
-      "required": [
-        "name",
-        "rule_id",
-        "packet",
-        "compressed"
-      ],
-      "additionalProperties": false,
-      "allOf": [
+      "description": "One SCHC compression corpus row. Variants mirror the field sets enforced by lichen/tests/schc_parity/gen_vectors.py and the python/rust consumers; additionalProperties is false so corpus drift fails the schema gate.",
+      "oneOf": [
         {
-          "if": {
-            "properties": {
-              "expect": {
-                "required": [
-                  "response_prefix"
-                ]
-              }
+          "description": "Plain round-trip row: compress(packet)==compressed, decompress(compressed)==packet.",
+          "type": "object",
+          "required": ["name", "rule_id", "packet", "compressed"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "rule_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "description": { "type": "string" },
+            "packet": {
+              "$ref": "#/definitions/hex",
+              "description": "Full uncompressed IPv6 datagram."
+            },
+            "compressed": {
+              "$ref": "#/definitions/hex",
+              "description": "SCHC output: leading rule-id byte + residue + tail."
             }
-          },
-          "then": {
-            "properties": {
-              "expect": {
-                "required": [
-                  "response_len"
-                ]
-              }
+          }
+        },
+        {
+          "description": "Fallback round-trip row: valid IPv6 that matches no compression rule and round-trips byte-preserving under Rule 255.",
+          "type": "object",
+          "required": ["name", "rule_id", "packet", "compressed", "category"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "rule_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "category": { "const": "fallback" },
+            "description": { "type": "string" },
+            "packet": {
+              "$ref": "#/definitions/hex",
+              "description": "Full uncompressed IPv6 datagram."
+            },
+            "compressed": {
+              "$ref": "#/definitions/hex",
+              "description": "SCHC output: leading rule-id byte + residue + tail."
+            }
+          }
+        },
+        {
+          "description": "Malformed packet input: compress must reject, never emit Rule255.",
+          "type": "object",
+          "required": ["name", "category", "packet", "expect_error"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "category": { "const": "malformed_input" },
+            "description": { "type": "string" },
+            "packet": {
+              "$ref": "#/definitions/hex",
+              "description": "Rejected packet bytes (any shape)."
+            },
+            "expect_error": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$"
+            }
+          }
+        },
+        {
+          "description": "Malformed compressed input: decompress must reject.",
+          "type": "object",
+          "required": ["name", "category", "rule_id", "compressed", "expect_error"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "category": { "const": "malformed" },
+            "rule_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "description": { "type": "string" },
+            "compressed": {
+              "$ref": "#/definitions/hex",
+              "description": "Compressed bytes that decode to an invalid packet."
+            },
+            "expect_error": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$"
+            }
+          }
+        },
+        {
+          "description": "Profile size boundary: prefix + tail probes the encoded-size ceiling.",
+          "type": "object",
+          "required": [
+            "name",
+            "category",
+            "rule_id",
+            "compressed_prefix",
+            "tail_byte",
+            "tail_length",
+            "expected_packet_size"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string" },
+            "category": { "const": "size_boundary" },
+            "rule_id": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "description": { "type": "string" },
+            "expect_error": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$"
+            },
+            "compressed_prefix": {
+              "$ref": "#/definitions/hex",
+              "description": "Encoded prefix bytes."
+            },
+            "tail_byte": { "type": "integer", "minimum": 0, "maximum": 255 },
+            "tail_length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 22554
+            },
+            "expected_packet_size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 65535
             }
           }
         }
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "rule_id": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 255
-        },
-        "description": {
-          "type": "string"
-        },
-        "packet": {
-          "$ref": "#/definitions/hex",
-          "description": "Full uncompressed IPv6 datagram."
-        },
-        "compressed": {
-          "$ref": "#/definitions/hex",
-          "description": "SCHC output: leading rule-id byte + residue + tail."
-        }
-      }
+      ]
     },
     "byte_part": {
       "oneOf": [
@@ -4420,6 +4489,7 @@
       "type": "object",
       "required": [
         "name",
+        "input_hex",
         "output"
       ],
       "additionalProperties": false,
@@ -4924,7 +4994,8 @@
             "single_active",
             "rule_version",
             "ack_bitmap",
-            "rule255_endpoint_policy"
+            "rule255_endpoint_policy",
+            "rule255_rx_structural_reject"
           ]
         },
         "priority": {
@@ -5268,6 +5339,23 @@
               "source_ipv6",
               "destination_ipv6",
               "expect_valid"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "rule255_rx_structural_reject"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "source_ipv6",
+              "destination_ipv6",
+              "expect_valid",
+              "expect_error"
             ]
           }
         }

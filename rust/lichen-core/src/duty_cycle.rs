@@ -296,7 +296,7 @@ pub fn adaptive_duty_permille(density: u8, region: u8) -> u16 {
     // CCP-13 defines region 0 as strict and region 1 as lenient. Unknown
     // values deliberately fail closed to the stricter region-0 budget.
     let strict_region = region != REGION_US;
-    if density > 8 {
+    if density > 10 {
         if strict_region {
             5
         } else {
@@ -919,12 +919,13 @@ mod tests {
     #[test]
     fn adaptive_duty_density() {
         assert_eq!(adaptive_duty_permille(0, REGION_EU), 20);
-        assert_eq!(adaptive_duty_permille(10, REGION_EU), 5);
+        assert_eq!(adaptive_duty_permille(11, REGION_EU), 5);
         assert_eq!(adaptive_duty_permille(5, REGION_EU), 10);
+        assert_eq!(adaptive_duty_permille(10, REGION_EU), 10);
         assert_eq!(adaptive_duty_permille(0, REGION_US), 50);
         assert_eq!(adaptive_duty_permille(5, REGION_US), 20);
-        assert_eq!(adaptive_duty_permille(10, REGION_US), 10);
-        assert_eq!(adaptive_duty_permille(10, 255), 5);
+        assert_eq!(adaptive_duty_permille(11, REGION_US), 10);
+        assert_eq!(adaptive_duty_permille(11, 255), 5);
     }
 
     #[test]

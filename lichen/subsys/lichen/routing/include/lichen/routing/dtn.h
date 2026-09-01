@@ -39,7 +39,7 @@ extern "C" {
 
 /** Maximum packet size (IPv6 MTU for mesh) */
 #ifndef CONFIG_LICHEN_DTN_MAX_PACKET_SIZE
-#define CONFIG_LICHEN_DTN_MAX_PACKET_SIZE 1280
+#define CONFIG_LICHEN_DTN_MAX_PACKET_SIZE 1536
 #endif
 
 /** Default TTL in seconds (24 hours) */
@@ -104,7 +104,9 @@ int lichen_dtn_init_with_size(struct lichen_dtn_buffer *buf, uint32_t max_bytes)
  * @param packet          Packet data to buffer
  * @param packet_len      Length of packet data
  * @param destination_iid 8-byte destination IID
- * @param expiry_unix     Unix timestamp when message expires
+ * @param expiry_unix     Unix timestamp when message expires; 0 means no
+ *                        validated deadline (R-05-080 fail-open) and the
+ *                        record is never locally expired
  * @param now_unix        Current Unix timestamp
  * @param now_ms          Current monotonic time in ms
  * @return true if buffered, false if rejected (expired, oversized, or buffer full)
@@ -177,6 +179,9 @@ uint16_t lichen_dtn_retrieve_for(struct lichen_dtn_buffer *buf,
 
 /**
  * Remove expired messages from buffer.
+ *
+ * Records with expiry_unix == 0 (R-05-080 fail-open) are never expired
+ * here; expiry for those is enforced downstream by nodes with valid time.
  *
  * @param buf       DTN buffer
  * @param now_unix  Current Unix timestamp

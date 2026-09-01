@@ -429,11 +429,20 @@ static int validate_ipv6_header_chain(const uint8_t *packet, size_t pkt_len,
 		if (next_header == IPV6_NH_ROUTING &&
 		    (ext_len < 24u ||
 		     packet[offset + 2u] != IPV6_ROUTING_TYPE_RPL_SRH ||
-		     packet[offset + 4u] != 0u || packet[offset + 5u] != 0u)) {
+		     packet[offset + 4u] != 0u || packet[offset + 5u] != 0u ||
+		     packet[offset + 6u] != 0u || packet[offset + 7u] != 0u)) {
 			return SCHC_ERR_NO_MATCHING_RULE;
 		}
 		if (next_header == IPV6_NH_ROUTING &&
 		    (size_t)packet[offset + 3u] > (ext_len - 8u) / SCHC_IPV6_ADDR_LEN) {
+			return SCHC_ERR_NO_MATCHING_RULE;
+		}
+		if (next_header == IPV6_NH_ROUTING &&
+		    (ext_len - 8u) % SCHC_IPV6_ADDR_LEN != 0u) {
+			/* RFC 6554 s3: with CmprI=CmprE=Pad=0 the Hdr Ext Len
+			 * must equal 2n (ext_len = 8 + 16n addresses); a
+			 * non-canonical length is not expressible and would
+			 * shift the last-address window onto trailing bytes. */
 			return SCHC_ERR_NO_MATCHING_RULE;
 		}
 		if (next_header == IPV6_NH_ROUTING && packet[offset + 3u] != 0u) {
@@ -491,6 +500,27 @@ int validate_ipv6_transport_lengths(const uint8_t *packet, size_t pkt_len)
 	uint16_t expected_checksum;
 
 	if (pkt_len < IPV6_HDR_LEN) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
+	/* Self-defending: do not rely on callers to have checked the version
+	 * (mirrors Rust validate_full_ipv6_structure and Python
+	 * IPv6Header.from_bytes, which both validate it internally). */
+	if (ipv6_version(packet) != 6) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+
+	/* Structural address constraints apply in BOTH directions
+	 * (spec/03-adaptation.md two-tier contract): unspecified or
+	 * multicast sources and an unspecified destination are invalid
+	 * on receipt as well as on emission. Loopback, IPv4-mapped, and
+	 * multicast-destination-scope remain emission-only policy
+	 * (validate_ipv6_address_policy). */
+	if (is_unspecified(&packet[SCHC_IPV6_SRC_OFFSET]) ||
+	    packet[SCHC_IPV6_SRC_OFFSET] == 0xffU) {
+		return SCHC_ERR_NO_MATCHING_RULE;
+	}
+	if (is_unspecified(&packet[SCHC_IPV6_DST_OFFSET])) {
 		return SCHC_ERR_NO_MATCHING_RULE;
 	}
 

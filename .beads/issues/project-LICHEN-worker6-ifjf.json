@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ifjf",
+  "title": "spec: forwarding-plane endpoint-policy check not normatively specified (04/05) — Rule 255 RX reclassification depends on it",
+  "description": "Found by codereview of project-LICHEN-worker6-ilye.6 (security pass, performed by worker after reviewer-model timeouts). spec/03-adaptation.md Rule 255 section now (correctly, per the ilye DECIDED decision) accepts policy-invalid-endpoint datagrams at decode, assigning endpoint policy to 'packet origination and the forwarding decision'. Origination is normative in 03 (EMISSION constraint). But the forwarding decision has NO normative endpoint-policy (martian) check anywhere: spec/04-network.md has only the border-router multicast-to-internet rule (:196), and spec/05-routing.md has none — grep for martian/loopback/unspecified/IPv4-mapped/multicast-source/MUST-NOT-forward finds nothing applicable. Net effect: a codec-accepted packet with loopback/unspecified/IPv4-mapped source or out-of-scope multicast destination enters a forwarding plane whose policy behavior is unspecified, so the decided 'handled by the forwarding plane' outcome is not guaranteed. Fix: add a normative forwarding-plane endpoint-policy paragraph to spec/04-network.md (accept at link intake, apply policy at the forwarding decision, report locally, never transmit as protocol errors) mirroring the 03 error-precedence rule.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:37:54.665482649Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T21:37:22.717794082Z",
+  "closed_at": "2026-08-31T21:37:22.717794082Z",
+  "close_reason": "Re-close (2nd; store reversion per biod). Spec landed: 222d5f6530.",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ifjf",
+      "depends_on_id": "project-LICHEN-worker6-ilye.6",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T07:37:54.782909099Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

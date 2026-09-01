@@ -54,6 +54,25 @@ uint8_t lichen_tdma_compute_slot(const uint8_t eui64[8], uint32_t sfn, uint8_t n
 	return (uint8_t)((lichen_hash_32(eui64, 8) + sfn) % num_slots);
 }
 
+bool lichen_slot_map_validate(const uint8_t *slots, size_t len,
+			      uint8_t num_slots)
+{
+	if (slots == NULL && len > 0) {
+		return false;
+	}
+	for (size_t i = 0; i < len; i++) {
+		/* Bounds: every entry must name a real slot. */
+		if (slots[i] >= num_slots) {
+			return false;
+		}
+		/* Strictly ascending: sorted, no duplicates. */
+		if (i > 0 && slots[i] <= slots[i - 1]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 int lichen_tdma_init(struct lichen_tdma_ctx *tdma, struct lichen_link_ctx *ctx)
 {
 	if (tdma == NULL || ctx == NULL) return -EINVAL;
@@ -177,14 +196,19 @@ int lichen_ccp_fsm_event(struct lichen_tdma_ctx *tdma, enum lichen_ccp_event eve
 		} else if (event == LICHEN_CCP_EVENT_RPL_VERSION) {
 			tdma->ccp_state = LICHEN_CCP_DRIFTING;
 			tdma->synced = false;
-			/* Spec/02a 2a.5 R-02a-045/022: an RPL version change
-			 * MUST reset the SFN relative to the new root. The
+			/* Spec/02a 2a.5.4 R-02a-045/022: an RPL version change
+			 * MUST reset the SFN relative to the new root
+			 * (python on_version_change sfn_reset=True). The
 			 * SFN-0 placeholder slot (own EUI64, copied at init)
 			 * is the retained baseline; the real hash(EUI64) +
-			 * SFN slot is installed by the next valid beacon. */
+			 * SFN slot is installed by the next valid beacon.
+			 * Also clear desync recovery counters that depended
+			 * on the prior version (2a.5.4 step 2). */
 			tdma->superframe = 0;
 			tdma->slot =
 				lichen_tdma_compute_slot(tdma->eui64, 0u, tdma->n_slots);
+			tdma->desync_consecutive_valid = 0;
+			tdma->desync_missed_superframes = 0;
 		}
 		break;
 

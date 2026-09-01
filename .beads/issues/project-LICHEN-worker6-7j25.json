@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-7j25",
+  "title": "[human] schnorr48 reference: derive_keypair returns different pubkeys for the same seed at different call sites in one process",
+  "description": "Blocking the gcp_slot_claim vector generation (nwjl.5). Reproduced in the generator process: main() calls derive_keypair(bytes(range(0x41,0x61))) -\u003e pub 78f58a98c28ee570..., while sign_claim() calls derive_keypair(bytes(range(0x41,0x61))) with the IDENTICAL seed bytes (hex printed at both sites, same function object id, same module file /home/mark/.../python/src/lichen/crypto/schnorr48.py) -\u003e pub adc14011f82d1c56.... derive_keypair is pure (sha512 + clamp + scalarmult_base, no state in the file) yet behaves as if the input or the binding differs per call site. A standalone python3 -c process derives adc14011 deterministically (3 calls equal). The generator's self-check correctly refuses to emit vectors whose signatures do not self-verify, so nothing invalid lands — but the anomaly needs crypto-owner eyes: is there hidden state in the reference schnorr48/nacl binding, or a second lichen.crypto.schnorr48 module instance (dual sys.path import)? Debug instrumentation was in place at capture time (derive_fn id identical at both sites).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:04:34.258974808Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T23:18:48.708471542Z",
+  "closed_at": "2026-08-31T23:18:48.708471542Z",
+  "close_reason": "Re-closing (repeat store-resurrection, 3rd): investigation closed two rounds ago with full evidence (NOT reproducible — 50/50 processes identical, no hidden state, oracle agreement, exhaustive sweep; capture from worker-3's environment). No new work.",
+  "labels": [
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7j25",
+      "depends_on_id": "project-LICHEN-worker6-nwjl.5",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T22:04:34.357246338Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -122,8 +122,13 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.check:
         try:
             current = read_bounded_exact(OUTPUT)
-        except (FileNotFoundError, RuntimeError):
+        except FileNotFoundError:
             current = None
+        except (OSError, RuntimeError) as error:
+            # Unsafe directory / unreadable vector: report the real
+            # problem instead of masquerading as a stale file.
+            print(f"cannot safely read {OUTPUT.name}: {error}", file=sys.stderr)
+            return 2
         if current != json_bytes(generated):
             print(f"out-of-date vector file: {OUTPUT.name}", file=sys.stderr)
             return 1

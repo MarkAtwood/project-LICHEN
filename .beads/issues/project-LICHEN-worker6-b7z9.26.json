@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.26",
+  "title": "Join rate limiting, exponential backoff, and per-IID root join table absent (spec 02a 2a.5.5.2)",
+  "description": "Requirements (all MUST): R-02a-054 nodes MUST implement join-attempt rate limiting; R-02a-055 max 1 join request per 10 s; R-02a-056 exponential backoff 20/40/80 s up to 320 s after 3 consecutive failed joins; R-02a-057 backoff resets on successful join; R-02a-058 root MUST track joins per source IID sliding window; R-02a-059 root MUST ignore IIDs exceeding 6 req/60 s; R-02a-060 root MUST enforce global 60 req/60 s with 5.03 Service Unavailable; R-02a-062 per-IID table MUST be bounded to 1024 entries with LRU-by-last-timestamp eviction. Classification: not-implemented in all three languages — no join rate limiter anywhere; nearest existing analogs: SOS sliding-window limiter lichen/subsys/lichen/link/sos_ratelimit.c:37-104 (pattern to copy), CoAP client backoff rust/lichen-coap/src/client.rs:40,73. Note R-02a-063..066 (PoW) are MAY/conditional and deliberately not filed. Suggested placement: joiner side in lichen TDMA join flow (C lichen/subsys/lichen/link/tdma.c join path, rust lichen-node, py sim); root side beside tdma beacon handling; vectors per 2a.5.5.2 numeric windows. From spec-coverage sweep 2026-08-31 (docs/spec-coverage.md R-02a-054..062).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:32:06.857727983Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:32:06.857727983Z",
+  "labels": [
+    "security",
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.26",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:32:07.01785571Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

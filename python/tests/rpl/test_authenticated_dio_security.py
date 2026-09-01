@@ -7,6 +7,7 @@ import asyncio
 import threading
 from collections.abc import Callable
 from ipaddress import IPv6Address
+from typing import cast
 
 import pytest
 
@@ -370,6 +371,100 @@ def test_transactional_elevation_rejects_awaitable_callbacks() -> None:
         _ = link.elevate_authenticated_dio(authenticated, elevate=asynchronous_elevation)
 
 
+class _CustomCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom hook results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+        return None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+def _scheduled_awaitable(kind: str, ran: list[int], created: list[object]) -> object:
+    async def _later() -> None:
+        ran.append(1)
+
+    if kind == "task":
+        value: object = asyncio.create_task(_later())
+    elif kind == "future":
+        value = asyncio.get_running_loop().create_future()
+    else:
+        value = _CustomCloseAwaitable()
+    created.append(value)
+    return value
+
+
+def _assert_terminated(kind: str, value: object, ran: list[int]) -> None:
+    if kind == "task":
+        assert ran == []
+        assert cast(asyncio.Task[None], value).cancelled()
+    elif kind == "future":
+        assert cast(asyncio.Future[None], value).cancelled()
+    else:
+        assert cast(_CustomCloseAwaitable, value).close_calls == 1
+
+
+async def _issue_async(
+    link: LinkLayer,
+    radio: QueueRadio,
+    counter: int,
+) -> AuthenticatedDio:
+    """Async twin of issue(): issue() runs its own loop via asyncio.run."""
+    radio.frames.append((signed_wire(counter, 3, remote=REMOTE), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    return link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+
+
+# dio_handler.py requires a synchronous elevation callback whose RESULT is
+# also synchronous: a hook returning an awaitable must raise TypeError, leave
+# the scheduled awaitable cancelled and never-run, and release the generation
+# lease (mirrors test_time_sync.py::test_provision_persist_hook_rejects_
+# scheduled_awaitable; bead project-LICHEN-worker6-mgot).
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_elevation_result_rejects_scheduled_awaitable(kind: str) -> None:
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    authenticated = await _issue_async(link, radio, 0)
+    ran: list[int] = []
+    created: list[object] = []
+
+    def elevate(_evidence: DetachedAuthenticatedDio) -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_authenticated_dio(
+            authenticated,
+            elevate=cast(
+                "Callable[[DetachedAuthenticatedDio], object]", elevate
+            ),
+        )
+    if kind == "task":
+        await asyncio.sleep(0)
+    _assert_terminated(kind, created[0], ran)
+
+    # No state poisoning: the generation lease was released, so a fresh
+    # issuance still elevates with a proper synchronous callback.
+    authenticated2 = await _issue_async(link, radio, 1)
+    detached = link.elevate_authenticated_dio(
+        authenticated2, elevate=lambda evidence: evidence
+    )
+    assert type(detached) is DetachedAuthenticatedDio
+
+
 def test_time_generation_elevation_is_current_and_synchronous() -> None:
     radio = QueueRadio()
     link = make_link(radio, Clock())
@@ -592,6 +687,92 @@ async def test_all_link_elevations_cancel_tasks_and_futures() -> None:
     assert dio_future.cancelled()
     assert generation_future.cancelled()
     assert receipt_future.cancelled()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_receipt_elevation_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    authenticated = await _receive_and_accept(link, radio)
+    generation = authenticated.key_generation
+    created: list[object] = []
+
+    async def later() -> None:
+        return None
+
+    def scheduled() -> object:
+        value: object
+        if kind == "task":
+            value = asyncio.create_task(later())
+        elif kind == "future":
+            value = asyncio.get_running_loop().create_future()
+        else:
+            value = _ReceiptCloseAwaitable()
+        created.append(value)
+        return value
+
+    for counter in (2, 3):
+        radio.frames.append((signed_wire(counter), -90, 4))
+        receipt = await link.receive(100)
+        assert isinstance(receipt, RxFrame)
+        with pytest.raises(TypeError, match="awaitable"):
+            link.elevate_verified_receipt(
+                receipt,
+                purpose="dio-time",
+                elevate=lambda _frame: scheduled(),
+            )
+        if kind == "task":
+            await asyncio.sleep(0)
+            assert cast(asyncio.Task[None], created[-1]).cancelled()
+        elif kind == "future":
+            assert cast(asyncio.Future[None], created[-1]).cancelled()
+        else:
+            assert cast(_ReceiptCloseAwaitable, created[-1]).close_calls == 1
+
+    # The failed elevations must not have consumed the receipt pipeline:
+    # a synchronous elevation on a fresh receipt still succeeds.
+    radio.frames.append((signed_wire(4), -90, 4))
+    fresh = await link.receive(100)
+    assert isinstance(fresh, RxFrame)
+    assert (
+        link.elevate_verified_receipt(
+            fresh,
+            purpose="dio-time",
+            elevate=lambda _frame: "sync-ok",
+        )
+        == "sync-ok"
+    )
+    _ = generation
+
+
+class _ReceiptCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+async def _receive_and_accept(link: object, radio: object) -> object:
+    radio.frames.append((signed_wire(1), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    return link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
 
 
 def test_dodag_identity_survives_forced_post_seal_rx_facade_mutation(
@@ -1009,3 +1190,151 @@ def test_dodag_scope_change_between_link_validation_and_commit_is_rejected(
     assert state.dodag_id == changed_dodag
     assert not state.parents
     assert REMOTE.pubkey not in link._schc_peer_contexts
+
+
+class _CustomCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom hook results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+def _scheduled_awaitable(kind: str, created: list[object]) -> object:
+    async def _later() -> None:
+        return None
+
+    value: object
+    if kind == "task":
+        value = asyncio.create_task(_later())
+    elif kind == "future":
+        value = asyncio.get_running_loop().create_future()
+    else:
+        value = _CustomCloseAwaitable()
+    created.append(value)
+    return value
+
+
+def _assert_terminated(kind: str, value: object) -> None:
+    if kind == "task":
+        assert cast(asyncio.Task[None], value).cancelled()
+    elif kind == "future":
+        assert cast(asyncio.Future[None], value).cancelled()
+    else:
+        assert cast(_CustomCloseAwaitable, value).close_calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_dio_elevation_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    """A DIO elevation callback returning an awaitable is cancelled/closed
+    and rejected TypeError; the DIO must not be admitted as processed."""
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    received = await link.receive(100)
+    authenticated = link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+    created: list[object] = []
+
+    def elevate(_: DetachedAuthenticatedDio) -> object:
+        return _scheduled_awaitable(kind, created)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        link.elevate_authenticated_dio(authenticated, elevate=elevate)
+    await asyncio.sleep(0)
+    _assert_terminated(kind, created[0])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_time_generation_elevation_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    received = await link.receive(100)
+    authenticated = link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+    generation = authenticated.key_generation
+    created: list[object] = []
+
+    def elevate() -> object:
+        return _scheduled_awaitable(kind, created)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        link.elevate_time_generation(
+            REMOTE.pubkey,
+            generation,
+            elevate=elevate,
+        )
+    await asyncio.sleep(0)
+    _assert_terminated(kind, created[0])
+    # The generation transition must not have committed: a retry with a
+    # synchronous callback still succeeds on the same generation.
+    committed: list[str] = []
+
+    def retry_commit() -> str:
+        committed.append("committed")
+        return "ok"
+
+    assert (
+        link.elevate_time_generation(
+            REMOTE.pubkey,
+            generation,
+            elevate=retry_commit,
+        )
+        == "ok"
+    )
+    assert committed == ["committed"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_peer_generation_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    received = await link.receive(100)
+    authenticated = link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+    generation = authenticated.key_generation
+    created: list[object] = []
+
+    def elevate() -> object:
+        return _scheduled_awaitable(kind, created)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        link.elevate_peer_generation(
+            REMOTE.pubkey,
+            generation,
+            elevate=elevate,
+        )
+    await asyncio.sleep(0)
+    _assert_terminated(kind, created[0])

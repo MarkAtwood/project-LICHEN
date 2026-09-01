@@ -354,6 +354,8 @@ int lichen_announce_ingest_authenticated(
 	struct announce_peer_pin *peer;
 	uint32_t observed_uptime_s;
 	uint32_t location_seq_num;
+	uint16_t prev_seq_num;
+	uint16_t prev_location_seq_num;
 	bool seq_stale_for_pin = false;
 	int ret;
 
@@ -439,6 +441,12 @@ int lichen_announce_ingest_authenticated(
 	/* SECURITY: Only update sequence state for fresh announces here. Stale
 	 * announces have their state update deferred until after notify_observers
 	 * accepts, preventing replay attacks that roll back seq_num. */
+	/* Capture the pre-ingest sequence state so a failed observer
+	 * callback can roll it back: the same-seq retry contract requires
+	 * that a callback failure does not consume the sequence number
+	 * (project-LICHEN-worker6-dp72). */
+	prev_seq_num = peer->seq_num;
+	prev_location_seq_num = peer->location_seq_num;
 	if (!seq_stale_for_pin) {
 		peer->seq_num = announce.wire_seq_num;
 		peer->location_seq_num = location_seq_num;
@@ -450,6 +458,16 @@ int lichen_announce_ingest_authenticated(
 	announce.seq_stale = seq_stale_for_pin;
 	ret = notify_observers(&announce, meta, seq_stale_for_pin);
 	if (ret < 0) {
+		k_mutex_lock(&announce_mutex, K_FOREVER);
+		/* Roll back only if no reentrant ingest advanced the state
+		 * further (k_mutex recursion permits same-thread relock):
+		 * clobbering a newer stream would re-open the replay window. */
+		if (peer->seq_num == announce.wire_seq_num &&
+		    peer->location_seq_num == location_seq_num) {
+			peer->seq_num = prev_seq_num;
+			peer->location_seq_num = prev_location_seq_num;
+		}
+		k_mutex_unlock(&announce_mutex);
 		k_mutex_unlock(&ingest_mutex);
 		return ret;
 	}
@@ -543,6 +561,31 @@ void lichen_announce_unregister_all_app_data_observers(void)
 	k_mutex_lock(&observer_mutex, K_FOREVER);
 	memset(announce_observers, 0, sizeof(announce_observers));
 	k_mutex_unlock(&observer_mutex);
+}
+
+bool lichen_announce_get_pinned_pubkey(
+	const uint8_t originator_iid[LICHEN_ANNOUNCE_IID_LEN],
+	uint8_t out_pubkey[LICHEN_ANNOUNCE_PUBKEY_LEN])
+{
+	bool found = false;
+
+	if (originator_iid == NULL || out_pubkey == NULL) {
+		return false;
+	}
+
+	/* Serialize with ingest so a pin cannot appear/vanish mid-copy
+	 * (same ordering discipline as lichen_announce_reset). */
+	k_mutex_lock(&ingest_mutex, K_FOREVER);
+	k_mutex_lock(&announce_mutex, K_FOREVER);
+	const struct announce_peer_pin *peer = find_peer_locked(originator_iid);
+
+	if (peer != NULL) {
+		memcpy(out_pubkey, peer->pubkey, LICHEN_ANNOUNCE_PUBKEY_LEN);
+		found = true;
+	}
+	k_mutex_unlock(&announce_mutex);
+	k_mutex_unlock(&ingest_mutex);
+	return found;
 }
 
 void lichen_announce_reset(void)

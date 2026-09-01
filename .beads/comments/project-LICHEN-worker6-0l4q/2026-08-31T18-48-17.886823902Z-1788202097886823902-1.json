@@ -1,0 +1,7 @@
+{
+  "id": "1788202097886823902-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-4",
+  "text": "Pinpointed diagnosis (worker-4 timeboxed round #2, empirical with temporary probes, all reverted): the 6 failures share ONE rejection point. Packet reception is CLEAN — process_received decompresses fine (PROBE2: len=170/68/70 payload_len exact, nh=58, b40=155 = RPL_ICMPV6_TYPE, dst ff02::1a == RPL_ALL_NODES so rpl_ipv6_multicast_is_allowed passes, envelope exact, checksum computed by rpl_ipv6_packet). The rejection is in process_rpl (receive.rs:490-510): routing router process_authenticated_dio(...) returns DioProcessOutcome::Rejected -\u003e RplRejected. So the fault is INSIDE the router's authenticated-DIO admission (rust/lichen-node/src/routing/ — find where DioProcessOutcome::Rejected is minted; candidate gates: AuthenticatedPeerSchcContext admission incl. ca236263fa hop-255 check, peer context/permit provisioning for loopback test stacks, dio consistency/version checks). NEXT STEP: instrument crate::routing::process_authenticated_dio to reveal which internal gate returns Rejected for a provisioned loopback pair, then either fix test provisioning (likely: tests must mint the same peer SCHC context/permit the vector harness uses, cf. authenticated_dio_vectors.rs) or file the over-tight-gate divergence for adjudication. NOT an envelope/walk/checksum problem — do not re-verify those.",
+  "created_at": "2026-08-31T18:48:17.886823902Z"
+}

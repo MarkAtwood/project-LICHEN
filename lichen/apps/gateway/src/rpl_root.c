@@ -282,10 +282,11 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 }
 
 bool lichen_rpl_root_handle_dao(struct lichen_rpl_root *root, const uint8_t *data, size_t len,
-				uint32_t now, const uint8_t *origin, bool origin_authenticated)
+				uint32_t now, const uint8_t *origin,
+				const uint8_t *origin_pubkey)
 {
 	return lichen_rpl_dao_manager_process_dao(&root->dao_manager, data, len, now,
-						  origin, origin_authenticated);
+						  origin, origin_pubkey);
 }
 
 const struct lichen_rpl_route *lichen_rpl_root_lookup(struct lichen_rpl_root *root, const uint8_t *target)

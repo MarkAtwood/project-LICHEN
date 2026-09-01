@@ -259,8 +259,13 @@ int lichen_router_route(struct lichen_router *router,
 }
 
 #define IPV6_FIXED_HEADER_LEN 40U
+#define IPV6_HBH_OPT_PAD1 0U
+#define IPV6_HBH_OPT_DTN 0x03U
+#define IPV6_HBH_OPT_DTN_DATA_LEN 5U
+#define IPV6_HBH_OPT_DTN_FLAG_S 0x80U
 #define IPV6_NH_HOP_BY_HOP 0U
 #define IPV6_NH_UDP 17U
+#define IPV6_NH_IPV6_IN_IPV6 41U
 #define IPV6_NH_ROUTING 43U
 #define IPV6_NH_FRAGMENT 44U
 #define IPV6_NH_ICMPV6 58U
@@ -280,6 +285,10 @@ struct ipv6_dispatch_view {
 	uint8_t source_route_segments_left;
 	size_t source_route_header_offset;
 	size_t source_route_address_offset;
+	bool dtn_store_forward;
+	uint32_t dtn_expiry_unix;
+	/* Spec 05-routing 8.9 (R-05-063): nh=41 IPv6-in-IPv6 tunnel payload. */
+	bool is_tunnel;
 };
 
 static bool addr_is_zero(const uint8_t addr[16])
@@ -363,6 +372,18 @@ static int parse_ipv6_dispatch(const uint8_t *data, size_t len,
 			view->upper_next_header = next_header;
 			return 0;
 		}
+		if (next_header == IPV6_NH_IPV6_IN_IPV6) {
+			/* Spec 05-routing 8.9 (R-05-063): post-SRH-consumption
+			 * tunnel payload — the SRH was stripped at the final
+			 * hop and next_header promoted to 41. The decap and
+			 * inner re-dispatch happen in route_packet_checked. */
+			if (offset != IPV6_FIXED_HEADER_LEN) {
+				return -EBADMSG;
+			}
+			view->upper_next_header = next_header;
+			view->is_tunnel = true;
+			return 0;
+		}
 		if (next_header == IPV6_NH_FRAGMENT) {
 			return -EPROTONOSUPPORT;
 		}
@@ -386,6 +407,52 @@ static int parse_ipv6_dispatch(const uint8_t *data, size_t len,
 		size_t extension_len = ((size_t)data[offset + 1U] + 1U) * 8U;
 		if (extension_len < 8U || extension_len > len - offset) {
 			return -EMSGSIZE;
+		}
+
+		if (next_header == IPV6_NH_HOP_BY_HOP) {
+			/* Walk HBH option TLVs (RFC 8200 §4.2). */
+			size_t opt_off = offset + 2U;
+			size_t opt_end = offset + extension_len;
+			bool saw_dtn = false;
+
+			while (opt_off < opt_end) {
+				if (data[opt_off] == IPV6_HBH_OPT_PAD1) {
+					opt_off++;
+					continue;
+				}
+				if (opt_end - opt_off < 2U) {
+					return -EMSGSIZE;
+				}
+				uint8_t opt_type = data[opt_off];
+				uint8_t opt_len = data[opt_off + 1U];
+
+				if ((size_t)opt_len > opt_end - opt_off - 2U) {
+					return -EMSGSIZE;
+				}
+				if (opt_type == IPV6_HBH_OPT_DTN) {
+					if (saw_dtn || opt_len != IPV6_HBH_OPT_DTN_DATA_LEN) {
+						return -EBADMSG;
+					}
+					saw_dtn = true;
+					uint8_t flags = data[opt_off + 2U];
+
+					view->dtn_store_forward =
+						(flags & IPV6_HBH_OPT_DTN_FLAG_S) != 0U;
+					view->dtn_expiry_unix =
+						((uint32_t)data[opt_off + 3U] << 24) |
+						((uint32_t)data[opt_off + 4U] << 16) |
+						((uint32_t)data[opt_off + 5U] << 8) |
+						(uint32_t)data[opt_off + 6U];
+				} else {
+					/* RFC 8200: action bits [7:6] for unrecognized. */
+					uint8_t action = opt_type >> 6;
+
+					if (action != 0U) {
+						return -EPROTONOSUPPORT;
+					}
+				}
+				opt_off += 2U + (size_t)opt_len;
+			}
 		}
 
 		if (next_header == IPV6_NH_ROUTING) {
@@ -471,10 +538,10 @@ static void set_drop(struct lichen_packet_route_result *result)
 	result->route.decision = LICHEN_ROUTE_DROP;
 }
 
-int lichen_router_route_packet(struct lichen_router *router,
-			       const struct lichen_route_packet *packet,
-			       uint32_t now_ms,
-			       struct lichen_packet_route_result *result)
+static int route_packet_checked(struct lichen_router *router,
+				const struct lichen_route_packet *packet,
+				uint32_t now_ms, uint8_t depth,
+				struct lichen_packet_route_result *result)
 {
 	struct ipv6_dispatch_view view;
 	struct lichen_packet_route_result next;
@@ -488,6 +555,42 @@ int lichen_router_route_packet(struct lichen_router *router,
 	ret = parse_ipv6_dispatch(packet->data, packet->len, &view);
 	if (ret < 0) {
 		return ret;
+	}
+
+	/* Spec 05-routing 8.9 (R-05-063): egress decapsulation.  The outer
+	 * was addressed to this node and its SRH is already consumed
+	 * (nh=41); validate the inner header and re-dispatch it.  Nested
+	 * tunnels are outside the bounded profile. */
+	if (view.is_tunnel) {
+		const uint8_t *inner = packet->data + IPV6_FIXED_HEADER_LEN;
+		size_t inner_len = packet->len - IPV6_FIXED_HEADER_LEN;
+		uint16_t inner_payload_len;
+		struct lichen_route_packet inner_packet;
+
+		if (depth > 0U || inner_len < IPV6_FIXED_HEADER_LEN ||
+		    inner[0] >> 4 != 6U) {
+			return -EBADMSG;
+		}
+		inner_payload_len = (uint16_t)((uint16_t)inner[4] << 8 | inner[5]);
+		if ((size_t)inner_payload_len != inner_len - IPV6_FIXED_HEADER_LEN) {
+			return -EBADMSG;
+		}
+		if (memcmp(&inner[24], router->node_address,
+			   sizeof(router->node_address)) != 0) {
+			return -EBADMSG;
+		}
+		inner_packet = (struct lichen_route_packet) {
+			.data = inner,
+			.len = inner_len,
+			.ingress = packet->ingress,
+			.multicast_peering = packet->multicast_peering,
+			.destination_coords_valid = packet->destination_coords_valid,
+			.destination_lat_e7 = packet->destination_lat_e7,
+			.destination_lon_e7 = packet->destination_lon_e7,
+			.now_unix = packet->now_unix,
+		};
+		return route_packet_checked(router, &inner_packet, now_ms,
+					    (uint8_t)(depth + 1U), result);
 	}
 
 	set_drop(&next);
@@ -639,20 +742,38 @@ int lichen_router_route_packet(struct lichen_router *router,
 	}
 
 #if CONFIG_LICHEN_ROUTER_DTN_BUFFER_SIZE > 0
-	if (next.route.decision == LICHEN_ROUTE_DROP && packet->dtn_expiry_unix != 0U &&
-	    packet->dtn_expiry_unix > packet->now_unix) {
-		ret = lichen_router_dtn_buffer(router, destination_iid, packet->data,
-					      packet->len, packet->dtn_expiry_unix, now_ms);
-		if (ret < 0) {
-			return ret;
+	{
+		/* DTN intent comes solely from the wire Type=0x03 HBH option
+		 * (spec 05-routing 9.8).  R-05-080 fail-open: without a valid
+		 * wall-clock (now_unix == 0) expiry cannot be evaluated, so an
+		 * S-flagged packet is stored and nodes with valid time enforce
+		 * expiry downstream. */
+		if (next.route.decision == LICHEN_ROUTE_DROP && view.dtn_store_forward &&
+		    (packet->now_unix == 0U ||
+		     (int32_t)(view.dtn_expiry_unix - packet->now_unix) > 0)) {
+			ret = lichen_router_dtn_buffer(router, destination_iid,
+						       &view.source[8], packet->data,
+						       packet->len,
+						       view.dtn_expiry_unix, now_ms);
+			if (ret < 0) {
+				return ret;
+			}
+			next.route.decision = LICHEN_ROUTE_STORE_DTN;
+			next.path = LICHEN_ROUTE_PATH_DTN;
 		}
-		next.route.decision = LICHEN_ROUTE_STORE_DTN;
-		next.path = LICHEN_ROUTE_PATH_DTN;
 	}
 #endif
 
 	*result = next;
 	return 0;
+}
+
+int lichen_router_route_packet(struct lichen_router *router,
+			       const struct lichen_route_packet *packet,
+			       uint32_t now_ms,
+			       struct lichen_packet_route_result *result)
+{
+	return route_packet_checked(router, packet, now_ms, 0U, result);
 }
 
 int lichen_router_queue_pending(struct lichen_router *router,
@@ -1055,6 +1176,7 @@ int lichen_router_gpsr_forward(struct lichen_router *router,
 
 int lichen_router_dtn_buffer(struct lichen_router *router,
 			     const uint8_t dst_iid[8],
+			     const uint8_t source_iid[8],
 			     const uint8_t *data,
 			     size_t len,
 			     uint32_t expiry_unix,
@@ -1062,6 +1184,27 @@ int lichen_router_dtn_buffer(struct lichen_router *router,
 {
 	if (router == NULL || dst_iid == NULL || data == NULL) {
 		return -EINVAL;
+	}
+
+	/* SECURITY: Per-source admission cap (project-LICHEN-worker6-cxa2):
+	 * without it, one sender can churn-evict every other source's
+	 * buffered messages through repeated S-flagged stores. */
+	if (source_iid != NULL) {
+		unsigned per_source = 0U;
+
+		for (int i = 0; i < CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGES; i++) {
+			const struct lichen_router_dtn_message *m =
+				&router->dtn_buffer[i];
+
+			if (m->valid &&
+			    memcmp(m->source_iid, source_iid,
+				   sizeof(m->source_iid)) == 0) {
+				per_source++;
+			}
+		}
+		if (per_source >= CONFIG_LICHEN_ROUTER_DTN_MAX_PER_SOURCE) {
+			return -ENOBUFS;
+		}
 	}
 
 	/* SECURITY: Reject messages larger than our static buffer to prevent
@@ -1126,6 +1269,11 @@ int lichen_router_dtn_buffer(struct lichen_router *router,
 
 	memset(slot, 0, sizeof(*slot));
 	memcpy(slot->destination_iid, dst_iid, 8);
+	if (source_iid != NULL) {
+		memcpy(slot->source_iid, source_iid, 8);
+	} else {
+		memcpy(slot->source_iid, dst_iid, 8);
+	}
 	/* SECURITY: Copy data into static buffer to prevent use-after-free
 	 * if caller frees their buffer before message is delivered. */
 	memcpy(slot->data, data, len);
@@ -1211,6 +1359,14 @@ int lichen_router_dtn_expire(struct lichen_router *router, uint32_t now_unix)
 	for (size_t i = 0; i < CONFIG_LICHEN_ROUTER_DTN_MAX_MESSAGES; i++) {
 		struct lichen_router_dtn_message *m = &router->dtn_buffer[i];
 		if (!m->valid) {
+			continue;
+		}
+		/* R-05-080 fail-open: expiry==0 marks a record stored by a
+		 * clockless node that could not validate an absolute
+		 * deadline; expiry is enforced downstream by nodes with
+		 * valid time. Flushing it here would defeat that handoff,
+		 * so expiry==0 is never treated as already-expired. */
+		if (m->expiry_unix == 0U) {
 			continue;
 		}
 		/* Use signed comparison for timestamp wraparound safety */

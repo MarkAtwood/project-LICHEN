@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-m9i4",
+  "title": "b7z9.35(a): Rust gateway — wire tunnel_auth into dispatch + egress forwarding path",
+  "description": "Child of b7z9.35 (spec 06-security.md:703-705, 727-807). lichen-gateway/src/tunnel_auth.rs is exported (lib.rs:20) and library-tested (tests/tunnel_auth_vectors.rs, vectors test/vectors/tunnel_authorization.json) but gateway.rs never uses it. Wire: (1) the tunnel-auth permit/deny check into the egress decapsulation/forwarding path (gateway.rs mesh-to-internet direction — drop unauthorized tunnels before forwarding, computing route_hash from the Source-Route Header); (2) the POST /.well-known/tunnel-auth resource (COSE_Sign1 alg -65537) registration in the gateway's CoAP dispatch. Mind the permit()/deny() 204/403 mapping convention (C tunnel_auth.c:24-33 analog). Tests: extend tunnel_auth_vectors.rs with the wired-path cases.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:49:36.048478262Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-08-31T20:53:23.934914171Z",
+  "started_at": "2026-08-31T20:50:05.272966951Z",
+  "labels": [
+    "gateway",
+    "rust",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-m9i4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.35",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T20:49:36.158779906Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}

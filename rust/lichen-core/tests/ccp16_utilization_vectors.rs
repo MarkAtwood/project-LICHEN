@@ -49,8 +49,8 @@ struct Output {
 fn select_tx_sf(assigned_sf: u8, density: u8, utilization: u8, ema_loss: f32) -> (u8, bool) {
     let mut sf = assigned_sf;
 
-    // Step 3: density/utilization > 150 check
-    if density > 10 || utilization > 150 {
+    // Step 3: density (spec 2a.8: > 8) / utilization > 150 check
+    if density > 8 || utilization > 150 {
         sf = sf.saturating_add(2).min(12);
     }
 

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-0aod",
+  "title": "spec docs: align 2a.2 TDMA_BEACON + appendix-schc.md rule table + Implementation Status with adjudicated outcome",
+  "description": "Child of b7z9.21, blocked by the R-02a-003 adjudication (project-LICHEN-worker6-4e0t). If adjudicated AMEND-SPEC: amend spec/02a section 2a.2 to describe the uncompressed TDMA_BEACON header actually implemented (reference rust/lichen-core/src/tdma_beacon.rs:21-26,83-126 — epoch u32 + num_slots), remove/annotate Rule 0x08 from the requirement text, update spec/appendix-schd.md rule table (lines 24-35) accordingly, and correct the false Implementation Status claim (spec line ~685 'Rule 0x08 implemented'). If adjudicated IMPLEMENT: this child instead updates the docs to reference the new rule and its vectors. Landable only after the human decision.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:24:16.692719448Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T09:24:16.692719448Z",
+  "labels": [
+    "schc",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0aod",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.21",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T09:24:16.852977816Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -48,6 +48,7 @@ from lichen.rpl.dao_paths import build_routes, contains_cycle, path_control_rank
 from lichen.rpl.dao_persistence import DaoPersistence
 from lichen.rpl.dao_refresh import DaoRefreshScheduler
 from lichen.rpl.dao_state import compute_active_parents, make_freshness_room
+from lichen.rpl.dao_tx_scheduler import DaoTxPhase, DaoTxScheduler
 from lichen.rpl.dao_types import (
     DEFAULT_FRESHNESS_RETENTION_SECONDS,
     TARGET_DESCRIPTOR,
@@ -165,6 +166,7 @@ class DaoManager:
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _scheduler: DaoRefreshScheduler = field(init=False, repr=False)
     _route_table: RouteTable = field(init=False, repr=False)
+    dao_tx: DaoTxScheduler = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.node_address = routing_key(self.node_address)
@@ -286,6 +288,7 @@ class DaoManager:
             clock=self.clock,
         )
         self._route_table = RouteTable(_routing_table=self.routing_table)
+        self.dao_tx = DaoTxScheduler(clock=self.clock)
         # SECURITY: Restore TX state from persistence if available.
         # Per spec section 8.6, missing/corrupt state is a hard failure;
         # the node must not transmit until valid state is restored.
@@ -401,6 +404,40 @@ class DaoManager:
         after reboot for retransmission.
         """
         return self._last_dao_bytes
+
+    def on_dao_tx_join(self, now_seconds: float | None = None) -> float:
+        """Joined a DODAG: schedule the initial DAO 0-2 s out (R-09-017).
+
+        Consumes the spec 09 §14.2 timing oracle; the runtime transmits the
+        DAO when :meth:`dao_tx_due` first reports True.
+        """
+        return self.dao_tx.on_join(now_seconds)
+
+    def on_dao_tx_sent(self, now_seconds: float | None = None) -> float | None:
+        """Record a DAO transmission: schedule the 4/8/16 s retry (R-09-018).
+
+        Returns the next retry deadline, or None once retries are exhausted
+        (parent unresponsive after the initial send plus every backoff).
+        """
+        return self.dao_tx.on_sent(now_seconds)
+
+    def on_dao_tx_ack(self, now_seconds: float | None = None) -> float:
+        """DAO-ACK received: reset retries, schedule the 900 s refresh (R-09-019)."""
+        return self.dao_tx.on_ack(now_seconds)
+
+    def dao_tx_due(self, now_seconds: float | None = None) -> bool:
+        """True when the pending DAO transmission deadline has passed."""
+        return self.dao_tx.on_due(now_seconds)
+
+    @property
+    def dao_tx_phase(self) -> DaoTxPhase:
+        """Current origination phase of the DAO TX scheduler."""
+        return self.dao_tx.phase
+
+    @property
+    def dao_tx_deadline(self) -> float | None:
+        """Monotonic deadline of the pending DAO transmission, if any."""
+        return self.dao_tx.deadline
 
     def build_dao(self, parent_address: IPv6Address | str, *, ack_requested: bool = False) -> DAO:
         """Build and durably reserve an authenticated logical DAO."""

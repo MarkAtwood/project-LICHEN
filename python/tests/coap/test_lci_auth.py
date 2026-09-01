@@ -26,6 +26,7 @@ from aiocoap import (
     CHANGED,
     CONTENT,
     CREATED,
+    DELETE,
     GET,
     METHOD_NOT_ALLOWED,
     NOT_FOUND,
@@ -410,7 +411,8 @@ class TestMessagesAuth:
 class TestSensorsLocationAuth:
     """POST /sensors/location is not exposed in Python (C-only), verify no handler."""
 
-    async def test_sensors_location_not_exposed(self) -> None:
+    @pytest.mark.parametrize("code", [GET, POST, PUT, DELETE], ids=["get", "post", "put", "delete"])
+    async def test_sensors_location_not_exposed(self, code: int) -> None:
         net = InMemoryNetwork()
         server = await create_lichen_context(
             net.channel("srv"),
@@ -419,8 +421,10 @@ class TestSensorsLocationAuth:
         )
         client = await create_lichen_context(net.channel("cli"), "cli")
         try:
+            # No method may reach the C-only resource: every verb must get
+            # 4.04 (no handler) rather than 4.05 (handler without the verb).
             resp = await client.request(
-                Message(code=GET, uri="coap://srv/sensors/location")
+                Message(code=code, uri="coap://srv/sensors/location")
             ).response
             assert resp.code == NOT_FOUND
         finally:

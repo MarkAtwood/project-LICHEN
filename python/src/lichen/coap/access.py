@@ -38,7 +38,7 @@ class AccessLevel(enum.Enum):
         return order.index(self) < order.index(other)
 
     def __le__(self, other: object) -> bool:
-        return self == other or self < other  # type: ignore[operator]
+        return self == other or self < other
 
 
 TRANSPORT_LEVELS: dict[str, AccessLevel] = {
@@ -75,6 +75,8 @@ _RULES: tuple[_Rule, ...] = (
         {
             "GET": _m(AccessLevel.ADMIN, CODE_FORBIDDEN),
             "POST": _m(AccessLevel.ADMIN),
+            # Arming /diag/raw/rx is an admin mutation (17.5.4).
+            "PUT": _m(AccessLevel.ADMIN),
         },
     ),
     _Rule("/diag/", {"GET": _m(AccessLevel.READ_ONLY)}),

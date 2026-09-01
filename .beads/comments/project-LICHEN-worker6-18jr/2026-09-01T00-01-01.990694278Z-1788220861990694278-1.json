@@ -1,0 +1,7 @@
+{
+  "id": "1788220861990694278-1",
+  "issue_id": "project-LICHEN-worker6-18jr",
+  "author": "opencode-worker-5",
+  "text": "Additional same-bug-class site found during survey: python/src/lichen/link/adaptive_sf.py ALSO transcribes density \u003e 10 (lines 16 docstring pseudocode and :137 in select_tx_sf) — same fix needed there or file separately. Checking whether that file has its own tests pinning 10.",
+  "created_at": "2026-09-01T00:01:01.990694278Z"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-zmae",
+  "title": "mutation.yml: move rust-cache step above cargo install to avoid weekly recompile of cargo-mutants",
+  "description": "Edge review finding (0i0g round): Swatinem/rust-cache@v2 DOES cache ~/.cargo/bin and the registry by default, but in .github/workflows/mutation.yml the cache restore (line ~27) runs AFTER 'cargo install cargo-mutants --version =27.1.0' (line 21), so the cached binary is never present at install time and every run recompiles cargo-mutants from source (~5-10 min). Move the rust-cache step above the install step (cache restore then install; cargo's already-installed check skips the rebuild). Also consider adding --locked to the install (fails loudly if the crate ships no lock — verify cargo-mutants ships Cargo.lock) to pin the transitive closure. Discovered from 0i0g.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T09:14:08.6437867Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T09:25:20.073055088Z",
+  "started_at": "2026-08-31T09:15:23.182934156Z",
+  "closed_at": "2026-08-31T09:25:20.073055088Z",
+  "close_reason": "Implemented the cache-ordering fix, then went further after evidence: (1) moved Cache Cargo (Swatinem/rust-cache@v2) above the cargo-mutants install; (2) DISCOVERED the bead's premise was incomplete — cargo install ALWAYS rebuilds (no already-installed skip, verified: no skip flag in cargo 1.96 install), so reordering alone would not avoid the weekly recompile; (3) added the working pattern: version-checked conditional install 'if [ \"$(cargo-mutants --version 2\u003e/dev/null)\" != \"cargo-mutants 27.1.0\" ]; then cargo install cargo-mutants --version =27.1.0 --locked; fi' — rust-cache restores ~/.cargo/bin (but not .crates.toml, reviewer-confirmed, so the explicit version check is genuinely needed); cache hit + version match skips the rebuild, version bump or missing binary reinstalls, format changes fail toward reinstall (safe); (4) --locked added — verified cargo-mutants 27.1.0 ships Cargo.lock in the crate package (downloaded the .crate from static.crates.io and inspected). Review: correctness PASS from reviewer on all four axes (bash -e exemption inside if, clap prints exactly 'cargo-mutants 27.1.0', cache round-trip, security unchanged) AND the reviewer caught a REAL P0 I had introduced: my reorder edit dropped the protoc step's run: line leaving a name-only step that GitHub Actions rejects at validation — fixed and now schema-validated (every step has uses or run; checked programmatically). Security PASS (self, reviewer timeout): no new trust beyond rust-cache's existing control; --locked retained. Edge PASS (self, reviewer timeout): miss/hit/bump/missing-binary paths all reinstall-or-skip correctly.",
+  "labels": [
+    "python",
+    "codereview"
+  ]
+}

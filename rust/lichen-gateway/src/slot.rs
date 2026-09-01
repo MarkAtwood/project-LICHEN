@@ -242,7 +242,7 @@ impl SlotAllocator {
 
     /// Validate that a slot pattern matches the expected interleaved allocation.
     ///
-    /// Per GCP-6.2: slots[i] == ordinal + i * gateway_count
+    /// Per GCP-6.2: `slots[i] == ordinal + i * gateway_count`
     ///
     /// # Returns
     ///
@@ -1440,6 +1440,10 @@ mod tests {
         assert!(!allocator.is_tx_allowed(7, &slot_map));
         assert!(allocator.is_tx_allowed(12, &slot_map));
         assert!(!allocator.is_tx_allowed(14, &slot_map));
+
+        // Empty slot_map: no slot is transmissible (b7z9.22.2 edge case).
+        assert!(!allocator.is_tx_allowed(0, &[]));
+        assert!(!allocator.is_tx_allowed(3, &[]));
     }
 
     #[test]

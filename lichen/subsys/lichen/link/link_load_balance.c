@@ -29,7 +29,10 @@ void lichen_lb_record_tx(struct lichen_lb_metrics *m)
 
 void lichen_lb_update_snr(struct lichen_lb_snr_stats *s, int8_t snr)
 {
-	int32_t snr_fp = (int32_t)snr << 16;
+	/* Multiply, not left-shift: snr is int8_t and LoRa SNR is routinely
+	 * negative — left-shifting a negative signed value is C11 UB. The
+	 * explicit signed cast keeps the multiply signed (the macro is 65536u). */
+	int32_t snr_fp = (int32_t)snr * (int32_t)LICHEN_LB_FP_SCALE;
 	if (s->count == 0) {
 		s->avg_fp = snr_fp;
 	} else {
@@ -85,7 +88,12 @@ uint32_t lichen_lb_packet_loss_fp(const struct lichen_lb_metrics *m)
 
 uint8_t lichen_lb_adaptive_sf(const struct lichen_lb_metrics *m)
 {
-	int8_t snr_ema = (m->snr.count == 0) ? 0 : (int8_t)((m->snr.avg_fp + (1 << 15)) >> 16);
+	int8_t snr_ema = (m->snr.count == 0)
+			     ? 0
+			     : (int8_t)((m->snr.avg_fp + (1 << 15)) >> 16);
+	/* No rounding-clamp needed: avg_fp has no saturation path here and is
+	 * bounded by the convex hull of int8-scaled samples, so the rounding
+	 * add cannot overflow (unlike rf_health.c's saturated accumulator). */
 	bool load_high = m->load_factor_fp > LICHEN_LB_LOAD_HIGH;
 
 	if (m->density > LICHEN_LB_DENSITY_CRITICAL || snr_ema < LICHEN_LB_SNR_CRITICAL) {

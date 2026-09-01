@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b9u3",
+  "title": "C rf_health: left-shift of negative SNR is UB (record_rx EMA)",
+  "description": "lichen/subsys/lichen/link/rf_health.c:38 (int32_t)snr \u003c\u003c 16 is UB when snr \u003c 0 (C11 6.5.7p4); LoRa SNR is routinely negative. Host tests run UBSan -fno-sanitize-recover, so the first negative-SNR record_rx under a sanitizer build aborts. Fix: (int32_t)snr * FP_SCALE (same value, defined; |snr|\u003c=128 fits int32). Latent: current rf_health test never calls record_rx with negative SNR. Found in edge-cases review of bead 0hvq (worker1).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:28:37.867496002Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T00:10:29.653700419Z",
+  "closed_at": "2026-09-01T00:10:29.653700419Z",
+  "close_reason": "RE-CLOSE (store write lost again — bd8h). Already fixed by commit 57319ec805 on beads-worker-7 (205c round): rf_health.c:40 uses '(int32_t)snr * FP_SCALE' with the UB-explaining comment; no '\u003c\u003c 16' remains in the file. Verified in current source.",
+  "labels": [
+    "zephyr",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b9u3",
+      "depends_on_id": "project-LICHEN-worker6-0hvq",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:28:38.016288668Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

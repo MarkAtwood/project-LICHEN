@@ -4,8 +4,8 @@
 //! Buffer-oriented RFC 1055 SLIP framing.
 //!
 //! These functions do not allocate and are suitable for `no_std` targets.
-//! [`encode`] adds both the leading synchronization delimiter and the trailing
-//! frame delimiter. [`decode`] accepts exactly one delimited frame and rejects
+//! `encode` adds both the leading synchronization delimiter and the trailing
+//! frame delimiter. `decode` accepts exactly one delimited frame and rejects
 //! malformed escape sequences as required by the LICHEN framing vectors.
 
 use core::fmt;

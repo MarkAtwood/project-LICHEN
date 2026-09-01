@@ -8,12 +8,17 @@ import time
 from typing import Any
 
 import aiocoap
+import cbor2
 from aiocoap import Message, resource
 
 from lichen.coap.resources.base import CBOR, _cbor_response
 from lichen.coap.resources.cbor_validation import _decode_single_cbor
 
-_WAYPOINTS_MAX = 100  # maximum stored waypoints
+# Spec 18.3.2 (R-12-029/030): waypoint storage MUST be bounded to at most
+# 32 waypoints per originator IID and 256 waypoints globally; POST to a full
+# table MUST return 5.03 with the waypoint_limit diagnostic (no eviction).
+_WAYPOINTS_MAX = 256
+_WAYPOINTS_PER_ORIGINATOR = 32
 
 
 def _is_valid_tstr(value: Any) -> bool:
@@ -59,18 +64,21 @@ class WaypointsResource(resource.Resource):
         *,
         creator_id: str = "unknown",
         max_waypoints: int = _WAYPOINTS_MAX,
+        max_per_originator: int = _WAYPOINTS_PER_ORIGINATOR,
     ) -> None:
         super().__init__()
-        if (
-            isinstance(max_waypoints, bool)
-            or not isinstance(max_waypoints, int)
-            or max_waypoints <= 0
+        for name, value in (
+            ("max_waypoints", max_waypoints),
+            ("max_per_originator", max_per_originator),
         ):
-            raise ValueError("max_waypoints must be a positive integer")
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
         self._creator_id = creator_id
         self._max_waypoints = max_waypoints
+        self._max_per_originator = max_per_originator
         self._waypoints: dict[str, dict[str, Any]] = {}
         self._waypoint_order: list[str] = []
+        self._creator_counts: dict[str, int] = {}
         self._next_id = 1
 
     def get_link_description(self) -> dict[str, Any]:
@@ -88,13 +96,35 @@ class WaypointsResource(resource.Resource):
     def add_waypoint(self, waypoint: dict[str, Any]) -> str:
         """Add a waypoint directly (for testing or mesh delivery).
 
+        Enforces the spec 18.3.2 bounds and raises ``ValueError`` with
+        ``waypoint_limit`` when they are exhausted. The creator must be a
+        non-empty string (the per-originator bound's bucket key).
+
         Returns the waypoint ID.
         """
         wpt_id = waypoint["id"]
-        self._waypoints[wpt_id] = dict(waypoint)
-        if wpt_id not in self._waypoint_order:
+        old = self._waypoints.get(wpt_id)
+        new_creator = waypoint.get("creator", self._creator_id)
+        if not _is_valid_tstr(new_creator):
+            raise ValueError("waypoint creator must be a non-empty string")
+        if old is None:
+            if self._at_capacity(new_creator):
+                raise ValueError("waypoint_limit")
             self._waypoint_order.append(wpt_id)
-        self._enforce_max()
+            self._creator_counts[new_creator] = self._creator_counts.get(new_creator, 0) + 1
+        elif old.get("creator", self._creator_id) != new_creator:
+            # Re-attribution consumes headroom in the new creator's bucket:
+            # respect the per-originator bound before moving the count.
+            if self._at_capacity(new_creator):
+                raise ValueError("waypoint_limit")
+            old_creator = old.get("creator", self._creator_id)
+            remaining = self._creator_counts.get(old_creator, 0) - 1
+            if remaining > 0:
+                self._creator_counts[old_creator] = remaining
+            else:
+                self._creator_counts.pop(old_creator, None)
+            self._creator_counts[new_creator] = self._creator_counts.get(new_creator, 0) + 1
+        self._waypoints[wpt_id] = dict(waypoint)
         return wpt_id
 
     def update_waypoint(self, wpt_id: str, updates: dict[str, Any]) -> bool:
@@ -112,17 +142,44 @@ class WaypointsResource(resource.Resource):
         """Delete a waypoint by ID. Returns True if found and deleted."""
         if wpt_id not in self._waypoints:
             return False
+        creator = self._waypoints[wpt_id].get("creator", self._creator_id)
         del self._waypoints[wpt_id]
         self._waypoint_order.remove(wpt_id)
+        remaining = self._creator_counts.get(creator, 0) - 1
+        if remaining > 0:
+            self._creator_counts[creator] = remaining
+        else:
+            self._creator_counts.pop(creator, None)
         return True
 
-    def _enforce_max(self) -> None:
-        """Ensure we don't exceed max_waypoints."""
-        if len(self._waypoint_order) > self._max_waypoints:
-            oldest = self._waypoint_order[: len(self._waypoint_order) - self._max_waypoints]
-            self._waypoint_order = self._waypoint_order[-self._max_waypoints:]
-            for old_id in oldest:
-                self._waypoints.pop(old_id, None)
+    def _at_capacity(self, creator: str) -> bool:
+        """True if admitting one more waypoint for *creator* would violate
+        the spec 18.3.2 bounds (32 per originator / 256 global by default)."""
+        if self._creator_counts.get(creator, 0) >= self._max_per_originator:
+            return True
+        return len(self._waypoint_order) >= self._max_waypoints
+
+    def _waypoint_limit_response(self) -> Message:
+        """5.03 Service Unavailable with the spec 18.3.2 diagnostic body."""
+        msg = Message(
+            code=aiocoap.SERVICE_UNAVAILABLE,
+            payload=cbor2.dumps(
+                {
+                    "reason": "waypoint_limit",
+                    "per_originator": self._max_per_originator,
+                    "global": self._max_waypoints,
+                }
+            ),
+        )
+        msg.opt.content_format = CBOR
+        return msg
+
+    def _capacity_rejection(self, creator: str) -> Message | None:
+        """5.03 if admitting a *new* waypoint for *creator* would violate
+        the spec 18.3.2 storage bounds, else None."""
+        if self._at_capacity(creator):
+            return self._waypoint_limit_response()
+        return None
 
     def _generate_id(self) -> str:
         """Generate a unique waypoint ID."""
@@ -164,6 +221,12 @@ class WaypointsResource(resource.Resource):
             return Message(code=aiocoap.BAD_REQUEST)
         if "expires" in body and not _is_valid_uint(body["expires"]):
             return Message(code=aiocoap.BAD_REQUEST)
+        # creator is the per-originator bound's bucket key (spec 18.3.2):
+        # it must be a tstr, otherwise bound accounting fragments across
+        # mixed-type keys and the per-originator limit is bypassed.
+        creator = body.get("creator", self._creator_id)
+        if not _is_valid_tstr(creator):
+            return Message(code=aiocoap.BAD_REQUEST)
 
         # Build waypoint with auto-generated fields
         wpt_id = body.get("id")
@@ -178,8 +241,21 @@ class WaypointsResource(resource.Resource):
             "lat": float(body["lat"]),
             "lon": float(body["lon"]),
             "created": body.get("created", int(time.time())),
-            "creator": body.get("creator", self._creator_id),
+            "creator": creator,
         }
+
+        # Spec 18.3.2: reject with 5.03 + waypoint_limit diagnostic when a
+        # NEW waypoint would exceed the per-originator or global bound (no
+        # silent eviction). Re-POSTing an existing id replaces storage in
+        # place and consumes no global headroom, but re-attributing it to a
+        # different creator consumes headroom in that creator's bucket.
+        if wpt_id not in self._waypoints:
+            rejection = self._capacity_rejection(creator)
+            if rejection is not None:
+                return rejection
+        elif creator != self._waypoints[wpt_id].get("creator", self._creator_id):
+            if self._at_capacity(creator):
+                return self._waypoint_limit_response()
 
         # Add optional fields
         if "alt" in body:

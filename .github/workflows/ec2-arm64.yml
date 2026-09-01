@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           which west || pip3 install --user west
-          which uv || pip3 install --user uv
+          which uv || pip3 install --user "uv>=0.11,<0.12"
           which cmake || sudo dnf install -y cmake ninja-build gcc meson
           pip3 install -r zephyr/scripts/requirements.txt || true
 
@@ -45,9 +45,13 @@ jobs:
         env:
           ZEPHYR_TOOLCHAIN_VARIANT: host
         run: |
-          # ARM64-native tests - no 32-bit emulation needed
+          # ARM64-native tests - no 32-bit emulation needed.
+          # R-APPC-009: every native_sim test builds with ASan/UBSan
+          # (EXTRA_CONF_FILE resolves ../sanitizers.conf from each depth-1
+          # test dir under lichen/tests/).
           west twister -T lichen/tests -p native_sim/native/64 \
-            --inline-logs --overflow-as-errors -j$(nproc)
+            --inline-logs --overflow-as-errors -j$(nproc) \
+            -x EXTRA_CONF_FILE=../sanitizers.conf
         timeout-minutes: 45
 
       - name: Upload twister results
@@ -75,7 +79,7 @@ jobs:
 
       - name: Install Python deps
         run: |
-          pip3 install --user uv || true
+          pip3 install --user "uv>=0.11,<0.12" || true
           uv sync --locked --all-extras --dev
 
       - name: Run tests
@@ -87,6 +91,7 @@ jobs:
     if: github.repository == 'MarkAtwood/project-LICHEN'
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Install Rust (if needed)
         run: |

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.5.5",
+  "title": "b7z9.5.5: Gateway transmit_ipv6_wire — same SCHC fragmentation wiring as node",
+  "description": "Child of project-LICHEN-worker6-b7z9.5. Mirror the node TX/RX fragmentation wiring (b7z9.5.2-.4) in lichen-gateway transmit_ipv6_wire (currently hard-fails on oversized compressed payloads like the node did). Depends on the node slices landing first for shape consistency.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T06:33:54.439148064Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T06:33:54.439148064Z",
+  "labels": [
+    "gateway",
+    "schc",
+    "rust",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.5.5",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.5",
+      "type": "parent-child",
+      "created_at": "2026-08-31T06:33:54.605983581Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

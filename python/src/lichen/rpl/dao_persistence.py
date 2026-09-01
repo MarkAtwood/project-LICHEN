@@ -345,6 +345,20 @@ class TwoSlotFilePersistence(DaoPersistence):
                 with no durable evidence of prior initialization; catalog-
                 recorded RX keys and TX-marker-initialized stores still raise
                 unconditionally per spec section 8.6.
+            revision_anchor: External rollback anchor. SECURITY (spec 8.6):
+                PRODUCTION anchors MUST be durable storage located outside
+                base_dir. All protected state (slot files, catalog) lives in
+                base_dir, so an actor able to delete one protected file can
+                delete them all; the protection only holds because the anchor
+                survives. With a durable external anchor, deleting every
+                base_dir file after a floor was committed fails closed — the
+                slot anchor reports "initialized RX floor was deleted"
+                (per-key slot check) or, with slots restored, the catalog
+                anchor reports "DAO RX floor catalog was deleted"; only an
+                anchor that is itself inside base_dir (or volatile) permits
+                the first-DAO-bootstrap fail-open path. Tests use an anchor
+                co-located in base_dir and MUST NOT be read as production
+                guidance.
 
         Raises:
             DaoPersistenceError: If base_dir exists and is a file (not a directory).

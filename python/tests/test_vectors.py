@@ -19,6 +19,7 @@ import re
 import sys
 import threading
 import zlib
+from collections import Counter
 from ipaddress import IPv6Address
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -27,6 +28,7 @@ import pytest
 from jsonschema import Draft7Validator
 
 from lichen.announce.coords import decode_coords, encode_coords
+from lichen.announce.messages import AnnounceError, AnnounceMessage
 from lichen.channel_plan import ChannelEntry, ChannelPlan
 from lichen.channel_plan import hash_32 as channel_plan_hash_32
 from lichen.constants import PORT_MQTT_SN
@@ -43,7 +45,6 @@ from lichen.l2_payload import (
     l2_payload_body,
     wrap_schc_payload,
 )
-from lichen.link.adaptive_sf import adaptive_sf_for_metrics
 from lichen.link.frame import AddrMode, FrameError, LichenFrame, MicLength
 from lichen.link.link_layer import MAX_SINGLE_FRAME_SCHC_PACKET, LinkLayer, RxFrame
 from lichen.link.short_addr import (
@@ -212,6 +213,7 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
+        "dtn_sflag_hbh.json",
     ],
 )
 def test_vector_file_schema(filename: str) -> None:
@@ -684,6 +686,12 @@ def _announce_coords_cases():
     return [(v["name"], v) for v in doc["vectors"]]
 
 
+def _announce_length_caps_cases():
+    doc = _load("announce_length_caps.json")
+    assert doc["format_version"] == 2
+    return [(v["name"], v) for v in doc["vectors"]["length_caps"]]
+
+
 def _meshcore_cases():
     doc = _load("meshcore_app_compat.json")
     assert doc["format_version"] == 2
@@ -715,15 +723,30 @@ def test_ipv6_malformed_vector(name: str, vector: dict) -> None:
     elif e == "invalid_source":
         p = IPv6Packet.from_bytes(wire)
         assert handle_icmpv6(p) is None
+    else:
+        pytest.fail(f"{name}: unhandled ipv6_malformed expect_error {e!r}")
+
+
+def _require_string_expect_error(vector: dict) -> None:
+    """Corpus drift guard: expect_error must be a nonempty string when
+    present. The C parity generator encodes it as presence-as-bool, so a
+    false or empty value would silently invert rejection semantics."""
+    if "expect_error" in vector:
+        value = vector["expect_error"]
+        assert isinstance(value, str) and value, (
+            f"{vector['name']}: expect_error must be a nonempty string"
+        )
 
 
 @pytest.mark.parametrize("name,vector", _schc_cases())
 def test_schc_vector(name: str, vector: dict) -> None:
     if vector.get("category") == "malformed_input":
+        _require_string_expect_error(vector)
         with pytest.raises(SchcError):
             compress_packet(bytes.fromhex(vector["packet"]))
         return
     if vector.get("category") == "size_boundary":
+        _require_string_expect_error(vector)
         compressed = (
             bytes.fromhex(vector["compressed_prefix"])
             + bytes([vector["tail_byte"]]) * vector["tail_length"]
@@ -736,6 +759,7 @@ def test_schc_vector(name: str, vector: dict) -> None:
         return
     compressed = bytes.fromhex(vector["compressed"])
     if vector.get("category") == "malformed":
+        _require_string_expect_error(vector)
         with pytest.raises((SchcError, ValueError)):
             decompress_packet(compressed)
         return
@@ -743,6 +767,72 @@ def test_schc_vector(name: str, vector: dict) -> None:
     assert compress_packet(packet) == compressed, f"compress drift: {name}"
     assert decompress_packet(compressed) == packet, f"decompress drift: {name}"
     assert compressed[0] == vector["rule_id"]
+
+
+def _load_gen_vectors_module():
+    """Import the C parity generator from its standalone script location."""
+    import importlib.util
+
+    script = (
+        Path(__file__).resolve().parents[2]
+        / "lichen" / "tests" / "schc_parity" / "gen_vectors.py"
+    )
+    spec = importlib.util.spec_from_file_location("schc_parity_gen_vectors", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _write_corpus(tmp_path: Path, vectors: list[dict]) -> Path:
+    path = tmp_path / "corpus.json"
+    path.write_text(json.dumps({"format_version": 2, "vectors": vectors}), encoding="utf-8")
+    return path
+
+
+def test_gen_vectors_accepts_canonical_corpus(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vectors = gen.load(VECTORS_DIR / "schc_compression.json")
+    header = gen.generate(vectors)
+    malformed = [v for v in vectors if v.get("category") == "malformed_input"]
+    assert malformed, "canonical corpus must keep malformed_input rows"
+    for vector in malformed:
+        assert str(vector["name"]) in header
+        assert "'true' if 'expect_error'" not in header  # generated, not template
+
+
+def test_gen_vectors_rejects_non_string_expect_error(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    base = {
+        "name": "row",
+        "category": "malformed_input",
+        "packet": "deadbeef",
+    }
+    for bad in (False, None, "", 1):
+        vector = dict(base, expect_error=bad)
+        with pytest.raises(ValueError, match="expect_error must be a nonempty snake_case string"):
+            gen.load(_write_corpus(tmp_path, [vector]))
+
+
+def test_gen_vectors_accepts_string_expect_error(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vector = {
+        "name": "row",
+        "category": "malformed_input",
+        "packet": "deadbeef",
+        "expect_error": "not_ipv6",
+        "description": "short garbage",
+    }
+    header = gen.generate([vector])  # generate() maps presence-as-bool for
+    # string expect_error; load()-level acceptance is covered by the
+    # canonical corpus test above, which contains string expect_error rows.
+    assert "true }" in header
+
+
+def test_gen_vectors_rejects_missing_expect_error_on_malformed_input(tmp_path: Path) -> None:
+    gen = _load_gen_vectors_module()
+    vector = {"name": "row", "category": "malformed_input", "packet": "deadbeef"}
+    with pytest.raises(ValueError, match="field mismatch"):
+        gen.load(_write_corpus(tmp_path, [vector]))
 
 
 @pytest.mark.parametrize("name,vector", _rule_versioning_cases())
@@ -1625,6 +1715,19 @@ def test_announce_coords_vector(name: str, vector: dict) -> None:
     assert int.from_bytes(encoded[5:9], "big", signed=True) == vector["longitude_e7"]
 
 
+@pytest.mark.parametrize("name,vector", _announce_length_caps_cases())
+def test_announce_length_caps_vector(name: str, vector: dict) -> None:
+    wire = bytes.fromhex(vector["wire"])
+    expected = vector["expected"]
+    if expected["action"] == "accept":
+        announce = AnnounceMessage.from_bytes(wire)
+        assert len(announce.app_data) == expected["app_data_len"]
+    else:
+        assert expected["reason"] == "too_long"
+        with pytest.raises(AnnounceError, match="too long"):
+            AnnounceMessage.from_bytes(wire)
+
+
 def test_node_address_vectors_match_python_implementation() -> None:
     """Validate all 10 node_address vectors against the Python Identity module.
 
@@ -1842,7 +1945,7 @@ def test_ccp16_sf_ema_load_factor_hash32_logic(desc: str, vector: dict) -> None:
     preimage = eui + (epoch & 0xFFFFFFFF).to_bytes(4, "little")
     assert channel_plan_hash_32(preimage) == o["hash_32"], f"hash_32 drift: {name}"
 
-    # select_channel implementation vs oracle (density>8 forces CH0,
+    # select_channel implementation vs oracle (density>10 forces CH0,
     # otherwise 1 + hash % num_channels over the vector plan).
     selected = _ccp16_vector_plan().select_channel(eui, epoch, density)
     assert selected == o["channel"], f"select_channel drift: {name}"
@@ -1855,10 +1958,23 @@ def test_ccp16_sf_ema_load_factor_hash32_logic(desc: str, vector: dict) -> None:
     # production code behavior. The now field is vector metadata, not a value
     # computed by any function under test.
 
-    # SF table implementation vs oracle.
+    # AdaptiveSFSelect full rule vs oracle (spec 2a.8): pseudocode steps
+    # then the threshold-table floors — NOT the table-only form.
     snr_ema = i.get("snr_ema", i.get("snr_db", 5.0))
     load_factor = i.get("load_factor", 0.0)
-    sf = adaptive_sf_for_metrics(density, snr_ema, load_factor)
+    sf = 10
+    if density > 10:
+        sf = min(12, sf + 2)
+    if snr_ema > 8 and density < 5:
+        sf = max(7, sf - 1)
+    if load_factor > 0.8:
+        sf = min(12, sf + 1)
+    if snr_ema < -5:
+        sf = 12
+    if snr_ema < 0:
+        sf = max(11, sf)
+    if density > 10:
+        sf = max(11, sf)
     assert sf == o["sf"], f"adaptive_sf drift: {name}"
 
 
@@ -2385,6 +2501,10 @@ def _dao_structure(wire: bytes) -> tuple[str | None, list[tuple[int, bytes]], in
             return "unknown_option", options, origin_offset
         elif option_type == 5 and length != 18 or option_type == 6 and length != 20:
             return "bad_option_length", options, origin_offset
+        elif option_type == 5 and data[0] != 0:
+            # R-05-035 (spec 8.6): the reserved Target Flags octet MUST be
+            # zero; matches the dao_origin.py structural pass.
+            return "malformed_dao", options, origin_offset
         if origin_offset is not None and option_type != 0x12:
             return "nonterminal_option", options, origin_offset
         options.append((option_type, data))
@@ -2644,7 +2764,7 @@ def test_every_dao_origin_vector_executes_production_validator_and_manager(
 def test_dao_origin_signature_coverage_and_dodag_rules() -> None:
     vectors = [vector for _, vector in _dao_origin_signature_cases()]
     coverage = {vector["coverage"] for vector in vectors}
-    assert len(vectors) == len(coverage) == 51
+    assert len(vectors) == len(coverage) == 52
     assert {
         "d1",
         "d0_effective_dodag",
@@ -2668,6 +2788,7 @@ def test_dao_origin_signature_coverage_and_dodag_rules() -> None:
         "inconsistent_transit_sequence",
         "inconsistent_transit_lifetime",
         "unsupported_transit_e",
+        "target_flags_nonzero",
         "cross_prefix_equal",
         "cross_prefix_lower",
         "fresh_cross_prefix_target",
@@ -2780,6 +2901,8 @@ def test_rpl_messages_vector(name: str, vector: dict) -> None:
         elif expect_error == "truncation":
             with pytest.raises((PacketError, Icmpv6Error, UdpError)):
                 IPv6Packet.from_bytes(wire)
+        else:
+            pytest.fail(f"{name}: unhandled malformed expect_error {expect_error!r}")
         return
 
     msg_type = vector["type"]
@@ -3013,6 +3136,9 @@ def test_rpl_messages_vector(name: str, vector: dict) -> None:
         assert len(options) == len(expected), f"{name}: options count"
         for i, opt in enumerate(options):
             assert opt.type == expected[i]["type"], f"{name}: option {i} type"
+
+    else:
+        pytest.fail(f"{name}: unhandled rpl_messages msg_type {msg_type!r}")
 
 
 def _loadng_messages_cases():
@@ -4695,9 +4821,9 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             assert decompress_packet(compressed) == raw, name
         else:
             error_pattern = {
-                "invalid_source_address": "invalid IPv6 source address",
-                "invalid_destination_address": "invalid IPv6 destination address",
-                "invalid_destination_scope": "invalid IPv6 destination multicast scope",
+                "invalid_source_address": "invalid Rule 7 source address",
+                "invalid_destination_address": "invalid Rule 7 destination address",
+                "invalid_destination_scope": "invalid Rule 7 multicast destination scope",
             }[vector["expect_error"]]
             with pytest.raises(SchcError, match=error_pattern):
                 validate_rule7_addresses(source, destination)
@@ -4707,8 +4833,8 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             # Canonical emission policy (spec 03-adaptation.md Rule 255 TX/RX
             # split): the compressor MUST NOT originate policy-invalid
             # endpoints via Rule 255 fallback either. (Message text is not
-            # pinned here: unspecified endpoints are caught by the structural
-            # receive-side check before the emission policy runs.)
+            # pinned here: unspecified endpoints are caught by the Rule 255
+            # emission policy, which raises before the packet is encoded.)
             with pytest.raises(SchcError):
                 compress_packet(raw)
 
@@ -4744,6 +4870,33 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             # structurally valid with a valid checksum, so decode succeeds
             # even though a canonical sender could not have originated it.
             assert decode_rule255(b"\xff" + raw) == raw, name
+
+    elif category == "rule255_rx_structural_reject":
+        # Structural address constraints are rejected in BOTH directions
+        # (spec 03-adaptation.md two-tier contract): the emission policy
+        # forbids originating them and the decoder's structural validation
+        # rejects them before byte preservation.
+        source = IPv6Address(vector["source_ipv6"])
+        destination = IPv6Address(vector["destination_ipv6"])
+        udp = UdpDatagram(PORT_MQTT_SN, 5000, b"lichen255").to_bytes(source, destination)
+        raw = (
+            IPv6Header(
+                src_addr=source,
+                dst_addr=destination,
+                next_header=NextHeader.UDP,
+                payload_length=len(udp),
+                hop_limit=64,
+            ).to_bytes()
+            + udp
+        )
+        error_pattern = {
+            "invalid_source_address": "invalid IPv6 source address",
+            "invalid_destination_address": "invalid IPv6 destination address",
+        }[vector["expect_error"]]
+        with pytest.raises(SchcError, match=error_pattern):
+            encode_rule255(raw)
+        with pytest.raises(SchcError, match=error_pattern):
+            decode_rule255(b"\xff" + raw)
 
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
@@ -4878,10 +5031,14 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             expected = Ack(rule_id, window, complete=True).to_bytes()
             assert wire == expected, f"{name}: ACK complete mismatch"
 
+    else:
+        pytest.fail(f"{name}: unknown schc_adaptation category {category!r}")
+
 
 def test_schc_adaptation_vector_coverage() -> None:
     """Verify schc_adaptation.json covers all required categories."""
-    cases = _schc_adaptation_cases()
+    doc = _load("schc_adaptation.json")
+    cases = [(v["name"], v) for v in doc["vectors"]]
     categories = {vector["category"] for _, vector in cases}
     expected = {
         "rejection",
@@ -4899,6 +5056,51 @@ def test_schc_adaptation_vector_coverage() -> None:
     }
     missing = expected - categories
     assert not missing, f"Missing categories: {missing}"
+
+    # Per-category count guard shared with the Rust suite: the committed
+    # expected_counts table is the cross-implementation oracle, so a row
+    # added or mis-categorized in the JSON fails loudly in both suites.
+    # Key semantics mirror the Rust counters: "p0" counts P0-priority rows,
+    # "endpoint_direction" counts category fragmentation_endpoint_direction,
+    # and "duplicate_idempotence" counts the receive_tile_0_then_tile_0_again
+    # single_active scenario.
+    declared = dict(doc["expected_counts"])
+    counted = Counter(vector["category"] for _, vector in cases)
+    p0_declared = declared.pop("p0", None)
+    if p0_declared is not None:
+        p0_counted = sum(1 for _, vector in cases if vector.get("priority") == "P0")
+        assert p0_counted == p0_declared, (
+            f"priority P0: counted {p0_counted}, expected_counts declares {p0_declared}"
+        )
+    endpoint_direction_declared = declared.pop("endpoint_direction", None)
+    if endpoint_direction_declared is not None:
+        counted["fragmentation_endpoint_direction"] = counted.pop(
+            "fragmentation_endpoint_direction", 0
+        )
+        assert (
+            counted["fragmentation_endpoint_direction"] == endpoint_direction_declared
+        ), (
+            f"category fragmentation_endpoint_direction: "
+            f"counted {counted['fragmentation_endpoint_direction']}, "
+            f"expected_counts declares {endpoint_direction_declared}"
+        )
+    duplicate_declared = declared.pop("duplicate_idempotence", None)
+    if duplicate_declared is not None:
+        duplicate_counted = sum(
+            1
+            for _, vector in cases
+            if vector.get("category") == "single_active"
+            and vector.get("scenario") == "receive_tile_0_then_tile_0_again"
+        )
+        assert duplicate_counted == duplicate_declared, (
+            f"duplicate_idempotence: counted {duplicate_counted}, "
+            f"expected_counts declares {duplicate_declared}"
+        )
+    for category, count in declared.items():
+        assert counted.get(category, 0) == count, (
+            f"category {category}: counted {counted.get(category, 0)}, "
+            f"expected_counts declares {count}"
+        )
 
     # Verify P0 vectors are present
     p0_vectors = [v for _, v in cases if v.get("priority") == "P0"]
@@ -5289,3 +5491,191 @@ def test_replay_window_logical_counter_vectors() -> None:
             assert computed > other_counter, (
                 f"Ordering violation: {computed} should be > {other_counter}"
             )
+
+
+_PENDING_EXPLICIT_SCHEMA_POLICY = frozenset({
+        "access_levels.json",
+        "announce_relay.json",
+        "announce_signed_data.json",
+        "ble_gatt_reassembly.json",
+        "br_multicast_filter.json",
+        "broadcast_rate_limiting.json",
+        "bufferbloat_congestion.json",
+        "capability_announcements.json",
+        "ccp-interference.json",
+        "ccp16-hop.json",
+        "ccp16_ema_loss_threshold.json",
+        "ccp16_load_balance.json",
+        "ccp16_utilization.json",
+        "ccp4_regional_channel_plans.json",
+        "ccp5_coordination_mechanism_negotiation.json",
+        "ccp7_holdover.json",
+        "ccp9_rendezvous.json",
+        "ccp_beacon_sig_gate.json",
+        "ccp_ema_update_integer.json",
+        "ccp_load_balancing.json",
+        "ccp_select_channel_endianness.json",
+        "ccp_sfn_wrap_slot_hash.json",
+        "ccp_slot_hash_carry.json",
+        "ccp_slot_map_validation.json",
+        "ccp_tdma.json",
+        "checkin_rollcall.json",
+        "coap_messages.json",
+        "coap_observe_sequence.json",
+        "coap_option_malformed.json",
+        "coap_rd.json",
+        "coap_token_validation.json",
+        "coap_transport.json",
+        "confessions_rate.json",
+        "constrained_node_time.json",
+        "core_link_format.json",
+        "dad_hash_clarification.json",
+        "delegation_tokens.json",
+        "dio_time_option_malformed.json",
+        "dodag_version_authorization.json",
+        "edhoc.json",
+        "edhoc_export_rfc9529.json",
+        "epoch_rollover.json",
+        "forwarding.json",
+        "forwarding_buffer.json",
+        "frame_length_boundaries.json",
+        "gateway_reachability.json",
+        "gcp3_trust_models.json",
+        "gcp_handoff_cose_sign1.json",
+        "gcp_iid_comparison.json",
+        "gcp_psk_oscore.json",
+        "gcp_slot_claim.json",
+        "gradient_entry.json",
+        "gradient_table.json",
+        "group_oscore_key.json",
+        "groups_cbor.json",
+        "groups_membership.json",
+        "groups_membership_sequences.json",
+        "groups_messaging.json",
+        "groups_rekey.json",
+        "ipso_smart_objects.json",
+        "ipv6-addresses.json",
+        "ipv6-icmpv6.json",
+        "keystore_cbor.json",
+        "keystore_iid.json",
+        "lci_config.json",
+        "lci_identity.json",
+        "lci_radio_config.json",
+        "lci_raw_diag.json",
+        "lci_routing_table.json",
+        "lci_status.json",
+        "loadng.json",
+        "lr_fhss.json",
+        "lr_fhss_capability.json",
+        "messaging.json",
+        "mic_length_selector.json",
+        "neighbors_cbor.json",
+        "no_silent_drops.json",
+        "node-addresses.json",
+        "node_address.json",
+        "oscore_context_parity.json",
+        "oscore_cross_exchange.json",
+        "oscore_key_update.json",
+        "oscore_schc_roundtrip.json",
+        "packet_walkthrough.json",
+        "packets-formats.json",
+        "packets-timing.json",
+        "port_dispatch.json",
+        "position_cache.json",
+        "position_observe.json",
+        "position_privacy_auth.json",
+        "presence_cbor.json",
+        "propagation.json",
+        "raw_diag_ttl.json",
+        "receipt_cbor.json",
+        "root_authorization.json",
+        "root_dio_signature.json",
+        "route_selection.json",
+        "rpl_route_state.json",
+        "schc_fragment.json",
+        "schc_session_security.json",
+        "senml_location.json",
+        "sf_assignment.json",
+        "short_addr_assignment.json",
+        "short_addr_dad.json",
+        "slip_framing.json",
+        "sos_cbor.json",
+        "sos_rate_limiting.json",
+        "sos_signature.json",
+        "source_route_hop_limit.json",
+        "suite_negotiation.json",
+        "tdma_ccp_fsm.json",
+        "tx_queue_bounded.json",
+        "tx_queue_expiry.json",
+        "tx_queue_implementation.json",
+        "tx_queue_priority.json",
+        "waypoint.json",
+        "yggdrasil-derivation.json",
+        "yggdrasil.json",
+        "yggdrasil_address.json",
+})
+
+
+def test_all_vector_documents_have_explicit_schema_policy() -> None:
+    """Every vector document must have an explicit schema policy.
+
+    Three buckets, no silent omissions (project-LICHEN-worker6-ojzg):
+      * shared: validates against schema.json,
+      * family: a per-family <stem>.schema.json exists and validates,
+      * pending: explicitly listed here until a family schema is written.
+    A new vector document that lands in none of these buckets fails this
+    test and must be given a policy consciously.
+    """
+    docs = sorted(
+        p.name
+        for p in VECTORS_DIR.glob("*.json")
+        if p.name != "schema.json" and not p.name.endswith(".schema.json")
+    )
+    shared_schema = _load("schema.json")
+    validator = Draft7Validator(shared_schema)
+
+    for name in docs:
+        if name in _PENDING_EXPLICIT_SCHEMA_POLICY:
+            continue
+        doc = _load(name)
+        errors = sorted(validator.iter_errors(doc), key=lambda e: e.path)
+        if errors:
+            family = VECTORS_DIR / (Path(name).stem + ".schema.json")
+            assert family.exists(), (
+                f"{name}: no schema policy ({len(errors)} shared-schema "
+                "errors, no per-family schema) - add a family schema or list "
+                f"it in _PENDING_EXPLICIT_SCHEMA_POLICY: {errors[0].message}"
+            )
+            fam_errors = sorted(
+                Draft7Validator(json.loads(family.read_text())).iter_errors(doc),
+                key=lambda e: e.path,
+            )
+            assert not fam_errors, [e.message for e in fam_errors]
+    # NOTE: family docs that also pass the shared schema (e.g. compact_cot)
+    # are enforced against their FAMILY schema only here; the drift loop
+    # below re-derives inventory and must not be relied on for enforcement.
+
+    # The explicit pending inventory must match reality exactly: re-derive
+    # every document's status (independent of the declared list) - entries
+    # that grew a schema (or now pass the shared schema) must be removed
+    # from the list, and every genuinely pending document must be listed.
+    actually_pending = set()
+    for name in docs:
+        doc = _load(name)
+        family = VECTORS_DIR / (Path(name).stem + ".schema.json")
+        if family.exists():
+            fam_errors = sorted(
+                Draft7Validator(json.loads(family.read_text())).iter_errors(doc),
+                key=lambda e: e.path,
+            )
+            assert not fam_errors, [e.message for e in fam_errors]
+            continue
+        if list(validator.iter_errors(doc)):
+            actually_pending.add(name)
+    assert actually_pending == _PENDING_EXPLICIT_SCHEMA_POLICY, (
+        "pending schema-policy inventory drifted; update "
+        "_PENDING_EXPLICIT_SCHEMA_POLICY (added: "
+        f"{sorted(actually_pending - _PENDING_EXPLICIT_SCHEMA_POLICY)}, "
+        "satisfied: "
+        f"{sorted(_PENDING_EXPLICIT_SCHEMA_POLICY - actually_pending)})"
+    )

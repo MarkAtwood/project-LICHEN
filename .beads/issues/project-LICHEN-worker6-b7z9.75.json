@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.75",
+  "title": "[BUG] Python EpochStore.boot_epoch cold-boot fallback is fixed 128, not random uniform [128,255]",
+  "description": "Req R-02-064 (spec 02-physical-link.md 4.4): when no persisted epoch is available implementations MUST initialize epoch to a random value uniformly distributed in [128,255]. DIVERGENT: python/src/lichen/link/epoch_store.py:48-57 boot_epoch() returns FIXED 128 on cold boot (test_epoch_store.py:11 test_cold_boot_starts_at_128 pins it). The LinkLayer default field is conformant (link_layer.py:196 secrets.randbelow(128)+128) and C is conformant (link_ctx.c:237 128 + (rand_byte \u0026 0x7F)); Rust is a contract (Stack::new asserts \u003e=128) validated by epoch_rollover.json cold_boot_epoch_range. Fix: randomize boot_epoch fallback in [128,255] (secrets module already used elsewhere) and update the pinning test.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:26:22.592312628Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:26:22.592312628Z",
+  "labels": [
+    "link",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.75",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:26:22.742738386Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

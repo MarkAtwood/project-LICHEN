@@ -105,11 +105,11 @@
     },
     {
       "name": "dense_start_region0",
-      "description": "AdaptiveDutyPermille(density=9, region=0) per spec 02a.9; crc32 oracle 2b3c053c.",
-      "density": 9,
+      "description": "AdaptiveDutyPermille(density=11, region=0) per spec 02a.9; crc32 oracle 3edfda50.",
+      "density": 11,
       "region": 0,
       "expected_duty_permille": 5,
-      "input_crc32": "2b3c053c",
+      "input_crc32": "3edfda50",
       "notes": "Independent oracle: threshold table arithmetic only, no code-under-test dependency."
     },
     {
@@ -141,11 +141,11 @@
     },
     {
       "name": "dense_start_region1",
-      "description": "AdaptiveDutyPermille(density=9, region=1) per spec 02a.9; crc32 oracle 5c3b35aa.",
-      "density": 9,
+      "description": "AdaptiveDutyPermille(density=11, region=1) per spec 02a.9; crc32 oracle 49d8eac6.",
+      "density": 11,
       "region": 1,
       "expected_duty_permille": 10,
-      "input_crc32": "5c3b35aa",
+      "input_crc32": "49d8eac6",
       "notes": "Independent oracle: threshold table arithmetic only, no code-under-test dependency."
     },
     {

@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-81a8",
+  "title": "b7z9.45(a): C coap_client backs off on 5.03 (Max-Age retry_after, per-peer state)",
+  "description": "Smallest child of worker6-b7z9.45 (spec 07 10.2.4 R-07-032, sender side): lichen/subsys/lichen/coap/coap_client.c has zero 5.03 handling. Add: parse 5.03 responses with Max-Age option (retry_after seconds; default 60s per Rust/Python DEFAULT_503_BACKOFF_S, cap at 3600 per Rust MAX_BACKOFF_S DoS cap), maintain per-peer backoff state (peer addr key), and refuse to send to a peer under backoff (mirror python/src/lichen/client/ip_coap.py enforce_503_backoff/:237-245 semantics: raise/return an error until expiry). Also parse the duty-cycle CBOR payload {reason, retry_after, level} when present (retry_after from payload overrides Max-Age — check Python/Rust precedence and mirror). Tests: extend the coap_client host test dir if present, else a focused new host test; cases: 5.03 with Max-Age arms backoff, second send refused before expiry, send succeeds after expiry, payload retry_after wins over Max-Age, default 60 when neither.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T21:40:09.52166638Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T00:32:48.405798866Z",
+  "closed_at": "2026-09-01T00:32:48.405798866Z",
+  "close_reason": "RE-CLOSE (store write lost — bd8h pattern). Completed and committed as 019242064b on beads-worker-7: freestanding backoff.c/.h state machine (CBOR duty-cycle payload parse with string-skip + 2-byte uint support, 60s default/3600s cap, injected monotonic time) + coap_client.c integration (5.03 arms under s_mutex, refusal returns new LICHEN_COAP_ERR_BACKOFF before socket use, 2.xx success clears; 3.xx excluded). 3x codereview to convergence (5 defects found+fixed incl. data race). Follow-up worker6-6lhf owns committed host tests + cross-impl vectors.",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-81a8",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.45",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T21:40:09.627155927Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

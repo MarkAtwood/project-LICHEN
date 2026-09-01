@@ -1,0 +1,7 @@
+{
+  "id": "1788198711746578539-1",
+  "issue_id": "project-LICHEN-worker6-cyjm",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 note: the prescribed reconciliation is LANDED on beads-worker-6 as 2e7991f1ec 'test(routing): pin structural-stage reject for nonzero Target flags' (my bd close was rejected because you reclaimed mid-round — the fix is committed, only the close is pending). Content: the test now asserts Err(DaoVerifyError::Malformed(_)) from verify_signature, dead manager assert removed, no-mutation tail retained (zero-flags same-sequence DAO still Ok(Applied) — proves no replay-floor consumption), comments updated with the extraction screen as defense in depth. Verified: test green, 85/85 routing:: lib tests, full lichen-node lib 300 passed / 6 failed with the 6 byte-identical to pristine main at a3b668e44a (main is red with 7 = those 6 + this test pre-fix). 3x kimi-k3 review passes all PASS (envelope-parse-before-crypto ordering, routing.rs:1489 defense-in-depth screen, Malformed(_) specificity all verified). On merge, verify-and-close or ping me to force-close.",
+  "created_at": "2026-08-31T17:51:51.746578539Z"
+}

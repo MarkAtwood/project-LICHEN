@@ -63,7 +63,12 @@ pub(crate) fn rpl_ipv6_packet(
     let mut packet = vec![0u8; IPV6_HEADER_LEN + usize::from(payload_len)];
     let src = Addr(source);
     let dst = Addr(destination);
-    Ipv6Header::new(next_header::ICMPV6, src, dst)
+    let mut header = Ipv6Header::new(next_header::ICMPV6, src, dst);
+    // RPL control messages are link-local single-hop: RFC 6550 / spec 09
+    // 13.3 (R-09-005) require hop limit 255 on send, and the authenticated
+    // DIO admission path rejects anything else.
+    header.hop_limit = 255;
+    header
         .write_to(payload_len, &mut packet[..IPV6_HEADER_LEN])
         .ok()?;
     packet[IPV6_HEADER_LEN] = RPL_ICMPV6_TYPE;
@@ -296,6 +301,13 @@ pub(crate) fn survey_routing_headers(ipv6: &[u8]) -> Result<RoutingHeaderSurvey,
                 terminal = true;
                 break;
             }
+            next_header::IPV6_IN_IPV6 => {
+                if ipv6.len() - offset < IPV6_HEADER_LEN {
+                    return Err(RxError::InvalidSourceRoute);
+                }
+                terminal = true;
+                break;
+            }
             next_header::NO_NEXT => {
                 if offset != ipv6.len() {
                     return Err(RxError::InvalidSourceRoute);
@@ -439,4 +451,29 @@ pub(crate) fn advance_rpl_source_route(
     ipv6[24..40].copy_from_slice(&next_destination);
     ipv6[view.offset + 3] -= 1;
     Ok(Some(next_destination))
+}
+
+/// Strip an IPv6-in-IPv6 outer header (spec 05-routing 8.9 R-05-063).
+///
+/// `expected_dst` is this node's authorized primary 02xx address: the
+/// inner destination MUST match it (the E check) or the packet is rejected.
+/// Fails closed on any malformed outer or inner header.
+pub(crate) fn decapsulate_ipv6(outer: &[u8], expected_dst: [u8; 16]) -> Result<Vec<u8>, RxError> {
+    let consistent_payload_len = |packet: &[u8]| {
+        packet.len() >= IPV6_HEADER_LEN
+            && packet[0] >> 4 == 6
+            && IPV6_HEADER_LEN + usize::from(u16::from_be_bytes([packet[4], packet[5]]))
+                == packet.len()
+    };
+    if !consistent_payload_len(outer) || outer[6] != next_header::IPV6_IN_IPV6 {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    let inner = &outer[IPV6_HEADER_LEN..];
+    if !consistent_payload_len(inner) {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    if inner[24..40] != expected_dst {
+        return Err(RxError::InvalidSourceRoute);
+    }
+    Ok(inner.to_vec())
 }

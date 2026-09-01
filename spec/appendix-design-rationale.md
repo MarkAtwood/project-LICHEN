@@ -391,7 +391,7 @@ Single channel creates contention hotspot. CCP-16 coordinates capacity. All impl
 - Slot duration is at least the configured profile's maximum permitted PHY-payload airtime plus the single 50 ms guard. The SF10/125 kHz profile minimum is 2,346 ms. Node uses lichen_link_set_slot() in subsys.
 - TX suppressed outside slot (tdma_tx_allowed()).
 
-Normative pseudocode and thresholds are now in 02a-coordinated-capacity:2a.7 (with pure IETF-style definitions for adaptive_sf_select, select_channel, now(); EMA alpha=1/4, per-neighbor state, DIO signaling). SF10 is the REQUIRED baseline for moderate density per section 7.1; density-aware overrides and CH0 fallback apply only on explicit thresholds (density >8 triggers specific SF and control channel rules). Implementations MUST match test/vectors/ccp16.json and ccp_load_balancing.json exactly. No dead code; all paths exercised by vectors.
+Normative pseudocode and thresholds are now in 02a-coordinated-capacity:2a.8 (with pure IETF-style definitions for adaptive_sf_select, select_channel, now(); EMA alpha=1/4, per-neighbor state, DIO signaling). SF10 is the REQUIRED baseline for moderate density per section 7.1; density-aware overrides and CH0 fallback apply only on explicit thresholds (density >8 triggers specific SF and control channel rules). Implementations MUST match test/vectors/ccp16.json and ccp_load_balancing.json exactly. No dead code; all paths exercised by vectors.
 
 **Fixed-Point no_std Example (Q16.16 for EMA):** For embedded `no_std` (Zephyr C/Rust lichen-core), avoid f32. Use saturating Q16.16 arithmetic matching rf_health.rs:170,251:
 

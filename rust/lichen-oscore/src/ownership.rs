@@ -9,7 +9,7 @@
 //! [`ContextId`]). Each call yields an independent context whose recipient
 //! replay window starts empty, so two concurrent instances can each accept the
 //! same authenticated packet once (a double-accept that defeats replay
-//! protection). The durable [`SenderStateStore`] only fences the sender
+//! protection). The durable [`ContextStateStore`] only fences the sender
 //! sequence, not the receiver replay window.
 //!
 //! [`OwnershipRegistry`] enforces a documented single-owner contract: while a
@@ -33,7 +33,7 @@
 
 use heapless::Vec;
 
-use crate::{Context, ContextId, ContextStoreError, SenderStateStore};
+use crate::{Context, ContextId, ContextStoreError, ContextStateStore};
 
 /// Default maximum number of concurrently owned context records.
 const DEFAULT_CAPACITY: usize = 8;
@@ -53,7 +53,7 @@ pub enum OwnershipError<E> {
 /// Fixed-capacity registry enforcing exclusive live ownership of OSCORE
 /// contexts by durable record ([`ContextId`]).
 ///
-/// See the [module documentation](self) for the ownership contract.
+/// See this module's documentation for the ownership contract.
 #[derive(Debug)]
 pub struct OwnershipRegistry<const N: usize = DEFAULT_CAPACITY> {
     live: Vec<ContextId, N>,
@@ -94,7 +94,7 @@ impl<const N: usize> OwnershipRegistry<N> {
     ///
     /// The claim is taken before the store compare-and-swap and rolled back
     /// if activation fails.
-    pub fn register_fresh<S: SenderStateStore>(
+    pub fn register_fresh<S: ContextStateStore>(
         &mut self,
         context: Context,
         store: &mut S,
@@ -118,7 +118,7 @@ impl<const N: usize> OwnershipRegistry<N> {
     /// Fails with [`OwnershipError::AlreadyOwned`] while another instance is
     /// live for the same durable record, preventing a second receiver with an
     /// independent replay window.
-    pub fn restore_existing<S: SenderStateStore>(
+    pub fn restore_existing<S: ContextStateStore>(
         &mut self,
         context: Context,
         store: &mut S,

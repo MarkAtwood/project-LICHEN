@@ -1,0 +1,32 @@
+{
+  "id": "project-LICHEN-worker6-ldzz.2",
+  "title": "diag.2: radio — DIO1 interrupt timeout detector",
+  "description": "After lora_send, if TX_DONE IRQ doesn't fire within 2x expected airtime: (1) try extending the timeout to 4x, (2) if still no IRQ, scan alternate DIO1 pin candidates from DTS compatible list, (3) report DIAG_RADIO_DIO1_ADAPT with the pin that worked or DIAG_RADIO_DIO1_FAIL if none did. Adapt: update the active IRQ pin at runtime. Report via /diag.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T05:18:42.238464799Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:20:27.721481367Z",
+  "closed_at": "2026-09-01T12:20:27.721481367Z",
+  "close_reason": "RE-CLOSE (store write lost — bd8h). Completed and committed as ad8f252504 on beads-worker-7: dio1_timeout.c/.h — 2x/4x timeout extension, alternate pin candidate scan with activate_pin, ADAPTED/FAIL outcomes, restore-on-FAIL. Standalone harness green; cppcheck gate exit 0. ldzz detector family complete.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ldzz.2",
+      "depends_on_id": "project-LICHEN-worker6-ldzz",
+      "type": "parent-child",
+      "created_at": "2026-09-01T05:18:42.409655341Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-ldzz.2",
+      "depends_on_id": "project-LICHEN-worker6-ldzz.1",
+      "type": "blocks",
+      "created_at": "2026-09-01T05:18:53.336594324Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

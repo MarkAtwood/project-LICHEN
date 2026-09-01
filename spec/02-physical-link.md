@@ -83,16 +83,16 @@ Independent oracle: `test/vectors/sf-assignment.json` verified against OpenSSL a
 
 ### 3.5. Adaptive Spreading Factor (CCP-16)
 
-SF10 (or ASSIGNED_SF from gateway DIO) is the REQUIRED baseline per appendix-design-rationale.md:7.1 and 02a-coordinated-capacity.md:2a.7. Density-aware rules override this **only** on explicit thresholds (see adaptive_sf_select pseudocode there and table below); otherwise retain baseline. Nodes MUST receive on all SF7-SF12. Gateways and nodes MUST announce current TX_SF in DIO options and Announce messages (1-byte field; absence means SF10). ASSIGNED_SF and RF metrics (per-neighbor EMA SNR with alpha=1/4, packet loss rate) MUST be signaled in DIO per CCP-16. Per-neighbor state MUST track EMA values, loss rate, and sample count.
+SF10 (or ASSIGNED_SF from gateway DIO) is the REQUIRED baseline per appendix-design-rationale.md:7.1 and 02a-coordinated-capacity.md:2a.8. Density-aware rules override this **only** on explicit thresholds (see adaptive_sf_select pseudocode there and table below); otherwise retain baseline. Nodes MUST receive on all SF7-SF12. Gateways and nodes MUST announce current TX_SF in DIO options and Announce messages (1-byte field; absence means SF10). ASSIGNED_SF and RF metrics (per-neighbor EMA SNR with alpha=1/4, packet loss rate) MUST be signaled in DIO per CCP-16. Per-neighbor state MUST track EMA values, loss rate, and sample count.
 
 Thresholds:
 
 | SF | Sensitivity | Upgrade (SHOULD decrease SF) | Downgrade (MUST increase SF) |
 |----|-------------|------------------------------|------------------------------|
 | 7  | -123 dBm   | N/A                          | SNR < 0 or loss > 0.25       |
-| 9  | -129 dBm   | density < 5 AND snr_ema > 8 (low-density only) | SNR < 0 or density > 8       |
+| 9  | -129 dBm   | density < 5 AND snr_ema > 8 (low-density only) | SNR < 0 or density > 10       |
 | 10 | -132 dBm   | **DEFAULT** (moderate density 5-20) | SNR < 0 or load_factor > 0.8 |
-| 11 | -134 dBm   | N/A                          | density > 8 or snr_ema < 0 or load > 0.8 |
+| 11 | -134 dBm   | N/A                          | density > 10 or snr_ema < 0 or load > 0.8 |
 | 12 | -137 dBm   | N/A                          | density > 20 or snr_ema < -5 |
 
 Channel utilization (`utilization`) is a uint8 on 0..255 representing
@@ -302,8 +302,8 @@ Implementations on constrained devices MAY use constant-time trial verification
 over a bounded peer table when the trust store is small, but MUST still enforce
 the pin-on-first-verified-contact and reject-on-mismatch rules above.
 
-Relay nodes that re-sign frames (see 4.6) populate their own SIID and sign with
-their own key. A downstream receiver pins the relay's (SIID, key) binding, not
+Relay nodes that re-sign frames (see spec/06-security.md Section 8.4) populate
+their own SIID and sign with their own key. A downstream receiver pins the relay's (SIID, key) binding, not
 the origin's. End-to-end origin authentication, when required, uses the DAO
 Origin Signature profile at the application layer (see spec/06-security.md).
 

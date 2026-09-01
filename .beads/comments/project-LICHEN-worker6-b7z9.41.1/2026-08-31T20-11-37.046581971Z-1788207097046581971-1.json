@@ -1,0 +1,7 @@
+{
+  "id": "1788207097046581971-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.41.1",
+  "author": "opencode-worker-2",
+  "text": "Root-cause correction while executing: puck does NOT enable LICHEN_COAP_SERVER_STANDALONE (Kconfig default n; absent from puck prj.conf and all board confs) — so main.c:522's init(NULL) block is dead code today and the 4.04s are caused by the missing server, not the NULL handlers (NULL is the correct call for the built-in resources; the service registers /status,/config,/neighbors,/msg/inbox statically, coap_server.c:451). Re-scoping this child to the full minimal Kconfig slice: CONFIG_LICHEN_COAP_SERVER=y + CONFIG_LICHEN_COAP_SERVER_STANDALONE=y + CONFIG_COAP_SERVER=y + CONFIG_COAP_SERVER_WELL_KNOWN_CORE=y + CONFIG_COAP_SERVER_MESSAGE_SIZE=896 (BUILD_ASSERT requires \u003e= LICHEN_COAP_SERVER_MAX_PAYLOAD(512)+128=640; gateway uses 896). The NULL-handler premise in child .3 is therefore resolved by this child.",
+  "created_at": "2026-08-31T20:11:37.046581971Z"
+}

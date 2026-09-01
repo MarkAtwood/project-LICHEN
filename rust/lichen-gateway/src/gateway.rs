@@ -30,7 +30,7 @@ use lichen_node::{
     AnnounceTrustStore, RplEvent,
 };
 use lichen_oscore::{
-    Context, ContextId, SenderSequenceState, SenderStateStore, COAP_OPTION_OSCORE,
+    Context, ContextId, SenderSequenceState, ContextStateStore, COAP_OPTION_OSCORE,
 };
 #[cfg(test)]
 use lichen_schc::codec::{decompress, SchcError};
@@ -56,6 +56,9 @@ pub struct Gateway {
     oscore_sender_store: GatewayOscoreSenderStore,
     oscore_recipient_store: GatewayOscoreRecipientStore,
     gcp_context_peers: Vec<([u8; 8], ContextId)>,
+    /// Spec 04-network 6.3.4: mesh↔internet multicast is dropped unless
+    /// explicitly configured multicast peering is enabled. Defaults to off.
+    multicast_peering: bool,
 }
 
 struct GatewayOscoreSenderStore {
@@ -544,7 +547,7 @@ impl GatewayOscoreRecipientStore {
     }
 }
 
-impl SenderStateStore for GatewayOscoreSenderStore {
+impl ContextStateStore for GatewayOscoreSenderStore {
     type Error = GatewayOscoreStoreError;
 
     /// Load the sender state for `context_id`, rebuilding the cache from
@@ -552,7 +555,7 @@ impl SenderStateStore for GatewayOscoreSenderStore {
     /// or an unverifiable record. A missing floor record heals forward to
     /// the sealed state (first-accept crash window or lost floor file) so
     /// the context is not permanently bricked.
-    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         if let Some(state) = self.cached(context_id) {
             return Ok(Some(state));
         }
@@ -608,13 +611,13 @@ impl SenderStateStore for GatewayOscoreSenderStore {
         Ok(Some(state))
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         context_id: &ContextId,
         expected: Option<SenderSequenceState>,
         next: SenderSequenceState,
     ) -> Result<bool, Self::Error> {
-        let current = self.load(context_id)?;
+        let current = self.load_sender(context_id)?;
         if current != expected {
             return Ok(false);
         }
@@ -650,6 +653,16 @@ impl SenderStateStore for GatewayOscoreSenderStore {
             self.records.push((*context_id, next));
         }
         Ok(true)
+    }
+
+    fn load_recipient(&mut self, _context_id: &ContextId) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+        // TODO(zlrx): persist recipient replay state for gateway OSCORE contexts
+        Ok(None)
+    }
+
+    fn save_recipient(&mut self, _context_id: &ContextId, _state: &lichen_oscore::RecipientReplayState) -> Result<(), Self::Error> {
+        // TODO(zlrx): persist recipient replay state for gateway OSCORE contexts
+        Ok(())
     }
 }
 
@@ -899,6 +912,18 @@ impl Gateway {
         self.rpl_stack.set_ygg_reachable(reachable)
     }
 
+    /// Explicitly configured multicast peering (spec 04-network 6.3.4).
+    /// When enabled, the border router forwards multicast between the mesh
+    /// and the backbone in both directions; the default (off) drops it.
+    pub fn set_multicast_peering(&mut self, enabled: bool) {
+        self.multicast_peering = enabled;
+    }
+
+    /// Whether explicitly configured multicast peering is enabled.
+    pub fn multicast_peering_enabled(&self) -> bool {
+        self.multicast_peering
+    }
+
     /// Open or provision a production gateway using durable RPL state.
     ///
     /// `persistence.provision` is an idempotent provision-or-resume mode: the
@@ -1002,6 +1027,7 @@ impl Gateway {
             oscore_sender_store: backing.oscore_sender_store,
             oscore_recipient_store: backing.oscore_recipient_store,
             gcp_context_peers: Vec::new(),
+            multicast_peering: false,
         })
     }
 
@@ -1086,7 +1112,7 @@ impl Gateway {
         let context_id = context.context_id();
         let stored = self
             .oscore_sender_store
-            .load(&context_id)
+            .load_sender(&context_id)
             .map_err(|_| SecureError::PersistenceFailed)?;
         let context = if stored.is_some() {
             context.restore_existing(&mut self.oscore_sender_store)
@@ -1524,12 +1550,26 @@ impl Gateway {
     }
 
     fn superframe_id_at(unix_timestamp: u64, duration_s: u16) -> u64 {
-        let duration = u64::from(duration_s);
-        if duration == 0 {
-            0
-        } else {
-            unix_timestamp / duration
+        unix_timestamp
+            .checked_div(u64::from(duration_s))
+            .unwrap_or(0)
+    }
+
+    /// Spec 05-routing 8.9 (R-05-066): the inner Hop Limit of an encapsulated
+    /// forwarded packet takes the normal forwarding decrement plus the initial
+    /// Segments Left (`num_addrs`). The initial Segments Left must be strictly
+    /// less than the Hop Limit remaining after the forwarding decrement, else
+    /// the route is not representable (`None` — emit no route).
+    pub(crate) fn inner_hop_limit_after_encapsulation(
+        hop_limit: u8,
+        num_addrs: usize,
+    ) -> Option<u8> {
+        let num_addrs = u8::try_from(num_addrs).ok()?;
+        let remaining = hop_limit.checked_sub(1)?;
+        if num_addrs >= remaining {
+            return None;
         }
+        remaining.checked_sub(num_addrs)
     }
 
     /// SCHC-compress an IPv6 packet from the upstream TUN device for the mesh.
@@ -1551,6 +1591,13 @@ impl Gateway {
         dst.copy_from_slice(&ipv6_packet[field::DST_OFFSET..field::DST_OFFSET + 16]);
         if dst[0] == 0xfd {
             warn!("upstream ULA destination is outside the LICHEN native profile");
+            return None;
+        }
+        if dst[0] == 0xff && !self.multicast_peering {
+            // Spec 04-network 6.3.4: a border router MUST NOT forward
+            // multicasts across the backbone boundary (this direction:
+            // backbone → mesh) without explicitly configured peering.
+            warn!("upstream multicast destination dropped (spec 04 6.3.4)");
             return None;
         }
         if self.is_local_mesh(&dst) {
@@ -1649,10 +1696,11 @@ impl Gateway {
                 let is_root_origin = ipv6[8..24] == root_addr;
                 let is_host_route = route.last() == Some(&dst);
                 if is_root_origin && is_host_route {
-                    // Inline SRH, not a tunnel: no inner/outer encapsulation,
-                    // so spec §8.9's inner Hop Limit decrements do not apply
-                    // here (add_rpl_source_route already rejects when the
-                    // initial Segments Left would exhaust the Hop Limit).
+                    // RH3 insertion only, not an IPv6-in-IPv6 tunnel: no
+                    // inner/outer encapsulation, so spec §8.9's inner Hop
+                    // Limit decrement does NOT apply here
+                    // (add_rpl_source_route already rejects when the initial
+                    // Segments Left would exhaust the Hop Limit).
                     let routing_len = 8 + 16 * (route.len() - 1);
                     let total_len = ipv6.len() + routing_len;
                     let mut routed = vec![0u8; total_len];
@@ -1662,25 +1710,31 @@ impl Gateway {
                     routed
                 } else {
                     let num_addrs = route.len() - 1;
-                    // Spec §8.9 (R-05-066): the root is forwarding this inner
-                    // packet — both callers (TUN egress and mesh-ingress
-                    // transit) are forwarding paths — so apply the normal
-                    // forwarding decrement first, then decrement the inner
-                    // Hop Limit by the initial Segments Left. The initial
-                    // Segments Left MUST be strictly less than the Hop Limit
-                    // available after the forwarding decrement; otherwise
-                    // emit no route.
-                    let hl_after_fwd = ipv6[7].checked_sub(1)?;
-                    if num_addrs >= usize::from(hl_after_fwd) {
-                        warn!(
-                            num_addrs,
-                            hop_limit = ipv6[7],
-                            "mesh_to_mesh: hop budget below initial Segments Left — no route"
-                        );
-                        return None;
-                    }
+                    // Spec §8.9 (R-05-066): this path forwards the inner
+                    // packet (TUN upstream or mesh hairpin ingress), so the
+                    // inner Hop Limit takes the normal forwarding decrement
+                    // plus the initial Segments Left. Merge resolution keeps
+                    // the tested helper: its checked u8 bound rejects
+                    // oversized routes where a plain `as u8` cast would
+                    // silently truncate num_addrs, and the warn diagnostic
+                    // on rejection is preserved. A Segments Left that would
+                    // exhaust the remaining Hop Limit is not representable
+                    // — emit no route.
+                    let mut inner = ipv6.to_vec();
+                    inner[7] = match Self::inner_hop_limit_after_encapsulation(inner[7], num_addrs)
+                    {
+                        Some(limit) => limit,
+                        None => {
+                            warn!(
+                                num_addrs,
+                                hop_limit = inner[7],
+                                "mesh_to_mesh: hop budget below initial Segments Left — no route"
+                            );
+                            return None;
+                        }
+                    };
                     let routing_len = 8 + 16 * num_addrs;
-                    let outer_payload = routing_len + ipv6.len();
+                    let outer_payload = routing_len + inner.len();
                     let outer_payload_u16 = u16::try_from(outer_payload).ok()?;
                     let outer_hdr = 40 + routing_len;
                     let mut outer = vec![0u8; outer_hdr];
@@ -1699,8 +1753,6 @@ impl Gateway {
                         let start = 48 + i * 16;
                         outer[start..start + 16].copy_from_slice(addr);
                     }
-                    let mut inner = ipv6.to_vec();
-                    inner[7] = hl_after_fwd - num_addrs as u8;
                     let mut encapsulated = Vec::with_capacity(outer_hdr + inner.len());
                     encapsulated.extend_from_slice(&outer);
                     encapsulated.extend_from_slice(&inner);
@@ -1806,13 +1858,13 @@ mod tests {
         let sealing_seed = [0x32; 32];
         let mut store =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(store.compare_exchange(&context_id, None, state), Ok(true));
+        assert_eq!(store.compare_exchange_sender(&context_id, None, state), Ok(true));
         drop(store);
         let mut reopened =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(reopened.load(&context_id), Ok(Some(state)));
+        assert_eq!(reopened.load_sender(&context_id), Ok(Some(state)));
         assert_eq!(
-            reopened.compare_exchange(&context_id, None, state),
+            reopened.compare_exchange_sender(&context_id, None, state),
             Ok(false)
         );
         std::fs::remove_dir_all(path).unwrap();
@@ -1842,13 +1894,13 @@ mod tests {
         };
         let mut store =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(store.compare_exchange(&context_id, None, first), Ok(true));
+        assert_eq!(store.compare_exchange_sender(&context_id, None, first), Ok(true));
         let record_path = path
             .join("gcp-oscore-sender")
             .join(GatewayOscoreSenderStore::key(&context_id));
         let first_record = std::fs::read(&record_path).unwrap();
         assert_eq!(
-            store.compare_exchange(&context_id, Some(first), second),
+            store.compare_exchange_sender(&context_id, Some(first), second),
             Ok(true)
         );
         drop(store);
@@ -1858,7 +1910,7 @@ mod tests {
         let mut rolled_back =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
         assert_eq!(
-            rolled_back.load(&context_id),
+            rolled_back.load_sender(&context_id),
             Err(GatewayOscoreStoreError::Corrupt)
         );
 
@@ -1868,14 +1920,14 @@ mod tests {
         let mut tampered =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
         assert_eq!(
-            tampered.load(&context_id),
+            tampered.load_sender(&context_id),
             Err(GatewayOscoreStoreError::Corrupt)
         );
 
         std::fs::write(&record_path, &second_record).unwrap();
         let mut reopened =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(reopened.load(&context_id), Ok(Some(second)));
+        assert_eq!(reopened.load_sender(&context_id), Ok(Some(second)));
         drop(reopened);
         // The state record is authoritative and unforgeable, so a missing
         // floor heals forward on load instead of failing closed.
@@ -1887,7 +1939,7 @@ mod tests {
         .unwrap();
         let mut missing_floor =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(missing_floor.load(&context_id), Ok(Some(second)));
+        assert_eq!(missing_floor.load_sender(&context_id), Ok(Some(second)));
         std::fs::remove_dir_all(path).unwrap();
         std::fs::remove_dir_all(floor_path).unwrap();
     }
@@ -1930,10 +1982,10 @@ mod tests {
 
         let mut store =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(store.compare_exchange(&context_id, None, first), Ok(true));
+        assert_eq!(store.compare_exchange_sender(&context_id, None, first), Ok(true));
         let stale_record = std::fs::read(&record_path).unwrap();
         assert_eq!(
-            store.compare_exchange(&context_id, Some(first), second),
+            store.compare_exchange_sender(&context_id, Some(first), second),
             Ok(true)
         );
         let current_record = std::fs::read(&record_path).unwrap();
@@ -1943,7 +1995,7 @@ mod tests {
         std::fs::remove_file(&floor_record_path).unwrap();
         let mut reopened =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(reopened.load(&context_id), Ok(Some(second)));
+        assert_eq!(reopened.load_sender(&context_id), Ok(Some(second)));
         drop(reopened);
 
         // The healed floor is durably rewritten: restoring the older sealed
@@ -1952,7 +2004,7 @@ mod tests {
         let mut rolled_back =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
         assert_eq!(
-            rolled_back.load(&context_id),
+            rolled_back.load_sender(&context_id),
             Err(GatewayOscoreStoreError::Corrupt)
         );
         drop(rolled_back);
@@ -1961,15 +2013,15 @@ mod tests {
         // And the context can continue advancing from the healed state.
         let mut resumed =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(resumed.load(&context_id), Ok(Some(second)));
+        assert_eq!(resumed.load_sender(&context_id), Ok(Some(second)));
         assert_eq!(
-            resumed.compare_exchange(&context_id, Some(second), third),
+            resumed.compare_exchange_sender(&context_id, Some(second), third),
             Ok(true)
         );
         drop(resumed);
         let mut final_check =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(final_check.load(&context_id), Ok(Some(third)));
+        assert_eq!(final_check.load_sender(&context_id), Ok(Some(third)));
         drop(final_check);
 
         // A missing state record still fails closed: trust is never rebuilt
@@ -1978,7 +2030,7 @@ mod tests {
         let mut missing_state =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
         assert_eq!(
-            missing_state.load(&context_id),
+            missing_state.load_sender(&context_id),
             Err(GatewayOscoreStoreError::Corrupt)
         );
 
@@ -2402,6 +2454,52 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[tokio::test]
+    async fn encapsulation_rejects_inner_hop_limit_not_above_segments_left() {
+        let mut gw = test_gateway();
+        let relay_addr = [0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+        let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
+        let path = [relay_addr, node_addr];
+        gw.rpl_stack
+            .rpl_node_mut()
+            .router_mut()
+            .inject_route(node_addr, &path);
+
+        // Upstream-originated (src != root), so the encapsulation branch
+        // applies: HL 3 - 1 forward = 2 remaining, initial SL 1 < 2 would
+        // pass; HL 2 leaves 1, and SL 1 is not strictly less than 1.
+        let make_packet = |hop_limit: u8| -> Vec<u8> {
+            let mut packet = vec![0u8; 48];
+            packet[0] = 0x60;
+            packet[4..6].copy_from_slice(&8u16.to_be_bytes());
+            packet[6] = 17;
+            packet[7] = hop_limit;
+            packet[8..24]
+                .copy_from_slice(&[0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]);
+            packet[24..40].copy_from_slice(&node_addr);
+            UdpHeader::new(5683, 5683)
+                .write_packet_to(
+                    &Addr(packet[8..24].try_into().unwrap()),
+                    &Addr(node_addr),
+                    b"",
+                    &mut packet[40..],
+                )
+                .unwrap();
+            packet
+        };
+
+        // HL 2: after forwarding decrement 1 remains; SL 1 is not < 1.
+        let low = gw.mesh_to_mesh(&make_packet(2)).await;
+        assert!(
+            low.is_none(),
+            "route MUST NOT be emitted when SL >= remaining HL"
+        );
+
+        // HL 1: forwarding decrement alone underflows.
+        let zero = gw.mesh_to_mesh(&make_packet(1)).await;
+        assert!(zero.is_none());
+    }
+
     #[test]
     fn dao_route_makes_ygg_address_local() {
         let mut gw = test_gateway();
@@ -2666,6 +2764,55 @@ mod tests {
             staged_again,
             Some(node_addr),
             "node must remain registered and re-stageable after a transmit failure"
+        );
+    }
+}
+
+#[cfg(test)]
+mod inner_hl_tests {
+    use super::Gateway;
+
+    #[test]
+    fn forwarding_decrement_plus_segments_left() {
+        // Canonical case: hop 255 (RPL control / freshly admitted packet),
+        // two-address source route (SL 1) -> 255 - 1 - 1 = 253.
+        assert_eq!(
+            Gateway::inner_hop_limit_after_encapsulation(255, 1),
+            Some(253)
+        );
+        // Three-address route (SL 2).
+        assert_eq!(
+            Gateway::inner_hop_limit_after_encapsulation(255, 2),
+            Some(252)
+        );
+    }
+
+    #[test]
+    fn segments_left_must_be_strictly_below_remaining_hop_limit() {
+        // SL == remaining after the forwarding decrement is NOT allowed.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(3, 2), None);
+        // SL greater than remaining is likewise rejected.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(3, 3), None);
+    }
+
+    #[test]
+    fn exhausted_or_oversized_inputs_emit_no_route() {
+        // A forwarded packet arriving with hop limit 0 is dead.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(0, 0), None);
+        // Hop limit 1 leaves zero headroom after the forwarding decrement.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(1, 0), None);
+        // SL must fit a u8: a 256-address route cannot be represented.
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(255, 256), None);
+        assert_eq!(Gateway::inner_hop_limit_after_encapsulation(255, 254), None);
+    }
+
+    #[test]
+    fn direct_delivery_boundary_is_representable() {
+        // SL 0 (route.len() == 1 is handled without encapsulation, but the
+        // helper must still accept the degenerate SL 0 shape).
+        assert_eq!(
+            Gateway::inner_hop_limit_after_encapsulation(255, 0),
+            Some(254)
         );
     }
 }

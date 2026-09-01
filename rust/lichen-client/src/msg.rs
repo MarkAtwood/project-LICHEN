@@ -687,7 +687,7 @@ impl MessagesStore {
         ];
         let filtered_map: Vec<(Value, Value)> = map
             .into_iter()
-            .filter(|(k, _)| k.as_text().map_or(false, |key| ALLOWED_KEYS.contains(&key)))
+            .filter(|(k, _)| k.as_text().is_some_and(|key| ALLOWED_KEYS.contains(&key)))
             .collect();
         let stored = Value::Map(filtered_map);
         self.sent.insert(assigned_id, stored);

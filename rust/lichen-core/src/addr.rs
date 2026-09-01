@@ -73,12 +73,12 @@ impl NodeId {
 /// wire-compatible with upstream AddrForKey (which bit-packs the pubkey
 /// without hashing). See test/vectors/yggdrasil_address.json for divergence.
 ///
-/// Algorithm: SHA-512(pubkey)[0:8], then clear the U/L bit per RFC 4291 S2.5.1.
+/// Algorithm: `SHA-512(pubkey)[0:8]`, then clear the U/L bit per RFC 4291 S2.5.1.
 ///
 /// The full Yggdrasil address is:
-///   addr[0] = 0x02
-///   addr[1:8] = SHA-512(pubkey)[0:7]     (routing dispersion within 0200::/8)
-///   addr[8:16] = SHA-512(pubkey)[0:8]     (IID; U/L bit cleared)
+///   `addr[0] = 0x02`
+///   `addr[1:8] = SHA-512(pubkey)[0:7]`    (routing dispersion within 0200::/8)
+///   `addr[8:16] = SHA-512(pubkey)[0:8]`   (IID; U/L bit cleared)
 ///
 /// This is the single canonical implementation; all callers MUST use it
 /// to ensure cross-implementation consistency.

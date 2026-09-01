@@ -922,24 +922,36 @@ impl RootCandidate {
 
     /// Set RF metrics.
     ///
-    /// NaN values are replaced with worst-case defaults (-120.0 dBm RSSI,
-    /// -20.0 dB SNR) to maintain Eq reflexivity (NaN != NaN would break it).
+    /// Non-finite values (NaN and both infinities) are replaced with
+    /// worst-case defaults (-120.0 dBm RSSI, -20.0 dB SNR) to maintain Eq
+    /// reflexivity (NaN != NaN would break it) and to keep poisoned beacon
+    /// metrics (e.g. +inf from a malformed peer) from winning root
+    /// selection — mirrors the C tdma_root_select.c handling.
     pub fn with_rf_metrics(mut self, rssi_ema: f32, snr_ema: f32) -> Self {
-        // Sanitize NaN to default (worst) values to maintain Eq invariant
-        self.rssi_ema = if rssi_ema.is_nan() { -120.0 } else { rssi_ema };
-        self.snr_ema = if snr_ema.is_nan() { -20.0 } else { snr_ema };
+        // Sanitize non-finite to default (worst) values to maintain the Eq
+        // invariant and fail closed on poisoned metrics
+        self.rssi_ema = if rssi_ema.is_finite() {
+            rssi_ema
+        } else {
+            -120.0
+        };
+        self.snr_ema = if snr_ema.is_finite() { snr_ema } else { -20.0 };
         self
     }
 
     /// Set RSSI EMA.
     pub fn with_rssi_ema(mut self, rssi_ema: f32) -> Self {
-        self.rssi_ema = if rssi_ema.is_nan() { -120.0 } else { rssi_ema };
+        self.rssi_ema = if rssi_ema.is_finite() {
+            rssi_ema
+        } else {
+            -120.0
+        };
         self
     }
 
     /// Set SNR EMA.
     pub fn with_snr_ema(mut self, snr_ema: f32) -> Self {
-        self.snr_ema = if snr_ema.is_nan() { -20.0 } else { snr_ema };
+        self.snr_ema = if snr_ema.is_finite() { snr_ema } else { -20.0 };
         self
     }
 
@@ -2287,6 +2299,36 @@ mod tests {
         assert_eq!(nan_rssi, nan_rssi);
         assert_eq!(nan_snr, nan_snr);
         assert_eq!(both_nan, both_nan);
+
+        // ba39/96ce parity pin: non-finite INFINITIES are sanitized like
+        // NaN — +inf RSSI/SNR must not win root selection over finite
+        // candidates.
+        let inf_rssi = RootCandidate::new(eui64(1)).with_rf_metrics(f32::INFINITY, 10.0);
+        let inf_snr = RootCandidate::new(eui64(1)).with_rf_metrics(-80.0, f32::INFINITY);
+        let neg_inf =
+            RootCandidate::new(eui64(1)).with_rf_metrics(f32::NEG_INFINITY, f32::NEG_INFINITY);
+        assert_eq!(inf_rssi.rssi_ema, -120.0);
+        assert_eq!(inf_rssi.snr_ema, 10.0);
+        assert_eq!(inf_snr.rssi_ema, -80.0);
+        assert_eq!(inf_snr.snr_ema, -20.0);
+        assert_eq!(neg_inf.rssi_ema, -120.0);
+        assert_eq!(neg_inf.snr_ema, -20.0);
+        assert_eq!(neg_inf, neg_inf);
+
+        // Ordering pin: a sanitized-inf-poisoned candidate must lose to a
+        // finite candidate under identical preference/stratum.
+        let poisoned = RootCandidate::new(eui64(1))
+            .with_dodag_preference(128)
+            .with_stratum(1)
+            .with_rf_metrics(f32::INFINITY, f32::INFINITY);
+        let healthy = RootCandidate::new(eui64(2))
+            .with_dodag_preference(128)
+            .with_stratum(1)
+            .with_rf_metrics(-70.0, 15.0);
+        assert!(
+            poisoned > healthy,
+            "poisoned +inf metrics must not win root selection"
+        );
 
         // NaN metrics should sort as worst (default values)
         let good_rf = RootCandidate::new(eui64(2))

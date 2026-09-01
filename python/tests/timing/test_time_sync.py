@@ -797,6 +797,21 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status
         is ProvisionEpochStatus.PERSISTENCE_FAILED
     )
+    # Forward gate: post-poison, any install/clear must raise the poisoned
+    # verifier error (qzxv core property — the gate stays latched).
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.clear(admin, reason="post-poison probe")
+    # The tracker-consumed authority path (_with_floor_snapshot ->
+    # _floor_result_locked persistence_failed branch, provisioning.py:596-597)
+    # must report the same poisoned state, and the verifier must be cleared.
+    authority = EpochFloorAuthority(FLOOR, verifier=verifier)
+    assert (
+        authority.current().provision_status
+        is ProvisionEpochStatus.PERSISTENCE_FAILED
+    )
+    assert verifier.cleared
 
 
 @pytest.mark.asyncio
@@ -829,6 +844,12 @@ async def test_provision_clear_hook_rejects_scheduled_awaitable(kind: str) -> No
     # Poisoned fail-closed: the ambiguous write revokes all live authority.
     assert verifier.cleared
     assert not verifier.accepts(metadata)
+    # Forward gate (qzxv property): post-poison, install/clear must both
+    # raise the latched poisoned-verifier error.
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.clear(admin, reason="post-poison probe")
 
 
 def test_provision_concurrent_installs_cannot_regress_rollback_state() -> None:
@@ -1312,6 +1333,40 @@ async def test_dio_time_verifier_rejects_post_issuance_mutation(mutation: str) -
     assert not link.accepts_authenticated_dio(authenticated)
     with pytest.raises(ValueError, match="authenticated DIO"):
         verifier.verify(authenticated)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_monotonic_clock_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    """The MonotonicClock callback surface must reject a scheduled awaitable
+    (task/future/custom) fail-closed: cancelled/closed then TypeError, and a
+    re-registration with a synchronous callback still works (bead 29wj)."""
+    ran: list[int] = []
+    created: list[object] = []
+
+    def scheduled() -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    # Registration gate: an async callback is rejected outright.
+    async def async_clock() -> float:
+        return 1.0
+
+    with pytest.raises(TypeError, match="synchronous"):
+        MonotonicClock(async_clock)  # type: ignore[arg-type]
+
+    # Invocation gate: the returned awaitable is cancelled/closed then
+    # rejected; it must never run.
+    clock = MonotonicClock(scheduled)
+    with pytest.raises(TypeError, match="awaitable"):
+        _ = clock()
+    await asyncio.sleep(0)
+    _assert_terminated(kind, created[0], ran)
+
+    # A re-registration with a synchronous callback still works.
+    sync_clock = MonotonicClock(lambda: 5.0)
+    assert sync_clock() == 5.0
 
 
 def test_monotonic_clock_callback_and_domain_are_structurally_immutable() -> None:

@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from ipaddress import IPv6Address, IPv6Network
 from types import MappingProxyType
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from lichen import port_dispatch
 from lichen._sync_callbacks import reject_awaitable_result, require_sync_callable
@@ -41,6 +41,7 @@ from lichen.announce.scheduler import (
     AnnounceScheduler,
     SchedulerConfig,
 )
+from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.gradient import GRADIENT_TIMEOUT_MS, GradientTable
 from lichen.ipv6.addr import iid_to_eui64, make_link_local
@@ -360,6 +361,13 @@ class Node:
         )
         if self.config.rreq_jitter_min_ms > self.config.rreq_jitter_max_ms:
             raise ValueError("rreq_jitter_min_ms must not exceed rreq_jitter_max_ms")
+        if (
+            self.config.persist_path is not None
+            and self.persistence_revision_anchor is None
+        ):
+            raise ValueError(
+                "persistence_revision_anchor required when persist_path is set"
+            )
         # Create peer database with eviction checker bound to this node
         self._peer_db = PeerDatabase(
             initial_peers=self.peer_db if self.peer_db else None,
@@ -389,10 +397,9 @@ class Node:
         )
 
         if self.config.rpl_instance_id is not None:
-            assert self.config.rpl_dodag_id is not None
             self.dodag = DodagState(
                 rpl_instance_id=self.config.rpl_instance_id,
-                dodag_id=self.config.rpl_dodag_id,
+                dodag_id=cast("IPv6Address", self.config.rpl_dodag_id),
                 version=self.config.rpl_dodag_version,
                 node_address=yggdrasil_address(self.identity.pubkey),
             )
@@ -409,11 +416,10 @@ class Node:
         announce_reconciliation: set[bytes] = set()
         announce_committer: Callable[[bytes, bytes, int], None] | None = None
         if self.config.persist_path is not None:
-            assert self.persistence_revision_anchor is not None
             self._announce_persistence = AnnounceStatePersistence(
                 self.config.persist_path,
                 self.identity,
-                self.persistence_revision_anchor,
+                cast("PersistenceRevisionAnchor", self.persistence_revision_anchor),
                 allow_bootstrap=self.allow_persistence_bootstrap,
             )
             announce_seen = self._announce_persistence.floors
@@ -867,7 +873,33 @@ class Node:
             await self._process_announce(body, rx.sender, rx.rssi_dbm)
             return
 
-        is_fragment = bool(payload) and payload[0] in (0x78, 0x79)
+        if kind == L2PayloadKind.ROUTING or (
+            len(payload) > 0 and payload[0] == L2_DISPATCH_ROUTING
+        ):
+            # Node-level routing traffic that is not a well-formed ANNOUNCE
+            # (other routing subtypes, malformed or truncated routing frames)
+            # is consumed here: it never reaches the application callback.
+            logger.debug(
+                "dropping non-ANNOUNCE routing frame from %s",
+                rx.sender,
+            )
+            return
+
+        if not payload or (
+            len(payload) == 1 and payload[0] in (L2_DISPATCH_SCHC, L2_DISPATCH_ROUTING)
+        ):
+            # Frame-level spec rules (draft-lichen-link-01 section 3.1): link
+            # framing permits an empty PLD, and a defined dispatch value MUST
+            # be at least 2 bytes — a lone dispatch octet violates that MUST.
+            # Either way there is nothing for the application; undefined
+            # dispatch values remain an application extension point.
+            logger.debug(
+                "dropping empty or truncated dispatch frame from %s",
+                rx.sender,
+            )
+            return
+
+        is_fragment = bool(payload) and payload[0] in RULE_IDS
 
         # SCHC-compressed IPv6 data packet: decompress, route, relay or deliver.
         if kind != L2PayloadKind.SCHC and not is_fragment:

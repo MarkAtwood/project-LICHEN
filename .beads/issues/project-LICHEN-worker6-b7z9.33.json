@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.33",
+  "title": "C key rotation sequence is not persisted (spec 8.7.4: NV persistence, increment, fail-closed at UINT64_MAX)",
+  "description": "Requirement (spec/06-security.md:392-398): rotation_seq MUST be persisted to non-volatile storage; MUST increment on each rotation; first rotation MUST use rotation_seq \u003e 0; at UINT64_MAX rotation MUST fail closed (no wrap); if persistence unavailable, rotation MUST fail. Classification: implemented+tested (Python, Rust); not-implemented (C). Evidence: C gcp_trust_verify_key_rotation receives stored_sequence from caller with no persist site (lichen/subsys/lichen/gcp/gcp_trust.c:208-255); struct lichen_key_entry has no rotation field (lichen/subsys/lichen/coap/include/lichen/coap_keys.h:94-101); C enforces only seq \u003e stored (implicit \u003e0, no max check). Python: trust.py:572-586 crash-safe fail-closed gate + test_public_rotate_key_requires_durable_persistence. Rust: rotation_sequence persisted in sealed v2 store + trust_store_rotation_sequence_survives_restart_and_blocks_replay (rust/lichen-gateway/src/trust.rs:2127-2170). Suggested placement: C key-store settings backend (lichen/subsys/lichen/coap/coap_keys_settings.c two-slot authenticated NV) plus gcp_trust rotation verification.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:17:07.935109237Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:17:07.935109237Z",
+  "labels": [
+    "spec-gap",
+    "security",
+    "zephyr",
+    "c"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.33",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T10:17:08.06556764Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.1",
+  "title": "b7z9.37(a): Rust root-sig DIO option + receiver validation",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37 (spec/06-security.md:587-700). Add the COSE_Sign1 root-signature DIO option to rust/lichen-rpl/src/message.rs option table (lines 71-80 currently lack it) and wire receiver validation into the lichen-node DIO receive path using python/src/lichen/crypto/root_dio_signature.py verify_root_dio_signature:278-362 as the semantic oracle (kid, alg, signature, expiry, seq\u003ecached, DIO field cross-checks) against test/vectors/root_dio_signature.json. Nodes MUST NOT reject DIOs solely for missing validation capability (L679); root_seq MUST NOT wrap (L687). Depend on sibling cache child if the seq cache lands separately. Independently landable with vectors.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T17:32:16.590196103Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T17:32:16.590196103Z",
+  "labels": [
+    "decomposed",
+    "rust",
+    "rpl",
+    "python",
+    "security",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37",
+      "type": "parent-child",
+      "created_at": "2026-08-31T17:32:16.711447676Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

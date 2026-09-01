@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-kpv0.8",
+  "title": "kpv0(f): pytest-cov actually available in the locked dev environment",
+  "description": "Parent: project-LICHEN-kpv0. Survey 2026-08-31: pyproject.toml already declares pytest-cov\u003e=7,\u003c8 (dev extra) and uv.lock contains it, but the installed venv (lichen-venv) lacks it, and no --cov invocation was found in current .github/workflows or scripts (bead text may be stale there). Verify: uv sync --extra dev (or the documented env bootstrap) then python -m pytest --cov=lichen --co -q on a small suite runs. If only the host venv is stale, sync/fix env wiring and document the canonical command; if no CI gate uses --cov anymore, close with evidence (no code change needed) rather than adding a gate nobody runs.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:19:41.337081884Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T17:22:58.723472078Z",
+  "labels": [
+    "decomposed",
+    "python",
+    "coap",
+    "l2",
+    "rust",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.8",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:19:41.552887677Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

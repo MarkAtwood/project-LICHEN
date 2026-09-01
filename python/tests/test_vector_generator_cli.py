@@ -217,3 +217,40 @@ def test_dao_check_accepts_canonical_bytes_without_writing(
 
     assert dao_generator.main(["--check"]) == 0
     assert (destination.read_bytes(), destination.stat().st_mtime_ns) == before
+
+
+def test_hash32_check_is_byte_exact_and_read_only() -> None:
+    output = REPO_ROOT / "test" / "vectors" / "hash_32.json"
+    generator = REPO_ROOT / "test" / "vectors" / "generate_hash_32.py"
+    before = (output.read_bytes(), output.stat().st_mtime_ns)
+    environment = os.environ.copy()
+
+    result = subprocess.run(
+        [sys.executable, str(generator), "--check"],
+        cwd=REPO_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (output.read_bytes(), output.stat().st_mtime_ns) == before
+
+
+def test_hash32_check_rejects_drifted_output_without_writing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sys.path.insert(0, str(VECTORS_DIR))
+    import generate_hash_32 as hash32_generator
+
+    destination = tmp_path / "hash_32.json"
+    document = hash32_generator.document()
+    document["vectors"][0]["output"] = "0xdeadbeef"
+    destination.write_bytes(atomic_json.json_bytes(document))
+    monkeypatch.setattr(hash32_generator, "OUTPUT", destination)
+    before = (destination.read_bytes(), destination.stat().st_mtime_ns)
+
+    assert hash32_generator.main(["--check"]) == 1
+    assert (destination.read_bytes(), destination.stat().st_mtime_ns) == before

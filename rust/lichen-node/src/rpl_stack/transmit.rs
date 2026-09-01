@@ -19,6 +19,7 @@ use crate::stack::{Priority, TxError};
 use super::error::{DaoSendError, RplControlError};
 use super::util::{
     dao_ipv6_packet, ipv6_eui64, ipv6_l2_destination, link_local_from_iid, rpl_ipv6_packet,
+    RPL_ALL_NODES,
 };
 use super::{RplRole, RplStack};
 
@@ -54,7 +55,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             .map_err(RplControlError::Transmit)
     }
 
-    pub async fn send_dio(&mut self, destination: [u8; 16]) -> Result<(), TxError> {
+    pub async fn send_dio(&mut self, _destination: [u8; 16]) -> Result<(), TxError> {
         let mut body = [0u8; 160];
         let len = self
             .rpl
@@ -63,14 +64,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         if len == 0 {
             return Err(TxError::BufferTooSmall);
         }
-        // DIO is link-local control traffic. Callers may identify a neighbor by
-        // its primary native address, but the on-wire IPv6 destination remains
-        // that neighbor's canonical link-local address.
-        let control_destination = if destination[0] == 0xff {
-            destination
-        } else {
-            link_local_from_iid(destination[8..].try_into().expect("complete IPv6 IID"))
-        };
+        // Canonical multicast DIO delivery (spec 09 13.3 R-09-005): every
+        // DIO — solicited or trickle — targets ff02::1a with broadcast L2.
+        // Unicast-dst DIOs are inadmissible at wire_is_for_local (the
+        // profile's admission contract, Python authenticated_dio.py parity),
+        // so callers naming a neighbor are re-targeted to the all-RPL-nodes
+        // multicast group. RFC 6550 8.3's unicast-response SHOULD is
+        // superseded by this profile contract.
+        let control_destination = RPL_ALL_NODES;
         let packet = rpl_ipv6_packet(
             self.local_control_addr,
             control_destination,
@@ -79,12 +80,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         )
         .ok_or(TxError::BufferTooSmall)?;
         let l2_destination = ipv6_l2_destination(control_destination);
-        // RPL DIO is control traffic (P1)
+        // RPL DIO is control traffic (P1) and is carried uncompressed
+        // (Rule 255): the authenticated-DIO admission gate accepts only
+        // Rule 255 frames (spec 09 13.3 R-09-005).
         self.stack
-            .send_ipv6_to(
+            .send_ipv6_uncompressed_to(
                 &packet,
                 l2_destination.as_ref().map_or(&[], <[u8; 8]>::as_slice),
-                Priority::Routing,
             )
             .await
     }

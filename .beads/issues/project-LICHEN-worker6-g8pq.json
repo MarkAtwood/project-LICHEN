@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-g8pq",
+  "title": "Slot claims without a timestamp bypass the claim-horizon bound (policy decision needed)",
+  "description": "Edge finding (j6o2 round): the new EXPIRY_TOO_FAR horizon check (slot_claim.py verify_slot_claim) is skipped when claim.timestamp is None (to_cbor_map omits it) — a legitimately-signing gateway can escape the 5-superframe pre-booking bound by omitting the field. This is documented in-code but is a spec-level policy decision, not enforcement: either (a) require timestamp on slot claims (wire/validation change — from_cbor and GCP-6.2 docs), or (b) accept the gap and note that global/per-originator caps (worker-7's 07pj, pending sync) remain the real bound. Decide with Mark or at the spec level; do not silently close. Ref beads: j6o2, 70p7, 07pj.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:50:35.757981872Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-08-31T20:55:14.178038864Z",
+  "closed_at": "2026-08-31T20:55:14.178038611Z",
+  "labels": [
+    "python",
+    "gateway",
+    "codereview"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-g8pq",
+      "depends_on_id": "project-LICHEN-worker6-vq3a",
+      "type": "supersedes",
+      "created_at": "2026-08-31T20:55:14.172308176Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

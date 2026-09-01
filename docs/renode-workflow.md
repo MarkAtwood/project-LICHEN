@@ -50,14 +50,21 @@ sudo apt install renode
 git clone https://github.com/renode/renode.git
 cd renode
 ./build.sh
-# Binary at output/bin/Release/Renode.exe (mono) or renode (Linux)
+# Entry point: the repo-root ./renode wrapper (runs the built Renode.dll
+# via dotnet). Source builds do NOT install `renode` on PATH — invoke
+# ./renode from the clone root, or put a symlink to it on PATH yourself.
 ```
 
 ### Verify Installation
 
 ```bash
 renode --version
-# Expected: Renode, version X.X.X
+# Expected for the pinned CI install (1.16.1 portable tarball):
+#   Renode v1.16.1.<build>  —  e.g. Renode v1.16.1.16908, build d66b0c2a-202602160923
+# The <build> suffix varies per artifact; "v1.16.1." is the stable prefix.
+# 1.16.1 is what CI pins and the fleet AMI ships; nightly/brew are untested.
+# From-source builds report a similar versioned string — invoke ./renode
+# from your clone root (see From Source above).
 ```
 
 ## Running Single-Node Simulation
@@ -453,14 +460,15 @@ jobs:
 
       - name: Install Renode
         run: |
-          wget https://builds.renode.io/renode-latest.linux-portable.tar.gz
-          tar xf renode-latest.linux-portable.tar.gz
+          wget https://builds.renode.io/renode-1.16.1.linux-portable.tar.gz
+          echo "1a532d4b5b82de0dd154970c401e0c7b0e498d17304b2cecc007e306c8f9617c  renode-1.16.1.linux-portable.tar.gz" | sha256sum -c -
+          tar xf renode-1.16.1.linux-portable.tar.gz
           echo "$PWD/renode_*_portable" >> $GITHUB_PATH
 
       - name: Install Python deps
         run: |
-          pip install uv
-          cd python && uv sync --locked --dev
+          pip install "uv>=0.11,<0.12"
+          cd python && uv sync --locked --extra dev
 
       - name: Build firmware
         run: |

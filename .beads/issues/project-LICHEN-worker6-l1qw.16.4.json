@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.16.4",
+  "title": "l1qw.16.4: C gcp_trust slot-claim verify migrates from SLOT_CLAIM: prefix to COSE_Sign1 (three-way interop break)",
+  "description": "Discovered by worker-4 during l1qw.16.1 prep: the three slot-claim implementations sign incompatible transcript formats TODAY — Rust b'LICHEN-GCP-SLOT-CLAIM-v1'+iid+superframe+seq+slots (slot.rs:723), C b'SLOT_CLAIM:'+opaque message (gcp_trust.h:59, gcp_trust_verify_slot_claim gcp_trust.c:126), Python canonical-CBOR string-keyed map (slot_claim.py). No cross-pair verifies. Fix as part of the coordinated COSE_Sign1 migration (.16.1/.16.2): gcp_trust_verify_slot_claim decodes the COSE_Sign1 envelope (or the shared payload transcript per the .16.1 decision), drops the SLOT_CLAIM: prefix path; update gcp vectors accordingly. Also note the committed gcp_slot_claim.json slot_claim_basic vector's cbor_canonical_hex embeds an indefinite-map fragment (0xbf) that cbor2 cannot decode — regenerate the corpus when migrating (two-suite count contract: python test_vectors + rust consumers).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T20:53:27.51365851Z",
+  "created_by": "opencode-worker-4",
+  "updated_at": "2026-08-31T20:53:27.51365851Z",
+  "labels": [
+    "gcp",
+    "lci",
+    "spec",
+    "spec-gap",
+    "human-only"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.16.4",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.16",
+      "type": "parent-child",
+      "created_at": "2026-08-31T20:53:27.626634966Z",
+      "created_by": "opencode-worker-4",
+      "metadata": "{}"
+    }
+  ]
+}

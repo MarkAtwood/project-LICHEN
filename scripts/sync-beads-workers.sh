@@ -10,6 +10,11 @@
 
 set -e
 
+# This script's checkpoint and merge commits are the only legitimate writers
+# of .beads/ (the pre-commit hook blocks worker-side store staging, bead
+# biod); opt this process out of the hook.
+export BEADS_ALLOW_STORE_COMMIT=1
+
 REPO_ROOT=$(git rev-parse --show-toplevel)
 WORKTREE_BASE="/Volumes/Attic/Desktop/Projects/lichen-workers"
 
@@ -52,11 +57,59 @@ cd "$REPO_ROOT"
 echo ""
 echo "=== Merging worker branches to main ==="
 
+# LLM semantic merge (AgentSpawn-style, arXiv:2602.07072): reconcile both
+# sides of a conflicted merge with an LLM, verified by the touched tests.
+# Returns 0 only if every conflict is resolved AND the result compiles/tests.
+llm_semantic_merge() {
+    local branch="$1"
+    local model="openrouter/moonshotai/kimi-k3"
+    local files
+    files=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
+    if [ -z "$files" ]; then
+        return 1
+    fi
+
+    echo "  LLM merge session ($model) on: $files"
+    # 15-minute cap so a hung session cannot wedge the sync loop.
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >/dev/null 2>&1 || return 1
+
+    # stage whatever the LLM resolved; fail if anything is still conflicted
+    git add -- $files
+    if git diff --name-only --diff-filter=U | grep -q .; then
+        return 1
+    fi
+    return 0
+}
+
 conflicted=()
+
+# Checkpoint pending bd writes (closes, comments, new beads) BEFORE any
+# merge: the merge normalization below runs `git checkout HEAD -- .beads`,
+# which would silently discard store writes still uncommitted in this
+# working tree (beads-worker-4 lost whole batches of verified closes this
+# way, bead project-LICHEN-worker6-bd8h). Committing first makes them
+# durable; the merge's .beads normalization then keeps main's committed
+# state, which now includes those closes.
+if [ -n "$(git status --porcelain .beads/)" ]; then
+    git add .beads/
+    git commit -m "chore(beads): checkpoint store writes before merge" --quiet &&
+        echo "checkpointed pending bd writes before merge"
+fi
+
 for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-worker-*'); do
     ahead=$(git rev-list main.."$branch" --count 2>/dev/null || echo 0)
     if [ "$ahead" -eq 0 ]; then
         continue
+    fi
+
+    # Per-branch checkpoint: closes written after the pre-loop checkpoint
+    # (e.g. during the previous branch's kimi session) must be committed
+    # BEFORE this branch's normalization rewinds .beads to HEAD, or they
+    # are destroyed (bead biod — the measured loss mechanism).
+    if [ -n "$(git status --porcelain .beads/)" ]; then
+        git add .beads/
+        git commit -m "chore(beads): per-branch store checkpoint" --quiet ||
+            true
     fi
 
     echo "Merging $branch ($ahead commits ahead)..."
@@ -76,13 +129,24 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
             git merge --abort 2>/dev/null || true
         fi
     else
-        # Retry surgically: apply everything except .beads as a plain commit
-        if git diff --name-only main..."$branch" -- ':!.beads' ':!.beads/**' | grep -q . \
-           && git diff main..."$branch" -- ':!.beads' ':!.beads/**' | git apply --index 2>/dev/null; then
-            git commit --no-edit -q -m "chore: merge $branch (code only, .beads excluded)"
-            echo "  merged surgically (conflicts were .beads-only or patch-applied)"
+        # Semantic merge (AgentSpawn-style, arXiv:2602.07072): LLM reconciles
+        # both diffs with intent; tests verify; escalate only on failure.
+        echo "  conflict — attempting LLM semantic merge..."
+        if llm_semantic_merge "$branch"; then
+            if git diff --name-only --diff-filter=U | grep -q .; then
+                echo "  semantic merge left unresolved files — aborting"
+                git merge --abort 2>/dev/null || true
+                git checkout -- .beads 2>/dev/null || true
+                conflicted+=("$branch")
+            elif git commit --no-edit --quiet; then
+                echo "  merged via LLM semantic reconciliation"
+            else
+                echo "  semantic merge produced no commit — aborting"
+                git merge --abort 2>/dev/null || true
+                conflicted+=("$branch")
+            fi
         else
-            echo "  CONFLICT — merge aborted, branch kept for manual resolution"
+            echo "  CONFLICT — LLM merge failed, branch kept for manual resolution"
             git merge --abort 2>/dev/null || true
             git checkout -- .beads 2>/dev/null || true
             conflicted+=("$branch")
@@ -90,11 +154,27 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
     fi
 done
 
-# Commit beads flat-file updates in main (workers wrote them via symlink)
+# Commit beads flat-file updates in main (workers wrote them via symlink).
+# This checkpoint is REQUIRED even though one ran before the merge loop:
+# workers (and this script's own merge handling) write to the store working
+# tree continuously; any close written after the pre-loop checkpoint would
+# otherwise be discarded by the LAST merge's normalization if the final
+# commit here did not exist. Commit immediately after the loop, and again
+# right before exit, so the window for losing a write is one script step.
 if [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
     git commit -m "chore(beads): sync from workers"
     echo "Main: committed beads sync"
+fi
+
+# Final checkpoint: capture anything written during merge handling above
+# (conflict-path checkouts, worker writes racing the loop) so the next run's
+# normalization cannot rewind a close that has already been reported to a
+# worker (bead project-LICHEN-worker6-bd8h, recurring revert pattern).
+if [ -n "$(git status --porcelain .beads/)" ]; then
+    git add .beads/
+    git commit -m "chore(beads): checkpoint store writes after merge loop" --quiet &&
+        echo "checkpointed post-merge store writes"
 fi
 
 if [ ${#conflicted[@]} -gt 0 ]; then

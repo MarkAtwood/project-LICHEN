@@ -19,7 +19,6 @@
 
 use crate::context::RuleVersionFailureTracker;
 use crate::rules::{versions_compatible, RULE_SET_VERSION};
-use core::sync::atomic::{AtomicU32, Ordering};
 use lichen_core::constants::{
     PORT_MQTT_SN, RULE_GLOBAL_COAP, RULE_GLOBAL_OSCORE, RULE_ICMPV6_ECHO, RULE_LINK_LOCAL_COAP,
     RULE_LINK_LOCAL_OSCORE, RULE_MQTT_SN, RULE_RPL_DAO, RULE_RPL_DIO, RULE_UNCOMPRESSED,
@@ -27,6 +26,7 @@ use lichen_core::constants::{
 };
 use lichen_core::error::{BufferTooSmall, TooShort};
 use lichen_core::ipv6::IPV6_HEADER_LEN;
+use portable_atomic::{AtomicU32 as PaAtomicU32, Ordering as PaOrdering};
 
 /// IPv6 link-local prefix (fe80::/64) as a u128 with the prefix in the high 64 bits.
 /// To reconstruct a full link-local address, OR this with a 64-bit Interface Identifier (IID).
@@ -279,9 +279,19 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
     if packet.len() != 40usize.saturating_add(payload_len) {
         return Err(SchcError::InvalidPacket("IPv6 payload length mismatch"));
     }
+    // Byte-preserving RX (decision rule255-rx-decode, 2026-08-31, FINAL):
+    // endpoint address policy is TX-only (validate_full_ipv6 ->
+    // validate_address_policy). Decode accepts any well-framed packet with
+    // valid checksums regardless of source/destination addresses. The
+    // address bytes are still read for the UDP checksum computation.
     let src = &packet[8..24];
     let dst = &packet[24..40];
 
+    // RX-side conflict resolved to byte-preserving decode: merge chose the
+    // beads-worker-7 side (decision rule255-rx-decode, spec/03-adaptation.md
+    // s6). HEAD's RX structural address checks (unspecified/multicast
+    // source, unspecified destination) were dropped; endpoint policy remains
+    // TX-only through validate_full_ipv6 -> validate_address_policy.
     let mut next_header = packet[6];
     let mut offset = 40usize;
     let mut upper_layer_destination = dst;
@@ -303,6 +313,8 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
                         || packet[offset + 2] != 3
                         || packet[offset + 4] != 0
                         || packet[offset + 5] != 0
+                        || packet[offset + 6] != 0
+                        || packet[offset + 7] != 0
                     {
                         return Err(SchcError::InvalidPacket(
                             "unsupported RPL source-routing header",
@@ -313,6 +325,15 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
                     if segments_left > address_count {
                         return Err(SchcError::InvalidPacket(
                             "invalid RPL source-routing segments-left",
+                        ));
+                    }
+                    if !(ext_len - 8).is_multiple_of(16) {
+                        // RFC 6554 s3: with CmprI=CmprE=Pad=0 the Hdr Ext Len
+                        // must equal 2n (ext_len = 8 + 16n addresses); a
+                        // non-canonical length is not expressible and would
+                        // shift the last-address window onto trailing bytes.
+                        return Err(SchcError::InvalidPacket(
+                            "invalid RPL source-routing header length",
                         ));
                     }
                     if segments_left != 0 {
@@ -792,6 +813,11 @@ fn compress_coap(packet: &[u8], out: &mut [u8], rule_id: u8) -> Result<usize, Sc
     if needed > out.len() {
         return Err(BufferTooSmall::new(needed, out.len()).into());
     }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
     out[0] = rule_id;
 
     let mut w = BitWriter::new(&mut out[1..]);
@@ -843,9 +869,26 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     let icmp_seq = u16::from_be_bytes([icmp[6], icmp[7]]);
     let tail = &icmp[8..];
 
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + icmp_type(8)
+    // + id(16) + seq(16) = 176.
+    const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 16 + 16;
+    let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_ICMPV6_ECHO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -857,12 +900,8 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     w.write(icmp_id as u128, 16)?;
     w.write(icmp_seq as u128, 16)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), RESIDUE_BITS.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -892,9 +931,26 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let dodagid = u128::from_be_bytes(rpl[8..24].try_into().expect("DODAGID is 16 bytes"));
     let tail = &rpl[24..];
 
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + instance(8)
+    // + version(8) + rank(16) + gmop(8) + dtsn(8) + dodagid(128) = 312.
+    const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 8 + 16 + 8 + 8 + 128;
+    let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_RPL_DIO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -909,12 +965,8 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(dtsn as u128, 8)?;
     w.write(dodagid, 128)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), RESIDUE_BITS.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -942,9 +994,26 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let dodagid = u128::from_be_bytes(rpl[4..20].try_into().expect("DODAGID is 16 bytes"));
     let tail = &rpl[20..];
 
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + instance(8)
+    // + kd_flags(8) + seq(8) + dodagid(128) = 288.
+    const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 8 + 8 + 128;
+    let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_RPL_DAO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -957,12 +1026,8 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(seq as u128, 8)?;
     w.write(dodagid, 128)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), RESIDUE_BITS.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -1031,13 +1096,41 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+
+    // Error returns must leave `out` untouched (decompress is atomic on
+    // error), so the total encoded size is computed before the first write:
+    // BitWriter::new zero-fills the residue region, and out[0] carries the
+    // rule byte — both are mutations that a late size check cannot undo.
+    // Residue bits: hop_limit(8) + addr_mode(1) + addresses + direction(1)
+    // + other_port(16); link-local writes two 64-bit IIDs, full writes two
+    // 128-bit addresses.
+    let link_local = is_link_local_64(src) && is_link_local_64(dst);
+    let residue_bits: usize = if link_local {
+        8 + 1 + 64 + 64 + 1 + 16
+    } else {
+        8 + 1 + 128 + 128 + 1 + 16
+    };
+    let needed = 1 + residue_bits.div_ceil(8) + tail.len();
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    // Profile ceiling: encoded Rule 7 (MQTT-SN) output may not exceed the
+    // fragmenter reassembly bound. Checked pre-write so this error is
+    // buffer-atomic too (the dispatcher's post-write
+    // enforce_encoded_profile_limit never fires for this rule).
+    if needed > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
+
     out[0] = RULE_MQTT_SN;
 
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
 
     // Address compression: same logic as CoAP rules
-    if is_link_local_64(src) && is_link_local_64(dst) {
+    if link_local {
         let src_iid = u64::from_be_bytes(src[8..16].try_into().expect("IID is 8 bytes"));
         let dst_iid = u64::from_be_bytes(dst[8..16].try_into().expect("IID is 8 bytes"));
         w.write(0, 1)?; // Address mode: 0 = link-local
@@ -1055,12 +1148,8 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(direction as u128, 1)?;
     w.write(other_port as u128, 16)?;
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), residue_bits.div_ceil(8));
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -1428,6 +1517,11 @@ pub fn encode_rule255(
     out: &mut [u8],
     single_frame_limit: usize,
 ) -> Result<usize, SchcError> {
+    // Raw-packet profile bound (see compress); independent of the encoded
+    // single_frame_limit check below.
+    if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
+        return Err(BufferTooSmall::new(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE).into());
+    }
     validate_full_ipv6(packet)?;
     let needed = packet.len().saturating_add(1);
     let profile_limit = single_frame_limit.min(SCHC_FRAG_MAX_PACKET_SIZE);
@@ -1532,7 +1626,7 @@ struct PeerAuthorityEntry {
     receipt_ticks: u64,
 }
 
-static NEXT_PEER_AUTHORITY_OWNER: AtomicU32 = AtomicU32::new(1);
+static NEXT_PEER_AUTHORITY_OWNER: PaAtomicU32 = PaAtomicU32::new(1);
 
 /// Bounded no-std owner of link-verified peer capabilities.
 ///
@@ -1553,7 +1647,7 @@ impl<const MAX_PEERS: usize> PeerContextAuthority<MAX_PEERS> {
             return Err(SchcError::PeerAuthorityFull);
         }
         let owner = NEXT_PEER_AUTHORITY_OWNER
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .fetch_update(PaOrdering::Relaxed, PaOrdering::Relaxed, |current| {
                 current.checked_add(1).filter(|next| *next != 0)
             })
             .map_err(|_| SchcError::PeerAuthorityFull)?;
@@ -1578,7 +1672,7 @@ impl<const MAX_PEERS: usize> PeerContextAuthority<MAX_PEERS> {
     ) -> Result<AuthenticatedPeerSchcContext, SchcError> {
         if !evidence.is_current()
             || evidence.receipt().monotonic_millis().is_none()
-            || !authenticated_dio_destination_is_local(evidence, &self.local_eui64)
+            || !authenticated_dio_destination_is_canonical_multicast(evidence, &self.local_eui64)
         {
             return Err(SchcError::InvalidPeerEvidence);
         }
@@ -1778,6 +1872,16 @@ impl AuthenticatedPeerSchcContext {
                 "authenticated SCHC payload is not a valid RPL DIO",
             ));
         }
+        // Spec 09 13.3 (R-09-005): canonical multicast DIO admission requires
+        // hop-limit == 255 (link-local single hop), enforced by the check
+        // below in parse; destination == ff02::1a is enforced by the
+        // destination gate that ran before this. The gate's checks (dst +
+        // Rule 255) exactly match the Python reference admission path.
+        if ipv6[7] != 255 {
+            return Err(SchcError::InvalidPacket(
+                "authenticated DIO Hop Limit must be 255",
+            ));
+        }
         let src: &[u8; 16] = ipv6[8..24]
             .try_into()
             .map_err(|_| SchcError::InvalidPacket("invalid DIO IPv6 source"))?;
@@ -1896,8 +2000,10 @@ impl AuthenticatedPeerSchcContext {
         expected_mop: u8,
         expected_role: ExpectedDioRole,
     ) -> Result<Self, SchcError> {
-        if !authenticated_dio_destination_is_local(frame.link_evidence(), &frame.receiving_eui64())
-        {
+        if !authenticated_dio_destination_is_canonical_multicast(
+            frame.link_evidence(),
+            &frame.receiving_eui64(),
+        ) {
             return Err(SchcError::InvalidPeerEvidence);
         }
         let mut context = Self::parse_authenticated_dio_evidence(
@@ -2105,10 +2211,20 @@ impl AuthenticatedPeerSchcContext {
     }
 }
 
-fn authenticated_dio_destination_is_local(
+fn authenticated_dio_destination_is_canonical_multicast(
     frame: lichen_link::AuthenticatedLinkFrame<'_>,
-    local_eui64: &[u8; 8],
+    _local_eui64: &[u8; 8],
 ) -> bool {
+    // Spec 09 13.3 (R-09-005): authenticated admission applies to the
+    // canonical multicast DIO only — destination exactly ff02::1a (all-RPL-
+    // nodes), carried uncompressed (Rule 255). Gate-level parity with the
+    // Python reference admission path (authenticated_dio.py:312-316,357-363),
+    // which also never inspects the link frame's address mode. Unicast-
+    // destination DIOs are rejected by the dst check (see worker6-dqeg).
+    // Residual end-to-end divergence: Python's link receive drops
+    // not-addressed-to-me frames (NOT_FOR_US) before admission, while Rust's
+    // receive_frame has no destination filter, so Rust admits a superset
+    // (Extended-to-anyone / Short frames) — see worker6-cpbe.
     const ALL_RPL_NODES: [u8; 16] = [0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1a];
 
     let mut ipv6 = [0u8; SCHC_MAX_DECOMPRESSED];
@@ -2118,38 +2234,7 @@ fn authenticated_dio_destination_is_local(
     if length < IPV6_HEADER_LEN {
         return false;
     }
-    let destination = &ipv6[24..40];
-    let mut local_iid = *local_eui64;
-    local_iid[0] ^= 0x02;
-    let local_link = [
-        0xfe,
-        0x80,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        local_iid[0],
-        local_iid[1],
-        local_iid[2],
-        local_iid[3],
-        local_iid[4],
-        local_iid[5],
-        local_iid[6],
-        local_iid[7],
-    ];
-
-    if destination == ALL_RPL_NODES {
-        return frame.payload().get(1).copied() == Some(RULE_UNCOMPRESSED)
-            && matches!(
-                frame.destination_mode(),
-                lichen_link::frame::AddrMode::None | lichen_link::frame::AddrMode::Elided
-            );
-    }
-    destination == local_link
-        && frame.destination_mode() == lichen_link::frame::AddrMode::Extended
-        && frame.destination() == local_eui64
+    ipv6[24..40] == ALL_RPL_NODES && frame.payload().get(1).copied() == Some(RULE_UNCOMPRESSED)
 }
 
 /// Compress a full IPv6 `packet` into `out` using the best matching SCHC rule.
@@ -2157,6 +2242,18 @@ fn authenticated_dio_destination_is_local(
 /// Falls back to rule 255 (uncompressed: rule byte + raw packet) if no rule
 /// matches. Returns the number of bytes written to `out`.
 pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
+    // The profile ceiling bounds the RAW packet (the fragmenter's reassembly
+    // buffer) on both directions: a datagram larger than the receiver can
+    // reassemble is undeliverable regardless of how well it compresses.
+    // Mirrors the C lichen_schc_compress raw-packet guard.
+    if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
+        // Profile-limit error (matching the Python compress_packet reference
+        // and the encoded-size guards below): the raw datagram can never be
+        // delivered, regardless of output-buffer capacity.
+        return Err(SchcError::InvalidPacket(
+            "SCHC packet exceeds profile limit",
+        ));
+    }
     validate_full_ipv6(packet)?;
 
     // Every v3 compressed rule elides Traffic Class and Flow Label as zero.
@@ -2194,8 +2291,10 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
             } else {
                 RULE_LINK_LOCAL_COAP
             };
-            if let Ok(n) = compress_coap(packet, out, rule) {
-                return enforce_encoded_profile_limit(n);
+            match compress_coap(packet, out, rule) {
+                Ok(n) => return enforce_encoded_profile_limit(n),
+                Err(SchcError::NoMatchingRule) => {}
+                Err(error) => return Err(error),
             }
         }
         // Yggdrasil (02xx::/8) addresses use rules 1/6 (120-bit compression)
@@ -2206,8 +2305,10 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
         } else {
             RULE_GLOBAL_COAP
         };
-        if let Ok(n) = compress_coap(packet, out, rule) {
-            return enforce_encoded_profile_limit(n);
+        match compress_coap(packet, out, rule) {
+            Ok(n) => return enforce_encoded_profile_limit(n),
+            Err(SchcError::NoMatchingRule) => {}
+            Err(error) => return Err(error),
         }
     } else if nh == 58 && packet.len() >= 40 + 4 {
         // ICMPv6 — verify checksum before selecting rules 2/3/4.
@@ -2226,22 +2327,28 @@ pub fn compress(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
             && is_link_local_64(dst)
             && packet.len() >= 40 + 8
         {
-            if let Ok(n) = compress_icmpv6_echo(packet, out) {
-                return enforce_encoded_profile_limit(n);
+            match compress_icmpv6_echo(packet, out) {
+                Ok(n) => return enforce_encoded_profile_limit(n),
+                Err(SchcError::NoMatchingRule) => {}
+                Err(error) => return Err(error),
             }
         } else if icmp_type == 155 && is_link_local_64(src) && is_link_local_64(dst) {
             if icmp_code == 1 && packet.len() >= 40 + 4 + 24 {
                 // DIO
-                if let Ok(n) = compress_rpl_dio(packet, out) {
-                    return enforce_encoded_profile_limit(n);
+                match compress_rpl_dio(packet, out) {
+                    Ok(n) => return enforce_encoded_profile_limit(n),
+                    Err(SchcError::NoMatchingRule) => {}
+                    Err(error) => return Err(error),
                 }
             } else if icmp_code == 2 && packet.len() >= 40 + 4 + 20 {
                 // DAO — only rule 4 if D flag set
                 // packet[45] = offset 40 (IPv6) + 4 (ICMPv6 header) + 1 (instance) = K/D/flags byte
                 let kd_flags = packet[45];
                 if kd_flags & 0x40 != 0 {
-                    if let Ok(n) = compress_rpl_dao(packet, out) {
-                        return enforce_encoded_profile_limit(n);
+                    match compress_rpl_dao(packet, out) {
+                        Ok(n) => return enforce_encoded_profile_limit(n),
+                        Err(SchcError::NoMatchingRule) => {}
+                        Err(error) => return Err(error),
                     }
                 }
             }
@@ -2590,24 +2697,31 @@ mod tests {
     fn mqtt_sn_profile_size_boundary() {
         let src = hex("fe800000000000000000000000000001");
         let dst = hex("fe800000000000000000000000000002");
-        // Link-local Rule 7 has a canonical 21-byte encoded prefix, so the
-        // largest SCHC packet carries 22,533 payload bytes and reconstructs a
-        // 22,581-byte IPv6 packet.
-        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        // The profile ceiling bounds the RAW packet (the fragmenter's
+        // reassembly buffer) on both directions: raw == MAX compresses
+        // (encoded = raw - 27); raw == MAX + 1 is rejected before rule
+        // dispatch.
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 48];
         let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
-        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 27);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 27);
         compressed.truncate(compressed_len);
         let mut restored = vec![0u8; packet.len()];
         let restored_len = decompress(&compressed, &mut restored).unwrap();
         assert_eq!(&restored[..restored_len], packet.as_slice());
 
-        compressed.push(0);
+        let one_over = mqtt_packet(
+            &src,
+            &dst,
+            PORT_MQTT_SN,
+            5000,
+            &[0u8; SCHC_FRAG_MAX_PACKET_SIZE - 47],
+        );
         assert!(matches!(
-            decompress(&compressed, &mut restored),
+            compress(&one_over, &mut compressed),
             Err(SchcError::InvalidPacket(
                 "SCHC packet exceeds profile limit"
             ))
@@ -2618,12 +2732,13 @@ mod tests {
     fn mqtt_sn_reconstruction_bound_is_caller_buffer() {
         let src = hex("fe800000000000000000000000000001");
         let dst = hex("fe800000000000000000000000000002");
-        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 48];
         let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 27);
         compressed.truncate(compressed_len);
 
         // The exactly maximal encoded packet reconstructs to 22,581 bytes; a
@@ -2636,6 +2751,79 @@ mod tests {
         ));
         let mut exact = vec![0u8; packet.len()];
         assert_eq!(decompress(&compressed, &mut exact).unwrap(), packet.len());
+    }
+
+    #[test]
+    fn mqtt_sn_compress_error_leaves_buffer_untouched() {
+        // Compress must be atomic on error, matching decompress: an
+        // Err(BufferTooSmall) may not modify any byte of the output buffer,
+        // not even the rule byte or the BitWriter zero-fill.
+        let link_local_src = hex("fe800000000000000000000000000001");
+        let link_local_dst = hex("fe800000000000000000000000000002");
+        // needed = 1 (rule) + 20 (residue) + 4 (tail) = 25
+        let packet = mqtt_packet(
+            &link_local_src,
+            &link_local_dst,
+            PORT_MQTT_SN,
+            5000,
+            b"ping",
+        );
+        let mut out = vec![0xAAu8; 24];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        let mut exact = vec![0xAAu8; 25];
+        assert_eq!(compress(&packet, &mut exact).unwrap(), 25);
+
+        // Full-address branch: needed = 1 + 36 (residue) + 1 (tail) = 38
+        let global_src = hex("20010000000000000000000000000001");
+        let global_dst = hex("20010000000000000000000000000002");
+        let packet = mqtt_packet(&global_src, &global_dst, PORT_MQTT_SN, 5000, b"x");
+        let mut out = vec![0xAAu8; 37];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        let mut exact = vec![0xAAu8; 38];
+        assert_eq!(compress(&packet, &mut exact).unwrap(), 38);
+    }
+
+    #[test]
+    fn mqtt_sn_compress_over_profile_leaves_buffer_untouched() {
+        // needed = 1 (rule) + 20 (residue) + 22,534 (tail) = 22,555, one byte
+        // over the 22,554-byte profile ceiling. The pre-write profile precheck
+        // rejects before any byte is written, so the sentinel buffer survives.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21 + 1];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        let needed = 1 + 20 + payload.len();
+        assert_eq!(needed, SCHC_FRAG_MAX_PACKET_SIZE + 1);
+        let mut out = vec![0xAAu8; needed];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
+        // Boundary: the RAW-packet bound applies even when the encoded form
+        // would still fit the ceiling (spec 03: implementations MUST NOT
+        // substitute the encoded size for the raw size). raw = 22,581 >
+        // 22,554 is rejected before rule dispatch, sentinel buffer intact.
+        let payload = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE - 21];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        let mut out = vec![0xAAu8; needed - 1];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA), "buffer modified on error");
     }
 
     fn coap_rule0_packet(payload_len: usize) -> Vec<u8> {
@@ -2668,14 +2856,19 @@ mod tests {
     fn coap_rule0_profile_size_boundary() {
         // Rules 0/5 carry a fixed 22-byte residue, so the exact 22,554-byte
         // encoded maximum is 1 (rule ID) + 22 (residue) + 22,531 (tail) and
-        // reconstructs to 22,583 raw IPv6 bytes (40 + 8 + 4 + tail).
-        let payload_len = SCHC_FRAG_MAX_PACKET_SIZE - 24;
+        // The profile ceiling bounds the RAW packet (the fragmenter's
+        // reassembly buffer): raw == MAX compresses via rule 0 (encoded =
+        // raw - 29); raw above it is rejected before rule dispatch.
+        // coap_len includes the payload marker byte: compress_coap's tail
+        // is the 0xFF marker plus the payload, so the marker is carried in
+        // the residue, not dropped.
+        let payload_len = SCHC_FRAG_MAX_PACKET_SIZE - 53;
         let packet = coap_rule0_packet(payload_len);
-        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 29);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 29);
         assert_eq!(compressed[0], RULE_LINK_LOCAL_COAP);
         compressed.truncate(compressed_len);
 
@@ -2692,8 +2885,8 @@ mod tests {
             Err(SchcError::BufferTooSmall(_))
         ));
 
-        // One encoded byte over the ceiling is rejected at ingress.
-        compressed.push(0);
+        // An encoded packet over the ceiling is rejected at ingress.
+        compressed.resize(SCHC_FRAG_MAX_PACKET_SIZE + 1, 0);
         assert!(matches!(
             decompress(&compressed, &mut restored),
             Err(SchcError::InvalidPacket(
@@ -2701,8 +2894,10 @@ mod tests {
             ))
         ));
 
-        // Compressor-side: one raw byte more encodes to 22,555 bytes and is
-        // rejected by the encoded profile ceiling.
+        // Compressor-side: one raw byte more exceeds the raw-packet
+        // reassembly bound and is rejected before rule dispatch with the
+        // profile-limit error (matching the Python compress_packet
+        // reference and the encoded-size guards in this file).
         let over = coap_rule0_packet(payload_len + 1);
         let mut bigger = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE + 1];
         assert!(matches!(
@@ -2738,15 +2933,16 @@ mod tests {
 
     #[test]
     fn icmpv6_rule2_profile_size_boundary() {
-        // Rule 2 carries a fixed 22-byte residue: 1 + 22 + 22,531 tail is the
-        // exact 22,554-byte encoded maximum and reconstructs to 22,579 bytes.
-        let tail_len = SCHC_FRAG_MAX_PACKET_SIZE - 23;
+        // The profile ceiling bounds the RAW packet (the fragmenter's
+        // reassembly buffer): raw == MAX compresses via rule 2 (encoded =
+        // raw - 25); raw above it is rejected before rule dispatch.
+        let tail_len = SCHC_FRAG_MAX_PACKET_SIZE - 48;
         let packet = icmpv6_echo_packet(tail_len);
-        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE + 25);
+        assert_eq!(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE);
 
         let mut compressed = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
         let compressed_len = compress(&packet, &mut compressed).unwrap();
-        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE);
+        assert_eq!(compressed_len, SCHC_FRAG_MAX_PACKET_SIZE - 25);
         assert_eq!(compressed[0], RULE_ICMPV6_ECHO);
         compressed.truncate(compressed_len);
 
@@ -2761,13 +2957,100 @@ mod tests {
             Err(SchcError::BufferTooSmall(_))
         ));
 
-        compressed.push(0);
+        compressed.resize(SCHC_FRAG_MAX_PACKET_SIZE + 1, 0);
         assert!(matches!(
             decompress(&compressed, &mut restored),
             Err(SchcError::InvalidPacket(
                 "SCHC packet exceeds profile limit"
             ))
         ));
+    }
+
+    #[test]
+    fn coap_compress_error_leaves_buffer_untouched() {
+        // Rule 0 residue is a fixed 22 bytes; tail is the 0xFF marker plus
+        // payload. One output byte short must fail without mutating the
+        // caller buffer, not even the rule byte or BitWriter zero-fill.
+        let packet = coap_rule0_packet(64);
+        let mut out = vec![0xAAu8; 1 + 22 + 64];
+        assert!(matches!(
+            compress_coap(&packet, &mut out, RULE_LINK_LOCAL_COAP),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn coap_compress_over_profile_leaves_buffer_untouched() {
+        // One encoded byte over the 22,554-byte ceiling must fail before any
+        // write: the dispatcher's profile error is pre-write atomic.
+        let packet = coap_rule0_packet(SCHC_FRAG_MAX_PACKET_SIZE - 23);
+        let mut out = vec![0xAAu8; SCHC_FRAG_MAX_PACKET_SIZE + 100];
+        assert!(matches!(
+            compress(&packet, &mut out),
+            Err(SchcError::InvalidPacket(
+                "SCHC packet exceeds profile limit"
+            ))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn icmpv6_echo_compress_error_leaves_buffer_untouched() {
+        let packet = icmpv6_echo_packet(8);
+        let mut out = vec![0xAAu8; 1 + 22 + 7]; // residue is 22 bytes; one short
+        assert!(matches!(
+            compress_icmpv6_echo(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn rpl_dio_compress_error_leaves_buffer_untouched() {
+        let packet = rpl_dio_packet(28 + 4); // 4-byte tail
+        let mut out = vec![0xAAu8; 1 + 39 + 3]; // residue is 39 bytes; one short
+        assert!(matches!(
+            compress_rpl_dio(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
+    }
+
+    #[test]
+    fn rpl_dao_compress_error_leaves_buffer_untouched() {
+        // DAO base: instance + K/D flags (D set) + reserved + seq + DODAGID.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        let tail_len = 4;
+        let icmp_len = 4 + 20 + tail_len;
+        let mut packet = vec![0u8; IPV6_HEADER_LEN + icmp_len];
+        packet[0] = 0x60;
+        packet[4..6].copy_from_slice(&(icmp_len as u16).to_be_bytes());
+        packet[6] = 58;
+        packet[7] = 64;
+        packet[8..24].copy_from_slice(&src);
+        packet[24..40].copy_from_slice(&dst);
+        packet[40] = 155;
+        packet[41] = 2;
+        packet[44] = 0; // instance
+        packet[45] = 0x40; // K/D flags: D set
+        packet[46] = 0; // reserved
+        packet[47] = 1; // seq
+        packet[48..64].copy_from_slice(&src); // DODAGID
+        let checksum = icmpv6_checksum_parts(
+            packet[8..24].try_into().unwrap(),
+            packet[24..40].try_into().unwrap(),
+            &[&packet[40..]],
+        );
+        packet[42..44].copy_from_slice(&checksum.to_be_bytes());
+
+        let mut out = vec![0xAAu8; 1 + 36 + 3]; // residue is 36 bytes; one short
+        assert!(matches!(
+            compress_rpl_dao(&packet, &mut out),
+            Err(SchcError::BufferTooSmall(_))
+        ));
+        assert!(out.iter().all(|&b| b == 0xAA));
     }
 
     fn uncompressed_packet(len: usize) -> Vec<u8> {

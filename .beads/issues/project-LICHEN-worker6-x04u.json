@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-x04u",
+  "title": "C hal: crc32 + encode_slot/parse_slot helpers for two-slot records (bit-exact with rust lichen-hal storage.rs)",
+  "description": "First slice of b7z9.11.1 (decompose-first). Pure functions only, no storage I/O: C port of rust/lichen-hal/src/storage.rs crc32 (reflect-8 0xEDB88320, init/max-out) and encode_slot/parse_slot (SLOT_HEADER_LEN 20: magic[4], version u8=1, reserved[3], generation u64 BE nonzero, len u32 BE; payload; crc32 trailer u32 BE). Placement: lichen/subsys/lichen/hal/ (new file, e.g. hal_storage_redundant.c + include header). Tests: new host CTest lichen/tests/hal_storage_redundant pinning a Rust-computed CRC32 vector + encode/parse roundtrip + corrupt/truncated/generation-0/length-mismatch rejects. Update the parent 11.1 description to note this slice done.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T00:18:10.887973058Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T00:40:36.601721844Z",
+  "started_at": "2026-09-01T00:18:22.309975598Z",
+  "closed_at": "2026-09-01T00:40:36.601721844Z",
+  "close_reason": "C port of lichen-hal storage.rs codec layer: crc32 (reflected 0xEDB88320, verified against independent zlib oracle vectors 0x3bddffa4/0x9cefd8c3), encode_slot, parse_slot in lichen/subsys/lichen/hal/hal_storage_redundant.{c,h}; host CTest lichen/tests/hal_storage_redundant covering roundtrip, empty payload, bit-flip, wrong magic, version, reserved, truncation, trailing garbage, lying length, generation 0, small buffer, NULL contract. gcc -Werror, cppcheck clean, ctest green. Reviews via kimi-k3: pass1 correctness — 5 findings, all addressed in-bead (NULL contract completed + documented, header bound doc fixed, 4 test gaps added, stale CMake std-flag workaround deleted now that test_common.cmake probes the compiler); pass2 security PASS; pass3 edge PASS with one very-low-severity encode-boundary divergence vs Rust (\u003e4GiB payload window) — resolved by documenting the intentional stricter C bound in the header. No findings filed as separate beads (all fixed in-scope or documented); the pre-existing CMake NOTFOUND hazard is already tracked as project-LICHEN-worker6-qjdp.",
+  "labels": [
+    "zephyr",
+    "hal"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x04u",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.11.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T00:18:11.037878467Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

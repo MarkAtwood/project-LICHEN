@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.3.3",
+  "title": "Test vector: nonzero RPL Target flags reject case in dao_origin_signature.json",
+  "description": "Child of b7z9.3 (spec 05-routing 8.6 R-05-035). No vector in test/vectors/dao_origin_signature.json pins a signed DAO with nonzero Target flags in the reject set. Add one (and/or a decode-reject vector per the vectors file's existing schema) so Rust, C, and Python implementations converge on rejecting nonzero Target flags. Reference: python/src/lichen/rpl/dao_origin.py:296-298 already rejects; the vector must be computed from the spec/independent implementation, never from the code under test. Landable independently; Rust/C children should reference it when it lands.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-6",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:42:39.566266835Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T10:03:47.102513217Z",
+  "started_at": "2026-08-31T08:49:35.982798194Z",
+  "closed_at": "2026-08-31T10:03:47.102513217Z",
+  "close_reason": "Landed the R-05-035 reject vector with full three-way (Rust envelope / Python structural) convergence. (1) lichen-rpl message.rs is_generalized_target_body now rejects a nonzero Target Flags octet (body[0] != 0) at envelope parse — aligning Rust with the Python reference dao_origin.py structural pass; flows to the node handler as DaoVerifyError::Malformed -\u003e DaoHandlingOutcome::Malformed. (2) Python test oracle _dao_structure extended with the identical check (malformed_dao). (3) New reject_target_flags_nonzero vector in dao_origin_signature.json via the canonical generator (signed with flags=0x01 so signature_valid=true while envelope_valid=false; coverage target_flags_nonzero; count 51-\u003e52). (4) Count assertions updated in test_vectors.py and lichen-node/tests/dao_origin_vectors.rs. Verified: python dao vector tests 108/108 + full test_vectors dao subset + generator CLI + rpl tests 801 passed; rust dao_origin_vectors 2/2 in BOTH consumers; lichen-rpl lib 237 green; lichen-node lib 301 green (the 7 formerly-failing rpl_stack tests were fixed upstream by b862cdecd1, unrelated). Reviews: correctness pass (kimi-k3) PASS with byte-level generator verification (regenerated JSON byte-identical, digest recomputed, spec anchor 05-routing.md:370-371); edge pass found the expected C-side residual (b7z9.3.2 owns it — specifics commented there); security pass done by worker after two opencode run timeouts (13-min budget each): fail-closed tightening, both data[0] accesses length-guarded, no amplification, PASS. Note: the DaoManager extract_updates screen (d5c4bb1e29, beads-worker-2) is not yet on main — the envelope reject is the only Rust screen on main today; worker-2's branch adds the second layer and its test bypasses the envelope so it remains valid after merge. C/Zephyr side remains open as b7z9.3.2.",
+  "labels": [
+    "rpl",
+    "decomposed",
+    "rust",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.3.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.3",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:42:39.998979253Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

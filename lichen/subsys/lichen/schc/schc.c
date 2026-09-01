@@ -514,23 +514,15 @@ static const struct schc_rule lichen_schc_rules[] = {
 	},
 };
 
-/* Rule 255 RX payload validator: the fallback payload must be a complete,
- * structurally valid IPv6 packet — structure and checksums only, NO endpoint
- * address policy (canonical TX/RX split, spec/03-adaptation.md).  Mirrors
- * Rust decode_rule255 (validate_full_ipv6_structure) and Python
- * decode_rule255 (validate_full_ipv6). */
-static int lichen_rule255_validate_payload(const uint8_t *payload,
-					   size_t payload_len)
-{
-	return validate_ipv6_transport_lengths(payload, payload_len);
-}
-
 static const struct schc_profile lichen_schc_profile = {
 	.rules = lichen_schc_rules,
 	.rule_count = sizeof(lichen_schc_rules) / sizeof(lichen_schc_rules[0]),
 	.uncompressed_rule_id = SCHC_RULE_UNCOMPRESSED,
 	.use_uncompressed_fallback = true,
-	.validate_payload = lichen_rule255_validate_payload,
+	/* Byte-preserving Rule 255 decode still verifies framing, structure,
+	 * and checksums (spec/03-adaptation.md); endpoint address policy is
+	 * deliberately absent here — it applies at origination only. */
+	.validate_payload = validate_ipv6_transport_lengths,
 };
 
 /* ─── public API ──────────────────────────────────────────────────────────── */
@@ -547,43 +539,28 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	if (out == NULL) {
 		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
-	/* No raw-input profile cap on the compression path: a compressible
-	 * packet may legitimately be larger than SCHC_FRAGMENT_MAX_PACKET_SIZE
-	 * (raw > compressed).  The 22554-byte ceiling applies to the encoded
-	 * SCHC packet — enforced here on the fallback paths and by the rule
-	 * compressors, and on the receive side by decompress; every write is
-	 * bounded by out_len. */
-
-	if (pkt_len < IPV6_HDR_LEN || ipv6_version(packet) != 6) {
-		/* Not IPv6 - uncompressed fallback */
-		/* SECURITY: Check for overflow before addition */
-		if (pkt_len > SIZE_MAX - 1) {
-			return SCHC_ERR_BUFFER_TOO_SMALL;
-		}
-		size_t needed = 1 + pkt_len;
-		/* Mirrors Rust encode_rule255: the fallback's encoded output is
-		 * a complete SCHC packet and must fit the profile ceiling. */
-		if (needed > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
-			return SCHC_ERR_BUFFER_TOO_SMALL;
-		}
-		if (out_len < needed) {
-			return SCHC_ERR_BUFFER_TOO_SMALL;
-		}
-		out[0] = SCHC_RULE_UNCOMPRESSED;
-		memcpy(&out[1], packet, pkt_len);
-		return (int)needed;
+	if (pkt_len > SCHC_FRAGMENT_MAX_PACKET_SIZE) {
+		return SCHC_ERR_BUFFER_TOO_SMALL;
 	}
 
-	/* Structure/checksum validation first, then the emission endpoint
-	 * address policy — mirroring Rust validate_full_ipv6 (codec.rs:363-366)
-	 * and Python's TX wrappers (encode_rule255, headers.py:188-189) so
-	 * dual-defect packets report the same error class as Rust (Python
-	 * raises one SchcError class for both stages). */
+	if (pkt_len < IPV6_HDR_LEN || ipv6_version(packet) != 6) {
+		/* Contract: compress accepts full IPv6 packets only, mirroring
+		 * Python compress_packet and Rust compress which reject
+		 * non-IPv6 input. Never emit Rule255 for non-IPv6 bytes: a
+		 * Rust/Python peer fatals on them at decode_rule255. */
+		return SCHC_ERR_INVALID_ARGUMENT;
+	}
+
 	ret = validate_ipv6_transport_lengths(packet, pkt_len);
 	if (ret < 0) {
 		return ret;
 	}
 
+	/* Emission endpoint policy (spec/03-adaptation.md Rule 255 TX/RX
+	 * split): origination refuses policy-invalid endpoints. Integrity and
+	 * structural failures report before endpoint-shape opinions, so this
+	 * runs after the structural validation above. The receive path
+	 * (schc_decompress validate_payload hook) stays policy-free. */
 	ret = validate_ipv6_address_policy(packet);
 	if (ret < 0) {
 		return ret;
@@ -595,6 +572,5 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 int lichen_schc_decompress(const uint8_t *data, size_t data_len,
 			   uint8_t *out, size_t out_len)
 {
-	return schc_decompress(&lichen_schc_profile, data, data_len,
-			       out, out_len);
+	return schc_decompress(&lichen_schc_profile, data, data_len, out, out_len);
 }

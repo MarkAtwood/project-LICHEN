@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.16",
+  "title": "DAO timing constants (initial/retry/refresh) never wired into a runtime TX scheduler",
+  "description": "Spec 09 14.2 R-09-017..019: initial DAO random 0-2s after joining; DAO retry 4/8/16s exponential backoff; DAO refresh 15 minutes (30-min soft state lifetime / 2). Classification: DIVERGENT (implemented+tested as library code, no runtime consumer) - all three languages define and unit-test the timing functions but NO node runtime drives them: Rust rust/lichen-rpl/src/dao_timing.rs (DAO_INITIAL_DELAY_MIN/MAX_MS:9-12, DAO_RETRY_DELAYS_MS=[4000,8000,16000]:15, DAO_REFRESH_INTERVAL_SECONDS=900:27, DaoRetryBackoff:196, DaoRefreshTimer:122; inline tests :259-467) is exported (lib.rs:24) but has no consumer in lichen-node/lichen-gateway; Python python/src/lichen/timing/dao.py:10-53 likewise not consumed by DaoManager (dao_manager.py); C lichen/subsys/lichen/rpl/rpl_dao_timing.c + lichen/tests/rpl_dao_timing/main.c likewise has no caller outside its test. Suggested placement: wire DaoRetryBackoff + DaoRefreshTimer into rust/lichen-node RplStack DAO TX path (after build_signed_dao / send_dao), mirror in python DaoManager and C rpl node loop; keep constants as the cross-language oracle.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:17.437326741Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T07:33:17.437326741Z",
+  "labels": [
+    "rpl",
+    "rust",
+    "python",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.16",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:17.58339415Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

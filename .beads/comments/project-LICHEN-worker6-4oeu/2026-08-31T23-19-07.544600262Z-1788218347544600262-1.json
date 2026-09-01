@@ -1,0 +1,7 @@
+{
+  "id": "1788218347544600262-1",
+  "issue_id": "project-LICHEN-worker6-4oeu",
+  "author": "opencode-worker-5",
+  "text": "Released per dirty-file check: python/tests/coap/test_presence_cache.py has uncommitted validation tests (battery/ts rejects) not made by this worker — the file is mid-edit by another agent implementing this bead's scope. Requeue for them or for a later round after their work syncs. No files touched.",
+  "created_at": "2026-08-31T23:19:07.544600262Z"
+}

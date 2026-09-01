@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.31",
+  "title": "OSCORE context cache diverges from spec 8.8: no 64-entry bound with LRU eviction (C/Rust fail-closed at 8, Python unbounded)",
+  "description": "Requirement (spec/06-security.md:444-446): Implementations MUST bound OSCORE security contexts to at most 64 entries; on overflow MUST evict least-recently-used (LRU by last message timestamp). Classification: divergent. Evidence: C LICHEN_OSCORE_MAX_CONTEXTS default 8, range 2-32, fixed pool, no eviction code (lichen/subsys/lichen/oscore/Kconfig:20-26, oscore_ctx.c:29, oscore_persist.c:427-429); Rust OwnershipRegistry\u003c8\u003e refuses new claims, no eviction (rust/lichen-oscore/src/ownership.rs:30-39, tests/ownership.rs:137 capacity_exhaustion_fails_closed); Python context stores unbounded (python/src/lichen/coap/secure/sqlite_store.py, memory_store.py). Suggested placement: lichen-oscore ownership/context registry, C Kconfig+pool, Python stores. Note: C/Rust fail-closed is stricter than spec (safe direction); Python unbounded is the real MUST violation. human-only: touches audited oscore context-management internals; do not plan a fix without human decision.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T10:16:20.603829637Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T10:16:20.603829637Z",
+  "labels": [
+    "spec-gap",
+    "oscore",
+    "security",
+    "human-only"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.31",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T10:16:20.716609325Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

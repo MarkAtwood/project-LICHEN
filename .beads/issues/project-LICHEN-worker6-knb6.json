@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-knb6",
+  "title": "AdaptiveSFSelect step-3 density threshold: fix oracles (ccp.py, generate.py, Rust test ref) and regenerate ccp16_load_balance vector",
+  "description": "Follow-up from spec reconciliation g7p7 (which fixed spec/02-physical-link.md:115 to \u003e8 per 02a 2a.8). Three code-side transcriptions still use density \u003e 10 in step 3: (1) python/src/lichen/ccp.py:231 + docstring :197; (2) test/vectors/generate.py:2652 _ccp15_adaptive_sf (the vector generator oracle); (3) rust/lichen-core/tests/ccp16_utilization_vectors.rs:53 reference select_tx_sf. Current vectors still PASS because distinguishing inputs are absent EXCEPT ccp16_load_balance.json synchronized_hop_high_density (density=10, snr=5, load=0, loss=0, util=0): spec-correct output is sf=12 (step-3 10+2), committed output sf=11 baked from the \u003e10 oracle (its oracle_note says so). Plan: fix all three oracles, hand-verify against spec 02a 2a.8 (NOT from the code), regenerate/patch the vector (sf 11 -\u003e 12 + oracle_note), then run python pytest test_vectors.py + test_ccp.py and cargo test -p lichen-core --test ccp16_utilization_vectors. Do NOT edit vector outputs before the oracles — suites would go red.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T23:38:37.749608453Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T00:25:02.345393999Z",
+  "closed_at": "2026-09-01T00:25:02.345393999Z",
+  "close_reason": "All three oracle transcriptions aligned to spec 02a 2a.8 step-3 density \u003e 8, vectors regenerated/patched, suites green. (1) python ccp.py:231 step-3 condition and :197 docstring fixed (\u003e 10 -\u003e \u003e 8). (2) test/vectors/generate.py: _ccp15_adaptive_sf fixed AND the ccp16_vectors _v helper converted from the table-only form to the full 2a.8 rule (pseudocode steps then floors) — the third stale transcription the bead's grep missed; ccp16.json regenerated from it (select_channel_timing_test and select_channel_density_high_ch0 density 9/10 vectors now sf=12). (3) rust ccp16_utilization_vectors.rs reference select_tx_sf fixed. (4) ccp16_load_balance.json: adaptive_sf_high_density_sf11_floor output corrected 11 -\u003e 12 (step 3 engages; floor subsumed) with description + oracle notes updated. (5) Stale oracle-note texts fixed across ccp16_utilization.json (density \u003e 10 wording) and ccp16_load_balance.json. Verified: pytest test_vectors.py + test_ccp.py 899 passed (including the generator-consistency and ccp.py-select-vs-vector assertions); cargo test -p lichen-core 365+2+1 green (ccp16_utilization_vectors reference matches the vectors); clippy/fmt clean. Reviewer-verified: every committed adaptive_sf/combined value re-derived correct under \u003e 8. Remaining (pre-existing, out of scope): the normative spec-text contradiction (02-physical-link.md:115 \u003e 10 vs 02a \u003e 8) is the g7p7 parent's edit; ccp16_utilization.json has no distinguishing density-9/10 input so its committed values are unaffected.",
+  "labels": [
+    "ccp15",
+    "python",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-knb6",
+      "depends_on_id": "project-LICHEN-worker6-g7p7",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T23:38:37.96700296Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

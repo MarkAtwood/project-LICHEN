@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.19",
+  "title": "Zephyr C: rejoin timeout 10x superframe constant absent (spec 09 14.8)",
+  "description": "Spec 09 14.8 R-09-150: rejoin timeout is 10 x superframe length (REJOIN_TIMEOUT = 10 * superframe_len, used by DRIFTING-state transitions). Classification: implemented in Python only (python/src/lichen/timing/sfn.py:15 TDMA_REJOIN_TIMEOUT_SUPERFRAMES=10); NOT FOUND in C (lichen/subsys/lichen/link/link.h defines LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES=3 and LICHEN_TDMA_MISSED_BEACON_THRESHOLD=3 but no rejoin timeout) and no Rust production constant found. Suggested placement: add LICHEN_TDMA_REJOIN_TIMEOUT_SUPERFRAMES 10U to lichen/subsys/lichen/link/include/lichen/link.h, consume in tdma.c DRIFTING/REJOINING transitions, pin with BUILD_ASSERT test like lichen/tests/csma_constants/main.c; vectors tdma_ccp_fsm.json.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T07:33:19.055615705Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T07:33:19.055615705Z",
+  "labels": [
+    "zephyr",
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.19",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T07:33:19.237729625Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

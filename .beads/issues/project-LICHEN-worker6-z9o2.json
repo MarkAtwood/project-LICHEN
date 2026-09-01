@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-z9o2",
   "title": "rust workspace must exclude oscore-fork from workspace discovery",
   "description": "Reviewer pass-1 finding (from xyt6.1): if rust/oscore-fork is a real directory (not a symlink), cargo workspace discovery from the fork's manifest walks up and finds rust/Cargo.toml; oscore-fork is in neither members nor exclude, risking 'current package believes it is in a workspace when it is not' errors or accidental membership. Fix: add exclude = [\"oscore-fork\"] to [workspace] in rust/Cargo.toml (harmless no-op for the symlink case since cargo canonicalizes outside the workspace).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T05:25:05.754190365Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-31T05:25:05.754190365Z",
+  "updated_at": "2026-08-31T06:40:59.903659418Z",
+  "closed_at": "2026-08-31T06:40:59.903659418Z",
+  "close_reason": "Re-close: shared-store rollback (5th incident) dropped the close. Work committed in ebdf8c0f04: exclude = [\"oscore-fork\"] added to [workspace] in rust/Cargo.toml; verified empirically both symlink and real-dir cases resolve.",
   "labels": [
     "rust"
   ],

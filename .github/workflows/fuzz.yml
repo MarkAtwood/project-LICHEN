@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run hypothesis tests with extended examples
@@ -44,6 +44,7 @@ jobs:
     if: github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -153,7 +154,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run stress tests (extended timeouts)

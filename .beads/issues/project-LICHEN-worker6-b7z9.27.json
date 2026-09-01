@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.27",
+  "title": "Root compromise anomaly detection and quarantine absent (spec 02a 2a.5.5.3)",
+  "description": "Requirements: R-02a-067 (MUST) nodes MUST implement defenses against root key compromise / malicious root behavior; R-02a-068 (SHOULD) monitor anomaly indicators (\u003e100 SFN epoch jump without version change, \u003e60 s drift when GNSS-PPS flag was set, slot_map excluding all previously active nodes, beacon rate \u003e150%); R-02a-069 (SHOULD) log anomaly with beacon hash + increment per-root counter; R-02a-070 (SHOULD) \u003e3 anomalies in 5 min demote trust (stratum +1); R-02a-071 (SHOULD) \u003e10 anomalies quarantine root until manual intervention / OOB verification. Classification: not-implemented — grep for anomaly|quarantine|demote across python/src, rust, lichen/subsys returns zero hits. Rotation/revocation halves of 2a.5.5.3 are tracked separately in project-LICHEN-worker6-b7z9.28. Suggested placement: per-root anomaly counter beside candidate evaluation (py slot_coordination.py MultiRootState; rust multi_instance.rs; C tdma.c when b7z9.24 lands); demotion hooks into stratum ordering already present (py timing/stratum.py:304-330). From spec-coverage sweep 2026-08-31 (docs/spec-coverage.md R-02a-067..071).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:32:21.76241327Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-08-31T08:32:21.76241327Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.27",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-08-31T08:32:21.925233412Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

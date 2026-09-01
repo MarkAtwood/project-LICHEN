@@ -16,6 +16,7 @@ from lichen.timing.sfn import (
     DesyncFSM,
     DesyncState,
     hash_32,
+    holdover_expired,
     initial_startup_delay,
     sfn_delta,
     slot_for,
@@ -286,19 +287,55 @@ class TestDesyncFSM:
         state = fsm.on_sfn_wrap(time_valid=False)
         assert state == DesyncState.DESYNCED
 
+    def test_drift_desync_transition(self) -> None:
+        """b7z9.29.63 / R-02a-decision guard-ppm: SYNCED + drift_ppm > 5000
+        -> DESYNCED (mirrors C desync_fsm ccp16-desync.json 12000>5000 case
+        and Rust holdover_expired semantics)."""
+        fsm = DesyncFSM()
+        # Below guard: stays SYNCED.
+        assert fsm.on_drift(4000) == DesyncState.SYNCED
+        # Exactly at guard: NOT desync (strictly greater).
+        assert fsm.on_drift(5000) == DesyncState.SYNCED
+        # Above guard: DESYNCED with counters reset.
+        assert fsm.on_drift(12000) == DesyncState.DESYNCED
+        assert fsm.consecutive_valid == 0
+        assert fsm.missed_superframes == 0
+
+    def test_holdover_expired_parity(self) -> None:
+        """holdover_expired matches Rust lichen-link tdma_clock.rs."""
+        assert holdover_expired(12000, 5000) is True
+        assert holdover_expired(-12000, 5000) is True
+        assert holdover_expired(5000, 5000) is False
+        assert holdover_expired(4999) is False
+        assert holdover_expired(5001) is True
+
     def test_beacon_valid_in_desynced_goes_recovering(self) -> None:
         fsm = DesyncFSM()
         fsm.on_sfn_wrap(time_valid=False)
         assert fsm.state == DesyncState.DESYNCED
-        state = fsm.on_beacon(valid=True)
+        state = fsm.on_beacon(valid=True, wall_clock_valid=True)
         assert state == DesyncState.RECOVERING
         assert fsm.consecutive_valid == 1
+
+    def test_wall_clock_invalid_blocks_desynced_recovery(self) -> None:
+        """R-02a-084: MUST NOT leave DESYNCED unless wall_clock_valid."""
+        fsm = DesyncFSM()
+        fsm.on_sfn_wrap(time_valid=False)
+        assert fsm.state == DesyncState.DESYNCED
+        # Valid beacon but unsynced wall clock: stays DESYNCED.
+        state = fsm.on_beacon(valid=True, wall_clock_valid=False)
+        assert state == DesyncState.DESYNCED
+        assert fsm.consecutive_valid == 0
+
+        # Once the wall clock syncs, the same beacon recovers.
+        state = fsm.on_beacon(valid=True, wall_clock_valid=True)
+        assert state == DesyncState.RECOVERING
 
     def test_beacon_invalid_in_recovering_goes_desynced(self) -> None:
         fsm = DesyncFSM()
         fsm.state = DesyncState.RECOVERING
         fsm.consecutive_valid = 2
-        state = fsm.on_beacon(valid=False)
+        state = fsm.on_beacon(valid=False, wall_clock_valid=True)
         assert state == DesyncState.DESYNCED
         assert fsm.consecutive_valid == 0
 
@@ -306,31 +343,31 @@ class TestDesyncFSM:
         fsm = DesyncFSM()
         fsm.on_sfn_wrap(time_valid=False)
         # First valid beacon
-        fsm.on_beacon(valid=True)
+        fsm.on_beacon(valid=True, wall_clock_valid=True)
         assert fsm.state == DesyncState.RECOVERING
         assert fsm.consecutive_valid == 1
         # Second valid beacon
-        fsm.on_beacon(valid=True)
+        fsm.on_beacon(valid=True, wall_clock_valid=True)
         assert fsm.state == DesyncState.RECOVERING
         assert fsm.consecutive_valid == 2
         # Third valid beacon -> synced
-        state = fsm.on_beacon(valid=True)
+        state = fsm.on_beacon(valid=True, wall_clock_valid=True)
         assert state == DesyncState.SYNCED
         assert fsm.consecutive_valid == 0
 
     def test_beacon_in_synced_no_op(self) -> None:
         fsm = DesyncFSM()
-        state = fsm.on_beacon(valid=True)
+        state = fsm.on_beacon(valid=True, wall_clock_valid=True)
         assert state == DesyncState.SYNCED  # No change
-        state = fsm.on_beacon(valid=False)
+        state = fsm.on_beacon(valid=False, wall_clock_valid=True)
         assert state == DesyncState.SYNCED  # No change
 
     def test_recovery_interrupted_by_invalid(self) -> None:
         fsm = DesyncFSM()
         fsm.state = DesyncState.DESYNCED
-        fsm.on_beacon(valid=True)  # -> RECOVERING, count=1
-        fsm.on_beacon(valid=True)  # -> RECOVERING, count=2
-        fsm.on_beacon(valid=False)  # -> DESYNCED, count=0
+        fsm.on_beacon(valid=True, wall_clock_valid=True)  # -> RECOVERING, count=1
+        fsm.on_beacon(valid=True, wall_clock_valid=True)  # -> RECOVERING, count=2
+        fsm.on_beacon(valid=False, wall_clock_valid=True)  # -> DESYNCED, count=0
         assert fsm.state == DesyncState.DESYNCED
         assert fsm.consecutive_valid == 0
 
@@ -339,7 +376,7 @@ class TestDesyncFSM:
         fsm = DesyncFSM()
         fsm.state = DesyncState.DESYNCED
         for _ in range(valid_count):
-            fsm.on_beacon(valid=True)
+            fsm.on_beacon(valid=True, wall_clock_valid=True)
         assert fsm.state == DesyncState.RECOVERING
 
         for missed in range(1, TDMA_BEACON_TIMEOUT_SUPERFRAMES):

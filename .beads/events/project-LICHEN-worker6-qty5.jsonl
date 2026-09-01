@@ -2,3 +2,4 @@
 {"id":"01a055fd-e801-7c3c-b1cd-083dc0507034","issue_id":"project-LICHEN-worker6-qty5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-08-31T04:04:58.497803274Z"}
 {"id":"01a055fd-e9aa-7b00-9800-e8e42842403d","issue_id":"project-LICHEN-worker6-qty5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-08-31T04:04:58.922722693Z"}
 {"id":"01a055fd-eb12-7583-8c04-9fb2727c3d36","issue_id":"project-LICHEN-worker6-qty5","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: tests","created_at":"2026-08-31T04:04:59.282363372Z"}
+{"id":"01a05a3d-fcb9-7d2a-9396-2c44ba9a6b3d","issue_id":"project-LICHEN-worker6-qty5","event_type":"closed","actor":"opencode-worker-3","old_value":"","new_value":"Re-close (2nd; store reversion per biod). Fix intact: 3347d11d04 on fix-qty5-gate-diagnostic.","created_at":"2026-08-31T23:53:26.969864311Z"}

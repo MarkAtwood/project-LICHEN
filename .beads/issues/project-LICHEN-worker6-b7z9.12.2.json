@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.12.2",
+  "title": "C TDMA: wire SFN-wrap + epoch-floor validation into DesyncFSM inputs + desync vectors",
+  "description": "Child of b7z9.12, lands after the FSM-core child. Wire the FSM inputs to real signals: SFN-wrap detection and epoch-floor validation via lichen_epoch_floor_accepts (time_sync.c:571), beacon timestamp matching SFN. Add/verify vectors: test/vectors/ccp16-desync.json and packets-timing.json desync_fsm_recovery_timeout entries per the existing schema (oracle: python DesyncFSM, never the C code). Discovered from project-LICHEN-worker6-b7z9.12.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T22:38:49.174579507Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-08-31T23:39:19.788241101Z",
+  "closed_at": "2026-08-31T23:39:19.788241101Z",
+  "close_reason": "Vector-consumption slice landed (commit, lichen/tests/tdma_guard_budget/main.c): the host desync FSM test now drives both packets-timing.json desync_fsm_recovery_timeout cases (valid_count 1 and 2 -\u003e partial RECOVERING, 3 missed superframes -\u003e DESYNCED, consecutive counter reset) — the desync_fsm category (wrap_invalid, recovering, recovered, recovery_timeout) is fully consumed host-side. Verification: host build+run green (asserts live: test_common.cmake sets no NDEBUG; sanitizer flags confirm the assert-enabled config); ZEPHYR native_sim routing_dispatch build green. Review 3x kimi-k3: pass 2 confirmed the vector cases fully cover all JSON-encoded fields and uint8 promotion cleanliness; passes 1/3 explored CI coverage (tdma_guard_budget runs via ctest host harness; not a named CI target — the lichen/tests twister sweep in ec2-arm64 covers Zephyr-side, host ctest runs locally/pre-merge) and NDEBUG (absent). Deferred half filed as follow-up: epoch-floor + beacon-RX-path wiring is Zephyr-side integration (new bead), keeping this slice host-testable and landable.",
+  "labels": [
+    "tdma",
+    "zephyr",
+    "decomposed",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.12.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.12",
+      "type": "parent-child",
+      "created_at": "2026-08-31T22:38:49.34541615Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -52,6 +52,7 @@ extern "C" {
 #define LICHEN_RPL_ERR_INVALID    -6  /**< NULL pointer or invalid argument */
 #define LICHEN_RPL_ERR_FULL       -7  /**< Table or buffer is full */
 #define LICHEN_RPL_ERR_NOT_FOUND  -8  /**< Requested entry does not exist */
+#define LICHEN_RPL_ERR_TX_STATE   -9  /**< Durable origin-sequence state missing/corrupt/unreservable (spec 09 14.2) */
 
 /* ── Option type bytes ─────────────────────────────────────────────────────── */
 
@@ -278,6 +279,16 @@ static inline size_t lichen_rpl_dio_options_len(size_t total_len)
 		? (total_len - LICHEN_RPL_DIO_BASE_LEN)
 		: 0;
 }
+
+/* ── Root DIO Signature (spec 06-security.md 8.10.1) ───────────────────────── */
+
+/** Temporary Root DIO Signature option type (wire type TBD per spec). */
+#define LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE 0x17
+/** Structural floor for the COSE_Sign1 blob (rejects garbage; the true
+ *  minimum valid encoding is ~111 bytes). */
+#define LICHEN_RPL_ROOT_DIO_SIGNATURE_MIN_LEN 64
+/** Maximum COSE_Sign1 blob: RPL option length is u8. */
+#define LICHEN_RPL_ROOT_DIO_SIGNATURE_MAX_LEN 255U
 
 /* ── DAO ───────────────────────────────────────────────────────────────────── */
 

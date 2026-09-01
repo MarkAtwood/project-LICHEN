@@ -116,6 +116,23 @@ bool lichen_announce_should_relay(
 	const struct lichen_announce_view *_Nonnull announce);
 
 /**
+ * @brief Look up the pinned public key for an originator IID (TOFU read).
+ *
+ * Read-only accessor over the announce pin table for consumers that must
+ * verify provenance against an already-pinned identity (e.g. the DAO Origin
+ * Signature verification of spec/05 8.6: the key comes from an already
+ * authenticated and pinned Announce identity; a DAO MUST NOT create or
+ * replace a pin).
+ *
+ * @param originator_iid 8-byte IID of the pinned identity
+ * @param out_pubkey 32-byte output for the pinned public key
+ * @return true if the IID is pinned (out_pubkey written), false otherwise
+ */
+bool lichen_announce_get_pinned_pubkey(
+	const uint8_t originator_iid[LICHEN_ANNOUNCE_IID_LEN],
+	uint8_t out_pubkey[LICHEN_ANNOUNCE_PUBKEY_LEN]);
+
+/**
  * @brief Prepare an announce frame for relay by incrementing hop count.
  *
  * Modifies the frame in-place by incrementing the hop count byte at offset 2.

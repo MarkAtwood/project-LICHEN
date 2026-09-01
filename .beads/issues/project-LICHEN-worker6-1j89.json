@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-1j89",
+  "title": "ping_l2: validate 7/7 on heft after re-provision fix (blocked by mid-merge conflict markers)",
+  "description": "Follow-up from 5fva.1 (commit 84908feee9 on beads-worker-3). Root cause chain: (1) lichen_l2 disable/enable wipes link_ctx by design (rwio.1) and the suite never re-provisioned after reinit cycles -\u003e -ENOKEY on all post-reinit TX tests; fixed with reprovision_after_reinit() after both net_if_up sites. (2) Setup loaded a legacy LLSec link key, but lichen_link_tx rejects E=1 keyed TX outright (2auf.21) -\u003e -EPROTONOSUPPORT(-93); removed from setup + helper. Partial validation on heft worktree: 4/7 -\u003e 5/7 after (1) alone. Remaining: rebuild+run with 84908feee9 applied, expect 7/7. BLOCKER: west anchors lichen module sources to ~/Developer/lichen-workspace/project-LICHEN (main checkout) even when building from a worktree, and that checkout currently has unresolved conflict markers (lichen/subsys/lichen/schc/schc.c:558+, lichen/include/lichen/lora_compat.h) from another agent's merge — coordinate with sync-janitor bead project-LICHEN-worker6-ba39 before validating. Note: lichen_util.h ENOENT strerror case lives in module path, so it needs the main checkout healthy (or build with ZEPHYR_EXTRA_MODULES override) to take effect.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-3",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-08-31T08:42:06.062313393Z",
+  "created_by": "opencode-worker-3",
+  "updated_at": "2026-08-31T18:22:52.560968037Z",
+  "started_at": "2026-08-31T18:22:20.913123096Z",
+  "closed_at": "2026-08-31T18:22:52.560968037Z",
+  "close_reason": "VALIDATED: ping_l2 native_sim on heft — 7/7, 'PROJECT EXECUTION SUCCESSFUL' (observed this session, fresh run after the final fix). Full fix chain, all committed on beads-worker-3: 84908feee9 (post-reinit key re-provision + drop legacy LLSec key), 237dc35064 (tx frame buffer capacity), 24cde81e5a (canonical key-derived peer EUI-64), cf9afa78a1 (one-shot loopback arming), 75b86d62cd (monotonic nonce stream: boot-epoch latch + stream checkpoint). The mid-merge conflict-marker blocker in this bead's description was transient (heft main healthy since). Each fix individually reviewed (3x kimi-k3 passes per round) and validated incrementally (3/7 -\u003e 4/7 -\u003e 5/7 -\u003e 6/7 -\u003e 7/7). Note for CI: the fixes live on beads-worker-3 pending merge; Twister/AWS re-validation happens at merge time per the normal flow. Parent 5fva and children .1/.2/.3 remain open — their failure modes are all covered by this chain and can be closed on review of these commits.",
+  "labels": [
+    "tests",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-1j89",
+      "depends_on_id": "project-LICHEN-worker6-5fva.1",
+      "type": "discovered-from",
+      "created_at": "2026-08-31T08:42:06.314316248Z",
+      "created_by": "opencode-worker-3",
+      "metadata": "{}"
+    }
+  ]
+}

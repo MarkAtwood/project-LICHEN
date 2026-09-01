@@ -17,13 +17,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/renode
-          key: renode-1.16.1-linux
+          key: renode-1.16.1-linux-1a532d4b
 
       - name: Install Renode
         if: steps.cache-renode.outputs.cache-hit != 'true'
         run: |
           # Download portable Renode release
           wget -q https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
+          echo "1a532d4b5b82de0dd154970c401e0c7b0e498d17304b2cecc007e306c8f9617c  renode-1.16.1.linux-portable.tar.gz" | sha256sum -c -
           mkdir -p ~/.local/share/renode
           tar -xzf renode-1.16.1.linux-portable.tar.gz -C ~/.local/share/renode --strip-components=1
           rm renode-1.16.1.linux-portable.tar.gz
@@ -43,7 +44,7 @@ jobs:
       - name: Install Python dependencies
         working-directory: python
         run: |
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run Renode server tests (no firmware)
@@ -104,12 +105,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/renode
-          key: renode-1.16.1-linux
+          key: renode-1.16.1-linux-1a532d4b
 
       - name: Install Renode
         if: steps.cache-renode.outputs.cache-hit != 'true'
         run: |
           wget -q https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
+          echo "1a532d4b5b82de0dd154970c401e0c7b0e498d17304b2cecc007e306c8f9617c  renode-1.16.1.linux-portable.tar.gz" | sha256sum -c -
           mkdir -p ~/.local/share/renode
           tar -xzf renode-1.16.1.linux-portable.tar.gz -C ~/.local/share/renode --strip-components=1
           rm renode-1.16.1.linux-portable.tar.gz
@@ -126,6 +128,7 @@ jobs:
       - name: Install Zephyr SDK
         run: |
           wget -q https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.16.8/zephyr-sdk-0.16.8_linux-x86_64_minimal.tar.xz
+          echo "c323afcd22149ef0f217759a478bf8b3a42d2e36c89b653a0b875db88d7677e4  zephyr-sdk-0.16.8_linux-x86_64_minimal.tar.xz" | sha256sum -c -
           tar xf zephyr-sdk-0.16.8_linux-x86_64_minimal.tar.xz
           cd zephyr-sdk-0.16.8
           ./setup.sh -t arm-zephyr-eabi -h -c
@@ -186,7 +189,7 @@ jobs:
       - name: Install Python test dependencies
         working-directory: python
         run: |
-          pip install uv
+          pip install "uv>=0.11,<0.12"
           uv sync --locked --all-extras --dev
 
       - name: Run Renode boot + TX test

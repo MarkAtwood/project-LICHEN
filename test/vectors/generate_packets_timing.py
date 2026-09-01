@@ -881,6 +881,12 @@ def packets_timing_vectors() -> list[dict[str, object]]:
             "seq_advance_valid": is_valid_dao_sequence(2, prev_max=1),
             "seq_no_advance_invalid": is_valid_dao_sequence(1, prev_max=1),
             "seq_max_valid_terminal": is_valid_dao_sequence(0xFFFFFFFFFFFFFFFF),
+            "seq_max_after_floor_valid": is_valid_dao_sequence(
+                0xFFFFFFFFFFFFFFFF, prev_max=100
+            ),
+            "seq_after_max_invalid": is_valid_dao_sequence(
+                1, prev_max=0xFFFFFFFFFFFFFFFF
+            ),
         }
     )
 
@@ -1674,8 +1680,13 @@ def main(argv: list[str] | None = None) -> int:
         for path, document in outputs:
             try:
                 current = read_bounded_exact(path)
-            except (FileNotFoundError, RuntimeError):
+            except FileNotFoundError:
                 mismatches.append(path.name)
+            except (OSError, RuntimeError) as error:
+                # Unsafe directory / unreadable vector: report the real
+                # problem instead of masquerading as a stale file.
+                print(f"cannot safely read {path.name}: {error}", file=sys.stderr)
+                return 2
             else:
                 if current != json_bytes(document):
                     mismatches.append(path.name)
