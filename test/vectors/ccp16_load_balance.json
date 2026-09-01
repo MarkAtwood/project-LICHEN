@@ -618,7 +618,7 @@
         "sf": 12,
         "tx_allowed": true
       },
-      "oracle_note": "Density 25 > 10, so step 3: SF = MIN(12, 10+2) = 12. Also density > 8 floor to SF >= 11, but already at 12."
+      "oracle_note": "Density 25 > 8, so step 3 (spec 02a 2a.8): SF = MIN(12, 10+2) = 12. Also density > 8 floor to SF >= 11, but already at 12."
     },
     {
       "category": "density_estimate",
