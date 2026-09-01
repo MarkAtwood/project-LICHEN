@@ -170,6 +170,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Interim `dead_code` expectation: the receiver call site lands with the
     /// root-signature validation bead (b7z9.37.1); the expectation then stops
     /// being fulfilled and must be removed.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "root-signature receiver call site lands in b7z9.37.1"
+        )
+    )]
     pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
         &mut self.root_seqs
     }

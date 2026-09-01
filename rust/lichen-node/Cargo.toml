@@ -7,7 +7,7 @@ description = "LICHEN integration crate: combines link, SCHC, CoAP, and routing 
 
 [features]
 default = []
-std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "lichen-oscore?/std", "dep:lichen-oscore", "lichen-ipv6/std", "dep:tokio", "dep:zeroize", "dep:hex", "dep:sha2", "lichen-meshtastic?/std"]
+std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "lichen-oscore?/std", "dep:lichen-oscore", "lichen-ipv6/std", "dep:tokio", "dep:zeroize", "dep:hex", "dep:sha2", "lichen-meshtastic?/std", "lichen-core/std"]
 # Meshtastic bridge integration
 meshtastic = ["dep:lichen-meshtastic", "lichen-meshtastic/alloc"]
 # Logging: defmt takes precedence when both are enabled
