@@ -93,6 +93,9 @@ class TxReservation:
     """
 
     _future: Future[bool] | None = field(default=None, repr=False)
+    _future_loop: asyncio.AbstractEventLoop | None = field(
+        default=None, repr=False
+    )
     _result: bool | None = field(default=None, repr=False)
 
     async def wait(self) -> bool:
@@ -101,9 +104,11 @@ class TxReservation:
         Returns the same value as result() after completion, guaranteeing
         consistency between the two methods regardless of internal future state.
         """
-        # Lazy future creation - we're now in an async context
+        # Lazy future creation - we're now in an async context. The owning
+        # loop is captured so foreign threads can marshal set_result safely.
         if self._future is None:
-            self._future = asyncio.get_running_loop().create_future()
+            self._future_loop = asyncio.get_running_loop()
+            self._future = self._future_loop.create_future()
             # Apply any result that was set before future existed
             if self._result is not None:
                 self._future.set_result(self._result)
@@ -135,7 +140,23 @@ class TxReservation:
             return
         self._result = success
         if self._future is not None and not self._future.done():
-            self._future.set_result(success)
+            on_owning_loop = False
+            if self._future_loop is not None:
+                try:
+                    on_owning_loop = (
+                        asyncio.get_running_loop() is self._future_loop
+                    )
+                except RuntimeError:
+                    on_owning_loop = False  # no running loop here: foreign
+            if on_owning_loop:
+                self._future.set_result(success)
+            else:
+                # Foreign thread (or loop-less thread): marshal the future
+                # mutation onto its owning loop — asyncio.Future.set_result
+                # is not thread-safe.
+                self._future_loop.call_soon_threadsafe(
+                    self._future.set_result, success
+                )
 
     def done(self) -> bool:
         """Return True if result has been set."""
