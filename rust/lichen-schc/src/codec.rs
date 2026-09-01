@@ -279,24 +279,13 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
     if packet.len() != 40usize.saturating_add(payload_len) {
         return Err(SchcError::InvalidPacket("IPv6 payload length mismatch"));
     }
+    // Byte-preserving RX (decision rule255-rx-decode, 2026-08-31, FINAL):
+    // endpoint address policy is TX-only (validate_full_ipv6 ->
+    // validate_address_policy). Decode accepts any well-framed packet with
+    // valid checksums regardless of source/destination addresses. The
+    // address bytes are still read for the UDP checksum computation.
     let src = &packet[8..24];
     let dst = &packet[24..40];
-
-    // Structural address constraints apply in BOTH directions (spec/03):
-    // unspecified or multicast sources and an unspecified destination are
-    // invalid on receipt as well as on emission. Loopback, IPv4-mapped, and
-    // multicast-destination-scope remain emission-only policy.
-    if src.iter().all(|&b| b == 0) {
-        return Err(SchcError::InvalidPacket("invalid IPv6 source address"));
-    }
-    if src[0] == 0xff {
-        return Err(SchcError::InvalidPacket("invalid IPv6 source address"));
-    }
-    if dst.iter().all(|&b| b == 0) {
-        return Err(SchcError::InvalidPacket(
-            "invalid IPv6 destination address",
-        ));
-    }
 
     let mut next_header = packet[6];
     let mut offset = 40usize;
