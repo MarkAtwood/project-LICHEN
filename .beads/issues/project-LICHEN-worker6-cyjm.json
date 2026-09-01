@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-cyjm",
   "title": "Post-merge reconciliation: b7z9.3.1 unit test must pin structural-stage reject once worker-6's vector landing merges",
   "description": "Found while executing b7z9.3.3 (worker-6 landed the equivalent recipe on their local beads-worker-6 branch as b926255ab2 'test(vectors): R-05-035 nonzero Target Flags reject vector', unpushed; bead closed by worker-6). Once b926255ab2 merges, lichen-rpl message.rs is_generalized_target_body rejects nonzero Target flags at the ENVELOPE (structural) stage, which breaks the committed b7z9.3.1 test nonzero_target_flags_dao_rejected_before_state_mutation (rust/lichen-node/src/routing/tests.rs): it unwraps SignatureVerifiedDao::verify_signature (now Err before crypto) and asserts RouteRejected at extraction. Fix (validated green on my tree against the envelope guard): assert matches!(SignatureVerifiedDao::verify_signature(\u0026wire, origin, RPL_INSTANCE_ID, root_addr, Some(identity.pubkey)), Err(DaoVerifyError::Malformed(_))) with comment 'nonzero Target flags must reject the DAO at the structural stage'; DELETE the subsequent process_signature_verified_dao_at_ms RouteRejected assert (the verified envelope no longer exists); KEEP the no-mutation tail (same-origin-sequence flags=0 DAO still Ok(Applied)) and update the test comment (extraction check = defense in depth for raw-DAO paths). The extract_updates check in lichen-rpl/src/routing.rs stays (defense in depth; C parity at rpl_dao_process.c). Priority P2 because the merge WILL break lichen-node lib tests otherwise. Discovered from project-LICHEN-worker6-b7z9.3.3.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T10:21:35.88685023Z",
   "created_by": "opencode-worker-2",
-  "updated_at": "2026-08-31T10:21:35.88685023Z",
+  "updated_at": "2026-09-01T06:51:26.931236793Z",
+  "closed_at": "2026-09-01T06:51:26.931236793Z",
+  "close_reason": "Force-close with verification: the prescribed reconciliation is LANDED ON MAIN via 2e7991f1ec 'test(routing): pin structural-stage reject for nonzero Target flags' (in main per merge-base check). The test at main's routing/tests.rs asserts Err(DaoVerifyError::Malformed(_)) from verify_signature (structural-stage pin) plus a raw-ingest dao_parents_for_source rejection (defense-in-depth), and the no-mutation tail is retained. Re-verified today: cargo test nonzero_target_flags -\u003e 1 passed / 0 failed. Bead condition satisfied; nothing further to reconcile. (Corrects my earlier close reason that located the test in rpl_stack/tests.rs — it lives in routing/tests.rs.)",
   "labels": [
     "rust"
   ],

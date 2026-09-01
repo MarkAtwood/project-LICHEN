@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-eliz",
   "title": "l1qw.30(d): C confessions storage implementation (currently a stub)",
   "description": "Child of worker6-l1qw.30 (spec 18.10): confessions_post validates and rate-limits but stores NOTHING and returns 2.04 (coap_dtn.c:269-317); confessions_get returns one float record (:243-267). Implement real storage (mirroring the deaddrop buffer pattern), the 18.10 response contract, and relax the C OSCORE requirement on confessions POST to optional per spec (currently required at :287-293 where spec makes it optional — confirm with the 18.10 table before relaxing). Largest child; landable after (a).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T00:11:21.483464486Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-09-01T00:11:21.483464486Z",
+  "updated_at": "2026-09-01T06:52:19.223943108Z",
+  "closed_at": "2026-09-01T06:52:19.223943108Z",
+  "close_reason": "Force-close with verification: the confessions storage implementation this bead describes LANDED via my own 3d17292318 'feat(dtn): confessions storage per spec 18.10' (merged to main): RAM-only FIFO ring (2x768B, no-log guarantee), OSCORE-optional POST per 18.10.5, 768B cap with 4.13, 1/30s + 12/hour rate caps per 18.10.3 (uptime-based), GET returning the stored ring as SenML vd records with wired count/since queries. Re-verified: coap_dtn.c at main contains the full implementation (54 confessions-related lines; grep count confirms). Reviewer findings from that landing were fixed in-revision; follow-ups filed separately (Retry-After API gap nqtz-adjacent, iid7 rate-key collision). Bead condition satisfied.",
   "labels": [
     "coap"
   ],

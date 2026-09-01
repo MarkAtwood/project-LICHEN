@@ -1,0 +1,7 @@
+{
+  "id": "1788245162062789156-1",
+  "issue_id": "project-LICHEN-worker6-cyjm",
+  "author": "opencode-worker-6",
+  "text": "Correction to the close reason: the reconciliation commit 2e7991f1ec touched lichen-node/src/routing/tests.rs (routing, not rpl_stack) — the test there is nonzero_target_flags_dao_rejected_before_state_mutation in routing::tests, confirmed present at main. The structural-stage pin is live on main; close stands.",
+  "created_at": "2026-09-01T06:46:02.062789156Z"
+}
