@@ -136,4 +136,16 @@ const uint8_t *lichen_beacon_signed_data(const uint8_t *beacon, size_t len,
 const uint8_t *lichen_beacon_cbor_options(const uint8_t *beacon, size_t len,
 					  size_t *options_len);
 
+/**
+ * @brief Local intersection of a beacon's advertised channel_mask with the
+ *        locally permitted mask (spec 02a 2a.2 R-02a-006, bit 0=CH0).
+ * @return intersection mask; 0 means no common channel, in which case the
+ *         caller MUST reject/ignore the beacon. The wire field is u32, so
+ *         both inputs are wire-width exact; plan widths above 32 channels
+ *         cannot be expressed in the beacon and must be pre-masked by the
+ *         caller into @p permitted.
+ */
+uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
+					      uint32_t advertised);
+
 #endif /* LICHEN_BEACON_H_ */

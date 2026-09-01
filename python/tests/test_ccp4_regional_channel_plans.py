@@ -46,6 +46,7 @@ HANDLED_TYPES = frozenset(
         "validate_plan_id",
         "ch0_fallback_required",
         "validate_channel_mask",
+        "intersect_channel_mask",
         "is_valid_power",
         "get_plan",
         "get_plan_by_name",
@@ -96,6 +97,17 @@ def test_validate_channel_mask_vector(name: str, vector: dict[str, Any]) -> None
     plan = get_plan_by_name(vector["input"]["plan_name"])
     masked = plan.validate_channel_mask(vector["input"]["mask"])
     assert masked == vector["output"]["valid_mask"]
+
+
+@pytest.mark.parametrize("name,vector", _cases("intersect_channel_mask"))
+def test_intersect_channel_mask_vector(name: str, vector: dict[str, Any]) -> None:
+    """R-02a-006: intersection of the beacon's advertised channel_mask with
+    the plan-permitted mask. The plan-side permitted mask is exactly what
+    validate_channel_mask masks down to, so intersecting is
+    advertised & plan_mask — computed here via the existing validator."""
+    plan = get_plan_by_name(vector["input"]["plan_name"])
+    plan_mask = plan.validate_channel_mask(0xFFFFFFFFFFFFFFFF)
+    assert (vector["input"]["advertised_mask"] & plan_mask) == vector["output"]["intersection"]
 
 
 @pytest.mark.parametrize("name,vector", _cases("is_valid_power"))

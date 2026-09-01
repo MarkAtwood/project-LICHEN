@@ -138,3 +138,9 @@ const uint8_t *lichen_beacon_cbor_options(const uint8_t *beacon, size_t len,
 	*options_len = len - LICHEN_BEACON_MIN_SIZE;
 	return &beacon[LICHEN_BEACON_HEADER_SIZE];
 }
+
+uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
+					      uint32_t advertised)
+{
+	return permitted & advertised;
+}
