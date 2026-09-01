@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-kpv0.18",
+  "title": "kpv0.4: Fix strict rustdoc errors in pre-existing files",
+  "description": "Strict rustdoc 13 unchanged documentation errors. Fix missing/broken doc links.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:45:56.070790966Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:45:56.070790966Z",
+  "labels": [
+    "coap",
+    "l2",
+    "python",
+    "rust",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.18",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:45:56.192648733Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

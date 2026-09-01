@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-p2y5.14",
+  "title": "p2y5.3: Rust gateway: RPL DODAG root — DIO advertisement, DAO acceptance, routing table",
+  "description": "Gateway must act as RPL DODAG root: advertise prefix via DIO, accept DAOs from mesh nodes, build/maintain the routing table. RPL root config flag exists but the full DODAG root lifecycle (periodic DIO, DAO processing, route installation) is not wired. Rust RPL crate has the primitives; this wires them into the gateway main loop.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:45:43.661619446Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:45:43.661619446Z",
+  "labels": [
+    "blocked:hardware",
+    "core",
+    "gateway",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-p2y5.14",
+      "depends_on_id": "project-LICHEN-p2y5",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:45:43.794065701Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-p2y5.15",
+  "title": "p2y5.4: Rust gateway: Yggdrasil tun backhaul integration",
+  "description": "Integrate Yggdrasil as the primary backhaul. Open the Yggdrasil tun interface, read/write IPv6 packets. Gateway's 02xx:: address is its Yggdrasil address. Mesh nodes with 02xx:: addresses are reachable globally via Yggdrasil. This is the simplest backhaul — no prefix delegation, no NAT.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:45:44.068435954Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:45:44.068435954Z",
+  "labels": [
+    "blocked:hardware",
+    "core",
+    "gateway",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-p2y5.15",
+      "depends_on_id": "project-LICHEN-p2y5",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:45:44.206318301Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

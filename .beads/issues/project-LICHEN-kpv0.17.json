@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-kpv0.17",
+  "title": "kpv0.3: Fix clippy manual_is_multiple_of in frame_parser.rs",
+  "description": "Clippy manual_is_multiple_of in unchanged frame_parser.rs. Single-line fix.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:45:55.665126033Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:45:55.665126033Z",
+  "labels": [
+    "coap",
+    "l2",
+    "python",
+    "rust",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.17",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:45:55.801173389Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

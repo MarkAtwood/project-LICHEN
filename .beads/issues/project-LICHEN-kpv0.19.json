@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-kpv0.19",
+  "title": "kpv0.5: Add pytest-cov to locked dev dependencies",
+  "description": "pytest-cov is absent from the locked dev environment although CI invokes --cov. Add to pyproject.toml dev deps and regenerate uv.lock.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:45:56.470296346Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:45:56.470296346Z",
+  "labels": [
+    "coap",
+    "l2",
+    "python",
+    "rust",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.19",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:45:56.591569999Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

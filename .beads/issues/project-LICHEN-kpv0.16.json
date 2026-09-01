@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-kpv0.16",
+  "title": "kpv0.2: Fix cargo fmt differences in pre-existing files",
+  "description": "cargo fmt differences in 10 unchanged/pre-existing locations. Run cargo fmt --all and commit.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:45:55.256779834Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:45:55.256779834Z",
+  "labels": [
+    "coap",
+    "l2",
+    "python",
+    "rust",
+    "tests"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-kpv0.16",
+      "depends_on_id": "project-LICHEN-kpv0",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:45:55.38600011Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
