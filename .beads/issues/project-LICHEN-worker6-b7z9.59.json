@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.59",
+  "title": "CCP: join rate limiting and PoW (2a.5.5.2) not implemented anywhere",
+  "description": "NOT-IMPLEMENTED. Req: 'Nodes MUST implement join-attempt rate limiting' (2a.5.5.2): node \u003c=1 join/10s; after 3 consecutive failed joins exponential backoff 20/40/80s max 320s, reset on success; root tracks per-IID sliding window, MUST ignore IIDs \u003e6 req/60s; global 60 req/60s -\u003e respond 5.03 + MAY enable PoW; dropped requests MUST NOT allocate state; per-IID table \u003c=1024 entries with LRU eviction. OPTIONAL PoW: 8-byte pow_challenge in beacon CBOR options; joiner pow_response 4-byte with SHA-256(pow_challenge||joiner_iid||pow_response)[0:2]==0x0000; root MUST reject invalid/missing when challenge advertised. Evidence: rg pow_challenge|pow_response|join.*rate|backoff.*320 across python/src, rust/, lichen/ = zero production hits (only unrelated CoAP 5.03 peer backoff lichen-coap/src/client.rs:159-263, BroadcastRateLimiter, SOS ratelimit). Spec added by commit 380396613a. Suggested placement: python/src/lichen/timing/tdma_fsm.py (node backoff) + root join gate in gateway; rust/lichen-gateway (per-IID LRU table); C lichen/subsys/lichen/link/ (Kconfig-gated). Beacon CBOR pow_challenge field also needs the beacon codec work tracked by the beacon-format gap bead.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T09:31:34.464238808Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T09:31:34.464238808Z",
+  "labels": [
+    "ccp",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.59",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T09:31:34.572956292Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

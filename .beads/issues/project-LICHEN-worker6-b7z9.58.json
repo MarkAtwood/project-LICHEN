@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.58",
+  "title": "CCP: density threshold 8 in impls+vectors contradicts decision \u003e10",
+  "description": "DIVERGENT (final decision density-high says DENSITY_HIGH\u003e10; spec text fixed to \u003e10; but all three implementations and committed vectors use \u003e8). Req: 'IF Density \u003e 10 THEN RETURN 0' (2a.3.1); 'Density\u003eDENSITY_HIGH(10) MUST use CH0 + SF\u003e=11' (2a.8/2a.10.5); duty dense tier density\u003e10 (2a.9). Evidence: python/src/lichen/ccp.py:105,350,375 and timing/duty_cycle.py:60-76 use \u003e8; rust/lichen-core/src/rf_health.rs:386,653 use DENSITY_HIGH=8; lichen/subsys/lichen/link/link_ctx.c:705, lichen/subsys/lichen/routing/gradient.c:320, lichen/subsys/lichen/l2/lora_l2_tx.c:587 use \u003e8. Vectors pin 8: ccp16.json select_channel_timing_test (density=9-\u003eCH0), ccp13.json dense_start_region0 (density=9-\u003e5 permille). Commit 521ce0968d set 8. Python has TWO divergent selectors: ccp.py (\u003e8) vs link/adaptive_sf.py:137 (\u003e10). Python test tests/test_ccp.py:106 pins 9-\u003eCH0. Fix: change DENSITY_HIGH to 10 in all three impls, regenerate affected vectors (ccp16.json, ccp13.json, ccp15.json, ccp16_load_balance.json), update Python tests pinning 9-\u003eCH0, unify python ccp.py with link/adaptive_sf.py and channel_plan.py duplicates. Suggested placement: python/src/lichen/ccp.py + python/src/lichen/link/adaptive_sf.py + python/src/lichen/channel_plan.py + python/src/lichen/timing/duty_cycle.py; rust/lichen-core/src/{rf_health.rs,duty_cycle.rs}; lichen/subsys/lichen/link/link_ctx.c + lichen/subsys/lichen/routing/gradient.c + lichen/subsys/lichen/l2/lora_l2_tx.c; test/vectors generators.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T09:31:34.066607432Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T09:31:34.066607432Z",
+  "labels": [
+    "ccp",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.58",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T09:31:34.201089761Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
