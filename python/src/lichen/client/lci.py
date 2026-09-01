@@ -998,7 +998,7 @@ def _waypoint_validation_error(waypoint: Mapping[str, Any]) -> str | None:
 
 
 def _is_finite_number(value: Any) -> TypeGuard[int | float]:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         return False
     try:
         return math.isfinite(value)

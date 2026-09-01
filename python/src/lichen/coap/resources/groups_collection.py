@@ -64,7 +64,7 @@ def _bound_oscore_identity(value: object) -> str | None:
     """
     if isinstance(value, str) and value:
         return value
-    if isinstance(value, (bytes, bytearray)) and value:
+    if isinstance(value, bytes | bytearray) and value:
         return bytes(value).hex()
     return None
 
@@ -109,7 +109,7 @@ def _group_oscore_value_matches(item: dict[str, Any], value: object) -> bool:
 
     for attribute in ("id_context", "context_id", "kid_context"):
         candidate = getattr(value, attribute, None)
-        if isinstance(candidate, (bytes, bytearray)):
+        if isinstance(candidate, bytes | bytearray):
             return bytes(candidate) == expected_id_context
 
     bound_group_id = getattr(value, "group_id", None)
@@ -117,7 +117,7 @@ def _group_oscore_value_matches(item: dict[str, Any], value: object) -> bool:
     if type(bound_epoch) is int and bound_epoch == epoch:
         if bound_group_id == group_id:
             return True
-        if isinstance(bound_group_id, (bytes, bytearray)):
+        if isinstance(bound_group_id, bytes | bytearray):
             return bytes(bound_group_id) == bytes.fromhex(group_id)
 
     key_id = item.get("key_id")

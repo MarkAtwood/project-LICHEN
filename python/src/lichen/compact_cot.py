@@ -97,7 +97,7 @@ def _validate_int_field(name: str, value: int, minimum: int, maximum: int) -> No
 
 def _validate_finite_field(name: str, value: float, minimum: float, maximum: float) -> None:
     """Validate a human-unit PLI input before fixed-point conversion."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, int | float) or not isfinite(value):
         raise ValueError(f"{name} must be finite")
     if not minimum <= value <= maximum:
         raise ValueError(f"{name} {value} out of range [{minimum}, {maximum}]")

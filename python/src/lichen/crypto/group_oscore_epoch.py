@@ -57,7 +57,7 @@ def _monotonic_time_ms() -> int:
 
 
 def _coerce_master_secret(value: bytes, name: str) -> bytes:
-    if not isinstance(value, (bytes, bytearray, memoryview)):
+    if not isinstance(value, bytes | bytearray | memoryview):
         raise ValueError(
             f"{name} must be bytes-like (bytes, bytearray, or memoryview), "
             f"not {type(value).__name__}"

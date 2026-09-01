@@ -230,7 +230,7 @@ class TestCapabilityAnnouncementVectorFile:
             assert bool(int(payload.capabilities) & 0x01) is bits["egress"]
             assert bool(int(payload.capabilities) & 0x02) is bits["prefix_delegation"]
             prefix = payload.prefix
-            prefix_hex = prefix.hex() if isinstance(prefix, (bytes, bytearray)) else str(prefix)
+            prefix_hex = prefix.hex() if isinstance(prefix, bytes | bytearray) else str(prefix)
             assert prefix_hex == vector["prefix"]
             assert payload.prefix_len == vector["prefix_len"]
             assert payload.seq == vector["seq"]

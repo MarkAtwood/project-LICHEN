@@ -81,26 +81,26 @@ class PositionCacheResource(resource.ObservableResource):
         """
         if (
             isinstance(ts, bool)
-            or not isinstance(ts, (int, float))
+            or not isinstance(ts, int | float)
             or (isinstance(ts, float) and not math.isfinite(ts))
             or ts < 0
         ):
             raise ValueError("timestamp must be non-negative finite number")
         if (
             isinstance(lat, bool)
-            or not isinstance(lat, (int, float))
+            or not isinstance(lat, int | float)
             or (isinstance(lat, float) and not math.isfinite(lat))
         ):
             raise ValueError("latitude must be finite number")
         if (
             isinstance(lon, bool)
-            or not isinstance(lon, (int, float))
+            or not isinstance(lon, int | float)
             or (isinstance(lon, float) and not math.isfinite(lon))
         ):
             raise ValueError("longitude must be finite number")
         if alt is not None and (
             isinstance(alt, bool)
-            or not isinstance(alt, (int, float))
+            or not isinstance(alt, int | float)
             or (isinstance(alt, float) and not math.isfinite(alt))
         ):
             raise ValueError("altitude must be finite number or None")
@@ -138,7 +138,7 @@ class PositionCacheResource(resource.ObservableResource):
         """
         if (
             isinstance(cutoff_ts, bool)
-            or not isinstance(cutoff_ts, (int, float))
+            or not isinstance(cutoff_ts, int | float)
             or (isinstance(cutoff_ts, float) and not math.isfinite(cutoff_ts))
             or cutoff_ts < 0
         ):

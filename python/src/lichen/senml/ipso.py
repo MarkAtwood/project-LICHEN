@@ -199,7 +199,7 @@ def sensor_record(
     Units are inferred only for known object/resource pairs; an explicit
     ``unit`` always wins.
     """
-    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+    if isinstance(value, bool) or not isinstance(value, int | float | Decimal):
         raise TypeError("value must be a number")
     try:
         finite = math.isfinite(value)

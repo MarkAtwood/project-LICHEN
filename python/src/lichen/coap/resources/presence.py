@@ -36,7 +36,7 @@ _PRESENCE_CACHE_MAX = 100  # maximum entries in the presence cache
 def _finite_non_negative(value: object, name: str) -> float:
     if (
         isinstance(value, bool)
-        or not isinstance(value, (int, float))
+        or not isinstance(value, int | float)
         or (isinstance(value, float) and not math.isfinite(value))
         or value < 0
     ):

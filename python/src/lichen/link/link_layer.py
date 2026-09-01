@@ -391,7 +391,7 @@ class LinkLayer:
                 if failure is None:
                     if (
                         isinstance(current, bool)
-                        or not isinstance(current, (int, float))
+                        or not isinstance(current, int | float)
                         or not math.isfinite(current)
                         or current < 0
                     ):

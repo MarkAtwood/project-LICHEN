@@ -225,7 +225,7 @@ async def partial_metrics(request: Request):
 
     # Parse SenML records into a dict
     metrics: dict[str, Any] = {}
-    if data and isinstance(data, (list, tuple)):
+    if data and isinstance(data, list | tuple):
         for rec in data:
             if isinstance(rec, dict):
                 name = rec.get("n")
@@ -252,7 +252,7 @@ async def partial_metrics(request: Request):
         if display_name in metrics:
             val = metrics[display_name]["value"]
             # Skip non-numeric values to avoid TypeError on comparison
-            if not isinstance(val, (int, float)):
+            if not isinstance(val, int | float):
                 continue
             if name == "collision_rate":
                 # Lower is better

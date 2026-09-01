@@ -87,7 +87,7 @@ def _validate_scope(scope: object) -> str:
 def _normalize_address(
     address: str | IPv6Address, link_scope: str | None
 ) -> tuple[_BucketKey, IPv6Address]:
-    if not isinstance(address, (str, IPv6Address)):
+    if not isinstance(address, str | IPv6Address):
         raise AddressCollisionError("address must be an IPv6 string or IPv6Address")
     try:
         parsed = IPv6Address(address)
@@ -119,7 +119,7 @@ def verify_native_address_binding(address: str | IPv6Address, public_key: bytes)
         raise AddressBindingError("known public key must be exactly 32 immutable bytes")
     if not crypto_core_ed25519_is_valid_point(public_key):
         raise AddressBindingError("known public key is not a valid prime-order Ed25519 point")
-    if not isinstance(address, (str, IPv6Address)):
+    if not isinstance(address, str | IPv6Address):
         raise AddressBindingError("claimed native address must be an IPv6 string or IPv6Address")
     try:
         parsed = IPv6Address(address)

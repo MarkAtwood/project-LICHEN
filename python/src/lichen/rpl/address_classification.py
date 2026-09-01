@@ -28,7 +28,7 @@ class AddressClassificationError(ValueError):
 
 
 def _parse_ipv6(address: str | IPv6Address) -> IPv6Address:
-    if not isinstance(address, (str, IPv6Address)):
+    if not isinstance(address, str | IPv6Address):
         raise AddressClassificationError("address must be an IPv6 string or IPv6Address")
     try:
         return IPv6Address(address)

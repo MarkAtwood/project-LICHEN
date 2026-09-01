@@ -96,7 +96,7 @@ def _epoch(value: object, name: str, *, nonzero: bool = False) -> int:
 def _mono(value: object, name: str = "monotonic time") -> float:
     if (
         isinstance(value, bool)
-        or not isinstance(value, (int, float))
+        or not isinstance(value, int | float)
         or not math.isfinite(value)
         or value < 0
     ):
