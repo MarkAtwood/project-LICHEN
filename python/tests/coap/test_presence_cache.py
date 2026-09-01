@@ -325,6 +325,7 @@ class TestPresenceCacheIPv6Canonicalization:
         cache = PresenceCacheResource(time_source=clock)
         with pytest.raises(ValueError, match="valid IPv6"):
             cache.record("not-an-ip", "available", ts=_T0)
+        assert cache._nodes == {}
 
     def test_record_rejects_ipv4_addr(self) -> None:
         """record() rejects IPv4 addresses (IPv6 only)."""
@@ -347,6 +348,14 @@ class TestPresenceCacheIPv6Canonicalization:
         with pytest.raises(ValueError, match="must be a string"):
             cache.record(None, "available", ts=_T0)  # type: ignore[arg-type]
 
+    def test_record_rejects_whitespace_padded_addr(self) -> None:
+        """record() rejects an address with surrounding whitespace."""
+        clock = _Clock(_T0)
+        cache = PresenceCacheResource(time_source=clock)
+        with pytest.raises(ValueError, match="valid IPv6"):
+            cache.record(" 200::1", "available", ts=_T0)
+        assert cache._nodes == {}
+
     def test_record_rejects_non_string_types(self) -> None:
         """record() rejects non-string types (int, list, etc.)."""
         clock = _Clock(_T0)
@@ -357,6 +366,49 @@ class TestPresenceCacheIPv6Canonicalization:
             cache.record(["200::1"], "available", ts=_T0)  # type: ignore[arg-type]
         with pytest.raises(ValueError, match="must be a string"):
             cache.record({"addr": "200::1"}, "available", ts=_T0)  # type: ignore[arg-type]
+
+    def test_record_rejects_invalid_battery(self) -> None:
+        """record() rejects bool, out-of-range, and non-integer battery."""
+        clock = _Clock(_T0)
+        cache = PresenceCacheResource(time_source=clock)
+        for battery in (True, -1, 101, 1.5, "80"):
+            with pytest.raises(PresenceError, match="battery"):
+                cache.record("200::1", "available", ts=_T0, battery=battery)  # type: ignore[arg-type]
+        assert cache._nodes == {}
+
+    def test_record_rejects_invalid_ts(self) -> None:
+        """record() rejects negative, NaN, inf, and bool ts."""
+        clock = _Clock(_T0)
+        cache = PresenceCacheResource(time_source=clock)
+        for ts in (-1.0, float("nan"), float("inf"), True):
+            with pytest.raises(ValueError, match="non-negative finite"):
+                cache.record("200::1", "available", ts=ts)  # type: ignore[arg-type]
+        assert cache._nodes == {}
+
+    def test_record_rejects_none_status(self) -> None:
+        """record() rejects None as status (spec 18.5.1 requires a tstr)."""
+        clock = _Clock(_T0)
+        cache = PresenceCacheResource(time_source=clock)
+        with pytest.raises(PresenceError):
+            cache.record("200::1", None, ts=_T0)  # type: ignore[arg-type]
+        assert cache._nodes == {}
+
+    def test_record_rejects_empty_status(self) -> None:
+        """record() rejects an empty status string."""
+        clock = _Clock(_T0)
+        cache = PresenceCacheResource(time_source=clock)
+        with pytest.raises(PresenceError):
+            cache.record("200::1", "", ts=_T0)
+        assert cache._nodes == {}
+
+    def test_record_rejects_non_string_status(self) -> None:
+        """record() rejects non-string status types."""
+        clock = _Clock(_T0)
+        cache = PresenceCacheResource(time_source=clock)
+        for status in (123, 1.5, True, ["available"], {"status": "available"}):
+            with pytest.raises(PresenceError):
+                cache.record("200::1", status, ts=_T0)  # type: ignore[arg-type]
+        assert cache._nodes == {}
 
     def test_equivalent_spellings_same_cache_slot(self) -> None:
         """Compressed and expanded IPv6 forms occupy the same cache slot."""
