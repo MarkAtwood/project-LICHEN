@@ -16,6 +16,7 @@ from lichen.timing.sfn import (
     DesyncFSM,
     DesyncState,
     hash_32,
+    holdover_expired,
     initial_startup_delay,
     sfn_delta,
     slot_for,
@@ -285,6 +286,28 @@ class TestDesyncFSM:
         fsm = DesyncFSM()
         state = fsm.on_sfn_wrap(time_valid=False)
         assert state == DesyncState.DESYNCED
+
+    def test_drift_desync_transition(self) -> None:
+        """b7z9.29.63 / R-02a-decision guard-ppm: SYNCED + drift_ppm > 5000
+        -> DESYNCED (mirrors C desync_fsm ccp16-desync.json 12000>5000 case
+        and Rust holdover_expired semantics)."""
+        fsm = DesyncFSM()
+        # Below guard: stays SYNCED.
+        assert fsm.on_drift(4000) == DesyncState.SYNCED
+        # Exactly at guard: NOT desync (strictly greater).
+        assert fsm.on_drift(5000) == DesyncState.SYNCED
+        # Above guard: DESYNCED with counters reset.
+        assert fsm.on_drift(12000) == DesyncState.DESYNCED
+        assert fsm.consecutive_valid == 0
+        assert fsm.missed_superframes == 0
+
+    def test_holdover_expired_parity(self) -> None:
+        """holdover_expired matches Rust lichen-link tdma_clock.rs."""
+        assert holdover_expired(12000, 5000) is True
+        assert holdover_expired(-12000, 5000) is True
+        assert holdover_expired(5000, 5000) is False
+        assert holdover_expired(4999) is False
+        assert holdover_expired(5001) is True
 
     def test_beacon_valid_in_desynced_goes_recovering(self) -> None:
         fsm = DesyncFSM()
