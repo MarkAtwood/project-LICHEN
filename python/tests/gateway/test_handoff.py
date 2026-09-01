@@ -12,6 +12,7 @@ import pytest
 
 from lichen.gateway.handoff import (
     FreshnessState,
+    HandoffConfirmCosePayload,
     HandoffError,
     HandoffRejectReason,
     HandoffRequest,
@@ -541,3 +542,47 @@ class TestHandoffRejectReason:
         """All reject reasons have distinct values."""
         values = [int(r) for r in HandoffRejectReason]
         assert len(values) == len(set(values))
+
+class TestConfirmReplayBitmap:
+    """replay_bitmap (key 7) per the GCP-7.1 spec amendment (b7z9.66/syml)."""
+
+    def _confirm(self, replay_bitmap: int = 0b101):
+        return HandoffConfirmCosePayload(
+            node=bytes(range(8)),
+            new_gw=bytes(range(8, 16)),
+            seq=1,
+            ts=1700000000,
+            link_epoch=3,
+            link_seq=100,
+            replay_bitmap=replay_bitmap,
+        )
+
+    def test_roundtrip_with_bitmap(self) -> None:
+        payload = self._confirm()
+        decoded = HandoffConfirmCosePayload.from_cbor(payload.to_cbor())
+        assert decoded.replay_bitmap == 0b101
+
+    def test_bit0_clear_rejected(self) -> None:
+        # bit 0 = link_seq itself was accepted; must be set.
+        with pytest.raises(HandoffError, match="bit 0 must be set"):
+            self._confirm(replay_bitmap=0b100)
+
+    def test_out_of_range_rejected(self) -> None:
+        with pytest.raises(HandoffError, match="32-bit"):
+            self._confirm(replay_bitmap=-1)
+        with pytest.raises(HandoffError, match="32-bit"):
+            self._confirm(replay_bitmap=1 << 32)
+
+    def test_missing_key_rejected(self) -> None:
+        import cbor2
+        payload_map = {
+            1: bytes(range(8)),
+            2: bytes(range(8, 16)),
+            3: 1,
+            4: 1700000000,
+            5: 3,
+            6: 100,
+            # 7 missing
+        }
+        with pytest.raises(HandoffError, match="missing or unknown keys"):
+            HandoffConfirmCosePayload.from_cbor(cbor2.dumps(payload_map, canonical=True))

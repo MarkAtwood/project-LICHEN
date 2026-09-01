@@ -120,6 +120,7 @@ _CONF_SEQ = 3  # seq: uint - Echoed handoff sequence number
 _CONF_TS = 4  # ts: uint - Confirmation timestamp
 _CONF_LINK_EPOCH = 5  # link_epoch: uint - Node's link-layer epoch (8-bit)
 _CONF_LINK_SEQ = 6  # link_seq: uint - Node's link-layer sequence (16-bit)
+_CONF_REPLAY_BITMAP = 7  # replay_bitmap: uint (32-bit) - seen-sequence bitmap
 
 
 @dataclass(frozen=True)
@@ -834,6 +835,8 @@ class HandoffConfirmCosePayload:
         ts: Confirmation timestamp
         link_epoch: Node's link-layer epoch (8-bit)
         link_seq: Node's link-layer sequence (16-bit)
+        replay_bitmap: 32-bit seen-sequence bitmap (bit i = link_seq - i;
+            bit 0 MUST be set — the old gateway accepted link_seq itself)
     """
 
     node: bytes
@@ -842,6 +845,7 @@ class HandoffConfirmCosePayload:
     ts: int
     link_epoch: int
     link_seq: int
+    replay_bitmap: int
 
     def __post_init__(self) -> None:
         _strict_iid(self.node, "node")
@@ -852,6 +856,10 @@ class HandoffConfirmCosePayload:
             raise HandoffError("link_epoch must be 0-255")
         if not isinstance(self.link_seq, int) or not 0 <= self.link_seq <= 65535:
             raise HandoffError("link_seq must be 0-65535")
+        if not isinstance(self.replay_bitmap, int) or not 0 <= self.replay_bitmap <= 0xFFFFFFFF:
+            raise HandoffError("replay_bitmap must be a 32-bit uint")
+        if not self.replay_bitmap & 1:
+            raise HandoffError("replay_bitmap bit 0 must be set (link_seq was accepted)")
 
     def to_cbor(self) -> bytes:
         """Encode as CBOR map with integer keys."""
@@ -862,6 +870,7 @@ class HandoffConfirmCosePayload:
             _CONF_TS: self.ts,
             _CONF_LINK_EPOCH: self.link_epoch,
             _CONF_LINK_SEQ: self.link_seq,
+            _CONF_REPLAY_BITMAP: self.replay_bitmap,
         }
         return cbor2.dumps(payload_map, canonical=True)
 
@@ -877,7 +886,8 @@ class HandoffConfirmCosePayload:
             raise HandoffError("payload must be a CBOR map")
 
         required_keys = {
-            _CONF_NODE, _CONF_NEW_GW, _CONF_SEQ, _CONF_TS, _CONF_LINK_EPOCH, _CONF_LINK_SEQ
+            _CONF_NODE, _CONF_NEW_GW, _CONF_SEQ, _CONF_TS, _CONF_LINK_EPOCH,
+            _CONF_LINK_SEQ, _CONF_REPLAY_BITMAP
         }
         if set(payload_map.keys()) != required_keys:
             raise HandoffError("payload has missing or unknown keys")
@@ -889,6 +899,7 @@ class HandoffConfirmCosePayload:
             ts=_strict_uint(payload_map[_CONF_TS], "ts"),
             link_epoch=payload_map[_CONF_LINK_EPOCH],
             link_seq=payload_map[_CONF_LINK_SEQ],
+            replay_bitmap=payload_map[_CONF_REPLAY_BITMAP],
         )
 
 
