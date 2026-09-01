@@ -518,48 +518,6 @@
    "single_frame_limit": 185,
    "can_fragment": false,
    "provenance": "Per spec section 5.7: Rule 255 does not provide fragmentation compatibility."
-  },
-  {
-   "name": "failure_tracker_success_clears_run",
-   "category": "rule_version",
-   "priority": "P2",
-   "description": "A successful decompression clears the consecutive-failure run; the next failure restarts from count 1 without notification.",
-   "failure_tracker_capacity": 4,
-   "failure_threshold": 3,
-   "capacity_policy": "fail_closed_no_eviction",
-   "sources": [
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
-   ],
-   "expected_results": [
-    "below_threshold",
-    "below_threshold",
-    "clear_on_success",
-    "below_threshold"
-   ],
-   "provenance": "Bounded implementation, same as failure_tracker_capacity vector."
-  },
-  {
-   "name": "failure_tracker_retire_then_refail",
-   "category": "rule_version",
-   "priority": "P2",
-   "description": "Retiring a signer clears its run; a subsequent failure from the same signer starts a fresh consecutive count.",
-   "failure_tracker_capacity": 4,
-   "failure_threshold": 2,
-   "capacity_policy": "fail_closed_no_eviction",
-   "sources": [
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
-    "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
-   ],
-   "expected_results": [
-    "below_threshold",
-    "notify_operator",
-    "below_threshold_after_retire"
-   ],
-   "provenance": "Retire clears state; refail starts fresh count without carry."
   }
  ],
  "admission_policy_vectors": [

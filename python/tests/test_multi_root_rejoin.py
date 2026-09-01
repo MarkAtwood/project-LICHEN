@@ -6,8 +6,6 @@ wiring on MultiRootState (bead q0pg, slice of b7z9.25)."""
 
 from dataclasses import dataclass
 
-import pytest
-
 from lichen.link.slot_coordination import (
     HOLDOFF_SUPERFRAMES,
     MultiRootState,
