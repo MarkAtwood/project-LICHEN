@@ -5,22 +5,22 @@
 
 use core::convert::Infallible;
 
-use lichen_oscore::{Context, ContextId, OscoreError, SenderSequenceState, SenderStateStore};
+use lichen_oscore::{Context, ContextId, OscoreError, SenderSequenceState, ContextStateStore, RecipientReplayState};
 
 #[derive(Default)]
 struct MemoryStore(Option<(ContextId, SenderSequenceState)>);
 
-impl SenderStateStore for MemoryStore {
+impl ContextStateStore for MemoryStore {
     type Error = Infallible;
 
-    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self
             .0
             .filter(|(stored_id, _)| stored_id == context_id)
             .map(|(_, state)| state))
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         context_id: &ContextId,
         expected: Option<SenderSequenceState>,
@@ -36,6 +36,9 @@ impl SenderStateStore for MemoryStore {
         self.0 = Some((*context_id, next));
         Ok(true)
     }
+
+    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
+    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
 }
 
 fn active_context(

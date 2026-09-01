@@ -19,23 +19,23 @@
 //!    connection IDs (RFC 9528 Section 7.2.1 parity), and the exported
 //!    context must protect to the same wire bytes.
 
-use lichen_oscore::{Context, SenderSequenceState, SenderStateStore};
+use lichen_oscore::{Context, SenderSequenceState, ContextStateStore, RecipientReplayState};
 use serde::Deserialize;
 use std::fs;
 
 struct TestStore(Option<SenderSequenceState>);
 
-impl SenderStateStore for TestStore {
+impl ContextStateStore for TestStore {
     type Error = core::convert::Infallible;
 
-    fn load(
+    fn load_sender(
         &mut self,
         _context_id: &lichen_oscore::ContextId,
     ) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self.0)
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         _context_id: &lichen_oscore::ContextId,
         expected: Option<SenderSequenceState>,
@@ -47,6 +47,9 @@ impl SenderStateStore for TestStore {
         self.0 = Some(next);
         Ok(true)
     }
+
+    fn load_recipient(&mut self, _: &lichen_oscore::ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
+    fn save_recipient(&mut self, _: &lichen_oscore::ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
 }
 
 #[derive(Debug, Deserialize)]

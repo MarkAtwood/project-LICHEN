@@ -36,24 +36,24 @@ use lichen_link::seqnum::LinkSeqNum;
 use lichen_node::rpl_code;
 use lichen_node::secure::{SecureRequestData, SecureResponse, SecureStack};
 use lichen_node::RplEvent;
-use lichen_oscore::{ContextId, SenderSequenceState, SenderStateStore};
+use lichen_oscore::{ContextId, SenderSequenceState, ContextStateStore, RecipientReplayState};
 use lichen_schc::codec;
 use schnorr48::{derive_keypair, sign};
 
 #[derive(Default)]
 struct TestSenderStore(Option<(ContextId, SenderSequenceState)>);
 
-impl SenderStateStore for TestSenderStore {
+impl ContextStateStore for TestSenderStore {
     type Error = ();
 
-    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self
             .0
             .filter(|(stored, _)| stored == context_id)
             .map(|(_, state)| state))
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         context_id: &ContextId,
         expected: Option<SenderSequenceState>,
@@ -69,6 +69,9 @@ impl SenderStateStore for TestSenderStore {
         self.0 = Some((*context_id, next));
         Ok(true)
     }
+
+    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
+    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
 }
 
 /// Build a link-local Ipv6Addr from an 8-bit interface-identifier suffix.
