@@ -334,9 +334,13 @@ int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 		sf = LICHEN_MAX(7, sf - 1);
 	}
 
-	/* Step 5: High loss OR very high utilization triggers SF +1 */
+	/* Step 5: High loss OR very high utilization OR load factor > 0.8
+	 * triggers SF +1 (spec 2a.8:423; >= 52429 is the Q16.16 form of
+	 * strictly greater than 0.8) */
 	bool tx_allowed = true;
-	if (ema_loss_fp > LICHEN_EMA_LOSS_THRESHOLD_FP || utilization > 200) {
+	if (ema_loss_fp > LICHEN_EMA_LOSS_THRESHOLD_FP ||
+	    load_factor_fp >= LICHEN_LOAD_FACTOR_THRESHOLD_FP ||
+	    utilization > 200) {
 		sf = LICHEN_MIN(12, sf + 1);
 		if (utilization > 200) {
 			/* Per spec: utilization > 200 forces SF=12 and blocks tx */

@@ -1221,6 +1221,25 @@ static int test_gradient_sf_floors(void)
 					  2003U, &sf, &tx_allowed) == 0);
 	REQUIRE(sf == 11U);
 
+	/* Step 5 (b7z9.29.2): load factor >= 52429 alone triggers SF +1.
+	 * current_sf=10, density=10 (no step 3), loss/util 0 -> 10+1 = 11. */
+	memset(&table, 0, sizeof(table));
+	entry.sf.current_sf = 10U;
+	entry.sf.snr_ewma = 0;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 52429U,
+					  2005U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Step 5 below threshold (52428): SF stays 10. */
+	memset(&table, 0, sizeof(table));
+	entry.sf.current_sf = 10U;
+	entry.sf.snr_ewma = 0;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 52428U,
+					  2006U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 10U);
+
 	/* Below the load-factor threshold (52428 = 0.79998...) no floor. */
 	memset(&table, 0, sizeof(table));
 	entry.sf.current_sf = 9U;
