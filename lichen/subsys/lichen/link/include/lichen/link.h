@@ -242,10 +242,8 @@ enum lichen_desync_state {
 
 /** Consecutive valid beacons required to recover (spec 14.7: 3) */
 #define LICHEN_DESYNC_RECOVERY_BEACONS 3u
-/** Bounded RECOVERING listen timeout (superframes), RECOMMENDED 3 per 14.7
- * (oracle name: python timing.sfn TDMA_BEACON_TIMEOUT_SUPERFRAMES) */
-#define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3u
 struct lichen_tdma_ctx {
+	uint8_t eui64[8];                    /**< Node EUI64 (copied at init) */
 	uint32_t superframe;
 	uint8_t slot;
 	uint8_t n_slots;

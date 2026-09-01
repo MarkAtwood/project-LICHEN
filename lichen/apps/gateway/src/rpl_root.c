@@ -159,12 +159,14 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 		return false;
 	}
 
-	/* Buffer for IPv6 + ICMPv6 + DIO base + DODAG config option */
-	uint8_t buf[IPV6_HDR_LEN + ICMPV6_HDR_LEN + LICHEN_RPL_DIO_BASE_LEN + 2 + LICHEN_RPL_DODAG_CONFIG_DATA_LEN];
+	/* Buffer for IPv6 + ICMPv6 + DIO base + DODAG config option +
+	 * SCHC Rule Version option (spec 5.7: 2-byte header + 1-byte version) */
+	uint8_t buf[IPV6_HDR_LEN + ICMPV6_HDR_LEN + LICHEN_RPL_DIO_BASE_LEN +
+		    2 + LICHEN_RPL_DODAG_CONFIG_DATA_LEN + 2 +
+		    LICHEN_RPL_SCHC_RULE_VERSION_DATA_LEN];
 	uint8_t src[16], dst[16] = RPL_MULTICAST_ADDR;
 
 	/* DIOs originate from the root's own link-local address */
-	uint8_t src[16], dst[16] = RPL_MULTICAST_ADDR;
 	memcpy(src, root->self_addr, 16);
 
 	/* Build DODAG config option */
@@ -207,7 +209,21 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 		return false;
 	}
 
-	size_t rpl_body_len = (size_t)dio_len + (size_t)opt_len;
+	/* Spec 5.7: every DIO usable for admission MUST advertise the DODAG's
+	 * rule set version; the C RX admission gate (dodag.c) requires it. */
+	struct lichen_rpl_schc_rule_version rule_version = {
+		.version = LICHEN_SCHC_RULE_SET_VERSION,
+	};
+	uint8_t *rv_opt = rpl + dio_len + opt_len;
+	int rv_len = lichen_rpl_schc_rule_version_write(
+		&rule_version, rv_opt,
+		sizeof(buf) - IPV6_HDR_LEN - ICMPV6_HDR_LEN - dio_len - opt_len);
+	if (rv_len < 0) {
+		LOG_ERR("SCHC rule version option serialize failed: %d", rv_len);
+		return false;
+	}
+
+	size_t rpl_body_len = (size_t)dio_len + (size_t)opt_len + (size_t)rv_len;
 	size_t icmp_len = ICMPV6_HDR_LEN + rpl_body_len;
 
 	/* Build IPv6 header */

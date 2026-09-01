@@ -1219,6 +1219,15 @@ impl CoapResponse {
         }
     }
 
+    /// 4.03 Forbidden.
+    pub fn forbidden() -> Self {
+        Self {
+            code: 0x83, // 4.03 Forbidden
+            payload: Zeroizing::new(Vec::new()),
+            content_format: 0,
+        }
+    }
+
     /// 4.01 Unauthorized.
     pub fn unauthorized() -> Self {
         Self {
@@ -1269,6 +1278,8 @@ pub const CONTENT_FORMAT_SENML_CBOR: u16 = 112;
 pub struct GatewayCoordinator {
     /// This gateway's info.
     pub info: GatewayInfo,
+    /// Validated capability announcements (spec 8.12, bounded LRU).
+    pub capability_table: crate::capability::CapabilityTable,
     /// Node registry.
     pub node_registry: NodeRegistry,
     /// Channel map.
@@ -1859,6 +1870,7 @@ impl GatewayCoordinator {
             info: GatewayInfo::new(iid),
             node_registry: NodeRegistry::new(),
             channel_map: ChannelMap { channels },
+            capability_table: crate::capability::CapabilityTable::new(),
             peer_claims: Vec::new(),
             slot_verifier: verifier,
             slots_per_superframe,
@@ -1868,6 +1880,46 @@ impl GatewayCoordinator {
 
     pub fn slot_replay_generation(&self) -> u64 {
         self.slot_verifier.generation()
+    }
+
+    /// Handle POST /.well-known/lichen-gw/capability-announce (spec 8.12):
+    /// decode + verify the announcement, cache it in the capability table,
+    /// respond 2.04 Changed on success and 4.03 Forbidden on failure.
+    fn handle_post_capability_announce(
+        &mut self,
+        payload: &[u8],
+        oscore_verified: bool,
+        peer_pubkey: Option<&[u8; 32]>,
+    ) -> CoapResponse {
+        if !oscore_verified {
+            return CoapResponse::unauthorized();
+        }
+        let Some(pubkey) = peer_pubkey else {
+            return CoapResponse::unauthorized();
+        };
+        let Ok(announcement) = crate::capability_announcements::from_cose_sign1(payload) else {
+            return CoapResponse::forbidden();
+        };
+        // Fail closed on a broken clock: u64::MAX expiry check rejects
+        // every announcement rather than admitting expired ones.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(u64::MAX);
+        let iid = announcement.payload.announcer_iid;
+        let cached_seq = self.capability_table.cached_seq(&iid);
+        match crate::capability_announcements::verify_announcement(
+            &announcement,
+            pubkey,
+            now,
+            cached_seq,
+        ) {
+            Ok(()) => {
+                self.capability_table.insert(announcement.into_entry());
+                CoapResponse::changed(Vec::new())
+            }
+            Err(_) => CoapResponse::forbidden(),
+        }
     }
 
     /// Handle GET /info request.
@@ -2225,6 +2277,9 @@ impl GatewayCoordinator {
             (CoapMethod::Get, "channels") => self.handle_get_channels(),
             (CoapMethod::Post, "handoff") => self.handle_post_handoff(payload, oscore_verified),
             (CoapMethod::Get, "nodes") => self.handle_get_nodes(),
+            (CoapMethod::Post, "capability-announce") => {
+                self.handle_post_capability_announce(payload, oscore_verified, peer_pubkey)
+            }
             (CoapMethod::Get, _) | (CoapMethod::Post, _) => CoapResponse::not_found(),
             _ => CoapResponse::method_not_allowed(),
         }
@@ -2265,6 +2320,78 @@ mod tests {
         (base.with_extension("state"), base.with_extension("floor"))
     }
     use crate::handoff::HandoffResponse;
+
+    #[test]
+    fn capability_announce_dispatch() {
+        use crate::capability_announcements::{create_announcement, CapabilityPayload};
+        let mut coordinator = coordinator([0x22; 16]);
+        let (private, public) = derive_keypair(&Seed::new([9; 32]));
+        let pubkey = *public.as_bytes();
+        // The announcer IID derives from the signer pubkey (8.12 kid binding).
+        let addr = lichen_link::ygg_addr_from_pubkey(&pubkey);
+        let mut announcer_iid = [0u8; 8];
+        announcer_iid.copy_from_slice(&addr[8..]);
+        let payload = CapabilityPayload {
+            capabilities: 1, // egress
+            prefix: Vec::new(),
+            prefix_len: 0,
+            expiry: 4102444800, // 2100-01-01
+            seq: 1,
+            announcer_iid,
+        };
+        let wire = create_announcement(&payload, &private, &public);
+
+        // Unauthenticated POST is rejected (4.01).
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire,
+            false,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x81);
+
+        // Authenticated + valid -> 2.04 Changed, entry cached.
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x44);
+        assert_eq!(
+            coordinator.capability_table.cached_seq(&announcer_iid),
+            Some(1)
+        );
+
+        // Replay (same seq) -> 4.03 Forbidden.
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x83);
+
+        // Tampered payload -> 4.03 (signature no longer matches).
+        let mut wire_tampered = wire.clone();
+        let last = wire_tampered.len() - 1;
+        wire_tampered[last] ^= 0xff;
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire_tampered,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x83);
+    }
 
     #[test]
     fn gateway_capabilities_roundtrip() {

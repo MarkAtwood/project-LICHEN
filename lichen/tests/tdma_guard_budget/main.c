@@ -45,6 +45,10 @@ static void test_desync_fsm(void)
 	       LICHEN_DESYNC_DESYNCED);
 	assert(tdma.desync_consecutive_valid == 0U);
 
+	/* SFN wrap with a valid provider is a no-op in DESYNCED. */
+	assert(lichen_desync_on_sfn_wrap(&tdma, true) ==
+	       LICHEN_DESYNC_DESYNCED);
+
 	/* Three consecutive valid beacons recover to SYNCED. */
 	assert(lichen_desync_on_beacon(&tdma, true) ==
 	       LICHEN_DESYNC_RECOVERING);
@@ -62,14 +66,17 @@ static void test_desync_fsm(void)
 	assert(lichen_desync_on_missed_superframe(NULL) ==
 	       LICHEN_DESYNC_DESYNCED);
 
-	/* SFN wrap with a valid provider is a no-op in DESYNCED. */
+	/* SFN wrap with a valid provider is a no-op in SYNCED. */
 	assert(lichen_desync_on_sfn_wrap(&tdma, true) ==
+	       LICHEN_DESYNC_SYNCED);
+
+	/* Re-desync to exercise the sfn.py:115-116 interleave: a valid
+	 * beacon in RECOVERING resets the missed-superframes count while
+	 * preserving the consecutive-valid count. */
+	assert(lichen_desync_on_sfn_wrap(&tdma, false) ==
 	       LICHEN_DESYNC_DESYNCED);
 	assert(lichen_desync_on_beacon(&tdma, true) ==
 	       LICHEN_DESYNC_RECOVERING);
-
-	/* sfn.py:115-116: a valid beacon in RECOVERING resets the missed
-	 * superframes count while preserving the consecutive-valid count. */
 	assert(lichen_desync_on_missed_superframe(&tdma) ==
 	       LICHEN_DESYNC_RECOVERING);
 	assert(tdma.desync_missed_superframes == 1U);
