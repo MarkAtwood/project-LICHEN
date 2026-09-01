@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.79",
+  "title": "Rust gateway trust store opens state file without O_NOFOLLOW (spec 06-security 8.7 hardening MUST)",
+  "description": "Spec 06-security.md §8.7 (lines ~300-302): 'Trust and private-key stores MUST use owned private directories, non-following regular-file opens, interprocess locks, unique mode-0600 temporary files, atomic replacement, and file plus directory fsync.'\n\nRequirement: R-06-048 (spec-coverage matrix docs/spec-coverage/06-security-part1.md).\n\nClassification: divergent.\nEvidence: rust/lichen-gateway/src/trust.rs:740 uses plain File::open(path) with no O_NOFOLLOW; OpenOptions at :842-846 (temp file) and :890 (reload) set no custom_flags. Everything else conforms: rename :851, file+dir fsync :849-859, unique 0600 temp create_new :842-846, rollback floor :778-783. Python (key_persistence.py:71,101,106-121) and rust/lichen-hal/src/storage.rs:489-496,622-649 implement O_NOFOLLOW/symlink-refusal fully. Compare rust/lichen-gateway/src/config.rs:245 which does use O_NOFOLLOW|O_CLOEXEC.\n\nSuggested placement: add libc::O_NOFOLLOW|O_CLOEXEC custom_flags to the three open sites in rust/lichen-gateway/src/trust.rs (load :740, temp create :842-846, reload :890); mirror the hal storage.rs regular-file/inode check on load.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T16:00:56.887585893Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T16:00:56.887585893Z",
+  "labels": [
+    "security",
+    "spec-gap",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.79",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T16:00:57.041509893Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

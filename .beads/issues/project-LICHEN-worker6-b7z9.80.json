@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.80",
+  "title": "BR trust-anchor list distribution, revocation push, and periodic node fetch absent (spec 06-security 8.7)",
+  "description": "Spec 06-security.md §8.7 (lines ~210-233): BR records (derived IID, PubKey) in a trust anchor list, distributes anchors to other nodes via CoAP; revocation = remove from list + push updated list to all managed nodes (+ optional signed broadcast); nodes SHOULD fetch updates periodically (e.g. every hour) or on BR announcement.\n\nRequirements: R-06-035 (revocation via anchor-list push), R-06-036 (periodic fetch) in docs/spec-coverage/06-security-part1.md. Classification: not-implemented.\n\nEvidence: no anchor-list CoAP resource, no push mechanism, no periodic fetcher in rust/, python/src/, or lichen/ (rg 'anchor' hits are persistence rollback anchors only). Local revocation flag exists in Python only (python/src/lichen/crypto/trust.py:709-729, tested python/tests/crypto/test_trust.py:372-411) and is not wired to any distribution path. BR-provisioned trust LEVEL exists everywhere (rust/lichen-gateway/src/trust.rs:672-713 BrProvisioned; python trust.py add_trust_anchor; C gcp_trust.h PROVISIONED) — what is missing is the distribution/revocation/fetch machinery that makes BR-provisioned fleets manageable.\n\nClassification note: spec text is capability-form ('the border router can revoke...') with one SHOULD (periodic fetch), so filed as SHOULD-gap that breaks the documented BR-provisioned feature rather than a MUST violation.\n\nSuggested placement: CoAP resource on BR for anchor-list fetch + revocation push (mirroring tunnel-auth/capability-announce patterns in spec 8.11/8.12), plus a periodic fetch/announcement hook on nodes; wire python revocation flag into it.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T16:00:56.894308377Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T16:00:56.894308377Z",
+  "labels": [
+    "security",
+    "spec-gap",
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.80",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T16:00:57.074663056Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

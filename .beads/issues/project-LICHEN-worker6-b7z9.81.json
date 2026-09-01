@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.81",
+  "title": "C process_dao validates semantic/Target before per-key replay classification — spec 8.4 mandates replay-before-semantic order",
+  "description": "Spec 06-security.md §8.4 (lines ~92-97): 'The root MUST validate in this order: structural framing and active instance/DODAG context; pinned key, IID, transcript, and origin signature; per-key replay classification; semantic parsing; exact self /128 Target validation; persistence of a fresh replay floor; and atomic in-memory route mutation. Structural failure therefore wins over replay, while a structurally and cryptographically valid replay wins over semantic or Target-validation failure.'\n\nRequirement: R-06-009 in docs/spec-coverage/06-security-part1.md. Classification: divergent (C only).\n\nEvidence: Rust conforms — rust/lichen-rpl/src/routing.rs:612-725 (DaoManager::process_signature_verified_inner): admission :622-624 → per-key replay classification :627-640 → semantic+Target authorize_dao_prefixes :646-655 → staged atomic mutation :678-696 → persistence :701-722. C diverges — lichen/subsys/lichen/rpl/rpl_dao_process.c:807-937 (process_dao): structural + instance/DODAG :830-840 → dao_targets_authorized (semantic/Target) :841-846 → extract_updates :847-849 → per-key sequence/replay classification :862-898 → validate_graph :908 → commit :912-926. Origin-signature verify itself is early (:246-291, during option processing) which is fine; the divergence is semantic/Target running BEFORE replay classification, so a structurally+crypto-valid replayed DAO with invalid targets is reported as a semantic rejection instead of a replay. Both paths fail closed; the precedence label differs from the spec's mandated order.\n\nImpact: low (fail-closed either way) but the ordering is a MUST sentence and Rust/C now disagree on observable rejection taxonomy (matters for dao_origin_signature.json outcome-vector parity).\n\nSuggested placement: in C process_dao, move the staged sequence/replay comparison (:862-898 loop) ahead of dao_targets_authorized/extract_updates, or reconcile spec 8.4 wording if the C order is blessed (see related bead project-LICHEN-worker6-b7z9.9 for the .44.7/delegation reconciliation).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T16:00:56.90878129Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T16:00:56.90878129Z",
+  "labels": [
+    "security",
+    "spec-gap",
+    "zephyr",
+    "rpl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.81",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T16:00:57.096349644Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
