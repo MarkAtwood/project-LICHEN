@@ -489,7 +489,7 @@ static int sos_post(struct coap_resource *resource,
 	 * signature (8-byte big-endian sequence + 48-byte Schnorr48) after
 	 * the CBOR payload; unsigned or truncated frames are silently
 	 * dropped (no error response). */
-	if (payload_len <= SOS_ORIGIN_SIGNATURE_LEN) {
+	if (payload_len < SOS_ORIGIN_SIGNATURE_LEN) {
 		return -ENOENT;
 	}
 	size_t cbor_len = payload_len - SOS_ORIGIN_SIGNATURE_LEN;
@@ -502,23 +502,26 @@ static int sos_post(struct coap_resource *resource,
 
 	ret = sos_alert_from_cbor(payload, cbor_len, &alert);
 	if (ret != 0) {
-		LOG_WRN("SOS alert parse failed: %d", ret);
-		return COAP_RESPONSE_CODE_BAD_REQUEST;
+		return -ENOENT; /* silent drop: unparseable payload */
 	}
 
-	/* Resolve the sender's pinned key (TOFU store). sos_signature.json
-	 * sos_unknown_pubkey_tofu: pinning happens in the key-store path, so
-	 * an unknown pubkey is silently dropped at this layer. The alert
-	 * node field carries the originating node IID. */
+	/* Resolve the sender's pinned key from the key store keyed by the
+	 * alert's node IID. This layer is lookup-only (no TOFU pinning);
+	 * sos_signature.json sos_unknown_pubkey_tofu acceptance requires the
+	 * pin path, so an unknown pubkey is silently dropped here until that
+	 * wiring lands (tracked separately). */
+	uint8_t node_iid[8];
+	alert_node_iid(&alert, node_iid);
+
 	struct lichen_key_entry key_entry;
-	if (lichen_key_store_get(alert_node_iid(&alert), &key_entry) != 0) {
+	if (lichen_key_store_get(node_iid, &key_entry) != 0) {
 		return -ENOENT; /* silent drop: unknown pubkey */
 	}
 
 	/* Origin signature verify (R-12-034: invalid -> silent drop). The
 	 * origin IPv6 is the node IID in the LICHEN native 02xx profile. */
 	uint8_t origin_ipv6[16] = { 0x02 };
-	memcpy(&origin_ipv6[8], alert_node_iid(&alert), 8);
+	memcpy(&origin_ipv6[8], node_iid, 8);
 	if (!sos_origin_verify(key_entry.pubkey, origin_ipv6, payload, cbor_len,
 			       &origin_sig)) {
 		return -ENOENT; /* silent drop: bad signature */
