@@ -1,0 +1,7 @@
+{
+  "id": "1788257221298130609-1",
+  "issue_id": "project-LICHEN-worker6-c0sv",
+  "author": "opencode-worker-7",
+  "text": "Diagnosis progress (worker-7, instrumented run): the relay DOES accept the leaf's announce (AnnouncementAccepted { relayed: true }), but root REJECTS it — root.receive returns RplRejected instead of AnnouncementAccepted { peer.iid == leaf }. So the failure is NOT fixture ordering; it is a root-side admission rejection for the relayed leaf announcement. Root was provisioned_root with MemStorage; the leaf's pubkey was never announced to root directly in this fixture (bootstrap only sent relay's announce). Hypothesis: root's TOFU/announce admission rejects the relayed leaf announce because (a) the leaf is not pinned and the relayed-announce admission path requires prior pinning, or (b) the gradient/route validation in the announce admission requires the relay to know the leaf (which it does — leaf joined via multicast DIO). Next step: trace root's announce admission (RplBorderIngressOutcome/AnnounceRejectReason) for the relayed leaf frame to find the exact reject reason. NOT a fixture-ordering fix — do not weaken the assertion.",
+  "created_at": "2026-09-01T10:07:01.298130609Z"
+}
