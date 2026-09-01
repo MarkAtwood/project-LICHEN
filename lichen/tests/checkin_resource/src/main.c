@@ -91,6 +91,11 @@ int coap_oscore_unprotect_resource_request(
 int coap_oscore_authorize_mutating(
 	struct coap_resource *resource, struct coap_packet *request,
 	struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+	/* Merge resolution: keep the extended out-parameter form (HEAD).
+	 * The beads-worker-7 thin wrapper over
+	 * coap_oscore_unprotect_resource_request() was rejected because the
+	 * merged production callers in checkin_resource.c pass the extended
+	 * out-params (plain_buf, payload_out, ctx_out, piv, is_protected). */
 	uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
 	uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
 	uint8_t *piv_out, size_t *piv_len_out, bool *is_protected)

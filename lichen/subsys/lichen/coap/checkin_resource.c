@@ -6,11 +6,11 @@
  * @brief CoAP resource handlers for Check-In / Roll Call (spec 18.6)
  *
  * Zephyr glue over lichen/checkin.h. See checkin_resource.h for the
- * endpoint contract. Write endpoints (POST/PUT) unprotect the request
- * with coap_oscore_unprotect_resource_request() and require it to be
+ * endpoint contract. Write endpoints (POST/PUT) authorize the request
+ * with coap_oscore_authorize_mutating() and require it to be
  * OSCORE-protected or to originate from the local admin (4.01
  * otherwise); all handler responses go through
- * coap_oscore_respond_resource(). Handler return values follow the
+ * coap_oscore_send_protected(). Handler return values follow the
  * coap_server contract: 0 after responding, or a CoAP response code
  * that the framework must deliver (unprotect failures).
  */
@@ -149,6 +149,13 @@ int lichen_checkin_post_handler(struct coap_resource *resource,
 	uint8_t code;
 	int ret;
 
+	/* Merge resolution: explicit-buffer authorize_mutating() variant
+	 * (HEAD), matching the settled merged-tree callers (coap_server.c,
+	 * coap_dtn.c) and the ctx/PIV + coap_oscore_send_protected()
+	 * response pattern below. beads-worker-7's result-struct wrapper
+	 * is the same authorization gate with a different signature; its
+	 * explicit local-admin 4.01 check already lives inside
+	 * authorize_mutating() (coap_oscore.c), so nothing is lost. */
 	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
 					     COAP_METHOD_POST, oscore_plain_buf,
 					     sizeof(oscore_plain_buf), &payload,
@@ -380,10 +387,14 @@ int lichen_checkin_config_put_handler(struct coap_resource *resource,
 	lichen_checkin_config_apply(&s_service, &cfg);
 	k_mutex_unlock(&s_lock);
 
-	return coap_oscore_respond_resource(resource, request, addr, addr_len,
+	/* send_protected here too: HEAD's text passed this helper's
+	 * argument list to coap_oscore_respond_resource(), which takes a
+	 * coap_oscore_unprotect_result * instead - unresolvable as
+	 * written; use the same helper as every other response in this
+	 * file. */
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
 					    oscore_ctx, piv, piv_len,
-					    COAP_RESPONSE_CODE_CHANGED,
-					    0, NULL, 0U);
+					    COAP_RESPONSE_CODE_CHANGED);
 }
 
 #if IS_ENABLED(CONFIG_LICHEN_CHECKIN_RESOURCE)
