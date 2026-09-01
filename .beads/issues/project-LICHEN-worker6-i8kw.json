@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-i8kw",
+  "title": "desync_fsm ztest fails at runtime: thread created at invalid prio 15 (kernel/thread.c:517) before any test starts",
+  "description": "Follow-up from b7z9.52 (compile half resolved+closed; assignee note: bead was reassigned to worker-1 mid-round by the shared store). lichen/tests/desync_fsm (on-disk, uncommitted — released uncommitted in b7z9.12.5) builds 258/258 green on native_sim/native/64 with the full chain (CONFIG_LICHEN_TDMA=y + CCP16_LOAD_BALANCING + RPL + SETTINGS + LICHEN_LINK_EPOCH_PERSIST + COAP_SERVER/896 + NUM_COOP=16 + NUM_PREEMPT=15 default), but RUNTIME aborts before any ztest starts: kernel/thread.c:517 ASSERTION FAIL — a thread is created at prio 15, out of the valid 0..14 preempt range for NUM_PREEMPT_PRIORITIES=15 (assert allows -16..14, or prio==NUM_PREEMPT+idle only). Suspects ELIMINATED: lichen lora_sim RX thread (LORA_LICHEN_SIM unset), SLIP/KISS RX threads (Kconfig prio 7 valid), Zephyr net TC threads (BASE_PRIO=NUM_PREEMPT-1=14 valid), ztest/main/workqueue (-1/0 valid). The offender is a static K_THREAD_DEFINE or early k_thread_create with a literal/Kconfig priority exceeding NUM_PREEMPT-1, fired during kernel init (no test output precedes it). Next steps: (1) run the zephyr.exe under gdb and break on z_setup_new_thread to catch the offending thread+priority; or (2) enable CONFIG_THREAD_NAME + CONFIG_THREAD_ANALYZER and dump at init; or (3) bump NUM_PREEMPT_PRIORITIES to 16 and see if the assert moves to prio 16 (confirming a Kconfig-defaulted priority that tracks the constant — e.g. a K_PRIO_PREEMPT(NUM_PREEMPT_PRIORITIES) off-by-one somewhere in the workspace or LICHEN transport code, note slip_transport.c:956 and kiss_transport.c:691 are the only in-tree k_thread_create sites, both Kconfig-driven). Files: lichen/tests/desync_fsm/prj.conf (current hardening: MAIN/ZTEST stacks 8192, NUM_COOP=16), lichen/tests/desync_fsm/src/main.c. Discovered from project-LICHEN-worker6-b7z9.52.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-2",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T08:52:09.838045606Z",
+  "created_by": "opencode-worker-2",
+  "updated_at": "2026-09-01T08:53:40.409109974Z",
+  "started_at": "2026-09-01T08:53:40.409109974Z",
+  "lease_expires_at": "2026-09-01T08:58:40.409109974Z",
+  "heartbeat_at": "2026-09-01T08:53:40.409109974Z",
+  "labels": [
+    "zephyr",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-i8kw",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.52",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T08:52:09.943542619Z",
+      "created_by": "opencode-worker-2",
+      "metadata": "{}"
+    }
+  ]
+}

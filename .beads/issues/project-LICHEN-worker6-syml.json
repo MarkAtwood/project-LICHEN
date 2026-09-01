@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-syml",
+  "title": "GCP-7.1: add replay-window bitmap to handoff confirm payload (spec amendment)",
+  "description": "Design amendment for l1qw.23.1 (lost to bd8h): the GCP-7.1 handoff confirm payload currently transfers only (link_epoch u8, link_seq u16) — but the link replay window is a 32-bit bitmap (bit 0 = last_seq, bit i = last_seq - i; lichen/subsys/lichen/link/replay.h) tracking in-window gaps the old gateway already accepted. With only the floor, the new gateway re-accepts frames in those gaps: a replay hole exactly at handoff, the attack GCP-7.1 exists to prevent. Amendment: add confirm payload key 7 = replay_bitmap (u32, bit i = link_seq - i set when that sequence was accepted), plus receiver validation step 9a (MUST reconstruct the window from epoch/seq/bitmap; MUST reject bitmap 0x00000001-with-gap... precisely: bit 0 MUST be set since link_seq itself was accepted). Deliverable: spec/08-gateway-coordination.md table row + CBOR example + validation step. Implementations follow separately.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T08:59:14.357923602Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T09:00:09.795238673Z",
+  "started_at": "2026-09-01T09:00:09.795238673Z",
+  "lease_expires_at": "2026-09-01T09:05:09.795238673Z",
+  "heartbeat_at": "2026-09-01T09:00:09.795238673Z",
+  "labels": [
+    "gcp",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-syml",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.23",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T08:59:14.479701222Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
