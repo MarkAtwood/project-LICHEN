@@ -61,10 +61,14 @@ config SLIP_TRANSPORT_RX_THREAD_STACK_SIZE
 config SLIP_TRANSPORT_RX_THREAD_PRIORITY
 	int "RX thread priority"
 	default 7
-	range 0 15
+	range 0 14
 	help
 	  Priority of the SLIP RX processing thread.
 	  Lower numbers are higher priority.
+	  MUST stay below CONFIG_NUM_PREEMPT_PRIORITIES (default 15, so
+	  the valid preempt range is 0..14): a value equal to
+	  NUM_PREEMPT_PRIORITIES is the idle priority and aborts the
+	  kernel at thread creation (kernel/thread.c priority assert).
 
 config SLIP_TRANSPORT_AUTO_INIT
 	bool "Automatically initialize SLIP transport"
@@ -248,10 +252,14 @@ config KISS_TRANSPORT_RX_THREAD_STACK_SIZE
 config KISS_TRANSPORT_RX_THREAD_PRIORITY
 	int "RX thread priority"
 	default 7
-	range 0 15
+	range 0 14
 	help
 	  Priority of the KISS RX processing thread.
 	  Lower numbers are higher priority.
+	  MUST stay below CONFIG_NUM_PREEMPT_PRIORITIES (default 15, so
+	  the valid preempt range is 0..14): a value equal to
+	  NUM_PREEMPT_PRIORITIES is the idle priority and aborts the
+	  kernel at thread creation (kernel/thread.c priority assert).
 
 config KISS_TRANSPORT_AUTO_INIT
 	bool "Automatically initialize KISS transport"
