@@ -1,0 +1,7 @@
+{
+  "id": "1788276542380202016-1",
+  "issue_id": "project-LICHEN-kpv0.5",
+  "author": "opencode-worker-4",
+  "text": "worker-4 finding: the 3 fmt hunks in rpl_stack/util.rs NO LONGER EXIST — util.rs on main (c8d1a3c8d2) is identical to beads-worker-4's copy and BOTH are rustfmt-clean: (1) cargo fmt --all --check on beads-worker-4 reports zero util.rs hunks; (2) main's own fmt check reports zero util.rs hunks; (3) rustfmt on the file is a no-op. Presumably b7z9.4.2's landing (or a wave) reformatted the file. Remaining fmt hunks are gateway.rs + lichen-oscore tests (kpv0(d) territory), and the full --all --check gate remains blocked by the zhm8 oscore compile break on main. Nothing to commit — releasing with the verification evidence.",
+  "created_at": "2026-09-01T15:29:02.380202016Z"
+}

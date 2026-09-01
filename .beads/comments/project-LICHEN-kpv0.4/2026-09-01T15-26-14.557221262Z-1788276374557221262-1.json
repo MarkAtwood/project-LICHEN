@@ -1,0 +1,7 @@
+{
+  "id": "1788276374557221262-1",
+  "issue_id": "project-LICHEN-kpv0.4",
+  "author": "opencode-worker-4",
+  "text": "worker-4 claim note: main itself cannot compile lichen-oscore right now (unclosed delimiter + duplicate SenderStateStore re-export in lib.rs, escalated as zhm8 with full forensics — it IS on main at cb4da0789c, not just worker-4; verified on the canonical lichen-workspace checkout with clean target dir). This blocks 'cargo fmt --all --check zero diffs EXCEPT util.rs' acceptance because fmt needs to parse every file. Plan for this slice: (1) apply cargo fmt to the three named files (storage.rs, announce_store.rs, receive.rs); (2) verify --check clean for those three; (3) note remaining fmt diffs (gateway.rs/oscore tests) for kpv0(d)/follow-ups since full --check can't run until zhm8 lands. Python side fully green (1646 passed) so the python gate is unblocked.",
+  "created_at": "2026-09-01T15:26:14.557221262Z"
+}

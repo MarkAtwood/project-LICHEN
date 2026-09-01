@@ -1,0 +1,7 @@
+{
+  "id": "1788276474860739381-1",
+  "issue_id": "project-LICHEN-kpv0.4",
+  "author": "opencode-worker-4",
+  "text": "worker-4 finding: the 7 fmt hunks in storage.rs/announce_store.rs/receive.rs NO LONGER EXIST — main (c8d1a3c8d2) already carries those files fully rustfmt-clean, verified three ways: (1) rustfmt --edition 2021 on each file produces zero diff; (2) cargo fmt --all --check on beads-worker-4 shows no hunks in those files (remaining hunks are gateway.rs and lichen-oscore tests, tracked for kpv0(d)); (3) the canonical main checkout's fmt check is also clean for those files. The bead description was written against an older snapshot; main (c8d1a3c8d2) already includes the formatting (worker-2's merge or the wave work). Acceptance-criteria status: those three files are fmt-clean; full --all --check is still blocked by the zhm8 oscore compile break on main (can't run the full check until it lands). Nothing to commit — releasing.",
+  "created_at": "2026-09-01T15:27:54.860739381Z"
+}

@@ -8,7 +8,8 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T07:18:56.355149543Z",
   "created_by": "opencode-worker-5",
-  "updated_at": "2026-08-31T17:22:58.710206803Z",
+  "updated_at": "2026-09-01T15:27:55.159149992Z",
+  "started_at": "2026-09-01T15:25:03.277278995Z",
   "labels": [
     "decomposed",
     "rust",
