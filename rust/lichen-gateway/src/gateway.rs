@@ -2464,7 +2464,8 @@ mod tests {
             packet[4..6].copy_from_slice(&8u16.to_be_bytes());
             packet[6] = 17;
             packet[7] = hop_limit;
-            packet[8..24].copy_from_slice(&[0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]);
+            packet[8..24]
+                .copy_from_slice(&[0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]);
             packet[24..40].copy_from_slice(&node_addr);
             UdpHeader::new(5683, 5683)
                 .write_packet_to(
@@ -2479,7 +2480,10 @@ mod tests {
 
         // HL 2: after forwarding decrement 1 remains; SL 1 is not < 1.
         let low = gw.mesh_to_mesh(&make_packet(2)).await;
-        assert!(low.is_none(), "route MUST NOT be emitted when SL >= remaining HL");
+        assert!(
+            low.is_none(),
+            "route MUST NOT be emitted when SL >= remaining HL"
+        );
 
         // HL 1: forwarding decrement alone underflows.
         let zero = gw.mesh_to_mesh(&make_packet(1)).await;
