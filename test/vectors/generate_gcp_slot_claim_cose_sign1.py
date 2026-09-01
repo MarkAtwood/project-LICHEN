@@ -1,306 +1,522 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: CC-BY-4.0
+# SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Generate GCP-6.5 slot-claim COSE_Sign1 admission vectors.
+#
+# Merge resolution (add/add, main vs beads-worker-7): kept the worker-7
+# rewrite. The two sides were incompatible full-file rewrites (different
+# output schemas: "claims"/"expect" vs "cases"/"expect_valid"), so both
+# could not be preserved. This side wins because it (1) matches the
+# already-merged gcp_slot_claim_cose_sign1.json/.schema.json and README
+# entry, including the --check freshness command; (2) implements the full
+# case list required by bead project-LICHEN-worker6-nwjl.5 (happy_path
+# n1/n4/n60, slots_array_mutation, claim_seq replay gate, expiry
+# boundaries, header_alg_decoy, kid_payload_iid_mismatch, ordinal_absent);
+# (3) uses the independent PyNaCl oracle (reference_schnorr48.py) so
+# vectors are never derived from the code under test, per the bead and
+# project test-integrity rules; (4) carries the correct GPL-3.0-or-later
+# software license tag; and (5) drops the other side's leftover DIGEST
+# selfcheck debug print from the worker-3 crypto-anomaly hunt.
+"""Generate independent GCP-6.5 slot-claim COSE_Sign1 test vectors.
 
-Independent-oracle construction for spec/08 9.8 (GCP-6.5): the CBOR claim
-payload map (keys 1-7 canonical order), the COSE_Sign1 envelope
-[protected {1: -65537}, {4: gateway_iid}, payload, sig], and the
-Schnorr48-Ed25519 signature over SHA-256(Sig_structure).
+Covers the parent bead's deltas over the happy path: signature coverage of
+slots/expiry/claim_seq (slots_array_mutation), the claim_seq replay gate,
+expiry boundaries (spec: expiry > now), the header algorithm decoy
+({1: -65536} per the spec/08 typo), kid/payload IID mismatch, and the
+missing-ordinal payload. Complements gcp_handoff_cose_sign1.json (GCP-7.1)
+without duplicating it.
 
-The CBOR/COSE construction here is written from the spec text; the only
-lichen import is the sanctioned reference crypto implementation
-(python/src/lichen/crypto/schnorr48.py), the same oracle behind
-test/vectors/schnorr48.json.
-
-Vector cases: valid baseline, same-claim_seq replay pair, expired, payload
-mutation, signature mutation, and the decoy protected-alg {1: -65536}.
-
-Usage: python3 test/vectors/generate_gcp_slot_claim_cose_sign1.py \
-           test/vectors/gcp_slot_claim_cose_sign1.json
+Oracle: this generator plus spec/08-gateway-coordination.md GCP-6.5. The
+signer is reference_schnorr48.py (independent PyNaCl implementation of
+draft-lichen-schnorr-00); no lichen package imports, so vectors are never
+derived from the code under test.
 """
 
+from __future__ import annotations
+
+import argparse
 import hashlib
-import json
 import sys
+from pathlib import Path
 
-sys.path.insert(0, "python/src")
-from lichen.crypto.schnorr48 import derive_keypair, sign, verify  # noqa: E402
+import cbor2
 
-# Protected header: bstr-wrapped {1: -65537} (alg Schnorr48-Ed25519).
-PROTECTED_ALG = bytes.fromhex("A1013A00010000")
-# Spec decoy: {1: -65536} (A1 01 39 FF FF) — must be rejected.
-DECOY_ALG = bytes.fromhex("A10139FFFF")
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 
+from atomic_json import atomic_write_json_batch, json_bytes, read_bounded_exact  # noqa: E402
+from reference_schnorr48 import ReferenceIdentity, sign, verify  # noqa: E402
 
-def cbor_uint(v: int) -> bytes:
-    if v < 24:
-        return bytes([v])
-    if v < 0x100:
-        return bytes([0x18, v])
-    if v < 0x10000:
-        return bytes([0x19]) + v.to_bytes(2, "big")
-    if v < 0x100000000:
-        return bytes([0x1A]) + v.to_bytes(4, "big")
-    return bytes([0x1B]) + v.to_bytes(8, "big")
+OUTPUT = HERE / "gcp_slot_claim_cose_sign1.json"
+FORMAT_VERSION = 1
+ALG = -65537  # Schnorr48-Ed25519
+NOW = 1_900_000_000  # fixed evaluation instant for all expiry cases
+MAX_CLAIM_DURATION_S = 300  # 5 superframes x 60 s (MAX_CLAIM_DURATION_SUPERFRAMES)
+CLOCK_TOLERANCE_S = 5  # spec step 7a clock tolerance
 
+# Deterministic identities for reproducible vectors
+GW_A = ReferenceIdentity.from_seed(bytes(range(32)))
+GW_B = ReferenceIdentity.from_seed(bytes(range(32, 64)))
 
-def cbor_bstr(b: bytes) -> bytes:
-    """Major-2 byte string with canonical length header."""
-    l = len(b)
-    if l < 24:
-        return bytes([0x40 | l]) + b
-    if l < 0x100:
-        return bytes([0x58, l]) + b
-    return bytes([0x59]) + l.to_bytes(2, "big") + b
+# Payload keys (spec GCP-6.5, integer keys 1..7)
+K_SLOTS = 1
+K_SUPERFRAME_EPOCH = 2
+K_MODE = 3
+K_EXPIRY = 4
+K_GATEWAY_IID = 5
+K_CLAIM_SEQ = 6
+K_ORDINAL = 7
 
-
-def cbor_array_header(n: int) -> bytes:
-    if n < 24:
-        return bytes([0x80 | n])
-    return bytes([0x98, n])
-
-
-def cbor_map_header(n: int) -> bytes:
-    if n < 24:
-        return bytes([0xA0 | n])
-    return bytes([0xB8, n])
+# Reject reasons (receiver-side validation steps 3-8)
+REASON_NONE = "none"
+REASON_SIGNATURE = "signature"
+REASON_REPLAY = "replay"
+REASON_EXPIRED = "expired"
+REASON_ALGORITHM = "algorithm"
+REASON_KID_MISMATCH = "kid_payload_mismatch"
+REASON_MALFORMED = "ordinal_missing"
 
 
-def claim_payload(slots, superframe_epoch, mode, expiry, gateway_iid, claim_seq, ordinal) -> bytes:
-    """Spec 08 GCP-6.5 payload map: keys 1-7 in canonical order."""
-    out = cbor_map_header(7)
-    out += cbor_uint(1) + cbor_array_header(len(slots))
-    for slot in slots:
-        out += cbor_uint(slot)
-    out += cbor_uint(2) + cbor_uint(superframe_epoch)
-    out += cbor_uint(3) + cbor_uint(mode)
-    out += cbor_uint(4) + cbor_uint(expiry)
-    out += cbor_uint(5) + cbor_bstr(gateway_iid)
-    out += cbor_uint(6) + cbor_uint(claim_seq)
-    out += cbor_uint(7) + cbor_uint(ordinal)
-    return out
+def _claim_payload(
+    *,
+    slots: list[int],
+    superframe_epoch: int,
+    mode: int,
+    expiry: int,
+    gateway_iid: bytes,
+    claim_seq: int,
+    include_ordinal: bool = True,
+    ordinal: int = 0,
+) -> bytes:
+    """Canonical CBOR payload map, integer keys 1..7 (RFC 8949 4.2.1 order)."""
+    payload: dict[int, object] = {
+        K_SLOTS: slots,
+        K_SUPERFRAME_EPOCH: superframe_epoch,
+        K_MODE: mode,
+        K_EXPIRY: expiry,
+        K_GATEWAY_IID: gateway_iid,
+        K_CLAIM_SEQ: claim_seq,
+    }
+    if include_ordinal:
+        payload[K_ORDINAL] = ordinal
+    return cbor2.dumps(payload, canonical=True)
 
 
-def sig_structure(payload: bytes, protected: bytes) -> bytes:
-    out = cbor_array_header(4)
-    out += cbor_bstr(b"Signature1")
-    out += cbor_bstr(protected)
-    out += cbor_bstr(b"")
-    out += cbor_bstr(payload)
-    return out
+def _build_case(
+    name: str,
+    description: str,
+    *,
+    signer: ReferenceIdentity = GW_A,
+    kid: bytes | None = None,
+    protected: bytes | None = None,
+    signed_payload: bytes,
+    emitted_payload: bytes | None = None,
+    expect_valid: bool,
+    reject_reason: str = REASON_NONE,
+    slots: list[int],
+    superframe_epoch: int = 12,
+    mode: int = 0,
+    expiry: int = NOW + MAX_CLAIM_DURATION_S,
+    claim_seq: int = 1,
+    ordinal: int = 0,
+    receiver_cached_claim_seq: int | None = None,
+) -> dict[str, object]:
+    """Build one COSE_Sign1 slot-claim vector case.
+
+    signed_payload is what the signature covers; emitted_payload (default:
+    signed_payload) is what ships inside the COSE_Sign1 - they differ only
+    for the byte-level slots mutation case, where a valid signature for the
+    original payload must fail against the mutated one.
+    """
+    kid_iid = signer.iid if kid is None else kid
+    protected_bytes = cbor2.dumps({1: ALG}, canonical=True) if protected is None else protected
+    emitted = signed_payload if emitted_payload is None else emitted_payload
+
+    sig_structure = cbor2.dumps(
+        ["Signature1", protected_bytes, b"", signed_payload], canonical=True
+    )
+    digest = hashlib.sha256(sig_structure).digest()
+    signature = sign(signer, digest)
+    assert verify(signer.pubkey, digest, signature), "generator self-check failed"
+    cose = cbor2.dumps(
+        [protected_bytes, {4: kid_iid}, emitted, signature], canonical=True
+    )
+
+    case: dict[str, object] = {
+        "name": name,
+        "description": description,
+        "expect_valid": expect_valid,
+        "expected_reject_reason": reject_reason,
+        "signer_name": "gw_a" if signer is GW_A else "gw_b",
+        "signer_seed_hex": signer.seed.hex(),
+        "signer_public_key_hex": signer.pubkey.hex(),
+        "signer_iid_hex": signer.iid.hex(),
+        "kid_iid_hex": kid_iid.hex(),
+        "algorithm": cbor2.loads(protected_bytes)[1],
+        "protected_hex": protected_bytes.hex(),
+        "payload_hex": emitted.hex(),
+        "signed_payload_hex": signed_payload.hex(),
+        "sig_structure_hex": sig_structure.hex(),
+        "digest_hex": digest.hex(),
+        "signature_hex": signature.hex(),
+        "cose_sign1_hex": cose.hex(),
+        "evaluation_time": NOW,
+        "slots": slots,
+        "superframe_epoch": superframe_epoch,
+        "mode": mode,
+        "expiry": expiry,
+        "claim_seq": claim_seq,
+        "ordinal": ordinal,
+        "max_claim_duration_s": MAX_CLAIM_DURATION_S,
+        "clock_tolerance_s": CLOCK_TOLERANCE_S,
+    }
+    if receiver_cached_claim_seq is not None:
+        case["receiver_cached_claim_seq"] = receiver_cached_claim_seq
+    return case
 
 
-def cose_sign1(payload: bytes, signature: bytes, gateway_iid: bytes, protected: bytes) -> bytes:
-    out = cbor_array_header(4)
-    out += cbor_bstr(protected)
-    out += cbor_map_header(1) + cbor_uint(4) + cbor_bstr(gateway_iid)
-    out += cbor_bstr(payload)
-    out += cbor_bstr(signature)
-    return out
+def _cases() -> list[dict[str, object]]:
+    cases: list[dict[str, object]] = []
+
+    # 1. Happy paths: 1, 4, and the 60-slot cap; payload keys 1..7 canonical.
+    cases.append(
+        _build_case(
+            "happy_path_n1",
+            "Single-slot claim, all seven payload keys, valid signature.",
+            signed_payload=_claim_payload(
+                slots=[7],
+                superframe_epoch=12,
+                mode=0,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=1,
+                ordinal=0,
+            ),
+            expect_valid=True,
+            slots=[7],
+            claim_seq=1,
+        )
+    )
+    cases.append(
+        _build_case(
+            "happy_path_n4",
+            "Typical four-slot claim; the ~110-byte on-air shape from the spec.",
+            signed_payload=_claim_payload(
+                slots=[3, 4, 5, 6],
+                superframe_epoch=12,
+                mode=0,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=2,
+                ordinal=0,
+            ),
+            expect_valid=True,
+            slots=[3, 4, 5, 6],
+            claim_seq=2,
+        )
+    )
+    cases.append(
+        _build_case(
+            "happy_path_n60",
+            "60-slot claim at CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS (backbone transport).",
+            signed_payload=_claim_payload(
+                slots=list(range(60)),
+                superframe_epoch=12,
+                mode=1,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=3,
+                ordinal=1,
+            ),
+            expect_valid=True,
+            slots=list(range(60)),
+            mode=1,
+            claim_seq=3,
+            ordinal=1,
+        )
+    )
+
+    # 2. THE parent-bead regression case: valid signature over the original
+    #    payload, slots array mutated in the emitted COSE_Sign1. The old
+    #    signer covered only ordinal/IID/superframe_id, so this forgery
+    #    verified; COSE_Sign1 over the full payload MUST reject it.
+    original_slots = [3, 4, 5, 6]
+    mutated_slots = [3, 4, 5, 7]
+    signed = _claim_payload(
+        slots=original_slots,
+        superframe_epoch=12,
+        mode=0,
+        expiry=NOW + MAX_CLAIM_DURATION_S,
+        gateway_iid=GW_A.iid,
+        claim_seq=4,
+        ordinal=0,
+    )
+    mutated = _claim_payload(
+        slots=mutated_slots,
+        superframe_epoch=12,
+        mode=0,
+        expiry=NOW + MAX_CLAIM_DURATION_S,
+        gateway_iid=GW_A.iid,
+        claim_seq=4,
+        ordinal=0,
+    )
+    cases.append(
+        _build_case(
+            "slots_array_mutation",
+            "Valid envelope signature re-attached to a mutated slots array "
+            "(last slot 6 -> 7): MUST fail verification. Regression case for "
+            "the old ordinal/IID/superframe_id-only signer.",
+            signed_payload=signed,
+            emitted_payload=mutated,
+            expect_valid=False,
+            reject_reason=REASON_SIGNATURE,
+            slots=mutated_slots,
+            claim_seq=4,
+        )
+    )
+
+    # 3. claim_seq replay gate (spec step 8, NV high-water per gateway).
+    cache_seed_seq = 5
+    cases.append(
+        _build_case(
+            "claim_seq_cache_seed",
+            "First claim from GW_A at seq 5: valid and seeds the receiver's "
+            "per-gateway claim_seq high-water for the replay cases.",
+            signed_payload=_claim_payload(
+                slots=[10, 11],
+                superframe_epoch=12,
+                mode=0,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=cache_seed_seq,
+                ordinal=0,
+            ),
+            expect_valid=True,
+            slots=[10, 11],
+            claim_seq=cache_seed_seq,
+        )
+    )
+    for seq, label in ((cache_seed_seq, "equal"), (cache_seed_seq - 1, "lower")):
+        cases.append(
+            _build_case(
+                f"claim_seq_replay_{label}",
+                f"Freshly signed claim with claim_seq {label} to the cached "
+                f"high-water ({cache_seed_seq}): step 8 MUST reject "
+                "(claim_seq > cached required).",
+                signed_payload=_claim_payload(
+                    slots=[10, 11],
+                    superframe_epoch=12,
+                    mode=0,
+                    expiry=NOW + MAX_CLAIM_DURATION_S,
+                    gateway_iid=GW_A.iid,
+                    claim_seq=seq,
+                    ordinal=0,
+                ),
+                expect_valid=False,
+                reject_reason=REASON_REPLAY,
+                slots=[10, 11],
+                claim_seq=seq,
+                receiver_cached_claim_seq=cache_seed_seq,
+            )
+        )
+
+    # 4. Expiry boundaries (spec step 7: expiry > now; 7a: duration cap).
+    expiry_notes = {
+        "past": "one second before the evaluation instant: step 7 rejects.",
+        "now": "exactly the evaluation instant: spec requires expiry > now, "
+        "so 'now' itself rejects.",
+        "future": "one second after the evaluation instant: strictly greater "
+        "than now and within the max-claim duration, so it accepts.",
+    }
+    for label, expiry, valid in (
+        ("past", NOW - 1, False),
+        ("now", NOW, False),
+        ("future", NOW + 1, True),
+    ):
+        cases.append(
+            _build_case(
+                f"expiry_boundary_{label}",
+                f"expiry = {expiry} is {expiry_notes[label]}",
+                signed_payload=_claim_payload(
+                    slots=[1],
+                    superframe_epoch=12,
+                    mode=0,
+                    expiry=expiry,
+                    gateway_iid=GW_A.iid,
+                    claim_seq=6,
+                    ordinal=0,
+                ),
+                expect_valid=valid,
+                reject_reason=REASON_NONE if valid else REASON_EXPIRED,
+                slots=[1],
+                expiry=expiry,
+                claim_seq=6,
+            )
+        )
+
+    # 5. Header algorithm decoy: spec/08 typo encodes {1: -65536}; step 4
+    #    requires -65537. Signature is valid over the decoy header - the
+    #    reject must come from the algorithm check, not verification.
+    decoy_protected = bytes.fromhex("a10139ffff")  # {1: -65536}
+    cases.append(
+        _build_case(
+            "header_alg_decoy",
+            "Protected header {1: -65536} (the spec typo's decoy value) with "
+            "a signature correctly computed over it: step 4 MUST reject on "
+            "the algorithm before signature evaluation.",
+            protected=decoy_protected,
+            signed_payload=_claim_payload(
+                slots=[2],
+                superframe_epoch=12,
+                mode=0,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=7,
+                ordinal=0,
+            ),
+            expect_valid=False,
+            reject_reason=REASON_ALGORITHM,
+            slots=[2],
+            claim_seq=7,
+        )
+    )
+
+    # 6. kid / payload gateway_iid mismatch (spec steps 3+6).
+    cases.append(
+        _build_case(
+            "kid_payload_iid_mismatch",
+            "Unprotected kid names GW_B (a known gateway, so step 3 passes) "
+            "while the signed payload binds GW_A's IID: step 6 MUST reject.",
+            signer=GW_A,
+            kid=GW_B.iid,
+            signed_payload=_claim_payload(
+                slots=[8],
+                superframe_epoch=12,
+                mode=0,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=8,
+                ordinal=0,
+            ),
+            expect_valid=False,
+            reject_reason=REASON_KID_MISMATCH,
+            slots=[8],
+            claim_seq=8,
+        )
+    )
+
+    # 7. Ordinal absent: 6-key payload; the receiver needs ordinal for
+    #    register_gateway (interleaved assignment).
+    cases.append(
+        _build_case(
+            "ordinal_absent",
+            "Payload carries keys 1..6 but omits ordinal (key 7): MUST "
+            "reject as malformed - the receiver cannot register the gateway.",
+            signed_payload=_claim_payload(
+                slots=[9],
+                superframe_epoch=12,
+                mode=0,
+                expiry=NOW + MAX_CLAIM_DURATION_S,
+                gateway_iid=GW_A.iid,
+                claim_seq=9,
+                include_ordinal=False,
+            ),
+            expect_valid=False,
+            reject_reason=REASON_MALFORMED,
+            slots=[9],
+            claim_seq=9,
+        )
+    )
+
+    return cases
 
 
-def sign_claim(seed: bytes, payload: bytes) -> tuple[bytes, bytes]:
-    priv, pub = derive_keypair(seed)
-    digest = hashlib.sha256(sig_structure(payload, PROTECTED_ALG)).digest()
-    sig = sign(priv, pub, digest)
-    assert verify(pub, digest, sig), "self-check: reference verify must accept"
-    return pub, sig
-
-
-def iid_of(pubkey: bytes) -> bytes:
-    """Spec 6.2 canonical IID: SHA-512(pubkey)[0:8] with U/L cleared."""
-    iid = bytearray(hashlib.sha512(pubkey).digest()[:8])
-    iid[0] &= ~0x02 & 0xFF
-    return bytes(iid)
-
-
-def main() -> None:
-    out_path = sys.argv[1] if len(sys.argv) > 1 else \
-        "test/vectors/gcp_slot_claim_cose_sign1.json"
-
-    gateway_seed = bytes(range(0x41, 0x61))  # deterministic test seed
-    gateway_pub, _ = derive_keypair(gateway_seed)
-    _p2, _q2 = derive_keypair(gateway_seed)
-    gateway_iid = iid_of(gateway_pub)
-
-    now_unix = 1500
-    claims = []
-
-    baseline_payload = claim_payload([1, 2], 3, 1, 2000, gateway_iid, 5, 0)
-    baseline_pub, baseline_sig = sign_claim(gateway_seed, baseline_payload)
-    claims.append({
-        "name": "valid_baseline",
-        "description": "well-formed claim: seq=5, expiry=2000, now=1500",
-        "gateway_seed_hex": gateway_seed.hex(),
-        "gateway_public_key_hex": gateway_pub.hex(),
-        "gateway_iid_hex": gateway_iid.hex(),
-        "claim_seq": 5,
-        "expiry": 2000,
-        "now_unix": now_unix,
-        "clock_valid": True,
-        "payload_hex": baseline_payload.hex(),
-        "signature_hex": baseline_sig.hex(),
-        "protected_alg_hex": PROTECTED_ALG.hex(),
-        "cose_sign1_hex": cose_sign1(
-            baseline_payload, baseline_sig, gateway_iid, PROTECTED_ALG).hex(),
-        "expect": "admit",
-    })
-
-    # Replay: the identical claim ingested a second time (seq already seen).
-    claims.append({
-        "name": "replay_same_claim_seq",
-        "description": "duplicate of valid_baseline: claim_seq=5 already consumed",
-        "gateway_seed_hex": gateway_seed.hex(),
-        "gateway_public_key_hex": gateway_pub.hex(),
-        "gateway_iid_hex": gateway_iid.hex(),
-        "claim_seq": 5,
-        "expiry": 2000,
-        "now_unix": now_unix,
-        "clock_valid": True,
-        "payload_hex": baseline_payload.hex(),
-        "signature_hex": baseline_sig.hex(),
-        "protected_alg_hex": PROTECTED_ALG.hex(),
-        "cose_sign1_hex": cose_sign1(
-            baseline_payload, baseline_sig, gateway_iid, PROTECTED_ALG).hex(),
-        "expect": "reject_replay",
-    })
-
-    # Expired: expiry (1000) before the synced clock (1500).
-    expired_payload = claim_payload([4], 3, 1, 1000, gateway_iid, 6, 0)
-    expired_pub, expired_sig = sign_claim(gateway_seed, expired_payload)
-    claims.append({
-        "name": "expired",
-        "description": "expiry=1000 < now=1500 with a valid clock",
-        "gateway_seed_hex": gateway_seed.hex(),
-        "gateway_public_key_hex": expired_pub.hex(),
-        "gateway_iid_hex": gateway_iid.hex(),
-        "claim_seq": 6,
-        "expiry": 1000,
-        "now_unix": now_unix,
-        "clock_valid": True,
-        "payload_hex": expired_payload.hex(),
-        "signature_hex": expired_sig.hex(),
-        "protected_alg_hex": PROTECTED_ALG.hex(),
-        "cose_sign1_hex": cose_sign1(
-            expired_payload, expired_sig, gateway_iid, PROTECTED_ALG).hex(),
-        "expect": "reject_expired",
-    })
-
-    # Payload mutation: flip one bit inside the signed payload.
-    mutated = bytearray(baseline_payload)
-    mutated[3] ^= 0x01
-    mutated_payload = bytes(mutated)
-    _, mutated_sig = sign_claim(gateway_seed, baseline_payload)  # sig from ORIGINAL
-    claims.append({
-        "name": "payload_mutation",
-        "description": "one payload bit flipped: signature must fail",
-        "gateway_seed_hex": gateway_seed.hex(),
-        "gateway_public_key_hex": gateway_pub.hex(),
-        "gateway_iid_hex": gateway_iid.hex(),
-        "claim_seq": 5,
-        "expiry": 2000,
-        "now_unix": now_unix,
-        "clock_valid": True,
-        "payload_hex": mutated_payload.hex(),
-        "signature_hex": mutated_sig.hex(),
-        "protected_alg_hex": PROTECTED_ALG.hex(),
-        "cose_sign1_hex": cose_sign1(
-            mutated_payload, mutated_sig, gateway_iid, PROTECTED_ALG).hex(),
-        "expect": "reject_signature",
-    })
-
-    # Signature mutation: flip the last signature byte.
-    bad_sig = bytearray(baseline_sig)
-    bad_sig[-1] ^= 0x01
-    claims.append({
-        "name": "signature_mutation",
-        "description": "one signature byte flipped: schnorr48_verify must fail",
-        "gateway_seed_hex": gateway_seed.hex(),
-        "gateway_public_key_hex": gateway_pub.hex(),
-        "gateway_iid_hex": gateway_iid.hex(),
-        "claim_seq": 5,
-        "expiry": 2000,
-        "now_unix": now_unix,
-        "clock_valid": True,
-        "payload_hex": baseline_payload.hex(),
-        "signature_hex": bytes(bad_sig).hex(),
-        "protected_alg_hex": PROTECTED_ALG.hex(),
-        "cose_sign1_hex": cose_sign1(
-            baseline_payload, bytes(bad_sig), gateway_iid, PROTECTED_ALG).hex(),
-        "expect": "reject_signature",
-    })
-
-    # Decoy protected alg {1: -65536} (A1 01 39 FF FF) — must be rejected.
-    decoy_payload = claim_payload([7], 3, 1, 2000, gateway_iid, 8, 0)
-    decoy_pub, decoy_sig = sign_claim(gateway_seed, decoy_payload)
-    claims.append({
-        "name": "decoy_protected_alg",
-        "description": "protected alg {1:-65536} is the spec decoy — reject",
-        "gateway_seed_hex": gateway_seed.hex(),
-        "gateway_public_key_hex": decoy_pub.hex(),
-        "gateway_iid_hex": gateway_iid.hex(),
-        "claim_seq": 8,
-        "expiry": 2000,
-        "now_unix": now_unix,
-        "clock_valid": True,
-        "payload_hex": decoy_payload.hex(),
-        "signature_hex": decoy_sig.hex(),
-        "protected_alg_hex": DECOY_ALG.hex(),
-        "cose_sign1_hex": cose_sign1(
-            decoy_payload, decoy_sig, gateway_iid, DECOY_ALG).hex(),
-        "expect": "reject_alg",
-    })
-
-    corpus = {
+def document() -> dict[str, object]:
+    cases = _cases()
+    return {
+        "$schema": "./schema.json",
         "vector_type": "gcp_slot_claim_cose_sign1",
-        "format_version": 1,
+        "format_version": FORMAT_VERSION,
         "description": (
-            "GCP-6.5 slot-claim COSE_Sign1 admission corpus (spec/08 9.8): "
-            "canonical CBOR claim payload (keys 1-7), protected header "
-            "{1:-65537}, Schnorr48-Ed25519 over SHA-256(Sig_structure). "
-            "Admission contract: signature verify, then expiry/claim_seq/ "
-            "conflict resolution."
+            "GCP-6.5 slot-claim COSE_Sign1 test vectors for "
+            "spec/08-gateway-coordination.md. Covers signature coverage of "
+            "slots/expiry/claim_seq, the claim_seq replay gate, expiry "
+            "boundaries, the header algorithm decoy ({1: -65536}), kid/"
+            "payload IID mismatch, and the missing-ordinal payload. "
+            "Schnorr48-Ed25519 (alg -65537), RFC 9052 Sig_structure, "
+            "integer-keyed payload map 1..7."
         ),
         "oracle": {
-            "basis": "spec/08 9.8 GCP-6.5 + RFC 9052 COSE_Sign1",
+            "basis": "RFC 9052 Sig_structure plus LICHEN spec GCP-6.5",
             "implementation": (
-                "independent CBOR/COSE construction; signatures from the "
-                "sanctioned reference python/src/lichen/crypto/schnorr48.py "
-                "(same oracle as schnorr48.json)"
+                "independent PyNaCl reference_schnorr48.py; no lichen package imports"
             ),
-            "generator_command": (
-                "python3 test/vectors/generate_gcp_slot_claim_cose_sign1.py "
-                "test/vectors/gcp_slot_claim_cose_sign1.json"
+            "generator_command": "python3 test/vectors/generate_gcp_slot_claim_cose_sign1.py",
+            "freshness_command": (
+                "python3 test/vectors/generate_gcp_slot_claim_cose_sign1.py --check"
             ),
         },
         "constants": {
-            "protected_alg_hex": PROTECTED_ALG.hex(),
-            "decoy_alg_hex": DECOY_ALG.hex(),
-            "cose_key_kid": 4,
-            "signature_len": 48,
+            "algorithm": ALG,
+            "protected_hex": "a1013a00010000",  # {1: -65537}
+            "evaluation_time": NOW,
+            "max_claim_duration_s": MAX_CLAIM_DURATION_S,
+            "clock_tolerance_s": CLOCK_TOLERANCE_S,
+            "payload_keys": [
+                K_SLOTS,
+                K_SUPERFRAME_EPOCH,
+                K_MODE,
+                K_EXPIRY,
+                K_GATEWAY_IID,
+                K_CLAIM_SEQ,
+                K_ORDINAL,
+            ],
+            "reject_reasons": [
+                REASON_NONE,
+                REASON_SIGNATURE,
+                REASON_REPLAY,
+                REASON_EXPIRED,
+                REASON_ALGORITHM,
+                REASON_KID_MISMATCH,
+                REASON_MALFORMED,
+            ],
         },
-        "claims": claims,
+        "identities": [
+            {
+                "name": "gw_a",
+                "seed_hex": GW_A.seed.hex(),
+                "public_key_hex": GW_A.pubkey.hex(),
+                "iid_hex": GW_A.iid.hex(),
+            },
+            {
+                "name": "gw_b",
+                "seed_hex": GW_B.seed.hex(),
+                "public_key_hex": GW_B.pubkey.hex(),
+                "iid_hex": GW_B.iid.hex(),
+            },
+        ],
+        "cases": cases,
     }
 
-    # Self-check (before writing): every signature verifies or fails as
-    # expected against the reference implementation.
-    for c in claims:
-        digest = hashlib.sha256(
-            sig_structure(bytes.fromhex(c["payload_hex"]),
-                          bytes.fromhex(c["protected_alg_hex"]))).digest()
-        print("DIGEST selfcheck:", digest.hex(), "pub:", c["gateway_public_key_hex"][:16], "payload:", c["payload_hex"][:32], file=sys.stderr)
-        ok = verify(bytes.fromhex(c["gateway_public_key_hex"]), digest,
-                    bytes.fromhex(c["signature_hex"]))
-        expected_ok = c["expect"] in ("admit", "reject_replay", "reject_expired")
-        assert ok == expected_ok, f"{c['name']}: verify={ok}"
 
-    with open(out_path, "w") as handle:
-        json.dump(corpus, handle, indent=2)
-        handle.write("\n")
-    print(f"wrote {out_path}: {len(claims)} claim vectors "
-          f"(signature self-check passed)")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args(argv)
+    generated = document()
+    if args.check:
+        try:
+            current = read_bounded_exact(OUTPUT)
+        except (FileNotFoundError, RuntimeError):
+            current = None
+        if current != json_bytes(generated):
+            print(f"out-of-date vector file: {OUTPUT.name}", file=sys.stderr)
+            return 1
+        return 0
+    atomic_write_json_batch([(OUTPUT, generated)])
+    print(f"Wrote {len(generated['cases'])} slot-claim COSE_Sign1 cases")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
