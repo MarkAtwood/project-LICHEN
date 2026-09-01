@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-ldzz.4",
+  "title": "diag.4: radio — TCXO ready verification",
+  "description": "After SetStandby(STDBY_XOSC), read SX1262 GetStatus. If mode bits don't show STANDBY_XOSC within 10ms, retry with increasing delay (10/20/50ms). Report DIAG_RADIO_TCXO_SLOW with the actual delay needed. Detects slow/missing TCXO on boards where the crystal warm-up exceeds the default wait.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T05:18:43.167386669Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T05:18:43.167386669Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ldzz.4",
+      "depends_on_id": "project-LICHEN-worker6-ldzz",
+      "type": "parent-child",
+      "created_at": "2026-09-01T05:18:43.288957654Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-ldzz.4",
+      "depends_on_id": "project-LICHEN-worker6-ldzz.1",
+      "type": "blocks",
+      "created_at": "2026-09-01T05:18:54.463905281Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "project-LICHEN-worker6-37ad",
+  "title": "b7z9.25.3 (tombstone): wall-clock gate on desync recovery landed (R-02a-084)",
+  "description": "TRACKER REPAIR: the original bead project-LICHEN-worker6-b7z9.25.3 (claim this wall-clock gate per R-02a-084) was LOST from the shared store by the bd8h write-loss pattern — the record vanished entirely (parent b7z9.25 now shows children: []). The work is complete and committed as d2ddd3278d on beads-worker-7: (1) python/src/lichen/timing/sfn.py DesyncFSM.on_beacon(valid, wall_clock_valid) — DESYNCED+valid+clock-valid -\u003e RECOVERING; DESYNCED+valid+unsynced stays DESYNCED (fail-closed, no counter advance); (2) rust/lichen-core/src/desync.rs DesyncFSM::on_beacon same gate; (3) desync.rs was ORPHANED (95d85c3747 added the file without registering pub mod desync in lib.rs) — now registered, fixing a pre-existing dead-module defect (desync tests never ran: 391 lib tests green post-registration vs 367 before); (4) gate tests in both languages + 6 CcpFSM test callers restored to single-arg after my regex mis-update. Reviews: 2 Kimi K3 passes (full pass timed out; narrow pass PASS — gate fail-closed confirmed, RECOVERING transitions unchanged, doc comments cite R-02a-084). This tombstone replaces the lost record so the b7z9.25 family accounting stays accurate.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T05:11:28.499950581Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T05:12:05.347227679Z",
+  "closed_at": "2026-09-01T05:12:05.347227679Z",
+  "close_reason": "Tombstone for the lost b7z9.25.3 record: work complete and committed (d2ddd3278d on beads-worker-7). See description.",
+  "labels": [
+    "tdma",
+    "bd8h-tombstone"
+  ]
+}

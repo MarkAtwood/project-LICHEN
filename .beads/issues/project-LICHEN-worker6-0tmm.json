@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-0tmm",
+  "title": "b7z9.22.2 (tombstone): empty slot_map edge case verified — slot_map membership already layered correctly",
+  "description": "TRACKER REPAIR: the original bead project-LICHEN-worker6-b7z9.22.2 (Rust tx_allowed: accept slot_map array instead of single slot) was LOST from the shared store by the bd8h write-loss pattern (record vanished). Audit finding: the slot_map membership check was ALREADY correctly layered — lichen-link tdma_clock.rs tx_allowed is a pure timing predicate (guard window, correctly slot-map-agnostic), and the membership check exists as SlotAllocator::is_tx_allowed(current_slot, owned_slots) in lichen-gateway/src/slot.rs:239 with tests. Committed addition: empty slot_map edge-case assertions in the tx_allowed_check test (empty map -\u003e no slot transmissible) — commit 877fdbcfe0 on beads-worker-7. Remaining chain gaps tracked separately: b7z9.22.1 (beacon builder EMITS slot_map — only parse_slot_map exists at tdma_beacon.rs:186), b7z9.22.5 (root-side population). Do not re-implement; consume the existing layers.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T05:19:23.481225926Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T05:19:50.474578534Z",
+  "closed_at": "2026-09-01T05:19:50.474578534Z",
+  "close_reason": "Tombstone for the lost b7z9.22.2 record. Audit conclusion: the slot_map membership check was already correctly layered (SlotAllocator::is_tx_allowed in gateway slot.rs + pure timing predicate in tdma_clock.rs); the only gap was the empty-map test edge case, now committed as 877fdbcfe0. Remaining chain work: b7z9.22.1 (beacon emits slot_map) and b7z9.22.5 (root-side population), tracked separately.",
+  "labels": [
+    "rust",
+    "tdma",
+    "bd8h-tombstone"
+  ]
+}
