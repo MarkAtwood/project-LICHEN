@@ -182,7 +182,7 @@ static int config_put(struct coap_resource *resource,
 		return COAP_RESPONSE_CODE_NOT_FOUND;
 	}
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len, COAP_METHOD_PUT,
 						     &oscore);
 	if (ret != 0) {
@@ -307,7 +307,7 @@ static int msg_inbox_post(struct coap_resource *resource,
 	int ret;
 
 	struct coap_oscore_unprotect_result oscore;
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len, COAP_METHOD_POST,
 						     &oscore);
 	if (ret != 0) return ret;

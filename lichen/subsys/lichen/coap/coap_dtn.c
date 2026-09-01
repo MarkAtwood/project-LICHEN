@@ -121,7 +121,7 @@ static int deaddrop_post(struct coap_resource *resource,
 		lichen_eui64_to_iid(peer_eui64, peer_eui64);
 	}
 	struct coap_oscore_unprotect_result oscore;
-	int ret = coap_oscore_unprotect_resource_request(resource, request,
+	int ret = coap_oscore_authorize_mutating(resource, request,
 							 addr, addr_len,
 							 COAP_METHOD_POST,
 							 &oscore);
@@ -284,7 +284,7 @@ static int confessions_post(struct coap_resource *resource,
 		lichen_eui64_to_iid(peer_eui64, peer_eui64);
 	}
 	struct coap_oscore_unprotect_result oscore;
-	int ret = coap_oscore_unprotect_resource_request(resource, request,
+	int ret = coap_oscore_authorize_mutating(resource, request,
 							 addr, addr_len,
 							 COAP_METHOD_POST,
 							 &oscore);
