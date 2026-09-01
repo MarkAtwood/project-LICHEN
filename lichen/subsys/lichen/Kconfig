@@ -14,6 +14,7 @@ if LICHEN
 rsource "app_identity/Kconfig"
 rsource "app_interface/Kconfig"
 rsource "coap/Kconfig"
+rsource "diag/Kconfig"
 rsource "compact_cot/Kconfig"
 rsource "crypto/Kconfig"
 rsource "edhoc/Kconfig"
