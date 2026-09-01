@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-4k15",
   "title": "Rust: emit ASSIGNED_SF (0x14) in border-router DIO construction + wire GatewaySfTracker",
   "description": "Rust slice of b7z9.71: sf_assignment.rs make_assigned_sf_option/GatewaySfTracker have zero production callers; the DIO builder never emits 0x14. Wire the tracker into lichen-gateway/lichen-rpl DIO construction (least-loaded assignment) and the join-response path per spec 02 3.4 R-02-016.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T14:26:26.084209507Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-01T14:40:44.996005927Z",
+  "updated_at": "2026-09-01T15:07:35.849078913Z",
+  "closed_at": "2026-09-01T15:07:35.849078913Z",
+  "close_reason": "Rust ASSIGNED_SF emission slice landed: (1) Router gains sf_tracker: Option\u003cGatewaySfTracker\u003e (std-only, gated to match the lichen-core type's cfg) with install_sf_tracker(); (2) build_dio_with_authorization now appends the 0x14 make_assigned_sf_option TLV (root + tracker present, bounds-checked) before the version-authorization option — the border router attaches its assignment to every DIO it originates; (3) emission unit tests (no-tracker emits no 0x14; with-tracker emits [0x14,1,7..=12]); (4) lichen-node Cargo.toml std feature now enables lichen-core/std (GatewaySfTracker is std-only in lichen-core). Verification: cargo build/check lichen-node + tests target and lichen-gateway all compile; cargo clippy -D warnings clean; cargo fmt applied; lichen-core 395 lib tests green. NOT testable end-to-end this round: lichen-node --lib tests cannot compile because the oscore-fork 0.1.3 trait split binds SenderStateStore to a second types::ContextId (E0053 in rpl_stack/tests.rs) — filed as P0 ovhe with the precise two-ContextId diagnosis for Mark's oscore session; the pre-existing failures reproduce on main 7a4e18b. Remaining for parent b7z9.71: join-response assignment path (gateway registers a joined node at DIO-admission time) — same 'call site' pattern as desync/beacon wiring.",
   "labels": [
     "rust",
     "ccp15"
