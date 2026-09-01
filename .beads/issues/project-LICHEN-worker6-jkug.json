@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-jkug",
+  "title": "C sos: wire rate-limit + Schnorr48 verify into SOS rx path and register /sos CoAP resource (spec 18.4 R-12-034..041)",
+  "description": "Remaining slice of l1qw.25: lichen/subsys/lichen/coap/sos_alert.c + sos_resource.c exist but sos_ratelimit_check has zero callers and coap_server.c registers no /sos resource. Wire: rx verify (link-layer Schnorr48 before rebroadcast, silent drop on failure per 18.4) -\u003e rate-limit gate (sos_ratelimit_check/record per source IID; 4.29 Too Many Requests with Retry-After on denial) -\u003e rebroadcast-once. Register /sos GET/POST in coap_server.c. Host tests via the SOS cbor/signature vectors. After the ratelimit vector suite (sibling bead) lands.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T09:09:11.540348487Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T09:09:11.540348487Z",
+  "labels": [
+    "zephyr",
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-jkug",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.25",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T09:09:11.656683753Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
