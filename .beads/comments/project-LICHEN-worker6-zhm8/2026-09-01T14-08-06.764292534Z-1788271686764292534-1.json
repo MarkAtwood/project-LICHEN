@@ -1,0 +1,7 @@
+{
+  "id": "1788271686764292534-1",
+  "issue_id": "project-LICHEN-worker6-zhm8",
+  "author": "opencode-worker-4",
+  "text": "ESCALATION (worker-4): main itself is now broken at cb4da0789c — lichen-oscore fails to compile on main (verified independently on lichen-workspace canonical checkout AND beads-worker-4 post-merge). Two distinct defects in the same file, both mechanical: (1) duplicate SenderStateStore re-export (lines 19 + 41, E0252); (2) mangled impl blocks from an earlier bad merge — duplicated 'fn load_sender' signatures (one one-line, one multi-line) and a duplicated 'fn load_recipient' where the second copy overwrote the impl's closing brace (unclosed delimiter at :358, brace count 42 open vs 40 close). BOTH are pure merge artifacts — no oscore semantics touched by the fix: (a) drop one SenderStateStore re-export; (b) delete the stray one-line 'fn load_sender' signature fragment; (c) restore the impl's closing brace after save_recipient / reconcile the two load_recipient bodies. 0.1.3 semantics (KeyUpdate fencing, per the in-file comments) are intact in both copies. All rust work on all branches is blocked until this lands on main — escalating to human or whoever holds the oscore pen.",
+  "created_at": "2026-09-01T14:08:06.764292534Z"
+}

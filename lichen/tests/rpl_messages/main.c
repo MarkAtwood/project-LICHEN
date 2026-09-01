@@ -789,12 +789,9 @@ static void test_assigned_sf_write_parse_roundtrip(void)
 		assert(buf[2] == sf);
 	}
 
-	/* Out-of-range values still write (the caller validates SF range) */
-	int ret = lichen_rpl_assigned_sf_write(6, buf, sizeof(buf));
-	(void)ret;
-	assert(ret == 3 && buf[2] == 6);
-	ret = lichen_rpl_assigned_sf_write(13, buf, sizeof(buf));
-	assert(ret == 3 && buf[2] == 13);
+	/* Out-of-range values are rejected (spec 3.4: SF must be 7-12) */
+	assert(lichen_rpl_assigned_sf_write(6, buf, sizeof(buf)) < 0);
+	assert(lichen_rpl_assigned_sf_write(13, buf, sizeof(buf)) < 0);
 
 	/* NULL buffer */
 	assert(lichen_rpl_assigned_sf_write(9, NULL, sizeof(buf)) < 0);

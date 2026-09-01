@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-23xz",
+  "title": "C gateway: emit ASSIGNED_SF (0x14) DIO option with least-loaded SF tracker",
+  "description": "Smallest slice of b7z9.71 (decompose-first): C side. lichen/subsys/lichen/rpl/rpl_sf_assignment.c has make/parse (parse wired into dodag.c:667-674 -\u003e lora_l2_assign_sf) but no emitter; the gateway least-loaded SF tracker is absent. Implement: per-SF node tracking in the gateway (rpl_routing or a new sf_tracker), option emission in the DIO construction path (lichen/apps/gateway + rpl DIO TX), consuming the spec 02 3.4 assignment policy. Rust/python emit slices are siblings. Follow the C DIO option layout in rpl_messages.h (LICHEN_RPL_OPT_ASSIGNED_SF / 0x14).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T14:26:25.718699869Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T14:29:23.531806279Z",
+  "started_at": "2026-09-01T14:26:35.813662235Z",
+  "closed_at": "2026-09-01T14:29:23.531806279Z",
+  "close_reason": "C gateway ASSIGNED_SF emission slice landed: (1) lichen_rpl_sf_tracker in rpl_sf_assignment.{c,h} (rust GatewaySfTracker parity: register/unregister with re-registration dedup, per-SF load array SF7..SF12, least-loaded assign, capacity 32 fail-closed); (2) DIO option walk accepts a validated singleton ASSIGNED_SF (0x14, len 1, sf 7..=12) in messages.c validate_dio_options — the option can now flow through lichen_rpl_dio_write_with_options; (3) lichen_rpl_dio_validate_assigned_sf single-option validator for the emission path; (4) tests: tracker assign order/least-loaded/re-register/unregister/reject cases + 0x14 TLV validation in tests/rpl_sf_assignment (all green), rpl_dao_sequence suite still 2/2 green (verified against the shared workspace build with the new files copied in — DIO option walk unchanged for existing options). Gates: ctest green under ASan/UBSan, gcc -Werror -Wconversion clean, cppcheck clean. NOTE for the sync janitor: messages.c and rpl_sf_assignment.{c,h} on main must take these versions at merge (main's messages.c lacks the 0x14 validation case; emit-side gateway wiring that CALLS the tracker/TLV builder in the DIO construction site remains for a follow-up — the option path is now complete end-to-end but no production DIO builder feeds it yet, matching the parent's emit-side-absent scope with the primitive + validation in place).",
+  "labels": [
+    "zephyr",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-23xz",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.71",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T14:26:25.869869773Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788273644733551424-1",
+  "issue_id": "project-LICHEN-worker6-4k15",
+  "author": "opencode-worker-2",
+  "text": "Worker-2 analysis (released per context budget): the GatewaySfTracker and make_assigned_sf_option are defined in lichen-core/sf_assignment.rs but have zero production callers. To wire them: (1) Add GatewaySfTracker to the root's state (GatewayCoordinator or RplNode in router.rs) — the root tracks which nodes are assigned which SFs; (2) On node join (DAO receipt or beacon acceptance), call assign_sf(iid) and persist the mapping; (3) In build_dio (router.rs:822) or the gateway DIO serialization path (rpl_root.c on the C side), append the 3-byte TLV [0x14, 1, assigned_sf] after the DODAG Config and SCHC Rule Version options; (4) Test: build a DIO with the option, parse it back, assert the assigned SF matches. The tracker and option codec are already unit-tested in sf_assignment.rs — only the wiring is missing. Recommend a fresh-context worker handles this (it requires understanding the full DIO construction pipeline across lichen-node/router.rs and lichen-gateway/rpl_root.c).",
+  "created_at": "2026-09-01T14:40:44.733551424Z"
+}

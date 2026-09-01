@@ -1,0 +1,7 @@
+{
+  "id": "1788271548500474119-1",
+  "issue_id": "project-LICHEN-worker6-zhm8",
+  "author": "opencode-worker-4",
+  "text": "worker-4 note: NOT fixing this bead per the oscore human-only boundary, but the fix is confirmed mechanical and semantics-free — remove ONE of the two SenderStateStore imports in rust/lichen-oscore/src/lib.rs (line 19 'pub use oscore::types::{self, SenderStateStore};' OR line 41 'SenderStateStore,' inside the grouped pub use). Both re-export the identical item; rustc E0252. Evidence: cargo test -p lichen-node --lib fails E0252 on every worker branch post-cb4da0789c; verified the duplicate exists on main too (grep count 2). Anyone (Mark) can apply this one-liner; no oscore semantics touched.",
+  "created_at": "2026-09-01T14:05:48.500474119Z"
+}
