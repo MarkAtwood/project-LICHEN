@@ -756,6 +756,12 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status
         is ProvisionEpochStatus.PERSISTENCE_FAILED
     )
+    # Forward gate: post-poison, any install/clear must raise the poisoned
+    # verifier error (qzxv core property — the gate stays latched).
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.clear(admin, reason="post-poison probe")
     # The tracker-consumed authority path (_with_floor_snapshot ->
     # _floor_result_locked persistence_failed branch, provisioning.py:596-597)
     # must report the same poisoned state, and the verifier must be cleared.
@@ -797,6 +803,12 @@ async def test_provision_clear_hook_rejects_scheduled_awaitable(kind: str) -> No
     # Poisoned fail-closed: the ambiguous write revokes all live authority.
     assert verifier.cleared
     assert not verifier.accepts(metadata)
+    # Forward gate (qzxv property): post-poison, install/clear must both
+    # raise the latched poisoned-verifier error.
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
+        verifier.clear(admin, reason="post-poison probe")
 
 
 def test_provision_concurrent_installs_cannot_regress_rollback_state() -> None:
