@@ -194,7 +194,7 @@ def adaptive_sf_select(
     Pseudocode:
     1. SF = AssignedSF
     2. IF SF absent THEN SF = 10
-    3. IF (Density > 10) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
+    3. IF (Density > 8) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
     4. IF (Neighbor.EMA_SNR > 8) AND (Density < 5) THEN SF = MAX(7, SF - 1)
     5a. IF Neighbor.EMA_Loss > 0.25 THEN SF = MIN(12, SF + 1)
     5b. IF Utilization > 200 THEN RETURN (12, false)
@@ -228,7 +228,8 @@ def adaptive_sf_select(
     sf = max(7, min(12, sf))
 
     # Step 3: High density or high utilization triggers SF +2
-    if density > 10 or utilization > 150:
+    # (spec 02a 2a.8: Density > 8; 02-physical-link.md:115 reconciled).
+    if density > 8 or utilization > 150:
         sf = min(12, sf + 2)
 
     # Step 4: Good SNR and low density allows SF -1 upgrade
