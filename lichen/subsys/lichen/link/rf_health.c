@@ -3,6 +3,8 @@
 
 #include <lichen/rf_health.h>
 #include <limits.h>
+#include <stddef.h>
+#include <string.h>
 
 #define FP_SCALE (1 << 16)
 #define FP_ROUND (1 << 15)
@@ -175,4 +177,62 @@ uint16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
 		return 0xFFFFu;
 	}
 	return (uint16_t)((uint32_t)busy_percent * 10u + packet_error_permille);
+}
+
+/* ------------------------------------------------------------------ */
+/* TX-time BusyPercent sampler (CCP-15 R-02a-131, MUST). Occupancy is  */
+/* computed purely from accumulated TX airtime within the rolling      */
+/* window — RSSI is never an input.                                    */
+/* ------------------------------------------------------------------ */
+
+void lichen_rf_health_busy_init(struct lichen_rf_health_busy *b,
+				uint32_t window_ms)
+{
+	if (b == NULL) {
+		return;
+	}
+	memset(b, 0, sizeof(*b));
+	b->window_ms = window_ms;
+}
+
+void lichen_rf_health_busy_record_tx(struct lichen_rf_health_busy *b,
+				     uint32_t now_ms, uint32_t airtime_us)
+{
+	if (b == NULL) {
+		return;
+	}
+	if (b->sample_count >= LICHEN_RF_BUSY_MAX_SAMPLES) {
+		/* Drop the oldest sample (ring shift; 16 entries max). */
+		memmove(&b->sample_time[0], &b->sample_time[1],
+			(LICHEN_RF_BUSY_MAX_SAMPLES - 1) *
+				sizeof(b->sample_time[0]));
+		memmove(&b->sample_us[0], &b->sample_us[1],
+			(LICHEN_RF_BUSY_MAX_SAMPLES - 1) *
+				sizeof(b->sample_us[0]));
+		b->sample_count--;
+	}
+	b->sample_time[b->sample_count] = now_ms;
+	b->sample_us[b->sample_count] = airtime_us;
+	b->sample_count++;
+}
+
+uint8_t lichen_rf_health_busy_percent(const struct lichen_rf_health_busy *b,
+				      uint32_t now_ms)
+{
+	if (b == NULL || b->window_ms == 0) {
+		return 0;
+	}
+	uint64_t cutoff = (uint64_t)now_ms >= b->window_ms
+				  ? (uint64_t)now_ms - b->window_ms
+				  : 0;
+	uint64_t tx_us = 0;
+	for (size_t i = 0; i < b->sample_count; i++) {
+		if (b->sample_time[i] >= cutoff) {
+			tx_us += b->sample_us[i];
+		}
+	}
+	/* percent = tx_us / (window_ms * 1000) * 100 = tx_us / (window_ms*10) */
+	uint64_t denom = (uint64_t)b->window_ms * 10u;
+	uint64_t pct = tx_us / denom;
+	return pct > 100u ? 100u : (uint8_t)pct;
 }

@@ -122,6 +122,59 @@ int main(void)
 	CHECK(lichen_rf_health_interference_score_tenths(0, 1001) == 0xFFFF,
 	      "interference: per > 1000 fails closed");
 
+	/* TX-time BusyPercent sampler (CCP-15 R-02a-131): occupancy purely
+	 * from TX airtime — no RSSI input anywhere. */
+	{
+		struct lichen_rf_health_busy busy;
+		lichen_rf_health_busy_init(&busy, 10000);
+
+		/* Zero transmissions -> 0%. */
+		CHECK(lichen_rf_health_busy_percent(&busy, 0) == 0,
+		      "busy: empty window 0%");
+
+		/* 1000us TX in a 10000ms window -> 0% (tiny). */
+		lichen_rf_health_busy_record_tx(&busy, 0, 1000);
+		CHECK(lichen_rf_health_busy_percent(&busy, 1000) == 0,
+		      "busy: 1ms of 10s ~ 0%");
+
+		/* Saturate: 100 * 100000us = full window (samples ring at
+		 * 16, so use fewer larger samples: 10 x 1_000_000us = 10s
+		 * of TX in a 10s window = 100%). */
+		for (unsigned int j = 0; j < 10; j++) {
+			lichen_rf_health_busy_record_tx(&busy, j * 1000U,
+							1000000U);
+		}
+		CHECK(lichen_rf_health_busy_percent(&busy, 10000) == 100,
+		      "busy: saturation clamps to 100%");
+
+		/* Window slide: old samples roll off. */
+		struct lichen_rf_health_busy slide;
+		lichen_rf_health_busy_init(&slide, 10000);
+		lichen_rf_health_busy_record_tx(&slide, 0, 500000);   /* 5% of the 10 s window */
+		lichen_rf_health_busy_record_tx(&slide, 20000, 100000); /* 1% */
+		/* At now=20000 the window is [10000,20000]: only the 100000us
+		 * sample (10%) is inside; the 500000 sample at t=0 is out. */
+		CHECK(lichen_rf_health_busy_percent(&slide, 20000) == 1,
+		      "busy: window slide rolls old samples off");
+
+		/* Sample-overflow ring: > 16 samples keep the newest. Window
+		 * 1000ms; 16 newest samples of 100000us = 1000000us = 100%. */
+		struct lichen_rf_health_busy ring;
+		lichen_rf_health_busy_init(&ring, 1000);
+		for (unsigned int j = 0; j < 20; j++) {
+			lichen_rf_health_busy_record_tx(&ring, j * 100U,
+							100000U);
+		}
+		CHECK(lichen_rf_health_busy_percent(&ring, 1900) == 100,
+		      "busy: ring keeps newest samples, clamped");
+
+		/* NULL guards. */
+		lichen_rf_health_busy_init(NULL, 1000);
+		CHECK(lichen_rf_health_busy_percent(NULL, 0) == 0,
+		      "busy: NULL sampler 0%");
+		lichen_rf_health_busy_record_tx(NULL, 0, 0);
+	}
+
 	if (failures == 0) {
 		printf("PASS: rf_health loss threshold\n");
 		return 0;
