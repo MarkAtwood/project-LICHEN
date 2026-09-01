@@ -1,0 +1,7 @@
+{
+  "id": "1788290267288330254-1",
+  "issue_id": "project-LICHEN-worker6-jtl6",
+  "author": "opencode-worker-1",
+  "text": "Worker1 progress: (1) PMTK init script landed in gnss_l76k.c (GGA/RMC-only output + 1Hz rate, MODEM_CHAT_SCRIPT_NO_ABORT — failure is non-fatal, device streams full NMEA without it); (2) build validation harness created (lichen/tests/gnss_l76k with native_sim overlay, prj.conf, smoke test) but native_sim build aborts on PRE-EXISTING Kconfig warnings-as-errors: (a) THREAD_ANALYZER/STACK_CANARIES choice conflict from the gnss_emul-style prj.conf pattern, (b) MODEM_BACKEND_UART needs UART_INTERRUPT_DRIVEN which needs SERIAL_SUPPORT_INTERRUPT — native_sim's default UART driver does not select it in v3.7.0. The harness + prj.conf are committed so the Kconfig fix can be a focused follow-up (likely: use the native_tty UART driver with a PTY-backed uart1 binding, or drop the modem-chat deps for a compile-only validation). Hardware validation remains 2h1i.1.2.2.",
+  "created_at": "2026-09-01T19:17:47.288330254Z"
+}
