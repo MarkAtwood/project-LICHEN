@@ -222,6 +222,43 @@ int coap_oscore_respond_resource(
   return -ENOTSUP;
 }
 
+int coap_oscore_send_protected(struct coap_resource *resource,
+                               struct coap_packet *request,
+                               struct sockaddr *addr, socklen_t addr_len,
+                               struct oscore_ctx *ctx, const uint8_t *piv,
+                               size_t piv_len, uint8_t response_code) {
+  ARG_UNUSED(resource);
+  ARG_UNUSED(request);
+  ARG_UNUSED(addr);
+  ARG_UNUSED(addr_len);
+  ARG_UNUSED(ctx);
+  ARG_UNUSED(piv);
+  ARG_UNUSED(piv_len);
+  ARG_UNUSED(response_code);
+  return 0;
+}
+
+int coap_oscore_authorize_mutating(
+    struct coap_resource *resource, struct coap_packet *request,
+    struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+    uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload,
+    uint16_t *payload_len, struct oscore_ctx **ctx, uint8_t *piv,
+    size_t *piv_len, bool *is_protected) {
+  ARG_UNUSED(resource);
+  ARG_UNUSED(request);
+  ARG_UNUSED(addr);
+  ARG_UNUSED(addr_len);
+  ARG_UNUSED(expected_method);
+  ARG_UNUSED(plain_buf);
+  ARG_UNUSED(plain_buf_len);
+  *payload = NULL;
+  *payload_len = 0;
+  *ctx = NULL;
+  *piv_len = 0;
+  *is_protected = false;
+  return -ENOTSUP;
+}
+
 static void reset_state(void) {
   lichen_position_beacon_stop();
   lichen_position_observe_reset();
