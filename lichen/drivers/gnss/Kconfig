@@ -23,3 +23,31 @@ config GNSS_AG3335_SATELLITES_COUNT
 	  Maximum number of satellites reported in the satellites callback.
 
 endif # GNSS_AG3335
+
+config GNSS_L76K
+	bool "Quectel L76K GNSS driver"
+	default y
+	depends on DT_HAS_QUECTEL_L76K_ENABLED
+	select GNSS
+	select MODEM_MODULES
+	select MODEM_BACKEND_UART
+	select MODEM_CHAT
+	select GNSS_PARSE
+	select GNSS_NMEA0183
+	select GNSS_NMEA0183_MATCH
+	help
+	  Driver for the Quectel L76K GNSS receiver (T-Echo). Streams
+	  standard NMEA-0183 at 9600 baud; PMTK configuration commands are
+	  a follow-up bead (sxvf). Standby/backup power via the optional
+	  backup GPIO loses ephemeris (cold start on wake).
+
+if GNSS_L76K
+
+config GNSS_L76K_SATELLITES_COUNT
+	int "Maximum satellite count"
+	depends on GNSS_SATELLITES
+	default 24
+	help
+	  Maximum number of satellites reported in the satellites callback.
+
+endif # GNSS_L76K
