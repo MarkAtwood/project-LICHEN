@@ -1,0 +1,35 @@
+{
+  "id": "project-LICHEN-worker6-rx2w.4",
+  "title": "rx2w.4: Run full L2 host test suite and verify deinit cleanup",
+  "description": "Run host CMake tests: l2_dispatch, ping_l2, csma, csma_constants, tx_queue, link_ctx. Verify lichen_l2 deinit with radio mid-RX/mid-TX/mid-CAD disarms cleanly. Fix or file follow-ups for any gaps.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T02:59:40.964361937Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T02:59:40.964361937Z",
+  "labels": [
+    "l2",
+    "tests",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rx2w.4",
+      "depends_on_id": "project-LICHEN-worker6-rx2w",
+      "type": "parent-child",
+      "created_at": "2026-09-01T02:59:41.094519158Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-rx2w.4",
+      "depends_on_id": "project-LICHEN-worker6-uwip",
+      "type": "blocks",
+      "created_at": "2026-09-01T02:59:51.29750454Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

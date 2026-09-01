@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.25.3",
+  "title": "l1qw.25.3: C: wire sos_ratelimit_check into SOS rx path",
+  "description": "sos_ratelimit.c:37-43 implements per-source rate limits (10 min cooldown, 3/hour, burst 2) on monotonic k_uptime:189-220, but sos_ratelimit_check has zero callers. Wire it into the SOS receive handler registered by .25.1. Exceeding limits: drop, log, do not relay (R-12-036/037/038). Test vectors: sos_rate_limiting.json. Python reference: emergency.py:31-33/:122-152.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T02:59:39.358879551Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T02:59:39.358879551Z",
+  "labels": [
+    "apps",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.25.3",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.25",
+      "type": "parent-child",
+      "created_at": "2026-09-01T02:59:39.516928237Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

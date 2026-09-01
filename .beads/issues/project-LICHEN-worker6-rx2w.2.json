@@ -1,0 +1,35 @@
+{
+  "id": "project-LICHEN-worker6-rx2w.2",
+  "title": "rx2w.2: Verify no blocking lora_recv/lora_send calls remain in L2",
+  "description": "Sweep lichen/subsys/lichen/l2/ for any remaining blocking lora_recv()/lora_send() calls. Only async variants (lora_recv_async, lora_send_async) should remain. Remove or replace any blocking calls found.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T02:59:40.193244461Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T02:59:40.193244461Z",
+  "labels": [
+    "l2",
+    "tests",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rx2w.2",
+      "depends_on_id": "project-LICHEN-worker6-rx2w",
+      "type": "parent-child",
+      "created_at": "2026-09-01T02:59:40.325469716Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-rx2w.2",
+      "depends_on_id": "project-LICHEN-worker6-uwip",
+      "type": "blocks",
+      "created_at": "2026-09-01T02:59:50.320241646Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
