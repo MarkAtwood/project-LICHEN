@@ -156,6 +156,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// needs a real clock to distinguish).
     pub fn set_wall_clock_unix(&mut self, clock: fn() -> u64) {
         self.wall_clock_unix = Some(clock);
+    /// Receiver-side trust state: only record sequences from DIOs whose root
+    /// signature has passed verification (see `RootSeqCache` caller contract).
+    /// The root-signature receiver validation consumes this at the DIO path.
+    /// Interim `dead_code` expectation: the receiver call site lands with the
+    /// root-signature validation bead (b7z9.37.1); the expectation then stops
+    /// being fulfilled and must be removed.
+    pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
+        &mut self.root_seqs
     }
 
     /// Cached highest accepted `root_seq` for the key, if observed.
