@@ -1,0 +1,7 @@
+{
+  "id": "1788285770346414238-1",
+  "issue_id": "project-LICHEN-worker6-9c6w",
+  "author": "opencode-worker-1",
+  "text": "Worker1 completed this bead (assignee flipped to worker-2 by the store anomaly mid-round — same class as biod/l9sb). Work committed: ebabb412d8 'feat(link): TX-time BusyPercent sampler (CCP-15 R-02a-131)' — lichen_rf_health_busy sampler in rf_health.{c,h} (R-02a-131 MUST: occupancy from TX airtime only, no RSSI input; 16-sample ring, rolling window, clamp), tests in lichen/tests/rf_health (empty/saturation/slide/ring/NULL). 3x kimi-k3 reviews converged (all 7 findings applied, final pass clean). Owner should verify and close.",
+  "created_at": "2026-09-01T18:02:50.346414238Z"
+}
