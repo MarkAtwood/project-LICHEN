@@ -13,7 +13,7 @@ Normative pseudocode (spec §3.5):
         nbr.samples = nbr.samples + 1
     select_tx_sf(nbr, density, utilization):
         sf = nbr.assigned_sf or 10
-        if density > 8 or utilization > 150:
+        if density > 10 or utilization > 150:
             sf = min(12, sf + 2)
         if nbr.ema_snr > 8 and density < 5:
             sf = max(7, sf - 1)
@@ -96,53 +96,58 @@ def select_tx_sf(
     nbr: NeighborState,
     density: int,
     utilization: int,
+    load_factor: float = 0.0,
 ) -> tuple[int, bool]:
-    """Select TX SF and tx_allowed flag per spec §3.5 pseudocode.
+    """Select TX SF and tx_allowed flag per spec 02a 2a.8 pseudocode.
 
-    Uses the normative two-tier approach matching Rust RfHealthMetrics:
-    ticket tier 1 is the table (adaptive_sf), tier 2 is pseudocode adjustments.
-    When called with explicit density/utilization the pseudocode density>8
-    branch is engaged; otherwise the table result is authoritative for the
-    SF9/SF11 expectations in the spec (density=3->SF9, density=12->SF11).
+    Two-tier approach matching Rust RfHealthMetrics: tier 1 supplies the
+    base SF (the threshold table via adaptive_sf_for_metrics when no
+    explicit assigned SF, else the caller's baseline), tier 2 ALWAYS
+    applies the normative pseudocode steps (density > 10, SNR upgrade,
+    loss bump, utilization back-off). The table alone remains the oracle
+    only when consulted directly via adaptive_sf_for_metrics (e.g. the
+    CCP-16 table-only vectors).
 
     Args:
         nbr: Per-neighbor state (assigned_sf, ema_snr, ema_loss).
         density: Neighbor density (0..255).
         utilization: Channel utilization uint8 0..255 (util_norm=util/255,
             TX-time based occupancy per spec).
+        load_factor: Channel load factor 0..1 (Q0.1 fraction); floor (d)
+            applies when > 0.8. Defaults to 0.0 (no load tracking).
 
     Returns:
         (sf, tx_allowed) where sf in 7..12 and tx_allowed is False only when
         utilization > 200 (congestion back-off, caller should defer TX).
     """
-    # Tier 1: table if no explicit assigned SF; otherwise use assigned
-    if nbr.assigned_sf is None:
-        table_sf = adaptive_sf_for_metrics(
-            density, nbr.ema_snr, nbr.ema_loss if isinstance(nbr.ema_loss, float) else 0.0
-        )
-        sf = table_sf
-        # When not explicit pseudocode path, table is the answer for classic vectors
-        # Detect implicit call (density provides table context, not pseudocode
-        # density>8). Heuristic: if caller provides utilization <=150 and
-        # density <=8, return table directly.
-        # This preserves backward compat for SF9/SF11 load_balancing cases.
-        if density <= 10 and utilization <= 150 and nbr.ema_loss <= 0.25:
-            # Check if pseudocode would change SF beyond table for these inputs
-            # Table already encodes density>8 etc., so return table
-            # But retain SNR upgrade path that overlaps: it is already in table
-            return max(7, min(12, sf)), True
-    else:
-        sf = nbr.baseline_sf
-    # Tier 2: pseudocode adjustments (explicit mode)
-    explicit = True  # select_tx_sf is always explicit per spec pseudocode
-    if (explicit and density > 8) or utilization > 150:
+    # Merge resolution: the beads-worker-1 body is kept. The other parent's
+    # density > 8 threshold was a residue; the normative 2a.8 pseudocode
+    # (spec/02-physical-link.md), python ccp.py, and rust rf_health.rs all
+    # pin density > 10. load_factor is a documented parameter with a 0.0
+    # default so floor (d) does not read an undefined name.
+    # Tier 1: assigned SF or the SF10 baseline.
+    sf = nbr.baseline_sf
+    # Tier 2: normative pseudocode steps (always applied)
+    if density > 10 or utilization > 150:
         sf = min(12, sf + 2)
-    if explicit and nbr.ema_snr > 8 and density < 5:
+    if nbr.ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)
     if nbr.ema_loss > 0.25:
         sf = min(12, sf + 1)
     if utilization > 200:
         return 12, False
+    # Spec 2a.8 post-step-6 minimum-SF floors, in order a-d with each MAX
+    # against the running SF (rust rf_health.rs parity; Rust implements
+    # floor d as >= 0.8 in Q16.16 where 52429 is the smallest integer
+    # strictly above 0.8*65536; Python uses the float threshold > 0.8).
+    if nbr.ema_snr < -5:
+        sf = 12
+    if nbr.ema_snr < 0:
+        sf = max(11, sf)
+    if density > 10:
+        sf = max(11, sf)
+    if load_factor > 0.8:
+        sf = max(11, sf)
     # Clamp to valid range (defensive)
     sf = max(7, min(12, sf))
     return sf, True
