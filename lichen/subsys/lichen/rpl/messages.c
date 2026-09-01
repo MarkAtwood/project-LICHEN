@@ -885,3 +885,14 @@ int lichen_rpl_opt_iter_next(struct lichen_rpl_opt_iter *it,
 	/* Exhausted */
 	return 1;
 }
+
+int lichen_rpl_assigned_sf_write(uint8_t sf, uint8_t *buf, size_t len)
+{
+	if (buf == NULL || len < 3) {
+		return LICHEN_RPL_ERR_BUF_SMALL;
+	}
+	buf[0] = LICHEN_RPL_OPT_ASSIGNED_SF;
+	buf[1] = LICHEN_RPL_ASSIGNED_SF_DATA_LEN;
+	buf[2] = sf;
+	return 3;
+}
