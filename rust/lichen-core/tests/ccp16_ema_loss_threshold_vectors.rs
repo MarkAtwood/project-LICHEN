@@ -56,7 +56,7 @@ fn select_tx_sf_loss_check(
     let mut bumped = false;
 
     // Step 3: density/utilization > 150 check
-    if density > 10 || utilization > 150 {
+    if density > 8 || utilization > 150 {
         sf = sf.saturating_add(2).min(12);
     }
 
