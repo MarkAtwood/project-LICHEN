@@ -412,6 +412,7 @@ impl RfHealthMetrics {
         ema_loss_fp: Option<u32>,
     ) -> (u8, bool) {
         let mut sf = assigned_sf.unwrap_or_else(|| self.adaptive_sf());
+        let explicit = assigned_sf.is_some() || utilization.is_some() || ema_loss_fp.is_some();
         let util = utilization.unwrap_or(0);
         let loss_fp = ema_loss_fp.unwrap_or(0);
         let snr_ema = self.snr.avg().unwrap_or(0);
@@ -420,14 +421,15 @@ impl RfHealthMetrics {
         let util_thresh_200 = 200u32.saturating_mul(FP_SCALE) / 100;
         let loss_threshold = FP_SCALE / 4;
 
-        let explicit = assigned_sf.is_some() || utilization.is_some() || ema_loss_fp.is_some();
-
-        // Step 3: density driven only when explicit pseudocode mode is engaged
-        // (spec §2a.8 step 3: density > DENSITY_HIGH = 8).
-        if (explicit && self.density > DENSITY_HIGH) || util > util_thresh_150 {
+        // Step 3: unconditional per spec §2a.8 step 3 (density >
+        // DENSITY_HIGH = 8) — matches ccp.py and the vector generator; the
+        // explicit-pseudocode gate was a pre-2a.8-reconciliation divergence.
+        if self.density > DENSITY_HIGH || util > util_thresh_150 {
             sf = sf.saturating_add(2).min(12);
         }
-        // Step 4: only apply when caller engages pseudocode with explicit params
+        // Step 4: engaged only in explicit-pseudocode mode (the default
+        // path uses the adaptive_sf() table form; the two diverge for
+        // low-density high-SNR inputs by design).
         if explicit && snr_ema > SNR_GOOD && self.density < DENSITY_LOW {
             sf = sf.saturating_sub(1).max(7);
         }
@@ -735,8 +737,11 @@ mod tests {
         m.record_load_factor((FP_SCALE * 85) / 100);
         assert_eq!(m.adaptive_sf(), 11);
         assert!(m.should_rebalance());
+        // Reconciled 2a.8: step 3 (density > 8) is unconditional in the
+        // pseudocode form, so the select result is 12 (the table form
+        // floors at 11 — both satisfy the >= 11 floor).
         let (sf, allowed) = m.adaptive_sf_select(None, None, None);
-        assert_eq!(sf, 11);
+        assert_eq!(sf, 12);
         assert!(allowed);
 
         // sf=12: snr<-5 critical
@@ -856,9 +861,11 @@ mod tests {
             m.record_density(density);
             m.record_rx(snr);
             m.record_load_factor(load_fp);
-            let sf = m.adaptive_sf();
             let exp_sf = output.get("sf").and_then(|x| x.as_u64()).unwrap_or(10) as u8;
-            assert_eq!(sf, exp_sf);
+            // The vector pins the full 2a.8 pseudocode result. The
+            // table-only adaptive_sf() form is asserted by its own unit
+            // tests and diverges from the pseudocode for density > 8
+            // (table floors at 11; the pseudocode step 3 reaches 12).
             let (sf_sel, allowed) = m.adaptive_sf_select(None, None, None);
             assert_eq!(sf_sel, exp_sf);
             assert!(allowed);

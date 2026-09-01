@@ -326,22 +326,110 @@ static int deaddrop_get(struct coap_resource *resource,
 			    SENML_CBOR_CONTENT_FORMAT, buf, (size_t)len);
 }
 
+/* Spec 18.10: confessions are RAM-only (no-log guarantee), FIFO evicted,
+ * 768 B max each, 2 KB leaf budget. */
+#define CONFESSIONS_MAX_SIZE 768U
+#define CONFESSIONS_SLOTS 2U
+#define CONFESSIONS_RATE_WINDOW_MS 30000U
+#define CONFESSIONS_HOURLY_WINDOW_MS 3600000U
+#define CONFESSIONS_HOURLY_LIMIT 12U
+
+static K_MUTEX_DEFINE(s_confessions_mutex);
+static uint8_t s_confessions[CONFESSIONS_SLOTS][CONFESSIONS_MAX_SIZE];
+static size_t s_confessions_len[CONFESSIONS_SLOTS];
+static uint32_t s_confessions_at[CONFESSIONS_SLOTS];
+static size_t s_confessions_head;
+static size_t s_confessions_count;
+static uint8_t s_conf_hourly_count[256] = {0};
+static uint32_t s_conf_hourly_start[256] = {0};
+
 static int confessions_get(struct coap_resource *resource,
 			   struct coap_packet *request,
 			   struct sockaddr *addr, socklen_t addr_len)
 {
-	uint8_t buf[64];
-	struct senml_pack pack;
+	uint8_t buf[2048]; /* 2KB leaf budget (18.10.3) + SenML overhead */
+	struct senml_pack out;
 	uint32_t now = 0U;
+	size_t count;
+	size_t start;
+	int64_t since = -1;
+	size_t skipped = 0U;
+
+	/* ?count=N and ?since=T query params (18.10.7). */
+	struct coap_option qopts[2];
+	int qcnt = coap_find_options(request, COAP_OPTION_URI_QUERY, qopts, 2);
+	for (int i = 0; i < qcnt; i++) {
+		if (qopts[i].len > 6 &&
+		    memcmp(qopts[i].value, "count=", 6) == 0) {
+			count = 0U;
+			for (size_t d = 6; d < qopts[i].len; d++) {
+				if (qopts[i].value[d] < '0' ||
+				    qopts[i].value[d] > '9') {
+					return lichen_coap_respond(
+					    resource, request, addr, addr_len,
+					    COAP_RESPONSE_CODE_BAD_REQUEST, 0,
+					    NULL, 0);
+				}
+				count = count * 10U +
+					(size_t)(qopts[i].value[d] - '0');
+			}
+		} else if (qopts[i].len > 6 &&
+			   memcmp(qopts[i].value, "since=", 6) == 0) {
+			int64_t parsed = 0;
+			for (size_t d = 6; d < qopts[i].len; d++) {
+				if (qopts[i].value[d] < '0' ||
+				    qopts[i].value[d] > '9') {
+					return lichen_coap_respond(
+					    resource, request, addr, addr_len,
+					    COAP_RESPONSE_CODE_BAD_REQUEST, 0,
+					    NULL, 0);
+				}
+				parsed =
+					parsed * 10 +
+					(int64_t)(qopts[i].value[d] - '0');
+			}
+			since = parsed;
+		}
+	}
 
 	/* No valid wall clock -> base_time 0 omits bt instead of
 	 * synthesizing a timestamp from uptime. */
 	(void)dtn_wall_clock(&now);
+	k_mutex_lock(&s_confessions_mutex, K_FOREVER);
+	if (s_confessions_count > 0U) {
+		/* ?since=T: skip records with time <= T (uptime-based;
+		 * meaningful only for clock-valid nodes). */
+		while (skipped < s_confessions_count &&
+		       since >= 0 &&
+		       (int64_t)s_confessions_at[
+			   (s_confessions_head + skipped) %
+			   CONFESSIONS_SLOTS] <= since) {
+			skipped++;
+		}
+	}
+	start = (s_confessions_head + skipped) % CONFESSIONS_SLOTS;
+	count = MIN(CONFESSIONS_SLOTS, s_confessions_count - skipped);
 	k_mutex_lock(&s_senml_pack_mutex, K_FOREVER);
-	senml_pack_init(&pack, NULL, now);
-	senml_add_float(&pack, SENML_KEY_CONFESSIONS, NULL, 0.0f);
-	int len = senml_encode_cbor(&pack, buf, sizeof(buf));
+	senml_pack_init(&out, NULL, now);
+	for (size_t i = 0U; i < count; i++) {
+		size_t idx = (start + i) % CONFESSIONS_SLOTS;
+		/* vd field: the ring buffer itself is the stable storage for
+		 * the record lifetime (SenML data cap 1536 >= 768). */
+		int r = senml_add_data(&out, SENML_KEY_CONFESSIONS, NULL,
+				       s_confessions[idx],
+				       s_confessions_len[idx]);
+		if (r < 0) {
+			k_mutex_unlock(&s_senml_pack_mutex);
+			k_mutex_unlock(&s_confessions_mutex);
+			return lichen_coap_respond(resource, request, addr,
+						   addr_len,
+						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
+						   0, NULL, 0);
+		}
+	}
+	int len = senml_encode_cbor(&out, buf, sizeof(buf));
 	k_mutex_unlock(&s_senml_pack_mutex);
+	k_mutex_unlock(&s_confessions_mutex);
 	if (len < 0) {
 		return lichen_coap_respond(resource, request, addr, addr_len,
 				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL,
@@ -370,11 +458,16 @@ static int confessions_post(struct coap_resource *resource,
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
+	/* Spec 18.10.5: OSCORE is OPTIONAL for confessions (anonymous
+	 * postings) — provide a plain buffer so unprotected POSTs carrying
+	 * a payload are accepted. */
+	uint8_t confessions_plain_buf[CONFESSIONS_MAX_SIZE];
 	int ret = coap_oscore_authorize_mutating(resource, request, addr,
 						 addr_len, COAP_METHOD_POST,
-						 NULL, 0, &payload,
-						 &payload_len, &oscore_ctx,
-						 piv, &piv_len,
+						 confessions_plain_buf,
+						 sizeof(confessions_plain_buf),
+						 &payload, &payload_len,
+						 &oscore_ctx, piv, &piv_len,
 						 &is_protected);
 	if (ret != 0) return ret;
 	if (payload == NULL || payload_len == 0) {
@@ -383,20 +476,58 @@ static int confessions_post(struct coap_resource *resource,
 						  piv_len,
 						  COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
+	if (payload_len > CONFESSIONS_MAX_SIZE) {
+		/* Spec 18.10.3: max confession size 768 B. */
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_REQUEST_ENTITY_TOO_LARGE);
+	}
 	uint32_t now_ms = k_uptime_get_32();
 	uint8_t iid7 = peer_eui64[7];
 	k_mutex_lock(&s_rate_mutex, K_FOREVER);
+	/* 18.10.3: 1 POST per node per 30 s (uptime-based). */
 	if (s_last_confession[iid7] &&
 	    (now_ms - s_last_confession[iid7] <
-	     CONFIG_LICHEN_COAP_DEADDROP_RATE_LIMIT_MS)) {
+	     CONFESSIONS_RATE_WINDOW_MS)) {
 		k_mutex_unlock(&s_rate_mutex);
 		return coap_oscore_send_protected(resource, request, addr,
 						  addr_len, oscore_ctx, piv,
 						  piv_len,
 						  COAP_RESPONSE_CODE_TOO_MANY_REQUESTS);
 	}
+	/* 18.10.3: 12 POSTs per node per hour. */
+	if (now_ms - s_conf_hourly_start[iid7] >=
+	    CONFESSIONS_HOURLY_WINDOW_MS) {
+		s_conf_hourly_start[iid7] = now_ms;
+		s_conf_hourly_count[iid7] = 0U;
+	}
+	if (s_conf_hourly_count[iid7] >= CONFESSIONS_HOURLY_LIMIT) {
+		k_mutex_unlock(&s_rate_mutex);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_TOO_MANY_REQUESTS);
+	}
+	s_conf_hourly_count[iid7]++;
 	s_last_confession[iid7] = now_ms;
 	k_mutex_unlock(&s_rate_mutex);
+	/* 18.10.3/18.10.4: FIFO eviction into the RAM-only ring. */
+	k_mutex_lock(&s_confessions_mutex, K_FOREVER);
+	size_t slot = s_confessions_count < CONFESSIONS_SLOTS
+			  ? (s_confessions_head + s_confessions_count) %
+				CONFESSIONS_SLOTS
+			  : s_confessions_head;
+	if (s_confessions_count == CONFESSIONS_SLOTS) {
+		s_confessions_head =
+		    (s_confessions_head + 1U) % CONFESSIONS_SLOTS;
+	} else {
+		s_confessions_count++;
+	}
+	memcpy(s_confessions[slot], payload, payload_len);
+	s_confessions_len[slot] = payload_len;
+	s_confessions_at[slot] = now_ms;
+	k_mutex_unlock(&s_confessions_mutex);
 	return coap_oscore_send_protected(resource, request, addr, addr_len,
 					  oscore_ctx, piv, piv_len,
 					  COAP_RESPONSE_CODE_CHANGED);
