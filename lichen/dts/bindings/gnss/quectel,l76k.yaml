@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 The contributors to the LICHEN project
+
+description: |
+  Quectel L76K GNSS receiver (NMEA-0183 via UART at 9600 baud).
+
+  Streams standard NMEA sentences at 9600 baud. The host sends PMTK
+  commands for configuration (output message set, update rate).
+  Standby/backup power uses V_BACKUP (RTC domain) and an optional
+  FORCE_ON pin; entering backup loses ephemeris and requires a
+  cold-start wake.
+
+  Example (nRF52840, T-Echo UART1 pin assignments):
+
+    &uart1 {
+      current-speed = <9600>;
+      ...
+      gnss0: l76k {
+        compatible = "quectel,l76k";
+        backup-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+        force-on-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+      };
+    };
+
+compatible: "quectel,l76k"
+
+include:
+  - uart-device.yaml
+
+properties:
+  backup-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      V_BACKUP / EXINT control (active HIGH). When provided, PM_DEVICE
+      suspend pulls it low to enter backup mode; resume releases it.
+
+  force-on-gpios:
+    type: phandle-array
+    description: |
+      FORCE_ON — optional wake/force-on pin. Optional; unused by the
+      driver today but wired on some T-Echo variants.

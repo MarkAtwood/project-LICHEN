@@ -1,3 +1,5 @@
 zephyr_library_named(lichen_gnss)
 zephyr_library_sources_ifdef(CONFIG_GNSS_AG3335 gnss_ag3335.c)
+zephyr_library_sources_ifdef(CONFIG_GNSS_L76K gnss_l76k.c)
 zephyr_include_directories_ifdef(CONFIG_GNSS_AG3335 ${ZEPHYR_BASE}/drivers/gnss)
+zephyr_include_directories_ifdef(CONFIG_GNSS_L76K ${ZEPHYR_BASE}/drivers/gnss)
