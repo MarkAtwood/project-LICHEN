@@ -434,7 +434,10 @@ impl From<RplError> for DaoEnvelopeError {
 /// octets. Whether the origin may advertise the prefix is a routing-layer
 /// decision (§8.7.2), enforced after signature verification.
 fn is_generalized_target_body(body: &[u8]) -> bool {
-    body.len() >= 2 && body[1] <= 128 && body.len() - 2 >= usize::from(body[1].div_ceil(8))
+    body.len() >= 2
+        && body[0] == 0
+        && body[1] <= 128
+        && body.len() - 2 >= usize::from(body[1].div_ceil(8))
 }
 
 impl<'a> SignedDaoEnvelope<'a> {
