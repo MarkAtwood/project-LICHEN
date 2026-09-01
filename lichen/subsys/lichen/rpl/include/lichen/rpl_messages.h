@@ -255,6 +255,13 @@ int lichen_rpl_dio_write(const struct lichen_rpl_dio *_Nonnull dio,
  *
  * @return Total bytes written, or a negative error code.
  */
+/**
+ * Validate a single ASSIGNED_SF DIO option TLV ([0x14, 1, sf]) with the
+ * same content rules as the DIO option walk. Returns 0 when valid,
+ * LICHEN_RPL_ERR_BAD_OPT otherwise.
+ */
+int lichen_rpl_dio_validate_assigned_sf(const uint8_t *option);
+
 int lichen_rpl_dio_write_with_options(
 	const struct lichen_rpl_dio *_Nonnull dio,
 	const uint8_t *_Nullable options, size_t options_len,
