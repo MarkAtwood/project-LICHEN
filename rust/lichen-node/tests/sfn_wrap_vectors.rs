@@ -54,11 +54,9 @@ fn find_vector(vectors: &[serde_json::Value], name: &str) -> serde_json::Value {
         .unwrap_or_else(|| panic!("Vector '{}' not found", name))
 }
 
-/// Expected sfn_delta implementation.
-/// Formula: (curr - last) & 0xFFFFFFFF (unsigned 32-bit subtraction)
-fn expected_sfn_delta(curr: u32, last: u32) -> u32 {
-    curr.wrapping_sub(last)
-}
+// Production sfn_delta now lives in lichen-core (spec 09 14.7); the
+// test-local oracle below is retired in favor of it.
+use lichen_core::sfn_delta as expected_sfn_delta;
 
 // =============================================================================
 // hash_32 tests

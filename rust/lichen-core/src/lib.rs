@@ -101,6 +101,15 @@ pub fn sfn_from_unix_time(
     ((unix_time_us - epoch_base_us) / superframe_duration_us) as u32
 }
 
+/// Unsigned 32-bit SFN delta: (curr - last) mod 2^32.
+///
+/// Spec 09 14.7 SFN arithmetic; mirrors python timing/sfn.py sfn_delta.
+/// Wrap-safe across the u32 SFN rollover.
+#[must_use]
+pub fn sfn_delta(curr: u32, last: u32) -> u32 {
+    curr.wrapping_sub(last)
+}
+
 /// Compute channel for network-wide synchronized hopping.
 /// Uses fnv1a32 hash of (seed || sfn) to select channel.
 ///
@@ -442,5 +451,22 @@ mod tests {
         assert_eq!(config.seed, 0);
         assert_eq!(config.superframe_duration_us, SUPERFRAME_DURATION_US);
         assert_eq!(config.epoch_base_us, GNSS_EPOCH_BASE_US);
+    }
+
+    #[test]
+    fn sfn_delta_normal_subtraction() {
+        assert_eq!(sfn_delta(100, 40), 60);
+        assert_eq!(sfn_delta(u32::MAX, 0), u32::MAX);
+    }
+
+    #[test]
+    fn sfn_delta_wrap_forward() {
+        // last near max, curr wrapped to low value
+        assert_eq!(sfn_delta(5, u32::MAX - 4), 10);
+    }
+
+    #[test]
+    fn sfn_delta_equal_is_zero() {
+        assert_eq!(sfn_delta(77, 77), 0);
     }
 }
