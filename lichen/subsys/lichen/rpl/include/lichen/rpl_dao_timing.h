@@ -176,8 +176,65 @@ bool lichen_rpl_dao_refresh_timer_take_if_due(
 void lichen_rpl_dao_refresh_timer_reset(
     struct lichen_rpl_dao_refresh_timer *timer);
 
+
+/* ------------------------------------------------------------------ */
+/* DAO transmission loop: composes the initial, retry, and refresh     */
+/* timers into one injected-time state machine for the node runtime    */
+/* (spec 09 14.2; bead b7z9.16(c)). The caller polls and transmits.    */
+/* ------------------------------------------------------------------ */
+
+/** Loop phase; drives which timer poll consumes. */
+enum lichen_rpl_dao_tx_loop_phase {
+    LICHEN_RPL_DAO_TX_LOOP_INITIAL = 0, /**< waiting for the initial window */
+    LICHEN_RPL_DAO_TX_LOOP_RETRYING,    /**< bounded retries in flight */
+    LICHEN_RPL_DAO_TX_LOOP_REFRESH,     /**< 900 s soft-state refresh cadence */
+    LICHEN_RPL_DAO_TX_LOOP_IDLE,        /**< retries exhausted; caller resets */
+};
+
+/** Caller-owned composite loop. All timers are embedded; no allocation. */
+struct lichen_rpl_dao_tx_loop {
+    enum lichen_rpl_dao_tx_loop_phase phase;
+    struct lichen_rpl_dao_initial_timer initial;
+    struct lichen_rpl_dao_retry_timer retry;
+    struct lichen_rpl_dao_refresh_timer refresh;
+    lichen_rpl_dao_rng_fn rng;
+    void *rng_user;
+};
+
+/**
+ * Initialize the loop and arm the initial 0-2 s jittered window.
+ * RNG injection mirrors lichen_rpl_dao_initial_timer_start().
+ */
+int lichen_rpl_dao_tx_loop_init(struct lichen_rpl_dao_tx_loop *loop,
+                                uint32_t now_ms, lichen_rpl_dao_rng_fn rng,
+                                void *rng_user, uint16_t *delay_ms);
+
+/**
+ * Report whether a transmission is due at @p now_ms and consume the
+ * corresponding gate exactly once. The caller transmits and then reports
+ * the outcome via lichen_rpl_dao_tx_loop_on_send_result().
+ */
+bool lichen_rpl_dao_tx_loop_poll(struct lichen_rpl_dao_tx_loop *loop,
+                                 uint32_t now_ms);
+
+/**
+ * Report the outcome of one transmission attempt.
+ *
+ * Success: INITIAL/RETRYING start the 900 s refresh cadence; REFRESH
+ * reschedules it. Failure: enters or advances the bounded 4/8/16 s retry
+ * sequence; exhausting the retries moves the loop to IDLE (origination
+ * stops until the caller re-initializes, e.g. on a route change).
+ */
+void lichen_rpl_dao_tx_loop_on_send_result(struct lichen_rpl_dao_tx_loop *loop,
+                                           uint32_t now_ms, bool success);
+
+/** Current phase (diagnostics and tests). */
+enum lichen_rpl_dao_tx_loop_phase
+lichen_rpl_dao_tx_loop_phase(const struct lichen_rpl_dao_tx_loop *loop);
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* LICHEN_RPL_DAO_TIMING_H_ */
+

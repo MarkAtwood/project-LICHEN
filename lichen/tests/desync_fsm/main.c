@@ -12,6 +12,12 @@
 
 #include <lichen/link.h>
 
+/* Pin the spec value (09-packets-timing.md 14.7: bounded RECOVERING
+ * listen timeout = 3 superframes) so a silent value change fails here
+ * with a clear reason. */
+_Static_assert(LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES == 3u,
+	       "RECOVERING listen timeout must stay 3 superframes (spec 09 14.7)");
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdint.h>
