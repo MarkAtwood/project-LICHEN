@@ -102,12 +102,24 @@ def test_validate_channel_mask_vector(name: str, vector: dict[str, Any]) -> None
 @pytest.mark.parametrize("name,vector", _cases("intersect_channel_mask"))
 def test_intersect_channel_mask_vector(name: str, vector: dict[str, Any]) -> None:
     """R-02a-006: intersection of the beacon's advertised channel_mask with
-    the plan-permitted mask. The plan-side permitted mask is exactly what
-    validate_channel_mask masks down to, so intersecting is
-    advertised & plan_mask — computed here via the existing validator."""
+    the plan-permitted mask via ChannelPlan.intersect_channel_mask."""
     plan = get_plan_by_name(vector["input"]["plan_name"])
-    plan_mask = plan.validate_channel_mask(0xFFFFFFFFFFFFFFFF)
-    assert (vector["input"]["advertised_mask"] & plan_mask) == vector["output"]["intersection"]
+    assert (
+        plan.intersect_channel_mask(vector["input"]["advertised_mask"])
+        == vector["output"]["intersection"]
+    )
+
+
+@pytest.mark.parametrize("name,vector", _cases("intersect_channel_mask"))
+def test_intersect_channel_mask_normalizes_to_wire_width(
+    name: str, vector: dict[str, Any]
+) -> None:
+    """The beacon channel_mask field is u32; wider advertised values are
+    normalized before the intersection (R-02a-006)."""
+    plan = get_plan_by_name(vector["input"]["plan_name"])
+    advertised = vector["input"]["advertised_mask"]
+    widened = advertised | (0xFFFFFFFF << 32)  # set high garbage bits
+    assert plan.intersect_channel_mask(widened) == vector["output"]["intersection"]
 
 
 @pytest.mark.parametrize("name,vector", _cases("is_valid_power"))

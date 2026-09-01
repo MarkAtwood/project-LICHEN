@@ -173,6 +173,17 @@ pub fn cbor_options(beacon: &[u8]) -> Option<&[u8]> {
     Some(&beacon[HEADER_SIZE..beacon.len() - SIG_SIZE])
 }
 
+/// Local intersection of a beacon's advertised `channel_mask` with the
+/// locally permitted mask (spec 02a 2a.2 R-02a-006, bit 0=CH0).
+///
+/// Returns the intersection; 0 means no common channel and the caller MUST
+/// reject/ignore the beacon. The wire field is u32, so both inputs are
+/// wire-width exact; plans wider than 32 channels cannot be expressed in the
+/// beacon and must be pre-masked by the caller into `permitted`.
+pub fn intersect_channel_mask(permitted: u32, advertised: u32) -> u32 {
+    permitted & advertised
+}
+
 /// Maximum slot_map entries we'll parse (DoS prevention).
 pub const MAX_SLOT_MAP_ENTRIES: usize = 64;
 
@@ -324,6 +335,32 @@ pub fn verify_gate(beacon: &[u8], verify_fn: impl Fn(&[u8], &[u8]) -> bool) -> b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_intersect_channel_mask() {
+        // R-02a-006: local intersection of the beacon's advertised
+        // channel_mask with the permitted mask. Expectations mirror the
+        // intersect_channel_mask cases in
+        // test/vectors/ccp4_regional_channel_plans.json (EU868: 8 channels,
+        // permitted 0xFF); the JSON is the committed independent oracle and
+        // is consumed by the C and Python suites.
+        let eu868_permitted: u32 = 0xFF;
+
+        // intersect_channel_mask_eu868_subset
+        assert_eq!(intersect_channel_mask(eu868_permitted, 0x03), 0x03);
+        // intersect_channel_mask_eu868_superset
+        assert_eq!(intersect_channel_mask(eu868_permitted, 0xFFFF), 0xFF);
+        // intersect_channel_mask_eu868_disjoint: caller MUST reject
+        assert_eq!(intersect_channel_mask(eu868_permitted, 0xF000), 0x00);
+        // intersect_channel_mask_eu868_full
+        assert_eq!(intersect_channel_mask(eu868_permitted, 0xFF), 0xFF);
+
+        // Hardware with fewer channels than the plan narrows permitted.
+        assert_eq!(intersect_channel_mask(0x0F, 0xFF), 0x0F);
+        // Empty intersection on either side yields 0.
+        assert_eq!(intersect_channel_mask(0x00, 0xFF), 0x00);
+        assert_eq!(intersect_channel_mask(0xFF, 0x00), 0x00);
+    }
 
     #[test]
     fn test_roundtrip() {
