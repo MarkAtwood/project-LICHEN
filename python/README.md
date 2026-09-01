@@ -15,12 +15,11 @@ This is a full network simulator. You can spin up virtual LICHEN nodes, watch th
 
 ```bash
 cd python
-python -m venv .venv
+uv sync --extra dev
 source .venv/bin/activate
-pip install -e ".[dev]"
 
-# Run the test suite
-pytest
+# Run the test suite (with coverage, matching the dev tooling)
+pytest --cov=lichen
 
 # Start the simulator server
 lichen-sim --node-port 4444 --api-port 4445
