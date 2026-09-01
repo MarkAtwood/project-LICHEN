@@ -756,6 +756,18 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status
         is ProvisionEpochStatus.PERSISTENCE_FAILED
     )
+    # Pin the tracker-consumed branch specifically: StratumTracker reads the
+    # floor via EpochFloorAuthority -> _with_floor_snapshot ->
+    # _floor_result_locked (:596), a separate persistence_failed check from
+    # the _missing_metadata_floor branch the evaluate_epoch_floor assertion
+    # above routes through. Without this pin, deleting only that check
+    # passes while trackers stop clearing active clocks on persistence
+    # failure.
+    assert (
+        EpochFloorAuthority(FLOOR, verifier=verifier)
+        .current().provision_status
+        is ProvisionEpochStatus.PERSISTENCE_FAILED
+    )
 
 
 @pytest.mark.asyncio
