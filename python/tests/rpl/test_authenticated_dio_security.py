@@ -689,6 +689,92 @@ async def test_all_link_elevations_cancel_tasks_and_futures() -> None:
     assert receipt_future.cancelled()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_receipt_elevation_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    authenticated = await _receive_and_accept(link, radio)
+    generation = authenticated.key_generation
+    created: list[object] = []
+
+    async def later() -> None:
+        return None
+
+    def scheduled() -> object:
+        value: object
+        if kind == "task":
+            value = asyncio.create_task(later())
+        elif kind == "future":
+            value = asyncio.get_running_loop().create_future()
+        else:
+            value = _ReceiptCloseAwaitable()
+        created.append(value)
+        return value
+
+    for counter in (2, 3):
+        radio.frames.append((signed_wire(counter), -90, 4))
+        receipt = await link.receive(100)
+        assert isinstance(receipt, RxFrame)
+        with pytest.raises(TypeError, match="awaitable"):
+            link.elevate_verified_receipt(
+                receipt,
+                purpose="dio-time",
+                elevate=lambda _frame: scheduled(),
+            )
+        if kind == "task":
+            await asyncio.sleep(0)
+            assert cast(asyncio.Task[None], created[-1]).cancelled()
+        elif kind == "future":
+            assert cast(asyncio.Future[None], created[-1]).cancelled()
+        else:
+            assert cast(_ReceiptCloseAwaitable, created[-1]).close_calls == 1
+
+    # The failed elevations must not have consumed the receipt pipeline:
+    # a synchronous elevation on a fresh receipt still succeeds.
+    radio.frames.append((signed_wire(4), -90, 4))
+    fresh = await link.receive(100)
+    assert isinstance(fresh, RxFrame)
+    assert (
+        link.elevate_verified_receipt(
+            fresh,
+            purpose="dio-time",
+            elevate=lambda _frame: "sync-ok",
+        )
+        == "sync-ok"
+    )
+    _ = generation
+
+
+class _ReceiptCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+async def _receive_and_accept(link: object, radio: object) -> object:
+    radio.frames.append((signed_wire(1), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    return link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+
+
 def test_dodag_identity_survives_forced_post_seal_rx_facade_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
