@@ -1,6 +1,22 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
+/**
+ * @file beacon.c
+ * @brief TDMA beacon wire codec (spec 02a-coordinated-capacity.md §2a.2).
+ *
+ * Merge resolution (main + beads-worker-7): both sides implemented bead
+ * l9sb independently. HEAD's API (enum lichen_beacon_status, bounds-checked
+ * serialize, flag predicates, signed_data with signed_len, cbor_options) is
+ * kept because it is the complete port of the Python/Rust reference codecs
+ * that bead l9sb requires ("signature_bytes/signed_data/cbor_options
+ * extraction"); the incoming beads-worker-7 codec drops cbor_options and
+ * the flag predicates and its serialize is not bounds-checked. The @file
+ * doc comment above is retained from beads-worker-7. Note: the incoming
+ * host test lichen/tests/tdma_beacon/src/main.c calls the beads-worker-7
+ * parse_header/serialize_header API and must be reconciled with this API.
+ */
+
 #include <lichen/beacon.h>
 
 #include <string.h>
