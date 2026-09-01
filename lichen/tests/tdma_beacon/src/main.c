@@ -96,6 +96,33 @@ static void test_null_guards(void)
 	assert(lichen_beacon_signature_bytes(NULL, 72) == NULL);
 }
 
+static void test_intersect_channel_mask(void)
+{
+	/* R-02a-006: local intersection of the beacon's advertised
+	 * channel_mask with the permitted mask. Expectations mirror the
+	 * intersect_channel_mask cases in
+	 * test/vectors/ccp4_regional_channel_plans.json (EU868: 8 channels,
+	 * permitted 0xFF); the JSON is the committed independent oracle. */
+	uint32_t eu868_permitted = 0xFFU;
+
+	assert(lichen_beacon_intersect_channel_mask(eu868_permitted, 0x03U) ==
+	       0x03U); /* intersect_channel_mask_eu868_subset */
+	assert(lichen_beacon_intersect_channel_mask(eu868_permitted,
+						    0xFFFFU) == 0xFFU);
+	/* intersect_channel_mask_eu868_superset */
+	assert(lichen_beacon_intersect_channel_mask(eu868_permitted,
+						    0xF000U) == 0x00U);
+	/* intersect_channel_mask_eu868_disjoint: caller MUST reject */
+	assert(lichen_beacon_intersect_channel_mask(eu868_permitted, 0xFFU) ==
+	       0xFFU); /* intersect_channel_mask_eu868_full */
+
+	/* Hardware with fewer channels than the plan narrows permitted. */
+	assert(lichen_beacon_intersect_channel_mask(0x0FU, 0xFFU) == 0x0FU);
+	/* Empty intersection on either side yields 0. */
+	assert(lichen_beacon_intersect_channel_mask(0x00U, 0xFFU) == 0x00U);
+	assert(lichen_beacon_intersect_channel_mask(0xFFU, 0x00U) == 0x00U);
+}
+
 int main(void)
 {
 	test_parse_vector();
@@ -103,6 +130,7 @@ int main(void)
 	test_reserved_flag_rejected();
 	test_short_buffer_rejected();
 	test_null_guards();
+	test_intersect_channel_mask();
 	printf("tdma_beacon tests passed\n");
 	return 0;
 }
