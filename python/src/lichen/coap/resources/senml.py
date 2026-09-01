@@ -29,7 +29,6 @@ class SenMLSensorsResource(resource.ObservableResource):
     def __init__(self) -> None:
         super().__init__()
         from lichen.coap.position_privacy import PositionPrivacyPolicy
-from lichen.senml.codec import pack  # noqa: PLC0415
 
         self._records: list[Any] = []
         self._payload: bytes = pack([])
@@ -68,7 +67,6 @@ class SenMLLocationResource(resource.ObservableResource):
     def __init__(self) -> None:
         super().__init__()
         from lichen.coap.position_privacy import PositionPrivacyPolicy
-from lichen.senml.codec import pack  # noqa: PLC0415
 
         self._payload: bytes = pack([])
         self.privacy_policy: PositionPrivacyPolicy | None = None
@@ -297,7 +295,6 @@ class SenMLMetricsResource(resource.ObservableResource):
         """Initialize with empty SenML pack."""
         super().__init__()
         from lichen.coap.position_privacy import PositionPrivacyPolicy
-from lichen.senml.codec import pack  # noqa: PLC0415
 
         self._payload: bytes = pack([])
 
@@ -311,7 +308,7 @@ from lichen.senml.codec import pack  # noqa: PLC0415
     ) -> None:
         """Update telemetry+battery readings and notify all observers."""
         from lichen.coap.position_privacy import PositionPrivacyPolicy
-from lichen.senml.codec import pack  # noqa: PLC0415
+        from lichen.senml.codec import pack  # noqa: PLC0415
         from lichen.senml.profiles import metrics  # noqa: PLC0415
 
         self._payload = pack(
