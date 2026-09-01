@@ -1294,6 +1294,40 @@ async def test_dio_time_verifier_rejects_post_issuance_mutation(mutation: str) -
         verifier.verify(authenticated)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_monotonic_clock_scheduled_awaitable_rejected_and_terminated(
+    kind: str,
+) -> None:
+    """The MonotonicClock callback surface must reject a scheduled awaitable
+    (task/future/custom) fail-closed: cancelled/closed then TypeError, and a
+    re-registration with a synchronous callback still works (bead 29wj)."""
+    ran: list[int] = []
+    created: list[object] = []
+
+    def scheduled() -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    # Registration gate: an async callback is rejected outright.
+    async def async_clock() -> float:
+        return 1.0
+
+    with pytest.raises(TypeError, match="synchronous"):
+        MonotonicClock(async_clock)  # type: ignore[arg-type]
+
+    # Invocation gate: the returned awaitable is cancelled/closed then
+    # rejected; it must never run.
+    clock = MonotonicClock(scheduled)
+    with pytest.raises(TypeError, match="awaitable"):
+        _ = clock()
+    await asyncio.sleep(0)
+    _assert_terminated(kind, created[0], ran)
+
+    # A re-registration with a synchronous callback still works.
+    sync_clock = MonotonicClock(lambda: 5.0)
+    assert sync_clock() == 5.0
+
+
 def test_monotonic_clock_callback_and_domain_are_structurally_immutable() -> None:
     clock = Clock()
     original_callback = clock.capability.callback
