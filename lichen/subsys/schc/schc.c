@@ -39,6 +39,135 @@ static bool valid_fragment_rule(uint8_t rule_id)
 	       rule_id == SCHC_FRAGMENT_RULE_B_TO_A;
 }
 
+/* ─── Rule 255 payload structure validation (spec/03-adaptation.md) ────────
+ *
+ * The Rule-255 receive path is byte-preserving with respect to the endpoint
+ * address policy (rule255-rx-decode decision): framing, extension headers,
+ * and UDP structure/checksums are enforced; addresses are read only for the
+ * checksum pseudo-header. Mirrors the Rust decode_rule255 ->
+ * validate_full_ipv6_structure contract so both implementations admit the
+ * same on-air frames.
+ */
+
+#define SCHC_IPV6_HEADER_LEN 40U
+#define SCHC_IPV6_NH_UDP 17U
+#define SCHC_IPV6_NH_HOPBYHOP 0U
+#define SCHC_IPV6_NH_ROUTING 43U
+#define SCHC_IPV6_NH_FRAGMENT 44U
+#define SCHC_IPV6_NH_DSTOPTS 60U
+#define SCHC_UDP_HEADER_LEN 8U
+
+static uint16_t rule255_read_be16(const uint8_t *p)
+{
+	return (uint16_t)((uint16_t)p[0] << 8 | (uint16_t)p[1]);
+}
+
+/* RFC 1071 checksum over the IPv6 pseudo-header plus the UDP datagram. */
+static uint16_t rule255_udp_checksum(const uint8_t src[16],
+				     const uint8_t dst[16],
+				     const uint8_t *udp, size_t udp_len)
+{
+	uint32_t sum = 0u;
+
+	for (size_t i = 0; i < 16u; i += 2u) {
+		sum += (uint32_t)((uint16_t)src[i] << 8 | src[i + 1u]);
+		sum += (uint32_t)((uint16_t)dst[i] << 8 | dst[i + 1u]);
+	}
+	sum += (uint32_t)udp_len;
+	sum += (uint32_t)SCHC_IPV6_NH_UDP;
+	for (size_t i = 0; i + 1u < udp_len; i += 2u) {
+		sum += (uint32_t)((uint16_t)udp[i] << 8 | udp[i + 1u]);
+	}
+	if (udp_len % 2u != 0u) {
+		sum += (uint32_t)((uint16_t)udp[udp_len - 1u] << 8);
+	}
+	while (sum >> 16 != 0u) {
+		sum = (sum & 0xFFFFu) + (sum >> 16);
+	}
+	return (uint16_t)~sum;
+}
+
+static int rule255_validate(const uint8_t *pkt, size_t len)
+{
+	if (len < SCHC_IPV6_HEADER_LEN) {
+		return SCHC_ERR_INVALID_ARGUMENT;
+	}
+	if (pkt[0] >> 4 != 6u) {
+		return SCHC_ERR_INVALID_ARGUMENT;
+	}
+	size_t payload_len = rule255_read_be16(&pkt[4]);
+	if (len != SCHC_IPV6_HEADER_LEN + payload_len) {
+		return SCHC_ERR_INVALID_ARGUMENT;
+	}
+
+	const uint8_t *upper_dst = &pkt[24];
+	uint8_t next_header = pkt[6];
+	size_t offset = SCHC_IPV6_HEADER_LEN;
+
+	for (;;) {
+		if (next_header == SCHC_IPV6_NH_FRAGMENT) {
+			/* LICHEN fragments at the SCHC layer (spec section 3). */
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+		if (next_header != SCHC_IPV6_NH_HOPBYHOP &&
+		    next_header != SCHC_IPV6_NH_ROUTING &&
+		    next_header != SCHC_IPV6_NH_DSTOPTS) {
+			break;
+		}
+		if (offset + 2u > len) {
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+		size_t ext_len = ((size_t)pkt[offset + 1u] + 1u) * 8u;
+		size_t end = offset + ext_len;
+		if (end > len) {
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+		if (next_header == SCHC_IPV6_NH_ROUTING) {
+			/* RPL SRH only: type 3, no compression, full addresses
+			 * (RFC 6554; RFC 5095 forbids type 0). */
+			if (ext_len < 24u || pkt[offset + 2u] != 3u ||
+			    pkt[offset + 4u] != 0u || pkt[offset + 5u] != 0u) {
+				return SCHC_ERR_INVALID_ARGUMENT;
+			}
+			size_t address_count = (ext_len - 8u) / 16u;
+			size_t segments_left = pkt[offset + 3u];
+			if (segments_left > address_count) {
+				return SCHC_ERR_INVALID_ARGUMENT;
+			}
+			if (segments_left != 0u) {
+				upper_dst = &pkt[end - 16u];
+			}
+		}
+		next_header = pkt[offset];
+		offset = end;
+	}
+
+	if (next_header == SCHC_IPV6_NH_UDP) {
+		if (len - offset < SCHC_UDP_HEADER_LEN) {
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+		const uint8_t *udp = &pkt[offset];
+		size_t udp_len = len - offset;
+		uint16_t udp_length = rule255_read_be16(&udp[4]);
+		if (udp_length < SCHC_UDP_HEADER_LEN || udp_length != udp_len) {
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+		uint16_t checksum = rule255_read_be16(&udp[6]);
+		if (checksum == 0u) {
+			/* Mandatory for IPv6 (RFC 8200 section 8.1). */
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+		/* RFC 1071 verification: the folded one's-complement sum over
+		 * the pseudo-header plus datagram (checksum field included)
+		 * is 0xFFFF, so the complement is 0 for a valid datagram. */
+		if (rule255_udp_checksum(&pkt[8], upper_dst, udp,
+					 udp_len) != 0u) {
+			return SCHC_ERR_INVALID_ARGUMENT;
+		}
+	}
+	return 0;
+}
+
 static uint32_t crc32_iso_hdlc(const uint8_t *data, size_t len)
 {
 	uint32_t crc = 0xffffffffu;
@@ -168,6 +297,18 @@ int schc_decompress(const struct schc_profile *profile,
 		const uint8_t *payload = &data[1];
 		size_t payload_len = data_len - 1;
 
+		/* payload_len <= SCHC_FRAGMENT_MAX_PACKET_SIZE - 1 via the
+		 * ingress ceiling above, so it cannot overflow this
+		 * int-returning API; the base revision's INT_MAX guard is
+		 * dead code here and was dropped. */
+		/* Validate before the buffer check so structurally invalid
+		 * input reports the invalid-packet error even when the
+		 * caller's buffer is also too small (matches the Rust
+		 * decode_rule255 precedence). */
+		int check = rule255_validate(payload, payload_len);
+		if (check != 0) {
+			return check;
+		}
 		if (out_len < payload_len) {
 			return SCHC_ERR_BUFFER_TOO_SMALL;
 		}
