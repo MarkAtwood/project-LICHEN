@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-mypf",
+  "title": "Rust: channel_mask local intersection (spec 02a 2a.2)",
+  "description": "Rust slice of the beacon channel_mask work: port python channel_plan.validate_channel_mask to lichen-core (channel_plan.rs or tdma_beacon.rs): intersect beacon channel_mask with the plan's channel count, CH0 bit always preserved. C mirror filed separately. Consume via a ccp_beacon_format.json-adjacent test or a new vector.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T18:48:05.381024362Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T18:57:25.07058205Z",
+  "started_at": "2026-09-01T18:48:54.635685353Z",
+  "closed_at": "2026-09-01T18:57:25.07058205Z",
+  "close_reason": "Rust channel_mask local intersection landed: intersect_channel_mask + channel_gate in rust/lichen-core/src/rf_health.rs (spec 02a 2a.2 'local intersection computed'; python channel_plan.validate_channel_mask parity — mask \u0026 (2^num_channels - 1), CH0 always preserved, 0-channel -\u003e empty, \u003e=32 passthrough). Tests: 3 unit cases (bits beyond plan cleared, CH0 preserved, gate reflect/empty). Gates: cargo test lichen-core 398 pass, clippy -D warnings clean, fmt clean. Reviews: kimi-k3 PASS (must_use on pure fns, no_std-compatible, spec-cited doc; only non-blocking notes). Companion C slice landed earlier (bead 8rg1, lichen_beacon_intersect_channel_mask in beacon.c) — both implementations now agree.",
+  "labels": [
+    "rust",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-mypf",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.60",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T18:48:05.483566041Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-8rg1",
+  "title": "C link: channel_mask local intersection (spec 02a 2a.2, beacon.c slice)",
+  "description": "The beacon header carries channel_mask u32 (bit 0=CH0) and the spec says 'local intersection computed' — no implementation applies it. Add to lichen/subsys/lichen/link/beacon.{c,h}: lichen_beacon_intersect_channel_mask(beacon_mask, num_channels) -\u003e uint32_t — clears bits for channels beyond num_channels (mirrors python channel_plan.validate_channel_mask: mask \u0026 ((1\u003c\u003cnum_channels)-1), CH0 bit always preserved since num_channels\u003e=1), plus a gate helper returning true when the intersection is nonzero. Host CTest cases: identity when beacon mask fits plan, high bits cleared, empty intersection (plan 1 channel vs mask without bit0) -\u003e gate false. Python parity: channel_plan.py:84 validate_channel_mask already exists (reference). Rust slice: same helper in lichen-core channel_plan or tdma_beacon.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T18:48:05.120376828Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T18:51:18.147596364Z",
+  "started_at": "2026-09-01T18:50:08.91215336Z",
+  "closed_at": "2026-09-01T18:51:18.147596364Z",
+  "close_reason": "Channel_mask local intersection landed (spec 02a 2a.2, 'local intersection computed'): lichen_beacon_intersect_channel_mask clears beacon mask bits beyond the local plan's num_channels (python channel_plan.validate_channel_mask parity: mask \u0026 (2^num_channels - 1); CH0 bit always within plan for num_channels \u003e= 1; 32-channel plans pass through; 0-channel -\u003e empty) and lichen_beacon_channel_gate reports whether any locally usable channel remains. Host CTest extended with 7 cases (identity, high-bit clear, 1-channel, 32-channel passthrough, zero-plan, gate true/false). Gates: ctest green under ASan/UBSan, gcc -Werror -Wconversion clean, cppcheck clean. Reviews: reviewer kimi-k3 was unavailable this round (timeouts all session) -\u003e self-review fallback per loop protocol: parity verified line-by-line against python channel_plan.py:84-88, boundary directions checked (plan \u003e= 32 passthrough, 0 -\u003e empty), single pure function. Sibling: Rust slice mypf filed.",
+  "labels": [
+    "zephyr",
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8rg1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.60",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T18:48:05.225894049Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
