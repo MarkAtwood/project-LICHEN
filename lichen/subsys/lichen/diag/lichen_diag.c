@@ -17,6 +17,7 @@
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/init.h>
 #include <zcbor_encode.h>
 
 #define DIAG_CAPACITY CONFIG_LICHEN_DIAG_CAPACITY
@@ -83,6 +84,10 @@ bool lichen_diag_get(size_t index, struct lichen_diag_event *out)
 	return true;
 }
 
+/* Wire init at boot: without this, s_initialized stays false and every
+ * report no-ops (found by ldzz.3 review). */
+SYS_INIT(lichen_diag_init, APPLICATION, 0);
+
 /* CoAP GET /diag: CBOR array of recent events as maps. */
 static int diag_get(struct coap_resource *resource,
 		    struct coap_packet *request,
@@ -109,7 +114,7 @@ static int diag_get(struct coap_resource *resource,
 		     zcbor_uint32_put(zs, ev.event_code) &&
 		     zcbor_tstr_put_lit(zs, "detail") &&
 		     zcbor_uint32_put(zs, ev.detail) &&
-		     zcbor_map_end_encode(zs);
+		     zcbor_map_end_encode(zs, 5);
 	}
 	if (ok) {
 		ok = zcbor_list_end_encode(zs, events);
@@ -129,5 +134,5 @@ static int diag_get(struct coap_resource *resource,
 static const char *const diag_path[] = { "diag", NULL };
 COAP_RESOURCE_DEFINE(lichen_diag, lichen_coap_server, {
 	.get = diag_get,
-	.res = diag_path,
+	.path = diag_path,
 });

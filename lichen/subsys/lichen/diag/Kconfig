@@ -5,6 +5,8 @@ config LICHEN_DIAG
 	bool "Hardware diagnostics event ring"
 	depends on LICHEN_COAP_SERVER
 	default y
+	# GET /diag encodes with zcbor (same pattern as SENML/COAP above).
+	imply ZCBOR
 	help
 	  Rolling ring buffer of diagnostic events (timestamp, subsystem,
 	  event code, detail, message) callable from any subsystem via

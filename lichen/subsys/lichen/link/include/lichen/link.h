@@ -563,7 +563,6 @@ bool lichen_tdma_guard_budget_sufficient(uint64_t guard,
 					 uint64_t peer_jitter,
 					 uint64_t propagation,
 					 uint64_t margin);
-#endif
 
 uint32_t lichen_hash_32(const uint8_t *_Nonnull data, size_t len);
 
