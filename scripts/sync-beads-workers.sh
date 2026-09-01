@@ -71,7 +71,7 @@ llm_semantic_merge() {
 
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >/dev/null 2>&1 || return 1
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log; >/dev/null 2>&1 || return 1
 
     # stage whatever the LLM resolved; fail if anything is still conflicted
     git add -- $files
@@ -129,10 +129,12 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
             git merge --abort 2>/dev/null || true
         fi
     else
-        # Semantic merge (AgentSpawn-style, arXiv:2602.07072): LLM reconciles
-        # both diffs with intent; tests verify; escalate only on failure.
-        echo "  conflict — attempting LLM semantic merge..."
-        if llm_semantic_merge "$branch"; then
+        # Single-file conflicts: in-loop kimi resolves immediately (measured
+        # 100% success on single files). Multi-file conflicts go straight to
+        # the janitor — the in-loop session fails ~80% there (75 dead sessions
+        # measured), pure wasted spend.
+        CONFLICT_N=$(git diff --name-only --diff-filter=U | wc -l)
+        if [ "$CONFLICT_N" -le 1 ] && llm_semantic_merge "$branch"; then
             if git diff --name-only --diff-filter=U | grep -q .; then
                 echo "  semantic merge left unresolved files — aborting"
                 git merge --abort 2>/dev/null || true
