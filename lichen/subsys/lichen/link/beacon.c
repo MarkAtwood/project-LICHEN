@@ -244,3 +244,25 @@ size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
 	}
 	return pos;
 }
+
+uint32_t lichen_beacon_intersect_channel_mask(uint32_t beacon_mask,
+					      uint8_t num_channels)
+{
+	if (num_channels == 0u) {
+		return 0u;
+	}
+	if (num_channels >= 32u) {
+		return beacon_mask;
+	}
+	/* CH0 (bit 0) is the control channel and is always in the plan:
+	 * the valid-mask always includes bit 0 (1<<num_channels - 1 has
+	 * bit 0 set for num_channels >= 1). */
+	return beacon_mask & ((1u << num_channels) - 1u);
+}
+
+bool lichen_beacon_channel_gate(const uint32_t beacon_mask,
+				uint8_t num_channels)
+{
+	return lichen_beacon_intersect_channel_mask(beacon_mask,
+						    num_channels) != 0u;
+}

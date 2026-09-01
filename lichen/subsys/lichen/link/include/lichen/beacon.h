@@ -131,4 +131,15 @@ lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
 size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
 				    uint8_t *out, size_t out_len);
 
+/** Local intersection (spec 02a 2a.2): clear beacon channel_mask bits
+ *  for channels beyond the local plan's num_channels. Bit 0 (CH0
+ *  control channel) is always within the plan for num_channels >= 1.
+ *  Python parity: channel_plan.validate_channel_mask. */
+uint32_t lichen_beacon_intersect_channel_mask(uint32_t beacon_mask,
+					      uint8_t num_channels);
+
+/** Gate: true when the intersected mask is nonzero (at least one
+ *  locally usable channel). */
+bool lichen_beacon_channel_gate(uint32_t beacon_mask, uint8_t num_channels);
+
 #endif /* LICHEN_LINK_BEACON_H_ */

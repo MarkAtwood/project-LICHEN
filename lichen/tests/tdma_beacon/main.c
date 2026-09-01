@@ -461,6 +461,25 @@ int main(int argc, char **argv)
 	      "too-small out buffer rejected");
 	}
 	free(sm_json);
+	/* Channel mask local intersection (spec 02a 2a.2; python
+	 * channel_plan.validate_channel_mask parity). */
+	CHECK(lichen_beacon_intersect_channel_mask(0x0000FFFF, 8) == 0x00FF,
+	      "mask: bits beyond plan cleared");
+	CHECK(lichen_beacon_intersect_channel_mask(0x00000001, 8) == 0x0001,
+	      "mask: CH0 bit preserved");
+	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 1) == 0x0001,
+	      "mask: 1-channel plan keeps only CH0");
+	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 32) ==
+		      0xFFFFFFFF,
+	      "mask: 32-channel plan keeps all bits");
+	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 0) == 0,
+	      "mask: zero-channel plan -> empty");
+	/* Gate: at least one locally usable channel. */
+	CHECK(lichen_beacon_channel_gate(0x0000FFFF, 8),
+	      "gate: intersected mask nonzero -> usable");
+	CHECK(!lichen_beacon_channel_gate(0xFFFFFFFE, 1),
+	      "gate: 1-channel plan without CH0 -> no usable channel");
+
 	if (failures == 0) {
 		printf("PASS: beacon codec vs ccp_beacon_format wire oracle\n");
 		return 0;
