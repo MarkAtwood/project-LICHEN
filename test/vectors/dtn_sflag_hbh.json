@@ -1,0 +1,67 @@
+[
+ {
+  "name": "sflag_set_layout",
+  "description": "S-flag set: option [0x03, 0x05, 0x80, expiry u32 BE] parses with store-and-forward requested. Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_hbh",
+  "option_hex": "0305806553f600",
+  "expiry_unix": 1700001280,
+  "s_flag": 1,
+  "expiry_be_bytes": "6553f600",
+  "expected": "parse"
+ },
+ {
+  "name": "sflag_clear",
+  "description": "Flags 0x00: option parses but no store-and-forward intent. Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_hbh",
+  "option_hex": "0305006553f600",
+  "expiry_unix": 1700001280,
+  "s_flag": 0,
+  "expiry_be_bytes": "6553f600",
+  "expected": "parse_no_store"
+ },
+ {
+  "name": "reserved_bits_ignored_on_receive",
+  "description": "Reserved bits in the flags byte MUST be ignored on receive (spec 9.8): flags 0x7F has S=0 and must parse as no-store, not as a reject. Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_hbh",
+  "option_hex": "03057f6553f600",
+  "expiry_unix": 1700001280,
+  "s_flag": 0,
+  "expiry_be_bytes": "6553f600",
+  "expected": "parse_no_store"
+ },
+ {
+  "name": "expiry_big_endian_decode",
+  "description": "Absolute expiry is a 4-byte big-endian Unix timestamp: bytes 0x000001E8 decode to 488. Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_hbh",
+  "option_hex": "030500000001e8",
+  "expiry_unix": 488,
+  "s_flag": 1,
+  "expiry_be_bytes": "000001e8",
+  "expected": "parse"
+ },
+ {
+  "name": "expired_with_valid_clock",
+  "description": "Node with valid wall clock: expiry < now -> drop silently (spec 9.8 Absolute TTL). Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_semantic",
+  "expiry_unix": 1000000000,
+  "now_unix": 1700000000,
+  "wall_clock_valid": true,
+  "expected": "drop_silently"
+ },
+ {
+  "name": "clockless_fail_open",
+  "description": "Node without valid wall-clock time MUST NOT drop based on expiry alone; store or forward so downstream nodes with valid time enforce expiry (R-05-080). Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_semantic",
+  "expiry_unix": 1000000000,
+  "now_unix": 0,
+  "wall_clock_valid": false,
+  "expected": "store_or_forward"
+ },
+ {
+  "name": "wrong_length_rejected",
+  "description": "Option length != 5 is malformed for Type=0x03 and the option must not be accepted as a DTN intent. Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
+  "type": "dtn_hbh",
+  "option_hex": "0304806553f6",
+  "expected": "reject_malformed"
+ }
+]

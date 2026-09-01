@@ -214,6 +214,7 @@ def test_tofu_edge_vectors_and_c_fixture_are_fresh() -> None:
         "rule_versioning.json",
         "schc_adaptation.json",
         "schc_tile_sizing.json",
+        "dtn_sflag_hbh.json",
     ],
 )
 def test_vector_file_schema(filename: str) -> None:
