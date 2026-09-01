@@ -1,0 +1,7 @@
+{
+  "id": "1788273133130994845-1",
+  "issue_id": "project-LICHEN-worker6-0l4q",
+  "author": "opencode-worker-2",
+  "text": "Worker-2 finding: lichen-node lib tests cannot run locally on this checkout — the merge with origin/main brought in a Cargo.toml/oscore-fork dependency path that doesn't exist locally (environment-only limitation, documented in beads 7bhj and nqtz). The 6 rpl_stack test failures need verification on a checkout that has the oscore-fork directory. Releasing for a worker with the correct environment.",
+  "created_at": "2026-09-01T14:32:13.130994845Z"
+}
