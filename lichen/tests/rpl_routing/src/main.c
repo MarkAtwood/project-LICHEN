@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include <zephyr/ztest.h>
+#include <lichen/schnorr48.h>
+#include <monocypher.h>
 
 #include <lichen/rpl_routing.h>
 
@@ -89,12 +91,39 @@ static void add_descriptor(uint8_t *buf, size_t *len, uint8_t data_len)
 	}
 }
 
-static void add_origin_signature(uint8_t *buf, size_t *len)
+static uint8_t origin_priv[32];
+static uint8_t origin_pub[32];
+static uint64_t origin_seq_ctr = 1U;
+
+/* Spec/05-routing.md 8.6 transcript: append the 0x12 DAO Origin Signature
+ * option (seq BE u64 + Schnorr48 over SHA-512(domain || origin || dodagid ||
+ * seq_be || unsigned DAO bytes)) using the suite's test signing key. */
+static void add_origin_signature(uint8_t *buf, size_t *len,
+				 const uint8_t origin[16])
 {
+	crypto_sha512_ctx ctx;
+	uint8_t digest[64];
+	uint8_t seq_be[8];
+	uint8_t sig[48];
+	static const uint8_t domain[] = "LICHEN-DAO-ORIGIN-v1";
+
+	crypto_sha512_init(&ctx);
+	crypto_sha512_update(&ctx, domain, sizeof(domain) - 1U);
+	crypto_sha512_update(&ctx, origin, 16U);
+	crypto_sha512_update(&ctx, dodag, 16U);
+	for (int i = 7; i >= 0; i--) {
+		seq_be[7 - i] = (uint8_t)(origin_seq_ctr >> (8 * i));
+	}
+	crypto_sha512_update(&ctx, seq_be, sizeof(seq_be));
+	crypto_sha512_update(&ctx, buf, *len);
+	crypto_sha512_final(&ctx, digest);
+	schnorr48_sign(origin_priv, origin_pub, digest, sizeof(digest), sig);
 	buf[(*len)++] = 0x12;
 	buf[(*len)++] = 56;
-	memset(&buf[*len], 0x5a, 56);
+	memcpy(&buf[*len], seq_be, 8);
+	memcpy(&buf[*len + 8], sig, 48);
 	*len += 56;
+	origin_seq_ctr++;
 }
 
 static void dao_sequences(const uint8_t *wire, size_t len,
@@ -153,8 +182,9 @@ static bool install_one(uint8_t target, uint8_t parent, uint8_t path_sequence,
 	add_target(dao, &len, target);
 	add_transit(dao, &len, parent, 0x40, path_sequence, lifetime);
 	address(origin, target);
+	add_origin_signature(dao, &len, origin);
 	return lichen_rpl_dao_manager_process_dao(&manager, dao, len, now,
-						  origin, true);
+						  origin, origin_pub);
 }
 
 static enum lichen_rpl_dao_process_result process_one(
@@ -167,12 +197,19 @@ static enum lichen_rpl_dao_process_result process_one(
 	add_target(dao, &len, target);
 	add_transit(dao, &len, parent, 0x40, path_sequence, 255);
 	address(origin, target);
+	add_origin_signature(dao, &len, origin);
 	return lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, now,
-						     origin, true, NULL, 0);
+						     origin, origin_pub, NULL, 0);
 }
 
 static void before(void *fixture)
 {
+	uint8_t test_seed[32];
+
+	for (int i = 0; i < 32; i++) {
+		test_seed[i] = (uint8_t)(0x70 + i);
+	}
+	schnorr48_derive_keypair(test_seed, origin_priv, origin_pub);
 	ARG_UNUSED(fixture);
 	address(root, 1);
 	address(dodag, 0x99);
@@ -204,7 +241,7 @@ ZTEST(rpl_routing, test_group_cartesian_and_path_control)
 	add_transit(dao, &len, 4, 0x40, 2, 20);
 	address(origin, 2);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 20,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "aggregated foreign target accepted");
 
 	len = dao_begin(dao, 2);
@@ -212,7 +249,7 @@ ZTEST(rpl_routing, test_group_cartesian_and_path_control)
 	add_transit(dao, &len, 1, 0x10, 2, 20);
 	add_transit(dao, &len, 4, 0x40, 2, 20);
 	zassert_true(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 20,
-							origin, true),
+							origin, origin_pub),
 		     "grouped DAO rejected");
 	address(origin, 3);
 	len = dao_begin(dao, 2);
@@ -220,7 +257,7 @@ ZTEST(rpl_routing, test_group_cartesian_and_path_control)
 	add_transit(dao, &len, 1, 0x10, 2, 20);
 	add_transit(dao, &len, 4, 0x40, 2, 20);
 	zassert_true(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 20,
-							origin, true),
+							origin, origin_pub),
 		     "grouped DAO rejected");
 
 	address(target2, 2);
@@ -426,7 +463,7 @@ ZTEST(rpl_routing, test_root_requires_bound_state)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	address(origin, 2);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "unbound root processed DAO");
 	uint8_t target[16];
 	struct lichen_rpl_route route;
@@ -439,7 +476,7 @@ ZTEST(rpl_routing, test_root_requires_bound_state)
 	zassert_equal(lichen_rpl_dao_manager_bind_root_state(&manager, &root_state),
 		      LICHEN_RPL_OK, "root state bind failed");
 	zassert_true(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 1,
-							origin, true),
+							origin, origin_pub),
 		     "bound root rejected DAO");
 }
 
@@ -589,7 +626,7 @@ ZTEST(rpl_routing, test_descriptor_grammar)
 	add_descriptor(dao, &len, 4);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_true(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 1,
-							origin, true),
+							origin, origin_pub),
 		     "valid descriptor rejected");
 	uint8_t target2[16];
 	address(target2, 2);
@@ -602,7 +639,7 @@ ZTEST(rpl_routing, test_descriptor_grammar)
 	dao[len - 1] = 9;
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 2,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED,
 		      "equal Path Sequence descriptor mutation was accepted");
 	snapshot = find_snapshot(&manager, target2);
@@ -615,7 +652,7 @@ ZTEST(rpl_routing, test_descriptor_grammar)
 	add_descriptor(dao, &len, 3);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 2,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "bad descriptor length accepted");
 
 	len = dao_begin(dao, 3);
@@ -624,7 +661,7 @@ ZTEST(rpl_routing, test_descriptor_grammar)
 	add_descriptor(dao, &len, 4);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 3,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "repeated descriptor accepted");
 
 	len = dao_begin(dao, 4);
@@ -632,7 +669,7 @@ ZTEST(rpl_routing, test_descriptor_grammar)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	add_descriptor(dao, &len, 4);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 4,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "post-Transit descriptor accepted");
 
 	len = dao_begin(dao, 5);
@@ -640,7 +677,7 @@ ZTEST(rpl_routing, test_descriptor_grammar)
 	add_target(dao, &len, 3);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 5,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "descriptor without Target accepted");
 }
 
@@ -656,12 +693,12 @@ ZTEST(rpl_routing, test_dao_base_and_options_are_exact)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	dao[1] |= 0x01;
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "reserved DAO flag accepted");
 	dao[1] &= ~0x01;
 	dao[2] = 1;
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "reserved DAO byte accepted");
 	dao[2] = 0;
 
@@ -669,7 +706,7 @@ ZTEST(rpl_routing, test_dao_base_and_options_are_exact)
 	dao[20] = 0xee;
 	dao[21] = 0;
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len + 2, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "leading unsupported option accepted");
 	len = dao_begin(dao, 1);
 	add_target(dao, &len, 2);
@@ -677,7 +714,7 @@ ZTEST(rpl_routing, test_dao_base_and_options_are_exact)
 	dao[len++] = 0xee;
 	dao[len++] = 0;
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "trailing unsupported option accepted");
 }
 
@@ -692,11 +729,11 @@ ZTEST(rpl_routing, test_ack_and_terminal_origin_signature)
 	address(origin, 2);
 	add_target(dao, &len, 2);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
-	add_origin_signature(dao, &len);
+	add_origin_signature(dao, &len, origin);
 	dao[1] |= 0x80U;
 	memset(ack_buf, 0xa5, sizeof(ack_buf));
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(
-			      &manager, dao, len, 10, origin, true,
+			      &manager, dao, len, 10, origin, origin_pub,
 			      ack_buf, sizeof(ack_buf)),
 		      LICHEN_RPL_DAO_APPLIED, "signed K DAO rejected");
 	zassert_equal(lichen_rpl_dao_ack_parse(&ack, ack_buf, sizeof(ack_buf)),
@@ -710,7 +747,7 @@ ZTEST(rpl_routing, test_ack_and_terminal_origin_signature)
 	dao[len++] = LICHEN_RPL_OPT_PAD1;
 	memset(ack_buf, 0xa5, sizeof(ack_buf));
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(
-			      &manager, dao, len, 11, origin, true,
+			      &manager, dao, len, 11, origin, origin_pub,
 			      ack_buf, sizeof(ack_buf)),
 		      LICHEN_RPL_DAO_REJECTED, "post-signature option accepted");
 	for (size_t i = 0; i < sizeof(ack_buf); i++) {
@@ -734,7 +771,7 @@ ZTEST(rpl_routing, test_path_control_same_subfield_and_validation)
 	add_transit(dao, &len, 2, 0x40, 1, 255);
 	address(origin, 4);
 	zassert_true(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 2,
-							origin, true),
+							origin, origin_pub),
 		     "same-subfield candidates rejected");
 	address(target, 4);
 	zassert_true(lookup_route(&manager, target, &route), "selected route missing");
@@ -745,7 +782,7 @@ ZTEST(rpl_routing, test_path_control_same_subfield_and_validation)
 	add_transit(dao, &len, 1, 0, 1, 255);
 	address(origin, 5);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 3,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "empty Path Control accepted");
 	len = dao_begin(dao, 4);
 	add_target(dao, &len, 5);
@@ -753,7 +790,7 @@ ZTEST(rpl_routing, test_path_control_same_subfield_and_validation)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	dao[transit_offset + 2] = 0x01;
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 4,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "reserved Transit flag accepted");
 }
 
@@ -816,7 +853,7 @@ ZTEST(rpl_routing, test_malformed_group_and_cycle_are_atomic)
 	add_target(dao, &len, 2);
 	add_transit(dao, &len, 1, 0x40, 2, 20);
 	zassert_false(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 15,
-							 origin, true),
+							 origin, origin_pub),
 		      "duplicate target accepted");
 
 	len = dao_begin(dao, 2);
@@ -824,7 +861,7 @@ ZTEST(rpl_routing, test_malformed_group_and_cycle_are_atomic)
 	add_transit(dao, &len, 1, 0x40, 2, 20);
 	add_transit(dao, &len, 3, 0x10, 3, 20);
 	zassert_false(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 20,
-							 origin, true),
+							 origin, origin_pub),
 		      "inconsistent group accepted");
 	len = dao_begin(dao, 2);
 	add_target(dao, &len, 2);
@@ -833,7 +870,7 @@ ZTEST(rpl_routing, test_malformed_group_and_cycle_are_atomic)
 	add_transit(dao, &len, 3, 0x10, 2, 20);
 	dao[external_offset + 2] = 0x80;
 	zassert_false(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 25,
-							 origin, true),
+							 origin, origin_pub),
 		      "inconsistent E flag accepted");
 
 	/* An aggregated cycle mixes foreign Targets; it is rejected
@@ -844,7 +881,7 @@ ZTEST(rpl_routing, test_malformed_group_and_cycle_are_atomic)
 	add_target(dao, &len, 3);
 	add_transit(dao, &len, 2, 0x40, 1, 20);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 30,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "aggregated cycle accepted");
 	address(target2, 2);
 	struct lichen_rpl_route route;
@@ -857,14 +894,14 @@ ZTEST(rpl_routing, test_malformed_group_and_cycle_are_atomic)
 	add_target(dao, &len, 2);
 	add_transit(dao, &len, 3, 0x40, 2, 20);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 30,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_APPLIED, "reparent to pending parent rejected");
 	len = dao_begin(dao, 3);
 	add_target(dao, &len, 3);
 	add_transit(dao, &len, 2, 0x40, 1, 20);
 	address(origin, 3);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 30,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "cycle accepted");
 	address(target3, 3);
 	zassert_is_null(find_snapshot(&manager, target3),
@@ -897,7 +934,7 @@ ZTEST(rpl_routing, test_overlong_target_is_atomic)
 	add_overlong_target(dao, &len, 3);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 20,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "overlong Target accepted");
 	zassert_mem_equal(find_snapshot(&manager, target2), &saved_snapshot,
 			  sizeof(saved_snapshot), "overlong Target partially updated snapshot");
@@ -919,14 +956,14 @@ ZTEST(rpl_routing, test_candidate_conflict_and_capacity_are_atomic)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	add_transit(dao, &len, 1, 0x10, 1, 255);
 	zassert_false(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 1,
-							 origin, true),
+							 origin, origin_pub),
 		      "conflicting duplicate candidate accepted");
 	len = dao_begin(dao, 1);
 	add_target(dao, &len, 2);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_true(lichen_rpl_dao_manager_process_dao(&manager, dao, len, 1,
-							origin, true),
+							origin, origin_pub),
 		     "identical duplicate candidate was not canonicalized");
 
 	for (uint8_t id = 2; id < 2 + CONFIG_LICHEN_RPL_MAX_ROUTES; id++) {
@@ -939,7 +976,7 @@ ZTEST(rpl_routing, test_candidate_conflict_and_capacity_are_atomic)
 	add_target(dao, &len, 20);
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 100,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "over-capacity transaction accepted");
 	address(target2, 2);
 	struct lichen_rpl_route route;
@@ -955,7 +992,7 @@ ZTEST(rpl_routing, test_candidate_conflict_and_capacity_are_atomic)
 	add_transit(dao, &len, 1, 0x40, 3, 255);
 	address(origin, 20);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 120,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "new target reused updated tombstone slot");
 	zassert_false(lookup_route(&manager, target2, &route),
 		      "failed transaction revived tombstone");
@@ -1034,7 +1071,7 @@ ZTEST(rpl_routing, test_dao_origin_authorization_matrix)
 	len += 8;
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "broad prefix accepted");
 	zassert_mem_equal(&root_state, &saved, sizeof(root_state),
 			  "broad prefix mutated routing state");
@@ -1046,7 +1083,7 @@ ZTEST(rpl_routing, test_dao_origin_authorization_matrix)
 	dao[len++] = 0;
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	zassert_equal(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-						       origin, true, NULL, 0),
+						       origin, origin_pub, NULL, 0),
 		      LICHEN_RPL_DAO_REJECTED, "default route accepted");
 	zassert_mem_equal(&root_state, &saved, sizeof(root_state),
 			  "default route mutated routing state");
@@ -1245,7 +1282,7 @@ ZTEST(rpl_routing, test_canonical_route_state_vectors)
 				     "%s: no Target option", vector->name);
 			result = lichen_rpl_dao_manager_process_dao_ex(
 				&manager, vector->dao, vector->dao_len, vector->now,
-				origin, true, NULL, 0);
+				origin, origin_pub, NULL, 0);
 
 			accepted = result != LICHEN_RPL_DAO_REJECTED;
 			changed = result == LICHEN_RPL_DAO_APPLIED;

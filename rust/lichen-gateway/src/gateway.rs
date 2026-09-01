@@ -1703,12 +1703,13 @@ impl Gateway {
                     // Spec §8.9 (R-05-066): this path forwards the inner
                     // packet (TUN upstream or mesh hairpin ingress), so the
                     // inner Hop Limit takes the normal forwarding decrement
-                    // plus the initial Segments Left. Resolves both sides
-                    // of the merge: beads-worker-7's tested helper computes
-                    // the decrement (with a u8 bound on num_addrs), and
-                    // HEAD's warn diagnostic on rejection is preserved.
-                    // A Segments Left that would exhaust the remaining Hop
-                    // Limit is not representable — emit no route.
+                    // plus the initial Segments Left. Merge resolution keeps
+                    // the tested helper: its checked u8 bound rejects
+                    // oversized routes where a plain `as u8` cast would
+                    // silently truncate num_addrs, and the warn diagnostic
+                    // on rejection is preserved. A Segments Left that would
+                    // exhaust the remaining Hop Limit is not representable
+                    // — emit no route.
                     let mut inner = ipv6.to_vec();
                     inner[7] = match Self::inner_hop_limit_after_encapsulation(inner[7], num_addrs)
                     {
@@ -1723,7 +1724,7 @@ impl Gateway {
                         }
                     };
                     let routing_len = 8 + 16 * num_addrs;
-                    let outer_payload = routing_len + ipv6.len();
+                    let outer_payload = routing_len + inner.len();
                     let outer_payload_u16 = u16::try_from(outer_payload).ok()?;
                     let outer_hdr = 40 + routing_len;
                     let mut outer = vec![0u8; outer_hdr];
@@ -2441,6 +2442,48 @@ mod tests {
         ];
         let result = gw.mesh_to_mesh(&packet).await;
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn encapsulation_rejects_inner_hop_limit_not_above_segments_left() {
+        let mut gw = test_gateway();
+        let relay_addr = [0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+        let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
+        let path = [relay_addr, node_addr];
+        gw.rpl_stack
+            .rpl_node_mut()
+            .router_mut()
+            .inject_route(node_addr, &path);
+
+        // Upstream-originated (src != root), so the encapsulation branch
+        // applies: HL 3 - 1 forward = 2 remaining, initial SL 1 < 2 would
+        // pass; HL 2 leaves 1, and SL 1 is not strictly less than 1.
+        let make_packet = |hop_limit: u8| -> Vec<u8> {
+            let mut packet = vec![0u8; 48];
+            packet[0] = 0x60;
+            packet[4..6].copy_from_slice(&8u16.to_be_bytes());
+            packet[6] = 17;
+            packet[7] = hop_limit;
+            packet[8..24].copy_from_slice(&[0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]);
+            packet[24..40].copy_from_slice(&node_addr);
+            UdpHeader::new(5683, 5683)
+                .write_packet_to(
+                    &Addr(packet[8..24].try_into().unwrap()),
+                    &Addr(node_addr),
+                    b"",
+                    &mut packet[40..],
+                )
+                .unwrap();
+            packet
+        };
+
+        // HL 2: after forwarding decrement 1 remains; SL 1 is not < 1.
+        let low = gw.mesh_to_mesh(&make_packet(2)).await;
+        assert!(low.is_none(), "route MUST NOT be emitted when SL >= remaining HL");
+
+        // HL 1: forwarding decrement alone underflows.
+        let zero = gw.mesh_to_mesh(&make_packet(1)).await;
+        assert!(zero.is_none());
     }
 
     #[test]
