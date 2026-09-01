@@ -25,7 +25,7 @@ from lichen.gradient import GradientTable
 from lichen.ipv6.packet import IPv6Packet
 from lichen.loadng.discovery import LoadngRouter
 from lichen.rpl.dodag import DodagState
-from lichen.rpl.routing import RoutingError, survey_source_route
+from lichen.rpl.routing import survey_source_route
 
 logger = logging.getLogger(__name__)
 

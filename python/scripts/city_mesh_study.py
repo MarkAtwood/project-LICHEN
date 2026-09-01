@@ -10,14 +10,14 @@ import math
 import random
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from lora_medium import PropagationModel, airtime_us
-from lichen.timing.sfn import slot_for, TDMA_SLOT_MS
+from lora_medium import airtime_us
+
 from lichen.link.channel import hash_32
+from lichen.timing.sfn import TDMA_SLOT_MS
 
 # San Francisco dimensions (approximate)
 SF_WIDTH_KM = 12.0   # East-West
@@ -189,7 +189,6 @@ def simulate_traffic(
     channel_usage = defaultdict(int)
 
     slot_s = TDMA_SLOT_MS / 1000
-    min_tx_interval = AIRTIME_S / 0.01  # 1% duty cycle
 
     time_s = 0
     pending_transmissions = []  # (time, msg, current_node_id)
@@ -198,9 +197,11 @@ def simulate_traffic(
         # Generate new messages
         if time_s < duration_s:
             for node in nodes:
-                if rng.random() < (slot_s / 60) * msg_rate_per_node_per_min:
-                    # Pick random destination (that's reachable)
-                    if node.routing_table:
+                # Pick random destination (that's reachable)
+                if (
+                    rng.random() < (slot_s / 60) * msg_rate_per_node_per_min
+                    and node.routing_table
+                ):
                         dst_id = rng.choice(list(node.routing_table.keys()))
                         msg = Message(
                             id=msg_id,
@@ -218,7 +219,7 @@ def simulate_traffic(
         current_txs = [(t, m, n) for t, m, n in pending_transmissions if t <= time_s]
         pending_transmissions = [(t, m, n) for t, m, n in pending_transmissions if t > time_s]
 
-        for tx_time, msg, current_id in current_txs:
+        for _tx_time, msg, current_id in current_txs:
             if msg.delivered:
                 continue
 
@@ -244,8 +245,9 @@ def simulate_traffic(
             # Simulate TX with TDMA+FH
             if use_tdma_fh:
                 sfn = int(time_s / (TDMA_SLOTS * slot_s))
-                my_slot = slot_for(current_node.eui64, sfn, TDMA_SLOTS)
-                channel = 1 + hash_32(sfn.to_bytes(4, 'little') + current_node.eui64) % (NUM_CHANNELS - 1)
+                channel = 1 + hash_32(
+                    sfn.to_bytes(4, 'little') + current_node.eui64
+                ) % (NUM_CHANNELS - 1)
 
                 # Track spatial channel usage
                 grid_x = int(current_node.x_km)
@@ -316,7 +318,8 @@ def run_sf_study():
         duration_s = scenario['duration_s']
         msg_rate = scenario['msg_rate']
 
-        print(f"\n[{i+1}/{len(scenarios)}] {num_nodes} nodes, {msg_rate} msg/node/min, {duration_s}s")
+        print(f"\n[{i+1}/{len(scenarios)}] {num_nodes} nodes, "
+              f"{msg_rate} msg/node/min, {duration_s}s")
         print("-" * 50)
 
         # Multiple runs for statistics
@@ -393,7 +396,8 @@ def run_sf_study():
     print(f"\n{'='*70}")
     print("SUMMARY")
     print("=" * 70)
-    print(f"{'Nodes':>6} {'MsgRate':>8} {'Delivery':>10} {'Hops':>6} {'Latency':>10} {'Neighbors':>10}")
+    print(f"{'Nodes':>6} {'MsgRate':>8} {'Delivery':>10} "
+          f"{'Hops':>6} {'Latency':>10} {'Neighbors':>10}")
     print("-" * 70)
 
     for scenario in scenarios:

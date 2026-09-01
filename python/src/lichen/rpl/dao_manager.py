@@ -47,8 +47,8 @@ from lichen.rpl.dao_origin import (
 from lichen.rpl.dao_paths import build_routes, contains_cycle, path_control_rank, select_path
 from lichen.rpl.dao_persistence import DaoPersistence
 from lichen.rpl.dao_refresh import DaoRefreshScheduler
-from lichen.rpl.dao_tx_scheduler import DaoTxPhase, DaoTxScheduler
 from lichen.rpl.dao_state import compute_active_parents, make_freshness_room
+from lichen.rpl.dao_tx_scheduler import DaoTxPhase, DaoTxScheduler
 from lichen.rpl.dao_types import (
     DEFAULT_FRESHNESS_RETENTION_SECONDS,
     TARGET_DESCRIPTOR,

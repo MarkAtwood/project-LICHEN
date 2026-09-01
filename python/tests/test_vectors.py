@@ -44,7 +44,6 @@ from lichen.l2_payload import (
     l2_payload_body,
     wrap_schc_payload,
 )
-from lichen.link.adaptive_sf import adaptive_sf_for_metrics
 from lichen.link.frame import AddrMode, FrameError, LichenFrame, MicLength
 from lichen.link.link_layer import MAX_SINGLE_FRAME_SCHC_PACKET, LinkLayer, RxFrame
 from lichen.link.short_addr import (
