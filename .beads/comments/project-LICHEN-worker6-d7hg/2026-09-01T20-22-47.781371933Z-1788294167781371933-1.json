@@ -1,0 +1,7 @@
+{
+  "id": "1788294167781371933-1",
+  "issue_id": "project-LICHEN-worker6-d7hg",
+  "author": "opencode-worker-1",
+  "text": "Worker1 investigated and released. The wiring requires a BEACON DISCRIMINATOR that does not exist in the C codebase: (1) the desync FSM tracks periodic TDMA beacons specifically, but the C L2 RX path (lichen_l2_rx.c) processes ALL authenticated frames identically — data, announces, CoAP — with no beacon-vs-data discriminator; (2) calling lichen_desync_on_beacon(true) on every authenticated frame would prevent desync detection (data traffic keeps the FSM in SYNCED); (3) the SFN wrap hook needs a superframe tick callback that doesn't exist (lichen_time_sync_advance_sfn is called but has no hook point for FSM notification); (4) the wall-clock gate (lichen_wall_clock_valid) and epoch-floor check (lichen_epoch_floor_accepts) are implemented in time_sync.c but not exposed to the L2 layer. Recommend: first add a beacon frame type discriminator to the C L2 layer (a dispatch byte or TDMA-specific header), then wire the FSM calls at that discrimination point. This is an architectural prerequisite before the wiring can be correct.",
+  "created_at": "2026-09-01T20:22:47.781371933Z"
+}
