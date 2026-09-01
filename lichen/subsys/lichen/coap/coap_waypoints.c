@@ -923,7 +923,7 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
   bool local_admin;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
+  ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_POST, &oscore);
   if (ret != 0) {
     return ret;
@@ -1013,7 +1013,7 @@ int lichen_waypoint_detail_get_handler(struct coap_resource *resource,
   char id[LICHEN_WAYPOINT_ID_MAX + 1U];
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
+  ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_GET, &oscore);
   if (ret != 0) {
     return ret;
@@ -1045,7 +1045,7 @@ int lichen_waypoint_detail_put_handler(struct coap_resource *resource,
                                        struct sockaddr *addr,
                                        socklen_t addr_len) {
   struct coap_oscore_unprotect_result oscore;
-  int ret = coap_oscore_unprotect_resource_request(
+  int ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_PUT, &oscore);
 
   if (ret != 0) {
@@ -1066,7 +1066,7 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
   bool local_admin;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
+  ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_DELETE, &oscore);
   if (ret != 0) {
     return ret;

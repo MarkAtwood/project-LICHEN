@@ -6,8 +6,8 @@
  * @brief CoAP resource handlers for Check-In / Roll Call (spec 18.6)
  *
  * Zephyr glue over lichen/checkin.h. See checkin_resource.h for the
- * endpoint contract. Write endpoints (POST/PUT) unprotect the request
- * with coap_oscore_unprotect_resource_request() and require it to be
+ * endpoint contract. Write endpoints (POST/PUT) authorize the request
+ * with coap_oscore_authorize_mutating() and require it to be
  * OSCORE-protected or to originate from the local admin (4.01
  * otherwise); all handler responses go through
  * coap_oscore_respond_resource(). Handler return values follow the
@@ -143,7 +143,7 @@ int lichen_checkin_post_handler(struct coap_resource *resource,
 	uint8_t code;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len,
 						     COAP_METHOD_POST, &oscore);
 	if (ret != 0) {
@@ -232,7 +232,7 @@ int lichen_rollcall_post_handler(struct coap_resource *resource,
 	uint8_t code;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len,
 						     COAP_METHOD_POST, &oscore);
 	if (ret != 0) {
@@ -337,7 +337,7 @@ int lichen_checkin_config_put_handler(struct coap_resource *resource,
 	struct lichen_checkin_config cfg;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len,
 						     COAP_METHOD_PUT, &oscore);
 	if (ret != 0) {

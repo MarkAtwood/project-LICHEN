@@ -85,6 +85,32 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
 					   struct coap_oscore_unprotect_result *result);
 
 /**
+ * @brief Centralized OSCORE gate for resource handlers (mutation and read).
+ *
+ * Thin wrapper over coap_oscore_unprotect_resource_request() giving resource
+ * dispatch a single choke point: CONFIG_LICHEN_COAP_SERVER_OSCORE enforcement
+ * (protection, context lookup, unprotect, method check) lives in one place so
+ * per-resource handlers cannot drift. Named for the mutating handlers it was
+ * introduced for; read endpoints (GET) share the identical gate semantics and
+ * route through it as well. Semantics are identical to calling the
+ * underlying function directly.
+ *
+ * @param[in]  resource    CoAP resource
+ * @param[in]  request     Original CoAP request
+ * @param[in]  addr        Client address
+ * @param[in]  addr_len    Address length
+ * @param[in]  expected_method Expected CoAP method code (checked after unprotect)
+ * @param[out] result      Unprotect result (ctx, piv, payload)
+ * @return 0 on success (result->payload valid), positive CoAP response code
+ *         on error (caller must return it without sending)
+ */
+int coap_oscore_authorize_mutating(struct coap_resource *resource,
+				   struct coap_packet *request,
+				   struct sockaddr *addr, socklen_t addr_len,
+				   uint8_t expected_method,
+				   struct coap_oscore_unprotect_result *result);
+
+/**
  * @brief Send an OSCORE-protected response for a resource request.
  *
  * Handles the common OSCORE response protection pattern. When the request

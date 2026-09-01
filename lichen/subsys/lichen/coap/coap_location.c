@@ -1290,7 +1290,7 @@ static int sensors_location_post(struct coap_resource *resource,
   struct coap_oscore_unprotect_result oscore;
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
+  ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_POST, &oscore);
   if (ret != 0) {
     return ret;
