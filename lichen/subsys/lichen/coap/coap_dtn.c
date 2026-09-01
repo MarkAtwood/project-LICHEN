@@ -28,7 +28,12 @@ static K_MUTEX_DEFINE(s_dtn_buf_mutex);
 static struct k_work_delayable s_dtn_expire_work;
 static uint32_t s_last_deaddrop[256] = {0};
 static uint32_t s_last_confession[256] = {0};
+/* Spec 18.9: 6 POSTs per source per hour (rolling fixed window). */
+static uint8_t s_hourly_count[256] = {0};
+static uint32_t s_hourly_window_start[256] = {0};
 static K_MUTEX_DEFINE(s_rate_mutex);
+/* Spec 18.9: total stored-bytes budget (8 KB leaf, 32 KB BR). */
+static size_t s_dtn_bytes;
 static K_MUTEX_DEFINE(s_senml_pack_mutex);
 
 static bool parse_recipient(const uint8_t *payload, size_t len,
@@ -170,6 +175,20 @@ static int deaddrop_post(struct coap_resource *resource,
 						  piv_len,
 						  COAP_RESPONSE_CODE_TOO_MANY_REQUESTS);
 	}
+	/* Spec 18.9 hourly cap: 6 POSTs per source per hour. */
+	if (now_ms - s_hourly_window_start[iid7] >= 3600000U) {
+		s_hourly_window_start[iid7] = now_ms;
+		s_hourly_count[iid7] = 0U;
+	}
+	if (s_hourly_count[iid7] >=
+	    CONFIG_LICHEN_COAP_DEADDROP_HOURLY_LIMIT) {
+		k_mutex_unlock(&s_rate_mutex);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_TOO_MANY_REQUESTS);
+	}
+	s_hourly_count[iid7]++;
 	s_last_deaddrop[iid7] = now_ms;
 	k_mutex_unlock(&s_rate_mutex);
 	k_mutex_lock(&s_dtn_buf_mutex, K_FOREVER);
@@ -201,8 +220,22 @@ static int deaddrop_post(struct coap_resource *resource,
 				 ? 0U
 				 : now + LICHEN_DTN_DEFAULT_TTL_SEC;
 	}
+	if (s_dtn_bytes + payload_len > CONFIG_LICHEN_DTN_MAX_BYTES) {
+		/* Spec 18.9: storage full -> 5.03 (structured CBOR body
+		 * {reason: storage_full, ...} requires an
+		 * coap_oscore_send_protected payload parameter — tracked
+		 * separately, the API is oscore-bar). */
+		k_mutex_unlock(&s_dtn_buf_mutex);
+		return coap_oscore_send_protected(resource, request, addr,
+						  addr_len, oscore_ctx, piv,
+						  piv_len,
+						  COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE);
+	}
 	bool ok = lichen_dtn_buffer_message(&s_dtn_buf, payload, payload_len,
 					    dest_iid, expiry, now, now_ms);
+	if (ok) {
+		s_dtn_bytes += payload_len;
+	}
 	k_mutex_unlock(&s_dtn_buf_mutex);
 	uint8_t resp_code = ok ? COAP_RESPONSE_CODE_CHANGED
 			       : COAP_RESPONSE_CODE_BAD_REQUEST;
