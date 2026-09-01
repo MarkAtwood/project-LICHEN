@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <lichen/rpl_messages.h>
+#include <lichen/rpl_root_dio_sig.h>
 
 static int tests_run;
 static int tests_passed;
@@ -32,9 +33,9 @@ static const uint8_t vector_cose_sign1[] = {
 	0x01, 0x00, 0x05, 0x1a, 0x67, 0x74, 0x85, 0x80, 0x06, 0x01, 0x07, 0x02,
 	0x58, 0x30, 0x4f, 0x9a, 0x6d, 0x75, 0x54, 0xed, 0xca, 0xf7, 0x03, 0x01,
 	0x63, 0x5b, 0xdd, 0xb2, 0x61, 0x8a, 0x5e, 0x71, 0x65, 0xbb, 0x02, 0xe9,
-	0xff, 0x1e, 0xc8, 0x6f, 0x27, 0xbc, 0xff, 0xf3, 0x56, 0xba, 0x61, 0x17,
-	0x1e, 0x0c, 0xef, 0x78, 0x61, 0xce, 0x3a, 0x6b, 0xe7, 0x6c, 0x7d, 0x7f,
-	0xd0, 0x0a,
+	0xff, 0x1e, 0xc8, 0x6f, 0x27, 0x6b, 0xcf, 0xff, 0x35, 0x6b, 0xa6, 0x11,
+	0x71, 0xe0, 0xce, 0xf7, 0x86, 0x1c, 0xe3, 0xa6, 0xbe, 0x76, 0xc6, 0xd7,
+	0xfd, 0x00,
 };
 
 static size_t run_test(int (*fn)(void))
@@ -216,6 +217,98 @@ static int test_dio_parse_without_option_unaffected(void)
 	return 1;
 }
 
+/* Signer pubkey from the committed vector (hex decoded). */
+static const uint8_t vector_pubkey[32] = {
+	0xe7, 0xa9, 0x6e, 0xf0, 0x7e, 0x66, 0xea, 0x92, 0x37, 0xf0, 0x3a, 0x46,
+	0x74, 0xbb, 0xf4, 0x3a, 0x8c, 0x1c, 0x9e, 0xb2, 0x7e, 0xdd, 0x23, 0x9f,
+	0xb5, 0xac, 0x09, 0x87, 0x35, 0xaf, 0xb0, 0xdf,
+};
+
+static int test_root_sig_decode_valid_vector(void)
+{
+	struct root_dio_sig sig;
+	int ret = root_dio_sig_decode(vector_cose_sign1, sizeof(vector_cose_sign1), &sig);
+	uint8_t expected_kid[8] = { 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a };
+
+	ASSERT_EQ(ret, ROOT_SIG_OK, "decode valid vector");
+	ASSERT_EQ(memcmp(sig.root_iid, expected_kid, 8), 0, "kid");
+	ASSERT_EQ(sig.payload.instance, 0, "instance");
+	ASSERT_EQ(sig.payload.version, 1, "version");
+	ASSERT_EQ(sig.payload.rank, 256, "rank");
+	ASSERT_EQ(sig.payload.expiry, 1735689600U, "expiry");
+	ASSERT_EQ(sig.payload.root_seq, 1, "root_seq");
+	ASSERT_EQ(sig.payload.mop, 2, "mop");
+	return 1;
+}
+
+static int test_root_sig_structural_ok_and_expiry(void)
+{
+	struct root_dio_sig sig;
+	uint8_t dodag[16] = { 0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f,
+			      0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a };
+	int ret = root_dio_sig_decode(vector_cose_sign1, sizeof(vector_cose_sign1), &sig);
+	uint8_t dio_dodag[16];
+
+	memcpy(dio_dodag, sig.payload.dodag_id, 16);
+	ASSERT_EQ(ret, ROOT_SIG_OK, "decode");
+
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U - 1U, dio_dodag, 0, 1, 256, 2);
+	ASSERT_EQ(ret, ROOT_SIG_OK, "structural ok pre-expiry");
+
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U, dio_dodag, 0, 1, 256, 2);
+	ASSERT_EQ(ret, ROOT_SIG_ERR_EXPIRED, "expired at boundary");
+	return 1;
+}
+
+static int test_root_sig_structural_rejects_mismatches(void)
+{
+	struct root_dio_sig sig;
+	uint8_t dodag[16] = { 0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f,
+			      0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a };
+	uint8_t other_dodag[16];
+	int ret = root_dio_sig_decode(vector_cose_sign1, sizeof(vector_cose_sign1), &sig);
+	uint8_t dio_dodag[16];
+
+	memcpy(dio_dodag, sig.payload.dodag_id, 16);
+	for (int i = 0; i < 16; i++) {
+		other_dodag[i] = (uint8_t)(0x30 + i);
+	}
+
+	/* DIO header cross-checks. */
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U - 1U, other_dodag, 0, 1, 256, 2);
+	ASSERT_EQ(ret, ROOT_SIG_ERR_DODAGID_MISMATCH, "dodag cross-check");
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U - 1U, dio_dodag, 1, 1, 256, 2);
+	ASSERT_EQ(ret, ROOT_SIG_ERR_INSTANCE_MISMATCH, "instance cross-check");
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U - 1U, dio_dodag, 0, 2, 256, 2);
+	ASSERT_EQ(ret, ROOT_SIG_ERR_VERSION_MISMATCH, "version cross-check");
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U - 1U, dio_dodag, 0, 1, 512, 2);
+	ASSERT_EQ(ret, ROOT_SIG_ERR_RANK_MISMATCH, "rank cross-check");
+	ret = root_dio_sig_verify_structural(&sig, vector_pubkey, 32,
+					     1735689600U - 1U, dio_dodag, 0, 1, 256, 3);
+	ASSERT_EQ(ret, ROOT_SIG_ERR_MOP_MISMATCH, "mop cross-check");
+	return 1;
+}
+
+static int test_root_sig_decode_rejects_garbage(void)
+{
+	struct root_dio_sig sig;
+	uint8_t short_blob[63];
+
+	memset(short_blob, 0, sizeof(short_blob));
+	ASSERT_EQ(root_dio_sig_decode(NULL, 0, &sig), -ROOT_SIG_ERR_DECODE, "null");
+	for (size_t len = 0; len < 64; len++) {
+		ASSERT_EQ(root_dio_sig_decode(vector_cose_sign1, len, &sig),
+			  -ROOT_SIG_ERR_DECODE, "truncated");
+	}
+	return 1;
+}
+
 int main(void)
 {
 	run_test(test_option_constants_in_sync_with_spec);
@@ -224,6 +317,10 @@ int main(void)
 	run_test(test_dio_parse_rejects_too_short_blob);
 	run_test(test_dio_parse_accepts_max_len_blob);
 	run_test(test_dio_parse_without_option_unaffected);
+	run_test(test_root_sig_decode_valid_vector);
+	run_test(test_root_sig_structural_ok_and_expiry);
+	run_test(test_root_sig_structural_rejects_mismatches);
+	run_test(test_root_sig_decode_rejects_garbage);
 
 	printf("%d/%d passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;
