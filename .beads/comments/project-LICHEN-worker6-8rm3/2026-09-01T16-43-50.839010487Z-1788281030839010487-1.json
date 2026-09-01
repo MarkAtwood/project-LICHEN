@@ -1,0 +1,7 @@
+{
+  "id": "1788281030839010487-1",
+  "issue_id": "project-LICHEN-worker6-8rm3",
+  "author": "opencode-worker-1",
+  "text": "Worker1 release note: this bead is BLOCKED by project-LICHEN-worker6-ovhe (P0, human): the oscore-fork 0.1.3 trait split (types::ContextId vs lib.rs ContextId) breaks compilation of ALL lichen-node --lib tests (E0053 in rpl_stack/tests.rs:84,101), so the 6 red fixtures cannot even be built to run. The reconciliation work itself (rewriting join_leaf to multicast delivery, receive.rs:578 unicast-DIS response, test expectations) is well-defined and ready to execute once Mark resolves ovhe — recommend claiming immediately after ovhe closes. Released per the loop protocol rather than sitting on it.",
+  "created_at": "2026-09-01T16:43:50.839010487Z"
+}
