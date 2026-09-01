@@ -104,11 +104,11 @@ def test_select_channel_endianness(name: str, vector: dict) -> None:
 
 
 def test_select_channel_density_fallback():
-    """select_channel returns 0 when density > 8."""
+    """select_channel returns 0 when density > 10."""
     eui64 = bytes.fromhex("0011223344556677")
-    # density > 8 should return CH0
-    assert select_channel(eui64, epoch=0, density=9, n_channels=8) == 0
-    assert select_channel(eui64, epoch=0, density=10, n_channels=8) == 0
+    # density > 10 should return CH0
+    assert select_channel(eui64, epoch=0, density=11, n_channels=8) == 0
+    assert select_channel(eui64, epoch=0, density=10, n_channels=8) == 4
     assert select_channel(eui64, epoch=0, density=100, n_channels=8) == 0
 
 

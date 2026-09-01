@@ -13,7 +13,7 @@ use crate::constants::{CSMA_BACKOFF_MAX, CSMA_RETRY_LIMIT, RF_METRICS_WINDOW_SF}
 const FP_SCALE: u32 = 1 << 16;
 const EMA_ALPHA_SHIFT: u32 = 2;
 const DENSITY_CRITICAL: u8 = 20;
-const DENSITY_HIGH: u8 = 8;
+const DENSITY_HIGH: u8 = 10;
 const DENSITY_LOW: u8 = 5;
 const SNR_CRITICAL: i8 = -5;
 const SNR_POOR: i8 = 0;
@@ -383,7 +383,7 @@ pub fn slot_hash(eui64: &[u8; 8], sfn: u32, num_slots: u8) -> Option<u8> {
 
 /// Select a CCP-15 data channel, or CH0 when density exceeds eight peers.
 pub fn select_channel(eui64: &[u8; 8], epoch: u32, density: u8, n_channels: u8) -> u8 {
-    if density > 8 || n_channels <= 1 {
+    if density > 10 || n_channels <= 1 {
         return 0;
     }
     let mut data = [0u8; 12];
@@ -650,7 +650,7 @@ impl RfHealthMetrics {
         let loss_threshold = FP_SCALE / 4;
 
         // Step 3: unconditional per spec §2a.8 step 3 (density >
-        // DENSITY_HIGH = 8) — matches ccp.py and the vector generator; the
+        // DENSITY_HIGH = 10) — matches ccp.py and the vector generator; the
         // explicit-pseudocode gate was a pre-2a.8-reconciliation divergence.
         if self.density > DENSITY_HIGH || util > util_thresh_150 {
             sf = sf.saturating_add(2).min(12);
@@ -675,7 +675,7 @@ impl RfHealthMetrics {
         // each MAX against the running SF (self state, not pseudocode args):
         // a. EMA_SNR < -5 -> SF 12
         // b. EMA_SNR < 0 -> max(11, SF)
-        // c. Density > 8 -> max(11, SF)
+        // c. Density > 10 -> max(11, SF)
         // d. LoadFactor >= 0.8 -> max(11, SF)
         if snr_ema < SNR_CRITICAL {
             sf = 12;
@@ -739,12 +739,12 @@ mod tests {
         // Floor (b): SNR EMA in [-5, 0) floors at 11.
         let mut m = RfHealthMetrics::new();
         m.record_rx(-3);
-        let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
+        let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
         assert_eq!(sf, 11);
 
-        // Floor (c): density > 8 floors at 11 even with a good SNR.
+        // Floor (c): density > 10 floors at 11 even with a good SNR.
         let mut m = RfHealthMetrics::new();
-        m.record_density(9);
+        m.record_density(11);
         m.record_rx(10);
         let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
         assert_eq!(sf, 11);
@@ -753,7 +753,7 @@ mod tests {
         let mut m = RfHealthMetrics::new();
         m.record_rx(10);
         m.record_load_factor(52429);
-        let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
+        let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
         assert_eq!(sf, 11);
     }
 
@@ -763,7 +763,7 @@ mod tests {
         let mut m = RfHealthMetrics::new();
         m.record_rx(10);
         m.record_load_factor(52429);
-        let (sf, _) = m.adaptive_sf_select(Some(9), None, None);
+        let (sf, _) = m.adaptive_sf_select(Some(11), None, None);
         assert_eq!(sf, 11);
 
         let mut m = RfHealthMetrics::new();
@@ -958,14 +958,14 @@ mod tests {
         assert_eq!(sf, 9);
         assert!(allowed);
 
-        // sf=11: density>8, snr<0, load>0.8 → all trigger rebalance
+        // sf=11: density>10, snr<0, load>0.8 → all trigger rebalance
         let mut m = RfHealthMetrics::new();
         m.record_density(12);
         m.record_rx(-3);
         m.record_load_factor((FP_SCALE * 85) / 100);
         assert_eq!(m.adaptive_sf(), 11);
         assert!(m.should_rebalance());
-        // Reconciled 2a.8: step 3 (density > 8) is unconditional in the
+        // Reconciled 2a.8: step 3 (density > 10) is unconditional in the
         // pseudocode form, so the select result is 12 (the table form
         // floors at 11 — both satisfy the >= 11 floor).
         let (sf, allowed) = m.adaptive_sf_select(None, None, None);
@@ -1189,7 +1189,7 @@ mod tests {
         assert_eq!(select_channel(&EUI_ZERO, 42, 0, 8), 7);
         assert_eq!(select_channel(&EUI_ZERO, 5, 0, 1), 0);
         assert_eq!(select_channel(&EUI_ZERO, 8, 0, 8), 1);
-        assert_eq!(select_channel(&EUI_ZERO, 9, 9, 8), 0);
+        assert_eq!(select_channel(&EUI_ZERO, 11, 11, 8), 0);
     }
 
     // =============================================================================
@@ -1386,18 +1386,18 @@ mod tests {
         assert_eq!(s1, s2);
     }
 
-    /// Spec 2a.8 step 3: Density > 8 (strictly greater) triggers SF +2.
+    /// Spec 2a.8 step 3: Density > 10 (strictly greater) triggers SF +2.
     #[test]
-    fn adaptive_sf_density_threshold_is_eight() {
+    fn adaptive_sf_density_threshold_is_ten() {
         let mut h = RfHealthMetrics::default();
-        h.record_density(8);
-        // Density 8 is not the trigger: assigned 10 stays 10.
+        h.record_density(10);
+        // Density 10 is not the trigger: assigned 10 stays 10.
         let (sf, _) = h.adaptive_sf_select(Some(10), Some(0), Some(0));
         assert_eq!(sf, 10);
 
         let mut h = RfHealthMetrics::default();
-        h.record_density(9);
-        // Density 9 crosses: SF +2 capped at 12.
+        h.record_density(11);
+        // Density 11 crosses: SF +2 capped at 12.
         let (sf, _) = h.adaptive_sf_select(Some(10), Some(0), Some(0));
         assert_eq!(sf, 12);
     }
@@ -1423,9 +1423,9 @@ mod tests {
         let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
         assert_eq!(sf, 11);
 
-        // Floor c: density > 8 floors at 11 (SNR and load clean).
+        // Floor c: density > 10 floors at 11 (SNR and load clean).
         let mut h = RfHealthMetrics::default();
-        h.record_density(9);
+        h.record_density(11);
         h.record_rx(20);
         let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
         assert_eq!(sf, 11);

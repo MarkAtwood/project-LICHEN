@@ -705,8 +705,8 @@ int lichen_link_channel_select(const uint8_t eui64[LICHEN_EUI64_LEN],
 		return -EINVAL;
 	}
 
-	/* spec/02a-coordinated-capacity.md:121 — Density > 8 returns control channel 0 */
-	if (density > 8 || num_channels <= 1U) {
+	/* spec/02a-coordinated-capacity.md:121 — Density > 10 returns control channel 0 */
+	if (density > 10 || num_channels <= 1U) {
 		*channel = 0;
 		return 0;
 	}

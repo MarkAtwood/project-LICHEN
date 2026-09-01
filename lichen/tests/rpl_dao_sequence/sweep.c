@@ -23,6 +23,15 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>
+
+/* dodag.c calls lora_l2_assign_sf() when a DIO carries an ASSIGNED_SF
+ * option (skab.1); the sweep has no L2 layer, so provide a no-op stub
+ * (same pattern as the lichen_hash_32 stubs in the sibling suites). */
+void lora_l2_assign_sf(uint8_t sf)
+{
+	(void)sf;
+}
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

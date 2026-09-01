@@ -256,14 +256,14 @@ class TestCCP13AdaptiveDutyPermille:
         assert adaptive_duty_permille(2, REGION_EU) == 20
 
     def test_region0_moderate(self) -> None:
-        # 3 <= density <= 8 -> 10 permille
+        # 3 <= density <= 10 -> 10 permille
         assert adaptive_duty_permille(3, REGION_EU) == 10
         assert adaptive_duty_permille(5, REGION_EU) == 10
-        assert adaptive_duty_permille(8, REGION_EU) == 10
+        assert adaptive_duty_permille(10, REGION_EU) == 10
 
     def test_region0_dense(self) -> None:
-        # density > 8 -> 5 permille
-        assert adaptive_duty_permille(9, REGION_EU) == 5
+        # density > 10 -> 5 permille
+        assert adaptive_duty_permille(11, REGION_EU) == 5
         assert adaptive_duty_permille(100, REGION_EU) == 5
         assert adaptive_duty_permille(255, REGION_EU) == 5
 
@@ -282,14 +282,14 @@ class TestCCP13AdaptiveDutyPermille:
         assert adaptive_duty_permille(2, REGION_US) == 50
 
     def test_region1_moderate(self) -> None:
-        # 3 <= density <= 8 -> 20 permille
+        # 3 <= density <= 10 -> 20 permille
         assert adaptive_duty_permille(3, REGION_US) == 20
         assert adaptive_duty_permille(5, REGION_US) == 20
-        assert adaptive_duty_permille(8, REGION_US) == 20
+        assert adaptive_duty_permille(10, REGION_US) == 20
 
     def test_region1_dense(self) -> None:
-        # density > 8 -> 10 permille
-        assert adaptive_duty_permille(9, REGION_US) == 10
+        # density > 10 -> 10 permille
+        assert adaptive_duty_permille(11, REGION_US) == 10
         assert adaptive_duty_permille(100, REGION_US) == 10
         assert adaptive_duty_permille(200, REGION_US) == 10
 
@@ -297,7 +297,7 @@ class TestCCP13AdaptiveDutyPermille:
         # Unknown regions should use strict budget (region 0)
         assert adaptive_duty_permille(0, 255) == 20  # sparse
         assert adaptive_duty_permille(5, 255) == 10  # moderate
-        assert adaptive_duty_permille(10, 255) == 5  # dense
+        assert adaptive_duty_permille(11, 255) == 5  # dense
 
 
 class TestCCP13MaxTxMs:

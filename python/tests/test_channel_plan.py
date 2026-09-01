@@ -65,7 +65,7 @@ def spec_reference_select_channel(
       N = NChannels - 1
       RETURN 1 + (Hash MOD N)
     """
-    if density > 8 or n_channels == 1:
+    if density > 10 or n_channels == 1:
         return 0
     if n_channels == 2:
         return 1
@@ -213,17 +213,17 @@ class TestChannelPlan:
 class TestSelectChannel:
     """Tests for select_channel algorithm."""
 
-    def test_density_above_8_returns_ch0(self) -> None:
-        """density > 8 triggers CH0 fallback per spec."""
+    def test_density_above_10_returns_ch0(self) -> None:
+        """density > 10 triggers CH0 fallback per spec."""
         eui64 = bytes.fromhex("0011223344556677")
-        assert select_channel(eui64, epoch=0, density=9) == 0
-        assert select_channel(eui64, epoch=0, density=10) == 0
+        assert select_channel(eui64, epoch=0, density=11) == 0
+        assert select_channel(eui64, epoch=0, density=10) == 32
         assert select_channel(eui64, epoch=0, density=100) == 0
 
-    def test_density_8_or_below_uses_hash(self) -> None:
-        """density <= 8 uses hash-based selection."""
+    def test_density_10_or_below_uses_hash(self) -> None:
+        """density <= 10 uses hash-based selection."""
         eui64 = bytes.fromhex("0011223344556677")
-        ch = select_channel(eui64, epoch=0, density=8, plan=EU868)
+        ch = select_channel(eui64, epoch=0, density=10, plan=EU868)
         assert ch >= 1  # Never returns CH0 for density <= 8
         assert ch < EU868.num_channels  # CH0 is reserved; data channels are 1..N-1
 

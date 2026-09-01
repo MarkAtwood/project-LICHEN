@@ -74,7 +74,7 @@ def select_channel(
     """Select data channel using deterministic hash.
 
     Per spec/02a-coordinated-capacity.md section 2a.3.1 SelectChannel pseudocode:
-    1. IF Density > 8 THEN RETURN 0 (CH0 fallback for high density)
+    1. IF Density > 10 THEN RETURN 0 (CH0 fallback for high density)
     2. Data = CONCAT(EUI64 as BE bytes, Epoch as LE u32 bytes)
     3. Hash = FNV1A32(Data)
     4. IF NChannels <= 1 THEN RETURN 0
@@ -102,7 +102,7 @@ def select_channel(
         raise ValueError("n_channels must be a positive integer")
 
     # Step 1: High density forces CH0 fallback
-    if density > 8 or n_channels <= 1:
+    if density > 10 or n_channels <= 1:
         return 0
 
     # Step 2: Concatenate EUI64 (BE) with epoch (LE u32)
@@ -312,7 +312,7 @@ def adaptive_sf_select(
     Pseudocode:
     1. SF = AssignedSF
     2. IF SF absent THEN SF = 10
-    3. IF (Density > 8) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
+    3. IF (Density > 10) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
     4. IF (Neighbor.EMA_SNR > 8) AND (Density < 5) THEN SF = MAX(7, SF - 1)
     5a. IF Neighbor.EMA_Loss > 0.25 THEN SF = MIN(12, SF + 1)
     5b. IF Utilization > 200 THEN RETURN (12, false)
@@ -327,7 +327,7 @@ def adaptive_sf_select(
     Additional threshold table rules (applied after pseudocode):
     - SNR < -5 -> SF 12 (maximum range needed)
     - SNR < 0 -> at least SF 11
-    - Density > 8 -> at least SF 11
+    - Density > 10 -> at least SF 11
     - Load factor > 0.8 -> at least SF 11
 
     Args:
@@ -346,8 +346,8 @@ def adaptive_sf_select(
     sf = max(7, min(12, sf))
 
     # Step 3: High density or high utilization triggers SF +2
-    # (spec 02a 2a.8: Density > 8; 02-physical-link.md:115 reconciled).
-    if density > 8 or utilization > 150:
+    # (spec 02a 2a.8: Density > 10).
+    if density > 10 or utilization > 150:
         sf = min(12, sf + 2)
 
     # Step 4: Good SNR and low density allows SF -1 upgrade
@@ -371,8 +371,8 @@ def adaptive_sf_select(
     elif ema_snr < 0:
         sf = max(11, sf)
 
-    # Density > 8 -> at least SF 11 (from threshold table)
-    if density > 8:
+    # Density > 10 -> at least SF 11 (from threshold table)
+    if density > 10:
         sf = max(11, sf)
 
     # Load factor > 0.8 -> at least SF 11

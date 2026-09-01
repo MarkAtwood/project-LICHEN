@@ -69,7 +69,7 @@ def adaptive_duty_permille(density: int, region: int) -> int:
     if density < 0:
         raise ValueError("density must be non-negative")
     strict_region = region != REGION_US
-    if density > 8:
+    if density > 10:
         return 5 if strict_region else 10
     if density < 3:
         return 20 if strict_region else 50
