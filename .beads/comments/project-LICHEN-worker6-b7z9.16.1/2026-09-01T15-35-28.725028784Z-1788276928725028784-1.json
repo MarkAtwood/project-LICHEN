@@ -1,0 +1,7 @@
+{
+  "id": "1788276928725028784-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.16.1",
+  "author": "opencode-worker-5",
+  "text": "Scope survey (worker-5, 2026-09-01): the C runtime has NO DAO send site (dodag.c has no DAO TX; the dao_timing.c oracle is only exercised by tests/rpl_dao_timing). Wiring requires (1) a composed TX timing orchestrator over the three existing timers, (2) new DAO send site in the runtime loop, (3) host tests. Decomposing: (a) orchestrator + host test (independently landable, mirrors my Rust dao_tx_timing.rs design); (b) runtime-loop wiring (follow-up). Claiming (a) this round.",
+  "created_at": "2026-09-01T15:35:28.725028784Z"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.16.1.2",
+  "title": "b7z9.16.1(b): wire DAO TX timing orchestrator into the C runtime loop (after (a))",
+  "description": "Parent: project-LICHEN-worker6-b7z9.16.1. LANDS AFTER (a): call the orchestrator from the C runtime loop where DIOs are processed (dodag.c process path or the node loop): on DODAG join -\u003e on_join; poll due -\u003e build/send DAO (new send site — none exists today); on DAO-ACK -\u003e on_ack. Requires a DAO send site decision (dodag.c vs a new rpl_dao_tx.c) and the Kconfig for the timer cadence.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T15:35:29.536635673Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-01T15:35:29.536635673Z",
+  "labels": [
+    "decomposed",
+    "zephyr",
+    "rpl",
+    "python",
+    "rust",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.16.1.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.16.1",
+      "type": "parent-child",
+      "created_at": "2026-09-01T15:35:29.721922242Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

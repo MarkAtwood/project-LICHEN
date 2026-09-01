@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.16.1.3",
+  "title": "b7z9.16.1(c): C DAO TX timing orchestrator composing the three timers + host test",
+  "description": "Parent: project-LICHEN-worker6-b7z9.16.1. NEW code in lichen/subsys/lichen/rpl/rpl_dao_timing.c (+ header decls): struct lichen_rpl_dao_tx_timing composing initial_timer/retry_timer/refresh_timer with an explicit phase (idle/initial-pending/retry-pending/refresh-pending/exhausted) and transitions mirroring rust dao_tx_timing.rs (commit 870577f9db): on_join draws initial delay via the injectable RNG and arms the initial timer; on_send consumes a due timer and advances to retry backoff 4/8/16s; on_ack resets retries and starts the 900s refresh; on_leave resets to idle. All timing constants come from rpl_dao_timing.h — no duplication. Host test in lichen/tests/rpl_dao_timing/ (extend main.c or new file): assert join delay window, retry sequence 4/8/16 then exhausted, ack resets to 900s refresh, leave resets. Runtime-loop wiring is sibling .2.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T15:36:16.669976064Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-01T15:37:07.282691847Z",
+  "started_at": "2026-09-01T15:37:07.282691847Z",
+  "lease_expires_at": "2026-09-01T15:42:07.282691847Z",
+  "heartbeat_at": "2026-09-01T15:37:07.282691847Z",
+  "labels": [
+    "decomposed",
+    "zephyr",
+    "rpl",
+    "python",
+    "rust",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.16.1.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.16.1",
+      "type": "parent-child",
+      "created_at": "2026-09-01T15:36:16.841143602Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}
