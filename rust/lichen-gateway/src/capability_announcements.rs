@@ -5,20 +5,21 @@
 //! ordering (reserved bits, IID match, signature, expiry, seq replay).
 
 use ciborium::de::from_reader;
-use ciborium::value::Value;
-use lichen_link::{keys::PublicKey, schnorr, ygg_addr_from_pubkey};
+use ciborium::value::{Integer, Value};
+use lichen_link::ygg_addr_from_pubkey;
+use schnorr48::{self, PublicKey};
 use sha2::{Digest, Sha256};
 
-const SCHNORR48_ED25519_ALG: i128 = -65537;
-const COSE_ALG_LABEL: i128 = 1;
-const COSE_KID_LABEL: i128 = 4;
+const SCHNORR48_ED25519_ALG: i64 = -65537;
+const COSE_ALG_LABEL: i64 = 1;
+const COSE_KID_LABEL: i64 = 4;
 
-const PAYLOAD_CAPABILITIES: i128 = 1;
-const PAYLOAD_PREFIX: i128 = 2;
-const PAYLOAD_PREFIX_LEN: i128 = 3;
-const PAYLOAD_EXPIRY: i128 = 4;
-const PAYLOAD_SEQ: i128 = 5;
-const PAYLOAD_ANNOUNCER_IID: i128 = 6;
+const PAYLOAD_CAPABILITIES: i64 = 1;
+const PAYLOAD_PREFIX: i64 = 2;
+const PAYLOAD_PREFIX_LEN: i64 = 3;
+const PAYLOAD_EXPIRY: i64 = 4;
+const PAYLOAD_SEQ: i64 = 5;
+const PAYLOAD_ANNOUNCER_IID: i64 = 6;
 
 /// Reserved capability bits (2-7) MUST be zero (spec 8.12).
 const RESERVED_BITS_MASK: u32 = 0xFC;
@@ -80,7 +81,7 @@ fn unprotected_kid(map: &Value) -> Option<[u8; 8]> {
         _ => return None,
     };
     for (key, value) in pairs {
-        if as_int(key) == Some(COSE_KID_LABEL) {
+        if as_int(key) == Some(i128::from(COSE_KID_LABEL)) {
             let bytes = as_bytes(value)?;
             let iid: [u8; 8] = bytes.as_slice().try_into().ok()?;
             return Some(iid);
@@ -118,7 +119,7 @@ pub fn from_cose_sign1(data: &[u8]) -> Result<CapabilityAnnouncement, AnnounceEr
         .map_err(|_| AnnounceError::Malformed)?;
     let alg = match &protected {
         Value::Map(pairs) => pairs.iter().find_map(|(key, value)| {
-            if as_int(key) == Some(COSE_ALG_LABEL) {
+            if as_int(key) == Some(i128::from(COSE_ALG_LABEL)) {
                 as_int(value)
             } else {
                 None
@@ -126,7 +127,7 @@ pub fn from_cose_sign1(data: &[u8]) -> Result<CapabilityAnnouncement, AnnounceEr
         }),
         _ => None,
     };
-    if alg != Some(SCHNORR48_ED25519_ALG) {
+    if alg != Some(i128::from(SCHNORR48_ED25519_ALG)) {
         return Err(AnnounceError::AlgorithmInvalid);
     }
 
@@ -144,44 +145,37 @@ pub fn from_cose_sign1(data: &[u8]) -> Result<CapabilityAnnouncement, AnnounceEr
     let mut seq = None;
     let mut announcer_iid = None;
     for (key, value) in pairs {
-        match as_int(key) {
-            Some(PAYLOAD_CAPABILITIES) => {
-                capabilities = Some(
-                    u32::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
-                        .map_err(|_| AnnounceError::Malformed)?,
-                );
-            }
-            Some(PAYLOAD_PREFIX) => {
-                prefix = Some(as_bytes(value).ok_or(AnnounceError::Malformed)?.clone());
-            }
-            Some(PAYLOAD_PREFIX_LEN) => {
-                prefix_len = Some(
-                    u8::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
-                        .map_err(|_| AnnounceError::Malformed)?,
-                );
-            }
-            Some(PAYLOAD_EXPIRY) => {
-                expiry = Some(
-                    u64::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
-                        .map_err(|_| AnnounceError::Malformed)?,
-                );
-            }
-            Some(PAYLOAD_SEQ) => {
-                seq = Some(
-                    u64::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
-                        .map_err(|_| AnnounceError::Malformed)?,
-                );
-            }
-            Some(PAYLOAD_ANNOUNCER_IID) => {
-                announcer_iid = Some(
-                    as_bytes(value)
-                        .ok_or(AnnounceError::Malformed)?
-                        .as_slice()
-                        .try_into()
-                        .map_err(|_| AnnounceError::Malformed)?,
-                );
-            }
-            _ => {}
+        let key_int = as_int(key);
+        if key_int == Some(i128::from(PAYLOAD_CAPABILITIES)) {
+            capabilities = Some(
+                u32::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
+                    .map_err(|_| AnnounceError::Malformed)?,
+            );
+        } else if key_int == Some(i128::from(PAYLOAD_PREFIX)) {
+            prefix = Some(as_bytes(value).ok_or(AnnounceError::Malformed)?.clone());
+        } else if key_int == Some(i128::from(PAYLOAD_PREFIX_LEN)) {
+            prefix_len = Some(
+                u8::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
+                    .map_err(|_| AnnounceError::Malformed)?,
+            );
+        } else if key_int == Some(i128::from(PAYLOAD_EXPIRY)) {
+            expiry = Some(
+                u64::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
+                    .map_err(|_| AnnounceError::Malformed)?,
+            );
+        } else if key_int == Some(i128::from(PAYLOAD_SEQ)) {
+            seq = Some(
+                u64::try_from(as_int(value).ok_or(AnnounceError::Malformed)?)
+                    .map_err(|_| AnnounceError::Malformed)?,
+            );
+        } else if key_int == Some(i128::from(PAYLOAD_ANNOUNCER_IID)) {
+            announcer_iid = Some(
+                as_bytes(value)
+                    .ok_or(AnnounceError::Malformed)?
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| AnnounceError::Malformed)?,
+            );
         }
     }
     let payload = CapabilityPayload {
@@ -213,6 +207,51 @@ fn pubkey_to_iid(pubkey: &[u8; 32]) -> [u8; 8] {
     let mut iid = [0u8; 8];
     iid.copy_from_slice(&address[8..]);
     iid
+}
+
+/// Encode the protected header map {1: -65537} (Schnorr48-Ed25519).
+fn encode_protected_header() -> Vec<u8> {
+    let mut out = Vec::new();
+    let header = Value::Map(vec![(
+        Value::Integer(Integer::from(COSE_ALG_LABEL)),
+        Value::Integer(Integer::from(SCHNORR48_ED25519_ALG)),
+    )]);
+    ciborium::ser::into_writer(&header, &mut out).expect("in-memory CBOR serialization");
+    out
+}
+
+/// Encode the payload CBOR map (integer keys 1..6, insertion order).
+fn payload_cbor(payload: &CapabilityPayload) -> Vec<u8> {
+    let map = vec![
+        (
+            Value::Integer(Integer::from(PAYLOAD_CAPABILITIES)),
+            Value::Integer(Integer::from(i64::from(payload.capabilities))),
+        ),
+        (
+            Value::Integer(Integer::from(PAYLOAD_PREFIX)),
+            Value::Bytes(payload.prefix.clone()),
+        ),
+        (
+            Value::Integer(Integer::from(PAYLOAD_PREFIX_LEN)),
+            Value::Integer(Integer::from(i64::from(payload.prefix_len))),
+        ),
+        (
+            Value::Integer(Integer::from(PAYLOAD_EXPIRY)),
+            Value::Integer(Integer::from(payload.expiry)),
+        ),
+        (
+            Value::Integer(Integer::from(PAYLOAD_SEQ)),
+            Value::Integer(Integer::from(payload.seq)),
+        ),
+        (
+            Value::Integer(Integer::from(PAYLOAD_ANNOUNCER_IID)),
+            Value::Bytes(payload.announcer_iid.to_vec()),
+        ),
+    ];
+    let mut encoded = Vec::new();
+    ciborium::ser::into_writer(&Value::Map(map), &mut encoded)
+        .expect("in-memory CBOR serialization");
+    encoded
 }
 
 /// Build the RFC 9052 Sig_structure and hash it (SHA-256).
@@ -250,7 +289,7 @@ pub fn verify_announcement(
 
     let digest = sig_structure_digest(&announcement.protected, &announcement.payload_bytes);
     let key = PublicKey::new(*pubkey);
-    if !schnorr::verify(&key, &digest, &announcement.signature) {
+    if !schnorr48::verify(&key, &digest, &announcement.signature) {
         return Err(AnnounceError::SignatureInvalid);
     }
 
@@ -264,6 +303,36 @@ pub fn verify_announcement(
         }
     }
     Ok(())
+}
+
+/// Build and sign a capability announcement (COSE_Sign1, untagged).
+///
+/// Mirrors python create_capability_announcement: the signature is Schnorr48
+/// over SHA-256 of the Sig_structure.
+pub fn create_announcement(
+    payload: &CapabilityPayload,
+    private: &schnorr48::PrivateKey,
+    public: &schnorr48::PublicKey,
+) -> Vec<u8> {
+    let protected = encode_protected_header();
+    let payload_bytes = payload_cbor(payload);
+    let digest = sig_structure_digest(&protected, &payload_bytes);
+    let signature = schnorr48::sign(private, public, &digest);
+
+    // COSE_Sign1: [protected, {4: kid}, payload, signature]
+    let unprotected = Value::Map(vec![(
+        Value::Integer(Integer::from(COSE_KID_LABEL)),
+        Value::Bytes(payload.announcer_iid.to_vec()),
+    )]);
+    let mut cose = Vec::new();
+    let cose_value = Value::Array(vec![
+        Value::Bytes(protected),
+        unprotected,
+        Value::Bytes(payload_bytes),
+        Value::Bytes(signature.to_vec()),
+    ]);
+    ciborium::ser::into_writer(&cose_value, &mut cose).expect("in-memory CBOR serialization");
+    cose
 }
 
 #[cfg(test)]
@@ -292,11 +361,12 @@ mod tests {
             .collect()
     }
 
-    /// Every vector decodes, carries a kid matching its payload IID, and its
-    /// signature verifies against the vector public key over the recorded
-    /// Sig_structure hash.
+    fn hex32(value: &str) -> [u8; 32] {
+        hex(value).try_into().unwrap()
+    }
+
     #[test]
-    fn vectors_decode_and_verify() {
+    fn vectors_decode_verify_and_encode() {
         for vector in vectors() {
             let name = vector["name"].as_str().unwrap();
             let wire = hex(vector["cose_sign1"].as_str().unwrap());
@@ -315,59 +385,40 @@ mod tests {
             assert_eq!(
                 payload.capabilities,
                 u32::try_from(vector["capabilities"].as_i64().unwrap()).unwrap(),
-                "{}",
-                vector["name"].as_str().unwrap()
+                "{name}"
             );
             assert_eq!(
                 payload.announcer_iid.to_vec(),
-                hex(vector["announcer_iid"].as_str().unwrap())
+                hex(vector["announcer_iid"].as_str().unwrap()),
+                "{name}"
             );
+            assert_eq!(payload.expiry, vector["expiry"].as_u64().unwrap(), "{name}");
+            assert_eq!(payload.seq, vector["seq"].as_u64().unwrap(), "{name}");
+
+            // Payload re-encoding must be byte-identical to the vector's
+            // recorded payload_cbor (cross-implementation CBOR contract).
             assert_eq!(
-                payload.expiry,
-                u64::try_from(vector["expiry"].as_u64().unwrap()).unwrap()
+                payload_cbor(payload),
+                hex(vector["payload_cbor"].as_str().unwrap()),
+                "{name}"
             );
-            assert_eq!(
-                payload.seq,
-                u64::try_from(vector["seq"].as_u64().unwrap()).unwrap()
-            );
+
             // The recorded Sig_structure hash matches our reconstruction.
             let digest = sig_structure_digest(&announcement.protected, &announcement.payload_bytes);
             assert_eq!(
                 digest.to_vec(),
                 hex(vector["sig_structure_hash"].as_str().unwrap()),
-                "{}",
-                vector["name"].as_str().unwrap()
+                "{name}"
             );
 
-            let pubkey: [u8; 32] = hex(vector["public_key"].as_str().unwrap())
-                .try_into()
-                .unwrap();
+            let pubkey = hex32(vector["public_key"].as_str().unwrap());
             let result = verify_announcement(&announcement, &pubkey, 0, None);
             let reserved_zero = vector["expected"]["reserved_bits_zero"].as_bool().unwrap();
-            let iid_match = vector["expected"]
-                .get("iid_match")
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(true);
+            let iid_match = iid_match_of(&vector);
             match (reserved_zero, iid_match) {
-                (true, true) => {
-                    assert_eq!(result, Ok(()), "{}", vector["name"].as_str().unwrap());
-                }
-                (false, _) => {
-                    assert_eq!(
-                        result,
-                        Err(AnnounceError::ReservedBitsSet),
-                        "{}",
-                        vector["name"].as_str().unwrap()
-                    );
-                }
-                (_, false) => {
-                    assert_eq!(
-                        result,
-                        Err(AnnounceError::IidMismatch),
-                        "{}",
-                        vector["name"].as_str().unwrap()
-                    );
-                }
+                (true, true) => assert_eq!(result, Ok(()), "{name}"),
+                (false, _) => assert_eq!(result, Err(AnnounceError::ReservedBitsSet), "{name}"),
+                (_, false) => assert_eq!(result, Err(AnnounceError::IidMismatch), "{name}"),
             }
         }
     }
@@ -375,23 +426,15 @@ mod tests {
     #[test]
     fn malformed_cose_is_rejected() {
         assert_eq!(from_cose_sign1(&[]), Err(AnnounceError::Malformed));
-        assert_eq!(from_cose_sign1(&[0x80]), Err(AnnounceError::Malformed)); // empty array
+        assert_eq!(from_cose_sign1(&[0x80]), Err(AnnounceError::Malformed));
     }
 
     #[test]
     fn expiry_and_replay_semantics() {
         let vector = &vectors()[0];
         let wire = hex(vector["cose_sign1"].as_str().unwrap());
-        let announcement = from_cose_sign1(&wire).unwrap_or_else(|e| {
-            panic!(
-                "decode {} failed: {:?}",
-                vector["name"].as_str().unwrap(),
-                e
-            )
-        });
-        let pubkey: [u8; 32] = hex(vector["public_key"].as_str().unwrap())
-            .try_into()
-            .unwrap();
+        let announcement = from_cose_sign1(&wire).expect("decode");
+        let pubkey = hex32(vector["public_key"].as_str().unwrap());
 
         // Expiry 1735689600: valid strictly before, expired at/after.
         assert!(verify_announcement(&announcement, &pubkey, 1735689599, None).is_ok());
