@@ -1516,19 +1516,19 @@ static int slots_post(struct coap_resource *resource,
 		uint16_t resp_len = 0;
 
 		if (result == LICHEN_CLAIM_REJECT_CONFLICT &&
-		    conflict_cose != NULL && conflict_cose_len != NULL &&
-		    *conflict_cose != NULL && *conflict_cose_len > 0 &&
-		    *conflict_cose_len <= sizeof(conflict_buf)) {
+		    conflict_cose != NULL && conflict_cose_len > 0 &&
+		    conflict_cose_len <= sizeof(conflict_buf)) {
 			/* Snapshot the winner's stored claim under the coord
 			 * lock: the pointer outlives process_claim's critical
-			 * section but the entry can be concurrently updated. */
+			 * section but the entry can be concurrently updated.
+			 * conflict_cose_len is a plain size_t here (the
+			 * producer wrote through its own pointer). */
 			code = COAP_RESPONSE_CODE_CONFLICT;
 			k_mutex_lock(&s_coord_lock, K_FOREVER);
-			memcpy(conflict_buf, *conflict_cose,
-			       *conflict_cose_len);
+			memcpy(conflict_buf, conflict_cose, conflict_cose_len);
 			k_mutex_unlock(&s_coord_lock);
 			resp_payload = conflict_buf;
-			resp_len = (uint16_t)*conflict_cose_len;
+			resp_len = (uint16_t)conflict_cose_len;
 		}
 		return coap_oscore_respond_resource(resource, request, addr,
 						    addr_len, &oscore,
