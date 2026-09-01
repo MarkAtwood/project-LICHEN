@@ -158,6 +158,145 @@ static void test_dao_tx_state(void)
 	      "tx open NULL key rejected");
 }
 
+/* reserve_next / clear_transmitted (rust persistence.rs :246-358). */
+static void test_dao_tx_reserve_clear(void)
+{
+	static const uint8_t key[32] = { 1 };
+	static const uint8_t origin[16] = { 2 };
+	static const uint8_t dodag[16] = { 3 };
+	struct store s;
+	struct lichen_rpl_dao_tx_state state;
+	uint8_t record[LICHEN_DAO_TX_HEADER_LEN + LICHEN_DAO_TX_MAX_SIGNED_LEN + 24];
+	uint64_t next;
+
+	memset(&s, 0, sizeof(s));
+	CHECK(lichen_rpl_dao_tx_provision(&store_ops, &s, key, origin, 7,
+					  dodag, &state) ==
+		      LICHEN_DAO_TX_PROVISION_OK,
+	      "reserve: provision");
+
+	/* Reserve 1: persists gen 2 carrying sequence 1 BEFORE TX. */
+	CHECK(lichen_rpl_dao_tx_reserve_next(&store_ops, &s, &state, record,
+					     sizeof(record),
+					     &next) == LICHEN_DAO_TX_TX_OK,
+	      "reserve: first reserve OK");
+	CHECK(next == 1U && state.last_reserved == 1U,
+	      "reserve: sequence 1 reserved");
+	CHECK(state.current.generation == 2 &&
+		      state.current.slot == LICHEN_STORAGE_SLOT_B,
+	      "reserve: opposite slot at gen 2");
+
+	/* Re-open sees the reserved sequence durably. */
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_OK,
+	      "reserve: re-open");
+	CHECK(state.last_reserved == 1U, "reserve: sequence durable");
+
+	/* clear_transmitted without pending signed bytes -> INVALID_STATE. */
+	CHECK(lichen_rpl_dao_tx_clear_transmitted(
+		      &store_ops, &s, &state, record,
+		      sizeof(record)) == LICHEN_DAO_TX_TX_INVALID_STATE,
+	      "clear: nothing pending -> INVALID_STATE");
+
+	/* Alternation continues: reserve 2 lands back in slot A. */
+	CHECK(lichen_rpl_dao_tx_reserve_next(&store_ops, &s, &state, record,
+					     sizeof(record),
+					     &next) == LICHEN_DAO_TX_TX_OK,
+	      "reserve: second reserve OK");
+	CHECK(next == 2U && state.current.slot == LICHEN_STORAGE_SLOT_A,
+	      "reserve: alternation continues");
+
+	/* Signed bytes carry: open a hand-crafted record with signed bytes,
+	 * reserve keeps them in the reserved payload. */
+	memset(&s, 0, sizeof(s));
+	{
+		uint8_t sig_bytes[4] = { 0xAA, 0xBB, 0xCC, 0xDD };
+		uint8_t payload2[LICHEN_DAO_TX_HEADER_LEN +
+				 LICHEN_DAO_TX_MAX_SIGNED_LEN];
+		size_t plen = lichen_rpl_dao_tx_encode(
+			key, origin, 7, dodag, 41, sig_bytes, sizeof(sig_bytes),
+			payload2, sizeof(payload2));
+		uint8_t rec2[24 + LICHEN_DAO_TX_HEADER_LEN +
+			     LICHEN_DAO_TX_MAX_SIGNED_LEN];
+		size_t rlen = lichen_hal_storage_encode_slot(
+			(const uint8_t *)"DTX2", 1, payload2, plen, rec2,
+			sizeof(rec2));
+		(void)rlen;
+		s.present[0] = true;
+		memcpy(s.data[0], rec2, 24 + plen);
+		s.len[0] = 24 + plen;
+		CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7,
+					     dodag,
+					     &state) == LICHEN_DAO_TX_OPEN_OK,
+		      "carry: signed-bytes record opens");
+		CHECK(state.last_signed_dao_len == 4U &&
+			      memcmp(state.last_signed_dao, sig_bytes, 4) == 0,
+		      "carry: signed bytes loaded");
+		CHECK(lichen_rpl_dao_tx_reserve_next(
+			      &store_ops, &s, &state, record,
+			      sizeof(record), &next) == LICHEN_DAO_TX_TX_OK,
+		      "carry: reserve with carried bytes OK");
+		CHECK(next == 42U, "carry: sequence 42 reserved");
+		/* The durable record still carries the signed bytes. */
+		CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7,
+					     dodag,
+					     &state) == LICHEN_DAO_TX_OPEN_OK,
+		      "carry: re-open");
+		CHECK(state.last_reserved == 42U &&
+			      state.last_signed_dao_len == 4U,
+		      "carry: prior signed bytes re-carried");
+
+		/* Clear success: same sequence, empty signed bytes persisted
+		 * and in-memory bytes zeroed. */
+		CHECK(lichen_rpl_dao_tx_clear_transmitted(
+			      &store_ops, &s, &state, record,
+			      sizeof(record)) == LICHEN_DAO_TX_TX_OK,
+		      "clear: success path");
+		CHECK(state.last_signed_dao_len == 0U,
+		      "clear: in-memory bytes zeroed");
+		CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7,
+					     dodag,
+					     &state) == LICHEN_DAO_TX_OPEN_OK,
+		      "clear: re-open");
+		CHECK(state.last_reserved == 42U &&
+			      state.last_signed_dao_len == 0U,
+		      "clear: durable record has empty signed bytes");
+	}
+
+	/* Exhaustion at u64 max (no wrap): hand-craft a max-sequence slot. */
+	memset(&s, 0, sizeof(s));
+	uint8_t payload[LICHEN_DAO_TX_HEADER_LEN + LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	size_t payload_len = lichen_rpl_dao_tx_encode(
+		key, origin, 7, dodag, UINT64_MAX, NULL, 0, payload,
+		sizeof(payload));
+	CHECK(payload_len == LICHEN_DAO_TX_HEADER_LEN,
+	      "reserve: max sequence encodes");
+	uint8_t max_rec[24 + LICHEN_DAO_TX_HEADER_LEN + LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	size_t max_len = lichen_hal_storage_encode_slot(
+		(const uint8_t *)"DTX2", 1, payload, payload_len, max_rec,
+		sizeof(max_rec));
+	(void)max_len;
+	s.present[0] = true;
+	memcpy(s.data[0], max_rec, 24 + payload_len);
+	s.len[0] = 24 + payload_len;
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_OK,
+	      "reserve: max sequence opens");
+	CHECK(state.last_reserved == UINT64_MAX, "reserve: u64 max loaded");
+	CHECK(lichen_rpl_dao_tx_reserve_next(&store_ops, &s, &state, record,
+					     sizeof(record),
+					     &next) ==
+		      LICHEN_DAO_TX_TX_EXHAUSTED,
+	      "reserve: u64 max is Exhausted (no wrap)");
+
+	/* NULL guards. */
+	CHECK(lichen_rpl_dao_tx_reserve_next(&store_ops, &s, NULL, record,
+					     sizeof(record),
+					     &next) ==
+		      LICHEN_DAO_TX_TX_STORAGE_ERROR,
+	      "reserve: NULL state rejected");
+}
+
 int main(void)
 {
 	/* Fixed vectors assembled by hand from the documented layout
@@ -285,6 +424,7 @@ int main(void)
 	      "max signed dao parses");
 
 	test_dao_tx_state();
+	test_dao_tx_reserve_clear();
 
 	if (failures == 0) {
 		printf("PASS: rpl_dao_tx_persist codec\n");

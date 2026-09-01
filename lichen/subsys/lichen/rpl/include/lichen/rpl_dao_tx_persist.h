@@ -127,4 +127,37 @@ enum lichen_rpl_dao_tx_provision_status lichen_rpl_dao_tx_provision(
 	uint8_t rpl_instance_id, const uint8_t dodag_id[16],
 	struct lichen_rpl_dao_tx_state *state);
 
+/** reserve_next / clear_transmitted outcomes. */
+enum lichen_rpl_dao_tx_tx_status {
+	LICHEN_DAO_TX_TX_OK = 0,
+	LICHEN_DAO_TX_TX_INVALID_STATE = -1,
+	LICHEN_DAO_TX_TX_EXHAUSTED = -2,
+	LICHEN_DAO_TX_TX_STORAGE_ERROR = -3,
+	/* Storage state changed under the caller (re-open and retry);
+	 * distinct from INVALID_STATE per the Rust taxonomy. */
+	LICHEN_DAO_TX_TX_STALE = -4,
+	LICHEN_DAO_TX_TX_CORRUPT = -5,
+};
+
+/**
+ * Reserve the next origin sequence: persist generation+1 carrying
+ * sequence = last_reserved + 1 BEFORE the DAO is built (crash-safe
+ * ordering; rust reserve_next). Returns the reserved sequence via *next.
+ * EXHAUSTED at u64 max (no wrap).
+ */
+enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_reserve_next(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
+	size_t record_len, uint64_t *next);
+
+/**
+ * Clear the exact retry bytes after successful transmission: persist
+ * the same sequence with empty signed bytes. INVALID_STATE when no
+ * signed bytes are pending.
+ */
+enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_clear_transmitted(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
+	size_t record_len);
+
 #endif /* LICHEN_RPL_DAO_TX_PERSIST_H_ */

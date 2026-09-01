@@ -205,3 +205,88 @@ enum lichen_rpl_dao_tx_provision_status lichen_rpl_dao_tx_provision(
 	}
 	return LICHEN_DAO_TX_PROVISION_OK;
 }
+
+static enum lichen_rpl_dao_tx_tx_status tx_persist(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint64_t sequence,
+	const uint8_t *signed_dao, size_t signed_dao_len, uint8_t *record,
+	size_t record_len)
+{
+	uint8_t payload[LICHEN_DAO_TX_HEADER_LEN +
+			LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	size_t payload_len = lichen_rpl_dao_tx_encode(
+		state->public_key, state->local_origin,
+		state->rpl_instance_id, state->dodag_id, sequence, signed_dao,
+		signed_dao_len, payload, sizeof(payload));
+	struct lichen_hal_storage_value updated;
+	enum lichen_hal_storage_update_status status;
+
+	if (payload_len == 0) {
+		return LICHEN_DAO_TX_TX_STORAGE_ERROR;
+	}
+	status = lichen_hal_storage_update_redundant(
+		ops, user, dao_tx_keys, dao_tx_magic, &state->current,
+		payload, payload_len, record, record_len, &updated);
+	if (status == LICHEN_STORAGE_UPDATE_STALE) {
+		return LICHEN_DAO_TX_TX_STALE;
+	}
+	if (status == LICHEN_STORAGE_UPDATE_EXHAUSTED) {
+		return LICHEN_DAO_TX_TX_EXHAUSTED;
+	}
+	if (status == LICHEN_STORAGE_UPDATE_CORRUPT ||
+	    status == LICHEN_STORAGE_UPDATE_BUFFER_TOO_SMALL) {
+		return LICHEN_DAO_TX_TX_CORRUPT;
+	}
+	if (status != LICHEN_STORAGE_UPDATE_OK) {
+		return LICHEN_DAO_TX_TX_STORAGE_ERROR;
+	}
+	state->current = updated;
+	return LICHEN_DAO_TX_TX_OK;
+}
+
+enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_reserve_next(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
+	size_t record_len, uint64_t *next)
+{
+	uint64_t next_seq;
+	enum lichen_rpl_dao_tx_tx_status status;
+
+	if (ops == NULL || state == NULL || record == NULL || next == NULL) {
+		return LICHEN_DAO_TX_TX_STORAGE_ERROR;
+	}
+	if (state->last_reserved == UINT64_MAX) {
+		return LICHEN_DAO_TX_TX_EXHAUSTED;
+	}
+	next_seq = state->last_reserved + 1;
+	status = tx_persist(ops, user, state, next_seq,
+			    state->last_signed_dao, state->last_signed_dao_len,
+			    record, record_len);
+	if (status != LICHEN_DAO_TX_TX_OK) {
+		return status;
+	}
+	state->last_reserved = next_seq;
+	*next = next_seq;
+	return LICHEN_DAO_TX_TX_OK;
+}
+
+enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_clear_transmitted(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
+	size_t record_len)
+{
+	if (ops == NULL || state == NULL || record == NULL) {
+		return LICHEN_DAO_TX_TX_STORAGE_ERROR;
+	}
+	if (state->last_signed_dao_len == 0) {
+		return LICHEN_DAO_TX_TX_INVALID_STATE;
+	}
+	enum lichen_rpl_dao_tx_tx_status status =
+		tx_persist(ops, user, state, state->last_reserved, NULL, 0,
+			   record, record_len);
+
+	if (status == LICHEN_DAO_TX_TX_OK) {
+		state->last_signed_dao_len = 0;
+	}
+	return status;
+}
