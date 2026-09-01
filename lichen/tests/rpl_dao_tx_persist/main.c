@@ -297,6 +297,166 @@ static void test_dao_tx_reserve_clear(void)
 	      "reserve: NULL state rejected");
 }
 
+/* Signed envelope validation + finalize_signed (rust message.rs
+ * SignedDaoEnvelope::from_bytes, persistence.rs finalize_signed). */
+static void test_dao_tx_finalize(void)
+{
+	static const uint8_t key[32] = { 1 };
+	static const uint8_t origin[16] = { 2 };
+	static const uint8_t dodag[16] = { 3 };
+	uint64_t next;
+	struct store s;
+	struct lichen_rpl_dao_tx_state state;
+	uint8_t record[LICHEN_DAO_TX_HEADER_LEN + LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	uint8_t dao[128];
+	size_t dao_len = 0;
+
+	/* Build a minimal signed envelope: DAO base (20, D=1) + PAD1 +
+	 * generalized Target + terminal 0x12 signature option. */
+	memset(dao, 0, sizeof(dao));
+	dao[0] = 7; /* instance */
+	dao[1] = 0x40; /* K=0, D=1, flags 0 */
+	dao[2] = 0; /* flags */
+	dao[3] = 0x55; /* dao sequence */
+	memcpy(&dao[4], dodag, 16);
+	size_t pos = 20;
+	dao[pos++] = 0; /* PAD1 */
+	dao[pos++] = 5; /* RPL Target */
+	dao[pos++] = 18; /* flags(1)+prefix_len(1)+/128 */
+	dao[pos++] = 0;
+	dao[pos++] = 128;
+	memcpy(&dao[pos], origin, 16);
+	pos += 16;
+	dao[pos++] = 0x12; /* origin signature */
+	dao[pos++] = 56;
+	dao[pos++] = 0;
+	dao[pos++] = 0;
+	dao[pos++] = 0;
+	dao[pos++] = 0;
+	dao[pos++] = 0;
+	dao[pos++] = 0;
+	dao[pos++] = 0;
+	dao[pos++] = 1; /* sequence 1 BE */
+	uint8_t sig[48];
+
+	memset(sig, 0x77, sizeof(sig));
+	memcpy(&dao[pos], sig, 48);
+	pos += 48;
+	dao_len = pos;
+
+	/* Envelope sequence extraction. */
+	uint64_t seq = 0;
+
+	CHECK(lichen_rpl_dao_envelope_sequence(dao, dao_len, &seq) == 0,
+	      "finalize: envelope validates");
+	CHECK(seq == 1U, "finalize: origin sequence 1 extracted");
+
+	/* Malformed: duplicate signature option -> Encoding. */
+	uint8_t dup[160];
+	memcpy(dup, dao, dao_len);
+	dup[dao_len++] = 0x12;
+	dup[dao_len++] = 56;
+	memset(&dup[dao_len], 0, 56);
+	dao_len += 56;
+	CHECK(lichen_rpl_dao_envelope_sequence(dup, dao_len, &seq) != 0,
+	      "finalize: duplicate signature rejected");
+	dao_len -= 58;
+
+	/* Non-terminal signature (option after signature) -> Encoding. */
+	uint8_t nonterm[160];
+	memcpy(nonterm, dao, dao_len);
+	nonterm[dao_len++] = 6; /* Transit after signature */
+	nonterm[dao_len++] = 20;
+	memset(&nonterm[dao_len], 0, 20);
+	dao_len += 20;
+	CHECK(lichen_rpl_dao_envelope_sequence(nonterm, dao_len, &seq) != 0,
+	      "finalize: non-terminal signature rejected");
+	dao_len -= 22;
+
+	/* Zero sequence in signature -> Encoding. */
+	uint8_t zero_seq[160];
+	memcpy(zero_seq, dao, dao_len);
+	zero_seq[46] = 0; /* sequence byte already 0... use offset */
+	CHECK(lichen_rpl_dao_envelope_sequence(zero_seq, dao_len, &seq) == 0,
+	      "finalize: zero-seq setup");
+	/* flip last sequence byte to 0 -> whole seq is 0 */
+	uint8_t zero2[160];
+	memcpy(zero2, dao, dao_len);
+	for (unsigned int i = 0; i < 8; i++) {
+		zero2[dao_len - 56 + i] = 0;
+	}
+	CHECK(lichen_rpl_dao_envelope_sequence(zero2, dao_len, &seq) != 0,
+	      "finalize: zero sequence rejected");
+	/* Unknown option -> Encoding. */
+	uint8_t unknown[160];
+	size_t unknown_len = dao_len;
+
+	memcpy(unknown, dao, dao_len);
+	unknown[unknown_len++] = 0x63;
+	unknown[unknown_len++] = 1;
+	unknown[unknown_len++] = 0;
+	CHECK(lichen_rpl_dao_envelope_sequence(unknown, unknown_len, &seq) !=
+		      0,
+	      "finalize: unknown option rejected");
+
+	/* End-to-end: provision, reserve (seq 41), finalize exact bytes. */
+	memset(&s, 0, sizeof(s));
+	CHECK(lichen_rpl_dao_tx_provision(&store_ops, &s, key, origin, 7,
+					  dodag, &state) ==
+		      LICHEN_DAO_TX_PROVISION_OK,
+	      "finalize: provision");
+	CHECK(lichen_rpl_dao_tx_reserve_next(&store_ops, &s, &state, record,
+					     sizeof(record),
+					     &next) == LICHEN_DAO_TX_TX_OK,
+	      "finalize: reserve");
+	CHECK(next == 1U, "finalize: reserved 1");
+
+	/* Sequence mismatch -> INVALID_STATE. */
+	CHECK(lichen_rpl_dao_tx_finalize_signed(
+		      &store_ops, &s, &state, 2, dao, dao_len, record,
+		      sizeof(record)) ==
+		      LICHEN_DAO_TX_FINALIZE_INVALID_STATE,
+	      "finalize: sequence mismatch rejected");
+
+	/* Success: bytes pinned durably. */
+	CHECK(lichen_rpl_dao_tx_finalize_signed(&store_ops, &s, &state, 1,
+						dao, dao_len, record,
+						sizeof(record)) ==
+		      LICHEN_DAO_TX_FINALIZE_OK,
+	      "finalize: OK");
+	CHECK(state.last_signed_dao_len == dao_len &&
+		      memcmp(state.last_signed_dao, dao, dao_len) == 0,
+	      "finalize: exact bytes in memory");
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_OK,
+	      "finalize: re-open");
+	CHECK(state.last_reserved == 1U &&
+		      state.last_signed_dao_len == dao_len &&
+		      memcmp(state.last_signed_dao, dao, dao_len) == 0,
+	      "finalize: exact bytes durable");
+
+	/* Double finalize (equal sequence) -> INVALID_STATE. */
+	CHECK(lichen_rpl_dao_tx_finalize_signed(&store_ops, &s, &state, 1,
+						dao, dao_len, record,
+						sizeof(record)) ==
+		      LICHEN_DAO_TX_FINALIZE_INVALID_STATE,
+	      "finalize: double finalize rejected");
+
+	/* Oversized signed DAO -> OVERSIZED. */
+	CHECK(lichen_rpl_dao_tx_finalize_signed(
+		      &store_ops, &s, &state, 1, dao,
+		      LICHEN_DAO_TX_MAX_SIGNED_LEN + 1, record,
+		      sizeof(record)) == LICHEN_DAO_TX_FINALIZE_OVERSIZED,
+	      "finalize: oversized rejected");
+
+	/* NULL guard. */
+	CHECK(lichen_rpl_dao_tx_finalize_signed(&store_ops, &s, &state, 1,
+						NULL, dao_len, record,
+						sizeof(record)) ==
+		      LICHEN_DAO_TX_FINALIZE_STORAGE_ERROR,
+	      "finalize: NULL signed dao rejected");
+}
+
 int main(void)
 {
 	/* Fixed vectors assembled by hand from the documented layout
@@ -425,6 +585,7 @@ int main(void)
 
 	test_dao_tx_state();
 	test_dao_tx_reserve_clear();
+	test_dao_tx_finalize();
 
 	if (failures == 0) {
 		printf("PASS: rpl_dao_tx_persist codec\n");

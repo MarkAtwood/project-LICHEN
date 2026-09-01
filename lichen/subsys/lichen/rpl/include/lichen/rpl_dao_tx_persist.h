@@ -160,4 +160,41 @@ enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_clear_transmitted(
 	struct lichen_rpl_dao_tx_state *state, uint8_t *record,
 	size_t record_len);
 
+/** finalize_signed outcomes (rust DaoTxError parity). */
+enum lichen_rpl_dao_tx_finalize_status {
+	LICHEN_DAO_TX_FINALIZE_OK = 0,
+	LICHEN_DAO_TX_FINALIZE_INVALID_STATE = -1,
+	LICHEN_DAO_TX_FINALIZE_OVERSIZED = -2,
+	LICHEN_DAO_TX_FINALIZE_ENCODING = -3,
+	LICHEN_DAO_TX_FINALIZE_EXHAUSTED = -4,
+	LICHEN_DAO_TX_FINALIZE_STALE = -5,
+	LICHEN_DAO_TX_FINALIZE_CORRUPT = -6,
+	LICHEN_DAO_TX_FINALIZE_STORAGE_ERROR = -7,
+};
+
+/**
+ * Validate a signed DAO envelope (rust message.rs
+ * SignedDaoEnvelope::from_bytes) and extract the origin sequence.
+ *
+ * Requirements: DAO base (D=1, 20 bytes), flags zero, exactly one
+ * terminal 0x12 origin-signature option (56 bytes: sequence u64 BE
+ * nonzero + Schnorr48), only PAD1/generalized-Target/Transit(20)/
+ * TargetDescriptor(4) options before it. Returns 0 and writes *sequence
+ * on success; negative on any violation.
+ */
+int lichen_rpl_dao_envelope_sequence(const uint8_t *data, size_t len,
+				     uint64_t *sequence);
+
+/**
+ * Persist the exact signed DAO bytes for `sequence` before they may be
+ * transmitted (rust finalize_signed). Rejects: sequence mismatch with
+ * the reserved value, oversized signed DAO, envelope validation failure,
+ * already-finalized equal-sequence rebuild, u64 generation exhaustion.
+ */
+enum lichen_rpl_dao_tx_finalize_status lichen_rpl_dao_tx_finalize_signed(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint64_t sequence,
+	const uint8_t *signed_dao, size_t signed_dao_len, uint8_t *record,
+	size_t record_len);
+
 #endif /* LICHEN_RPL_DAO_TX_PERSIST_H_ */

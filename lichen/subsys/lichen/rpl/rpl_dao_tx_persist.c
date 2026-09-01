@@ -290,3 +290,169 @@ enum lichen_rpl_dao_tx_tx_status lichen_rpl_dao_tx_clear_transmitted(
 	}
 	return status;
 }
+
+/* ------------------------------------------------------------------ */
+/* Signed DAO envelope validation + finalize_signed (rust message.rs   */
+/* SignedDaoEnvelope::from_bytes / persistence.rs finalize_signed).    */
+/* ------------------------------------------------------------------ */
+
+#define LICHEN_RPL_OPT_PAD1 0u
+#define LICHEN_RPL_OPT_RPL_TARGET 5u
+#define LICHEN_RPL_OPT_TRANSIT_INFO 6u
+#define LICHEN_RPL_OPT_RPL_TARGET_DESCRIPTOR 9u
+#define LICHEN_RPL_OPT_DAO_ORIGIN_SIGNATURE 0x12u
+#define LICHEN_RPL_DAO_BASE_LEN 20u /* D=1 common case */
+#define LICHEN_RPL_TRANSIT_INFO_DATA_LEN 20u
+
+/* Generalized RPL Target body (spec/05-routing 8.7.1): flags 0,
+ * prefix length 1..=128, at least ceil(prefix_len/8) prefix octets. */
+static bool generalized_target_body_ok(const uint8_t *body, size_t len)
+{
+	return len >= 2 && body[0] == 0 && body[1] <= 128 &&
+	       len - 2 >= ((size_t)body[1] + 7u) / 8u;
+}
+
+int lichen_rpl_dao_envelope_sequence(const uint8_t *data, size_t len,
+				     uint64_t *sequence)
+{
+	if (data == NULL || sequence == NULL || len < 4) {
+		return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+	}
+	/* DAO base: reject local RPLInstanceID 0xC0-0xFF (RFC 6550 5.1). */
+	if (data[0] >= 0xC0 || (data[1] & 0x3F) != 0 || data[2] != 0) {
+		return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+	}
+	size_t base_len = (len > LICHEN_RPL_DAO_BASE_LEN)
+				  ? LICHEN_RPL_DAO_BASE_LEN
+				  : len;
+	size_t pos = base_len;
+	bool found = false;
+	uint64_t seq = 0;
+
+	while (pos < len) {
+		if (data[pos] == LICHEN_RPL_OPT_PAD1) {
+			if (found) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			}
+			pos++;
+			continue;
+		}
+		if (pos + 2 > len) {
+			return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+		}
+		size_t opt_end = pos + 2 + (size_t)data[pos + 1];
+
+		if (opt_end > len) {
+			return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+		}
+		if (data[pos] == LICHEN_RPL_OPT_DAO_ORIGIN_SIGNATURE) {
+			if (found || opt_end - (pos + 2) != 56) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			}
+			const uint8_t *sig = &data[pos + 2];
+
+			seq = 0;
+			for (unsigned int i = 0; i < 8; i++) {
+				seq = (seq << 8) | sig[i];
+			}
+			if (seq == 0) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			}
+			found = true;
+		} else {
+			if (found) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			}
+			size_t body_len = opt_end - (pos + 2);
+
+			if (data[pos] == LICHEN_RPL_OPT_RPL_TARGET) {
+				if (!generalized_target_body_ok(&data[pos + 2],
+								body_len)) {
+					return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+				}
+			} else if (data[pos] ==
+					   LICHEN_RPL_OPT_TRANSIT_INFO &&
+				   body_len !=
+					   LICHEN_RPL_TRANSIT_INFO_DATA_LEN) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			} else if (data[pos] ==
+					   LICHEN_RPL_OPT_RPL_TARGET_DESCRIPTOR &&
+				   body_len != 4) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			} else if (data[pos] ==
+					   LICHEN_RPL_OPT_RPL_TARGET ||
+				   data[pos] ==
+					   LICHEN_RPL_OPT_TRANSIT_INFO ||
+				   data[pos] ==
+					   LICHEN_RPL_OPT_RPL_TARGET_DESCRIPTOR) {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			} else {
+				return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+			}
+		}
+		pos = opt_end;
+	}
+	if (!found) {
+		return -LICHEN_DAO_TX_FINALIZE_ENCODING;
+	}
+	*sequence = seq;
+	return 0;
+}
+
+enum lichen_rpl_dao_tx_finalize_status lichen_rpl_dao_tx_finalize_signed(
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state, uint64_t sequence,
+	const uint8_t *signed_dao, size_t signed_dao_len, uint8_t *record,
+	size_t record_len)
+{
+	uint64_t envelope_seq = 0;
+	uint64_t pending_seq = 0;
+	bool pending_valid;
+	enum lichen_rpl_dao_tx_tx_status status;
+
+	if (ops == NULL || state == NULL || signed_dao == NULL ||
+	    record == NULL) {
+		return LICHEN_DAO_TX_FINALIZE_STORAGE_ERROR;
+	}
+	if (sequence != state->last_reserved) {
+		return LICHEN_DAO_TX_FINALIZE_INVALID_STATE;
+	}
+	if (signed_dao_len > LICHEN_DAO_TX_MAX_SIGNED_LEN) {
+		return LICHEN_DAO_TX_FINALIZE_OVERSIZED;
+	}
+	if (lichen_rpl_dao_envelope_sequence(signed_dao, signed_dao_len,
+					     &envelope_seq) != 0) {
+		return LICHEN_DAO_TX_FINALIZE_ENCODING;
+	}
+	if (envelope_seq != sequence) {
+		return LICHEN_DAO_TX_FINALIZE_INVALID_STATE;
+	}
+	/* Already-finalized equal-sequence rebuild rejection. */
+	pending_valid = state->last_signed_dao_len > 0 &&
+			lichen_rpl_dao_envelope_sequence(
+				state->last_signed_dao,
+				state->last_signed_dao_len,
+				&pending_seq) == 0;
+	if (pending_valid && pending_seq == sequence) {
+		return LICHEN_DAO_TX_FINALIZE_INVALID_STATE;
+	}
+	status = (enum lichen_rpl_dao_tx_tx_status)tx_persist(
+		ops, user, state, sequence, signed_dao, signed_dao_len,
+		record, record_len);
+	switch (status) {
+	case LICHEN_DAO_TX_TX_OK:
+		memcpy(state->last_signed_dao, signed_dao, signed_dao_len);
+		state->last_signed_dao_len = signed_dao_len;
+		return LICHEN_DAO_TX_FINALIZE_OK;
+	case LICHEN_DAO_TX_TX_INVALID_STATE:
+		return LICHEN_DAO_TX_FINALIZE_INVALID_STATE;
+	case LICHEN_DAO_TX_TX_EXHAUSTED:
+		return LICHEN_DAO_TX_FINALIZE_EXHAUSTED;
+	case LICHEN_DAO_TX_TX_STALE:
+		return LICHEN_DAO_TX_FINALIZE_STALE;
+	case LICHEN_DAO_TX_TX_CORRUPT:
+		return LICHEN_DAO_TX_FINALIZE_CORRUPT;
+	default:
+		return LICHEN_DAO_TX_FINALIZE_STORAGE_ERROR;
+	}
+}
