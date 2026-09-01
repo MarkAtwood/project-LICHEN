@@ -86,6 +86,18 @@ class ChannelPlan:
         valid_mask = (1 << self.num_channels) - 1
         return mask & valid_mask
 
+    def intersect_channel_mask(self, advertised: int) -> int:
+        """Return the beacon's advertised channel_mask narrowed to locally
+        permitted channels (spec 02a 2a.2 R-02a-006, bit 0=CH0).
+
+        The wire field is u32, so wider ints are normalized to 32 bits
+        before the intersection — plan channels above bit 31 can never be
+        expressed in a beacon. Returns 0 when there is no common channel;
+        the caller MUST reject/ignore the beacon in that case. The 2a.3.1
+        NChannels derivation will consume this at beacon ingestion.
+        """
+        return self.validate_channel_mask(advertised & 0xFFFFFFFF)
+
     def is_valid_power(self, channel_index: int, power_dbm: int) -> bool:
         """Check if power level is valid for the given channel."""
         if channel_index < 0 or channel_index >= self.num_channels:
