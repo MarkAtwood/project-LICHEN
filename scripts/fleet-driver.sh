@@ -76,7 +76,15 @@ while :; do
         for i in 1 2 3 4 5 6 7; do
             WIN="$SESSION:worker$i"
             tmux has-session -t "$SESSION" 2>/dev/null || break
-            tmux select-window -t "$WIN" 2>/dev/null || { echo "   worker$i: window missing"; continue; }
+            if ! tmux select-window -t "$WIN" 2>/dev/null; then
+                # Self-heal: a worker window that died (e.g. opencode crashed on
+                # a fatal API error) is recreated automatically — the overnight
+                # w4/w7 context-death sat unnoticed for hours (bead biod era).
+                echo "   worker$i: window missing — recreating"
+                tmux new-window -d -t "$SESSION:$i" -n "worker$i" \
+                    "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                continue
+            fi
             pane_busy "$WIN" && { echo "   worker$i: busy"; continue; }
             NIP=$(worker_in_progress "$i")
             [ "$NIP" -gt 0 ] && { echo "   worker$i: holds $NIP in-progress bead(s) — waiting"; continue; }
