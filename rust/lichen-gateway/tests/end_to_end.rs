@@ -637,7 +637,7 @@ async fn mesh_to_mesh_drops_unknown_gua_destination() {
 
     let mut gw = test_gateway();
     // mesh_to_mesh for GUA with no route → None
-    let result = gw.mesh_to_mesh(ipv6).await;
+    let result = gw.mesh_to_mesh(ipv6, false).await;
     assert!(
         result.is_none(),
         "unknown GUA should be dropped in mesh_to_mesh"
