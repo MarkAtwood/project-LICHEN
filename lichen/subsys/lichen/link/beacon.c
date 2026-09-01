@@ -174,7 +174,7 @@ lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
 	} else {
 		return LICHEN_SLOT_MAP_NOT_AN_ARRAY;
 	}
-	if (len > 64u) {
+	if (len > LICHEN_SLOT_MAP_MAX_ENTRIES) {
 		return LICHEN_SLOT_MAP_TOO_MANY_SLOTS;
 	}
 
@@ -215,4 +215,48 @@ lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
 	}
 	*out_len = count;
 	return LICHEN_SLOT_MAP_OK;
+}
+
+size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
+				    uint8_t *out, size_t out_len)
+{
+	if (slot_count > LICHEN_SLOT_MAP_MAX_ENTRIES || out == NULL) {
+		return 0;
+	}
+	if (slots == NULL && slot_count != 0) {
+		return 0;
+	}
+
+	/* Header: 0x80+len short form (<= 23) or 0x98 + one-byte length. */
+	size_t pos = 0;
+	if (slot_count <= 23) {
+		if (out_len < 1) {
+			return 0;
+		}
+		out[pos++] = (uint8_t)(0x80 + slot_count);
+	} else {
+		if (out_len < 2) {
+			return 0;
+		}
+		out[pos++] = 0x98;
+		out[pos++] = (uint8_t)slot_count;
+	}
+
+	/* Entries: CBOR immediate 0x00..0x17 for 0..23; 0x18 prefix for
+	 * 24..255 — entries > 0x17 take two bytes, so bound-check each. */
+	for (size_t i = 0; i < slot_count; i++) {
+		uint8_t v = slots[i];
+		size_t need = (v <= 0x17u) ? 1u : 2u;
+
+		if (out_len - pos < need) {
+			return 0;
+		}
+		if (v <= 0x17u) {
+			out[pos++] = v;
+		} else {
+			out[pos++] = 0x18;
+			out[pos++] = v;
+		}
+	}
+	return pos;
 }

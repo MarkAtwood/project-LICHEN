@@ -256,6 +256,23 @@ int lichen_link_set_slot(struct lichen_link_ctx *ctx, struct lichen_tdma_ctx *td
 	return 0;
 }
 
+bool lichen_slot_map_tx_allowed(const uint8_t *slot_map, size_t len,
+				uint8_t current_slot, uint8_t num_slots)
+{
+	if (current_slot >= num_slots) {
+		return false;
+	}
+	if (slot_map == NULL) {
+		return false;
+	}
+	for (size_t i = 0; i < len; i++) {
+		if (slot_map[i] == current_slot) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool tdma_tx_allowed(const struct lichen_tdma_ctx *tdma, uint32_t now_ms)
 {
 	if (tdma == NULL || !tdma->synced) return true;

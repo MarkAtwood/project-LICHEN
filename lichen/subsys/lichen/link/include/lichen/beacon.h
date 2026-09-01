@@ -60,6 +60,9 @@
 #define LICHEN_BEACON_FLAG_CH0_RX 0x04U
 #define LICHEN_BEACON_FLAG_GNSS_PPS 0x08U
 
+/** Maximum slot_map entries (rust parity; see lichen_beacon_write_slot_map). */
+#define LICHEN_SLOT_MAP_MAX_ENTRIES 64U
+
 /** Parse/serialize status. */
 enum lichen_beacon_status {
 	LICHEN_BEACON_OK = 0,		  /**< success */
@@ -167,4 +170,11 @@ enum lichen_slot_map_status
 lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
 			     uint8_t num_slots, uint8_t *out, size_t out_cap,
 			     size_t *out_len);
+/** Encode a slot_map as a CBOR array (beacon CBOR options section).
+ *  Accepts up to LICHEN_SLOT_MAP_MAX_ENTRIES (64, rust parity). Returns the
+ *  encoded length, or 0 when out is too small, slot_count exceeds 64,
+ *  or slots is NULL with a nonzero count. */
+size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
+				    uint8_t *out, size_t out_len);
+
 #endif /* LICHEN_BEACON_H_ */
