@@ -211,6 +211,13 @@ int coap_oscore_authorize_mutating(
     uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
     uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
     uint8_t *piv_out, size_t *piv_len_out, bool *is_protected) {
+  /* Merge resolution: keep the explicit-buffer signature (HEAD). The
+   * settled merged-tree callers (coap_location.c, coap_server.c,
+   * coap_dtn.c, checkin_resource.c) all use this form, and this stub must
+   * match what the code under test links against. beads-worker-7's
+   * result-struct delegation variant is the same authorization gate with
+   * an incompatible signature; both variants return -ENOTSUP in this test,
+   * so no test behavior is lost. */
   ARG_UNUSED(resource);
   ARG_UNUSED(request);
   ARG_UNUSED(addr);

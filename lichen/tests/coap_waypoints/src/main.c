@@ -160,6 +160,14 @@ int coap_oscore_authorize_mutating(
     uint8_t *plain_buf, size_t plain_buf_len, const uint8_t **payload_out,
     uint16_t *payload_len_out, struct oscore_ctx **ctx_out,
     uint8_t *piv_out, size_t *piv_len_out, bool *is_protected) {
+  /* Merge resolution: keep the explicit-buffer signature (HEAD). The
+   * settled merged-tree callers in coap_waypoints.c (POST, detail DELETE)
+   * pass the extended out-params, and the sibling test stubs
+   * (checkin_resource, coap_location_beacon) settled on this same form.
+   * beads-worker-7's result-struct delegation variant is the same
+   * authorization gate with an incompatible signature; its behavior is
+   * preserved here: the unprotected local-admin 4.01 denial is the
+   * !protected_request path below. */
   ARG_UNUSED(resource);
   ARG_UNUSED(request);
   ARG_UNUSED(addr);

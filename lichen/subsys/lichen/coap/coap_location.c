@@ -1356,6 +1356,12 @@ static int sensors_location_post(struct coap_resource *resource,
   const uint8_t *payload = NULL;
   int ret;
 
+  /* Merge resolution: explicit-buffer authorize_mutating() variant
+   * (HEAD), matching the settled merged-tree callers (coap_server.c,
+   * coap_dtn.c, checkin_resource.c). beads-worker-7's result-struct
+   * wrapper is the same authorization gate with a different signature;
+   * its explicit local-admin 4.01 check already lives inside
+   * authorize_mutating() (coap_oscore.c), so nothing is lost. */
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_POST, oscore.plainbuf,
                                        sizeof(oscore.plainbuf), &payload,

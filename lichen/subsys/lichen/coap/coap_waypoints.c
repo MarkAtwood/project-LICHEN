@@ -972,6 +972,13 @@ int lichen_waypoints_post_handler(struct coap_resource *resource,
   const uint8_t *payload = NULL;
   int ret;
 
+  /* Merge resolution: explicit-buffer authorize_mutating() variant (HEAD),
+   * matching the settled merged-tree callers (coap_server.c, coap_dtn.c,
+   * checkin_resource.c, coap_location.c). beads-worker-7's result-struct
+   * wrapper is the same authorization gate with a different signature; its
+   * extra explicit local-admin 4.01 check already lives inside
+   * authorize_mutating()'s unprotected path (coap_oscore.c), so nothing is
+   * lost. */
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_POST, oscore.plainbuf,
                                        sizeof(oscore.plainbuf), &payload,
@@ -1075,7 +1082,7 @@ int lichen_waypoint_detail_get_handler(struct coap_resource *resource,
   char id[LICHEN_WAYPOINT_ID_MAX + 1U];
   int ret;
 
-  ret = coap_oscore_unprotect_resource_request(
+  ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_GET, &oscore);
   if (ret != 0) {
     return ret;
@@ -1107,7 +1114,7 @@ int lichen_waypoint_detail_put_handler(struct coap_resource *resource,
                                        struct sockaddr *addr,
                                        socklen_t addr_len) {
   struct coap_oscore_unprotect_result oscore;
-  int ret = coap_oscore_unprotect_resource_request(
+  int ret = coap_oscore_authorize_mutating(
       resource, request, addr, addr_len, COAP_METHOD_PUT, &oscore);
 
   if (ret != 0) {
@@ -1129,6 +1136,8 @@ int lichen_waypoint_detail_delete_handler(struct coap_resource *resource,
   const uint8_t *payload = NULL;
   int ret;
 
+  /* Merge resolution: explicit-buffer authorize_mutating() variant (HEAD),
+   * same rationale as lichen_waypoints_post_handler() above. */
   ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
                                        COAP_METHOD_DELETE, oscore.plainbuf,
                                        sizeof(oscore.plainbuf), &payload,
