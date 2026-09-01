@@ -161,6 +161,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// needs a real clock to distinguish).
     pub fn set_wall_clock_unix(&mut self, clock: fn() -> u64) {
         self.wall_clock_unix = Some(clock);
+    }
+
     /// Receiver-side trust state: only record sequences from DIOs whose root
     /// signature has passed verification (see `RootSeqCache` caller contract).
     /// The root-signature receiver validation consumes this at the DIO path.
