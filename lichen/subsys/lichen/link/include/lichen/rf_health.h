@@ -51,5 +51,14 @@ bool lichen_rf_health_should_rebalance(const struct lichen_rf_health *h);
 uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
 					  uint16_t loss_permille,
 					  int8_t rssi_ema_dbm);
+
+/**
+ * CCP-15 interference score (R-02a-137; rust rf_health.rs
+ * interference_score_tenths parity): busy_percent*10 + per_mille, in
+ * tenths of a percentage point. Returns -1 (via LICHEN_RF_INVALID
+ * sentinel 0xFFFF) when inputs are out of range.
+ */
+uint16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
+						    uint16_t packet_error_permille);
 void lichen_rf_health_reset(struct lichen_rf_health *h);
 #endif /* LICHEN_RF_HEALTH_H_ */
