@@ -772,7 +772,10 @@ def _load_gen_vectors_module():
     """Import the C parity generator from its standalone script location."""
     import importlib.util
 
-    script = Path(__file__).resolve().parents[2] / "lichen" / "tests" / "schc_parity" / "gen_vectors.py"
+    script = (
+        Path(__file__).resolve().parents[2]
+        / "lichen" / "tests" / "schc_parity" / "gen_vectors.py"
+    )
     spec = importlib.util.spec_from_file_location("schc_parity_gen_vectors", script)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

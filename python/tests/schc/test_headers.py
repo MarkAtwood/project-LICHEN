@@ -23,7 +23,6 @@ from lichen.schc.headers import (
     decode_rule255,
     decompress_packet,
     encode_rule255,
-    validate_full_ipv6,
 )
 
 SRC = IPv6Address("fe80::1")

@@ -12,14 +12,15 @@ is deliberately not exercised here.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 from jsonschema import Draft7Validator  # type: ignore[import-untyped]
 
 from lichen.ccp import hash_32 as hash_32_ccp
-from lichen.link.channel import hash_32 as hash_32_link_channel
 from lichen.channel_plan import hash_32 as hash_32_channel_plan
+from lichen.link.channel import hash_32 as hash_32_link_channel
 from lichen.timing.sfn import hash_32 as hash_32_sfn
 
 ROOT = Path(__file__).resolve().parents[2]

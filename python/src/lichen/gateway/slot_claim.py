@@ -261,9 +261,11 @@ def encode_claim_canonical(claim: SlotClaim) -> bytes:
     6 claim_seq, 7 ordinal. gateway_count is a local allocation parameter
     and is NEVER serialized.
     """
-    from ipaddress import IPv6Address
-
-    mode = _MODE_INTERLEAVED if claim.allocation_mode == AllocationMode.INTERLEAVED else _MODE_CONTIGUOUS
+    mode = (
+        _MODE_INTERLEAVED
+        if claim.allocation_mode == AllocationMode.INTERLEAVED
+        else _MODE_CONTIGUOUS
+    )
     payload: dict[int, object] = {
         _PAYLOAD_SLOTS: list(claim.slots),
         _PAYLOAD_SUPERFRAME_EPOCH: claim.superframe_id,

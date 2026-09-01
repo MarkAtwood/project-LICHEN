@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 import cbor2
 
+from lichen.crypto.identity import Identity
+
 GroupRoleName = Literal["member", "admin"]
 ALLOWED_INVITE_ROLES: frozenset[str] = frozenset({"member", "admin"})
 # spec 18.8.2 payload role wire values (uint)
@@ -195,11 +197,11 @@ def encode_invitation_cose(invitation: GroupInvitationCose, identity: Identity) 
     from hashlib import sha256
     from ipaddress import IPv6Address
 
-    from lichen.crypto.schnorr48 import sign
     from lichen.crypto.delegation_tokens import (
         cose_protected_header,
         cose_sig_structure,
     )
+    from lichen.crypto.schnorr48 import sign
 
     if invitation.inviter_iid != identity.iid:
         raise MembershipError("inviter_iid must match the signing identity")
@@ -241,13 +243,13 @@ def verify_invitation_cose(
     from hashlib import sha256
     from ipaddress import IPv6Address
 
-    from lichen.crypto.schnorr48 import verify
     from lichen.crypto.delegation_tokens import (
         COSE_ALG_LABEL,
         SCHNORR48_ED25519_ALG,
         cose_sig_structure,
     )
     from lichen.crypto.identity import _pubkey_to_iid
+    from lichen.crypto.schnorr48 import verify
 
     if type(envelope) is not bytes:
         raise MembershipError("invitation envelope must be bytes")

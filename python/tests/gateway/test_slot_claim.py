@@ -149,8 +149,9 @@ class TestSlotClaim:
             expiry=1700000000,
             claim_seq=7,
         )
-        from lichen.gateway.slot_claim import encode_claim_canonical
         import cbor2
+
+        from lichen.gateway.slot_claim import encode_claim_canonical
 
         fields = cbor2.loads(encode_claim_canonical(claim))
         assert fields[1] == [0, 1, 2]
