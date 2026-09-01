@@ -146,6 +146,11 @@ static int deaddrop_post(struct coap_resource *resource,
 		memcpy(peer_eui64, &in6->sin6_addr.s6_addr[8], 8);
 		lichen_eui64_to_iid(peer_eui64, peer_eui64);
 	}
+	/* Merge resolution: HEAD's expanded-parameter authorize_mutating form
+	 * is kept. The shared post-gate code below stuffs oscore_ctx/piv/
+	 * piv_len/is_protected into the oscore result struct, and
+	 * beads-worker-7's bundled coap_oscore_unprotect_result form would
+	 * leave those locals undeclared. Same gate semantics either way. */
 	struct coap_oscore_unprotect_result oscore = {0};
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
@@ -454,6 +459,9 @@ static int confessions_post(struct coap_resource *resource,
 		memcpy(peer_eui64, &in6->sin6_addr.s6_addr[8], 8);
 		lichen_eui64_to_iid(peer_eui64, peer_eui64);
 	}
+	/* Merge resolution: HEAD's expanded-parameter form kept (same reason
+	 * as deaddrop_post above): shared code below uses piv/piv_len/
+	 * oscore_ctx/payload/payload_len locals directly. */
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
 	struct oscore_ctx *oscore_ctx = NULL;

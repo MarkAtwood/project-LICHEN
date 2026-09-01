@@ -756,7 +756,7 @@ static int config_put(struct coap_resource *resource,
 	struct lichen_config_node node_cfg;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len, COAP_METHOD_PUT,
 						     &oscore);
 	if (ret != 0) {
@@ -880,7 +880,7 @@ static int config_radio_put(struct coap_resource *resource,
 	struct lichen_config_radio radio_cfg;
 	int ret;
 
-	ret = coap_oscore_unprotect_resource_request(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 						     addr_len, COAP_METHOD_PUT,
 						     &oscore);
 	if (ret != 0) {

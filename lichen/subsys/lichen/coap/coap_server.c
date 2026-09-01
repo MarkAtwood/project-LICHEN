@@ -196,6 +196,12 @@ static int config_put(struct coap_resource *resource,
 		return COAP_RESPONSE_CODE_NOT_FOUND;
 	}
 
+	/* Merge resolution: kept HEAD's expanded authorize_mutating() form.
+	 * beads-worker-7 only renamed coap_oscore_unprotect_resource_request()
+	 * -> coap_oscore_authorize_mutating() at this call site; the renamed
+	 * entry point is still called, and the surrounding auto-merged code
+	 * (out-params, server_plain_buf, coap_oscore_send_protected) matches
+	 * the expanded signature, not the old result-struct form. */
 	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
 					     COAP_METHOD_PUT,
 					     server_plain_buf,
@@ -316,6 +322,11 @@ static int msg_inbox_post(struct coap_resource *resource,
 	uint32_t msg_id = 0;
 	int ret;
 
+	/* Merge resolution: kept HEAD's declarations + expanded
+	 * authorize_mutating() form (same reasoning as config_put above:
+	 * beads-worker-7's rename intent is preserved because the renamed
+	 * coap_oscore_authorize_mutating() is still called; the code below
+	 * uses the bare is_protected/payload/oscore_ctx/piv out-params). */
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
 	struct oscore_ctx *oscore_ctx = NULL;
