@@ -19,6 +19,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import NamedTuple
 
+from lichen.constants import (
+    DENSITY_PER_BONUS_PERMILLE,
+    DENSITY_RSSI_BONUS_DBM,
+    RF_METRICS_WINDOW_SF,
+)
 from lichen.timing.sfn import slot_for
 
 # FNV-1a32 hash constants per spec/02a-coordinated-capacity.md:123
@@ -108,6 +113,86 @@ def select_channel(
 
     # Step 4-5: n_channels includes reserved CH0.
     return 1 + (h % (n_channels - 1))
+
+
+class BusyPercentSampler:
+    """Rolling-window TX-time BusyPercent sampler (spec R-02a-131 / 2a.10.3).
+
+    BusyPercent is TX-time based occupancy over RF_METRICS_WINDOW_SF
+    rolling superframes: callers record own-node TX airtime (ms) per
+    superframe; busy_percent computes tx_airtime / slot_duration * 100
+    clamped to 0..100. Never RSSI-derived (spec MUST).
+    """
+
+    def __init__(self) -> None:
+        self._airtime_by_sf: dict[int, int] = {}
+        self._current_sf = 0
+
+    def record_tx_airtime(self, superframe: int, airtime_ms: int) -> None:
+        """Record the TX airtime (ms) consumed in the given superframe."""
+        if superframe > self._current_sf:
+            self._current_sf = superframe
+        self._airtime_by_sf[superframe] = (
+            self._airtime_by_sf.get(superframe, 0) + airtime_ms
+        )
+
+    def busy_percent(self, slot_duration_ms: int) -> int:
+        """BusyPercent over the rolling window (0..100).
+
+        The window is EXCLUSIVE of the oldest edge: superframes in
+        (current-32, current] are summed (underflow-safe, so at current 0
+        the whole recorded range is retained).
+        """
+        self._airtime_by_sf = {
+            sf: ms
+            for sf, ms in self._airtime_by_sf.items()
+            if sf + RF_METRICS_WINDOW_SF > self._current_sf
+        }
+        if slot_duration_ms <= 0:
+            return 0
+        window_slots = slot_duration_ms * RF_METRICS_WINDOW_SF
+        total_ms = sum(self._airtime_by_sf.values())
+        return min(100, (total_ms * 100) // window_slots)
+
+
+class PeerDensityTracker:
+    """Rolling-window peer density tracker (spec R-02a-117 / 2a.10.3).
+
+    Tracks distinct link-layer peers heard within RF_METRICS_WINDOW_SF
+    superframes and feeds the count into estimate_density's formula.
+    """
+
+    def __init__(self) -> None:
+        self._last_seen: dict[tuple[int, ...], int] = {}
+        self._current_sf = 0
+
+    def record_peer(self, iid: tuple[int, ...] | bytes, superframe: int) -> None:
+        """Record one peer heard in the given superframe."""
+        if isinstance(iid, (bytes, bytearray)):
+            iid = tuple(iid)
+        if superframe > self._current_sf:
+            self._current_sf = superframe
+        self._last_seen[iid] = superframe
+
+    def peer_count(self) -> int:
+        """Distinct peers inside the metrics window (prunes first)."""
+        window_start = max(0, self._current_sf - RF_METRICS_WINDOW_SF)
+        self._last_seen = {
+            iid: seen
+            for iid, seen in self._last_seen.items()
+            if seen >= window_start
+        }
+        return len(self._last_seen)
+
+    def estimate_density(self, loss_permille: int, rssi_ema_dbm: int) -> int:
+        """Peer count passed through the estimate_density formula."""
+        neighbors = min(255, self.peer_count())
+        d = neighbors
+        if loss_permille > DENSITY_PER_BONUS_PERMILLE:
+            d += 2
+        if rssi_ema_dbm < DENSITY_RSSI_BONUS_DBM:
+            d += 1
+        return min(255, d)
 
 
 class SFResult(NamedTuple):

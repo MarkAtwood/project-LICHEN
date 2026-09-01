@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from lichen.ccp import (
+    BusyPercentSampler,
+    PeerDensityTracker,
     adaptive_sf_select,
     ema_update,
     ema_update_integer,
@@ -19,6 +21,7 @@ from lichen.ccp import (
     slot_hash,
     synchronized_hop,
 )
+from lichen.constants import RF_METRICS_WINDOW_SF, TDMA_SLOT_MS
 
 VECTORS_DIR = Path(__file__).parent.parent.parent / "test" / "vectors"
 
@@ -477,6 +480,8 @@ def test_ccp16_load_balance_vector_coverage():
         cat = v.get("category", "unknown")
         category_counts[cat] = category_counts.get(cat, 0) + 1
 
+    # HEAD's multi-line assert formatting, plus beads-worker-7's new
+    # TestPeerDensityTracker class below (both intents compatible).
     assert category_counts.get("channel_selection", 0) >= 5, (
         "Need at least 5 channel selection vectors")
     assert category_counts.get("tdma_slot", 0) >= 5, (
@@ -485,3 +490,53 @@ def test_ccp16_load_balance_vector_coverage():
         "Need at least 10 adaptive SF vectors")
     assert category_counts.get("density_estimate", 0) >= 5, (
         "Need at least 5 density estimate vectors")
+
+
+class TestPeerDensityTracker:
+    """Rolling-window peer tracker (b7z9.29.2, R-02a-117)."""
+
+    def test_distinct_peers_and_window_prune(self) -> None:
+        t = PeerDensityTracker()
+        for peer in (1, 2, 3):
+            t.record_peer((peer,) * 8, 1)
+        t.record_peer((1,) * 8, 2)  # repeat: distinct only
+        assert t.peer_count() == 3
+
+        # Window slides past: current 40, window start 8.
+        t.record_peer((9,) * 8, 40)
+        assert t.peer_count() == 1
+
+    def test_density_matches_formula_vectors(self) -> None:
+        t = PeerDensityTracker()
+        for i in range(5):
+            t.record_peer((i,) * 8, 1)
+        assert t.estimate_density(50, -70) == 5
+        assert t.estimate_density(150, -70) == 7
+        assert t.estimate_density(150, -100) == 8
+        for i in range(253):
+            t.record_peer((i, 0xEE, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66), 3)
+        assert t.estimate_density(200, -100) == 255
+
+
+class TestBusyPercentSampler:
+    """TX-time BusyPercent sampler (b7z9.29.3, R-02a-131)."""
+
+    def test_partial_and_window_slide(self) -> None:
+        s = BusyPercentSampler()
+        s.record_tx_airtime(0, TDMA_SLOT_MS * 2)
+        pct = s.busy_percent(TDMA_SLOT_MS)
+        assert 6 <= pct <= 7, pct
+
+        # Window slide: old entries drop.
+        s.record_tx_airtime(100, 0)
+        assert s.busy_percent(TDMA_SLOT_MS) == 0
+
+
+    def test_saturation_and_zero_duration(self) -> None:
+        s = BusyPercentSampler()
+        for sf in range(RF_METRICS_WINDOW_SF):
+            s.record_tx_airtime(sf, TDMA_SLOT_MS)
+        assert s.busy_percent(TDMA_SLOT_MS) == 100
+        s.record_tx_airtime(RF_METRICS_WINDOW_SF + 1, TDMA_SLOT_MS * 2)
+        assert s.busy_percent(TDMA_SLOT_MS) == 100
+        assert s.busy_percent(0) == 0

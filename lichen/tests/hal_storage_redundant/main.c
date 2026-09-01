@@ -16,6 +16,8 @@ static int failures;
 		}                                                              \
 	} while (0)
 
+static void test_storage_layer(void);
+
 int main(void)
 {
 	const uint8_t magic[4] = { 'D', 'T', 'X', '2' };
@@ -157,10 +159,246 @@ int main(void)
 					     tiny, sizeof(tiny)) == 0,
 	      "small output buffer rejected");
 
+	test_storage_layer();
+
 	if (failures == 0) {
 		printf("PASS: hal_storage_redundant slot codec\n");
 		return 0;
 	}
 	printf("FAILURES: %d\n", failures);
 	return 1;
+}
+/* ------------------------------------------------------------------ */
+/* Two-slot storage layer tests over an in-memory fake store.          */
+/* ------------------------------------------------------------------ */
+
+#include <errno.h>
+
+#define NSLOTS 2
+#define STORE_CAP 128
+
+struct store {
+	bool present[NSLOTS];
+	uint8_t data[NSLOTS][STORE_CAP];
+	size_t len[NSLOTS];
+	bool fail_write_slot[NSLOTS];
+};
+
+static int store_read(void *user, const char *key, uint8_t *out,
+		      size_t capacity, size_t *length)
+{
+	struct store *s = user;
+	unsigned int idx = key[7] - 'a';
+
+	if (idx >= NSLOTS || !s->present[idx]) {
+		return 1;
+	}
+	size_t n = s->len[idx] < capacity ? s->len[idx] : capacity;
+	memcpy(out, s->data[idx], n);
+	*length = n;
+	return 0;
+}
+
+static int store_write(void *user, const char *key, const uint8_t *value,
+		       size_t length)
+{
+	struct store *s = user;
+	unsigned int idx = key[7] - 'a';
+
+	if (idx >= NSLOTS) {
+		return -EINVAL;
+	}
+	if (s->fail_write_slot[idx]) {
+		return -EIO;
+	}
+	if (length > STORE_CAP) {
+		return -ENOSPC;
+	}
+	s->present[idx] = true;
+	memcpy(s->data[idx], value, length);
+	s->len[idx] = length;
+	return 0;
+}
+
+static const struct lichen_hal_storage_ops store_ops = {
+	.read = store_read,
+	.write = store_write,
+};
+
+static const char *const keys[2] = { "rpl.tx.a", "rpl.tx.b" };
+
+static void test_storage_layer(void)
+{
+	static const uint8_t magic[4] = { 'D', 'T', 'X', '2' };
+	struct store s;
+	uint8_t record[64];
+	uint8_t scratch_a[64];
+	uint8_t scratch_b[64];
+	uint8_t out[64];
+	size_t out_len = sizeof(out);
+	struct lichen_hal_storage_value value;
+	const uint8_t gen1[] = { 0x01, 0x01 };
+	const uint8_t gen2[] = { 0x02, 0x02, 0x02 };
+	const uint8_t gen3[] = { 0x03 };
+
+	/* Empty store -> Missing. */
+	memset(&s, 0, sizeof(s));
+	CHECK(lichen_hal_storage_open_redundant(&store_ops, &s, keys, magic,
+						scratch_a, sizeof(scratch_a),
+						scratch_b, sizeof(scratch_b),
+						out, &out_len,
+						&value) ==
+		      LICHEN_STORAGE_OPEN_MISSING,
+	      "empty store opens as Missing");
+
+	/* Provision at generation 1 into slot A. */
+	CHECK(lichen_hal_storage_provision_redundant(
+		      &store_ops, &s, keys, magic, gen1, sizeof(gen1), record,
+		      sizeof(record)) == LICHEN_STORAGE_PROVISION_OK,
+	      "provision succeeds");
+	CHECK(s.present[0] && !s.present[1], "provision writes slot A only");
+
+	/* Re-provision -> Exists, existing state untouched. */
+	CHECK(lichen_hal_storage_provision_redundant(
+		      &store_ops, &s, keys, magic, gen1, sizeof(gen1), record,
+		      sizeof(record)) == LICHEN_STORAGE_PROVISION_EXISTS,
+	      "re-provision is Exists");
+
+	/* Open finds generation 1 in slot A. */
+	CHECK(lichen_hal_storage_open_redundant(&store_ops, &s, keys, magic,
+						scratch_a, sizeof(scratch_a),
+						scratch_b, sizeof(scratch_b),
+						out, &out_len,
+						&value) == LICHEN_STORAGE_OPEN_OK,
+	      "open after provision");
+	CHECK(value.generation == 1 &&
+		      value.slot == LICHEN_STORAGE_SLOT_A &&
+		      value.len == sizeof(gen1) &&
+		      memcmp(out, gen1, sizeof(gen1)) == 0,
+	      "open returns generation 1 payload");
+
+	/* Update alternation: B at gen 2, A at gen 3. */
+	CHECK(lichen_hal_storage_update_redundant(&store_ops, &s, keys, magic,
+						  &value, gen2, sizeof(gen2),
+						  record, sizeof(record),
+						  &value) ==
+		      LICHEN_STORAGE_UPDATE_OK,
+	      "update 1 -> 2 succeeds");
+	CHECK(value.generation == 2 && value.slot == LICHEN_STORAGE_SLOT_B,
+	      "update lands in slot B at gen 2");
+	CHECK(lichen_hal_storage_update_redundant(&store_ops, &s, keys, magic,
+						  &value, gen3, sizeof(gen3),
+						  record, sizeof(record),
+						  &value) ==
+		      LICHEN_STORAGE_UPDATE_OK,
+	      "update 2 -> 3 succeeds");
+	CHECK(value.generation == 3 && value.slot == LICHEN_STORAGE_SLOT_A,
+	      "update lands back in slot A at gen 3");
+
+	/* Newest wins after alternation. */
+	CHECK(lichen_hal_storage_open_redundant(&store_ops, &s, keys, magic,
+						scratch_a, sizeof(scratch_a),
+						scratch_b, sizeof(scratch_b),
+						out, &out_len,
+						&value) == LICHEN_STORAGE_OPEN_OK,
+	      "open after alternation");
+	CHECK(value.generation == 3 && value.slot == LICHEN_STORAGE_SLOT_A &&
+		      value.len == sizeof(gen3),
+	      "newest generation wins");
+
+	/* Stale detection: replay an old (generation, slot). */
+	struct lichen_hal_storage_value stale = { .generation = 1,
+						  .slot =
+							  LICHEN_STORAGE_SLOT_A };
+	CHECK(lichen_hal_storage_update_redundant(&store_ops, &s, keys, magic,
+						  &stale, gen1, sizeof(gen1),
+						  record, sizeof(record),
+						  &value) ==
+		      LICHEN_STORAGE_UPDATE_STALE,
+	      "stale generation rejected");
+
+	/* Write failure surfaces as STORAGE_ERROR and leaves the previous
+	 * slot intact (same as the Rust reference: no rollback, caller
+	 * retries with the unchanged current value).
+	 */
+	s.fail_write_slot[1] = true;
+	CHECK(lichen_hal_storage_update_redundant(&store_ops, &s, keys, magic,
+						  &value, gen2, sizeof(gen2),
+						  record, sizeof(record),
+						  &value) ==
+		      LICHEN_STORAGE_UPDATE_STORAGE_ERROR,
+	      "write failure is STORAGE_ERROR");
+	s.fail_write_slot[1] = false;
+	CHECK(lichen_hal_storage_update_redundant(&store_ops, &s, keys, magic,
+						  &value, gen2, sizeof(gen2),
+						  record, sizeof(record),
+						  &value) ==
+		      LICHEN_STORAGE_UPDATE_OK,
+	      "retry after write failure succeeds");
+	CHECK(value.generation == 4 && value.slot == LICHEN_STORAGE_SLOT_B,
+	      "retry wrote gen 4 to slot B");
+
+	/* Corrupt store: present but unparseable -> Corrupt on open. */
+	memset(&s, 0, sizeof(s));
+	s.present[0] = true;
+	memset(s.data[0], 0xEE, 24);
+	s.len[0] = 24;
+	CHECK(lichen_hal_storage_open_redundant(&store_ops, &s, keys, magic,
+						scratch_a, sizeof(scratch_a),
+						scratch_b, sizeof(scratch_b),
+						out, &out_len,
+						&value) ==
+		      LICHEN_STORAGE_OPEN_CORRUPT,
+	      "corrupt-only store is Corrupt");
+
+	/* Corrupt on update: present but invalid -> Corrupt. */
+	CHECK(lichen_hal_storage_update_redundant(
+		      &store_ops, &s, keys, magic,
+		      &(struct lichen_hal_storage_value){
+			      .generation = 1,
+			      .slot = LICHEN_STORAGE_SLOT_A },
+		      gen1, sizeof(gen1), record, sizeof(record),
+		      &value) == LICHEN_STORAGE_UPDATE_CORRUPT,
+	      "corrupt store update is Corrupt");
+
+	/* Generation exhaustion at u64 max (no wrap). */
+	memset(&s, 0, sizeof(s));
+	out_len = sizeof(out);
+	uint8_t max_rec[64];
+	size_t max_len = lichen_hal_storage_encode_slot(
+		magic, UINT64_MAX, gen1, sizeof(gen1), max_rec, sizeof(max_rec));
+	(void)max_len;
+	/* Write the max-generation record directly as slot B. */
+	s.present[1] = true;
+	memcpy(s.data[1], max_rec, 24 + sizeof(gen1));
+	s.len[1] = 24 + sizeof(gen1);
+	int open_status = lichen_hal_storage_open_redundant(
+		&store_ops, &s, keys, magic, scratch_a, sizeof(scratch_a),
+		scratch_b, sizeof(scratch_b), out, &out_len, &value);
+	CHECK(open_status == LICHEN_STORAGE_OPEN_OK,
+	      "max generation opens");
+	CHECK(value.generation == UINT64_MAX &&
+		      value.slot == LICHEN_STORAGE_SLOT_B,
+	      "max generation in slot B");
+	CHECK(lichen_hal_storage_update_redundant(&store_ops, &s, keys, magic,
+						  &value, gen2, sizeof(gen2),
+						  record, sizeof(record),
+						  &value) ==
+		      LICHEN_STORAGE_UPDATE_EXHAUSTED,
+	      "u64 generation max is Exhausted (no wrap)");
+
+	/* Buffer-too-small on open. */
+	memset(&s, 0, sizeof(s));
+	lichen_hal_storage_provision_redundant(&store_ops, &s, keys, magic,
+					       gen2, sizeof(gen2), record,
+					       sizeof(record));
+	uint8_t tiny[1];
+	size_t tiny_len = sizeof(tiny);
+	CHECK(lichen_hal_storage_open_redundant(&store_ops, &s, keys, magic,
+						scratch_a, sizeof(scratch_a),
+						scratch_b, sizeof(scratch_b),
+						tiny, &tiny_len,
+						&value) ==
+		      LICHEN_STORAGE_OPEN_BUFFER_TOO_SMALL,
+	      "small out buffer is BUFFER_TOO_SMALL");
 }

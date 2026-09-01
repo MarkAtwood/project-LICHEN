@@ -86,7 +86,6 @@ BUILD_ASSERT(sizeof(struct LICHEN_TDMA_Slot) == 20);
 
 #define LICHEN_TDMA_GUARD_MS 50 /* spec/02a-coordinated-capacity.md §2a.2: guard "MUST be 50 for this revision"; ccp_tdma.json guard_ms=50 */
 #define LICHEN_TDMA_SLOT_MS 250 /* spec/02a-coordinated-capacity.md §2a.2 Slot=(fnv1a32(EUI64)+u32(SFN)) mod n via lichen_hash_32; epoch MUST NOT enter the hash */
-#define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3 /* BEACON_TIMEOUT per 09-packets-timing.md FSM */
 #define LICHEN_TDMA_CONTENTION_RETRIES 5 /* Max DAO retransmissions in contention slot */
 #define LICHEN_TDMA_CONTENTION_BACKOFF_MIN_MS 100 /* CSMA min backoff */
 #define LICHEN_TDMA_CONTENTION_BACKOFF_MAX_MS 1000 /* CSMA max backoff */
@@ -242,10 +241,8 @@ enum lichen_desync_state {
 
 /** Consecutive valid beacons required to recover (spec 14.7: 3) */
 #define LICHEN_DESYNC_RECOVERY_BEACONS 3u
-/** Bounded RECOVERING listen timeout (superframes), RECOMMENDED 3 per 14.7
- * (oracle name: python timing.sfn TDMA_BEACON_TIMEOUT_SUPERFRAMES) */
-#define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3u
 struct lichen_tdma_ctx {
+	uint8_t eui64[8];                    /**< Node EUI64 (copied at init) */
 	uint32_t superframe;
 	uint8_t slot;
 	uint8_t n_slots;

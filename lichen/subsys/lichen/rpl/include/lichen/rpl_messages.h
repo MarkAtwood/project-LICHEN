@@ -268,6 +268,16 @@ static inline size_t lichen_rpl_dio_options_len(size_t total_len)
 		: 0;
 }
 
+/* ── Root DIO Signature (spec 06-security.md 8.10.1) ───────────────────────── */
+
+/** Temporary Root DIO Signature option type (wire type TBD per spec). */
+#define LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE 0x17
+/** Structural floor for the COSE_Sign1 blob (rejects garbage; the true
+ *  minimum valid encoding is ~111 bytes). */
+#define LICHEN_RPL_ROOT_DIO_SIGNATURE_MIN_LEN 64
+/** Maximum COSE_Sign1 blob: RPL option length is u8. */
+#define LICHEN_RPL_ROOT_DIO_SIGNATURE_MAX_LEN 255U
+
 /* ── DAO ───────────────────────────────────────────────────────────────────── */
 
 /** DAO base object size with DODAGID present (20 bytes) */

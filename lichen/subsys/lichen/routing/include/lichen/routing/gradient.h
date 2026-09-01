@@ -38,6 +38,10 @@ extern "C" {
 /* Data gradient timeout (shorter, opportunistic) */
 #ifndef CONFIG_LICHEN_ROUTING_DATA_GRADIENT_TIMEOUT_MS
 #define CONFIG_LICHEN_ROUTING_DATA_GRADIENT_TIMEOUT_MS 60000
+
+/* CCP-15 proposed constants (spec/02a-coordinated-capacity.md 2a.10.3/2a.10.4/2a.10.6) */
+#define LICHEN_RF_METRICS_WINDOW_SF 32u  /* rolling metrics window (superframes) */
+#define LICHEN_INTERFERENCE_ESCAPE_TENTHS 1000u /* interference score escape threshold */
 #endif
 
 /**
@@ -255,6 +259,11 @@ int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 			      uint8_t *out_sf,
 			      bool *out_tx_allowed);
 #endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
+
+/* Spec 02a 2a.10.3 (proposed): rolling RF metrics window in superframes. */
+#define LICHEN_RF_METRICS_WINDOW_SF 32U
+/* Spec 02a 2a.10.4 (proposed): interference escape threshold (tenths). */
+#define LICHEN_INTERFERENCE_ESCAPE_TENTHS 1000U
 
 #ifdef __cplusplus
 }

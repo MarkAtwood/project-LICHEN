@@ -119,6 +119,7 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     root_seqs: RootSeqCache,
     /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
     dao_tx_sched: DaoTxScheduler,
+    wall_clock_unix: Option<fn() -> u64>,
     routing_now_ms: u64,
     generation: u64,
     direct_neighbors: HashSet<[u8; 8]>,
@@ -152,8 +153,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         self.generation
     }
 
-    /// Highest accepted root-DIO signature sequence per `(dodag_id, instance)`.
+    /// Install a Unix-seconds wall clock for root-signature expiry checks.
     ///
+    /// Without a wall clock, root-signature expiry cannot be evaluated; the
+    /// receiver then treats every well-formed signature as unexpired (a
+    /// documented limitation — spec 06 §8.10.1 "expired -> treat as unsigned"
+    /// needs a real clock to distinguish).
+    pub fn set_wall_clock_unix(&mut self, clock: fn() -> u64) {
+        self.wall_clock_unix = Some(clock);
     /// Receiver-side trust state: only record sequences from DIOs whose root
     /// signature has passed verification (see `RootSeqCache` caller contract).
     /// The root-signature receiver validation consumes this at the DIO path.

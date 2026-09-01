@@ -8,7 +8,7 @@
 //! load_factor. Saturating counters, Q16.16 fixed point. no_std compatible,
 //! #![forbid(unsafe_code)]. Removed dead RSSI stats and dropped counter.
 
-use crate::constants::{CSMA_BACKOFF_MAX, CSMA_RETRY_LIMIT};
+use crate::constants::{CSMA_BACKOFF_MAX, CSMA_RETRY_LIMIT, RF_METRICS_WINDOW_SF};
 
 const FP_SCALE: u32 = 1 << 16;
 const EMA_ALPHA_SHIFT: u32 = 2;
@@ -135,6 +135,158 @@ pub const fn estimate_density(neighbor_count: u8, loss_permille: u16, rssi_ema_d
         255
     } else {
         d as u8
+    }
+}
+
+/// Rolling-window TX-time BusyPercent sampler (spec R-02a-131 / 2a.10.3).
+///
+/// BusyPercent is TX-time based occupancy over
+/// [`RF_METRICS_WINDOW_SF`] rolling superframes: the caller records the
+/// own-node airtime (ms) consumed per superframe; the sampler accumulates
+/// per-window totals and reports `tx_airtime / slot_duration * 100`
+/// clamped to 0..100. Never RSSI-derived (spec MUST).
+#[derive(Debug, Clone, Default)]
+pub struct BusyPercentSampler {
+    /// Per-superframe TX airtime (ms) inside the current window.
+    airtime_by_sf: heapless::Vec<(u64, u32), { RF_METRICS_WINDOW_SF as usize }>,
+    current_sf: u64,
+}
+
+impl BusyPercentSampler {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record the TX airtime (ms) consumed in the given superframe.
+    pub fn record_tx_airtime(&mut self, superframe: u64, airtime_ms: u32) {
+        if superframe > self.current_sf {
+            self.current_sf = superframe;
+        }
+        // Fold repeat samples for the same superframe.
+        for entry in self.airtime_by_sf.iter_mut() {
+            if entry.0 == superframe {
+                entry.1 = entry.1.saturating_add(airtime_ms);
+                return;
+            }
+        }
+        // Evict the oldest window entry when full (rolling window: the
+        // oldest superframe is the one furthest below current).
+        if self.airtime_by_sf.len() == self.airtime_by_sf.capacity() {
+            if let Some(oldest_idx) = self
+                .airtime_by_sf
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, (sf, _))| *sf)
+                .map(|(i, _)| i)
+            {
+                let _ = self.airtime_by_sf.swap_remove(oldest_idx);
+            }
+        }
+        let _ = self.airtime_by_sf.push((superframe, airtime_ms));
+    }
+
+    /// BusyPercent over the rolling window (0..100).
+    ///
+    /// `slot_duration_ms` is the per-superframe slot budget the occupancy is
+    /// measured against (e.g. TDMA_SLOT_MS * slots_per_superframe). The
+    /// window is EXCLUSIVE of the oldest edge: superframes in
+    /// (current-32, current] are summed, so at most 32 distinct entries fit
+    /// the window — matching the sampler capacity exactly.
+    pub fn busy_percent(&mut self, slot_duration_ms: u32) -> u8 {
+        // Drop entries outside the exclusive window before summing.
+        // sf + WINDOW > current is underflow-safe: at current 0 the whole
+        // recorded range is retained (window is (-32, 0]).
+        self.airtime_by_sf
+            .retain(|(sf, _)| sf + u64::from(RF_METRICS_WINDOW_SF) > self.current_sf);
+        let total_ms: u64 = self
+            .airtime_by_sf
+            .iter()
+            .map(|(_, ms)| u64::from(*ms))
+            .sum();
+        if slot_duration_ms == 0 {
+            return 0;
+        }
+        let window_slots = u64::from(slot_duration_ms) * u64::from(RF_METRICS_WINDOW_SF);
+        let percent = total_ms.saturating_mul(100) / window_slots;
+        percent.min(100) as u8
+    }
+}
+
+/// Rolling-window peer density tracker (spec R-02a-117 / 2a.10.3).
+///
+/// Tracks the distinct link-layer peers heard within
+/// [`RF_METRICS_WINDOW_SF`] superframes and feeds their count into
+/// [`estimate_density`]. Peers expire when their last-heard superframe
+/// falls out of the window.
+/// Maximum tracked peers (bounded for no_std; matches the 255 cap the
+/// density formula can ever reach with headroom).
+const PEER_TRACKER_CAPACITY: usize = 256;
+
+#[derive(Debug, Clone)]
+pub struct PeerDensityTracker {
+    last_seen: heapless::LinearMap<[u8; 8], u64, PEER_TRACKER_CAPACITY>,
+    current_sf: u64,
+}
+
+impl Default for PeerDensityTracker {
+    fn default() -> Self {
+        Self {
+            last_seen: heapless::LinearMap::new(),
+            current_sf: 0,
+        }
+    }
+}
+
+impl PeerDensityTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record one peer heard in the given superframe.
+    pub fn record_peer(&mut self, iid: [u8; 8], superframe: u64) {
+        if superframe > self.current_sf {
+            self.current_sf = superframe;
+        }
+        // Drop the stalest entry (oldest last-heard superframe) when full
+        // (ponytail: O(n) scan over the bounded map; upgrade path: a proper
+        // LRU if capacity becomes pressure).
+        if self.last_seen.get(&iid).is_none() && self.last_seen.len() == PEER_TRACKER_CAPACITY {
+            if let Some(oldest) = self
+                .last_seen
+                .iter()
+                .min_by_key(|(_, seen)| *seen)
+                .map(|(k, _)| *k)
+            {
+                let _ = self.last_seen.remove(&oldest);
+            }
+        }
+        let _ = self.last_seen.insert(iid, superframe);
+    }
+
+    fn prune(&mut self) {
+        let window_start = self.current_sf.saturating_sub(RF_METRICS_WINDOW_SF as u64);
+        let expired: heapless::Vec<[u8; 8], PEER_TRACKER_CAPACITY> = self
+            .last_seen
+            .iter()
+            .filter(|(_, seen)| **seen < window_start)
+            .map(|(k, _)| *k)
+            .collect();
+        for iid in expired {
+            let _ = self.last_seen.remove(&iid);
+        }
+    }
+
+    /// Distinct peers inside the metrics window (prunes first).
+    pub fn peer_count(&mut self) -> usize {
+        self.prune();
+        self.last_seen.len()
+    }
+
+    /// Estimated density: peer count passed through the estimate_density
+    /// formula (loss/RSSI bonuses, u8 cap).
+    pub fn estimate_density(&mut self, loss_permille: u16, rssi_ema_dbm: i8) -> u8 {
+        let neighbors = self.peer_count().min(255) as u8;
+        estimate_density(neighbors, loss_permille, rssi_ema_dbm)
     }
 }
 
@@ -1040,6 +1192,78 @@ mod tests {
         // hash + 0xFFFFFFFF wraps to hash - 1
         let expected_diff = ((slot_max as i16 - slot_zero as i16) + 16) % 16;
         assert_eq!(expected_diff, 15);
+    }
+
+    #[test]
+    fn peer_tracker_counts_distinct_and_prunes_window() {
+        use crate::rf_health::PeerDensityTracker;
+        let mut t = PeerDensityTracker::new();
+        // Three distinct peers in superframe 1.
+        t.record_peer([1; 8], 1);
+        t.record_peer([2; 8], 1);
+        t.record_peer([3; 8], 1);
+        t.record_peer([1; 8], 2); // repeat: same peer, distinct only
+        assert_eq!(t.peer_count(), 3);
+
+        // Window slides past all of them: current 40, window start 8.
+        t.record_peer([9; 8], 40);
+        assert_eq!(t.peer_count(), 1);
+    }
+
+    #[test]
+    fn peer_tracker_density_matches_formula_vectors() {
+        use crate::rf_health::PeerDensityTracker;
+        let mut t = PeerDensityTracker::new();
+        for i in 0..5u8 {
+            t.record_peer([i; 8], 1);
+        }
+        // ccp16_load_balance density_estimate_basic: 5 neighbors, no bonuses.
+        assert_eq!(t.estimate_density(50, -70), 5);
+        // density_estimate_high_loss_bonus: 5 + 2.
+        assert_eq!(t.estimate_density(150, -70), 7);
+        // density_estimate_both_bonuses: 5 + 2 + 1.
+        assert_eq!(t.estimate_density(150, -100), 8);
+        // density_estimate_capped_at_255: needs >= 252 peers so the
+        // bonuses saturate the u8 cap.
+        for i in 0..253u8 {
+            t.record_peer([i, 0xEE, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66], 3);
+        }
+        assert_eq!(t.estimate_density(200, -100), 255);
+    }
+
+    #[test]
+    fn busy_percent_rolling_window_semantics() {
+        use crate::constants::TDMA_SLOT_MS;
+        use crate::rf_health::BusyPercentSampler;
+        let mut s = BusyPercentSampler::new();
+        // 2 slots' worth of TX inside one superframe: ~2/32 = 6.25% -> 6.
+        s.record_tx_airtime(0, TDMA_SLOT_MS * 2);
+        let pct = s.busy_percent(TDMA_SLOT_MS);
+        assert!(pct >= 6 && pct <= 7, "got {pct}");
+
+        // Window slide: all old entries drop, new occupancy ~0.
+        s.record_tx_airtime(100, 0);
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 0);
+
+        // Exclusive boundary: one slot's airtime at SF 32 = current: the
+        // (0, 32] window retains it -> 1/32 of the window budget = 3%.
+        let mut s = BusyPercentSampler::new();
+        s.record_tx_airtime(32, TDMA_SLOT_MS);
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 3);
+
+        // Saturation: full-window airtime -> 100.
+        let mut s = BusyPercentSampler::new();
+        for sf in 0..32u64 {
+            s.record_tx_airtime(sf, TDMA_SLOT_MS);
+        }
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 100);
+
+        // Over the budget clamps at 100.
+        s.record_tx_airtime(33, TDMA_SLOT_MS * 2);
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 100);
+
+        // Zero slot duration is safe (returns 0, no div-by-zero).
+        assert_eq!(s.busy_percent(0), 0);
     }
 
     #[test]

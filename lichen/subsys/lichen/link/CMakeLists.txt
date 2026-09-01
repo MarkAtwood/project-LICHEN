@@ -16,6 +16,7 @@ zephyr_library_sources(
   link_cca.c
   link_ctx.c
   replay.c
+  root_selection.c
   tx_queue.c
 )
 
@@ -38,6 +39,7 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_LINK_REPLAY_PERSIST
 
 zephyr_library_sources_ifdef(CONFIG_LICHEN_TDMA
   tdma.c
+  tdma_root_select.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_LICHEN_CCP_TIME_SYNC
