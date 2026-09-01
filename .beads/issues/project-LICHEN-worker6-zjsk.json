@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-zjsk",
   "title": "CCP-15: RF_METRICS_WINDOW_SF constant in all constant files (R-02a-133 slice of b7z9.29)",
   "description": "Smallest slice of b7z9.29 residue: R-02a-133 (MUST) metrics over rolling RF_METRICS_WINDOW_SF=32 superframes — the constant is absent from all constant files. Add: rust/lichen-core/src/constants.rs (RF_METRICS_WINDOW_SF: u32 = 32), C lichen/subsys/lichen/link/include/lichen/rf_health.h (LICHEN_RF_METRICS_WINDOW_SF 32u), python/src/lichen/ccp.py (RF_METRICS_WINDOW_SF = 32) — each with the spec citation (spec/02a 2a.10.4, docs/spec-coverage.md R-02a-133). Machinery (rolling window consumption) remains with the parent.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T18:06:31.465687952Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-01T18:06:31.465687952Z",
+  "updated_at": "2026-09-01T18:07:38.652666647Z",
+  "closed_at": "2026-09-01T18:07:38.652666647Z",
+  "close_reason": "Not reproducible — already landed on main: RF_METRICS_WINDOW_SF=32 exists in rust/lichen-core/src/constants.rs:102, is exported/imported in python ccp.py:25 with the rolling window consumption at ccp.py:149-162, and is cross-referenced in the rust doc comments. The C side's constant surface is the busy sampler landed in 9c6w (window_ms config consumed by lichen_rf_health_busy_*). Remaining R-02a-133 machinery (periodic re-invocation wiring) is tracked in the b7z9.29 parent residue.",
   "labels": [
     "ccp15",
     "zephyr"
