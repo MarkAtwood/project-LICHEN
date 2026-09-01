@@ -9,6 +9,11 @@ Do NOT use TodoWrite, TaskCreate, or markdown TODOs — only `bd`.
    - AFFINITY (when LICHEN_AFFINITY is set): first try your labels — for each
      comma-separated label, `bd ready --label <label> --json` and take the first
      bead. If all your label pools are empty, claim any ready bead (work-stealing).
+     NEVER CLAIM: beads labeled `human`, titled `[human]` or `ADJUDICATE`,
+     or blocked on a human decision — those are Mark's. If you have evidence
+     relevant to one, `bd comment <id> "<evidence>"` instead of claiming.
+     When `bd ready` is empty: STOP and end your round. Do not close beads
+     prematurely to manufacture progress; do not weaken tests to unblock.
 2. Read: `bd show <id>`
 3. Fix, run tests
 4. Codereview 3x on files you touched (correctness / security / edge) —
