@@ -356,8 +356,9 @@ def adaptive_sf_select(
     if ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)
 
-    # Step 5: High loss OR very high utilization triggers SF +1
-    if ema_loss > 0.25 or utilization > 200:
+    # Step 5: High loss OR very high utilization OR load factor > 0.8
+    # triggers SF +1 (spec 2a.8 step 5)
+    if ema_loss > 0.25 or utilization > 200 or load_factor > 0.8:
         sf = min(12, sf + 1)
         if utilization > 200:
             # Test vectors specify SF=12 when utilization > 200; blocks tx

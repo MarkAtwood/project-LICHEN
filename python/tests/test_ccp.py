@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from lichen.ccp import (
+    SFResult,
     BusyPercentSampler,
     PacketErrorPermilleTracker,
     PeerDensityTracker,
@@ -124,6 +125,44 @@ def test_select_channel_degenerate_channel_plans():
 
 
 # --- adaptive_sf_select tests ---
+
+
+def test_adaptive_sf_select_step5_load_factor_plus_one():
+    """Spec 2a.8 step 5: LoadFactor > 0.8 triggers SF +1 (no loss, no util).
+
+    b7z9.29.2: step 5 previously omitted the load-factor disjunct."""
+    # load 0.9 with baseline SF 10: +1 -> 11, floors hold at 11.
+    result = adaptive_sf_select(
+        assigned_sf=10,
+        density=5,
+        ema_snr=5.0,
+        ema_loss=0.0,
+        utilization=0,
+        load_factor=0.9,
+    )
+    assert result == SFResult(11, True)
+
+    # load 0.79 (below threshold): no step-5 bump, SF stays 10.
+    result = adaptive_sf_select(
+        assigned_sf=10,
+        density=5,
+        ema_snr=5.0,
+        ema_loss=0.0,
+        utilization=0,
+        load_factor=0.79,
+    )
+    assert result == SFResult(10, True)
+
+    # load 0.9 with baseline SF 12: +1 clamps at 12.
+    result = adaptive_sf_select(
+        assigned_sf=12,
+        density=5,
+        ema_snr=5.0,
+        ema_loss=0.0,
+        utilization=0,
+        load_factor=0.9,
+    )
+    assert result == SFResult(12, True)
 
 
 def _ccp16_cases():
