@@ -1,0 +1,4 @@
+{"id":"01a05cd0-009a-7af6-b75a-7d3acba0d1ca","issue_id":"project-LICHEN-worker6-7bhj","event_type":"created","actor":"opencode-worker-5","old_value":"","new_value":"","created_at":"2026-09-01T11:52:10.650719925Z"}
+{"id":"01a05cd0-009d-7b9c-9bad-4a34dff8e065","issue_id":"project-LICHEN-worker6-7bhj","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: rust","created_at":"2026-09-01T11:52:10.653762388Z"}
+{"id":"01a05cd0-00a0-792c-80f8-abfb61fdf39d","issue_id":"project-LICHEN-worker6-7bhj","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: rpl","created_at":"2026-09-01T11:52:10.656602938Z"}
+{"id":"01a05cd0-00a3-7611-b504-7535395dc73d","issue_id":"project-LICHEN-worker6-7bhj","event_type":"label_added","actor":"opencode-worker-5","comment":"Added label: spec-gap","created_at":"2026-09-01T11:52:10.659399753Z"}
