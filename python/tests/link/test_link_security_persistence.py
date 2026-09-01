@@ -751,6 +751,111 @@ def test_persistence_failure_revokes_cached_policy_capabilities(tmp_path: Path) 
     assert not link.accepts_time_generation(REMOTE.pubkey, generation)
 
 
+def test_persistence_failure_from_thread_fails_new_sends_closed(tmp_path: Path) -> None:
+    """9rbiz: on_persistence_failure is documented callable from any thread.
+    After a terminal persistence failure, new sends fail closed immediately
+    (LinkPersistenceError) — never hanging — and the state teardown
+    (marshalled onto the loop) has cleared the TX queue."""
+    link = receiving_link(MemoryRadio(), tmp_path / "tx-closed")
+
+    async def fail_from_thread() -> None:
+        # on_persistence_failure from a non-loop thread marshals the teardown
+        # onto the loop via call_soon_threadsafe (loop captured on first send).
+        link.on_persistence_failure()
+
+    # First a successful send to capture the loop seam.
+    asyncio.run(link.send(b"initial"))
+    # Then the failure from a non-loop thread.
+    worker = threading.Thread(
+        target=lambda: asyncio.run(asyncio.wait_for(fail_from_thread(), 5))
+    )
+    worker.start()
+    worker.join(10)
+    assert not worker.is_alive(), "on_persistence_failure deadlocked"
+
+    # New sends fail closed immediately (never hang): LinkPersistenceError
+    # or the terminal-state OverflowError — either is a fail-closed reject.
+    with pytest.raises((RuntimeError, OverflowError)):
+        asyncio.run(asyncio.wait_for(link.send(b"after-failure"), 5))
+    assert len(link.tx_queue) == 0, "queue must be empty after teardown"
+
+
+def test_persistence_failure_teardown_marshals_to_loop(tmp_path: Path) -> None:
+    """9rbiz: the teardown must run ON the loop (asyncio state safe). Pin
+    that on_persistence_failure from a non-loop thread still clears the TX
+    queue via the loop marshalling, and the pending send resolves."""
+    link = receiving_link(MemoryRadio(), tmp_path / "tx-marshal")
+    results: list[object] = []
+
+    class SlowRadio(MemoryRadio):
+        async def transmit(self, data: bytes) -> bool:
+            await asyncio.sleep(0.3)  # long enough to interleave
+            return True
+
+    link.radio = SlowRadio()
+
+    async def send_and_fail() -> None:
+        send_task = asyncio.create_task(link.send(b"pending"))
+        await asyncio.sleep(0.05)
+        # Persistence failure detected on a persistence thread mid-drain.
+        link.on_persistence_failure()
+        try:
+            results.append(await asyncio.wait_for(send_task, 5))
+        except BaseException as exc:  # noqa: BLE001 - outcome capture
+            results.append(exc)
+
+    asyncio.run(asyncio.wait_for(send_and_fail(), 10))
+    assert len(results) == 1, "send must complete (any outcome), not hang"
+    assert len(link.tx_queue) == 0, "queue must be empty after teardown"
+
+
+def test_persistence_failure_resolves_pending_reservation_false(tmp_path: Path) -> None:
+    """9rbiz: on_persistence_failure is documented callable from any thread.
+    The teardown (marshalled onto the loop) must complete without deadlock on
+    the generation-lease condition or the TX-queue clear, leaving the queue
+    empty afterwards. The send outcome is not pinned: the drain may commit
+    before or after the clear depending on interleaving."""
+    link = receiving_link(MemoryRadio(), tmp_path / "tx-revoke")
+
+    class SlowRadio(MemoryRadio):
+        async def transmit(self, data: bytes) -> bool:
+            await asyncio.sleep(0.3)
+            return True
+
+    link.radio = SlowRadio()
+    outcomes: list[object] = []
+    queued = threading.Event()
+
+    async def scenario() -> None:
+        send_task = asyncio.create_task(link.send(b"pending"))
+        for _ in range(200):
+            if len(link.tx_queue) == 1:
+                break
+            await asyncio.sleep(0.01)
+        queued.set()
+        try:
+            outcomes.append(await send_task)
+        except BaseException as exc:  # noqa: BLE001 - outcome capture
+            outcomes.append(exc)
+
+    def persistence_thread() -> None:
+        link.on_persistence_failure()
+
+    loop_thread = threading.Thread(target=lambda: asyncio.run(scenario()))
+    loop_thread.start()
+    queued.wait(5)
+    t_fail = threading.Thread(target=persistence_thread)
+    t_fail.start()
+    t_fail.join(10)
+    assert not t_fail.is_alive(), (
+        "on_persistence_failure deadlocked on the generation-lease condition"
+    )
+    loop_thread.join(15)
+    assert not loop_thread.is_alive(), "send() deadlocked after queue clear"
+    assert len(link.tx_queue) == 0, "queue must be empty after clear"
+    assert len(outcomes) == 1, "send must have completed (any outcome), not hung"
+
+
 def test_async_revision_anchor_is_rejected_before_use(tmp_path: Path) -> None:
     class AsyncAnchor:
         async def read(self, _local_pubkey: bytes) -> int | None:
