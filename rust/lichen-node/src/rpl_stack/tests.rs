@@ -24,8 +24,8 @@ use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
-use lichen_oscore::{Context, ContextStateStore, SenderStateStore};
 use lichen_oscore::types::{ContextId, SenderSequenceState};
+use lichen_oscore::{Context, ContextStateStore, SenderStateStore};
 use lichen_rpl::message::{DaoOriginSignature, Dio, SignedDaoEnvelope};
 use lichen_rpl::routing::{
     DaoAdmissionState, DaoPersistentOpenError, DaoProvisionError, DaoTxError, DaoTxState,
@@ -80,10 +80,7 @@ struct TestOscoreStore(Option<(ContextId, SenderSequenceState)>);
 impl SenderStateStore for TestOscoreStore {
     type Error = ();
 
-    fn load(
-        &mut self,
-        context_id: &ContextId,
-    ) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(Some(
             self.0
                 .filter(|(stored_context, _)| stored_context == context_id)
