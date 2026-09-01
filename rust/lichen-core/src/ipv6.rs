@@ -21,6 +21,7 @@ pub mod next_header {
     pub const HOP_BY_HOP: u8 = 0;
     pub const TCP: u8 = 6;
     pub const UDP: u8 = 17;
+    /// IPv6-in-IPv6 encapsulation (RFC 2473 / RFC 6554 tunneling).
     pub const IPV6_IN_IPV6: u8 = 41;
     pub const ROUTING: u8 = 43;
     pub const FRAGMENT: u8 = 44;
