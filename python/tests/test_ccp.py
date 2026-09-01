@@ -363,7 +363,9 @@ def test_ccp16_load_balance_channel_selection(name: str, vector: dict) -> None:
     n_channels = inp["n_channels"]
 
     channel = select_channel(eui64, epoch, density, n_channels)
-    assert channel == out["channel"], f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
+    assert channel == out["channel"], (
+        f"{name}: channel mismatch (got {channel}, "
+        f"expected {out['channel']})")
 
 
 def _ccp16_load_balance_slot_cases():
@@ -450,7 +452,11 @@ def test_ccp16_load_balance_synchronized_hop(name: str, vector: dict) -> None:
         n_channels=inp.get("n_channels", 8),
     )
 
-    assert channel == out["channel"], f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
+    assert channel == out["channel"], (
+
+        f"{name}: channel mismatch (got {channel}, "
+
+        f"expected {out['channel']})")
     assert sf == out["sf"], f"{name}: SF mismatch (got {sf}, expected {out['sf']})"
     assert tx_allowed == out["tx_allowed"], f"{name}: tx_allowed mismatch"
 
@@ -473,7 +479,11 @@ def test_ccp16_load_balance_vector_coverage():
         cat = v.get("category", "unknown")
         category_counts[cat] = category_counts.get(cat, 0) + 1
 
-    assert category_counts.get("channel_selection", 0) >= 5, "Need at least 5 channel selection vectors"
-    assert category_counts.get("tdma_slot", 0) >= 5, "Need at least 5 TDMA slot vectors"
-    assert category_counts.get("adaptive_sf", 0) >= 10, "Need at least 10 adaptive SF vectors"
-    assert category_counts.get("density_estimate", 0) >= 5, "Need at least 5 density estimate vectors"
+    assert category_counts.get("channel_selection", 0) >= 5, (
+        "Need at least 5 channel selection vectors")
+    assert category_counts.get("tdma_slot", 0) >= 5, (
+        "Need at least 5 TDMA slot vectors")
+    assert category_counts.get("adaptive_sf", 0) >= 10, (
+        "Need at least 10 adaptive SF vectors")
+    assert category_counts.get("density_estimate", 0) >= 5, (
+        "Need at least 5 density estimate vectors")
