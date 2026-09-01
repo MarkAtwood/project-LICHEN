@@ -35,6 +35,9 @@
 #include <lichen/coap_server.h>
 #include <lichen/senml.h>
 #include <lichen/sos_alert.h>
+#include <lichen/sos_origin.h>
+#include <lichen/schnorr48.h>
+#include <lichen/coap_keys.h>
 #include <lichen/oscore.h>
 #include <lichen/coap_oscore.h>
 
@@ -448,32 +451,81 @@ COAP_RESOURCE_DEFINE(lichen_msg_inbox, lichen_coap_server, {
  * verify-before-rebroadcast) and rate limiting are wired by beads
  * l1qw.25.2/l1qw.25.3 before this acceptance point processes alerts.
  */
+/* Hex digit -> value, 0xFF on invalid (permissive parse of the node
+ * string produced by the SOS codec). */
+static uint8_t hex_nibble(char c)
+{
+	if (c >= '0' && c <= '9') return (uint8_t)(c - '0');
+	if (c >= 'a' && c <= 'f') return (uint8_t)(c - 'a' + 10);
+	if (c >= 'A' && c <= 'F') return (uint8_t)(c - 'A' + 10);
+	return 0xFF;
+}
+
+/* Extract the 8-byte node IID from the alert's hex node string. */
+static void alert_node_iid(const struct sos_alert *alert, uint8_t out[8])
+{
+	for (size_t i = 0; i < 8; i++) {
+		char hi = alert->node[2 * i];
+		char lo = alert->node[2 * i + 1];
+		out[i] = (uint8_t)((hex_nibble(hi) << 4) | hex_nibble(lo));
+	}
+}
+
 static int sos_post(struct coap_resource *resource,
 		    struct coap_packet *request,
 		    struct sockaddr *addr, socklen_t addr_len)
 {
-	uint8_t payload[LICHEN_COAP_SERVER_MAX_PAYLOAD];
 	uint16_t payload_len;
 	struct sos_alert alert;
+	const uint8_t *payload;
 	int ret;
 
-	ARG_UNUSED(resource);
-
-	payload_len = 0;
-	payload[0] = 0U;
-	ret = coap_packet_get_payload(request, &payload, &payload_len);
-	if (ret < 0 || payload_len == 0U) {
+	payload = coap_packet_get_payload(request, &payload_len);
+	if (payload == NULL || payload_len == 0U) {
 		return COAP_RESPONSE_CODE_BAD_REQUEST;
 	}
 
-	ret = sos_alert_from_cbor(payload, payload_len, &alert);
+	/* R-12-034/035 + sos_signature.json: the frame carries the origin
+	 * signature (8-byte big-endian sequence + 48-byte Schnorr48) after
+	 * the CBOR payload; unsigned or truncated frames are silently
+	 * dropped (no error response). */
+	if (payload_len <= SOS_ORIGIN_SIGNATURE_LEN) {
+		return -ENOENT;
+	}
+	size_t cbor_len = payload_len - SOS_ORIGIN_SIGNATURE_LEN;
+
+	struct sos_origin_signature origin_sig;
+	if (sos_origin_signature_parse(&origin_sig, payload + cbor_len,
+				       SOS_ORIGIN_SIGNATURE_LEN) != 0) {
+		return -ENOENT; /* silent drop: truncated signature */
+	}
+
+	ret = sos_alert_from_cbor(payload, cbor_len, &alert);
 	if (ret != 0) {
 		LOG_WRN("SOS alert parse failed: %d", ret);
 		return COAP_RESPONSE_CODE_BAD_REQUEST;
 	}
 
-	/* Acceptance point: l1qw.25.2 (Schnorr48 verify) and l1qw.25.3
-	 * (sos_ratelimit_check) gate rebroadcast before processing. */
+	/* Resolve the sender's pinned key (TOFU store). sos_signature.json
+	 * sos_unknown_pubkey_tofu: pinning happens in the key-store path, so
+	 * an unknown pubkey is silently dropped at this layer. The alert
+	 * node field carries the originating node IID. */
+	struct lichen_key_entry key_entry;
+	if (lichen_key_store_get(alert_node_iid(&alert), &key_entry) != 0) {
+		return -ENOENT; /* silent drop: unknown pubkey */
+	}
+
+	/* Origin signature verify (R-12-034: invalid -> silent drop). The
+	 * origin IPv6 is the node IID in the LICHEN native 02xx profile. */
+	uint8_t origin_ipv6[16] = { 0x02 };
+	memcpy(&origin_ipv6[8], alert_node_iid(&alert), 8);
+	if (!sos_origin_verify(key_entry.pubkey, origin_ipv6, payload, cbor_len,
+			       &origin_sig)) {
+		return -ENOENT; /* silent drop: bad signature */
+	}
+
+	/* Acceptance point: l1qw.25.3 (sos_ratelimit_check) gates
+	 * rebroadcast before processing. */
 
 	return lichen_coap_respond(resource, request, addr, addr_len,
 				   COAP_RESPONSE_CODE_CHANGED,
