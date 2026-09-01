@@ -105,16 +105,18 @@ static int diag_get(struct coap_resource *resource,
 			ok = false;
 			break;
 		}
-		ok = zcbor_map_start_encode(zs, 5) &&
+		ok = zcbor_map_start_encode(zs, 4) &&
 		     zcbor_tstr_put_lit(zs, "ts") &&
 		     zcbor_uint64_put(zs, ev.timestamp_ms) &&
 		     zcbor_tstr_put_lit(zs, "sub") &&
 		     zcbor_uint32_put(zs, ev.subsystem) &&
 		     zcbor_tstr_put_lit(zs, "code") &&
 		     zcbor_uint32_put(zs, ev.event_code) &&
-		     zcbor_tstr_put_lit(zs, "detail") &&
-		     zcbor_uint32_put(zs, ev.detail) &&
-		     zcbor_map_end_encode(zs, 5);
+	     zcbor_tstr_put_lit(zs, "detail") &&
+	     zcbor_uint32_put(zs, ev.detail) &&
+	     /* Exactly 4 pairs are encoded (ts/sub/code/detail); a count of
+	      * 5 broke at end-encode. If "msg" is added, bump both to 5. */
+	     zcbor_map_end_encode(zs, 4);
 	}
 	if (ok) {
 		ok = zcbor_list_end_encode(zs, events);
