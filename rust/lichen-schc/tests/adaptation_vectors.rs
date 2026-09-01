@@ -1156,14 +1156,10 @@ fn test_schc_adaptation_vectors() {
                 let mut decoded = vec![0u8; wire.len()];
                 let mut rx_input = vec![0xffu8];
                 rx_input.extend_from_slice(&wire);
-                let decoded_len = lichen_schc::decode_rule255(
-                    &rx_input,
-                    &mut decoded,
-                    usize::MAX,
-                )
-                .unwrap_or_else(|error| {
-                    panic!("{}: decode must accept byte-preserving: {error:?}", name)
-                });
+                let decoded_len = lichen_schc::decode_rule255(&rx_input, &mut decoded, usize::MAX)
+                    .unwrap_or_else(|error| {
+                        panic!("{}: decode must accept byte-preserving: {error:?}", name)
+                    });
                 assert_eq!(&decoded[..decoded_len], &wire, "{}: roundtrip", name);
             }
             "rule255_endpoint_policy" => {

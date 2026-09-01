@@ -3,7 +3,9 @@
 
 //! Production OSCORE -> SCHC Rule 5 -> OSCORE integration coverage.
 
-use lichen_oscore::{Context, ContextId, OscoreError, SenderSequenceState, ContextStateStore, RecipientReplayState};
+use lichen_oscore::{
+    Context, ContextId, ContextStateStore, OscoreError, RecipientReplayState, SenderSequenceState,
+};
 use lichen_schc::{compress, decompress, SchcError};
 use serde::Deserialize;
 use std::fs;
@@ -42,8 +44,19 @@ impl ContextStateStore for Store {
         Ok(true)
     }
 
-    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
-    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+    fn load_recipient(
+        &mut self,
+        _: &ContextId,
+    ) -> Result<Option<RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+    fn save_recipient(
+        &mut self,
+        _: &ContextId,
+        _: &RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]
