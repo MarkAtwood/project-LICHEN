@@ -768,6 +768,16 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         .current().provision_status
         is ProvisionEpochStatus.PERSISTENCE_FAILED
     )
+    # Forward gate: poisoning must also make every subsequent install and
+    # clear raise (the qzxv core property - poisoned state never advances).
+    with pytest.raises(
+        RuntimeError, match="provision verifier is poisoned after persistence failure"
+    ):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
+    with pytest.raises(
+        RuntimeError, match="provision verifier is poisoned after persistence failure"
+    ):
+        verifier.clear(admin, reason="retry")
 
 
 @pytest.mark.asyncio
@@ -800,6 +810,15 @@ async def test_provision_clear_hook_rejects_scheduled_awaitable(kind: str) -> No
     # Poisoned fail-closed: the ambiguous write revokes all live authority.
     assert verifier.cleared
     assert not verifier.accepts(metadata)
+    # Forward gate: every subsequent install and clear must raise.
+    with pytest.raises(
+        RuntimeError, match="provision verifier is poisoned after persistence failure"
+    ):
+        verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 2, FLOOR + 1).encode())
+    with pytest.raises(
+        RuntimeError, match="provision verifier is poisoned after persistence failure"
+    ):
+        verifier.clear(admin, reason="retry")
 
 
 def test_provision_concurrent_installs_cannot_regress_rollback_state() -> None:
