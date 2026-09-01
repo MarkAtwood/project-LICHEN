@@ -1,0 +1,7 @@
+{
+  "id": "1788261415066756678-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.67",
+  "author": "opencode-worker-2",
+  "text": "Worker-2 probe (released per TIMEBOX, context budget): the Rust reference is complete and well-structured — RuleVersionFailureTracker (rust/lichen-schc/src/context.rs:43-108) with record_failure (threshold notification exactly once per run via notified flag, capacity_events counter on full), record_success (clear), retire, and fail-closed no-eviction semantics. The C port needs: (1) a bounded per-signer tracker in lichen/subsys/schc/ (new files or added to schc.h) with the same API surface; (2) integration into the production decompression ingress (lichen/subsys/lichen/link/lichen_link_rx.c -\u003e lichen_schc_decompress) keyed by the authenticated link signer's 32-byte pubkey; (3) threshold notification (exactly once per consecutive run); (4) fail-closed no-eviction when the bounded source table is full; (5) host CTest with: empty-\u003eMissing-equivalent, record_failure to threshold (notify exactly once), record_success clears, fail-closed on full, retire. Recommend the next worker model the C struct directly on the Rust FailureTracker (source [u8;32], count u16 saturating, notified bool) — it is a clean, small port. The integration into lichen_link_rx.c is the harder half (need to identify the authenticated signer's pubkey at the SCHC decompression call site). Discovered from project-LICHEN-worker6-b7z9.67.",
+  "created_at": "2026-09-01T11:16:55.066756678Z"
+}
