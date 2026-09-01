@@ -11,6 +11,7 @@ import pytest
 
 from lichen.ccp import (
     BusyPercentSampler,
+    PacketErrorPermilleTracker,
     PeerDensityTracker,
     adaptive_sf_select,
     ema_update,
@@ -530,3 +531,40 @@ class TestBusyPercentSampler:
         s.record_tx_airtime(RF_METRICS_WINDOW_SF + 1, TDMA_SLOT_MS * 2)
         assert s.busy_percent(TDMA_SLOT_MS) == 100
         assert s.busy_percent(0) == 0
+
+
+class TestPacketErrorPermilleTracker:
+    """PacketErrorPermille tracker (b7z9.29.4, R-02a-133)."""
+
+    def test_rolling_window_permille(self) -> None:
+        t = PacketErrorPermilleTracker()
+        t.record_attempt(0, False)
+        t.record_attempt(0, False)
+        t.record_attempt(0, True)
+        t.record_attempt(1, False)
+        t.record_attempt(1, True)
+        t.record_attempt(1, True)
+        for _ in range(4):
+            t.record_attempt(2, False)
+        assert t.packet_error_permille() == 300
+
+        # Window slide: SF 100 (success) retained at current 100
+        # (1 attempt, 0 failed) -> 0 via the division path.
+        t.record_attempt(100, False)
+        assert t.packet_error_permille() == 0
+
+        # Empty-window branch: fresh tracker -> 0 via the early return.
+        assert PacketErrorPermilleTracker().packet_error_permille() == 0
+
+    def test_boundary_and_all_failure(self) -> None:
+        t = PacketErrorPermilleTracker()
+        t.record_attempt(0, False)
+        t.record_attempt(100, False)
+        t.record_attempt(131, True)
+        # Window at current=131 retains sf > 99: SF 100 (success) and
+        # SF 131 (fail) -> 1 fail of 2 -> 500.
+        assert t.packet_error_permille() == 500
+        t.record_attempt(132, True)
+        # current=132: SF 100 drops (100+32=132 > 132 false), leaving SF 131
+        # and SF 132 (both failures) -> 2 fails of 2 -> 1000.
+        assert t.packet_error_permille() == 1000

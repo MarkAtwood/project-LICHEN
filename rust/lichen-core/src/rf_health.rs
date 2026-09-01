@@ -212,6 +212,82 @@ impl BusyPercentSampler {
     }
 }
 
+/// Rolling-window PacketErrorPermille tracker (spec R-02a-133 / 2a.10.3).
+///
+/// Tracks TX failures vs total TX attempts per superframe inside the
+/// [`RF_METRICS_WINDOW_SF`] rolling window and reports
+/// `failures / total * 1000`. Feeds
+/// [`RfHealthMetrics::interference_score_tenths`](RfHealthMetrics::interference_score_tenths)
+/// via the existing loss-rate consumers.
+#[derive(Debug, Clone, Default)]
+pub struct PacketErrorPermilleTracker {
+    /// Per-superframe (tx_total, tx_failed) counts in the window.
+    by_sf: heapless::Vec<(u64, u32, u32), { RF_METRICS_WINDOW_SF as usize }>,
+    current_sf: u64,
+}
+
+impl PacketErrorPermilleTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record one TX attempt in the given superframe (failed = true when
+    /// the transmission was not acknowledged).
+    pub fn record_attempt(&mut self, superframe: u64, failed: bool) {
+        if superframe > self.current_sf {
+            self.current_sf = superframe;
+        }
+        // Late records already outside the window are dropped without
+        // evicting in-window entries (Python dict semantics: stale keys
+        // are simply purged at query time, never displacing fresh ones).
+        if self.by_sf.len() == self.by_sf.capacity()
+            && !self.by_sf.iter().any(|(sf, _, _)| *sf == superframe)
+            && superframe + u64::from(RF_METRICS_WINDOW_SF) <= self.current_sf
+        {
+            return;
+        }
+        for entry in self.by_sf.iter_mut() {
+            if entry.0 == superframe {
+                entry.1 = entry.1.saturating_add(1);
+                if failed {
+                    entry.2 = entry.2.saturating_add(1);
+                }
+                return;
+            }
+        }
+        if self.by_sf.len() == self.by_sf.capacity() {
+            if let Some(oldest_idx) = self
+                .by_sf
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, (sf, _, _))| *sf)
+                .map(|(i, _)| i)
+            {
+                let _ = self.by_sf.swap_remove(oldest_idx);
+            }
+        }
+        let _ = self.by_sf.push((superframe, 1, u32::from(failed)));
+    }
+
+    /// PacketErrorPermille over the rolling window: (failures/total)*1000.
+    /// Returns 0 when no attempts are in the window (0% of nothing).
+    pub fn packet_error_permille(&mut self) -> u16 {
+        // Drop entries outside the exclusive window (underflow-safe).
+        self.by_sf
+            .retain(|(sf, _, _)| sf + u64::from(RF_METRICS_WINDOW_SF) > self.current_sf);
+        let mut total: u64 = 0;
+        let mut failed: u64 = 0;
+        for (_, t, fails) in self.by_sf.iter() {
+            total += u64::from(*t);
+            failed += u64::from(*fails);
+        }
+        if total == 0 {
+            return 0;
+        }
+        u16::try_from(failed.saturating_mul(1000) / total).unwrap_or(1000)
+    }
+}
+
 /// Rolling-window peer density tracker (spec R-02a-117 / 2a.10.3).
 ///
 /// Tracks the distinct link-layer peers heard within
@@ -1172,6 +1248,42 @@ mod tests {
 
         // Zero slot duration is safe (returns 0, no div-by-zero).
         assert_eq!(s.busy_percent(0), 0);
+    }
+
+    #[test]
+    fn packet_error_permille_rolling_window() {
+        use crate::rf_health::PacketErrorPermilleTracker;
+        let mut t = PacketErrorPermilleTracker::new();
+        // 10 attempts across three superframes, 3 failures -> 300 permille.
+        t.record_attempt(0, false);
+        t.record_attempt(0, false);
+        t.record_attempt(0, true);
+        t.record_attempt(1, false);
+        t.record_attempt(1, true);
+        t.record_attempt(1, true);
+        for _ in 0..4 {
+            t.record_attempt(2, false);
+        }
+        assert_eq!(t.packet_error_permille(), 300);
+
+        // Window slide past both: SF 100 (success) retained at current 100
+        // (1 attempt of 1, 0 failed) -> 0 via the division path.
+        t.record_attempt(100, false);
+        assert_eq!(t.packet_error_permille(), 0);
+
+        // Empty-window branch: fresh tracker -> 0 via the early return.
+        let mut empty = PacketErrorPermilleTracker::new();
+        assert_eq!(empty.packet_error_permille(), 0);
+
+        // Boundary at current 131: SF 100 (success) is still retained
+        // (100+32=132 > 131) -> 1 fail of 2 attempts -> 500.
+        t.record_attempt(131, true);
+        assert_eq!(t.packet_error_permille(), 500);
+
+        // At current 132: SF 100 drops out (100+32=132 > 132 is false),
+        // leaving SF 131 and SF 132 (both failures) -> 2 fails of 2 -> 1000.
+        t.record_attempt(132, true);
+        assert_eq!(t.packet_error_permille(), 1000);
     }
 
     #[test]
