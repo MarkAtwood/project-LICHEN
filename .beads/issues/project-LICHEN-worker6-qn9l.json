@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-qn9l",
+  "title": "Rust: ccp16-desync.json vector consumer + R-02a-079 FSM conformance tests (slice of b7z9.25)",
+  "description": "Smallest Rust slice of b7z9.25 (decompose-first): no Rust consumer exists for test/vectors/ccp16-desync.json (only python/tests/test_ccp_sync_vector_consumers.py:290-386). Add a Rust consumer test in lichen-node (or lichen-core where the multi_instance/sfn FSMs live) driving the desync_on_sfn_wrap, multi_root_version_conflict_desync, excessive_clock_drift_desync, and desync_recovery_beacon_revalidate cases against lichen-rpl::multi_instance and the desync FSM, matching the python DesyncFSM oracle. C consumer already landed (lichen/tests/desync_fsm, bead b7z9.12.5).",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T16:45:06.966973183Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T16:45:49.998448333Z",
+  "started_at": "2026-09-01T16:45:49.998448333Z",
+  "lease_expires_at": "2026-09-01T16:50:49.998448333Z",
+  "heartbeat_at": "2026-09-01T16:45:49.998448333Z",
+  "labels": [
+    "rust",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qn9l",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.25",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T16:45:07.09026929Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

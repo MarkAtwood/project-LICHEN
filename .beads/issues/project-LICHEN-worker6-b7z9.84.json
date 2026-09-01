@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.84",
+  "title": "[spec-gap][R-06-215] Persisted OSCORE state not authenticated (and unversioned in Python)",
+  "description": "spec/06-security.md §15.3: 'Implementations MUST persist this mutable state in a versioned, authenticated record bound to the exact Security Context, including its algorithms, Sender ID, Recipient ID, ID Context, and derived key/IV identity.'\n\nEvidence (sweep 2026-09-01, docs/spec-coverage/06-security-part2.md):\n- C: versioned OK (oscore_persist.c:12 OSCORE_PERSIST_MAGIC, :170-171 FORMAT_VERSION, validated :204-205) and context-bound OK (record_id_derive, oscore_ctx.c:368-378) but NOT authenticated — no MAC/checksum over the serialized state.\n- Python: sqlite_store.py persists sender seq + replay window (:262, :339-342) but no record versioning or authentication found.\n- Rust: ContextStateStore CAS + save_atomic_with_floor (rust/lichen-gateway/src/gateway.rs:1072,1185) closest to the requirement; record-level versioning/authentication is store-implementation-defined.\n\nhuman-only: oscore internals have the human-only edit bar; do not plan an agent fix. Note the repo threat model is radio-adversary-only, so flash tampering may be argued out of scope — that is mark's call (weaken spec text or add authentication).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T16:48:35.114225462Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T16:48:35.114225462Z",
+  "labels": [
+    "oscore",
+    "spec-gap",
+    "human-only"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.84",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T16:48:35.257248379Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
