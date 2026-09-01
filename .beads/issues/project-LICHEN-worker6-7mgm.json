@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-7mgm",
+  "title": "Vectors: DTN S-flag/HBH expiry wire format (spec 05-routing 9.8, Type=0x03)",
+  "description": "Remaining verifiable slice of b7z9.8. The C implementation (router.c IPV6_HBH_OPT_DTN 0x03, data len 5, S flag 0x80, expiry u32 BE) and the wall-clock fail-open wiring (coap_dtn.c dtn_wall_clock) landed; Rust and Python consumers are absent (separate parity beads). Create test/vectors/dtn_sflag_hbh.json — spec-derived independent oracle from spec/05-routing.md 9.8 (option layout, S flag 0x80, reserved-ignored-on-receive, absolute expiry u32 BE, clockless fail-open MUST) — plus schema validation via python/tests/test_vectors.py. C/Rust/Python consumers are follow-ups.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T07:16:04.497658885Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T07:16:34.925605721Z",
+  "started_at": "2026-09-01T07:16:34.925605721Z",
+  "lease_expires_at": "2026-09-01T07:21:34.925605721Z",
+  "heartbeat_at": "2026-09-01T07:16:34.925605721Z",
+  "labels": [
+    "schc",
+    "networking",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7mgm",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T07:16:04.659383769Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
