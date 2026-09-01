@@ -410,7 +410,7 @@ impl SlotClaimPayload {
     /// Deterministic CBOR map, integer keys in ascending order (RFC 8949
     /// 4.2.1); byte-identical to Python `encode_claim_canonical` (cbor2
     /// canonical=True).
-    fn encode_canonical(&self) -> Result<Vec<u8>, SlotError> {
+    pub(crate) fn encode_canonical(&self) -> Result<Vec<u8>, SlotError> {
         let malformed = |_| SlotError::MalformedClaim;
         let mut buf = vec![0u8; 9 * self.slots.len() + 64];
         let len = {
@@ -449,7 +449,7 @@ impl SlotClaimPayload {
     /// SHA-256 over CBOR(Sig_structure) — the GCP-6.5 signature input:
     /// Sig_structure = ["Signature1", protected, h'', payload] (RFC 9052
     /// 4.4) with the shared `{1: -65537}` protected header.
-    fn cose_sig_digest(&self) -> Result<[u8; 32], SlotError> {
+    pub(crate) fn cose_sig_digest(&self) -> Result<[u8; 32], SlotError> {
         let payload = self.encode_canonical()?;
         let malformed = |_| SlotError::MalformedClaim;
         let mut input = vec![0u8; payload.len() + 32];
@@ -643,6 +643,14 @@ impl RawSlotClaim {
 
     pub fn claim_sequence(&self) -> u32 {
         self.claim_sequence
+    }
+
+    pub fn expiry(&self) -> u64 {
+        self.expiry
+    }
+
+    pub fn ordinal(&self) -> Option<u64> {
+        self.ordinal
     }
 }
 
