@@ -701,7 +701,7 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
  * MUST be @p origin's own canonical /128 or an exact prefix delegation to
  * @p origin (lichen_rpl_prefix_delegate(), spec/05-routing.md 8.7.1-8.7.2);
  * a foreign prefix is rejected before any route or snapshot mutation. Passing
- * @p origin as NULL or @p origin_authenticated as false fails closed: the
+ * @p origin as NULL or @p origin_pubkey as NULL fails closed: the
  * DAO is rejected without mutating routing state.
  *
  * @note Root processing fails closed unless caller-owned root state was bound
@@ -712,14 +712,17 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
  * @param len       Length of DAO bytes
  * @param now       Current timestamp for lifetime tracking
  * @param origin    Verified DAO origin address (16 bytes), NULL if unknown
- * @param origin_authenticated True once the caller authenticated the origin
+ * @param origin_pubkey 32-byte pinned public key of @p origin (from
+ *        lichen_announce_get_pinned_pubkey()), NULL if not pinned. The DAO
+ *        Origin Signature (0x12) is verified against this key; NULL fails
+ *        closed.
  * @return true if a route was installed, false otherwise
  */
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull dm,
 					const uint8_t *_Nonnull dao_bytes, size_t len,
 					uint32_t now,
 					const uint8_t *_Nullable origin,
-					bool origin_authenticated);
+					const uint8_t *_Nullable origin_pubkey);
 
 /**
  * Process a DAO and report rejection, mutation, or exact idempotent replay.
@@ -729,7 +732,7 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull 
  * Source Address and every RPL Target MUST be its own canonical /128 or an
  * exact prefix delegation to it (spec/05-routing.md 8.7); foreign prefixes
  * are rejected before any mutation, and a NULL @p origin or false
- * @p origin_authenticated fails closed. This blocking API is
+ * @p origin_pubkey fails closed. This blocking API is
  * thread-context only and MUST NOT be called from an ISR.
  *
  * If ack_buf is non-NULL and ack_buf_len >= 20, and the DAO has the ACK
@@ -740,7 +743,7 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *_Nonnull 
 enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	struct lichen_rpl_dao_manager *_Nonnull dm,
 	const uint8_t *_Nonnull dao_bytes, size_t len, uint32_t now,
-	const uint8_t *_Nullable origin, bool origin_authenticated,
+	const uint8_t *_Nullable origin, const uint8_t *_Nullable origin_pubkey,
 	uint8_t *_Nullable ack_buf, size_t ack_buf_len);
 
 /**

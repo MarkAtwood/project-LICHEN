@@ -24,6 +24,8 @@ pub mod next_header {
     pub const IPV6_IN_IPV6: u8 = 41;
     pub const ROUTING: u8 = 43;
     pub const FRAGMENT: u8 = 44;
+    /// IPv6-in-IPv6 encapsulation (RFC 2473 / RFC 6554 tunneling).
+    pub const IPV6_IN_IPV6: u8 = 41;
     pub const ICMPV6: u8 = 58;
     pub const NO_NEXT: u8 = 59;
     pub const DEST_OPTIONS: u8 = 60;

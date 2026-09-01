@@ -4,6 +4,23 @@
 //!
 //! DTX2, DRX2, and DAD1 are provisional, unshipped scope-bound formats. There
 //! is intentionally no migration between format versions.
+//!
+//! # Security Boundary: corruption detection, not tamper resistance
+//!
+//! Slot integrity for all three formats is the bare CRC-32 of
+//! `lichen_hal::storage`: it detects corruption only, NOT tampering. An
+//! attacker with flash-write access can roll back both slots, delete the
+//! newer slot so the older generation is opened, or forge a minimal record
+//! (origin sequence floor 1) with a recomputed CRC; `DaoManager::open_root`
+//! would then trust the forged generation as the origin high-water mark, and
+//! replay checks would accept captured signature-valid DAOs as fresh.
+//!
+//! This is bounded: the same flash-write capability is already total
+//! compromise (identity keys live in the same storage), and these formats are
+//! provisional and unshipped. The anti-rollback anchor is physical possession
+//! of the flash. Defense-in-depth future work, intentionally not implemented
+//! here: a device-key MAC over records plus an independent monotonic NVS
+//! counter outside the record itself.
 
 #[cfg(feature = "std")]
 use std::{

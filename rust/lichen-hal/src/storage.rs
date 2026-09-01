@@ -4,6 +4,28 @@
 //! - Identity seed (32 bytes) → derives keypair on load
 //! - Peer table (pubkeys for signature verification)
 //! - Link layer sequence numbers (for replay protection continuity)
+//!
+//! # Security Boundary: corruption detection, not tamper resistance
+//!
+//! The redundant-slot framing below ([`open_redundant`], [`update_redundant`])
+//! protects slot integrity with a bare CRC-32. That detects corruption only;
+//! it provides NO tamper resistance. Anyone with flash-write access can
+//! (a) roll back both slots to an older generation, (b) delete the newer slot
+//! so [`open_redundant`] selects the older value, or (c) forge a minimal
+//! record (generation floor is 1) with a recomputed CRC. Callers that treat
+//! the loaded generation as a high-water mark (e.g. DAO replay checks) are
+//! only sound while flash contents are trusted not to have been rewritten
+//! after the fact.
+//!
+//! The anti-rollback anchor is physical possession of the flash: an attacker
+//! who can write storage can already rewrite the identity seed and peer keys
+//! held alongside, so the same capability is total compromise and no
+//! in-format defense can raise that bar.
+//!
+//! Defense-in-depth future work, intentionally not implemented here:
+//! authenticate records with a device-key MAC and anchor the generation
+//! counter in an independent monotonic hardware counter (e.g. NVS) outside
+//! the record itself.
 
 use crate::NonVolatile;
 use lichen_link::{PublicKey, Seed};

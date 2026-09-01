@@ -17,7 +17,13 @@
 
 #include <lichen/rpl_addr.h>
 #include <lichen/rpl_routing.h>
+#include <lichen/schnorr48.h>
+#include <monocypher.h>
 #include "rpl_internal.h"
+
+/* spec/05-routing.md 8.6: DAO Origin Signature transcript domain (20 ASCII
+ * octets, no terminating NUL). */
+static const uint8_t DAO_ORIGIN_DOMAIN[] = "LICHEN-DAO-ORIGIN-v1";
 
 /* ── finish_group implementation ───────────────────────────────────────────── */
 
@@ -238,6 +244,11 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 duplicate_candidate:
 			;
 		} else if (opt.opt_type == 0x12) {
+			uint64_t origin_seq_u64 = 0U;
+			for (size_t i = 0; i < 8U; i++) {
+				origin_seq_u64 =
+					(origin_seq_u64 << 8) | opt.data[i];
+			}
 			/* DAO Origin Signature (0x12). Per draft-lichen-rpl-lora-00.md 7.3,7.5:
 			 * MUST contain exactly one terminal option, Data Length=56 (u64 seq +
 			 * Schnorr48). Root MUST send success DAO-ACK after replay-floor
@@ -248,14 +259,43 @@ duplicate_candidate:
 			    it.pos != it.len) {
 				return false;
 			}
+			/* spec/05-routing.md 8.6: verify the origin signature
+			 * over the transcript before any state mutation. The
+			 * unsigned span is dao_bytes[0 .. it.pos - 58] (the
+			 * 0x12 option header plus 56 data octets end the DAO). */
+			if (origin_pubkey == NULL) {
+				return false;
+			}
+			{
+				crypto_sha512_ctx ctx;
+				uint8_t digest[64];
+				uint8_t seq_be[8];
+				size_t unsigned_len = it.pos - 58U;
+
+				crypto_sha512_init(&ctx);
+				crypto_sha512_update(&ctx, DAO_ORIGIN_DOMAIN,
+						     sizeof(DAO_ORIGIN_DOMAIN) - 1U);
+				crypto_sha512_update(&ctx, origin, 16U);
+				crypto_sha512_update(&ctx, dm->dodag_id, 16U);
+				for (int i = 7; i >= 0; i--) {
+					seq_be[7 - (unsigned)i] =
+						(uint8_t)(origin_seq_u64 >> (8 * i));
+				}
+				crypto_sha512_update(&ctx, seq_be, sizeof(seq_be));
+				crypto_sha512_update(&ctx, dao_bytes, unsigned_len);
+				crypto_sha512_final(&ctx, digest);
+				if (!schnorr48_verify(origin_pubkey, digest,
+						      sizeof(digest),
+						      &opt.data[8], 48U)) {
+					return false;
+				}
+			}
 			if (!finish_group(staged, staged_count, targets, target_count,
 					  candidates, candidate_count, path_sequence)) {
 				return false;
 			}
 			target_count = 0;
 			candidate_count = 0;
-			/* Signature verification + replay floor update done by caller (link/OSCORE).
-			 * Enforces MUST before semantic parsing. */
 			have_origin_signature = true;
 			routes_closed = true;
 		} else {
@@ -766,7 +806,7 @@ bool rebuild_routes(struct lichen_rpl_dao_manager *dm)
  */
 static enum lichen_rpl_dao_process_result process_dao(
 	struct lichen_rpl_dao_manager *dm, const uint8_t *dao_bytes, size_t len,
-	uint32_t now, bool *route_installed, bool authenticated,
+	uint32_t now, bool *route_installed, const uint8_t *origin_pubkey,
 	const uint8_t *origin)
 {
 	struct lichen_rpl_dao_stage *staged;
@@ -781,7 +821,7 @@ static enum lichen_rpl_dao_process_result process_dao(
 	if (!dm->is_root || dm->root_state == NULL) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
-	if (!authenticated || origin == NULL) {
+	if (origin == NULL) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	struct lichen_rpl_dao_root_state *root = dm->root_state;
@@ -899,7 +939,7 @@ static enum lichen_rpl_dao_process_result process_dao(
 bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
 					const uint8_t *dao_bytes, size_t len,
 					uint32_t now, const uint8_t *origin,
-					bool origin_authenticated)
+					const uint8_t *origin_pubkey)
 {
 	bool installed = false;
 
@@ -908,14 +948,14 @@ bool lichen_rpl_dao_manager_process_dao(struct lichen_rpl_dao_manager *dm,
 	}
 	k_mutex_lock(&dm->lock, K_FOREVER);
 	(void)process_dao(dm, dao_bytes, len, now, &installed,
-			  origin_authenticated, origin);
+			  origin_pubkey, origin);
 	k_mutex_unlock(&dm->lock);
 	return installed;
 }
 
 enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	struct lichen_rpl_dao_manager *dm, const uint8_t *dao_bytes, size_t len,
-	uint32_t now, const uint8_t *origin, bool origin_authenticated,
+	uint32_t now, const uint8_t *origin, const uint8_t *origin_pubkey,
 	uint8_t *ack_buf, size_t ack_buf_len)
 {
 	if (dm == NULL || dao_bytes == NULL) {
@@ -923,7 +963,7 @@ enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	}
 	k_mutex_lock(&dm->lock, K_FOREVER);
 	enum lichen_rpl_dao_process_result result =
-		process_dao(dm, dao_bytes, len, now, NULL, origin_authenticated, origin);
+		process_dao(dm, dao_bytes, len, now, NULL, origin_pubkey, origin);
 	if (result != LICHEN_RPL_DAO_REJECTED && (dao_bytes[1] & 0x80U) != 0U &&
 	    ack_buf != NULL && ack_buf_len >= 20U) {
 		if (lichen_rpl_dao_manager_build_dao_ack(dm, dao_bytes[3], 0,
