@@ -131,10 +131,10 @@ bool lichen_rf_health_should_rebalance(const struct lichen_rf_health *h)
 {
 	/* Spec 02a-coordinated-capacity.md 2a.8 R-02a-112: EMA_Loss > 0.25
 	 * (LOSS_HIGH, pinned by ccp16_ema_loss_threshold.json). Compared in
-	 * the Q16.16 fixed-point domain (25.0 == 25 << 16) so fractional
-	 * losses in (0.25, 0.26] trigger per the vector's
-	 * ema_loss_0.251_minimal_above case; the whole-percent helper
-	 * truncates and would miss them.
+	 * the Q16.16 fixed-point domain (25% = 25 << 16 = 1638400, strictly
+	 * greater) so fractional losses in (0.25, 0.26] trigger per the
+	 * vector's ema_loss_0.251_minimal_above case; the whole-percent
+	 * helper truncates and would miss them.
 	 */
 	return h->density > LICHEN_RF_DENSITY_HIGH
 		|| h->load_factor_fp > LICHEN_RF_LOAD_REBALANCE_FP
