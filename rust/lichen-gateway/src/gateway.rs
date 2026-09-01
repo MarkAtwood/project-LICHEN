@@ -10,7 +10,7 @@ use lichen_coap::codec::{CoapPacket, OptionIterator};
 use lichen_coap::message::MessageCode;
 #[cfg(test)]
 use lichen_core::constants::{L2_DISPATCH_SCHC, SCHC_MAX_DECOMPRESSED};
-use lichen_core::ipv6::field;
+use lichen_core::ipv6::{field, next_header};
 #[cfg(test)]
 use lichen_core::l2_payload::{
     body as l2_payload_body, classify as classify_l2_payload, L2PayloadKind,
@@ -26,7 +26,7 @@ use lichen_node::{
     gradient::GradientTable,
     rpl_stack::{RplBorderIngressOutcome, RplReceiveError, RplReceiveOutcome, RplStack},
     secure::{SecureError, SecureResponseData, SecureStack},
-    stack::{add_rpl_source_route, MAX_FRAME_SIZE},
+    stack::{add_rpl_source_route, decrement_inner_hop_limit, MAX_FRAME_SIZE},
     AnnounceTrustStore, RplEvent,
 };
 use lichen_oscore::{
@@ -1649,6 +1649,9 @@ impl Gateway {
                 let is_root_origin = ipv6[8..24] == root_addr;
                 let is_host_route = route.last() == Some(&dst);
                 if is_root_origin && is_host_route {
+                    // Root-originated: SRH is inserted directly (no tunnel),
+                    // so the §8.9 inner Hop Limit tunnel decrement does not
+                    // apply; per-hop decrements happen along the SRH path.
                     let routing_len = 8 + 16 * (route.len() - 1);
                     let total_len = ipv6.len() + routing_len;
                     let mut routed = vec![0u8; total_len];
@@ -1658,8 +1661,21 @@ impl Gateway {
                     routed
                 } else {
                     let num_addrs = route.len() - 1;
+                    // Spec 05-routing §8.9 (R-05-066): the inner packet is
+                    // forwarded (not originated) by the root here, so the
+                    // normal forwarding decrement applies before the tunnel
+                    // decrement by the initial Segments Left.
+                    let mut inner = ipv6.to_vec();
+                    if !decrement_inner_hop_limit(&mut inner, num_addrs as u8, true) {
+                        warn!(
+                            segments_left = num_addrs,
+                            hop_limit = inner[7],
+                            "mesh_to_mesh: Hop Limit too low to tunnel"
+                        );
+                        return None;
+                    }
                     let routing_len = 8 + 16 * num_addrs;
-                    let outer_payload = routing_len + ipv6.len();
+                    let outer_payload = routing_len + inner.len();
                     let outer_payload_u16 = u16::try_from(outer_payload).ok()?;
                     let outer_hdr = 40 + routing_len;
                     let mut outer = vec![0u8; outer_hdr];
@@ -1669,7 +1685,7 @@ impl Gateway {
                     outer[7] = 64;
                     outer[8..24].copy_from_slice(&root_addr);
                     outer[24..40].copy_from_slice(&route[0]);
-                    outer[40] = 41;
+                    outer[40] = next_header::IPV6_IN_IPV6;
                     outer[41] = (routing_len / 8 - 1) as u8;
                     outer[42] = 3;
                     outer[43] = num_addrs as u8;
@@ -1678,9 +1694,9 @@ impl Gateway {
                         let start = 48 + i * 16;
                         outer[start..start + 16].copy_from_slice(addr);
                     }
-                    let mut encapsulated = Vec::with_capacity(outer_hdr + ipv6.len());
+                    let mut encapsulated = Vec::with_capacity(outer_hdr + inner.len());
                     encapsulated.extend_from_slice(&outer);
-                    encapsulated.extend_from_slice(ipv6);
+                    encapsulated.extend_from_slice(&inner);
                     encapsulated
                 }
             }
@@ -2377,6 +2393,48 @@ mod tests {
         ];
         let result = gw.mesh_to_mesh(&packet).await;
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn encapsulation_rejects_inner_hop_limit_not_above_segments_left() {
+        let mut gw = test_gateway();
+        let relay_addr = [0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+        let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
+        let path = [relay_addr, node_addr];
+        gw.rpl_stack
+            .rpl_node_mut()
+            .router_mut()
+            .inject_route(node_addr, &path);
+
+        // Upstream-originated (src != root), so the encapsulation branch
+        // applies: HL 3 - 1 forward = 2 remaining, initial SL 1 < 2 would
+        // pass; HL 2 leaves 1, and SL 1 is not strictly less than 1.
+        let make_packet = |hop_limit: u8| -> Vec<u8> {
+            let mut packet = vec![0u8; 48];
+            packet[0] = 0x60;
+            packet[4..6].copy_from_slice(&8u16.to_be_bytes());
+            packet[6] = 17;
+            packet[7] = hop_limit;
+            packet[8..24].copy_from_slice(&[0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]);
+            packet[24..40].copy_from_slice(&node_addr);
+            UdpHeader::new(5683, 5683)
+                .write_packet_to(
+                    &Addr(packet[8..24].try_into().unwrap()),
+                    &Addr(node_addr),
+                    b"",
+                    &mut packet[40..],
+                )
+                .unwrap();
+            packet
+        };
+
+        // HL 2: after forwarding decrement 1 remains; SL 1 is not < 1.
+        let low = gw.mesh_to_mesh(&make_packet(2)).await;
+        assert!(low.is_none(), "route MUST NOT be emitted when SL >= remaining HL");
+
+        // HL 1: forwarding decrement alone underflows.
+        let zero = gw.mesh_to_mesh(&make_packet(1)).await;
+        assert!(zero.is_none());
     }
 
     #[test]

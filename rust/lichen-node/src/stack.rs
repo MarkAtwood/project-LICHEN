@@ -873,6 +873,34 @@ fn wrap_schc_payload<'a>(schc: &[u8], out: &'a mut [u8]) -> Result<&'a [u8], TxE
     Ok(&out[..1 + schc.len()])
 }
 
+/// Spec 05-routing §8.9 (R-05-066): decrement the inner packet's Hop Limit
+/// when the root encapsulates it in IPv6-in-IPv6 for RPL source routing.
+///
+/// When `forwarding` is true (the root is forwarding, not originating, the
+/// inner packet) the additional normal forwarding decrement applies first.
+/// Returns false — leaving the packet unchanged — when the Hop Limit would
+/// underflow or the initial Segments Left is not strictly less than the Hop
+/// Limit remaining after any forwarding decrement (the route MUST NOT be
+/// emitted in that case).
+pub fn decrement_inner_hop_limit(
+    inner: &mut [u8],
+    initial_segments_left: u8,
+    forwarding: bool,
+) -> bool {
+    let Some(hl) = inner.get_mut(7) else {
+        return false;
+    };
+    let forward_decrement = u8::from(forwarding);
+    let Some(after_forward) = hl.checked_sub(forward_decrement) else {
+        return false;
+    };
+    if initial_segments_left >= after_forward {
+        return false;
+    }
+    *hl = after_forward - initial_segments_left;
+    true
+}
+
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
@@ -888,6 +916,46 @@ mod tests {
         let identity = Identity::from_seed(Seed::new([0x01; 32]));
         let (radio, _) = LoopbackRadio::pair();
         Stack::new(radio, identity, epoch, seq)
+    }
+
+    // Spec 05-routing §8.9 (R-05-066) inner Hop Limit tunnel decrement.
+    #[test]
+    fn inner_hop_limit_decrements_forwarding_plus_segments_left() {
+        let mut inner = [0u8; 40];
+        inner[7] = 64;
+        assert!(decrement_inner_hop_limit(&mut inner, 3, true));
+        assert_eq!(inner[7], 60, "64 - 1 (forward) - 3 (SL)");
+    }
+
+    #[test]
+    fn inner_hop_limit_decrement_without_forwarding_decrement() {
+        let mut inner = [0u8; 40];
+        inner[7] = 10;
+        assert!(decrement_inner_hop_limit(&mut inner, 4, false));
+        assert_eq!(inner[7], 6);
+    }
+
+    #[test]
+    fn inner_hop_limit_zero_is_rejected() {
+        let mut inner = [0u8; 40];
+        inner[7] = 0;
+        assert!(!decrement_inner_hop_limit(&mut inner, 1, true));
+        assert_eq!(inner[7], 0, "packet unchanged on rejection");
+    }
+
+    #[test]
+    fn segments_left_equal_to_remaining_hop_limit_is_rejected() {
+        // After the forwarding decrement only 2 remain; SL 2 is not < 2.
+        let mut inner = [0u8; 40];
+        inner[7] = 3;
+        assert!(!decrement_inner_hop_limit(&mut inner, 2, true));
+        assert_eq!(inner[7], 3, "packet unchanged on rejection");
+    }
+
+    #[test]
+    fn short_buffer_is_rejected() {
+        let mut inner = [0u8; 7];
+        assert!(!decrement_inner_hop_limit(&mut inner, 1, true));
     }
 
     #[test]
