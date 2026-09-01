@@ -8,7 +8,8 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T23:30:46.539816292Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-08-31T23:30:46.539816292Z",
+  "updated_at": "2026-09-01T00:08:46.460797752Z",
+  "started_at": "2026-08-31T23:55:06.276128633Z",
   "labels": [
     "python",
     "ccp15"

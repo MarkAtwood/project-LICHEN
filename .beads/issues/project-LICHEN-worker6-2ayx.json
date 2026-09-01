@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-2ayx",
+  "title": "l1qw.30(a): C deaddrop response-code contract (5.03 storage_full, 4.13, Location-Path/Max-Age on POST)",
+  "description": "Smallest child of worker6-l1qw.30 (spec 18.9, R-12-079/085/087): lichen/subsys/lichen/coap/coap_dtn.c — (1) POST success (2.04 at :205) must add Location-Path (deaddrop/\u003cmsg-id\u003e) and Max-Age options per spec; (2) store-full admission failure must return 5.03 Service Unavailable with the storage_full diagnostic (not the current generic 5.00 at :163-179 — check which arm fires when lichen_dtn_buffer_message returns false); (3) payload \u003e MAX_PACKET_SIZE must return 4.13 Request Entity Too Large (currently folded into other codes); (4) keep rate-limit 4.29 semantics unchanged. Mirror the Python deaddrop resource (python/src/lichen/coap/resources/deaddrop.py) which conforms and is vector-tested. Diagnostic body shape must match Python/deaddrop.json vectors. Zephyr-coupled file (no host harness) — verification via cppcheck gate + review; note the coap_dtn host-test gap for the test-infra follow-up.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T00:11:20.479502554Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T00:11:36.549915697Z",
+  "started_at": "2026-09-01T00:11:36.549915697Z",
+  "lease_expires_at": "2026-09-01T00:16:36.549915697Z",
+  "heartbeat_at": "2026-09-01T00:11:36.549915697Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2ayx",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.30",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T00:11:20.615922266Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}

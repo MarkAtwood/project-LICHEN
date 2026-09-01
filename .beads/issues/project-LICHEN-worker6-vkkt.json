@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-vkkt",
+  "title": "l1qw.30(c): C deaddrop by-id GET + Observe + read privacy ACL",
+  "description": "Child of worker6-l1qw.30 (spec 18.9): add by-id GET (deaddrop/\u003cmsg-id\u003e), Observe support on the collection GET, and the read privacy ACL to lichen/subsys/lichen/coap/coap_dtn.c. Landable after (a) establishes the response-code contract.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T00:11:21.124347067Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T00:11:21.124347067Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vkkt",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.30",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T00:11:21.296999297Z",
+      "created_by": "opencode-worker-7",
+      "metadata": "{}"
+    }
+  ]
+}
