@@ -21,8 +21,9 @@ import enum
 
 
 class PositionPrivacyMode(enum.Enum):
-    """Position visibility mode."""
+    """Position visibility mode (spec/12-apps.md 18.2.4)."""
 
+    OFF = "off"
     PUBLIC = "public"
     GROUP = "group"
     PRIVATE = "private"
@@ -70,6 +71,10 @@ class PositionPrivacyPolicy:
 
         Returns ``(accept, response_code)``.
         """
+        if self._mode is PositionPrivacyMode.OFF:
+            # GPS disabled — no position sharing at all (spec 18.2.4).
+            return (False, CODE_FORBIDDEN)
+
         if self._mode is PositionPrivacyMode.PUBLIC:
             return (True, CODE_OK)
 
@@ -94,5 +99,6 @@ class PositionPrivacyPolicy:
         return (False, CODE_FORBIDDEN)
 
     def include_position_in_beacon(self) -> bool:
-        """Beacons are public broadcast; only public mode carries position."""
+        """Beacons are public broadcast; only public mode carries position.
+        OFF mode never includes position."""
         return self._mode is PositionPrivacyMode.PUBLIC
