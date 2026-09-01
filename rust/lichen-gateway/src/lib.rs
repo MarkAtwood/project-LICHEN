@@ -5,6 +5,7 @@
 
 pub mod aprs_is;
 pub mod capability;
+pub mod capability_announcements;
 pub mod config;
 pub mod discovery;
 pub mod gateway;
