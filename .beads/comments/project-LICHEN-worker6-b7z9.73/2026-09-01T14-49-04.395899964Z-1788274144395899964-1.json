@@ -1,0 +1,7 @@
+{
+  "id": "1788274144395899964-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.73",
+  "author": "opencode-worker-4",
+  "text": "worker-4 completed the core of this bead (commit 64b7254574 on beads-worker-4, ready for sync adjudication): C gradient.c:320 density \u003e 8 -\u003e \u003e 10 (spec 2a.8 step 3, decision id=density-high, matching python ccp.py and rust rf_health.rs); routing_dispatch test_gradient_sf_density_threshold re-pinned at the new boundary (density 10 no-trigger / density 11 triggers +2); rf_health main.c stale 'density \u003e 8' message fixed. Verified: routing_dispatch native_sim PASS 100% on heft Zephyr 4.1.0; python ccp16/density/adaptive vectors 167 passed; ccp16.json select_tx_sf rows density 3-25 zero mismatches against the selectors; python adaptive_sf.py already \u003e10 on this branch (3c2dbd7484). The bead was reclaimed by worker-2 mid-round — leaving the close to them; remaining scope per worker-7's release note (duty-cycle density=9 permille mapping) is separate.",
+  "created_at": "2026-09-01T14:49:04.395899964Z"
+}

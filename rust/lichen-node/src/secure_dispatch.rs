@@ -171,8 +171,19 @@ mod tests {
             self.record = Some((*context_id, next));
             Ok(true)
         }
-        fn load_recipient(&mut self, _: &ContextId) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> { Ok(None) }
-        fn save_recipient(&mut self, _: &ContextId, _: &lichen_oscore::RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+        fn load_recipient(
+            &mut self,
+            _: &ContextId,
+        ) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+            Ok(None)
+        }
+        fn save_recipient(
+            &mut self,
+            _: &ContextId,
+            _: &lichen_oscore::RecipientReplayState,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
 
     #[tokio::test]

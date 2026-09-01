@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ovhe",
+  "title": "[human][BUG] oscore-fork 0.1.3: two distinct ContextId types break external SenderStateStore impls (E0053)",
+  "description": "Precise diagnosis from worker1's 4k15 round (Rust ASSIGNED_SF slice): the fork (oscore-fork 0.1.3, commit 1c56f30) now has TWO distinct ContextId types — ~/crates/oscore/src/types.rs:86 (used by the new SenderStateStore trait at types.rs:104, commit 1c56f30) and ~/crates/oscore/src/lib.rs:205 (the original, re-exported by lichen-oscore's grouped pub use oscore::{...}). The trait's method signatures bind to types::ContextId, so every EXTERNAL impl of SenderStateStore using the re-exported lib.rs ContextId fails E0053 — reproduced in lichen-node/src/rpl_stack/tests.rs:84,101 (expected oscore::types::ContextId, found ContextId); lichen-node lib tests cannot compile. Fix direction (Mark decides, oscore boundary): (a) delete the types.rs:86 duplicate and have types.rs use the canonical lib.rs ContextId, or (b) have lichen-oscore re-export oscore::types::ContextId and migrate internals. Either rewrites trait signatures inside the oscore boundary — filed per the oscore human-only rule, not fixed. Supersedes/absorbs the unfiled remainder of old nqtz (no longer in store — store reversion) which tracked the same split.",
+  "status": "open",
+  "priority": 0,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T14:59:10.474509237Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T14:59:10.474509237Z",
+  "labels": [
+    "rust",
+    "oscore"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ovhe",
+      "depends_on_id": "project-LICHEN-worker6-4k15",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T14:59:10.615937109Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

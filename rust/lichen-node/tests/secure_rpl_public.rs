@@ -8,7 +8,9 @@ use lichen_hal::storage::mem::MemStorage;
 use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::Seed;
 use lichen_node::{AnnounceProcessor, GradientTable, RplReceiveOutcome, RplStack, SecureStack};
-use lichen_oscore::{Context, ContextId, SenderSequenceState, ContextStateStore, RecipientReplayState};
+use lichen_oscore::{
+    Context, ContextId, ContextStateStore, RecipientReplayState, SenderSequenceState,
+};
 
 #[derive(Default)]
 struct OscoreStore(Option<(ContextId, SenderSequenceState)>);
@@ -16,7 +18,10 @@ struct OscoreStore(Option<(ContextId, SenderSequenceState)>);
 impl ContextStateStore for OscoreStore {
     type Error = ();
 
-    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(
+        &mut self,
+        context_id: &ContextId,
+    ) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self
             .0
             .filter(|(stored_context, _)| stored_context == context_id)
@@ -36,8 +41,19 @@ impl ContextStateStore for OscoreStore {
         Ok(true)
     }
 
-    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
-    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+    fn load_recipient(
+        &mut self,
+        _: &ContextId,
+    ) -> Result<Option<RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+    fn save_recipient(
+        &mut self,
+        _: &ContextId,
+        _: &RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 #[test]
