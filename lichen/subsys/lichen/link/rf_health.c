@@ -145,3 +145,23 @@ void lichen_rf_health_reset(struct lichen_rf_health *h)
 {
 	lichen_rf_health_init(h);
 }
+
+uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
+					  uint16_t loss_permille,
+					  int8_t rssi_ema_dbm)
+{
+	/* CCP-16 2a.10.3 (R-02a-117), rust rf_health.rs parity:
+	 * distinct peers heard in the window, adjusted for hidden
+	 * congestion and weak links, clamped to [0, 255]. */
+	uint16_t density = neighbor_count;
+
+	if (loss_permille > LICHEN_RF_DENSITY_PER_BONUS_PERMILLE) {
+		density = (density > UINT16_MAX - 2) ? UINT16_MAX
+						     : density + 2;
+	}
+	if (rssi_ema_dbm < LICHEN_RF_DENSITY_RSSI_BONUS_DBM) {
+		density = (density > UINT16_MAX - 1) ? UINT16_MAX
+						     : density + 1;
+	}
+	return density > 255u ? 255u : (uint8_t)density;
+}

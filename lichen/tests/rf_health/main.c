@@ -73,6 +73,25 @@ int main(void)
 	fill_loss(&h, 4, 1);
 	CHECK(lichen_rf_health_packet_loss_permille(&h) == 250, "250 permille");
 
+	/* Density estimation (CCP-16 2a.10.3, R-02a-117): vectors from
+	 * ccp16_load_balance.json density_estimate cases. */
+	CHECK(lichen_rf_health_estimate_density(5, 50, -70) == 5,
+	      "density: no modifiers");
+	CHECK(lichen_rf_health_estimate_density(5, 150, -70) == 7,
+	      "density: high loss +2");
+	CHECK(lichen_rf_health_estimate_density(5, 50, -95) == 6,
+	      "density: weak RSSI +1");
+	CHECK(lichen_rf_health_estimate_density(5, 200, -100) == 8,
+	      "density: both bonuses");
+	CHECK(lichen_rf_health_estimate_density(5, 100, -70) == 5,
+	      "density: loss at boundary (strict >)");
+	CHECK(lichen_rf_health_estimate_density(5, 50, -90) == 5,
+	      "density: RSSI at boundary (strict <)");
+	CHECK(lichen_rf_health_estimate_density(254, 200, -100) == 255,
+	      "density: capped at 255");
+	CHECK(lichen_rf_health_estimate_density(0, 200, -100) == 3,
+	      "density: zero neighbors with bonuses");
+
 	if (failures == 0) {
 		printf("PASS: rf_health loss threshold\n");
 		return 0;
