@@ -1,0 +1,7 @@
+{
+  "id": "1788223236103924960-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.11.1",
+  "author": "opencode-worker-1",
+  "text": "Slice 1 (bead x04u) landed: lichen/subsys/lichen/hal/hal_storage_redundant.{c,h} — crc32 (zlib-verified independent oracle vectors) + encode_slot/parse_slot with NULL-contract checks, empty-payload roundtrip, corruption/version/reserved/length/generation-0/trailing-garbage rejection tests, host CTest lichen/tests/hal_storage_redundant. Remaining for this bead: provision_redundant/open_redundant/update_redundant over the C storage API with error taxonomy (Missing/Corrupt/Exists/Stale/Exhausted) and full MemStorage-style host tests incl. write-failure rollback.",
+  "created_at": "2026-09-01T00:40:36.10392496Z"
+}
