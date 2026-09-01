@@ -8,7 +8,6 @@ and exposes properties. Mixins in other modules add behavior.
 
 from __future__ import annotations
 
-import math
 import random
 import time
 from enum import Enum, auto
@@ -20,6 +19,7 @@ from lora_medium import Medium
 from lichen.sim.events import EventQueue, ObserverRegistry, SimulationObserver
 from lichen.sim.metrics import Metrics
 from lichen.sim.node import SimNode
+from lichen.timing.startup_delay import compute_startup_delay_s
 
 if TYPE_CHECKING:
     from lora_medium import ChaosEngine
@@ -144,9 +144,9 @@ class SimulationBase:
                 startup, with a per-node delay scaled by estimated density.
             listen_period_us: Duration in microseconds each node listens before
                 its first TX to build its heard set.
-            density_scale_factor: Scaling constant for the density-derived delay.
-                The actual delay is random.uniform(0, density_scale_factor *
-                log(1 + heard_count)).
+            density_scale_factor: Deprecated legacy scaling constant (kept for
+                constructor compatibility; no longer affects the delay, which
+                now follows the spec formula in calculate_startup_delay).
         """
         self._id = sim_id
         self._time_mode = time_mode
@@ -282,9 +282,12 @@ class SimulationBase:
     def calculate_startup_delay(self, node: SimNode) -> int:
         """Calculate the density-aware startup delay for a node.
 
-        The delay is proportional to log(1 + heard_count), so denser
-        neighborhoods produce longer listen periods before first TX.
-        This reduces collision probability during simultaneous boot.
+        Per spec 09 (unnumbered boot-storm section between 14.7 and 14.8):
+        min(MAX_STARTUP_DELAY_S, nodes_heard * DELAY_PER_NODE_S) — linear in
+        the heard count, capped at 300 s — and the caller selects a uniform
+        value in [0, initial_delay] before first TX. This replaces the
+        earlier log1p scaling, which diverged from the spec formula
+        (b7z9.55).
 
         Args:
             node: The node to calculate delay for.
@@ -292,13 +295,16 @@ class SimulationBase:
         Returns:
             Startup delay in microseconds.
         """
-        if not node.started:
-            heard = len(node.heard_set)
-            scale = self._density_scale_factor * math.log1p(heard)
-            if scale <= 0.0:
-                return 0
-            return int(self._rng.uniform(0, scale))
-        return 0
+        if node.started:
+            return 0
+        heard = len(node.heard_set)
+        # Spec formula in seconds -> microseconds.
+        max_delay_us = compute_startup_delay_s(heard) * 1_000_000
+        if max_delay_us <= 0:
+            return 0
+        # Uniform draw in [0, initial_delay] per the spec sentence.
+        delay_us = int(self._rng.uniform(0, max_delay_us))
+        return delay_us
 
     def mark_node_started(self, node_id: str) -> None:
         """Mark a node as having completed its startup listen phase.
