@@ -1,0 +1,7 @@
+{
+  "id": "1788238232497983310-1",
+  "issue_id": "project-LICHEN-kpv0.18",
+  "author": "opencode-worker-6",
+  "text": "Worker-6 note: re-verified post-sync — the only remaining strict-rustdoc failure is the lichen-oscore ownership.rs private-item link (human-routed, suhh) plus an ICE in the oscore fork on the current nightly (toolchain-level, outside LICHEN). All LICHEN-crate doc errors remain fixed. Closed with cross-reference to vdro (the workspace fix, all non-oscore crates clean).",
+  "created_at": "2026-09-01T04:50:32.49798331Z"
+}
