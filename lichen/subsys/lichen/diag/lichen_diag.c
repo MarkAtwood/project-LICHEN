@@ -105,7 +105,7 @@ static int diag_get(struct coap_resource *resource,
 			ok = false;
 			break;
 		}
-		ok = zcbor_map_start_encode(zs, 5) &&
+		ok = zcbor_map_start_encode(zs, 4) &&
 		     zcbor_tstr_put_lit(zs, "ts") &&
 		     zcbor_uint64_put(zs, ev.timestamp_ms) &&
 		     zcbor_tstr_put_lit(zs, "sub") &&
@@ -114,7 +114,7 @@ static int diag_get(struct coap_resource *resource,
 		     zcbor_uint32_put(zs, ev.event_code) &&
 		     zcbor_tstr_put_lit(zs, "detail") &&
 		     zcbor_uint32_put(zs, ev.detail) &&
-		     zcbor_map_end_encode(zs);
+		     zcbor_map_end_encode(zs, 4);
 	}
 	if (ok) {
 		ok = zcbor_list_end_encode(zs, events);
@@ -134,5 +134,5 @@ static int diag_get(struct coap_resource *resource,
 static const char *const diag_path[] = { "diag", NULL };
 COAP_RESOURCE_DEFINE(lichen_diag, lichen_coap_server, {
 	.get = diag_get,
-	.res = diag_path,
+	.path = diag_path,
 });
