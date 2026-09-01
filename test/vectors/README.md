@@ -119,6 +119,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `gcp_iid_comparison.json` | IID comparison/conflict-resolution algorithm (GCP-6.3) |
 | `gcp_psk_oscore.json` | PSK-based OSCORE HKDF derivation intermediates (RFC 8613) |
 | `gcp_slot_claim.json` | Slot-claim message Schnorr48 signing over CBOR-canonical form |
+| `gcp_slot_claim_cose_sign1.json` | GCP-6.5 slot-claim COSE_Sign1: slots-mutation forgery, claim_seq replay, expiry boundaries, alg decoy, kid mismatch, missing ordinal |
 | `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid) |
 | `tofu_edge_cases.json` | Canonical TOFU contact, binding, malformed-input, persistence, reboot, rollback, concurrency, and replay invariants |
 | `gcp6_slot_coordination.json` | Superframe slot coordination (spec 08 §6) |
