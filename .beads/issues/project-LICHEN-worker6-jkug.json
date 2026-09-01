@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-jkug",
   "title": "C sos: wire rate-limit + Schnorr48 verify into SOS rx path and register /sos CoAP resource (spec 18.4 R-12-034..041)",
   "description": "Remaining slice of l1qw.25: lichen/subsys/lichen/coap/sos_alert.c + sos_resource.c exist but sos_ratelimit_check has zero callers and coap_server.c registers no /sos resource. Wire: rx verify (link-layer Schnorr48 before rebroadcast, silent drop on failure per 18.4) -\u003e rate-limit gate (sos_ratelimit_check/record per source IID; 4.29 Too Many Requests with Retry-After on denial) -\u003e rebroadcast-once. Register /sos GET/POST in coap_server.c. Host tests via the SOS cbor/signature vectors. After the ratelimit vector suite (sibling bead) lands.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T09:09:11.540348487Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-01T09:09:11.540348487Z",
+  "updated_at": "2026-09-01T09:42:22.094981753Z",
+  "closed_at": "2026-09-01T09:42:22.094981753Z",
+  "close_reason": "Landed upstream — closing with verification: all components the bead requested are on main. (1) rx verify: link-layer Schnorr48 before rebroadcast with silent drop (sos_origin_verify at coap_server.c, -ENOENT on failure per 18.4); (2) rate-limit gate: sos_ratelimit_check/record wired into the SOS rx path (b493682f32 'feat(coap): sos_ratelimit gate in SOS rx path (R-12-036..038)', plus persistent state fedc948 and iid-buffer/silent-drop reviews 3ab1d902c9); (3) /sos GET+POST registered in coap_server.c (sos_path/sos_attrs resource); (4) the ratelimit vector suite landed as 72e2cfc360 'test(sos): rate-limit vector suite; fix vector arithmetic' with lichen/tests/sos_ratelimit/main.c (194 lines) and test/vectors/sos_rate_limiting.json. Verified: sos_ratelimit_check present in coap_server.c at synced HEAD; lichen-node 337/337 green post-merge.",
   "labels": [
     "zephyr",
     "coap"

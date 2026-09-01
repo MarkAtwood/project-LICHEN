@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-b7z9.61",
   "title": "CCP: slot_map emission/adoption + node TX gate unwired",
   "description": "DIVERGENT. Req 2a.2: 'The root MUST set slot_map on each beacon; joiners MUST adopt the assigned slot_map and MUST NOT transmit outside it'; 2a.10.5 'MUST NOT transmit outside slot_map'. Evidence: root-side emission not implemented in any stack (Python has no beacon builder; Rust codec serializes slot_map but no root beacon emission wiring; C none). Joiner adoption: Python link/slot_coordination.py:63-96 validates slot_map (tests/link/test_slot_coordination.py + ccp_slot_map_validation.json) and :99-121 tx_allowed gates TX, but sim/tdma.py:67-92 only adopts a SINGLE slot (sync_from_beacon assigned=), no multi-entry slot_map adoption; Rust SlotAllocator::is_tx_allowed (lichen-gateway/src/slot.rs:239-241) is gateway-side, lichen-node TX path unwired; C tdma_tx_allowed (tdma.c:259-294) checks own slot only, NO slot_map membership in TX path, and lichen_link_tx.c:106-112 feeds constant now_ms=0 with FIXME (gate only correct while unsynced). Suggested placement: C: extend lichen_link_tdma_ctx with slot_map + membership check in tdma.c:259-294 + wire real now_ms in lichen_link_tx.c; Rust: wire slot.rs allocator into lichen-node TX path; Python: adopt slot_map in sim/tdma.py sync_from_beacon.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T09:31:35.268470999Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T09:31:35.268470999Z",
+  "updated_at": "2026-09-01T09:39:16.515407966Z",
+  "closed_at": "2026-09-01T09:39:16.515407966Z",
+  "close_reason": "Duplicate of project-LICHEN-worker6-b7z9.22 (slot_map end-to-end absent, spec 02a 2a.2); evidence consolidated in docs/spec-coverage/02a-coordinated-capacity.md",
   "labels": [
     "ccp",
     "spec-gap"

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.65",
+  "title": "CCP: channel-plan registry/version + unknown-plan CH0 fallback gaps",
+  "description": "DIVERGENT. Req 2a.7: plans contain 'plan identifier and version'; 'Unknown plan identifiers or versions MUST cause CH0 fallback'; plan MUST be provisioned locally (OTA cannot expand plan/power/limits). Evidence: Python conformant (python/src/lichen/channel_plan.py:256-261 ch0_fallback_required true for unknown id OR version mismatch; tests/test_ccp4_regional_channel_plans.py). C: lichen/subsys/lichen/hal/include/lichen/op_class.h compile-time table has NO version field and NO regulatory-accounting-group per channel; unknown class_id -\u003e NULL -\u003e lichen/subsys/lichen/l2/lora_l2_tx.c:578-583 falls back to duty region 0 (EU-conservative), NOT CH0 channel fallback. RUST: no plan registry at all (only OperatingClassParams in rust/lichen-hal/src/lib.rs:174-283); test/vectors/ccp4_regional_channel_plans.json has no Rust consumer. Suggested placement: C: add version field to op_class.h entries + CH0 fallback in lichen/subsys/lichen/link/link_ctx.c channel select; Rust: port channel-plan registry into lichen-core and consume ccp4_regional_channel_plans.json.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T09:39:16.75110312Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T09:39:16.75110312Z",
+  "labels": [
+    "ccp",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.65",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T09:39:16.865556838Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
