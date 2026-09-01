@@ -224,6 +224,16 @@ enum lichen_hal_redundant_update_result lichen_hal_redundant_update(
 	if (rc_a < 0 || rc_b < 0) {
 		return LICHEN_HAL_REDUNDANT_UPDATE_STORAGE;
 	}
+	/* Ops contract: *len is the FULL stored length. A record longer than
+	 * the scratch buffer was only partially copied — treat it as corrupt
+	 * rather than parsing past the buffer (matches Rust read_raw's
+	 * len > buf.len() overflow mapping). */
+	if (rc_a == 0 && raw_a_len > sizeof(slot_buf[0])) {
+		return LICHEN_HAL_REDUNDANT_UPDATE_CORRUPT;
+	}
+	if (rc_b == 0 && raw_b_len > sizeof(slot_buf[1])) {
+		return LICHEN_HAL_REDUNDANT_UPDATE_CORRUPT;
+	}
 
 	bool a_present = (rc_a == 0);
 	bool b_present = (rc_b == 0);
