@@ -639,8 +639,11 @@ impl RfHealthMetrics {
         utilization: Option<u32>,
         ema_loss_fp: Option<u32>,
     ) -> (u8, bool) {
-        let mut sf = assigned_sf.unwrap_or_else(|| self.adaptive_sf());
-        let explicit = assigned_sf.is_some() || utilization.is_some() || ema_loss_fp.is_some();
+        // Step 1-2: assigned SF, or the spec step-2 default of 10. The
+        // baseline is NOT the adaptive_sf() table form — that would
+        // double-count load/density before steps 3-6 and the floors see
+        // them a second time (b7z9.29.3; matches python ccp.py step 1-2).
+        let mut sf = assigned_sf.unwrap_or(10);
         let util = utilization.unwrap_or(0);
         let loss_fp = ema_loss_fp.unwrap_or(0);
         let snr_ema = self.snr.avg().unwrap_or(0);
@@ -655,15 +658,17 @@ impl RfHealthMetrics {
         if self.density > DENSITY_HIGH || util > util_thresh_150 {
             sf = sf.saturating_add(2).min(12);
         }
-        // Step 4: engaged only in explicit-pseudocode mode (the default
-        // path uses the adaptive_sf() table form; the two diverge for
-        // low-density high-SNR inputs by design).
-        if explicit && snr_ema > SNR_GOOD && self.density < DENSITY_LOW {
+        // Step 4: good SNR and low density allow SF -1 (unconditional,
+        // matching python ccp.py; the mode gate was a pre-2a.8-reconciliation
+        // divergence).
+        if snr_ema > SNR_GOOD && self.density < DENSITY_LOW {
             sf = sf.saturating_sub(1).max(7);
         }
-        // Step 5
+        // Step 5: high loss OR load factor > 0.8 triggers SF +1
+        // (spec 2a.8:423; >= FLOOR_LOAD_FP is the Q16.16 form of > 0.8,
+        // same threshold the floor-d block applies)
         let mut tx_allowed = true;
-        if loss_fp > loss_threshold {
+        if loss_fp > loss_threshold || self.load_factor_fp >= FLOOR_LOAD_FP {
             sf = sf.saturating_add(1).min(12);
         }
         if util > util_thresh_200 {
@@ -958,6 +963,24 @@ mod tests {
         assert_eq!(sf, 9);
         assert!(allowed);
 
+        // Step 5 (b7z9.29.3): load factor > 0.8 alone triggers SF +1.
+        let mut m = RfHealthMetrics::new();
+        m.record_density(5);
+        m.record_rx(12);
+        m.record_load_factor(58982); // 0.9 Q16.16
+        let (sf, allowed) = m.adaptive_sf_select(Some(10), Some(0), Some(0));
+        assert_eq!(sf, 11);
+        assert!(allowed);
+
+        // Below threshold (0.79): no step-5 bump.
+        let mut m = RfHealthMetrics::new();
+        m.record_density(5);
+        m.record_rx(12);
+        m.record_load_factor(51_793); // 0.79 Q16.16
+        let (sf, allowed) = m.adaptive_sf_select(Some(10), Some(0), Some(0));
+        assert_eq!(sf, 10);
+        assert!(allowed);
+
         // sf=11: density>10, snr<0, load>0.8 → all trigger rebalance
         let mut m = RfHealthMetrics::new();
         m.record_density(12);
@@ -1090,11 +1113,23 @@ mod tests {
             m.record_rx(snr);
             m.record_load_factor(load_fp);
             let exp_sf = output.get("sf").and_then(|x| x.as_u64()).unwrap_or(10) as u8;
-            // The vector pins the full 2a.8 pseudocode result. The
-            // table-only adaptive_sf() form is asserted by its own unit
-            // tests and diverges from the pseudocode for density > 8
-            // (table floors at 11; the pseudocode step 3 reaches 12).
-            let (sf_sel, allowed) = m.adaptive_sf_select(None, None, None);
+            // Replay the vector through the full pseudocode with its own
+            // explicit inputs (the corpus was generated that way; an
+            // implicit None-replay would re-derive the baseline instead of
+            // testing the assigned-SF steps).
+            let assigned = input
+                .get("assigned_sf")
+                .and_then(|x| x.as_u64())
+                .map(|x| x as u8);
+            let util_fp = input
+                .get("utilization")
+                .and_then(|x| x.as_f64())
+                .map(|u| (u * FP_SCALE as f64 / 100.0) as u32);
+            let loss_fp = input
+                .get("ema_loss_permille")
+                .and_then(|x| x.as_f64())
+                .map(|l| (l * FP_SCALE as f64 / 1000.0) as u32);
+            let (sf_sel, allowed) = m.adaptive_sf_select(assigned, util_fp, loss_fp);
             assert_eq!(sf_sel, exp_sf);
             assert!(allowed);
             let _ = m.should_rebalance();
