@@ -33,7 +33,7 @@
   "name": "expiry_big_endian_decode",
   "description": "Absolute expiry is a 4-byte big-endian Unix timestamp: bytes 0x000001E8 decode to 488. Oracle: spec/05-routing.md 9.8 (independent, spec-derived).",
   "type": "dtn_hbh",
-  "option_hex": "030500000001e8",
+  "option_hex": "030580000001e8",
   "expiry_unix": 488,
   "s_flag": 1,
   "expiry_be_bytes": "000001e8",

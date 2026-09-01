@@ -1724,13 +1724,13 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
             LinkRxError::UnknownSender
         )))
     ));
-    root.send_dio(relay_addr).await.unwrap();
+    root.send_dio(RPL_ALL_NODES).await.unwrap();
     assert!(matches!(
         relay.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
     ));
 
-    relay.send_dio(leaf_addr).await.unwrap();
+    relay.send_dio(RPL_ALL_NODES).await.unwrap();
     assert!(matches!(
         leaf.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
