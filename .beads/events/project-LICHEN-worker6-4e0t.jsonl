@@ -1,3 +1,4 @@
 {"id":"01a05721-c14e-7268-a852-3deff0011be5","issue_id":"project-LICHEN-worker6-4e0t","event_type":"created","actor":"opencode-worker-4","old_value":"","new_value":"","created_at":"2026-08-31T09:23:45.102159436Z"}
 {"id":"01a05721-c152-79c3-831c-44e47e3aa3ff","issue_id":"project-LICHEN-worker6-4e0t","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: schc","created_at":"2026-08-31T09:23:45.106640946Z"}
 {"id":"01a05721-c156-7ea5-b992-a9ad93afe752","issue_id":"project-LICHEN-worker6-4e0t","event_type":"label_added","actor":"opencode-worker-4","comment":"Added label: tdma","created_at":"2026-08-31T09:23:45.110962411Z"}
+{"id":"01a05b57-2205-7d4b-b595-07c653ee79ca","issue_id":"project-LICHEN-worker6-4e0t","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Re-closing (sync loop overwrote). Adjudicated option B.","created_at":"2026-09-01T05:00:32.133872155Z"}
