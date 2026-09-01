@@ -129,9 +129,12 @@ uint8_t lichen_rf_health_adaptive_sf(const struct lichen_rf_health *h)
 
 bool lichen_rf_health_should_rebalance(const struct lichen_rf_health *h)
 {
+	/* R-02a-112: loss threshold 25% per spec 2a.8, pinned by
+	 * ccp16_ema_loss_threshold.json (loss rate is percent-in-Q16.16:
+	 * 25% = 25 << 16 = 1638400; strictly greater). */
 	return h->density > LICHEN_RF_DENSITY_HIGH
 		|| h->load_factor_fp > LICHEN_RF_LOAD_REBALANCE_FP
-		|| lichen_rf_health_packet_loss_rate_pct(h) > 40;
+		|| lichen_rf_health_packet_loss_rate_fp(h) > 25U * 65536U;
 }
 
 void lichen_rf_health_reset(struct lichen_rf_health *h)
