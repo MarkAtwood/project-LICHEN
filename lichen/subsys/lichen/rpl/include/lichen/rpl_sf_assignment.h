@@ -90,7 +90,8 @@ void lichen_rpl_sf_tracker_load(const struct lichen_rpl_sf_tracker *t,
 
 /**
  * Assign the least-loaded SF for a new node and register it.
- * Returns the assigned SF (7..=12), or 0 when iid is NULL.
+ * Returns the assigned SF (7..=12), or 0 when iid is NULL or the
+ * tracker is full (LICHEN_SF_TRACKER_CAPACITY).
  */
 uint8_t lichen_rpl_sf_tracker_assign(struct lichen_rpl_sf_tracker *t,
 				     const uint8_t iid[8]);
