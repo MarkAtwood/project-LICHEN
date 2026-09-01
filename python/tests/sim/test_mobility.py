@@ -325,3 +325,10 @@ class TestFiniteConfigValidation:
     def test_manhattan_grid_rejects_nan_spacing(self) -> None:
         with pytest.raises(ValueError, match="spacing_m"):
             ManhattanGrid(area_bounds=(0, 100, 0, 100), spacing_m=float("nan"))
+
+    @pytest.mark.parametrize("speed", [float("nan"), float("inf"), 0.0, -1.0])
+    def test_manhattan_grid_rejects_bad_speed(self, speed: float) -> None:
+        # Wave-4 addendum (bead e1ct): ManhattanGrid speed_m_s=NaN passes bare
+        # comparisons and poisons positions via ratio math; must be rejected.
+        with pytest.raises(ValueError, match="speed_m_s"):
+            ManhattanGrid(area_bounds=(0, 100, 0, 100), speed_m_s=speed)
