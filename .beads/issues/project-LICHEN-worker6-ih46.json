@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-ih46",
+  "title": "Rust rf_health: NaN/inf poisoning in RF metric setters — is_nan should be !is_finite (residue from b7z9.24.2 review)",
+  "description": "Residue from the multi-root root-selection review (worker1 b7z9.24.2 round). rust/lichen-core/src/rf_health.rs with_rf_metrics/with_rssi_ema/with_snr_ema use is_nan() to sanitize but should use !is_finite() — +INFINITY/-INFINITY passes is_nan and poisons the density estimate (a beacon with rssi=inf would make estimate_density unusable). Three one-line changes plus a test pinning that inf is treated as worst-case.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T21:04:49.877838748Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T21:08:33.467732542Z",
+  "started_at": "2026-09-01T21:06:19.772654091Z",
+  "closed_at": "2026-09-01T21:08:33.467732542Z",
+  "close_reason": "Not applicable: the current rust/lichen-core/src/rf_health.rs does not have with_rf_metrics/with_rssi_ema/with_snr_ema float setters — those were part of an earlier API shape that was refactored to integer-typed setters (record_rx takes i8, record_density takes u8, record_load_factor takes u32), all of which are inherently finite. The inf-poisoning vector no longer exists in the current code. Closing as moot.",
+  "labels": [
+    "rust",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ih46",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.24.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T21:04:49.978446243Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
