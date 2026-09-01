@@ -639,6 +639,13 @@ mod tests {
         let mut reopened =
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xC2; 32]).unwrap();
         assert_eq!(reopened.load(&iid), Ok(Some(state(0x41, 1))));
+        // The rebuild must have durably rewritten the floor record itself,
+        // not merely populated the cache.
+        assert_eq!(
+            reopened.read(&iid, true),
+            Ok(Some(state(0x41, 1))),
+            "rebuilt floor must be durably written"
+        );
         // The healed floor is durably rewritten: a held sequence is refused.
         assert_eq!(
             reopened.accept(&iid, state(0x41, 1)),
@@ -687,6 +694,14 @@ mod tests {
         let mut healed =
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x82; 32]).unwrap();
         assert_eq!(healed.load(&iid), Ok(Some(state(0xE1, 200))));
+        // The heal must have durably rewritten the floor record itself, not
+        // merely populated the cache: the sealed on-disk floor now holds the
+        // healed sequence (re-arms rollback detection via precedes).
+        assert_eq!(
+            healed.read(&iid, true),
+            Ok(Some(state(0xE1, 200))),
+            "healed floor must be durably rewritten"
+        );
         // The healed floor is durably rewritten: replay of seq 100 fails.
         drop(healed);
         let mut healed =
@@ -901,6 +916,13 @@ mod tests {
         // the lagging floor heals forward to the sealed state.
         store.floor_storage = floor_storage;
         assert_eq!(store.load(&iid), Ok(Some(state(0x71, 200))));
+        // The heal must have durably rewritten the floor record itself, not
+        // merely populated the cache.
+        assert_eq!(
+            store.read(&iid, true),
+            Ok(Some(state(0x71, 200))),
+            "healed floor must be durably rewritten"
+        );
 
         // The healed floor rejects the intermediate replay that a stale
         // cache would have accepted, and the floor keeps advancing.
