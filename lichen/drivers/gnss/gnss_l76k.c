@@ -62,6 +62,15 @@ MODEM_CHAT_MATCHES_DEFINE(unsol_matches,
 #endif
 );
 
+/* PMTK init: GGA+RMC-only output, 1 Hz fix rate (bead jtl6). An L76K
+ * without the script still streams full NMEA at 9600 — the script
+ * only trims traffic, so failure is non-fatal. */
+MODEM_CHAT_SCRIPT_NO_ABORT_DEFINE(
+	gnss_l76k_init_script,
+	MODEM_CHAT_SCRIPT_CMD_RESP_NONE("$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*28", 100),
+	MODEM_CHAT_SCRIPT_CMD_RESP_NONE("$PMTK220,1000*1F", 100),
+	MODEM_CHAT_SCRIPT_END);
+
 /* Passive-only (mirrors the AG3335 driver): the L76K streams NMEA at
  * 9600 baud unconfigured; PMTK configuration (output message set,
  * update rate, GNSS search mode) is a follow-up bead. All

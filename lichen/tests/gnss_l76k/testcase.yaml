@@ -1,0 +1,4 @@
+tests:
+  gnss.l76k.build:
+    platform_allow: native_sim/native/64 native_sim
+    tags: gnss
