@@ -25,6 +25,7 @@ from lichen.gradient import GradientTable
 from lichen.ipv6.packet import IPv6Packet
 from lichen.loadng.discovery import LoadngRouter
 from lichen.rpl.dodag import DodagState
+from lichen.rpl.routing import RoutingError as RplRoutingError
 from lichen.rpl.routing import survey_source_route
 
 logger = logging.getLogger(__name__)
@@ -480,7 +481,7 @@ class Router:
         # node's receive path advances before routing.
         try:
             in_transit = survey_source_route(packet)
-        except RoutingError as error:
+        except (RoutingError, RplRoutingError) as error:
             logger.debug("route: dropping packet with invalid source-route header: %s", error)
             return RouteDecision.DROP, None
         if in_transit:

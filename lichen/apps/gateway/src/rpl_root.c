@@ -163,7 +163,7 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 	 * SCHC Rule Version option (spec 5.7: 2-byte header + 1-byte version) */
 	uint8_t buf[IPV6_HDR_LEN + ICMPV6_HDR_LEN + LICHEN_RPL_DIO_BASE_LEN +
 		    2 + LICHEN_RPL_DODAG_CONFIG_DATA_LEN + 2 +
-		    LICHEN_RPL_SCHC_RULE_VERSION_DATA_LEN];
+		    LICHEN_RPL_SCHC_RULE_VERSION_DATA_LEN + 3];
 	uint8_t src[16], dst[16] = RPL_MULTICAST_ADDR;
 
 	/* DIOs originate from the root's own link-local address */
@@ -223,7 +223,21 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 		return false;
 	}
 
-	size_t rpl_body_len = (size_t)dio_len + (size_t)opt_len + (size_t)rv_len;
+	/* Spec 3.4 R-02-016: every DIO usable for parent selection MUST
+	 * advertise the DODAG's assigned SF (option 0x14, 3-byte TLV). */
+	uint8_t *sf_opt = rpl + dio_len + opt_len + rv_len;
+	int sf_len = lichen_rpl_assigned_sf_write(
+		root->dodag.assigned_sf ? root->dodag.assigned_sf : 10,
+		sf_opt,
+		sizeof(buf) - IPV6_HDR_LEN - ICMPV6_HDR_LEN - dio_len -
+			opt_len - rv_len);
+	if (sf_len < 0) {
+		LOG_ERR("ASSIGNED_SF option serialize failed: %d", sf_len);
+		return false;
+	}
+
+	size_t rpl_body_len = (size_t)dio_len + (size_t)opt_len +
+			      (size_t)rv_len + (size_t)sf_len;
 	size_t icmp_len = ICMPV6_HDR_LEN + rpl_body_len;
 
 	/* Build IPv6 header */
