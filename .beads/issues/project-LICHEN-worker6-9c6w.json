@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-9c6w",
+  "title": "C link: TX-time BusyPercent sampler (R-02a-131) — smallest slice of b7z9.29",
+  "description": "Smallest slice of b7z9.29 (decompose-first): R-02a-131 (MUST) BusyPercent MUST be TX-time based occupancy, MUST NOT be RSSI-derived — no sampler exists in any language. Add to lichen/subsys/lichen/link/rf_health.{c,h}: record_tx_airtime_us(airtime_us) accumulating TX time in a rolling window; busy_percent = TX time / window * 100 clamped [0,100]; window constant named per spec (RF_METRICS_WINDOW_SF=32 superframes * slot duration — for the sampler expose the window in ms as a config). No RSSI input anywhere in the path. Host CTest cases in lichen/tests/rf_health: zero, partial, saturation clamp, window slide. Parent residue stays (rolling window reset, MitigateInterference, periodic re-invocation).",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T17:32:57.326108125Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T17:33:18.425135961Z",
+  "started_at": "2026-09-01T17:33:18.425135961Z",
+  "lease_expires_at": "2026-09-01T17:38:18.425135961Z",
+  "heartbeat_at": "2026-09-01T17:33:18.425135961Z",
+  "labels": [
+    "zephyr",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-9c6w",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.29",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T17:32:57.468844854Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
