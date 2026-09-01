@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-0kli",
+  "title": "Python: DTN S-flag HBH option (0x03) ingress parity",
+  "description": "Consumer follow-up from vectors bead 7mgm, python side: python/src/lichen/routing/router.py has DTN buffering (MAX_DTN_TTL_SECONDS, dtn_buffer) but no IPv6 hop-by-hop Type=0x03 DTN option parsing (S-flag 0x80 + absolute expiry u32 BE, spec/05-routing.md 9.8). Implement per test/vectors/dtn_sflag_hbh.json (dtn_hbh cases) with the R-05-080 clockless fail-open rule, consuming the vectors in a python test. C reference: lichen/subsys/lichen/routing/router.c IPV6_HBH_OPT_DTN path.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T07:35:15.723256367Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T07:41:34.267818392Z",
+  "started_at": "2026-09-01T07:41:34.267818392Z",
+  "lease_expires_at": "2026-09-01T07:46:34.267818392Z",
+  "heartbeat_at": "2026-09-01T07:41:34.267818392Z",
+  "labels": [
+    "python",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-0kli",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.8",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T07:35:15.8468184Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
