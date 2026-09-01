@@ -17,6 +17,7 @@ zephyr_library_sources(
   rpl_dao_timing.c
   rpl_dao_process.c
   rpl_short_assignment.c
+  rpl_dao_tx_persist.c
 )
 
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
