@@ -279,42 +279,45 @@ class TestSignAndVerify:
         privkey, pubkey = keypair
         cache = SlotClaimReplayCache()
 
+        iid = _bound_iid(pubkey)
+        expiry = int(time.time()) + 8
+
         # First claim (superframe 5) is accepted and advances the cache.
         claim_5 = sign_slot_claim(
-            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=5),
+            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=5, expiry=expiry, claim_seq=0),
             privkey,
             pubkey,
         )
-        is_valid, reason = verify_slot_claim(claim_5, pubkey, cache)
+        is_valid, reason = verify_slot_claim(claim_5, pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
         # Replay of the same superframe -> REPLAY.
         replay = sign_slot_claim(
-            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=5),
+            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=5, expiry=expiry, claim_seq=1),
             privkey,
             pubkey,
         )
-        is_valid, reason = verify_slot_claim(replay, pubkey, cache)
+        is_valid, reason = verify_slot_claim(replay, pubkey, replay_cache=cache)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY
 
         # Older superframe -> REPLAY.
         older = sign_slot_claim(
-            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=4),
+            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=4, expiry=expiry, claim_seq=2),
             privkey,
             pubkey,
         )
-        is_valid, reason = verify_slot_claim(older, pubkey, cache)
+        is_valid, reason = verify_slot_claim(older, pubkey, replay_cache=cache)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY
 
         # Strictly advancing superframe -> accepted.
         newer = sign_slot_claim(
-            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=6),
+            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=6, expiry=expiry, claim_seq=3),
             privkey,
             pubkey,
         )
-        is_valid, reason = verify_slot_claim(newer, pubkey, cache)
+        is_valid, reason = verify_slot_claim(newer, pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
     def test_replay_cache_tracks_gateways_independently(
@@ -323,23 +326,36 @@ class TestSignAndVerify:
         privkey, pubkey = keypair
         cache = SlotClaimReplayCache()
 
+        expiry = int(time.time()) + 8
         first = sign_slot_claim(
-            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=10),
+            SlotClaim(
+                gateway_iid=_bound_iid(pubkey),
+                slots=(0,),
+                superframe_id=10,
+                expiry=expiry,
+                claim_seq=0,
+            ),
             privkey,
             pubkey,
         )
-        is_valid, _ = verify_slot_claim(first, pubkey, cache)
+        is_valid, _ = verify_slot_claim(first, pubkey, replay_cache=cache)
         assert is_valid
 
         # A different gateway starting at a lower superframe is independent.
         second_keypair = schnorr48.derive_keypair(bytes(range(32)))
         other_priv, other_pub = second_keypair
         other = sign_slot_claim(
-            SlotClaim(gateway_iid="aabbccddeeff0011", slots=(0,), superframe_id=1),
+            SlotClaim(
+                gateway_iid=_bound_iid(other_pub),
+                slots=(0,),
+                superframe_id=1,
+                expiry=expiry,
+                claim_seq=0,
+            ),
             other_priv,
             other_pub,
         )
-        is_valid, reason = verify_slot_claim(other, other_pub, cache)
+        is_valid, reason = verify_slot_claim(other, other_pub, replay_cache=cache)
         assert is_valid and reason is None
 
     def test_replay_cache_unchanged_without_cache_arg(
@@ -349,7 +365,13 @@ class TestSignAndVerify:
         replay tracking (existing callers unaffected)."""
         privkey, pubkey = keypair
         claim_1 = sign_slot_claim(
-            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=1),
+            SlotClaim(
+                gateway_iid=_bound_iid(pubkey),
+                slots=(0,),
+                superframe_id=1,
+                expiry=int(time.time()) + 8,
+                claim_seq=0,
+            ),
             privkey,
             pubkey,
         )
