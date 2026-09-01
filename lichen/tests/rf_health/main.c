@@ -52,7 +52,7 @@ int main(void)
 	fill_loss(&h, 4, 1);
 	lichen_rf_health_record_density(&h, LICHEN_RF_DENSITY_HIGH + 1);
 	CHECK(lichen_rf_health_should_rebalance(&h),
-	      "density > 8 rebalances regardless of loss");
+	      "density > 10 rebalances regardless of loss");
 
 	/* Fractional loss above 0.25 (25 fails / 99 tx = 0.2525) must
 	 * rebalance per ccp16_ema_loss_threshold.json
