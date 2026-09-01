@@ -8,7 +8,7 @@
     "rule7_address_policy": 14,
     "rule255_endpoint_policy": 11,
     "duplicate_idempotence": 1,
-    "rule255_rx_structural_reject": 3
+    "rule255_rx_byte_preserving_address": 3
   },
   "vectors": [
     {
@@ -815,36 +815,33 @@
     },
     {
       "name": "rule255_rx_reject_unspecified_source",
-      "category": "rule255_rx_structural_reject",
+      "category": "rule255_rx_byte_preserving_address",
       "priority": "P1",
-      "description": "An unspecified source is a structural violation rejected in BOTH directions: the emission policy forbids originating it and the decoder's structural validation rejects it before byte preservation.",
+      "description": "An unspecified source is a emission-policy violation that is byte-preserving on receipt: the emission policy forbids originating it and the decoder preserves it verbatim (Rule A).",
       "source_ipv6": "::",
       "destination_ipv6": "2001:db8::1",
-      "expect_valid": false,
-      "expect_error": "invalid_source_address",
-      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations rejected in BOTH directions (emission and decode-time structural validation)."
+      "expect_valid": true,
+      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations TX-only under Rule A (decode preserves verbatim; adjudicated 2026-08-31)."
     },
     {
       "name": "rule255_rx_reject_multicast_source",
-      "category": "rule255_rx_structural_reject",
+      "category": "rule255_rx_byte_preserving_address",
       "priority": "P1",
-      "description": "A multicast source is a structural violation rejected in BOTH directions (emission policy and decoder structural validation).",
+      "description": "A multicast source is a emission-policy violation that is byte-preserving on receipt (emission policy forbids originating it; decode preserves it).",
       "source_ipv6": "ff02::1",
       "destination_ipv6": "2001:db8::1",
-      "expect_valid": false,
-      "expect_error": "invalid_source_address",
-      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations rejected in BOTH directions (emission and decode-time structural validation)."
+      "expect_valid": true,
+      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations TX-only under Rule A (decode preserves verbatim; adjudicated 2026-08-31)."
     },
     {
       "name": "rule255_rx_reject_unspecified_destination",
-      "category": "rule255_rx_structural_reject",
+      "category": "rule255_rx_byte_preserving_address",
       "priority": "P1",
       "description": "An unspecified destination is a structural violation rejected in BOTH directions.",
       "source_ipv6": "2001:db8::1",
       "destination_ipv6": "::",
-      "expect_valid": false,
-      "expect_error": "invalid_destination_address",
-      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations rejected in BOTH directions (emission and decode-time structural validation)."
+      "expect_valid": true,
+      "provenance": "spec/03-adaptation.md profile address policy: unspecified and multicast sources and an unspecified destination are structural violations TX-only under Rule A (decode preserves verbatim; adjudicated 2026-08-31)."
     }
   ]
 }

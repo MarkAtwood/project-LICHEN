@@ -4995,7 +4995,7 @@
             "rule_version",
             "ack_bitmap",
             "rule255_endpoint_policy",
-            "rule255_rx_structural_reject"
+            "rule255_rx_byte_preserving_address"
           ]
         },
         "priority": {
@@ -5346,7 +5346,7 @@
           "if": {
             "properties": {
               "category": {
-                "const": "rule255_rx_structural_reject"
+                "const": "rule255_rx_byte_preserving_address"
               }
             }
           },
@@ -5354,8 +5354,7 @@
             "required": [
               "source_ipv6",
               "destination_ipv6",
-              "expect_valid",
-              "expect_error"
+              "expect_valid"
             ]
           }
         }

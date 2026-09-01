@@ -441,21 +441,22 @@ NOT originate a packet whose source is unspecified, loopback, multicast, or
 IPv4-mapped, nor one whose destination is unspecified, loopback,
 IPv4-mapped, or a multicast address with a scope outside 2-14. A Rule 255
 encoder (and the compression path falling back to it) MUST reject such
-packets. Rule 255 DECODING is byte-preserving with respect to the emission
-policy: a decoder MUST validate structure and checksums plus the structural
-address constraints (an unspecified or multicast source and an unspecified
-destination are invalid on receipt as well as on emission), but MUST NOT
-re-apply the emission-only constraints (loopback, IPv4-mapped, or multicast
-destination scope outside 2-14). A structurally valid packet whose only
-defect is an emission-policy violation is preserved verbatim rather than
-reinterpreted or dropped as malformed, because a packet one implementation
-cannot originate is still delivered intact by the other.
-On the origination and forwarding paths, where endpoint policy is
-evaluated, integrity and structural failures report before endpoint-shape
-opinions: a packet failing both a structural or checksum check and an
-endpoint-policy check MUST be reported as a structure or checksum error.
-Validation reports are local diagnostics only and MUST NOT themselves be
-transmitted as protocol errors.
+packets. Rule 255 DECODING is fully byte-preserving (adjudicated
+2026-08-31, Rule A): a decoder MUST validate framing, structure, and
+checksums, and MUST NOT apply ANY endpoint address policy on receipt —
+not the emission-only constraints (loopback, IPv4-mapped, multicast
+destination scope outside 2-14) and not the structural address
+constraints (an unspecified or multicast source, or an unspecified
+destination). A well-framed packet with a valid checksum is preserved
+verbatim rather than reinterpreted or dropped as malformed, because a
+packet one implementation cannot originate is still delivered intact by
+the other. All endpoint address policy lives on the origination and
+forwarding paths. On those paths, integrity and structural failures
+report before endpoint-shape opinions: a packet failing both a
+structural or checksum check and an endpoint-policy check MUST be
+reported as a structure or checksum error. Validation reports are local
+diagnostics only and MUST NOT themselves be transmitted as protocol
+errors.
 
 **Profile size ceiling (canonical raw-packet bound):**
 `SCHC_FRAGMENT_MAX_PACKET_SIZE` (126 tiles x 179 bytes = 22554 octets) is the

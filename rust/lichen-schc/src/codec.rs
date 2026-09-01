@@ -282,20 +282,10 @@ fn validate_full_ipv6_structure(packet: &[u8]) -> Result<(), SchcError> {
     let src = &packet[8..24];
     let dst = &packet[24..40];
 
-    // Structural address constraints apply in BOTH directions (spec/03):
-    // unspecified or multicast sources and an unspecified destination are
-    // invalid on receipt as well as on emission. Loopback, IPv4-mapped, and
-    // multicast-destination-scope remain emission-only policy.
-    if src.iter().all(|&b| b == 0) {
-        return Err(SchcError::InvalidPacket("invalid IPv6 source address"));
-    }
-    if src[0] == 0xff {
-        return Err(SchcError::InvalidPacket("invalid IPv6 source address"));
-    }
-    if dst.iter().all(|&b| b == 0) {
-        return Err(SchcError::InvalidPacket("invalid IPv6 destination address"));
-    }
-
+    // Rule 255 RX is byte-preserving (adjudicated 2026-08-31, Rule A):
+    // framing, structure, and checksums only. Endpoint address policy —
+    // including unspecified/multicast sources and an unspecified
+    // destination — is TX-side emission policy (validate_address_policy).
     let mut next_header = packet[6];
     let mut offset = 40usize;
     let mut upper_layer_destination = dst;
