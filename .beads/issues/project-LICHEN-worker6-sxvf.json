@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-sxvf",
+  "title": "L76K GNSS driver for T-Echo (Zephyr, based on AG3335 pattern)",
+  "description": "T-Echo uses Quectel L76K GNSS on UART1 at 9600 baud. No driver exists — only AG3335 (T1000-E, 115200 baud) is implemented. Create lichen/drivers/gnss/gnss_l76k.c + DTS binding based on gnss_ag3335.c pattern. Differences from AG3335: default 9600 baud, may need PMTK init commands for configuration, configurable PPS, standby/backup power modes. The Zephyr GNSS_NMEA0183 parser is generic (wildcard talker ID) so sentence parsing should work — but must be validated against real L76K output (see child bead).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T05:38:37.588155909Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T05:38:37.588155909Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-sxvf",
+      "depends_on_id": "project-LICHEN-worker6-ak84",
+      "type": "blocks",
+      "created_at": "2026-09-01T05:38:47.080893705Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
