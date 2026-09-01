@@ -201,7 +201,7 @@ class PeerDensityTracker:
 
     def record_peer(self, iid: tuple[int, ...] | bytes, superframe: int) -> None:
         """Record one peer heard in the given superframe."""
-        if isinstance(iid, (bytes, bytearray)):
+        if isinstance(iid, bytes | bytearray):
             iid = tuple(iid)
         if superframe > self._current_sf:
             self._current_sf = superframe

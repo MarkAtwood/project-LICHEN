@@ -396,7 +396,7 @@ class DodagState:
         link_etx: float,
     ) -> None:
         _require_finite_non_negative_etx(link_etx)
-        if not isinstance(neighbor_id, (IPv6Address, str)):
+        if not isinstance(neighbor_id, IPv6Address | str):
             raise TypeError(
                 f"neighbor_id must be IPv6Address or str, got {type(neighbor_id).__name__}"
             )

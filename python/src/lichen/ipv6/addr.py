@@ -47,7 +47,7 @@ def to_ipv6(value: IPv6Address | str | bytes) -> IPv6Address:
     # SECURITY: bool subclasses int; IPv6Address(True) is ::1 and
     # IPv6Address(False) is ::. Reject bool before any int-like coercion.
     # Integers are not in the documented contract.
-    if isinstance(value, bool) or not isinstance(value, (str, bytes)):
+    if isinstance(value, bool) or not isinstance(value, str | bytes):
         raise AddrError("IPv6 address must be IPv6Address, str, or 16 packed bytes")
     if isinstance(value, bytes) and len(value) != 16:
         raise AddrError(f"packed IPv6 address must be 16 bytes, got {len(value)}")

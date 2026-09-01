@@ -175,7 +175,7 @@ class RangeTestResource(resource.ObservableResource):
                 interval = body["interval_ms"]
                 if (
                     isinstance(interval, bool)
-                    or not isinstance(interval, (int, float))
+                    or not isinstance(interval, int | float)
                     or (isinstance(interval, float) and not math.isfinite(interval))
                     or interval <= 0
                 ):

@@ -89,7 +89,7 @@ def is_reserved_addr(addr: int) -> bool:
 
 
 def _check_eui64(eui64: bytes) -> None:
-    if not isinstance(eui64, (bytes, bytearray)):
+    if not isinstance(eui64, bytes | bytearray):
         raise TypeError("eui64 must be bytes")
     if len(eui64) != 8:
         raise ValueError(f"EUI-64 must be 8 bytes, got {len(eui64)}")

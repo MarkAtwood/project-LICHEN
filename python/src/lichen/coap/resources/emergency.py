@@ -224,7 +224,7 @@ class SosResource(resource.ObservableResource):
             return Message(code=aiocoap.BAD_REQUEST)
         if (
             isinstance(timestamp, bool)
-            or not isinstance(timestamp, (int, float))
+            or not isinstance(timestamp, int | float)
             or (isinstance(timestamp, float) and not math.isfinite(timestamp))
             or timestamp < 0
         ):
@@ -425,7 +425,7 @@ class RollcallResource(resource.ObservableResource):
         for value in (started, timeout_s):
             if (
                 isinstance(value, bool)
-                or not isinstance(value, (int, float))
+                or not isinstance(value, int | float)
                 or (isinstance(value, float) and not math.isfinite(value))
             ):
                 return Message(code=aiocoap.BAD_REQUEST)
@@ -435,7 +435,7 @@ class RollcallResource(resource.ObservableResource):
             return Message(code=aiocoap.BAD_REQUEST)
         # Validate id type: only str or int allowed (null/bytes/list/dict rejected)
         raw_id = data["id"]
-        if raw_id is None or isinstance(raw_id, bool) or not isinstance(raw_id, (str, int)):
+        if raw_id is None or isinstance(raw_id, bool) or not isinstance(raw_id, str | int):
             return Message(code=aiocoap.BAD_REQUEST)
         roll_id = str(raw_id)
         self._prune_expired()
@@ -539,7 +539,7 @@ class CheckInResource(resource.Resource):
             return Message(code=aiocoap.BAD_REQUEST)
         if (
             isinstance(ts, bool)
-            or not isinstance(ts, (int, float))
+            or not isinstance(ts, int | float)
             or (isinstance(ts, float) and not math.isfinite(ts))
             or ts < 0
         ):
@@ -564,7 +564,7 @@ class CheckInResource(resource.Resource):
         for value, limit in ((lat, 90), (lon, 180)):
             if value is None:
                 continue
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if isinstance(value, bool) or not isinstance(value, int | float):
                 return Message(code=aiocoap.BAD_REQUEST)
             if isinstance(value, float) and not math.isfinite(value):
                 return Message(code=aiocoap.BAD_REQUEST)

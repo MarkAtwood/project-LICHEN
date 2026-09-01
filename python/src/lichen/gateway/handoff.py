@@ -251,11 +251,11 @@ class FreshnessState:
         # Validate types
         if not isinstance(sequence, int) or sequence < 0:
             raise HandoffError("sequence must be a non-negative integer")
-        if active_until is not None and not isinstance(active_until, (int, float)):
+        if active_until is not None and not isinstance(active_until, int | float):
             raise HandoffError("active_until must be numeric")
-        if not isinstance(retain_until, (int, float)):
+        if not isinstance(retain_until, int | float):
             raise HandoffError("retain_until must be numeric")
-        if not isinstance(updated_at, (int, float)):
+        if not isinstance(updated_at, int | float):
             raise HandoffError("updated_at must be numeric")
 
         return cls(

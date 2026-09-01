@@ -313,7 +313,7 @@ class TestCoapOptionMalformedVectors:
         wire_options = bytes.fromhex(vec["option_byte"] + vec["extended_length"]) + bytes(length)
         decoded = _decode_wire(_SCANNER_HEADER + wire_options)
         values = [
-            bytes(o.value) if isinstance(o.value, (bytes, bytearray)) else o.value
+            bytes(o.value) if isinstance(o.value, bytes | bytearray) else o.value
             for o in decoded.opt.option_list()
         ]
         assert any(len(v) == length for v in values)

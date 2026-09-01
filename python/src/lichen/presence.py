@@ -114,7 +114,7 @@ def _require_addr(value: object) -> str:
 def _finite_non_negative(value: object, name: str) -> float:
     if (
         isinstance(value, bool)
-        or not isinstance(value, (int, float))
+        or not isinstance(value, int | float)
         or (isinstance(value, float) and not math.isfinite(value))
         or value < 0
     ):

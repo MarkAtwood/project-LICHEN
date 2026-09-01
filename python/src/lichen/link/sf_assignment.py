@@ -30,7 +30,7 @@ def assigned_sf_hash_based(iid: bytes) -> int:
     Returns:
         SF in 7..12 inclusive.
     """
-    if not isinstance(iid, (bytes, bytearray)):
+    if not isinstance(iid, bytes | bytearray):
         raise TypeError("iid must be bytes")
     if len(iid) == 0:
         raise ValueError("iid must be non-empty")

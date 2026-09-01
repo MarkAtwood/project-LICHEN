@@ -339,7 +339,7 @@ def _is_number(value: object) -> bool:
     Rust ``f64`` timestamp field and are rejected later by the freshness
     guard (=> "stale_timestamp"), exactly as in Rust.
     """
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 @dataclass

@@ -79,7 +79,7 @@ def _freeze(value: object, path: str = "quality") -> QualityValue:
         if not math.isfinite(value):
             raise ValueError(f"{path} floats must be finite")
         return value
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return tuple(_freeze(item, f"{path}[]") for item in value)
     if isinstance(value, Mapping):
         result: dict[str, QualityValue] = {}
@@ -112,7 +112,7 @@ def _gpsd_quality_rejection(
         return "gpsd-time-not-valid"
     if (
         isinstance(measured_accuracy, bool)
-        or not isinstance(measured_accuracy, (int, float))
+        or not isinstance(measured_accuracy, int | float)
         or not math.isfinite(measured_accuracy)
         or measured_accuracy < 0
     ):

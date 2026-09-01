@@ -381,7 +381,7 @@ class SimNodeApp(App[None]):
         except asyncio.CancelledError:
             raise
         except BaseException as e:
-            if isinstance(e, (SystemExit, KeyboardInterrupt, GeneratorExit)):
+            if isinstance(e, SystemExit | KeyboardInterrupt | GeneratorExit):
                 raise
             self._log_event("error", f"Unexpected error: {e}")
             if self._radio is not None:
@@ -405,7 +405,7 @@ class SimNodeApp(App[None]):
         except asyncio.CancelledError:
             raise
         except BaseException as e:
-            if isinstance(e, (SystemExit, KeyboardInterrupt, GeneratorExit)):
+            if isinstance(e, SystemExit | KeyboardInterrupt | GeneratorExit):
                 raise
             self._log_event("error", f"Error during disconnect: {e}")
         finally:

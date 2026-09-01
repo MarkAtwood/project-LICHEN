@@ -114,7 +114,7 @@ def _compact_repr(obj: object, depth: int = 0) -> str:
         return "null"
     if isinstance(obj, bool):
         return "true" if obj else "false"
-    if isinstance(obj, (int, float)):
+    if isinstance(obj, int | float):
         # Compact number formatting
         if isinstance(obj, float):
             if obj == int(obj):
@@ -128,7 +128,7 @@ def _compact_repr(obj: object, depth: int = 0) -> str:
         return json.dumps(obj)
     if isinstance(obj, bytes):
         return f"<{len(obj)}B>"
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         if len(obj) == 0:
             return "[]"
         items = [_compact_repr(x, depth + 1) for x in obj[:10]]

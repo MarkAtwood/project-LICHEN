@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import json
 import time
-import time
 from pathlib import Path
 
 import pytest
 
 from lichen.crypto import schnorr48
-from lichen.gateway import slot_claim
 from lichen.crypto.identity import _pubkey_to_iid
+from lichen.gateway import slot_claim
 from lichen.gateway.slot_claim import (
     ClaimError,
     ClaimRejectReason,
@@ -680,9 +679,9 @@ class TestSlotClaimVectors:
                 # Sign the claims per vector's "both_signatures_valid: true".
                 # GCP-6.5 step 6 binds gateway_iid to the signing key's IID,
                 # so the fixture IIDs are replaced with key-derived ones.
-                from lichen.crypto.identity import _pubkey_to_iid
-
                 import time
+
+                from lichen.crypto.identity import _pubkey_to_iid
 
                 expiry = int(time.time()) + 8
                 claim_a = sign_slot_claim(

@@ -132,7 +132,7 @@ def _oscore_identity(request: Message) -> str | None:
         identity = getattr(oscore_context, "recipient_id", None) or getattr(
             oscore_context, "kid", None
         )
-        if isinstance(identity, (bytes, bytearray)) and identity:
+        if isinstance(identity, bytes | bytearray) and identity:
             return bytes(identity).hex()
         if isinstance(identity, str) and identity:
             return identity
@@ -201,7 +201,7 @@ def _extract_anonymous(records: list[SenmlRecord]) -> bool:
 
 
 def _finite_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
 class ConfessionsResource(resource.ObservableResource):

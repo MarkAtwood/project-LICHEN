@@ -61,7 +61,7 @@ def _scalar_oscore_identity(value: object) -> str | None:
     """Return a non-empty scalar identity without stringifying objects."""
     if isinstance(value, str) and value:
         return value
-    if isinstance(value, (bytes, bytearray)) and value:
+    if isinstance(value, bytes | bytearray) and value:
         return bytes(value).hex()
     return None
 
@@ -208,7 +208,7 @@ def _numeric_value(record: SenmlRecord) -> float | None:
     NaN/inf handling downstream.
     """
     value = record.v
-    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+    if isinstance(value, bool) or not isinstance(value, int | float | Decimal):
         return None
     if isinstance(value, Decimal) and not value.is_finite():
         return None

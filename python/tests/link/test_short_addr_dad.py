@@ -141,7 +141,7 @@ def test_jitter_source_rejects_invalid_results(source_value: object) -> None:
             del stop
             return source_value  # type: ignore[return-value]
 
-    error = TypeError if isinstance(source_value, (bool, float)) else ValueError
+    error = TypeError if isinstance(source_value, bool | float) else ValueError
     with pytest.raises(error):
         dad_jitter_ms(InvalidSource())
 

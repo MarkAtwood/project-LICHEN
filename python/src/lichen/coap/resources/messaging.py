@@ -103,7 +103,7 @@ def _bound_oscore_identity(value: object) -> str | None:
     """
     if isinstance(value, str) and value:
         return value
-    if isinstance(value, (bytes, bytearray)) and value:
+    if isinstance(value, bytes | bytearray) and value:
         return bytes(value).hex()
     durable = getattr(value, "durable_context_id", None)
     if callable(durable):
