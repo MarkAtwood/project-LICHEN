@@ -941,7 +941,10 @@ async fn forward_mesh_to_upstream<T: TunLike>(
         if ipv6.len() >= IPV6_HEADER_LEN {
             dst.copy_from_slice(&ipv6[field::DST_OFFSET..field::DST_OFFSET + 16]);
             if gw.is_local_mesh(&dst) {
-                return gw.mesh_to_mesh(&ipv6).await;
+                // Hairpinned mesh->mesh traffic is FORWARDED (mesh ingress,
+                // not root egress): root_originated = false forces the spec
+                // 8.9 tunnel for any src == root_addr spoof.
+                return gw.mesh_to_mesh(&ipv6, false).await;
             }
             if dst[0] == 0xff && !gw.multicast_peering_enabled() {
                 // Spec 04-network 6.3.4: a border router MUST NOT forward

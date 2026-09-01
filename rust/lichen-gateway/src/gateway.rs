@@ -30,7 +30,7 @@ use lichen_node::{
     AnnounceTrustStore, RplEvent,
 };
 use lichen_oscore::{
-    Context, ContextId, SenderSequenceState, ContextStateStore, COAP_OPTION_OSCORE,
+    Context, ContextId, ContextStateStore, SenderSequenceState, COAP_OPTION_OSCORE,
 };
 #[cfg(test)]
 use lichen_schc::codec::{decompress, SchcError};
@@ -555,7 +555,10 @@ impl ContextStateStore for GatewayOscoreSenderStore {
     /// or an unverifiable record. A missing floor record heals forward to
     /// the sealed state (first-accept crash window or lost floor file) so
     /// the context is not permanently bricked.
-    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(
+        &mut self,
+        context_id: &ContextId,
+    ) -> Result<Option<SenderSequenceState>, Self::Error> {
         if let Some(state) = self.cached(context_id) {
             return Ok(Some(state));
         }
@@ -655,12 +658,19 @@ impl ContextStateStore for GatewayOscoreSenderStore {
         Ok(true)
     }
 
-    fn load_recipient(&mut self, _context_id: &ContextId) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+    fn load_recipient(
+        &mut self,
+        _context_id: &ContextId,
+    ) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
         // TODO(zlrx): persist recipient replay state for gateway OSCORE contexts
         Ok(None)
     }
 
-    fn save_recipient(&mut self, _context_id: &ContextId, _state: &lichen_oscore::RecipientReplayState) -> Result<(), Self::Error> {
+    fn save_recipient(
+        &mut self,
+        _context_id: &ContextId,
+        _state: &lichen_oscore::RecipientReplayState,
+    ) -> Result<(), Self::Error> {
         // TODO(zlrx): persist recipient replay state for gateway OSCORE contexts
         Ok(())
     }
@@ -1601,7 +1611,7 @@ impl Gateway {
             return None;
         }
         if self.is_local_mesh(&dst) {
-            self.mesh_to_mesh(ipv6_packet).await
+            self.mesh_to_mesh(ipv6_packet, false).await
         } else {
             self.transmit_ipv6_wire(ipv6_packet, None).await
         }
@@ -1667,7 +1677,7 @@ impl Gateway {
     ///
     /// Link-local destinations are forwarded verbatim. Native 0200::/8
     /// destinations require an admitted RPL route; LICHEN does not use ULA.
-    pub async fn mesh_to_mesh(&mut self, ipv6: &[u8]) -> Option<Vec<u8>> {
+    pub async fn mesh_to_mesh(&mut self, ipv6: &[u8], root_originated: bool) -> Option<Vec<u8>> {
         if ipv6.len() < 40 || ipv6[0] >> 4 != 6 {
             warn!(len = ipv6.len(), "mesh_to_mesh: not IPv6");
             return None;
@@ -1693,9 +1703,18 @@ impl Gateway {
                 ipv6.to_vec()
             } else {
                 let root_addr = self.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
-                let is_root_origin = ipv6[8..24] == root_addr;
-                let is_host_route = route.last() == Some(&dst);
-                if is_root_origin && is_host_route {
+                // Origination is a property of the INJECTION PATH, never the
+                // packet: upstream_to_mesh (TUN) and mesh hairpin ingress
+                // perform no source validation, so the source bytes (the
+                // root's broadcast, key-derived link-local address) are fully
+                // attacker-controlled. A forwarded packet claiming
+                // src == root_addr is a spoof and MUST take the IPv6-in-IPv6
+                // tunnel per spec 8.9 (the tunnel is what lets E verify the
+                // inner destination). Only root-originated egress may pass
+                // root_originated = true and inline an RH3 source route — no
+                // production caller does yet (root egress is not wired); the
+                // branch is exercised by root_originated_downward_srh.
+                if root_originated {
                     // RH3 insertion only, not an IPv6-in-IPv6 tunnel: no
                     // inner/outer encapsulation, so spec §8.9's inner Hop
                     // Limit decrement does NOT apply here
@@ -1858,7 +1877,10 @@ mod tests {
         let sealing_seed = [0x32; 32];
         let mut store =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(store.compare_exchange_sender(&context_id, None, state), Ok(true));
+        assert_eq!(
+            store.compare_exchange_sender(&context_id, None, state),
+            Ok(true)
+        );
         drop(store);
         let mut reopened =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
@@ -1894,7 +1916,10 @@ mod tests {
         };
         let mut store =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(store.compare_exchange_sender(&context_id, None, first), Ok(true));
+        assert_eq!(
+            store.compare_exchange_sender(&context_id, None, first),
+            Ok(true)
+        );
         let record_path = path
             .join("gcp-oscore-sender")
             .join(GatewayOscoreSenderStore::key(&context_id));
@@ -1982,7 +2007,10 @@ mod tests {
 
         let mut store =
             GatewayOscoreSenderStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
-        assert_eq!(store.compare_exchange_sender(&context_id, None, first), Ok(true));
+        assert_eq!(
+            store.compare_exchange_sender(&context_id, None, first),
+            Ok(true)
+        );
         let stale_record = std::fs::read(&record_path).unwrap();
         assert_eq!(
             store.compare_exchange_sender(&context_id, Some(first), second),
@@ -2450,7 +2478,7 @@ mod tests {
             0x60, 0, 0, 0, 40, 0, 58, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
             0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3,
         ];
-        let result = gw.mesh_to_mesh(&packet).await;
+        let result = gw.mesh_to_mesh(&packet, false).await;
         assert!(result.is_none());
     }
 
@@ -2489,14 +2517,14 @@ mod tests {
         };
 
         // HL 2: after forwarding decrement 1 remains; SL 1 is not < 1.
-        let low = gw.mesh_to_mesh(&make_packet(2)).await;
+        let low = gw.mesh_to_mesh(&make_packet(2), false).await;
         assert!(
             low.is_none(),
             "route MUST NOT be emitted when SL >= remaining HL"
         );
 
         // HL 1: forwarding decrement alone underflows.
-        let zero = gw.mesh_to_mesh(&make_packet(1)).await;
+        let zero = gw.mesh_to_mesh(&make_packet(1), false).await;
         assert!(zero.is_none());
     }
 
@@ -2572,7 +2600,10 @@ mod tests {
             )
             .unwrap();
 
-        let result = gw.mesh_to_mesh(&packet).await;
+        // Root-originated egress: only this path may inline an RH3 source
+        // route (the selector is the injection-path flag, not the spoofable
+        // source bytes).
+        let result = gw.mesh_to_mesh(&packet, true).await;
         assert!(result.is_some(), "expected SRH-compressed payload");
         let wire = result.unwrap();
         let compressed = l2_from_wire(&wire);
@@ -2643,7 +2674,7 @@ mod tests {
         let packet = forwarded_udp_packet(ll(9).0, &node_addr, 64);
         let inner_offset = 40 + 8 + 16 * 2; // outer hdr + SRH(2 addresses)
 
-        let wire = gw.mesh_to_mesh(&packet).await.unwrap();
+        let wire = gw.mesh_to_mesh(&packet, false).await.unwrap();
         let compressed = l2_from_wire(&wire);
         assert_eq!(compressed[0], L2_DISPATCH_SCHC);
 
@@ -2673,12 +2704,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn root_spoofed_source_on_forwarded_path_takes_tunnel_not_rh3() {
+        let (mut gw, relay1, _relay2, node_addr) = encapsulation_fixture();
+        // Mesh-ingress body claiming src == root_addr: the source bytes are
+        // attacker-controlled on every forwarding path (TUN or mesh hairpin),
+        // so the selector MUST ignore them and force the spec 8.9 tunnel.
+        let root_addr = gw.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
+        let packet = forwarded_udp_packet(root_addr, &node_addr, 64);
+        let inner_offset = 40 + 8 + 16 * 2; // outer hdr + SRH(2 addresses)
+
+        let wire = gw.mesh_to_mesh(&packet, false).await.unwrap();
+        let compressed = l2_from_wire(&wire);
+        assert_eq!(compressed[0], L2_DISPATCH_SCHC);
+
+        let mut decompressed = [0u8; SCHC_MAX_DECOMPRESSED];
+        let n = decompress(&compressed[1..], &mut decompressed).expect("decompress");
+        assert!(n >= inner_offset + 40, "outer + SRH + inner IPv6 header");
+        assert_eq!(decompressed[6], 43, "outer NH = Routing (SRH)");
+        assert_eq!(
+            decompressed[40],
+            next_header::IPV6_IN_IPV6,
+            "spoofed root source MUST be tunnelled, not RH3-inlined"
+        );
+        assert_eq!(
+            decompressed[inner_offset + 7],
+            61,
+            "inner HL decremented (tunnel semantics, not root-egress inline)"
+        );
+    }
+
+    #[tokio::test]
     async fn encapsulation_hop_budget_guard() {
         let (mut gw, _relay1, _relay2, node_addr) = encapsulation_fixture();
         // num_addrs = 2; HL=4 leaves 3 after the forwarding decrement (> 2):
         // allowed with inner HL = 1.
         let packet = forwarded_udp_packet(ll(9).0, &node_addr, 4);
-        let wire = gw.mesh_to_mesh(&packet).await.unwrap();
+        let wire = gw.mesh_to_mesh(&packet, false).await.unwrap();
         let compressed = l2_from_wire(&wire);
         let mut decompressed = [0u8; SCHC_MAX_DECOMPRESSED];
         let n = decompress(&compressed[1..], &mut decompressed).expect("decompress");
@@ -2692,9 +2753,9 @@ mod tests {
         // HL=3 leaves 2 after the forwarding decrement (not strictly > 2) and
         // HL=0 cannot be forwarded at all: both emit no route.
         let packet = forwarded_udp_packet(ll(9).0, &node_addr, 3);
-        assert!(gw.mesh_to_mesh(&packet).await.is_none());
+        assert!(gw.mesh_to_mesh(&packet, false).await.is_none());
         let packet = forwarded_udp_packet(ll(9).0, &node_addr, 0);
-        assert!(gw.mesh_to_mesh(&packet).await.is_none());
+        assert!(gw.mesh_to_mesh(&packet, false).await.is_none());
     }
 
     fn register_handoff_node(gw: &mut Gateway) -> [u8; 16] {
