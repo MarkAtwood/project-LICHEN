@@ -33,6 +33,26 @@ use super::util::{
 };
 use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
 
+/// Extract the COSE_Sign1 payload of a root-DIO-signature option (type
+/// 0x17) from the DIO wire (base + option TLVs). None when absent or
+/// malformed-tlv.
+fn dio_root_signature_option(dio_wire: &[u8], base_len: usize) -> Option<&[u8]> {
+    let opts = dio_wire.get(base_len..)?;
+    let mut pos = 0usize;
+    while pos + 2 <= opts.len() {
+        let opt_type = opts[pos];
+        let opt_len = opts[pos + 1] as usize;
+        if pos + 2 + opt_len > opts.len() {
+            return None;
+        }
+        if opt_type == lichen_rpl::message::OPT_ROOT_DIO_SIGNATURE {
+            return Some(&opts[pos + 2..pos + 2 + opt_len]);
+        }
+        pos += 2 + opt_len;
+    }
+    None
+}
+
 impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Authenticate and admit one complete link-layer wire frame received by
     /// an external border-router transport.
@@ -493,11 +513,57 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     ) -> Result<RplReceiveOutcome, RplReceiveError> {
         if received.ipv6.get(IPV6_HEADER_LEN + 1).copied() == Some(rpl_code::DIO) {
             let body_offset = IPV6_HEADER_LEN + hdr_field::BODY_OFFSET;
-            let Ok(_dio) = lichen_rpl::message::Dio::from_bytes(
+            let Ok(dio) = lichen_rpl::message::Dio::from_bytes(
                 received.ipv6.get(body_offset..).unwrap_or_default(),
             ) else {
                 return Ok(RplReceiveOutcome::RplRejected);
             };
+            // Spec 06-security.md 8.10.1 (L679): a DIO MAY carry the root
+            // signature option. Present -> verify (fail-closed); absent ->
+            // process normally (the signature is defense-in-depth). The
+            // pubkey comes from the link-authenticated sender (TOFU trust
+            // store per the receiver steps); expiry is deferred until the
+            // wall-clock seam lands (clockless-node MUST, R-05-080
+            // precedent: skip, never reject on missing capability).
+            if let Some(cose) = dio_root_signature_option(
+                received.ipv6.get(body_offset..).unwrap_or_default(),
+                lichen_rpl::message::Dio::SERIALIZED_LEN,
+            ) {
+                let Ok(sig) = lichen_rpl::message::RootDioSignature::from_bytes(cose) else {
+                    return Ok(RplReceiveOutcome::RplRejected);
+                };
+                let decoded = match crate::rpl_stack::root_sig::DecodedRootSig::from_cose_sign1(
+                    sig.cose_sign1,
+                ) {
+                    Ok(decoded) => decoded,
+                    Err(_) => return Ok(RplReceiveOutcome::RplRejected),
+                };
+                let fields = crate::rpl_stack::root_sig::DioFields {
+                    dodag_id: Some(dio.dodag_id),
+                    instance: Some(dio.rpl_instance_id),
+                    version: Some(dio.version),
+                    rank: Some(dio.rank),
+                    mop: Some(dio.mode_of_operation),
+                };
+                let pubkey = frame.sender().pubkey.as_bytes();
+                if decoded.verify_structural(pubkey).is_err()
+                    || decoded.verify_signature(pubkey).is_err()
+                {
+                    return Ok(RplReceiveOutcome::RplRejected);
+                }
+                // RootSeqCache consumption: post-verification per the
+                // b7z9.37.3.1 caller contract; replay rejects the DIO.
+                if let Err(_) = self.root_seqs_mut().accept(
+                    decoded.payload.dodag_id,
+                    decoded.payload.instance,
+                    decoded.payload.root_seq,
+                ) {
+                    return Ok(RplReceiveOutcome::RplRejected);
+                }
+                if decoded.cross_check(&fields).is_err() {
+                    return Ok(RplReceiveOutcome::RplRejected);
+                }
+            }
             let rssi = received
                 .rssi
                 .and_then(|value| i8::try_from(value).ok())
