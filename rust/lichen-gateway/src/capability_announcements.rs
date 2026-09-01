@@ -201,6 +201,23 @@ pub fn from_cose_sign1(data: &[u8]) -> Result<CapabilityAnnouncement, AnnounceEr
     })
 }
 
+impl CapabilityAnnouncement {
+    /// Build the capability-table entry for this announcement.
+    pub fn into_entry(self) -> crate::capability::CapabilityEntry {
+        let mut prefix = [0u8; 16];
+        let n = self.payload.prefix.len().min(16);
+        prefix[..n].copy_from_slice(&self.payload.prefix[..n]);
+        crate::capability::CapabilityEntry {
+            iid: self.payload.announcer_iid,
+            capabilities: self.payload.capabilities,
+            prefix,
+            prefix_len: self.payload.prefix_len,
+            expiry_unix: u32::try_from(self.payload.expiry).unwrap_or(u32::MAX),
+            seq: self.payload.seq,
+        }
+    }
+}
+
 /// Derive the announcer IID from a public key (native 02xx profile).
 fn pubkey_to_iid(pubkey: &[u8; 32]) -> [u8; 8] {
     let address = ygg_addr_from_pubkey(pubkey);

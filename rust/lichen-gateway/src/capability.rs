@@ -17,7 +17,7 @@ pub const CAPABILITY_EGRESS_BIT: u32 = 1 << 0;
 use std::collections::HashMap;
 
 /// One validated capability announcement.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CapabilityEntry {
     pub iid: [u8; 8],
     pub capabilities: u32,
@@ -34,6 +34,7 @@ impl CapabilityEntry {
     }
 }
 
+#[derive(Debug)]
 struct Slot {
     entry: CapabilityEntry,
     tick: u64,
@@ -44,13 +45,14 @@ struct Slot {
 /// Non-egress entries occupy at most `capacity - reserved` slots; egress
 /// entries may use the whole table. Eviction is strict LRU over the
 /// eligible partition. Inserting an existing IID refreshes it in place.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CapabilityTable {
     slots: HashMap<[u8; 8], Slot>,
     tick: u64,
 }
 
 impl CapabilityTable {
+    /// An empty table.
     pub fn new() -> Self {
         Self::default()
     }
