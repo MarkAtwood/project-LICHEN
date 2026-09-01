@@ -177,14 +177,19 @@ int lichen_ccp_fsm_event(struct lichen_tdma_ctx *tdma, enum lichen_ccp_event eve
 		} else if (event == LICHEN_CCP_EVENT_RPL_VERSION) {
 			tdma->ccp_state = LICHEN_CCP_DRIFTING;
 			tdma->synced = false;
-			/* Spec/02a 2a.5 R-02a-045/022: an RPL version change
-			 * MUST reset the SFN relative to the new root. The
+			/* Spec/02a 2a.5.4 R-02a-045/022: an RPL version change
+			 * MUST reset the SFN relative to the new root
+			 * (python on_version_change sfn_reset=True). The
 			 * SFN-0 placeholder slot (own EUI64, copied at init)
 			 * is the retained baseline; the real hash(EUI64) +
-			 * SFN slot is installed by the next valid beacon. */
+			 * SFN slot is installed by the next valid beacon.
+			 * Also clear desync recovery counters that depended
+			 * on the prior version (2a.5.4 step 2). */
 			tdma->superframe = 0;
 			tdma->slot =
 				lichen_tdma_compute_slot(tdma->eui64, 0u, tdma->n_slots);
+			tdma->desync_consecutive_valid = 0;
+			tdma->desync_missed_superframes = 0;
 		}
 		break;
 
