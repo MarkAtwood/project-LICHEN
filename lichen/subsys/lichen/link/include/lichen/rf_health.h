@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #define LICHEN_RF_EMA_ALPHA_SHIFT 2
 #define LICHEN_RF_DENSITY_CRITICAL 20
@@ -51,6 +52,36 @@ bool lichen_rf_health_should_rebalance(const struct lichen_rf_health *h);
 uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
 					  uint16_t loss_permille,
 					  int8_t rssi_ema_dbm);
+
+/**
+ * TX-time BusyPercent sampler (CCP-15 R-02a-131, MUST): rolling
+ * occupancy computed purely from accumulated TX airtime — RSSI is
+ * never an input (R-02a-131 explicitly forbids RSSI-derived busy).
+ *
+ * Usage: lichen_rf_health_busy_init(&b, window_ms); then
+ * lichen_rf_health_busy_record_tx(&b, now_ms, airtime_us) per
+ * transmission and lichen_rf_health_busy_percent(&b, now_ms) to read
+ * the occupancy. Samples older than the window roll off. now_ms MUST
+ * be monotonic non-decreasing across record_tx calls (monotonic
+ * uptime per spec 18.4.3); the eviction assumes sample_time[0] is the
+ * oldest entry.
+ */
+#define LICHEN_RF_BUSY_MAX_SAMPLES 16u
+
+struct lichen_rf_health_busy {
+	uint32_t window_ms;
+	/** Ring of (timestamp, airtime) samples inside the window. */
+	uint32_t sample_time[LICHEN_RF_BUSY_MAX_SAMPLES];
+	uint32_t sample_us[LICHEN_RF_BUSY_MAX_SAMPLES];
+	size_t sample_count;
+};
+
+void lichen_rf_health_busy_init(struct lichen_rf_health_busy *b,
+				uint32_t window_ms);
+void lichen_rf_health_busy_record_tx(struct lichen_rf_health_busy *b,
+				     uint32_t now_ms, uint32_t airtime_us);
+uint8_t lichen_rf_health_busy_percent(const struct lichen_rf_health_busy *b,
+				      uint32_t now_ms);
 
 /**
  * CCP-15 interference score (R-02a-137; rust rf_health.rs
