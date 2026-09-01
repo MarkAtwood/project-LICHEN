@@ -8,6 +8,7 @@
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
 #include <zcbor_decode.h>
+#include <zcbor_encode.h>
 #include <zephyr/net/net_ip.h>
 #include <lichen/coap_server.h>
 #include <lichen/coap_client.h>
@@ -141,6 +142,14 @@ static int deaddrop_post(struct coap_resource *resource,
 						    0, NULL, 0);
 	}
 	parse_recipient(payload, payload_len, dest_iid);
+	/* Spec 18.9: max drop size 1536 B — oversize is rejected statelessly
+	 * before rate limiting and storage (4.13 Request Entity Too Large). */
+	if (payload_len > CONFIG_LICHEN_DTN_MAX_PACKET_SIZE) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_MAKE_RESPONSE_CODE(4, 13),
+						    0, NULL, 0);
+	}
 	uint32_t now_ms = k_uptime_get_32();
 	uint8_t iid7 = peer_eui64[7];
 	k_mutex_lock(&s_rate_mutex, K_FOREVER);
@@ -174,11 +183,39 @@ static int deaddrop_post(struct coap_resource *resource,
 	uint32_t expiry = (now != 0U) ? now + LICHEN_DTN_DEFAULT_TTL_SEC : 0U;
 	bool ok = lichen_dtn_buffer_message(&s_dtn_buf, payload, payload_len,
 					    dest_iid, expiry, now, now_ms);
+	uint8_t body[40];
+	size_t body_len = 0;
+	if (!ok) {
+		/* Spec 18.9: storage exhausted -> 5.03 Service Unavailable
+		 * with the storage_full CBOR diagnostic. Field set matches the
+		 * deaddrop.json storage_full_rejection vector exactly
+		 * ({reason, retry_after}); slot-based capacity is the real
+		 * constraint (MAX_MESSAGES), so byte-based available_kb would
+		 * be misleading and is deliberately omitted. Encoded size:
+		 * map hdr 1 + "reason" 7 + "storage_full" 13 + "retry_after"
+		 * 12 + 3600 as 0x19 xx xx 3 = 36 bytes. */
+		ZCBOR_STATE_E(zs, 1, body, sizeof(body), 0);
+		if (!zcbor_map_start_encode(zs, 2) ||
+		    !zcbor_tstr_put_lit(zs, "reason") ||
+		    !zcbor_tstr_put_lit(zs, "storage_full") ||
+		    !zcbor_tstr_put_lit(zs, "retry_after") ||
+		    !zcbor_uint32_put(zs, 3600U)) {
+			body_len = 0;
+		} else {
+			body_len = (size_t)(zs->payload - body);
+		}
+	}
 	k_mutex_unlock(&s_dtn_buf_mutex);
-	uint8_t resp_code = ok ? COAP_RESPONSE_CODE_CHANGED
-			       : COAP_RESPONSE_CODE_BAD_REQUEST;
+	if (!ok) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE,
+						    COAP_CONTENT_FORMAT_APP_CBOR,
+						    body, body_len);
+	}
 	return coap_oscore_respond_resource(resource, request, addr, addr_len,
-					    &oscore, resp_code, 0, NULL, 0);
+					    &oscore, COAP_RESPONSE_CODE_CHANGED,
+					    0, NULL, 0);
 }
 
 static int deaddrop_get(struct coap_resource *resource,
