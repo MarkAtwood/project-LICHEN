@@ -8,6 +8,7 @@
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
 #include <zcbor_decode.h>
+#include <zcbor_encode.h>
 #include <zephyr/net/net_ip.h>
 #include <lichen/coap_server.h>
 #include <lichen/coap_client.h>
@@ -143,19 +144,29 @@ static int deaddrop_post(struct coap_resource *resource,
 		memcpy(peer_eui64, &in6->sin6_addr.s6_addr[8], 8);
 		lichen_eui64_to_iid(peer_eui64, peer_eui64);
 	}
+	struct coap_oscore_unprotect_result oscore = {0};
 	uint8_t piv[OSCORE_PIV_MAX_LEN];
 	size_t piv_len = 0;
 	struct oscore_ctx *oscore_ctx = NULL;
 	const uint8_t *payload = NULL;
 	uint16_t payload_len = 0;
 	bool is_protected = false;
+	/* The embedded plainbuf is required: authorize_mutating() rejects
+	 * payload-carrying requests when called with a NULL buffer, and
+	 * coap_oscore_respond_resource() (used for the payload-carrying
+	 * 4.13/5.03 bodies) consumes this result struct. */
 	int ret = coap_oscore_authorize_mutating(resource, request, addr,
 						 addr_len, COAP_METHOD_POST,
-						 NULL, 0, &payload,
+						 oscore.plainbuf,
+						 sizeof(oscore.plainbuf), &payload,
 						 &payload_len, &oscore_ctx,
 						 piv, &piv_len,
 						 &is_protected);
 	if (ret != 0) return ret;
+	oscore.ctx = oscore_ctx;
+	oscore.piv_len = piv_len;
+	oscore.is_protected = is_protected;
+	memcpy(oscore.piv, piv, piv_len);
 	if (!payload || payload_len == 0) {
 		return coap_oscore_send_protected(resource, request, addr,
 						  addr_len, oscore_ctx, piv,
@@ -163,6 +174,14 @@ static int deaddrop_post(struct coap_resource *resource,
 						  COAP_RESPONSE_CODE_BAD_REQUEST);
 	}
 	parse_recipient(payload, payload_len, dest_iid);
+	/* Spec 18.9: max drop size 1536 B — oversize is rejected statelessly
+	 * before rate limiting and storage (4.13 Request Entity Too Large). */
+	if (payload_len > CONFIG_LICHEN_DTN_MAX_PACKET_SIZE) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_MAKE_RESPONSE_CODE(4, 13),
+						    0, NULL, 0);
+	}
 	uint32_t now_ms = k_uptime_get_32();
 	uint8_t iid7 = peer_eui64[7];
 	k_mutex_lock(&s_rate_mutex, K_FOREVER);
@@ -233,14 +252,46 @@ static int deaddrop_post(struct coap_resource *resource,
 	}
 	bool ok = lichen_dtn_buffer_message(&s_dtn_buf, payload, payload_len,
 					    dest_iid, expiry, now, now_ms);
+	/* Merge resolution (HEAD + beads-worker-7): keep HEAD's stored-bytes
+	 * budget accounting on success, and beads-worker-7's structured 5.03
+	 * storage_full CBOR diagnostic on rejection (spec 18.9); storage
+	 * failures are 5.03, not HEAD's 4.00. */
 	if (ok) {
 		s_dtn_bytes += payload_len;
 	}
+	uint8_t body[40];
+	size_t body_len = 0;
+	if (!ok) {
+		/* Spec 18.9: storage exhausted -> 5.03 Service Unavailable
+		 * with the storage_full CBOR diagnostic. Field set matches the
+		 * deaddrop.json storage_full_rejection vector exactly
+		 * ({reason, retry_after}); slot-based capacity is the real
+		 * constraint (MAX_MESSAGES), so byte-based available_kb would
+		 * be misleading and is deliberately omitted. Encoded size:
+		 * map hdr 1 + "reason" 7 + "storage_full" 13 + "retry_after"
+		 * 12 + 3600 as 0x19 xx xx 3 = 36 bytes. */
+		ZCBOR_STATE_E(zs, 1, body, sizeof(body), 0);
+		if (!zcbor_map_start_encode(zs, 2) ||
+		    !zcbor_tstr_put_lit(zs, "reason") ||
+		    !zcbor_tstr_put_lit(zs, "storage_full") ||
+		    !zcbor_tstr_put_lit(zs, "retry_after") ||
+		    !zcbor_uint32_put(zs, 3600U)) {
+			body_len = 0;
+		} else {
+			body_len = (size_t)(zs->payload - body);
+		}
+	}
 	k_mutex_unlock(&s_dtn_buf_mutex);
-	uint8_t resp_code = ok ? COAP_RESPONSE_CODE_CHANGED
-			       : COAP_RESPONSE_CODE_BAD_REQUEST;
-	return coap_oscore_send_protected(resource, request, addr, addr_len,
-					  oscore_ctx, piv, piv_len, resp_code);
+	if (!ok) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE,
+						    COAP_CONTENT_FORMAT_APP_CBOR,
+						    body, body_len);
+	}
+	return coap_oscore_respond_resource(resource, request, addr, addr_len,
+					    &oscore, COAP_RESPONSE_CODE_CHANGED,
+					    0, NULL, 0);
 }
 
 static int deaddrop_get(struct coap_resource *resource,
