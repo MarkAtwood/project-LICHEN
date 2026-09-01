@@ -43,6 +43,7 @@ __all__ = [
     "resolve_slot_conflict",
     "validate_interleaved_pattern",
     "verify_slot_claim",
+    "SlotClaimReplayCache",
 ]
 
 
@@ -52,6 +53,7 @@ class ClaimRejectReason(Enum):
     MISSING_SIGNATURE = auto()  # No signature provided
     INVALID_SIGNATURE = auto()  # Signature failed verification
     INVALID_CLAIM_DATA = auto()  # Malformed claim structure
+    REPLAY = auto()  # claim_seq/superframe at or below the stored high-water
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
 
 
@@ -214,9 +216,37 @@ def encode_claim_canonical(claim: SlotClaim) -> bytes:
     return cbor2.dumps(claim.to_cbor_map(), canonical=True)
 
 
+class SlotClaimReplayCache:
+    """Per-gateway-IID replay high-water (GCP-6.5 step 8, l1qw.20.2).
+
+    Tracks the highest superframe_id accepted per gateway IID and rejects
+    claims at or below it. State is in-memory only; persistence across
+    restarts is the l1qw.20.1/NVS follow-up (mirrors Rust slot.rs
+    last_seen semantics).
+    """
+
+    def __init__(self) -> None:
+        self._highwater: dict[str, int] = {}
+
+    def check_and_update(
+        self, gateway_iid: str, superframe_id: int
+    ) -> tuple[bool, ClaimRejectReason | None]:
+        """Advance the high-water for *gateway_iid*.
+
+        Returns (True, None) and stores the new high-water when the claim
+        strictly advances it; returns (False, REPLAY) otherwise.
+        """
+        previous = self._highwater.get(gateway_iid)
+        if previous is not None and superframe_id <= previous:
+            return (False, ClaimRejectReason.REPLAY)
+        self._highwater[gateway_iid] = superframe_id
+        return (True, None)
+
+
 def verify_slot_claim(
     claim: SlotClaim,
     gateway_pubkey: bytes,
+    replay_cache: SlotClaimReplayCache | None = None,
 ) -> tuple[bool, ClaimRejectReason | None]:
     """Verify Schnorr48 signature on slot claim.
 
@@ -230,6 +260,11 @@ def verify_slot_claim(
     Args:
         claim: SlotClaim to verify
         gateway_pubkey: 32-byte Ed25519 public key of claiming gateway
+        replay_cache: Optional per-gateway claim high-water (l1qw.20.2).
+            When provided, the claim's superframe_id must strictly advance
+            the stored high-water for its gateway IID. Signature checks run
+            first per GCP-6.3, so the replay state is only consumed by
+            signature-valid claims.
 
     Returns:
         Tuple of (is_valid, rejection_reason or None)
@@ -249,6 +284,13 @@ def verify_slot_claim(
     # Verify Schnorr48 signature
     if not schnorr48.verify(gateway_pubkey, signed_data, claim.signature):
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
+
+    if replay_cache is not None:
+        ok, reason = replay_cache.check_and_update(
+            claim.gateway_iid, claim.superframe_id
+        )
+        if not ok:
+            return (False, reason)
 
     return (True, None)
 

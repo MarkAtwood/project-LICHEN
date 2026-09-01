@@ -18,6 +18,7 @@ from lichen.gateway.slot_claim import (
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
+    SlotClaimReplayCache,
     compute_contiguous_slots,
     compute_interleaved_slots,
     encode_claim_canonical,
@@ -219,6 +220,93 @@ class TestSignAndVerify:
         is_valid, reason = verify_slot_claim(claim, pubkey)
         assert not is_valid
         assert reason == ClaimRejectReason.INVALID_SIGNATURE
+
+    def test_replay_cache_rejects_replay_and_allows_advance(
+        self, keypair: tuple[bytes, bytes]
+    ) -> None:
+        """l1qw.20.2: the replay cache rejects at-or-below high-water and
+        accepts strictly advancing superframes (mirrors Rust slot.rs
+        last_seen semantics)."""
+        privkey, pubkey = keypair
+        cache = SlotClaimReplayCache()
+
+        # First claim (superframe 5) is accepted and advances the cache.
+        claim_5 = sign_slot_claim(
+            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=5),
+            privkey,
+            pubkey,
+        )
+        is_valid, reason = verify_slot_claim(claim_5, pubkey, cache)
+        assert is_valid and reason is None
+
+        # Replay of the same superframe -> REPLAY.
+        replay = sign_slot_claim(
+            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=5),
+            privkey,
+            pubkey,
+        )
+        is_valid, reason = verify_slot_claim(replay, pubkey, cache)
+        assert not is_valid
+        assert reason == ClaimRejectReason.REPLAY
+
+        # Older superframe -> REPLAY.
+        older = sign_slot_claim(
+            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=4),
+            privkey,
+            pubkey,
+        )
+        is_valid, reason = verify_slot_claim(older, pubkey, cache)
+        assert not is_valid
+        assert reason == ClaimRejectReason.REPLAY
+
+        # Strictly advancing superframe -> accepted.
+        newer = sign_slot_claim(
+            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=6),
+            privkey,
+            pubkey,
+        )
+        is_valid, reason = verify_slot_claim(newer, pubkey, cache)
+        assert is_valid and reason is None
+
+    def test_replay_cache_tracks_gateways_independently(
+        self, keypair: tuple[bytes, bytes]
+    ) -> None:
+        privkey, pubkey = keypair
+        cache = SlotClaimReplayCache()
+
+        first = sign_slot_claim(
+            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=10),
+            privkey,
+            pubkey,
+        )
+        is_valid, _ = verify_slot_claim(first, pubkey, cache)
+        assert is_valid
+
+        # A different gateway starting at a lower superframe is independent.
+        second_keypair = schnorr48.derive_keypair(bytes(range(32)))
+        other_priv, other_pub = second_keypair
+        other = sign_slot_claim(
+            SlotClaim(gateway_iid="aabbccddeeff0011", slots=(0,), superframe_id=1),
+            other_priv,
+            other_pub,
+        )
+        is_valid, reason = verify_slot_claim(other, other_pub, cache)
+        assert is_valid and reason is None
+
+    def test_replay_cache_unchanged_without_cache_arg(
+        self, keypair: tuple[bytes, bytes]
+    ) -> None:
+        """Back-compat: verify_slot_claim without a cache performs no
+        replay tracking (existing callers unaffected)."""
+        privkey, pubkey = keypair
+        claim_1 = sign_slot_claim(
+            SlotClaim(gateway_iid="0011223344556677", slots=(0,), superframe_id=1),
+            privkey,
+            pubkey,
+        )
+        for _ in range(3):
+            is_valid, _ = verify_slot_claim(claim_1, pubkey)
+            assert is_valid
 
     def test_wrong_pubkey_rejected(self, keypair: tuple[bytes, bytes]) -> None:
         privkey, pubkey = keypair
