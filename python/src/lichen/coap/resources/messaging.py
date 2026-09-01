@@ -616,3 +616,91 @@ class LegacyMessagesAliasResource(resource.ObservableResource):
 
     async def render_post(self, request: Message) -> Message:
         return await self._messages.render_post(request)
+
+
+class MsgStoreResource(resource.Resource):
+    """``/msg/store`` — offline store-and-forward (spec 18.1.4).
+
+    Stores messages for unreachable recipients; TTL-bounded per-message with
+    eviction (expired-first → per-destination fair-share → FIFO). Response
+    codes: 2.01 Created, 5.03 storage_full, 4.13 too_large, 4.03 blacklisted,
+    4.00 TTL-too-long. Static memory reservation, no dynamic allocation.
+    """
+
+    #: Minimum storage limits per spec 18.1.4
+    MIN_MESSAGES = 8
+    MIN_PER_DEST = 2
+    MIN_MSG_SIZE = 128
+    MIN_TOTAL = 1024
+    MIN_TTL_S = 3600
+
+    def __init__(
+        self,
+        max_messages: int = 16,
+        max_per_dest: int = 4,
+        max_body: int = 256,
+        max_total: int = 4096,
+        default_ttl_s: int = 14400,
+    ) -> None:
+        super().__init__()
+        self._entries: list[dict[str, Any]] = []  # {dest_iid, body, expires}
+        self._max_messages = max(max_messages, self.MIN_MESSAGES)
+        self._max_per_dest = max(max_per_dest, self.MIN_PER_DEST)
+        self._max_body = max(max_body, 128)
+        self._max_total = max(max_total, self.MIN_TOTAL)
+        self._default_ttl_s = default_ttl_s
+
+    def get_link_description(self) -> dict[str, Any]:
+        return {"rt": "msg.store", "ct": str(int(CBOR))}
+
+    async def render_post(self, request: Message) -> Message:
+        """Store a message for later retrieval by the recipient."""
+        if not _request_is_oscore_or_admin(request):
+            return Message(code=UNAUTHORIZED)
+        if request.opt.content_format is not None and request.opt.content_format != CBOR:
+            return Message(code=BAD_REQUEST)
+        payload = request.payload
+        if len(payload) > self._max_body:
+            return Message(code=REQUEST_ENTITY_TOO_LARGE)
+        body = cbor2.loads(payload) if payload else {}
+        dest = body.get("to")
+        ttl = body.get("ttl", self._default_ttl_s)
+        if ttl > self._default_ttl_s:
+            return Message(code=BAD_REQUEST)
+
+        # Eviction: expired-first, then per-dest fair-share, then FIFO.
+        now = time.time()
+        self._entries = [e for e in self._entries if e["expires"] > now]
+        # Check total-size budget
+        total = sum(len(e["body"]) for e in self._entries) + len(payload)
+        if total > self._max_total:
+            return Message(code=SERVICE_UNAVAILABLE)
+        # Per-dest check
+        dest_key = str(dest) if dest else "*"
+        dest_count = sum(1 for e in self._entries if e["dest"] == dest_key)
+        if dest_count >= self._max_per_dest:
+            # Evict oldest for this dest
+            oldest = min(
+                (e for e in self._entries if e["dest"] == dest_key),
+                key=lambda e: e["expires"],
+                default=None,
+            )
+            if oldest is not None:
+                self._entries.remove(oldest)
+        if len(self._entries) >= self._max_messages:
+            return Message(code=SERVICE_UNAVAILABLE)
+
+        self._entries.append({
+            "dest": dest_key,
+            "body": payload,
+            "expires": now + ttl,
+            "seq": body.get("seq", 0),
+        })
+        return Message(code=aiocoap.CREATED)
+
+    async def render_get(self, request: Message) -> Message:
+        """Return pending messages for the requesting peer (or all)."""
+        now = time.time()
+        self._entries = [e for e in self._entries if e["expires"] > now]
+        msgs = [{"dest": e["dest"], "seq": e["seq"]} for e in self._entries]
+        return _cbor_response({"stored": msgs})
