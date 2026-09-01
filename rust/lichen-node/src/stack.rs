@@ -1031,7 +1031,7 @@ pub fn find_dtn_hbh_option(next_header: u8, payload: &[u8]) -> Option<DtnSFlag> 
             let expiry_unix = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
             return Some(DtnSFlag {
                 s_flag,
-                expiry_unix: expiry_unix,
+                expiry_unix,
             });
         }
         pos = data_end;

@@ -54,9 +54,14 @@ impl Default for RplRuntimeConfig {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RplRuntimeAction {
-    Receive { timeout_ms: u32 },
+    Receive {
+        timeout_ms: u32,
+    },
     TrickleTransmit,
     TrickleExpire,
+    /// A leaf DAO transmission is due (b7z9.16.1: initial 0-2 s after
+    /// join, retry ladder, or refresh per spec 09 14.2).
+    DaoTransmit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,6 +175,28 @@ impl RplRuntime {
             return Err(RplRuntimeActionError::ActionNotPending);
         }
         Ok(timeout_ms)
+    }
+
+    /// Clear the pending DaoTransmit action after the executor sent the DAO.
+    pub(crate) fn complete_dao_transmit(
+        &mut self,
+        node: &mut RplNode,
+        observed_now_ms: u64,
+        stack_generation: u64,
+    ) -> Result<Option<RplMaintenanceOutcome>, RplRuntimeActionError> {
+        if self
+            .bound_generation
+            .is_some_and(|bound| bound != stack_generation)
+        {
+            return Err(RplRuntimeActionError::StaleGeneration);
+        }
+        if self.pending_action != Some(RplRuntimeAction::DaoTransmit) {
+            return Err(RplRuntimeActionError::ActionNotPending);
+        }
+        self.pending_action = None;
+        let (now_ms, maintenance) = self.observe(node, observed_now_ms);
+        self.next_maintenance_ms = Some(now_ms + 1);
+        Ok(maintenance)
     }
 
     pub(crate) fn complete_trickle_transmit(

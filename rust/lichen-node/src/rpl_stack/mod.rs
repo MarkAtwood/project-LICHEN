@@ -176,11 +176,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Advance the DAO TX scheduler and detect the join transition
     /// (spec 09 14.2). On the first advance with the node joined and the
     /// scheduler idle, the initial DAO is scheduled 0-2 s out (R-09-017).
-    /// Returns the scheduler outcome for the TX path (wired in b7z9.16.1(b)).
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "DAO TX consumer lands in b7z9.16.1(b)")
-    )]
+    /// Returns the scheduler outcome for the TX path.
     pub(crate) fn dao_tx_advance(&mut self, now_ms: u64) -> DaoTxAdvance {
         let joined = self.rpl.router.is_joined();
         if !joined {

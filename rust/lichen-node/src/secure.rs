@@ -22,9 +22,9 @@ use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::LinkLayer;
 use lichen_oscore::{
-    request_identifiers, validate_option, Context, ContextId, ContextStoreError, OscoreError,
-    RequestIdentifiers, ReservationError, ContextStateStore, RecipientReplayState, COAP_OPTION_OSCORE, PIV_MAX_LEN,
-    TAG_LEN,
+    request_identifiers, validate_option, Context, ContextId, ContextStateStore, ContextStoreError,
+    OscoreError, RequestIdentifiers, ReservationError, COAP_OPTION_OSCORE,
+    PIV_MAX_LEN, TAG_LEN,
 };
 
 use crate::stack::{Priority, ReceivedIpv6, RxError, Stack, TxError};
@@ -2131,8 +2131,19 @@ mod tests {
             Ok(true)
         }
 
-        fn load_recipient(&mut self, _: &ContextId) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> { Ok(None) }
-        fn save_recipient(&mut self, _: &ContextId, _: &lichen_oscore::RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+        fn load_recipient(
+            &mut self,
+            _: &ContextId,
+        ) -> Result<Option<lichen_oscore::RecipientReplayState>, Self::Error> {
+            Ok(None)
+        }
+        fn save_recipient(
+            &mut self,
+            _: &ContextId,
+            _: &lichen_oscore::RecipientReplayState,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
 
     impl Radio for RecordingRadio {
