@@ -72,5 +72,8 @@ SCHC_INACTIVITY_TIMEOUT_S: int = 60
 
 # Spec 02a 2a.10.3 (proposed, R-02a-117 family): rolling RF metrics window.
 RF_METRICS_WINDOW_SF: int = 32
+# Spec 02a 2a.10.3 (proposed): density bonus thresholds (estimate_density).
+DENSITY_PER_BONUS_PERMILLE: int = 100
+DENSITY_RSSI_BONUS_DBM: int = -90
 # Spec 02a 2a.10.4 (proposed): interference escape threshold (tenths).
 INTERFERENCE_ESCAPE_TENTHS: int = 1000
