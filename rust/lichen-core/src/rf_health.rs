@@ -1444,3 +1444,52 @@ mod tests {
         assert_eq!(sf, 7);
     }
 }
+
+/// Local intersection of a beacon channel_mask with the local plan
+/// (spec/02a-coordinated-capacity.md 2a.2 "local intersection computed"):
+/// clear mask bits for channels beyond the plan's `num_channels`. Bit 0
+/// (CH0 control channel) is always within the plan for num_channels >= 1.
+/// Python parity: `channel_plan.validate_channel_mask`. Values beyond 32
+/// channels pass through unchanged.
+#[must_use]
+pub fn intersect_channel_mask(beacon_mask: u32, num_channels: u8) -> u32 {
+    if num_channels == 0 {
+        return 0;
+    }
+    if num_channels >= 32 {
+        return beacon_mask;
+    }
+    beacon_mask & ((1u32 << num_channels) - 1)
+}
+
+/// Gate: true when the intersected mask has at least one locally usable
+/// channel.
+#[must_use]
+pub fn channel_gate(beacon_mask: u32, num_channels: u8) -> bool {
+    intersect_channel_mask(beacon_mask, num_channels) != 0
+}
+
+#[cfg(test)]
+mod channel_mask_tests {
+    use super::{channel_gate, intersect_channel_mask};
+
+    #[test]
+    fn bits_beyond_plan_cleared() {
+        assert_eq!(intersect_channel_mask(0x0000_FFFF, 8), 0x00FF);
+        assert_eq!(intersect_channel_mask(0xFFFF_FFFF, 1), 0x0000_0001);
+        assert_eq!(intersect_channel_mask(0xFFFF_FFFF, 32), 0xFFFF_FFFF);
+        assert_eq!(intersect_channel_mask(0xFFFF_FFFF, 0), 0);
+    }
+
+    #[test]
+    fn ch0_bit_always_within_plan() {
+        assert_eq!(intersect_channel_mask(0x0000_0001, 8), 0x0000_0001);
+    }
+
+    #[test]
+    fn gate_reflects_usable_channels() {
+        assert!(channel_gate(0x0000_FFFF, 8));
+        assert!(!channel_gate(0xFFFF_FFFE, 1), "no CH0 in 1-channel plan");
+        assert!(!channel_gate(0, 8));
+    }
+}
