@@ -98,6 +98,9 @@ pub enum TxError {
     SequenceExhausted,
     /// No next hop is available for the destination.
     NoRoute,
+    /// Link-layer signing key not provisioned on this stack (-ENOKEY parity
+    /// with lichen_link_tx.c pre-TX gate).
+    NoKey,
     /// Plaintext CoAP is forbidden on the production transmit path.
     PlaintextCoap,
     /// IPv6 extension headers are unsupported by the production router.
@@ -118,6 +121,7 @@ impl core::fmt::Display for TxError {
             Self::QueueFull => write!(f, "forwarding queue full"),
             Self::SequenceExhausted => write!(f, "link-layer sequence exhausted"),
             Self::NoRoute => write!(f, "no route to destination"),
+            Self::NoKey => write!(f, "link-layer signing key not provisioned"),
             Self::PlaintextCoap => write!(f, "plaintext CoAP is forbidden"),
             Self::UnsupportedIpv6Extension => write!(f, "IPv6 extension header is unsupported"),
         }
@@ -538,6 +542,10 @@ impl<R: Radio> Stack<R> {
         l2_payload: &[u8],
         dst_addr: &[u8],
     ) -> Result<(), TxError> {
+        // Spec 02a 4.4 pre-TX gate parity (lichen_link_tx.c:63-106). The
+        // Rust link layer takes its signing identity at construction
+        // (mandatory), so -ENOKEY's unkeyed-context state is unreachable;
+        // the TDMA latch below covers the C time/sync gate's Rust analog.
         let max_payload = match dst_addr.len() {
             8 => MAX_EXTENDED_SCHC_SIZE + 1,
             // build_frame's true 2-byte-dst signed-frame capacity (ctbn).
