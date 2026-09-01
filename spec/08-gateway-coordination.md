@@ -364,6 +364,7 @@ COSE_Sign1 = [
 | 4   | ts         | uint         | Confirmation timestamp                   |
 | 5   | link_epoch | uint         | Node's link-layer epoch (8-bit)          |
 | 6   | link_seq   | uint         | Node's link-layer sequence (16-bit)      |
+| 7   | replay_bitmap | uint (32-bit) | Seen-sequence bitmap (bit 0 = link_seq) |
 
 ```cbor
 {
@@ -372,9 +373,27 @@ COSE_Sign1 = [
   3: <uint>,              ; seq: echoed from request
   4: <unix timestamp>,    ; ts: confirmation timestamp
   5: <uint>,              ; link_epoch: node's current epoch
-  6: <uint>               ; link_seq: node's last accepted seqnum
+  6: <uint>,              ; link_seq: node's last accepted seqnum
+  7: <uint>               ; replay_bitmap: 32-bit seen-sequence bitmap
 }
 ```
+
+**Replay Bitmap (key 7):**
+
+The bitmap reconstructs the node's full link replay window on the new
+gateway, closing the in-window gap replay hole that a floor-only transfer
+would leave. Bit layout matches the link replay window (lichen replay.h,
+Rust replay.rs) exactly:
+
+- Bit 0 of the bitmap represents `link_seq` itself (MUST be set).
+- Bit i represents `link_seq - i`.
+- A set bit means the old gateway already accepted that sequence number.
+
+The new gateway MUST reject a confirm whose bitmap has bit 0 clear (the
+old gateway cannot have accepted `link_seq` without recording it) and
+MUST reconstruct its replay window as: floor at (link_epoch, link_seq),
+bitmap bit i = link_seq - i. This prevents replay of frames the old
+gateway already accepted, including the in-window gaps below link_seq.
 
 **Signature Computation (COSE_Sign1):**
 
@@ -419,17 +438,35 @@ New gateway B validates incoming confirm:
 5. Reconstruct Sig_structure per RFC 9052 and verify signature using A's pubkey
 6. Decode payload; verify `new_gw` matches own IID
 7. Verify `seq` matches the request sequence number
-8. Initialize node's replay window with (link_epoch, link_seq)
-9. Add node to local registry; confirm handoff to node via CoAP
+8. Decode `replay_bitmap`; reject the confirm if the value exceeds
+   32 bits (non-conforming) or bit 0 is clear (the old gateway cannot
+   have accepted `link_seq` without recording it)
+9. Initialize node's replay window with (link_epoch, link_seq) and the
+   seen-sequence bitmap (bit i = link_seq - i)
+10. Add node to local registry; confirm handoff to node via CoAP
 
 **Link-Layer Replay State Transfer:**
 
-The `link_epoch` and `link_seq` fields transfer the node's current replay
-position. The new gateway MUST:
+The `link_epoch`, `link_seq`, and `replay_bitmap` fields transfer the
+node's current replay state. The new gateway MUST:
 
-- Initialize replay window floor at (link_epoch, link_seq)
-- Accept only frames with epoch > link_epoch, or epoch == link_epoch AND seq > link_seq
-- This prevents replay of frames the old gateway already accepted
+- Initialize the replay window floor at (link_epoch, link_seq)
+- Restore the seen-sequence bitmap (bit i = link_seq - i) so frames the
+  old gateway already accepted remain rejected after handoff
+- Accept a frame exactly when the C/Rust `lichen_replay_check` semantics
+  accept it against the reconstructed window:
+  - epoch > link_epoch: accept (newer epoch)
+  - epoch < link_epoch: reject (stale)
+  - epoch == link_epoch and seq == link_seq: reject (already accepted,
+    bitmap bit 0 set)
+  - epoch == link_epoch and seq > link_seq: accept and advance the window
+    (no bitmap bit exists for these; the window advances)
+  - epoch == link_epoch and seq < link_seq: accept only when
+    link_seq - seq < 32 AND the corresponding bitmap bit is clear; reject
+    otherwise (already accepted, or fell out of the window)
+- This prevents replay of frames the old gateway already accepted,
+  including the in-window gaps below link_seq, without over-rejecting
+  unseen in-window sequences
 
 **Security Considerations:**
 
