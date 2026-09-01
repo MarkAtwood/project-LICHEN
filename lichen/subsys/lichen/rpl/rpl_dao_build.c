@@ -116,6 +116,7 @@ int lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *dm,
 	dm->is_root = false;
 	dm->dao_sequence = 240;
 	dm->path_sequence = 240;
+	memset(&dm->tx_binding, 0, sizeof(dm->tx_binding));
 	return LICHEN_RPL_OK;
 }
 
@@ -128,7 +129,53 @@ int lichen_rpl_dao_manager_init_root(struct lichen_rpl_dao_manager *dm,
 	if (ret != LICHEN_RPL_OK) {
 		return ret;
 	}
+
 	dm->is_root = true;
+	return LICHEN_RPL_OK;
+}
+
+int lichen_rpl_dao_manager_bind_tx_state(
+	struct lichen_rpl_dao_manager *dm,
+	const struct lichen_hal_storage_ops *ops, void *user,
+	struct lichen_rpl_dao_tx_state *state)
+{
+	if (dm == NULL || (ops != NULL && state == NULL)) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+	dm->tx_binding.ops = ops;
+	dm->tx_binding.user = user;
+	dm->tx_binding.state = state;
+	dm->tx_binding.require_persisted = ops != NULL;
+	return LICHEN_RPL_OK;
+}
+
+/**
+ * Reserve the next durable 64-bit origin sequence when a TX binding is
+ * active (spec 09 14.2 R-09-009/010): the sequence and its signed bytes
+ * are persisted BEFORE the DAO is built or transmitted; missing, corrupt,
+ * or unreservable state stops origination (fail-closed) instead of
+ * falling back to the RAM lollipop counter. The DAO base carries the low
+ * byte of the 64-bit sequence; the full value rides the 0x12 Origin
+ * Signature option at finalize time.
+ */
+static int reserve_origin_sequence(struct lichen_rpl_dao_manager *dm,
+				   uint64_t *reserved)
+{
+	if (!dm->tx_binding.require_persisted) {
+		return LICHEN_RPL_OK;
+	}
+	uint8_t record[LICHEN_DAO_TX_HEADER_LEN + LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	uint64_t next;
+	enum lichen_rpl_dao_tx_tx_status status =
+		lichen_rpl_dao_tx_reserve_next(dm->tx_binding.ops,
+					       dm->tx_binding.user,
+					       dm->tx_binding.state, record,
+					       sizeof(record), &next);
+
+	if (status != LICHEN_DAO_TX_TX_OK) {
+		return LICHEN_RPL_ERR_TX_STATE;
+	}
+	*reserved = next;
 	return LICHEN_RPL_OK;
 }
 
@@ -258,10 +305,28 @@ static int build_dao_mut(struct lichen_rpl_dao_manager *dm,
 			 uint8_t *buf, size_t len)
 {
 	int ret;
+	uint64_t reserved_sequence = 0;
 
 	k_mutex_lock(&dm->lock, K_FOREVER);
 
-	uint8_t dao_sequence = increment_lollipop(dm->dao_sequence);
+	/* Durable sequence reservation happens BEFORE the frame is built:
+	 * the record persisted here carries the NEXT sequence paired with
+	 * the PREVIOUS transmission's signed bytes (retransmission fuel
+	 * until finalize_signed upgrades it); a crash after this point
+	 * wastes a sequence but never transmits an unpersisted one
+	 * (R-09-009/010). */
+	ret = reserve_origin_sequence(dm, &reserved_sequence);
+	if (ret != LICHEN_RPL_OK) {
+		k_mutex_unlock(&dm->lock);
+		return ret;
+	}
+
+	/* When durably bound, the visible lollipop byte IS the low byte of
+	 * the persisted 64-bit sequence (no independent increment). */
+	uint8_t dao_sequence =
+		dm->tx_binding.require_persisted
+			? (uint8_t)(reserved_sequence & 0xFFu)
+			: increment_lollipop(dm->dao_sequence);
 	uint8_t path_sequence = increment_lollipop(dm->path_sequence);
 	ret = build_dao(dm, parent_addr, path_lifetime, dao_sequence,
 			path_sequence, buf, len);
@@ -320,8 +385,19 @@ int lichen_rpl_dao_manager_build_dao_copy_with_lifetime(
 	}
 
 	/* Build without advancing path_sequence, only dao_sequence. Same
-	 * lock-held snapshot+advance discipline as build_dao_mut(). */
-	uint8_t dao_sequence = increment_lollipop(dm->dao_sequence);
+	 * lock-held snapshot+advance discipline as build_dao_mut(),
+	 * including the durable origin-sequence reservation. */
+	uint64_t reserved_sequence = 0;
+
+	ret = reserve_origin_sequence(dm, &reserved_sequence);
+	if (ret != LICHEN_RPL_OK) {
+		k_mutex_unlock(&dm->lock);
+		return ret;
+	}
+	uint8_t dao_sequence =
+		dm->tx_binding.require_persisted
+			? (uint8_t)(reserved_sequence & 0xFFu)
+			: increment_lollipop(dm->dao_sequence);
 	ret = build_dao(dm, parent_addr, path_lifetime, dao_sequence,
 			dm->path_sequence, buf, len);
 	if (ret > 0) {

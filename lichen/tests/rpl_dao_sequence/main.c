@@ -18,6 +18,10 @@
 #include <stdio.h>
 
 #include <lichen/rpl_routing.h>
+#include <lichen/rpl_dao_tx_persist.h>
+
+#include <errno.h>
+#include <string.h>
 
 /* The enum comes from the real header above; pin the values that the
  * canonical JSON vectors and this file's tables are encoded against. */
@@ -36,6 +40,145 @@ static int tests_passed;
 		return 0; \
 	} \
 } while (0)
+
+/* --- Durable 64-bit origin sequence binding (spec 09 14.2) --- */
+
+#define TX_NSLOTS 2
+#define TX_STORE_CAP 340
+
+struct tx_store {
+	bool present[TX_NSLOTS];
+	uint8_t data[TX_NSLOTS][TX_STORE_CAP];
+	size_t len[TX_NSLOTS];
+};
+
+static int tx_read(void *user, const char *key, uint8_t *out, size_t cap,
+		   size_t *len)
+{
+	struct tx_store *s = user;
+	unsigned int idx = key[7] - 'a';
+
+	if (idx >= TX_NSLOTS || !s->present[idx]) {
+		return 1;
+	}
+	size_t n = s->len[idx] < cap ? s->len[idx] : cap;
+	memcpy(out, s->data[idx], n);
+	*len = n;
+	return 0;
+}
+
+static int tx_write(void *user, const char *key, const uint8_t *value,
+		    size_t length)
+{
+	struct tx_store *s = user;
+	unsigned int idx = key[7] - 'a';
+
+	if (idx >= TX_NSLOTS || length > TX_STORE_CAP) {
+		return -EINVAL;
+	}
+	s->present[idx] = true;
+	memcpy(s->data[idx], value, length);
+	s->len[idx] = length;
+	return 0;
+}
+
+static const struct lichen_hal_storage_ops tx_ops = {
+	.read = tx_read,
+	.write = tx_write,
+};
+
+static int test_durable_sequence_binding(void)
+{
+	static const uint8_t key[32] = { 1 };
+	static const uint8_t origin[16] = { 2 };
+	static const uint8_t dodag[16] = { 3 };
+	struct tx_store s;
+	struct lichen_rpl_dao_tx_state state;
+	struct lichen_rpl_dao_manager dm;
+	uint8_t parent[16] = { 0x11 };
+	uint8_t buf[LICHEN_RPL_LEAF_DAO_LEN + 64];
+
+	/* Unbound manager keeps the RAM lollipop behavior. */
+	lichen_rpl_dao_manager_init(&dm, origin, 7, dodag);
+	int ret = lichen_rpl_dao_manager_build_dao(&dm, parent, buf,
+						   sizeof(buf));
+	ASSERT_EQ(ret > 0, 1, "unbound build succeeds");
+	ASSERT_EQ(dm.dao_sequence, 241, "unbound lollipop advanced");
+
+	/* Bound but state never provisioned: origination must STOP. */
+	memset(&s, 0, sizeof(s));
+	lichen_rpl_dao_manager_init(&dm, origin, 7, dodag);
+	ret = lichen_rpl_dao_manager_bind_tx_state(&dm, &tx_ops, &s, &state);
+	ASSERT_EQ(ret, LICHEN_RPL_OK, "bind on missing state is accepted");
+	ret = lichen_rpl_dao_manager_build_dao(&dm, parent, buf, sizeof(buf));
+	ASSERT_EQ(ret, LICHEN_RPL_ERR_TX_STATE,
+		  "missing TX state stops origination");
+
+	/* Provision, bind, then TX: sequence persisted before transmit and
+	 * the DAO base carries its low byte. */
+	memset(&s, 0, sizeof(s));
+	ASSERT_EQ(lichen_rpl_dao_tx_provision(&tx_ops, &s, key, origin, 7,
+					      dodag, &state),
+		  LICHEN_DAO_TX_PROVISION_OK, "tx state provisioned");
+	ASSERT_EQ(lichen_rpl_dao_manager_bind_tx_state(&dm, &tx_ops, &s,
+						       &state),
+		  LICHEN_RPL_OK, "bind to provisioned state");
+	ret = lichen_rpl_dao_manager_build_dao(&dm, parent, buf, sizeof(buf));
+	ASSERT_EQ(ret > 0, 1, "bound build succeeds");
+	ASSERT_EQ(state.last_reserved, 1U, "sequence 1 reserved");
+	ASSERT_EQ(dm.dao_sequence, (uint8_t)(1 & 0xFF),
+		  "DAO base carries low byte of reserved sequence");
+
+	/* Second build: durable alternation continues (2, slot A). */
+	ret = lichen_rpl_dao_manager_build_dao(&dm, parent, buf, sizeof(buf));
+	ASSERT_EQ(ret > 0, 1, "second bound build succeeds");
+	ASSERT_EQ(state.last_reserved, 2U, "sequence 2 reserved");
+
+	/* Crash-recovery matrix: after "reboot" (fresh state open from the
+	 * store), the reserved sequence is durable and origination
+	 * continues from it. */
+	struct lichen_rpl_dao_tx_state rebooted;
+
+	ASSERT_EQ(lichen_rpl_dao_tx_open(&tx_ops, &s, key, origin, 7, dodag,
+					 &rebooted),
+		  LICHEN_DAO_TX_OPEN_OK, "reboot re-open");
+	ASSERT_EQ(rebooted.last_reserved, 2U, "sequence 2 durable");
+	lichen_rpl_dao_manager_init(&dm, origin, 7, dodag);
+	ASSERT_EQ(lichen_rpl_dao_manager_bind_tx_state(&dm, &tx_ops, &s,
+						       &rebooted),
+		  LICHEN_RPL_OK, "reboot rebind");
+	ret = lichen_rpl_dao_manager_build_dao(&dm, parent, buf, sizeof(buf));
+	ASSERT_EQ(ret > 0, 1, "post-reboot build succeeds");
+	ASSERT_EQ(rebooted.last_reserved, 3U, "sequence 3 after reboot");
+	ASSERT_EQ(dm.dao_sequence, 3, "low byte 3 after reboot");
+
+	/* Corruption matrix: a torn/corrupt slot-A record makes the state
+	 * unreservable and stops origination (fail-closed, R-09-014/016). */
+	memset(&s, 0, sizeof(s));
+	ASSERT_EQ(lichen_rpl_dao_tx_provision(&tx_ops, &s, key, origin, 7,
+					      dodag, &state),
+		  LICHEN_DAO_TX_PROVISION_OK, "corrupt-matrix provision");
+	/* Tear slot A in place: present but unparseable. */
+	memset(s.data[0], 0xEE, s.len[0]);
+	lichen_rpl_dao_manager_init(&dm, origin, 7, dodag);
+	ASSERT_EQ(lichen_rpl_dao_manager_bind_tx_state(&dm, &tx_ops, &s,
+						       &state),
+		  LICHEN_RPL_OK, "corrupt-matrix bind");
+	ret = lichen_rpl_dao_manager_build_dao(&dm, parent, buf, sizeof(buf));
+	ASSERT_EQ(ret, LICHEN_RPL_ERR_TX_STATE,
+		  "corrupt state stops origination");
+	/* And the manager made no unbound fallback attempt afterwards. */
+	ASSERT_EQ(dm.dao_sequence, 240, "no lollipop fallback after stop");
+
+	/* NULL guard. */
+	ASSERT_EQ(lichen_rpl_dao_manager_bind_tx_state(NULL, &tx_ops, &s,
+						       &state),
+		  LICHEN_RPL_ERR_INVALID, "bind NULL dm rejected");
+
+	tests_run++;
+	return 1;
+}
+
 
 /*
  * Canonical route-state sequence_relations (independent copy of
@@ -212,6 +355,7 @@ static int test_multi_step_wraps(void)
 
 int main(void)
 {
+	tests_passed += test_durable_sequence_binding();
 	struct {
 		const char *name;
 		int (*fn)(void);
