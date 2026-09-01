@@ -123,4 +123,11 @@ enum lichen_slot_map_status
 lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
 			     uint8_t num_slots, uint8_t *out, size_t out_cap,
 			     size_t *out_len);
+/** Encode a slot_map as a CBOR array (beacon CBOR options section).
+ *  Accepts up to 64 entries (rust MAX_SLOT_MAP_ENTRIES). Returns the
+ *  encoded length, or 0 when out is too small, slot_count exceeds 64,
+ *  or slots is NULL with a nonzero count. */
+size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
+				    uint8_t *out, size_t out_len);
+
 #endif /* LICHEN_LINK_BEACON_H_ */

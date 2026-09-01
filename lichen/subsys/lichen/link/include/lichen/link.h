@@ -241,6 +241,10 @@ enum lichen_desync_state {
 
 /** Consecutive valid beacons required to recover (spec 14.7: 3) */
 #define LICHEN_DESYNC_RECOVERY_BEACONS 3u
+/** Bounded RECOVERING listen timeout (superframes), 3 per
+ * 09-packets-timing.md 14.7 (python timing.sfn
+ * TDMA_BEACON_TIMEOUT_SUPERFRAMES). */
+#define LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES 3u
 struct lichen_tdma_ctx {
 	uint8_t eui64[8];                    /**< Node EUI64 (copied at init) */
 	uint32_t superframe;
@@ -281,7 +285,7 @@ enum lichen_desync_state lichen_desync_on_beacon(struct lichen_tdma_ctx *tdma,
 /**
  * @brief Advance the bounded RECOVERING listen timeout by one superframe.
  *
- * After LICHEN_DESYNC_RECOVERING_TIMEOUT_SUPERFRAMES missed superframes in
+ * After LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES missed superframes in
  * RECOVERING, the FSM returns to DESYNCED. No-op in other states.
  *
  * @param[in,out] tdma TDMA context
@@ -546,6 +550,22 @@ uint8_t lichen_tdma_compute_slot(
  */
 bool lichen_slot_map_validate(const uint8_t *slots, size_t len,
 			      uint8_t num_slots);
+
+/**
+ * @brief Slot_map-granular transmission gate (spec 02a 2a.2 R-02a-014).
+ *
+ * A joiner with an adopted slot_map MUST NOT transmit outside its
+ * assigned slots: TX is allowed only when @p current_slot is one of the
+ * mapped entries. Out-of-range @p current_slot is denied.
+ *
+ * @param slot_map     Assigned slot indices (may be NULL when len is 0)
+ * @param len          Number of entries in @p slot_map
+ * @param current_slot Current slot index
+ * @param num_slots    Total slots in the superframe (bounds check)
+ * @return true when transmission is allowed in the current slot
+ */
+bool lichen_slot_map_tx_allowed(const uint8_t *slot_map, size_t len,
+				uint8_t current_slot, uint8_t num_slots);
 #endif /* CONFIG_LICHEN_TDMA */
 
 

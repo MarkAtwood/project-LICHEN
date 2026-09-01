@@ -177,6 +177,28 @@ static void test_version_change_sfn_reset(void)
 	assert(tdma.superframe == 0U);
 }
 
+/* Slot_map-granular TX gate (spec 02a 2a.2 R-02a-014). */
+static void test_slot_map_gate(void)
+{
+	const uint8_t map[] = { 0, 2, 5 };
+
+	/* In-map slots allowed, out-of-map denied. */
+	assert(lichen_slot_map_tx_allowed(map, 3, 0, 8));
+	assert(!lichen_slot_map_tx_allowed(map, 3, 1, 8));
+	assert(lichen_slot_map_tx_allowed(map, 3, 2, 8));
+	assert(!lichen_slot_map_tx_allowed(map, 3, 3, 8));
+	assert(lichen_slot_map_tx_allowed(map, 3, 5, 8));
+	assert(!lichen_slot_map_tx_allowed(map, 3, 6, 8));
+
+	/* Bounds: current_slot >= num_slots denied. */
+	assert(!lichen_slot_map_tx_allowed(map, 3, 8, 8));
+	assert(!lichen_slot_map_tx_allowed(map, 3, 200, 8));
+
+	/* Empty/NULL map denies everything (no assigned slots). */
+	assert(!lichen_slot_map_tx_allowed(NULL, 0, 0, 8));
+	assert(!lichen_slot_map_tx_allowed(map, 0, 0, 8));
+}
+
 int main(void)
 {
 	/* Canonical ccp7_holdover.json cases, in milliseconds. */
@@ -207,6 +229,7 @@ int main(void)
 
 	test_desync_fsm();
 	test_version_change_sfn_reset();
+	test_slot_map_gate();
 
 	return 0;
 }

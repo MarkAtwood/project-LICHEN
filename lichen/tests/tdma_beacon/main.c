@@ -424,6 +424,41 @@ int main(int argc, char **argv)
 	}
 	/* The JSON distinguishes "unsorted" from "duplicate"; the C codec
 	 * has one NOT_SORTED outcome for both (rust SlotMapError parity). */
+
+	/* slot_map CBOR writer: short-form, long-form, too-small out. */
+	uint8_t sm_slots[65];
+	uint8_t sm_wire[70];
+	for (unsigned int j = 0; j < 65; j++) {
+		sm_slots[j] = (uint8_t)j;
+	}
+	size_t w = lichen_beacon_write_slot_map(sm_slots, 3, sm_wire,
+						sizeof(sm_wire));
+	CHECK(w == 4 && sm_wire[0] == 0x83 && sm_wire[1] == 0 &&
+		      sm_wire[2] == 1 && sm_wire[3] == 2,
+	      "slot_map writer short-form");
+	size_t sm_len = 0;
+	uint8_t sm_back[8];
+	CHECK(lichen_beacon_parse_slot_map(sm_wire, w, 255, sm_back,
+					   sizeof(sm_back),
+					   &sm_len) == LICHEN_SLOT_MAP_OK &&
+		      sm_len == 3,
+	      "writer output reparses");
+	w = lichen_beacon_write_slot_map(sm_slots, 30, sm_wire,
+					 sizeof(sm_wire));
+	CHECK(w == 38 && sm_wire[0] == 0x98 && sm_wire[1] == 30,
+	      "slot_map writer long-form 0x98 (values 24..29 are 2-byte CBOR)");
+	{
+		uint8_t big_back[64];
+		enum lichen_slot_map_status st = lichen_beacon_parse_slot_map(
+			sm_wire, w, 255, big_back, sizeof(big_back), &sm_len);
+		CHECK(st == LICHEN_SLOT_MAP_OK && sm_len == 30,
+		      "long-form writer output reparses");
+	}
+	CHECK(lichen_beacon_write_slot_map(sm_slots, 65, sm_wire,
+					   sizeof(sm_wire)) == 0,
+	      "65-entry write rejected (> 64)");
+	CHECK(lichen_beacon_write_slot_map(sm_slots, 30, sm_wire, 5) == 0,
+	      "too-small out buffer rejected");
 	}
 	free(sm_json);
 	if (failures == 0) {
