@@ -115,3 +115,8 @@ beacon_timeout_superframes = 3   # BEACON_TIMEOUT = N × superframe; node listen
 contention_retries = 5           # Max DAO retransmissions in contention slot during join (CSMA/CA backoff)
 contention_backoff_min_ms = 100  # Minimum CSMA backoff before contention slot TX
 contention_backoff_max_ms = 1000 # Maximum CSMA backoff before contention slot TX
+
+[ccp15]
+# spec/02a-coordinated-capacity.md 2a.10.3/2a.10.4/2a.10.6 (proposed constants)
+rf_metrics_window_sf = 32        # Rolling metrics window in superframes (2a.10.3)
+interference_escape_tenths = 1000 # Interference-score escape threshold (2a.10.4)

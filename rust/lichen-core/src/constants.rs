@@ -95,3 +95,10 @@ pub const SENML_TELEMETRY_UNIT_PA: &str = "Pa";
 pub const TDMA_GUARD_MS: u32 = 50;
 /// Minimum slot length: ceil(2296 ms airtime for 255 bytes at SF10) + guard.
 pub const TDMA_SLOT_MS: u32 = 2346;
+
+/// Rolling metrics window in superframes (spec 2a.10.3/2a.10.6; constants.toml ccp15).
+pub const RF_METRICS_WINDOW_SF: u16 = 32;
+/// Interference score in tenths above which a node MAY request an epoch
+/// rollover (spec 2a.10.4/2a.10.6; constants.toml ccp15). No transmission
+/// decision is gated on the score alone.
+pub const INTERFERENCE_ESCAPE_TENTHS: u16 = 1000;
