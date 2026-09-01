@@ -1,0 +1,7 @@
+{
+  "id": "1788240226138946427-1",
+  "issue_id": "project-LICHEN-worker6-biod",
+  "author": "Mark Atwood",
+  "text": "UPDATE (post-incident): the orchestrator branch (beads-worker-orchestrator, Opus session) carried a store snapshot whose 13 branch-only issue files — the ldzz hardware-bringup-diagnostics epic + 11 diag children + 37ad tombstone — would have been destroyed by the sync loop's normalization. Rescued into main via per-file cherry-pick (90efd12c2b) and verified: ldzz epic open with 11 children visible. Branch then consolidated via -s ours merge. LESSON: the normalization drops ALL branch-side .beads content by design; any store work done outside the shared working tree (e.g. on a branch in another checkout) MUST be cherry-picked into main's store before the branch merges. The orchestrator's branch-based store route is architecturally a no-op; bd writes only persist via the shared working tree + checkpoints.",
+  "created_at": "2026-09-01T05:23:46.138946427Z"
+}
