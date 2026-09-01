@@ -1,0 +1,7 @@
+{
+  "id": "1788272963810723515-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.71",
+  "author": "opencode-worker-1",
+  "text": "Worker1 C-slice status: tracker + option validation landed (23xz). The actual DIO-construction call site (feeding lichen_rpl_sf_tracker_assign + appending the 0x14 TLV in the gateway DIO build) still needs a production DIO builder — the same 'no send site' gap as desync/beacon wiring. Filed and closed with that caveat; parent remains open for the Rust slice (gbtq closed the verify gate) and the call-site wiring.",
+  "created_at": "2026-09-01T14:29:23.810723515Z"
+}
