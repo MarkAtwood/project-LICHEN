@@ -2099,15 +2099,31 @@ class LinkLayer:
         self._restore_security_state(state)
 
     def on_persistence_failure(self) -> None:
-        """Handle terminal persistence failure (PersistenceFailureHandler protocol)."""
+        """Handle terminal persistence failure (PersistenceFailureHandler protocol).
+
+        Callable from any thread. The teardown runs synchronously on the
+        calling thread: the state mutations are sync container operations and
+        the TX queue's reservation signalling is thread-safe by design
+        (TxQueue.set_result stores the result; the awaiting coroutine's lazy
+        future applies it on its own loop). The generation-lease wait is
+        bounded (5 s per cycle) so a blocked lease holder cannot deadlock the
+        persistence thread — the teardown proceeds regardless, because after
+        a terminal persistence failure the leases are moot."""
+        deadline = threading.Event()
+        for _ in range(5):
+            with self._security_lock:
+                if not self._generation_leases:
+                    break
+                owns_lease = any(
+                    owner_thread == threading.get_ident() and count > 0
+                    for (_signer, owner_thread), count in
+                    self._generation_lease_owners.items()
+                )
+                if owns_lease:
+                    break
+                self._generation_condition.wait(1.0)
+            deadline.wait(1.0)
         with self._security_lock:
-            thread_id = threading.get_ident()
-            owns_lease = any(
-                owner_thread == thread_id and count > 0
-                for (_signer, owner_thread), count in self._generation_lease_owners.items()
-            )
-            while self._generation_leases and not owns_lease:
-                self._generation_condition.wait()
             self._exhausted = True
             self.tx_queue.clear()
             self._verified_receipts.clear()
@@ -2117,3 +2133,5 @@ class LinkLayer:
             self._schc_peer_contexts.clear()
             self._schc_peer_context_issuances.clear()
             self._key_generations.clear()
+            self._generation_leases.clear()
+            self._generation_condition.notify_all()
