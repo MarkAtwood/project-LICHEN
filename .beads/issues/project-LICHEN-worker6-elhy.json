@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-elhy",
+  "title": "C link: estimate_density (R-02a-117/135) + host CTest consuming ccp16_load_balance estimate_density vectors",
+  "description": "Smallest slice of b7z9.29 (decompose-first). rust/lichen-core/src/rf_health.rs:122-137 estimate_density is implemented+tested; python mirror; C has NO estimator — only the report API lichen_lora_l2_set_density (lora_l2_tx.c:569-578, driven by a test only). Port the formula to C in lichen/subsys/lichen/link (rf_health.c or a new density_estimate.{c,h}) mirroring rust exactly, and consume test/vectors/ccp16_load_balance.json estimate_density vectors (:626-724, currently zero consumers) in a host CTest (extend lichen/tests/rf_health or new tests/rf_density). Parent residue stays: rolling-window machinery (R-02a-133), BusyPercent TX-time sampler (R-02a-131), MitigateInterference consolidation (R-02a-142).",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:20:37.489072575Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T12:20:52.252837447Z",
+  "started_at": "2026-09-01T12:20:52.252837447Z",
+  "lease_expires_at": "2026-09-01T12:25:52.252837447Z",
+  "heartbeat_at": "2026-09-01T12:20:52.252837447Z",
+  "labels": [
+    "zephyr",
+    "ccp15"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-elhy",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.29",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T12:20:37.644217337Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788265402882698053-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.20",
+  "author": "opencode-worker-7",
+  "text": "Status consolidation (worker-7): the receiver-side slices of this bead are DONE — Python claim replay cache (SlotClaimReplayCache + verify_slot_claim replay gate, commit c89351eb05, closed as 20.2) and C NVS persistence (slot_claim_settings.c, closed as 20.1, gated CONFIG_LICHEN_SLOT_CLAIM_REPLAY). Remaining scope is the SENDER side (atomic increment-before-claim + NVS persistence in the sender's claim construction), which per worker-4's coordination note is part of the single-session COSE_Sign1 migration (16.1/16.2/16.4) that requires the human payload-keys adjudication first — the sender transcript format cannot be finalized before that decision. Adding human-only label so the loop skips it until the 70p7/16 adjudication completes.",
+  "created_at": "2026-09-01T12:23:22.882698053Z"
+}

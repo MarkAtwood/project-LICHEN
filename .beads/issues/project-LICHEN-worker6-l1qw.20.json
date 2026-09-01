@@ -12,7 +12,8 @@
     "gcp",
     "spec-gap",
     "lci",
-    "spec"
+    "spec",
+    "human-only"
   ],
   "dependencies": [
     {

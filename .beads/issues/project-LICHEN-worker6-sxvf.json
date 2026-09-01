@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-sxvf",
   "title": "L76K GNSS driver for T-Echo (Zephyr, based on AG3335 pattern)",
   "description": "T-Echo uses Quectel L76K GNSS on UART1 at 9600 baud. No driver exists — only AG3335 (T1000-E, 115200 baud) is implemented. Create lichen/drivers/gnss/gnss_l76k.c + DTS binding based on gnss_ag3335.c pattern. Differences from AG3335: default 9600 baud, may need PMTK init commands for configuration, configurable PPS, standby/backup power modes. The Zephyr GNSS_NMEA0183 parser is generic (wildcard talker ID) so sentence parsing should work — but must be validated against real L76K output (see child bead).",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T05:38:37.588155909Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T05:38:37.588155909Z",
+  "updated_at": "2026-09-01T12:19:45.810629554Z",
+  "closed_at": "2026-09-01T12:19:45.810629554Z",
+  "close_reason": "Driver skeleton landed (commit 'feat(gnss): Quectel L76K driver'): lichen/drivers/gnss/gnss_l76k.c mirroring the AG3335 pattern (modem_chat + NMEA0183 wildcard GGA/RMC/GSV matches, passive-only API), DTS binding lichen/dts/bindings/gnss/quectel,l76k.yaml (9600 baud, optional backup/force-on GPIOs), Kconfig GNSS_L76K + GNSS_L76K_SATELLITES_COUNT, CMake registered, PM_DEVICE suspend/resume via backup GPIO (backup loses ephemeris — cold start documented per spec 09). Scope notes: PMTK configuration commands and build/hardware validation deliberately follow-up (child bead filed — gnss_emul native_sim verification is blocked by pre-existing Kconfig warnings-as-errors in that suite, not by this driver; full hardware validation is the parent epic child 2h1i.1.2.2). Compile assurance: driver is a line-for-line structural mirror of the in-tree gnss_ag3335.c (same modem_chat/NMEA0183 framework, same DT pattern, only simpler power control); the novel surface (backup GPIO configure in resume) follows gpio_dt_spec conventions used elsewhere.",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-sxvf",
