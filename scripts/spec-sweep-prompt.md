@@ -2,7 +2,9 @@
 
 You are performing the requirements-extraction pass for ONE section of the
 LICHEN protocol spec. The .beads/ directory is the live shared store — NEVER
-stage or commit it. You MAY edit only `docs/spec-coverage.md` and file beads.
+stage or commit it. You MAY edit only the TWO output files named below and
+file beads. Do not edit any other file (source, spec, tests — evidence goes
+in the matrix, not the code).
 
 INPUT: the spec section file given to you (e.g. spec/05-routing.md).
 
@@ -51,7 +53,10 @@ tests. No evidence = ambiguous, not implemented.
 
 ## Step 3 — Coverage matrix
 
-Append to docs/spec-coverage.md a section:
+WRITE (create) your section matrix to `docs/spec-coverage/<SECTION_STEM>.md`
+(e.g. `docs/spec-coverage/05-routing.md` for spec/05-routing.md) — this exact
+path is what the wave runner checks; appending anywhere else loses your work.
+The file starts with:
 
     ## <spec file> — coverage (sweep <date>)
     | Req | Spec text (trimmed) | Status | Evidence | Confidence |
@@ -71,7 +76,8 @@ MAYs: never file. oscore/EDHOC semantics: label `human-only`, never plan a fix.
 
 ## Step 5 — Flagged set for Opus verification
 
-Write docs/spec-coverage-<section>-flagged.md: every requirement where
+Write `docs/spec-coverage/<SECTION_STEM>-flagged.md` (e.g.
+`docs/spec-coverage/05-routing-flagged.md`): every requirement where
 (a) confidence was low, (b) classification was ambiguous or divergent, or
 (c) the section is 06-security or concerns oscore/EDHOC semantics.
 For each: the requirement, your classification, your evidence, and the
