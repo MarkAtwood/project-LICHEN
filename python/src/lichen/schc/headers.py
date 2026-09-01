@@ -152,9 +152,12 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
 def validate_full_ipv6(raw: bytes) -> bytes:
     """Validate a complete IPv6 packet before Rule 255 delivery.
 
-    RX decode is byte-preserving: framing, structure, and checksums are
-    validated, but endpoint address policy is TX-only (lives in
-    :func:`_validate_rule255_emission_endpoints`).
+    Framing, structure, checksums, and the structural address constraints
+    (Rule 255 RX is byte-preserving with respect to the emission policy,
+    spec/03-adaptation.md): unspecified or multicast sources and an
+    unspecified destination are invalid in BOTH directions; loopback,
+    IPv4-mapped, and multicast-destination-scope remain TX-side emission
+    policy and live in :func:`_validate_rule255_emission_endpoints`.
     """
     if type(raw) is not bytes:
         raise SchcError("IPv6 packet must be bytes")
@@ -166,6 +169,11 @@ def validate_full_ipv6(raw: bytes) -> bytes:
         packet = IPv6Packet.from_bytes(raw, strict=True)
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
+    source, destination = packet.header.src_addr, packet.header.dst_addr
+    if source.is_unspecified or source.is_multicast:
+        raise SchcError(f"invalid IPv6 source address {source}")
+    if destination.is_unspecified:
+        raise SchcError(f"invalid IPv6 destination address {destination}")
     upper_dst = _validate_routing_headers(packet)
     if packet.header.next_header == UDP_NEXT_HEADER:
         try:
