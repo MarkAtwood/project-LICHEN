@@ -149,6 +149,8 @@ static bool find_ll(const char *obj, const char *end, const char *key,
 	return true;
 }
 
+int lichen_rpl_dio_validate_assigned_sf(const uint8_t *option);
+
 int main(int argc, char **argv)
 {
 	const char *path = argc > 1 ? argv[1]
@@ -273,6 +275,58 @@ int main(int argc, char **argv)
 	      "sf validity bounds");
 
 	free(json);
+	/* Gateway least-loaded SF tracker (rust GatewaySfTracker parity). */
+	{
+		struct lichen_rpl_sf_tracker tracker;
+		uint32_t load[6];
+		uint8_t iid_a[8] = { 0x0A, 1, 2, 3, 4, 5, 6, 7 };
+		uint8_t iid_b[8] = { 0x0B, 1, 2, 3, 4, 5, 6, 7 };
+		uint8_t iid_c[8] = { 0x0C, 1, 2, 3, 4, 5, 6, 8 };
+		uint8_t iid_d[8] = { 0x0D, 1, 2, 3, 4, 5, 6, 9 };
+
+		lichen_rpl_sf_tracker_init(&tracker);
+		/* First three assigns fill SF7, SF8, SF9 in order. */
+		CHECK(lichen_rpl_sf_tracker_assign(&tracker, iid_a) == 7,
+		      "tracker: first assign SF7");
+		CHECK(lichen_rpl_sf_tracker_assign(&tracker, iid_b) == 8,
+		      "tracker: second assign SF8");
+		CHECK(lichen_rpl_sf_tracker_assign(&tracker, iid_c) == 9,
+		      "tracker: third assign SF9");
+		lichen_rpl_sf_tracker_load(&tracker, load);
+		CHECK(load[0] == 1 && load[1] == 1 && load[2] == 1 &&
+			      load[3] == 0,
+		      "tracker: load by SF");
+
+		/* Re-register iid_a at SF12: moves, freeing SF7. */
+		CHECK(lichen_rpl_sf_tracker_register(&tracker, iid_a, 12),
+		      "tracker: re-register at SF12");
+		CHECK(lichen_rpl_sf_tracker_assign(&tracker, iid_d) == 7,
+		      "tracker: freed SF7 is least-loaded next");
+
+		/* Unregister removes exactly one. */
+		lichen_rpl_sf_tracker_unregister(&tracker, iid_a);
+		lichen_rpl_sf_tracker_load(&tracker, load);
+		CHECK(load[5] == 0 && load[0] == 1, "tracker: unregister SF12");
+
+		/* Invalid SF rejected; NULL iid rejected. */
+		CHECK(!lichen_rpl_sf_tracker_register(&tracker, iid_a, 6),
+		      "tracker: SF6 rejected");
+		CHECK(!lichen_rpl_sf_tracker_register(&tracker, iid_a, 13),
+		      "tracker: SF13 rejected");
+		CHECK(lichen_rpl_sf_tracker_assign(&tracker, NULL) == 0,
+		      "tracker: NULL iid rejected");
+
+		/* 0x14 TLV emission through the DIO option path. */
+		uint8_t opt_tlv[3];
+		CHECK(lichen_rpl_sf_assignment_make(9, opt_tlv),
+		      "tracker: make 0x14 option");
+		CHECK(lichen_rpl_dio_validate_assigned_sf(opt_tlv) == 0,
+		      "tracker: 0x14 option validates in DIO walk");
+		uint8_t bad_sf_opt[3] = { 0x14, 1, 13 };
+		CHECK(lichen_rpl_dio_validate_assigned_sf(bad_sf_opt) != 0,
+		      "tracker: SF13 option rejected");
+	}
+
 	if (failures == 0) {
 		printf("PASS: rpl_sf_assignment vs sf_assignment vectors\n");
 		return 0;
