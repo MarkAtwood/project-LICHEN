@@ -17,6 +17,9 @@
 
 #include <lichen/lora_cad.h>
 #include <lichen/op_class.h>
+#if defined(CONFIG_LICHEN_DIAG)
+#include <lichen/diag.h>
+#endif
 
 LOG_MODULE_DECLARE(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 
@@ -29,6 +32,12 @@ struct lichen_lora_cad_entry {
 
 static struct lichen_lora_cad_entry cad_registry[LICHEN_LORA_CAD_REGISTRY_SIZE];
 K_MUTEX_DEFINE(cad_registry_mutex);
+
+/* diag.3 (worker6-ldzz.3): consecutive lora_send -EBUSY streak, reset by
+ * any successful or non-EBUSY send. Compiled out when diagnostics are off. */
+#if defined(CONFIG_LICHEN_DIAG)
+static uint32_t lora_tx_ebusy_streak;
+#endif
 
 int lichen_lora_cad_register(const struct device *dev,
                              lichen_lora_cad_fn callback)
@@ -353,6 +362,25 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
     if (lora_data.cca_enabled) {
         (void)lichen_csma_tx_complete(&lora_data.csma, ret);
     }
+#if defined(CONFIG_LICHEN_DIAG)
+    /* diag.3 (worker6-ldzz.3): consecutive -EBUSY from lora_send detects
+     * the modem-hold race where RX async holds the modem. Thresholds are
+     * advisory: no transmission decision changes here. */
+    if (ret == -EBUSY) {
+        lora_tx_ebusy_streak++;
+        if (lora_tx_ebusy_streak == 3U) {
+            lichen_diag_report(LICHEN_DIAG_SUB_RADIO,
+                               LICHEN_DIAG_RADIO_MODEM_HELD, 3U,
+                               "modem held: 3 TX EBUSY");
+        } else if (lora_tx_ebusy_streak == 10U) {
+            lichen_diag_report(LICHEN_DIAG_SUB_RADIO,
+                               LICHEN_DIAG_RADIO_TX_DEAD, 10U,
+                               "modem TX dead: 10 EBUSY");
+        }
+    } else {
+        lora_tx_ebusy_streak = 0U;
+    }
+#endif
     k_mutex_unlock(&modem_mutex);
 #if IS_ENABLED(CONFIG_LICHEN_DUTY_CYCLE)
     if (ret >= 0) lichen_duty_cycle_record_tx(&lora_data.duty, k_uptime_get(), dur);

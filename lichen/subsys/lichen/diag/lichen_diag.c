@@ -17,6 +17,7 @@
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_service.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/init.h>
 #include <zcbor_encode.h>
 
 #define DIAG_CAPACITY CONFIG_LICHEN_DIAG_CAPACITY
@@ -82,6 +83,10 @@ bool lichen_diag_get(size_t index, struct lichen_diag_event *out)
 	*out = s_ring[(base + index) % DIAG_CAPACITY];
 	return true;
 }
+
+/* Wire init at boot: without this, s_initialized stays false and every
+ * report no-ops (found by ldzz.3 review). */
+SYS_INIT(lichen_diag_init, APPLICATION, 0);
 
 /* CoAP GET /diag: CBOR array of recent events as maps. */
 static int diag_get(struct coap_resource *resource,
