@@ -479,6 +479,11 @@ class Router:
         # advance it. Direct route() callers have no channel to advance the
         # header, so in-transit (or malformed) source routes drop here; the
         # node's receive path advances before routing.
+        # Both error classes are caught deliberately: survey_source_route
+        # raises lichen.rpl.routing.RoutingError (imported as RplRoutingError),
+        # while the local RoutingError is caught defensively. Catching only the
+        # local class would let malformed SRH exceptions escape route(); the
+        # narrowed variant from the merge other-side was rejected for that reason.
         try:
             in_transit = survey_source_route(packet)
         except (RoutingError, RplRoutingError) as error:

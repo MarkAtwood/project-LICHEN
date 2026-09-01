@@ -13,7 +13,7 @@
 
 use core::time::Duration;
 
-use crate::dao_timing::{
+use lichen_rpl::dao_timing::{
     checked_dao_refresh_deadline, dao_initial_delay_ms, dao_retry_delay, DaoRefreshTimer,
 };
 
@@ -122,7 +122,7 @@ impl DaoTimingState {
             DaoTimingPhase::RetryPending | DaoTimingPhase::Exhausted => {}
             DaoTimingPhase::Idle => return None,
         }
-        let delay = crate::dao_timing::dao_retry_delay(self.attempts);
+        let delay = lichen_rpl::dao_timing::dao_retry_delay(self.attempts);
         self.attempts = self.attempts.saturating_add(1);
         match delay {
             Some(d) => {
