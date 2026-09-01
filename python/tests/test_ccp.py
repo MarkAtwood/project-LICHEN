@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from lichen.ccp import (
+    BusyPercentSampler,
     PeerDensityTracker,
     adaptive_sf_select,
     ema_update,
@@ -20,6 +21,7 @@ from lichen.ccp import (
     slot_hash,
     synchronized_hop,
 )
+from lichen.constants import RF_METRICS_WINDOW_SF, TDMA_SLOT_MS
 
 VECTORS_DIR = Path(__file__).parent.parent.parent / "test" / "vectors"
 
@@ -514,3 +516,27 @@ class TestPeerDensityTracker:
         for i in range(253):
             t.record_peer((i, 0xEE, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66), 3)
         assert t.estimate_density(200, -100) == 255
+
+
+class TestBusyPercentSampler:
+    """TX-time BusyPercent sampler (b7z9.29.3, R-02a-131)."""
+
+    def test_partial_and_window_slide(self) -> None:
+        s = BusyPercentSampler()
+        s.record_tx_airtime(0, TDMA_SLOT_MS * 2)
+        pct = s.busy_percent(TDMA_SLOT_MS)
+        assert 6 <= pct <= 7, pct
+
+        # Window slide: old entries drop.
+        s.record_tx_airtime(100, 0)
+        assert s.busy_percent(TDMA_SLOT_MS) == 0
+
+
+    def test_saturation_and_zero_duration(self) -> None:
+        s = BusyPercentSampler()
+        for sf in range(RF_METRICS_WINDOW_SF):
+            s.record_tx_airtime(sf, TDMA_SLOT_MS)
+        assert s.busy_percent(TDMA_SLOT_MS) == 100
+        s.record_tx_airtime(RF_METRICS_WINDOW_SF + 1, TDMA_SLOT_MS * 2)
+        assert s.busy_percent(TDMA_SLOT_MS) == 100
+        assert s.busy_percent(0) == 0

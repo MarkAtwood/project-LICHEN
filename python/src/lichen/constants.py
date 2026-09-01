@@ -73,6 +73,8 @@ SCHC_INACTIVITY_TIMEOUT_S: int = 60
 # CCP-15 proposed metrics (spec/02a-coordinated-capacity.md 2a.10.3/2a.10.4/2a.10.6).
 # Union of both sides: HEAD's CCP-15 umbrella and beads-worker-7's density bonus
 # thresholds; the shared constants agree on both sides.
+# Spec 02a (TDMA slot budget): per-superframe slot duration for occupancy.
+TDMA_SLOT_MS: int = 2346
 # Spec 02a 2a.10.3 (proposed, R-02a-117 family): rolling RF metrics window.
 RF_METRICS_WINDOW_SF: int = 32
 # Spec 02a 2a.10.3 (proposed): density bonus thresholds (estimate_density).

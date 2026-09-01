@@ -115,6 +115,46 @@ def select_channel(
     return 1 + (h % (n_channels - 1))
 
 
+class BusyPercentSampler:
+    """Rolling-window TX-time BusyPercent sampler (spec R-02a-131 / 2a.10.3).
+
+    BusyPercent is TX-time based occupancy over RF_METRICS_WINDOW_SF
+    rolling superframes: callers record own-node TX airtime (ms) per
+    superframe; busy_percent computes tx_airtime / slot_duration * 100
+    clamped to 0..100. Never RSSI-derived (spec MUST).
+    """
+
+    def __init__(self) -> None:
+        self._airtime_by_sf: dict[int, int] = {}
+        self._current_sf = 0
+
+    def record_tx_airtime(self, superframe: int, airtime_ms: int) -> None:
+        """Record the TX airtime (ms) consumed in the given superframe."""
+        if superframe > self._current_sf:
+            self._current_sf = superframe
+        self._airtime_by_sf[superframe] = (
+            self._airtime_by_sf.get(superframe, 0) + airtime_ms
+        )
+
+    def busy_percent(self, slot_duration_ms: int) -> int:
+        """BusyPercent over the rolling window (0..100).
+
+        The window is EXCLUSIVE of the oldest edge: superframes in
+        (current-32, current] are summed (underflow-safe, so at current 0
+        the whole recorded range is retained).
+        """
+        self._airtime_by_sf = {
+            sf: ms
+            for sf, ms in self._airtime_by_sf.items()
+            if sf + RF_METRICS_WINDOW_SF > self._current_sf
+        }
+        if slot_duration_ms <= 0:
+            return 0
+        window_slots = slot_duration_ms * RF_METRICS_WINDOW_SF
+        total_ms = sum(self._airtime_by_sf.values())
+        return min(100, (total_ms * 100) // window_slots)
+
+
 class PeerDensityTracker:
     """Rolling-window peer density tracker (spec R-02a-117 / 2a.10.3).
 
