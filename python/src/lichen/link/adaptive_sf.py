@@ -85,7 +85,7 @@ def adaptive_sf_for_metrics(
     snr = int(snr_ema) if isinstance(snr_ema, int) else int(snr_ema)
     if density > 20 or snr < -5:
         return 12
-    if density > 8 or snr < 0 or load_factor > 0.8:
+    if density > 10 or snr < 0 or load_factor > 0.8:
         return 11
     if density < 5 and snr > 8:
         return 9

@@ -280,7 +280,7 @@ def _select_channel_index(eui64: bytes, epoch: int, density: int, n_channels: in
     """
     if type(n_channels) is not int or n_channels <= 0:
         raise ValueError("n_channels must be a positive integer")
-    if density > 8 or n_channels == 1:
+    if density > 10 or n_channels == 1:
         return 0
     if n_channels == 2:
         return 1

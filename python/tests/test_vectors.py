@@ -1945,7 +1945,7 @@ def test_ccp16_sf_ema_load_factor_hash32_logic(desc: str, vector: dict) -> None:
     preimage = eui + (epoch & 0xFFFFFFFF).to_bytes(4, "little")
     assert channel_plan_hash_32(preimage) == o["hash_32"], f"hash_32 drift: {name}"
 
-    # select_channel implementation vs oracle (density>8 forces CH0,
+    # select_channel implementation vs oracle (density>10 forces CH0,
     # otherwise 1 + hash % num_channels over the vector plan).
     selected = _ccp16_vector_plan().select_channel(eui, epoch, density)
     assert selected == o["channel"], f"select_channel drift: {name}"
@@ -1963,7 +1963,7 @@ def test_ccp16_sf_ema_load_factor_hash32_logic(desc: str, vector: dict) -> None:
     snr_ema = i.get("snr_ema", i.get("snr_db", 5.0))
     load_factor = i.get("load_factor", 0.0)
     sf = 10
-    if density > 8:
+    if density > 10:
         sf = min(12, sf + 2)
     if snr_ema > 8 and density < 5:
         sf = max(7, sf - 1)
@@ -1973,7 +1973,7 @@ def test_ccp16_sf_ema_load_factor_hash32_logic(desc: str, vector: dict) -> None:
         sf = 12
     if snr_ema < 0:
         sf = max(11, sf)
-    if density > 8:
+    if density > 10:
         sf = max(11, sf)
     assert sf == o["sf"], f"adaptive_sf drift: {name}"
 

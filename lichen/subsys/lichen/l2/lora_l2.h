@@ -293,7 +293,7 @@ int lichen_lora_l2_queue_stats_get(struct tx_queue_stats *stats);
  * @brief Adaptive duty cycle limit for a network density and region (CCP-13)
  *
  * Density thresholds per spec/02a-coordinated-capacity.md section 2a.9:
- * density > 8 (dense) shrinks airtime, density < 3 (sparse) allows more.
+ * density > 10 (dense) shrinks airtime, density < 3 (sparse) allows more.
  *
  * @param density Current neighbor count estimate
  * @param region  Duty region from the operating class table

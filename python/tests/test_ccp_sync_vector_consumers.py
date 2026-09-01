@@ -239,9 +239,9 @@ def test_ccp16_hop_sim_select_channel(name: str) -> None:
 
 def test_ccp16_hop_density_high_ch0() -> None:
     vec = _case(CCP16_HOP, "density_high_ch0")
-    assert vec["density"] == 9
+    assert vec["density"] == 11
     # ccp.select_channel implements the density gate of the same 02a pseudocode:
-    # density > 8 forces CH0 before any hashing (EUI/epoch are irrelevant here).
+    # density > 10 forces CH0 before any hashing (EUI/epoch are irrelevant here).
     ch = ccp_select_channel(eui64=bytes(8), epoch=0, density=vec["density"],
                             n_channels=vec["num_channels"])
     assert ch == vec["expected_channel"] == 0

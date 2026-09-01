@@ -96,4 +96,4 @@ def test_exhaustive_epoch_boundaries_stay_deterministic_and_in_range(n_channels:
             assert first == 1
         else:
             assert 1 <= first < n_channels
-        assert plan.select_channel(eui64, epoch, density=9) == 0
+        assert plan.select_channel(eui64, epoch, density=11) == 0

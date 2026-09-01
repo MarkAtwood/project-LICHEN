@@ -585,7 +585,7 @@ uint8_t lora_l2_duty_region(void)
 
 uint16_t adaptive_duty_permille(uint8_t density, uint8_t region)
 {
-    if (density > 8) {
+    if (density > 10) {
         return (region == 0) ? 5 : 10;
     }
     if (density < 3) {

@@ -37,6 +37,7 @@ pub use oscore::{
     SenderSequenceState,
     RecipientReplayState,
     ContextStateStore,
+    SenderStateStore,
     // Constants
     ALG_AEAD,
     COAP_OPTION_OSCORE,
