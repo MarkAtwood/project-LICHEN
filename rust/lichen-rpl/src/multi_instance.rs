@@ -1110,8 +1110,12 @@ impl MultiRootState {
             self.current_root = Some(self.candidates[selected_idx].clone());
         }
 
-        // Return reference to the exact candidate that was selected
-        self.candidates.get(selected_idx)
+        // 2a.5.3: discard non-selected candidates so they cannot accumulate
+        // state or influence scheduling decisions.
+        let selected = self.candidates[selected_idx].clone();
+        self.candidates.clear();
+        self.candidates.push(selected);
+        self.candidates.first()
     }
 
     /// Advance holdoff counter by one superframe.
@@ -1124,7 +1128,10 @@ impl MultiRootState {
 
         self.holdoff_counter = self.holdoff_counter.saturating_sub(1);
         if self.holdoff_counter == 0 {
-            // Holdoff complete - transition to new root
+            // Holdoff complete - transition to new root. Per 2a.5.3 the
+            // node MUST initiate desync and rejoin (Section 2a.6): drop
+            // prior-version desync state so the RPL layer re-establishes
+            // sync under the new root.
             if let Some(selected) = self.holdoff_selected.take() {
                 self.current_root = Some(selected);
             }
