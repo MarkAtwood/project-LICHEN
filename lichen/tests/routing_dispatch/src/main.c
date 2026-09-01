@@ -1141,17 +1141,18 @@ static int test_gradient_sf_density_threshold(void)
 	memcpy(entry.next_hop, next_hop, sizeof(entry.next_hop));
 	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
 
-	/* Spec 02a 2a.8 step 3: Density > 8 (strictly greater). Density 8 is
-	 * NOT the trigger; the SF stays at the entry's current value. */
-	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 8U, 0U, 0U, 1U, &sf,
+	/* Spec 02a 2a.8 step 3: Density > 10 (strictly greater; decision
+	 * id=density-high, matching python ccp.py and rust rf_health.rs).
+	 * Density 10 is NOT the trigger; the SF stays at the entry's value. */
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 1U, &sf,
 					  &tx_allowed) == 0);
 	REQUIRE(sf == 10U);
 
-	/* Density 9 crosses the threshold: SF +2, capped at 12. NOTE:
+	/* Density 11 crosses the threshold: SF +2, capped at 12. NOTE:
 	 * sf_select writes the result back into entry.sf.current_sf, so the
 	 * second call's baseline is the first call's result (still 10 here) —
 	 * keep the call order stable. */
-	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 9U, 0U, 0U, 2U, &sf,
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 11U, 0U, 0U, 2U, &sf,
 					  &tx_allowed) == 0);
 	REQUIRE(sf == 12U);
 	(void)tx_allowed;
