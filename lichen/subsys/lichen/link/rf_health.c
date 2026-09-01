@@ -2,6 +2,7 @@
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
 #include <lichen/rf_health.h>
+#include <string.h>
 #include <limits.h>
 
 #define FP_SCALE (1 << 16)
@@ -175,4 +176,68 @@ uint16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
 		return 0xFFFFu;
 	}
 	return (uint16_t)((uint32_t)busy_percent * 10u + packet_error_permille);
+}
+
+void lichen_busy_percent_init(struct lichen_busy_percent_sampler *s)
+{
+	memset(s, 0, sizeof(*s));
+}
+
+void lichen_busy_percent_record(struct lichen_busy_percent_sampler *s,
+				uint64_t superframe, uint32_t airtime_ms)
+{
+	if (superframe > s->current_sf) {
+		s->current_sf = superframe;
+	}
+	for (uint8_t i = 0; i < s->count; i++) {
+		if (s->sf[i] == superframe) {
+			uint64_t sum =
+				(uint64_t)s->airtime_ms[i] + airtime_ms;
+			s->airtime_ms[i] = sum > UINT32_MAX
+						   ? UINT32_MAX
+						   : (uint32_t)sum;
+			return;
+		}
+	}
+	if (s->count >= LICHEN_BUSY_PERCENT_MAX_ENTRIES) {
+		uint8_t oldest = 0;
+		for (uint8_t i = 1; i < s->count; i++) {
+			if (s->sf[i] < s->sf[oldest]) {
+				oldest = i;
+			}
+		}
+		memmove(&s->sf[oldest], &s->sf[oldest + 1],
+			(s->count - oldest - 1) * sizeof(s->sf[0]));
+		memmove(&s->airtime_ms[oldest], &s->airtime_ms[oldest + 1],
+			(s->count - oldest - 1) * sizeof(s->airtime_ms[0]));
+		s->count--;
+	}
+	s->sf[s->count] = superframe;
+	s->airtime_ms[s->count] = airtime_ms;
+	s->count++;
+}
+
+uint8_t lichen_busy_percent(struct lichen_busy_percent_sampler *s,
+			    uint32_t slot_duration_ms)
+{
+	/* Drop entries outside the exclusive window before summing. */
+	uint8_t kept = 0;
+	uint64_t total_ms = 0;
+	for (uint8_t i = 0; i < s->count; i++) {
+		if (s->sf[i] + LICHEN_BUSY_PERCENT_WINDOW_SF >
+		    s->current_sf) {
+			s->sf[kept] = s->sf[i];
+			s->airtime_ms[kept] = s->airtime_ms[i];
+			total_ms += s->airtime_ms[kept];
+			kept++;
+		}
+	}
+	s->count = kept;
+	if (slot_duration_ms == 0) {
+		return 0;
+	}
+	uint64_t window_ms =
+		(uint64_t)slot_duration_ms * LICHEN_BUSY_PERCENT_WINDOW_SF;
+	uint64_t percent = total_ms * 100 / window_ms;
+	return percent > 100 ? 100 : (uint8_t)percent;
 }

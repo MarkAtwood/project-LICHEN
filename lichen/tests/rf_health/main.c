@@ -26,6 +26,41 @@ static void fill_loss(struct lichen_rf_health *h, uint32_t tx, uint32_t fails)
 	}
 }
 
+static void test_busy_percent_sampler(void)
+{
+	struct lichen_busy_percent_sampler s;
+
+	/* Zero: no airtime recorded -> 0% */
+	lichen_busy_percent_init(&s);
+	CHECK(lichen_busy_percent(&s, 250) == 0, "zero busy");
+
+	/* Partial: 800ms out of 32*250=8000ms window -> ~10% */
+	lichen_busy_percent_init(&s);
+	lichen_busy_percent_record(&s, 1, 800);
+	uint8_t pct = lichen_busy_percent(&s, 250);
+	CHECK(pct >= 9 && pct <= 11, "partial busy ~10%");
+
+	/* Saturation clamp: 500ms x 32 superframes -> 200% -> clamped 100% */
+	lichen_busy_percent_init(&s);
+	for (uint64_t sf = 1; sf <= 32; sf++) {
+		lichen_busy_percent_record(&s, sf, 500);
+	}
+	pct = lichen_busy_percent(&s, 250);
+	CHECK(pct == 100, "saturation clamp");
+
+	/* Window slide: old superframes fall out */
+	lichen_busy_percent_init(&s);
+	for (uint64_t sf = 1; sf <= 32; sf++) {
+		lichen_busy_percent_record(&s, sf, 250);
+	}
+	pct = lichen_busy_percent(&s, 250);
+	CHECK(pct == 100, "full window saturates");
+
+	lichen_busy_percent_record(&s, 33, 0);
+	pct = lichen_busy_percent(&s, 250);
+	CHECK(pct > 95 && pct < 100, "window slides");
+}
+
 int main(void)
 {
 	struct lichen_rf_health h;
@@ -91,6 +126,7 @@ int main(void)
 	      "density: capped at 255");
 	CHECK(lichen_rf_health_estimate_density(0, 200, -100) == 3,
 	      "density: zero neighbors with bonuses");
+	test_busy_percent_sampler();
 
 	/* Interference score (CCP-15 R-02a-137): ccp-interference.json
 	 * vectors. busy_percent*10 + per_mille, tenths domain. */
@@ -123,9 +159,7 @@ int main(void)
 	      "interference: per > 1000 fails closed");
 
 	if (failures == 0) {
-		printf("PASS: rf_health loss threshold\n");
-		return 0;
+		printf("ALL TESTS PASSED\n");
 	}
-	printf("FAILURES: %d\n", failures);
-	return 1;
+	return failures != 0;
 }
