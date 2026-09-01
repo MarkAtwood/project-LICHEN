@@ -756,6 +756,15 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         evaluate_epoch_floor(FLOOR, None, verifier=verifier).provision_status
         is ProvisionEpochStatus.PERSISTENCE_FAILED
     )
+    # The tracker-consumed authority path (_with_floor_snapshot ->
+    # _floor_result_locked persistence_failed branch, provisioning.py:596-597)
+    # must report the same poisoned state, and the verifier must be cleared.
+    authority = EpochFloorAuthority(FLOOR, verifier=verifier)
+    assert (
+        authority.current().provision_status
+        is ProvisionEpochStatus.PERSISTENCE_FAILED
+    )
+    assert verifier.cleared
 
 
 @pytest.mark.asyncio
