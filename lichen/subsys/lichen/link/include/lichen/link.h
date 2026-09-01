@@ -483,6 +483,23 @@ uint8_t lichen_tdma_compute_slot(
 	const uint8_t eui64[_Nonnull 8], uint32_t sfn, uint8_t num_slots);
 
 /**
+ * @brief Validate a beacon slot_map (spec 02a 2a.2, R-02a-008 family).
+ *
+ * A slot_map is valid when every entry is within [0, num_slots) and the
+ * entries are strictly ascending (sorted, no duplicates). An empty map is
+ * valid.
+ *
+ * @param slots     Slot indices from the beacon (may be NULL when len is 0)
+ * @param len       Number of entries in @p slots
+ * @param num_slots Total slots in the superframe (upper bound, exclusive)
+ * @return true when the slot_map is well-formed
+ */
+bool lichen_slot_map_validate(const uint8_t *slots, size_t len,
+			      uint8_t num_slots);
+#endif /* CONFIG_LICHEN_TDMA */
+
+
+/**
  * @brief Validate the CCP-7 guard budget.
  *
  * All arguments use the same caller-selected time unit.  The guard is
