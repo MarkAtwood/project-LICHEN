@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.88",
+  "title": "Root DIO signature (spec 8.10.1) residuals: C RX call site absent, Python production integration absent, root-side TX signing absent in Rust/C, CONFIG_LICHEN_RPL_ROOT_SIG absent",
+  "description": "Residual of closed project-LICHEN-worker6-b7z9.37 (filed before the Rust RX wiring landed; found by spec-coverage sweep part 3, R-06-305/R-06-310, docs/spec-coverage/06-security-part3.md). Evidence: Rust receiver fully wired rust/lichen-node/src/rpl_stack/receive.rs:522-\u003e657-747 + RootSeqCache rust/lichen-rpl/src/root_seq_cache.rs:45-97 + announce TOFU pin store announce.rs:287. C library complete but test-only: lichen/subsys/lichen/rpl/root_dio_sig.c:401-445 + root_dio_replay.c have zero production call sites (dodag.c RX never consumes the 0x17 option). Python crypto/root_dio_signature.py:291-377 is an unwired oracle; it also holds the ONLY root-side signer (create_root_dio_signature :242). No stack appends the option to outgoing DIOs (Rust message.rs RootDioSignature::write_to has no producer). CONFIG_LICHEN_RPL_ROOT_SIG Kconfig/feature exists nowhere (spec L694). Suggested placement: C = one authorized-consume call site in lichen/subsys/lichen/rpl/dodag.c DIO path + Kconfig; Rust = root-side sign+append behind a feature flag; Python = wire verify into production DIO path or explicitly mark oracle-only. Also fold in: RX-path test pinning expired-signature -\u003e Baseline (R-06-307, receive.rs:713-715 currently untested; vector set lacks an expired case).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T17:17:30.229932589Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T17:17:30.229932589Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.88",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T17:17:30.382664229Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788283376263808414-1",
+  "issue_id": "project-LICHEN-worker6-yh7c",
+  "author": "opencode-worker-2",
+  "text": "Worker-2 analysis (released per context budget): the selector at gateway.rs:1696 uses ipv6[8..24] == root_addr to choose RH3-insertion vs encapsulation. Both callers (upstream_to_mesh TUN path and lichend.rs:944 mesh-ingress transit) are forwarding paths, so RH3 inline insertion is architecturally questionable for ALL mesh_to_mesh traffic. However, the test root_originated_downward_srh (gateway.rs:2540) explicitly expects RH3 for a packet with src == root_addr. The correct fix requires distinguishing 'root-generated' from 'internet-side-spoofed' — either (a) verify the source via the trust store (check trust_store.get(iid_from_iid) exists and matches), (b) add a source_path parameter to mesh_to_mesh to distinguish TUN vs internal, or (c) always use encapsulation and change the test. Option (a) is most secure and minimal: before entering the RH3 branch, verify that the source address corresponds to a pinned identity in the trust store. This prevents internet-side spoofing while preserving legitimate root-originated RH3 behavior. Releasing — needs a fresh worker to implement and re-run the test suite.",
+  "created_at": "2026-09-01T17:22:56.263808414Z"
+}
