@@ -261,8 +261,22 @@ size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
 	return pos;
 }
 
-/* From beads-worker-4: union resolution keeps both the slot-map codec
- * (HEAD) and this channel-mask helper, both declared in beacon.h. */
+/* Merge resolution (main + beads-worker-1): HEAD's two-mask form is kept.
+ * Both sides independently implemented the spec 02a 2a.2 "local
+ * intersection" helper, but C cannot carry both signatures under one
+ * name: beads-worker-1's (beacon_mask, num_channels) form is the Python
+ * validate_channel_mask operation (advertised mask clipped to plan
+ * width), a distinct operation from the R-02a-006 intersection exposed
+ * here (canonical ccp4_regional_channel_plans.json vectors: "permitted &
+ * advertised"; rust parity: tdma_beacon.rs, the module this file ports).
+ * The general form subsumes the clipped one -- callers pass
+ * permitted = (1u << num_channels) - 1 (pre-masked for plans wider than
+ * 32 channels, per beacon.h) -- and the channel gate is simply
+ * intersect(...) != 0, so no capability is lost by dropping the
+ * beads-worker-1 variants. Note: the incoming rust rf_health.rs num-form
+ * and the channel-mask section of lichen/tests/tdma_beacon/main.c call
+ * the (beacon_mask, num_channels) shape and must be reconciled with
+ * this API. */
 uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
 					      uint32_t advertised)
 {

@@ -185,8 +185,23 @@ size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
  *         both inputs are wire-width exact; plan widths above 32 channels
  *         cannot be expressed in the beacon and must be pre-masked by the
  *         caller into @p permitted.
+ *
+ * Merge note (main + beads-worker-1): HEAD's two-mask intersect
+ * (permitted & advertised) is kept because it is the general primitive
+ * matching the committed JSON oracle, and it is what the merged beacon.c
+ * implements. beads-worker-1's num_channels-masked variant is expressible
+ * on this primitive (permitted = (1u << n) - 1u). beads-worker-1's
+ * channel_gate convenience predicate is preserved below; both of its
+ * intents (intersection + nonzero gate) are compatible with this
+ * primitive.
  */
 uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
 					      uint32_t advertised);
+
+/** Gate (beads-worker-1): true when the mask intersection with the plan's
+ *  num_channels width is nonzero (at least one locally usable channel).
+ *  See the merge note above for why the intersect primitive takes two
+ *  masks. */
+bool lichen_beacon_channel_gate(uint32_t beacon_mask, uint8_t num_channels);
 
 #endif /* LICHEN_BEACON_H_ */

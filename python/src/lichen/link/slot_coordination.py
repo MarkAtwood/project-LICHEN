@@ -308,6 +308,8 @@ class MultiRootState:
     holdoff_counter: int = 0
     # Desync state that depends on prior version (reset on version change)
     desync_state_version: int | None = None
+    # SFN at which the post-holdoff rejoin was initiated (R-02a-043)
+    _rejoin_sf: int | None = None
 
     def add_candidate(self, candidate: RootCandidate) -> bool:
         """Add a candidate root from a received beacon.
@@ -374,6 +376,44 @@ class MultiRootState:
                 self.holdoff_selected = None
             return True
         return False
+
+    def beacon_overlaps_window(
+        self,
+        beacon_time_us: int,
+        window: "TdmaWindow",
+    ) -> bool:
+        """Overlap test per 2a.5.3/R-02a-040: a candidate beacon overlaps
+        the current root's window when it arrives within
+        setup_window + occupied_time + guard of the window's slot.
+
+        ``window`` must expose ``slot_start_us``, ``setup_window_us``,
+        ``occupied_time_us`` and ``guard_us`` attributes (the caller
+        computes these from the current root's schedule and slot
+        duration). Beacons from the current root itself always overlap
+        by definition; only conflicting-root beacons are gated here.
+        """
+        slot_end_us = window.slot_start_us + window.setup_window_us + window.occupied_time_us
+        window_start_us = window.slot_start_us - window.setup_window_us
+        window_end_us = slot_end_us + window.guard_us
+        return window_start_us <= beacon_time_us <= window_end_us
+
+    def holdoff_complete_rejoin(self, now_sf: int) -> bool:
+        """R-02a-043: after holdoff completes (advance_holdoff() True),
+        the node MUST initiate desync and rejoin: the old root's state is
+        dropped, candidates are cleared for a fresh beacon window, and
+        the version-scoped desync state is invalidated. Returns True when
+        the rejoin was initiated (callers then reset SFN per R-02a-045).
+        """
+        if not self.is_in_holdoff():
+            return False
+        if self.desync_state_version is not None:
+            self.desync_state_version = None
+        self.current_root = None
+        self.clear_candidates()
+        self.holdoff_counter = 0
+        self.holdoff_selected = None
+        self._rejoin_sf = now_sf
+        return True
 
     def on_version_change(
         self,
