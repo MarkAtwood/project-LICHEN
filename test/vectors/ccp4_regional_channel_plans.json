@@ -261,6 +261,62 @@
       "notes": "64 channels: all 64 bits valid."
     },
     {
+      "name": "intersect_channel_mask_eu868_subset",
+      "description": "EU868 beacon advertising 0x03 (subset of the 0xFF plan mask).",
+      "type": "intersect_channel_mask",
+      "input": {
+        "plan_name": "EU868",
+        "advertised_mask": 3
+      },
+      "output": {
+        "intersection": 3,
+        "intersection_hex": "0x03"
+      },
+      "notes": "R-02a-006: permitted (0xFF for 8 channels) & advertised. Subset passes through."
+    },
+    {
+      "name": "intersect_channel_mask_eu868_superset",
+      "description": "EU868 beacon advertising 0xFFFF (bits beyond plan width).",
+      "type": "intersect_channel_mask",
+      "input": {
+        "plan_name": "EU868",
+        "advertised_mask": 65535
+      },
+      "output": {
+        "intersection": 255,
+        "intersection_hex": "0xff"
+      },
+      "notes": "Bits 8-15 fall outside the 8-channel plan and are dropped by the intersection."
+    },
+    {
+      "name": "intersect_channel_mask_eu868_disjoint",
+      "description": "EU868 beacon advertising only out-of-plan channels 0xF000.",
+      "type": "intersect_channel_mask",
+      "input": {
+        "plan_name": "EU868",
+        "advertised_mask": 61440
+      },
+      "output": {
+        "intersection": 0,
+        "intersection_hex": "0x00"
+      },
+      "notes": "Empty intersection: no common channel, the caller MUST reject/ignore the beacon."
+    },
+    {
+      "name": "intersect_channel_mask_eu868_full",
+      "description": "EU868 beacon advertising the full plan mask 0xFF.",
+      "type": "intersect_channel_mask",
+      "input": {
+        "plan_name": "EU868",
+        "advertised_mask": 255
+      },
+      "output": {
+        "intersection": 255,
+        "intersection_hex": "0xff"
+      },
+      "notes": "Full overlap: every plan channel advertised."
+    },
+    {
       "name": "is_valid_power_eu868_at_limit",
       "description": "EU868 CH0 at max power 14 dBm is valid.",
       "type": "is_valid_power",

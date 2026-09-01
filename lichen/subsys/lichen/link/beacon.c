@@ -260,3 +260,11 @@ size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
 	}
 	return pos;
 }
+
+/* From beads-worker-4: union resolution keeps both the slot-map codec
+ * (HEAD) and this channel-mask helper, both declared in beacon.h. */
+uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
+					      uint32_t advertised)
+{
+	return permitted & advertised;
+}
