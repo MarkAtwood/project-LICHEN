@@ -95,12 +95,20 @@ class DesyncFSM:
             self.missed_superframes = 0
         return self.state
 
-    def on_beacon(self, valid: bool) -> DesyncState:
-        if self.state == DesyncState.DESYNCED and valid:
-            self.state = DesyncState.RECOVERING
-            self.consecutive_valid = 1
-            self.missed_superframes = 0
-        elif self.state == DesyncState.RECOVERING:
+    def on_beacon(self, valid: bool, wall_clock_valid: bool) -> DesyncState:
+        """Handle beacon reception.
+
+        Per R-02a-084 the node MUST NOT leave DESYNCED unless
+        wall_clock_valid=true, so an otherwise-valid beacon in DESYNCED is
+        ignored while the wall clock is unsynced.
+        """
+        if self.state == DesyncState.DESYNCED:
+            if valid and wall_clock_valid:
+                self.state = DesyncState.RECOVERING
+                self.consecutive_valid = 1
+                self.missed_superframes = 0
+            return self.state
+        if self.state == DesyncState.RECOVERING:
             if valid:
                 self.consecutive_valid += 1
                 self.missed_superframes = 0

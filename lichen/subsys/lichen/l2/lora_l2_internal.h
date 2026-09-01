@@ -169,6 +169,19 @@ void lora_l2_rx_stop(void);
  */
 int generate_eui64(uint8_t *eui64);
 
+/**
+ * @brief Store a gateway-assigned SF override (spec 3.4 R-02-008).
+ *
+ * Called from the RPL layer when an ASSIGNED_SF DIO option is parsed.
+ * @param sf Assigned SF (7..12 valid); 0 clears the override.
+ */
+void lora_l2_assign_sf(uint8_t sf);
+
+/**
+ * @brief Current assigned-SF override (0 = none).
+ */
+uint8_t lora_l2_assigned_sf(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IPv6-in-IPv6 tunnel encapsulation/decapsulation conformance (spec/05-routing.md 8.9)",
+  "type": "object",
+  "required": [
+    "vector_type",
+    "format_version",
+    "description",
+    "oracle",
+    "constants",
+    "encapsulation",
+    "decapsulation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "vector_type": {
+      "const": "tunnel_encapsulation"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "oracle": {
+      "type": "object",
+      "required": [
+        "basis",
+        "implementation",
+        "generator_command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "implementation": {
+          "type": "string"
+        },
+        "generator_command": {
+          "type": "string"
+        }
+      }
+    },
+    "constants": {
+      "type": "object",
+      "required": [
+        "outer_hop_limit",
+        "outer_next_header",
+        "inner_next_header",
+        "forwarding_decrement"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "outer_hop_limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "outer_next_header": {
+          "type": "integer"
+        },
+        "inner_next_header": {
+          "type": "integer"
+        },
+        "forwarding_decrement": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "encapsulation": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "original_hop_limit",
+          "num_addrs",
+          "root_addr_hex",
+          "route_hops_hex",
+          "inner_packet_hex",
+          "expect"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "original_hop_limit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "num_addrs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "root_addr_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "route_hops_hex": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string",
+              "pattern": "^(?:[0-9a-f]{2})+$"
+            }
+          },
+          "inner_packet_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "expected_encapsulated_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "expected_inner_hop_limit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "expect": {
+            "enum": [
+              "encapsulate",
+              "no_route"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "expect": {
+                  "const": "encapsulate"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "expected_encapsulated_hex",
+                "expected_inner_hop_limit"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "decapsulation": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "outer_packet_hex",
+          "expected_dst_hex",
+          "expect"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "outer_packet_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "expected_dst_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "expected_inner_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "expect": {
+            "enum": [
+              "decapsulate",
+              "reject"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "expect": {
+                  "const": "decapsulate"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "expected_inner_hex"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -23,28 +23,6 @@ export BEADS_DIR="${BEADS_DIR:-$REPO_ROOT/.beads}"
 export BEADS_ALLOW_STORE_COMMIT=1
 mkdir -p "$STATE_DIR"
 
-remaining_credits() {
-    KEY=$(python3 - <<PYEOF
-import json, os
-c = json.load(open(os.path.expanduser("~/.config/opencode/opencode.json")))
-def find(d):
-    if isinstance(d, dict):
-        for k, v in d.items():
-            if k == "apiKey" and isinstance(v, str) and v.startswith("sk-or-"):
-                print(v); return True
-            if find(v): return True
-    elif isinstance(d, list):
-        for x in d:
-            if find(x): return True
-    return False
-find(c)
-PYEOF
-)
-    [ -z "$KEY" ] && { echo 0; return; }
-    curl -s --max-time 30 https://openrouter.ai/api/v1/credits -H "Authorization: Bearer $KEY" | \
-        python3 -c "import json,sys; d=json.load(sys.stdin).get('data',{}); print(int(d.get('total_credits',0)-d.get('total_usage',0)))" 2>/dev/null || echo 0
-}
-
 resolve_file() {
     # $1 = conflicted file path. One kimi session, one file.
     # No --agent: the resolver must be able to EDIT the file (the plan agent
@@ -148,7 +126,9 @@ while :; do
         echo "   sync loop busy — skipping"
     else
         trap 'rmdir /tmp/lichen-beads-sync.lock 2>/dev/null' EXIT
-        CREDITS=$(remaining_credits)
+        # No credit gating: auto-topup keeps the balance healthy; killing
+        # kimi sessions on a balance dip wastes their paid work. Burn is
+        # observed by log-burn.sh, not gated here.
         LEFTOVERS=""
         for branch in $(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' 'refs/heads/beads-worker-*'); do
             ahead=$(git -C "$REPO_ROOT" rev-list main.."$branch" --count 2>/dev/null || echo 0)
@@ -162,8 +142,6 @@ while :; do
         done
         if [ -z "$LEFTOVERS" ]; then
             echo "   no conflicted leftovers"
-        elif [ "$CREDITS" -lt 15 ]; then
-            echo "   credits $CREDITS below 15 — pausing (auto-topup will replenish)"
         else
             for branch in $LEFTOVERS; do
                 COUNT=$(cat "$STATE_DIR/$branch.count" 2>/dev/null || echo 0)

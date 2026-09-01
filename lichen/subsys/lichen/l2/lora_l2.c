@@ -83,6 +83,9 @@ K_MUTEX_DEFINE(tx_buf_mutex);
  * signal, not an error.
  */
 atomic_t tx_pending;
+/* Gateway-assigned SF override (spec 3.4 R-02-008); 0 = none. Written by
+ * the RPL layer when an ASSIGNED_SF DIO option is parsed. */
+static atomic_t assigned_sf;
 
 /*
  * Hard mutual exclusion for driver calls (modem_mutex).
@@ -215,6 +218,31 @@ out:
     return ret;
 }
 
+void lora_l2_assign_sf(uint8_t sf)
+{
+	atomic_set(&assigned_sf, sf);
+}
+
+uint8_t lora_l2_assigned_sf(void)
+{
+	return (uint8_t)atomic_get(&assigned_sf);
+}
+
+static enum lora_datarate lora_l2_effective_datarate(void)
+{
+	if (IS_ENABLED(CONFIG_LICHEN_SF_ASSIGNMENT_ENABLED)) {
+		uint8_t sf = (uint8_t)atomic_get(&assigned_sf);
+		/* Spec 3.4 priority 1: gateway-assigned SF (7..12) MUST be
+		 * used. The hash-based fallback (priority 2) requires the
+		 * RPL layer's joined state; SF10 remains the default until
+		 * assignment (priority 3), replacing the SF9 placeholder. */
+		if (sf >= 7 && sf <= 12) {
+			return (enum lora_datarate)(SF_7 + (sf - 7));
+		}
+	}
+	return SF_10;
+}
+
 int lichen_lora_l2_start(void)
 {
     enum lora_state state = lora_get_state();
@@ -270,12 +298,14 @@ int lichen_lora_l2_start(void)
     static struct lora_modem_config config = {
         .frequency = CONFIG_LICHEN_LORA_FREQUENCY,
         .bandwidth = BW_125_KHZ,
-        .datarate = IS_ENABLED(CONFIG_LICHEN_SF_ASSIGNMENT_ENABLED) ? SF_9 : SF_10,
+        .datarate = SF_10,
         .coding_rate = CR_4_5,
         .preamble_len = 8,
         .tx_power = CONFIG_LICHEN_LORA_TX_POWER,
         .tx = false,
     };
+
+    config.datarate = lora_l2_effective_datarate();
 
     int ret = lora_config(lora_data.lora_dev, &config);
     if (ret < 0) {

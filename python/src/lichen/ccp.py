@@ -155,6 +155,39 @@ class BusyPercentSampler:
         return min(100, (total_ms * 100) // window_slots)
 
 
+class PacketErrorPermilleTracker:
+    """Rolling-window PacketErrorPermille tracker (spec R-02a-133 / 2a.10.3).
+
+    Tracks TX failures vs total TX attempts per superframe inside the
+    RF_METRICS_WINDOW_SF rolling window; packet_error_permille() reports
+    (failures / total) * 1000 for the interference score.
+    """
+
+    def __init__(self) -> None:
+        self._by_sf: dict[int, tuple[int, int]] = {}
+        self._current_sf = 0
+
+    def record_attempt(self, superframe: int, failed: bool) -> None:
+        """Record one TX attempt in the given superframe."""
+        if superframe > self._current_sf:
+            self._current_sf = superframe
+        total, fails = self._by_sf.get(superframe, (0, 0))
+        self._by_sf[superframe] = (total + 1, fails + (1 if failed else 0))
+
+    def packet_error_permille(self) -> int:
+        """PacketErrorPermille over the rolling window (0 when empty)."""
+        self._by_sf = {
+            sf: counts
+            for sf, counts in self._by_sf.items()
+            if sf + RF_METRICS_WINDOW_SF > self._current_sf
+        }
+        total = sum(t for t, _ in self._by_sf.values())
+        failed = sum(f for _, f in self._by_sf.values())
+        if total == 0:
+            return 0
+        return min(1000, failed * 1000 // total)
+
+
 class PeerDensityTracker:
     """Rolling-window peer density tracker (spec R-02a-117 / 2a.10.3).
 

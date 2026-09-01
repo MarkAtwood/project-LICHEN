@@ -11,12 +11,15 @@ add_executable(hal_storage_redundant_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/hal_storage_redundant.c
 )
+
 target_include_directories(hal_storage_redundant_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
 )
 
 # Apply sanitizers and hardening
 lichen_test_target(hal_storage_redundant_test)
+lichen_test_target(hal_storage_redundant_test)
+target_link_libraries(hal_storage_redundant_test PRIVATE pthread)
 
 include(CTest)
 add_test(NAME hal_storage_redundant COMMAND hal_storage_redundant_test)

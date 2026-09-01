@@ -20,3 +20,11 @@ Rules: evidence only — no agreement without checking the code or test. Do not
 edit source code. Do not file beads (the integration pass does that). Report
 per-requirement verdicts in the same order as the flagged list, plus a final
 tally: confirmed / corrected / escalated.
+
+## Adjudicated decisions
+
+Before verifying, read `spec/decisions.jsonl`. Each line records a FINAL
+human decision. If any flagged requirement conflicts with a recorded
+decision, the decision wins — CONFIRM the decision's position regardless
+of what the spec text or prior classification said. Do not ESCALATE or
+CORRECT against a recorded decision.

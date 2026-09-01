@@ -53,8 +53,9 @@ worker_in_progress() {  # worker number; count of that actor's in_progress beads
     BEADS_DIR="$BEADS_DIR" bd list --status in_progress --assignee "opencode-worker-$1" --json 2>/dev/null | jq "length" 2>/dev/null || echo 0
 }
 
-echo "fleet driver: cycle ${CYCLE_MIN}m, credit floor \$$FLOOR — Ctrl+C to stop"
+echo "fleet driver: cycle ${CYCLE_MIN}m, no credit gating (auto-topup) — Ctrl+C to stop"
 
+EMPTY_N=0
 while :; do
     CREDITS=$(remaining_credits)
     echo "── driver $(date '+%F %T') credits=$CREDITS ──"
@@ -62,9 +63,16 @@ while :; do
 
     if [ "$READY" -eq 0 ]; then
         echo "   ready queue empty — nothing to dispatch"
-    elif [ "$CREDITS" -lt "$FLOOR" ]; then
-        echo "   credits $CREDITS below floor $FLOOR — rounds paused (auto-topup will replenish)"
+        EMPTY_N=$((EMPTY_N + 1))
+        if [ "$EMPTY_N" -eq 3 ] && [ ! -f "$REPO_ROOT/.fleet-drained" ]; then
+            date '+%F %T' > "$REPO_ROOT/.fleet-drained"
+            BEADS_DIR="$BEADS_DIR" bd create --title="[info] Fleet drained: ready queue empty" --description="The worker swarm exhausted all claimable work at $(date -u '+%F %T'). Remaining open beads are human-decision or hardware-blocked. Sync loop and janitor keep running; nothing was closed prematurely. Parked awaiting Mark." -t task -p 4 --json >/dev/null 2>&1
+            echo "   fleet drained — marker filed"
+        fi
     else
+        EMPTY_N=0
+        rm -f "$REPO_ROOT/.fleet-drained"
+        echo "   workers have work"
         for i in 1 2 3 4 5 6 7; do
             WIN="$SESSION:worker$i"
             tmux has-session -t "$SESSION" 2>/dev/null || break
@@ -79,14 +87,6 @@ while :; do
             tmux send-keys -t "$WIN" Enter
             sleep 3
         done
-        # Un-stick the wave runner if it paused on credits and credits recovered
-        SW=$(tmux capture-pane -t "$SESSION:sweep-all" -p -S -30 2>/dev/null | rg -c "pausing sweep" || true)
-        if [ "${SW:-0}" -gt 0 ]; then
-            tmux send-keys -t "$SESSION:sweep-all" -l "scripts/spec-sweep-all.sh"
-            sleep 0.5
-            tmux send-keys -t "$SESSION:sweep-all" Enter
-            echo "   wave runner resumed"
-        fi
     fi
     sleep $((CYCLE_MIN * 60))
 done

@@ -21,6 +21,9 @@
 #include <string.h>
 
 #include <lichen/rpl_dodag.h>
+#include "lora_l2.h"
+static uint8_t s_last_assigned_sf;
+void lora_l2_assign_sf(uint8_t sf) { s_last_assigned_sf = sf; }
 
 /* Encoding for RFC incomparable / Rust None / Python None. Independent of
  * the C helper's internal constant; both use 2 by convention. */

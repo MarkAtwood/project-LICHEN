@@ -10,9 +10,11 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/test_common.cmake)
 add_executable(rpl_dao_tx_persist_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/rpl_dao_tx_persist.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/hal_storage_redundant.c
 )
 target_include_directories(rpl_dao_tx_persist_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
 )
 
 # Apply sanitizers and hardening
