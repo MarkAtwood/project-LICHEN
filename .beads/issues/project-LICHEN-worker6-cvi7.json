@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-cvi7",
+  "title": "C rpl: DAO TX-state payload codec (encode_tx_state + header parse, constants) — slice 1 of b7z9.11.2",
+  "description": "Decompose-first slice of b7z9.11.2 (DaoTxState port). Pure codec only, no storage calls: C port of rust/lichen-rpl/src/persistence.rs encode_tx_state (:516-535) — payload layout: pubkey[0..32), local_origin[32..48), instance_id[48], dodagid[49..65), sequence u64 BE[65..73), signed_len u16 BE[73..75), signed_dao bytes[75..); DAO_TX_HEADER_LEN 75, MAX_SIGNED_DAO_LEN 255, DAO_TX_MAGIC 'DTX2', DAO_TX_KEYS rpl.tx.a/rpl.tx.b, SLOT_OVERHEAD 24. Plus a parse helper validating min length and extracting the header fields (used by boot-time open in the next slice). Placement: lichen/subsys/lichen/rpl/rpl_dao_tx_persist.{c,h} (join subsys CMake). Tests: host CTest lichen/tests/rpl_dao_tx_persist — encode layout bytes, oversized signed_dao reject, header parse, cross-impl: compute one Rust encode_tx_state output as a fixed vector (python zlib not applicable; derive the vector by running the rust fn via a quick cargo test or hand-compute — layout is trivial concatenation).",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:15:44.053012862Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T01:32:08.298505993Z",
+  "started_at": "2026-09-01T01:16:20.134905768Z",
+  "closed_at": "2026-09-01T01:32:08.298505993Z",
+  "close_reason": "DAO TX-state payload codec ported to C: rpl_dao_tx_persist.{c,h} (encode_tx_state + parse header with exact-length gate, constants HEADER_LEN 75 / MAX_SIGNED 255 / magic DTX2 / keys rpl.tx.a/b), registered in rpl subsys CMake. Host CTest lichen/tests/rpl_dao_tx_persist: hand-assembled independent-oracle byte vector (77B) byte-for-byte, roundtrips, empty and max-size signed DAO, oversized/undersized/NULL-contract/trailing-garbage/signed_len-past-payload rejections. Gates: gcc -Werror -Wconversion clean, cppcheck clean, ctest green under ASan/UBSan (fixed a UBSan memcpy(NULL,0) and a test-oracle typo caught by the suite itself). Reviews via kimi-k3: pass1 correctness found real P1 (parse returned OOB signed_dao pointer; trailing garbage accepted vs Rust exact-length gate) + NULL-doc gap — both fixed to Rust parity with new tests; pass2 security found untested NULL-acceptance assertion — fixed; pass3 edge PASS (incl. independent recomputation of the oracle vector). Remaining slices of b7z9.11.2: state machine (provision/reserve_next/finalize_signed/open-on-boot) over the hal two-slot primitive.",
+  "labels": [
+    "zephyr",
+    "rpl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cvi7",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.11.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T01:15:44.202373238Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
