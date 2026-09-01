@@ -22,6 +22,9 @@ use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, IPV6_HEADER_LEN, UDP
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::LinkLayer;
 use lichen_oscore::{
+    // Merge resolution: both sides import the identical name set; ordering-only
+    // conflict. Kept HEAD's sorted ordering (MERGE_HEAD's ordering placed
+    // ContextStateStore after OscoreError, breaking alphabetical sort).
     request_identifiers, validate_option, Context, ContextId, ContextStateStore, ContextStoreError,
     OscoreError, RequestIdentifiers, ReservationError, COAP_OPTION_OSCORE,
     PIV_MAX_LEN, TAG_LEN,

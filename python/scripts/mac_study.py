@@ -110,9 +110,9 @@ def run_aloha(config: SimConfig, rng: random.Random) -> SimResult:
         # Determine who wants to TX this slot
         tx_nodes = []
         for node in nodes:
-            # Poisson-ish: ~1 msg per 2 minutes per node
             if (
                 time_s - node['last_tx_s'] >= config.min_tx_interval_s
+                # Poisson-ish: ~1 msg per 2 minutes per node
                 and rng.random() < (slot_duration_s / 120)
             ):
                 tx_nodes.append(node)
@@ -158,9 +158,10 @@ def run_csma(config: SimConfig, rng: random.Random) -> SimResult:
         # Nodes that want to TX and aren't backing off
         tx_candidates = []
         for node in nodes:
+            if time_s < node['backoff_until_s']:
+                continue
             if (
-                time_s >= node['backoff_until_s']
-                and time_s - node['last_tx_s'] >= config.min_tx_interval_s
+                time_s - node['last_tx_s'] >= config.min_tx_interval_s
                 and rng.random() < (slot_duration_s / 120)
             ):
                 tx_candidates.append(node)
@@ -221,9 +222,8 @@ def run_tdma(config: SimConfig, rng: random.Random) -> SimResult:
 
         if tx_nodes:
             result.tx_attempts += len(tx_nodes)
-            result.slot_distribution[slot_in_sf] = (
-                result.slot_distribution.get(slot_in_sf, 0) + len(tx_nodes)
-            )
+            dist = result.slot_distribution
+            dist[slot_in_sf] = dist.get(slot_in_sf, 0) + len(tx_nodes)
 
             if len(tx_nodes) == 1:
                 result.tx_success += 1
@@ -291,9 +291,8 @@ def run_tdma_fh(config: SimConfig, rng: random.Random) -> SimResult:
 
         for channel, ch_nodes in by_channel.items():
             result.tx_attempts += len(ch_nodes)
-            result.slot_distribution[slot_in_sf] = (
-                result.slot_distribution.get(slot_in_sf, 0) + len(ch_nodes)
-            )
+            dist = result.slot_distribution
+            dist[slot_in_sf] = dist.get(slot_in_sf, 0) + len(ch_nodes)
 
             if len(ch_nodes) == 1:
                 result.tx_success += 1
@@ -425,15 +424,10 @@ def run_study():
                        and r['config']['num_nodes'] == num_nodes]
             if matching:
                 avg_delivery = sum(r['delivery_rate'] for r in matching) / len(matching)
-                avg_collision = sum(
-                    r['collision_rate'] for r in matching
-                ) / len(matching)
-                avg_util = sum(
-                    r['channel_utilization'] for r in matching
-                ) / len(matching)
-                print(f"{protocol:<10} {num_nodes:>6} "
-                      f"{avg_delivery:>10.1%} {avg_collision:>10.1%} "
-                      f"{avg_util:>12.1%}")
+                avg_collision = sum(r['collision_rate'] for r in matching) / len(matching)
+                avg_util = sum(r['channel_utilization'] for r in matching) / len(matching)
+                print(f"{protocol:<10} {num_nodes:>6} {avg_delivery:>10.1%} "
+                      f"{avg_collision:>10.1%} {avg_util:>12.1%}")
 
     print(f"\nResults saved to: {output_dir}")
     return output_dir

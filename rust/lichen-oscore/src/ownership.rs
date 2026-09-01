@@ -31,6 +31,7 @@
 //! Capacity exhaustion refuses new claims ([`OwnershipError::Full`]) rather
 //! than evicting a live owner.
 
+use oscore::{ContextStateStore};
 use heapless::Vec;
 
 use crate::{Context, ContextId, ContextStoreError, ContextStateStore};

@@ -189,6 +189,7 @@ def simulate_traffic(
     channel_usage = defaultdict(int)
 
     slot_s = TDMA_SLOT_MS / 1000
+
     time_s = 0
     pending_transmissions = []  # (time, msg, current_node_id)
 
@@ -218,7 +219,7 @@ def simulate_traffic(
         current_txs = [(t, m, n) for t, m, n in pending_transmissions if t <= time_s]
         pending_transmissions = [(t, m, n) for t, m, n in pending_transmissions if t > time_s]
 
-        for _, msg, current_id in current_txs:
+        for _tx_time, msg, current_id in current_txs:
             if msg.delivered:
                 continue
 
