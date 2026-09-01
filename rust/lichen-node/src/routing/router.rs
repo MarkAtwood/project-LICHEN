@@ -1179,6 +1179,13 @@ pub(crate) fn dao_parents_for_source(
             OPT_TRANSIT_INFO => {
                 if group_targets.iter().any(|target| target == packet_source) {
                     let transit = TransitInfo::from_bytes(option.data).ok()?;
+                    // E=1 marks external reachability: the root rejects E=1
+                    // transits in DAO authorization, so relaying such a DAO
+                    // toward the root wastes LoRa airtime. Drop the whole
+                    // parent set instead (project-LICHEN-worker6-7gvp).
+                    if transit.external {
+                        return None;
+                    }
                     parents.push(transit.parent_address);
                 }
                 transit_seen = true;
