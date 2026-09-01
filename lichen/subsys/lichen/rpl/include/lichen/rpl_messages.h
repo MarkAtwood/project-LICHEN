@@ -52,6 +52,7 @@ extern "C" {
 #define LICHEN_RPL_ERR_INVALID    -6  /**< NULL pointer or invalid argument */
 #define LICHEN_RPL_ERR_FULL       -7  /**< Table or buffer is full */
 #define LICHEN_RPL_ERR_NOT_FOUND  -8  /**< Requested entry does not exist */
+#define LICHEN_RPL_ERR_TX_STATE   -9  /**< Durable origin-sequence state missing/corrupt/unreservable (spec 09 14.2) */
 
 /* ── Option type bytes ─────────────────────────────────────────────────────── */
 

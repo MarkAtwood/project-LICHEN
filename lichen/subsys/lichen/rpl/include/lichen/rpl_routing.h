@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <lichen/rpl_messages.h>
+#include <lichen/rpl_dao_tx_persist.h>
 
 /* Nullability annotations for pointer safety (Clang/GCC compatibility) */
 #ifndef __has_feature
@@ -538,6 +539,17 @@ enum lichen_rpl_dao_process_result {
  * an ISR. A bound root-state object remains exclusively owned by and must
  * outlive its manager.
  */
+/** Durable 64-bit origin-sequence binding (spec 09 14.2
+ * R-09-009/010): when bound, build_dao_mut reserves the next sequence
+ * from the two-slot TX state (persisted BEFORE transmission) and gates
+ * origination on it; missing/corrupt state stops origination. */
+struct lichen_rpl_dao_tx_binding {
+	const struct lichen_hal_storage_ops *_Nullable ops;
+	void *_Nullable user;
+	struct lichen_rpl_dao_tx_state *_Nullable state;
+	bool require_persisted;
+};
+
 struct lichen_rpl_dao_manager {
 	uint8_t node_address[16];
 	uint8_t rpl_instance_id;
@@ -551,6 +563,7 @@ struct lichen_rpl_dao_manager {
 	bool has_last_dao_update;
 
 	struct lichen_rpl_dao_root_state *_Nullable root_state;
+	struct lichen_rpl_dao_tx_binding tx_binding;
 	struct k_mutex lock;
 };
 
@@ -570,6 +583,29 @@ int lichen_rpl_dao_manager_init(struct lichen_rpl_dao_manager *_Nonnull dm,
 				const uint8_t *_Nonnull node_address,
 				uint8_t rpl_instance_id,
 				const uint8_t *_Nonnull dodag_id);
+/**
+ * @brief Bind a durable 64-bit origin-sequence TX state to the manager.
+ *
+ * When bound with require_persisted=true, every subsequent build_dao
+ * reserves the next sequence from the two-slot TX state (persisted
+ * before transmission, R-09-009/010) and gates origination on it: a
+ * missing/corrupt/unreservable state stops origination (build returns
+ * LICHEN_RPL_ERR_TX_STATE) instead of falling back to the RAM lollipop.
+ * The DAO base carries the low byte of the reserved sequence; the full
+ * 64-bit value rides the 0x12 Origin Signature option at finalize time.
+ *
+ * @param dm     DAO manager
+ * @param ops    Storage ops (NULL unbinds)
+ * @param user   Storage user context
+ * @param state  Opened TX state (from lichen_rpl_dao_tx_open)
+ * @return LICHEN_RPL_OK, or LICHEN_RPL_ERR_INVALID on NULL dm/state
+ *         when ops is non-NULL.
+ */
+int lichen_rpl_dao_manager_bind_tx_state(
+	struct lichen_rpl_dao_manager *_Nonnull dm,
+	const struct lichen_hal_storage_ops *_Nullable ops, void *_Nullable user,
+	struct lichen_rpl_dao_tx_state *_Nullable state);
+
 
 /**
  * @brief Initialize DAO manager for root node.
