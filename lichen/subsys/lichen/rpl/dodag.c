@@ -16,6 +16,11 @@
 #include <string.h>
 
 #include <lichen/rpl_dodag.h>
+#include <lichen/sf_assignment.h>
+
+/* Layering bridge: the RPL layer consumes the ASSIGNED_SF option and pushes
+ * the effective assignment down to the LoRa L2 modem configuration. */
+extern void lora_l2_assign_sf(uint8_t sf);
 #include <lichen/rpl_addr.h>
 
 /**
@@ -220,6 +225,7 @@ static void adopt_version(struct lichen_rpl_dodag *d,
 	d->has_preferred_parent = false;
 	d->rank = LICHEN_RPL_INFINITE_RANK;
 	d->lowest_rank = LICHEN_RPL_INFINITE_RANK;
+	d->assigned_sf = 0U;
 	d->role = LICHEN_RPL_UNJOINED;
 	d->gateway_centric = false;
 	d->last_gateway_centric = false;
@@ -658,6 +664,14 @@ int lichen_rpl_dodag_process_dio_bytes_authorized(
 				return ret;
 			}
 			config = &cfg;
+		} else if (opt.opt_type == LICHEN_RPL_OPT_ASSIGNED_SF) {
+			if (opt.data_len != 1 ||
+			    opt.data[0] < LICHEN_SF_MIN ||
+			    opt.data[0] > LICHEN_SF_MAX) {
+				return LICHEN_RPL_ERR_BAD_OPT;
+			}
+			d->assigned_sf = opt.data[0];
+			lora_l2_assign_sf(opt.data[0]);
 		} else if (opt.opt_type == LICHEN_RPL_OPT_SCHC_RULE_VERSION) {
 			if (have_schc_version ||
 			    lichen_rpl_schc_rule_version_parse(&schc_version, opt.data,

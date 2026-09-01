@@ -127,6 +127,9 @@ struct lichen_rpl_dodag {
 	/* Lowest rank ever achieved (for MaxRankIncrease check) */
 	uint16_t lowest_rank;
 
+	/* Gateway-assigned SF via ASSIGNED_SF DIO option (0 = none; spec 3.4) */
+	uint8_t assigned_sf;
+
 	/* DODAG state change notification */
 	lichen_rpl_dodag_state_cb _Nullable state_cb;
 	void *_Nullable state_cb_user_data;

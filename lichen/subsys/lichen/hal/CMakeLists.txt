@@ -13,6 +13,8 @@ zephyr_library_sources(
 	hal_reset.c
 	hal_time.c
 	redundant_slot.c
+	hal_storage_redundant.c
+hal_time.c
 )
 
 zephyr_include_directories(include)

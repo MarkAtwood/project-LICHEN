@@ -66,6 +66,7 @@ extern "C" {
 #define LICHEN_RPL_OPT_RPL_TARGET_DESCRIPTOR 9
 #define LICHEN_RPL_OPT_DIO_TIME      0x15  /**< DIO Time Option (project-local provisional; matches python DIO_TIME_OPTION_TYPE and rust OPT_DIO_TIME; do NOT use 0x12 - that is the DAO Origin Signature option, and 0x00 is RFC 6550 Pad1) */
 #define LICHEN_RPL_OPT_SCHC_RULE_VERSION 0x13  /**< SCHC Rule Version Option (spec 5.7) */
+#define LICHEN_RPL_OPT_ASSIGNED_SF 0x14  /**< ASSIGNED_SF Option (spec 02 3.4, R-02-008) */
 
 /* DIO Time Option stratum bounds (python Stratum / rust Stratum) */
 #define LICHEN_RPL_STRATUM_NO_SYNC   0U
