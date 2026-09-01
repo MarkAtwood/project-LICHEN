@@ -803,9 +803,14 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         verifier.install(admin, ProvisionRecord(LOCAL.pubkey, 1, FLOOR + 1).encode())
     with pytest.raises(RuntimeError, match="poisoned after persistence failure"):
         verifier.clear(admin, reason="post-poison probe")
-    # The tracker-consumed authority path (_with_floor_snapshot ->
-    # _floor_result_locked persistence_failed branch, provisioning.py:596-597)
-    # must report the same poisoned state, and the verifier must be cleared.
+    # Pin the tracker-consumed branch specifically: StratumTracker reads the
+    # floor via EpochFloorAuthority -> _with_floor_snapshot ->
+    # _floor_result_locked (provisioning.py:596-597), a separate
+    # persistence_failed check from the _missing_metadata_floor branch the
+    # evaluate_epoch_floor assertion above routes through. Without this pin,
+    # deleting only that check passes while trackers stop clearing active
+    # clocks on persistence failure. The path must report the same poisoned
+    # state, and the verifier must be cleared.
     authority = EpochFloorAuthority(FLOOR, verifier=verifier)
     assert (
         authority.current().provision_status
