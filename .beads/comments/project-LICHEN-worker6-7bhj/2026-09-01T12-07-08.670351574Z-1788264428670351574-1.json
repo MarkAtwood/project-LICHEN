@@ -1,0 +1,7 @@
+{
+  "id": "1788264428670351574-1",
+  "issue_id": "project-LICHEN-worker6-7bhj",
+  "author": "opencode-worker-2",
+  "text": "Worker-2 analysis (released per TIMEBOX, context budget): the runtime.rs RplRuntimeAction enum (Receive/TrickleTransmit/TrickleExpire) has no DAO TX action, and adding one requires a cross-layer async wiring that needs design. The send_dao function (lichen-node/src/rpl_stack/transmit.rs:116) is async and operates on RplStack (with L2 transport), while RplRuntime::poll operates on RplNode (sync, no L2). The runtime's action pattern returns actions for the caller to execute — but DAO TX needs the L2 transport that only RplStack has. Proposed design: (1) Add DaoTransmit to RplRuntimeAction; (2) RplRuntime tracks a DaoRetryBackoff + DaoRefreshTimer (from lichen-rpl dao_timing.rs) as state; (3) next_action returns DaoTransmit when the timer is due; (4) the caller (lichend) executes the async send_dao on RplStack and calls runtime.complete_dao_transmit(...) to advance the backoff. The dao_timing.rs module already has DaoRetryBackoff (4s/8s/16s retries) and dao_initial_delay_ms (0-2s jitter) — no constant duplication needed. Tests need a fake-clock runtime poll asserting initial 0-2s delay, then 4/8/16 retry intervals, then 900s refresh. The lichen-node lib tests are currently green on this checkout (296 passed) — the oscore-fork drift noted in the bead does not reproduce locally. Releasing — the cross-layer design needs fresh context.",
+  "created_at": "2026-09-01T12:07:08.670351574Z"
+}
