@@ -43,8 +43,7 @@ pub enum DaoTimingPhase {
 pub struct DaoTimingState {
     /// Random initial delay drawn at join time (ms).
     initial_delay_ms: Option<u16>,
-    /// Retry slot index (0..=3); also the ACK latched flag when in
-    /// RefreshPending.
+    /// Retry slot index (0..=3); consumed by on_sent, reset by on_ack/leave.
     attempts: u8,
     /// Monotonic deadline (ms) of the currently pending transition.
     deadline_ms: u64,
@@ -146,16 +145,16 @@ impl DaoTimingState {
         if matches!(self.phase, DaoTimingPhase::Idle | DaoTimingPhase::Exhausted) {
             return None;
         }
-        self.attempts = 0;
         let now = Duration::from_millis(now_ms);
         match checked_dao_refresh_deadline(now) {
             Ok(deadline) => {
                 self.refresh_timer = DaoRefreshTimer::checked_start(now).ok()?;
+                self.attempts = 0;
                 self.phase = DaoTimingPhase::RefreshPending;
                 self.deadline_ms = deadline.as_millis() as u64;
                 Some(self.deadline_ms)
             }
-            Err(_) => None,
+            Err(_) => None, // state unchanged on overflow (fail closed)
         }
     }
 
