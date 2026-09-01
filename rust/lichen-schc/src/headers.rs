@@ -205,7 +205,15 @@ fn finalize(sum: u32) -> u16 {
     while s >> 16 != 0 {
         s = (s & 0xFFFF) + (s >> 16);
     }
-    !(s as u16)
+    let c = !(s as u16);
+    // RFC 768: a computed zero is transmitted as all ones. IPv6 UDP never
+    // permits the on-wire zero value; matches the C finalize_checksum and
+    // the compress-side ones_complement_sum mapping.
+    if c == 0 {
+        0xFFFF
+    } else {
+        c
+    }
 }
 
 fn udp_checksum(
@@ -1167,5 +1175,44 @@ mod tests {
         } else {
             panic!("expected BufferTooSmall error");
         }
+    }
+}
+
+#[cfg(test)]
+mod udp_checksum_tests {
+    use super::*;
+
+    /// 5b1y regression: a datagram whose true checksum computes to 0x0000
+    /// must be reconstructed with the wire value 0xFFFF (RFC 768), matching
+    /// the C finalize_checksum and the Python to_bytes serialization.
+    #[test]
+    fn udp_checksum_computed_zero_maps_to_0xffff() {
+        // fe80::1 -> fe80::2, ports 5683/5683, CoAP [b0=0x45, code 0x01,
+        // MID 0x916a]: the true checksum over this datagram is 0x0000
+        // (independently computed with the RFC 1071 reference algorithm).
+        let src: [u8; 16] = fe80_parse(1);
+        let dst: [u8; 16] = fe80_parse(2);
+        let payload = [0x45, 0x01, 0x91, 0x6a];
+        assert_eq!(udp_checksum(&src, &dst, 5683, 5683, &payload), 0xFFFF);
+    }
+
+    /// Sanity: a non-zero true checksum passes through unchanged.
+    #[test]
+    fn udp_checksum_nonzero_passes_through() {
+        let src: [u8; 16] = fe80_parse(1);
+        let dst: [u8; 16] = fe80_parse(2);
+        let payload = [0x45, 0x01, 0x91, 0x6b]; // one payload bit flipped
+        // Independent oracle: flipping one payload bit decrements the folded
+        // sum by one, so the true checksum is 0xFFFE (0x0000 + one borrow).
+        let c = udp_checksum(&src, &dst, 5683, 5683, &payload);
+        assert_eq!(c, 0xFFFE);
+    }
+
+    fn fe80_parse(last: u8) -> [u8; 16] {
+        let mut a = [0u8; 16];
+        a[0] = 0xfe;
+        a[1] = 0x80;
+        a[15] = last;
+        a
     }
 }
