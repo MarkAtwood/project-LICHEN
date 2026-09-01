@@ -317,7 +317,7 @@
     {
       "category": "adaptive_sf",
       "name": "adaptive_sf_high_density_sf11_floor",
-      "description": "Density > 8 triggers SF >= 11 floor.",
+      "description": "Density > 8 triggers SF + 2 (step 3) with the floor at 11 subsumed.",
       "input": {
         "assigned_sf": 10,
         "density": 9,
@@ -327,10 +327,10 @@
         "load_factor": 0.0
       },
       "output": {
-        "sf": 11,
+        "sf": 12,
         "tx_allowed": true
       },
-      "oracle_note": "Per spec threshold table: Density > 8 -> at least SF 11."
+      "oracle_note": "Per spec threshold table: Density > 8 -> at least SF 11; under the full 2a.8 rule step 3 also applies, subsumed."
     },
     {
       "category": "adaptive_sf",
@@ -448,7 +448,7 @@
         "assigned_sf": 10,
         "density": 5,
         "ema_snr": 5.0,
-        "ema_loss": 0.30,
+        "ema_loss": 0.3,
         "utilization": 0,
         "load_factor": 0.0
       },
@@ -492,7 +492,7 @@
         "sf": 11,
         "tx_allowed": true
       },
-      "oracle_note": "Per spec threshold table: SNR < 0 -> at least SF 11."
+      "oracle_note": "Per spec threshold table: SNR < 0 -> at least SF 11; under the full 2a.8 rule step 3 also applies where density > 8, subsumed."
     },
     {
       "category": "adaptive_sf",
@@ -528,7 +528,7 @@
         "sf": 11,
         "tx_allowed": true
       },
-      "oracle_note": "Per spec threshold table: LoadFactor > 0.8 -> at least SF 11."
+      "oracle_note": "Per spec threshold table: LoadFactor > 0.8 -> at least SF 11; under the full 2a.8 rule the floors are applied after the pseudocode steps."
     },
     {
       "category": "adaptive_sf",
@@ -556,7 +556,7 @@
         "assigned_sf": 10,
         "density": 3,
         "ema_snr": 12.0,
-        "ema_loss": 0.30,
+        "ema_loss": 0.3,
         "utilization": 0,
         "load_factor": 0.0
       },
@@ -769,10 +769,10 @@
       },
       "output": {
         "channel": 0,
-        "sf": 11,
+        "sf": 12,
         "tx_allowed": true
       },
-      "oracle_note": "density=10 > 8 -> channel 0. density=10 not > 10 so no SF+2, but density > 8 floors SF at 11."
+      "oracle_note": "density=10 > 8 -> channel 0. Spec 2a.8 step 3 (density > 8) triggers SF+2: 10+2 = 12; the density > 8 floor at 11 is subsumed. Reconciled with the 02-physical-link.md:115 > 10 conflict per g7p7."
     },
     {
       "category": "combined",
