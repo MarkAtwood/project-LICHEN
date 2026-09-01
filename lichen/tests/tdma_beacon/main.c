@@ -259,7 +259,173 @@ int main(int argc, char **argv)
 	CHECK(lichen_beacon_cbor_options(beacon, sizeof(beacon), NULL) == NULL,
 	      "cbor options with NULL len rejected");
 
-	free(json);
+	/* slot_map CBOR validation (ccp_slot_map_validation.json; spec 02a
+	 * 2a.2 R-02a-012). The vectors list raw slot arrays; the CBOR
+	 * encoding for each case is derived from the array per the CBOR
+	 * immediate/0x18 rules the Rust oracle implements. */
+	const char *sm_path_env = getenv("CCP_SLOT_MAP_VECTORS");
+	char sm_path[256];
+	snprintf(sm_path, sizeof(sm_path), "%s",
+		 sm_path_env ? sm_path_env
+			     : "../../../test/vectors/ccp_slot_map_validation.json");
+	char *sm_json = read_file(sm_path);
+	CHECK(sm_json != NULL, "cannot read ccp_slot_map_validation.json");
+	if (sm_json != NULL) {
+	struct {
+		const char *name;
+		uint8_t num_slots;
+		uint8_t slots[8];
+		size_t slot_count;
+		enum lichen_slot_map_status expected;
+	} sm_cases[] = {
+		{ "slot_boundary_valid", 8, { 0, 1, 7 }, 3, LICHEN_SLOT_MAP_OK },
+		{ "slot_empty", 8, { 0 }, 0, LICHEN_SLOT_MAP_OK },
+		{ "slot_all_valid", 8, { 0, 1, 2, 3, 4, 5, 6, 7 }, 8,
+		  LICHEN_SLOT_MAP_OK },
+		{ "slot_single_zero", 1, { 0 }, 1, LICHEN_SLOT_MAP_OK },
+		{ "slot_gap_valid", 8, { 0, 3, 7 }, 3, LICHEN_SLOT_MAP_OK },
+	};
+	for (size_t i = 0; i < sizeof(sm_cases) / sizeof(sm_cases[0]); i++) {
+		uint8_t cbor[16];
+		size_t n = sm_cases[i].slot_count;
+		uint8_t sm_out[8];
+		size_t sm_out_len = 0;
+		if (n == 0) {
+			/* Vector slot_empty is an empty CBOR array (0x80). */
+			cbor[0] = 0x80;
+			enum lichen_slot_map_status st =
+				lichen_beacon_parse_slot_map(cbor, 1,
+							     sm_cases[i].num_slots,
+							     sm_out, 8,
+							     &sm_out_len);
+			CHECK(st == sm_cases[i].expected, sm_cases[i].name);
+			CHECK(sm_out_len == 0, "empty map count 0");
+			/* Zero-length input is the distinct EMPTY branch. */
+			CHECK(lichen_beacon_parse_slot_map(
+				      cbor, 0, sm_cases[i].num_slots, sm_out, 8,
+				      &sm_out_len) == LICHEN_SLOT_MAP_EMPTY,
+			      "zero-length input -> EMPTY");
+			continue;
+		}
+		cbor[0] = (uint8_t)(0x80 + n);
+		for (size_t j = 0; j < n; j++) {
+			cbor[1 + j] = sm_cases[i].slots[j];
+		}
+		enum lichen_slot_map_status st = lichen_beacon_parse_slot_map(
+			cbor, 1 + n, sm_cases[i].num_slots, sm_out, 8,
+			&sm_out_len);
+		CHECK(st == sm_cases[i].expected, sm_cases[i].name);
+		if (st == LICHEN_SLOT_MAP_OK) {
+			CHECK(sm_out_len == n, "slot_map roundtrip count");
+			for (size_t j = 0; j < n; j++) {
+				CHECK(sm_out[j] == sm_cases[i].slots[j],
+				      "slot_map roundtrip values");
+			}
+		}
+	}
+
+	/* Reject cases: out-of-bounds, unsorted/duplicate, trailing bytes. */
+	uint8_t sm_out[8];
+	size_t sm_out_len = 0;
+	uint8_t cbor_oob[5] = { 0x84, 0, 3, 8, 12 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_oob, 5, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_OUT_OF_BOUNDS,
+	      "slot_out_of_bounds");
+	uint8_t cbor_unsorted[5] = { 0x84, 3, 1, 5, 2 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_unsorted, 5, 16, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_NOT_SORTED,
+	      "slot_unsorted/duplicate");
+	uint8_t cbor_trailing[4] = { 0x81, 0x00, 0xFF, 0xEE };
+	CHECK(lichen_beacon_parse_slot_map(cbor_trailing, 2, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_OK,
+	      "exact-length slot_map ok");
+	CHECK(lichen_beacon_parse_slot_map(cbor_trailing, 4, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_TRAILING_BYTES,
+	      "trailing bytes rejected");
+	uint8_t cbor_not_array[2] = { 0x19, 0 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_not_array, 2, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_NOT_AN_ARRAY,
+	      "non-array rejected");
+	uint8_t cbor_oob255[3] = { 0x81, 0x18, 255 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_oob255, 3, 255, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_OUT_OF_BOUNDS,
+	      "slot_single_at_limit (255 with num_slots 255) rejected");
+	uint8_t cbor_max254[4] = { 0x81, 0x18, 254 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_max254, 3, 255, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_OK,
+	      "slot_single_max_valid (254 with num_slots 255) accepted");
+	CHECK(sm_out_len == 1 && sm_out[0] == 254, "slot 254 roundtrip");
+
+	/* Branch coverage beyond the JSON vectors (rust parity):
+	 * 0x98 long-form array header. */
+	uint8_t cbor_long[5] = { 0x98, 3, 0, 1, 2 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_long, 5, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_OK,
+	      "0x98 long-form array header");
+	CHECK(sm_out_len == 3 && sm_out[2] == 2, "long-form roundtrip");
+
+	/* > 64 entries -> TOO_MANY_SLOTS. */
+	uint8_t cbor_big[70];
+	cbor_big[0] = 0x98;
+	cbor_big[1] = 65;
+	for (unsigned int j = 0; j < 65; j++) {
+		cbor_big[2 + j] = (uint8_t)j;
+	}
+	CHECK(lichen_beacon_parse_slot_map(cbor_big, 67, 255, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_TOO_MANY_SLOTS,
+	      "65-entry slot_map rejected");
+
+	/* out_cap smaller than the array -> TOO_MANY_SLOTS. */
+	uint8_t tiny_out[2];
+	size_t tiny_len = 0;
+	uint8_t cbor_three[4] = { 0x83, 0, 1, 2 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_three, 4, 8, tiny_out, 2,
+					   &tiny_len) ==
+		      LICHEN_SLOT_MAP_TOO_MANY_SLOTS,
+	      "out_cap 2 with 3 entries rejected");
+
+	/* Mid-array truncation. */
+	uint8_t cbor_mid[3] = { 0x83, 0, 1 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_mid, 3, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_TRUNCATED,
+	      "mid-array truncation rejected");
+
+	/* Invalid slot encoding inside the array (0x19 two-byte form). */
+	uint8_t cbor_badcoding[4] = { 0x81, 0x19, 0, 1 };
+	CHECK(lichen_beacon_parse_slot_map(cbor_badcoding, 4, 8, sm_out, 8,
+					   &sm_out_len) ==
+		      LICHEN_SLOT_MAP_INVALID_ENCODING,
+	      "0x19 slot encoding inside array rejected");
+
+	/* Traceability coupling: the slot_map vectors this suite pins must
+	 * remain in ccp_slot_map_validation.json (same gate as sos). */
+	static const char *const pinned_sm[] = {
+		"slot_out_of_bounds", "slot_boundary_valid",
+		"slot_boundary_invalid", "slot_empty", "slot_all_valid",
+		"slot_single_zero", "slot_single_max_valid",
+		"slot_single_at_limit", "slot_zero_num_slots", "slot_gap_valid",
+	};
+	for (size_t i = 0; i < sizeof(pinned_sm) / sizeof(pinned_sm[0]);
+	     i++) {
+		char needle[96];
+		snprintf(needle, sizeof(needle), "\"name\": \"%s\"",
+			 pinned_sm[i]);
+		CHECK(strstr(sm_json, needle) != NULL, pinned_sm[i]);
+	}
+	/* The JSON distinguishes "unsorted" from "duplicate"; the C codec
+	 * has one NOT_SORTED outcome for both (rust SlotMapError parity). */
+	}
+	free(sm_json);
 	if (failures == 0) {
 		printf("PASS: beacon codec vs ccp_beacon_format wire oracle\n");
 		return 0;

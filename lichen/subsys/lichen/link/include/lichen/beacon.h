@@ -135,5 +135,36 @@ const uint8_t *lichen_beacon_signed_data(const uint8_t *beacon, size_t len,
  */
 const uint8_t *lichen_beacon_cbor_options(const uint8_t *beacon, size_t len,
 					  size_t *options_len);
+/** slot_map parse outcomes (rust SlotMapError parity). */
+enum lichen_slot_map_status {
+	LICHEN_SLOT_MAP_OK = 0,
+	LICHEN_SLOT_MAP_EMPTY = 1, /**< valid: empty map (no intent) */
+	LICHEN_SLOT_MAP_NOT_AN_ARRAY = -1,
+	LICHEN_SLOT_MAP_TRUNCATED = -2,
+	LICHEN_SLOT_MAP_TOO_MANY_SLOTS = -3,
+	LICHEN_SLOT_MAP_INVALID_ENCODING = -4,
+	LICHEN_SLOT_MAP_OUT_OF_BOUNDS = -5,
+	LICHEN_SLOT_MAP_NOT_SORTED = -6,
+	LICHEN_SLOT_MAP_TRAILING_BYTES = -7,
+};
 
+/**
+ * Parse a CBOR-encoded slot_map from beacon options and validate it
+ * (rust tdma_beacon.rs parse_slot_map): CBOR array of ascending unique
+ * immediate/1-byte slot indices, each < num_slots, no trailing bytes.
+ * Empty input is a valid empty map (LICHEN_SLOT_MAP_EMPTY). On
+ * LICHEN_SLOT_MAP_OK the slots are written to out (capacity out_cap) and
+ * *out_len receives the count.
+ *
+ * Merge note (main + beads-worker-1): beads-worker-1's
+ * lichen_beacon_parse_slot_map declaration is kept (beacon.c implements
+ * it and tdma_beacon tests exercise it); the closing endif comment uses
+ * LICHEN_BEACON_H_ to match the actual include guard above (see the
+ * top-of-file merge note: flat guard convention, not
+ * LICHEN_LINK_BEACON_H_).
+ */
+enum lichen_slot_map_status
+lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
+			     uint8_t num_slots, uint8_t *out, size_t out_cap,
+			     size_t *out_len);
 #endif /* LICHEN_BEACON_H_ */
