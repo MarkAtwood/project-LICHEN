@@ -24,8 +24,15 @@ add_executable(rpl_root_sig_test
   ${LINK_SRC}/identity_addr.c
   ${CRYPTO_SRC}/monocypher.c
   ${CRYPTO_SRC}/monocypher-ed25519.c
+  ${LINK_SRC}/schnorr48.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../coap_slot_claim/stub/tinycrypt/sha256.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../coap_slot_claim/stub/tinycrypt/utils.c
 )
-target_compile_definitions(rpl_root_sig_test PRIVATE LICHEN_RPL_TEST=1)
+target_compile_definitions(rpl_root_sig_test PRIVATE
+  LICHEN_RPL_TEST=1
+  CONFIG_LICHEN_CRYPTO_MONOCYPHER=1
+  CONFIG_LICHEN_LINK_SCHNORR=1
+)
 # NOTE: deliberately does not call lichen_test_target() — this host's gcc 13
 # rejects its -std=c23 flag. The test builds with the default dialect and
 # keeps LICHEN_RPL_TEST=1 (required by the host byteorder stub).
@@ -37,4 +44,6 @@ target_include_directories(rpl_root_sig_test PRIVATE
   ${CRYPTO_SRC}
   ${HOST_STUB_INCLUDE_DIR}
   ${HOST_STUB_INCLUDE_DIR}/..
+  ${CMAKE_CURRENT_SOURCE_DIR}/../coap_slot_claim/stub
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )

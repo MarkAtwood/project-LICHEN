@@ -13,6 +13,16 @@
 #include <lichen/rpl_messages.h>
 #include <lichen/rpl_root_dio_sig.h>
 #include <lichen/root_dio_replay.h>
+#include <tinycrypt/sha256.h>
+#include <tinycrypt/constants.h>
+
+static int test_sha256(const uint8_t *input, size_t len, uint8_t out[32])
+{
+	struct tc_sha256_state_struct s;
+	if (tc_sha256_init(&s) != TC_CRYPTO_SUCCESS) return -1;
+	if (tc_sha256_update(&s, input, len) != TC_CRYPTO_SUCCESS) return -1;
+	return tc_sha256_final(out, &s) == TC_CRYPTO_SUCCESS ? 0 : -1;
+}
 
 static int tests_run;
 static int tests_passed;
@@ -70,14 +80,6 @@ static int test_dio_parse_accepts_vector_option(void)
 	uint8_t buf[2 + sizeof(vector_cose_sign1) + 32];
 	size_t pos = 0;
 
-	/* Option: type + len + blob */
-	uint8_t opt[2 + sizeof(vector_cose_sign1)];
-	opt[0] = LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE;
-	opt[1] = (uint8_t)sizeof(vector_cose_sign1);
-	for (size_t i = 0; i < sizeof(vector_cose_sign1); i++) {
-		opt[2 + i] = vector_cose_sign1[i];
-	}
-
 	uint8_t options[2 + sizeof(vector_cose_sign1)];
 	options[0] = LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE;
 	options[1] = (uint8_t)sizeof(vector_cose_sign1);
@@ -121,6 +123,7 @@ static int test_dio_parse_rejects_duplicate_root_sig(void)
 		}
 		ASSERT_EQ(lichen_rpl_dio_write(&dio, buf, sizeof(buf)), 24, "base write");
 	}
+	pos = 24;
 
 	/* Two singleton root-sig options (short 64-byte blobs). */
 	for (int copy = 0; copy < 2; copy++) {
@@ -245,8 +248,6 @@ static int test_root_sig_decode_valid_vector(void)
 static int test_root_sig_structural_ok_and_expiry(void)
 {
 	struct root_dio_sig sig;
-	uint8_t dodag[16] = { 0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f,
-			      0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a };
 	int ret = root_dio_sig_decode(vector_cose_sign1, sizeof(vector_cose_sign1), &sig);
 	uint8_t dio_dodag[16];
 
@@ -266,8 +267,6 @@ static int test_root_sig_structural_ok_and_expiry(void)
 static int test_root_sig_structural_rejects_mismatches(void)
 {
 	struct root_dio_sig sig;
-	uint8_t dodag[16] = { 0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f,
-			      0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a };
 	uint8_t other_dodag[16];
 	int ret = root_dio_sig_decode(vector_cose_sign1, sizeof(vector_cose_sign1), &sig);
 	uint8_t dio_dodag[16];
@@ -299,9 +298,6 @@ static int test_root_sig_structural_rejects_mismatches(void)
 static int test_root_sig_decode_rejects_garbage(void)
 {
 	struct root_dio_sig sig;
-	uint8_t short_blob[63];
-
-	memset(short_blob, 0, sizeof(short_blob));
 	ASSERT_EQ(root_dio_sig_decode(NULL, 0, &sig), -ROOT_SIG_ERR_DECODE, "null");
 	for (size_t len = 0; len < 64; len++) {
 		ASSERT_EQ(root_dio_sig_decode(vector_cose_sign1, len, &sig),
@@ -375,6 +371,47 @@ static int test_replay_cache_full_table_fails_closed(void)
 	return 1;
 }
 
+
+
+static int test_root_sig_verify_signature_valid_vector(void)
+{
+	struct root_dio_sig sig;
+	int ret = root_dio_sig_decode(vector_cose_sign1, sizeof(vector_cose_sign1), &sig);
+	ASSERT_EQ(ret, ROOT_SIG_OK, "decode");
+	ret = root_dio_sig_verify_signature(&sig, vector_pubkey, test_sha256);
+	ASSERT_EQ(ret, ROOT_SIG_OK, "valid signature verifies");
+	return 1;
+}
+
+static int test_root_sig_verify_signature_rejects_tampered(void)
+{
+	uint8_t blob[sizeof(vector_cose_sign1)];
+	struct root_dio_sig sig;
+	memcpy(blob, vector_cose_sign1, sizeof(vector_cose_sign1));
+	/* Flip one signature bit (vector root_dio_signature_tampered: byte 0 of
+	 * the 48-byte signature, which starts at COSE offset 62). */
+	blob[62] ^= 0x01;
+	int ret = root_dio_sig_decode(blob, sizeof(blob), &sig);
+	ASSERT_EQ(ret, ROOT_SIG_OK, "tampered still decodes");
+	ret = root_dio_sig_verify_signature(&sig, vector_pubkey, test_sha256);
+	ASSERT_EQ(ret, -ROOT_SIG_ERR_SIGNATURE, "tampered rejected");
+	return 1;
+}
+
+static int test_root_sig_verify_signature_rejects_zero(void)
+{
+	uint8_t blob[sizeof(vector_cose_sign1)];
+	struct root_dio_sig sig;
+	memcpy(blob, vector_cose_sign1, sizeof(vector_cose_sign1));
+	/* Zero the 48-byte signature (COSE offset 62..109). */
+	memset(&blob[62], 0, 48);
+	int ret = root_dio_sig_decode(blob, sizeof(blob), &sig);
+	ASSERT_EQ(ret, ROOT_SIG_OK, "zero sig decodes");
+	ret = root_dio_sig_verify_signature(&sig, vector_pubkey, test_sha256);
+	ASSERT_EQ(ret, -ROOT_SIG_ERR_SIGNATURE, "zero sig rejected");
+	return 1;
+}
+
 int main(void)
 {
 	run_test(test_option_constants_in_sync_with_spec);
@@ -387,6 +424,9 @@ int main(void)
 	run_test(test_root_sig_structural_ok_and_expiry);
 	run_test(test_root_sig_structural_rejects_mismatches);
 	run_test(test_root_sig_decode_rejects_garbage);
+	run_test(test_root_sig_verify_signature_valid_vector);
+	run_test(test_root_sig_verify_signature_rejects_tampered);
+	run_test(test_root_sig_verify_signature_rejects_zero);
 	run_test(test_replay_cache_first_observation_admitted);
 	run_test(test_replay_cache_rejects_equal_and_lower);
 	run_test(test_replay_cache_keys_isolated);
