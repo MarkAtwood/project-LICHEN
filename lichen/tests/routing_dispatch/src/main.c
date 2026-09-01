@@ -1144,17 +1144,91 @@ static int test_gradient_sf_density_threshold(void)
 	/* Spec 02a 2a.8 step 3: Density > 10 (strictly greater; decision
 	 * id=density-high, matching python ccp.py and rust rf_health.rs).
 	 * Density 10 is NOT the trigger; the SF stays at the entry's value. */
-	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 1U, &sf,
-					  &tx_allowed) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 0U, 1U,
+					  &sf, &tx_allowed) == 0);
 	REQUIRE(sf == 10U);
 
 	/* Density 11 crosses the threshold: SF +2, capped at 12. NOTE:
 	 * sf_select writes the result back into entry.sf.current_sf, so the
 	 * second call's baseline is the first call's result (still 10 here) —
 	 * keep the call order stable. */
-	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 11U, 0U, 0U, 2U, &sf,
-					  &tx_allowed) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 11U, 0U, 0U, 0U, 2U,
+					  &sf, &tx_allowed) == 0);
 	REQUIRE(sf == 12U);
+	(void)tx_allowed;
+#endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
+	return 0;
+}
+
+static int test_gradient_sf_floors(void)
+{
+#if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED)
+	/* Spec 02a 2a.8 post-step-6 minimum-SF floors, in order a-d. Each
+	 * case re-seeds a fresh table so the previous floor's stored SF
+	 * cannot leak. density=10 and utilization=0 keep steps 3 and 5 out
+	 * of the way (step 3 triggers strictly above 10). */
+	struct lichen_gradient_table table = {0};
+	struct lichen_gradient_entry entry = {
+		.hop_count = 1U,
+		.seq_num = 1U,
+		.source = LICHEN_GRADIENT_ANNOUNCE,
+		.expires_ms = 100000U,
+		.valid = true,
+		.sf.upgrade_count = 0U,
+	};
+	const uint8_t neighbor[8] = {0x02, 0, 0, 0, 0, 0, 0, 0x5b};
+	uint8_t next_hop[16] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0,
+				0x02, 0,   0, 0, 0, 0, 0, 0x5b};
+	uint8_t sf = 0U;
+	bool tx_allowed = false;
+
+	memcpy(entry.destination_iid, neighbor, 8U);
+	memcpy(entry.next_hop, next_hop, sizeof(entry.next_hop));
+
+	/* Floor a: EMA_SNR < -5 forces SF = 12. */
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = -6;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 0U,
+					  2000U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 12U);
+
+	/* Floor b: -5 <= EMA_SNR < 0 raises SF to at least 11. */
+	memset(&table, 0, sizeof(table));
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = -1;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 0U,
+					  2001U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Floor c: density > 10 raises SF to at least 11. current_sf=7 so
+	 * step 3's +2 lands on 9 — only floor c can produce 11. */
+	memset(&table, 0, sizeof(table));
+	entry.sf.current_sf = 7U;
+	entry.sf.snr_ewma = 0;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 11U, 0U, 0U, 0U,
+					  2002U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Floor d: load factor >= 0.8 (Q16.16 52429) raises SF to >= 11. */
+	memset(&table, 0, sizeof(table));
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = 0;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 52429U,
+					  2003U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 11U);
+
+	/* Below the load-factor threshold (52428 = 0.79998...) no floor. */
+	memset(&table, 0, sizeof(table));
+	entry.sf.current_sf = 9U;
+	entry.sf.snr_ewma = 0;
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 10U, 0U, 0U, 52428U,
+					  2004U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 9U);
 	(void)tx_allowed;
 #endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
 	return 0;
@@ -1181,6 +1255,8 @@ static int run_all_tests(void)
 	ret = test_ipv6_in_ipv6_egress_decap();
 	if (ret != 0) return ret;
 	ret = test_gradient_sf_density_threshold();
+	if (ret != 0) return ret;
+	ret = test_gradient_sf_floors();
 	if (ret != 0) return ret;
 	return 0;
 }

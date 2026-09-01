@@ -291,11 +291,16 @@ void lichen_gradient_sf_update(struct lichen_gradient_table *table,
 /* Q16.16 fixed-point threshold for 25% loss (0.25 * 65536 = 16384) */
 #define LICHEN_EMA_LOSS_THRESHOLD_FP 16384u
 
+/* Q16.16 fixed-point threshold for load factor 0.8 (0.8 * 65536 = 52428.8;
+ * strictly greater than 0.8 starts at 52429) */
+#define LICHEN_LOAD_FACTOR_THRESHOLD_FP 52429u
+
 int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 			      const uint8_t neighbor_iid[8],
 			      uint8_t density,
 			      uint16_t utilization,
 			      uint32_t ema_loss_fp,
+			      uint32_t load_factor_fp,
 			      uint32_t now_ms,
 			      uint8_t *out_sf,
 			      bool *out_tx_allowed)
@@ -338,6 +343,22 @@ int lichen_gradient_sf_select(struct lichen_gradient_table *table,
 			sf = 12;
 			tx_allowed = false;
 		}
+	}
+
+	/* Post-step-6 minimum-SF floors (spec 2a.8, Downgrade MUST column,
+	 * applied in order a-d). Floor (a) subsumes (b). Thresholds match
+	 * python ccp.py adaptive_sf_select and the adjudicated density > 10
+	 * step-3 trigger (decision id=density-high). */
+	if (entry->sf.snr_ewma < -5) {
+		sf = 12;
+	} else if (entry->sf.snr_ewma < 0) {
+		sf = LICHEN_MAX(11, sf);
+	}
+	if (density > 10) {
+		sf = LICHEN_MAX(11, sf);
+	}
+	if (load_factor_fp >= LICHEN_LOAD_FACTOR_THRESHOLD_FP) {
+		sf = LICHEN_MAX(11, sf);
 	}
 
 	entry->sf.current_sf = sf;
