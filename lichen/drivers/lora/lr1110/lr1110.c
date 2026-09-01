@@ -492,8 +492,8 @@ static int lr1110_config_impl(const struct device *dev,
 			dev, LR1110_RADIO_RX_TX_FALLBACK_MODE_STDBYRC));
 	LR1110_RETURN_ON_HAL_ERROR(
 		lr1110_radio_set_lora_sync_word(
-			dev, cfg->public_network ? LR1110_RADIO_LORA_NETWORK_PUBLIC
-						 : LR1110_RADIO_LORA_NETWORK_PRIVATE));
+			dev, LR1110_RADIO_LORA_NETWORK_PUBLIC)); /* R-02-006: sync word 0x34 (Semtech public network byte). */
+
 
 #if DT_INST_NODE_HAS_PROP(0, tx_enable_gpios)
 	gpio_pin_set_dt(&lr1110_gpio_tx_enable, cfg->tx ? 1 : 0);

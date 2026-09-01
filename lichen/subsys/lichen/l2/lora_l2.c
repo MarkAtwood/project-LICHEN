@@ -275,6 +275,9 @@ int lichen_lora_l2_start(void)
         .preamble_len = 8,
         .tx_power = CONFIG_LICHEN_LORA_TX_POWER,
         .tx = false,
+        /* R-02-006: sync word 0x34 — the lr1110 driver programs the Semtech
+         * public network byte 0x34 unconditionally on lora_config(). */
+        .public_network = true,
     };
 
     int ret = lora_config(lora_data.lora_dev, &config);
