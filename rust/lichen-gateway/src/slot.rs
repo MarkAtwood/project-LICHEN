@@ -48,8 +48,10 @@ use std::path::{Path, PathBuf};
 
 use lichen_link::keys::Seed;
 use schnorr48::{derive_keypair, sign, verify};
+use sha2::{Digest, Sha256};
 
 use crate::trust::{verify_gateway_message, verify_iid_binding, SIGNATURE_LEN};
+use crate::tunnel_auth::{Reader, Writer, PROTECTED};
 
 /// Absolute number of slots accepted in one superframe.
 pub const MAX_SLOTS_PER_SUPERFRAME: u32 = 4_096;
@@ -76,6 +78,8 @@ pub enum SlotError {
     DuplicateGateway,
     InvalidSignature,
     IdentityMismatch,
+    MalformedClaim,
+    UnsupportedAlgorithm,
     StaleSuperframe {
         claim: u64,
         current: u64,
@@ -368,13 +372,107 @@ pub enum ConflictResolution {
 }
 
 /// An untrusted, signed slot claim received from the wire.
+///
+/// Claims arrive in one of two signature forms (see [`ClaimSigForm`]): the
+/// legacy domain transcript (pre-COSE, slated for removal once all consumers
+/// flip in l1qw.16.2.2) or the spec GCP-6.5 COSE_Sign1 envelope decoded by
+/// [`RawSlotClaim::from_cose`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawSlotClaim {
     gateway_iid: Iid,
     slots: Vec<u32>,
     superframe_id: u64,
     claim_sequence: u32,
+    mode: AllocationMode,
+    expiry: u64,
+    ordinal: Option<u64>,
     signature: [u8; SIGNATURE_LEN],
+    sig_form: ClaimSigForm,
+}
+
+/// COSE_Sign1 slot-claim payload (spec/08 GCP-6.5).
+///
+/// Integer keys 1-7: 1 slots, 2 superframe_epoch, 3 mode, 4 expiry,
+/// 5 gateway_iid bstr(8), 6 claim_seq, 7 optional ordinal. `gateway_count`
+/// is a local allocation parameter and is never serialized (l1qw.16.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotClaimPayload {
+    pub slots: Vec<u32>,
+    pub superframe_epoch: u64,
+    pub mode: AllocationMode,
+    pub expiry: u64,
+    pub gateway_iid: Iid,
+    pub claim_seq: u32,
+    pub ordinal: Option<u64>,
+}
+
+impl SlotClaimPayload {
+    /// Deterministic CBOR map, integer keys in ascending order (RFC 8949
+    /// 4.2.1); byte-identical to Python `encode_claim_canonical` (cbor2
+    /// canonical=True).
+    fn encode_canonical(&self) -> Result<Vec<u8>, SlotError> {
+        let malformed = |_| SlotError::MalformedClaim;
+        let mut buf = vec![0u8; 9 * self.slots.len() + 64];
+        let len = {
+            let mut w = Writer::new(&mut buf);
+            let pairs: u64 = if self.ordinal.is_some() { 7 } else { 6 };
+            w.head(5, pairs).map_err(malformed)?;
+            w.uint(1).map_err(malformed)?;
+            w.head(4, self.slots.len() as u64).map_err(malformed)?;
+            for slot in &self.slots {
+                w.uint(u64::from(*slot)).map_err(malformed)?;
+            }
+            w.uint(2).map_err(malformed)?;
+            w.uint(self.superframe_epoch).map_err(malformed)?;
+            w.uint(3).map_err(malformed)?;
+            w.uint(match self.mode {
+                AllocationMode::Interleaved => 0,
+                AllocationMode::Contiguous => 1,
+            })
+            .map_err(malformed)?;
+            w.uint(4).map_err(malformed)?;
+            w.uint(self.expiry).map_err(malformed)?;
+            w.uint(5).map_err(malformed)?;
+            w.bstr(&self.gateway_iid).map_err(malformed)?;
+            w.uint(6).map_err(malformed)?;
+            w.uint(u64::from(self.claim_seq)).map_err(malformed)?;
+            if let Some(ordinal) = self.ordinal {
+                w.uint(7).map_err(malformed)?;
+                w.uint(ordinal).map_err(malformed)?;
+            }
+            w.position()
+        };
+        buf.truncate(len);
+        Ok(buf)
+    }
+
+    /// SHA-256 over CBOR(Sig_structure) — the GCP-6.5 signature input:
+    /// Sig_structure = ["Signature1", protected, h'', payload] (RFC 9052
+    /// 4.4) with the shared `{1: -65537}` protected header.
+    fn cose_sig_digest(&self) -> Result<[u8; 32], SlotError> {
+        let payload = self.encode_canonical()?;
+        let malformed = |_| SlotError::MalformedClaim;
+        let mut input = vec![0u8; payload.len() + 32];
+        let len = {
+            let mut w = Writer::new(&mut input);
+            w.byte(0x84).map_err(malformed)?;
+            w.tstr(b"Signature1").map_err(malformed)?;
+            w.bstr(PROTECTED).map_err(malformed)?;
+            w.bstr(&[]).map_err(malformed)?;
+            w.bstr(&payload).map_err(malformed)?;
+            w.position()
+        };
+        Ok(Sha256::digest(&input[..len]).into())
+    }
+}
+
+/// How the signature over a [`RawSlotClaim`] is bound to its content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaimSigForm {
+    /// Legacy `slot_claim_transcript` domain separation (pre-COSE).
+    DomainTranscript,
+    /// Spec GCP-6.5: signature over SHA-256(CBOR(Sig_structure)).
+    CoseSign1,
 }
 
 impl RawSlotClaim {
@@ -393,8 +491,142 @@ impl RawSlotClaim {
             slots,
             superframe_id,
             claim_sequence,
+            mode: AllocationMode::Interleaved,
+            expiry: 0,
+            ordinal: None,
             signature,
+            sig_form: ClaimSigForm::DomainTranscript,
         })
+    }
+
+    /// Decode a spec GCP-6.5 COSE_Sign1 slot-claim envelope.
+    ///
+    /// Mirrors Python `SlotClaim.decode_cose` (l1qw.16.1): 4-element array,
+    /// protected header byte-identical to the shared `{1: -65537}` encoding
+    /// (any other alg is a decoy and is rejected as such), unprotected map
+    /// `{4: kid bstr(8)}`, payload map with integer keys 1-7, 48-byte
+    /// Schnorr48 signature. Structural validation only — signature
+    /// verification happens in [`SlotClaimVerifier::verify`].
+    ///
+    /// Stricter than the Python decoder in three ways, all invisible to
+    /// spec-conformant peers: duplicate payload keys are rejected (cbor2
+    /// would keep the last), unknown payload keys are rejected (cbor2
+    /// ignores them), and the unprotected kid must equal the payload's
+    /// gateway_iid (Python ignores the kid beyond its 8-byte shape).
+    pub fn from_cose(envelope: &[u8], slots_per_superframe: u32) -> Result<Self, SlotError> {
+        let malformed = |_| SlotError::MalformedClaim;
+        let mut r = Reader::new(envelope);
+        r.exact(0x84).map_err(malformed)?;
+        let protected = r.bstr().map_err(malformed)?;
+        if protected != PROTECTED {
+            return Err(if protected.starts_with(&[0xa1, 0x01]) {
+                SlotError::UnsupportedAlgorithm
+            } else {
+                SlotError::MalformedClaim
+            });
+        }
+        r.exact(0xa1).map_err(malformed)?;
+        r.uint_exact(4).map_err(malformed)?;
+        let kid = r.bstr().map_err(malformed)?;
+        let gateway_iid: Iid = kid.try_into().map_err(|_| SlotError::MalformedClaim)?;
+        let payload_bytes = r.bstr().map_err(malformed)?;
+        let signature: [u8; SIGNATURE_LEN] = r
+            .bstr()
+            .map_err(malformed)?
+            .try_into()
+            .map_err(|_| SlotError::MalformedClaim)?;
+        if !r.finished() {
+            return Err(SlotError::MalformedClaim);
+        }
+
+        let mut p = Reader::new(payload_bytes);
+        let pairs = p.head(5).map_err(malformed)?;
+        if !(6..=7).contains(&pairs) {
+            return Err(SlotError::MalformedClaim);
+        }
+        let mut slots: Option<Vec<u32>> = None;
+        let mut superframe_epoch: Option<u64> = None;
+        let mut mode: Option<u64> = None;
+        let mut expiry: Option<u64> = None;
+        let mut claim_seq: Option<u32> = None;
+        let mut ordinal: Option<u64> = None;
+        let mut seen: u8 = 0;
+        for _ in 0..pairs {
+            let key = p.uint().map_err(malformed)?;
+            if key == 0 || key > 7 || seen & (1 << key) != 0 {
+                return Err(SlotError::MalformedClaim);
+            }
+            seen |= 1 << key;
+            match key {
+                1 => {
+                    let count = p.head(4).map_err(malformed)?;
+                    if count > u64::from(MAX_SLOTS_PER_SUPERFRAME) {
+                        return Err(SlotError::TooManySlots);
+                    }
+                    let mut parsed = Vec::with_capacity(count as usize);
+                    for _ in 0..count {
+                        let slot = p.uint().map_err(malformed)?;
+                        let slot = u32::try_from(slot).map_err(|_| SlotError::MalformedClaim)?;
+                        parsed.push(slot);
+                    }
+                    slots = Some(parsed);
+                }
+                2 => superframe_epoch = Some(p.uint().map_err(malformed)?),
+                3 => mode = Some(p.uint().map_err(malformed)?),
+                4 => expiry = Some(p.uint().map_err(malformed)?),
+                5 => {
+                    let iid = p.bstr().map_err(malformed)?;
+                    if iid != gateway_iid {
+                        return Err(SlotError::IdentityMismatch);
+                    }
+                }
+                6 => {
+                    let seq = p.uint().map_err(malformed)?;
+                    claim_seq = Some(u32::try_from(seq).map_err(|_| SlotError::MalformedClaim)?);
+                }
+                _ => ordinal = Some(p.uint().map_err(malformed)?),
+            }
+        }
+        // Keys 1-6 required, 7 optional.
+        if seen & 0b0111_1110 != 0b0111_1110 {
+            return Err(SlotError::MalformedClaim);
+        }
+        let mode = match mode {
+            Some(0) => AllocationMode::Interleaved,
+            Some(1) => AllocationMode::Contiguous,
+            _ => return Err(SlotError::MalformedClaim),
+        };
+        let slots = slots.ok_or(SlotError::MalformedClaim)?;
+        validate_claim_slots(&slots, slots_per_superframe)?;
+        Ok(Self {
+            gateway_iid,
+            slots,
+            superframe_id: superframe_epoch.ok_or(SlotError::MalformedClaim)?,
+            claim_sequence: claim_seq.ok_or(SlotError::MalformedClaim)?,
+            mode,
+            expiry: expiry.ok_or(SlotError::MalformedClaim)?,
+            ordinal,
+            signature,
+            sig_form: ClaimSigForm::CoseSign1,
+        })
+    }
+
+    /// Re-encode the decoded fields into the canonical signed payload.
+    ///
+    /// Mirrors Python verification, which digests a re-encode of the decoded
+    /// claim rather than the received payload bytes — non-canonical wire
+    /// variants therefore fail the signature check, matching `cbor2
+    /// canonical=True` round-tripping on the Python side.
+    fn claim_payload(&self) -> SlotClaimPayload {
+        SlotClaimPayload {
+            slots: self.slots.clone(),
+            superframe_epoch: self.superframe_id,
+            mode: self.mode,
+            expiry: self.expiry,
+            gateway_iid: self.gateway_iid,
+            claim_seq: self.claim_sequence,
+            ordinal: self.ordinal,
+        }
     }
 
     pub fn gateway_iid(&self) -> &Iid {
@@ -523,13 +755,25 @@ impl SlotClaimVerifier {
                 capacity: self.max_gateways,
             });
         }
-        let transcript = slot_claim_transcript(
-            &claim.gateway_iid,
-            &claim.slots,
-            claim.superframe_id,
-            claim.claim_sequence,
-        )?;
-        if !verify_gateway_message(gateway_pubkey, &transcript, &claim.signature) {
+        let signature_ok = match claim.sig_form {
+            ClaimSigForm::DomainTranscript => {
+                let transcript = slot_claim_transcript(
+                    &claim.gateway_iid,
+                    &claim.slots,
+                    claim.superframe_id,
+                    claim.claim_sequence,
+                )?;
+                verify_gateway_message(gateway_pubkey, &transcript, &claim.signature)
+            }
+            ClaimSigForm::CoseSign1 => {
+                let digest = claim
+                    .claim_payload()
+                    .cose_sig_digest()
+                    .map_err(|_| SlotError::InvalidSignature)?;
+                verify_gateway_message(gateway_pubkey, &digest, &claim.signature)
+            }
+        };
+        if !signature_ok {
             return Err(SlotError::InvalidSignature);
         }
         self.generation = self
@@ -1593,6 +1837,317 @@ mod tests {
         let expected_lowest: Iid = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77];
         assert_eq!(ordinals[0].0, expected_lowest);
         assert_eq!(ordinals[0].1, 0);
+    }
+
+    // ── COSE_Sign1 slot claims (spec/08 GCP-6.5, l1qw.16.2.1) ───────────────
+    //
+    // Oracle vectors computed from the landed Python reference
+    // (l1qw.16.1): python/src/lichen/gateway/slot_claim.py
+    // encode_claim_canonical + cose_sig_structure + sha256, for the claim
+    // slots [0,1,2], superframe_epoch 7, mode 0, expiry 5_000_000,
+    // gateway_iid 1020304050607080, claim_seq 3, ordinal 1.
+    const ORACLE_PAYLOAD_HEX: &str = "a7018300010202070300041a004c4b400548102030405060708006030701";
+    const ORACLE_DIGEST_HEX: &str =
+        "92e7841d534360155ddc03fbdb351adca8be54b58d3a891091a4e4f750a913bc";
+
+    fn oracle_payload() -> SlotClaimPayload {
+        SlotClaimPayload {
+            slots: vec![0, 1, 2],
+            superframe_epoch: 7,
+            mode: AllocationMode::Interleaved,
+            expiry: 5_000_000,
+            gateway_iid: [0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80],
+            claim_seq: 3,
+            ordinal: Some(1),
+        }
+    }
+
+    fn hex_bytes(hex: &str) -> Vec<u8> {
+        (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    fn signed_cose_envelope(
+        seed_bytes: [u8; 32],
+        slots: Vec<u32>,
+        superframe: u64,
+    ) -> (Vec<u8>, [u8; 32], RawSlotClaim) {
+        let (private, public) = derive_keypair(&Seed::new(seed_bytes));
+        let pubkey = *public.as_bytes();
+        let iid = crate::trust::iid_from_pubkey(&pubkey);
+        let payload = SlotClaimPayload {
+            slots,
+            superframe_epoch: superframe,
+            mode: AllocationMode::Interleaved,
+            expiry: 5_000_000,
+            gateway_iid: iid,
+            claim_seq: 0,
+            ordinal: None,
+        };
+        let payload_bytes = payload.encode_canonical().unwrap();
+        let digest = payload.cose_sig_digest().unwrap();
+        let signature = sign(&private, &public, &digest);
+        let envelope = cose_envelope_with_kid(&payload_bytes, &signature, &iid);
+        let claim = RawSlotClaim::from_cose(&envelope, 60).unwrap();
+        (envelope, pubkey, claim)
+    }
+
+    fn cose_envelope_with_kid(
+        payload_bytes: &[u8],
+        signature: &[u8; SIGNATURE_LEN],
+        kid: &[u8; 8],
+    ) -> Vec<u8> {
+        let mut buf = vec![0u8; payload_bytes.len() + 80];
+        let len = {
+            let mut w = Writer::new(&mut buf);
+            w.byte(0x84).unwrap();
+            w.bstr(PROTECTED).unwrap();
+            w.byte(0xa1).unwrap();
+            w.byte(0x04).unwrap();
+            w.bstr(kid).unwrap();
+            w.bstr(payload_bytes).unwrap();
+            w.bstr(signature).unwrap();
+            w.position()
+        };
+        buf.truncate(len);
+        buf
+    }
+
+    #[test]
+    fn cose_payload_encode_matches_python_oracle() {
+        let encoded = oracle_payload().encode_canonical().unwrap();
+        assert_eq!(encoded, hex_bytes(ORACLE_PAYLOAD_HEX));
+    }
+
+    #[test]
+    fn cose_sig_digest_matches_python_oracle() {
+        let digest = oracle_payload().cose_sig_digest().unwrap();
+        assert_eq!(digest.to_vec(), hex_bytes(ORACLE_DIGEST_HEX));
+    }
+
+    #[test]
+    fn cose_envelope_roundtrip_and_verify() {
+        let (envelope, pubkey, claim) = signed_cose_envelope([42; 32], vec![3, 5, 9], 7);
+        assert_eq!(claim.superframe_id(), 7);
+        assert_eq!(claim.slots(), &[3, 5, 9]);
+        assert_eq!(claim.expiry, 5_000_000);
+        assert_eq!(claim.mode, AllocationMode::Interleaved);
+        assert_eq!(claim.ordinal, None);
+        assert_eq!(claim.sig_form, ClaimSigForm::CoseSign1);
+
+        let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
+        verifier.verify(claim, &pubkey, 7).unwrap();
+
+        // Tampered payload must fail the signature check. Layout from the
+        // end: 48 sig bytes, 1 sig-bstr head, 1 payload-bstr head — so the
+        // final payload data byte sits at len - 48 - 3.
+        let mut tampered = envelope.clone();
+        let last_payload_byte = tampered.len() - SIGNATURE_LEN - 3;
+        tampered[last_payload_byte] ^= 0x01;
+        let broken = RawSlotClaim::from_cose(&tampered, 60).unwrap();
+        let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
+        assert_eq!(
+            verifier.verify(broken, &pubkey, 7).unwrap_err(),
+            SlotError::InvalidSignature
+        );
+    }
+
+    #[test]
+    fn cose_decode_rejects_malformed_envelopes() {
+        let payload_bytes = oracle_payload().encode_canonical().unwrap();
+        let signature = [7u8; SIGNATURE_LEN];
+        let kid = oracle_payload().gateway_iid;
+
+        let build = |protected: &[u8], kid: &[u8], sig: &[u8], payload: &[u8], trailing: &[u8]| {
+            let mut buf = vec![0u8; protected.len() + kid.len() + sig.len() + payload.len() + 32];
+            let len = {
+                let mut w = Writer::new(&mut buf);
+                w.byte(0x84).unwrap();
+                w.bstr(protected).unwrap();
+                w.byte(0xa1).unwrap();
+                w.byte(0x04).unwrap();
+                w.bstr(kid).unwrap();
+                w.bstr(payload).unwrap();
+                w.bstr(sig).unwrap();
+                w.position()
+            };
+            buf.truncate(len);
+            buf.extend_from_slice(trailing);
+            buf
+        };
+
+        // Wrong alg: {1: -65536} is a decoy.
+        let decoy_protected = [0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x01];
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(&decoy_protected, &kid, &signature, &payload_bytes, &[]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::UnsupportedAlgorithm
+        );
+
+        // Protected header is neither the canonical bytes nor an alg map.
+        assert_eq!(
+            RawSlotClaim::from_cose(&build(b"\xff", &kid, &signature, &payload_bytes, &[]), 60)
+                .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // kid must be 8 bytes.
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(PROTECTED, &kid[..7], &signature, &payload_bytes, &[]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Signature must be 48 bytes.
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(PROTECTED, &kid, &signature[..47], &payload_bytes, &[]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Trailing bytes after the envelope are rejected.
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(PROTECTED, &kid, &signature, &payload_bytes, &[0xff]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Duplicate payload key 2 (two maps in one envelope is not possible;
+        // craft a payload map with key 2 twice).
+        let mut dup = vec![0u8; 64];
+        let dup_len = {
+            let mut w = Writer::new(&mut dup);
+            w.byte(0xa7).unwrap();
+            w.uint(1).unwrap();
+            w.head(4, 0).unwrap();
+            w.uint(2).unwrap();
+            w.uint(7).unwrap();
+            w.uint(2).unwrap();
+            w.uint(7).unwrap();
+            w.uint(3).unwrap();
+            w.uint(0).unwrap();
+            w.uint(4).unwrap();
+            w.uint(5_000_000).unwrap();
+            w.uint(5).unwrap();
+            w.bstr(&kid).unwrap();
+            w.uint(6).unwrap();
+            w.uint(3).unwrap();
+            w.position()
+        };
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(PROTECTED, &kid, &signature, &dup[..dup_len], &[]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Unknown payload key 9.
+        let mut unknown = vec![0u8; 64];
+        let unknown_len = {
+            let mut w = Writer::new(&mut unknown);
+            w.byte(0xa7).unwrap();
+            w.uint(1).unwrap();
+            w.head(4, 0).unwrap();
+            w.uint(2).unwrap();
+            w.uint(7).unwrap();
+            w.uint(3).unwrap();
+            w.uint(0).unwrap();
+            w.uint(4).unwrap();
+            w.uint(5_000_000).unwrap();
+            w.uint(5).unwrap();
+            w.bstr(&kid).unwrap();
+            w.uint(6).unwrap();
+            w.uint(3).unwrap();
+            w.uint(9).unwrap();
+            w.uint(0).unwrap();
+            w.position()
+        };
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(PROTECTED, &kid, &signature, &unknown[..unknown_len], &[]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Mode must be 0 or 1. Canonical payload: a7 01 83000102 02 07
+        // 03 00 ... — the mode value byte is index 9 (key 3 at index 8).
+        let mut bad_mode = hex_bytes(ORACLE_PAYLOAD_HEX);
+        assert_eq!(bad_mode[9], 0x00);
+        bad_mode[9] = 0x02;
+        assert_eq!(
+            RawSlotClaim::from_cose(&build(PROTECTED, &kid, &signature, &bad_mode, &[]), 60)
+                .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Slot indices must fit u32 (2^32 does not).
+        let mut wide = vec![0u8; 64];
+        let wide_len = {
+            let mut w = Writer::new(&mut wide);
+            w.byte(0xa7).unwrap();
+            w.uint(1).unwrap();
+            w.head(4, 1).unwrap();
+            w.byte(0x1b).unwrap();
+            w.bytes(&[0, 0, 0, 1, 0, 0, 0, 0]).unwrap();
+            w.uint(2).unwrap();
+            w.uint(7).unwrap();
+            w.uint(3).unwrap();
+            w.uint(0).unwrap();
+            w.uint(4).unwrap();
+            w.uint(5_000_000).unwrap();
+            w.uint(5).unwrap();
+            w.bstr(&kid).unwrap();
+            w.uint(6).unwrap();
+            w.uint(3).unwrap();
+            w.position()
+        };
+        assert_eq!(
+            RawSlotClaim::from_cose(
+                &build(PROTECTED, &kid, &signature, &wide[..wide_len], &[]),
+                60
+            )
+            .unwrap_err(),
+            SlotError::MalformedClaim
+        );
+
+        // Expiry and claim_seq carry through the decode and the claim
+        // verifies under the COSE signature form.
+        let (_envelope, pubkey, claim) = signed_cose_envelope([7; 32], vec![1], 9);
+        assert_eq!(claim.expiry, 5_000_000);
+        assert_eq!(claim.claim_sequence(), 0);
+        let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
+        verifier.verify(claim, &pubkey, 9).unwrap();
+    }
+
+    #[test]
+    fn cose_form_matches_domain_form_field_for_field() {
+        // Same seed -> same keypair/IID; legacy and COSE forms carry
+        // identical coordination fields.
+        let (raw, pubkey) = signed_raw_claim([9; 32], vec![2, 4], 5, 60);
+        let (_envelope, cose_pubkey, cose) = signed_cose_envelope([9; 32], vec![2, 4], 5);
+        assert_eq!(pubkey, cose_pubkey);
+        assert_eq!(raw.gateway_iid(), cose.gateway_iid());
+        assert_eq!(raw.slots(), cose.slots());
+        assert_eq!(raw.superframe_id(), cose.superframe_id());
+        assert_eq!(raw.claim_sequence(), cose.claim_sequence());
     }
 
     #[test]
