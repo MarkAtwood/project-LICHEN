@@ -2628,13 +2628,13 @@ fn root_seq_cache_is_reachable_from_stack_state() {
     assert_eq!(stack.root_seq_cached(dodag_a, 0), None);
 
     // Mutations through the receiver-facing accessor land in stack state.
-    stack.root_seqs_mut().accept(dodag_a, 0, 5).unwrap();
-    stack.root_seqs_mut().accept(dodag_b, 0, 5).unwrap();
+    stack.root_seqs.accept(dodag_a, 0, 5).unwrap();
+    stack.root_seqs.accept(dodag_b, 0, 5).unwrap();
     assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
     assert_eq!(stack.root_seq_cached(dodag_b, 0), Some(5));
 
     // Replay via the stack API is rejected and leaves state untouched.
-    assert!(stack.root_seqs_mut().accept(dodag_a, 0, 5).is_err());
+    assert!(stack.root_seqs.accept(dodag_a, 0, 5).is_err());
     assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
     assert_eq!(stack.root_seq_cached(dodag_a, 1), None);
 }

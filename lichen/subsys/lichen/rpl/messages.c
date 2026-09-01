@@ -169,7 +169,10 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 	struct lichen_rpl_dio_time dio_time;
 	bool have_config = false;
 	bool have_schc_version = false;
+	/* Merge: both DIO option singletons are tracked (DIO_TIME from main,
+	 * ROOT_DIO_SIGNATURE from beads-worker-5; both validators required). */
 	bool have_dio_time = false;
+	bool have_root_sig = false;
 	int ret;
 
 	if (options == NULL && options_len != 0U) {
@@ -206,6 +209,16 @@ static int validate_dio_options(const uint8_t *options, size_t options_len)
 				return LICHEN_RPL_ERR_BAD_OPT;
 			}
 			have_dio_time = true;
+			break;
+		/* Root DIO Signature (spec 06 8.10.1): singleton,
+		 * COSE_Sign1 blob carried byte-transparent; COSE decode
+		 * and signature verification are receiver-side. */
+		case LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE:
+			if (have_root_sig || opt.data_len < LICHEN_RPL_ROOT_DIO_SIGNATURE_MIN_LEN ||
+			    opt.data_len > LICHEN_RPL_ROOT_DIO_SIGNATURE_MAX_LEN) {
+				return LICHEN_RPL_ERR_BAD_OPT;
+			}
+			have_root_sig = true;
 			break;
 		default:
 			break;
