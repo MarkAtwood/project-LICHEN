@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-u6ww",
+  "title": "RootCandidate finite-extreme metrics (f32::MAX) still win root selection (Rust + C parity gap)",
+  "description": "Edge-review finding on 96ce (follow-up, beyond the bead's mirror-C scope): the non-finite sanitization (NaN/±inf -\u003e worst-case) is done, but a finite extreme like f32::MAX passes is_finite() and its combined_score outranks all sane candidates under preference/stratum ties — a malformed-but-finite beacon metric still forces root selection. Affects BOTH rust (multi_instance.rs compare via Ord/total_cmp) and C (tdma_root_select.c, which sanitizes non-finite only). Fix direction: clamp the metric ranges to the plausible RF domain (RSSI in [-200, 0], SNR in [-40, 40] per the units doc) in both implementations' sanitize paths, with boundary pins; or treat |value| beyond physical bounds as non-finite. Cross-impl parity required (same clamp in both).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T02:22:05.796901783Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-09-01T02:22:05.796901783Z",
+  "labels": [
+    "ccp15",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-u6ww",
+      "depends_on_id": "project-LICHEN-worker6-96ce",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T02:22:05.932086104Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
