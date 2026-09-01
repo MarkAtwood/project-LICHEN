@@ -2,6 +2,8 @@
 
 # Hardware diagnostics event ring + fleet detectors - Zephyr build
 
+zephyr_include_directories(include)
+
 zephyr_library_sources(
   lichen_diag.c
   asymmetric_link.c
