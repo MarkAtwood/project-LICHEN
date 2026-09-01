@@ -1130,6 +1130,7 @@ fn test_schc_adaptation_vectors() {
                 assert!(!vector.expect_valid.unwrap_or(true), "{}", name);
 
                 let wire = rule7_udp_packet(source, destination);
+                // TX-side: emission policy rejects these addresses.
                 let encode_error = match lichen_schc::encode_rule255(
                     &wire,
                     &mut vec![0u8; wire.len() + 1],
@@ -1150,14 +1151,20 @@ fn test_schc_adaptation_vectors() {
                     name,
                     encode_error
                 );
+                // RX-side: byte-preserving decode accepts regardless of
+                // endpoint addresses (decision rule255-rx-decode).
                 let mut decoded = vec![0u8; wire.len()];
                 let mut rx_input = vec![0xffu8];
                 rx_input.extend_from_slice(&wire);
-                assert!(matches!(
-                    lichen_schc::decode_rule255(&rx_input, &mut decoded, usize::MAX),
-                    Err(lichen_schc::SchcError::InvalidPacket(message))
-                        if message.contains(fragment)
-                ));
+                let decoded_len = lichen_schc::decode_rule255(
+                    &rx_input,
+                    &mut decoded,
+                    usize::MAX,
+                )
+                .unwrap_or_else(|error| {
+                    panic!("{}: decode must accept byte-preserving: {error:?}", name)
+                });
+                assert_eq!(&decoded[..decoded_len], &wire, "{}: roundtrip", name);
             }
             "rule255_endpoint_policy" => {
                 use std::net::Ipv6Addr;
