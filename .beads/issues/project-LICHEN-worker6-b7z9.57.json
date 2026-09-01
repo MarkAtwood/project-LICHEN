@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.57",
+  "title": "Time-sensitive operation suppression gated only in C (spec 09 14.6 constrained node)",
+  "description": "Spec 09 14.6 R-09-132: nodes without a valid wall clock MUST NOT originate time-sensitive operations (scheduled check-in, message TTL requiring wall-clock comparison). Classification: divergent (partial). Evidence: C gates DTN ops (lichen/subsys/lichen/coap/coap_dtn.c:73 if (!lichen_wall_clock_valid())) and slot coordination (coap_slot_coord.c:1499). Rust production paths: no wall-clock gating found for scheduled check-in or TTL comparisons. Python: link/slot_coordination.py has no wall-clock gate (rg clean); no test pins scheduled-check-in suppression or TTL gating in any stack. Suggested placement: rust/lichen-node + python node loop - gate check-in origination and TTL-consuming operations on wall_clock_valid; add a constrained-node vector or test pinning suppression (cf. test/vectors/constrained_node_time.json).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T08:07:09.571273377Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T08:07:09.571273377Z",
+  "labels": [
+    "time",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.57",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T08:07:09.686891172Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

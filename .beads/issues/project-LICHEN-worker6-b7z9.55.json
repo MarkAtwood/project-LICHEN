@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.55",
+  "title": "Density-aware boot startup absent in C, unwired in Rust, Python simulator diverges (spec 09 14.7)",
+  "description": "Spec 09 14.7 rows R-09-142/143/144/145: listen-only random [30,60] s on boot; count unique nodes heard (dedup by EUI-64/short addr); delay random(0, min(300 s, nodes_heard*5 s)) before first announce/DIO/DIS. Python library is spec-faithful (python/src/lichen/timing/startup_delay.py, tests test_startup_delay.py:43,133,200,228, vectors packets-timing.json density_startup_delay) BUT python/src/lichen/sim/simulation/base.py:282-300 uses log1p(heard)*scale instead of the spec formula, exercised by TestDensityAwareStartup asserting log-not-linear (python/tests/sim/test_radio.py:1716+). Rust: constants only (rust/lichen-core/src/desync.rs:11-38 initial_startup_delay), no boot/announce-path wiring found. C/Zephyr: no implementation anywhere under lichen/ (rg clean). Related MAY (shorten listen to 30 s if channel idle 15 s) absent in all stacks - noted, not beaded. Fix: conform sim to spec formula or document divergence; wire constants into Rust node boot; implement in C puck/boot path; pin with packets-timing.json density_startup_delay consumers.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T08:07:08.747084923Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T08:07:08.747084923Z",
+  "labels": [
+    "python",
+    "rust",
+    "zephyr",
+    "tdma",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.55",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T08:07:08.905408574Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
