@@ -91,6 +91,7 @@ jobs:
     if: github.repository == 'MarkAtwood/project-LICHEN'
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/oscore-fork
 
       - name: Install Rust (if needed)
         run: |
