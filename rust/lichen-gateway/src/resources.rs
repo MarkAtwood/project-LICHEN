@@ -27,7 +27,7 @@
 
 use ciborium::Value;
 use lichen_link::keys::Seed;
-use schnorr48::{derive_keypair, sign, verify};
+use schnorr48::{derive_keypair, sign, verify, PrivateKey, PublicKey};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use std::{
@@ -40,6 +40,7 @@ use zeroize::Zeroizing;
 use crate::handoff::{HandoffRequest, NodeRegistry};
 use crate::slot;
 use crate::trust::SIGNATURE_LEN;
+use crate::tunnel_auth;
 
 // ─── CBOR map keys (short integers for constrained links) ────────────────────
 
@@ -781,6 +782,67 @@ impl SlotClaim {
         self.gateway_count = Some(gateway_count);
         self.ordinal = Some(ordinal);
         self
+    }
+
+    /// Encode and sign as a spec GCP-6.5 COSE_Sign1 envelope (l1qw.16.2.3).
+    ///
+    /// Mirrors Python `sign_slot_claim` (l1qw.16.1): payload integer keys
+    /// 1-7 over the shared `{1: -65537}` protected header, signature =
+    /// Schnorr48(privkey, SHA256(CBOR(Sig_structure))). Expiry (payload key
+    /// 4) comes from `timestamp`, which is REQUIRED — build with
+    /// [`SlotClaim::with_timestamp`]. `gateway_count` is a local allocation
+    /// parameter and is never serialized (GCP-6.5). Rust `SlotClaim` has no
+    /// allocation-mode field, so the payload is emitted interleaved (mode
+    /// 0); `with_federation` supplies the ordinal (key 7) when present.
+    pub fn encode_cose(
+        &self,
+        private: &PrivateKey,
+        public: &PublicKey,
+    ) -> Result<Vec<u8>, ResourceError> {
+        let expiry = self
+            .timestamp
+            .ok_or(ResourceError::MissingField("timestamp"))?;
+        let expiry =
+            u64::try_from(expiry).map_err(|_| ResourceError::InvalidFieldType("timestamp"))?;
+        // Fail closed like the Python constructor: slots must be strictly
+        // ascending (sorted + unique) or the envelope would sign a claim no
+        // verifier accepts.
+        for pair in self.slots.windows(2) {
+            if pair[0] >= pair[1] {
+                return Err(ResourceError::InvalidFieldType("slots"));
+            }
+        }
+        let payload = slot::SlotClaimPayload {
+            slots: self.slots.clone(),
+            superframe_epoch: self.superframe_id,
+            mode: slot::AllocationMode::Interleaved,
+            expiry,
+            gateway_iid: self.gateway_iid,
+            claim_seq: self.claim_sequence,
+            ordinal: self.ordinal.map(u64::from),
+        };
+        let payload_bytes = payload
+            .encode_canonical()
+            .map_err(|_| ResourceError::InvalidCbor)?;
+        let digest = payload
+            .cose_sig_digest()
+            .map_err(|_| ResourceError::InvalidCbor)?;
+        let signature = sign(private, public, &digest);
+        let malformed = || ResourceError::InvalidCbor;
+        let mut buf = vec![0u8; payload_bytes.len() + 80];
+        let len = {
+            let mut w = tunnel_auth::Writer::new(&mut buf);
+            w.byte(0x84).map_err(|_| malformed())?;
+            w.bstr(tunnel_auth::PROTECTED).map_err(|_| malformed())?;
+            w.byte(0xa1).map_err(|_| malformed())?;
+            w.byte(0x04).map_err(|_| malformed())?;
+            w.bstr(&self.gateway_iid).map_err(|_| malformed())?;
+            w.bstr(&payload_bytes).map_err(|_| malformed())?;
+            w.bstr(&signature).map_err(|_| malformed())?;
+            w.position()
+        };
+        buf.truncate(len);
+        Ok(buf)
     }
 
     /// Encode as CBOR for transmission (including signature if present).
@@ -2319,6 +2381,52 @@ mod tests {
         ));
         (base.with_extension("state"), base.with_extension("floor"))
     }
+
+    #[test]
+    fn encode_cose_roundtrips_through_from_cose_and_verifies() {
+        let (private, public) = derive_keypair(&Seed::new([0x5A; 32]));
+        let pubkey = *public.as_bytes();
+        let iid = crate::trust::iid_from_pubkey(&pubkey);
+        let claim = SlotClaim::new(iid, vec![4, 8, 15], 42, 1)
+            .with_timestamp()
+            .with_federation(3, 0);
+        let envelope = claim.encode_cose(&private, &public).unwrap();
+
+        // Field-level round-trip through the strict decoder (16.2.1).
+        let decoded = slot::RawSlotClaim::from_cose(&envelope, 60).unwrap();
+        assert_eq!(decoded.gateway_iid(), &iid);
+        assert_eq!(decoded.slots(), &[4, 8, 15]);
+        assert_eq!(decoded.superframe_id(), 42);
+        assert_eq!(decoded.claim_sequence(), 1);
+        assert_eq!(decoded.expiry(), claim.timestamp.unwrap() as u64);
+        assert_eq!(decoded.ordinal(), Some(0));
+
+        // End-to-end: the envelope verifies under the COSE signature form.
+        let mut verifier = slot::SlotClaimVerifier::new_ephemeral(16).unwrap();
+        verifier.verify(decoded, &pubkey, 42).unwrap();
+    }
+
+    #[test]
+    fn encode_cose_requires_timestamp() {
+        let (private, public) = derive_keypair(&Seed::new([0x5B; 32]));
+        let claim = SlotClaim::new([0x11; 8], vec![1], 42, 0);
+        assert!(matches!(
+            claim.encode_cose(&private, &public),
+            Err(ResourceError::MissingField("timestamp"))
+        ));
+    }
+
+    #[test]
+    fn encode_cose_rejects_unsorted_slots() {
+        let (private, public) = derive_keypair(&Seed::new([0x5C; 32]));
+        let mut claim = SlotClaim::new([0x11; 8], vec![3, 1], 42, 0);
+        claim.timestamp = Some(1_700_000_000);
+        assert!(matches!(
+            claim.encode_cose(&private, &public),
+            Err(ResourceError::InvalidFieldType("slots"))
+        ));
+    }
+
     use crate::handoff::HandoffResponse;
 
     #[test]
