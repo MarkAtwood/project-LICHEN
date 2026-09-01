@@ -6,4 +6,5 @@ zephyr_library_sources(
   lichen_diag.c
   asymmetric_link.c
   rf_path_asymmetry.c
+  pps_monitor.c
 )
