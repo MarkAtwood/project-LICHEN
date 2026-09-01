@@ -43,13 +43,11 @@ for SECTION in $SECTIONS; do
     FLAGGED="$REPO_ROOT/docs/spec-coverage/$SECNAME-flagged.md"
     [ -f "$MATRIX" ] && { echo "skip $SECNAME (already swept)"; continue; }
 
-    CREDITS=$(remaining_credits)
-    if [ "$CREDITS" -lt "$FLOOR" ]; then
-        echo "credit floor hit ($CREDITS < $FLOOR — topup fires at $15) — pausing sweep. Rerun to resume."
-        exit 3
-    fi
+    # No credit gating: auto-topup keeps the balance healthy, and killing a
+    # mid-extraction session wastes its paid work and forces a full-price
+    # rerun (the 2026-08-31 five-section failure). Burn is logged, not gated.
 
-    echo "── sweeping $SECTION (credits: $CREDITS) ──"
+    echo "── sweeping $SECTION ──"
     bash "$REPO_ROOT/scripts/spec-sweep.sh" "$SECTION" "$FLASH_MODEL" || { echo "sweep $SECNAME failed"; continue; }
     [ -f "$MATRIX" ] || { echo "no matrix produced for $SECNAME"; continue; }
 
