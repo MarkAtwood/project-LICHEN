@@ -6,6 +6,7 @@
 zephyr_library()
 
 zephyr_library_sources(
+  sf_assignment.c
   trickle.c
   messages.c
   rpl_dis.c
