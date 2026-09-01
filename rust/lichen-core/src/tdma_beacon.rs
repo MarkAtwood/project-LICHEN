@@ -302,6 +302,25 @@ impl core::fmt::Display for SlotMapError {
     }
 }
 
+/// Verify gate: fail-closed beacon signature check.
+///
+/// Extracts signed_data and signature_bytes from the beacon, then delegates
+/// to the caller-provided verify function (which performs the Schnorr48
+/// verification against the sender's registered pubkey).
+///
+/// Returns false if the beacon is too short or the verify function rejects.
+/// This is the primary safety invariant per ccp_beacon_sig_gate.json:
+/// an invalid signature MUST reject the frame before DIO processing.
+pub fn verify_gate(beacon: &[u8], verify_fn: impl Fn(&[u8], &[u8]) -> bool) -> bool {
+    let Some(signed) = signed_data(beacon) else {
+        return false;
+    };
+    let Some(sig) = signature_bytes(beacon) else {
+        return false;
+    };
+    verify_fn(signed, sig)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -470,5 +489,42 @@ mod tests {
         let cbor = [0x81, 0x01, 0xFF];
         let err = parse_slot_map(&cbor, 16).unwrap_err();
         assert_eq!(err, SlotMapError::TrailingBytes);
+    }
+    fn make_beacon(signed_byte: u8, sig_byte: u8) -> Vec<u8> {
+        let mut b = vec![0u8; MIN_BEACON_SIZE];
+        b[0] = signed_byte;
+        let last = b.len() - 1;
+        b[last] = sig_byte;
+        b
+    }
+
+    #[test]
+    fn verify_gate_valid_signature() {
+        let beacon = make_beacon(0xAB, 0xCD);
+        assert!(verify_gate(&beacon, |signed, sig| {
+            signed[0] == 0xAB && sig[sig.len() - 1] == 0xCD
+        }));
+    }
+
+    #[test]
+    fn verify_gate_rejects_when_callback_fails() {
+        let beacon = make_beacon(0xAB, 0xCD);
+        assert!(!verify_gate(&beacon, |_, _| false));
+    }
+
+    #[test]
+    fn verify_gate_too_short_fails_closed() {
+        let short = vec![0u8; MIN_BEACON_SIZE - 1];
+        assert!(!verify_gate(&short, |_, _| true));
+        assert!(!verify_gate(&[], |_, _| true));
+    }
+
+    #[test]
+    fn verify_gate_signed_data_and_sig_are_disjoint() {
+        let beacon = make_beacon(0xAB, 0xCD);
+        let signed = signed_data(&beacon).unwrap();
+        let sig = signature_bytes(&beacon).unwrap();
+        assert_eq!(signed.len(), MIN_BEACON_SIZE - SIG_SIZE);
+        assert_eq!(sig.len(), SIG_SIZE);
     }
 }
