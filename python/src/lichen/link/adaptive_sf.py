@@ -13,7 +13,7 @@ Normative pseudocode (spec §3.5):
         nbr.samples = nbr.samples + 1
     select_tx_sf(nbr, density, utilization):
         sf = nbr.assigned_sf or 10
-        if density > 8 or utilization > 150:
+        if density > 10 or utilization > 150:
             sf = min(12, sf + 2)
         if nbr.ema_snr > 8 and density < 5:
             sf = max(7, sf - 1)
@@ -135,7 +135,7 @@ def select_tx_sf(
         sf = nbr.baseline_sf
     # Tier 2: pseudocode adjustments (explicit mode)
     explicit = True  # select_tx_sf is always explicit per spec pseudocode
-    if (explicit and density > 8) or utilization > 150:
+    if (explicit and density > 10) or utilization > 150:
         sf = min(12, sf + 2)
     if explicit and nbr.ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)
