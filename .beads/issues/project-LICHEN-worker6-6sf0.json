@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-6sf0",
+  "title": "b7z9.37.1.2(c-ii): runtime test for root-sig DIO option (needs DIO-option emission seam)",
+  "description": "Coverage follow-up from b7z9.37.1.2(c) (worker-6): the receiver wiring for OPT_ROOT_DIO_SIGNATURE (0x17) landed in receive.rs (decode via DecodedRootSig, verify structural+signature against the link-authenticated sender pubkey, RootSeqCache consumption post-verification, fail-closed RplRejected on any failure, absent-option = normal L679 processing). The runtime test could not land: root.send_dio() builds the DIO from router state (no option-injection seam), and the plaintext Stack::send_ipv6_uncompressed_to path bypasses the DIO admission gate entirely. Needed: an emission seam for authenticated DIOs carrying arbitrary options (e.g. build_authenticated_dio accepting extra options, or a raw-frame injection helper like the C routing_dispatch tests use), then port the tampered-option test from the abandoned worker-6 draft (vector oracle COSE bytes with one flipped byte, assert non-delivery).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:42:01.009168206Z",
+  "created_by": "opencode-worker-6",
+  "updated_at": "2026-09-01T03:42:01.009168206Z",
+  "labels": [
+    "rust",
+    "rpl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-6sf0",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.1.2.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T03:42:01.135064275Z",
+      "created_by": "opencode-worker-6",
+      "metadata": "{}"
+    }
+  ]
+}
