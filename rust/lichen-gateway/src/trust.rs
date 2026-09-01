@@ -737,13 +737,17 @@ impl TrustStore {
         configured_capacity: usize,
     ) -> Result<Self, TrustError> {
         validate_store_capacity(configured_capacity)?;
-        let mut file = File::open(path).map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                TrustError::MissingStore
-            } else {
-                TrustError::StorageIo(error.to_string())
-            }
-        })?;
+        let mut file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(path)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    TrustError::MissingStore
+                } else {
+                    TrustError::StorageIo(error.to_string())
+                }
+            })?;
         let max_len = trust_store_encoded_len(configured_capacity);
         let mut bytes = Vec::new();
         Read::by_ref(&mut file)
@@ -842,6 +846,7 @@ impl TrustStore {
             let mut temp = OpenOptions::new()
                 .write(true)
                 .create_new(true)
+                .custom_flags(libc::O_NOFOLLOW)
                 .open(&temp_path)
                 .map_err(|error| TrustError::StorageIo(error.to_string()))?;
             temp.write_all(&payload)
@@ -890,6 +895,7 @@ impl TrustStore {
             let mut file = OpenOptions::new()
                 .write(true)
                 .create_new(true)
+                .custom_flags(libc::O_NOFOLLOW)
                 .open(&temporary)
                 .map_err(|error| TrustError::StorageIo(error.to_string()))?;
             file.write_all(&self.generation.to_be_bytes())
