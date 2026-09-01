@@ -7,7 +7,7 @@ use std::vec::Vec;
 
 use lichen_hal::{NonVolatile, Radio};
 use lichen_ipv6::Addr;
-use lichen_oscore::{Context, SenderStateStore};
+use lichen_oscore::{Context, ContextStateStore};
 
 use crate::secure::{
     secure_datagram_from_received, ReceivedSecureDatagram, RequestCorrelation, SecureError,
@@ -21,7 +21,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Atomically register a newly established OSCORE context.
     ///
     /// `peer_iid` is the authoritative IPv6 identity binding for the context.
-    pub fn register_fresh_context<T: SenderStateStore>(
+    pub fn register_fresh_context<T: ContextStateStore>(
         &mut self,
         peer_iid: [u8; 8],
         context: Context,
@@ -33,7 +33,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Restore authoritative sender state for an existing OSCORE context.
     ///
     /// `peer_iid` must match the IPv6 identity originally bound to the context.
-    pub fn restore_context<T: SenderStateStore>(
+    pub fn restore_context<T: ContextStateStore>(
         &mut self,
         peer_iid: [u8; 8],
         context: Context,
@@ -43,7 +43,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     }
 
     /// Send OSCORE-protected CoAP through the single RPL/link owner.
-    pub async fn send_secure_get<T: SenderStateStore>(
+    pub async fn send_secure_get<T: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],
@@ -130,7 +130,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     }
 
     /// Protect and route a response bound to a decrypted request.
-    pub async fn send_secure_response<T: SenderStateStore>(
+    pub async fn send_secure_response<T: ContextStateStore>(
         &mut self,
         dst: &Addr,
         peer_iid: &[u8; 8],

@@ -502,7 +502,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             // COSE option when present. Absence (or a missing trust pin or
             // wall clock) falls back to link-layer baseline per L679 — DIOs
             // MUST NOT be rejected for missing capability. Forged, tampered,
-            // or replayed signatures ARE rejected.
+            // or replayed signatures ARE rejected. Verification lives in
+            // verify_dio_root_signature: it binds the signature to the
+            // TOFU-pinned root key (superseding the link-sender-pubkey-only
+            // inline variant) and runs the DIO-header cross-checks BEFORE
+            // mutating the root-seq cache, so a mismatched carrier cannot
+            // burn the root's current sequence.
             let dio_fields = DioFields {
                 dodag_id: Some(dio.dodag_id),
                 instance: Some(dio.rpl_instance_id),

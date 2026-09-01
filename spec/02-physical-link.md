@@ -90,9 +90,9 @@ Thresholds:
 | SF | Sensitivity | Upgrade (SHOULD decrease SF) | Downgrade (MUST increase SF) |
 |----|-------------|------------------------------|------------------------------|
 | 7  | -123 dBm   | N/A                          | SNR < 0 or loss > 0.25       |
-| 9  | -129 dBm   | density < 5 AND snr_ema > 8 (low-density only) | SNR < 0 or density > 8       |
+| 9  | -129 dBm   | density < 5 AND snr_ema > 8 (low-density only) | SNR < 0 or density > 10       |
 | 10 | -132 dBm   | **DEFAULT** (moderate density 5-20) | SNR < 0 or load_factor > 0.8 |
-| 11 | -134 dBm   | N/A                          | density > 8 or snr_ema < 0 or load > 0.8 |
+| 11 | -134 dBm   | N/A                          | density > 10 or snr_ema < 0 or load > 0.8 |
 | 12 | -137 dBm   | N/A                          | density > 20 or snr_ema < -5 |
 
 Channel utilization (`utilization`) is a uint8 on 0..255 representing
@@ -112,7 +112,7 @@ update_neighbor(nbr, snr, loss):
     nbr.samples = nbr.samples + 1
 select_tx_sf(nbr, density, utilization):
     sf = nbr.assigned_sf or 10
-    if density > 8 or utilization > 150:
+    if density > 10 or utilization > 150:
         sf = min(12, sf + 2)
     if nbr.ema_snr > 8 and density < 5:
         sf = max(7, sf - 1)

@@ -8,7 +8,7 @@
 The Coordinated Capacity Protocol (CCP) defines mechanisms for coordinated capacity management in LICHEN LoRa meshes. This includes TDMA slot assignment, channel agility via select_channel with density-aware fallback, adaptive spreading factor selection via adaptive_sf_select (incorporating EMA-smoothed SNR and load_factor), time synchronization via now(), CH0 control channel rules, signed rx_channel for CCP-9 da2q rendezvous, density/load rules, capability signaling in DIOs, the consolidated CCP-15 interference mitigation algorithm (Section 2a.10: CCA, frequency agility, density-aware SF, TDMA coordination), and desynchronization recovery.
 
 All implementations MUST produce identical behavior to test vectors in `test/vectors/ccp16.json`, `ccp15.json`, `ccp-interference.json`, `ccp_tdma.json`, `link_frame.json`, and `l2_payload.json`:
-- TDMA beacon byte layout, CDDL, SCHC rule 0x08, slot/hash, SFN wrap, join flows, epoch/num_slots per 2a.2
+- TDMA beacon byte layout, CDDL, slot/hash, SFN wrap, join flows, epoch/num_slots per 2a.2
 - vectors for CCP-16/14 slot, SF, channel, tx_allowed, Multi-RX, capacity metrics (independent oracle: FNV-1a + SX126x airtime + multi-channel sim).
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
@@ -17,7 +17,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 1. Abstract
 2. 2a.1. Overview
-3. 2a.2. TDMA Beacon Format, Slots, Hash Selection, and Join (SCHC 0x08, CDDL, byte layout)
+3. 2a.2. TDMA Beacon Format, Slots, Hash Selection, and Join (CDDL, byte layout)
 4. 2a.3. Channel Agility (select_channel, now())
 5. 2a.4. Time Synchronization
 6. 2a.5. Multi-Root Beacon Conflict Resolution
@@ -32,13 +32,13 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## Overview
 
-LICHEN networks operate under severe bandwidth and duty-cycle constraints. CCP coordinates access to the shared medium using hash-derived TDMA slots synchronized to a network epoch, density-aware adaptive SF selection, multi-channel operation (CH0 dedicated to control per SCHC-compressed beacons and RPL DIOs), deterministic channel agility, time synchronization, signed rx_channel announcements for rendezvous, per-neighbor EMA for RF metrics, and load/density signaling. The root advertises epoch and num_slots. Nodes suppress transmission outside assigned slots. All algorithms are deterministic.
+LICHEN networks operate under severe bandwidth and duty-cycle constraints. CCP coordinates access to the shared medium using hash-derived TDMA slots synchronized to a network epoch, density-aware adaptive SF selection, multi-channel operation (CH0 dedicated to control traffic including TDMA beacons and RPL DIOs), deterministic channel agility, time synchronization, signed rx_channel announcements for rendezvous, per-neighbor EMA for RF metrics, and load/density signaling. The root advertises epoch and num_slots. Nodes suppress transmission outside assigned slots. All algorithms are deterministic.
 
 ## TDMA Frame Structure, Slot Assignment, now(), and Desync Recovery
 
 ## 2a.2. TDMA Slots and Hash Selection
 
-The root advertises `epoch` (u32) and `num_slots` (default 8) via SCHC Rule ID 0x08 (TDMA_BEACON) on CH0 (see draft-lichen-schc-lora-00 and appendix-schc.md). 
+The root advertises `epoch` (u32) and `num_slots` (default 8) via a fixed-format uncompressed TDMA beacon on CH0. The beacon is not SCHC-compressed (it is not an IPv6/UDP packet; SCHC would save no bytes on the variable fields). 
 
 **TDMA Beacon Format (exact, normative for interop):**
 
@@ -282,7 +282,7 @@ The desync recovery FSM has three states:
 | MAX_STARTUP_DELAY_S | 300 | Maximum startup delay |
 | BEACON_TIMEOUT_SUPERFRAMES | 3 | Consecutive missed beacons before DESYNCED |
 | REJOIN_TIMEOUT_SUPERFRAMES | 10 | Maximum recovery attempts before rejoin |
-| GUARD_PPM | 250 | Maximum tolerable clock drift (parts per million) |
+| GUARD_PPM | 5000 | Maximum tolerable clock drift (parts per million). Conservative default for low-cost LoRa oscillators; may be tightened in future hardware revisions with TCXO-grade references. |
 
 ### 2a.6.4. Interaction with Time Provider
 
@@ -393,7 +393,7 @@ Procedure Now():
    2. All subtractions, comparisons, and MOD operations MUST use unsigned 32-bit modular arithmetic (modulo 2^32) to handle wraparound correctly per test vectors.
 
 Procedure SelectChannel(EUI64, Epoch, Density, NChannels):
-   1. IF Density > 8 THEN RETURN 0
+   1. IF Density > 10 THEN RETURN 0
    2. IF NChannels <= 1 THEN RETURN 0
    3. Data = CONCAT(EUI64 as BE bytes, Epoch as LE u32 bytes)
    4. Hash = FNV1A32(Data)  // basis 0x811c9dc5; matches hash_32.json and ccp16.json vectors
@@ -410,15 +410,15 @@ SF10 is the REQUIRED baseline for moderate density (5-20 nodes). Density-aware a
 |----|-------------|----------------------------|----------------------------|
 | 7  | -123 dBm   | N/A                        | SNR < 0 OR loss > 0.25    |
 | 8  | -126 dBm   | Density < 5 AND SNR_EMA > 8 | SNR < 0 OR loss > 0.25    |
-| 9  | -129 dBm   | Density < 5 AND SNR_EMA > 8 | SNR < 0 OR Density > 8    |
+| 9  | -129 dBm   | Density < 5 AND SNR_EMA > 8 | SNR < 0 OR Density > 10    |
 | 10 | -132 dBm   | DEFAULT (moderate density) | SNR < 0 OR load_factor > 0.8 |
-| 11 | -134 dBm   | N/A                        | Density > 8 OR SNR_EMA < 0 OR load > 0.8 |
+| 11 | -134 dBm   | N/A                        | Density > 10 OR SNR_EMA < 0 OR load > 0.8 |
 | 12 | -137 dBm   | N/A                        | Density > 20 OR SNR_EMA < -5 |
 
 Procedure AdaptiveSFSelect(AssignedSF, Neighbor, Density, Utilization, LoadFactor):
    1. SF = AssignedSF
    2. IF SF absent THEN SF = 10
-   3. IF (Density > 8) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
+   3. IF (Density > 10) OR (Utilization > 150) THEN SF = MIN(12, SF + 2)
    4. IF (Neighbor.EMA_SNR > 8) AND (Density < 5) THEN SF = MAX(7, SF - 1)
    5. IF (Neighbor.EMA_Loss > 0.25) OR (Utilization > 200) OR (LoadFactor > 0.8) THEN
           SF = MIN(12, SF + 1)
@@ -428,7 +428,7 @@ Procedure AdaptiveSFSelect(AssignedSF, Neighbor, Density, Utilization, LoadFacto
 After step 6, the Downgrade (MUST increase SF) column of the thresholds table above applies as minimum-SF floors, in this order:
    a. IF Neighbor.EMA_SNR < -5 THEN SF = 12
    b. IF Neighbor.EMA_SNR < 0 THEN SF = MAX(11, SF)
-   c. IF Density > 8 THEN SF = MAX(11, SF)
+   c. IF Density > 10 THEN SF = MAX(11, SF)
    d. IF LoadFactor > 0.8 THEN SF = MAX(11, SF)
 
 EMA_Update(Avg, Sample) = Avg + ((Sample - Avg) right-shift 2). Update per-neighbor state on every RX. Integrate with RPL DIO capability signaling. No dead code.
@@ -447,8 +447,8 @@ The duty region is the `duty_region` value of the node's configured operating cl
 
 | Density | Condition | Region 0 (EU, AU/NZ) | Region 1 (US/CA) |
 |---------|-----------|----------------------|------------------|
-| Dense   | density > 8  | 5 permille (0.5%)  | 10 permille (1%) |
-| Moderate| 3 <= density <= 8 | 10 permille (1%) | 20 permille (2%) |
+| Dense   | density > 10  | 5 permille (0.5%)  | 10 permille (1%) |
+| Moderate| 3 <= density <= 10 | 10 permille (1%) | 20 permille (2%) |
 | Sparse  | density < 3  | 20 permille (2%)   | 50 permille (5%) |
 
 A node MUST NOT exceed the budget in force for its reported density, and MUST use the most conservative (lowest) applicable value when the operating class is unknown.
@@ -456,7 +456,7 @@ A node MUST NOT exceed the budget in force for its reported density, and MUST us
 ### 2a.9.2. Pure Pseudocode Definitions (IETF-style, language agnostic)
 
 Procedure AdaptiveDutyPermille(Density, Region):
-   1. IF Density > 8 THEN
+   1. IF Density > 10 THEN
          RETURN Region == 0 ? 5 : 10
    2. IF Density < 3 THEN
          RETURN Region == 0 ? 20 : 50
@@ -475,7 +475,7 @@ This section consolidates the CCP-15 interference mitigation algorithm. Three co
 2. **Density-based adaptive SF selection** — the AdaptiveSFSelect procedure and threshold table of Section 2a.8, fed by a locally estimated density;
 3. **TDMA coordination** — hash-derived slot admission with slot_map and guard enforcement (Section 2a.2), which removes contention the other two mechanisms would otherwise have to tolerate.
 
-All three mechanisms consume the same density estimate (Section 2a.10.3): when density exceeds DENSITY_HIGH (8), SelectChannel returns CH0, AdaptiveSFSelect floors SF at 11, and the 2a.9 duty budget tightens simultaneously. Every implementation MUST reproduce the results of `test/vectors/ccp15.json` (categories `cca`, `frequency_agility`, `interference`, `adaptive_sf`, `tdma`), `test/vectors/ccp-interference.json` (interference score), `test/vectors/ccp_ema_update_integer.json` (EMA), and `test/vectors/ccp16.json` with `ccp16_utilization.json` (SF and channel selection) exactly.
+All three mechanisms consume the same density estimate (Section 2a.10.3): when density exceeds DENSITY_HIGH (10), SelectChannel returns CH0, AdaptiveSFSelect floors SF at 11, and the 2a.9 duty budget tightens simultaneously. Every implementation MUST reproduce the results of `test/vectors/ccp15.json` (categories `cca`, `frequency_agility`, `interference`, `adaptive_sf`, `tdma`), `test/vectors/ccp-interference.json` (interference score), `test/vectors/ccp_ema_update_integer.json` (EMA), and `test/vectors/ccp16.json` with `ccp16_utilization.json` (SF and channel selection) exactly.
 
 ### 2a.10.1. Inputs and Outputs
 
@@ -590,7 +590,7 @@ Procedure MitigateInterference(Op):
    4. IF local time is within GUARD (50 ms) of the slot end THEN
           RETURN (defer)                            // MUST NOT transmit in guard (2a.2)
    5. Channel = ChannelPriorityChain(Op.NodeEUI64, Op.Epoch, Op.Density, Op.NChannels)
-                                                    // 2a.3.1: Density > 8 yields CH0
+                                                    // 2a.3.1: Density > 10 yields CH0
    6. ChannelBusy = CAD(Channel)
    7. (Result, CcaState) = CcaUpdate(CcaState, ChannelBusy)
    8. IF Result == CAD_BUSY THEN
@@ -615,7 +615,7 @@ Normative statements:
 - A node MUST perform CCA before every scheduled transmission and MUST fail closed (no transmission) on RETRY_EXHAUSTED.
 - A node MUST NOT transmit outside its assigned slot_map or during the trailing 50 ms guard (2a.2).
 - Slot, SFN, and channel arithmetic MUST use unsigned 32-bit modular arithmetic (2a.2, 2a.4).
-- When Density > DENSITY_HIGH (8), a node MUST use CH0 for data (2a.3.1) and MUST select SF >= 11 (2a.8).
+- When Density > DENSITY_HIGH (10), a node MUST use CH0 for data (2a.3.1) and MUST select SF >= 11 (2a.8).
 - A node MUST listen continuously on CH0 (2a.3) even while using a hash-selected data channel.
 - SF selection MUST apply the 2a.8 threshold-table floors after the AdaptiveSFSelect steps; the Utilization > 200 path MUST return (12, false).
 - After RETRY_EXHAUSTED a node SHOULD defer until its next assigned slot and MAY request an epoch rollover; a node MUST NOT change channels by any over-the-air-negotiated mechanism (2a.7).
@@ -635,7 +635,7 @@ Parameters marked **proposed** are not yet present in implementation constant fi
 | SF_BASELINE | 10 | existing | 2a.8; 02-physical-link.md Sec. 3.5 |
 | SF_MIN / SF_MAX | 7 / 12 | existing | 2a.8 |
 | DENSITY_LOW | 5 | existing | 2a.8; `LICHEN_RF_DENSITY_LOW`, rf_health.rs |
-| DENSITY_HIGH | 8 | existing | 2a.3.1, 2a.9; `LICHEN_RF_DENSITY_HIGH` |
+| DENSITY_HIGH | 10 | existing | 2a.3.1, 2a.9; `LICHEN_RF_DENSITY_HIGH` |
 | DENSITY_CRITICAL | 20 | existing | 2a.8; `LICHEN_RF_DENSITY_CRITICAL` |
 | SNR_GOOD | 8 dB | existing | 2a.8; `LICHEN_RF_SNR_GOOD` |
 | SNR_POOR | 0 dB | existing | 2a.8; `LICHEN_RF_SNR_POOR` |
@@ -682,7 +682,7 @@ identifier, breaking interoperability.
 ## Implementation Status
 
 - Python simulator, Rust gateway, Zephyr `lichen/subsys/lichen` validate against `test/vectors/ccp16.json`, `ccp_tdma.json`, `link_frame.json`, `l2_payload.json`.
-- Kconfig options for CCP16, TDMA_SLOTS, integration with RPL/SCHC/TDMA complete. SCHC Rule 0x08 for TDMA beacon implemented.
+- Kconfig options for CCP16, TDMA_SLOTS, integration with RPL/SCHC/TDMA complete. TDMA beacon uses fixed-format uncompressed header (not SCHC).
 - Adaptive SF, desync FSM, channel plans, Multi-RX gateway support implemented and tested.
 - All codereview passes closed. Capacity gains verified in simulation per independent oracles.
 
@@ -698,7 +698,7 @@ identifier, breaking interoperability.
 - `spec/drafts/draft-lichen-schc-lora-00.md`
 - `spec/appendix-design-rationale.md`
 - `spec/appendix-ccp12-hopping.md` (CCP-16/CCP-12 channel selection; FNV-1a32 definition)
-- `spec/appendix-schc.md` (Rule 0x08=TDMA_BEACON)
+- `spec/appendix-schc.md` (SCHC rule table; TDMA beacon is not SCHC-compressed)
 - `spec/02-physical-link.md` Section 3.5 (adaptive SF; TX-time-based utilization measurement)
 - `lichen/subsys/lichen/link*` (for `lichen_link_set_slot()`, `tdma_tx_allowed()`)
 - `lichen/subsys/lichen/link/include/lichen/rf_health.h` and `rust/lichen-core/src/rf_health.rs` (CCP-15 constant sources)

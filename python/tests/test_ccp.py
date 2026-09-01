@@ -366,6 +366,8 @@ def test_ccp16_load_balance_channel_selection(name: str, vector: dict) -> None:
     n_channels = inp["n_channels"]
 
     channel = select_channel(eui64, epoch, density, n_channels)
+    # Resolution: kept HEAD's single-f-string parenthesized form; beads-worker-5
+    # made the same line-wrap change but with split f-strings (same intent).
     assert channel == out["channel"], (
         f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
     )
@@ -455,6 +457,8 @@ def test_ccp16_load_balance_synchronized_hop(name: str, vector: dict) -> None:
         n_channels=inp.get("n_channels", 8),
     )
 
+    # Resolution: kept HEAD's form; beads-worker-5's version was identical
+    # except for stray blank lines inside the parens (editing artifact).
     assert channel == out["channel"], (
         f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
     )
@@ -482,6 +486,8 @@ def test_ccp16_load_balance_vector_coverage():
 
     # HEAD's multi-line assert formatting, plus beads-worker-7's new
     # TestPeerDensityTracker class below (both intents compatible).
+    # beads-worker-5 applied the identical parenthesization to these asserts,
+    # so no content from its side is lost here.
     assert category_counts.get("channel_selection", 0) >= 5, (
         "Need at least 5 channel selection vectors")
     assert category_counts.get("tdma_slot", 0) >= 5, (

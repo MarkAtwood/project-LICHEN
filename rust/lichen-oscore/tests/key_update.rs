@@ -6,7 +6,7 @@ use std::fs;
 
 use lichen_oscore::{
     Context, ContextId, KeyUpdateContext, KeyUpdateError, KeyUpdateMaterial, KeyUpdateState,
-    KeyUpdateStore, SenderSequenceState, SenderStateStore,
+    KeyUpdateStore, SenderSequenceState, ContextStateStore, RecipientReplayState,
 };
 use serde::Deserialize;
 
@@ -48,14 +48,14 @@ struct AtomicStore {
     fail: bool,
 }
 
-impl SenderStateStore for AtomicStore {
+impl ContextStateStore for AtomicStore {
     type Error = StoreError;
 
-    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self.senders.get(context_id).copied())
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         context_id: &ContextId,
         expected: Option<SenderSequenceState>,
@@ -70,6 +70,9 @@ impl SenderStateStore for AtomicStore {
         self.senders.insert(*context_id, next);
         Ok(true)
     }
+
+    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
+    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
 }
 
 impl KeyUpdateStore for AtomicStore {
