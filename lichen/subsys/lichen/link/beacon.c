@@ -122,3 +122,81 @@ const uint8_t *lichen_beacon_cbor_options(const uint8_t *beacon, size_t len,
 	*options_len = len - LICHEN_BEACON_MIN_SIZE;
 	return &beacon[LICHEN_BEACON_HEADER_SIZE];
 }
+
+enum lichen_slot_map_status
+lichen_beacon_parse_slot_map(const uint8_t *cbor, size_t cbor_len,
+			     uint8_t num_slots, uint8_t *out, size_t out_cap,
+			     size_t *out_len)
+{
+	size_t pos = 0;
+	size_t count = 0;
+	uint8_t prev = 0;
+	bool have_prev = false;
+
+	if (out_len == NULL) {
+		return LICHEN_SLOT_MAP_TRUNCATED;
+	}
+	if (cbor == NULL || cbor_len == 0) {
+		*out_len = 0;
+		return LICHEN_SLOT_MAP_EMPTY;
+	}
+	if (out == NULL) {
+		return LICHEN_SLOT_MAP_TRUNCATED;
+	}
+
+	uint8_t first = cbor[pos];
+	pos++;
+	size_t len;
+	if (first >= 0x80u && first <= 0x97u) {
+		len = (size_t)(first - 0x80u);
+	} else if (first == 0x98u) {
+		if (pos >= cbor_len) {
+			return LICHEN_SLOT_MAP_TRUNCATED;
+		}
+		len = (size_t)cbor[pos];
+		pos++;
+	} else {
+		return LICHEN_SLOT_MAP_NOT_AN_ARRAY;
+	}
+	if (len > 64u) {
+		return LICHEN_SLOT_MAP_TOO_MANY_SLOTS;
+	}
+
+	while (count < len) {
+		if (pos >= cbor_len) {
+			return LICHEN_SLOT_MAP_TRUNCATED;
+		}
+		uint8_t byte = cbor[pos];
+		pos++;
+		uint8_t slot;
+		if (byte <= 0x17u) {
+			slot = byte;
+		} else if (byte == 0x18u) {
+			if (pos >= cbor_len) {
+				return LICHEN_SLOT_MAP_TRUNCATED;
+			}
+			slot = cbor[pos];
+			pos++;
+		} else {
+			return LICHEN_SLOT_MAP_INVALID_ENCODING;
+		}
+		if (slot >= num_slots) {
+			return LICHEN_SLOT_MAP_OUT_OF_BOUNDS;
+		}
+		if (have_prev && slot <= prev) {
+			return LICHEN_SLOT_MAP_NOT_SORTED;
+		}
+		if (count >= out_cap) {
+			return LICHEN_SLOT_MAP_TOO_MANY_SLOTS;
+		}
+		out[count] = slot;
+		count++;
+		prev = slot;
+		have_prev = true;
+	}
+	if (pos != cbor_len) {
+		return LICHEN_SLOT_MAP_TRAILING_BYTES;
+	}
+	*out_len = count;
+	return LICHEN_SLOT_MAP_OK;
+}
