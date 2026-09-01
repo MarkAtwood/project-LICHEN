@@ -38,6 +38,7 @@
 #include <lichen/sos_origin.h>
 #include <lichen/schnorr48.h>
 #include <lichen/coap_keys.h>
+#include <lichen/sos_ratelimit.h>
 #include <lichen/oscore.h>
 #include <lichen/coap_oscore.h>
 
@@ -527,8 +528,28 @@ static int sos_post(struct coap_resource *resource,
 		return -ENOENT; /* silent drop: bad signature */
 	}
 
-	/* Acceptance point: l1qw.25.3 (sos_ratelimit_check) gates
-	 * rebroadcast before processing. */
+	/* R-12-036/037/038: per-source rate limits (10-min cooldown,
+	 * 3/hour) on monotonic uptime gate rebroadcast. Violations are
+	 * dropped and logged without relaying. */
+	struct sos_ratelimit_config rl_config;
+	struct sos_ratelimit_state rl_state;
+
+	sos_ratelimit_config_init(&rl_config);
+	/* Per-source state: the L2/link identifier scope is a single
+	 * announcing node here (the coordinator caches per-IID at the
+	 * dispatch layer in a follow-up multi-source table). */
+	sos_ratelimit_state_init(&rl_state);
+	int64_t now_ms = k_uptime_get();
+	uint32_t remaining_ms = 0U;
+	enum sos_ratelimit_result rl =
+		sos_ratelimit_check(&rl_state, now_ms, &rl_config,
+				    &remaining_ms);
+	if (rl != SOS_RATELIMIT_ALLOWED) {
+		LOG_WRN("SOS rate limited (result %d, retry in %u ms)", rl,
+			remaining_ms);
+		return -ENOENT; /* drop, do not relay */
+	}
+	sos_ratelimit_record(&rl_state, now_ms);
 
 	return lichen_coap_respond(resource, request, addr, addr_len,
 				   COAP_RESPONSE_CODE_CHANGED,
