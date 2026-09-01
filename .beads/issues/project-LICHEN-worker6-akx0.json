@@ -1,0 +1,18 @@
+{
+  "id": "project-LICHEN-worker6-akx0",
+  "title": "c0sv (tombstone): three_rpl_stacks fixture reconciled — 294/294 green (commit e75754a0cf)",
+  "description": "TRACKER REPAIR: the bead project-LICHEN-worker6-c0sv (three_rpl_stacks fixture reconciliation) was LOST from the shared store by the bd8h write-loss pattern after the fix was committed. Resolution recorded here: root cause was NOT admission or TOFU — the shared broadcast medium queues frames per-receiver in transmission order, and after the ehcn option-A re-target the RELAY's solicited-DIS multicast DIO response is queued at ROOT ahead of the relay's DAO; root (provision_root) rejects DIOs, so the fixture popped RplRejected where it expected Dao(Applied). Fix (fixture only): drain root's queued RplRejected after the DIS exchange; drain stale frames before the DIS/DAO exchange. Committed as e75754a0cf on beads-worker-7. Verification: cargo test -p lichen-node --features std --lib 294/294 green, fmt clean. No production change, no assertion weakening.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T13:35:52.407853196Z",
+  "created_by": "opencode-worker-7",
+  "updated_at": "2026-09-01T13:35:59.648641556Z",
+  "closed_at": "2026-09-01T13:35:59.648641556Z",
+  "close_reason": "Tombstone for the lost c0sv record: work complete and committed (e75754a0cf on beads-worker-7). See description.",
+  "labels": [
+    "rust",
+    "bd8h-tombstone"
+  ]
+}
