@@ -6,6 +6,25 @@ stage or commit it. You MAY edit only `docs/spec-coverage.md` and file beads.
 
 INPUT: the spec section file given to you (e.g. spec/05-routing.md).
 
+## Step 0 — Check adjudicated decisions
+
+Before starting the sweep, read `spec/decisions.jsonl`. Each line is a
+JSON object recording a human-adjudicated design decision. For each decision
+whose `specs` array includes the section you are sweeping:
+
+1. Run the `verify.grep` check (if present): the pattern MUST match in the
+   specified file. If it doesn't, the spec has regressed — **fix the spec
+   file to match the decision** before proceeding with the sweep.
+2. Run the `verify.grep_absent` check (if present): the pattern MUST NOT
+   appear in the specified file. If it does, the spec has regressed — fix it.
+3. If a decision's `verify` target is a source file (not a spec file), verify
+   it but do not modify source — file a bead if it has regressed.
+
+Decisions in this file are FINAL. Do not re-adjudicate them, question them,
+or file beads that contradict them. If a requirement in the spec text
+conflicts with a recorded decision, the decision wins and the spec text
+should be updated to match.
+
 ## Step 1 — Extract
 
 Walk the section top to bottom. Extract every normative requirement
