@@ -138,6 +138,80 @@ pub const fn estimate_density(neighbor_count: u8, loss_permille: u16, rssi_ema_d
     }
 }
 
+/// Rolling-window TX-time BusyPercent sampler (spec R-02a-131 / 2a.10.3).
+///
+/// BusyPercent is TX-time based occupancy over
+/// [`RF_METRICS_WINDOW_SF`] rolling superframes: the caller records the
+/// own-node airtime (ms) consumed per superframe; the sampler accumulates
+/// per-window totals and reports `tx_airtime / slot_duration * 100`
+/// clamped to 0..100. Never RSSI-derived (spec MUST).
+#[derive(Debug, Clone, Default)]
+pub struct BusyPercentSampler {
+    /// Per-superframe TX airtime (ms) inside the current window.
+    airtime_by_sf: heapless::Vec<(u64, u32), { RF_METRICS_WINDOW_SF as usize }>,
+    current_sf: u64,
+}
+
+impl BusyPercentSampler {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record the TX airtime (ms) consumed in the given superframe.
+    pub fn record_tx_airtime(&mut self, superframe: u64, airtime_ms: u32) {
+        if superframe > self.current_sf {
+            self.current_sf = superframe;
+        }
+        // Fold repeat samples for the same superframe.
+        for entry in self.airtime_by_sf.iter_mut() {
+            if entry.0 == superframe {
+                entry.1 = entry.1.saturating_add(airtime_ms);
+                return;
+            }
+        }
+        // Evict the oldest window entry when full (rolling window: the
+        // oldest superframe is the one furthest below current).
+        if self.airtime_by_sf.len() == self.airtime_by_sf.capacity() {
+            if let Some(oldest_idx) = self
+                .airtime_by_sf
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, (sf, _))| *sf)
+                .map(|(i, _)| i)
+            {
+                let _ = self.airtime_by_sf.swap_remove(oldest_idx);
+            }
+        }
+        let _ = self.airtime_by_sf.push((superframe, airtime_ms));
+    }
+
+    /// BusyPercent over the rolling window (0..100).
+    ///
+    /// `slot_duration_ms` is the per-superframe slot budget the occupancy is
+    /// measured against (e.g. TDMA_SLOT_MS * slots_per_superframe). The
+    /// window is EXCLUSIVE of the oldest edge: superframes in
+    /// (current-32, current] are summed, so at most 32 distinct entries fit
+    /// the window — matching the sampler capacity exactly.
+    pub fn busy_percent(&mut self, slot_duration_ms: u32) -> u8 {
+        // Drop entries outside the exclusive window before summing.
+        // sf + WINDOW > current is underflow-safe: at current 0 the whole
+        // recorded range is retained (window is (-32, 0]).
+        self.airtime_by_sf
+            .retain(|(sf, _)| sf + u64::from(RF_METRICS_WINDOW_SF) > self.current_sf);
+        let total_ms: u64 = self
+            .airtime_by_sf
+            .iter()
+            .map(|(_, ms)| u64::from(*ms))
+            .sum();
+        if slot_duration_ms == 0 {
+            return 0;
+        }
+        let window_slots = u64::from(slot_duration_ms) * u64::from(RF_METRICS_WINDOW_SF);
+        let percent = total_ms.saturating_mul(100) / window_slots;
+        percent.min(100) as u8
+    }
+}
+
 /// Rolling-window peer density tracker (spec R-02a-117 / 2a.10.3).
 ///
 /// Tracks the distinct link-layer peers heard within
@@ -1063,6 +1137,41 @@ mod tests {
             t.record_peer([i, 0xEE, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66], 3);
         }
         assert_eq!(t.estimate_density(200, -100), 255);
+    }
+
+    #[test]
+    fn busy_percent_rolling_window_semantics() {
+        use crate::constants::TDMA_SLOT_MS;
+        use crate::rf_health::BusyPercentSampler;
+        let mut s = BusyPercentSampler::new();
+        // 2 slots' worth of TX inside one superframe: ~2/32 = 6.25% -> 6.
+        s.record_tx_airtime(0, TDMA_SLOT_MS * 2);
+        let pct = s.busy_percent(TDMA_SLOT_MS);
+        assert!(pct >= 6 && pct <= 7, "got {pct}");
+
+        // Window slide: all old entries drop, new occupancy ~0.
+        s.record_tx_airtime(100, 0);
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 0);
+
+        // Exclusive boundary: one slot's airtime at SF 32 = current: the
+        // (0, 32] window retains it -> 1/32 of the window budget = 3%.
+        let mut s = BusyPercentSampler::new();
+        s.record_tx_airtime(32, TDMA_SLOT_MS);
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 3);
+
+        // Saturation: full-window airtime -> 100.
+        let mut s = BusyPercentSampler::new();
+        for sf in 0..32u64 {
+            s.record_tx_airtime(sf, TDMA_SLOT_MS);
+        }
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 100);
+
+        // Over the budget clamps at 100.
+        s.record_tx_airtime(33, TDMA_SLOT_MS * 2);
+        assert_eq!(s.busy_percent(TDMA_SLOT_MS), 100);
+
+        // Zero slot duration is safe (returns 0, no div-by-zero).
+        assert_eq!(s.busy_percent(0), 0);
     }
 
     #[test]

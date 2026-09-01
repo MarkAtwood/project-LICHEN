@@ -70,6 +70,8 @@ SCHC_RETRANSMISSION_TIMEOUT_S: int = 10
 SCHC_MAX_ACK_REQUESTS: int = 4
 SCHC_INACTIVITY_TIMEOUT_S: int = 60
 
+# Spec 02a (TDMA slot budget): per-superframe slot duration for occupancy.
+TDMA_SLOT_MS: int = 2346
 # Spec 02a 2a.10.3 (proposed, R-02a-117 family): rolling RF metrics window.
 RF_METRICS_WINDOW_SF: int = 32
 # Spec 02a 2a.10.3 (proposed): density bonus thresholds (estimate_density).
