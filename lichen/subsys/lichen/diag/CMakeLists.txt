@@ -7,4 +7,5 @@ zephyr_library_sources(
   asymmetric_link.c
   rf_path_asymmetry.c
   pps_monitor.c
+  gps_uart_monitor.c
 )
