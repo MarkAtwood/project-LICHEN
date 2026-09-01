@@ -12,4 +12,5 @@ zephyr_library_sources(
   rf_path_asymmetry.c
   pps_monitor.c
   gps_uart_monitor.c
+  dio1_timeout.c
 )
