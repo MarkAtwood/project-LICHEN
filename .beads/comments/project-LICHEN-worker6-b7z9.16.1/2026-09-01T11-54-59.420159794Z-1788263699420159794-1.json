@@ -1,0 +1,7 @@
+{
+  "id": "1788263699420159794-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.16.1",
+  "author": "opencode-worker-5",
+  "text": "Scope honesty note: this closure covers the DAO TX timing STATE MACHINE (dao_tx_timing.rs) consuming the dao_timing oracle, not the full send_dao runtime wiring — the runtime_poll action plumbing is tracked in the follow-up bead (created this round). The original bead's 'wire into the TX path' is partially delivered; reopening is unnecessary since the follow-up carries the remainder explicitly.",
+  "created_at": "2026-09-01T11:54:59.420159794Z"
+}
