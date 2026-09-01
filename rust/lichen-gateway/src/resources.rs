@@ -2088,11 +2088,16 @@ impl GatewayCoordinator {
         let mut candidate_verifier = self.slot_verifier.clone();
         let claim = match candidate_verifier.verify(raw_claim, peer_pubkey, current_superframe) {
             Ok(claim) => claim,
-            // GCP-6.3: verification failure (bad signature, replay,
-            // identity mismatch) is silently discarded; spec 08 GCP-6.5
-            // step-failure semantics (4.03 for replay/expiry/invalid-slot)
-            // are tracked separately — this handler's verifier does not
-            // yet distinguish those causes (see slot.rs SlotError).
+            Err(slot::SlotError::Replay { .. }) | Err(slot::SlotError::StaleSuperframe { .. }) => {
+                // GCP-6.5 step-failure semantics (spec/08:226-236): replay
+                // (claim_seq gate, step 8) and expiry (step 7; the
+                // superframe-exact gate here) respond 4.03 Forbidden.
+                return CoapResponse::forbidden();
+            }
+            // GCP-6.3: invalid-signature, identity-mismatch, and malformed
+            // claims are silently discarded; spec 08 GCP-6.5 step-failure
+            // semantics (4.03 for replay/expiry/invalid-slot) are tracked
+            // separately — see the match arms above and l1qw.20.1.
             Err(_) => return CoapResponse::empty_success(),
         };
         let mut candidate_peer_claims = self.peer_claims.clone();
@@ -2926,13 +2931,14 @@ mod tests {
         assert_eq!(restored.info.slot_map.owned, accepted_owned);
         assert_eq!(restored.peer_claims.len(), 1);
         assert_eq!(restored.peer_claims[0].slots(), &[10, 11, 12]);
-        // Replay is a verification failure: GCP-6.3 mandates silent discard
-        // (empty 2.04), not a 4.01 protocol error.
+        // Replay (claim_seq gate) is a GCP-6.5 step failure: 4.03 Forbidden
+        // (spec/08:226-236) — the high-water committed on the first accept
+        // is what makes the duplicate land in this arm.
         assert_eq!(
             restored
                 .handle_post_slots(&claim.encode(), true, Some(&pubkey), 4)
                 .code,
-            0x44
+            0x83
         );
 
         fs::remove_file(state_path).unwrap();
@@ -3044,12 +3050,14 @@ mod tests {
         assert_eq!(restored.slot_replay_generation(), restored_generation);
         assert_eq!(restored.peer_claims.len(), 1);
         assert_eq!(restored.peer_claims[0].slots(), &[5]);
-        // Conflicting/replayed claim: GCP-6.3 silent discard (empty 2.04).
+        // Re-posted conflict after restart: the tiebreak-advanced high-water
+        // makes this a replay (claim_seq gate) — GCP-6.5 step failure, 4.03
+        // Forbidden (spec/08:226-236).
         assert_eq!(
             restored
                 .handle_post_slots(&conflict.encode(), true, Some(&pubkey), 4)
                 .code,
-            0x44
+            0x83
         );
 
         fs::remove_file(state_path).unwrap();

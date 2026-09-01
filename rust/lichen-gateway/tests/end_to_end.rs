@@ -36,7 +36,7 @@ use lichen_link::seqnum::LinkSeqNum;
 use lichen_node::rpl_code;
 use lichen_node::secure::{SecureRequestData, SecureResponse, SecureStack};
 use lichen_node::RplEvent;
-use lichen_oscore::{ContextId, SenderSequenceState, ContextStateStore, RecipientReplayState};
+use lichen_oscore::{ContextId, ContextStateStore, RecipientReplayState, SenderSequenceState};
 use lichen_schc::codec;
 use schnorr48::{derive_keypair, sign};
 
@@ -46,7 +46,10 @@ struct TestSenderStore(Option<(ContextId, SenderSequenceState)>);
 impl ContextStateStore for TestSenderStore {
     type Error = ();
 
-    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
+    fn load_sender(
+        &mut self,
+        context_id: &ContextId,
+    ) -> Result<Option<SenderSequenceState>, Self::Error> {
         Ok(self
             .0
             .filter(|(stored, _)| stored == context_id)
@@ -70,8 +73,19 @@ impl ContextStateStore for TestSenderStore {
         Ok(true)
     }
 
-    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
-    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+    fn load_recipient(
+        &mut self,
+        _: &ContextId,
+    ) -> Result<Option<RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+    fn save_recipient(
+        &mut self,
+        _: &ContextId,
+        _: &RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// Build a link-local Ipv6Addr from an 8-bit interface-identifier suffix.
@@ -864,8 +878,8 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
                 current_superframe,
             )
             .code,
-        0x81,
-        "runtime dispatch must have committed the slot replay high-water"
+        0x83,
+        "duplicate claim_seq is a replay: GCP-6.5 step-failure semantics respond 4.03 Forbidden (spec/08:226-236); runtime dispatch must have committed the slot replay high-water"
     );
     assert_eq!(iid_from_pubkey(&remote_pubkey), remote_iid);
     drop(gateway);
