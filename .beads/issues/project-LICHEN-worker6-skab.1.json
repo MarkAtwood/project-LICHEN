@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-skab.1",
+  "title": "C/Zephyr: ASSIGNED_SF (0x14) DIO option parser absent; modem config hardcodes SF9 placeholder",
+  "description": "Req R-02-008 (spec/02-physical-link.md 3.4, MUST): 'Nodes MUST use assigned SF for all TX after joining' via ASSIGNED_SF RPL DIO option, project-local Type 0x14.\n\nClassification: implemented+tested in Rust; not-implemented in C.\nEvidence: Rust rust/lichen-core/src/constants.rs:63-66 (DIO_OPTION_ASSIGNED_SF=0x14), rust/lichen-core/src/sf_assignment.rs:62-76 (effective_sf), :140-175 (make/parse option), test rust/lichen-core/tests/sf_assignment_vectors.rs:42-86 consuming test/vectors/sf_assignment.json.\nC gap: CONFIG_LICHEN_SF_ASSIGNMENT_ENABLED exists (lichen/subsys/lichen/l2/Kconfig:190-196) but default n, no 0x14 parser anywhere in lichen/subsys/lichen/rpl, and the modem config hardcodes a placeholder 'SF_9 if CONFIG_LICHEN_SF_ASSIGNMENT_ENABLED else SF_10' (lichen/subsys/lichen/l2/lora_l2.c:273) instead of applying an assigned SF.\n\nSuggested placement: implement 0x14 DIO option parse/store in lichen/subsys/lichen/rpl + apply effective SF in lichen/subsys/lichen/l2 radio config; mirror rust/lichen-core/src/sf_assignment.rs. Add C consumer for sf_assignment.json.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:39:32.149273738Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:39:32.149273738Z",
+  "labels": [
+    "zephyr",
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-skab.1",
+      "depends_on_id": "project-LICHEN-worker6-skab",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:39:32.284313217Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

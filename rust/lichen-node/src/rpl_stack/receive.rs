@@ -498,55 +498,26 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             let Ok(dio) = lichen_rpl::message::Dio::from_bytes(dio_body) else {
                 return Ok(RplReceiveOutcome::RplRejected);
             };
-            // Spec 06-security.md 8.10.1 (L679): a DIO MAY carry the root
-            // signature option. Present -> verify (fail-closed); absent ->
-            // process normally (the signature is defense-in-depth). The
-            // pubkey comes from the link-authenticated sender (TOFU trust
-            // store per the receiver steps); expiry is deferred until the
-            // wall-clock seam lands (clockless-node MUST, R-05-080
-            // precedent: skip, never reject on missing capability).
-            if let Some(cose) = dio_root_signature_option(
-                received.ipv6.get(body_offset..).unwrap_or_default(),
-                lichen_rpl::message::Dio::SERIALIZED_LEN,
-            ) {
-                let Ok(sig) = lichen_rpl::message::RootDioSignature::from_bytes(cose) else {
-                    return Ok(RplReceiveOutcome::RplRejected);
-                };
-                let decoded = match crate::rpl_stack::root_sig::DecodedRootSig::from_cose_sign1(
-                    sig.cose_sign1,
-                ) {
-                    Ok(decoded) => decoded,
-                    Err(_) => return Ok(RplReceiveOutcome::RplRejected),
-                };
-                let fields = crate::rpl_stack::root_sig::DioFields {
-                    dodag_id: Some(dio.dodag_id),
-                    instance: Some(dio.rpl_instance_id),
-                    version: Some(dio.version),
-                    rank: Some(dio.rank),
-                    mop: Some(dio.mode_of_operation),
-                };
-                let pubkey = frame.sender().pubkey.as_bytes();
-                if decoded.verify_structural(pubkey).is_err()
-                    || decoded.verify_signature(pubkey).is_err()
-                {
-                    return Ok(RplReceiveOutcome::RplRejected);
-                }
-                // RootSeqCache consumption: post-verification per the
-                // b7z9.37.3.1 caller contract; replay rejects the DIO.
-                if self
-                    .root_seqs_mut()
-                    .accept(
-                        decoded.payload.dodag_id,
-                        decoded.payload.instance,
-                        decoded.payload.root_seq,
-                    )
-                    .is_err()
-                {
-                    return Ok(RplReceiveOutcome::RplRejected);
-                }
-                if decoded.cross_check(&fields).is_err() {
-                    return Ok(RplReceiveOutcome::RplRejected);
-                }
+            // Root-signature defense-in-depth (spec 06 8.10.1): verify the
+            // COSE option when present. Absence (or a missing trust pin or
+            // wall clock) falls back to link-layer baseline per L679 — DIOs
+            // MUST NOT be rejected for missing capability. Forged, tampered,
+            // or replayed signatures ARE rejected. Verification lives in
+            // verify_dio_root_signature: it binds the signature to the
+            // TOFU-pinned root key (superseding the link-sender-pubkey-only
+            // inline variant) and runs the DIO-header cross-checks BEFORE
+            // mutating the root-seq cache, so a mismatched carrier cannot
+            // burn the root's current sequence.
+            let dio_fields = DioFields {
+                dodag_id: Some(dio.dodag_id),
+                instance: Some(dio.rpl_instance_id),
+                version: Some(dio.version),
+                rank: Some(dio.rank),
+                mop: Some(dio.mode_of_operation),
+            };
+            if let DioRootSigOutcome::Reject = self.verify_dio_root_signature(dio_body, &dio_fields)
+            {
+                return Ok(RplReceiveOutcome::RplRejected);
             }
             let rssi = received
                 .rssi

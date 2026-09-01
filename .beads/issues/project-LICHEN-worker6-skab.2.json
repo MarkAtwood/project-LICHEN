@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-skab.2",
+  "title": "Multi-SF RX unimplemented: gateway all-SF7-12 RX/scan and node receive-on-all-SF7-12",
+  "description": "Req R-02-011 (spec/02-physical-link.md 3.4, MUST): 'Gateways MUST receive on all SF7-SF12 (multi-SF RX or CAD/round-robin scan).'\nReq R-02-015 (spec/02-physical-link.md 3.5, MUST): 'Nodes MUST receive on all SF7-SF12.'\n\nClassification: not-implemented.\nEvidence: C CONFIG_LICHEN_GATEWAY_MULTI_SF default n with comment-only wiring (lichen/subsys/lichen/l2/Kconfig:198-205; lichen/subsys/lichen/l2/lora_l2.c:261-268); Python model-only function must_receive_all_sf with zero consumers (python/src/lichen/link/sf_assignment.py:79-81); Rust gateway has no multi-SF scan (search negative in rust/lichen-gateway).\nRelated SHOULD R-02-012 (gateway SHOULD advertise multi-SF capability in DIO) also absent; noted in matrix, not filed separately.\n\nSuggested placement: gateway CAD/round-robin SF scan in C L2 + rust/lichen-gateway RX; node RX-wide SF filter widening.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:39:32.553179039Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:39:32.553179039Z",
+  "labels": [
+    "radio",
+    "gateway",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-skab.2",
+      "depends_on_id": "project-LICHEN-worker6-skab",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:39:32.674396147Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

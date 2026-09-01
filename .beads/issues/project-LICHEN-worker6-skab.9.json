@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-skab.9",
+  "title": "C/Zephyr: link replay table keyed by pubkey only - no key-generation component or retirement invalidation",
+  "description": "Req R-02-054 (spec/02-physical-link.md 4.4, MUST): 'The replay key is (SignerPublicKey, KeyGeneration). An IID, short address, SIID hint, IPv6 source address, interface identifier, or caller-supplied peer label MUST NOT replace either component.'\nReq R-02-055 (MUST): retirement of a generation 'MUST immediately make all frames and replay state from that generation unusable.'\nReq R-02-060 (MUST): key rotation MAY start a fresh counter only after the new generation is durably installed and the old durably retired; clearing an address alias MUST NOT resurrect the retired generation.\n\nClassification: implemented+tested in Rust and Python; divergent (partial) in C.\nEvidence: C lichen/subsys/lichen/link/replay.c:88-123 matches full public_key only; no generation field; no retirement invalidation in the C replay path. lichen_replay_remove is atomic through the durable backend (replay_persist.c:319-355) but cannot distinguish generations.\nConformant: Rust evidence.rs:27-46 PeerKeyGeneration/DurablePeerKeyGeneration, link_layer.rs:400,690-704,1226-1235, tests link_layer.rs:1993,2071-2072 (same-key reinstall gets NEW durable generation); python link_layer.py:1689-1714, replay.py:647-688, tombstones test test_link_security_persistence.py:228.\n\nSuggested placement: add generation identifier to lichen/subsys/lichen/link/replay.c table + replay_persist.c blob (bind under the existing keyed BLAKE2b); wire retirement on key change/unpin. Related: worker6-l1qw.3.7.6.1 (SCHC peer table generation).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:40:26.610928065Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:40:26.610928065Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "replay",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-skab.9",
+      "depends_on_id": "project-LICHEN-worker6-skab",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:40:26.75326476Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
