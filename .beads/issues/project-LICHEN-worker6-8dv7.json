@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-8dv7",
   "title": "python tree: 32 pre-existing ruff failures would fail the CI ruff gate",
   "description": "ruff check over python/ reports 32 remaining errors outside tests/test_vectors.py (whose import-sort this closes): examples/chaos_testing.py I001, scripts/city_mesh_study.py (~9), scripts/mac_study.py (~12), src/lichen/crypto/__init__.py I001, src/lichen/sim/__init__.py I001, src/lichen/timing/__init__.py I001, tests/crypto/test_oscore_context_parity.py I001, tests/test_ccp.py E501 x4. CI (.github/workflows/ci.yml:20) runs 'uv run --directory python ruff check' tree-wide, so these fail the gate. Fix per-file respecting existing style; E501 lines in test_ccp may warrant per-file ignores if they are data-table lines. Discovered from project-LICHEN-worker6-8ayp.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-30T04:10:31.641821Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-30T04:10:31.641821Z",
+  "updated_at": "2026-09-01T12:28:48.81358209Z",
+  "closed_at": "2026-09-01T12:28:48.81358209Z",
+  "close_reason": "Completed: python tree is now ruff-clean (uv run --directory python ruff check passes, matching CI ci.yml:20). All 32 findings fixed: I001 import sorts (examples/chaos_testing.py, scripts/city_mesh_study.py, 4 package __init__.py, tests), F401 unused imports (city_mesh_study asdict/Optional/PropagationModel, mac_study os/Medium/PropagationModel, test_vectors adaptive_sf_for_metrics), F841 dead locals removed, B007 -\u003e _tx_time, SIM102 nested-if combines (preserving short-circuit order), E501 wraps as adjacent-literal concatenation (byte-identical CLI output), and the F811 shadow in src/lichen/routing/router.py (imported RoutingError binding dropped; the local class at :44 was already shadowing it, tests/routing 83 pass). Reviewer-reported findings fixed in-round: 3 dead bare expressions removed, the resulting slot_for F401 cleaned. Note: 2 pre-existing EDHOC flaky tests in the full run (fail batched, pass in isolation; documented in earlier rounds) — unrelated. 3x review (kimi-k3): pass1 correctness PASS (F811 binding-identical; short-circuit order preserved; E501 output parity), pass2 security/edge PASS with dead bare-expression finding (fixed: removed 3 dead computations + resulting slot_for import), pass3 convergence after F401 cascade fix. Full suite 12232 passed.",
   "labels": [
     "python"
   ],

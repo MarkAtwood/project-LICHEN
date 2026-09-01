@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.71",
+  "title": "[BUG] ASSIGNED_SF DIO option (0x14) is never emitted; gateway least-loaded tracker is dead code (spec 02 3.4)",
+  "description": "Req R-02-016: Nodes MUST use assigned SF for all TX after joining. DIVERGENT: codec and C RX parse are wired but no implementation ever emits the option, so assignment can never arrive. Evidence: rust/lichen-core/src/constants.rs:66 DIO_OPTION_ASSIGNED_SF=0x14, sf_assignment.rs:149-247 make/parse/GatewaySfTracker (tracker has zero production callers); C rpl_messages.h:70, rpl_sf_assignment.c:22-40, dodag.c:667-674 parses and pushes to lora_l2_assign_sf -\u003e TX datarate (lora_l2.c:231-244,308) — C consume side works, emit side absent; python link/sf_assignment.py. make_assigned_sf_option called only from tests. Suggested placement: border-router DIO construction (rust/lichen-rpl or lichen-gateway DIO builder; C lichen/apps/gateway + rpl dodag DIO TX), gateway per-SF node tracking wired to GatewaySfTracker/lichen_rpl tracker, plus join-response path per spec.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:25:46.241386581Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:57:25.863099925Z",
+  "labels": [
+    "ccp",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.71",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:25:46.368361837Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

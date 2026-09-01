@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.38",
+  "title": "12-apps: Python SOS rejects (4.01) instead of silently dropping unsigned/invalid SOS (18.4.1)",
+  "description": "spec/12-apps.md 18.4.1: unsigned or invalid SOS messages are silently dropped. C drops silently (lichen/subsys/lichen/link/include/lichen/sos_origin.h:19, no relay). Python returns 4.01 (python/src/lichen/coap/resources/emergency.py:237-238,248-251) — a rejection, which permits sender enumeration that the spec's silent drop is meant to prevent. Decide which layer owns the silent-drop semantic and align Python. See docs/spec-coverage/12-apps.md R-12-029.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:48:00.538488649Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:48:00.538488649Z",
+  "labels": [
+    "apps",
+    "spec-gap",
+    "lci",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.38",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:48:00.668813696Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

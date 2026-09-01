@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.78",
+  "title": "LR-FHSS gateway dual-mode RX absent; spec references nonexistent bead project-LICHEN-zd2d.2 (spec 02 3.7)",
+  "description": "Req R-02-039: Gateway MUST implement dual-mode RX (standard LoRa + LR-FHSS on same frequency). NOT-IMPLEMENTED: zero fhss hits in lichen/subsys, lichen/drivers, rust/lichen-hal, rust/lichen-embassy; DR8-DR11 and OCW 137/336 kHz constants exist only in python/src/lichen/link/lr_fhss.py:15 docstring; the collision/airtime model lives in external package lora_medium. Capability-advertisement layer is implemented+tested in Python only (lr_fhss.py:27-28 vs lr_fhss_capability.json; flags absent in Rust/C — divergence rows R-02-036/037/040/041). spec/02-physical-link.md:179 defers the driver to child issue project-LICHEN-zd2d.2 which does NOT exist in bd — this bead replaces that pointer. test/vectors/lr_fhss.json (airtime/sensitivity/fragment-collision) has no implementation consumer. Suggested placement: SX1262 LR-FHSS driver behind lichen/drivers + lichen-embassy; dual-mode gateway RX; port DIO/Announce flag layer to Rust/C.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:26:23.893239534Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:26:23.893239534Z",
+  "labels": [
+    "lr-fhss",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.78",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:26:24.065977545Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

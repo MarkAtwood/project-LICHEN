@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.76",
+  "title": "[BUG] C persisted replay record lacks key-generation identifier and window bitmap (spec 02 4.4 binding MUST)",
+  "description": "Req R-02-072: Persisted replay records MUST bind full public key, opaque key-generation identifier, highest counter, window bitmap, and monotonic record generation under an integrity check. DIVERGENT (C): lichen/subsys/lichen/link/replay_persist.c:12-19,94-111,169,286-292 has keyed-BLAKE2b integrity + local/peer pubkey + tx_epoch + per-peer high-water floor (seq+31), restore marks whole window seen (bitmap=0xFFFFFFFF) — conservative/fail-closed but no opaque generation id and no literal bitmap binding. Rust binds all elements under Schnorr-48 (rust/lichen-link/src/link_layer.rs:725-782,1237-1247); Python binds digest chain + bitmap, generation via retired/rekeyed sets (no explicit opaque id). Fix C record layout (cost: record size on STM32WL) or amend spec wording; decision needed on floor-vs-bitmap acceptability.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:26:23.024243431Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:26:23.024243431Z",
+  "labels": [
+    "link",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.76",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:26:23.151018644Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

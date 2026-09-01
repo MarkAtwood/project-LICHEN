@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.70",
+  "title": "[SPEC] sec 3.3 hash channel formula stale: src_iid^dst_iid vs implemented FNV1a32(eui64+epoch) per 02a 2a.3.1",
+  "description": "Req R-02-011 (spec 02-physical-link.md:42). DIVERGENT: spec formula data_ch = 1 + (hash(src_iid ^ dst_iid) mod (N_CHANNELS-1)) is implemented nowhere; all three implementations follow spec/02a 2a.3.1: FNV1A32(eui64_be || epoch_le_u32) with density\u003e10 -\u003e CH0 (python/src/lichen/ccp.py:68-115, rust/lichen-core/src/rf_health.rs:385-395, C link_ctx.c:722,754 + sync_hop.c), pinned by ccp15.json and ccp_select_channel_endianness.json. Spec fix: rewrite sec 3.3 to match 02a 2a.3.1 and the vectors. Also fix filename typo in the same file: sec 3.4 and 3.5 reference test/vectors/sf-assignment.json but the on-disk file is sf_assignment.json. No code change.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:25:45.807703028Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:25:45.807703028Z",
+  "labels": [
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.70",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:25:45.957935867Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

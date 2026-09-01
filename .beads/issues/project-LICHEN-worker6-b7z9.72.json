@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.72",
+  "title": "Multi-SF RX absent: gateways/nodes MUST receive on SF7-SF12; SHOULD advertise capability (spec 02 3.4/3.5)",
+  "description": "Reqs R-02-019, R-02-020, R-02-025. NOT-IMPLEMENTED. Evidence: C Kconfig placeholder only (lichen/subsys/lichen/l2/Kconfig:198-205 LICHEN_GATEWAY_MULTI_SF default n, no scan code; comments lora_l2.c:289-296); C RX programs a single datarate (lora_l2.c:298-308); rust lichen-hal/lichen-embassy have no SF-scan surface; python sim medium.py has no SF dimension at all so orthogonality/multi-SF RX cannot be simulated. Also blocks R-02-021 cross-SF forwarding via gateway. Suggested placement: C lr1110/lora_l2 CAD multi-SF scan (gateway first), rust lichen-embassy RX scheduler, python sim medium SF dimension; capability bit in DIO.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T12:25:46.69010264Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T12:25:46.69010264Z",
+  "labels": [
+    "rf",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.72",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T12:25:46.81319164Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
