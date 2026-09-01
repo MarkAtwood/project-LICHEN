@@ -20,6 +20,8 @@ const SNR_POOR: i8 = 0;
 const SNR_GOOD: i8 = 8;
 const LOAD_HIGH: u32 = FP_SCALE * 4 / 5;
 const LOAD_REBALANCE: u32 = FP_SCALE * 2 / 5;
+/// Spec 2a.8 floor d threshold: LoadFactor >= 0.8 (Q16.16, ceil).
+const FLOOR_LOAD_FP: u32 = 52_429;
 
 /// CCP-16 Section 2a.10.3: PER threshold for density bonus (100 permille = 10%).
 const DENSITY_PER_BONUS_PERMILLE: u16 = 100;
@@ -439,8 +441,12 @@ impl RfHealthMetrics {
             tx_allowed = false;
         }
 
-        // Post-step-6 minimum-SF floors (spec §2a.8 a-d). Independent floors:
-        // (a) a poor SNR EMA forces SF 12 outright; (b)-(d) floor at 11.
+        // Spec 2a.8 post-step-6 minimum-SF floors, applied in order a-d with
+        // each MAX against the running SF (self state, not pseudocode args):
+        // a. EMA_SNR < -5 -> SF 12
+        // b. EMA_SNR < 0 -> max(11, SF)
+        // c. Density > 8 -> max(11, SF)
+        // d. LoadFactor >= 0.8 -> max(11, SF)
         if snr_ema < SNR_CRITICAL {
             sf = 12;
         }
@@ -450,7 +456,7 @@ impl RfHealthMetrics {
         if self.density > DENSITY_HIGH {
             sf = sf.max(11);
         }
-        if self.load_factor_fp >= 52429 {
+        if self.load_factor_fp >= FLOOR_LOAD_FP {
             sf = sf.max(11);
         }
         (sf, tx_allowed)
@@ -1035,5 +1041,63 @@ mod tests {
         let s1 = slot_hash(&eui, 42, 8);
         let s2 = slot_hash(&eui, 42, 8);
         assert_eq!(s1, s2);
+    }
+
+    /// Spec 2a.8 step 3: Density > 8 (strictly greater) triggers SF +2.
+    #[test]
+    fn adaptive_sf_density_threshold_is_eight() {
+        let mut h = RfHealthMetrics::default();
+        h.record_density(8);
+        // Density 8 is not the trigger: assigned 10 stays 10.
+        let (sf, _) = h.adaptive_sf_select(Some(10), Some(0), Some(0));
+        assert_eq!(sf, 10);
+
+        let mut h = RfHealthMetrics::default();
+        h.record_density(9);
+        // Density 9 crosses: SF +2 capped at 12.
+        let (sf, _) = h.adaptive_sf_select(Some(10), Some(0), Some(0));
+        assert_eq!(sf, 12);
+    }
+
+    /// Spec 2a.8 post-step-6 floors a-d (order a-d, each MAX against SF).
+    #[test]
+    fn adaptive_sf_floors_apply_in_order() {
+        // Floor a: EMA_SNR < -5 forces SF 12.
+        let mut h = RfHealthMetrics::default();
+        for _ in 0..8 {
+            h.record_rx(-100);
+        }
+        assert!(h.snr.avg().unwrap() < -5);
+        let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
+        assert_eq!(sf, 12);
+
+        // Floor b: -5 <= EMA_SNR < 0 floors at 11.
+        let mut h = RfHealthMetrics::default();
+        h.record_rx(-2);
+        h.record_rx(-2);
+        h.record_rx(-2);
+        assert_eq!(h.snr.avg().unwrap(), -2);
+        let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
+        assert_eq!(sf, 11);
+
+        // Floor c: density > 8 floors at 11 (SNR and load clean).
+        let mut h = RfHealthMetrics::default();
+        h.record_density(9);
+        h.record_rx(20);
+        let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
+        assert_eq!(sf, 11);
+
+        // Floor d: load_factor_fp >= 52429 (0.8) floors at 11.
+        let mut h = RfHealthMetrics::default();
+        h.record_load_factor(52_429);
+        h.record_rx(20);
+        let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
+        assert_eq!(sf, 11);
+
+        // Control: clean state floors nothing (7 stays 7).
+        let mut h = RfHealthMetrics::default();
+        h.record_rx(20);
+        let (sf, _) = h.adaptive_sf_select(Some(7), Some(0), Some(0));
+        assert_eq!(sf, 7);
     }
 }

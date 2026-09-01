@@ -57,6 +57,8 @@ enum lichen_coap_result {
 	LICHEN_COAP_ERR_TRANSPORT = -8,
 	LICHEN_COAP_ERR_OSCORE_PROTECT = -9,   /**< OSCORE protect failed */
 	LICHEN_COAP_ERR_OSCORE_UNPROTECT = -10, /**< OSCORE unprotect failed */
+	LICHEN_COAP_ERR_BACKOFF = -11, /**< Peer 5.03 backoff window active
+					*   (spec 07 10.2.4, R-07-032) */
 };
 
 /**
