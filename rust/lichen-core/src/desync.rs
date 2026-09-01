@@ -70,12 +70,12 @@ pub enum DesyncState {
 /// assert_eq!(fsm.state(), DesyncState::Desynced);
 ///
 /// // Start recovery on valid beacon
-/// fsm.on_beacon(true);
+/// fsm.on_beacon(true, true);
 /// assert_eq!(fsm.state(), DesyncState::Recovering);
 ///
 /// // Need 3 consecutive valid beacons to sync
-/// fsm.on_beacon(true);
-/// fsm.on_beacon(true);
+/// fsm.on_beacon(true, true);
+/// fsm.on_beacon(true, true);
 /// assert_eq!(fsm.state(), DesyncState::Synced);
 /// ```
 #[derive(Debug, Clone, Copy)]
@@ -122,12 +122,14 @@ impl DesyncFSM {
 
     /// Handle beacon reception.
     ///
-    /// - DESYNCED + valid beacon -> RECOVERING (start counting)
+    /// - DESYNCED + valid beacon + wall clock valid -> RECOVERING (start
+    ///   counting); per R-02a-084 the node MUST NOT leave DESYNCED unless
+    ///   the wall clock is valid.
     /// - RECOVERING + valid beacon -> count++; if count >= 3 -> SYNCED
     /// - RECOVERING + invalid beacon -> DESYNCED (reset)
-    pub fn on_beacon(&mut self, valid: bool) -> DesyncState {
+    pub fn on_beacon(&mut self, valid: bool, wall_clock_valid: bool) -> DesyncState {
         match self.state {
-            DesyncState::Desynced if valid => {
+            DesyncState::Desynced if valid && wall_clock_valid => {
                 self.state = DesyncState::Recovering;
                 self.consecutive_valid = 1;
             }
@@ -190,7 +192,7 @@ pub enum CcpState {
 /// assert_eq!(fsm.state(), CcpState::Drift);
 ///
 /// // Valid beacon recovers sync
-/// fsm.on_beacon(true);
+/// fsm.on_beacon(true, true);
 /// assert_eq!(fsm.state(), CcpState::Joined);
 /// ```
 #[derive(Debug, Clone, Copy)]
@@ -304,6 +306,21 @@ mod tests {
     }
 
     #[test]
+    fn test_desync_fsm_wall_clock_gate() {
+        // R-02a-084: MUST NOT leave DESYNCED unless wall_clock_valid.
+        let mut fsm = DesyncFSM::default();
+        fsm.on_sfn_wrap(false);
+        assert_eq!(fsm.state(), DesyncState::Desynced);
+
+        // Valid beacon while the wall clock is unsynced: stays Desynced.
+        assert_eq!(fsm.on_beacon(true, false), DesyncState::Desynced);
+        assert_eq!(fsm.consecutive_valid(), 0);
+
+        // Once the wall clock syncs, the same beacon recovers.
+        assert_eq!(fsm.on_beacon(true, true), DesyncState::Recovering);
+    }
+
+    #[test]
     fn test_desync_fsm_recovery_flow() {
         let mut fsm = DesyncFSM::new();
 
@@ -312,17 +329,17 @@ mod tests {
         assert_eq!(fsm.state(), DesyncState::Desynced);
 
         // First valid beacon -> Recovering
-        fsm.on_beacon(true);
+        fsm.on_beacon(true, true);
         assert_eq!(fsm.state(), DesyncState::Recovering);
         assert_eq!(fsm.consecutive_valid(), 1);
 
         // Second valid beacon
-        fsm.on_beacon(true);
+        fsm.on_beacon(true, true);
         assert_eq!(fsm.state(), DesyncState::Recovering);
         assert_eq!(fsm.consecutive_valid(), 2);
 
         // Third valid beacon -> Synced
-        fsm.on_beacon(true);
+        fsm.on_beacon(true, true);
         assert_eq!(fsm.state(), DesyncState::Synced);
         assert_eq!(fsm.consecutive_valid(), 0);
     }
@@ -332,9 +349,9 @@ mod tests {
         let mut fsm = DesyncFSM::new();
 
         fsm.on_sfn_wrap(false);
-        fsm.on_beacon(true); // -> Recovering
-        fsm.on_beacon(true); // count = 2
-        fsm.on_beacon(false); // -> Desynced
+        fsm.on_beacon(true, true); // -> Recovering
+        fsm.on_beacon(true, true); // count = 2
+        fsm.on_beacon(false, true); // -> Desynced
 
         assert_eq!(fsm.state(), DesyncState::Desynced);
         assert_eq!(fsm.consecutive_valid(), 0);
@@ -343,9 +360,9 @@ mod tests {
     #[test]
     fn test_desync_fsm_beacon_ignored_when_synced() {
         let mut fsm = DesyncFSM::new();
-        fsm.on_beacon(true);
+        fsm.on_beacon(true, true);
         assert_eq!(fsm.state(), DesyncState::Synced);
-        fsm.on_beacon(false);
+        fsm.on_beacon(false, true);
         assert_eq!(fsm.state(), DesyncState::Synced);
     }
 
@@ -353,7 +370,7 @@ mod tests {
     fn test_desync_fsm_invalid_beacon_ignored_when_desynced() {
         let mut fsm = DesyncFSM::new();
         fsm.on_sfn_wrap(false);
-        fsm.on_beacon(false);
+        fsm.on_beacon(false, true);
         assert_eq!(fsm.state(), DesyncState::Desynced);
     }
 

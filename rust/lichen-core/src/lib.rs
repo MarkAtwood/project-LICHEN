@@ -53,6 +53,7 @@ pub mod announce;
 pub mod checksum;
 pub mod compact_cot;
 pub mod constants;
+pub mod desync;
 pub mod duty_cycle;
 pub mod error;
 pub mod icmpv6;
