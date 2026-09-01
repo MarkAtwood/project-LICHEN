@@ -16,6 +16,7 @@ zephyr_library_sources(
   link_cca.c
   link_ctx.c
   replay.c
+  root_selection.c
   tx_queue.c
 )
 
