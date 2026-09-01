@@ -58,6 +58,9 @@ required-features = ["std", "raw-fragment-codec"]
 name = "authenticated_dio_vectors"
 required-features = ["std"]
 
+# link_layer_integration uses only std/schnorr-gated APIs (lichen_link::identity,
+# lichen_link::link_layer, lichen_schc::link) — nothing from raw-fragment-codec —
+# so unlike the sibling tests above, `std` alone is the correct minimal gate.
 [[test]]
 name = "link_layer_integration"
-required-features = ["std", "raw-fragment-codec"]
+required-features = ["std"]
