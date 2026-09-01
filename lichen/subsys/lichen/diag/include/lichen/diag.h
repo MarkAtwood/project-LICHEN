@@ -30,6 +30,18 @@ enum lichen_diag_subsystem {
 	LICHEN_DIAG_SUB_COUNT,
 };
 
+/** Radio-subsystem event codes (ldzz family). */
+enum lichen_diag_radio_event {
+	LICHEN_DIAG_RADIO_MODEM_HELD = 1, /**< 3 consecutive TX -EBUSY */
+	LICHEN_DIAG_RADIO_TX_DEAD = 2,    /**< 10 consecutive TX -EBUSY */
+};
+
+/** Fleet-subsystem event codes (diag.10-11 detectors). */
+enum lichen_diag_fleet_event {
+	LICHEN_DIAG_FLEET_ASYMMETRIC_LINK = 1, /**< TX:RX ratio > 10:1 over 5 min */
+	LICHEN_DIAG_FLEET_SLOT_DRIFT = 2,      /**< boundary CRC concentration */
+};
+
 /** One diagnostic event in the ring. */
 struct lichen_diag_event {
 	uint64_t timestamp_ms;                  /**< Monotonic ms since boot */
