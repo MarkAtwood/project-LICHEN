@@ -4,6 +4,7 @@
 //! Production ownership and dispatch for the std RPL stack.
 
 mod error;
+mod dao_tx_timing;
 mod provisioning;
 mod receive;
 mod root_sig;
