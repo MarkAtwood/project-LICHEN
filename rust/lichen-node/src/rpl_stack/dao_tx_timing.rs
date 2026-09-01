@@ -14,8 +14,7 @@
 use core::time::Duration;
 
 use crate::dao_timing::{
-    dao_initial_delay_ms, checked_dao_refresh_deadline, dao_retry_delay,
-    DaoRefreshTimer,
+    checked_dao_refresh_deadline, dao_initial_delay_ms, dao_retry_delay, DaoRefreshTimer,
 };
 
 /// Phase of the DAO origination TX state machine.
@@ -33,8 +32,6 @@ pub enum DaoTimingPhase {
     /// All retry slots exhausted; the parent is unresponsive.
     Exhausted,
 }
-
-
 
 /// DAO TX timing state machine consuming the dao_timing oracle.
 ///
@@ -146,10 +143,7 @@ impl DaoTimingState {
     /// Returns the refresh deadline, or `None` if the refresh deadline
     /// overflowed (caller fails closed).
     pub fn on_ack(&mut self, now_ms: u64) -> Option<u64> {
-        if matches!(
-            self.phase,
-            DaoTimingPhase::Idle | DaoTimingPhase::Exhausted
-        ) {
+        if matches!(self.phase, DaoTimingPhase::Idle | DaoTimingPhase::Exhausted) {
             return None;
         }
         self.attempts = 0;
