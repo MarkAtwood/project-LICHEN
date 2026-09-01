@@ -809,6 +809,37 @@ Check `bd list` for issues tracking these decisions.
   - Client gets link-local address, node routes to mesh
   - Resources: /config, /status, /keys, mesh proxy
 
+## Hardware Adaptation (lichen_diag)
+
+The firmware must handle minor hardware variation across board revisions,
+component substitutions, and production batches without manual configuration.
+Epic: `project-LICHEN-worker6-ldzz`.
+
+**Design principle: adapt and report, never detect and fail.** Every detector
+is paired with an adapter. If TCXO warm-up is slow, wait longer and log it.
+If GPS baud is wrong, auto-detect and reconfigure. If SPI contention occurs,
+auto-defer display updates to guard windows. The `/diag` CoAP endpoint is a
+fleet health dashboard showing what each unit adapted, not a bringup console.
+
+**All detectors ship in production firmware** (`CONFIG_LICHEN_DIAG=y`). There
+is no bringup-only mode — a "bringup problem" and a "board rev B has a
+different GPIO" look identical to the firmware. Detectors must handle both.
+
+Areas covered (see ldzz children for implementation details):
+- **Radio**: DIO1 interrupt timeout (scan alternate pins), TCXO warm-up
+  (adaptive delay), modem-hold detection (EBUSY counter), RF path symmetry
+  (TX-only / RX-only detection), PA config anomaly
+- **GPS**: UART baud auto-detect, fix quality monitoring, PPS interrupt
+  verification with fallback to beacon-only time sync
+- **Display**: SPI contention correlation, auto-defer refresh to guard windows
+- **Power**: ADC calibration detection (wider error bars if uncalibrated),
+  abnormal drain rate (GPIO float detection)
+- **Fleet**: Asymmetric link detection, slot boundary drift, firmware version
+  skew (SCHC rule version mismatch)
+
+Reference decisions: `spec/decisions.jsonl` (adjudicated design choices that
+sweeps and workers must respect as ground truth).
+
 ## Hardware Targets
 
 **We target all hardware that Meshtastic already supports.** This is a reflash, not new hardware. Users with existing Meshtastic devices can flash our firmware.

@@ -38,6 +38,7 @@
 #include <lichen/sos_origin.h>
 #include <lichen/schnorr48.h>
 #include <lichen/coap_keys.h>
+#include <lichen/sos_ratelimit.h>
 #include <lichen/oscore.h>
 #include <lichen/coap_oscore.h>
 
@@ -358,8 +359,8 @@ static int msg_inbox_post(struct coap_resource *resource,
 		/* OSCORE response with Location-Path options */
 		uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 		struct coap_packet resp;
-		int r = coap_oscore_protect_response(oscore_ctx, piv,
-						     piv_len, request,
+		int r = coap_oscore_protect_response(oscore_ctx, piv, piv_len,
+						     request,
 						     COAP_RESPONSE_CODE_CREATED,
 						     NULL, 0, &resp, buf, sizeof(buf));
 		if (r < 0) {
@@ -471,6 +472,10 @@ static void alert_node_iid(const struct sos_alert *alert, uint8_t out[8])
 	}
 }
 
+/* Per-source rate limit state (R-12-036/037/038). Single-source scope:
+ * the multi-source per-IID table is follow-up work. */
+static struct sos_ratelimit_state s_sos_rl_state;
+
 static int sos_post(struct coap_resource *resource,
 		    struct coap_packet *request,
 		    struct sockaddr *addr, socklen_t addr_len)
@@ -527,8 +532,25 @@ static int sos_post(struct coap_resource *resource,
 		return -ENOENT; /* silent drop: bad signature */
 	}
 
-	/* Acceptance point: l1qw.25.3 (sos_ratelimit_check) gates
-	 * rebroadcast before processing. */
+	/* R-12-036/037/038: per-source rate limits (10-min cooldown,
+	 * 3/hour) on monotonic uptime gate rebroadcast. Violations are
+	 * dropped and logged without relaying. The limiter state persists
+	 * across requests for the current source; a per-IID table is the
+	 * multi-source follow-up. */
+	struct sos_ratelimit_config rl_config;
+
+	sos_ratelimit_config_init(&rl_config);
+	int64_t now_ms = k_uptime_get();
+	uint32_t remaining_ms = 0U;
+	enum sos_ratelimit_result rl =
+		sos_ratelimit_check(&s_sos_rl_state, now_ms, &rl_config,
+				    &remaining_ms);
+	if (rl != SOS_RATELIMIT_ALLOWED) {
+		LOG_WRN("SOS rate limited (result %d, retry in %u ms)", rl,
+			remaining_ms);
+		return -ENOENT; /* drop, do not relay */
+	}
+	sos_ratelimit_record(&s_sos_rl_state, now_ms);
 
 	return lichen_coap_respond(resource, request, addr, addr_len,
 				   COAP_RESPONSE_CODE_CHANGED,
