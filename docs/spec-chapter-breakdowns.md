@@ -412,7 +412,7 @@ These breakdowns show the full bead structure when exploding scaffolding to impl
 │   │   ├── [P1] Zephyr: scope detection
 │   │   └── [P1] Standard group constants (ff02::1, ff02::1a, ff03::fc)
 │   ├── [P2 epic] Hop-Limited Broadcast
-│   │   ├── [P2] Python: hop-by-hop option (TBD1 type)
+│   │   ├── [P2] Python: hop-by-hop option (Type=0x03, S-flag + expiry)
 │   │   ├── [P2] Rust: hop-by-hop option parsing/building
 │   │   ├── [P2] Zephyr: hop-by-hop option
 │   │   ├── [P2] Original Hop Limit (1-7) preservation
