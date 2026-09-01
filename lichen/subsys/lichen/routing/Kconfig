@@ -178,10 +178,11 @@ config LICHEN_DTN
 config LICHEN_DTN_MAX_BYTES
 	int "DTN buffer maximum size in bytes"
 	depends on LICHEN_DTN
-	default 65536
+	default 8192
 	help
-	  Maximum buffer size in bytes. Spec 9.8 suggests 64KB for routers.
-	  Constrained devices should use a smaller value or disable DTN.
+	  Total stored-bytes budget for the DTN buffer. Spec 18.9 deaddrop:
+	  8 KB (leaf); border routers override to 32 KB. (Spec 9.8's 64 KB
+	  applies to router store-and-forward, not the deaddrop budget.)
 
 config LICHEN_DTN_MAX_MESSAGES
 	int "DTN buffer maximum message count"

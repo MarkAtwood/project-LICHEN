@@ -40,6 +40,23 @@ from lichen.timing.duty_cycle import (  # noqa: F401
     max_packets_per_hour,
 )
 from lichen.timing.sfn import DesyncFSM, DesyncState, hash_32, sfn_delta, slot_for  # noqa: F401
+from lichen.timing.startup_delay import (  # noqa: F401
+    DELAY_PER_NODE_MS,
+    DELAY_PER_NODE_S,
+    LISTEN_PERIOD_MAX_MS,
+    LISTEN_PERIOD_MAX_S,
+    LISTEN_PERIOD_MIN_MS,
+    LISTEN_PERIOD_MIN_S,
+    MAX_STARTUP_DELAY_MS,
+    MAX_STARTUP_DELAY_S,
+    BootStormMitigation,
+    compute_startup_delay_ms,
+    compute_startup_delay_s,
+    random_listen_period_ms,
+    random_listen_period_s,
+    random_startup_delay_ms,
+    random_startup_delay_s,
+)
 from lichen.timing.time_sync import (  # noqa: F401
     DEFAULT_MAX_BACKWARD_STEP_S,
     DEFAULT_MAX_CORRECTION_RATE_PPM,
@@ -79,23 +96,6 @@ from lichen.timing.time_sync import (  # noqa: F401
     can_establish_sample,
     effective_epoch_floor,
     evaluate_epoch_floor,
-)
-from lichen.timing.startup_delay import (  # noqa: F401
-    DELAY_PER_NODE_MS,
-    DELAY_PER_NODE_S,
-    LISTEN_PERIOD_MAX_MS,
-    LISTEN_PERIOD_MAX_S,
-    LISTEN_PERIOD_MIN_MS,
-    LISTEN_PERIOD_MIN_S,
-    MAX_STARTUP_DELAY_MS,
-    MAX_STARTUP_DELAY_S,
-    BootStormMitigation,
-    compute_startup_delay_ms,
-    compute_startup_delay_s,
-    random_listen_period_ms,
-    random_listen_period_s,
-    random_startup_delay_ms,
-    random_startup_delay_s,
 )
 from lichen.timing.trickle import (  # noqa: F401
     TRICKLE_IMAX_DOUBLINGS,

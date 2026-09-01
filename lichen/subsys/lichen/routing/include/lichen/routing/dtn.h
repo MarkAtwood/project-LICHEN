@@ -39,7 +39,7 @@ extern "C" {
 
 /** Maximum packet size (IPv6 MTU for mesh) */
 #ifndef CONFIG_LICHEN_DTN_MAX_PACKET_SIZE
-#define CONFIG_LICHEN_DTN_MAX_PACKET_SIZE 1280
+#define CONFIG_LICHEN_DTN_MAX_PACKET_SIZE 1536
 #endif
 
 /** Default TTL in seconds (24 hours) */

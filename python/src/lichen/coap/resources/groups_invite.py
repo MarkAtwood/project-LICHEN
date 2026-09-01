@@ -4,11 +4,10 @@
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
 import cbor2
-from collections import deque
-
 from aiocoap import BAD_REQUEST, CHANGED, FORBIDDEN, Message, resource
 
 from lichen.coap.resources.base import CBOR

@@ -4,9 +4,10 @@
 
 from __future__ import annotations
 
+from hashlib import sha256
+
 import cbor2
 import pytest
-from hashlib import sha256
 
 from lichen.crypto.delegation_tokens import cose_sig_structure
 from lichen.crypto.identity import Identity
@@ -132,10 +133,9 @@ def test_role_uint_boundary_values_round_trip() -> None:
         inviter_iid=INVITER.iid,
         signature=b"",
     )
-    assert (
-        verify_invitation_cose(encode_invitation_cose(admin, INVITER), INVITER.pubkey, INVITEE_IID).role
-        == "admin"
-    )
+    envelope = encode_invitation_cose(admin, INVITER)
+    verified = verify_invitation_cose(envelope, INVITER.pubkey, INVITEE_IID)
+    assert verified.role == "admin"
 
 
 def test_invalid_role_uint_is_rejected() -> None:
@@ -188,14 +188,15 @@ def test_malformed_envelopes_are_rejected() -> None:
 
 # ─── resource wiring: POST /groups/invite with a COSE envelope ───────────────
 
+from collections import deque  # noqa: E402
+from datetime import UTC  # noqa: E402
+
 import aiocoap  # noqa: E402
+
 from lichen.coap.resources.groups_collection import (  # noqa: E402
     GroupsCollectionResource,
-    GroupsItemResource,
 )
 from lichen.coap.resources.groups_invite import GroupsInviteResource  # noqa: E402
-
-from collections import deque  # noqa: E402
 
 OWNER_ADDR = "0200::1111"
 LEAF_ADDR = "0200::4444"
@@ -231,7 +232,6 @@ def _cose_post(envelope: bytes) -> aiocoap.Message:
 
 
 def test_cose_invitation_accepted_then_nonce_replay_rejected() -> None:
-    from collections import deque
 
     fixed = 1716742800.0
     collection, resource_obj, invitee_iid = _cose_resource(clock=lambda: fixed)
@@ -268,9 +268,9 @@ def test_cose_invitation_accepted_then_nonce_replay_rejected() -> None:
 
 
 def test_cose_invitation_expired_is_rejected() -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime(2026, 8, 31, 12, 0, 0, tzinfo=timezone.utc).timestamp()
+    now = datetime(2026, 8, 31, 12, 0, 0, tzinfo=UTC).timestamp()
     collection, resource_obj, invitee_iid = _cose_resource(clock=lambda: now)
     from lichen.group_membership import GroupInvitationCose as Cose
 

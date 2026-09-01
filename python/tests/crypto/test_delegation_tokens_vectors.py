@@ -23,8 +23,8 @@ from lichen.crypto.delegation_tokens import (
     DelegationScope,
     DelegationToken,
     DelegationTokenPayload,
-    cose_sig_structure,
     cose_protected_header,
+    cose_sig_structure,
 )
 from lichen.crypto.schnorr48 import verify
 

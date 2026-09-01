@@ -338,6 +338,16 @@ config LICHEN_COAP_DEADDROP_MAX_STORAGE
 	help
 	  Maximum messages in DTN deaddrop buffer.
 
+config LICHEN_COAP_DEADDROP_HOURLY_LIMIT
+	int "Max deaddrop POSTs per source per hour (spec 18.9: 6)"
+	depends on LICHEN_COAP_DEADDROP
+	default 6
+	range 1 255
+	help
+	  Hourly per-source POST cap alongside the cooldown interval
+	  (spec 18.9: 6 POSTs per hour per context). Exceeding it returns
+	  4.29 with Retry-After.
+
 config LICHEN_COAP_DEADDROP_LOG_LEVEL
 	int "CoAP deaddrop log level"
 	depends on LICHEN_COAP_DEADDROP

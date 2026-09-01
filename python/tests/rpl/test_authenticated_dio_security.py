@@ -6,8 +6,8 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Callable
-from typing import cast
 from ipaddress import IPv6Address
+from typing import cast
 
 import pytest
 
