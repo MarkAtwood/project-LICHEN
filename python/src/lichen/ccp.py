@@ -346,7 +346,9 @@ def adaptive_sf_select(
     sf = max(7, min(12, sf))
 
     # Step 3: High density or high utilization triggers SF +2
-    # (spec 02a 2a.8: Density > 8; 02-physical-link.md:115 reconciled).
+    # (spec 02a 2a.8: Density > DENSITY_HIGH = 8 — unconditional, matching
+    # Rust rf_health.rs and the vector generator; 02-physical-link.md:115
+    # reconciled).
     if density > 8 or utilization > 150:
         sf = min(12, sf + 2)
 
