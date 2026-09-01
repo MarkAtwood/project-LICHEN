@@ -36,6 +36,8 @@ pub use oscore::{
     ReservedSender,
     SenderSequenceState,
     SenderStateStore,
+    ContextStateStore,
+    RecipientReplayState,
     // Constants
     ALG_AEAD,
     COAP_OPTION_OSCORE,
@@ -98,7 +100,7 @@ pub struct KeyUpdateState {
 /// The compare-and-swap MUST update both the active-context pointer and the
 /// initial sender state as one durable transaction. A torn update could either
 /// reactivate retired keys or reuse an OSCORE nonce after recovery.
-pub trait KeyUpdateStore: SenderStateStore {
+pub trait KeyUpdateStore: ContextStateStore {
     /// Load the durable active-context pointer.
     fn load_key_update(&mut self) -> Result<Option<KeyUpdateState>, Self::Error>;
 
@@ -258,14 +260,17 @@ struct KeyUpdateRegistration<'a, S> {
     replacement: KeyUpdateState,
 }
 
-impl<S: KeyUpdateStore> SenderStateStore for KeyUpdateRegistration<'_, S> {
+impl<S: KeyUpdateStore> ContextStateStore for KeyUpdateRegistration<'_, S> {
     type Error = S::Error;
 
-    fn load(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
-        self.store.load(context_id)
+    fn load_sender(
+        &mut self,
+        context_id: &ContextId,
+    ) -> Result<Option<SenderSequenceState>, Self::Error> {
+        self.store.load_sender(context_id)
     }
 
-    fn compare_exchange(
+    fn compare_exchange_sender(
         &mut self,
         context_id: &ContextId,
         expected: Option<SenderSequenceState>,
@@ -276,6 +281,26 @@ impl<S: KeyUpdateStore> SenderStateStore for KeyUpdateRegistration<'_, S> {
         }
         self.store
             .compare_exchange_key_update(self.expected, self.replacement, next)
+    }
+
+    fn load_recipient(
+        &mut self,
+        _context_id: &ContextId,
+    ) -> Result<Option<RecipientReplayState>, Self::Error> {
+        // Key updates only fence the sender sequence (0.1.3 ContextStateStore
+        // contract); the recipient replay window starts empty per fresh
+        // context activation.
+        Ok(None)
+    }
+
+    fn save_recipient(
+        &mut self,
+        _context_id: &ContextId,
+        _state: &RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        // Same durable record as load_recipient: activation-time window is
+        // empty, and the first unprotect persists through the owning store.
+        Ok(())
     }
 }
 

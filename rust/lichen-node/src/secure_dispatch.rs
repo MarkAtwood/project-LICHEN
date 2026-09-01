@@ -11,7 +11,7 @@
 use lichen_coap::codec::CoapPacket;
 use lichen_coap::option::content_format::CBOR;
 use lichen_hal::Radio;
-use lichen_oscore::SenderStateStore;
+use lichen_oscore::ContextStateStore;
 
 use crate::dispatch::{self, Dispatcher, Request};
 use crate::secure::{ReceivedSecureDatagram, SecureError, SecureResponseData, SecureStack};
@@ -34,7 +34,7 @@ pub enum SecureDispatchOutcome {
 /// sender IID for context selection. The inner request is dispatched to the resource
 /// handler and the response is encrypted. Plaintext requests (from local admin per LCI)
 /// are dispatched directly.
-pub async fn dispatch_secure<R: Radio, S: SenderStateStore>(
+pub async fn dispatch_secure<R: Radio, S: ContextStateStore>(
     stack: &mut SecureStack<R>,
     store: &mut S,
     received: &ReceivedSecureDatagram,
@@ -55,7 +55,7 @@ pub async fn dispatch_secure<R: Radio, S: SenderStateStore>(
     }
 }
 
-async fn dispatch_encrypted<R: Radio, S: SenderStateStore>(
+async fn dispatch_encrypted<R: Radio, S: ContextStateStore>(
     stack: &mut SecureStack<R>,
     store: &mut S,
     received: &ReceivedSecureDatagram,
@@ -139,7 +139,7 @@ mod tests {
         fail: bool,
     }
 
-    impl SenderStateStore for SimpleStore {
+    impl ContextStateStore for SimpleStore {
         type Error = ();
         fn load(
             &mut self,

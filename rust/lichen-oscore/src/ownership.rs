@@ -31,6 +31,7 @@
 //! Capacity exhaustion refuses new claims ([`OwnershipError::Full`]) rather
 //! than evicting a live owner.
 
+use oscore::{ContextStateStore};
 use heapless::Vec;
 
 use crate::{Context, ContextId, ContextStoreError, SenderStateStore};
@@ -94,7 +95,7 @@ impl<const N: usize> OwnershipRegistry<N> {
     ///
     /// The claim is taken before the store compare-and-swap and rolled back
     /// if activation fails.
-    pub fn register_fresh<S: SenderStateStore>(
+    pub fn register_fresh<S: ContextStateStore>(
         &mut self,
         context: Context,
         store: &mut S,
@@ -118,7 +119,7 @@ impl<const N: usize> OwnershipRegistry<N> {
     /// Fails with [`OwnershipError::AlreadyOwned`] while another instance is
     /// live for the same durable record, preventing a second receiver with an
     /// independent replay window.
-    pub fn restore_existing<S: SenderStateStore>(
+    pub fn restore_existing<S: ContextStateStore>(
         &mut self,
         context: Context,
         store: &mut S,
