@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-j2h1",
+  "title": "C schc: public fragmenter/reassembler API in lichen/schc.h (wrapper over schc_internal)",
+  "description": "Smallest slice of b7z9.53.1 (decompose-first). The SCHC fragmenter (schc_fragmenter_init/next/input/timeout, schc_reassembler_*) exists and is vector-tested but is only reachable via schc_internal.h and called solely from tests/fuzz. Expose a public API in lichen/subsys/lichen/schc/include/lichen/schc.h: thin wrappers (e.g. lichen_schc_fragmenter_* mirroring the internal signatures, plus a lichen_schc_requires_fragmentation(len) helper mirroring Rust requires_fragmentation: len \u003e MAX_SINGLE_FRAME_SCHC_PACKET — check the C constant's equivalent, likely LICHEN_FRAME_PAYLOAD_MAX-derived; keep names/cutoffs consistent with rust lichen-schc link.rs). No TX/RX wiring in this slice (that's the security-policy-dependent follow-up; parent b7z9.53.1). Tests: extend/imitate tests/schc_fragment_generation coverage through the public API. Rust reference: rust/lichen-schc/src/link.rs:248-293.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:09:36.040934501Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-01T04:11:24.104414584Z",
+  "closed_at": "2026-09-01T04:11:24.104414584Z",
+  "close_reason": "Premise stale: the fragmenter/reassembler API is ALREADY public — lichen/subsys/schc/include/schc/schc.h:216-305 (schc_fragmenter_init/next/input/timeout, schc_reassembler_*, SCHC_OK, SCHC_FRAGMENT_RULE_A_TO_B) in the CONFIG_SCHC-gated Zephyr subsys lichen/subsys/schc; tests/fuzz/fuzz_schc.c consumes it via #include \u003cschc/schc.h\u003e. There is no schc_internal.h barrier (that header belongs to the separate lichen/subsys/lichen/schc compression subsys and contains only a micro-fragment codec). A wrapper layer would duplicate an existing public API — declined per simplicity bias. Remaining scope of parent b7z9.53.1 is the TX/RX wiring, tracked by its sibling bead (authenticated-fragmentation policy, blocked on l1qw.3.7.6.1).",
+  "labels": [
+    "schc",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-j2h1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.53.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T04:09:36.167567365Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

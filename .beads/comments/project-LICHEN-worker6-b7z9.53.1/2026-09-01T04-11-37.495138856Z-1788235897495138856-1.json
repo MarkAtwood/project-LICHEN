@@ -1,0 +1,7 @@
+{
+  "id": "1788235897495138856-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.53.1",
+  "author": "opencode-worker-1",
+  "text": "Worker1 scoping update: the C fragmenter/reassembler public API already exists (lichen/subsys/schc/include/schc/schc.h:216-305, CONFIG_SCHC subsys; consumed by tests/fuzz) — the only gap is TX/RX wiring in lichen_link_tx. Rust parity requires the AUTHENTICATED fragmentation policy layer (rust/lichen-schc/src/link.rs FragmentationPolicy/AuthenticatedFragmentationPermit/create_fragment_sender, requires_fragmentation cutoff MAX_SINGLE_FRAME_SCHC_PACKET = MAX_FRAME_BODY-4-8-8-SIG-1) with per-peer key/generation state — which depends on the human-only peer_table bead l1qw.3.7.6.1 and needs your design sign-off (wiring unauthenticated fragments would be a security downgrade vs Rust). Decomposed slices filed: j2h1 (public API — closed stale, already exists) and the wiring child (open, blocked on peer_table + design). Recommend: human decision on policy design before any worker wires emission.",
+  "created_at": "2026-09-01T04:11:37.495138856Z"
+}

@@ -3,11 +3,12 @@
   "title": "COSE: Node Credentials (spec 8.13)",
   "description": "Implement node credentials per 06-security.md 8.13. COSE_Sign1 with namespaced claims (lichen:, oidc:, vcard:). Supports TOFU, PKI chain, or default CA. Presentation via CoAP.",
   "notes": "Section expanded: 8.13.1 Local Facts (gateway-issued, mesh-scope) + 8.13.2 CA Credentials (portable, PKI). Implementation covers both.",
-  "status": "open",
+  "status": "deferred",
   "priority": 2,
   "issue_type": "epic",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:46:10.748033Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T23:47:56.012757Z"
+  "updated_at": "2026-09-01T04:11:29.312641261Z",
+  "defer_until": "2026-11-01T00:00:00-07:00"
 }

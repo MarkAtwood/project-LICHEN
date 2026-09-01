@@ -1,0 +1,36 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.53.3",
+  "title": "b7z9.53.3: C: SCHC session-security context keying (signer identity + generation)",
+  "description": "C engine takes rule_id from caller with no signer-key A/B derivation. Implement: context key tuple (local_identity, remote_signer_identity, remote_key_generation, rule_id), 0x78/0x79 direction from signer-key lexicographic comparison, \u003c=4 contexts/signer and \u003c=64 global bounds, auth+replay check before any context mutation. Python/Rust references: fragment.py:64-77, fragment.rs:134-152.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:57:55.014708478Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T03:57:55.014708478Z",
+  "labels": [
+    "c",
+    "schc",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.53.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.53",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:57:55.186922224Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.53.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.53.1",
+      "type": "blocks",
+      "created_at": "2026-09-01T03:58:06.276889411Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

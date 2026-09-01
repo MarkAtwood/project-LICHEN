@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.53.1",
+  "title": "b7z9.53.1: C: wire SCHC fragmenter into lichen_link_tx for oversized payloads",
+  "description": "lichen_link_tx.c:134 calls lichen_schc_compress only; payloads exceeding single-frame size fail -EMSGSIZE. Wire schc_fragmenter_init + fragment emission for compressed payloads that exceed the authenticated frame body. The fragmenter exists and is vector-tested but only called from tests/fuzz.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T03:57:54.152233679Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:11:37.244819717Z",
+  "labels": [
+    "c",
+    "schc",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.53.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.53",
+      "type": "parent-child",
+      "created_at": "2026-09-01T03:57:54.288543983Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

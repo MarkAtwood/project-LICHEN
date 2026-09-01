@@ -2,13 +2,14 @@
   "id": "project-LICHEN-worker6-l6rf",
   "title": "Implement backbone-to-LoRa path transition (spec 7.4)",
   "description": "Implement configurable thresholds for backbone-to-LoRa path transition per spec/05-routing.md 7.4. Parameters: PATH_SWITCH_HYSTERESIS, PATH_SWITCH_HOLD_TIME, PREFER_LORA. Prevents flapping when node is near boundary between backbone and direct LoRa paths.",
-  "status": "open",
+  "status": "deferred",
   "priority": 2,
   "issue_type": "epic",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:19:37.22633Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T23:19:37.22633Z",
+  "updated_at": "2026-09-01T04:11:33.214213322Z",
+  "defer_until": "2026-11-01T00:00:00-07:00",
   "labels": [
     "networking"
   ],
