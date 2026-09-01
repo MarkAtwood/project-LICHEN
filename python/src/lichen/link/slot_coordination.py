@@ -283,6 +283,16 @@ class VersionChangeResult(NamedTuple):
 
 
 @dataclass
+class TdmaWindow:
+    """Timing window for one TDMA slot (R-02a-040 overlap computation)."""
+
+    slot_start_us: int
+    setup_window_us: int
+    occupied_time_us: int
+    guard_us: int
+
+
+@dataclass
 class MultiRootState:
     """State machine for multi-root beacon conflict resolution.
 

@@ -20,7 +20,10 @@ def _option_bytes(case: dict) -> bytes:
     return bytes.fromhex(case["option_hex"])
 
 
-@pytest.mark.parametrize("case", [c for c in VECTORS if c["type"] == "dtn_hbh"], ids=lambda c: c["name"])
+_HBH_CASES = [c for c in VECTORS if c["type"] == "dtn_hbh"]
+
+
+@pytest.mark.parametrize("case", _HBH_CASES, ids=lambda c: c["name"])
 def test_dtn_hbh_option(case: dict) -> None:
     parsed = parse_dtn_option(_option_bytes(case))
     expected = case["expected"]

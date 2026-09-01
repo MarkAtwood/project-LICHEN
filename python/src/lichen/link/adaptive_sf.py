@@ -96,6 +96,7 @@ def select_tx_sf(
     nbr: NeighborState,
     density: int,
     utilization: int,
+    load_factor: float = 0.0,
 ) -> tuple[int, bool]:
     """Select TX SF and tx_allowed flag per spec 02a 2a.8 pseudocode.
 
