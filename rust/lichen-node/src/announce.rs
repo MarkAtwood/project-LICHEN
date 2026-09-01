@@ -15,7 +15,7 @@ use lichen_link::identity::{iid_from_pubkey, PeerIdentity};
 use lichen_link::keys::PublicKey;
 use lichen_link::schnorr;
 
-use crate::announce_store::{AnnounceTrustState, AnnounceTrustStore};
+use crate::announce_store::{AnnounceStoreError, AnnounceTrustState, AnnounceTrustStore};
 use crate::gradient::{
     GeoCoords, GradientEntry, GradientSource, GradientTable, GRADIENT_TIMEOUT_MS,
 };
@@ -40,6 +40,11 @@ pub enum AnnounceRejectReason {
     /// Durable trust state could not be read or committed; admission fails
     /// closed (no route/gradient mutation) per persist-first ordering.
     PersistenceError,
+    /// The durable store is at its lifetime originator capacity
+    /// (MAX_TRACKED_ORIGINATORS) and the IID is new. Distinct from
+    /// PersistenceError so operators can diagnose store-full admission
+    /// bricks instead of suspecting corruption.
+    StoreFull,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -236,7 +241,7 @@ impl AnnounceProcessor {
         // gradient, pin, and replay tables untouched. A surviving floor after
         // a crash forces the legitimate sender to increment its sequence.
         if self.trust_store.borrow().is_persistent() {
-            let accepted = self
+            let accept_result = self
                 .trust_store
                 .borrow_mut()
                 .accept(
@@ -245,10 +250,15 @@ impl AnnounceProcessor {
                         pubkey: *announce.pubkey,
                         seq: announce.seq_num,
                     },
-                )
-                .is_ok();
-            if !accepted {
-                return AnnounceResult::rejected(AnnounceRejectReason::PersistenceError);
+                );
+            if let Err(err) = accept_result {
+                // Full (lifetime originator cap) is an operator-diagnosable
+                // capacity condition, not corruption: surface it distinctly.
+                let reason = match err {
+                    AnnounceStoreError::Full => AnnounceRejectReason::StoreFull,
+                    _ => AnnounceRejectReason::PersistenceError,
+                };
+                return AnnounceResult::rejected(reason);
             }
         }
 
@@ -1117,7 +1127,7 @@ mod tests {
         assert!(!result.accepted);
         assert_eq!(
             result.reject_reason,
-            Some(AnnounceRejectReason::PersistenceError)
+            Some(AnnounceRejectReason::StoreFull)
         );
 
         // Fail closed: the route/gradient state for the originator was not
