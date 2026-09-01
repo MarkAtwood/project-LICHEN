@@ -3,6 +3,7 @@
 
 #include <lichen/rpl_dao_tx_persist.h>
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -15,6 +16,147 @@ static int failures;
 			failures++;                                            \
 		}                                                              \
 	} while (0)
+
+/* --- DAO TX state open/provision over a fake store (bead b7z9.11.2) --- */
+
+#define NSLOTS 2
+#define STORE_CAP 340
+
+struct store {
+	bool present[NSLOTS];
+	uint8_t data[NSLOTS][STORE_CAP];
+	size_t len[NSLOTS];
+	int read_error;
+};
+
+static int store_read(void *user, const char *key, uint8_t *out,
+		      size_t capacity, size_t *length)
+{
+	struct store *s = user;
+	unsigned int idx = key[7] - 'a';
+
+	if (s->read_error != 0) {
+		return s->read_error;
+	}
+	if (idx >= NSLOTS || !s->present[idx]) {
+		return 1;
+	}
+	size_t n = s->len[idx] < capacity ? s->len[idx] : capacity;
+	memcpy(out, s->data[idx], n);
+	*length = n;
+	return 0;
+}
+
+static int store_write(void *user, const char *key, const uint8_t *value,
+		       size_t length)
+{
+	struct store *s = user;
+	unsigned int idx = key[7] - 'a';
+
+	if (idx >= NSLOTS || length > STORE_CAP) {
+		return -EINVAL;
+	}
+	s->present[idx] = true;
+	memcpy(s->data[idx], value, length);
+	s->len[idx] = length;
+	return 0;
+}
+
+static const struct lichen_hal_storage_ops store_ops = {
+	.read = store_read,
+	.write = store_write,
+};
+
+static void test_dao_tx_state(void)
+{
+	static const uint8_t key[32] = { 1 };
+	static const uint8_t origin[16] = { 2 };
+	static const uint8_t dodag[16] = { 3 };
+	static const uint8_t other_key[32] = { 9 };
+	struct store s;
+	struct lichen_rpl_dao_tx_state state;
+	uint8_t record[LICHEN_DAO_TX_HEADER_LEN +
+		       LICHEN_DAO_TX_MAX_SIGNED_LEN];
+	size_t payload_len;
+
+	/* Empty store: open is Missing; provision succeeds at sequence 0. */
+	memset(&s, 0, sizeof(s));
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_MISSING,
+	      "tx open on empty store is Missing");
+	CHECK(lichen_rpl_dao_tx_provision(&store_ops, &s, key, origin, 7,
+					  dodag, &state) ==
+		      LICHEN_DAO_TX_PROVISION_OK,
+	      "tx provision succeeds");
+	CHECK(state.current.generation == 1 && state.last_reserved == 0U &&
+		      state.last_signed_dao_len == 0U,
+	      "tx provision state: gen 1, seq 0, no signed bytes");
+	CHECK(s.present[0] && !s.present[1], "tx provision wrote slot A");
+
+	/* Re-open roundtrips the scope. */
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_OK,
+	      "tx re-open OK");
+
+	/* Provision again -> Already. */
+	CHECK(lichen_rpl_dao_tx_provision(&store_ops, &s, key, origin, 7,
+					  dodag, &state) ==
+		      LICHEN_DAO_TX_PROVISION_ALREADY,
+	      "tx re-provision is Already");
+
+	/* Key mismatch. */
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, other_key, origin, 7,
+				     dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_KEY_MISMATCH,
+	      "tx open key mismatch");
+
+	/* Scope mismatch (instance). */
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 9, dodag,
+				     &state) ==
+		      LICHEN_DAO_TX_OPEN_SCOPE_MISMATCH,
+	      "tx open scope mismatch");
+
+	/* Corrupt record: provision is Corrupt, not Already (Exists->Corrupt
+	 * mapping matches the Rust reference). */
+	memset(&s, 0, sizeof(s));
+	s.present[0] = true;
+	memset(s.data[0], 0xEE, 24);
+	s.len[0] = 24;
+	CHECK(lichen_rpl_dao_tx_provision(&store_ops, &s, key, origin, 7,
+					  dodag, &state) ==
+		      LICHEN_DAO_TX_PROVISION_CORRUPT,
+	      "tx provision over corrupt is Corrupt");
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_CORRUPT,
+	      "tx open corrupt is Corrupt");
+
+	/* Trailing-garbage record (exact-length gate on open). */
+	memset(&s, 0, sizeof(s));
+	payload_len = lichen_rpl_dao_tx_encode(key, origin, 7, dodag, 5, NULL,
+					       0, record, sizeof(record));
+	CHECK(payload_len == LICHEN_DAO_TX_HEADER_LEN, "seq-0 encode");
+	s.present[0] = true;
+	memcpy(s.data[0], record, payload_len);
+	s.len[0] = payload_len + 3;
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) == LICHEN_DAO_TX_OPEN_CORRUPT,
+	      "tx open rejects trailing garbage");
+
+	/* Storage read failure surfaces as STORAGE_ERROR. */
+	memset(&s, 0, sizeof(s));
+	s.read_error = -EIO;
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, key, origin, 7, dodag,
+				     &state) ==
+		      LICHEN_DAO_TX_OPEN_STORAGE_ERROR,
+	      "tx open storage error");
+
+	/* NULL guard. */
+	memset(&s, 0, sizeof(s));
+	CHECK(lichen_rpl_dao_tx_open(&store_ops, &s, NULL, origin, 7, dodag,
+				     &state) ==
+		      LICHEN_DAO_TX_OPEN_STORAGE_ERROR,
+	      "tx open NULL key rejected");
+}
 
 int main(void)
 {
@@ -141,6 +283,8 @@ int main(void)
 		      header.signed_dao_len == LICHEN_DAO_TX_MAX_SIGNED_LEN &&
 		      header.signed_dao[0] == 0x5A,
 	      "max signed dao parses");
+
+	test_dao_tx_state();
 
 	if (failures == 0) {
 		printf("PASS: rpl_dao_tx_persist codec\n");
