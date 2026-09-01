@@ -1,0 +1,38 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.66",
+  "title": "Rule 255 RX: Rust and C still enforce stale two-tier structural address checks (decision rule255-rx-decode)",
+  "description": "Requirement (decisions.jsonl rule255-rx-decode, 2026-08-31, FINAL): byte-preserving — decode accepts any well-framed packet with valid checksum REGARDLESS of endpoint addresses; address validation is TX-only.\n\nClassification: divergent (Rust + C); Python conformant.\n\nEvidence:\n- Rust: rust/lichen-schc/src/codec.rs:285-297 validate_full_ipv6_structure rejects unspecified/multicast source and unspecified destination on RX; called from decode_rule255 (codec.rs:1547,1562). Docstring codec.rs:265-270 contradicts the code below it (claims byte-preserving).\n- C: validate_ipv6_transport_lengths (lichen/subsys/lichen/schc/schc_helpers.c) rejects the same structural set on RX via lichen_schc_profile.validate_payload (schc.c:525); comment schc.c:523-524 claims byte-preserving.\n- Python conformant: validate_full_ipv6 headers.py:152-180 + decode_rule255 headers.py:233-244 do framing/structure/checksums only; emission endpoints TX-only (_validate_rule255_emission_endpoints headers.py:183-209). Decision verify.grep_absent passes.\n- Stale vectors: test/vectors/schc_adaptation.json category rule255_rx_structural_reject (3 cases; provenance asserts 'rejected in BOTH directions'); consumers rust/lichen-schc/tests/adaptation_vectors.rs:1109-1135 and python/tests/test_vectors.py:4874-4898 (the Python consumer contradicts its own byte-preserving library; suite currently cannot collect — jsonschema missing from python/.venv).\n- Spec fixed this sweep: 03-adaptation.md 5.7 RX paragraph restored to byte-preserving wording per the decision.\n\nAcceptance: Rust codec.rs and C validate_ipv6_transport_lengths drop the RX-side structural address checks (keep structure/checksum validation); rule255_rx_structural_reject vectors rewritten to byte-preserving expectation (encode rejects, decode accepts); both vector consumers updated; parity tests green.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-7",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T10:41:02.463823615Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T10:48:30.635077308Z",
+  "started_at": "2026-09-01T10:48:30.635077308Z",
+  "lease_expires_at": "2026-09-01T10:53:30.635077308Z",
+  "heartbeat_at": "2026-09-01T10:48:30.635077308Z",
+  "labels": [
+    "schc",
+    "decision-regression"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.66",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T10:41:02.58562746Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.66",
+      "depends_on_id": "project-LICHEN-worker6-l9jj",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T10:41:02.68275067Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
