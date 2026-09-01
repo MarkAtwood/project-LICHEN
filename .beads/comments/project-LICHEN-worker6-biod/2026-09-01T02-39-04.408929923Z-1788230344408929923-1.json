@@ -1,0 +1,7 @@
+{
+  "id": "1788230344408929923-1",
+  "issue_id": "project-LICHEN-worker6-biod",
+  "author": "Mark Atwood",
+  "text": "Mitigation shipped (a158b0ffd7), verified with a controlled repro: (1) pre-commit hook at scripts/githooks/pre-commit via core.hooksPath blocks any commit staging .beads/ or rust/crates/oscore/ unless BEADS_ALLOW_STORE_COMMIT=1 (sync loop + janitor opt out) — worker-side store leaks never enter history again, so the merge normalizations stop having anything to rewind; (2) sync-beads-workers.sh + merge-janitor.sh now checkpoint pending store writes before EACH branch merge (previously only before the loop), closing the between-branches window worker-4 identified. Residual risk: writes landing during a single conflicting branch's kimi session (up to ~30 min) can still be eaten by that branch's normalization until legacy-polluted branches drain; the hook stops new pollution. Structural cure (per-worker stores with merger, or bd dolt/sqlite backend) filed as project-LICHEN-worker6-nqs6 for the human decision. Also caught during this work: a sweep-session overreach reverted the rule255 two-tier adjudication across 8 files including weakening test_vectors.py — reverted, evidence at /tmp/opencode/biod-incident-sweep-overreach.patch, incident bead filed.",
+  "created_at": "2026-09-01T02:39:04.408929923Z"
+}

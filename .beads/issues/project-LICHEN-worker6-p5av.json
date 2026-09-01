@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-p5av",
+  "title": "ADJUDICATE (human): move bd store off flat-file RMW (per-worker stores + merger, or dolt/sqlite backend)",
+  "description": "Structural follow-up from biod: the shared BEADS_DIR store is a git working tree written by 7 worker processes + sync loop + janitor, with checkpoint commits and rewinding normalizations guarding it. The layered mitigation (pre-commit hook blocking worker-side store staging + per-branch checkpoints, a158b0ffd7) makes loss practically unreachable, but file-copy granularity remains the disease (worker-4's words). Human decision: (a) keep current architecture and accept the residual, (b) per-worker bd stores with a merger pass in the sync loop, or (c) move bd to its dolt/sqlite backend (check bd's storage options and migration cost first; AGENTS.md forbids bd dolt push — local-only dolt is unaffected). Evidence thread: project-LICHEN-worker6-biod, worker-4's measured incidents.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T02:39:04.559806714Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T02:39:04.559806714Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p5av",
+      "depends_on_id": "project-LICHEN-worker6-biod",
+      "type": "discovered-from",
+      "created_at": "2026-09-01T02:39:04.669551324Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
