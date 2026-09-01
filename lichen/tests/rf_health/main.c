@@ -92,6 +92,36 @@ int main(void)
 	CHECK(lichen_rf_health_estimate_density(0, 200, -100) == 3,
 	      "density: zero neighbors with bonuses");
 
+	/* Interference score (CCP-15 R-02a-137): ccp-interference.json
+	 * vectors. busy_percent*10 + per_mille, tenths domain. */
+	struct {
+		const char *name;
+		uint8_t busy;
+		uint16_t per;
+		uint16_t score;
+	} interference[] = {
+		{ "idle_channel", 0, 0, 0 },
+		{ "moderate_busy_low_per", 30, 50, 350 },
+		{ "high_busy_high_per", 80, 200, 1000 },
+		{ "saturated_channel", 95, 500, 1450 },
+		{ "low_busy_moderate_per", 10, 150, 250 },
+		{ "clean_channel_high_per", 5, 600, 650 },
+	};
+	for (size_t i = 0; i < sizeof(interference) / sizeof(interference[0]);
+	     i++) {
+		CHECK(lichen_rf_health_interference_score_tenths(
+			      interference[i].busy,
+			      interference[i].per) ==
+			      interference[i].score,
+		      interference[i].name);
+	}
+	CHECK(lichen_rf_health_interference_score_tenths(100, 1000) == 2000,
+	      "interference: in-range boundary (100, 1000) -> 2000");
+	CHECK(lichen_rf_health_interference_score_tenths(101, 0) == 0xFFFF,
+	      "interference: busy > 100 fails closed");
+	CHECK(lichen_rf_health_interference_score_tenths(0, 1001) == 0xFFFF,
+	      "interference: per > 1000 fails closed");
+
 	if (failures == 0) {
 		printf("PASS: rf_health loss threshold\n");
 		return 0;

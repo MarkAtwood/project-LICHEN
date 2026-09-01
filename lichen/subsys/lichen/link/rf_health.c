@@ -165,3 +165,14 @@ uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
 	}
 	return density > 255u ? 255u : (uint8_t)density;
 }
+
+uint16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
+						    uint16_t packet_error_permille)
+{
+	/* CCP-15 (R-02a-137), rust rf_health.rs parity: busy percent in
+	 * tenths + packet error permille; out-of-range fails closed. */
+	if (busy_percent > 100u || packet_error_permille > 1000u) {
+		return 0xFFFFu;
+	}
+	return (uint16_t)((uint32_t)busy_percent * 10u + packet_error_permille);
+}
