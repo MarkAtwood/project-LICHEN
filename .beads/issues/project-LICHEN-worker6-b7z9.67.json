@@ -8,8 +8,7 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T10:42:51.331646294Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T11:16:55.27789527Z",
-  "started_at": "2026-09-01T11:06:20.607935254Z",
+  "updated_at": "2026-09-01T19:52:22.301009809Z",
   "labels": [
     "zephyr",
     "spec-gap"
