@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-mvrx.2",
+  "title": "mvrx.2: Fix Nucleo puck Kconfig — add missing CONFIG_LICHEN_COAP",
+  "description": "Nucleo puck build required ad hoc audit override for CONFIG_LICHEN_COAP before reaching the radio-link failure. Add the missing Kconfig to the puck board's prj.conf or defconfig so it builds canonically without overrides.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:25:46.353921676Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:25:46.353921676Z",
+  "labels": [
+    "renode"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-mvrx.2",
+      "depends_on_id": "project-LICHEN-mvrx",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:25:46.472786143Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.30.3",
+  "title": "l1qw.30.3: C deaddrop: add ACL — OSCORE-authenticated access only",
+  "description": "Spec 18.9: deaddrop reads/writes require OSCORE authentication. Current C implementation has no ACL check. Wire OSCORE context verification into the deaddrop handlers.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:18:23.890888566Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:18:23.890888566Z",
+  "labels": [
+    "apps",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.30.3",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.30",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:18:24.027138189Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

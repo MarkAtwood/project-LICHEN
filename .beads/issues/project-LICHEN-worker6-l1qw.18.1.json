@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.18.1",
+  "title": "l1qw.18.1: C: add 32-entry cap to GCP GET /slots response",
+  "description": "Spec GCP-6.4: GET /slots response MUST cap at 32 entries. Current C implementation returns all entries without limit. Add cap and return appropriate CoAP response when truncated.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:18:20.793818954Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:18:20.793818954Z",
+  "labels": [
+    "gcp",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.18.1",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.18",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:18:20.919533795Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

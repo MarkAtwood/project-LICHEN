@@ -1,3 +1,4 @@
 {"id":"01a04597-aee1-74a3-8b3b-f1e0d5b68cac","issue_id":"project-LICHEN-worker6-qpco.4","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-27T23:39:23.745305Z"}
 {"id":"01a0560e-f94f-772b-8a35-9ccfe4b62449","issue_id":"project-LICHEN-worker6-qpco.4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:23:37.039470876Z"}
 {"id":"01a0567a-dcfb-7dcd-b128-f90093c1bc47","issue_id":"project-LICHEN-worker6-qpco.4","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-08-31T06:21:27.675905702Z"}
+{"id":"01a05b2c-418d-7595-94b5-2f654b680f70","issue_id":"project-LICHEN-worker6-qpco.4","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Vector regeneration is scoped within l1qw.16.4 (CBOR 0xbf fix + cross-validate)","created_at":"2026-09-01T04:13:42.157367581Z"}

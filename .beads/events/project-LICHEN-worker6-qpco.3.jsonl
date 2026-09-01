@@ -1,3 +1,4 @@
 {"id":"01a04597-a277-7468-888f-c3c88a21e321","issue_id":"project-LICHEN-worker6-qpco.3","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-08-27T23:39:20.56729Z"}
 {"id":"01a0560e-f94b-72e5-800f-df6358a273fd","issue_id":"project-LICHEN-worker6-qpco.3","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:23:37.0351909Z"}
 {"id":"01a0567a-e83c-7f20-af64-7afc558496c8","issue_id":"project-LICHEN-worker6-qpco.3","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-08-31T06:21:30.556992317Z"}
+{"id":"01a05b2c-3fda-7216-bdad-6fe2544f3801","issue_id":"project-LICHEN-worker6-qpco.3","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Superseded by l1qw.16.4 (has actionable description: C gcp_trust SLOT_CLAIM: prefix to COSE_Sign1 migration)","created_at":"2026-09-01T04:13:41.722138097Z"}

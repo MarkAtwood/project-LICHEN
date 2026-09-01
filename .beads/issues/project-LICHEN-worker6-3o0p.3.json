@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-worker6-3o0p.3",
   "title": "Zephyr: GCP Handoff COSE_Sign1",
-  "description": "Implement GCP Handoff COSE_Sign1 in Zephyr C. Algorithm -65537, integer-keyed payload, RFC 9052 Sig_structure.",
+  "description": "Implement COSE_Sign1 codec for GCP-7.1 handoff messages in C/Zephyr. Existing C stubs in coap_handoff.c. Add: (1) lichen_handoff_decode_cose_sign1 — parse COSE_Sign1 envelope, extract protected/unprotected/payload/signature; (2) verify protected alg==-65537; (3) rebuild Sig_structure per RFC 9052 → SHA256 → Schnorr48 verify via existing gcp_trust functions; (4) decode payload integer keys 1-6 (request: node, old_gw, seq, ts, expiry, rssi; confirm: node, new_gw, seq, ts, link_epoch, link_seq); (5) lichen_handoff_encode_cose_sign1 — build confirm message with signing. Test against gcp_handoff_cose_sign1.json vectors. Domain prefix must match Python/Rust (not SLOT_CLAIM: pattern).",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:39:21.491985Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T23:39:21.491985Z",
+  "updated_at": "2026-09-01T04:14:44.685449822Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-3o0p.3",

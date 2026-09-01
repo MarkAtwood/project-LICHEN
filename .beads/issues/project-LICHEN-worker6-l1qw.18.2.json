@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.18.2",
+  "title": "l1qw.18.2: C: add Block2 pagination to GCP GET /slots",
+  "description": "When slot list exceeds 32 entries or payload limit, use CoAP Block2 to paginate. Spec GCP-6.4 requires pagination support for large federations.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:18:21.176628728Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:18:21.176628728Z",
+  "labels": [
+    "gcp",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.18.2",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.18",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:18:21.308026807Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

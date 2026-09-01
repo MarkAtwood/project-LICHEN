@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.32.1",
+  "title": "l1qw.32.1: Implement /config/privacy CoAP resource",
+  "description": "Spec 18.2.4: GET/PUT for position privacy mode (off, coarse, full). Controls whether node includes precise GPS in beacons and SenML reports. No implementation exists.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:18:26.331494317Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:18:26.331494317Z",
+  "labels": [
+    "apps",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.32.1",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.32",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:18:26.487058105Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-worker6-l1qw.29",
   "title": "Deaddrop SCHC rules absent: /deaddrop not in rule registry, appendix, or vectors (spec 18.9)",
-  "description": "Spec 12-apps.md 18.9: /deaddrop CoAP messages MUST use the project SCHC rule set; rules for path /deaddrop, content-format 112, and OSCORE options are pre-provisioned (appendix-schc.md and constants.toml); implementations MUST match test vector outputs for compressed packets. Classification: not-implemented. Evidence: rust/lichen-schc/src/rules.rs (rule set v3, 35 rules) has no /deaddrop or confessions rules (:223-233 generic CoAP fields only); spec/appendix-schc.md has zero /deaddrop mentions; constants.toml none; test/vectors/schc_compression.json none; C schc.h none. Suggested placement: rust/lichen-schc/src/rules.rs + spec/appendix-schc.md + test/vectors/ (new deaddrop SCHC vectors) + C rule tables. Refs R-12-077, R-12-078.",
+  "description": "Spec 18.9: /deaddrop CoAP resource needs a dedicated SCHC compression rule for efficient LoRa transport. No deaddrop rule exists in the SCHC rule registry (rules.py/rules.rs/schc.c), appendix-schc.md rule table, or test vectors. Add rule (next available ID), document in appendix, add round-trip test vectors.",
   "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:36:50.894114563Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T12:36:50.894114563Z",
+  "updated_at": "2026-09-01T04:19:07.279214168Z",
   "labels": [
     "apps",
     "spec-gap",

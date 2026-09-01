@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-cy6c.3",
+  "title": "cy6c.1: Analyze ESP32-S3 ELF memory map vs Renode .repl platform",
+  "description": "Read the ESP32-S3 ELF program headers (readelf -l) for Heltec V3 and T-Deck builds. Cross-reference against the current Renode .repl platform description. Document which address ranges are unmapped (causing the load failure). The ESP32-S3 TRM has the canonical memory map. Pure analysis — no hardware needed.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T04:25:43.163625875Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T04:25:43.163625875Z",
+  "labels": [
+    "blocked:hardware",
+    "renode"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-cy6c.3",
+      "depends_on_id": "project-LICHEN-cy6c",
+      "type": "parent-child",
+      "created_at": "2026-09-01T04:25:43.299888934Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,20 +1,36 @@
 {
   "id": "project-LICHEN-worker6-3o0p.5",
   "title": "Cross-validate: GCP Handoff COSE_Sign1 parity",
-  "description": "Cross-validate Python, Rust, and Zephyr implementations of GCP Handoff COSE_Sign1. Ensure all implementations produce identical output for the same inputs.",
+  "description": "Cross-validate GCP Handoff COSE_Sign1 across Python, Rust, and C. (1) All three implementations must produce identical COSE_Sign1 bytes for the same inputs (canonical CBOR payload + same signing key → same signature); (2) each implementation must successfully verify messages signed by the other two; (3) test against every vector in gcp_handoff_cose_sign1.json from all three consumers; (4) verify replay rejection, expiry enforcement, and kid/alg validation are consistent across implementations. Depends on 3o0p.2 and 3o0p.3.",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:39:29.633212Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T23:39:29.633212Z",
+  "updated_at": "2026-09-01T04:14:44.920070107Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-3o0p.5",
       "depends_on_id": "project-LICHEN-worker6-3o0p",
       "type": "parent-child",
       "created_at": "2026-08-27T23:39:30.610249Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-3o0p.5",
+      "depends_on_id": "project-LICHEN-worker6-3o0p.2",
+      "type": "blocks",
+      "created_at": "2026-09-01T04:14:51.547876369Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-3o0p.5",
+      "depends_on_id": "project-LICHEN-worker6-3o0p.3",
+      "type": "blocks",
+      "created_at": "2026-09-01T04:14:52.76321885Z",
       "created_by": "Mark Atwood",
       "metadata": "{}"
     }

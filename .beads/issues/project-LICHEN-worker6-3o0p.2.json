@@ -1,14 +1,14 @@
 {
   "id": "project-LICHEN-worker6-3o0p.2",
   "title": "Rust: GCP Handoff COSE_Sign1",
-  "description": "Implement GCP Handoff COSE_Sign1 in Rust. Algorithm -65537, integer-keyed payload, RFC 9052 Sig_structure.",
+  "description": "Implement COSE_Sign1 codec for GCP-7.1 handoff messages in Rust lichen-gateway. Existing handoff.rs has protocol logic (NodeRegistry, handle_handoff_request, accept_handoff, finalize_handoff) and trust.rs has sign/verify_gateway_message — but no COSE_Sign1 envelope encoding/decoding. Add: (1) HandoffRequestCoseSign1 struct with from_cose_sign1/to_cose_sign1 methods matching Python handoff.py:919-984; (2) protected header {1:-65537}, unprotected {4:kid=gateway_iid}; (3) RFC 9052 Sig_structure computation → SHA256 → Schnorr48 sign/verify via existing trust.rs functions; (4) HandoffRequestCosePayload with integer keys 1-6 (node, old_gw, seq, ts, expiry, rssi); (5) HandoffConfirmCosePayload with integer keys 1-6 (node, new_gw, seq, ts, link_epoch, link_seq); (6) alg -65537 check on decode (reject others). Test against gcp_handoff_cose_sign1.json vectors (comprehensive: valid, replay, expired, wrong-alg, wrong-kid).",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T23:39:17.284702Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-27T23:39:17.284702Z",
+  "updated_at": "2026-09-01T04:14:44.408547781Z",
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-3o0p.2",
