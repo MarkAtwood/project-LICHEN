@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.25.5",
+  "title": "b7z9.25.5: Python+Rust: wire hold-off completion to desync/rejoin FSM",
+  "description": "Spec 02a.5.3 R-02a-043: after hold-off 3 superframes, MUST initiate desync+rejoin. Python advance_holdoff()==True is only a signal (slot_coordination.py:359-376); Rust same pattern (multi_instance.rs:1108-1122). Neither wires the signal to DesyncFSM. Fix: when advance_holdoff() returns True, call desync_fsm.force_desynced() or equivalent to trigger the rejoin path.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:48:37.628652427Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:48:37.628652427Z",
+  "labels": [
+    "spec-gap",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.25.5",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.25",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:48:37.747681299Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

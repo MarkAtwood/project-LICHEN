@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.25.4",
+  "title": "b7z9.25.4: Python+Rust: add stratum ordering gate to recovery acceptance",
+  "description": "Spec R-02a-085: stratum ordering gates recovery acceptance. Neither Python nor Rust desync FSM checks stratum when accepting beacons in DESYNCED/RECOVERING states. RootCandidate has stratum field and it's used in root selection (multi_instance.rs:974), but not in desync recovery. Add stratum parameter to on_beacon() and reject beacons with worse stratum than stored best.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:48:32.688455533Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:48:32.688455533Z",
+  "labels": [
+    "spec-gap",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.25.4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.25",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:48:32.825120088Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.2.2.2",
+  "title": "b7z9.37.2.2(b): C Schnorr48 verify + replay cache + receiver wiring + Kconfig (after (a))",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37.2.2. LANDS AFTER (a): signature verification via schnorr48_verify over sha256(rebuilt sig_structure) (C sha256 source: survey lichen/subsys for an existing sha256 or use monocypher crypto_sha256 — monocypher is already a C dependency), replay cache keyed (dodag_id,instance) mirroring rust RootSeqCache, receiver wiring in the C DIO path with L679 baseline fallback (no option/pin/expired -\u003e process normally), and CONFIG_LICHEN_RPL_ROOT_SIG Kconfig gating root-side inclusion. Vectors drive the full verify path.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:58:13.534605057Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-01T01:58:13.534605057Z",
+  "labels": [
+    "decomposed",
+    "zephyr",
+    "security",
+    "python",
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.2.2.2",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.2.2",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:58:13.711927015Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

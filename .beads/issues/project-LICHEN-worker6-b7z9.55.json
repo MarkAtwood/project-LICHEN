@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.55",
+  "title": "C/Zephyr: SCHC decompression consecutive-failure tracker absent",
+  "description": "spec/03-adaptation.md 5.7: 'Production decompression ingress MUST maintain a bounded consecutive-failure tracker keyed by the authenticated link signer ... When the tracker is full, an ingress MUST fail closed for a previously untracked signer and MUST NOT evict an existing run.' Classification: not-implemented in C. Evidence: no tracker anywhere in lichen/subsys (rg clean); Rust rust/lichen-schc/src/context.rs:43-108 RuleVersionFailureTracker + lichen-node/src/stack.rs:224-345 (threshold 3, no-eviction fail-closed); Python python/src/lichen/schc/context.py:214-265 + node.py:1318-1343. Vectors rule_versioning.json failure_tracker_capacity consumed by Rust+Python only. Suggested placement: lichen/subsys/lichen/schc or the L2 RX path. Filed from spec-coverage sweep 2026-08-31 (R-03-068/069).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:48:27.266594949Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:48:27.266594949Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "schc",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.55",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:48:27.402536717Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

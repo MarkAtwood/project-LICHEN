@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-eliz",
   "title": "l1qw.30(d): C confessions storage implementation (currently a stub)",
   "description": "Child of worker6-l1qw.30 (spec 18.10): confessions_post validates and rate-limits but stores NOTHING and returns 2.04 (coap_dtn.c:269-317); confessions_get returns one float record (:243-267). Implement real storage (mirroring the deaddrop buffer pattern), the 18.10 response contract, and relax the C OSCORE requirement on confessions POST to optional per spec (currently required at :287-293 where spec makes it optional — confirm with the 18.10 table before relaxing). Largest child; landable after (a).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T00:11:21.483464486Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-09-01T00:11:21.483464486Z",
+  "updated_at": "2026-09-01T01:45:58.350600059Z",
+  "closed_at": "2026-09-01T01:45:58.350600059Z",
+  "close_reason": "Landed the C confessions storage per spec 18.10: RAM-only FIFO ring (2 slots x 768B, Kconfig-tunable budget context), POST contract — OSCORE-optional (18.10.5: plain_buf provided so unprotected anonymous POSTs are accepted; the relaxation confirmed against the 18.10.5 table before landing), 768B size cap (4.13), 1/30s per-node + 12/hour rate caps (4.29, uptime-based per 18.10.3), 2.04 on store; GET contract — stored ring returned as SenML vd records (data field; stable ring-buffer pointers so no aliasing; 1536 data cap covers 768), ?count=N and ?since=T query params wired (fail-closed on malformed values), uptime-based record timestamps with the clockless-node caveat. Reviewer findings all fixed in-revision: P0 undefined Kconfig macro (GET buffer sized to the 2KB leaf budget locally), P1 use-after-scope char-text aliasing (eliminated via senml_add_data over the ring), P1 silent \u003e256B data loss (data-field cap covers), P2 dead since/count (wired), P3 out-of-lock ring reads (moved inside), P3 dead 1KB s_conf_last_post static (removed — RAM win on 64KB STM32WL), P3 unused pack local (removed). Verified: native_sim coap_location_beacon suite green (PROJECT EXECUTION SUCCESSFUL). NOT landed (filed): 4.29 Retry-After + storage_full 5.03 body (need the coap_oscore_send_protected payload/option API — oscore-bar, bead filed); iid7-bucket rate-key collision (pattern pre-existing in deaddrop — filed).",
   "labels": [
     "coap"
   ],

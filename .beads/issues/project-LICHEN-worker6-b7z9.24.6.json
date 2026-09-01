@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.24.6",
+  "title": "b7z9.24.4: C: multi-root ztest consuming ccp16-desync.json multi_root vectors",
+  "description": "Create lichen/tests/multi_root/ ztest suite exercising the C multi-root selection and version-change SFN reset against ccp16-desync.json multi_root_version_conflict_desync vector and any additional multi-root vectors. Must match Python/Rust behavior.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:49:11.887842827Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:49:11.887842827Z",
+  "labels": [
+    "rpl",
+    "spec-gap",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.24.6",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.24",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:49:12.003998091Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

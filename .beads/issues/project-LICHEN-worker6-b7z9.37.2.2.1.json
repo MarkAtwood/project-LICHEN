@@ -1,0 +1,34 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.37.2.2.1",
+  "title": "b7z9.37.2.2(a): C COSE decode + structural validation (root_dio_sig.c) + host vector test",
+  "description": "Parent: project-LICHEN-worker6-b7z9.37.2.2. New C module lichen/subsys/lichen/rpl/root_dio_sig.c/.h: minimal strict CBOR reader for the COSE_Sign1 Root DIO Signature (definite lengths only; tag-18 array(4): protected bstr-\u003emap{1:-65537}, unprotected map{4:kid bstr8}, payload bstr-\u003emap keys 1-7 with u8/u16/u64 range checks, signature bstr 48; duplicate labels, trailing bytes, indefinite lengths, and negatives for unsigned fields rejected fail-closed) + structural checks mirroring python verify_root_dio_signature:278-362: kid==IID(pubkey) via lichen_identity_iid_from_ed25519, DODAGID==ygg_addr(pubkey) via lichen_identity_ygg_addr_from_ed25519, expiry\u003enow. Error reasons match vector expected.error strings. Host CMake test lichen/tests/rpl_root_sig/ extended with fixtures from test/vectors/root_dio_signature.json (valid basic, tampered-\u003edecode-ok, wrong_algorithm, kid_mismatch, impersonation, expiry boundary, garbage/trailing). Schnorr48 verify + replay + receiver wiring stay in sibling (b).",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-5",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:58:13.053237224Z",
+  "created_by": "opencode-worker-5",
+  "updated_at": "2026-09-01T01:58:14.399951643Z",
+  "started_at": "2026-09-01T01:58:14.399951643Z",
+  "lease_expires_at": "2026-09-01T02:03:14.399951643Z",
+  "heartbeat_at": "2026-09-01T01:58:14.399951643Z",
+  "labels": [
+    "decomposed",
+    "zephyr",
+    "security",
+    "python",
+    "rpl",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.37.2.2.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.37.2.2",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:58:13.198276443Z",
+      "created_by": "opencode-worker-5",
+      "metadata": "{}"
+    }
+  ]
+}

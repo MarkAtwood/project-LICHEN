@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.22.5",
+  "title": "b7z9.22.5: Root-side beacon slot_map population from DODAG state",
+  "description": "Implement the root-side logic that computes each node's slot_map and includes it in beacons. Spec R-02a-013: root MUST set slot_map on each beacon. Currently no beacon writer in any language sets slot_map. Design: root assigns slots based on DAO registrations. Python reference implementation first, then port to Rust beacon builder (b7z9.22.1).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:48:04.284676108Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:48:04.284676108Z",
+  "labels": [
+    "spec-gap",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.22.5",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.22",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:48:04.419873295Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-4oeu",
   "title": "PresenceCacheResource.record() missing input validation for addr/status",
   "description": "In presence.py, record() (lines 250-286) accepts addr:str and status:str parameters without validation. Compare to evict() which validates addr with 'if type(addr) is not str or addr == \"\"'. Missing validation could allow invalid data (None, empty string, wrong type) to be cached or cause inconsistent exceptions. Add validation at the start of record() to match the pattern in evict() and other methods in this file.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-27T17:20:06.397072Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T23:19:07.850994607Z",
+  "updated_at": "2026-09-01T01:54:15.329341245Z",
   "started_at": "2026-08-31T23:18:50.024803539Z",
+  "closed_at": "2026-09-01T01:54:15.329341245Z",
+  "close_reason": "Re-closing (repeat store-resurrection, 2nd): completed two rounds ago — commit cbf70f4939 'test(coap): pin presence-cache input validation' verified in tree (44 tests incl. addr/status/battery/ts reject paths with no-partial-write pins). No new work existed.",
   "labels": [
     "python"
   ]

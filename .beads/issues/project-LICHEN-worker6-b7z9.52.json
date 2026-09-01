@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.52",
+  "title": "SCHC 5.6: hop-by-hop reassembly before IPv6 forwarding unimplemented in Rust gateway/node",
+  "description": "spec/03-adaptation.md 5.6: 'Fragmentation is hop-by-hop; routers reassemble and decompress before IPv6 forwarding.' Classification: divergent (Rust). Evidence: rust/lichen-gateway has zero fragmentation symbols; transit fragments (Rule 0x78/0x79) fail rule dispatch and are dropped (rust/lichen-schc/src/codec.rs:2386-2397 UnknownRuleId; gateway ingest gateway.rs:1291-1349); decompress-before-forward exists only for single-frame packets (gateway.rs:1234-1273 helper). rust/lichen-node/src/stack.rs:230 holds FragmentationPolicy\u003c8\u003e but its RX consumer is an explicit unwired dead-code seam (stack.rs:226-230, 280-290, pending bead project-LICHEN-worker6-b7z9.5.2.2). Python node.py reassembles+decompresses before routing (python/src/lichen/link/schc_handler.py:475-554, node.py:1020-1058) — conformant. Suggested placement: wire node RX reassembly consumer (b7z9.5.2.2), then add gateway fragment transit handling. Filed from spec-coverage sweep 2026-08-31 (R-03-045).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:48:11.544365416Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:48:11.544365416Z",
+  "labels": [
+    "rust",
+    "networking",
+    "schc",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.52",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:48:11.674878728Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

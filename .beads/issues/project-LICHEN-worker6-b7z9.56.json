@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.56",
+  "title": "SCHC 5.6: tombstone/admission-floor 256-per-direction bound + oldest-by-terminal-time eviction not implemented",
+  "description": "spec/03-adaptation.md 5.6: 'Tombstone and admission-floor tables MUST be bounded to at most 256 entries per direction. On overflow, implementations MUST evict the oldest tombstone by terminal-time.' Classification: divergent (mechanism absent; boundedness achieved differently). Evidence: Rust FragmentationPolicyEntry stores [Option\u003cTerminalTombstone\u003e; 2] per peer per direction (rust/lichen-schc/src/fragment.rs:196-197), reclaimed by 60s expiry (fragment.rs:1220-1247) and generation wipe — no 256 cap, no terminal-time eviction anywhere (rg clean). Python: no 256 cap; rejection-table overflow fails closed by advancing the floor and silently dropping (python/src/lichen/schc/reassembly.py:636-638, 662-664). Practical impact low: structural bounds are stricter (production Rust \u003c=16 tombstones total). Suggested placement: either implement the literal bound+eviction or amend spec 5.6 to name the structural-bounds alternative. Filed from spec-coverage sweep 2026-08-31 (R-03-044).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-01T01:48:40.750389684Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-01T01:48:40.750389684Z",
+  "labels": [
+    "rust",
+    "python",
+    "schc",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.56",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-01T01:48:40.892034128Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
