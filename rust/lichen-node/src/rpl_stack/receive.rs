@@ -25,7 +25,7 @@ use crate::secure::secure_datagram_from_received;
 use crate::stack::{Priority, ReceivedIpv6, RxError, MAX_FRAME_SIZE};
 
 use super::error::RplReceiveError;
-use super::util::{
+use super::util::{ RPL_ALL_NODES, 
     advance_rpl_source_route, bootstrap_announce_peer, dao_parts, dio_dis_destination_is_allowed,
     eui64_link_local, ipv6_eui64, link_local_from_iid, multicast_dis_jitter, routing_announce,
     rpl_ipv6_multicast_is_allowed, survey_routing_headers, wire_is_for_local,
@@ -560,7 +560,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     }
                     return Ok(RplReceiveOutcome::Rpl(RplEvent::DisReceived));
                 }
-                self.send_dio(source)
+                // Solicited DIS response: re-target to the canonical
+                // multicast DIO address (RPL_ALL_NODES, ff02::1a). Per the
+                // R-09-005 admission contract (Python parity, worker6-ehcn
+                // option (A)) a unicast-destination DIO would be
+                // inadmissible at wire_is_for_local before admission even
+                // runs — and the leaf still joins by hearing the multicast
+                // DIO. RFC 6550 8.3's unicast-response SHOULD is overridden
+                // by the profile contract.
+                self.send_dio(RPL_ALL_NODES)
                     .await
                     .map_err(RplReceiveError::Transmit)?;
                 Ok(RplReceiveOutcome::Rpl(RplEvent::DisReceived))
