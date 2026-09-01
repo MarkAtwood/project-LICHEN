@@ -1739,6 +1739,14 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     let unknown_downward = address(&identity(99), 1);
     assert!(leaf.route_for(unknown_downward, 0, true).is_none());
 
+    // Drain the relay's queued multicast DIO at root (root rejects DIOs, so
+    // the frame sits at the head of root's queue ahead of the relayed leaf
+    // announce and would otherwise be popped first).
+    assert!(matches!(
+        root.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::RplRejected)
+    ));
+
     leaf.send_announce(&signed_announce(&leaf_identity, 1), 0)
         .await
         .unwrap();
@@ -1778,14 +1786,30 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     root.admit_dao_origin(relay_identity.iid).unwrap();
     root.admit_dao_origin(leaf_identity.iid).unwrap();
 
+    // Drain any stale queued frames (announce echoes, DIO duplicates) so
+    // the DIS/DAO exchange below starts from clean queues on both stacks.
+    for _ in 0..12 {
+        let _ = root.receive(1, 0).await;
+        let _ = relay.receive(1, 0).await;
+        let _ = leaf.receive(1, 0).await;
+    }
+
     leaf.send_dis(relay_addr).await.unwrap();
     assert!(matches!(
         relay.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::Rpl(RplEvent::DisReceived))
     ));
+    // The relay's solicited-DIS response is the multicast DIO re-target
+    // (ehcn option A); it is heard by leaf (joined above) and root.
     assert!(matches!(
         leaf.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    // Root (provision_root) rejects the DIO — drain it so the DAO below
+    // is the next frame root pops.
+    assert!(matches!(
+        root.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::RplRejected)
     ));
 
     relay.send_dao().await.unwrap();
