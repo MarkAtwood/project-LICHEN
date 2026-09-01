@@ -973,7 +973,64 @@ pub fn decrement_inner_hop_limit(
     true
 }
 
-#[cfg(all(test, feature = "std"))]
+/// Parsed DTN hop-by-hop option (spec 05-routing.md 9.8): option type 0x03,
+/// S-flag (bit 7 of byte 2), absolute expiry as u32 big-endian.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DtnSFlag {
+    pub s_flag: bool,
+    pub expiry_unix: u32,
+}
+
+/// Expiry decision per spec 05-routing.md 9.8 clockless rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DtnExpiryDecision {
+    DropSilently,
+    StoreOrForward,
+}
+
+pub fn decide_expiry(expiry_unix: u32, now_unix: u32, wall_clock_valid: bool) -> DtnExpiryDecision {
+    if wall_clock_valid && expiry_unix < now_unix {
+        DtnExpiryDecision::DropSilently
+    } else {
+        DtnExpiryDecision::StoreOrForward
+    }
+}
+
+/// Walk the IPv6 hop-by-hop options chain for the DTN option (type 0x03).
+/// `payload` is the post-IPv6-header body starting at the first next-header.
+/// Returns None when absent or malformed (fail-closed per 9.8).
+pub fn find_dtn_hbh_option(next_header: u8, payload: &[u8]) -> Option<DtnSFlag> {
+    if next_header != 0 {
+        return None;
+    }
+    let mut pos = 0usize;
+    while pos + 2 <= payload.len() {
+        let opt_type = payload[pos];
+        let opt_len = payload[pos + 1] as usize;
+        let data_start = pos + 2;
+        let data_end = data_start + opt_len;
+        if data_end > payload.len() {
+            return None;
+        }
+        if opt_type == 0x03 {
+            // Wire layout per dtn_sflag_hbh.json: [S-flag+reserved byte,
+            // expiry u32 BE] = 5 bytes.
+            let data = &payload[data_start..data_end];
+            if data.len() != 5 {
+                return None;
+            }
+            let s_flag = data[0] & 0x80 != 0;
+            let expiry_unix = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
+            return Some(DtnSFlag {
+                s_flag,
+                expiry_unix: expiry_unix,
+            });
+        }
+        pos = data_end;
+    }
+    None
+}
+
 mod tests {
     use super::*;
     use lichen_hal::loopback::LoopbackRadio;
@@ -1451,4 +1508,45 @@ mod tests {
             tuple_state
         );
     }
+}
+
+#[test]
+fn dtn_sflag_option_parses_layout() {
+    // Vector oracle: test/vectors/dtn_sflag_hbh.json sflag_set_layout
+    // [0x03, 0x05, 0x80, expiry u32 BE].
+    let hbh_body = [0x03, 0x05, 0x80, 0x65, 0x53, 0xf6, 0x00];
+    let parsed = find_dtn_hbh_option(0, &hbh_body);
+    let parsed = parsed.expect("S-flag set option must parse");
+    assert!(parsed.s_flag);
+    assert_eq!(parsed.expiry_unix, 1700001280);
+}
+
+#[test]
+fn dtn_sflag_clear_option_parses_without_store_intent() {
+    // sflag_clear: flags byte 0x00.
+    let hbh_body = [0x03, 0x05, 0x00, 0x65, 0x53, 0xf6, 0x00];
+    let parsed = find_dtn_hbh_option(0, &hbh_body).expect("parses");
+    assert!(!parsed.s_flag);
+    assert_eq!(parsed.expiry_unix, 1700001280);
+}
+
+#[test]
+fn dtn_hbh_wrong_length_rejected() {
+    // wrong_length_rejected: data len 4 instead of 5.
+    let hbh_body = [0x03, 0x04, 0x80, 0x65, 0x53, 0xf6];
+    assert!(find_dtn_hbh_option(0, &hbh_body).is_none());
+}
+
+#[test]
+fn dtn_expiry_decision_clockless_fail_open() {
+    // clockless_fail_open: no wall clock -> never drop on expiry alone.
+    assert_eq!(
+        decide_expiry(1_000_000_000, 500, false),
+        DtnExpiryDecision::StoreOrForward
+    );
+    // expired_with_valid_clock: valid wall clock past expiry -> drop.
+    assert_eq!(
+        decide_expiry(1_000, 2_000, true),
+        DtnExpiryDecision::DropSilently
+    );
 }
