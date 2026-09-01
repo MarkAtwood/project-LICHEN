@@ -4765,6 +4765,34 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             # even though a canonical sender could not have originated it.
             assert decode_rule255(b"\xff" + raw) == raw, name
 
+    elif category == "rule255_rx_structural_reject":
+        # Emission-only structural violations (rule255-rx-decode decision):
+        # a canonical sender cannot originate unspecified or multicast
+        # sources or an unspecified destination, but the Rule 255 decoder
+        # preserves a well-framed packet with valid checksums verbatim.
+        source = IPv6Address(vector["source_ipv6"])
+        destination = IPv6Address(vector["destination_ipv6"])
+        udp = UdpDatagram(PORT_MQTT_SN, 5000, b"lichen255").to_bytes(source, destination)
+        raw = (
+            IPv6Header(
+                src_addr=source,
+                dst_addr=destination,
+                next_header=NextHeader.UDP,
+                payload_length=len(udp),
+                hop_limit=64,
+            ).to_bytes()
+            + udp
+        )
+        assert not vector["expect_valid"], name
+        error_pattern = {
+            "invalid_source_address": "invalid IPv6 source address",
+            "invalid_destination_address": "invalid unspecified IPv6 destination address",
+            "invalid_destination_scope": "invalid IPv6 destination multicast scope",
+        }[vector["expect_error"]]
+        with pytest.raises(SchcError, match=error_pattern):
+            encode_rule255(raw)
+        assert decode_rule255(b"\xff" + raw) == raw, name
+
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
         rule_id = vector["rule_id"]
@@ -4909,6 +4937,7 @@ def test_schc_adaptation_vector_coverage() -> None:
         "port_boundary",
         "rule7_address_policy",
         "rule255_endpoint_policy",
+        "rule255_rx_structural_reject",
         "fragmentation_direction",
         "fragmentation_endpoint_direction",
         "compressed_size",

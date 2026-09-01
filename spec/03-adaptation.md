@@ -424,15 +424,13 @@ NOT originate a packet whose source is unspecified, loopback, multicast, or
 IPv4-mapped, nor one whose destination is unspecified, loopback,
 IPv4-mapped, or a multicast address with a scope outside 2-14. A Rule 255
 encoder (and the compression path falling back to it) MUST reject such
-packets. Rule 255 DECODING is byte-preserving with respect to the emission
-policy: a decoder MUST validate structure and checksums plus the structural
-address constraints (an unspecified or multicast source and an unspecified
-destination are invalid on receipt as well as on emission), but MUST NOT
-re-apply the emission-only constraints (loopback, IPv4-mapped, or multicast
-destination scope outside 2-14). A structurally valid packet whose only
-defect is an emission-policy violation is preserved verbatim rather than
-reinterpreted or dropped as malformed, because a packet one implementation
-cannot originate is still delivered intact by the other.
+packets. Rule 255 DECODING is byte-preserving (rule255-rx-decode decision,
+2026-08-31, FINAL): a decoder MUST validate structure and checksums only and
+MUST NOT apply any part of the endpoint address policy on receipt, because a
+structurally valid packet already on the link is preserved verbatim rather
+than reinterpreted or dropped as malformed. This split keeps the two
+implementation families interoperable: a packet one implementation cannot
+originate is still delivered intact by the other.
 
 **Profile size ceiling (canonical raw-packet bound):**
 `SCHC_FRAGMENT_MAX_PACKET_SIZE` (126 tiles x 179 bytes = 22554 octets) is the

@@ -135,8 +135,51 @@ def _validate_routing_headers(packet: IPv6Packet) -> IPv6Address:
     return upper_dst
 
 
+def _validate_udp_structure(packet: IPv6Packet) -> None:
+    """Enforce UDP framing and checksums without re-interpreting addresses.
+
+    Keeps the UdpDatagram length and zero-checksum structure checks; the
+    address bytes are read only for the RFC 2460 section 8.1 pseudo-header.
+    """
+    upper_dst = _validate_routing_headers(packet)
+    if packet.header.next_header == UDP_NEXT_HEADER:
+        try:
+            UdpDatagram.from_bytes(packet.payload)
+        except UdpError as error:
+            raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
+        if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
+            raise SchcError("invalid Rule 255 IPv6 UDP checksum")
+
+
+def validate_ipv6_structure(raw: bytes) -> bytes:
+    """Validate IPv6 framing, extension headers, and checksums only.
+
+    Receive-side (byte-preserving Rule 255 decode) contract per the
+    rule255-rx-decode decision (spec/03-adaptation.md): no endpoint address
+    policy is applied on receipt; a well-framed packet with valid checksums
+    is preserved verbatim regardless of its addresses.
+    """
+    if type(raw) is not bytes:
+        raise SchcError("IPv6 packet must be bytes")
+    if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
+        raise SchcError(
+            f"IPv6 packet length must be {HEADER_LENGTH}..{_MAX_IPV6_PACKET_SIZE}, got {len(raw)}"
+        )
+    try:
+        packet = IPv6Packet.from_bytes(raw, strict=True)
+    except PacketError as error:
+        raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
+    _validate_udp_structure(packet)
+    return raw
+
+
 def validate_full_ipv6(raw: bytes) -> bytes:
-    """Validate a complete IPv6 packet before Rule 255 delivery."""
+    """Validate a complete IPv6 packet before Rule 255 delivery (TX path).
+
+    Structure and checksums plus the endpoint address policy per the
+    canonical TX/RX split in spec/03-adaptation.md; the receive path
+    (``decode_rule255``) validates structure only.
+    """
     if type(raw) is not bytes:
         raise SchcError("IPv6 packet must be bytes")
     if not HEADER_LENGTH <= len(raw) <= _MAX_IPV6_PACKET_SIZE:
@@ -148,14 +191,7 @@ def validate_full_ipv6(raw: bytes) -> bytes:
     except PacketError as error:
         raise SchcError(f"invalid Rule 255 IPv6 packet: {error}") from error
     _validate_ipv6_addresses(packet.header)
-    upper_dst = _validate_routing_headers(packet)
-    if packet.header.next_header == UDP_NEXT_HEADER:
-        try:
-            UdpDatagram.from_bytes(packet.payload, packet.header.src_addr)
-        except UdpError as error:
-            raise SchcError(f"invalid Rule 255 UDP datagram: {error}") from error
-        if not UdpDatagram.verify_checksum(packet.header.src_addr, upper_dst, packet.payload):
-            raise SchcError("invalid Rule 255 IPv6 UDP checksum")
+    _validate_udp_structure(packet)
     return raw
 
 
@@ -209,7 +245,7 @@ def decode_rule255(data: bytes, *, single_frame_limit: int | None = None) -> byt
         raise SchcError(
             f"Rule 255 packet is {len(data)} bytes, exceeds single frame limit {single_frame_limit}"
         )
-    return validate_full_ipv6(data[1:])
+    return validate_ipv6_structure(data[1:])
 
 
 def _is_global(addr: int) -> bool:
