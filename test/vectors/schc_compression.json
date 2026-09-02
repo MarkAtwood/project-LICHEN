@@ -495,6 +495,38 @@
       "rule_id": 255,
       "compressed": "ff60000000000c2c40fe800000000000000000000000000001fe80000000000000000000000000000213881389000cfcef70696e67",
       "expect_error": "unsupported_fragment_header"
+    },
+    {
+      "category": "malformed",
+      "expect_error": "invalid_argument",
+      "name": "rule255_malformed_non_ipv6_payload",
+      "rule_id": 255,
+      "compressed": "ffdeadbeef",
+      "description": "Rule 255 decode must reject a payload that is not a complete IPv6 packet (framing; spec/03)."
+    },
+    {
+      "category": "malformed",
+      "expect_error": "invalid_argument",
+      "name": "rule255_malformed_fragment_header",
+      "rule_id": 255,
+      "compressed": "ff6000000000102c4020010db800000000000000000000000120010db800000000000000000000000211000000000000012a8313880008665e",
+      "description": "Rule 255 decode must reject an IPv6 Fragment header (LICHEN fragments at the SCHC layer)."
+    },
+    {
+      "category": "malformed",
+      "expect_error": "invalid_argument",
+      "name": "rule255_malformed_non_rh3_routing",
+      "rule_id": 255,
+      "compressed": "ff6000000000102b4020010db800000000000000000000000120010db800000000000000000000000211000000000000002a8313880008665e",
+      "description": "Rule 255 decode must reject routing type 0 (RPL SRH type-3 only, RFC 5095)."
+    },
+    {
+      "category": "malformed",
+      "expect_error": "invalid_argument",
+      "name": "rule255_malformed_bad_udp_checksum",
+      "rule_id": 255,
+      "compressed": "ff600000000008114020010db800000000000000000000000120010db80000000000000000000000022a8313880008665f",
+      "description": "Rule 255 decode must reject a UDP datagram failing RFC 1071 verification."
     }
   ]
 }
