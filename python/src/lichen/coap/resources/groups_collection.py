@@ -734,7 +734,65 @@ class GroupsItemResource(resource.Resource, resource.PathCapable):
         rest = self._rest(request)
         if len(rest) == 2 and rest[1] == "key":
             return await self._join_key(rest[0], request)
+        if len(rest) == 2 and rest[1] == "admins":
+            return await self._promote_demote(rest[0], request)
         return Message(code=METHOD_NOT_ALLOWED)
+
+    async def _promote_demote(self, group_id: str, request: Message) -> Message:
+        """POST /groups/{id}/admins (spec 12-apps.md 18.8.2 Admin Delegation).
+
+        Body: {"action": "promote" | "demote", "node": identity}. Owner-only.
+        Demotion strips admin authority only -- outstanding invitations the
+        demoted admin minted stay valid (18.8.2 Delegation Revocation: no
+        cascade, no minted_by tracking), and the group key is unchanged
+        because membership is unchanged.
+        """
+        peer = _pairwise_oscore_identity(request)
+        if peer is None:
+            return _oscore_required_response()
+        with self.collection._mutation_lock:
+            item = self.collection.groups.get(group_id)
+            if item is None:
+                return Message(code=NOT_FOUND)
+            # 18.8.2: only the owner can promote/demote admins.
+            if self.collection.requester_role(group_id, peer) != "owner":
+                return Message(code=FORBIDDEN)
+            if not request.payload:
+                return Message(code=BAD_REQUEST)
+            try:
+                body = _decode_single_cbor(request.payload)
+            except Exception:
+                return Message(code=BAD_REQUEST)
+            if type(body) is not dict:
+                return Message(code=BAD_REQUEST)
+            unknown = set(body) - {"action", "node"}
+            if unknown:
+                return Message(code=BAD_REQUEST)
+            action = body.get("action")
+            node = body.get("node")
+            if type(action) is not str or action not in ("promote", "demote"):
+                return Message(code=BAD_REQUEST)
+            if type(node) is not str or node == "":
+                return Message(code=BAD_REQUEST)
+            owner = item.get("owner")
+            if action == "demote" and node == owner:
+                # Owner authority is role-derived (peer == item["owner"]),
+                # not stored in admins[]; demotion cannot apply.
+                return Message(code=FORBIDDEN)
+            admins = list(item.get("admins") or [])
+            members = list(item.get("members") or [])
+            if action == "promote":
+                # requester_role fails closed for orphaned admin entries
+                # (admins are always members), so promoting a non-member
+                # would create exactly that stale state.
+                if node not in members:
+                    return Message(code=BAD_REQUEST)
+                if node not in admins:
+                    admins.append(node)
+            else:
+                admins = [admin for admin in admins if admin != node]
+            item["admins"] = admins
+        return Message(code=CHANGED)
 
     async def _join_key(self, group_id: str, request: Message) -> Message:
         # SECURITY: spec 18.8.2 -- group OSCORE keys travel only over the
