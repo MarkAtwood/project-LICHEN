@@ -4895,9 +4895,16 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             "invalid_destination_address": "invalid IPv6 destination address",
             "invalid_destination_scope": "invalid IPv6 destination multicast scope",
         }[vector["expect_error"]]
+        # Emission side: the TX policy rejects these endpoints.
         with pytest.raises(SchcError, match=error_pattern):
             encode_rule255(raw)
-        assert decode_rule255(b"\xff" + raw) == raw, name
+        # RX side (rule255-rx-decode decision): the decoder is
+        # byte-preserving - it accepts any well-framed packet with a valid
+        # checksum regardless of endpoint addresses. (Both intents from the
+        # two branches preserved: the explicit RX-side comment style from
+        # beads-worker-4, and HEAD's new rule255_malformed category below.)
+        decoded = decode_rule255(b"\xff" + raw)
+        assert decoded == raw
 
     elif category == "rule255_malformed":
         # Malformed rule-255 frames must be rejected by decode in every

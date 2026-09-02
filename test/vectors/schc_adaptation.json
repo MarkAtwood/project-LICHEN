@@ -823,7 +823,7 @@
       "destination_ipv6": "2001:db8::1",
       "expect_valid": false,
       "expect_error": "invalid_source_address",
-      "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
+      "provenance": "Emission-only rejection per the rule255-rx-decode decision (decisions.jsonl, 2026-08-31): the TX policy forbids originating unspecified/multicast endpoints; the Rule 255 decoder is byte-preserving and accepts any well-framed packet with a valid checksum regardless of endpoint addresses."
     },
     {
       "name": "rule255_rx_reject_multicast_source",
@@ -834,7 +834,7 @@
       "destination_ipv6": "2001:db8::1",
       "expect_valid": false,
       "expect_error": "invalid_source_address",
-      "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
+      "provenance": "Emission-only rejection per the rule255-rx-decode decision (decisions.jsonl, 2026-08-31): the TX policy forbids originating unspecified/multicast endpoints; the Rule 255 decoder is byte-preserving and accepts any well-framed packet with a valid checksum regardless of endpoint addresses."
     },
     {
       "name": "rule255_rx_reject_unspecified_destination",
@@ -845,7 +845,7 @@
       "destination_ipv6": "::",
       "expect_valid": false,
       "expect_error": "invalid_destination_address",
-      "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
+      "provenance": "Emission-only rejection per the rule255-rx-decode decision (decisions.jsonl, 2026-08-31): the TX policy forbids originating unspecified/multicast endpoints; the Rule 255 decoder is byte-preserving and accepts any well-framed packet with a valid checksum regardless of endpoint addresses."
     },
     {
       "category": "rule255_malformed",
