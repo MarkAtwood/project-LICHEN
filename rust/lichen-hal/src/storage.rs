@@ -548,9 +548,12 @@ pub mod fs {
                 Err(e) => return Err(e),
             };
             verify_private_file(&p, &file.metadata()?, "security state")?;
-            let mut data = Vec::new();
-            file.read_to_end(&mut data)?;
-            let stored = data.len();
+            // Cap the read at buf.len()+1 (bead xn3r): read_to_end into an
+            // unbounded Vec turns a planted multi-GB record file into an
+            // OOM amplifier. Reading one extra byte distinguishes an exact
+            // fit from an oversized record while bounding the allocation.
+            let mut data = vec![0u8; buf.len() + 1];
+            let stored = file.read(&mut data)?;
             let n = stored.min(buf.len());
             buf[..n].copy_from_slice(&data[..n]);
             Ok(Some(stored))
@@ -901,6 +904,33 @@ mod tests {
         assert_eq!(load_seed(&s2).unwrap(), Some(seed));
         save_epoch(&mut s, 42).unwrap();
         assert_eq!(load_epoch(&s).unwrap(), Some(42));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn file_storage_read_bounds_allocation_for_oversized_records() {
+        // Bead xn3r: read must not read_to_end into an unbounded Vec - a
+        // planted multi-GB record file must not become an OOM amplifier.
+        let d = unique_fs_dir("bounded-read");
+        let mut s = FileStorage::new(&d).unwrap();
+
+        // Planted oversized record (100 bytes at a small-buffer key).
+        let planted = vec![0xEEu8; 100];
+        s.write("key.small", &planted).unwrap();
+
+        let mut small = [0u8; 10];
+        // Oversized: returns buf.len()+1 (the bounded read's cap), which is
+        // != any valid record length, so callers fail closed. The allocation
+        // stays bounded at 11 bytes regardless of the planted file size.
+        assert_eq!(s.read("key.small", &mut small).unwrap(), Some(11));
+        assert_eq!(&small[..], &planted[..10]);
+
+        // Exact-fit reads still work.
+        let mut exact = [0u8; 100];
+        assert_eq!(s.read("key.small", &mut exact).unwrap(), Some(100));
+        assert_eq!(&exact[..], &planted[..]);
+
         let _ = std::fs::remove_dir_all(&d);
     }
 

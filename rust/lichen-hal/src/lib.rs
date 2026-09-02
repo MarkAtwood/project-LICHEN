@@ -372,6 +372,11 @@ pub trait NonVolatile {
     /// - `Err(e)` on I/O or hardware failure
     ///
     /// Callers can detect truncation by comparing `stored_len` against `buf.len()`.
+    /// Implementations may report an implementation-defined length >= `buf.len()`
+    /// for records LARGER than `buf.len()` (FileStorage caps the read to bound its
+    /// allocation), so oversized records are detectable but their exact on-disk
+    /// size is not. A genuine record exactly `buf.len()` always reports exactly
+    /// `buf.len()`.
     fn read(&self, key: &str, buf: &mut [u8]) -> Result<Option<usize>, Self::Error>;
 
     /// Atomically and durably replace one value.
