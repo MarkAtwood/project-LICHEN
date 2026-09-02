@@ -233,7 +233,7 @@ pub enum CcpState {
 /// assert_eq!(fsm.state(), CcpState::Drift);
 ///
 /// // Valid beacon recovers sync
-/// fsm.on_beacon(true, true);
+/// fsm.on_beacon(true);
 /// assert_eq!(fsm.state(), CcpState::Joined);
 /// ```
 #[derive(Debug, Clone, Copy)]

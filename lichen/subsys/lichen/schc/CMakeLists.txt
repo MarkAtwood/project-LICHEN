@@ -10,6 +10,7 @@ zephyr_library_sources(
   schc_checksum.c
   schc_compress.c
   schc_decompress.c
+  schc_failure_tracker.c
   schc_helpers.c
 )
 
