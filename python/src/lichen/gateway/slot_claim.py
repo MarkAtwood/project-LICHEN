@@ -81,6 +81,9 @@ class ClaimRejectReason(Enum):
     EXPIRY_TOO_FAR = auto()  # Claim timestamp further ahead than the max horizon
     STALE_CLAIM = auto()  # Claim timestamp older than the stale tolerance
     STATE_FULL = auto()  # Replay cache at MAX_GATEWAYS, gateway not tracked
+    # Merged: beads-worker-4's GCP-6.5 rate-limit reject is an independent
+    # cause from HEAD's STATE_FULL; both are referenced below, keep both.
+    RATE_LIMITED = auto()  # GCP-6.5: exceeded 10/min/peer or 60/min global
 
 
 # GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim may
@@ -308,6 +311,44 @@ def encode_claim_canonical(claim: SlotClaim) -> bytes:
     return cbor2.dumps(payload, canonical=True)
 
 
+class SlotClaimRateLimiter:
+    """Bounded sliding-window rate limiter for slot claims (GCP-6.5:
+    "at most 10 claims per minute per peer IID and 60 claims per minute
+    globally. Claims exceeding these limits MUST be silently dropped.").
+
+    Exceeding a limit returns False from :meth:`allow`; the caller drops
+    the claim with the same indistinguishable rejection as a signature
+    failure (GCP-6.3) and never advances the replay high-water.
+    """
+
+    WINDOW_S = 60
+    PER_PEER_LIMIT = 10
+    GLOBAL_LIMIT = 60
+
+    def __init__(self) -> None:
+        self._per_peer: dict[str, list[float]] = {}
+        self._global: list[float] = []
+
+    def _prune(self, now: float) -> None:
+        cutoff = now - self.WINDOW_S
+        self._global = [t for t in self._global if t > cutoff]
+        for stamps in self._per_peer.values():
+            stamps[:] = [t for t in stamps if t > cutoff]
+
+    def allow(self, gateway_iid: str, now: float) -> bool:
+        """Record one claim at *now* (seconds). False when the claim
+        exceeds the per-peer or global rate (caller silently drops)."""
+        self._prune(now)
+        if len(self._global) >= self.GLOBAL_LIMIT:
+            return False
+        stamps = self._per_peer.setdefault(gateway_iid, [])
+        if len(stamps) >= self.PER_PEER_LIMIT:
+            return False
+        stamps.append(now)
+        self._global.append(now)
+        return True
+
+
 class SlotClaimReplayCache:
     """Per-gateway-IID replay high-water (GCP-6.5 step 8, l1qw.20.2).
 
@@ -351,6 +392,7 @@ def verify_slot_claim(
     gateway_pubkey: bytes,
     replay_cache: SlotClaimReplayCache | None = None,
     now_unix: float | None = None,
+    rate_limiter: SlotClaimRateLimiter | None = None,
 ) -> tuple[bool, ClaimRejectReason | None]:
     """Verify Schnorr48 signature on slot claim.
 
@@ -365,6 +407,10 @@ def verify_slot_claim(
         claim: SlotClaim to verify
         gateway_pubkey: 32-byte Ed25519 public key of claiming gateway
         replay_cache: Optional per-gateway claim high-water (l1qw.20.2).
+        rate_limiter: Optional GCP-6.5 rate limiter (l1qw.22): a claim
+            exceeding the 10/min/peer or 60/min/global window returns
+            (False, RATE_LIMITED) for a silent drop, never advancing the
+            replay high-water.
             When provided, the claim's superframe_id must strictly advance
             the stored high-water for its gateway IID. Signature checks run
             first per GCP-6.3, so the replay state is only consumed by
@@ -376,6 +422,13 @@ def verify_slot_claim(
     Returns:
         Tuple of (is_valid, rejection_reason or None)
     """
+    if rate_limiter is not None:
+        now = time.time() if now_unix is None else now_unix
+        if not rate_limiter.allow(claim.gateway_iid, now):
+            # GCP-6.5: exceeding claims MUST be silently dropped; the
+            # replay high-water is not advanced by rate-dropped claims.
+            return (False, ClaimRejectReason.RATE_LIMITED)
+
     if claim.signature is None:
         return (False, ClaimRejectReason.MISSING_SIGNATURE)
 
