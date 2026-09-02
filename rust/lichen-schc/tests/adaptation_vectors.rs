@@ -25,6 +25,7 @@ struct ExpectedCounts {
     rule7_address_policy: usize,
     rule255_endpoint_policy: usize,
     rule255_rx_structural_reject: usize,
+    rule255_malformed: usize,
     #[cfg_attr(
         not(all(feature = "raw-fragment-codec", feature = "test-utils")),
         allow(dead_code)
@@ -585,6 +586,7 @@ fn test_schc_adaptation_vectors() {
     let mut rule7_address_policy_count = 0;
     let mut rule255_endpoint_policy_count = 0;
     let mut rule255_rx_structural_reject_count = 0;
+    let mut rule255_malformed_count = 0;
     #[cfg(all(feature = "raw-fragment-codec", feature = "test-utils"))]
     let mut duplicate_idempotence_count = 0;
 
@@ -1106,6 +1108,19 @@ fn test_schc_adaptation_vectors() {
                 }
             }
 
+            "rule255_malformed" => {
+                rule255_malformed_count += 1;
+                assert!(!vector.expect_valid.unwrap_or(true), "{}", name);
+                let wire = hex_decode(vector.wire.as_deref().expect("rule255 malformed wire"));
+                assert_eq!(wire[0], 0xff, "{}: rule id must be 255", name);
+                let mut out = vec![0u8; wire.len().max(1)];
+                let result = lichen_schc::decode_rule255(&wire, &mut out, usize::MAX);
+                assert!(
+                    result.is_err(),
+                    "{}: malformed rule-255 frame must be rejected",
+                    name
+                );
+            }
             "rule255_rx_structural_reject" => {
                 use std::net::Ipv6Addr;
                 use std::str::FromStr;
@@ -1523,6 +1538,12 @@ fn test_schc_adaptation_vectors() {
             "Expected {} Rule 7 address-policy vectors (per metadata), found {}",
             expected.rule7_address_policy, rule7_address_policy_count
         ));
+    }
+    if rule255_malformed_count != expected.rule255_malformed {
+        panic!(
+            "rule255_malformed count mismatch: expected {}, got {}",
+            expected.rule255_malformed, rule255_malformed_count
+        );
     }
     if rule255_rx_structural_reject_count != expected.rule255_rx_structural_reject {
         failures.push(format!(
