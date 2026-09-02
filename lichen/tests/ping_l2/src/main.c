@@ -178,8 +178,10 @@ static void *ping_l2_setup(void)
 	zassert_not_null(net_if_ipv6_addr_lookup_by_iface(test_iface, &primary_addr),
 			 "key load did not install primary address");
 
-	ret = lichen_l2_test_load_link_key(test_link_key);
-	zassert_equal(ret, 0, "failed to load deterministic link key: %d", ret);
+	/* Deliberately NO legacy link key here: bead 2auf.21 makes any
+	 * context with a loaded link key reject TX (-EPROTONOSUPPORT) — the
+	 * modern stack transmits Schnorr48-signed frames only. Loading one
+	 * would poison every subsequent TX in the suite. */
 
 	ret = lichen_peer_add(eui64, test_pubkey);
 	zassert_equal(ret, 0, "failed to add self peer: %d", ret);
@@ -604,6 +606,14 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
+
+	/* The teardown ran lichen_link_cleanup(), which wiped the signing key
+	 * from the shared link context. The suite fixture runs once, so later
+	 * tests would TX with an unkeyed context (-ENOKEY). Restore the
+	 * deterministic test keys the same way a real disable -> enable ->
+	 * load_key cycle does. */
+	ret = lichen_l2_test_load_key(test_seed, test_pubkey);
+	zassert_equal(ret, 0, "key re-load after teardown failed: %d", ret);
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);
