@@ -511,6 +511,62 @@ async def test_repeated_dio_time_verify_same_counter_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_unauthorized_for_time_dios_never_evict_replay_barrier() -> None:
+    # 8c0b eviction fix: signers verified by the DIO verifier (peer_origins)
+    # but NOT authorized for time in the stratum policy must be rejected
+    # BEFORE the replay-barrier LRU - their considerations never occupy
+    # slots, so they cannot evict a victim signer's high-water.
+    attacker_option = DioTimeOption(Stratum.GNSS_GPSD, FLOOR)
+    # Victim arms the barrier first (authorized for time).
+    clock, radio, link, verifier, authenticated = await _dio_time_setup(1, attacker_option)
+    attacker_radio = QueueRadio()
+    attacker_link = receiver(attacker_radio, clock, peer=OTHER)
+    attacker_frames = [
+        (signed_wire(OTHER, dio_envelope(attacker_option, signer=OTHER), counter=counter), -91, 5)
+        for counter in range(1, 31)
+    ]
+    attacker_radio.frames.extend(attacker_frames)
+    attacker_verifier = DioTimeVerifier(
+        "dio-verifier",
+        attacker_link,
+        peer_origins={
+            REMOTE.pubkey: {Stratum.GNSS_GPSD: SourceClass.GNSS},
+            OTHER.pubkey: {Stratum.GNSS_GPSD: SourceClass.GNSS},
+        },
+        peer_accuracy_seconds={
+            REMOTE.pubkey: 1,
+            OTHER.pubkey: 1,
+        },
+        clock=clock.capability,
+    )
+    state = StratumTracker(
+        authorities=(verifier, attacker_verifier, provider(clock, SourceClass.GNSS)),
+        policy=policy(SourceClass.GNSS, SourceClass.NETWORK, peers=frozenset({REMOTE.pubkey})),
+        floor_authority=EpochFloorAuthority(FLOOR),
+        clock=clock.capability,
+    )
+    victim_sample = verifier.verify(authenticated)
+    assert state.consider(attacker_option, sample=victim_sample)
+    victim_key = (REMOTE.pubkey, victim_sample.evidence.signer_key_generation)
+    replay_keys = state._StratumTracker__network_high_water  # type: ignore[attr-defined]
+    assert replay_keys[victim_key] == victim_sample.evidence.replay_counter
+
+    # 30 considerations from the unauthorized-for-time attacker: every one
+    # must reject with the authorization reason BEFORE the barrier.
+    for _ in range(30):
+        received = await attacker_link.receive(100)
+        assert isinstance(received, RxFrame)
+        attacker_authenticated = authenticate_dio(attacker_link, received)
+        attacker_sample = attacker_verifier.verify(attacker_authenticated)
+        assert not state.consider(attacker_option, sample=attacker_sample)
+        assert state.last_rejection_reason == "network-peer-not-authorized-for-time"
+        assert (OTHER.pubkey, attacker_sample.evidence.signer_key_generation) not in replay_keys
+
+    # The victim's high-water survived the flood untouched.
+    assert replay_keys[victim_key] == victim_sample.evidence.replay_counter
+
+
+@pytest.mark.asyncio
 async def test_delayed_receipt_expires_before_elevation() -> None:
     clock = Clock(10)
     radio = QueueRadio()
