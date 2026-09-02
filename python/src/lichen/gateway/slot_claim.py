@@ -21,6 +21,7 @@ All implementations MUST match test vectors in:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TYPE_CHECKING
@@ -56,6 +57,18 @@ class ClaimRejectReason(Enum):
     REPLAY = auto()  # claim_seq/superframe at or below the stored high-water
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
     STATE_FULL = auto()  # Replay cache at MAX_GATEWAYS, gateway not tracked
+    EXPIRY_TOO_FAR = auto()  # expiry - now exceeds the max claim duration
+
+
+# GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim may
+# not reserve capacity further than MAX_CLAIM_DURATION into the future.
+# 5 superframes x 60 s = 300 s, plus 5 s clock tolerance.
+SUPERFRAME_SECONDS = 60
+MAX_CLAIM_DURATION_SUPERFRAMES = 5
+CLOCK_TOLERANCE_SECONDS = 5
+MAX_CLAIM_DURATION_SECONDS = (
+    MAX_CLAIM_DURATION_SUPERFRAMES * SUPERFRAME_SECONDS + CLOCK_TOLERANCE_SECONDS
+)
 
 
 class AllocationMode(Enum):
@@ -95,6 +108,7 @@ class SlotClaim:
 
     # Optional fields
     timestamp: int | None = None
+    expiry: int | None = None
     gateway_count: int | None = None
     ordinal: int | None = None
     signature: bytes | None = None
@@ -138,6 +152,8 @@ class SlotClaim:
         }
         if self.timestamp is not None:
             result["timestamp"] = self.timestamp
+        if self.expiry is not None:
+            result["expiry"] = self.expiry
         if self.gateway_count is not None:
             result["gateway_count"] = self.gateway_count
         if self.ordinal is not None:
@@ -188,6 +204,7 @@ class SlotClaim:
                 slots=slots,
                 superframe_id=superframe_id,
                 timestamp=data.get("timestamp"),
+                expiry=data.get("expiry"),
                 gateway_count=data.get("gateway_count"),
                 ordinal=data.get("ordinal"),
                 signature=signature,
@@ -255,6 +272,22 @@ class SlotClaimReplayCache:
         return (True, None)
 
 
+def validate_claim_timing(
+    *,
+    expiry: int,
+    now_unix: int,
+    max_duration_seconds: int = MAX_CLAIM_DURATION_SECONDS,
+) -> bool:
+    """GCP-6.5 validation steps 7+7a (spec/08-gateway-coordination.md).
+
+    A claim's expiry must be strictly in the future and no further than the
+    max claim duration (5 superframes = 300 s + 5 s clock tolerance) past
+    *now_unix* — this bounds how far into the future a gateway can reserve
+    slots (anti-squatting, bead j6o2).
+    """
+    return now_unix < expiry <= now_unix + max_duration_seconds
+
+
 def verify_slot_claim(
     claim: SlotClaim,
     gateway_pubkey: bytes,
@@ -283,6 +316,11 @@ def verify_slot_claim(
     """
     if claim.signature is None:
         return (False, ClaimRejectReason.MISSING_SIGNATURE)
+    if claim.expiry is not None and not validate_claim_timing(
+        expiry=claim.expiry,
+        now_unix=int(time.time()),
+    ):
+        return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
 
     if len(claim.signature) != 48:
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
@@ -497,6 +535,7 @@ def sign_slot_claim(
         slots=claim.slots,
         superframe_id=claim.superframe_id,
         timestamp=claim.timestamp,
+        expiry=claim.expiry,
         gateway_count=claim.gateway_count,
         ordinal=claim.ordinal,
         signature=signature,
