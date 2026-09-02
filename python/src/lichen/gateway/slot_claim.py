@@ -83,6 +83,17 @@ class ClaimRejectReason(Enum):
     STATE_FULL = auto()  # Replay cache at MAX_GATEWAYS, gateway not tracked
 
 
+# GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim may
+# not reserve capacity further than MAX_CLAIM_DURATION into the future.
+# 5 superframes x 60 s = 300 s, plus 5 s clock tolerance.
+SUPERFRAME_SECONDS = 60
+MAX_CLAIM_DURATION_SUPERFRAMES = 5
+CLOCK_TOLERANCE_SECONDS = 5
+MAX_CLAIM_DURATION_SECONDS = (
+    MAX_CLAIM_DURATION_SUPERFRAMES * SUPERFRAME_SECONDS + CLOCK_TOLERANCE_SECONDS
+)
+
+
 class AllocationMode(Enum):
     """Slot allocation mode (GCP-6.2)."""
 
@@ -121,6 +132,9 @@ class SlotClaim:
     allocation_mode: AllocationMode = AllocationMode.INTERLEAVED
 
     # Optional fields
+    # Merged: worker-7's optional timestamp/expiry fields are dropped; HEAD
+    # makes expiry a required field (spec key 4) and exposes `timestamp` as a
+    # property alias below, so the optional-None model is superseded.
     ordinal: int | None = None
     gateway_count: int | None = None
     signature: bytes | None = None
@@ -168,6 +182,10 @@ class SlotClaim:
         """Return gateway IID as unsigned big-endian integer for comparison."""
         return int.from_bytes(bytes.fromhex(self.gateway_iid), "big")
 
+    # Merged: worker-7's string-keyed to_cbor_map helper is dropped; the
+    # spec wire form (GCP-6.5) uses integer-keyed payloads assembled in
+    # encode_claim_canonical(), so a parallel string-key encoder would be
+    # dead, divergent code.
     @classmethod
     def decode_cose(cls, envelope: bytes) -> SlotClaim:
         """Decode a COSE_Sign1 slot-claim envelope (spec GCP-6.5).
@@ -247,6 +265,10 @@ class SlotClaim:
 
 
 # ─── COSE_Sign1 wire format (spec/08-gateway-coordination.md GCP-6.5) ────────
+
+# Merged: worker-7's string-keyed from_cbor decoder tail is dropped; the
+# decoder on this class is HEAD's decode_cose (COSE_Sign1, strict integer
+# keys per GCP-6.5). The constants below are its payload key labels.
 
 _PAYLOAD_SLOTS = 1
 _PAYLOAD_SUPERFRAME_EPOCH = 2
@@ -382,6 +404,18 @@ def verify_slot_claim(
     digest = sha256(cose_sig_structure(protected, payload)).digest()
     if not schnorr48.verify(gateway_pubkey, digest, claim.signature):
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
+
+    # Merged: worker-7's validate_claim_timing() was dropped; its strict
+    # `now < expiry` lower bound conflicts with the stale-tolerance
+    # semantics HEAD pins via the `timestamp` alias block below. The
+    # upper horizon (GCP-6.5 step 7a, MAX_CLAIM_DURATION_SECONDS) is
+    # checked inline; the lower bound/stale tolerance follows in the HEAD
+    # block. Checked after authentication, never before.
+    now = time.time() if now_unix is None else now_unix
+    if claim.expiry > now + MAX_CLAIM_DURATION_SECONDS:
+        # The upper bound is checked against the worker constant; the
+        # tighter HEAD constant below may still reject, matching tests.
+        return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
 
     # GCP-6.3 hardening: bound how far ahead a claim may pre-book slots.
     # The timestamp is covered by the signature, so this rejects a
@@ -606,6 +640,8 @@ def sign_slot_claim(
         gateway_iid=claim.gateway_iid,
         slots=claim.slots,
         superframe_id=claim.superframe_id,
+        # Merged: HEAD kwargs kept; worker-7's `timestamp` kwarg cannot be
+        # passed because `timestamp` is a property alias for `expiry`.
         expiry=claim.expiry,
         claim_seq=claim.claim_seq,
         allocation_mode=claim.allocation_mode,

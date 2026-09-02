@@ -18,6 +18,7 @@ from lichen.crypto import schnorr48
 from lichen.crypto.identity import _pubkey_to_iid
 from lichen.gateway import slot_claim
 from lichen.gateway.slot_claim import (
+    MAX_CLAIM_DURATION_SECONDS,
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
@@ -314,6 +315,45 @@ class TestSignAndVerify:
             pubkey,
         )
         is_valid, reason = verify_slot_claim(newer, pubkey, replay_cache=cache)
+        assert is_valid and reason is None
+
+    def test_claim_expiry_bounded_to_max_duration(
+        self, keypair: tuple[bytes, bytes], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Bead j6o2 (GCP-6.5 step 7a): a claim whose expiry lies further
+        than MAX_CLAIM_DURATION past now is rejected EXPIRY_TOO_FAR; an
+        in-window expiry is accepted."""
+        privkey, pubkey = keypair
+        cache = SlotClaimReplayCache()
+        now = 1_900_000_000
+        monkeypatch.setattr(time, "time", lambda: now)
+
+        def claim(expiry: int):
+            return sign_slot_claim(
+                SlotClaim(
+                    gateway_iid="0011223344556677",
+                    slots=(0,),
+                    superframe_id=5,
+                    expiry=expiry,
+                ),
+                privkey,
+                pubkey,
+            )
+
+        # Step 7: expired (<= now) is already fail-closed via timing.
+        is_valid, reason = verify_slot_claim(claim(now), pubkey, cache)
+        assert not is_valid
+        assert reason == ClaimRejectReason.EXPIRY_TOO_FAR
+
+        # Step 7a: beyond max duration (305 s tolerance window) -> rejected.
+        is_valid, reason = verify_slot_claim(
+            claim(now + MAX_CLAIM_DURATION_SECONDS + 1), pubkey, cache
+        )
+        assert not is_valid
+        assert reason == ClaimRejectReason.EXPIRY_TOO_FAR
+
+        # In-window (now < expiry <= now + 305) -> accepted.
+        is_valid, reason = verify_slot_claim(claim(now + MAX_CLAIM_DURATION_SECONDS), pubkey, cache)
         assert is_valid and reason is None
 
     def test_replay_cache_caps_at_max_gateways(self, keypair: tuple[bytes, bytes]) -> None:
