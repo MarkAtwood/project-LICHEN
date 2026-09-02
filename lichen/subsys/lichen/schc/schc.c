@@ -570,7 +570,19 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 		return ret;
 	}
 
-	return schc_compress(&lichen_schc_profile, packet, pkt_len, out, out_len);
+	ret = schc_compress(&lichen_schc_profile, packet, pkt_len, out, out_len);
+	if (ret > (int)SCHC_FRAGMENT_MAX_PACKET_SIZE) {
+		/* The ceiling is on the ENCODED datagram including the rule
+		 * byte: the rule-255 fallback at pkt_len == 22554 would emit
+		 * 22555 - one over. Peers' decode_rule255 rejects len > 22554
+		 * (Rust codec.rs, Python headers.py), so this frame is a
+		 * silent TX blackhole (bead 1npp). Mirrors Rust's
+		 * enforce_encoded_profile_limit. Endpoint policy (above) and
+		 * this ceiling are complementary merge-parent intents:
+		 * policy gates before compression, the ceiling gates after. */
+		return SCHC_ERR_BUFFER_TOO_SMALL;
+	}
+	return ret;
 }
 
 int lichen_schc_decompress(const uint8_t *data, size_t data_len,
