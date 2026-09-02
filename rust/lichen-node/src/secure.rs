@@ -639,6 +639,11 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Send the next independently protected Block1 request.
+    ///
+    /// `dst`, `peer_iid`, `uri_path`, `token`, and `method` describe the
+    /// Block1 transfer endpoint (fixed for the whole transfer); `transfer`
+    /// and `store` carry the mutable per-transfer state.
+    #[allow(clippy::too_many_arguments)] // endpoint descriptor + transfer state; single test caller
     pub async fn send_secure_block1<S: SenderStateStore>(
         &mut self,
         dst: &Addr,
