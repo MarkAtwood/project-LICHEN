@@ -1521,8 +1521,11 @@ static int slots_post(struct coap_resource *resource,
 			/* Snapshot the winner's stored claim under the coord
 			 * lock: the pointer outlives process_claim's critical
 			 * section but the entry can be concurrently updated.
-			 * conflict_cose_len is a plain size_t here (the
-			 * producer wrote through its own pointer). */
+			 * conflict_cose is the const uint8_t * out-parameter
+			 * (process_claim wrote it through &conflict_cose), so
+			 * memcpy uses the pointer directly, without deref; the
+			 * bead 3yhv cleanup targeted the invalid *conflict_cose_len
+			 * unary-* on a plain size_t, not this pointer. */
 			code = COAP_RESPONSE_CODE_CONFLICT;
 			k_mutex_lock(&s_coord_lock, K_FOREVER);
 			memcpy(conflict_buf, conflict_cose, conflict_cose_len);
