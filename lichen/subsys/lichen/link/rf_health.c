@@ -2,10 +2,12 @@
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
 #include <lichen/rf_health.h>
+/* Merge resolution: HEAD's <string.h> (memset/memmove in the busy samplers)
+ * kept; beads-worker-4's <errno.h> rejected together with its -EINVAL error
+ * convention — see lichen_rf_health_interference_score_tenths below. */
 #include <string.h>
 #include <limits.h>
 #include <stddef.h>
-#include <string.h>
 
 #define FP_SCALE (1 << 16)
 #define FP_ROUND (1 << 15)
@@ -173,7 +175,15 @@ uint16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
 						    uint16_t packet_error_permille)
 {
 	/* CCP-15 (R-02a-137), rust rf_health.rs parity: busy percent in
-	 * tenths + packet error permille; out-of-range fails closed. */
+	 * tenths + packet error permille; out-of-range fails closed.
+	 *
+	 * Merge resolution: beads-worker-4 carried this same function as
+	 * int16_t with -EINVAL on out-of-range (per the C errno
+	 * convention). That variant is rejected: the merged rf_health
+	 * test and the merged header both declare/document the fail-closed
+	 * sentinel 0xFFFF (0xFFFF is also non-equatable-to-errno for
+	 * callers in C, matching Rust Option<u16> -> None mapping to a
+	 * distinct sentinel rather than an errno value). */
 	if (busy_percent > 100u || packet_error_permille > 1000u) {
 		return 0xFFFFu;
 	}

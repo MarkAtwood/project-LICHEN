@@ -27,4 +27,6 @@ list(APPEND RF_HEALTH_OPTS -std=c2x)
 set_target_properties(rf_health_test PROPERTIES COMPILE_OPTIONS "${RF_HEALTH_OPTS}")
 
 include(CTest)
-add_test(NAME rf_health COMMAND rf_health_test)
+add_test(NAME rf_health
+	 COMMAND rf_health_test
+		 ${CMAKE_CURRENT_LIST_DIR}/../../../test/vectors/ccp-interference.json)
