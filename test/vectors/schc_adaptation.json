@@ -8,7 +8,8 @@
     "rule7_address_policy": 14,
     "rule255_endpoint_policy": 8,
     "duplicate_idempotence": 1,
-    "rule255_rx_structural_reject": 3
+    "rule255_rx_structural_reject": 3,
+    "rule255_malformed": 4
   },
   "vectors": [
     {
@@ -814,6 +815,46 @@
       "expect_valid": false,
       "expect_error": "invalid_destination_address",
       "provenance": "spec/03-adaptation.md profile address policy (rule255-rx-decode decision): unspecified and multicast sources and an unspecified destination are emission-only (TX) violations; the Rule 255 decoder is byte-preserving on receipt."
+    },
+    {
+      "category": "rule255_malformed",
+      "priority": "P1",
+      "expect_valid": false,
+      "expect_error": "malformed",
+      "name": "rule255_malformed_non_ipv6_payload",
+      "description": "Rule 255 decode MUST reject a payload that is not a complete IPv6 packet (4 arbitrary bytes): framing validation (spec/03: payload MUST be a structurally valid IPv6 packet).",
+      "wire": "ffdeadbeef",
+      "provenance": "lichen/tests/schc/main.c test_rule255_rejects_non_ipv6 (jxlm); rule255-rx-decode structure-only contract."
+    },
+    {
+      "category": "rule255_malformed",
+      "priority": "P1",
+      "expect_valid": false,
+      "expect_error": "malformed",
+      "name": "rule255_malformed_fragment_header",
+      "description": "Rule 255 decode MUST reject an IPv6 Fragment header in the chain (LICHEN fragments at the SCHC layer).",
+      "wire": "ff6000000000102c4020010db800000000000000000000000120010db800000000000000000000000211000000000000012a8313880008665e",
+      "provenance": "lichen/tests/schc/main.c test_rule255_rejects_fragment_header (jxlm)."
+    },
+    {
+      "category": "rule255_malformed",
+      "priority": "P1",
+      "expect_valid": false,
+      "expect_error": "malformed",
+      "name": "rule255_malformed_non_rh3_routing",
+      "description": "Rule 255 decode MUST reject a routing header with type 0 (deprecated, RFC 5095): RPL SRH type-3 only.",
+      "wire": "ff6000000000102b4020010db800000000000000000000000120010db800000000000000000000000211000000000000002a8313880008665e",
+      "provenance": "lichen/tests/schc/main.c test_rule255_rejects_non_rh3_routing (jxlm)."
+    },
+    {
+      "category": "rule255_malformed",
+      "priority": "P1",
+      "expect_valid": false,
+      "expect_error": "malformed",
+      "name": "rule255_malformed_bad_udp_checksum",
+      "description": "Rule 255 decode MUST reject a UDP datagram whose checksum fails RFC 1071 verification (field corrupted +1).",
+      "wire": "ff600000000008114020010db800000000000000000000000120010db80000000000000000000000022a8313880008665f",
+      "provenance": "lichen/tests/schc/main.c test_rule255_rejects_bad_udp_checksum (jxlm)."
     }
   ]
 }
