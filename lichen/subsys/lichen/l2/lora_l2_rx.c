@@ -91,6 +91,40 @@ static atomic_t rx_session;
 static void rx_work_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(rx_work, rx_work_fn);
 
+#ifdef CONFIG_LICHEN_L2_RX_DEDICATED_WORKQUEUE
+/* Bead gcib: dedicated workqueue so the CPU-bound RX chain (Schnorr-48
+ * verify, SCHC decompress, net_pkt alloc) cannot starve the cooperative
+ * system workqueue (USB, net DAD/ND, mgmt events) under a radio-range
+ * flood. Priority matches the old sb0b RX thread (preemptible). */
+K_THREAD_STACK_DEFINE(rx_wq_stack, CONFIG_LICHEN_L2_RX_WORKQUEUE_STACK_SIZE);
+static struct k_work_queue_config rx_wq_cfg = {
+	.name = "lichen_l2_rx",
+};
+static struct k_work_queue_config rx_wq_cfg_used;
+static struct k_work_q rx_work_q;
+static bool rx_work_q_started;
+
+static struct k_work_q *rx_work_queue(void)
+{
+	if (!rx_work_q_started) {
+		rx_wq_cfg_used = rx_wq_cfg;
+		k_work_queue_init(&rx_work_q);
+		k_work_queue_start(&rx_work_q, rx_wq_stack,
+				   K_THREAD_STACK_SIZEOF(rx_wq_stack),
+				   K_PRIO_PREEMPT(5), &rx_wq_cfg_used);
+		rx_work_q_started = true;
+	}
+	return &rx_work_q;
+}
+
+#define RX_WORK_SUBMIT(w) k_work_schedule_for_queue(rx_work_queue(), (w), K_NO_WAIT)
+#define RX_WORK_SUBMIT_DELAYED(w, delay) \
+	k_work_schedule_for_queue(rx_work_queue(), (w), (delay))
+#else
+#define RX_WORK_SUBMIT(w) k_work_schedule(w, K_NO_WAIT)
+#define RX_WORK_SUBMIT_DELAYED(w, delay) k_work_schedule(w, (delay))
+#endif
+
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 			      uint16_t size, int16_t rssi, int8_t snr
 			      LORA_RECV_CB_EXTRA_ARGS);
@@ -169,7 +203,7 @@ static void lora_l2_rx_arm(void)
 	LOG_ERR("lora_l2: recv_async arm failed (%d), retrying", ret);
 
 retry:
-	k_work_schedule(&rx_work, K_MSEC(RX_REARM_RETRY_MS));
+	RX_WORK_SUBMIT_DELAYED(&rx_work, K_MSEC(RX_REARM_RETRY_MS));
 }
 
 /**
@@ -228,7 +262,7 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 	/* rx_work is delayable (the re-arm retry uses the delay slot); submit
 	 * immediately with a zero delay - k_work_reschedule expedites a
 	 * pending 10 ms retry so a staged packet never waits it out. */
-	k_work_reschedule(&rx_work, K_NO_WAIT);
+	RX_WORK_SUBMIT(&rx_work);
 }
 
 /**

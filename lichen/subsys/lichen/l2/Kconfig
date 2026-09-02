@@ -149,6 +149,27 @@ config LICHEN_L2_LOG_LEVEL
 	  Log level for LICHEN Zephyr L2 interface.
 	  0 = Off, 1 = Error, 2 = Warning, 3 = Info, 4 = Debug.
 
+config LICHEN_L2_RX_DEDICATED_WORKQUEUE
+	bool "Run RX packet processing on a dedicated workqueue"
+	depends on LICHEN_L2
+	default n
+	help
+	  Bead gcib: the RX chain (rx_mutex wait, Schnorr-48 verify, SCHC
+	  decompress, net_pkt alloc) is CPU-bound; on the cooperative system
+	  workqueue a radio-range attacker (~40 fps at SF7) can starve USB,
+	  net DAD/ND delayed work, and mgmt events. Enable to run rx_work on
+	  its own k_work_queue at preemption priority instead. Costs one
+	  thread stack (see LICHEN_L2_RX_WORKQUEUE_STACK_SIZE).
+
+config LICHEN_L2_RX_WORKQUEUE_STACK_SIZE
+	int "Dedicated RX workqueue stack size (bytes)"
+	depends on LICHEN_L2_RX_DEDICATED_WORKQUEUE
+	default 2048
+	help
+	  Stack for the dedicated RX workqueue thread. Parity with the old
+	  sb0b-migrated budgets: puck 8192, gateway boards 12288,
+	  nucleo_wl55jc 2048.
+
 config LICHEN_L2_RX_ALLOC_TIMEOUT_MS
 	int "RX packet allocation timeout (ms)"
 	depends on LICHEN_L2
