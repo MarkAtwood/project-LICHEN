@@ -135,9 +135,11 @@ class DesyncFSM:
 
         Per 2a.6.2 (decision guard-ppm): SYNCED + drift_ppm > GUARD_PPM ->
         DESYNCED, triggering epoch_floor revalidation by the caller.
+        No-op outside SYNCED (a drift measurement alone cannot exit
+        RECOVERING or deepen DESYNCED). Parity with rust DesyncFSM::on_drift.
         """
         guard = DESYNC_CONSTANTS["GUARD_PPM"]
-        if abs(drift_ppm) > guard:
+        if self.state is DesyncState.SYNCED and abs(drift_ppm) > guard:
             self.state = DesyncState.DESYNCED
             self.consecutive_valid = 0
             self.missed_superframes = 0
