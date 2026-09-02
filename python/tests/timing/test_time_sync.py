@@ -1769,6 +1769,29 @@ def test_provision_transitions_reject_reentrant_persistence_hooks() -> None:
     assert verifier.current() is None and verifier.cleared
 
 
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_monotonic_clock_callback_rejects_scheduled_awaitable(kind: str) -> None:
+    """Bead 29wj: a MonotonicClock callback that is a sync def returning a
+    scheduled awaitable passes registration (require_sync_callable cannot
+    see through sync defs) and MUST be rejected at invocation via
+    reject_awaitable_result, terminating the awaitable (cancelled
+    Task/Future, closed custom) before failing closed."""
+    ran: list[int] = []
+    created: list[object] = []
+
+    def deferred_clock() -> object:
+        return _scheduled_awaitable(kind, ran, created)
+
+    clock = MonotonicClock(deferred_clock)  # type: ignore[arg-type]
+    with pytest.raises(
+        TypeError, match="monotonic clock callback must not return an awaitable"
+    ):
+        clock()
+    if kind == "task":
+        await asyncio.sleep(0)  # deliver the pending cancellation
+    _assert_terminated(kind, created[0], ran)
+
+
 def test_async_clock_and_provision_callbacks_are_closed_and_rejected() -> None:
     async def async_clock() -> float:
         return 1.0
