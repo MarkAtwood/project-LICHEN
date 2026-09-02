@@ -67,6 +67,16 @@ int coap_oscore_unprotect_resource_request(
 	return 0;
 }
 
+int coap_oscore_authorize_mutating(
+	struct coap_resource *resource, struct coap_packet *request,
+	struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
+	struct coap_oscore_unprotect_result *result)
+{
+	return coap_oscore_unprotect_resource_request(resource, request, addr,
+						      addr_len, expected_method,
+						      result);
+}
+
 bool lichen_coap_is_local_admin(const struct sockaddr *addr,
 				socklen_t addr_len)
 {
