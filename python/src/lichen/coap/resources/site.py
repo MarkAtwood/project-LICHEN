@@ -31,6 +31,7 @@ from lichen.coap.resources.messaging import (
     SentMessageDetailsResource,
     SentMessagesResource,
 )
+from lichen.coap.resources.msg_store import MsgStoreResource
 from lichen.coap.resources.node_resources import (
     ConfigResource,
     IdentityConfigResource,
@@ -152,6 +153,7 @@ def build_site(
     presence_resource: PresenceResource | None = None,
     presence_cache_resource: PresenceCacheResource | None = None,
     messages_resource: MessagesResource | None = None,
+    msg_store_resource: MsgStoreResource | None = None,
     message_receipts_resource: MessageReceiptsResource | None = None,
     sos_resource: SosResource | None = None,
     rollcall_resource: RollcallResource | None = None,
@@ -251,6 +253,8 @@ def build_site(
         site.add_resource(["messages"], legacy_messages)
     if message_receipts_resource is not None:
         site.add_resource(["msg", "ack"], message_receipts_resource)
+    if msg_store_resource is not None:
+        site.add_resource(["msg", "store"], msg_store_resource)
     if sos_resource is not None:
         site.add_resource(["sos"], sos_resource)
     if rollcall_resource is not None:
