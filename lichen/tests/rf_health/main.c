@@ -2,7 +2,10 @@
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
 #include <lichen/rf_health.h>
+
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int failures;
@@ -26,7 +29,115 @@ static void fill_loss(struct lichen_rf_health *h, uint32_t tx, uint32_t fails)
 	}
 }
 
-int main(void)
+/* --- minimal JSON access for the CCP-15 interference corpus -------- */
+
+static char *read_file(const char *path)
+{
+	FILE *f = fopen(path, "rb");
+
+	if (f == NULL) {
+		return NULL;
+	}
+	if (fseek(f, 0, SEEK_END) != 0) {
+		fclose(f);
+		return NULL;
+	}
+	long size = ftell(f);
+
+	if (size < 0) {
+		fclose(f);
+		return NULL;
+	}
+	rewind(f);
+	char *buf = malloc((size_t)size + 1);
+
+	if (buf == NULL) {
+		fclose(f);
+		return NULL;
+	}
+	size_t n = fread(buf, 1U, (size_t)size, f);
+
+	fclose(f);
+	buf[n] = '\0';
+	return buf;
+}
+
+static const char *find_case(const char *json, const char *name,
+			     const char **end)
+{
+	char needle[128];
+
+	snprintf(needle, sizeof(needle), "\"name\": \"%s\"", name);
+	const char *at = strstr(json, needle);
+
+	if (at == NULL) {
+		return NULL;
+	}
+	const char *brace = at;
+
+	while (brace > json && *brace != '{') {
+		brace--;
+	}
+	if (brace == json) {
+		return NULL;
+	}
+	int depth = 0;
+	const char *p = brace;
+
+	for (; *p != '\0'; p++) {
+		if (*p == '{') {
+			depth++;
+		} else if (*p == '}') {
+			depth--;
+			if (depth == 0) {
+				*end = p;
+				return brace + 1;
+			}
+		}
+	}
+	return NULL;
+}
+
+static bool find_double(const char *obj, const char *end, const char *key,
+			double *out)
+{
+	char needle[96];
+
+	snprintf(needle, sizeof(needle), "\"%s\":", key);
+	const char *at = strstr(obj, needle);
+
+	if (at == NULL || at >= end) {
+		return false;
+	}
+	const char *p = at + strlen(needle);
+
+	while (*p == ' ') {
+		p++;
+	}
+	*out = strtod(p, NULL);
+	return true;
+}
+
+static void case_interference(const char *obj, const char *end)
+{
+	double busy_pct = 0.0;
+	double per = 0.0;
+	double expected = 0.0;
+
+	CHECK(find_double(obj, end, "busy_pct", &busy_pct) &&
+		      find_double(obj, end, "per", &per) &&
+		      find_double(obj, end, "interference_score", &expected),
+	      "interference: vector fields present");
+
+	uint8_t busy_percent = (uint8_t)(busy_pct + 0.5);
+	uint16_t permille = (uint16_t)(per * 1000.0 + 0.5);
+	int16_t tenths = lichen_rf_health_interference_score_tenths(
+		busy_percent, permille);
+	CHECK(tenths == (int16_t)(expected * 10.0 + 0.5),
+	      "interference: score matches the committed oracle");
+}
+
+int main(int argc, char **argv)
 {
 	struct lichen_rf_health h;
 
@@ -91,6 +202,38 @@ int main(void)
 	      "density: capped at 255");
 	CHECK(lichen_rf_health_estimate_density(0, 200, -100) == 3,
 	      "density: zero neighbors with bonuses");
+
+	/* CCP-15 interference-score corpus (b7z9.29.6). The JSON section is
+	 * exercised when the vector path is supplied (ctest add_test);
+	 * Zephyr/twister runs without argv keep the hardcoded checks. */
+	if (argc > 1) {
+		char *json = read_file(argv[1]);
+
+		CHECK(json != NULL, "interference: corpus readable");
+		if (json != NULL) {
+			static const char *const NAMES[] = {
+				"idle_channel",
+				"moderate_busy_low_per",
+				"high_busy_high_per",
+				"saturated_channel",
+				"low_busy_moderate_per",
+				"clean_channel_high_per",
+			};
+			const char *end = NULL;
+
+			for (size_t i = 0; i < sizeof(NAMES) / sizeof(NAMES[0]);
+			     i++) {
+				const char *obj = find_case(json, NAMES[i],
+							    &end);
+				CHECK(obj != NULL,
+				      "interference: case present");
+				if (obj != NULL) {
+					case_interference(obj, end);
+				}
+			}
+		}
+		free(json);
+	}
 
 	if (failures == 0) {
 		printf("PASS: rf_health loss threshold\n");

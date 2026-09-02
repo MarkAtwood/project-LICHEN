@@ -2,6 +2,7 @@
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
 #include <lichen/rf_health.h>
+#include <errno.h>
 #include <limits.h>
 
 #define FP_SCALE (1 << 16)
@@ -164,4 +165,17 @@ uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
 						     : density + 1;
 	}
 	return density > 255u ? 255u : (uint8_t)density;
+}
+
+int16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
+						   uint16_t packet_error_permille)
+{
+	/* Spec 02a 2a.10.4: busy percentage plus packet-error rate in
+	 * percent points, carried in tenths. Rust rf_health.rs
+	 * interference_score_tenths parity (None out-of-range here maps
+	 * to -EINVAL per the C errno convention). */
+	if (busy_percent > 100U || packet_error_permille > 1000U) {
+		return -EINVAL;
+	}
+	return (int16_t)((uint32_t)busy_percent * 10U + packet_error_permille);
 }

@@ -47,6 +47,20 @@ uint8_t lichen_rf_health_packet_loss_rate_pct(const struct lichen_rf_health *h);
 uint16_t lichen_rf_health_packet_loss_permille(const struct lichen_rf_health *h);
 int8_t lichen_rf_health_snr_avg(const struct lichen_rf_health *h);
 uint8_t lichen_rf_health_adaptive_sf(const struct lichen_rf_health *h);
+
+/**
+ * @brief CCP-15 interference score in tenths of a point (spec 02a 2a.10.4).
+ *
+ * score = busy_percent * 10 + packet_error_permille, i.e. busy percentage
+ * plus packet-error rate in percent points, carried in tenths so the
+ * permille-rate detail survives. Parity: rust rf_health.rs
+ * interference_score_tenths, python ccp.py interference_score.
+ *
+ * @return score in tenths, or -EINVAL when busy_percent > 100 or
+ *         packet_error_permille > 1000.
+ */
+int16_t lichen_rf_health_interference_score_tenths(uint8_t busy_percent,
+						   uint16_t packet_error_permille);
 bool lichen_rf_health_should_rebalance(const struct lichen_rf_health *h);
 uint8_t lichen_rf_health_estimate_density(uint8_t neighbor_count,
 					  uint16_t loss_permille,
