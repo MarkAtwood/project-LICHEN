@@ -621,8 +621,7 @@ mod tests {
         // proving the foreign failure is seed-specific, not a generally
         // unreadable record.
         let mut owner_again =
-            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x42; 32])
-                .unwrap();
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x42; 32]).unwrap();
         assert_eq!(owner_again.load(&iid), Ok(Some(state(0xB1, 10))));
 
         std::fs::remove_dir_all(state_root).unwrap();

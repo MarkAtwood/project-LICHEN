@@ -2415,7 +2415,7 @@ fn dense_network_simulation_progressive_suppression() {
     // Simulate a node receiving consistent DIOs in a dense network,
     // gradually increasing suppression, and verify neighbors stay alive.
     let mut table = NeighborTable::new();
-    let neighbors: Vec<[u8; 16]> = (1..=5).map(|i| link_local(i)).collect();
+    let neighbors: Vec<[u8; 16]> = (1..=5).map(link_local).collect();
     for addr in &neighbors {
         table.update(addr, 1.0, -50, 0);
     }

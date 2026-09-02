@@ -675,7 +675,7 @@ async fn join_leaf<R: Radio, L: Radio, S: NonVolatile>(
     leaf: &mut RplStack<L, S>,
     root_identity: &Identity,
     root_addr: [u8; 16],
-    leaf_addr: [u8; 16],
+    _leaf_addr: [u8; 16],
 ) where
     R::Error: core::fmt::Debug,
 {

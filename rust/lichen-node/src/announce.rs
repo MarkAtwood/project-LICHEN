@@ -251,16 +251,13 @@ impl AnnounceProcessor {
         // gradient, pin, and replay tables untouched. A surviving floor after
         // a crash forces the legitimate sender to increment its sequence.
         if self.trust_store.borrow().is_persistent() {
-            let accept_result = self
-                .trust_store
-                .borrow_mut()
-                .accept(
-                    &iid,
-                    AnnounceTrustState {
-                        pubkey: *announce.pubkey,
-                        seq: announce.seq_num,
-                    },
-                );
+            let accept_result = self.trust_store.borrow_mut().accept(
+                &iid,
+                AnnounceTrustState {
+                    pubkey: *announce.pubkey,
+                    seq: announce.seq_num,
+                },
+            );
             if let Err(err) = accept_result {
                 // Full (lifetime originator cap) is an operator-diagnosable
                 // capacity condition, not corruption: surface it distinctly.
@@ -1189,10 +1186,7 @@ mod tests {
 
         let result = processor.process(&announce, link_local(0xAA), 1000);
         assert!(!result.accepted);
-        assert_eq!(
-            result.reject_reason,
-            Some(AnnounceRejectReason::StoreFull)
-        );
+        assert_eq!(result.reject_reason, Some(AnnounceRejectReason::StoreFull));
 
         // Fail closed: the route/gradient state for the originator was not
         // mutated and nothing was pinned or replay-tracked in memory.
@@ -1308,7 +1302,11 @@ mod tests {
                 AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x7C; 32]).unwrap(),
             );
             // Direct delivery pins the origin and raises the floor to 100.
-            assert!(processor.process(&announce, link_local(0xAA), 1000).accepted);
+            assert!(
+                processor
+                    .process(&announce, link_local(0xAA), 1000)
+                    .accepted
+            );
         }
 
         // Restart: the pin and the seq-100 floor are durable.

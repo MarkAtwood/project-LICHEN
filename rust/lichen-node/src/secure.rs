@@ -653,6 +653,15 @@ impl<R: Radio> SecureStack<R> {
     }
 
     /// Send the next independently protected Block1 request.
+    ///
+    /// `dst`, `peer_iid`, and `request` describe the Block1 transfer endpoint
+    /// (fixed for the whole transfer); `transfer` and `store` carry the
+    /// mutable per-transfer state.
+    // Merge resolution: HEAD's bundled `SecureRequestData` API and
+    // `ContextStateStore` bound (the rest of this file merged to HEAD's form,
+    // so the incoming `SenderStateStore` bound would not compile here), plus
+    // the incoming clippy-arity justification retained.
+    #[allow(clippy::too_many_arguments)] // endpoint descriptor + transfer state; single test caller
     pub async fn send_secure_block1<S: ContextStateStore>(
         &mut self,
         dst: &Addr,
