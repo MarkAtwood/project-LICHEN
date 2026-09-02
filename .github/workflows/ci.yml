@@ -77,6 +77,9 @@ jobs:
         with:
           workspaces: rust
       - run: cargo build
+      # Plain cargo test silently skips feature-gated suites (e.g. the whole
+      # lichen-link link-layer suite behind schnorr,std — bead 19d4).
+      - run: cargo test --features lichen-link/schnorr,lichen-link/std
       - run: cargo test
 
   rust-all-features:
