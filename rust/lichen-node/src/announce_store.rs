@@ -136,7 +136,14 @@ pub struct AnnounceTrustStore {
 #[cfg(feature = "std")]
 impl AnnounceTrustStore {
     /// Cache-only store; nothing is persisted.
-    pub fn ephemeral() -> Self {
+    ///
+    /// WARNING (bead vwiq): an ephemeral store provides NO durable pin or
+    /// replay-floor protection - after every restart all pins vanish and
+    /// IID-collision attackers can re-pin at will. Production callers MUST
+    /// use [`AnnounceTrustStore::persistent`]. This constructor exists only
+    /// for tests and explicitly opt-in simulations.
+    #[doc(hidden)]
+    pub fn ephemeral_unprotected() -> Self {
         Self {
             records: HashMap::new(),
             clock: 0,
@@ -857,7 +864,7 @@ mod tests {
 
     #[test]
     fn store_capacity_is_bounded() {
-        let mut store = AnnounceTrustStore::ephemeral();
+        let mut store = AnnounceTrustStore::ephemeral_unprotected();
         for i in 0..MAX_TRACKED_ORIGINATORS {
             let mut iid = [0u8; 8];
             iid[0] = i as u8;
@@ -1040,7 +1047,7 @@ mod tests {
     #[test]
     fn ephemeral_store_roundtrip() {
         let iid = [0x88; 8];
-        let mut store = AnnounceTrustStore::ephemeral();
+        let mut store = AnnounceTrustStore::ephemeral_unprotected();
         assert_eq!(store.load(&iid), Ok(None));
         store.accept(&iid, state(0x21, 9)).unwrap();
         assert_eq!(store.load(&iid), Ok(Some(state(0x21, 9))));
