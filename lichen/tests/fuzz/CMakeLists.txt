@@ -102,3 +102,21 @@ target_link_options(fuzz_schc PRIVATE ${FUZZ_FLAGS})
 if(FUZZ_STANDALONE_DEF)
   target_compile_definitions(fuzz_schc PRIVATE ${FUZZ_STANDALONE_DEF})
 endif()
+# ─── ctest smoke registration (bead kxs9) ────────────────────────────────────
+enable_testing()
+# Bitrot previously went unnoticed because these executables were built but
+# never run by ctest. Each smoke run keeps the default 1M-iteration budget
+# out of CI while proving the binary still links and executes.
+if(NOT FUZZ_STANDALONE_DEF)
+  # libFuzzer build: -runs=N gives a bounded smoke pass.
+  add_test(NAME fuzz_frame_smoke COMMAND fuzz_frame -runs=200)
+  add_test(NAME fuzz_schnorr48_smoke COMMAND fuzz_schnorr48 -runs=200)
+  add_test(NAME fuzz_schc_smoke COMMAND fuzz_schc -runs=200)
+  set_tests_properties(fuzz_frame_smoke fuzz_schnorr48_smoke fuzz_schc_smoke
+    PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+else()
+  # Standalone harnesses take [iterations] [seed].
+  add_test(NAME fuzz_frame_smoke COMMAND fuzz_frame 200 1)
+  add_test(NAME fuzz_schnorr48_smoke COMMAND fuzz_schnorr48 200 1)
+  add_test(NAME fuzz_schc_smoke COMMAND fuzz_schc 200 1)
+endif()
