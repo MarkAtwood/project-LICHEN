@@ -185,6 +185,9 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 		.peer_eui64 = src_eui64,
 		.link_key = rx_link_key_ptr,
 		.current_time = k_uptime_get_32(),
+#ifdef CONFIG_LICHEN_SCHC
+		.schc_failures = &link_ctx.schc_failures,
+#endif
 	};
 
 	ipv6_len = sizeof(rx_ipv6_buf);

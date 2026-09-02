@@ -207,6 +207,13 @@ int lichen_link_init(struct lichen_link_ctx *ctx, const uint8_t *eui64)
 	ctx->cca_ops.cad = NULL;
 	ctx->cca_ops.user = NULL;
 
+#ifdef CONFIG_LICHEN_SCHC
+	/* Spec 03 5.7: bounded consecutive decompression-failure tracker,
+	 * keyed by the authenticated signer. Threshold from Kconfig. */
+	lichen_schc_failure_tracker_init(&ctx->schc_failures,
+					 CONFIG_LICHEN_SCHC_FAILURE_NOTIFY_THRESHOLD);
+#endif
+
 	memcpy(ctx->eui64, eui64, LICHEN_EUI64_LEN);
 	memset(ctx->ed25519_sk, 0, LICHEN_SK_LEN);
 	memset(ctx->ed25519_pk, 0, LICHEN_PK_LEN);

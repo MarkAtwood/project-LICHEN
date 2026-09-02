@@ -353,6 +353,9 @@ int lichen_frame_write(const struct lichen_frame *_Nullable frame,
 /* ─── replay table ────────────────────────────────────────────────────────── */
 
 #include <lichen/replay.h>
+#ifdef CONFIG_LICHEN_SCHC
+#include <lichen/schc_failure_tracker.h>
+#endif
 
 /* Replay structs and functions are defined in replay.h */
 
@@ -436,6 +439,9 @@ struct lichen_link_rx_ctx {
 	const uint8_t *_Nullable peer_eui64;   /**< Optional canonical 8-byte peer EUI-64 */
 	const uint8_t *_Nullable link_key;     /**< Retained legacy key (NULL to skip) */
 	uint32_t current_time;                 /**< Current timestamp for replay aging */
+#ifdef CONFIG_LICHEN_SCHC
+	struct lichen_schc_failure_tracker *_Nullable schc_failures; /**< Bounded decompression-failure accounting (spec 03 5.7) */
+#endif
 };
 
 /**
