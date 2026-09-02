@@ -868,6 +868,10 @@ impl fmt::Debug for Gateway {
 impl Gateway {
     /// Create a new root gateway with the given identity.
     ///
+    /// WARNING: the backing trust stores (including announce trust) are
+    /// EPHEMERAL - nothing durable is persisted. Only for tests; production
+    /// MUST use [`Gateway::new_persistent`].
+    ///
     /// The root address and DODAG ID are derived from the identity's
     /// public key per spec (unified Ed25519 identity for LICHEN and
     /// Yggdrasil addressing).
@@ -888,7 +892,10 @@ impl Gateway {
                 trust_persistence: None,
                 oscore_sender_store: GatewayOscoreSenderStore::ephemeral(),
                 oscore_recipient_store: GatewayOscoreRecipientStore::ephemeral(),
-                announce_trust: AnnounceTrustStore::ephemeral(),
+                // WARNING (bead vwiq): ephemeral announce trust provides
+                // no durable pin/floor protection. Production entry points
+                // must use new_persistent, which supplies a persistent store.
+                announce_trust: AnnounceTrustStore::ephemeral_unprotected(),
             },
         )
     }

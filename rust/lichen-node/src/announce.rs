@@ -120,8 +120,18 @@ pub struct AnnounceProcessor {
 
 #[cfg(feature = "std")]
 impl AnnounceProcessor {
+    /// Build a processor with an UNPROTECTED (ephemeral) trust store.
+    ///
+    /// WARNING: nothing is persisted - after every restart all pins vanish
+    /// and IID-collision attackers can re-pin at will. Only for tests and
+    /// explicitly opt-in simulations; production MUST use
+    /// [`AnnounceProcessor::with_trust_store`] with a persistent store.
     pub fn new(gradient_table: GradientTable, prefix: [u8; 8]) -> Self {
-        Self::with_trust_store(gradient_table, prefix, AnnounceTrustStore::ephemeral())
+        Self::with_trust_store(
+            gradient_table,
+            prefix,
+            AnnounceTrustStore::ephemeral_unprotected(),
+        )
     }
 
     /// Build a processor whose admission decisions commit to `store` before
