@@ -273,6 +273,8 @@ class RadioMixin:
                 node_state=node.state.name if node is not None else None,
                 queue_size=len(self._event_queue),
                 active_txs=len(self._active_transmissions),
+                jitter_enabled=self._jitter_max_us > 0,
+                current_time=self._current_time_us,
             )
         self._debug_log("tx_start", **tx_log)  # type: ignore[attr-defined]
 
@@ -756,6 +758,16 @@ class RadioMixin:
         node = self._nodes.get(event.node_id)
         if node is None or not node.connected:
             return
+        self._debug_log(  # type: ignore[attr-defined]
+            "tx_start_delayed",
+            sim_id=self._id,
+            node_id=event.node_id,
+            payload_len=len(event.payload),
+            node_state=node.state.name,
+            queue_size=len(self._event_queue),
+            jitter_enabled=self._jitter_max_us > 0,
+            current_time=self._current_time_us,
+        )
         if self._density_aware_startup and not node.started:
             extra = self.calculate_startup_delay(node)  # type: ignore[attr-defined]
             node.started = True
