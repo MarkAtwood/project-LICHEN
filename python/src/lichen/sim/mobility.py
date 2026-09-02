@@ -69,6 +69,18 @@ class WaypointState(Enum):
     PAUSED = auto()
 
 
+def _require_finite(name: str, *values: float) -> None:
+    """Reject NaN/inf in simulator geometry inputs (bead ohw4).
+
+    NaN bypasses all `<= 0` comparisons (nan <= 0 is False), poisoning
+    positions silently through every later distance/sqrt; inf passes
+    validation and makes arrival time charges zero, amplifying step loops.
+    """
+    for value in values:
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite, got {value}")
+
+
 @dataclass
 class RandomWaypoint(MobilityPattern):
     """Random waypoint mobility pattern.
@@ -97,6 +109,16 @@ class RandomWaypoint(MobilityPattern):
     _pause_remaining_us: float = field(init=False, default=0)
 
     def __post_init__(self) -> None:
+        if self.speed_m_s <= 0:
+            raise ValueError(f"speed_m_s must be > 0, got {self.speed_m_s}")
+        if self.pause_time_us < 0:
+            raise ValueError(f"pause_time_us must be >= 0, got {self.pause_time_us}")
+        min_x, max_x, min_y, max_y = self.area_bounds
+        if min_x >= max_x or min_y >= max_y:
+            raise ValueError(f"area_bounds must have min < max, got {self.area_bounds}")
+        _require_finite("speed_m_s", self.speed_m_s)
+        _require_finite("area_bounds", min_x, max_x, min_y, max_y)
+        _require_finite("z", self.z)
         self._rng = random.Random(self.seed)
         self._state = WaypointState.PAUSED
         self._target = None
@@ -278,6 +300,10 @@ class GroupMobility(MobilityPattern):
         min_x, max_x, min_y, max_y = self.area_bounds
         if min_x >= max_x or min_y >= max_y:
             raise ValueError(f"area_bounds must have min < max, got {self.area_bounds}")
+        _require_finite("speed_m_s", self.speed_m_s)
+        _require_finite("area_bounds", min_x, max_x, min_y, max_y)
+        _require_finite("group_radius_m", self.group_radius_m)
+        _require_finite("jitter_m", self.jitter_m)
         if self.group_radius_m < 0:
             raise ValueError(f"group_radius_m must be >= 0, got {self.group_radius_m}")
         if self.jitter_m < 0:
@@ -566,6 +592,9 @@ class RPGM(MobilityPattern):
         min_x, max_x, min_y, max_y = self.area_bounds
         if min_x >= max_x or min_y >= max_y:
             raise ValueError(f"area_bounds must have min < max, got {self.area_bounds}")
+        _require_finite("speed_m_s", self.speed_m_s)
+        _require_finite("area_bounds", min_x, max_x, min_y, max_y)
+        _require_finite("max_offset_m", self.max_offset_m)
         if self.max_offset_m < 0:
             raise ValueError(f"max_offset_m must be >= 0, got {self.max_offset_m}")
         if 2 * self.max_offset_m > min(max_x - min_x, max_y - min_y):
@@ -800,8 +829,10 @@ class ManhattanGrid(MobilityPattern):
     def __post_init__(self) -> None:
         if self.spacing_m <= 0:
             raise ValueError(f"spacing_m must be > 0, got {self.spacing_m}")
+        _require_finite("spacing_m", self.spacing_m)
         if self.speed_m_s <= 0:
             raise ValueError(f"speed_m_s must be > 0, got {self.speed_m_s}")
+        _require_finite("speed_m_s", self.speed_m_s)
         if self.pause_time_us < 0:
             raise ValueError(f"pause_time_us must be >= 0, got {self.pause_time_us}")
         if not 0.0 <= self.pause_probability <= 1.0:

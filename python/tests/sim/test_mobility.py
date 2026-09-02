@@ -56,22 +56,23 @@ class TestRandomWaypoint:
         assert abs(distance - 10.0) < 0.01
 
     def test_pauses_at_waypoint(self) -> None:
-        # Use a small area so we reach waypoint quickly
+        # Use a 1-meter area so the first waypoint is always within reach of
+        # a single 1-second step at 100 m/s.
         pattern = RandomWaypoint(
-            area_bounds=(10, 10, 10, 10),  # All waypoints at (10, 10)
+            area_bounds=(9.0, 10.0, 9.0, 10.0),
             speed_m_s=100.0,  # Fast
             pause_time_us=2_000_000,  # 2 second pause
             seed=42,
         )
-        node = SimNode(id="test", position=(0.0, 0.0, 0.0))
+        node = SimNode(id="test", position=(9.0, 9.0, 0.0))
 
-        # Step until we reach the waypoint
+        # Step until we reach the waypoint and enter the pause state.
         pattern.step(node, dt_us=1_000_000)
 
-        # Node should be at (10, 10)
+        # Node must be inside the area and paused at the waypoint.
         x, y, _ = node.position
-        assert abs(x - 10.0) < 0.01
-        assert abs(y - 10.0) < 0.01
+        assert 9.0 <= x <= 10.0 and 9.0 <= y <= 10.0
+        assert pattern._state == WaypointState.PAUSED
 
         # Pattern should now be paused
         assert pattern._state == WaypointState.PAUSED
