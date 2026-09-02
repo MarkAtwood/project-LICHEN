@@ -619,6 +619,23 @@ class StratumTracker:
             )
             if signer is None or generation is None or counter is None:
                 return self._reject("network-verifier-evidence-missing")
+            # Authorization precedes the replay barrier (bead 8dhx, fixing the
+            # 8c0b eviction exposure): a signer not authorized for time must
+            # never occupy an LRU slot, or >=256 such signers can evict a
+            # victim's high-water and re-open an old counter to adoption
+            # (time rollback). Reasons mirror _rejection verbatim so the
+            # hoist is observation-preserving for authorized peers; the
+            # payload-binding check stays after the barrier (per-sample).
+            if (
+                evidence.network_authenticated is not True
+                or SourceClass.NETWORK not in self.__policy.accepted_wall_clock_sources
+                or signer not in self.__policy.authorized_network_peers
+            ):
+                if evidence.network_authenticated is not True:
+                    return self._reject("network-verifier-evidence-missing")
+                if SourceClass.NETWORK not in self.__policy.accepted_wall_clock_sources:
+                    return self._reject("network-transport-not-authorized")
+                return self._reject("network-peer-not-authorized-for-time")
             replay_key = (signer, generation)
             if counter <= self.__network_high_water.get(replay_key, -1):
                 return self._reject("network-replay-counter-not-new")
