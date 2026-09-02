@@ -5,6 +5,8 @@
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
+use lichen_core::addr::Ipv6Addr;
+
 #[cfg(feature = "std")]
 use crate::message::RplError;
 #[cfg(feature = "std")]
@@ -20,7 +22,7 @@ pub const MAX_ROUTE_HOPS: usize = 8;
 #[derive(Debug, PartialEq, Eq)]
 pub struct SourceRoutingHeader {
     pub segments_left: u8,
-    pub addresses: Vec<[u8; 16]>,
+    pub addresses: Vec<Ipv6Addr>,
 }
 
 #[cfg(feature = "std")]
@@ -43,7 +45,7 @@ impl SourceRoutingHeader {
         out[4] = 0; // reserved
         out[5] = 0;
         for (i, addr) in self.addresses.iter().enumerate() {
-            out[6 + i * 16..6 + (i + 1) * 16].copy_from_slice(addr);
+            out[6 + i * 16..6 + (i + 1) * 16].copy_from_slice(&addr.0);
         }
         Ok(needed)
     }
@@ -67,9 +69,9 @@ impl SourceRoutingHeader {
         if !addr_bytes.len().is_multiple_of(16) {
             return Err(RplError::InvalidOption);
         }
-        let addresses: Vec<[u8; 16]> = addr_bytes
+        let addresses: Vec<Ipv6Addr> = addr_bytes
             .chunks_exact(16)
-            .map(|chunk| chunk.try_into().unwrap())
+            .map(|chunk| Ipv6Addr(chunk.try_into().unwrap()))
             .collect();
         if addresses.len() > MAX_ROUTE_HOPS {
             return Err(RplError::InvalidOption);
@@ -84,7 +86,7 @@ impl SourceRoutingHeader {
         })
     }
 
-    pub fn from_route(route: &[[u8; 16]]) -> Result<Self, RplError> {
+    pub fn from_route(route: &[Ipv6Addr]) -> Result<Self, RplError> {
         let remaining = route.len().checked_sub(1).ok_or(RplError::InvalidOption)?;
         if remaining == 0 || route.len() > MAX_ROUTE_HOPS {
             return Err(RplError::InvalidOption);

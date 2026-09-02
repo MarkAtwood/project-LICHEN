@@ -1851,7 +1851,8 @@ mod tests {
     #[test]
     fn srh_encode_decode_roundtrip() {
         use crate::srh::SourceRoutingHeader;
-        let addresses: Vec<[u8; 16]> = [ll(2), ll(3)].into_iter().collect();
+        let addresses: Vec<lichen_core::addr::Ipv6Addr> =
+            [ll(2), ll(3)].map(lichen_core::addr::Ipv6Addr).into_iter().collect();
         let srh = SourceRoutingHeader {
             segments_left: 2,
             addresses: addresses.clone(),
