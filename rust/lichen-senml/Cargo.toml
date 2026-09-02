@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-senml"
 edition.workspace = true
@@ -8,11 +12,21 @@ description = "SenML (RFC 8428): record type, CBOR (112) and JSON (110) codecs."
 
 [features]
 default = []
-std = ["senml-cbor/std"]
-serde = ["senml-cbor/serde"]
+std = [
+    "senml-cbor/std",
+]
+serde = [
+    "senml-cbor/serde",
+]
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-core/defmt"]
-log = ["dep:log", "lichen-core/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }

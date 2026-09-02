@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-kiss"
 edition.workspace = true
@@ -10,8 +14,12 @@ description = "KISS protocol framing for TNC app compatibility (APRSDroid, aprs.
 default = []
 std = []
 kiss = []
-kiss-aprs = ["kiss"]
-kiss-ble = ["kiss"]
+kiss-aprs = [
+    "kiss",
+]
+kiss-ble = [
+    "kiss",
+]
 kiss-ble-btleplug = [
     "kiss-ble",
     "std",
@@ -20,10 +28,17 @@ kiss-ble-btleplug = [
     "dep:tokio",
     "dep:uuid",
 ]
-bridge = ["kiss", "dep:lichen-link"]
+bridge = [
+    "kiss",
+    "dep:lichen-link",
+]
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt"]
-log = ["dep:log"]
+defmt = [
+    "dep:defmt",
+]
+log = [
+    "dep:log",
+]
 
 [dependencies]
 heapless = "0.8"

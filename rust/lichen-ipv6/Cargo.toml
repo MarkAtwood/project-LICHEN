@@ -24,5 +24,9 @@ hex-literal = "0.4"
 default = []
 std = []
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt"]
-log = ["dep:log"]
+defmt = [
+    "dep:defmt",
+]
+log = [
+    "dep:log",
+]

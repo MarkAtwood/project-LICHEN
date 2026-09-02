@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-node"
 edition.workspace = true
@@ -7,12 +11,50 @@ description = "LICHEN integration crate: combines link, SCHC, CoAP, and routing 
 
 [features]
 default = []
-std = ["lichen-hal/std", "lichen-link/std", "lichen-link/schnorr", "dep:lichen-rpl", "lichen-rpl?/std", "lichen-oscore?/std", "dep:lichen-oscore", "lichen-ipv6/std", "dep:tokio", "dep:zeroize", "dep:hex", "dep:sha2", "lichen-meshtastic?/std", "lichen-core/std"]
+std = [
+    "lichen-hal/std",
+    "lichen-link/std",
+    "lichen-link/schnorr",
+    "dep:lichen-rpl",
+    "lichen-rpl?/std",
+    "lichen-oscore?/std",
+    "dep:lichen-oscore",
+    "lichen-ipv6/std",
+    "dep:tokio",
+    "dep:zeroize",
+    "dep:hex",
+    "dep:sha2",
+    "lichen-meshtastic?/std",
+    "lichen-core/std",
+]
 # Meshtastic bridge integration
-meshtastic = ["dep:lichen-meshtastic", "lichen-meshtastic/alloc"]
+meshtastic = [
+    "dep:lichen-meshtastic",
+    "lichen-meshtastic/alloc",
+]
 # Logging: defmt takes precedence when both are enabled
-defmt = ["dep:defmt", "lichen-core/defmt", "lichen-hal/defmt", "lichen-link/defmt", "lichen-schc/defmt", "lichen-coap/defmt", "lichen-ipv6/defmt", "lichen-rpl?/defmt", "lichen-oscore?/defmt"]
-log = ["dep:log", "lichen-core/log", "lichen-hal/log", "lichen-link/log", "lichen-schc/log", "lichen-coap/log", "lichen-ipv6/log", "lichen-rpl?/log", "lichen-oscore?/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+    "lichen-hal/defmt",
+    "lichen-link/defmt",
+    "lichen-schc/defmt",
+    "lichen-coap/defmt",
+    "lichen-ipv6/defmt",
+    "lichen-rpl?/defmt",
+    "lichen-oscore?/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+    "lichen-hal/log",
+    "lichen-link/log",
+    "lichen-schc/log",
+    "lichen-coap/log",
+    "lichen-ipv6/log",
+    "lichen-rpl?/log",
+    "lichen-oscore?/log",
+]
 raw-rpl-test-api = []
 
 [dependencies]

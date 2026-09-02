@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-meshtastic"
 edition.workspace = true
@@ -10,10 +14,21 @@ description = "Meshtastic protobuf types for LICHEN bridge"
 # for Vec/String, but callers should enable it explicitly.
 default = []
 alloc = []  # Required: this crate uses Vec/String from alloc
-std = ["alloc", "prost/std"]
+std = [
+    "alloc",
+    "prost/std",
+]
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-core/defmt", "lichen-link/defmt"]
-log = ["dep:log", "lichen-core/log", "lichen-link/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+    "lichen-link/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+    "lichen-link/log",
+]
 
 [dependencies]
 hashbrown = "0.15"

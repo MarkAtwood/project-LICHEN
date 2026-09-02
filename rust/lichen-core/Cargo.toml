@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-core"
 edition.workspace = true
@@ -9,8 +13,12 @@ description = "LICHEN protocol primitives: constants, address types, and frame t
 default = []
 std = []
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt"]
-log = ["dep:log"]
+defmt = [
+    "dep:defmt",
+]
+log = [
+    "dep:log",
+]
 
 [dependencies]
 # Logging backends (optional, feature-gated)

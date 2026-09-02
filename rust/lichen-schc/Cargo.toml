@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-schc"
 edition.workspace = true
@@ -9,12 +13,23 @@ description = "SCHC header compression (RFC 8724): rule model and compress/decom
 # Consistent with workspace: no default features. Use `default-features = false`
 # for no_std embedded builds. Explicitly enable `std` when needed.
 default = []
-std = ["lichen-link/std", "lichen-link/schnorr"]
+std = [
+    "lichen-link/std",
+    "lichen-link/schnorr",
+]
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-core/defmt"]
-log = ["dep:log", "lichen-core/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+]
 raw-fragment-codec = []
-test-utils = ["lichen-link/test-utils"]
+test-utils = [
+    "lichen-link/test-utils",
+]
 
 [dependencies]
 # AtomicU32 RMW (fetch_update) is unavailable on no-CAS MCU targets
