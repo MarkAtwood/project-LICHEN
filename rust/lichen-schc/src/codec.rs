@@ -875,6 +875,9 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     // rule byte — both are mutations that a late size check cannot undo.
     // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + icmp_type(8)
     // + id(16) + seq(16) = 176.
+    // (Merge resolution: beads-worker-7 implemented this same pre-write
+    // preflight with a hardcoded 22-byte residue literal; this named-constant
+    // form is kept because it also feeds the debug_assert below.)
     const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 16 + 16;
     let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
@@ -937,6 +940,9 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     // rule byte — both are mutations that a late size check cannot undo.
     // Residue bits: hop_limit(8) + src_iid(64) + dst_iid(64) + instance(8)
     // + version(8) + rank(16) + gmop(8) + dtsn(8) + dodagid(128) = 312.
+    // (Merge resolution: beads-worker-7 implemented this same pre-write
+    // preflight with a hardcoded 39-byte residue literal; this named-constant
+    // form is kept because it also feeds the debug_assert below.)
     const RESIDUE_BITS: usize = 8 + 64 + 64 + 8 + 8 + 16 + 8 + 8 + 128;
     let needed = 1 + RESIDUE_BITS.div_ceil(8) + tail.len();
     if out.is_empty() {
@@ -1005,6 +1011,9 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    // Merge resolution: the beads-worker-7 hardcoded 36-byte preflight was
+    // the same fix; the RESIDUE_BITS computation above (common merged text)
+    // already yields `needed`, so only the size checks are needed here.
     if needed > out.len() {
         return Err(BufferTooSmall::new(needed, out.len()).into());
     }
@@ -1104,6 +1113,9 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     // Residue bits: hop_limit(8) + addr_mode(1) + addresses + direction(1)
     // + other_port(16); link-local writes two 64-bit IIDs, full writes two
     // 128-bit addresses.
+    // (Merge resolution: beads-worker-7's literal 20/36-byte `residue_bytes`
+    // preflight was the same fix; the bit-counted `residue_bits` form is kept
+    // because the debug_assert below proves the bit arithmetic.)
     let link_local = is_link_local_64(src) && is_link_local_64(dst);
     let residue_bits: usize = if link_local {
         8 + 1 + 64 + 64 + 1 + 16
@@ -2691,6 +2703,41 @@ mod tests {
         let mut decomp_buf = [0u8; 256];
         let m = decompress(&comp_buf[..n], &mut decomp_buf).unwrap();
         assert_eq!(&decomp_buf[..m], packet);
+    }
+
+    #[test]
+    fn compress_error_leaves_output_untouched() {
+        // csdw: compress must be atomic on error - a caller that treats
+        // Err as "buffer untouched" must never observe partial bytes. The
+        // mqtt_sn rule writes out[0] and zero-fills the residue BEFORE the
+        // old late size check; the preflight makes Err leave `out` intact.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        // Link-local residue = 20 bytes, so a 1-byte rule + 20 + 100-byte
+        // tail needs 121 bytes; a 25-byte buffer is far too small.
+        let payload = vec![0x55u8; 100];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        assert!(packet.len() >= 48);
+
+        let mut out = vec![0xa5u8; 25];
+        let result = compress_mqtt_sn(&packet, &mut out);
+        assert!(result.is_err(), "121-byte encode must not fit in 25 bytes");
+        assert!(
+            out.iter().all(|&b| b == 0xa5),
+            "out buffer must be untouched on Err"
+        );
+
+        // Global-address variant exercises the full-mode residue preflight.
+        let gsrc = hex("20010db8000000000000000000000001");
+        let gdst = hex("20010db8000000000000000000000002");
+        let gpacket = mqtt_packet(&gsrc, &gdst, PORT_MQTT_SN, 5000, &payload);
+        let mut gout = vec![0xa5u8; 25];
+        let gresult = compress_mqtt_sn(&gpacket, &mut gout);
+        assert!(gresult.is_err());
+        assert!(
+            gout.iter().all(|&b| b == 0xa5),
+            "out buffer must be untouched on Err (full mode)"
+        );
     }
 
     #[test]
