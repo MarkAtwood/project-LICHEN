@@ -79,6 +79,29 @@ const KEY_CLAIM_ORDINAL: i64 = 6;
 const KEY_CLAIM_SIGNATURE: i64 = 7;
 const KEY_CLAIM_SEQUENCE: i64 = 8;
 
+/// GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim
+/// may not reserve capacity further than this past now (5 superframes x
+/// 60 s + 5 s clock tolerance). The wire key-4 field decoded as
+/// `timestamp` on `SlotClaim` carries the claim expiry (C
+/// `coap_slot_coord.c` parity, bead 72p4).
+pub const MAX_CLAIM_DURATION_SECONDS: i64 = 5 * 60 + 5;
+
+/// Unix now in seconds (0 before the epoch — pre-1970 clocks make every
+/// positive expiry fail the step-7 future check, which fails closed).
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// GCP-6.5 validation steps 7+7a: `wire_expiry` must be strictly in the
+/// future and no further than MAX_CLAIM_DURATION_SECONDS past now.
+/// Mirrors Python validate_claim_timing (bead j6o2).
+pub fn validate_claim_timing(expiry: i64, now_unix: i64) -> bool {
+    now_unix < expiry && expiry <= now_unix + MAX_CLAIM_DURATION_SECONDS
+}
+
 // Channel map keys
 const KEY_CHANNEL_ID: i64 = 1;
 const KEY_CHANNEL_FREQUENCY: i64 = 2;
@@ -1299,6 +1322,15 @@ impl CoapResponse {
         }
     }
 
+    /// 4.03 Forbidden (GCP-6.5 validation failures).
+    pub fn forbidden() -> Self {
+        Self {
+            code: 0x83, // 4.03 Forbidden
+            payload: Zeroizing::new(Vec::new()),
+            content_format: 0,
+        }
+    }
+
     /// 4.04 Not Found.
     pub fn not_found() -> Self {
         Self {
@@ -2080,6 +2112,15 @@ impl GatewayCoordinator {
             // can observe).
             Err(_) => return CoapResponse::empty_success(),
         };
+        // GCP-6.5 step 7a (bead 72p4): the wire key-4 field is the claim
+        // EXPIRY; bound how far into the future a gateway can reserve
+        // slots. Claims without the field skip the gate (field is optional
+        // on the wire; C requires it — parity tracked on the policy beads).
+        if let Some(expiry) = claim.timestamp {
+            if !validate_claim_timing(expiry, unix_now()) {
+                return CoapResponse::forbidden();
+            }
+        }
         let raw_claim = match claim.into_raw(self.slots_per_superframe) {
             Ok(claim) => claim,
             // GCP-6.3: invalid-signature claims are silently discarded.
@@ -2715,6 +2756,36 @@ mod tests {
         let response = coordinator.handle_get_slots();
         assert_eq!(response.code, 0x45); // 2.05 Content
         assert_eq!(response.content_format, CONTENT_FORMAT_CBOR);
+    }
+
+    #[test]
+    fn gateway_coordinator_post_slots_enforces_max_claim_duration() {
+        // Bead 72p4 (GCP-6.5 step 7a): a claim whose wire key-4 expiry lies
+        // further than MAX_CLAIM_DURATION_SECONDS past now is rejected
+        // 4.03 Forbidden; in-window claims pass the timing gate.
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Contiguous,
+            gateway_count: 2,
+            ordinal: 0,
+            start_slot: Some(0),
+            slot_count: Some(30),
+            owned: None,
+        };
+
+        let now = unix_now();
+        let (mut far_claim, pubkey) = signed_slot_claim([0x31; 32], vec![30, 31, 32], 1, 0);
+        far_claim.timestamp = Some(now + MAX_CLAIM_DURATION_SECONDS + 1);
+        let response = coordinator.handle_post_slots(&far_claim.encode(), true, Some(&pubkey), 1);
+        assert_eq!(response.code, 0x83); // 4.03 Forbidden
+
+        // In-window expiry (now + 300 <= now + 305) passes the timing gate
+        // and the claim is accepted (2.04).
+        let (mut ok_claim, pubkey) = signed_slot_claim([0x31; 32], vec![30, 31, 32], 1, 0);
+        ok_claim.timestamp = Some(now + MAX_CLAIM_DURATION_SECONDS);
+        let response = coordinator.handle_post_slots(&ok_claim.encode(), true, Some(&pubkey), 1);
+        assert_eq!(response.code, 0x44); // 2.04 Changed
     }
 
     #[test]
