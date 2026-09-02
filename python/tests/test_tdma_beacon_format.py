@@ -19,9 +19,8 @@ from lichen.rpl.tdma_beacon import (
     signed_data,
 )
 
-VECTORS = json.loads(
-    (Path(__file__).resolve().parents[2] / "test" / "vectors" / "ccp_beacon_format.json").read_text()
-)
+_VECTOR_FILE = Path(__file__).resolve().parents[2] / "test" / "vectors" / "ccp_beacon_format.json"
+VECTORS = json.loads(_VECTOR_FILE.read_text())
 
 
 def _beacon_format_cases() -> list[dict]:
@@ -87,9 +86,18 @@ def test_serialize_rejects_reserved_flag_bits() -> None:
 
 
 def test_serialize_rejects_out_of_range_fields() -> None:
-    base = dict(epoch=1, num_slots=16, sfn=0, timestamp=0, flags=0,
-                rx_chains=1, setup_window=0, occupied_time=0, guard=50,
-                channel_mask=1)
+    base = {
+        "epoch": 1,
+        "num_slots": 16,
+        "sfn": 0,
+        "timestamp": 0,
+        "flags": 0,
+        "rx_chains": 1,
+        "setup_window": 0,
+        "occupied_time": 0,
+        "guard": 50,
+        "channel_mask": 1,
+    }
     with pytest.raises(BeaconFormatError):
         serialize_header(TdmaBeaconHeader(**{**base, "num_slots": 256}))
     with pytest.raises(BeaconFormatError):

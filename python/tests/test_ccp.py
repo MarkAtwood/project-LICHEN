@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 
 from lichen.ccp import (
-    SFResult,
     BusyPercentSampler,
     PacketErrorPermilleTracker,
     PeerDensityTracker,
+    SFResult,
     adaptive_sf_select,
     ema_update,
     ema_update_integer,

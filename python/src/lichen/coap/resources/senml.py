@@ -9,7 +9,9 @@ from typing import Any
 
 from aiocoap import CONTENT, FORBIDDEN, Message, resource
 
+from lichen.coap.position_privacy import PositionPrivacyPolicy
 from lichen.coap.resources.base import SENML_CBOR
+from lichen.senml.codec import pack, unpack
 
 
 class SenMLSensorsResource(resource.ObservableResource):
@@ -28,8 +30,6 @@ class SenMLSensorsResource(resource.ObservableResource):
 
     def __init__(self) -> None:
         super().__init__()
-        from lichen.coap.position_privacy import PositionPrivacyPolicy
-        from lichen.senml.codec import pack  # noqa: PLC0415
 
         self._records: list[Any] = []
         self._payload: bytes = pack([])
@@ -40,7 +40,6 @@ class SenMLSensorsResource(resource.ObservableResource):
         Args:
             records: List of :class:`~lichen.senml.codec.SenmlRecord`.
         """
-        from lichen.senml.codec import pack
 
         self._records = records
         self._payload = pack(records)
@@ -67,8 +66,6 @@ class SenMLLocationResource(resource.ObservableResource):
 
     def __init__(self) -> None:
         super().__init__()
-        from lichen.coap.position_privacy import PositionPrivacyPolicy
-        from lichen.senml.codec import pack  # noqa: PLC0415
 
         self._payload: bytes = pack([])
         self.privacy_policy: PositionPrivacyPolicy | None = None
@@ -94,7 +91,6 @@ class SenMLLocationResource(resource.ObservableResource):
             hacc: Horizontal accuracy in metres, or None to omit.
             vacc: Vertical accuracy in metres, or None to omit.
         """
-        from lichen.senml.codec import pack
         from lichen.senml.profiles import location
 
         self._payload = pack(
@@ -202,7 +198,6 @@ class PositionBeaconResource(resource.ObservableResource):
 
         from aiocoap import BAD_REQUEST, CHANGED
 
-        from lichen.senml.codec import unpack
 
         if not request.payload:
             return Message(code=BAD_REQUEST)
@@ -296,8 +291,6 @@ class SenMLMetricsResource(resource.ObservableResource):
     def __init__(self) -> None:
         """Initialize with empty SenML pack."""
         super().__init__()
-        from lichen.coap.position_privacy import PositionPrivacyPolicy
-        from lichen.senml.codec import pack  # noqa: PLC0415
 
         self._payload: bytes = pack([])
 
@@ -310,8 +303,6 @@ class SenMLMetricsResource(resource.ObservableResource):
         collision_rate: float | None = None,
     ) -> None:
         """Update telemetry+battery readings and notify all observers."""
-        from lichen.coap.position_privacy import PositionPrivacyPolicy
-        from lichen.senml.codec import pack  # noqa: PLC0415
         from lichen.senml.profiles import metrics  # noqa: PLC0415
 
         self._payload = pack(
