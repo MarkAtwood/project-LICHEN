@@ -654,6 +654,69 @@ impl RawSlotClaim {
     }
 }
 
+/// Bounded sliding-window rate limiter for slot claims (spec 08 GCP-6.5:
+/// "Gateways MUST rate-limit slot claim processing to at most 10 claims per
+/// minute per peer IID and 60 claims per minute globally. Claims exceeding
+/// these limits MUST be silently dropped.")
+///
+/// Windows use the caller's millisecond clock (the RX path passes wall
+/// clock; tests inject a fake). Silent drop = the caller returns the same
+/// empty-2.04 as signature-class failures (GCP-6.3 indistinguishability).
+#[derive(Debug, Clone)]
+pub struct SlotClaimRateLimiter {
+    /// (peer iid) -> ring of monotonic-ms timestamps of accepted claims.
+    per_peer: HashMap<Iid, Vec<u64>>,
+    /// Global ring of monotonic-ms timestamps of accepted claims.
+    global: Vec<u64>,
+    /// Sliding window length in ms.
+    window_ms: u64,
+    /// Max accepted claims per window per peer (spec: 10).
+    per_peer_limit: usize,
+    /// Max accepted claims per window globally (spec: 60).
+    global_limit: usize,
+}
+
+const CLAIM_RATE_WINDOW_MS: u64 = 60_000;
+const CLAIM_PER_PEER_LIMIT: usize = 10;
+const CLAIM_GLOBAL_LIMIT: usize = 60;
+
+impl SlotClaimRateLimiter {
+    pub fn new() -> Self {
+        Self {
+            per_peer: HashMap::new(),
+            global: Vec::new(),
+            window_ms: CLAIM_RATE_WINDOW_MS,
+            per_peer_limit: CLAIM_PER_PEER_LIMIT,
+            global_limit: CLAIM_GLOBAL_LIMIT,
+        }
+    }
+
+    /// Drop timestamps outside the sliding window.
+    fn prune(&mut self, now_ms: u64) {
+        let window = self.window_ms;
+        self.global.retain(|t| now_ms.saturating_sub(*t) < window);
+        for stamps in self.per_peer.values_mut() {
+            stamps.retain(|t| now_ms.saturating_sub(*t) < window);
+        }
+    }
+
+    /// Record one accepted claim at @p now_ms. Returns false when the claim
+    /// exceeds the per-peer or global rate (caller silently drops it).
+    pub fn allow(&mut self, iid: Iid, now_ms: u64) -> bool {
+        self.prune(now_ms);
+        if self.global.len() >= self.global_limit {
+            return false;
+        }
+        let stamps = self.per_peer.entry(iid).or_default();
+        if stamps.len() >= self.per_peer_limit {
+            return false;
+        }
+        stamps.push(now_ms);
+        self.global.push(now_ms);
+        true
+    }
+}
+
 /// Opaque capability proving signature, IID binding, freshness, and replay checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedSlotClaim {
