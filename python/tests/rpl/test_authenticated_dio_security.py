@@ -1129,8 +1129,65 @@ async def test_authenticated_dio_elevation_rejects_scheduled_awaitable(kind: str
         committed.append("committed")
         return "result"
 
+    assert link.elevate_authenticated_dio(authenticated, elevate=commit) == "result"
+    assert committed == ["committed"]
+
+
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_verified_receipt_elevation_rejects_scheduled_awaitable(kind: str) -> None:
+    """Bead ip40: a scheduled-awaitable verified-receipt elevation callback
+    must be rejected, the awaitable cancelled and never run, and the receipt
+    consumed fail-closed (take-before-callback: a rejected callback cannot be
+    retried into an accepted transaction; a fresh receipt elevates)."""
+    ran: list[int] = []
+    created: list[object] = []
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    receipt = await link.receive(100)
+    assert isinstance(receipt, RxFrame)
+
+    def elevate(_: RxFrame) -> str:
+        value = _scheduled_awaitable(kind, ran, created)
+        return cast("str", value)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_verified_receipt(
+            receipt,
+            purpose="dio-time",
+            elevate=elevate,
+        )
+    if kind == "task":
+        await asyncio.sleep(0)  # deliver the pending cancellation
+    _assert_terminated(kind, created[0], ran)
+
+    # The rejected elevation DID consume the receipt (take-before-callback):
+    # re-elevating the same RxFrame now fails closed, so a rejected callback
+    # cannot be retried into an accepted transaction.
+    with pytest.raises(ValueError, match="unconsumed verified receipt"):
+        _ = link.elevate_verified_receipt(
+            receipt,
+            purpose="dio-time",
+            elevate=lambda _: "retry",
+        )
+
+    # A FRESH verified receipt elevates legitimately.
+    radio.frames.append((signed_wire(1), -90, 4))
+    fresh = await link.receive(100)
+    assert isinstance(fresh, RxFrame)
+    committed: list[str] = []
+
+    def commit(_: RxFrame) -> str:
+        committed.append("committed")
+        return "result"
+
     assert (
-        link.elevate_authenticated_dio(authenticated, elevate=commit) == "result"
+        link.elevate_verified_receipt(
+            fresh,
+            purpose="dio-time",
+            elevate=commit,
+        )
+        == "result"
     )
     assert committed == ["committed"]
 
