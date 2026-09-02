@@ -81,6 +81,28 @@ typedef int (*lichen_announce_app_data_fn)(
 	const struct lichen_announce_rx_meta *_Nonnull meta,
 	void *_Nullable user_data);
 
+/* Announce app_data TLVs (spec 02 3.4 R-02-026, spec 9.7/11.4): the
+ * app_data is a chain of type-prefixed records. TX_SF (type 0x06, 2-byte
+ * TLV: type + sf) carries the sender's current TX spreading factor;
+ * ABSENCE of the TLV means SF10 (the spec baseline). Mirrors the python
+ * APP_DATA_TYPE_TX_SF and rust TX_SF_TLV definitions. */
+#define LICHEN_ANNOUNCE_APP_DATA_TYPE_TX_SF 0x06
+#define LICHEN_ANNOUNCE_TX_SF_ABSENT_DEFAULT 10U
+
+/**
+ * @brief Extract the sender's current TX SF from announce app_data
+ *        (spec 02 3.4 R-02-026).
+ *
+ * Scans the TLV chain for the TX_SF record. Absence yields SF10 per
+ * spec; an out-of-range value inside a malformed TLV clamps to the SF10
+ * baseline (fail-closed).
+ *
+ * @param app_data Announce app_data bytes (may be NULL when len is 0)
+ * @param len app_data length in bytes
+ * @return TX spreading factor 7-12 (10 when absent)
+ */
+uint8_t lichen_announce_tx_sf(const uint8_t *_Nullable app_data, size_t len);
+
 int lichen_announce_parse(const uint8_t *_Nonnull data, size_t len,
 			  struct lichen_announce_view *_Nonnull announce);
 

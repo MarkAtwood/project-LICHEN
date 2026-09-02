@@ -799,6 +799,49 @@ static void test_assigned_sf_write_parse_roundtrip(void)
 	printf("test_assigned_sf_write_parse_roundtrip: PASS\n");
 }
 
+static void test_rf_metrics_write_parse_roundtrip(void)
+{
+	uint8_t buf[8];
+
+	/* Round-trip a representative metric set. */
+	int ret = lichen_rpl_rf_metrics_write(-42, 25, 11, 200, buf, sizeof(buf));
+	assert(ret == 6);
+	assert(buf[0] == LICHEN_RPL_OPT_RF_METRICS);
+	assert(buf[1] == LICHEN_RPL_RF_METRICS_DATA_LEN);
+	int8_t snr = 0;
+	uint8_t loss = 0;
+	uint8_t density = 0;
+	uint8_t util = 0;
+	assert(lichen_rpl_rf_metrics_parse(buf, &snr, &loss, &density, &util) == 0);
+	assert(snr == -42);
+	assert(loss == 25);
+	assert(density == 11);
+	assert(util == 200);
+
+	/* Negative SNR round-trips through the i8 cast. */
+	assert(lichen_rpl_rf_metrics_write(-128, 0, 0, 0, buf, sizeof(buf)) == 6);
+	assert(lichen_rpl_rf_metrics_parse(buf, &snr, &loss, &density, &util) == 0);
+	assert(snr == -128);
+
+	/* Loss percent is bounds-checked (0-100). */
+	assert(lichen_rpl_rf_metrics_write(0, 101, 0, 0, buf, sizeof(buf)) < 0);
+
+	/* NULL output pointers rejected. */
+	assert(lichen_rpl_rf_metrics_write(-42, 25, 11, 200, NULL, sizeof(buf)) < 0);
+	assert(lichen_rpl_rf_metrics_parse(NULL, &snr, &loss, &density, &util) < 0);
+	assert(lichen_rpl_rf_metrics_parse(buf, NULL, &loss, &density, &util) < 0);
+
+	/* Wrong type/length rejected. */
+	assert(lichen_rpl_rf_metrics_write(-42, 25, 11, 200, buf, sizeof(buf)) == 6);
+	buf[0] = LICHEN_RPL_OPT_ASSIGNED_SF;
+	assert(lichen_rpl_rf_metrics_parse(buf, &snr, &loss, &density, &util) < 0);
+	assert(lichen_rpl_rf_metrics_write(-42, 25, 11, 200, buf, sizeof(buf)) == 6);
+	buf[1] = 3;
+	assert(lichen_rpl_rf_metrics_parse(buf, &snr, &loss, &density, &util) < 0);
+
+	printf("test_rf_metrics_write_parse_roundtrip: PASS\n");
+}
+
 int main(void)
 {
 	unsigned int i;
@@ -812,6 +855,7 @@ int main(void)
 	printf("========================\n\n");
 
 	test_assigned_sf_write_parse_roundtrip();
+	test_rf_metrics_write_parse_roundtrip();
 	tests_run++;
 	printf("  dio_strict_atomicity...");
 	if (test_dio_strict_atomicity()) {

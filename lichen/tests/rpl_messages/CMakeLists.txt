@@ -18,13 +18,19 @@ add_custom_command(
 add_executable(rpl_messages_test
   main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/messages.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/rpl_sf_assignment.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
   ${VECTOR_HDR}
 )
 
 target_include_directories(rpl_messages_test PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/include
   ${CMAKE_CURRENT_SOURCE_DIR}/stub
   ${CMAKE_CURRENT_BINARY_DIR}
+)
+target_compile_definitions(rpl_messages_test PRIVATE
+  CONFIG_LICHEN_LINK_MAX_NEIGHBORS=16
 )
 target_compile_options(rpl_messages_test PRIVATE
   -std=c11

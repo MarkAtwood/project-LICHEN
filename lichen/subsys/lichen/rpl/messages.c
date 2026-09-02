@@ -918,8 +918,50 @@ int lichen_rpl_assigned_sf_write(uint8_t sf, uint8_t *buf, size_t len)
 	if (buf == NULL || len < 3) {
 		return LICHEN_RPL_ERR_BUF_SMALL;
 	}
+	/* Spec 3.4: SF must be 7-12. */
+	if (sf < 7 || sf > 12) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
 	buf[0] = LICHEN_RPL_OPT_ASSIGNED_SF;
 	buf[1] = LICHEN_RPL_ASSIGNED_SF_DATA_LEN;
 	buf[2] = sf;
 	return 3;
+}
+
+int lichen_rpl_rf_metrics_write(int8_t ema_snr, uint8_t loss_pct,
+				uint8_t density, uint8_t utilization,
+				uint8_t *buf, size_t len)
+{
+	if (buf == NULL || len < 6U) {
+		return LICHEN_RPL_ERR_BUF_SMALL;
+	}
+	if (loss_pct > 100U) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+	buf[0] = LICHEN_RPL_OPT_RF_METRICS;
+	buf[1] = LICHEN_RPL_RF_METRICS_DATA_LEN;
+	buf[2] = (uint8_t)ema_snr;
+	buf[3] = loss_pct;
+	buf[4] = density;
+	buf[5] = utilization;
+	return 6;
+}
+
+int lichen_rpl_rf_metrics_parse(const uint8_t *option, int8_t *ema_snr,
+				uint8_t *loss_pct, uint8_t *density,
+				uint8_t *utilization)
+{
+	if (option == NULL || ema_snr == NULL || loss_pct == NULL ||
+	    density == NULL || utilization == NULL) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+	if (option[0] != LICHEN_RPL_OPT_RF_METRICS ||
+	    option[1] != LICHEN_RPL_RF_METRICS_DATA_LEN) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+	*ema_snr = (int8_t)option[2];
+	*loss_pct = option[3];
+	*density = option[4];
+	*utilization = option[5];
+	return 0;
 }
