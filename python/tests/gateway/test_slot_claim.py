@@ -268,6 +268,39 @@ class TestSignAndVerify:
         is_valid, reason = verify_slot_claim(newer, pubkey, cache)
         assert is_valid and reason is None
 
+    def test_replay_cache_caps_at_max_gateways(self, keypair: tuple[bytes, bytes]) -> None:
+        """Bead c5lz: the cache rejects GATEWAY_FULL (not REPLAY) for a NEW
+        gateway when at MAX_GATEWAYS; already-tracked gateways stay usable
+        (mirrors Rust slot.rs max_gateways/StateFull)."""
+        privkey, pubkey = keypair
+        cache = SlotClaimReplayCache()
+
+        def claim_for(iid: str, superframe: int):
+            return sign_slot_claim(
+                SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=superframe),
+                privkey,
+                pubkey,
+            )
+
+        # Fill the cache to capacity.
+        for i in range(cache.MAX_GATEWAYS):
+            iid = f"{i:016x}"
+            is_valid, reason = verify_slot_claim(claim_for(iid, 10 + i), pubkey, cache)
+            assert is_valid, (iid, reason)
+        assert len(cache._highwater) == cache.MAX_GATEWAYS
+
+        # A NEW gateway at capacity -> STATE_FULL (not REPLAY).
+        is_valid, reason = verify_slot_claim(
+            claim_for("ffffffffffffffff", 10), pubkey, cache
+        )
+        assert not is_valid
+        assert reason == ClaimRejectReason.STATE_FULL
+
+        # An ALREADY-TRACKED gateway still advances at capacity.
+        iid0 = "0000000000000000"
+        is_valid, reason = verify_slot_claim(claim_for(iid0, 11), pubkey, cache)
+        assert is_valid and reason is None
+
     def test_replay_cache_tracks_gateways_independently(
         self, keypair: tuple[bytes, bytes]
     ) -> None:

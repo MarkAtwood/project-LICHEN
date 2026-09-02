@@ -55,6 +55,7 @@ class ClaimRejectReason(Enum):
     INVALID_CLAIM_DATA = auto()  # Malformed claim structure
     REPLAY = auto()  # claim_seq/superframe at or below the stored high-water
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
+    STATE_FULL = auto()  # Replay cache at MAX_GATEWAYS, gateway not tracked
 
 
 class AllocationMode(Enum):
@@ -223,7 +224,16 @@ class SlotClaimReplayCache:
     claims at or below it. State is in-memory only; persistence across
     restarts is the l1qw.20.1/NVS follow-up (mirrors Rust slot.rs
     last_seen semantics).
+
+    Capacity is bounded at MAX_GATEWAYS (mirroring Rust slot.rs
+    max_gateways/StateFull, bead c5lz): a claim from a gateway with no
+    cached high-water when the cache is full is rejected GATEWAY_FULL, so
+    IID churn cannot grow the cache without bound. Already-tracked
+    gateways always remain usable.
     """
+
+    #: Maximum distinct gateway IIDs tracked (Rust slot.rs parity).
+    MAX_GATEWAYS = 256
 
     def __init__(self) -> None:
         self._highwater: dict[str, int] = {}
@@ -239,6 +249,11 @@ class SlotClaimReplayCache:
         previous = self._highwater.get(gateway_iid)
         if previous is not None and superframe_id <= previous:
             return (False, ClaimRejectReason.REPLAY)
+        if (
+            gateway_iid not in self._highwater
+            and len(self._highwater) >= self.MAX_GATEWAYS
+        ):
+            return (False, ClaimRejectReason.STATE_FULL)
         self._highwater[gateway_iid] = superframe_id
         return (True, None)
 
