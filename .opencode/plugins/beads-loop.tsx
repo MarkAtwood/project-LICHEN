@@ -1,7 +1,5 @@
 // ponytail: self-looping beads worker driver for an interactive TUI; gated by OPENCODE_BEADS_LOOP env
 // .tsx extension (no JSX) so the server plugin auto-scan (*.ts,*.js) skips it — TUI-only module
-import { appendFileSync } from "node:fs"
-import { homedir } from "node:os"
 import type { TuiPlugin } from "@opencode-ai/plugin/tui"
 
 const id = "lichen-beads-loop"
@@ -14,11 +12,16 @@ Claim the next ready bead, complete it fully (tests, 3x codereview with findings
 Exactly one bead this round.`
 
 async function roundPrompt(cwd: string): Promise<string> {
+  let text = ""
   try {
-    const text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
-    if (text.trim()) return text
+    text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
   } catch {}
-  return ROUND_PROMPT_FALLBACK
+  if (!text.trim()) text = ROUND_PROMPT_FALLBACK
+  const affinity = process.env.LICHEN_AFFINITY
+  if (affinity) {
+    text += `\nAFFINITY (LICHEN_AFFINITY=${affinity}): prefer beads labeled one of these — check \`bd ready --label <label> --json\` per label first. If none ready, take any ready bead.`
+  }
+  return text
 }
 
 const NEW_SESSION_EVERY = 6
@@ -36,11 +39,40 @@ const tui: TuiPlugin = async (api) => {
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+  // Credit-floor gate: unattended fleet pauses new rounds below the floor.
+  const CREDIT_FLOOR = 50
+  let creditsCache: { value: number; at: number } | undefined
+  async function creditsRemaining(): Promise<number> {
+    if (creditsCache && Date.now() - creditsCache.at < 600_000) return creditsCache.value
+    try {
+      const cfg = JSON.parse(await Bun.file(`${process.env.HOME}/.config/opencode/opencode.json`).text())
+      let key: string | undefined
+      const find = (node: unknown): void => {
+        if (key || typeof node !== "object" || node === null) return
+        for (const [k, v] of Object.entries(node)) {
+          if (k === "apiKey" && typeof v === "string" && v.startsWith("sk-or-")) { key = v; return }
+          find(v)
+        }
+      }
+      find(cfg)
+      if (!key) { creditsCache = { value: 0, at: Date.now() }; return 0 }
+      const res = await fetch("https://openrouter.ai/api/v1/credits", {
+        headers: { Authorization: `Bearer ${key}` },
+      })
+      const d: any = (await res.json())?.data ?? {}
+      const rem = Math.max(0, Math.floor((d.total_credits ?? 0) - (d.total_usage ?? 0)))
+      creditsCache = { value: rem, at: Date.now() }
+      return rem
+    } catch {
+      return 0
+    }
+  }
+
   // File-based debug trace: survives TUI restarts, readable without the TUI.
-  const TRACE = `${homedir()}/Developer/fleet-debug.log`
+  const TRACE = `${process.env.HOME || ""}/Developer/fleet-debug.log`
   function trace(message: string) {
     try {
-      appendFileSync(TRACE, `${new Date().toISOString()} worker${worker}: ${message}\n`)
+      Bun.appendSync(TRACE, `${new Date().toISOString()} worker${worker}: ${message}\n`)
     } catch {}
   }
 
@@ -51,7 +83,6 @@ const tui: TuiPlugin = async (api) => {
       .catch(() => {})
   }
 
-  // -1 = bd failed (missing, nonzero exit, unparseable output); >= 0 = queue length
   async function readyCount(): Promise<number> {
     try {
       const cwd = api.state.path.directory || process.cwd()
@@ -64,12 +95,12 @@ const tui: TuiPlugin = async (api) => {
       const err = await new Response(proc.stderr).text()
       await proc.exited
       trace(`readyCount cwd=${cwd} exit=${proc.exitCode} err=${err.slice(0, 120).replace(/\n/g, " ")}`)
-      if (proc.exitCode !== 0) return -1
+      if (proc.exitCode !== 0) return 0
       const parsed: unknown = JSON.parse(out)
-      return Array.isArray(parsed) ? parsed.length : -1
+      return Array.isArray(parsed) ? parsed.length : 0
     } catch (error) {
       trace(`readyCount threw: ${error instanceof Error ? error.message : String(error)}`)
-      return -1
+      return 0
     }
   }
 
@@ -101,12 +132,14 @@ const tui: TuiPlugin = async (api) => {
       await sleep(SETTLE_MS)
       const remaining = await readyCount()
       trace(`${trigger}: remaining=${remaining}`)
-      if (remaining < 0) {
-        report("bd ready failed — worker loop paused, see fleet-debug.log", "error")
-        return
-      }
       if (remaining === 0) {
         report("ready queue drained — worker loop done", "success")
+        return
+      }
+      const credits = await creditsRemaining()
+      if (credits < CREDIT_FLOOR) {
+        trace(`credit floor hit (${credits} < ${CREDIT_FLOOR}) — rounds paused`)
+        report(`credit floor hit (${credits} left) — rounds paused until top-up`, "warning")
         return
       }
       await runRound()
