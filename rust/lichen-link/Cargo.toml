@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-link"
 edition.workspace = true
@@ -9,11 +13,21 @@ description = "LICHEN link layer: frame format, LLSec modes, and replay window."
 default = []
 std = []
 alloc = []  # Enables alloc-dependent code; required by schnorr feature
-schnorr = ["alloc", "dep:schnorr48", "dep:sha2"]
+schnorr = [
+    "alloc",
+    "dep:schnorr48",
+    "dep:sha2",
+]
 test-utils = [] # Explicitly test-only evidence constructors; never enable in production.
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-core/defmt"]
-log = ["dep:log", "lichen-core/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+]
 
 [dependencies]
 schnorr48 = { version = "0.1", default-features = false, optional = true }

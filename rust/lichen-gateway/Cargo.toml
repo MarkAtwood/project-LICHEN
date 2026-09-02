@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-gateway"
 edition.workspace = true
@@ -8,7 +12,13 @@ description = "LICHEN border router (6LBR) daemon for Linux."
 [features]
 default = []
 # Enable log feature on all dependencies for unified logging
-log = ["lichen-core/log", "lichen-kiss/log", "lichen-node/log", "lichen-schc/log", "lichen-sim/log"]
+log = [
+    "lichen-core/log",
+    "lichen-kiss/log",
+    "lichen-node/log",
+    "lichen-schc/log",
+    "lichen-sim/log",
+]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }

@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-client"
 edition.workspace = true
@@ -11,7 +15,9 @@ description = "Shared client-side domain models and CBOR wire codecs for LICHEN 
 [features]
 default = []
 # Enable async client methods (requires tokio runtime)
-tokio = ["lichen-coap/tokio"]
+tokio = [
+    "lichen-coap/tokio",
+]
 
 [dependencies]
 serde        = { version = "1", features = ["derive"] }

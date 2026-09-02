@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-coap"
 edition.workspace = true
@@ -8,11 +12,22 @@ description = "CoAP (RFC 7252): message types, options, and blockwise transfer s
 [features]
 default = []
 std = []
-tokio = ["std", "dep:tokio"]
+tokio = [
+    "std",
+    "dep:tokio",
+]
 # Logging: enable one or neither, not both. Test feature enables std for cargo test --features test (no_std compatible where possible)
-test = ["std"]
-defmt = ["dep:defmt", "lichen-core/defmt"]
-log = ["dep:log", "lichen-core/log"]
+test = [
+    "std",
+]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }

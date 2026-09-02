@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-sim"
 edition.workspace = true
@@ -8,7 +12,10 @@ description = "LICHEN simulator TCP client (mirrors the Python SimRadio interfac
 [features]
 default = []
 # Logging: propagates to dependencies
-log = ["dep:log", "lichen-node/log"]
+log = [
+    "dep:log",
+    "lichen-node/log",
+]
 
 [dependencies]
 # Logging backend (optional, feature-gated)

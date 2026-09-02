@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-embassy"
 edition.workspace = true
@@ -9,17 +13,35 @@ description = "Embassy HAL implementations for LICHEN. Feature-gated per target.
 default = []
 std = []
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-hal/defmt", "lichen-core/defmt"]
-log = ["dep:log", "lichen-hal/log", "lichen-core/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-hal/defmt",
+    "lichen-core/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-hal/log",
+    "lichen-core/log",
+]
 
 # Target features - only one should be enabled at a time
-esp32s3 = ["dep:esp-hal", "dep:lora-phy", "dep:embedded-hal-async"]
-stm32wl = ["dep:embassy-stm32", "dep:lora-phy", "dep:embedded-hal-async"]
+esp32s3 = [
+    "dep:esp-hal",
+    "dep:lora-phy",
+    "dep:embedded-hal-async",
+]
+stm32wl = [
+    "dep:embassy-stm32",
+    "dep:lora-phy",
+    "dep:embedded-hal-async",
+]
 # nrf52840 = ["dep:embassy-nrf"]  # ponytail: uncomment when targeting nRF
 # rp2040 = ["dep:embassy-rp"]     # ponytail: uncomment when targeting RP2040
 
 # Mock/simulator targets for host testing (require std)
-mock = ["std"]
+mock = [
+    "std",
+]
 sim = ["std", "dep:sha2", "dep:hex"]  # Bridges to lichen-sim via TCP for QEMU/Renode
 
 [dependencies]

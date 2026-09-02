@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-rpl"
 edition.workspace = true
@@ -7,12 +11,26 @@ description = "RPL routing protocol engine for LICHEN (RFC 6550, Non-Storing Mod
 
 [features]
 default = []
-std = ["dep:lichen-hal", "lichen-hal/std", "dep:lichen-link", "lichen-link/std", "lichen-link/schnorr", "lichen-schc/std", "dep:sha2"]
+std = [
+    "dep:lichen-hal",
+    "lichen-hal/std",
+    "dep:lichen-link",
+    "lichen-link/std",
+    "lichen-link/schnorr",
+    "lichen-schc/std",
+    "dep:sha2",
+]
 # Expose test-only methods (process_dao, etc.) for integration tests
 test-helpers = []
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-core/defmt"]
-log = ["dep:log", "lichen-core/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-core/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-core/log",
+]
 
 [dependencies]
 lichen-core = { path = "../lichen-core" }

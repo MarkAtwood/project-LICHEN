@@ -1,3 +1,7 @@
+# Swarm merge convention (bead fejd): one feature per line; insert new
+# [dependencies]/[dev-dependencies] entries ALPHABETICALLY. Keeps parallel
+# agent merges conflict-free. Do not collapse arrays to single-line.
+
 [package]
 name = "lichen-hal"
 edition.workspace = true
@@ -9,8 +13,14 @@ description = "Hardware abstraction traits for LICHEN. Implemented by Embassy HA
 default = []
 std = []
 # Logging: enable one or neither, not both
-defmt = ["dep:defmt", "lichen-link/defmt"]
-log = ["dep:log", "lichen-link/log"]
+defmt = [
+    "dep:defmt",
+    "lichen-link/defmt",
+]
+log = [
+    "dep:log",
+    "lichen-link/log",
+]
 rand = ["dep:rand_core"]  # Enables RngCore + CryptoRng blanket impls for lichen_hal::Rng (for EDHOC etc.)
 
 # Hardware variants
