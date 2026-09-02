@@ -15,8 +15,8 @@ fn decode_hex(value: &str) -> Vec<u8> {
         .collect()
 }
 
-fn address(value: &Value) -> [u8; 16] {
-    decode_hex(value.as_str().unwrap()).try_into().unwrap()
+fn address(value: &Value) -> lichen_core::addr::Ipv6Addr {
+    lichen_core::addr::Ipv6Addr(decode_hex(value.as_str().unwrap()).try_into().unwrap())
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn canonical_source_route_hop_limit_vectors_match_codec() {
             vector["segments_left"].as_u64().unwrap() as u8,
             "{name}"
         );
-        let expected_addresses: Vec<[u8; 16]> = vector["addresses"]
+        let expected_addresses: Vec<lichen_core::addr::Ipv6Addr> = vector["addresses"]
             .as_array()
             .unwrap()
             .iter()
@@ -59,7 +59,7 @@ fn canonical_source_route_hop_limit_vectors_match_codec() {
 
 #[test]
 fn codec_enforces_profile_route_limits() {
-    let too_many_addresses = vec![[0x02; 16]; MAX_ROUTE_HOPS + 1];
+    let too_many_addresses = vec![lichen_core::addr::Ipv6Addr([0x02; 16]); MAX_ROUTE_HOPS + 1];
     let srh = SourceRoutingHeader {
         segments_left: 0,
         addresses: too_many_addresses.clone(),
@@ -70,7 +70,7 @@ fn codec_enforces_profile_route_limits() {
     wire[0] = 3;
     assert!(SourceRoutingHeader::from_bytes(&wire).is_err());
 
-    let overlong_complete_route = vec![[0x02; 16]; MAX_ROUTE_HOPS + 1];
+    let overlong_complete_route = vec![lichen_core::addr::Ipv6Addr([0x02; 16]); MAX_ROUTE_HOPS + 1];
     assert!(SourceRoutingHeader::from_route(&overlong_complete_route).is_err());
 }
 

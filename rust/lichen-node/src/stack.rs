@@ -936,7 +936,10 @@ pub fn add_rpl_source_route(
     out[24..40].copy_from_slice(&route[0]);
     out[insertion_offset] = following_header;
     out[insertion_offset + 1] = (routing_len / 8 - 1) as u8;
-    let srh = SourceRoutingHeader::from_route(route).map_err(|_| TxError::NoRoute)?;
+    let srh_route: Vec<lichen_core::addr::Ipv6Addr> =
+        route.iter().map(|a| lichen_core::addr::Ipv6Addr(*a)).collect();
+    let srh = SourceRoutingHeader::from_route(&srh_route)
+        .map_err(|_| TxError::NoRoute)?;
     let _ = srh
         .write_to(&mut out[insertion_offset + 2..insertion_offset + routing_len])
         .map_err(|_| TxError::BufferTooSmall)?;
