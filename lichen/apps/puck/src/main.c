@@ -232,21 +232,27 @@ static void on_coap_response(void *user_data, int status, uint8_t code,
  * so a main-loop-granular watchdog needs a ~20 s timeout — slow recovery that
  * makes host monitoring painful (long USB drop-outs).
  *
- * We track a "progress" heartbeat. Sources (async RX semantics, sb0b):
+ * We track a "progress" heartbeat. Sources (async RX semantics since bead
+ * sb0b — there are no more poll loops):
  *   - the main loop, each iteration (the dominant feeder in the common case),
- *   - the L2 async RX path: every successful recv_async arm and every
- *     received packet (lora_l2_rx.c). Deliberately NOT the re-arm retry
- *     attempts — a retry storm would keep the heartbeat fresh while the
- *     radio path is actually dead, masking wedges. While the radio sits
- *     idle and armed, silence does not bump the heartbeat; liveness of the
- *     whole radio path is instead inferred by the application from traffic.
+ *   - the L2 async RX path via the weak lichen_radio_progress() hook: every
+ *     successful recv_async arm and every received packet (lora_l2_rx.c).
+ *     Deliberately NOT the re-arm retry attempts — a retry storm would keep
+ *     the heartbeat fresh while the radio path is actually dead, masking
+ *     wedges.
  *
  * The k_timer feeds the SoC watchdog only while the heartbeat is fresh; a
  * genuine main-loop stall stops the main-loop kicks and the watchdog resets
- * within a few seconds. Note the narrowed contract vs the old RX-thread
- * design: the watchdog guards the MAIN thread, not the radio driver's RX
- * liveness (a wedged lora_send() holding modem_mutex is reported through
- * the phase/heartbeat trails, not the WDT).
+ * within a few seconds. The watchdog guards the MAIN thread, not the radio
+ * driver's RX liveness — note the armed-and-idle gap (bead cdoj): while the
+ * radio sits armed waiting for traffic, the hook is NOT bumped, so the main
+ * loop's feed is what keeps the watchdog alive; silent armed-idle hangs are
+ * not caught (the application infers radio-path liveness from traffic). A
+ * genuine radio-path stall surfaces as a main-loop-visible wedge only if it
+ * blocks send()/arm() calls — per the cdoj correction a main thread blocked
+ * in send() no longer kicks, so a wedged send DOES trip the WDT (this
+ * supersedes the older "wedged lora_send() is reported through the
+ * phase/heartbeat trails, not the WDT" wording).
  *
  * The feeder runs from a k_timer (system-clock ISR), NOT a thread: under heavy
  * USB-CDC contention the CDC work queue can starve a cooperative feeder thread,
