@@ -468,4 +468,38 @@ ZTEST(routing_announce, test_callback_failure_allows_same_seq_retry)
 	zassert_equal(state.calls, 2U);
 }
 
+ZTEST(routing_announce, test_tx_sf_tlv_absence_means_sf10)
+{
+	/* Spec 02 3.4 R-02-026: ABSENCE of the TX_SF TLV means SF10. */
+	zassert_equal(lichen_announce_tx_sf(NULL, 0U), 10U, "no app_data -> SF10");
+	uint8_t none[1] = {0xAAU};
+	zassert_equal(lichen_announce_tx_sf(none, 0U), 10U,
+		      "zero-len app_data -> SF10");
+	zassert_equal(lichen_announce_tx_sf(none, 1U), 10U,
+		      "1-byte app_data (too short for any TLV) -> SF10");
+	zassert_equal(lichen_announce_tx_sf(none, 1U), 10U,
+		      "app_data without the TLV -> SF10");
+}
+
+ZTEST(routing_announce, test_tx_sf_tlv_roundtrip_and_bounds)
+{
+	/* Present TLV: type 0x06, sf. */
+	uint8_t app_data[8] = {0x06U, 9U};
+	zassert_equal(lichen_announce_tx_sf(app_data, sizeof(app_data)), 9U,
+		      "TX_SF TLV decoded");
+
+	/* TLV after other app_data (coords type 0x01 prefix). */
+	uint8_t chained[11] = {0x01U, 0, 0, 0, 0, 0, 0, 0, 0, 0x06U, 12U};
+	zassert_equal(lichen_announce_tx_sf(chained, sizeof(chained)), 12U,
+		      "TX_SF TLV found after other TLVs");
+
+	/* Malformed out-of-range SF clamps to the SF10 baseline. */
+	uint8_t bad[2] = {0x06U, 13U};
+	zassert_equal(lichen_announce_tx_sf(bad, sizeof(bad)), 10U,
+		      "out-of-range SF clamps to SF10");
+	uint8_t bad_low[2] = {0x06U, 6U};
+	zassert_equal(lichen_announce_tx_sf(bad_low, sizeof(bad_low)), 10U,
+		      "SF6 clamps to SF10");
+}
+
 ZTEST_SUITE(routing_announce, NULL, NULL, before, NULL, NULL);

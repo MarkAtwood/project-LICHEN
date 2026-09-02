@@ -918,9 +918,9 @@ int lichen_rpl_assigned_sf_write(uint8_t sf, uint8_t *buf, size_t len)
 	if (buf == NULL || len < 3) {
 		return LICHEN_RPL_ERR_BUF_SMALL;
 	}
-	/* Spec 3.4: SF must be 7-12 (LICHEN_SF_MIN/MAX). */
-	if (sf < 7u || sf > 12u) {
-		return LICHEN_RPL_ERR_BAD_OPT;
+	/* Spec 3.4: SF must be 7-12. */
+	if (sf < 7 || sf > 12) {
+		return LICHEN_RPL_ERR_INVALID;
 	}
 	buf[0] = LICHEN_RPL_OPT_ASSIGNED_SF;
 	buf[1] = LICHEN_RPL_ASSIGNED_SF_DATA_LEN;

@@ -223,12 +223,17 @@ bool lichen_rpl_root_send_dio(struct lichen_rpl_root *root)
 		return false;
 	}
 
+	/* Spec 3.4 R-02-016: advertise the assigned SF (default 10 when no
+	 * explicit assignment has been received via DIO). */
+	uint8_t assigned_sf = root->dodag.assigned_sf;
+	if (assigned_sf < 7 || assigned_sf > 12) {
+		assigned_sf = 10;
+	}
 	/* Spec 3.4 R-02-016: every DIO usable for parent selection MUST
 	 * advertise the DODAG's assigned SF (option 0x14, 3-byte TLV). */
 	uint8_t *sf_opt = rpl + dio_len + opt_len + rv_len;
 	int sf_len = lichen_rpl_assigned_sf_write(
-		root->dodag.assigned_sf ? root->dodag.assigned_sf : 10,
-		sf_opt,
+		assigned_sf, sf_opt,
 		sizeof(buf) - IPV6_HDR_LEN - ICMPV6_HDR_LEN - dio_len -
 			opt_len - rv_len);
 	if (sf_len < 0) {

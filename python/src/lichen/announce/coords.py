@@ -28,6 +28,12 @@ APP_DATA_TYPE_DTN_PENDING = 0x04
 # Header type for opportunistic forwarder list (spec 9.9)
 HEADER_TYPE_OPPORTUNISTIC = 0x05
 
+# App data type for current TX spreading factor (spec 02 3.4 R-02-026):
+# 2-byte TLV, 1-byte SF; ABSENCE of the TLV means SF10 (the spec
+# baseline). SF values are 7-12 (spec 02 3.4).
+APP_DATA_TYPE_TX_SF = 0x06
+TX_SF_ABSENT_DEFAULT = 10
+
 # Resolution: 1e-7 degrees per LSB, matching firmware/HAL e7 coordinates.
 _SCALE = 10_000_000
 _LAT_MIN = -90
@@ -95,6 +101,46 @@ def decode_coords(app_data: bytes) -> tuple[float, float] | None:
 
 
 # --- Congestion encoding (spec 11.4) ---
+
+
+def encode_tx_sf(sf: int) -> bytes:
+    """Encode current TX spreading factor to the 2-byte app_data TLV
+    (spec 02 3.4 R-02-026).
+
+    Args:
+        sf: Current TX spreading factor (7-12).
+
+    Returns:
+        2 bytes: type(1) + sf(1)
+
+    Raises:
+        ValueError: If sf out of range.
+    """
+    if not 7 <= sf <= 12:
+        raise ValueError(f"sf {sf} out of range (7-12)")
+    return bytes([APP_DATA_TYPE_TX_SF, sf])
+
+
+def decode_tx_sf(app_data: bytes) -> int:
+    """Decode current TX SF from app_data (spec 02 3.4 R-02-026).
+
+    Scans for the TLV in concatenated app_data. Per spec: ABSENCE of the
+    TLV means SF10, so this never fails for well-formed app_data.
+
+    Args:
+        app_data: Raw app_data bytes from announce.
+
+    Returns:
+        TX SF (7-12); 10 when the TLV is absent. An out-of-range value in
+        a malformed TLV is clamped to the SF10 baseline (fail-closed).
+    """
+    if len(app_data) < 2:
+        return TX_SF_ABSENT_DEFAULT
+    for i in range(len(app_data) - 1):
+        if app_data[i] == APP_DATA_TYPE_TX_SF:
+            sf = app_data[i + 1]
+            return sf if 7 <= sf <= 12 else TX_SF_ABSENT_DEFAULT
+    return TX_SF_ABSENT_DEFAULT
 
 
 def encode_congestion(queue_depth: int) -> bytes:

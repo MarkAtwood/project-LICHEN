@@ -387,6 +387,10 @@ impl AnnounceProcessor {
 }
 
 const CONGESTION_TLV: u8 = 0x02;
+/// TX_SF app_data TLV (spec 02 3.4 R-02-026): 2-byte TLV, 1-byte SF;
+/// absence of the TLV means SF10 (the spec baseline). SF is 7-12.
+const TX_SF_TLV: u8 = 0x06;
+const TX_SF_ABSENT_DEFAULT: u8 = 10;
 
 fn parse_congestion(app_data: &[u8]) -> Option<u8> {
     for i in 0..app_data.len().saturating_sub(1) {
@@ -395,6 +399,32 @@ fn parse_congestion(app_data: &[u8]) -> Option<u8> {
         }
     }
     None
+}
+
+/// Current TX SF from announce app_data (spec 02 3.4 R-02-026): scans the
+/// TLV chain; absence means SF10. An out-of-range value in a malformed TLV
+/// clamps to the SF10 baseline (fail-closed).
+pub fn parse_tx_sf(app_data: &[u8]) -> u8 {
+    for i in 0..app_data.len().saturating_sub(1) {
+        if app_data[i] == TX_SF_TLV {
+            let sf = app_data[i + 1];
+            return if (7..=12).contains(&sf) {
+                sf
+            } else {
+                TX_SF_ABSENT_DEFAULT
+            };
+        }
+    }
+    TX_SF_ABSENT_DEFAULT
+}
+
+/// Encode the TX_SF TLV (2 bytes: type, sf).
+pub fn encode_tx_sf(sf: u8) -> Option<[u8; 2]> {
+    if (7..=12).contains(&sf) {
+        Some([TX_SF_TLV, sf])
+    } else {
+        None
+    }
 }
 
 #[cfg(all(test, feature = "std"))]
@@ -407,6 +437,29 @@ mod tests {
     use std::format;
     use std::string::String;
     use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn tx_sf_tlv_absence_means_sf10() {
+        assert_eq!(parse_tx_sf(&[]), 10);
+        assert_eq!(parse_tx_sf(&[0xAA]), 10);
+        assert_eq!(parse_tx_sf(&[0x01, 0x02, 0x03]), 10);
+    }
+
+    #[test]
+    fn tx_sf_tlv_roundtrip_and_bounds() {
+        assert_eq!(parse_tx_sf(&[0x06, 9]), 9);
+        // TLV after other app data.
+        let mut chained: ::std::vec::Vec<u8> =
+            ::std::vec![0x01, 0, 0, 0, 0, 0, 0, 0, 0];
+        chained.extend_from_slice(&encode_tx_sf(12).unwrap());
+        assert_eq!(parse_tx_sf(&chained), 12);
+        // Malformed out-of-range SF clamps to the SF10 baseline.
+        assert_eq!(parse_tx_sf(&[0x06, 13]), 10);
+        assert_eq!(parse_tx_sf(&[0x06, 6]), 10);
+        // Encoder rejects out-of-range.
+        assert!(encode_tx_sf(6).is_none());
+        assert_eq!(encode_tx_sf(10), Some([TX_SF_TLV, 10]));
+    }
 
     fn make_identity(seed_byte: u8) -> Identity {
         Identity::from_seed(Seed::new([seed_byte; 32]))

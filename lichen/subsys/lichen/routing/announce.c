@@ -1114,3 +1114,23 @@ static int announce_sched_init(void)
 SYS_INIT(announce_sched_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
 
 #endif /* CONFIG_LICHEN_ANNOUNCE_SCHEDULER */
+
+
+uint8_t lichen_announce_tx_sf(const uint8_t *app_data, size_t len)
+{
+	/* Spec 02 3.4 R-02-026: TX_SF is a 2-byte TLV (type 0x06, sf) in
+	 * the announce app_data chain; ABSENCE of the TLV means SF10. An
+	 * out-of-range value in a malformed TLV clamps to the baseline. */
+	if (app_data == NULL || len < 2U) {
+		return LICHEN_ANNOUNCE_TX_SF_ABSENT_DEFAULT;
+	}
+	for (size_t i = 0U; i + 1U < len; i++) {
+		if (app_data[i] == LICHEN_ANNOUNCE_APP_DATA_TYPE_TX_SF) {
+			uint8_t sf = app_data[i + 1U];
+			return (sf >= 7U && sf <= 12U)
+				       ? sf
+				       : LICHEN_ANNOUNCE_TX_SF_ABSENT_DEFAULT;
+		}
+	}
+	return LICHEN_ANNOUNCE_TX_SF_ABSENT_DEFAULT;
+}

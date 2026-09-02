@@ -81,7 +81,7 @@ uint32_t lichen_hash_32(const uint8_t *data, size_t len);
  * Covered error codes:
  *   POSIX: EINVAL, ENOMEM, EMSGSIZE, EOVERFLOW, EALREADY, EIO, ENODEV,
  *          ENETDOWN, EBUSY, EAGAIN, ECANCELED, ENODATA, ESRCH, ENOBUFS,
- *          ETIMEDOUT, ENOSPC, ENOENT, ENOKEY
+ *          ETIMEDOUT, ENOSPC, ENOENT, EPROTONOSUPPORT, ENOKEY
  *   LICHEN: LICHEN_EAUTH, LICHEN_ESCHC
  *
  * @param err Negative error code from lichen_link_tx/rx
@@ -151,6 +151,14 @@ static inline const char *lichen_link_strerror(int err)
 #ifdef ENOSPC
     case -ENOSPC:
         return "no space left on device";
+#endif
+#ifdef ENOENT
+    case -ENOENT:
+        return "no such entry";
+#endif
+#ifdef EPROTONOSUPPORT
+    case -EPROTONOSUPPORT:
+        return "protocol not supported";
 #endif
 /* LICHEN_EAUTH only exists when CONFIG_LICHEN_LINK is enabled (see top of file) */
 #if HAVE_LICHEN_ERRNO
