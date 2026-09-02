@@ -29,4 +29,5 @@ set_target_properties(rf_health_test PROPERTIES COMPILE_OPTIONS "${RF_HEALTH_OPT
 include(CTest)
 add_test(NAME rf_health
 	 COMMAND rf_health_test
-		 ${CMAKE_CURRENT_LIST_DIR}/../../../test/vectors/ccp-interference.json)
+		 ${CMAKE_CURRENT_LIST_DIR}/../../../test/vectors/ccp-interference.json
+		 ${CMAKE_CURRENT_LIST_DIR}/../../../test/vectors/ccp_ema_update_integer.json)
