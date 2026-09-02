@@ -18,6 +18,7 @@ See spec/appendix-bufferbloat.md and spec/02a-coordinated-capacity.md.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from asyncio import Future
@@ -525,10 +526,9 @@ class TxQueue:
         after CAD failure would assign a fresh deadline.
         Caller MUST call complete(entry, success) afterward.
         """
-        try:
+        # Sync test callers have no loop; loop-affine futures don't exist yet.
+        with contextlib.suppress(RuntimeError):
             self._loop = asyncio.get_running_loop()
-        except RuntimeError:
-            pass  # sync test caller; no loop-affine futures exist yet
         self.expire_stale()
         if not self._entries:
             return None

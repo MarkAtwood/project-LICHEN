@@ -13,12 +13,13 @@ rust/lichen-oscore/tests/context_parity.rs.
 
 from __future__ import annotations
 
-import cbor2
 import json
 import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+
+import cbor2
 
 from lichen.crypto.edhoc import EdhocInitiator, EdhocResponder
 from lichen.crypto.identity import Identity

@@ -149,11 +149,11 @@ from lichen.sim.hybrid import (
     create_hybrid_topology,
 )
 from lichen.sim.mobility import (
+    RPGM,
     GroupMobility,
     ManhattanGrid,
     MobilityManager,
     MobilityPattern,
-    RPGM,
     RandomWaypoint,
 )
 from lichen.sim.node import NodeState, SimNode

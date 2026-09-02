@@ -6,16 +6,16 @@ Outputs JSON data files for analysis and figure generation.
 """
 
 import json
-import os
 import random
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from lora_medium import Medium, PropagationModel, airtime_us
-from lichen.timing.sfn import slot_for, TDMA_SLOT_MS
+from lora_medium import airtime_us
+
 from lichen.link.channel import hash_32
+from lichen.timing.sfn import TDMA_SLOT_MS, slot_for
 
 # Simulation parameters
 NODE_COUNTS = [10, 50, 100, 500, 1000, 2000]
@@ -110,10 +110,12 @@ def run_aloha(config: SimConfig, rng: random.Random) -> SimResult:
         # Determine who wants to TX this slot
         tx_nodes = []
         for node in nodes:
-            if time_s - node['last_tx_s'] >= config.min_tx_interval_s:
+            if (
+                time_s - node['last_tx_s'] >= config.min_tx_interval_s
                 # Poisson-ish: ~1 msg per 2 minutes per node
-                if rng.random() < (slot_duration_s / 120):
-                    tx_nodes.append(node)
+                and rng.random() < (slot_duration_s / 120)
+            ):
+                tx_nodes.append(node)
 
         if tx_nodes:
             result.tx_attempts += len(tx_nodes)
@@ -158,9 +160,11 @@ def run_csma(config: SimConfig, rng: random.Random) -> SimResult:
         for node in nodes:
             if time_s < node['backoff_until_s']:
                 continue
-            if time_s - node['last_tx_s'] >= config.min_tx_interval_s:
-                if rng.random() < (slot_duration_s / 120):
-                    tx_candidates.append(node)
+            if (
+                time_s - node['last_tx_s'] >= config.min_tx_interval_s
+                and rng.random() < (slot_duration_s / 120)
+            ):
+                tx_candidates.append(node)
 
         if not tx_candidates:
             time_s += slot_duration_s
@@ -204,7 +208,6 @@ def run_tdma(config: SimConfig, rng: random.Random) -> SimResult:
 
     time_s = 0
     while time_s < config.duration_s:
-        sfn = int(time_s / superframe_s)
         slot_in_sf = int((time_s % superframe_s) / slot_s)
 
         # Find nodes whose slot is now
@@ -219,7 +222,8 @@ def run_tdma(config: SimConfig, rng: random.Random) -> SimResult:
 
         if tx_nodes:
             result.tx_attempts += len(tx_nodes)
-            result.slot_distribution[slot_in_sf] = result.slot_distribution.get(slot_in_sf, 0) + len(tx_nodes)
+            dist = result.slot_distribution
+            dist[slot_in_sf] = dist.get(slot_in_sf, 0) + len(tx_nodes)
 
             if len(tx_nodes) == 1:
                 result.tx_success += 1
@@ -285,7 +289,8 @@ def run_tdma_fh(config: SimConfig, rng: random.Random) -> SimResult:
 
         for channel, ch_nodes in by_channel.items():
             result.tx_attempts += len(ch_nodes)
-            result.slot_distribution[slot_in_sf] = result.slot_distribution.get(slot_in_sf, 0) + len(ch_nodes)
+            dist = result.slot_distribution
+            dist[slot_in_sf] = dist.get(slot_in_sf, 0) + len(ch_nodes)
 
             if len(ch_nodes) == 1:
                 result.tx_success += 1
@@ -391,7 +396,9 @@ def run_study():
                     json.dump([asdict(e) for e in result.events], f)
 
                 completed += 1
-                print(f"[{completed}/{total_configs}] {protocol_name:8s} n={num_nodes:4d} run={run_id} "
+                print(
+                    f"[{completed}/{total_configs}] {protocol_name:8s} "
+                    f"n={num_nodes:4d} run={run_id} "
                       f"delivery={result.delivery_rate:.1%} collisions={result.collision_rate:.1%} "
                       f"({result.wall_time_s:.2f}s)")
 
@@ -406,7 +413,7 @@ def run_study():
     print(f"{'Protocol':<10} {'Nodes':>6} {'Delivery':>10} {'Collision':>10} {'Utilization':>12}")
     print("-" * 70)
 
-    for protocol in PROTOCOLS.keys():
+    for protocol in PROTOCOLS:
         for num_nodes in NODE_COUNTS:
             matching = [r for r in all_results
                        if r['config']['protocol'] == protocol
@@ -415,7 +422,10 @@ def run_study():
                 avg_delivery = sum(r['delivery_rate'] for r in matching) / len(matching)
                 avg_collision = sum(r['collision_rate'] for r in matching) / len(matching)
                 avg_util = sum(r['channel_utilization'] for r in matching) / len(matching)
-                print(f"{protocol:<10} {num_nodes:>6} {avg_delivery:>10.1%} {avg_collision:>10.1%} {avg_util:>12.1%}")
+                print(
+                    f"{protocol:<10} {num_nodes:>6} {avg_delivery:>10.1%} "
+                    f"{avg_collision:>10.1%} {avg_util:>12.1%}"
+                )
 
     print(f"\nResults saved to: {output_dir}")
     return output_dir

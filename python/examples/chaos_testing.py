@@ -16,6 +16,7 @@ from lichen.sim.chaos import (
     LatencyRule,
     PartitionRule,
 )
+
 from lichen.sim.simulation import Simulation, TimeMode
 
 
