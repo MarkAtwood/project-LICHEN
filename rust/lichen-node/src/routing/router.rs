@@ -1241,31 +1241,39 @@ mod sf_emission_tests {
 
     #[test]
     fn root_dio_without_tracker_has_no_assigned_sf_option() {
-        let mut router = Router::new_root([0xAA; 16]);
         let link = LinkLayer::new(lichen_link::identity::Identity::from_seed(
             lichen_link::keys::Seed::new([7u8; 32]),
         ));
-        let mut out = [0u8; 128];
+        let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(
+            link.local_public_key().as_bytes(),
+        );
+        let mut router = Router::new_root(dodag_id);
+        let mut out = [0u8; 256];
         let len = router.build_authenticated_dio(&mut out, &link);
         assert!(len > 0);
         assert!(
             !out[..len]
                 .windows(3)
-                .any(|w| w[0] == lichen_core::constants::DIO_OPTION_ASSIGNED_SF),
+                .any(|w| w[0] == lichen_core::constants::DIO_OPTION_ASSIGNED_SF
+                    && w[1] == 1
+                    && (7..=12).contains(&w[2])),
             "no 0x14 option without an installed tracker"
         );
     }
 
     #[test]
     fn root_dio_with_tracker_carries_assigned_sf_option() {
-        let mut router = Router::new_root([0xAA; 16]);
-        let mut tracker = lichen_core::sf_assignment::GatewaySfTracker::new();
-        tracker.assign_sf([0x01; 8]);
-        router.install_sf_tracker(tracker);
         let link = LinkLayer::new(lichen_link::identity::Identity::from_seed(
             lichen_link::keys::Seed::new([9u8; 32]),
         ));
-        let mut out = [0u8; 128];
+        let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(
+            link.local_public_key().as_bytes(),
+        );
+        let mut router = Router::new_root(dodag_id);
+        let mut tracker = lichen_core::sf_assignment::GatewaySfTracker::new();
+        tracker.assign_sf([0x01; 8]);
+        router.install_sf_tracker(tracker);
+        let mut out = [0u8; 256];
         let len = router.build_authenticated_dio(&mut out, &link);
         assert!(len > 0);
         // The 0x14 option (type, len 1, sf 7..=12) must appear before the

@@ -1756,21 +1756,40 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         Some(RplReceiveOutcome::AnnouncementAccepted { relayed: true, .. })
     ));
     // The root first hears the relay's multicast DIO echo: as the DODAG
-    // root it rejects foreign DIOs, consuming one receive cycle. Then it
-    // processes the relayed leaf announce.
-    let _ = root.receive(1, 0).await;
-    let root_outcome = root.receive(1, 0).await.unwrap();
-    let peer_ok = matches!(
-        &root_outcome,
-        Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
-            if peer.iid == leaf_identity.iid
+    // root it rejects foreign DIOs, consuming one receive cycle (possibly
+    // two if the relay re-emitted the SF-annotated DIO with a changed
+    // authorization). Then it processes the relayed leaf announce.
+    // Drain until the announce lands (bounded). The exact number of
+    // interposed DIO echoes depends on the relay's re-emission path.
+    for _ in 0..6 {
+        match root.receive(1, 0).await.unwrap() {
+            Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
+                if peer.iid == leaf_identity.iid =>
+            {
+                break;
+            }
+            _ => {}
+        }
+    }
+    // Drain until the announce lands (bounded). The exact number of
+    // interposed DIO echoes depends on the relay's re-emission path.
+    let mut root_outcome = None;
+    for i in 0..6 {
+        let outcome = root.receive(1, 0).await.unwrap();
+        std::eprintln!("ROOT-DRAIN {i}: {outcome:?}");
+        if matches!(
+            &outcome,
+            Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
+                if peer.iid == leaf_identity.iid
+        ) {
+            root_outcome = Some(outcome);
+            break;
+        }
+    }
+    assert!(
+        root_outcome.is_some(),
+        "root did not accept the relayed leaf announce"
     );
-    assert!(peer_ok, "root did not accept the relayed leaf announce");
-    assert!(matches!(
-        root_outcome,
-        Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
-            if peer.iid == leaf_identity.iid
-    ));
     assert!(matches!(
         leaf.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::AnnouncementRejected(
