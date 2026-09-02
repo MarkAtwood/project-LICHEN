@@ -38,6 +38,24 @@ static struct lichen_loadng_seen_rreq seen_table[CONFIG_LICHEN_LOADNG_SEEN_TABLE
 #define PRUNE_INTERVAL 16
 static atomic_t prune_countdown = ATOMIC_INIT(PRUNE_INTERVAL);
 
+/* RREQ admission rate limiting (spec/05-routing.md 8.4.6, bead cmx3):
+ * MUST drop RREQs exceeding 10 per minute per source IID and 30 per minute
+ * globally, before processing. Implemented as a small ring log of recent
+ * arrivals; per-source and global counts are evaluated over the window. */
+#define RREQ_RATE_WINDOW_MS 60000U
+#define RREQ_RATE_PER_SOURCE_MAX 10U
+#define RREQ_RATE_GLOBAL_MAX 30U
+#define RREQ_RATE_LOG_LEN 64U
+
+struct rreq_rate_entry {
+	uint8_t originator[16];
+	uint32_t seen_at_ms;
+	bool used;
+};
+
+static struct rreq_rate_entry rate_log[RREQ_RATE_LOG_LEN];
+static size_t rate_log_head;
+
 /*
  * Message codec implementations.
  */
@@ -411,6 +429,27 @@ static void prune_seen_locked(uint32_t now_ms)
 	}
 }
 
+/* Count entries in the rate log: total within the window and how many
+ * originate from the same source. Entries older than the window (or with
+ * timestamps in the future, handled as unsigned-safe) are pruned lazily. */
+static void rate_count_locked(const uint8_t originator[16], uint32_t now_ms,
+			      size_t *per_source, size_t *global)
+{
+	for (size_t i = 0; i < RREQ_RATE_LOG_LEN; i++) {
+		if (!rate_log[i].used) {
+			continue;
+		}
+		if (now_ms - rate_log[i].seen_at_ms >= RREQ_RATE_WINDOW_MS) {
+			rate_log[i].used = false;
+			continue;
+		}
+		(*global)++;
+		if (memcmp(rate_log[i].originator, originator, 16) == 0) {
+			(*per_source)++;
+		}
+	}
+}
+
 bool lichen_loadng_seen_check_and_mark(const struct lichen_loadng_rreq *rreq,
 				       uint32_t now_ms)
 {
@@ -419,6 +458,38 @@ bool lichen_loadng_seen_check_and_mark(const struct lichen_loadng_rreq *rreq,
 	}
 
 	k_mutex_lock(&seen_mutex, K_FOREVER);
+
+	/* RREQ admission rate limit (spec/05-routing.md 8.4.6, bead cmx3):
+	 * MUST drop RREQs exceeding 10 per minute per source IID and 30 per
+	 * minute globally, before processing. */
+	size_t per_source = 0;
+	size_t global = 0;
+	rate_count_locked(rreq->originator, now_ms, &per_source, &global);
+	if (per_source >= RREQ_RATE_PER_SOURCE_MAX ||
+	    global >= RREQ_RATE_GLOBAL_MAX) {
+		k_mutex_unlock(&seen_mutex);
+		return true; /* Rate limited: silently drop. */
+	}
+
+	/* Log this arrival for the rate window. */
+	size_t log_slot = RREQ_RATE_LOG_LEN;
+	for (size_t i = 0; i < RREQ_RATE_LOG_LEN; i++) {
+		if (!rate_log[i].used) {
+			log_slot = i;
+			break;
+		}
+	}
+	if (log_slot == RREQ_RATE_LOG_LEN) {
+		/* Log full (cannot happen: global cap 30 < log 64, and stale
+		 * entries were just pruned) — overwrite the oldest. */
+		log_slot = rate_log_head;
+		rate_log_head = (rate_log_head + 1U) % RREQ_RATE_LOG_LEN;
+	}
+	rate_log[log_slot].used = true;
+	rate_log[log_slot].seen_at_ms = now_ms;
+	memcpy(rate_log[log_slot].originator, rreq->originator, 16);
+
+	k_mutex_unlock(&seen_mutex);
 
 	if (atomic_dec(&prune_countdown) <= 1) {
 		prune_seen_locked(now_ms);
