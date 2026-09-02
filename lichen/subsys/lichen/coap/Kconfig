@@ -411,6 +411,34 @@ config LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES
 	  claims with expiry beyond now + 305 s are rejected with
 	  LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR (4.03 Forbidden).
 
+config LICHEN_COAP_CODEC
+	bool "Standalone CoAP codec (RFC 7252 parse/encode helpers)"
+	depends on LICHEN_COAP_SERVER
+	default n
+	help
+	  Header/option codec helpers used by the coap_codec host test and
+	  candidate client paths (bead cq48). Off by default: the Zephyr
+	  coap_server stack provides its own parser.
+
+config LICHEN_COAP_BLOCKWISE
+	bool "CoAP block-wise transfer helpers (RFC 7952 Block1/2)"
+	depends on LICHEN_COAP_SERVER
+	select LICHEN_COAP_CODEC
+	default n
+	help
+	  Block-wise sender/receiver primitives (RFC 7952). Currently used by
+	  the coap_blockwise host suite only (bead cq48); production blockwise
+	  transfer remains on the Zephyr coap_client path.
+
+config LICHEN_PRESENCE
+	bool "Presence beacon state (spec 18.5)"
+	depends on LICHEN_COAP_SERVER
+	default n
+	help
+	  Presence status message state machine and CBOR codec per
+	  spec/08-nodes.md §18.5 (MAX_MSG_LEN 256, 256-entry cache). Used by
+	  the presence host test suite.
+
 config LICHEN_COAP_WAYPOINTS
 	bool "Enable Waypoint storage + /waypoints resources (GCP-8)"
 	depends on LICHEN_COAP_SERVER
@@ -418,9 +446,7 @@ config LICHEN_COAP_WAYPOINTS
 	default n
 	help
 	  Waypoint sharing per spec/08 Section 8 (GCP-8): store, query, and
-	  share points of interest over OSCORE-protected CoAP (bead kbgx:
-	  coap_waypoints.c was committed but never compiled; enabling this
-	  compiles it and its OSCORE-backed resource handlers).
+	  share points of interest over OSCORE-protected CoAP (bead kbgx).
 
 config LICHEN_COAP_SLOT_COORD_RESOURCE
 	bool "Enable Slot Coordination CoAP resources"
