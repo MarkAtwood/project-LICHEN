@@ -179,6 +179,9 @@ static void request_ctx_cancel_coap_slot(struct request_ctx *ctx)
 	 * Update or replace with public API if Zephyr changes internals. See net/coap_client.c.
 	 * The 3.7.0-era member send_mutex was renamed to lock upstream in 4.1.0.
 	 * Pinned to Zephyr v4.1.0 per AGENTS.md initialization graph.
+	 * (Merge resolution: beads-worker-7's stale "v3.7.0" label was dropped;
+	 * lichen/west.yml pins revision v4.1.0 and main ported these internals
+	 * in commit "fix(coap): port coap_client internals to Zephyr 4.1.0".)
 	 */
 	size_t match_idx[ARRAY_SIZE(s_client.requests)];
 	size_t n_match = 0;

@@ -194,9 +194,11 @@ static void *ping_l2_setup(void)
 	zassert_not_null(net_if_ipv6_addr_lookup_by_iface(test_iface, &primary_addr),
 			 "key load did not install primary address");
 
-	/* No legacy LLSec link key here: lichen_link_tx rejects E=1 keyed
-	 * transmission outright (bead 2auf.21), so loading one would only
-	 * break every TX path this suite exercises. */
+	/* Deliberately NO legacy LLSec link key here: bead 2auf.21 makes
+	 * lichen_link_tx reject E=1 keyed transmission outright
+	 * (-EPROTONOSUPPORT) — the modern stack transmits Schnorr48-signed
+	 * frames only, so loading one would break every TX path this suite
+	 * exercises. */
 
 	/* Peers are keyed by the canonical key-derived EUI-64 (frame SIID:
 	 * sha512(pubkey)[0:8] with U/L set), not by the device hardware ID
@@ -629,6 +631,14 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
+
+	/* The teardown ran lichen_link_cleanup(), which wiped the signing key
+	 * from the shared link context. The suite fixture runs once, so later
+	 * tests would TX with an unkeyed context (-ENOKEY). Restore the full
+	 * deterministic identity (signing key + canonical-EUI-64 peer) the
+	 * same way a real disable -> enable -> load_key cycle does; the
+	 * helper also re-adds the peer, which a bare key re-load would miss
+	 * (RX SIID lookup would fail with -LICHEN_EAUTH). */
 	reprovision_after_reinit();
 }
 
