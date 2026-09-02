@@ -438,6 +438,17 @@ config LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES
 	  claims with expiry beyond now + 305 s are rejected with
 	  LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR (4.03 Forbidden).
 
+config LICHEN_COAP_WAYPOINTS
+	bool "Enable Waypoint storage + /waypoints resources (GCP-8)"
+	depends on LICHEN_COAP_SERVER
+	depends on LICHEN_OSCORE
+	default n
+	help
+	  Waypoint sharing per spec/08 Section 8 (GCP-8): store, query, and
+	  share points of interest over OSCORE-protected CoAP (bead kbgx:
+	  coap_waypoints.c was committed but never compiled; enabling this
+	  compiles it and its OSCORE-backed resource handlers).
+
 config LICHEN_COAP_SLOT_COORD_RESOURCE
 	bool "Enable Slot Coordination CoAP resources"
 	depends on LICHEN_COAP_SLOT_COORD
