@@ -18,6 +18,7 @@
 #include <lichen/rpl_addr.h>
 #include <lichen/rpl_routing.h>
 #include <lichen/schnorr48.h>
+#include <monocypher-ed25519.h>
 #include <monocypher.h>
 #include "rpl_internal.h"
 
@@ -95,8 +96,11 @@ bool finish_group(struct lichen_rpl_dao_stage *staged,
  * return all targets for the same transit info.
  */
 static bool extract_updates(const uint8_t *dao_bytes, size_t len,
-			   struct lichen_rpl_dao_workspace *workspace,
-			   int *staged_count)
+			    struct lichen_rpl_dao_workspace *workspace,
+			    int *staged_count,
+			    const uint8_t *origin_pubkey,
+			    const uint8_t origin[16],
+			    const struct lichen_rpl_dao_manager *dm)
 {
 	const uint8_t *opts = lichen_rpl_dao_options(dao_bytes, len);
 	size_t opts_len = lichen_rpl_dao_options_len_ex(dao_bytes, len);
@@ -844,7 +848,8 @@ static enum lichen_rpl_dao_process_result process_dao(
 	if (!dao_targets_authorized(dao_bytes, len, origin)) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
-	if (!extract_updates(dao_bytes, len, &root->workspace, &staged_count)) {
+	if (!extract_updates(dao_bytes, len, &root->workspace, &staged_count,
+			     origin_pubkey, origin, dm)) {
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 
