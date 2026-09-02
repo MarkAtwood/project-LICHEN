@@ -475,8 +475,12 @@ impl GatewayOscoreRecipientStore {
             }
             (Some(state), Some(_)) => state,
         };
+        // Bead 2c2k: never return Full from load for an already-durable
+        // context. In a persistent store every cached record has a sealed
+        // durable copy, so evicting the oldest cached context is safe (it
+        // reloads from storage on next use). FIFO order = oldest loaded.
         if self.records.len() >= MAX_GCP_OSCORE_CONTEXTS {
-            return Err(GatewayOscoreStoreError::Full);
+            self.records.remove(0);
         }
         self.records.push((*context_id, state));
         Ok(state)
@@ -604,8 +608,10 @@ impl SenderStateStore for GatewayOscoreSenderStore {
             }
             (Some(state), Some(_)) => state,
         };
+        // Bead 2c2k: evict the oldest cached context instead of returning
+        // Full - an already-durable context must always load.
         if self.records.len() >= MAX_GCP_OSCORE_CONTEXTS {
-            return Err(GatewayOscoreStoreError::Full);
+            self.records.remove(0);
         }
         self.records.push((*context_id, state));
         Ok(Some(state))
@@ -647,8 +653,10 @@ impl SenderStateStore for GatewayOscoreSenderStore {
         {
             *state = next;
         } else {
+            // Bead 2c2k: evict oldest when at capacity instead of failing —
+            // the evicted context has a sealed durable copy and reloads.
             if self.records.len() >= MAX_GCP_OSCORE_CONTEXTS {
-                return Err(GatewayOscoreStoreError::Full);
+                self.records.remove(0);
             }
             self.records.push((*context_id, next));
         }
@@ -2019,6 +2027,73 @@ mod tests {
 
         std::fs::remove_dir_all(path).unwrap();
         std::fs::remove_dir_all(floor_path).unwrap();
+    }
+
+    #[test]
+    fn recipient_store_loads_all_durable_contexts_beyond_cache_capacity() {
+        // Bead 2c2k: after a restart with more durable contexts than the
+        // MAX_GCP_OSCORE_CONTEXTS cache capacity, load() must reload each
+        // context from its sealed durable record (FIFO-evicting the oldest
+        // cached entry) instead of failing Err(Full) forever.
+        let suffix = PERSISTENT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "lichen-gw-2c2k-recipient-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor_path = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_path);
+        let sealing_seed = [0x62; 32];
+
+        let mut context_ids: Vec<ContextId> = Vec::new();
+        for i in 0..(MAX_GCP_OSCORE_CONTEXTS + 8) {
+            let sender_id = [
+                (i % 256) as u8,
+                ((i >> 8) % 256) as u8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ];
+            let context = Context::new(&sender_id, None, None, &[1], &[2]).unwrap();
+            context_ids.push(context.context_id());
+        }
+
+        // Persist one sealed state+floor record pair per context.
+        let mut store =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        for (i, context_id) in context_ids.iter().enumerate() {
+            let state = RecipientReplayState {
+                highest: 100 + i as u64,
+                window: 1,
+                initialized: true,
+            };
+            store.write(context_id, false, state).unwrap();
+            store.write(context_id, true, state).unwrap();
+        }
+
+        // Reopen: cache empty, every durable context must load.
+        let mut reopened =
+            GatewayOscoreRecipientStore::persistent(&path, &floor_path, &sealing_seed).unwrap();
+        for (i, context_id) in context_ids.iter().enumerate() {
+            let state = reopened
+                .load(context_id)
+                .unwrap_or_else(|e| panic!("load of context {i} failed: {e:?}"));
+            assert_eq!(state.highest, 100 + i as u64, "context {i}");
+        }
+
+        let _ = std::fs::remove_dir_all(&path);
+        let _ = std::fs::remove_dir_all(&floor_path);
     }
 
     #[test]
