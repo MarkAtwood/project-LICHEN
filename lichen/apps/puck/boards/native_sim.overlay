@@ -1,4 +1,8 @@
 / {
+	aliases {
+		lora0 = &lora_loopback;
+	};
+
 	chosen {
 		zephyr,lora = &lora_loopback;
 	};

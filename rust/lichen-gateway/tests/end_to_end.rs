@@ -741,6 +741,177 @@ async fn gateway_dio_reply_has_valid_ipv6() {
 }
 
 #[tokio::test]
+async fn restart_after_partial_context_install_self_heals() {
+    // Bead vzq5/5sp1 (2): a context-install failure after the anchor commit
+    // leaves the daemon pinned-but-contextless (fail-closed); the next
+    // restart re-runs provisioning monotonically and must self-heal —
+    // contexts re-installed, no duplicates.
+    let gateway_identity = gateway_identity();
+    let gateway_addr = gw_native(&gateway_identity);
+    let remote_identity = Identity::from_seed(Seed::new([0x76; 32]));
+    let remote_pubkey = *remote_identity.pubkey.as_bytes();
+
+    let master_secret = [0x8b; 16];
+    let root = std::env::temp_dir().join(format!(
+        "lichen-vzq5-heal-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let floor_root = root.with_extension("floors");
+    private_test_dir(&root);
+    private_test_dir(&floor_root);
+    let sealing_seed = [0x8c; 32];
+    let trust = TrustStore::new_ephemeral(8).unwrap();
+    trust
+        .save_atomic_with_floor(
+            &root.join("gateway-trust.bin"),
+            &floor_root.join("gateway-trust.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+    let coordinator = GatewayCoordinator::provision_persistent(
+        gateway_addr,
+        60,
+        64,
+        &root.join("gateway-slot-replay.bin"),
+        &floor_root.join("gateway-slot-replay.generation"),
+        &sealing_seed,
+    )
+    .unwrap();
+
+    // Simulate the partial install: commit the anchors durably but do NOT
+    // install the context (the pinned-but-contextless intermediate state).
+    let trust_store = trust.clone();
+    let mut store = trust_store;
+    store.provision_configured_peer(&remote_pubkey).unwrap();
+    store
+        .save_atomic_with_floor(
+            &root.join("gateway-trust.bin"),
+            &floor_root.join("gateway-trust.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+
+    // Restart: build the gateway from the persisted state, then re-run
+    // provisioning — it must self-heal (context installed exactly once).
+    let mut gateway = Gateway::new_persistent(
+        gateway_identity.clone(),
+        128,
+        trust,
+        coordinator,
+        GatewayPersistence::new(
+            FileStorage::new(&root).unwrap(),
+            true,
+            root.clone(),
+            floor_root.clone(),
+            sealing_seed,
+        ),
+    )
+    .unwrap();
+    let federation = PskFederation::new(&master_secret, None, None).unwrap();
+    let installed = gateway
+        .provision_closed_federation(&federation, &[remote_pubkey])
+        .unwrap();
+    assert_eq!(installed, 1);
+    assert_eq!(gateway.gcp_context_count(), 1, "no duplicated contexts");
+    assert!(gateway.trust_store().list_iids().len() >= 1);
+}
+
+#[tokio::test]
+async fn config_removal_revokes_durable_pin_and_context() {
+    // Bead vzq5/5sp1 (1): dropping a peer key from the closed-federation
+    // config must revoke its durable BrProvisioned pin and drop its
+    // installed GCP context.
+    let gateway_identity = gateway_identity();
+    let gateway_addr = gw_native(&gateway_identity);
+    let remote_identity = Identity::from_seed(Seed::new([0x76; 32]));
+    let remote_pubkey = *remote_identity.pubkey.as_bytes();
+    let attacker_identity = Identity::from_seed(Seed::new([0x83; 32]));
+    let attacker_pubkey = *attacker_identity.pubkey.as_bytes();
+    let attacker_iid = attacker_identity.iid;
+
+    let master_secret = [0x89; 16];
+    let root = std::env::temp_dir().join(format!(
+        "lichen-vzq5-revoke-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let floor_root = root.with_extension("floors");
+    private_test_dir(&root);
+    private_test_dir(&floor_root);
+    let sealing_seed = [0x8a; 32];
+    let trust = TrustStore::new_ephemeral(8).unwrap();
+    trust
+        .save_atomic_with_floor(
+            &root.join("gateway-trust.bin"),
+            &floor_root.join("gateway-trust.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+    let coordinator = GatewayCoordinator::provision_persistent(
+        gateway_addr,
+        60,
+        64,
+        &root.join("gateway-slot-replay.bin"),
+        &floor_root.join("gateway-slot-replay.generation"),
+        &sealing_seed,
+    )
+    .unwrap();
+    let mut gateway = Gateway::new_persistent(
+        gateway_identity.clone(),
+        128,
+        trust,
+        coordinator,
+        GatewayPersistence::new(
+            FileStorage::new(&root).unwrap(),
+            true,
+            root.clone(),
+            floor_root.clone(),
+            sealing_seed,
+        ),
+    )
+    .unwrap();
+    let federation = PskFederation::new(&master_secret, None, None).unwrap();
+
+    // Provision BOTH peers as configured.
+    gateway
+        .provision_closed_federation(&federation, &[remote_pubkey, attacker_pubkey])
+        .unwrap();
+    let configured: std::collections::HashSet<[u8; 8]> =
+        gateway.trust_store().list_iids().into_iter().collect();
+    assert!(configured.contains(&attacker_identity.iid));
+    assert!(gateway.gcp_context_count() >= 2);
+
+    // Re-provision with the attacker key REMOVED from the config: the
+    // attacker's durable BrProvisioned pin must be revoked, its context
+    // dropped, and the surviving peer untouched.
+    gateway
+        .provision_closed_federation(&federation, &[remote_pubkey])
+        .unwrap();
+    assert!(
+        !gateway
+            .trust_store()
+            .list_iids()
+            .contains(&attacker_identity.iid),
+        "removed peer must lose its durable pin"
+    );
+    assert!(
+        gateway
+            .trust_store()
+            .list_iids()
+            .contains(&remote_identity.iid),
+        "surviving peer keeps its pin"
+    );
+    assert_eq!(gateway.gcp_context_count(), 1);
+}
+
+#[tokio::test]
 async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     let gateway_identity = gateway_identity();
     let gateway_addr = gw_native(&gateway_identity);

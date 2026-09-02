@@ -472,15 +472,16 @@ static void expire_status_observers_locked(int64_t now_ms)
 
 static const char *trust_level_str(enum lichen_coap_trust_level trust)
 {
-	switch (trust) {
+	/* Cast to int: -Werror=switch-enum demands a case for every
+	 * enumerator; LICHEN_COAP_TRUST_UNKNOWN is deliberately folded into
+	 * the default "unknown" string. */
+	switch ((int)trust) {
 	case LICHEN_COAP_TRUST_TOFU:
 		return "tofu";
 	case LICHEN_COAP_TRUST_DANE:
 		return "dane";
 	case LICHEN_COAP_TRUST_VERIFIED:
 		return "verified";
-	case LICHEN_COAP_TRUST_UNKNOWN:
-		return "unknown";
 	default:
 		return "unknown";
 	}
