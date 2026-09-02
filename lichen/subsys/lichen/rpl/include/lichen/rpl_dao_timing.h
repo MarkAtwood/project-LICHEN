@@ -176,6 +176,60 @@ bool lichen_rpl_dao_refresh_timer_take_if_due(
 void lichen_rpl_dao_refresh_timer_reset(
     struct lichen_rpl_dao_refresh_timer *timer);
 
+/* ── Composed DAO TX timing orchestrator ──────────────────────────────────── */
+
+/** Phase of the composed DAO TX timing state machine. */
+enum lichen_rpl_dao_tx_phase {
+  LICHEN_RPL_DAO_TX_IDLE = 0,
+  LICHEN_RPL_DAO_TX_INITIAL_PENDING,
+  LICHEN_RPL_DAO_TX_RETRY_PENDING,
+  LICHEN_RPL_DAO_TX_REFRESH_PENDING,
+  LICHEN_RPL_DAO_TX_EXHAUSTED,
+};
+
+/** Composed DAO TX timing state (spec 09 14.2). */
+struct lichen_rpl_dao_tx_timing {
+  struct lichen_rpl_dao_initial_timer initial;
+  struct lichen_rpl_dao_retry_timer retry;
+  struct lichen_rpl_dao_refresh_timer refresh;
+  enum lichen_rpl_dao_tx_phase phase;
+};
+
+/** Reset the composed state to idle (not joined). */
+void lichen_rpl_dao_tx_timing_init(struct lichen_rpl_dao_tx_timing *t);
+
+/**
+ * Arm the initial DAO timer with an RNG-drawn 0..2000 ms delay.
+ *
+ * Only meaningful from IDLE; a duplicate join in any later phase returns
+ * -EALREADY without regressing the state machine. Returns -EIO if the RNG
+ * persistently fails.
+ */
+int lichen_rpl_dao_tx_timing_on_join(struct lichen_rpl_dao_tx_timing *t,
+                                     uint32_t now_ms,
+                                     lichen_rpl_dao_rng_fn rng,
+                                     void *rng_user);
+
+/** Whether a DAO transmission (initial/retry/refresh) is due at now_ms. */
+bool lichen_rpl_dao_tx_timing_is_due(
+    const struct lichen_rpl_dao_tx_timing *t, uint32_t now_ms);
+
+/**
+ * Consume the due send and advance to the retry backoff sequence.
+ *
+ * Callers MUST poll lichen_rpl_dao_tx_timing_is_due() first; calling early
+ * arms the retry sequence prematurely.
+ */
+void lichen_rpl_dao_tx_timing_on_send(struct lichen_rpl_dao_tx_timing *t,
+                                      uint32_t now_ms);
+
+/** Record a DAO-ACK: reset retries and start the 900 s refresh. */
+int lichen_rpl_dao_tx_timing_on_ack(struct lichen_rpl_dao_tx_timing *t,
+                                    uint32_t now_ms);
+
+/** Reset to idle (DODAG left / route invalidated). */
+void lichen_rpl_dao_tx_timing_on_leave(struct lichen_rpl_dao_tx_timing *t);
+
 #ifdef __cplusplus
 }
 #endif

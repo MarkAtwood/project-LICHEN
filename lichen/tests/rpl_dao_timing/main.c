@@ -335,6 +335,119 @@ static bool test_refresh_wrap_boundary(void) {
   return true;
 }
 
+/* ── Composed orchestrator (spec 09 14.2) ────────────────────────────────── */
+static uint32_t orch_rng_next;
+
+static int test_rng(void *user, uint32_t *value) {
+  (void)user;
+  *value = orch_rng_next;
+  return 0;
+}
+
+
+
+static int test_tx_on_join_schedules_initial_window(void) {
+  struct lichen_rpl_dao_tx_timing t;
+  lichen_rpl_dao_tx_timing_init(&t);
+  orch_rng_next = 1000U;
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, 1000, test_rng, NULL) == 0,
+            "on_join ok");
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_INITIAL_PENDING, "initial pending");
+  CHECK(!lichen_rpl_dao_tx_timing_is_due(&t, 1999), "not due early");
+  CHECK(lichen_rpl_dao_tx_timing_is_due(&t, 2000), "due at delay");
+  return 1;
+}
+
+static int test_tx_on_send_advances_through_backoff_then_exhausted(void) {
+  struct lichen_rpl_dao_tx_timing t;
+  lichen_rpl_dao_tx_timing_init(&t);
+  orch_rng_next = 0U;
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, 0, test_rng, NULL) == 0, "join");
+  CHECK(lichen_rpl_dao_initial_timer_take_if_due(&t.initial, 2000),
+            "initial consumed");
+  uint32_t now = 2000;
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_RETRY_PENDING, "retry pending");
+  /* retry 0 was armed 4 s out at on_send(2000): due at 6000. */
+  now = 6000;
+  CHECK(lichen_rpl_dao_retry_timer_is_due(&t.retry, now), "retry1 due");
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  /* retry1 consumed; next slot 8 s from now = 14000. */
+  now = 14000;
+  CHECK(lichen_rpl_dao_retry_timer_is_due(&t.retry, now), "retry2 due");
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  /* retry2 consumed; next = 16 s from 14000 = 30000. */
+  now = 30000;
+  CHECK(lichen_rpl_dao_retry_timer_is_due(&t.retry, now), "retry3 due");
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_EXHAUSTED, "exhausted after 3");
+  return 1;
+}
+
+static int test_tx_on_ack_starts_refresh_and_resets_retries(void) {
+  struct lichen_rpl_dao_tx_timing t;
+  lichen_rpl_dao_tx_timing_init(&t);
+  orch_rng_next = 0U;
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, 0, test_rng, NULL) == 0, "join");
+  CHECK(lichen_rpl_dao_initial_timer_take_if_due(&t.initial, 2000),
+            "initial consumed");
+  lichen_rpl_dao_tx_timing_on_send(&t, 2000);
+  CHECK(lichen_rpl_dao_tx_timing_on_ack(&t, 3000) == 0, "ack ok");
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_REFRESH_PENDING, "refresh pending");
+  CHECK(!lichen_rpl_dao_refresh_timer_is_due(&t.refresh, 902999),
+            "not due early");
+  CHECK(lichen_rpl_dao_refresh_timer_is_due(&t.refresh, 903000),
+            "refresh due at 900s");
+  return 1;
+}
+
+static int test_tx_on_leave_resets(void) {
+  struct lichen_rpl_dao_tx_timing t;
+  lichen_rpl_dao_tx_timing_init(&t);
+  orch_rng_next = 0U;
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, 0, test_rng, NULL) == 0, "join");
+  lichen_rpl_dao_tx_timing_on_leave(&t);
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_IDLE, "idle after leave");
+  CHECK(!lichen_rpl_dao_tx_timing_is_due(&t, 999999), "nothing due");
+  return 1;
+}
+/* ── Composed orchestrator (spec 09 14.2) ────────────────────────────────── */
+
+
+
+
+
+static int test_tx_duplicate_join_rejected_from_any_phase(void) {
+  struct lichen_rpl_dao_tx_timing t;
+  lichen_rpl_dao_tx_timing_init(&t);
+  orch_rng_next = 0U;
+
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, 0, test_rng, NULL) == 0,
+        "first join ok");
+
+  uint32_t now = 2000;
+  (void)lichen_rpl_dao_initial_timer_take_if_due(&t.initial, now);
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_RETRY_PENDING, "retry pending");
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, now, test_rng, NULL) == -EALREADY,
+        "dup join in RETRY_PENDING");
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_RETRY_PENDING, "phase unchanged (retry)");
+
+  now = 6000;
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  now = 14000;
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  now = 30000;
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  now = 60000;
+  lichen_rpl_dao_tx_timing_on_send(&t, now);
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_EXHAUSTED, "exhausted");
+  CHECK(lichen_rpl_dao_tx_timing_on_join(&t, now, test_rng, NULL) == -EALREADY,
+        "dup join in EXHAUSTED");
+  CHECK(t.phase == LICHEN_RPL_DAO_TX_EXHAUSTED, "phase unchanged (exhausted)");
+  return 1;
+}
+
 static bool run_all_tests(void) {
   return test_exact_mapping_and_rejection_boundary() &&
          test_injected_rng_and_fail_closed_bounds() &&
@@ -342,7 +455,12 @@ static bool run_all_tests(void) {
          test_retry_profile_and_exhaustion() &&
          test_retry_wrap_and_reset_rearm() &&
          test_refresh_profile_and_periodic_rearm() &&
-         test_refresh_wrap_boundary();
+         test_refresh_wrap_boundary() &&
+         test_tx_on_join_schedules_initial_window() &&
+         test_tx_on_send_advances_through_backoff_then_exhausted() &&
+         test_tx_on_ack_starts_refresh_and_resets_retries() &&
+         test_tx_on_leave_resets() &&
+         test_tx_duplicate_join_rejected_from_any_phase();
 }
 
 #ifdef CONFIG_ZTEST
