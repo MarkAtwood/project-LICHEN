@@ -406,8 +406,6 @@ def test_ccp16_load_balance_channel_selection(name: str, vector: dict) -> None:
     n_channels = inp["n_channels"]
 
     channel = select_channel(eui64, epoch, density, n_channels)
-    # Resolution: kept HEAD's single-f-string parenthesized form; beads-worker-5
-    # made the same line-wrap change but with split f-strings (same intent).
     assert channel == out["channel"], (
         f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
     )
@@ -497,8 +495,6 @@ def test_ccp16_load_balance_synchronized_hop(name: str, vector: dict) -> None:
         n_channels=inp.get("n_channels", 8),
     )
 
-    # Resolution: kept HEAD's form; beads-worker-5's version was identical
-    # except for stray blank lines inside the parens (editing artifact).
     assert channel == out["channel"], (
         f"{name}: channel mismatch (got {channel}, expected {out['channel']})"
     )
@@ -524,18 +520,17 @@ def test_ccp16_load_balance_vector_coverage():
         cat = v.get("category", "unknown")
         category_counts[cat] = category_counts.get(cat, 0) + 1
 
-    # HEAD's multi-line assert formatting, plus beads-worker-7's new
-    # TestPeerDensityTracker class below (both intents compatible).
-    # beads-worker-5 applied the identical parenthesization to these asserts,
-    # so no content from its side is lost here.
+    # Both sides asserted the same thresholds; kept beads-worker-7's form
+    # because it matches `ruff format` output (HEAD's uniform parenthesized
+    # style is back-normalized to this exact shape by the formatter).
     assert category_counts.get("channel_selection", 0) >= 5, (
-        "Need at least 5 channel selection vectors")
-    assert category_counts.get("tdma_slot", 0) >= 5, (
-        "Need at least 5 TDMA slot vectors")
-    assert category_counts.get("adaptive_sf", 0) >= 10, (
-        "Need at least 10 adaptive SF vectors")
+        "Need at least 5 channel selection vectors"
+    )
+    assert category_counts.get("tdma_slot", 0) >= 5, "Need at least 5 TDMA slot vectors"
+    assert category_counts.get("adaptive_sf", 0) >= 10, "Need at least 10 adaptive SF vectors"
     assert category_counts.get("density_estimate", 0) >= 5, (
-        "Need at least 5 density estimate vectors")
+        "Need at least 5 density estimate vectors"
+    )
 
 
 class TestPeerDensityTracker:

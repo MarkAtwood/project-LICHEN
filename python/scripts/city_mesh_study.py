@@ -189,6 +189,8 @@ def simulate_traffic(
     channel_usage = defaultdict(int)
 
     slot_s = TDMA_SLOT_MS / 1000
+    # NOTE: duty-cycle gating (mac_study.MIN_TX_INTERVAL_S) is intentionally
+    # not modeled here; merge kept HEAD and dropped worker-7's no-op parity line.
 
     time_s = 0
     pending_transmissions = []  # (time, msg, current_node_id)

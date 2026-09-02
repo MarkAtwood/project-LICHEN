@@ -42,10 +42,6 @@ MAX_NEIGHBORS = 32
 MAX_PENDING_DESTINATIONS = 8
 
 
-class RoutingError(Exception):
-    """Raised on routing failures that shouldn't happen."""
-
-
 class AddressClass(Enum):
     """Classification of IPv6 destination address (spec 7.2).
 
