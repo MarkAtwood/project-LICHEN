@@ -32,8 +32,10 @@ enum lichen_diag_subsystem {
 
 /** Radio-subsystem event codes (ldzz family). */
 enum lichen_diag_radio_event {
-	LICHEN_DIAG_RADIO_MODEM_HELD = 1, /**< 3 consecutive TX -EBUSY */
-	LICHEN_DIAG_RADIO_TX_DEAD = 2,    /**< 10 consecutive TX -EBUSY */
+	LICHEN_DIAG_RADIO_MODEM_HELD = 1,  /**< 3 consecutive TX -EBUSY */
+	LICHEN_DIAG_RADIO_TX_DEAD = 2,     /**< 10 consecutive TX -EBUSY */
+	LICHEN_DIAG_RADIO_DIO1_ADAPT = 3,  /**< DIO1 IRQ pin adapted at runtime */
+	LICHEN_DIAG_RADIO_DIO1_FAIL = 4,   /**< No DIO1 candidate produced TX_DONE */
 };
 
 /** Fleet-subsystem event codes (diag.10-11 detectors). */

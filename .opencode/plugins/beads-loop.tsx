@@ -12,11 +12,16 @@ Claim the next ready bead, complete it fully (tests, 3x codereview with findings
 Exactly one bead this round.`
 
 async function roundPrompt(cwd: string): Promise<string> {
+  let text = ""
   try {
-    const text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
-    if (text.trim()) return text
+    text = await Bun.file(`${cwd}/${ROUND_PROMPT_FILE}`).text()
   } catch {}
-  return ROUND_PROMPT_FALLBACK
+  if (!text.trim()) text = ROUND_PROMPT_FALLBACK
+  const affinity = process.env.LICHEN_AFFINITY
+  if (affinity) {
+    text += `\nAFFINITY (LICHEN_AFFINITY=${affinity}): prefer beads labeled one of these — check \`bd ready --label <label> --json\` per label first. If none ready, take any ready bead.`
+  }
+  return text
 }
 
 const NEW_SESSION_EVERY = 6
@@ -33,6 +38,35 @@ const tui: TuiPlugin = async (api) => {
   let lastRoundAt = 0
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  // Credit-floor gate: unattended fleet pauses new rounds below the floor.
+  const CREDIT_FLOOR = 50
+  let creditsCache: { value: number; at: number } | undefined
+  async function creditsRemaining(): Promise<number> {
+    if (creditsCache && Date.now() - creditsCache.at < 600_000) return creditsCache.value
+    try {
+      const cfg = JSON.parse(await Bun.file(`${process.env.HOME}/.config/opencode/opencode.json`).text())
+      let key: string | undefined
+      const find = (node: unknown): void => {
+        if (key || typeof node !== "object" || node === null) return
+        for (const [k, v] of Object.entries(node)) {
+          if (k === "apiKey" && typeof v === "string" && v.startsWith("sk-or-")) { key = v; return }
+          find(v)
+        }
+      }
+      find(cfg)
+      if (!key) { creditsCache = { value: 0, at: Date.now() }; return 0 }
+      const res = await fetch("https://openrouter.ai/api/v1/credits", {
+        headers: { Authorization: `Bearer ${key}` },
+      })
+      const d: any = (await res.json())?.data ?? {}
+      const rem = Math.max(0, Math.floor((d.total_credits ?? 0) - (d.total_usage ?? 0)))
+      creditsCache = { value: rem, at: Date.now() }
+      return rem
+    } catch {
+      return 0
+    }
+  }
 
   // File-based debug trace: survives TUI restarts, readable without the TUI.
   const TRACE = `${process.env.HOME || ""}/Developer/fleet-debug.log`
@@ -100,6 +134,12 @@ const tui: TuiPlugin = async (api) => {
       trace(`${trigger}: remaining=${remaining}`)
       if (remaining === 0) {
         report("ready queue drained — worker loop done", "success")
+        return
+      }
+      const credits = await creditsRemaining()
+      if (credits < CREDIT_FLOOR) {
+        trace(`credit floor hit (${credits} < ${CREDIT_FLOOR}) — rounds paused`)
+        report(`credit floor hit (${credits} left) — rounds paused until top-up`, "warning")
         return
       }
       await runRound()
