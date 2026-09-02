@@ -67,18 +67,21 @@ class TestRandomWaypoint:
     def test_pauses_at_waypoint(self) -> None:
         # Degenerate bounds (10,10,10,10) are invalid under the new
         # min<max validation; use a tiny valid area that the fast pattern
-        # crosses within one step.
+        # crosses within one step. The 1-meter area also keeps every
+        # waypoint within reach of a single 1-second step at 100 m/s.
         pattern = RandomWaypoint(
             area_bounds=(9.0, 10.0, 9.0, 10.0),
             speed_m_s=100.0,  # Fast
             pause_time_us=2_000_000,  # 2 second pause
             seed=42,
         )
-        node = SimNode(id="test", position=(0.0, 0.0, 0.0))
+        node = SimNode(id="test", position=(9.0, 9.0, 0.0))
 
         # Waypoints now vary within the 1x1 area (seeded RNG), so assert
         # pause behavior rather than a fixed corner: step until PAUSED with a
         # nonzero pause budget, then verify the node rests inside bounds.
+        # (A single-step assertion is not reliable here since the waypoint is
+        # drawn at random within the area.)
         for _ in range(200):
             pattern.step(node, dt_us=1_000_000)
             if pattern._state == WaypointState.PAUSED and pattern._pause_remaining_us > 0:

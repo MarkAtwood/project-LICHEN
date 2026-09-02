@@ -123,6 +123,7 @@ class RandomWaypoint(MobilityPattern):
         if self.pause_time_us < 0:
             raise ValueError(f"pause_time_us must be >= 0, got {self.pause_time_us}")
         _require_finite_bounds("area_bounds", self.area_bounds)
+        _require_finite("z", self.z, allow_zero=True)
         self._rng = random.Random(self.seed)
         self._state = WaypointState.PAUSED
         self._target = None
@@ -301,6 +302,8 @@ class GroupMobility(MobilityPattern):
         if self.pause_time_us < 0:
             raise ValueError(f"pause_time_us must be >= 0, got {self.pause_time_us}")
         _require_finite_bounds("area_bounds", self.area_bounds)
+        _require_finite("group_radius_m", self.group_radius_m, allow_zero=True)
+        _require_finite("jitter_m", self.jitter_m, allow_zero=True)
         if self.group_radius_m < 0:
             raise ValueError(f"group_radius_m must be >= 0, got {self.group_radius_m}")
         if self.jitter_m < 0:
@@ -587,6 +590,7 @@ class RPGM(MobilityPattern):
         if self.pause_time_us < 0:
             raise ValueError(f"pause_time_us must be >= 0, got {self.pause_time_us}")
         _require_finite_bounds("area_bounds", self.area_bounds)
+        _require_finite("max_offset_m", self.max_offset_m, allow_zero=True)
         if self.max_offset_m < 0:
             raise ValueError(f"max_offset_m must be >= 0, got {self.max_offset_m}")
         _min_x, max_x, _min_y, max_y = self.area_bounds
