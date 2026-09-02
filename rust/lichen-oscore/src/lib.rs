@@ -38,9 +38,6 @@ pub use oscore::{
     SenderSequenceState,
     RecipientReplayState,
     ContextStateStore,
-    SenderStateStore,
-    ContextStateStore,
-    RecipientReplayState,
     // Constants
     ALG_AEAD,
     COAP_OPTION_OSCORE,
@@ -266,7 +263,6 @@ struct KeyUpdateRegistration<'a, S> {
 impl<S: KeyUpdateStore> ContextStateStore for KeyUpdateRegistration<'_, S> {
     type Error = S::Error;
 
-    fn load_sender(&mut self, context_id: &ContextId) -> Result<Option<SenderSequenceState>, Self::Error> {
     fn load_sender(
         &mut self,
         context_id: &ContextId,
@@ -287,12 +283,6 @@ impl<S: KeyUpdateStore> ContextStateStore for KeyUpdateRegistration<'_, S> {
             .compare_exchange_key_update(self.expected, self.replacement, next)
     }
 
-    fn load_recipient(&mut self, context_id: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> {
-        self.store.load_recipient(context_id)
-    }
-
-    fn save_recipient(&mut self, context_id: &ContextId, state: &RecipientReplayState) -> Result<(), Self::Error> {
-        self.store.save_recipient(context_id, state)
     fn load_recipient(
         &mut self,
         _context_id: &ContextId,
