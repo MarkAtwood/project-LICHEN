@@ -111,12 +111,16 @@ static int lichen_l2_send_inner(struct net_if *iface, struct net_pkt *pkt)
 	 * - Schnorr-48 signature (always applied when has_key is set)
 	 * - Returns -ENOKEY if has_key is not set (no unsigned frames)
 	 */
-	size_t frame_len = 0;
+	/* lichen_link_tx() reads *out_len as the OUTPUT BUFFER CAPACITY
+	 * (min-buffer check `*out_len < 16` and capacity preflight) and
+	 * writes back the built frame length. Pass the buffer capacity;
+	 * a zero here makes every call fail -ENOMEM (bead be4x). On error
+	 * returns frame_len is meaningless; the frame_len == 0 check below
+	 * still guards the success path against an unwritten length
+	 * (project-LICHEN-i1gk.102 intent). */
+	size_t frame_len = sizeof(tx_frame_buf);
+
 	/*
-	 * Zero-initialize frame_len so that if lichen_link_tx() returns an
-	 * error without writing frame_len, the frame_len == 0 check below
-	 * catches it (project-LICHEN-i1gk.102).
-	 *
 	 * NULL dst_eui64 = broadcast (no destination address in frame header).
 	 *
 	 * DESIGN DECISION: LICHEN always transmits broadcast frames at L2.
