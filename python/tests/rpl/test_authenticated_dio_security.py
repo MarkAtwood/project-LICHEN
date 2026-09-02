@@ -7,6 +7,7 @@ import asyncio
 import threading
 from collections.abc import Callable
 from ipaddress import IPv6Address
+from typing import cast
 
 import pytest
 
@@ -368,6 +369,45 @@ def test_transactional_elevation_rejects_awaitable_callbacks() -> None:
 
     with pytest.raises(TypeError, match="must be synchronous"):
         _ = link.elevate_authenticated_dio(authenticated, elevate=asynchronous_elevation)
+
+
+class _ScheduledCloseAwaitable:
+    """Awaitable with a tracked close(), standing in for custom hook results."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        if False:
+            yield None
+        return None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
+def _scheduled_awaitable(kind: str, ran: list[int], created: list[object]) -> object:
+    async def _later() -> None:
+        ran.append(1)
+
+    if kind == "task":
+        value: object = asyncio.create_task(_later())
+    elif kind == "future":
+        value = asyncio.get_running_loop().create_future()
+    else:
+        value = _ScheduledCloseAwaitable()
+    created.append(value)
+    return value
+
+
+def _assert_terminated(kind: str, value: object, ran: list[int]) -> None:
+    if kind == "task":
+        assert ran == []
+        assert cast(asyncio.Task[None], value).cancelled()
+    elif kind == "future":
+        assert cast(asyncio.Future[None], value).cancelled()
+    else:
+        assert cast(_ScheduledCloseAwaitable, value).close_calls == 1
 
 
 def test_time_generation_elevation_is_current_and_synchronous() -> None:
@@ -1009,3 +1049,81 @@ def test_dodag_scope_change_between_link_validation_and_commit_is_rejected(
     assert state.dodag_id == changed_dodag
     assert not state.parents
     assert REMOTE.pubkey not in link._schc_peer_contexts
+
+
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_time_generation_elevation_rejects_scheduled_awaitable(kind: str) -> None:
+    """Bead cryc: a scheduled-awaitable elevation callback must be rejected,
+    the awaitable cancelled and never run, and the generation transition
+    must not commit (covers DioHandler.elevate_time_generation and the
+    LinkLayer delegation)."""
+    ran: list[int] = []
+    created: list[object] = []
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    authenticated = link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+    generation = authenticated.key_generation
+
+    def elevate() -> str:
+        value = _scheduled_awaitable(kind, ran, created)
+        return cast("str", value)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_time_generation(
+            REMOTE.pubkey,
+            generation,
+            elevate=elevate,
+        )
+    if kind == "task":
+        await asyncio.sleep(0)  # deliver the pending cancellation
+    _assert_terminated(kind, created[0], ran)
+    # The rejected elevation must not consume the generation: the lease is
+    # released and the generation still accepts authorized elevation.
+    assert link.accepts_time_generation(REMOTE.pubkey, generation)
+
+
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_peer_generation_elevation_rejects_scheduled_awaitable(kind: str) -> None:
+    """Bead cryc: the peer-generation elevation path (LinkLayer ->
+    DioHandler delegation) rejects scheduled awaitables identically, and
+    the atomic peer-policy commit the callback represents never commits."""
+    ran: list[int] = []
+    created: list[object] = []
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    authenticated = link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+    generation = authenticated.key_generation
+
+    def elevate() -> str:
+        value = _scheduled_awaitable(kind, ran, created)
+        return cast("str", value)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_peer_generation(
+            REMOTE.pubkey,
+            generation,
+            elevate=elevate,
+        )
+    if kind == "task":
+        await asyncio.sleep(0)  # deliver the pending cancellation
+    _assert_terminated(kind, created[0], ran)
+    # The rejected elevation must not consume the peer generation either.
+    assert link.accepts_time_generation(REMOTE.pubkey, generation)
