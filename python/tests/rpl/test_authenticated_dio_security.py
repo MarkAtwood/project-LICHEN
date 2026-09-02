@@ -1092,6 +1092,50 @@ async def test_time_generation_elevation_rejects_scheduled_awaitable(kind: str) 
 
 
 @pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_authenticated_dio_elevation_rejects_scheduled_awaitable(kind: str) -> None:
+    """Bead mgot: a scheduled-awaitable authenticated-DIO elevation callback
+    must be rejected, the awaitable cancelled and never run, and no
+    AuthenticatedDio consumed - the issuance stays live for a legitimate
+    elevation."""
+    ran: list[int] = []
+    created: list[object] = []
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    received = await link.receive(100)
+    assert isinstance(received, RxFrame)
+    authenticated = link.accept_authenticated_dio(
+        received,
+        expected_rpl_instance_id=0,
+        expected_dodag_id=DODAG_ID,
+        expected_mop=1,
+        expected_role="peer",
+    )
+
+    def elevate(_: DetachedAuthenticatedDio) -> str:
+        value = _scheduled_awaitable(kind, ran, created)
+        return cast("str", value)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_authenticated_dio(authenticated, elevate=elevate)
+    if kind == "task":
+        await asyncio.sleep(0)  # deliver the pending cancellation
+    _assert_terminated(kind, created[0], ran)
+
+    # The issuance was not consumed: a legitimate elevation still works.
+    committed: list[str] = []
+
+    def commit(_: DetachedAuthenticatedDio) -> str:
+        committed.append("committed")
+        return "result"
+
+    assert (
+        link.elevate_authenticated_dio(authenticated, elevate=commit) == "result"
+    )
+    assert committed == ["committed"]
+
+
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
 async def test_peer_generation_elevation_rejects_scheduled_awaitable(kind: str) -> None:
     """Bead cryc: the peer-generation elevation path (LinkLayer ->
     DioHandler delegation) rejects scheduled awaitables identically, and
