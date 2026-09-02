@@ -341,6 +341,33 @@ impl AnnounceTrustStore {
         Ok(Some(state))
     }
 
+    /// Read-only durable view for accept-time validation (bead 9gug): the
+    /// sealed state and floor straight from storage, no cache, NO heal
+    /// writes (those belong to load(); accept must not mutate state in its
+    /// validation step - a detached floor window would otherwise fail
+    /// before the state write commits). Returns the current trust state a
+    /// new sequence must strictly advance, or None for a genuinely new pin.
+    fn read_durable_current(
+        &self,
+        iid: &[u8; 8],
+    ) -> Result<Option<AnnounceTrustState>, AnnounceStoreError> {
+        let state = self.read(iid, false)?;
+        let floor = self.read(iid, true)?;
+        match (state, floor) {
+            (None, None) => Ok(None),
+            (None, Some(_)) => Err(AnnounceStoreError::Corrupt),
+            // The sealed state is unforgeable and a missing floor cannot
+            // lower trust below it: validate against the state alone.
+            (Some(state), None) => Ok(Some(state)),
+            (Some(state), Some(floor)) if Self::precedes(state, floor) => {
+                Err(AnnounceStoreError::Corrupt)
+            }
+            // A lagging floor (crash window) validates against the sealed
+            // state - the truth the floor will be healed to.
+            (Some(state), Some(_)) => Ok(Some(state)),
+        }
+    }
+
     /// Cache `state` for `iid`, LRU-evicting the coldest entry when the
     /// cache is at capacity and `iid` is not already cached. Only the cache
     /// entry is removed; durable records are never deleted.
@@ -377,7 +404,18 @@ impl AnnounceTrustStore {
         iid: &[u8; 8],
         next: AnnounceTrustState,
     ) -> Result<(), AnnounceStoreError> {
-        let existing = self.load(iid)?;
+        // Durable-first validation (bead 9gug): a second store instance on
+        // the same roots has an independent cache, so validating against the
+        // cache would let a stale instance seal a regressed (state, floor)
+        // pair with zero tamper evidence. Validate against the READ-ONLY
+        // durable view instead (no heal writes here - load() owns those, and
+        // accept must not mutate during validation). Ephemeral stores have
+        // no durable state and stay cache-first.
+        let existing = if self.storage.is_some() {
+            self.read_durable_current(iid)?
+        } else {
+            self.load(iid)?
+        };
         if let Some(current) = existing {
             if next.pubkey != current.pubkey {
                 return Err(AnnounceStoreError::Corrupt);
@@ -710,6 +748,42 @@ mod tests {
             healed.accept(&iid, state(0xE1, 100)),
             Err(AnnounceStoreError::Corrupt)
         );
+
+        std::fs::remove_dir_all(state_root).unwrap();
+        std::fs::remove_dir_all(floor_root).unwrap();
+    }
+
+    #[test]
+    fn second_store_instance_cannot_seal_regressed_floor() {
+        // 9gug: a second AnnounceTrustStore on the same roots (stale systemd
+        // unit beside a debug run) has an independent cache. Validation must
+        // consult the DURABLE records, not that cache, or the second
+        // instance seals a self-consistent regressed (state, floor) pair
+        // with zero tamper evidence.
+        let (state_root, floor_root) = unique_roots("second-instance");
+        let iid = [0x7A; 8];
+        let mut owner =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xD2; 32]).unwrap();
+        owner.accept(&iid, state(0x61, 100)).unwrap();
+
+        let mut stale_cache =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0xD2; 32]).unwrap();
+        assert_eq!(stale_cache.load(&iid), Ok(Some(state(0x61, 100))));
+
+        owner.accept(&iid, state(0x61, 200)).unwrap();
+        drop(owner);
+
+        // The stale-cache instance must not seal (150,150): durable-first
+        // validation reads 200 and refuses the regression.
+        assert_eq!(
+            stale_cache.accept(&iid, state(0x61, 150)),
+            Err(AnnounceStoreError::Corrupt)
+        );
+        // B's cache legitimately still holds the stale 100 (the Corrupt
+        // rejection does not evict), but that is now harmless: every future
+        // accept re-validates durable-first, so the regression stays
+        // blocked regardless of what the cache serves.
+        assert_eq!(stale_cache.load(&iid), Ok(Some(state(0x61, 100))));
 
         std::fs::remove_dir_all(state_root).unwrap();
         std::fs::remove_dir_all(floor_root).unwrap();
