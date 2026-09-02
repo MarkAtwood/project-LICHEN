@@ -592,10 +592,14 @@ mod tests {
         assert_eq!(store.load(&iid), Err(AnnounceStoreError::Corrupt));
         drop(store);
 
-        // Restore the pristine record so the next checks vary ONLY the seed:
-        // a tampered record fails for any seed and would prove nothing about
-        // seed binding.
+        // Restore the ORIGINAL sealed record before the foreign-seed check:
+        // a tampered record fails signature verification for ANY seed, so
+        // asserting on it proves nothing about seed binding. The restored
+        // record verifies under seed 0x42 and must still fail under 0x43.
         write_record_raw(&record_path(&state_root, &iid, false), &record);
+        // Vary ONLY the seed from here on: confirm the restored record
+        // loads under the CORRECT seed before the foreign-seed check runs,
+        // so a failure below localizes to seed binding, not to the restore.
         let mut store =
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x42; 32]).unwrap();
         assert_eq!(store.load(&iid), Ok(Some(state(0xB1, 10))));
@@ -605,6 +609,14 @@ mod tests {
         let mut foreign =
             AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x43; 32]).unwrap();
         assert_eq!(foreign.load(&iid), Err(AnnounceStoreError::Corrupt));
+
+        // And the restored record still verifies under the CORRECT seed -
+        // proving the foreign failure is seed-specific, not a generally
+        // unreadable record.
+        let mut owner_again =
+            AnnounceTrustStore::persistent(&state_root, &floor_root, &[0x42; 32])
+                .unwrap();
+        assert_eq!(owner_again.load(&iid), Ok(Some(state(0xB1, 10))));
 
         std::fs::remove_dir_all(state_root).unwrap();
         std::fs::remove_dir_all(floor_root).unwrap();
