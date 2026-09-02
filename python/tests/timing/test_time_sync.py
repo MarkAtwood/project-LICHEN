@@ -816,6 +816,9 @@ async def test_provision_persist_hook_rejects_scheduled_awaitable(kind: str) -> 
         authority.current().provision_status
         is ProvisionEpochStatus.PERSISTENCE_FAILED
     )
+    # Kept from HEAD: poisoning also latches `cleared`. The other parent's
+    # forward-gate install/clear block was dropped as a duplicate of the
+    # post-poison probe already asserted above in this test.
     assert verifier.cleared
 
 
