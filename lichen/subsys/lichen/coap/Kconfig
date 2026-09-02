@@ -88,7 +88,7 @@ config LICHEN_COAP_SERVER_OSCORE
 	  When enabled, the server can verify OSCORE-protected requests
 	  and send OSCORE-protected responses.
 
-	  MUTATING-REQUEST GATE (coap_oscore_unprotect_resource_request):
+	  MUTATING-REQUEST GATE (coap_oscore_authorize_mutating):
 	  Enabled: an OSCORE-protected request is verified by looking up
 	  the security context for the peer EUI-64 derived from the source
 	  address, unprotecting it, and checking the inner method; a
