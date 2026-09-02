@@ -1284,6 +1284,12 @@ async def test_time_generation_elevation_scheduled_awaitable_rejected_and_termin
         committed.append("committed")
         return "ok"
 
+    # Merge resolution: HEAD's synchronous-retry assertion is kept here, per
+    # the merge note above this test. The stray `elevate_authenticated_dio`
+    # assert the auto-merge spliced in here belonged to beads-worker-7's
+    # authenticated-DIO awaitable test (dropped as a duplicate of
+    # test_elevation_result_rejects_scheduled_awaitable) and referenced a
+    # `commit` name that does not exist in this test's scope.
     assert (
         link.elevate_time_generation(
             REMOTE.pubkey,
@@ -1291,6 +1297,71 @@ async def test_time_generation_elevation_scheduled_awaitable_rejected_and_termin
             elevate=retry_commit,
         )
         == "ok"
+    )
+    assert committed == ["committed"]
+
+
+@pytest.mark.parametrize("kind", ["task", "future", "custom"])
+async def test_verified_receipt_elevation_rejects_scheduled_awaitable(kind: str) -> None:
+    """Bead ip40: a scheduled-awaitable verified-receipt elevation callback
+    must be rejected, the awaitable cancelled and never run, and the receipt
+    consumed fail-closed (take-before-callback: a rejected callback cannot be
+    retried into an accepted transaction; a fresh receipt elevates)."""
+    ran: list[int] = []
+    created: list[object] = []
+    radio = QueueRadio()
+    link = make_link(radio, Clock())
+    radio.frames.append((signed_wire(0), -90, 4))
+    receipt = await link.receive(100)
+    assert isinstance(receipt, RxFrame)
+
+    def elevate(_: RxFrame) -> str:
+        value = _scheduled_awaitable(kind, ran, created)
+        return cast("str", value)
+
+    with pytest.raises(TypeError, match="must not return an awaitable"):
+        _ = link.elevate_verified_receipt(
+            receipt,
+            purpose="dio-time",
+            elevate=elevate,
+        )
+    if kind == "task":
+        await asyncio.sleep(0)  # deliver the pending cancellation
+    _assert_terminated(kind, created[0], ran)
+
+    # The rejected elevation DID consume the receipt (take-before-callback):
+    # re-elevating the same RxFrame now fails closed, so a rejected callback
+    # cannot be retried into an accepted transaction.
+    with pytest.raises(ValueError, match="unconsumed verified receipt"):
+        _ = link.elevate_verified_receipt(
+            receipt,
+            purpose="dio-time",
+            elevate=lambda _: "retry",
+        )
+
+    # A FRESH verified receipt elevates legitimately.
+    radio.frames.append((signed_wire(1), -90, 4))
+    fresh = await link.receive(100)
+    assert isinstance(fresh, RxFrame)
+    committed: list[str] = []
+
+    def commit(_: RxFrame) -> str:
+        committed.append("committed")
+        return "result"
+
+    # Merge resolution: beads-worker-7's side is kept. HEAD's side
+    # (`elevate_time_generation(..., elevate=retry_commit)`) was displaced
+    # here from the time-generation test above; `generation` and
+    # `retry_commit` are undefined in this receipt test's scope. This test's
+    # intent (bead ip40) is that a FRESH verified receipt elevates after the
+    # rejected callback consumed the first one fail-closed.
+    assert (
+        link.elevate_verified_receipt(
+            fresh,
+            purpose="dio-time",
+            elevate=commit,
+        )
+        == "result"
     )
     assert committed == ["committed"]
 
