@@ -152,7 +152,10 @@ config LICHEN_L2_LOG_LEVEL
 config LICHEN_L2_RX_ALLOC_TIMEOUT_MS
 	int "RX packet allocation timeout (ms)"
 	depends on LICHEN_L2
-	default 50
+	# Bead gcib: the RX chain runs on the cooperative system workqueue, so
+	# this alloc wait is unpreemptible there. Keep the default short; a
+	# 50 ms wait starves USB/net-dwork/mgmt work under a ~40 fps attacker.
+	default 10
 	range 0 1000
 	help
 	  Timeout in milliseconds for net_pkt_rx_alloc_with_buffer().
