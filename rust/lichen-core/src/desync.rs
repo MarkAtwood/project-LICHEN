@@ -176,6 +176,20 @@ impl DesyncFSM {
         }
         self.state
     }
+
+    /// Handle an excessive clock drift measurement (spec 02a 2a.6.2,
+    /// decision guard-ppm): SYNCED + |drift_ppm| > guard -> DESYNCED,
+    /// triggering epoch_floor revalidation by the caller. No-op outside
+    /// SYNCED. Parity with python timing/sfn.py `on_drift` and the
+    /// ccp16-desync.json excessive_clock_drift_desync vector.
+    pub fn on_drift(&mut self, drift_ppm: i64, guard_ppm: i64) -> DesyncState {
+        if self.state == DesyncState::Synced && drift_ppm.abs() > guard_ppm {
+            self.state = DesyncState::Desynced;
+            self.consecutive_valid = 0;
+            self.missed_superframes = 0;
+        }
+        self.state
+    }
 }
 
 /// CCP desync recovery states (spec §14.8, 2a.6, CCP-13a).

@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // SPDX-FileCopyrightText: The contributors to the LICHEN project
 
-//! Rust consumer for test/vectors/ccp16-desync.json (spec 09 14.7,
+//! Rust consumer for test/vectors/ccp16-desync.json (spec 02a 2a.6, 09 14.7,
 //! R-02a-079; bead qn9l). Drives lichen_core::desync::DesyncFSM against
 //! the committed vectors — matching the C consumer (lichen/tests/desync_fsm)
-//! and the python oracle (timing.sfn DesyncFSM).
+//! and the python oracle (timing.sfn DesyncFSM). Two-suite+ contract: the
+//! corpus is the committed independent oracle for all three suites.
 
 use serde_json::Value;
+
+use lichen_core::desync::{DesyncFSM, DesyncState};
 
 fn vectors() -> Vec<Value> {
     let content = include_str!("../../../test/vectors/ccp16-desync.json");
@@ -18,6 +21,13 @@ fn find_case(name: &str) -> Value {
         .into_iter()
         .find(|v| v["name"] == name)
         .unwrap_or_else(|| panic!("vector {name} missing"))
+}
+
+#[test]
+fn corpus_case_count_is_pinned() {
+    // Guard against corpus case-count drift (beads-worker-4); the C and
+    // Python consumers pin the same count.
+    assert_eq!(vectors().len(), 4, "corpus case count changed");
 }
 
 #[test]
@@ -35,21 +45,12 @@ fn desync_on_sfn_wrap_vector() {
 
     // A synced node whose time provider is invalid at a wrap drops to
     // Desynced and the first valid beacon re-enters Recovering.
-    let mut fsm = lichen_core::desync::DesyncFSM::new();
+    let mut fsm = DesyncFSM::new();
     fsm.on_beacon(true, true);
     fsm.on_beacon(true, true);
-    assert_eq!(
-        fsm.on_sfn_wrap(true),
-        lichen_core::desync::DesyncState::Synced
-    );
-    assert_eq!(
-        fsm.on_sfn_wrap(false),
-        lichen_core::desync::DesyncState::Desynced
-    );
-    assert_eq!(
-        fsm.on_beacon(true, true),
-        lichen_core::desync::DesyncState::Recovering
-    );
+    assert_eq!(fsm.on_sfn_wrap(true), DesyncState::Synced);
+    assert_eq!(fsm.on_sfn_wrap(false), DesyncState::Desynced);
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Recovering);
 }
 
 #[test]
@@ -59,45 +60,43 @@ fn desync_recovery_beacon_revalidate_vector() {
 
     // After desync, the first valid beacon re-enters Recovering;
     // three consecutive valid beacons are required for Synced (14.7).
-    let mut fsm = lichen_core::desync::DesyncFSM::new();
+    let mut fsm = DesyncFSM::new();
     fsm.on_sfn_wrap(false);
-    assert_eq!(
-        fsm.on_beacon(true, true),
-        lichen_core::desync::DesyncState::Recovering
-    );
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Recovering);
     // An invalid beacon resets the consecutive-valid count.
-    assert_eq!(
-        fsm.on_beacon(false, true),
-        lichen_core::desync::DesyncState::Desynced
-    );
-    assert_eq!(
-        fsm.on_beacon(true, true),
-        lichen_core::desync::DesyncState::Recovering
-    );
-    assert_eq!(
-        fsm.on_beacon(true, true),
-        lichen_core::desync::DesyncState::Recovering
-    );
-    assert_eq!(
-        fsm.on_beacon(true, true),
-        lichen_core::desync::DesyncState::Synced
-    );
+    assert_eq!(fsm.on_beacon(false, true), DesyncState::Desynced);
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Recovering);
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Recovering);
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Synced);
 }
 
 #[test]
-fn excessive_clock_drift_vector_semantics() {
-    // SEMANTICS-PIN ONLY (not an FSM drive): the drift-vs-guard numeric
-    // relationship and the trigger outcome. The drift holdover check
-    // itself is exercised in lichen-link tdma_clock tests and the C
-    // consumer (main.c drift holdover boundary cases).
+fn excessive_clock_drift_desync_vector() {
     let v = find_case("excessive_clock_drift_desync");
     assert_eq!(v["expected"], "enter_desync_recovery");
     let drift = v["drift_ppm"].as_i64().unwrap();
     let guard = v["guard_ppm"].as_i64().unwrap();
     assert!(
-        drift > guard,
+        drift.abs() > guard,
         "vector drift {drift} must exceed guard {guard}"
     );
+
+    // Real FSM drive (beads-worker-4): DesyncFSM::on_drift (spec 02a
+    // 2a.6.2) now exists in the merged API, superseding the HEAD
+    // semantics-pin-only treatment. SYNCED + |drift| > guard -> Desynced.
+    let mut fsm = DesyncFSM::new();
+    assert_eq!(fsm.on_drift(drift, guard), DesyncState::Desynced);
+
+    // No-op outside Synced: a drift measurement alone cannot exit
+    // recovery, and an already-desynced node stays Desynced.
+    let mut recovering = DesyncFSM::new();
+    recovering.on_sfn_wrap(false);
+    recovering.on_beacon(true, true);
+    assert_eq!(recovering.on_drift(drift, guard), DesyncState::Recovering);
+
+    let mut desynced = DesyncFSM::new();
+    desynced.on_sfn_wrap(false);
+    assert_eq!(desynced.on_drift(drift, guard), DesyncState::Desynced);
 }
 
 #[test]
@@ -105,6 +104,9 @@ fn multi_root_version_conflict_vector_semantics() {
     // SEMANTICS-PIN ONLY (not an FSM drive): the version-conflict -> desync
     // trigger. The root-selection/version gate lives in the
     // gradient/root-selection layer (b7z9.24.2), not the desync FSM.
+    // Merge note: beads-worker-4 drove on_sfn_wrap(false) here, but an SFN
+    // wrap is not this vector's trigger — driving it would test SFN-wrap
+    // behavior, not the version gate — so the semantics pin is kept.
     let v = find_case("multi_root_version_conflict_desync");
     assert_eq!(v["expected"], "desync");
     assert_ne!(v["version"], v["alternate_version"]);
