@@ -249,10 +249,7 @@ class SlotClaimReplayCache:
         previous = self._highwater.get(gateway_iid)
         if previous is not None and superframe_id <= previous:
             return (False, ClaimRejectReason.REPLAY)
-        if (
-            gateway_iid not in self._highwater
-            and len(self._highwater) >= self.MAX_GATEWAYS
-        ):
+        if gateway_iid not in self._highwater and len(self._highwater) >= self.MAX_GATEWAYS:
             return (False, ClaimRejectReason.STATE_FULL)
         self._highwater[gateway_iid] = superframe_id
         return (True, None)
@@ -301,9 +298,7 @@ def verify_slot_claim(
         return (False, ClaimRejectReason.INVALID_SIGNATURE)
 
     if replay_cache is not None:
-        ok, reason = replay_cache.check_and_update(
-            claim.gateway_iid, claim.superframe_id
-        )
+        ok, reason = replay_cache.check_and_update(claim.gateway_iid, claim.superframe_id)
         if not ok:
             return (False, reason)
 

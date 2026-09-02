@@ -163,6 +163,7 @@ class TestEncodeClaimCanonical:
         encoded = encode_claim_canonical(claim)
         # Decode to verify structure
         import cbor2
+
         decoded = cbor2.loads(encoded)
         keys = list(decoded.keys())
         # Keys should be: "slots" (5), "timestamp" (9), "gateway_iid" (11), "superframe_id" (13)
@@ -177,9 +178,7 @@ class TestSignAndVerify:
 
     @pytest.fixture
     def keypair(self) -> tuple[bytes, bytes]:
-        seed = bytes.fromhex(
-            "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe"
-        )
+        seed = bytes.fromhex("deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe")
         return schnorr48.derive_keypair(seed)
 
     def test_sign_and_verify(self, keypair: tuple[bytes, bytes]) -> None:
@@ -290,9 +289,7 @@ class TestSignAndVerify:
         assert len(cache._highwater) == cache.MAX_GATEWAYS
 
         # A NEW gateway at capacity -> STATE_FULL (not REPLAY).
-        is_valid, reason = verify_slot_claim(
-            claim_for("ffffffffffffffff", 10), pubkey, cache
-        )
+        is_valid, reason = verify_slot_claim(claim_for("ffffffffffffffff", 10), pubkey, cache)
         assert not is_valid
         assert reason == ClaimRejectReason.STATE_FULL
 
@@ -301,9 +298,7 @@ class TestSignAndVerify:
         is_valid, reason = verify_slot_claim(claim_for(iid0, 11), pubkey, cache)
         assert is_valid and reason is None
 
-    def test_replay_cache_tracks_gateways_independently(
-        self, keypair: tuple[bytes, bytes]
-    ) -> None:
+    def test_replay_cache_tracks_gateways_independently(self, keypair: tuple[bytes, bytes]) -> None:
         privkey, pubkey = keypair
         cache = SlotClaimReplayCache()
 
@@ -326,9 +321,7 @@ class TestSignAndVerify:
         is_valid, reason = verify_slot_claim(other, other_pub, cache)
         assert is_valid and reason is None
 
-    def test_replay_cache_unchanged_without_cache_arg(
-        self, keypair: tuple[bytes, bytes]
-    ) -> None:
+    def test_replay_cache_unchanged_without_cache_arg(self, keypair: tuple[bytes, bytes]) -> None:
         """Back-compat: verify_slot_claim without a cache performs no
         replay tracking (existing callers unaffected)."""
         privkey, pubkey = keypair
@@ -611,9 +604,7 @@ class TestSlotClaimVectors:
                 expected = v["expected"]
 
                 result = validate_interleaved_pattern(slots, ordinal, gateway_count)
-                assert result == expected["valid"], (
-                    f"Pattern validation failed for {v['name']}"
-                )
+                assert result == expected["valid"], f"Pattern validation failed for {v['name']}"
                 break
 
     def test_conflict_resolution_vector(self, vectors: list[dict]) -> None:
@@ -648,9 +639,7 @@ class TestSlotClaimVectors:
                     pub_b,
                 )
 
-                winner, _ = resolve_slot_conflict(
-                    claim_a, claim_b, pubkey_a=pub_a, pubkey_b=pub_b
-                )
+                winner, _ = resolve_slot_conflict(claim_a, claim_b, pubkey_a=pub_a, pubkey_b=pub_b)
                 expected_winner = v["expected"]["winner"]
 
                 if expected_winner == "claim_a":
