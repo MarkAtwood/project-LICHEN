@@ -20,6 +20,7 @@ zephyr_library_sources(
   rpl_short_assignment.c
   rpl_dao_tx_persist.c
   rpl_sf_assignment.c
+  multi_root.c
 )
 
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
