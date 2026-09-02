@@ -44,7 +44,8 @@ struct Output {
     sf_bumped: bool,
 }
 
-/// Simulate select_tx_sf logic from spec pseudocode for loss threshold.
+/// Simulate select_tx_sf logic from spec 02a 2a.8 pseudocode for loss
+/// threshold (density gate per the adjudicated density-high decision: > 10).
 fn select_tx_sf_loss_check(
     assigned_sf: u8,
     density: u8,
@@ -55,8 +56,8 @@ fn select_tx_sf_loss_check(
     let mut sf = assigned_sf;
     let mut bumped = false;
 
-    // Step 3: density/utilization > 150 check
-    if density > 8 || utilization > 150 {
+    // Step 3: density > 10 (DENSITY_HIGH) or utilization > 150
+    if density > 10 || utilization > 150 {
         sf = sf.saturating_add(2).min(12);
     }
 
