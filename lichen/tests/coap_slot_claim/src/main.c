@@ -432,6 +432,9 @@ static void test_roundtrip_and_accept(void)
 	struct lichen_slot_grant grant;
 	int ret;
 
+	/* 1250, not the merge-side 1305: the merged implementation caps
+	 * expiry at now + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (300 s) with
+	 * no +5 s tolerance, so 1305 would now be REJECT_EXPIRY_TOO_FAR. */
 	ret = sign_into(IID_A, 2, 1, 1250, LICHEN_SLOT_ALLOC_INTERLEAVED,
 			cose, sizeof(cose));
 	CHECK(ret > 0);
@@ -501,6 +504,8 @@ static void test_mutation_breaks_verify(void)
 
 	reset_seq_hooks();
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s; 1305 would be
+	 * REJECT_EXPIRY_TOO_FAR before signature verification. */
 	ret = sign_into(IID_A, 2, 1, 1250, LICHEN_SLOT_ALLOC_INTERLEAVED,
 			cose, sizeof(cose));
 	CHECK(ret > 0);
@@ -547,6 +552,7 @@ static void test_unknown_signer(void)
 	struct lichen_slot_coord_ctx ctx;
 	int ret;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	ret = sign_into(IID_UNKNOWN, 2, 1, 1250,
 			LICHEN_SLOT_ALLOC_INTERLEAVED, cose, sizeof(cose));
 	CHECK(ret > 0);
@@ -563,6 +569,7 @@ static void test_no_verification_material(void)
 	struct lichen_slot_claim claim;
 	struct lichen_slot_grant grant;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	fill_claim(&claim, IID_A, 0, 1, 1250, 0);
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 	CHECK(lichen_slot_coord_process_claim(&ctx, &claim, 1000, true, &grant,
@@ -586,19 +593,44 @@ static void test_gates(void)
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
 		       LICHEN_CLAIM_REJECT_EXPIRED);
 
+	/* Expiry too far: expiry beyond now + max duration (spec step 7a,
+	 * anti-squatting, bead eaws). In the merged implementation the cap
+	 * is now + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC = 1300, so an expiry
+	 * of 1400 is rejected EXPIRY_TOO_FAR. Seq 2 chosen to stay
+	 * above the earlier seq-1 rejection without consuming the seq-5
+	 * accept below. */
+	ret = sign_into(IID_A, 2, 2, 1400, 0, cose, sizeof(cose));
+	CHECK(ret > 0);
+	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
+		       LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR);
+
+	/* Boundary: expiry == now + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC is
+	 * accepted (inclusive cap, as in test_expiry_too_far; the
+	 * merge-side 1305 relied on a hardcoded +5 s tolerance the merged
+	 * implementation deliberately dropped). Seq 3 above the too-far
+	 * rejection. */
+	ret = sign_into(IID_A, 2, 3,
+			1000 + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC, 0, cose,
+			sizeof(cose));
+	CHECK(ret > 0);
+	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_ACCEPTED);
+
 	/* Fail-closed: unsynced wall clock (now 0, clock_valid false) must
 	 * reject even a not-yet-expired claim instead of accepting it with
 	 * no expiry validation (GCP-6.5 step 7 precondition). Seq 7 chosen
 	 * above the later accept (seq 5): if a regression ever persisted
 	 * the high-water on this rejection, the following seq-5 ACCEPTED
 	 * assertion below would fail. */
+	/* 1250 (not merge-side 1305): merged cap is 300 s; this value only
+	 * needs to be future-dated since the clock gate rejects first. */
 	ret = sign_into(IID_A, 2, 7, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_NO_CLOCK(&ctx, cose, (size_t)ret,
 			 LICHEN_CLAIM_REJECT_NO_CLOCK);
 
 	/* Replay: seq 5 accepted, then 5 and 4 rejected, 6 accepted
-	 * (spec step 8) */
+	 * (spec step 8). 1250, not merge-side 1305: merged cap is 300 s,
+	 * so 1305 would be REJECT_EXPIRY_TOO_FAR instead of ACCEPTED. */
 	ret = sign_into(IID_A, 2, 5, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000, LICHEN_CLAIM_ACCEPTED);
@@ -668,6 +700,7 @@ static void test_seq_recheck_under_lock(void)
 	seq_cache_a.fail_first_lookup = true;
 	seq_cache_a.lookups = 0;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	ret = sign_into(IID_A, 2, 5, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
@@ -689,7 +722,8 @@ static void test_persist_failure(void)
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 	seq_cache_b.commit_fails = true;
 
-	/* Sign by B so the failing cache entry (B) is the one consulted */
+	/* Sign by B so the failing cache entry (B) is the one consulted.
+	 * 1250 (not merge-side 1305): merged cap is 300 s. */
 	ret = sign_into(IID_B, 2, 1, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	PROCESS_OK(&ctx, cose, (size_t)ret, 1000,
@@ -719,6 +753,7 @@ static void test_conflict_resolution(void)
 	/* B (higher IID) takes slot 5 first */
 	struct lichen_slot_claim claim_b;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	fill_claim(&claim_b, IID_B, 3, 1, 1250, 0);
 	claim_b.slots[0] = 5;
 	claim_b.slot_count = 1;
@@ -730,6 +765,7 @@ static void test_conflict_resolution(void)
 	/* A (lower IID) claims the same slot: overrides, accepted */
 	struct lichen_slot_claim claim_a;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	fill_claim(&claim_a, IID_A, 2, 1, 1250, 0);
 	claim_a.slots[0] = 5;
 	claim_a.slot_count = 1;
@@ -742,6 +778,7 @@ static void test_conflict_resolution(void)
 	/* B re-claims slot 5: 4.09 conflict, payload is A's stored claim */
 	struct lichen_slot_claim claim_b2;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	fill_claim(&claim_b2, IID_B, 3, 2, 1250, 0);
 	claim_b2.slots[0] = 5;
 	claim_b2.slot_count = 1;
@@ -776,6 +813,7 @@ static void test_structural_rejects(void)
 	};
 	int ret;
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	ret = sign_into(IID_A, 2, 1, 1250, 0, cose, sizeof(cose));
 	CHECK(ret > 0);
 	size_t cose_len = (size_t)ret;
@@ -879,7 +917,8 @@ static void test_structural_rejects(void)
 	CHECK(lichen_slot_coord_decode_claim(t.buf, t.len, &claim) ==
 	      -EBADMSG);
 
-	/* Payload structural rejects, all with a well-formed envelope */
+	/* Payload structural rejects, all with a well-formed envelope.
+	 * 1250 (not merge-side 1305): merged cap is 300 s. */
 	struct lichen_slot_claim base;
 
 	fill_claim(&base, IID_A, 2, 1, 1250, 0);
@@ -1030,6 +1069,7 @@ static void test_max_slots_claim(void)
 	big.superframe_id = 7;
 	big.ordinal = 1;
 	big.mode = 1;
+	/* 1250, not merge-side 1305: merged cap is 300 s. */
 	big.expiry = 1250;
 	big.claim_seq = 1;
 
@@ -1060,6 +1100,7 @@ static void test_slot_range_gate(void)
 
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 
+	/* 1250 (not merge-side 1305): merged cap is 300 s. */
 	fill_claim(&claim, IID_A, 2, 1, 1250, 0);
 	claim.slot_count = 1;
 	claim.slots[0] = 200; /* >= slots_per_superframe (60) */
@@ -1080,7 +1121,8 @@ static void test_bad_args(void)
 
 	CHECK(lichen_slot_coord_init(&ctx, IID_A) == 0);
 
-	/* Buffer too small for the payload map */
+	/* Buffer too small for the payload map. 1250 (not merge-side
+	 * 1305): merged cap is 300 s. */
 	fill_claim(&claim, IID_A, 2, 1, 1250, 0);
 	CHECK(lichen_slot_coord_encode_claim(&claim, buf, sizeof(buf)) ==
 	      -ENOBUFS);

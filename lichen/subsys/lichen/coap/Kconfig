@@ -426,6 +426,18 @@ config LICHEN_SLOT_CLAIM_REPLAY_TEST_HOOKS
 	  Enable lichen_slot_claim_seq_test_reset() for clearing the RAM
 	  cache between test cases. Only for testing.
 
+config LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES
+	int "Maximum slot-claim duration in superframes (GCP-6.5 step 7a)"
+	depends on LICHEN_COAP_SLOT_COORD
+	default 5
+	range 1 60
+	help
+	  Maximum claim duration in superframes (spec/08-gateway-coordination.md
+	  MAX_CLAIM_DURATION_SUPERFRAMES, anti-squatting). With a 60 s superframe,
+	  5 superframes = 300 s; validation adds 5 s of clock tolerance, so
+	  claims with expiry beyond now + 305 s are rejected with
+	  LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR (4.03 Forbidden).
+
 config LICHEN_COAP_SLOT_COORD_RESOURCE
 	bool "Enable Slot Coordination CoAP resources"
 	depends on LICHEN_COAP_SLOT_COORD

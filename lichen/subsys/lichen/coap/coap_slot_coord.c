@@ -434,7 +434,12 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 
 	/* GCP-6.5 validation step 7 (upper bound): cap the claim lifetime
 	 * at N superframes so a compromised key cannot squat slots with a
-	 * far-future expiry (GCP-6 claim-model review). */
+	 * far-future expiry (GCP-6 claim-model review). Uses
+	 * LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (= CONFIG_LICHEN_CCP_SUPERFRAME_SEC
+	 * * CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES) so the cap
+	 * tracks the Kconfig-overridable superframe duration; the merge-side
+	 * hardcoded "SUPERFRAMES * 60U + 5U" was rejected because the magic
+	 * 60 would diverge from CONFIG_LICHEN_CCP_SUPERFRAME_SEC. */
 	if (claim->expiry >
 	    now_unix + (uint64_t)LICHEN_SLOT_CLAIM_MAX_DURATION_SEC) {
 		LOG_DBG("Claim rejected: expiry too far in future");

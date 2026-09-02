@@ -133,7 +133,11 @@ enum lichen_claim_result {
 	 *  cannot be evaluated; fail-closed, never accept without it */
 	LICHEN_CLAIM_REJECT_NO_CLOCK = 8,
 	/** Claim rejected: expiry beyond the superframe-denominated cap
-	 *  (GCP-6.5 step 7 upper bound; anti-squatting cap) */
+	 *  (GCP-6.5 step 7 upper bound; spec/08 also numbers this check as
+	 *  step 7a; anti-squatting). Both intents merged: the resolved
+	 *  implementation (coap_slot_coord.c) calls this the step 7 upper
+	 *  bound, and the check itself is expiry - now exceeding
+	 *  LICHEN_SLOT_CLAIM_MAX_DURATION_SEC. */
 	LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR = 9,
 };
 
@@ -338,8 +342,10 @@ bool lichen_slot_coord_tx_allowed(const struct lichen_slot_coord_ctx *_Nonnull c
  *
  * Per GCP-6.3 and GCP-6.5, in order:
  * - COSE_Sign1 verification against the signer's key-store entry
- * - expiry > now (step 7) and expiry within the claim-duration cap
- *   now + LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (step 7 upper bound)
+ * - expiry > now (step 7)
+ * - expiry - now within the claim-duration cap now +
+ *   LICHEN_SLOT_CLAIM_MAX_DURATION_SEC (step 7 upper bound; spec/08 also
+ *   numbers this check as step 7a)
  * - claim_seq above the cached per-gateway high-water mark (step 8);
  *   on acceptance the new high-water is committed via
  *   lichen_slot_claim_seq_commit() BEFORE the claim is applied
