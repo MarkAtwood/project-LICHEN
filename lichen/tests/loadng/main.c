@@ -561,6 +561,87 @@ static int test_wire_format_seq_num_big_endian(void)
 	return 1;
 }
 
+/* ─── RREQ admission rate limiting (bead cmx3, spec/05 8.4.6) ─────────────── */
+
+static bool rreq_from_at(const uint8_t origin[16], uint16_t seq, uint32_t now_ms)
+{
+	struct lichen_loadng_rreq rreq = { 0 };
+
+	memcpy(rreq.originator, origin, sizeof(rreq.originator));
+	rreq.seq_num = seq;
+	return lichen_loadng_seen_check_and_mark(&rreq, now_ms);
+}
+
+static int test_rreq_rate_limit_per_source(void)
+{
+	static const uint8_t src_a[16] = { 0x20 };
+	static const uint8_t src_b[16] = { 0x21 };
+	const uint32_t now = 1000U;
+
+	/* First 10 RREQs from source A within the window pass the gate.
+	 * Distinct sequence numbers keep them out of duplicate suppression. */
+	for (uint16_t seq = 1; seq <= 10; seq++) {
+		if (rreq_from_at(src_a, seq, now)) {
+			printf("  FAIL: seq %u rate limited on first window\n", seq);
+			return 0;
+		}
+	}
+
+	/* The 11th within the window exceeds the per-source MUST (10/min). */
+	if (!rreq_from_at(src_a, 11, now)) {
+		printf("  FAIL: 11th RREQ from one source was not rate limited\n");
+		return 0;
+	}
+
+	/* A different source is unaffected: per-source independence. */
+	if (rreq_from_at(src_b, 1, now)) {
+		printf("  FAIL: source B was rate limited by source A's flood\n");
+		return 0;
+	}
+
+	return 1;
+}
+
+static int test_rreq_rate_limit_global(void)
+{
+	static const uint8_t src[16] = { 0x30 };
+	const uint32_t now = 62000U; /* past test 1's window */
+
+	/* Fill the global window: 30 arrivals across distinct sources. */
+	for (uint16_t seq = 1; seq <= 30; seq++) {
+		uint8_t origin[16] = { 0 };
+		origin[0] = (uint8_t)(seq >> 8);
+		origin[1] = (uint8_t)seq;
+		if (rreq_from_at(origin, seq, now)) {
+			printf("  FAIL: arrival %u of 30 was rate limited\n", seq);
+			return 0;
+		}
+	}
+
+	/* Arrival 31 (any source) exceeds the global MUST. */
+	if (!rreq_from_at(src, 31, now)) {
+		printf("  FAIL: 31st global RREQ was not rate limited\n");
+		return 0;
+	}
+
+	return 1;
+}
+
+static int test_rreq_rate_limit_window_expiry(void)
+{
+	static const uint8_t src[16] = { 0x31 };
+	const uint32_t now = 124000U; /* past test 2's window */
+
+	/* After the 60 s window expires the gate reopens. The rate log prunes
+	 * lazily on the next arrival, so advance now_ms past the window. */
+	if (rreq_from_at(src, 99, now)) {
+		printf("  FAIL: arrival after window expiry was rate limited\n");
+		return 0;
+	}
+
+	return 1;
+}
+
 #define RUN_TEST(fn) do { \
 	printf("  %s...", #fn); \
 	tests_run++; \
@@ -583,6 +664,9 @@ int main(void)
 	RUN_TEST(test_rreq_parse_rejects_short);
 	RUN_TEST(test_rrep_parse_rejects_short);
 	RUN_TEST(test_rerr_parse_rejects_short);
+	RUN_TEST(test_rreq_rate_limit_per_source);
+	RUN_TEST(test_rreq_rate_limit_global);
+	RUN_TEST(test_rreq_rate_limit_window_expiry);
 	RUN_TEST(test_rreq_write_rejects_null);
 	RUN_TEST(test_rreq_write_rejects_small_buffer);
 	RUN_TEST(test_wire_format_seq_num_big_endian);
