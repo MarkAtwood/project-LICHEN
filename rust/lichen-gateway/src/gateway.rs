@@ -1143,6 +1143,11 @@ impl Gateway {
     /// enters its radio loops. Configured public keys are out-of-band trust
     /// anchors; all trust changes are committed once before any context is
     /// installed, and OSCORE sender sequences resume from durable storage.
+    /// Commit anchors BEFORE installing contexts: a context-install failure
+    /// exits the daemon with anchors pinned but contextless. That
+    /// intermediate state fails closed (no contexts -> no OSCORE traffic)
+    /// and self-heals on the next restart, which re-runs provisioning and
+    /// context installation monotonically (bead vzq5).
     pub fn provision_closed_federation(
         &mut self,
         federation: &PskFederation,
@@ -1185,6 +1190,29 @@ impl Gateway {
                 .provision_configured_peer(pubkey)
                 .map_err(GatewayFederationError::Trust)?;
         }
+
+        // Bead vzq5: in closed-federation mode the configured peer list is
+        // the source of truth for BrProvisioned pins. Revoke (remove) any
+        // previously provisioned pin whose pubkey is no longer configured —
+        // provisioning is monotonic on its own, so dropping a compromised
+        // key from the config must translate into an explicit durable
+        // revocation (TrustStore::remove bumps the generation and persists
+        // atomically with the floor below).
+        let configured: std::collections::HashSet<[u8; 8]> = peer_pubkeys
+            .iter()
+            .map(|p| lichen_core::addr::iid_from_pubkey_bytes(p))
+            .collect();
+        let revoked: Vec<[u8; 8]> = candidate
+            .list_iids()
+            .into_iter()
+            .filter(|iid| !configured.contains(iid))
+            .collect();
+        for iid in &revoked {
+            changed |= candidate
+                .remove(iid)
+                .map_err(GatewayFederationError::Trust)?;
+        }
+
         if changed {
             candidate
                 .save_atomic_with_floor(
@@ -1195,6 +1223,11 @@ impl Gateway {
                 .map_err(GatewayFederationError::Trust)?;
         }
         self.trust_store = candidate;
+
+        // Drop the installed GCP contexts of revoked peers so their OSCORE
+        // contexts are no longer consulted by this gateway.
+        self.gcp_context_peers
+            .retain(|(installed, _)| !revoked.contains(installed));
         for (pubkey, context) in contexts {
             let public = lichen_link::keys::PublicKey::new(pubkey);
             self.rpl_stack
