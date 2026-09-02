@@ -4893,10 +4893,14 @@ def test_schc_adaptation_vector(name: str, vector: dict) -> None:
             "invalid_source_address": "invalid IPv6 source address",
             "invalid_destination_address": "invalid IPv6 destination address",
         }[vector["expect_error"]]
+        # Emission side: the TX policy rejects these endpoints.
         with pytest.raises(SchcError, match=error_pattern):
             encode_rule255(raw)
-        with pytest.raises(SchcError, match=error_pattern):
-            decode_rule255(b"\xff" + raw)
+        # RX side (rule255-rx-decode decision): the decoder is
+        # byte-preserving - it accepts any well-framed packet with a valid
+        # checksum regardless of endpoint addresses.
+        decoded = decode_rule255(b"\xff" + raw)
+        assert decoded == raw
 
     elif category == "fragmentation_direction":
         # Rule 0x79 B-to-A direction vectors
