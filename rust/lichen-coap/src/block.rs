@@ -416,6 +416,11 @@ impl BlockReceiver {
         self.data[self.data_len..self.data_len + data.len()].copy_from_slice(data);
         self.data_len = needed;
         self.expected_block = block.num + 1;
+        // Persist the server's negotiated size: block numbers for re-requests
+        // must be computed at the size the server is actually sending
+        // (bead hivb - a stale requested szx made lost-block re-requests
+        // address the wrong byte offset and never converge).
+        self.block_size = block.size();
 
         if !block.more {
             self.complete = true;
@@ -763,6 +768,38 @@ mod tests {
 
         assert!(receiver.receive_block(larger, &[1u8; 128]).unwrap());
         assert_eq!(receiver.payload(), &[1u8; 128]);
+    }
+
+    #[test]
+    fn receiver_rerequest_converges_after_mid_transfer_szx_change() {
+        // Bead hivb: server drops the final block after a mid-transfer size
+        // increase. Block numbers are recalculated at the new SZX (num =
+        // offset / size): after {0,szx=2}+{1,szx=2} the server continues at
+        // szx=3 with block 1 (128..256) and drops the final block 2
+        // (256..384). The re-request must use the server's NEW szx so the
+        // offset matches; the stale requested szx built {num:2,szx:2} =
+        // offset 128 and the loop never converged.
+        let mut receiver = BlockReceiver::new(64);
+        receiver
+            .receive_block(BlockOption::new(0, true, 2).unwrap(), &[1u8; 64])
+            .unwrap();
+        receiver
+            .receive_block(BlockOption::new(1, true, 2).unwrap(), &[2u8; 64])
+            .unwrap();
+        receiver
+            .receive_block(BlockOption::new(1, true, 3).unwrap(), &[3u8; 128])
+            .unwrap();
+
+        // Lost final block -> re-request at the server's current szx.
+        let request = receiver.next_request_block();
+        assert_eq!(request.num, 2);
+        assert_eq!(request.size(), 128);
+
+        // Server resends the final block; transfer completes.
+        assert!(receiver
+            .receive_block(BlockOption::new(2, false, 3).unwrap(), &[4u8; 128])
+            .unwrap());
+        assert_eq!(receiver.payload().len(), 384);
     }
 
     #[test]
