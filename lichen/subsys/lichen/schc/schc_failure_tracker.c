@@ -1,101 +1,86 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /* SPDX-FileCopyrightText: The contributors to the LICHEN project */
 
-#include <lichen/schc_failure_tracker.h>
+/*
+ * Merge resolution (main vs beads-worker-4): this file implements the
+ * beads-worker-4 API declared by the merged schc_failure_tracker.h.
+ * The other parent's richer variant (3-arg init with capacity, enum
+ * result, record_success/retire; bead b7z9.67) had no production
+ * callers and cannot compile against the merged header (different
+ * struct fields and LICHEN_SCHC_FT_* constants); its clear/retire
+ * intent is covered by lichen_schc_failure_clear().
+ */
 
-#include <errno.h>
+#include <lichen/schc_failure_tracker.h>
 
 #include <string.h>
 
-int lichen_schc_failure_tracker_init(struct lichen_schc_failure_tracker *t,
-				     uint16_t threshold, uint16_t capacity)
+void lichen_schc_failure_tracker_init(struct lichen_schc_failure_tracker *t,
+				      uint16_t threshold)
 {
-	if (t == NULL || threshold == 0 || capacity == 0 ||
-	    capacity > LICHEN_SCHC_FT_MAX_SOURCES) {
-		return -EINVAL;
-	}
-	memset(t, 0, sizeof(*t));
-	t->threshold = threshold;
-	t->capacity = capacity;
-	return 0;
-}
-
-enum lichen_schc_ft_result
-lichen_schc_failure_tracker_record_failure(struct lichen_schc_failure_tracker *t,
-					   const uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN])
-{
-	if (t == NULL || source == NULL) {
-		return LICHEN_SCHC_FT_INVALID;
-	}
-	/* Existing run: saturate at threshold, emit one notification. */
-	for (uint16_t i = 0; i < LICHEN_SCHC_FT_MAX_SOURCES; i++) {
-		if (t->entries[i].used &&
-		    memcmp(t->entries[i].source, source,
-			   LICHEN_SCHC_FT_SOURCE_LEN) == 0) {
-			if (t->entries[i].count < t->threshold) {
-				t->entries[i].count++;
-			}
-			bool notify = t->entries[i].count == t->threshold &&
-				      !t->entries[i].notified;
-			if (notify) {
-				t->entries[i].notified = true;
-			}
-			return notify ? LICHEN_SCHC_FT_NOTIFY
-				      : LICHEN_SCHC_FT_OK;
-		}
-	}
-	/* New signer: fail closed when at capacity (no eviction). */
-	if (t->entry_count >= t->capacity) {
-		t->capacity_events++;
-		return LICHEN_SCHC_FT_FULL;
-	}
-	/* Find a free slot. */
-	for (uint16_t i = 0; i < LICHEN_SCHC_FT_MAX_SOURCES; i++) {
-		if (!t->entries[i].used) {
-			t->entries[i].used = true;
-			memcpy(t->entries[i].source, source,
-			       LICHEN_SCHC_FT_SOURCE_LEN);
-			t->entries[i].count = 1;
-			t->entries[i].notified = (t->threshold == 1);
-			t->entry_count++;
-			return t->threshold == 1 ? LICHEN_SCHC_FT_NOTIFY
-						 : LICHEN_SCHC_FT_OK;
-		}
-	}
-	/* Should not reach here (entry_count == capacity guard above). */
-	t->capacity_events++;
-	return LICHEN_SCHC_FT_FULL;
-}
-
-void lichen_schc_failure_tracker_record_success(
-	struct lichen_schc_failure_tracker *t,
-	const uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN])
-{
-	if (t == NULL || source == NULL) {
+	if (t == NULL) {
 		return;
 	}
-	for (uint16_t i = 0; i < LICHEN_SCHC_FT_MAX_SOURCES; i++) {
-		if (t->entries[i].used &&
-		    memcmp(t->entries[i].source, source,
-			   LICHEN_SCHC_FT_SOURCE_LEN) == 0) {
-			t->entries[i].used = false;
-			t->entries[i].count = 0;
-			t->entries[i].notified = false;
-			t->entry_count--;
+	t->threshold = threshold;
+	memset(t->entries, 0, sizeof(t->entries));
+	t->capacity_events = 0U;
+}
+
+bool lichen_schc_failure_record(struct lichen_schc_failure_tracker *t,
+				const uint8_t pubkey[LICHEN_SCHC_TRACKER_KEY_LEN])
+{
+	if (t == NULL || pubkey == NULL || t->threshold == 0U) {
+		return false;
+	}
+
+	for (size_t i = 0U; i < LICHEN_SCHC_TRACKER_MAX_SOURCES; i++) {
+		struct lichen_schc_failure_entry *e = &t->entries[i];
+
+		if (e->active && memcmp(e->pubkey, pubkey,
+					LICHEN_SCHC_TRACKER_KEY_LEN) == 0) {
+			e->count = e->count < t->threshold ? (uint16_t)(e->count + 1U)
+							   : t->threshold;
+			bool notify = (e->count == t->threshold) && !e->notified;
+			e->notified = e->notified || notify;
+			return notify;
+		}
+	}
+
+	/* Fail closed: never evict an existing run for an untracked signer. */
+	for (size_t i = 0U; i < LICHEN_SCHC_TRACKER_MAX_SOURCES; i++) {
+		struct lichen_schc_failure_entry *e = &t->entries[i];
+
+		if (!e->active) {
+			e->active = true;
+			memcpy(e->pubkey, pubkey, LICHEN_SCHC_TRACKER_KEY_LEN);
+			e->count = 1U;
+			e->notified = (t->threshold == 1U);
+			return e->notified;
+		}
+	}
+	t->capacity_events++;
+	return false;
+}
+
+void lichen_schc_failure_clear(struct lichen_schc_failure_tracker *t,
+			       const uint8_t pubkey[LICHEN_SCHC_TRACKER_KEY_LEN])
+{
+	if (t == NULL || pubkey == NULL) {
+		return;
+	}
+	for (size_t i = 0U; i < LICHEN_SCHC_TRACKER_MAX_SOURCES; i++) {
+		struct lichen_schc_failure_entry *e = &t->entries[i];
+
+		if (e->active && memcmp(e->pubkey, pubkey,
+					LICHEN_SCHC_TRACKER_KEY_LEN) == 0) {
+			memset(e, 0, sizeof(*e));
 			return;
 		}
 	}
 }
 
-void lichen_schc_failure_tracker_retire(
-	struct lichen_schc_failure_tracker *t,
-	const uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN])
+uint64_t
+lichen_schc_failure_capacity_events(const struct lichen_schc_failure_tracker *t)
 {
-	lichen_schc_failure_tracker_record_success(t, source);
-}
-
-uint64_t lichen_schc_failure_tracker_capacity_events(
-	const struct lichen_schc_failure_tracker *t)
-{
-	return (t != NULL) ? t->capacity_events : 0;
+	return (t == NULL) ? 0U : t->capacity_events;
 }

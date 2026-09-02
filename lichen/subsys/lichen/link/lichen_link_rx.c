@@ -352,9 +352,18 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 				     ipv6_buf, sizeof(ipv6_buf));
 	if (ret < 0) {
 		if (ret == SCHC_ERR_BUFFER_TOO_SMALL) {
+			/* Output-buffer failure: accounting NOT incremented
+			 * (spec 03 5.7: transport/OOB failure is not a
+			 * decompression-policy failure). */
 			ret = -ENOMEM;
 			goto cleanup;
 		}
+		/* Bounded consecutive-failure accounting keyed by the
+		 * authenticated signer (spec 03 5.7); exactly one
+		 * notification per consecutive run. Static in-context
+		 * storage keeps the footprint bounded. */
+		lichen_schc_failure_record(&ctx->schc_failures,
+					   ctx->ed25519_pk);
 		ret = -EINVAL;
 		goto cleanup;
 	}
@@ -376,6 +385,7 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	memcpy(out_ipv6, ipv6_buf, ipv6_len);
 	*out_len = ipv6_len;
 	memcpy(src_eui64, auth.info.src_eui64, LICHEN_EUI64_LEN);
+	lichen_schc_failure_clear(&ctx->schc_failures, ctx->ed25519_pk);
 	ret = 0;
 
 cleanup:

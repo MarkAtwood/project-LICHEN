@@ -17,6 +17,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <lichen/csma.h>
+#ifdef CONFIG_LICHEN_SCHC
+#include <lichen/schc_failure_tracker.h>
+#endif
 
 /* Nullability annotations for pointer safety (Clang/GCC compatibility) */
 #ifndef __has_feature
@@ -111,6 +114,9 @@ struct lichen_link_ctx {
 #endif
 	struct lichen_csma csma; /**< Per-context CAD/backoff state */
 	struct lichen_link_cca_ops cca_ops; /**< Injected pre-TX CCA probe; see lichen_link_set_cca_ops() */
+#ifdef CONFIG_LICHEN_SCHC
+	struct lichen_schc_failure_tracker schc_failures; /**< Bounded consecutive decompression-failure accounting (spec 03 5.7), keyed by the authenticated signer */
+#endif
 #ifdef CONFIG_LICHEN_TDMA
 	/* Per-context TDMA schedule state (spec/02a §2a.2 slot mapping).
 	 * lichen_link_tx() consults and lazily initializes this instance;

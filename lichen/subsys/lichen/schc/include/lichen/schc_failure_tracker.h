@@ -3,15 +3,28 @@
 
 /**
  * @file schc_failure_tracker.h
- * @brief Bounded per-signer consecutive SCHC decompression-failure
- *	  tracker (spec/03-adaptation.md 5.7; C port of rust
- *	  lichen-schc context.rs RuleVersionFailureTracker; bead b7z9.67).
+ * @brief Bounded consecutive decompression-failure tracker (spec 03 5.7).
  *
- * Tracks consecutive decompression failures keyed by the 32-byte
- * authenticated link signer. Capacity is bounded: when full, a new
- * signer fails closed (LICHEN_SCHC_FT_FULL) without evicting existing
- * runs. A threshold crossing emits exactly one notification per
- * consecutive run; a successful decompression clears only that signer.
+ * C port of rust/lichen-schc/src/context.rs RuleVersionFailureTracker:
+ * production decompression ingress maintains a bounded consecutive-failure
+ * tracker keyed by the authenticated link signer.
+ *
+ * Contract (spec/03-adaptation.md 5.7 Decompression Failure Handling):
+ * - unknown rules / truncated or non-canonical residues / invalid
+ *   decompressed packets increment that signer's consecutive count
+ * - output-buffer or transport failure does NOT increment
+ * - a successful decompression clears only that signer
+ * - the threshold emits exactly one notification per consecutive run
+ * - when the bounded table is full, fail closed for untracked signers
+ *   and NEVER evict existing runs
+ *
+ * Merge note: the beads-worker-4 API is kept because the merged
+ * production callers (link/link_ctx.c 2-arg init, link/lichen_link_rx.c
+ * record/clear) and tests/schc_failure_tracker/src/main.c use it. The
+ * other parent's richer variant (3-arg init with capacity parameter,
+ * enum result, record_success/retire; bead b7z9.67) had no production
+ * callers; its retire-on-link-lifetime intent is covered by
+ * lichen_schc_failure_clear().
  */
 
 #ifndef LICHEN_SCHC_FAILURE_TRACKER_H_
@@ -21,71 +34,54 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define LICHEN_SCHC_FT_MAX_SOURCES 16u
-#define LICHEN_SCHC_FT_SOURCE_LEN 32u
+/** Authenticated signer identity: 32-byte Ed25519 public key. */
+#define LICHEN_SCHC_TRACKER_KEY_LEN 32U
 
-/** Per-signer entry. */
-struct lichen_schc_ft_entry {
-	bool used;
-	uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN];
+/** Bounded number of concurrently tracked signers (spec 5.7 static memory). */
+#define LICHEN_SCHC_TRACKER_MAX_SOURCES 16U
+
+/** Tracker at capacity: the signer was not tracked (fail closed). */
+#define LICHEN_SCHC_TRACKER_FULL (-2)
+
+/** One signer's consecutive-failure run. */
+struct lichen_schc_failure_entry {
+	uint8_t pubkey[LICHEN_SCHC_TRACKER_KEY_LEN];
 	uint16_t count;
 	bool notified;
+	bool active;
 };
 
-/** Record outcome. */
-enum lichen_schc_ft_result {
-	LICHEN_SCHC_FT_OK = 0,	   /**< Recorded, threshold not reached */
-	LICHEN_SCHC_FT_NOTIFY = 1, /**< Threshold crossed: notify operator */
-	LICHEN_SCHC_FT_FULL = -1,  /**< Tracker full, new signer rejected */
-	LICHEN_SCHC_FT_INVALID = -2,
-};
-
-/** Bounded failure tracker. Caller allocates statically. */
+/**
+ * @brief Bounded per-signer consecutive-failure tracker (static storage).
+ */
 struct lichen_schc_failure_tracker {
 	uint16_t threshold;
-	uint16_t capacity;
-	uint16_t entry_count;
-	struct lichen_schc_ft_entry entries[LICHEN_SCHC_FT_MAX_SOURCES];
+	struct lichen_schc_failure_entry entries[LICHEN_SCHC_TRACKER_MAX_SOURCES];
 	uint64_t capacity_events;
 };
 
 /**
- * Initialize the tracker. threshold must be >= 1, capacity must be
- * >= 1 and <= LICHEN_SCHC_FT_MAX_SOURCES.
- * @return 0 on success, -EINVAL on invalid args.
+ * @brief Construct a bounded tracker (zero threshold is invalid).
  */
-int lichen_schc_failure_tracker_init(struct lichen_schc_failure_tracker *t,
-				     uint16_t threshold, uint16_t capacity);
+void lichen_schc_failure_tracker_init(struct lichen_schc_failure_tracker *t,
+				      uint16_t threshold);
 
 /**
- * Record one decompression failure for the given signer.
- * @return LICHEN_SCHC_FT_NOTIFY when the threshold is crossed for the
- * first time in this consecutive run, LICHEN_SCHC_FT_OK when recorded
- * below threshold, LICHEN_SCHC_FT_FULL when the tracker is full (the
- * existing runs are preserved; capacity_events is incremented).
+ * @brief Record one failure for @p pubkey and report a newly crossed
+ *        threshold.
+ * @return true exactly once per consecutive run at the threshold;
+ *         false otherwise, or when the table is full and the signer is
+ *         untracked (fail closed, no eviction; capacity_events increments).
  */
-enum lichen_schc_ft_result
-lichen_schc_failure_tracker_record_failure(struct lichen_schc_failure_tracker *t,
-					   const uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN]);
+bool lichen_schc_failure_record(struct lichen_schc_failure_tracker *t,
+				const uint8_t pubkey[LICHEN_SCHC_TRACKER_KEY_LEN]);
 
-/**
- * Clear the consecutive-failure run for a signer after a successful
- * decompression. No-op when the signer has no active run.
- */
-void lichen_schc_failure_tracker_record_success(
-	struct lichen_schc_failure_tracker *t,
-	const uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN]);
+/** Clear the signer's consecutive-failure run after success. */
+void lichen_schc_failure_clear(struct lichen_schc_failure_tracker *t,
+			       const uint8_t pubkey[LICHEN_SCHC_TRACKER_KEY_LEN]);
 
-/**
- * Retire tracking state when the owning link retires/evicts this signer.
- * Same as record_success but explicit for link lifetime events.
- */
-void lichen_schc_failure_tracker_retire(
-	struct lichen_schc_failure_tracker *t,
-	const uint8_t source[LICHEN_SCHC_FT_SOURCE_LEN]);
-
-/** Number of failures that could not be assigned a bounded source slot. */
-uint64_t lichen_schc_failure_tracker_capacity_events(
+/** Count of failures that could not be assigned a bounded slot. */
+uint64_t lichen_schc_failure_capacity_events(
 	const struct lichen_schc_failure_tracker *t);
 
 #endif /* LICHEN_SCHC_FAILURE_TRACKER_H_ */
