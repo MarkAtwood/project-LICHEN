@@ -1526,7 +1526,8 @@ impl<R: Radio> SecureStack<R> {
             .payload(ciphertext.as_slice())
             .map_err(|_| SecureError::CoapEncode)?;
         let outer_len = builder.finish();
-        self.stack
+        let send_result = self
+            .stack
             .send_coap_raw_to(
                 route.source,
                 route.destination,
@@ -1535,8 +1536,15 @@ impl<R: Radio> SecureStack<R> {
                 route.source_route,
                 Priority::Normal,
             )
-            .await?;
+            .await;
+        // Drop the pending entry on BOTH paths (bead 6pjo): on success the
+        // response is emitted; on send failure the correlation is dead and
+        // must not serve a later byte-identical retry with the stale
+        // request-PIV/token (the client sees CorrelationMismatch). The
+        // client's retransmission re-enters via decrypt_request, which
+        // creates a fresh pending entry.
         self.pending_requests.remove(pending_index);
+        send_result?;
         Ok(())
     }
 
