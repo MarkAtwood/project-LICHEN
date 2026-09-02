@@ -544,10 +544,14 @@ int lichen_schc_compress(const uint8_t *packet, size_t pkt_len,
 	}
 
 	if (pkt_len < IPV6_HDR_LEN || ipv6_version(packet) != 6) {
-		/* Contract: compress accepts full IPv6 packets only, mirroring
-		 * Python compress_packet and Rust compress which reject
-		 * non-IPv6 input. Never emit Rule255 for non-IPv6 bytes: a
-		 * Rust/Python peer fatals on them at decode_rule255. */
+		/* Mixed-fleet parity (bead 7v5f): Python compress_packet and
+		 * Rust compress reject non-IPv6 input instead of emitting it
+		 * verbatim as Rule 255 — a Rule 255 frame that every peer's
+		 * decode_rule255 rejects is a delivery blackhole. The
+		 * rule-255 fallback in schc_compress() exists for valid IPv6
+		 * that no rule matches, never for arbitrary bytes. (Both
+		 * merge parents argued identically; the incoming comment is
+		 * kept as the fuller rationale.) */
 		return SCHC_ERR_INVALID_ARGUMENT;
 	}
 

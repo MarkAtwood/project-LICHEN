@@ -346,6 +346,31 @@ static int test_uncompressed_fallback(void)
 	return 1;
 }
 
+static int test_compress_rejects_non_ipv6(void)
+{
+	/* Mixed-fleet parity (bead 7v5f): Python/Rust compress reject
+	 * non-IPv6 input instead of emitting a Rule 255 frame their own
+	 * decoders reject. */
+	uint8_t garbage[4] = { 0xde, 0xad, 0xbe, 0xef };
+	uint8_t v4_shaped[45] = { 0x45 }; /* version nibble 4 */
+	uint8_t out[300];
+	int ret;
+
+	ret = lichen_schc_compress(garbage, sizeof(garbage), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for short garbage (got %d)\n",
+		       ret);
+		return 0;
+	}
+	ret = lichen_schc_compress(v4_shaped, sizeof(v4_shaped), out, sizeof(out));
+	if (ret != SCHC_ERR_INVALID_ARGUMENT) {
+		printf("  FAIL: expected SCHC_ERR_INVALID_ARGUMENT for version-4 input (got %d)\n",
+		       ret);
+		return 0;
+	}
+	return 1;
+}
+
 static int test_rule255_rejects_non_ipv6(void)
 {
 	/* The old behavior copied any payload verbatim; a non-IPv6 payload is
@@ -791,6 +816,7 @@ int main(void)
 	RUN_TEST(test_reject_non_ipv6_input);
 	RUN_TEST(test_validator_direct_call_self_defense);
 	RUN_TEST(test_uncompressed_fallback);
+	RUN_TEST(test_compress_rejects_non_ipv6);
 	RUN_TEST(test_rule255_rejects_non_ipv6);
 	RUN_TEST(test_rule255_rejects_fragment_header);
 	RUN_TEST(test_rule255_rh3_final_dst_checksum);
