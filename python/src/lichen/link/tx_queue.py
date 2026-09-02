@@ -135,7 +135,18 @@ class TxReservation:
             return
         self._result = success
         if self._future is not None and not self._future.done():
-            self._future.set_result(success)
+            future = self._future
+            try:
+                running = asyncio.get_running_loop()
+            except RuntimeError:
+                running = None
+            if running is future.get_loop():
+                future.set_result(success)
+            else:
+                # Off-loop caller (e.g. the persistence-failure thread):
+                # Future.set_result is not thread-safe; marshal the wake
+                # through the owning loop (bead rbiz).
+                future.get_loop().call_soon_threadsafe(future.set_result, success)
 
     def done(self) -> bool:
         """Return True if result has been set."""
@@ -200,6 +211,10 @@ class TxQueueStats:
 class TxQueue:
     """Priority TX queue with deadline expiry.
 
+    ``_loop`` is the event loop captured at the first reserve(); off-loop
+    callers (the persistence-failure handler) marshal future wakeups and
+    clears through it (bead rbiz).
+
     Reentrancy: expire_stale(), push() (which does list rebuild on
     preempt/expire), and pop() are not atomic. The list mutation +
     stats update sequence must not be interrupted (or protected by
@@ -217,6 +232,8 @@ class TxQueue:
     # EMA smoothing factor for avg_latency_ms (0.1 = 10% new, 90% old)
     # Why 0.1: Smooths over ~10 samples, responsive but not jumpy.
     _EMA_ALPHA = 0.1
+
+    _loop: asyncio.AbstractEventLoop | None = None
 
     def __init__(
         self,
@@ -491,6 +508,15 @@ class TxQueue:
         self._entries.clear()
         return count
 
+    def marshal_loop(self) -> asyncio.AbstractEventLoop | None:
+        """The loop captured at the last reserve(); None before any reserve.
+
+        Off-loop fail-closed paths marshal queue wakeups/clears through this
+        loop so Future.set_result and queue mutation are serialized with the
+        drain (bead rbiz).
+        """
+        return self._loop
+
     def reserve(self) -> TxQueueEntry | None:
         """Reserve the highest-priority packet for transmission.
 
@@ -499,6 +525,10 @@ class TxQueue:
         after CAD failure would assign a fresh deadline.
         Caller MUST call complete(entry, success) afterward.
         """
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass  # sync test caller; no loop-affine futures exist yet
         self.expire_stale()
         if not self._entries:
             return None
