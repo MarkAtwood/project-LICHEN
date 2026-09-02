@@ -34,6 +34,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/lora.h>
 
+#include <lichen/lora_compat.h>
+
 LOG_MODULE_DECLARE(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 
 /** Delay between re-arm attempts while the modem is owned by TX. */
@@ -90,7 +92,8 @@ static void rx_work_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(rx_work, rx_work_fn);
 
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr);
+			      uint16_t size, int16_t rssi, int8_t snr
+			      LORA_RECV_CB_EXTRA_ARGS);
 
 /**
  * @brief Arm the driver for the next asynchronous reception
@@ -136,7 +139,7 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret == 0) {
@@ -182,9 +185,11 @@ retry:
  * callable from error paths including ISRs) and leave the radio unarmed.
  */
 static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
-			      uint16_t size, int16_t rssi, int8_t snr)
+			      uint16_t size, int16_t rssi, int8_t snr
+			      LORA_RECV_CB_EXTRA_ARGS)
 {
 	ARG_UNUSED(dev);
+	LORA_RECV_CB_UNUSED;
 
 	if (!atomic_get(&rx_enabled)) {
 		/* Stop raced the delivery; the packet is dropped, which is
@@ -243,7 +248,9 @@ static void rx_work_fn(struct k_work *work)
 		 * this (see puck main.c). Bumped on actual deliveries and
 		 * successful arms only - NOT on retry attempts, which would
 		 * keep the heartbeat fresh while the radio path is dead.
-		 */
+		 * NOTE (bead cdoj): while armed-and-idle nothing bumps this -
+		 * the app's main-loop watchdog feed is the only protection in
+		 * that state; a wedge of the armed radio shows up there. */
 		lichen_radio_progress();
 
 		/*
@@ -307,7 +314,7 @@ int lora_l2_rx_start(void)
 		return -EBUSY;
 	}
 
-	ret = lora_recv_async(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret < 0) {
@@ -377,7 +384,7 @@ void lora_l2_rx_stop(void)
 	}
 
 	if (atomic_get(&rx_armed)) {
-		ret = lora_recv_async(dev, NULL);
+		ret = LORA_RECV_ASYNC(dev, NULL);
 		if (ret < 0) {
 			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
 		}

@@ -232,12 +232,17 @@ static void on_coap_response(void *user_data, int status, uint8_t code,
  * so a main-loop-granular watchdog needs a ~20 s timeout — slow recovery that
  * makes host monitoring painful (long USB drop-outs).
  *
- * Instead we track a "progress" heartbeat that the radio driver bumps from
- * inside its poll loops (via the weak lichen_radio_progress() hook it calls),
- * plus the main loop each iteration. A k_timer feeds the SoC watchdog only
- * while the heartbeat is fresh. Normal multi-second RX/TX waits keep bumping
- * the heartbeat so they don't trip it; a genuine stall stops the bumps and the
- * watchdog resets within a few seconds.
+ * Instead we track a "progress" heartbeat that the radio driver bumps on
+ * actual packet deliveries and successful RX arms (via the weak
+ * lichen_radio_progress() hook; async-RX contract since bead sb0b — there are
+ * no more poll loops), plus the main loop each iteration. A k_timer feeds the
+ * SoC watchdog only while the heartbeat is fresh. NOTE the armed-and-idle
+ * gap (bead cdoj): while the radio sits armed waiting for traffic, the hook
+ * is NOT bumped, so this main loop's feed is what keeps the watchdog alive —
+ * a genuine radio-path stall surfaces as a main-loop-visible wedge only if
+ * it blocks send()/arm() calls; silent armed-idle hangs are not caught. A
+ * genuine send/RX stall stops the bumps and the watchdog resets within a few
+ * seconds.
  *
  * The feeder runs from a k_timer (system-clock ISR), NOT a thread: under heavy
  * USB-CDC contention the CDC work queue can starve a cooperative feeder thread,
