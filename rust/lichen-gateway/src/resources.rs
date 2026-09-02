@@ -1304,15 +1304,6 @@ impl CoapResponse {
         }
     }
 
-    /// 4.03 Forbidden.
-    pub fn forbidden() -> Self {
-        Self {
-            code: 0x83, // 4.03 Forbidden
-            payload: Zeroizing::new(Vec::new()),
-            content_format: 0,
-        }
-    }
-
     /// 4.01 Unauthorized.
     pub fn unauthorized() -> Self {
         Self {
