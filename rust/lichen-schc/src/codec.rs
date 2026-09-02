@@ -848,8 +848,12 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     let icmp_seq = u16::from_be_bytes([icmp[6], icmp[7]]);
     let tail = &icmp[8..];
 
-    if out.is_empty() {
-        return Err(BufferTooSmall::new(1, 0).into());
+    // Preflight the complete result before touching caller-owned output:
+    // the residue is fixed-width (8 hop + 64+64 IID + 8 type + 16+16 seq
+    // = 176 bits = 22 bytes), so `needed` is exact here.
+    let needed = 1 + 22 + tail.len();
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[0] = RULE_ICMPV6_ECHO;
     let mut w = BitWriter::new(&mut out[1..]);
@@ -861,13 +865,8 @@ fn compress_icmpv6_echo(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcErro
     w.write(icmp_type as u128, 8)?;
     w.write(icmp_id as u128, 16)?;
     w.write(icmp_seq as u128, 16)?;
-
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), 22);
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -897,8 +896,12 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     let dodagid = u128::from_be_bytes(rpl[8..24].try_into().expect("DODAGID is 16 bytes"));
     let tail = &rpl[24..];
 
-    if out.is_empty() {
-        return Err(BufferTooSmall::new(1, 0).into());
+    // Preflight the complete result before touching caller-owned output:
+    // the residue is fixed-width (8 hop + 64+64 IID + 8 instance + 8 version
+    // + 16 rank + 8 gmop + 8 dtsn + 128 DODAGID = 312 bits = 39 bytes).
+    let needed = 1 + 39 + tail.len();
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[0] = RULE_RPL_DIO;
     let mut w = BitWriter::new(&mut out[1..]);
@@ -913,13 +916,8 @@ fn compress_rpl_dio(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(gmop as u128, 8)?;
     w.write(dtsn as u128, 8)?;
     w.write(dodagid, 128)?;
-
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), 39);
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -950,6 +948,13 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     if out.is_empty() {
         return Err(BufferTooSmall::new(1, 0).into());
     }
+    // Preflight the complete result before touching caller-owned output:
+    // the residue is fixed-width (8 hop + 64+64 IID + 8 instance + 8 KD/flags
+    // + 8 seq + 128 DODAGID = 288 bits = 36 bytes).
+    let needed = 1 + 36 + tail.len();
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
     out[0] = RULE_RPL_DAO;
     let mut w = BitWriter::new(&mut out[1..]);
     w.write(hop_limit as u128, 8)?;
@@ -961,13 +966,8 @@ fn compress_rpl_dao(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(kd_flags as u128, 8)?;
     w.write(seq as u128, 8)?;
     w.write(dodagid, 128)?;
-
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    debug_assert_eq!(w.byte_len(), 36);
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -1033,8 +1033,14 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
 
     let tail = &udp[8..]; // MQTT-SN payload after UDP header
 
-    if out.is_empty() {
-        return Err(BufferTooSmall::new(1, 0).into());
+    // Preflight the complete result before touching caller-owned output:
+    // residue is 8 hop + 1 mode + (64+64 IID | 128+128 addr) + 1 direction
+    // + 16 port = 154 bits (20 bytes) link-local or 282 bits (36 bytes) full.
+    let link_local = is_link_local_64(src) && is_link_local_64(dst);
+    let residue_bytes = if link_local { 20 } else { 36 };
+    let needed = 1 + residue_bytes + tail.len();
+    if needed > out.len() {
+        return Err(BufferTooSmall::new(needed, out.len()).into());
     }
     out[0] = RULE_MQTT_SN;
 
@@ -1042,7 +1048,7 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
     w.write(hop_limit as u128, 8)?;
 
     // Address compression: same logic as CoAP rules
-    if is_link_local_64(src) && is_link_local_64(dst) {
+    if link_local {
         let src_iid = u64::from_be_bytes(src[8..16].try_into().expect("IID is 8 bytes"));
         let dst_iid = u64::from_be_bytes(dst[8..16].try_into().expect("IID is 8 bytes"));
         w.write(0, 1)?; // Address mode: 0 = link-local
@@ -1055,17 +1061,12 @@ fn compress_mqtt_sn(packet: &[u8], out: &mut [u8]) -> Result<usize, SchcError> {
         w.write(src_int, 128)?;
         w.write(dst_int, 128)?;
     }
-
     // Direction bit and other port
     w.write(direction as u128, 1)?;
     w.write(other_port as u128, 16)?;
+    debug_assert_eq!(w.byte_len(), residue_bytes);
 
-    let residue_len = w.byte_len();
-    let tail_start = 1 + residue_len;
-    let needed = tail_start + tail.len();
-    if needed > out.len() {
-        return Err(BufferTooSmall::new(needed, out.len()).into());
-    }
+    let tail_start = 1 + w.byte_len();
     out[tail_start..needed].copy_from_slice(tail);
     Ok(needed)
 }
@@ -2599,6 +2600,41 @@ mod tests {
         let mut decomp_buf = [0u8; 256];
         let m = decompress(&comp_buf[..n], &mut decomp_buf).unwrap();
         assert_eq!(&decomp_buf[..m], packet);
+    }
+
+    #[test]
+    fn compress_error_leaves_output_untouched() {
+        // csdw: compress must be atomic on error - a caller that treats
+        // Err as "buffer untouched" must never observe partial bytes. The
+        // mqtt_sn rule writes out[0] and zero-fills the residue BEFORE the
+        // old late size check; the preflight makes Err leave `out` intact.
+        let src = hex("fe800000000000000000000000000001");
+        let dst = hex("fe800000000000000000000000000002");
+        // Link-local residue = 20 bytes, so a 1-byte rule + 20 + 100-byte
+        // tail needs 121 bytes; a 25-byte buffer is far too small.
+        let payload = vec![0x55u8; 100];
+        let packet = mqtt_packet(&src, &dst, PORT_MQTT_SN, 5000, &payload);
+        assert!(packet.len() >= 48);
+
+        let mut out = vec![0xa5u8; 25];
+        let result = compress_mqtt_sn(&packet, &mut out);
+        assert!(result.is_err(), "121-byte encode must not fit in 25 bytes");
+        assert!(
+            out.iter().all(|&b| b == 0xa5),
+            "out buffer must be untouched on Err"
+        );
+
+        // Global-address variant exercises the full-mode residue preflight.
+        let gsrc = hex("20010db8000000000000000000000001");
+        let gdst = hex("20010db8000000000000000000000002");
+        let gpacket = mqtt_packet(&gsrc, &gdst, PORT_MQTT_SN, 5000, &payload);
+        let mut gout = vec![0xa5u8; 25];
+        let gresult = compress_mqtt_sn(&gpacket, &mut gout);
+        assert!(gresult.is_err());
+        assert!(
+            gout.iter().all(|&b| b == 0xa5),
+            "out buffer must be untouched on Err (full mode)"
+        );
     }
 
     #[test]
