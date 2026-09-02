@@ -2098,6 +2098,11 @@ class LinkLayer:
         """Restore security state from persistence (SecurityStateRestorer protocol)."""
         self._restore_security_state(state)
 
+    async def _fail_closed_tx_clear(self) -> None:
+        """Clear the TX queue under the TX lock (off-loop persistence path)."""
+        async with self._tx_lock:
+            self.tx_queue.clear()
+
     def on_persistence_failure(self) -> None:
         """Handle terminal persistence failure (PersistenceFailureHandler protocol).
 
@@ -2125,7 +2130,19 @@ class LinkLayer:
             deadline.wait(1.0)
         with self._security_lock:
             self._exhausted = True
-            self.tx_queue.clear()
+            # rbiz: the clear must not race an in-flight drain (which holds
+            # _tx_lock across radio.transmit) nor call Future.set_result
+            # off-loop. Marshal through the captured loop: the clear task
+            # waits for the drain's lock, so in-flight frames complete first
+            # (no False-for-emitted-frame duplicates) and Future wakes happen
+            # on the loop.
+            marshal_loop = self.tx_queue.marshal_loop()
+            if marshal_loop is None:
+                self.tx_queue.clear()
+            else:
+                def _spawn_fail_closed_clear() -> None:
+                    asyncio.ensure_future(self._fail_closed_tx_clear())
+                marshal_loop.call_soon_threadsafe(_spawn_fail_closed_clear)
             self._verified_receipts.clear()
             self._authenticated_dio_issuances.clear()
             self._schc_session_manager.fail_closed()
