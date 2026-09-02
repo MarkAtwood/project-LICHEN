@@ -426,6 +426,16 @@ enum lichen_claim_result lichen_slot_coord_process_claim(
 		return LICHEN_CLAIM_REJECT_EXPIRED;
 	}
 
+	/* GCP-6.5 validation step 7a: bound how far into the future a gateway
+	 * can reserve slots (anti-squatting). 5 superframes default + 5 s
+	 * clock tolerance (bead eaws). */
+	if (claim->expiry >
+	    now_unix + CONFIG_LICHEN_SLOT_CLAIM_MAX_DURATION_SUPERFRAMES * 60U +
+		5U) {
+		LOG_DBG("Claim rejected: expiry too far");
+		return LICHEN_CLAIM_REJECT_EXPIRY_TOO_FAR;
+	}
+
 	/* GCP-6.5 validation step 8: claim_seq above cached high-water mark */
 	{
 		uint32_t cached_seq;
