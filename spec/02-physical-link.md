@@ -39,7 +39,7 @@ LoRa Chirp Spread Spectrum (CSS) as implemented by Semtech SX126x and SX127x.
 
 **Coordination Methods** (see CCP-9 in 02a-coordinated-capacity.md)
 
-- Hash-based (stateless): `data_ch = 1 + (hash(src_iid ^ dst_iid) mod (N_CHANNELS - 1))`
+- Hash-based (stateless): `SelectChannel(EUI64, Epoch, Density, NChannels)` per 02a-coordinated-capacity.md 2a.3.1 — density > 10 → CH0 (reserved control channel), otherwise `data_ch = 1 + (FNV1A32(EUI64 as BE bytes || Epoch as LE u32) mod (N_CHANNELS - 1))`, FNV-1a32 basis `0x811c9dc5`. Pinned by `test/vectors/ccp16.json`, `ccp_select_channel_endianness.json`, and `ccp_load_balancing.json` (all implementations MUST match exactly).
 - Rendezvous: Announce includes `rx_channel`; sender uses announced (TOFU pinning)
 - Gateway-assigned: DIO carries channel for load balancing (MRHOF variant)
 
@@ -79,7 +79,7 @@ Gateways **MUST** receive on all SF7-SF12 (multi-SF RX or CAD/round-robin scan).
 
 Cross-SF traffic adds one hop. New nodes **MAY** fallback to SF10 for direct P2P to SF10 peers.
 
-Independent oracle: `test/vectors/sf-assignment.json` verified against OpenSSL and reference Python impl.
+Independent oracle: `test/vectors/sf_assignment.json` verified against OpenSSL and reference Python impl.
 
 ### 3.5. Adaptive Spreading Factor (CCP-16)
 
