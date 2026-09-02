@@ -72,6 +72,18 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_SLOT_COORD
 zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_WAYPOINTS
   coap_waypoints.c
 )
+
+zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_CODEC
+  coap_codec.c
+)
+
+zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_BLOCKWISE
+  coap_blockwise.c
+)
+
+zephyr_library_sources_ifdef(CONFIG_LICHEN_PRESENCE
+  presence.c
+)
 zephyr_library_sources_ifdef(CONFIG_LICHEN_SLOT_CLAIM_REPLAY
   slot_claim_settings.c
 )
