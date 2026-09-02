@@ -1301,6 +1301,11 @@ async def test_time_generation_elevation_scheduled_awaitable_rejected_and_termin
 # accepts_time_generation post-check).
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["task", "future", "custom"])
+# Merge resolution: kept HEAD's peer-generation test signature, because the
+# shared body below this hunk exercises link.elevate_peer_generation and must
+# therefore target the peer-generation path. beads-worker-7's side additionally
+# defined an authenticated-DIO awaitable test (bead mgot) that duplicated the
+# already-present test_elevation_result_rejects_scheduled_awaitable above.
 async def test_peer_generation_scheduled_awaitable_rejected_and_terminated(
     kind: str,
 ) -> None:
