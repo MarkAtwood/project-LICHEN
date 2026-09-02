@@ -162,7 +162,17 @@ impl AnnounceTrustStore {
     }
 
     /// Open durable stores under `state_root` and `floor_root` (separate
-    /// roots so a rollback snapshot cannot silently rewind both sides).
+    /// roots so a single-root rollback or crash window cannot silently
+    /// rewind both sides).
+    ///
+    /// TOFU-inherent limit: a whole-volume snapshot restored from BEFORE an
+    /// IID's first accept rewinds BOTH roots at once. Both durable sides read
+    /// empty, so `load` returns `Ok(None)` and the next `accept` TOFU-pins
+    /// whatever key arrives.
+    /// This is the trust-on-first-use failure mode (the operator cannot
+    /// distinguish an attacked store from a fresh install); mitigations
+    /// beyond TOFU need out-of-band state (e.g. a monotonic generation
+    /// marker on separate media), which the node does not maintain.
     ///
     /// The number of durable state records already on disk is recounted at
     /// open so the new-pin capacity gate survives restarts (a cache-only
