@@ -23,6 +23,15 @@ menuconfig LICHEN_SCHC
 
 if LICHEN_SCHC
 
+config LICHEN_SCHC_FAILURE_NOTIFY_THRESHOLD
+	int "Consecutive SCHC decompression failures before failure notification"
+	default 3
+	range 1 65535
+	help
+	  Spec 03-adaptation.md 5.7: bounded consecutive-failure tracker keyed
+	  by the authenticated link signer. One notification per consecutive
+	  run when the count reaches this threshold.
+
 config LICHEN_SCHC_LOG_LEVEL
 	int "SCHC log level"
 	default 3
