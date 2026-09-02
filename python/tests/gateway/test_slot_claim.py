@@ -111,7 +111,7 @@ class TestSlotClaim:
                 superframe_id=-1,
                 expiry=int(time.time()) + 8,
                 claim_seq=0,
-                )
+            )
 
     def test_invalid_signature_length(self) -> None:
         with pytest.raises(ClaimError, match="signature must be 48 bytes"):
@@ -194,6 +194,7 @@ class TestEncodeClaimCanonical:
         )
         encoded = encode_claim_canonical(claim)
         import cbor2
+
         decoded = cbor2.loads(encoded)
         keys = list(decoded.keys())
         # Canonical CBOR emits integer keys in ascending order for small uints.
@@ -212,9 +213,7 @@ class TestSignAndVerify:
 
     @pytest.fixture
     def keypair(self) -> tuple[bytes, bytes]:
-        seed = bytes.fromhex(
-            "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe"
-        )
+        seed = bytes.fromhex("deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe")
         return schnorr48.derive_keypair(seed)
 
     def test_sign_and_verify(self, keypair: tuple[bytes, bytes]) -> None:
@@ -257,9 +256,7 @@ class TestSignAndVerify:
             slots=(0,),
             superframe_id=1,
             expiry=int(time.time()) + 8,
-
             claim_seq=0,
-
             signature=bytes(48),
         )
         is_valid, reason = verify_slot_claim(claim, pubkey)
@@ -319,9 +316,69 @@ class TestSignAndVerify:
         is_valid, reason = verify_slot_claim(newer, pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
-    def test_replay_cache_tracks_gateways_independently(
-        self, keypair: tuple[bytes, bytes]
-    ) -> None:
+    def test_replay_cache_caps_at_max_gateways(self, keypair: tuple[bytes, bytes]) -> None:
+        """Bead c5lz: the cache rejects GATEWAY_FULL (not REPLAY) for a NEW
+        gateway when at MAX_GATEWAYS; already-tracked gateways stay usable
+        (mirrors Rust slot.rs max_gateways/StateFull)."""
+        privkey, pubkey = keypair
+        cache = SlotClaimReplayCache()
+        expiry = int(time.time()) + 8
+
+        def claim_for(iid: str, superframe: int):
+            return sign_slot_claim(
+                SlotClaim(
+                    gateway_iid=iid,
+                    slots=(0,),
+                    superframe_id=superframe,
+                    expiry=expiry,
+                    claim_seq=0,
+                ),
+                privkey,
+                pubkey,
+            )
+
+        # Merged: HEAD binds each claim's IID to its signing key, so one
+        # keypair fills only one cache slot end-to-end (worker-7's loop of
+        # 256 arbitrary IIDs predates the identity binding). Track this
+        # keypair's IID through verify_slot_claim, then fill the remaining
+        # capacity via the cache's public API.
+        tracked_iid = _bound_iid(pubkey)
+        is_valid, reason = verify_slot_claim(claim_for(tracked_iid, 10), pubkey, cache)
+        assert is_valid and reason is None
+        for i in range(cache.MAX_GATEWAYS):
+            if len(cache._highwater) == cache.MAX_GATEWAYS:
+                break
+            iid = f"{i:016x}"
+            if iid == tracked_iid:
+                continue
+            ok, _ = cache.check_and_update(iid, 10)
+            assert ok
+        assert len(cache._highwater) == cache.MAX_GATEWAYS
+
+        # A NEW gateway at capacity -> STATE_FULL (not REPLAY). Signed by its
+        # own keypair so identity/signature checks pass and the capacity gate
+        # is what rejects it.
+        new_priv, new_pub = schnorr48.derive_keypair(bytes.fromhex("0123456789abcdef" * 4))
+        new_claim = sign_slot_claim(
+            SlotClaim(
+                gateway_iid=_bound_iid(new_pub),
+                slots=(0,),
+                superframe_id=10,
+                expiry=expiry,
+                claim_seq=0,
+            ),
+            new_priv,
+            new_pub,
+        )
+        is_valid, reason = verify_slot_claim(new_claim, new_pub, cache)
+        assert not is_valid
+        assert reason == ClaimRejectReason.STATE_FULL
+
+        # An ALREADY-TRACKED gateway still advances at capacity.
+        is_valid, reason = verify_slot_claim(claim_for(tracked_iid, 11), pubkey, cache)
+        assert is_valid and reason is None
+
+    def test_replay_cache_tracks_gateways_independently(self, keypair: tuple[bytes, bytes]) -> None:
         privkey, pubkey = keypair
         cache = SlotClaimReplayCache()
 
@@ -357,9 +414,7 @@ class TestSignAndVerify:
         is_valid, reason = verify_slot_claim(other, other_pub, replay_cache=cache)
         assert is_valid and reason is None
 
-    def test_replay_cache_unchanged_without_cache_arg(
-        self, keypair: tuple[bytes, bytes]
-    ) -> None:
+    def test_replay_cache_unchanged_without_cache_arg(self, keypair: tuple[bytes, bytes]) -> None:
         """Back-compat: verify_slot_claim without a cache performs no
         replay tracking (existing callers unaffected)."""
         privkey, pubkey = keypair
@@ -484,9 +539,7 @@ class TestResolveSlotConflict:
             slots=(5, 6),
             superframe_id=100,
             expiry=int(time.time()) + 8,
-
             claim_seq=0,
-
             signature=bytes(48),  # Invalid zero signature
         )
 
@@ -549,9 +602,7 @@ class TestResolveSlotConflict:
             slots=(5, 6),
             superframe_id=100,
             expiry=int(time.time()) + 8,
-
             claim_seq=0,
-
             signature=bytes(48),
         )
         claim_b = SlotClaim(
@@ -559,9 +610,7 @@ class TestResolveSlotConflict:
             slots=(5, 6),
             superframe_id=100,
             expiry=int(time.time()) + 8,
-
             claim_seq=0,
-
             signature=bytes(48),
         )
         with pytest.raises(ClaimError, match="both claims have invalid signatures"):
@@ -681,9 +730,7 @@ class TestSlotClaimVectors:
                 expected = v["expected"]
 
                 result = validate_interleaved_pattern(slots, ordinal, gateway_count)
-                assert result == expected["valid"], (
-                    f"Pattern validation failed for {v['name']}"
-                )
+                assert result == expected["valid"], f"Pattern validation failed for {v['name']}"
                 break
 
     def test_conflict_resolution_vector(self, vectors: list[dict]) -> None:
@@ -729,9 +776,7 @@ class TestSlotClaimVectors:
                     pub_b,
                 )
 
-                winner, _ = resolve_slot_conflict(
-                    claim_a, claim_b, pubkey_a=pub_a, pubkey_b=pub_b
-                )
+                winner, _ = resolve_slot_conflict(claim_a, claim_b, pubkey_a=pub_a, pubkey_b=pub_b)
                 expected_winner = v["expected"]["winner"]
 
                 # Vector's "lowest IID wins" semantic: with key-derived
@@ -741,8 +786,10 @@ class TestSlotClaimVectors:
                     (claim_b.gateway_iid, "claim_b"),
                 )[1]
                 assert expected_winner == "claim_a", (
-                    "vector assumed claim_a wins; lowest-IID semantic moved it"
-                ) if winner_expected == "claim_b" else None
+                    ("vector assumed claim_a wins; lowest-IID semantic moved it")
+                    if winner_expected == "claim_b"
+                    else None
+                )
                 assert winner.gateway_iid == (
                     claim_a.gateway_iid if winner_expected == "claim_a" else claim_b.gateway_iid
                 )
@@ -785,9 +832,7 @@ class TestSlotClaimVectors:
                     slots=tuple(v["claim"]["slots"]),
                     superframe_id=1,
                     expiry=int(time.time()) + 8,
-
                     claim_seq=0,
-
                     signature=sig,
                 )
                 # Use a dummy pubkey for verification
@@ -798,9 +843,9 @@ class TestSlotClaimVectors:
                 is_valid, reason = verify_slot_claim(claim, dummy_pubkey)
                 assert not is_valid
                 assert reason in (
-            ClaimRejectReason.IDENTITY_MISMATCH,
-            ClaimRejectReason.INVALID_SIGNATURE,
-        )
+                    ClaimRejectReason.IDENTITY_MISMATCH,
+                    ClaimRejectReason.INVALID_SIGNATURE,
+                )
                 break
 
 
@@ -809,18 +854,14 @@ class TestClaimExpiryHorizon:
 
     @pytest.fixture
     def keypair(self) -> tuple[bytes, bytes]:
-        seed = bytes.fromhex(
-            "feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface"
-        )
+        seed = bytes.fromhex("feedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface")
         return schnorr48.derive_keypair(seed)
 
     @pytest.fixture
     def pubkey(self, keypair: tuple[bytes, bytes]) -> bytes:
         return keypair[1]
 
-    def _signed(
-        self, privkey: bytes, pubkey: bytes, timestamp: int | None
-    ) -> SlotClaim:
+    def _signed(self, privkey: bytes, pubkey: bytes, timestamp: int | None) -> SlotClaim:
         claim = SlotClaim(
             gateway_iid=_pubkey_to_iid(pubkey).hex(),
             slots=(3, 4),
@@ -863,14 +904,10 @@ class TestClaimExpiryHorizon:
         assert is_valid
         assert reason is None
 
-    def test_invalid_signature_reported_before_horizon(
-        self, keypair: tuple[bytes, bytes]
-    ) -> None:
+    def test_invalid_signature_reported_before_horizon(self, keypair: tuple[bytes, bytes]) -> None:
         privkey, _ = keypair
         _, other_pubkey = schnorr48.derive_keypair(
-            bytes.fromhex(
-                "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-            )
+            bytes.fromhex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
         )
         now = 1_900_000_000.0
         horizon = slot_claim.MAX_CLAIM_DURATION_SEC
@@ -882,24 +919,19 @@ class TestClaimExpiryHorizon:
         assert reason is slot_claim.ClaimRejectReason.IDENTITY_MISMATCH
 
 
-
 class TestStaleClaimBound:
     """GCP-6.3 step 7 analogue: reject already-expired (stale) claims."""
 
     @pytest.fixture
     def keypair(self) -> tuple[bytes, bytes]:
-        seed = bytes.fromhex(
-            "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00"
-        )
+        seed = bytes.fromhex("c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00")
         return schnorr48.derive_keypair(seed)
 
     @pytest.fixture
     def pubkey(self, keypair: tuple[bytes, bytes]) -> bytes:
         return keypair[1]
 
-    def _signed(
-        self, privkey: bytes, pubkey: bytes, timestamp: int | None
-    ) -> SlotClaim:
+    def _signed(self, privkey: bytes, pubkey: bytes, timestamp: int | None) -> SlotClaim:
         claim = SlotClaim(
             gateway_iid=_pubkey_to_iid(pubkey).hex(),
             slots=(5, 6),
@@ -909,9 +941,7 @@ class TestStaleClaimBound:
         )
         return sign_slot_claim(claim, privkey, pubkey)
 
-    def test_fresh_timestamp_accepted(
-        self, keypair: tuple[bytes, bytes], pubkey: bytes
-    ) -> None:
+    def test_fresh_timestamp_accepted(self, keypair: tuple[bytes, bytes], pubkey: bytes) -> None:
         privkey, _ = keypair
         now = 1_900_000_000.0
         signed = self._signed(privkey, pubkey, int(now))
@@ -919,9 +949,7 @@ class TestStaleClaimBound:
         assert is_valid
         assert reason is None
 
-    def test_stale_timestamp_rejected(
-        self, keypair: tuple[bytes, bytes], pubkey: bytes
-    ) -> None:
+    def test_stale_timestamp_rejected(self, keypair: tuple[bytes, bytes], pubkey: bytes) -> None:
         privkey, _ = keypair
         now = 1_900_000_000.0
         tolerance = slot_claim.STALE_CLAIM_TOLERANCE_SEC
