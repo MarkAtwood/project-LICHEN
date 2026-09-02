@@ -167,6 +167,9 @@ pub struct Router {
     pub(crate) trickle: TrickleTimer,
     pub(crate) dao_manager: DaoManager,
     pub(crate) neighbors: NeighborTable,
+    /// Per-source DIO admission rate log (spec/05 8.4.5: 30 msg/min/source
+    /// IID MUST). Ring of (source_iid, timestamp_ms) arrivals.
+    pub(crate) dio_rate_log: heapless::Vec<([u8; 8], u64), 64>,
     pub(crate) dodag_id: [u8; 16],
     pub(crate) dodag_config: DodagConfig,
     pub(crate) last_now_ms: u64,
@@ -200,6 +203,7 @@ impl Router {
                 Ipv6Addr::from(dodag_id),
             ),
             neighbors: NeighborTable::new(),
+            dio_rate_log: heapless::Vec::new(),
             dodag_id,
             dodag_config,
             last_now_ms: 0,
@@ -242,6 +246,7 @@ impl Router {
             trickle,
             dao_manager,
             neighbors: NeighborTable::new(),
+            dio_rate_log: heapless::Vec::new(),
             dodag_id,
             dodag_config,
             last_now_ms: 0,
@@ -339,6 +344,35 @@ impl Router {
             .is_inconsistent()
     }
 
+    /// DIO admission rate limit (spec/05 8.4.5 MUST: 30 msg/min/source IID).
+    /// Returns false (reject) when the source already has 30 arrivals in the
+    /// trailing 60 s window. Ring log pruned lazily on each call.
+    fn dio_rate_limited(&mut self, sender_addr: [u8; 8], now_ms: u64) -> bool {
+        const WINDOW_MS: u64 = 60_000;
+        const PER_SOURCE_MAX: usize = 30;
+        // Lazy prune of stale entries.
+        self.dio_rate_log
+            .retain(|(source, at)| now_ms.wrapping_sub(*at) < WINDOW_MS);
+        let arrivals = self
+            .dio_rate_log
+            .iter()
+            .filter(|(source, _)| *source == sender_addr)
+            .count();
+        if arrivals >= PER_SOURCE_MAX {
+            return true;
+        }
+        if self.dio_rate_log.push((sender_addr, now_ms)).is_err() {
+            // Log full: evict the oldest (front) — the ring is pruned above
+            // so this only occurs if >64 distinct sources arrived within one
+            // window; evicting the front keeps the gate conservative.
+            self.dio_rate_log.remove(0);
+            self.dio_rate_log
+                .push((sender_addr, now_ms))
+                .expect("capacity 1 after evict");
+        }
+        false
+    }
+
     /// Production DIO admission from live link-authenticated evidence.
     pub fn process_authenticated_dio(
         &mut self,
@@ -349,6 +383,9 @@ impl Router {
         now_ms: u64,
     ) -> DioProcessOutcome {
         let signer_iid = frame.sender().iid;
+        if self.dio_rate_limited(signer_iid, now_ms) {
+            return DioProcessOutcome::Rejected;
+        }
         let expected_role =
             if lichen_core::addr::ygg_addr_from_pubkey(frame.sender().pubkey.as_bytes())
                 == self.dodag_id
@@ -1195,4 +1232,27 @@ pub(crate) fn dao_parents_for_source(
 #[cfg(test)]
 fn same_interface(a: &[u8; 16], b: &[u8; 16]) -> bool {
     a[8..] == b[8..]
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dio_ingress_rate_limited_per_source() {
+        let mut router = Router::new(
+            [0xfd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [0xfd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        );
+        let sender = [0x09u8; 8];
+        for i in 0..30u64 {
+            assert!(
+                !router.dio_rate_limited(sender, 1000 + i),
+                "arrival {i} must not be rate limited"
+            );
+        }
+        assert!(router.dio_rate_limited(sender, 1060), "31st must reject");
+        let other = [0x0au8; 8];
+        assert!(!router.dio_rate_limited(other, 1061));
+        assert!(!router.dio_rate_limited(sender, 1000 + 60_001));
+    }
 }
