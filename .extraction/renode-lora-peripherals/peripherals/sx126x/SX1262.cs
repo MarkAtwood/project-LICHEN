@@ -667,6 +667,26 @@ namespace Antmicro.Renode.Peripherals.Wireless
             }
         }
 
+        // Reader-thread-initiated teardown of its own connection. Unlike
+        // Disconnect(), this refuses to tear down a newer connection: if
+        // EnsureConnected() reconnected while this reader was blocked, the
+        // stream identity check leaves the fresh connection alone.
+        private void TeardownReaderConnection(TcpClient readerSocket,
+                                               NetworkStream readerStream)
+        {
+            lock (connectionLock)
+            {
+                if (!ReferenceEquals(stream, readerStream))
+                {
+                    return;
+                }
+                readerThread = null;
+                stream = null;
+                socket = null;
+                readerSocket.Close();
+            }
+        }
+
         // Start the background reader for the current connection. Reads block
         // (ReceiveTimeout = 0); Disconnect() closes the socket to break out.
         private void StartReader(TcpClient readerSocket, NetworkStream readerStream)
@@ -706,7 +726,15 @@ namespace Antmicro.Renode.Peripherals.Wireless
 
                 if (resp == null)
                 {
-                    break; // peer closed
+                    // Peer closed or protocol fault (oversize length prefix).
+                    // Tear the connection down so EnsureConnected() sees a
+                    // dead socket and reconnects with a fresh reader: leaving
+                    // the socket open here permanently deafens the node, since
+                    // socket.Connected stays true and no reader is running.
+                    this.Log(LogLevel.Warning,
+                             "reader: stream ended (peer close or protocol fault), dropping connection");
+                    TeardownReaderConnection(readerSocket, readerStream);
+                    break;
                 }
                 if (resp.Length < 1)
                 {
@@ -785,7 +813,7 @@ namespace Antmicro.Renode.Peripherals.Wireless
             }
         }
 
-        private static byte[] ReadMessage(NetworkStream readerStream)
+        private byte[] ReadMessage(NetworkStream readerStream)
         {
             var lenBuf = new byte[4];
             int read = 0;
@@ -798,7 +826,15 @@ namespace Antmicro.Renode.Peripherals.Wireless
 
             int len = (int)ReadLE32(lenBuf, 0);
             if (len == 0) return new byte[0];
-            if (len > 1024) return null;
+            if (len > 1024)
+            {
+                // Protocol fault: a corrupted length prefix. Log it so the
+                // fault is visible, then report null; the reader loop tears
+                // the connection down and EnsureConnected() reconnects.
+                this.Log(LogLevel.Error,
+                         "reader: oversize length prefix {0} > 1024, protocol fault", len);
+                return null;
+            }
 
             var data = new byte[len];
             read = 0;
