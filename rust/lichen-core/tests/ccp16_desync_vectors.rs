@@ -7,7 +7,6 @@
 //! and Python (test_ccp_sync_vector_consumers) suites consume the same
 //! file (two-suite+ contract).
 
-use serde_json::Value;
 
 use lichen_core::desync::{DesyncFSM, DesyncState};
 
