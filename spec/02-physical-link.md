@@ -39,7 +39,7 @@ LoRa Chirp Spread Spectrum (CSS) as implemented by Semtech SX126x and SX127x.
 
 **Coordination Methods** (see CCP-9 in 02a-coordinated-capacity.md)
 
-- Hash-based (stateless): `data_ch = 1 + (FNV1A32(EUI64_BE || epoch_LE_u32) mod (N_CHANNELS - 1))`; density > 10 → CH0
+- Hash-based (stateless): `SelectChannel(EUI64, Epoch, Density, NChannels)` per 02a-coordinated-capacity.md 2a.3.1 — density > 10 → CH0 (reserved control channel), otherwise `data_ch = 1 + (FNV1A32(EUI64 as BE bytes || Epoch as LE u32) mod (N_CHANNELS - 1))`, FNV-1a32 basis `0x811c9dc5`. Pinned by `test/vectors/ccp16.json`, `ccp_select_channel_endianness.json`, and `ccp_load_balancing.json` (all implementations MUST match exactly).
 - Rendezvous: Announce includes `rx_channel`; sender uses announced (TOFU pinning)
 - Gateway-assigned: DIO carries channel for load balancing (MRHOF variant)
 
