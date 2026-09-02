@@ -155,9 +155,9 @@ uint8_t lichen_rpl_sf_tracker_assign(struct lichen_rpl_sf_tracker *t,
 int lichen_rpl_dio_validate_assigned_sf(const uint8_t *option)
 {
 	if (option == NULL) {
-		return -LICHEN_RPL_ERR_BAD_OPT;
+		return LICHEN_RPL_ERR_BAD_OPT;
 	}
 	return lichen_rpl_sf_assignment_parse(option, 3) != 0
 		       ? 0
-		       : -LICHEN_RPL_ERR_BAD_OPT;
+		       : LICHEN_RPL_ERR_BAD_OPT;
 }

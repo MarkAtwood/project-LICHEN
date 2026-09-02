@@ -70,6 +70,14 @@ extern "C" {
 #define LICHEN_RPL_OPT_ASSIGNED_SF 0x14  /**< ASSIGNED_SF Option (spec 02 3.4, R-02-008) */
 #define LICHEN_RPL_ASSIGNED_SF_DATA_LEN 1  /**< 1 byte: spreading factor */
 
+/* RF-metrics Option (spec 02 3.4/3.5 R-02-027, CCP-16): provisional
+ * project-local option type 0x16; mirrors the 0x14/0x15 provisional
+ * numbering. 4-byte data: ema_snr i8 dB (alpha=1/4, rust
+ * RfHealthMetrics::snr parity) | loss_pct u8 0-100 | density u8
+ * 0-255 (estimate_density output) | utilization u8 0-255 (255=100%). */
+#define LICHEN_RPL_OPT_RF_METRICS 0x16
+#define LICHEN_RPL_RF_METRICS_DATA_LEN 4
+
 /**
  * @brief Write an ASSIGNED_SF DIO option (3-byte TLV: type, len, sf).
  * @param[in] sf    Assigned spreading factor (7-12)
@@ -78,6 +86,35 @@ extern "C" {
  * @return Written length (3) on success, negative on error
  */
 int lichen_rpl_assigned_sf_write(uint8_t sf, uint8_t *buf, size_t len);
+
+/**
+ * @brief Write an RF-metrics DIO option (6-byte TLV: type, len, 4 data
+ *        bytes; spec 02 3.4/3.5 R-02-027, CCP-16).
+ * @param[in] ema_snr      EMA SNR in dB (alpha=1/4), -128..127
+ * @param[in] loss_pct     Packet loss rate percent 0-100
+ * @param[in] density      Effective density estimate 0-255
+ * @param[in] utilization  Channel utilization 0-255 (255 = 100%)
+ * @param[out] buf Output buffer (>= 6 bytes)
+ * @param[in] len  Buffer capacity
+ * @return Written length (6) on success, negative on error
+ */
+int lichen_rpl_rf_metrics_write(int8_t ema_snr, uint8_t loss_pct,
+				uint8_t density, uint8_t utilization,
+				uint8_t *buf, size_t len);
+
+/**
+ * @brief Parse an RF-metrics DIO option TLV ([0x16, 4, snr, loss, dens, util]).
+ * @param[in] option Points at the option type byte (>= 6 bytes valid)
+ * @param[out] ema_snr Receives the EMA SNR
+ * @param[out] loss_pct Receives the loss percent
+ * @param[out] density Receives the density
+ * @param[out] utilization Receives the utilization
+ * @return 0 on success, LICHEN_RPL_ERR_BAD_OPT (negative) when the TLV
+ *         does not match the option contract (type, length).
+ */
+int lichen_rpl_rf_metrics_parse(const uint8_t *option, int8_t *ema_snr,
+				uint8_t *loss_pct, uint8_t *density,
+				uint8_t *utilization);
 
 /* DIO Time Option stratum bounds (python Stratum / rust Stratum) */
 #define LICHEN_RPL_STRATUM_NO_SYNC   0U
