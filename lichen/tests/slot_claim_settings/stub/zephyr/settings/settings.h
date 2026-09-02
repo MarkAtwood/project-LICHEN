@@ -18,6 +18,7 @@ extern test_settings_set_handler_t test_settings_set_handler;
 int settings_subsys_init(void);
 int settings_load_subtree(const char *subtree);
 int settings_save_one(const char *name, const void *value, size_t len);
+int settings_delete(const char *name);
 bool settings_name_steq(const char *name, const char *key, const char **next);
 
 #endif
