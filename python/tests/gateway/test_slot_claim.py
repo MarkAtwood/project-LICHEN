@@ -15,12 +15,13 @@ from pathlib import Path
 import pytest
 
 from lichen.crypto import schnorr48
-from lichen.crypto.identity import _pubkey_to_iid
+from lichen.crypto.identity import Identity, _pubkey_to_iid
 from lichen.gateway import slot_claim
 from lichen.gateway.slot_claim import (
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
+    SlotClaimRateLimiter,
     SlotClaimReplayCache,
     compute_contiguous_slots,
     compute_interleaved_slots,
@@ -940,3 +941,60 @@ class TestStaleClaimBound:
         is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
         assert is_valid
         assert reason is None
+
+
+class TestSlotClaimRateLimiter:
+    """GCP-6.5 rate limiting (l1qw.22): 10/min/peer + 60/min/global, silent drop."""
+
+    def test_per_peer_limit_enforced(self) -> None:
+        limiter = SlotClaimRateLimiter()
+        iid = "0200::1111"
+        now = 1716742800.0
+        for i in range(10):
+            assert limiter.allow(iid, now + i)
+        assert not limiter.allow(iid, now + 10)
+
+    def test_per_peer_window_resets(self) -> None:
+        limiter = SlotClaimRateLimiter()
+        iid = "0200::1111"
+        now = 1716742800.0
+        for i in range(10):
+            assert limiter.allow(iid, now + i)
+        assert not limiter.allow(iid, now + 10)
+        assert limiter.allow(iid, now + 61)
+
+    def test_global_limit_across_peers(self) -> None:
+        limiter = SlotClaimRateLimiter()
+        for peer in range(10):
+            iid = f"0200::{peer:04x}"
+            for _ in range(6):
+                assert limiter.allow(iid, 1716742800.0)
+        assert not limiter.allow("0200::ffff", 1716742800.0)
+
+    def test_distinct_peers_independent(self) -> None:
+        limiter = SlotClaimRateLimiter()
+        assert limiter.allow("0200::0001", 1716742800.0)
+        assert limiter.allow("0200::0002", 1716742800.0)
+
+    def test_verify_slot_claim_rate_gate(self) -> None:
+        limiter = SlotClaimRateLimiter()
+        now = 1716746790.0
+        identity = Identity.from_seed(bytes([7]) * 32)
+        claim = SlotClaim(
+            gateway_iid=identity.iid.hex(),
+            slots=(1, 2, 3),
+            superframe_id=7,
+            expiry=1716746800,
+            claim_seq=1,
+        )
+        signed = sign_slot_claim(claim, identity.privkey, identity.pubkey)
+        for i in range(10):
+            ok, _ = verify_slot_claim(
+                signed, identity.pubkey, now_unix=now + i, rate_limiter=limiter
+            )
+            assert ok, f"claim {i} within limit must pass"
+        ok, reason = verify_slot_claim(
+            signed, identity.pubkey, now_unix=now + 10, rate_limiter=limiter
+        )
+        assert not ok
+        assert reason == ClaimRejectReason.RATE_LIMITED
