@@ -61,6 +61,21 @@ int settings_load_subtree(const char *subtree)
 	return 0;
 }
 
+int settings_delete(const char *name)
+{
+	if (save_error != 0) {
+		return save_error;
+	}
+	for (size_t i = 0; i < store_count; i++) {
+		if (strcmp(store[i].name, name) == 0) {
+			store[i] = store[store_count - 1];
+			store_count--;
+			return 0;
+		}
+	}
+	return -ENOENT;
+}
+
 int settings_save_one(const char *name, const void *value, size_t len)
 {
 	if (save_error != 0) {

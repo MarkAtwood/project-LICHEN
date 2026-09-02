@@ -36,6 +36,12 @@ extern "C" {
 #define CONFIG_LICHEN_SLOT_COORD_MAX_GATEWAYS 8
 #endif
 
+/** Maximum claim_seq high-water entries (spec/08 GCP-6.5: MUST bound the
+ *  claim_seq cache to 64 entries, LRU-evicting by last claim timestamp) */
+#ifndef CONFIG_LICHEN_SLOT_CLAIM_SEQ_CACHE_MAX
+#define CONFIG_LICHEN_SLOT_CLAIM_SEQ_CACHE_MAX 64
+#endif
+
 /** Maximum slots per superframe */
 #ifndef CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS
 #define CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS 60
