@@ -1372,6 +1372,7 @@ pub struct GatewayCoordinator {
     /// Peer slot claims (for conflict detection).
     peer_claims: Vec<slot::VerifiedSlotClaim>,
     slot_verifier: slot::SlotClaimVerifier,
+    slot_rate_limiter: slot::SlotClaimRateLimiter,
     slots_per_superframe: u32,
     replay_persistence: Option<SlotReplayPersistence>,
 }
@@ -1958,6 +1959,7 @@ impl GatewayCoordinator {
             capability_table: crate::capability::CapabilityTable::new(),
             peer_claims: Vec::new(),
             slot_verifier: verifier,
+            slot_rate_limiter: slot::SlotClaimRateLimiter::new(),
             slots_per_superframe,
             replay_persistence,
         })
@@ -2117,6 +2119,19 @@ impl GatewayCoordinator {
             // GCP-6.3: invalid-signature claims are silently discarded.
             Err(_) => return CoapResponse::empty_success(),
         };
+        // GCP-6.5 rate limiting (spec/08:281): at most 10 claims/min per
+        // peer IID and 60/min globally; exceeding claims MUST be silently
+        // dropped (same indistinguishable empty 2.04 as signature failures).
+        // Monotonic wall-clock ms for the sliding windows (same pattern as
+        // handle_post_capability_announce's expiry check).
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_millis() as u64)
+            .unwrap_or(0);
+        let peer_iid = lichen_core::addr::iid_from_pubkey_bytes(peer_pubkey);
+        if !self.slot_rate_limiter.allow(peer_iid, now_ms) {
+            return CoapResponse::empty_success();
+        }
         let mut candidate_verifier = self.slot_verifier.clone();
         let claim = match candidate_verifier.verify(raw_claim, peer_pubkey, current_superframe) {
             Ok(claim) => claim,
