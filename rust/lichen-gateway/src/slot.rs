@@ -373,10 +373,10 @@ pub enum ConflictResolution {
 
 /// An untrusted, signed slot claim received from the wire.
 ///
-/// Claims arrive in one of two signature forms (see [`ClaimSigForm`]): the
-/// legacy domain transcript (pre-COSE, slated for removal once all consumers
-/// flip in l1qw.16.2.2) or the spec GCP-6.5 COSE_Sign1 envelope decoded by
-/// [`RawSlotClaim::from_cose`].
+/// Claims arrive in one of two signature forms (the private `ClaimSigForm`
+/// selects between them): the legacy domain transcript (pre-COSE, slated for
+/// removal once all consumers flip in l1qw.16.2.2) or the spec GCP-6.5
+/// COSE_Sign1 envelope decoded by [`RawSlotClaim::from_cose`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawSlotClaim {
     gateway_iid: Iid,
