@@ -45,12 +45,15 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import struct
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import nacl.bindings as bindings
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
 # Old key remains valid this long after a rekey (spec 18.8.5 grace window).
 GRACE_PERIOD_S = 3600
@@ -431,3 +434,101 @@ __all__ = [
     "pairwise_unwrap",
     "pairwise_wrap",
 ]
+
+
+# -- group payload AEAD (spec 12-apps.md 18.2.4, bead l1qw.35.1) -------------
+
+# AES-CCM-16-64-128 per spec 18.8.2 group key (matches edhoc.py suite 0).
+_PAYLOAD_CCM_KEY_LEN = 16
+_PAYLOAD_CCM_NONCE_LEN = 13
+_PAYLOAD_CCM_TAG_LEN = 8
+
+# Payload nonces are random per message (transmitted alongside the
+# ciphertext, so receivers need no derivation). Random nonces are safe under
+# CCM's birthday bound for the message volumes a LICHEN group sees, and the
+# transmitted nonce is bound to the ciphertext by the AEAD tag.
+
+
+def seal_group_payload(
+    manager: GroupKeyManager,
+    plaintext: bytes,
+    aad: bytes = b"",
+    *,
+    epoch: int | None = None,
+) -> tuple[bytes, bytes, int]:
+    """Encrypt a group payload with the current group key (spec 18.2.4).
+
+    Uses AES-CCM-16-64-128 — the algorithm named for group keys by spec
+    18.8.2 — with a random per-message nonce (transmitted alongside the
+    ciphertext; receivers need no derivation).
+
+    Args:
+        manager: Group key manager holding the current key material.
+        plaintext: Payload to encrypt (position beacon body, etc.).
+        aad: Additional authenticated data (e.g. destination ff35 address).
+        epoch: Key epoch to seal under; defaults to the manager's current.
+
+    Returns:
+        ``(ciphertext, nonce, key_epoch)`` — the tuple to transmit; the
+        receiver opens it with :func:`open_group_payload` against held
+        material for that epoch.
+
+    Raises:
+        ValueError: If the manager's current key is not a 16-byte AES-CCM
+            key.
+    """
+    material = manager.key_for_epoch(epoch) if epoch is not None else manager._current
+    if material is None:
+        raise ValueError("no key material for the requested epoch")
+    if not manager.key_valid_at(material):
+        raise ValueError(
+            f"key material for epoch {material.epoch} is not valid now"
+        )
+    key = bytes(material.key)
+    if len(key) != _PAYLOAD_CCM_KEY_LEN:
+        raise ValueError(
+            f"group key must be {_PAYLOAD_CCM_KEY_LEN} bytes for "
+            f"AES-CCM-16-64-128, got {len(key)}"
+        )
+    nonce = os.urandom(_PAYLOAD_CCM_NONCE_LEN)
+    ciphertext = AESCCM(key, tag_length=_PAYLOAD_CCM_TAG_LEN).encrypt(
+        nonce, plaintext, aad if aad else None
+    )
+    return ciphertext, nonce, material.epoch
+
+
+def open_group_payload(
+    manager: GroupKeyManager,
+    ciphertext: bytes,
+    nonce: bytes,
+    key_epoch: int,
+    aad: bytes = b"",
+) -> bytes:
+    """Decrypt a group payload sealed with :func:`seal_group_payload`.
+
+    Uses the key material the manager holds for *key_epoch*; honors the
+    grace-window policy via :meth:`GroupKeyManager.key_valid_at` — material
+    the manager does not hold is never authorized.
+
+    Raises:
+        ValueError: If no key material is held for *key_epoch*, the held
+            material is outside its validity window, or decryption fails
+            (wrong key, tampered ciphertext/AAD).
+    """
+    material = manager.key_for_epoch(key_epoch)
+    if material is None:
+        raise ValueError(f"no key material held for epoch {key_epoch}")
+    if not manager.key_valid_at(material):
+        raise ValueError(f"key material for epoch {key_epoch} is not valid now")
+    key = bytes(material.key)
+    if len(key) != _PAYLOAD_CCM_KEY_LEN:
+        raise ValueError(
+            f"group key must be {_PAYLOAD_CCM_KEY_LEN} bytes for "
+            f"AES-CCM-16-64-128, got {len(key)}"
+        )
+    try:
+        return AESCCM(key, tag_length=_PAYLOAD_CCM_TAG_LEN).decrypt(
+            nonce, ciphertext, aad if aad else None
+        )
+    except InvalidTag as e:
+        raise ValueError("group payload decryption failed") from e
