@@ -112,6 +112,22 @@ class PositionPrivacyPolicy:
         return (False, CODE_FORBIDDEN)
 
     def include_position_in_beacon(self) -> bool:
-        """Beacons are public broadcast; only public mode carries position.
-        OFF mode never includes position."""
+        """Whether the PUBLIC broadcast beacon carries position.
+
+        Per spec 18.2.4, only public mode beacons to all. OFF mode never
+        shares position; GROUP mode shares it via the *encrypted* ff35
+        group beacon (see include_encrypted_group_beacon); PRIVATE mode
+        never beacons.
+        """
         return self._mode is PositionPrivacyMode.PUBLIC
+
+    def include_encrypted_group_beacon(self) -> bool:
+        """Whether the encrypted ff35 group beacon is emitted (spec 18.2.4).
+
+        GROUP mode beacons to the group only, sealed with the group OSCORE
+        key (spec 18.2.4 table: "Beacon to group only (encrypted)"). The
+        sealed emission itself goes through
+        :func:`lichen.coap.group_beacon.seal_position_beacon`; this predicate
+        gates whether that emitter runs.
+        """
+        return self._mode is PositionPrivacyMode.GROUP
