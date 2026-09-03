@@ -139,18 +139,15 @@ static void test_verify_gate(void)
 	uint8_t beacon[LICHEN_BEACON_MIN_SIZE];
 	memset(beacon, 0xAB, sizeof(beacon));
 
-	CHECK(lichen_beacon_verify_gate(beacon, sizeof(beacon), stub_verify,
-					(void *)1),
-	      "verify gate accepts when stub verify passes");
-	CHECK(!lichen_beacon_verify_gate(beacon, LICHEN_BEACON_MIN_SIZE - 1U,
-					 stub_verify, (void *)1),
-	      "too-short beacon fails closed");
-	CHECK(!lichen_beacon_verify_gate(NULL, LICHEN_BEACON_MIN_SIZE,
-					 stub_verify, (void *)1),
-	      "NULL beacon fails closed");
-	CHECK(!lichen_beacon_verify_gate(beacon, LICHEN_BEACON_MIN_SIZE,
-					 stub_verify, NULL),
-	      "verify reject propagates");
+	assert(lichen_beacon_verify_gate(beacon, sizeof(beacon), stub_verify,
+					 (void *)1));
+	assert(!lichen_beacon_verify_gate(beacon,
+					  LICHEN_BEACON_MIN_SIZE - 1U,
+					  stub_verify, (void *)1));
+	assert(!lichen_beacon_verify_gate(NULL, LICHEN_BEACON_MIN_SIZE,
+					  stub_verify, (void *)1));
+	assert(!lichen_beacon_verify_gate(beacon, LICHEN_BEACON_MIN_SIZE,
+					  stub_verify, NULL));
 }
 
 int main(void)
