@@ -155,3 +155,53 @@ class GroupBeaconResource(resource.Resource):
         if self._on_position is not None:
             self._on_position(group_id, position)
         return Message(code=CHANGED)
+
+
+class GroupBeaconEmitter:
+    """Emits encrypted group position beacons while privacy mode is GROUP.
+
+    Spec 18.2.4 group mode: "Beacon to group only (sealed), position beacon
+    every 30s during SOS" — but the periodic cadence for group beacons
+    follows the application's normal beacon schedule; this driver exposes
+    :meth:`emit` for the scheduling loop to call (same executor-neutral
+    pattern as :class:`lichen.coap.sos_periodic.SosPeriodicDriver`).
+
+    Gated by the privacy policy: emits only while
+    ``policy.include_encrypted_group_beacon()`` is true and a position fix
+    has been pushed via :meth:`update_position`.
+    """
+
+    def __init__(
+        self,
+        manager: GroupKeyManager,
+        *,
+        group_id: str,
+        mcast_addr: str,
+        policy: Any,
+        now: Callable[[], float],
+    ) -> None:
+        self._manager = manager
+        self._group_id = group_id
+        self._mcast_addr = mcast_addr
+        self._policy = policy
+        self._now = now
+        self._last_position: dict[str, Any] | None = None
+
+    def update_position(self, position: dict[str, Any]) -> None:
+        """Store the latest position fix to emit on the next emit()."""
+        self._last_position = position
+
+    def emit(self) -> tuple[str, bytes] | None:
+        """Seal and return the group beacon, or None when not emitting.
+
+        Returns None when the privacy policy is not GROUP or no position
+        fix is available.
+        """
+        if not self._policy.include_encrypted_group_beacon():
+            return None
+        if self._last_position is None:
+            return None
+        _, wire = seal_position_beacon(
+            self._manager, self._last_position, self._group_id, self._mcast_addr
+        )
+        return self._mcast_addr, wire
