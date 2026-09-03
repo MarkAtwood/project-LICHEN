@@ -148,4 +148,29 @@ const uint8_t *lichen_beacon_cbor_options(const uint8_t *beacon, size_t len,
 uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
 					      uint32_t advertised);
 
+/**
+ * @brief Beacon signature verify-gate (spec 8, ccp_beacon_sig_gate.json).
+ *
+ * Extracts signed_data and signature_bytes, then delegates to the
+ * caller-provided verify function (which performs the Schnorr48
+ * verification against the sender's registered pubkey).
+ *
+ * Returns false if the beacon is too short or the verify function
+ * rejects. Per ccp_beacon_sig_gate.json: an invalid signature MUST
+ * reject the frame before DIO processing.
+ *
+ * @param beacon    Full beacon bytes (header + options + 48-byte sig)
+ * @param len       Beacon length in bytes
+ * @param verify_fn Verification callback: (signed_data, sig) -> bool
+ * @param user      Opaque context passed back to @p verify_fn
+ * @return true when the beacon passes signature verification
+ */
+bool lichen_beacon_verify_gate(const uint8_t *beacon, size_t len,
+			       bool (*verify_fn)(const uint8_t *signed_data,
+						 size_t signed_len,
+						 const uint8_t *sig,
+						 size_t sig_len,
+						 void *user),
+			       void *user);
+
 #endif /* LICHEN_BEACON_H_ */

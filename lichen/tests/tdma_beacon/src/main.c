@@ -123,6 +123,36 @@ static void test_intersect_channel_mask(void)
 	assert(lichen_beacon_intersect_channel_mask(0xFFU, 0x00U) == 0x00U);
 }
 
+static bool stub_verify(const uint8_t *signed_data, size_t signed_len,
+			const uint8_t *sig, size_t sig_len, void *user)
+{
+	(void)signed_data;
+	(void)signed_len;
+	(void)sig;
+	(void)sig_len;
+	return user != NULL;
+}
+
+static void test_verify_gate(void)
+{
+	/* Spec 8 / ccp_beacon_sig_gate.json: verify-gate contract. */
+	uint8_t beacon[LICHEN_BEACON_MIN_SIZE];
+	memset(beacon, 0xAB, sizeof(beacon));
+
+	CHECK(lichen_beacon_verify_gate(beacon, sizeof(beacon), stub_verify,
+					(void *)1),
+	      "verify gate accepts when stub verify passes");
+	CHECK(!lichen_beacon_verify_gate(beacon, LICHEN_BEACON_MIN_SIZE - 1U,
+					 stub_verify, (void *)1),
+	      "too-short beacon fails closed");
+	CHECK(!lichen_beacon_verify_gate(NULL, LICHEN_BEACON_MIN_SIZE,
+					 stub_verify, (void *)1),
+	      "NULL beacon fails closed");
+	CHECK(!lichen_beacon_verify_gate(beacon, LICHEN_BEACON_MIN_SIZE,
+					 stub_verify, NULL),
+	      "verify reject propagates");
+}
+
 int main(void)
 {
 	test_parse_vector();
@@ -131,6 +161,7 @@ int main(void)
 	test_short_buffer_rejected();
 	test_null_guards();
 	test_intersect_channel_mask();
+	test_verify_gate();
 	printf("tdma_beacon tests passed\n");
 	return 0;
 }
