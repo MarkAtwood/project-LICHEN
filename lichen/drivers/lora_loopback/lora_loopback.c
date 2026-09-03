@@ -12,6 +12,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/lora.h>
+
+#include <lichen/lora_compat.h>
 #include <zephyr/logging/log.h>
 
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
@@ -51,7 +53,7 @@ struct lora_loopback_data {
 	struct k_work rx_work;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
-	void *recv_cb_user_data;
+	void *recv_user_data;
 	struct loopback_packet rx_pkt;
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
 	atomic_t sent_packets;
@@ -209,52 +211,54 @@ static int lora_loopback_cad(const struct device *dev, k_timeout_t timeout,
 #endif
 
 /* Deliver queued packets to the registered async callback. Runs in system
- * workqueue context. Arming is ONE-SHOT: each delivery consumes the
- * registration (recv_cb cleared) and the upper layer re-arms after
- * processing, matching upstream sx12xx semantics where RX_DONE disarms the
- * receiver. A callback cancel (recv_async(NULL)) is honored at the next
- * delivery check. The drain is capped per run so a send flood cannot
- * monopolize the workqueue. */
+ * workqueue context; the callback may cancel (recv_async(NULL)) — cancel-then
+ * re-arm also works — both handled by re-reading recv_cb each packet. The
+ * drain is capped per run so a send flood cannot monopolize the workqueue;
+ * excess packets are picked up by the re-submitted work item.
+ *
+ * Merge note (beads-worker-7 vs cf9afa78a1 one-shot): the registration is
+ * PERSISTENT, matching upstream sx12xx (sx12xx_common re-arms Radio.Rx(0)
+ * and keeps async_rx_cb) and the in-tree lr1110 driver. The one-shot disarm
+ * from cf9afa78a1 targeted the L2 post-delivery re-arm -EBUSY storm
+ * (worker6-5fva.1) but broke this driver's own contract: the hal test
+ * requires cancel-after-delivery to return 0 and double-cancel -EINVAL,
+ * which only holds if a delivery leaves the reception armed. */
 static void lora_loopback_rx_work(struct k_work *work)
 {
 	struct lora_loopback_data *data =
 		CONTAINER_OF(work, struct lora_loopback_data, rx_work);
 	const struct device *dev = data->dev;
+	int drained = 0;
 
-	/*
-	 * One-shot delivery per the Zephyr lora_recv_async contract: the
-	 * callback fires once and the driver disarms itself; the L2 layer
-	 * re-arms after processing. Keeping the callback registered here
-	 * made every post-delivery re-arm fail -EBUSY and struck the module
-	 * into ABORTED after three retries (worker6-5fva.1; the bug was
-	 * masked until the first successful loopback TX).
-	 */
-	k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
-	lora_recv_cb cb = data->recv_cb;
-	void *cb_user_data = data->recv_cb_user_data;
+	while (drained++ < LOOPBACK_QUEUE_DEPTH) {
+		k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
+		lora_recv_cb cb = data->recv_cb;
 
-	data->recv_cb = NULL;
-	data->recv_cb_user_data = NULL;
-	k_spin_unlock(&data->rx_lock, key);
+		k_spin_unlock(&data->rx_lock, key);
 
-	if (cb == NULL) {
-		return;
-	}
+		if (cb == NULL) {
+			return;
+		}
 
-	if (k_msgq_get(&data->rx_queue, &data->rx_pkt, K_NO_WAIT) != 0) {
-		return;
-	}
+		if (k_msgq_get(&data->rx_queue, &data->rx_pkt, K_NO_WAIT) != 0) {
+			return;
+		}
 
 #ifdef CONFIG_LORA_LOOPBACK_TEST_HOOKS
-	atomic_inc(&data->received_packets);
+		atomic_inc(&data->received_packets);
 #endif
-	cb(dev, data->rx_pkt.data, data->rx_pkt.len,
-	   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR,
-	   cb_user_data);
+		cb(dev, data->rx_pkt.data, data->rx_pkt.len,
+		   CONFIG_LORA_LOOPBACK_RSSI, CONFIG_LORA_LOOPBACK_SNR
+		   LORA_RECV_CB_PASS(data->recv_user_data));
+	}
+
+	/* Queue still has work: re-queue ourselves (Zephyr re-submission of a
+	 * running item is legal and ordered after this run). */
+	k_work_submit(&data->rx_work);
 }
 
 static int lora_loopback_recv_async(const struct device *dev,
-				    lora_recv_cb cb, void *user_data)
+				    lora_recv_cb cb LORA_RECV_CB_EXTRA_ARGS)
 {
 	struct lora_loopback_data *data = dev->data;
 
@@ -263,7 +267,6 @@ static int lora_loopback_recv_async(const struct device *dev,
 		bool was_armed = data->recv_cb != NULL;
 
 		data->recv_cb = NULL;
-		data->recv_cb_user_data = NULL;
 		k_spin_unlock(&data->rx_lock, key);
 		return was_armed ? 0 : -EINVAL;
 	}
@@ -275,7 +278,9 @@ static int lora_loopback_recv_async(const struct device *dev,
 		return -EBUSY;
 	}
 	data->recv_cb = cb;
-	data->recv_cb_user_data = user_data;
+#if KERNEL_VERSION_NUMBER >= 0x040000
+	data->recv_user_data = user_data;
+#endif
 	k_spin_unlock(&data->rx_lock, key);
 
 	/* Deliver anything already queued (sent before arming). */

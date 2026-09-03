@@ -102,7 +102,7 @@ remains future `.44.9` work.
 
 ### 8.5. Unified Ed25519 Identity Derivation
 
-All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), stable IID, and primary 0200::/8 native address. No separate keys or ULA. See normative steps and full key management in §8.7, `rust/lichen-link/src/identity.rs:14-48` (`iid_from_pubkey`, `yggdrasil_addr_from_pubkey`), `python/src/lichen/crypto/identity.py:116-198` (`_pubkey_to_iid`, `yggdrasil_address`), `test/vectors/yggdrasil-derivation.json`, 04-network.md:§6.2, and 03-addressing.md.
+All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), stable IID, and primary 0200::/8 native address. No separate keys or ULA. See normative steps and full key management in §8.7, `rust/lichen-core/src/addr.rs:86-117` (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`; re-exported via `rust/lichen-link/src/lib.rs`), `python/src/lichen/crypto/identity.py:116-234` (`_pubkey_to_iid`, `yggdrasil_address`), `test/vectors/yggdrasil-derivation.json`, 04-network.md:§6.2, and 03-addressing.md.
 
 **Overview (MUST match §8.7 and test vectors exactly):**
 
@@ -141,8 +141,8 @@ A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (
 **Normative Derivation (MUST match test vectors exactly):**
 
 1. **Keypair**: `privkey, pubkey = derive_keypair(seed)` per draft-lichen-schnorr-00.md:97 (h=SHA-512(seed); privkey=clamp(h[0:32]); pubkey=basepoint_mult). Matches schnorr48.py:107 and Rust exactly.
-2. **IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291). **MUST be SHA-512** — Yggdrasil `AddrForKey` compatibility. See 04-network.md:53, identity.rs:22.
-3. **0200::/8 Address**: `addr=[0x02] + SHA-512(pubkey)[0:7] + IID` (MUST: lower 64 bits == IID to bind key to address and prevent substitution attacks; bytes 1 through 7 are from SHA-512(pubkey)). No ULA. See identity.rs:40 (yggdrasil_addr_from_pubkey), test/vectors/yggdrasil-derivation.json.
+2. **IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291). **MUST be SHA-512** — this is the LICHEN native profile's own derivation digest; upstream Yggdrasil `AddrForKey` does not hash at all (it bit-packs the inverted key), and the two schemes agree only on the leading `0x02` byte (see the divergence note in `test/vectors/yggdrasil_address.json`). See 04-network.md:53, identity.rs:15.
+3. **0200::/8 Address**: `addr=[0x02] + SHA-512(pubkey)[0:7] + IID` (MUST: lower 64 bits == IID to bind key to address and prevent substitution attacks; bytes 1 through 7 are from SHA-512(pubkey)). No ULA. See addr.rs:109 (`ygg_addr_from_pubkey`), test/vectors/yggdrasil-derivation.json.
  4. **X25519**: `x25519_priv=clamp(SHA-512(seed)[0:32])` per RFC 7748 §5 for EDHOC static DH (see 8.9). Matches Python identity.py:109, standards/crypto.md:79.
 
 

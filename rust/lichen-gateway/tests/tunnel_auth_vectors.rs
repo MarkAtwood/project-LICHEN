@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use lichen_core::addr::iid_from_pubkey_bytes;
 use lichen_gateway::tunnel_auth::{
     build_root_post, route_hash, AuthenticatedRoot, DecapsulationRequest, TunnelAuthError,
     TunnelAuthorization, TunnelAuthorizationTable, TunnelDirection,
@@ -318,4 +319,83 @@ fn canonical_decapsulation_cases_enforce_least_privilege() {
             }
         }
     }
+}
+
+struct OverlapFixture {
+    route: Vec<[u8; 8]>,
+    source: [u8; 16],
+}
+
+fn overlapping_setup(
+    short: (u64, u64),
+    long: (u64, u64),
+) -> (TunnelAuthorizationTable<4>, OverlapFixture) {
+    let seed = Seed::new(bytes(
+        "3f7a9c1e5d2b8406a1c9e75b3d8042f6c5a19e2b7d4f8306952c8e1a4b7d9f63",
+    ));
+    let (private_key, public_key) = derive_keypair(&seed);
+    let root_iid = iid_from_pubkey_bytes(public_key.as_bytes());
+    let egress_iid = [0xAA; 8];
+    let route = vec![[0x11; 8], egress_iid];
+    let digest = route_hash(&route).unwrap();
+    let source = "0200:0:0:0::1".parse::<Ipv6Addr>().unwrap().octets();
+    let prefix = [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let short = TunnelAuthorization::new(prefix, 64, digest, short.0, short.1, egress_iid).unwrap();
+    let long = TunnelAuthorization::new(prefix, 96, digest, long.0, long.1, egress_iid).unwrap();
+    let mut table = TunnelAuthorizationTable::<4>::default();
+    table.set_root(root_iid);
+    for claim in [short, long] {
+        let wire = build_root_post(claim, &route, root_iid, &private_key, &public_key)
+            .unwrap()
+            .body
+            .as_bytes()
+            .to_vec();
+        table
+            .accept_post(
+                &wire,
+                AuthenticatedRoot {
+                    iid: root_iid,
+                    public_key: &public_key,
+                    oscore_authenticated: true,
+                },
+                egress_iid,
+                100,
+            )
+            .unwrap();
+    }
+    (table, OverlapFixture { route, source })
+}
+
+fn overlap_request(fixture: &OverlapFixture) -> DecapsulationRequest<'_> {
+    DecapsulationRequest {
+        direction: TunnelDirection::MeshToExternal,
+        inner_source: fixture.source,
+        source_is_mesh: true,
+        destination_is_mesh: false,
+        route: &fixture.route,
+    }
+}
+
+#[test]
+fn longer_live_prefix_authorizes_when_earlier_shorter_entry_is_expired() {
+    // Shorter /64 grant accepted first (array order) but expired; the longer
+    // /96 grant is live. Python selects the longest candidate before checking
+    // expiry and permits; first-match array order denied Expired.
+    let (mut table, fixture) = overlapping_setup((1, 200), (2, 10_000));
+    assert_eq!(
+        table.authorize_decapsulation(overlap_request(&fixture), 300),
+        Ok(())
+    );
+}
+
+#[test]
+fn expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant() {
+    // Expiry applies to the selected (longest) candidate: Python denies
+    // EXPIRED and pops it even though a live shorter grant exists; no silent
+    // fallback to the shorter entry.
+    let (mut table, fixture) = overlapping_setup((1, 10_000), (2, 200));
+    assert_eq!(
+        table.authorize_decapsulation(overlap_request(&fixture), 300),
+        Err(TunnelAuthError::Expired)
+    );
 }

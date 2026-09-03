@@ -390,25 +390,40 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         validate_route(request.route)?;
         let request_route_hash = route_hash(request.route)?;
         self.check_time(now)?;
-        let mut found = None;
-        for (index, slot) in self.entries.iter_mut().enumerate() {
-            let matches = slot.is_some_and(|entry| {
-                entry.claim.route_hash == request_route_hash
-                    && request.route.last() == Some(&entry.claim.egress_iid)
-                    && entry.claim.matches_source(&request.inner_source)
-            });
-            if matches && slot.unwrap().claim.expiry <= now {
-                *slot = None;
-                return Err(TunnelAuthError::Expired);
+        // Python parity: gather every candidate matching the route hash and
+        // inner source, select the longest prefix, and only then check the
+        // selected candidate's expiry. Picking the first match in array order
+        // denies Expired when an earlier expired entry shadows a live longer
+        // grant; ties on prefix_len take the least-recently-used entry.
+        let mut selected: Option<usize> = None;
+        for (index, slot) in self.entries.iter().enumerate() {
+            let Some(entry) = slot else {
+                continue;
+            };
+            let matches = entry.claim.route_hash == request_route_hash
+                && request.route.last() == Some(&entry.claim.egress_iid)
+                && entry.claim.matches_source(&request.inner_source);
+            if !matches {
+                continue;
             }
-            if slot.is_some_and(|entry| entry.claim.expiry <= now) {
-                *slot = None;
-            } else if matches {
-                found = Some(index);
-                break;
+            let better = match selected {
+                None => true,
+                Some(best) => {
+                    let best_entry = self.entries[best].unwrap();
+                    entry.claim.prefix_len > best_entry.claim.prefix_len
+                        || (entry.claim.prefix_len == best_entry.claim.prefix_len
+                            && entry.used < best_entry.used)
+                }
+            };
+            if better {
+                selected = Some(index);
             }
         }
-        let index = found.ok_or(TunnelAuthError::UnauthorizedTunnel)?;
+        let index = selected.ok_or(TunnelAuthError::UnauthorizedTunnel)?;
+        if self.entries[index].unwrap().claim.expiry <= now {
+            self.entries[index] = None;
+            return Err(TunnelAuthError::Expired);
+        }
         self.clock = self.clock.saturating_add(1);
         if let Some(entry) = &mut self.entries[index] {
             entry.used = self.clock;
