@@ -10,7 +10,12 @@ from pathlib import Path
 import pytest
 
 from lichen.ccp import ema_update, ema_update_integer
-from lichen.rpl.tdma_beacon import MIN_BEACON_SIZE, verify_gate
+from lichen.rpl.tdma_beacon import (
+    MIN_BEACON_SIZE,
+    TdmaBeaconHeader,
+    serialize_header,
+    verify_gate,
+)
 from lichen.timing.sfn import hash_32, slot_for
 
 VECTORS_PATH = Path(__file__).resolve().parents[3] / "test" / "vectors" / "ccp_beacon_format.json"
@@ -276,53 +281,9 @@ def test_ema_literal_recurrence_hand_computed(
         assert avg_exact == want_exact, f"exact step for sample {sample}"
 
 
-    """Beacon signature verify-gate (spec 8, ccp_beacon_sig_gate.json)."""
-
-    @staticmethod
-    def _signing_keypair() -> tuple[bytes, bytes]:
-        from lichen.crypto.identity import Identity
-
-        identity = Identity.from_seed(bytes([9]) * 32)
-        return identity.privkey, identity.pubkey
-
-    @staticmethod
-    def _make_beacon(sign_key: bytes | None, sig_bytes: bytes | None = None) -> bytes:
-        header = serialize_header(
-            TdmaBeaconHeader(
-                epoch=1,
-                num_slots=16,
-                sfn=100,
-                timestamp=1716742800,
-                flags=0,
-                rx_chains=1,
-                setup_window=20,
-                occupied_time=2300,
-                guard=50,
-                channel_mask=1,
-            )
-        )
-        beacon = bytearray(header)
-        beacon += b"\x00" * 48  # placeholder signature bytes
-        if sign_key is not None:
-            from lichen.crypto.schnorr48 import sign
-
-            sig = schnorr48_sign = None  # placeholder to avoid name error
-        return bytes(beacon)
-
-    def test_gate_rejects_short_beacon(self) -> None:
-        from lichen.rpl.tdma_beacon import verify_gate
-
-        short = b"\x00" * (MIN_BEACON_SIZE - 1)
-        assert verify_gate(short, lambda s, sig: True) is False
-
-    def test_gate_accepts_valid_signature(self) -> None:
-        pass
-
 
 def test_verify_gate_rejects_short_beacon() -> None:
     """Beacon shorter than MIN_BEACON_SIZE has no sig -> gate False."""
-    from lichen.crypto import schnorr48
-    from lichen.rpl.tdma_beacon import verify_gate
 
     short = b"\x00" * (MIN_BEACON_SIZE - 1)
     assert verify_gate(short, lambda s, sig: True) is False
@@ -331,7 +292,6 @@ def test_verify_gate_rejects_short_beacon() -> None:
 def test_verify_gate_accepts_valid_signature() -> None:
     from lichen.crypto import schnorr48
     from lichen.crypto.identity import Identity
-    from lichen.rpl.tdma_beacon import verify_gate
 
     identity = Identity.from_seed(bytes([9]) * 32)
     header = serialize_header(
@@ -357,8 +317,8 @@ def test_verify_gate_accepts_valid_signature() -> None:
 
 
 def test_verify_gate_rejects_bad_signature() -> None:
+    from lichen.crypto import schnorr48
     from lichen.crypto.identity import Identity
-    from lichen.rpl.tdma_beacon import verify_gate
 
     identity = Identity.from_seed(bytes([9]) * 32)
     header = serialize_header(
@@ -377,4 +337,5 @@ def test_verify_gate_rejects_bad_signature() -> None:
     )
     bad_sig = b"\xee" * 48
     beacon = header + b"\x00" * 16 + bad_sig
-    assert verify_gate(beacon, lambda s, sig: False) is False
+    assert verify_gate(beacon,
+                        lambda s, sig: schnorr48.verify(identity.pubkey, s, sig)) is False
