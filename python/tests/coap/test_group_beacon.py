@@ -8,10 +8,12 @@ import pytest
 from aiocoap import BAD_REQUEST, CHANGED, Message
 
 from lichen.coap.group_beacon import (
+    GroupBeaconEmitter,
     GroupBeaconResource,
     open_position_beacon,
     seal_position_beacon,
 )
+from lichen.coap.position_privacy import PositionPrivacyPolicy
 from lichen.crypto.group_oscore import GroupKeyManager
 
 GROUP_ID = "team-alpha"
@@ -23,6 +25,15 @@ MCAST = "ff35:0040:0200::9abc"
 @pytest.fixture
 def manager() -> GroupKeyManager:
     return GroupKeyManager(GROUP_ID.encode("utf-8"), GROUP_KEY)
+
+
+
+class _Clock:
+    def __init__(self, start: float = 1716742800.0) -> None:
+        self.t = start
+
+    def __call__(self) -> float:
+        return self.t
 
 
 @pytest.fixture
@@ -115,3 +126,39 @@ async def test_garbage_payload_rejected(
 ) -> None:
     response = await resource.render_post(Message(code=1, payload=b"not-cbor"))
     assert response.code == BAD_REQUEST
+
+
+@pytest.mark.asyncio
+async def test_emitter_seals_in_group_mode(manager: GroupKeyManager) -> None:
+    """Emitter returns a sealed beacon when policy is GROUP."""
+    policy = PositionPrivacyPolicy("group")
+    emitter = GroupBeaconEmitter(
+        manager, group_id=GROUP_ID, mcast_addr=MCAST, policy=policy, now=_Clock()
+    )
+    emitter.update_position(POSITION)
+    result = emitter.emit()
+    assert result is not None
+    mcast_addr, wire = result
+    assert mcast_addr == MCAST
+    gid, pos = open_position_beacon(manager, wire, MCAST)
+    assert gid == GROUP_ID
+    assert pos == POSITION
+
+
+@pytest.mark.asyncio
+async def test_emitter_silent_in_public_mode(manager: GroupKeyManager) -> None:
+    policy = PositionPrivacyPolicy("public")
+    emitter = GroupBeaconEmitter(
+        manager, group_id=GROUP_ID, mcast_addr=MCAST, policy=policy, now=_Clock()
+    )
+    emitter.update_position(POSITION)
+    assert emitter.emit() is None
+
+
+@pytest.mark.asyncio
+async def test_emitter_silent_without_position_fix(manager: GroupKeyManager) -> None:
+    policy = PositionPrivacyPolicy("group")
+    emitter = GroupBeaconEmitter(
+        manager, group_id=GROUP_ID, mcast_addr=MCAST, policy=policy, now=_Clock()
+    )
+    assert emitter.emit() is None  # no fix pushed yet
