@@ -270,6 +270,11 @@ void lichen_rpl_dao_refresh_timer_reset(
 #undef DAO_U32_OUTCOMES
 #undef DAO_INITIAL_DELAY_OUTCOMES
 
+/* Merge resolution: both composite DAO TX orchestrators are kept. The
+ * poll/outcome-driven tx_loop (HEAD) and the event-driven tx_timing
+ * (beads-worker-5) share no symbols; the merged header declares both and
+ * tests/rpl_dao_timing exercises both, so neither side was dropped. */
+
 /* ------------------------------------------------------------------ */
 /* DAO transmission loop (spec 09 14.2 composite state machine).       */
 /* ------------------------------------------------------------------ */
@@ -371,4 +376,111 @@ lichen_rpl_dao_tx_loop_phase(const struct lichen_rpl_dao_tx_loop *loop)
 		return LICHEN_RPL_DAO_TX_LOOP_IDLE;
 	}
 	return loop->phase;
+}
+
+/* ── Composed DAO TX timing orchestrator ──────────────────────────────────── */
+
+void lichen_rpl_dao_tx_timing_init(struct lichen_rpl_dao_tx_timing *t)
+{
+  memset(t, 0, sizeof(*t));
+  lichen_rpl_dao_initial_timer_init(&t->initial);
+  lichen_rpl_dao_retry_timer_init(&t->retry);
+  lichen_rpl_dao_refresh_timer_init(&t->refresh);
+  t->phase = LICHEN_RPL_DAO_TX_IDLE;
+}
+
+int lichen_rpl_dao_tx_timing_on_join(struct lichen_rpl_dao_tx_timing *t,
+                                     uint32_t now_ms,
+                                     lichen_rpl_dao_rng_fn rng,
+                                     void *rng_user)
+{
+  /* A join is only meaningful from IDLE; in any other phase the machine is
+   * already running — regressing to INITIAL_PENDING would orphan armed
+   * retry/refresh timers and restart the backoff sequence. */
+  if (t->phase != LICHEN_RPL_DAO_TX_IDLE) {
+    return -EALREADY;
+  }
+  uint16_t delay_ms;
+  int ret = lichen_rpl_dao_initial_timer_start(&t->initial, now_ms, rng,
+                                               rng_user, &delay_ms);
+  if (ret != 0) {
+    return ret;
+  }
+  t->phase = LICHEN_RPL_DAO_TX_INITIAL_PENDING;
+  return 0;
+}
+
+bool lichen_rpl_dao_tx_timing_is_due(
+    const struct lichen_rpl_dao_tx_timing *t, uint32_t now_ms)
+{
+  switch (t->phase) {
+  case LICHEN_RPL_DAO_TX_INITIAL_PENDING:
+    return lichen_rpl_dao_initial_timer_is_due(&t->initial, now_ms);
+  case LICHEN_RPL_DAO_TX_RETRY_PENDING:
+    return lichen_rpl_dao_retry_timer_is_due(&t->retry, now_ms);
+  case LICHEN_RPL_DAO_TX_REFRESH_PENDING:
+    return lichen_rpl_dao_refresh_timer_is_due(&t->refresh, now_ms);
+  default:
+    return false;
+  }
+}
+
+void lichen_rpl_dao_tx_timing_on_send(struct lichen_rpl_dao_tx_timing *t,
+                                      uint32_t now_ms)
+{
+  uint32_t delay_ms;
+
+  if (t->phase == LICHEN_RPL_DAO_TX_INITIAL_PENDING) {
+    /* Consume the initial gate so a duplicate join cannot regress the
+     * machine, then start a fresh retry sequence (4 s first). */
+    (void)lichen_rpl_dao_initial_timer_take_if_due(&t->initial, now_ms);
+    lichen_rpl_dao_retry_timer_init(&t->retry);
+    if (lichen_rpl_dao_retry_timer_schedule_next(&t->retry, now_ms,
+                                                 &delay_ms) != 0) {
+      return;
+    }
+    t->phase = LICHEN_RPL_DAO_TX_RETRY_PENDING;
+    return;
+  }
+  if (t->phase == LICHEN_RPL_DAO_TX_RETRY_PENDING) {
+    if (!lichen_rpl_dao_retry_timer_take_if_due(&t->retry, now_ms)) {
+      return;
+    }
+    if (lichen_rpl_dao_retry_timer_is_exhausted(&t->retry)) {
+      t->phase = LICHEN_RPL_DAO_TX_EXHAUSTED;
+      return;
+    }
+    (void)lichen_rpl_dao_retry_timer_schedule_next(&t->retry, now_ms,
+                                                   &delay_ms);
+    return;
+  }
+  if (t->phase == LICHEN_RPL_DAO_TX_REFRESH_PENDING) {
+    /* A refresh send is itself a successful transmission: reschedule. */
+    (void)lichen_rpl_dao_refresh_timer_take_if_due(&t->refresh, now_ms);
+    (void)lichen_rpl_dao_refresh_timer_reschedule(&t->refresh, now_ms);
+  }
+}
+
+int lichen_rpl_dao_tx_timing_on_ack(struct lichen_rpl_dao_tx_timing *t,
+                                    uint32_t now_ms)
+{
+  /* IDLE and INITIAL_PENDING have no acknowledged exchange in flight (the
+   * initial DAO was never sent); EXHAUSTED is allowed so the in-flight final
+   * DAO's late ACK can still start the refresh cycle. */
+  if (t->phase == LICHEN_RPL_DAO_TX_IDLE ||
+      t->phase == LICHEN_RPL_DAO_TX_INITIAL_PENDING) {
+    return -EPERM;
+  }
+  lichen_rpl_dao_retry_timer_reset(&t->retry);
+  int ret = lichen_rpl_dao_refresh_timer_start(&t->refresh, now_ms);
+  if (ret != 0 && ret != -EALREADY) {
+    return ret;
+  }
+  t->phase = LICHEN_RPL_DAO_TX_REFRESH_PENDING;
+  return 0;
+}
+
+void lichen_rpl_dao_tx_timing_on_leave(struct lichen_rpl_dao_tx_timing *t)
+{
+  lichen_rpl_dao_tx_timing_init(t);
 }
