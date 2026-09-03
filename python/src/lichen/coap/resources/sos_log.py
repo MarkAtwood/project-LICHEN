@@ -15,9 +15,9 @@ from typing import Any
 
 import cbor2
 from aiocoap import GET, Message
+from aiocoap.resource import Resource
 
 from lichen.coap.resources.base import CBOR
-from aiocoap.resource import Resource
 
 SOS_LOG_MAX = 64
 
