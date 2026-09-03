@@ -282,3 +282,25 @@ uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
 {
 	return permitted & advertised;
 }
+
+
+bool lichen_beacon_verify_gate(const uint8_t *beacon, size_t len,
+			       bool (*verify_fn)(const uint8_t *signed_data,
+						 size_t signed_len,
+						 const uint8_t *sig,
+						 size_t sig_len,
+						 void *user),
+			       void *user)
+{
+	const uint8_t *signed_data = NULL;
+	const uint8_t *sig = NULL;
+
+	if (beacon == NULL || verify_fn == NULL ||
+	    len < LICHEN_BEACON_MIN_SIZE) {
+		return false;
+	}
+	signed_data = beacon;
+	sig = &beacon[len - LICHEN_BEACON_SIG_SIZE];
+	return verify_fn(signed_data, len - LICHEN_BEACON_SIG_SIZE, sig,
+			 LICHEN_BEACON_SIG_SIZE, user);
+}

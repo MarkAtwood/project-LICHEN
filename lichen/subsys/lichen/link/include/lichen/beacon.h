@@ -204,4 +204,36 @@ uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
  *  masks. */
 bool lichen_beacon_channel_gate(uint32_t beacon_mask, uint8_t num_channels);
 
+/**
+ * @brief Beacon signature verify-gate (spec 8, ccp_beacon_sig_gate.json).
+ *
+ * Extracts signed_data and signature_bytes, then delegates to the
+ * caller-provided verify function (which performs the Schnorr48
+ * verification against the sender's registered pubkey).
+ *
+ * Returns false if the beacon is too short or the verify function
+ * rejects. Per ccp_beacon_sig_gate.json: an invalid signature MUST
+ * reject the frame before DIO processing.
+ *
+ * @param beacon    Full beacon bytes (header + options + 48-byte sig)
+ * @param len       Beacon length in bytes
+ * @param verify_fn Verification callback: (signed_data, sig) -> bool
+ * @param user      Opaque context passed back to @p verify_fn
+ * @return true when the beacon passes signature verification
+ *
+ * Merge note (main + beads-worker-4): union resolution. HEAD's
+ * channel_gate (channel-plan gating on the mask intersection) and
+ * beads-worker-4's verify_gate (Schnorr48 signature gating before DIO
+ * processing) are independent predicates with compatible intents, so
+ * both declarations are kept. verify_gate is implemented in the merged
+ * beacon.c and exercised by lichen/tests/tdma_beacon/src/main.c.
+ */
+bool lichen_beacon_verify_gate(const uint8_t *beacon, size_t len,
+			       bool (*verify_fn)(const uint8_t *signed_data,
+						 size_t signed_len,
+						 const uint8_t *sig,
+						 size_t sig_len,
+						 void *user),
+			       void *user);
+
 #endif /* LICHEN_BEACON_H_ */
