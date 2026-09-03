@@ -806,26 +806,12 @@ impl SlotClaimVerifier {
         gateway_pubkey: &[u8; 32],
         current_superframe: u64,
     ) -> Result<VerifiedSlotClaim, SlotError> {
-        if claim.superframe_id != current_superframe {
-            return Err(SlotError::StaleSuperframe {
-                claim: claim.superframe_id,
-                current: current_superframe,
-            });
-        }
+        // Signature checks run FIRST per GCP-6.3 (spec/08:234-236): a
+        // signature-invalid claim is silently discarded and never consumes
+        // replay state. Only signature-valid claims proceed to the
+        // superframe/replay gates (python verify_slot_claim parity).
         verify_iid_binding(gateway_pubkey, &claim.gateway_iid)
             .map_err(|_| SlotError::IdentityMismatch)?;
-        if let Some(previous) = self.last_seen.get(&claim.gateway_iid) {
-            if (claim.superframe_id, claim.claim_sequence) <= *previous {
-                return Err(SlotError::Replay {
-                    gateway_iid: claim.gateway_iid,
-                    superframe_id: claim.superframe_id,
-                });
-            }
-        } else if self.last_seen.len() >= self.max_gateways {
-            return Err(SlotError::StateFull {
-                capacity: self.max_gateways,
-            });
-        }
         let signature_ok = match claim.sig_form {
             ClaimSigForm::DomainTranscript => {
                 let transcript = slot_claim_transcript(
@@ -846,6 +832,24 @@ impl SlotClaimVerifier {
         };
         if !signature_ok {
             return Err(SlotError::InvalidSignature);
+        }
+        if claim.superframe_id != current_superframe {
+            return Err(SlotError::StaleSuperframe {
+                claim: claim.superframe_id,
+                current: current_superframe,
+            });
+        }
+        if let Some(previous) = self.last_seen.get(&claim.gateway_iid) {
+            if (claim.superframe_id, claim.claim_sequence) <= *previous {
+                return Err(SlotError::Replay {
+                    gateway_iid: claim.gateway_iid,
+                    superframe_id: claim.superframe_id,
+                });
+            }
+        } else if self.last_seen.len() >= self.max_gateways {
+            return Err(SlotError::StateFull {
+                capacity: self.max_gateways,
+            });
         }
         self.generation = self
             .generation
