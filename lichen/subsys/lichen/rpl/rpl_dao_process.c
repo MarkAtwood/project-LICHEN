@@ -274,7 +274,13 @@ duplicate_candidate:
 				crypto_sha512_ctx ctx;
 				uint8_t digest[64];
 				uint8_t seq_be[8];
-				size_t unsigned_len = it.pos - 58U;
+				/* it.pos counts from the options start; convert to an
+			 * absolute dao_bytes offset for the transcript span
+			 * (spec 8.6: unsigned bytes begin at RPLInstanceID,
+			 * i.e. dao_bytes[0]). */
+			const size_t opts_start =
+				(size_t)(it.data - dao_bytes);
+			size_t unsigned_len = opts_start + it.pos - 58U;
 
 				crypto_sha512_init(&ctx);
 				crypto_sha512_update(&ctx, DAO_ORIGIN_DOMAIN,
@@ -307,6 +313,12 @@ duplicate_candidate:
 		}
 	}
 
+	/* Spec 05 8.6: every DAO MUST contain exactly one DAO Origin
+	 * Signature Option; a missing option rejects the entire DAO
+	 * without state mutation. */
+	if (!have_origin_signature) {
+		return false;
+	}
 	if (routes_closed) {
 		return *staged_count > 0;
 	}
