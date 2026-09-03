@@ -25,6 +25,7 @@ header and the trailing 48-byte Schnorr48 beacon signature.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 HEADER_SIZE = 24
@@ -154,3 +155,23 @@ def cbor_options(beacon: bytes) -> bytes | None:
     if len(beacon) <= MIN_BEACON_SIZE:
         return None
     return beacon[HEADER_SIZE:-SIG_SIZE]
+
+
+def verify_gate(beacon: bytes, verify_fn: Callable[[bytes, bytes], bool]) -> bool:
+    """Beacon signature verify-gate (spec 8 / ccp_beacon_sig_gate.json).
+
+    Extracts signed_data and signature_bytes, then delegates to the
+    caller-provided verify function (which performs the Schnorr48
+    verification against the sender's registered pubkey).
+
+    Returns False if the beacon is too short or the verify function
+    rejects. Per ccp_beacon_sig_gate.json: an invalid signature MUST
+    reject the frame before DIO processing.
+    """
+    signed = signed_data(beacon)
+    if signed is None:
+        return False
+    sig = signature_bytes(beacon)
+    if sig is None:
+        return False
+    return verify_fn(signed, sig)
