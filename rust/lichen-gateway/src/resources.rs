@@ -69,16 +69,6 @@ const KEY_MAP_ORDINAL: i64 = 4;
 const KEY_MAP_START: i64 = 5;
 const KEY_MAP_COUNT: i64 = 6;
 
-// Slot claim keys
-const KEY_CLAIM_IID: i64 = 1;
-const KEY_CLAIM_SLOTS: i64 = 2;
-const KEY_CLAIM_SUPERFRAME_ID: i64 = 3;
-const KEY_CLAIM_TIMESTAMP: i64 = 4;
-const KEY_CLAIM_GATEWAY_COUNT: i64 = 5;
-const KEY_CLAIM_ORDINAL: i64 = 6;
-const KEY_CLAIM_SIGNATURE: i64 = 7;
-const KEY_CLAIM_SEQUENCE: i64 = 8;
-
 /// GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim
 /// may not reserve capacity further than this past now (5 superframes x
 /// 60 s + 5 s clock tolerance). The wire key-4 field decoded as
@@ -816,7 +806,8 @@ impl SlotClaim {
     /// [`SlotClaim::with_timestamp`]. `gateway_count` is a local allocation
     /// parameter and is never serialized (GCP-6.5). Rust `SlotClaim` has no
     /// allocation-mode field, so the payload is emitted interleaved (mode
-    /// 0); `with_federation` supplies the ordinal (key 7) when present.
+    /// 0); the ordinal (key 7) is REQUIRED on the wire (corpus vector
+    /// "ordinal_absent") — build with [`SlotClaim::with_federation`].
     pub fn encode_cose(
         &self,
         private: &PrivateKey,
@@ -835,6 +826,12 @@ impl SlotClaim {
                 return Err(ResourceError::InvalidFieldType("slots"));
             }
         }
+        // Payload key 7 is required on the wire (corpus vector
+        // "ordinal_absent"): an ordinal-less envelope is rejected by every
+        // spec-conformant receiver, including this crate's from_cose.
+        let ordinal = self
+            .ordinal
+            .ok_or(ResourceError::MissingField("ordinal"))?;
         let payload = slot::SlotClaimPayload {
             slots: self.slots.clone(),
             superframe_epoch: self.superframe_id,
@@ -842,7 +839,7 @@ impl SlotClaim {
             expiry,
             gateway_iid: self.gateway_iid,
             claim_seq: self.claim_sequence,
-            ordinal: self.ordinal.map(u64::from),
+            ordinal: Some(u64::from(ordinal)),
         };
         let payload_bytes = payload
             .encode_canonical()
@@ -868,262 +865,6 @@ impl SlotClaim {
         Ok(buf)
     }
 
-    /// Encode as CBOR for transmission (including signature if present).
-    pub fn encode(&self) -> Vec<u8> {
-        let slots: Vec<Value> = self
-            .slots
-            .iter()
-            .map(|&s| Value::Integer((s as i64).into()))
-            .collect();
-
-        let mut entries: Vec<(Value, Value)> = vec![
-            (
-                Value::Integer(KEY_CLAIM_IID.into()),
-                Value::Bytes(self.gateway_iid.to_vec()),
-            ),
-            (Value::Integer(KEY_CLAIM_SLOTS.into()), Value::Array(slots)),
-            (
-                Value::Integer(KEY_CLAIM_SUPERFRAME_ID.into()),
-                Value::Integer(self.superframe_id.into()),
-            ),
-            (
-                Value::Integer(KEY_CLAIM_SEQUENCE.into()),
-                Value::Integer(self.claim_sequence.into()),
-            ),
-        ];
-
-        if let Some(ts) = self.timestamp {
-            entries.push((
-                Value::Integer(KEY_CLAIM_TIMESTAMP.into()),
-                Value::Integer(ts.into()),
-            ));
-        }
-        if let Some(gc) = self.gateway_count {
-            entries.push((
-                Value::Integer(KEY_CLAIM_GATEWAY_COUNT.into()),
-                Value::Integer((gc as i64).into()),
-            ));
-        }
-        if let Some(ord) = self.ordinal {
-            entries.push((
-                Value::Integer(KEY_CLAIM_ORDINAL.into()),
-                Value::Integer((ord as i64).into()),
-            ));
-        }
-        if let Some(sig) = &self.signature {
-            entries.push((
-                Value::Integer(KEY_CLAIM_SIGNATURE.into()),
-                Value::Bytes(sig.to_vec()),
-            ));
-        }
-
-        let value = Value::Map(entries);
-        let mut buf = Vec::new();
-        ciborium::into_writer(&value, &mut buf).expect("CBOR encoding should not fail");
-        buf
-    }
-
-    /// Encode for signing (excludes signature field).
-    /// Uses deterministic CBOR encoding per RFC 8949 Section 4.2.
-    pub fn encode_canonical(&self) -> Vec<u8> {
-        // Build map entries in sorted key order (deterministic)
-        let slots: Vec<Value> = self
-            .slots
-            .iter()
-            .map(|&s| Value::Integer((s as i64).into()))
-            .collect();
-
-        let mut entries: Vec<(i64, Value)> = vec![
-            (KEY_CLAIM_IID, Value::Bytes(self.gateway_iid.to_vec())),
-            (KEY_CLAIM_SLOTS, Value::Array(slots)),
-            (
-                KEY_CLAIM_SUPERFRAME_ID,
-                Value::Integer(self.superframe_id.into()),
-            ),
-            (
-                KEY_CLAIM_SEQUENCE,
-                Value::Integer(self.claim_sequence.into()),
-            ),
-        ];
-
-        if let Some(ts) = self.timestamp {
-            entries.push((KEY_CLAIM_TIMESTAMP, Value::Integer(ts.into())));
-        }
-        if let Some(gc) = self.gateway_count {
-            entries.push((KEY_CLAIM_GATEWAY_COUNT, Value::Integer((gc as i64).into())));
-        }
-        if let Some(ord) = self.ordinal {
-            entries.push((KEY_CLAIM_ORDINAL, Value::Integer((ord as i64).into())));
-        }
-
-        // Sort by key (already sorted since we use sequential keys)
-        entries.sort_by_key(|(k, _)| *k);
-
-        let map: Vec<(Value, Value)> = entries
-            .into_iter()
-            .map(|(k, v)| (Value::Integer(k.into()), v))
-            .collect();
-
-        let value = Value::Map(map);
-        let mut buf = Vec::new();
-        ciborium::into_writer(&value, &mut buf).expect("CBOR encoding should not fail");
-        buf
-    }
-
-    /// Decode from CBOR payload.
-    pub fn decode(payload: &[u8]) -> Result<Self, ResourceError> {
-        let value: Value =
-            ciborium::from_reader(payload).map_err(|_| ResourceError::InvalidCbor)?;
-
-        let map = match value {
-            Value::Map(m) => m,
-            _ => return Err(ResourceError::ExpectedMap),
-        };
-
-        let mut gateway_iid: Option<[u8; 8]> = None;
-        let mut slots: Vec<u32> = Vec::new();
-        let mut superframe_id: Option<u64> = None;
-        let mut claim_sequence: Option<u32> = None;
-        let mut timestamp: Option<i64> = None;
-        let mut gateway_count: Option<u8> = None;
-        let mut ordinal: Option<u8> = None;
-        let mut signature: Option<[u8; 48]> = None;
-
-        for (k, v) in map {
-            let key = match k {
-                Value::Integer(i) => i128::from(i) as i64,
-                _ => continue,
-            };
-            match key {
-                KEY_CLAIM_IID => {
-                    if let Value::Bytes(b) = v {
-                        if b.len() == 8 {
-                            let mut iid = [0u8; 8];
-                            iid.copy_from_slice(&b);
-                            gateway_iid = Some(iid);
-                        } else {
-                            return Err(ResourceError::InvalidAddress);
-                        }
-                    }
-                }
-                KEY_CLAIM_SLOTS => {
-                    if let Value::Array(arr) = v {
-                        for item in arr {
-                            if let Value::Integer(i) = item {
-                                slots.push(
-                                    u32::try_from(i128::from(i))
-                                        .map_err(|_| ResourceError::InvalidFieldType("slots"))?,
-                                );
-                            } else {
-                                return Err(ResourceError::InvalidFieldType("slots"));
-                            }
-                        }
-                    } else {
-                        return Err(ResourceError::InvalidFieldType("slots"));
-                    }
-                }
-                KEY_CLAIM_SUPERFRAME_ID => {
-                    if let Value::Integer(i) = v {
-                        superframe_id = Some(
-                            u64::try_from(i128::from(i))
-                                .map_err(|_| ResourceError::InvalidFieldType("superframe_id"))?,
-                        );
-                    } else {
-                        return Err(ResourceError::InvalidFieldType("superframe_id"));
-                    }
-                }
-                KEY_CLAIM_SEQUENCE => {
-                    if let Value::Integer(i) = v {
-                        claim_sequence = Some(
-                            u32::try_from(i128::from(i))
-                                .map_err(|_| ResourceError::InvalidFieldType("claim_sequence"))?,
-                        );
-                    } else {
-                        return Err(ResourceError::InvalidFieldType("claim_sequence"));
-                    }
-                }
-                KEY_CLAIM_TIMESTAMP => {
-                    if let Value::Integer(i) = v {
-                        timestamp = Some(
-                            i64::try_from(i128::from(i))
-                                .map_err(|_| ResourceError::InvalidFieldType("timestamp"))?,
-                        );
-                    }
-                }
-                KEY_CLAIM_GATEWAY_COUNT => {
-                    if let Value::Integer(i) = v {
-                        gateway_count = Some(
-                            u8::try_from(i128::from(i))
-                                .map_err(|_| ResourceError::InvalidFieldType("gateway_count"))?,
-                        );
-                    }
-                }
-                KEY_CLAIM_ORDINAL => {
-                    if let Value::Integer(i) = v {
-                        ordinal = Some(
-                            u8::try_from(i128::from(i))
-                                .map_err(|_| ResourceError::InvalidFieldType("ordinal"))?,
-                        );
-                    }
-                }
-                KEY_CLAIM_SIGNATURE => {
-                    if let Value::Bytes(b) = v {
-                        if b.len() == 48 {
-                            let mut sig = [0u8; 48];
-                            sig.copy_from_slice(&b);
-                            signature = Some(sig);
-                        } else {
-                            return Err(ResourceError::InvalidSignature);
-                        }
-                    } else {
-                        return Err(ResourceError::InvalidSignature);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        let gateway_iid = gateway_iid.ok_or(ResourceError::MissingField("gateway_iid"))?;
-        let superframe_id = superframe_id.ok_or(ResourceError::MissingField("superframe_id"))?;
-        let claim_sequence = claim_sequence.ok_or(ResourceError::MissingField("claim_sequence"))?;
-        match (gateway_count, ordinal) {
-            (Some(0), _) | (Some(_), None) | (None, Some(_)) => {
-                return Err(ResourceError::InvalidFieldType("claim_dimensions"));
-            }
-            (Some(count), Some(index)) if index >= count => {
-                return Err(ResourceError::InvalidFieldType("claim_dimensions"));
-            }
-            _ => {}
-        }
-
-        Ok(Self {
-            gateway_iid,
-            slots,
-            superframe_id,
-            claim_sequence,
-            timestamp,
-            gateway_count,
-            ordinal,
-            signature,
-        })
-    }
-
-    /// Convert an untrusted decoded resource payload into the structurally
-    /// bounded form accepted by the stateful signature/replay verifier.
-    pub fn into_raw(self, slots_per_superframe: u32) -> Result<slot::RawSlotClaim, ResourceError> {
-        let signature = self
-            .signature
-            .ok_or(ResourceError::MissingField("signature"))?;
-        slot::RawSlotClaim::new(
-            self.gateway_iid,
-            self.slots,
-            self.superframe_id,
-            self.claim_sequence,
-            signature,
-            slots_per_superframe,
-        )
-        .map_err(|_| ResourceError::InvalidFieldType("slot_claim"))
-    }
 }
 
 // ─── Channel info ────────────────────────────────────────────────────────────
@@ -2097,28 +1838,24 @@ impl GatewayCoordinator {
             return CoapResponse::unauthorized();
         };
 
-        let claim = match SlotClaim::decode(payload) {
-            Ok(c) => c,
-            // GCP-6.3: malformed and invalid-signature claims are silently
-            // discarded — an indistinguishable empty 2.04, never a
-            // protocol error (the claim never existed as far as the peer
-            // can observe).
+        // Spec GCP-6.5: the claim arrives as a COSE_Sign1 envelope (payload
+        // integer keys 1-7, all required — from_cose enforces). Malformed
+        // envelopes are silently discarded (GCP-6.3): an indistinguishable
+        // empty 2.04, never a protocol error (the claim never existed as
+        // far as the peer can observe).
+        let raw_claim = match slot::RawSlotClaim::from_cose(payload, self.slots_per_superframe) {
+            Ok(claim) => claim,
             Err(_) => return CoapResponse::empty_success(),
         };
         // GCP-6.5 step 7a (bead 72p4): the wire key-4 field is the claim
-        // EXPIRY; bound how far into the future a gateway can reserve
-        // slots. Claims without the field skip the gate (field is optional
-        // on the wire; C requires it — parity tracked on the policy beads).
-        if let Some(expiry) = claim.timestamp {
-            if !validate_claim_timing(expiry, unix_now()) {
-                return CoapResponse::forbidden();
-            }
-        }
-        let raw_claim = match claim.into_raw(self.slots_per_superframe) {
-            Ok(claim) => claim,
-            // GCP-6.3: invalid-signature claims are silently discarded.
-            Err(_) => return CoapResponse::empty_success(),
+        // EXPIRY (required in COSE form); bound how far into the future a
+        // gateway can reserve slots.
+        let Ok(expiry) = i64::try_from(raw_claim.expiry()) else {
+            return CoapResponse::forbidden();
         };
+        if !validate_claim_timing(expiry, unix_now()) {
+            return CoapResponse::forbidden();
+        }
         // GCP-6.5 rate limiting (spec/08:281): at most 10 claims/min per
         // peer IID and 60/min globally; exceeding claims MUST be silently
         // dropped (same indistinguishable empty 2.04 as signature failures).
@@ -2410,20 +2147,39 @@ mod tests {
         GatewayCoordinator::new_ephemeral(iid, 60, 64).unwrap()
     }
 
+    /// Build a spec GCP-6.5 COSE_Sign1 slot-claim envelope signed by the seed's
+    /// keypair (the wire format `handle_post_slots` now decodes). Expiry is
+    /// in-window by default so the timing gate never masks the test intent.
     fn signed_slot_claim(
         seed_bytes: [u8; 32],
         slots: Vec<u32>,
         superframe: u64,
         sequence: u32,
-    ) -> (SlotClaim, [u8; 32]) {
+    ) -> (Vec<u8>, [u8; 32]) {
+        signed_slot_claim_with_expiry(
+            seed_bytes,
+            slots,
+            superframe,
+            sequence,
+            unix_now() + 100,
+        )
+    }
+
+    fn signed_slot_claim_with_expiry(
+        seed_bytes: [u8; 32],
+        slots: Vec<u32>,
+        superframe: u64,
+        sequence: u32,
+        expiry: i64,
+    ) -> (Vec<u8>, [u8; 32]) {
         let (private, public) = derive_keypair(&Seed::new(seed_bytes));
         let pubkey = *public.as_bytes();
         let iid = crate::trust::iid_from_pubkey(&pubkey);
-        let transcript = slot::slot_claim_transcript(&iid, &slots, superframe, sequence).unwrap();
-        let signature = sign(&private, &public, &transcript);
-        let mut claim = SlotClaim::new(iid, slots, superframe, sequence);
-        claim.signature = Some(signature);
-        (claim, pubkey)
+        let mut claim =
+            SlotClaim::new(iid, slots, superframe, sequence).with_federation(3, 0);
+        claim.timestamp = Some(expiry);
+        let envelope = claim.encode_cose(&private, &public).unwrap();
+        (envelope, pubkey)
     }
 
     fn coordinator_state_paths(name: &str) -> (PathBuf, PathBuf) {
@@ -2694,43 +2450,6 @@ mod tests {
     }
 
     #[test]
-    fn slot_claim_encode_decode() {
-        let claim = SlotClaim::new(
-            [0x02, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77],
-            vec![0, 3, 6, 9],
-            42,
-            7,
-        )
-        .with_federation(3, 0);
-
-        let encoded = claim.encode();
-        let decoded = SlotClaim::decode(&encoded).unwrap();
-
-        assert_eq!(decoded.gateway_iid, claim.gateway_iid);
-        assert_eq!(decoded.slots, vec![0, 3, 6, 9]);
-        assert_eq!(decoded.superframe_id, 42);
-        assert_eq!(decoded.claim_sequence, 7);
-        assert_eq!(decoded.gateway_count, Some(3));
-        assert_eq!(decoded.ordinal, Some(0));
-    }
-
-    #[test]
-    fn slot_claim_canonical_encoding() {
-        let claim = SlotClaim::new(
-            [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
-            vec![0, 1, 2],
-            100,
-            0,
-        );
-
-        let canonical1 = claim.encode_canonical();
-        let canonical2 = claim.encode_canonical();
-
-        // Deterministic encoding should produce identical output
-        assert_eq!(canonical1, canonical2);
-    }
-
-    #[test]
     fn gateway_coordinator_get_info() {
         let iid = [
             0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
@@ -2781,16 +2500,26 @@ mod tests {
         };
 
         let now = unix_now();
-        let (mut far_claim, pubkey) = signed_slot_claim([0x31; 32], vec![30, 31, 32], 1, 0);
-        far_claim.timestamp = Some(now + MAX_CLAIM_DURATION_SECONDS + 1);
-        let response = coordinator.handle_post_slots(&far_claim.encode(), true, Some(&pubkey), 1);
+        let (far_claim, pubkey) = signed_slot_claim_with_expiry(
+            [0x31; 32],
+            vec![30, 31, 32],
+            1,
+            0,
+            now + MAX_CLAIM_DURATION_SECONDS + 1,
+        );
+        let response = coordinator.handle_post_slots(&far_claim, true, Some(&pubkey), 1);
         assert_eq!(response.code, 0x83); // 4.03 Forbidden
 
         // In-window expiry (now + 300 <= now + 305) passes the timing gate
         // and the claim is accepted (2.04).
-        let (mut ok_claim, pubkey) = signed_slot_claim([0x31; 32], vec![30, 31, 32], 1, 0);
-        ok_claim.timestamp = Some(now + MAX_CLAIM_DURATION_SECONDS);
-        let response = coordinator.handle_post_slots(&ok_claim.encode(), true, Some(&pubkey), 1);
+        let (ok_claim, pubkey) = signed_slot_claim_with_expiry(
+            [0x31; 32],
+            vec![30, 31, 32],
+            1,
+            0,
+            now + MAX_CLAIM_DURATION_SECONDS,
+        );
+        let response = coordinator.handle_post_slots(&ok_claim, true, Some(&pubkey), 1);
         assert_eq!(response.code, 0x44); // 2.04 Changed
     }
 
@@ -2809,8 +2538,7 @@ mod tests {
         };
 
         // Claim slots 30, 31, 32 which we don't own (no conflict)
-        let (claim, pubkey) = signed_slot_claim([0x31; 32], vec![30, 31, 32], 1, 0);
-        let payload = claim.encode();
+        let (payload, pubkey) = signed_slot_claim([0x31; 32], vec![30, 31, 32], 1, 0);
 
         // Without OSCORE, should return 4.01 Unauthorized
         let response = coordinator.handle_post_slots(&payload, false, Some(&pubkey), 1);
@@ -2828,17 +2556,19 @@ mod tests {
 
         // GCP-6.3: a claim whose signature fails MUST be silently discarded —
         // an indistinguishable empty 2.04, never a 4.01 protocol error.
-        let (mut claim, pubkey) = signed_slot_claim([0x51; 32], vec![20, 21], 1, 0);
-        claim.signature = Some([0x00; 48]); // garbage signature
-        let payload = claim.encode();
+        // The envelope is validly shaped; the trailing 48 signature bytes
+        // are corrupted so decode succeeds but verification fails.
+        let (mut payload, pubkey) = signed_slot_claim([0x51; 32], vec![20, 21], 1, 0);
+        let sig_start = payload.len() - 48;
+        payload[sig_start..].fill(0x00); // garbage signature
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         assert_eq!(response.code, 0x44); // 2.04 Changed (empty = discarded)
         assert!(response.payload.is_empty());
 
-        // A missing signature is also silently discarded.
-        let (mut claim, pubkey) = signed_slot_claim([0x52; 32], vec![22], 1, 0);
-        claim.signature = None;
-        let payload = claim.encode();
+        // A truncated envelope (no complete signature) is malformed and
+        // silently discarded the same way.
+        let (mut payload, pubkey) = signed_slot_claim([0x52; 32], vec![22], 1, 0);
+        payload.truncate(payload.len() - 1);
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         assert_eq!(response.code, 0x44);
         assert!(response.payload.is_empty());
@@ -2861,8 +2591,7 @@ mod tests {
         };
 
         // Higher IID gateway claims overlapping slots
-        let (claim, pubkey) = signed_slot_claim([0x41; 32], vec![10, 11, 12], 1, 0);
-        let payload = claim.encode();
+        let (payload, pubkey) = signed_slot_claim([0x41; 32], vec![10, 11, 12], 1, 0);
 
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim
@@ -2898,8 +2627,8 @@ mod tests {
             slot_count: Some(30),
             owned: None,
         };
-        let (claim, pubkey) = signed_slot_claim([0x51; 32], vec![10, 11, 12], 1, 0);
-        let response = coordinator.handle_post_slots(&claim.encode(), true, Some(&pubkey), 1);
+        let (payload, pubkey) = signed_slot_claim([0x51; 32], vec![10, 11, 12], 1, 0);
+        let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         assert_eq!(response.code, 0x44);
 
         let local_slots = coordinator
@@ -2940,8 +2669,8 @@ mod tests {
         // Lower-IID peer claims three of our slots with no free slot left to
         // replace them; recovery must fail closed instead of accepting the
         // claim with missing replacements.
-        let (claim, pubkey) = signed_slot_claim([0x53; 32], vec![10, 11, 12], 1, 0);
-        let response = coordinator.handle_post_slots(&claim.encode(), true, Some(&pubkey), 1);
+        let (payload, pubkey) = signed_slot_claim([0x53; 32], vec![10, 11, 12], 1, 0);
+        let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         assert_eq!(response.code, 0x45); // 2.05 Content (rejection payload)
 
         let Value::Map(fields) = ciborium::from_reader(response.payload.as_slice()).unwrap() else {
@@ -2987,7 +2716,7 @@ mod tests {
         let (claim, pubkey) = signed_slot_claim([0x52; 32], vec![10, 11, 12], 4, 0);
         assert_eq!(
             coordinator
-                .handle_post_slots(&claim.encode(), true, Some(&pubkey), 4)
+                .handle_post_slots(&claim, true, Some(&pubkey), 4)
                 .code,
             0x44
         );
@@ -3013,7 +2742,7 @@ mod tests {
         // is what makes the duplicate land in this arm.
         assert_eq!(
             restored
-                .handle_post_slots(&claim.encode(), true, Some(&pubkey), 4)
+                .handle_post_slots(&claim, true, Some(&pubkey), 4)
                 .code,
             0x83
         );
@@ -3049,7 +2778,7 @@ mod tests {
         let (claim, pubkey) = signed_slot_claim([0x53; 32], vec![40], 9, 0);
         assert_eq!(
             coordinator
-                .handle_post_slots(&claim.encode(), true, Some(&pubkey), 9)
+                .handle_post_slots(&claim, true, Some(&pubkey), 9)
                 .code,
             0xa0
         );
@@ -3060,7 +2789,7 @@ mod tests {
         coordinator.replay_persistence.as_mut().unwrap().path = original_path;
         assert_eq!(
             coordinator
-                .handle_post_slots(&claim.encode(), true, Some(&pubkey), 9)
+                .handle_post_slots(&claim, true, Some(&pubkey), 9)
                 .code,
             0x45
         );
@@ -3095,7 +2824,7 @@ mod tests {
         let (claim, pubkey) = signed_slot_claim([0x41; 32], vec![40, 41], 4, 0);
         assert_eq!(
             coordinator
-                .handle_post_slots(&claim.encode(), true, Some(&pubkey), 4)
+                .handle_post_slots(&claim, true, Some(&pubkey), 4)
                 .code,
             0x44
         );
@@ -3105,7 +2834,7 @@ mod tests {
         // The advanced high-water and its stored peer claim must commit as
         // one transaction even though the claim itself is rejected.
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
-        let response = coordinator.handle_post_slots(&conflict.encode(), true, Some(&pubkey), 4);
+        let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
         assert_eq!(response.code, 0x45); // 2.05 Content (rejection payload)
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
@@ -3132,7 +2861,7 @@ mod tests {
         // Forbidden (spec/08:226-236).
         assert_eq!(
             restored
-                .handle_post_slots(&conflict.encode(), true, Some(&pubkey), 4)
+                .handle_post_slots(&conflict, true, Some(&pubkey), 4)
                 .code,
             0x83
         );
