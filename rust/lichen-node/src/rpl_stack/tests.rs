@@ -2886,7 +2886,6 @@ async fn sender_ipv6(
 
 #[tokio::test]
 #[cfg(feature = "root-sig")]
-#[ignore = "WIP: uncompressed DIO+0x17 signature (~290B) exceeds the 254-byte link frame - sizing decision tracked in bead b7z9.88.4 (fragmentation/compress/omit tradeoff); see also ljgs"]
 async fn root_dio_signature_roundtrip_produces_and_advances() {
     let root_identity = identity(31);
     let leaf_identity = identity(32);

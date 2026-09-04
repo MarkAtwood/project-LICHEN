@@ -902,8 +902,11 @@ impl Router {
         link: &LinkLayer,
         expiry_unix: u64,
     ) -> usize {
-        let base = self.build_authenticated_dio(out, link);
-        
+        // The 0x17 COSE signature supersedes the version-auth option
+        // (both bind the root to version/rank; the COSE covers a superset
+        // and omitting version-auth makes the signed DIO fit the link
+        // frame — qe1t sizing resolution). Build WITHOUT it.
+        let base = self.build_dio_with_authorization(out, None);
         if base == 0 {
             return 0;
         }
