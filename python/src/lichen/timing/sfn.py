@@ -117,6 +117,13 @@ class DesyncFSM:
                 self.consecutive_valid = 1
                 self.missed_superframes = 0
             return self.state
+        if self.state == DesyncState.SYNCED:
+            # A valid beacon clears the missed-superframe streak so an
+            # isolated miss cannot accumulate toward the R-02a-081
+            # SYNCED -> DESYNCED transition.
+            if valid:
+                self.missed_superframes = 0
+            return self.state
         if self.state == DesyncState.RECOVERING:
             if valid:
                 self.consecutive_valid += 1
@@ -146,14 +153,27 @@ class DesyncFSM:
         return self.state
 
     def on_missed_superframe(self) -> DesyncState:
-        """Advance the bounded RECOVERING listen timeout by one superframe."""
-        if self.state != DesyncState.RECOVERING:
+        """Advance the bounded RECOVERING listen timeout by one superframe.
+
+        SYNCED also tracks missed superframes: per the transition table
+        (spec/02a-coordinated-capacity.md:267, R-02a-081) >= 3 consecutive
+        missed beacons transition SYNCED -> DESYNCED ("Suppress TX, reset
+        counters"). Without this a SYNCED node never desyncs no matter how
+        long the root goes silent.
+        """
+        if self.state == DesyncState.SYNCED:
+            self.missed_superframes += 1
+            if self.missed_superframes >= TDMA_BEACON_TIMEOUT_SUPERFRAMES:
+                self.state = DesyncState.DESYNCED
+                self.consecutive_valid = 0
+                self.missed_superframes = 0
             return self.state
-        self.missed_superframes += 1
-        if self.missed_superframes >= TDMA_BEACON_TIMEOUT_SUPERFRAMES:
-            self.state = DesyncState.DESYNCED
-            self.consecutive_valid = 0
-            self.missed_superframes = 0
+        if self.state == DesyncState.RECOVERING:
+            self.missed_superframes += 1
+            if self.missed_superframes >= TDMA_BEACON_TIMEOUT_SUPERFRAMES:
+                self.state = DesyncState.DESYNCED
+                self.consecutive_valid = 0
+                self.missed_superframes = 0
         return self.state
 
 
