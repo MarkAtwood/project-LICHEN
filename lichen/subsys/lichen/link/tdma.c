@@ -146,8 +146,23 @@ lichen_desync_on_missed_superframe(struct lichen_tdma_ctx *tdma)
 {
 	if (tdma == NULL) return LICHEN_DESYNC_DESYNCED;
 
+	/* R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267): >= 3
+	 * consecutive missed beacons -> DESYNCED ("Suppress TX, reset
+	 * counters"), mirroring python timing/sfn.py. No-op outside
+	 * SYNCED/RECOVERING. */
+	if (tdma->desync_state == LICHEN_DESYNC_SYNCED) {
+		tdma->desync_missed_superframes++;
+		if (tdma->desync_missed_superframes >=
+		    LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES) {
+			tdma->desync_state = LICHEN_DESYNC_DESYNCED;
+			tdma->desync_consecutive_valid = 0;
+			tdma->desync_missed_superframes = 0;
+		}
+		return tdma->desync_state;
+	}
+
 	/* Bounded RECOVERING listen timeout: 3 superframes (RECOMMENDED,
-	 * spec/09 14.7). No-op outside RECOVERING. */
+	 * spec/09 14.7). */
 	if (tdma->desync_state != LICHEN_DESYNC_RECOVERING) {
 		return tdma->desync_state;
 	}

@@ -108,6 +108,19 @@ static void test_desync_fsm(void)
 	assert(lichen_desync_on_missed_superframe(&tdma) ==
 	       LICHEN_DESYNC_DESYNCED);
 
+	/* R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267):
+	 * >= 3 consecutive missed superframes in SYNCED -> DESYNCED,
+	 * counters reset; a count below the threshold stays SYNCED. */
+	tdma.desync_state = LICHEN_DESYNC_SYNCED;
+	tdma.desync_missed_superframes = 0;
+	assert(lichen_desync_on_missed_superframe(&tdma) ==
+	       LICHEN_DESYNC_SYNCED);
+	assert(lichen_desync_on_missed_superframe(&tdma) ==
+	       LICHEN_DESYNC_SYNCED);
+	assert(lichen_desync_on_missed_superframe(&tdma) ==
+	       LICHEN_DESYNC_DESYNCED);
+	assert(tdma.desync_consecutive_valid == 0U);
+
 	/* packets-timing.json desync_fsm_recovery_timeout: both partial-
 	 * recovery cases (valid_count 1 and 2) return to DESYNCED after 3
 	 * missed superframes, with the consecutive-valid counter reset. */
