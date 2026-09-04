@@ -245,6 +245,18 @@ static const struct {
 	 LICHEN_RPL_DAO_REJECTED, false},
 };
 
+/* The denial guarantee covers routing_table, parent_map, and snapshots -
+ * the workspace is transient staging scratch used (and dirtied) during
+ * parsing, so it is excluded from the "rejected DAO mutated nothing"
+ * comparison. The three meaningful members precede the workspace in the
+ * struct layout. */
+static int root_state_differs(const struct lichen_rpl_dao_root_state *a,
+			      const struct lichen_rpl_dao_root_state *b)
+{
+	size_t meaningful = offsetof(struct lichen_rpl_dao_root_state, workspace);
+	return memcmp(a, b, meaningful) != 0;
+}
+
 static int test_dao_origin_authorization_matrix(void)
 {
 	uint8_t dao[512];
@@ -270,6 +282,10 @@ static int test_dao_origin_authorization_matrix(void)
 		len = dao_begin(dao, 1);
 		add_target(dao, &len, origin_cases[i].target);
 		add_transit(dao, &len, 1, 0x40, 1, 255);
+		/* Spec 05 8.6: every DAO must carry exactly one 0x12 Origin
+		 * Signature option, signed with the suite key (row 3 expects
+		 * the verification to fail via the mismatched pubkey). */
+		sign_origin(dao, &len, origin);
 		struct lichen_rpl_dao_root_state saved = root_state;
 
 		enum lichen_rpl_dao_process_result result =
@@ -282,7 +298,7 @@ static int test_dao_origin_authorization_matrix(void)
 			  origin_cases[i].route_installed,
 			  origin_cases[i].name);
 		if (result != LICHEN_RPL_DAO_APPLIED) {
-			ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+			ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 				      "rejected DAO mutated routing state");
 		}
 		tests_run++;
@@ -322,7 +338,7 @@ static int test_foreign_host_route_preserves_installed_route(void)
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "foreign route accepted");
 	ASSERT_EQ(route_present(3), false, "foreign route installed");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "foreign route mutated routing state");
 
 	tests_run++;
@@ -358,7 +374,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "foreign /64 accepted");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "foreign /64 mutated routing state");
 
 	/* ::/0: the canonical default route is never authorizable. */
@@ -369,7 +385,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "default route accepted");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "default route mutated routing state");
 
 	/* Truncated /64 body: 7 < ceil(64/8) prefix octets. */
@@ -380,7 +396,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "truncated target accepted");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "truncated target mutated routing state");
 
 	/* Prefix length over the 128-bit bound. */
@@ -391,7 +407,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "prefix_len 129 accepted");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "prefix_len 129 mutated routing state");
 
 	/* Target option body shorter than the fixed 2-byte header. */
@@ -404,7 +420,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "short target body accepted");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "short target body mutated routing state");
 
 	/* No Target option at all. */
@@ -414,7 +430,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "targetless DAO accepted");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "targetless DAO mutated routing state");
 
 	tests_run++;
@@ -561,11 +577,19 @@ static int test_delegated_slash64_end_to_end(void)
 	ASSERT_EQ(route_present_bytes(installed), false, "/64 route installed");
 	ASSERT_EQ(route_present(2), false, "self route installed");
 	ASSERT_TRUE(find_snapshot(installed) == NULL, "/64 snapshot installed");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "denial mutated routing state");
 
 	ASSERT_EQ(lichen_rpl_prefix_delegate(origin, slash64_full, 64),
 		  LICHEN_RPL_OK, "delegate /64");
+	/* Rebuild the DAO after delegating: a DAO may carry exactly one
+	 * 0x12 Origin Signature option, and the previous buffer already
+	 * has one appended. */
+	len = dao_begin(dao, 1);
+	add_target(dao, &len, 2);
+	add_transit(dao, &len, 1, 0x40, 1, 255);
+	add_raw_target(dao, &len, 0, 64, slash64, sizeof(slash64));
+	add_transit(dao, &len, 2, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
@@ -707,7 +731,7 @@ static int test_gate_generalized_body_literals(void)
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
 							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "/63 accepted by /64 delegation");
-	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
+	ASSERT_EQ(root_state_differs(&root_state, &saved), 0,
 		      "/63 denial mutated routing state");
 
 	tests_run++;

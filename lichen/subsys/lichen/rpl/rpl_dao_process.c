@@ -19,7 +19,6 @@
 #include <lichen/rpl_routing.h>
 #include <lichen/schnorr48.h>
 #include <monocypher-ed25519.h>
-#include <stdio.h>
 #include <monocypher.h>
 #include "rpl_internal.h"
 
@@ -119,7 +118,6 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 	bool have_origin_signature = false;
 
 	if (opts == NULL || opts_len == 0) {
-		fprintf(stderr, "TRACE extract reject at 122\n");
 		return false;
 	}
 
@@ -135,21 +133,18 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 			break;
 		}
 		if (ret != LICHEN_RPL_OK) {
-			fprintf(stderr, "TRACE extract reject at 137\n");
 			return false;
 		}
 		if (opt.opt_type == LICHEN_RPL_OPT_RPL_TARGET) {
 			struct lichen_rpl_target target;
 
 			if (routes_closed) {
-				fprintf(stderr, "TRACE extract reject at 143\n");
 				return false;
 			}
 
 			if (candidate_count > 0) {
 				if (!finish_group(staged, staged_count, targets, target_count,
 						  candidates, candidate_count, path_sequence)) {
-					fprintf(stderr, "TRACE extract reject at 149\n");
 					return false;
 				}
 				target_count = 0;
@@ -171,7 +166,6 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 			    opt.data[1] > 128U ||
 			    opt.data_len - 2 < (opt.data[1] + 7U) / 8U ||
 			    target_count == CONFIG_LICHEN_RPL_MAX_ROUTES) {
-				fprintf(stderr, "TRACE extract reject at 170\n");
 				return false;
 			}
 			memset(&target, 0, sizeof(target));
@@ -182,7 +176,6 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 			lichen_rpl_prefix_canonicalize(target.prefix, target.prefix_len);
 			for (int i = 0; i < target_count; i++) {
 				if (rpl_addr_eq(targets[i].target, target.prefix)) {
-					fprintf(stderr, "TRACE extract reject at 180\n");
 					return false;
 				}
 			}
@@ -193,7 +186,6 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 		} else if (opt.opt_type == LICHEN_RPL_OPT_RPL_TARGET_DESCRIPTOR) {
 			if (routes_closed || !last_was_target || candidate_count > 0 ||
 			    opt.data_len != 4) {
-				fprintf(stderr, "TRACE extract reject at 190\n");
 				return false;
 			}
 			targets[target_count - 1].descriptor =
@@ -211,24 +203,20 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 			    (opt.data[0] & 0x7fU) != 0U ||
 			    lichen_rpl_transit_info_parse(&transit, opt.data, opt.data_len) !=
 				LICHEN_RPL_OK) {
-				fprintf(stderr, "TRACE extract reject at 207\n");
 				return false;
 			}
 			/* The current node-owned /128 profile rejects external routes. */
 			if (transit.external) {
-				fprintf(stderr, "TRACE extract reject at 211\n");
 				return false;
 			}
 			transit.path_control &= LICHEN_RPL_PATH_CONTROL_MASK;
 			if (transit.path_control == 0) {
-				fprintf(stderr, "TRACE extract reject at 215\n");
 				return false;
 			}
 			last_was_target = false;
 			if (have_transit && (transit.path_sequence != path_sequence ||
 					     transit.path_lifetime != path_lifetime ||
 					     transit.external != external)) {
-				fprintf(stderr, "TRACE extract reject at 221\n");
 				return false;
 			}
 			if (!have_transit) {
@@ -249,13 +237,11 @@ static bool extract_updates(const uint8_t *dao_bytes, size_t len,
 					continue;
 				}
 				if (!candidate_equal(&candidates[i], &candidate)) {
-					fprintf(stderr, "TRACE extract reject at 241\n");
 					return false;
 				}
 				goto duplicate_candidate;
 			}
 			if (candidate_count == CONFIG_LICHEN_RPL_MAX_PARENTS) {
-				fprintf(stderr, "TRACE extract reject at 246\n");
 				return false;
 			}
 			candidates[candidate_count++] = candidate;
@@ -275,7 +261,6 @@ duplicate_candidate:
 			 * floor). Matches Rust. Reference project-LICHEN-et78.2 */
 			if (routes_closed || have_origin_signature || opt.data_len != 56 ||
 			    it.pos != it.len) {
-				fprintf(stderr, "TRACE extract reject at 265\n");
 				return false;
 			}
 			/* spec/05-routing.md 8.6: verify the origin signature
@@ -283,8 +268,6 @@ duplicate_candidate:
 			 * unsigned span is dao_bytes[0 .. it.pos - 58] (the
 			 * 0x12 option header plus 56 data octets end the DAO). */
 			if (origin_pubkey == NULL) {
-				fprintf(stderr, "TRACE origin_pubkey NULL\n");
-				fprintf(stderr, "TRACE extract reject at 273\n");
 				return false;
 			}
 			{
@@ -311,18 +294,14 @@ duplicate_candidate:
 				crypto_sha512_update(&ctx, seq_be, sizeof(seq_be));
 				crypto_sha512_update(&ctx, dao_bytes, unsigned_len);
 				crypto_sha512_final(&ctx, digest);
-				fprintf(stderr, "TRACE 0x12 arm: unsigned_len=%zu opts_start=%zu it.pos=%zu seq=%llu\n", unsigned_len, opts_start, it.pos, (unsigned long long)origin_seq_u64);
 				if (!schnorr48_verify(origin_pubkey, digest,
 						      sizeof(digest),
 						      &opt.data[8], 48U)) {
-					fprintf(stderr, "TRACE sig verify FAILED\n");
-					fprintf(stderr, "TRACE extract reject at 304\n");
 					return false;
 				}
 			}
 			if (!finish_group(staged, staged_count, targets, target_count,
 					  candidates, candidate_count, path_sequence)) {
-				fprintf(stderr, "TRACE extract reject at 309\n");
 				return false;
 			}
 			target_count = 0;
@@ -330,7 +309,6 @@ duplicate_candidate:
 			have_origin_signature = true;
 			routes_closed = true;
 		} else {
-			fprintf(stderr, "TRACE extract reject at 316\n");
 			return false;
 		}
 	}
@@ -339,7 +317,6 @@ duplicate_candidate:
 	 * Signature Option; a missing option rejects the entire DAO
 	 * without state mutation. */
 	if (!have_origin_signature) {
-		fprintf(stderr, "TRACE extract reject at 324\n");
 		return false;
 	}
 	if (routes_closed) {
@@ -370,7 +347,6 @@ static bool delegation_canonicalize(const uint8_t *prefix, uint8_t prefix_len,
 				    uint8_t out[16])
 {
 	if (prefix == NULL || prefix_len == 0 || prefix_len > 128U) {
-		fprintf(stderr, "TRACE extract reject at 354\n");
 		return false;
 	}
 	memset(out, 0, 16);
@@ -442,7 +418,6 @@ bool lichen_rpl_prefix_delegation_authorizes(const uint8_t *origin,
 					     const uint8_t *canonical_prefix)
 {
 	if (origin == NULL || canonical_prefix == NULL) {
-		fprintf(stderr, "TRACE extract reject at 425\n");
 		return false;
 	}
 	for (int i = 0; i < CONFIG_LICHEN_RPL_MAX_PREFIX_DELEGATIONS; i++) {
@@ -451,7 +426,6 @@ bool lichen_rpl_prefix_delegation_authorizes(const uint8_t *origin,
 			return true;
 		}
 	}
-	fprintf(stderr, "TRACE extract reject at 433\n");
 	return false;
 }
 
@@ -480,7 +454,6 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 	bool found_origin = false;
 
 	if (opts == NULL || opts_len == 0) {
-		fprintf(stderr, "TRACE extract reject at 461\n");
 		return false;
 	}
 
@@ -495,7 +468,6 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 			break;
 		}
 		if (ret != LICHEN_RPL_OK) {
-			fprintf(stderr, "TRACE extract reject at 475\n");
 			return false;
 		}
 		if (opt.opt_type != LICHEN_RPL_OPT_RPL_TARGET) {
@@ -503,7 +475,6 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 		}
 		if (opt.data_len < 2 || opt.data[1] == 0 || opt.data[1] > 128U ||
 		    opt.data_len - 2 < (opt.data[1] + 7U) / 8U) {
-			fprintf(stderr, "TRACE extract reject at 482\n");
 			return false;
 		}
 		uint8_t canonical[16];
@@ -522,7 +493,6 @@ static bool dao_targets_authorized(const uint8_t *dao_bytes, size_t len,
 		}
 		if (!lichen_rpl_prefix_delegation_authorizes(origin, opt.data[1],
 							     canonical)) {
-			fprintf(stderr, "TRACE extract reject at 500\n");
 			return false;
 		}
 	}
@@ -578,7 +548,6 @@ static bool validate_graph(const struct lichen_rpl_dao_manager *dm,
 		}
 	}
 	if (candidate_count > CONFIG_LICHEN_RPL_MAX_ACTIVE_DAO_CANDIDATES) {
-		fprintf(stderr, "TRACE extract reject at 555\n");
 		return false;
 	}
 
@@ -608,7 +577,6 @@ static bool validate_graph(const struct lichen_rpl_dao_manager *dm,
 			}
 		}
 		if (!removed) {
-			fprintf(stderr, "TRACE extract reject at 584\n");
 			return false;
 		}
 	}
@@ -639,7 +607,6 @@ static bool validate_graph(const struct lichen_rpl_dao_manager *dm,
 					}
 				}
 				if (candidate_depth > LICHEN_RPL_MAX_HOPS) {
-					fprintf(stderr, "TRACE extract reject at 614\n");
 					return false;
 				}
 				if (candidate_depth > depth) {
@@ -712,7 +679,6 @@ static bool preserve_prefix_routes(struct lichen_rpl_routing_table *new_rt,
 		if (old_rt->routes[i].valid && old_rt->routes[i].is_prefix) {
 			struct lichen_rpl_route *slot = find_free_route(new_rt);
 			if (slot == NULL) {
-				fprintf(stderr, "TRACE extract reject at 686\n");
 				return false;
 			}
 			*slot = old_rt->routes[i];
@@ -741,7 +707,6 @@ bool rebuild_routes(struct lichen_rpl_dao_manager *dm)
 	/* Preserve prefix routes from previous table before filling with host routes */
 	const struct lichen_rpl_routing_table *old_table = &root->routing_table;
 	if (!preserve_prefix_routes(new_table, old_table)) {
-		fprintf(stderr, "TRACE extract reject at 714\n");
 		return false;
 	}
 
@@ -749,7 +714,6 @@ bool rebuild_routes(struct lichen_rpl_dao_manager *dm)
 	int prefix_count = (int)new_table->prefix_route_count;
 	int free_slots_needed = count_active_snapshots(root);
 	if (prefix_count + free_slots_needed > CONFIG_LICHEN_RPL_MAX_ROUTES) {
-		fprintf(stderr, "TRACE extract reject at 721\n");
 		return false;
 	}
 
@@ -807,7 +771,6 @@ bool rebuild_routes(struct lichen_rpl_dao_manager *dm)
 					if (lichen_rpl_routing_table_add(new_table,
 								       snapshot->target,
 								       best_path, best_len) != LICHEN_RPL_OK) {
-						fprintf(stderr, "TRACE extract reject at 778\n");
 						return false;
 					}
 					changed = true;
@@ -887,36 +850,18 @@ static enum lichen_rpl_dao_process_result process_dao(
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	bool d_flag = (dao_bytes[1] & 0x40U) != 0;
-	if (d_flag) {
-		fprintf(stderr, "TRACE dao dodag: ");
-		for (int _i = 0; _i < 16; _i++) {
-			fprintf(stderr, "%02x", dao.dodag_id[_i]);
-		}
-		fprintf(stderr, "\nTRACE dm  dodag: ");
-		for (int _i = 0; _i < 16; _i++) {
-			fprintf(stderr, "%02x", dm->dodag_id[_i]);
-		}
-		fprintf(stderr, "\nTRACE raw dao head: ");
-		for (int _i = 0; _i < 24 && _i < (int)len; _i++) {
-			fprintf(stderr, "%02x", dao_bytes[_i]);
-		}
-		fprintf(stderr, "\n");
-	}
 	if (dao.rpl_instance_id != dm->rpl_instance_id ||
 	    (d_flag && memcmp(dao.dodag_id, dm->dodag_id, 16) != 0)) {
-		fprintf(stderr, "TRACE process_dao reject at 874\n");
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	/* spec/05-routing.md 8.7.1-8.7.2: every Target MUST be the origin's own
 	 * canonical /128 or an exact prefix delegated to it; ::/0, truncated
 	 * bodies, and prefix_len > 128 fail closed before any mutation. */
 	if (!dao_targets_authorized(dao_bytes, len, origin)) {
-		fprintf(stderr, "TRACE process_dao reject at 880\n");
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	if (!extract_updates(dao_bytes, len, &root->workspace, &staged_count,
 			     origin_pubkey, origin, dm)) {
-		fprintf(stderr, "TRACE process_dao reject at 884\n");
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 
@@ -945,13 +890,11 @@ static enum lichen_rpl_dao_process_result process_dao(
 
 			if (relation == LICHEN_RPL_SEQUENCE_EQUAL) {
 				if (!snapshot_equal(incoming, current)) {
-					fprintf(stderr, "TRACE process_dao reject at 912\n");
 					return LICHEN_RPL_DAO_REJECTED;
 				}
 				continue;
 			}
 			if (relation != LICHEN_RPL_SEQUENCE_NEWER) {
-				fprintf(stderr, "TRACE process_dao reject at 917\n");
 				return LICHEN_RPL_DAO_REJECTED;
 			}
 			staged[i].changed = true;
@@ -967,7 +910,6 @@ static enum lichen_rpl_dao_process_result process_dao(
 				}
 			}
 			if (staged[i].slot < 0) {
-				fprintf(stderr, "TRACE process_dao reject at 932\n");
 				return LICHEN_RPL_DAO_REJECTED;
 			}
 		}
@@ -981,7 +923,6 @@ static enum lichen_rpl_dao_process_result process_dao(
 		}
 	}
 	if (!validate_graph(dm, staged, staged_count)) {
-		fprintf(stderr, "TRACE process_dao reject at 945\n");
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 
@@ -998,7 +939,6 @@ static enum lichen_rpl_dao_process_result process_dao(
 				root->snapshots[staged[i].slot] = staged[i].previous;
 			}
 		}
-		fprintf(stderr, "TRACE process_dao reject at 961\n");
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	for (int i = 0; i < staged_count; i++) {
@@ -1036,7 +976,6 @@ enum lichen_rpl_dao_process_result lichen_rpl_dao_manager_process_dao_ex(
 	uint8_t *ack_buf, size_t ack_buf_len)
 {
 	if (dm == NULL || dao_bytes == NULL) {
-		fprintf(stderr, "TRACE process_dao reject at 998\n");
 		return LICHEN_RPL_DAO_REJECTED;
 	}
 	k_mutex_lock(&dm->lock, K_FOREVER);
