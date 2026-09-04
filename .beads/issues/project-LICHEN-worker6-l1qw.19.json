@@ -1,13 +1,15 @@
 {
   "id": "project-LICHEN-worker6-l1qw.19",
   "title": "GCP-6.5: response-code semantics divergent (Rust 2.05 not 4.09+winning claim, no 4.03; C missing +5s tolerance; vectors pin 2.01/4.29)",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:01:51.076211425Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T12:01:51.076211425Z",
+  "updated_at": "2026-09-04T20:34:33.163930238Z",
+  "closed_at": "2026-09-04T20:34:33.163930238Z",
+  "close_reason": "TRIAGED AS OWNER-GATED (Mark) - superseded by yiv0, which carries the precise per-test reconciliation plan for the conflict-response change. Status at current tip: (1) 4.03 Forbidden for replay/expiry/invalid-slot: IMPLEMENTED (resources.rs handle_post_slots validate_claim_timing + verifier Replay/StaleSuperframe arms); (2) silent-discard empty 2.04 for malformed/signature: IMPLEMENTED (from_cose/into_raw/verify Err arms); (3) CONFLICT response: current arm returns 2.05 Content with the rejection map — spec 08:226-236 asks 4.09 Conflict with the winning claim as payload; the winning-claim COSE payload requires storing the winner's COSE at accept time (the C claim_store_cose pattern) — not a 1-line change; (4) C missing +5s tolerance: Python verify_slot_claim HAS the 5s stale tolerance, the C tdma.c/coap_slot_coord enforce strict expiry\u003c=now — the boundary semantics need an adjudication (same family as GUARD_PPM), and the shared corpus currently pins 2.01/4.29 in places. This bead's scope spans both stacks' response-code model and the vector corpus — requires Mark's adjudication on which semantics (spec-strict 4.03/4.09 or in-tree 2.05) are canonical. Filing the tradeoff rather than picking silently; the fully_occupied/slot_state_write_failure test paths that complicate the change are documented in yiv0.",
   "labels": [
     "gcp",
     "spec-gap",
