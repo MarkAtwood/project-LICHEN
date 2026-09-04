@@ -2881,3 +2881,68 @@ async fn sender_ipv6(
         .await
         .unwrap();
 }
+
+// ── Root-side 0x17 producer round-trip (b7z9.88.2, feature "root-sig") ──────
+
+#[tokio::test]
+#[cfg(feature = "root-sig")]
+async fn root_dio_signature_roundtrip_produces_and_advances() {
+    let root_identity = identity(31);
+    let leaf_identity = identity(32);
+    let mut root_eui64 = root_identity.iid;
+    root_eui64[0] ^= 0x02;
+    let mut leaf_eui64 = leaf_identity.iid;
+    leaf_eui64[0] ^= 0x02;
+    let (_mesh, [root_radio, leaf_radio, _spare]) =
+        MeshHarness::new([root_eui64, leaf_eui64, [0u8; 8]]);
+    let root_addr = root_address(&root_identity);
+
+    let mut root = RplStack::provision_root(
+        Stack::new(root_radio, root_identity.clone(), 128, 0),
+        root_addr,
+        root_addr,
+        announces(root_addr[8..16].try_into().unwrap()),
+        MemStorage::new(),
+    )
+    .unwrap();
+    let mut leaf = RplStack::provision_leaf(
+        Stack::new(leaf_radio, leaf_identity.clone(), 129, 0),
+        address(&leaf_identity, 1),
+        root_addr,
+        announces(root_addr[8..16].try_into().unwrap()),
+        MemStorage::new(),
+    )
+    .unwrap();
+
+    // Both clocks agree and are valid: the root signs with expiry
+    // now + ROOT_SIG_TTL_SECONDS; the leaf enforces the expiry gate.
+    root.set_wall_clock_unix(|| 2_000_000_000);
+    leaf.set_wall_clock_unix(|| 2_000_000_000);
+
+    // Link-layer TOFU: the leaf pins the root's key from its announce, so
+    // the COSE kid (same key) also resolves through the pin store.
+    root.send_announce(&signed_announce(&root_identity, 1), 0)
+        .await
+        .unwrap();
+    assert!(matches!(
+        leaf.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::AnnouncementAccepted { .. })
+    ));
+
+    // First root DIO: signed (seq 1) -> admitted.
+    root.send_dio(RPL_ALL_NODES).await.unwrap();
+    let outcome = leaf.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        "first signed DIO must be admitted: {outcome:?}"
+    );
+
+    // Second root DIO: the producer must ADVANCE root_seq (2 > 1), or the
+    // leaf's replay gate would reject — pinning the seq advance.
+    root.send_dio(RPL_ALL_NODES).await.unwrap();
+    let outcome = leaf.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        "second signed DIO must be admitted after seq advance: {outcome:?}"
+    );
+}
