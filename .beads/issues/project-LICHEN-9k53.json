@@ -2,17 +2,17 @@
   "id": "project-LICHEN-9k53",
   "title": "[spec-compliance] outdated cross-reference to ygg_addr_from_pubkey after refactor",
   "description": "spec/06-security.md:105-145 (sections 8.5, 8.7) references `rust/lichen-link/src/identity.rs:14-48` (`yggdrasil_addr_from_pubkey`) and specific line 40. This no longer matches after commit ce284558b (project-LICHEN-ebhw.2.1.2) which moved the function to lichen-core/src/addr.rs as ygg_addr_from_pubkey (with SHA-512+SHA-256 impl matching the normative steps and test/vectors/yggdrasil-derivation.json). The re-export in lichen-link/lib.rs exists but spec is stale. Code now differs from spec documentation. Also verify all other cross-references in 03-addressing.md, 04-network.md. Test vectors still pass.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "assignee": "opencode-worker-1",
   "owner": "agent@lichen-project.dev",
   "created_at": "2026-07-23T05:39:05.194103587Z",
   "created_by": "AI Agent",
-  "updated_at": "2026-09-04T05:35:56.179272565Z",
+  "updated_at": "2026-09-04T05:48:48.128931232Z",
   "started_at": "2026-07-24T16:15:29.995076531Z",
-  "lease_expires_at": "2026-09-04T05:40:56.179272565Z",
-  "heartbeat_at": "2026-09-04T05:35:56.179272565Z",
+  "closed_at": "2026-09-04T05:48:48.128931232Z",
+  "close_reason": "Stale cross-references after ygg_addr_from_pubkey moved to lichen-core/src/addr.rs (ce284558b) refreshed in spec/06-security.md and spec/04-network.md (commits 015e2ce5c5 sync + c34a752f52): 06:139 identity.rs:100 -\u003e :69 (Identity::from_seed); 06:144 04-network.md:53/identity.rs:15 -\u003e 04-network.md §6.2 + addr.rs:86 iid_from_pubkey_bytes (canonical; re-export via lichen-link::iid_from_pubkey noted); 04-network.md:58 addr.rs:70 -\u003e addr.rs:86-117 (iid_from_pubkey_bytes, ygg_addr_from_pubkey); 06:143 schnorr48.py:107 -\u003e :96 (derive_keypair, same drift class spotted by review, fixed in-bead). References already correct pre-existing: 06:105 (addr.rs:86-117 + re-export via lib.rs:83-84), 06:145 (addr.rs:109), 06:146 (identity.py:109), identity.py:116-234 range and 03-addressing.md:12-18 verified valid. Verification: yggdrasil/identity python tests 159 passed (6 pre-existing httpx-missing collection errors unrelated). Reviewer (kimi-k3) 3 passes all PASS: correctness (every ref resolves today; zero yggdrasil_addr_from_pubkey remnants in spec/), security-accuracy (normative SHA-512/clamp claims recomputed against impl - identity.py clamp matches schnorr48.py:82-92; seed chain matches), edge-cases (docs/spec-coverage hits are historical audit records quoting old refs as evidence, not live citations; both test-vector files present; markdown structure intact).",
   "labels": [
     "yggdrasil"
   ]
