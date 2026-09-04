@@ -52,7 +52,7 @@ def _pubkey(case: dict) -> bytes:
 
 
 def _assert_fields(claim: SlotClaim, case: dict, name: str) -> None:
-    slots = [s for s in case["slots"]]
+    slots = list(case["slots"])
     assert claim.slots == tuple(slots), name
     assert claim.superframe_id == case["superframe_epoch"], name
     assert claim.claim_seq == case["claim_seq"], name

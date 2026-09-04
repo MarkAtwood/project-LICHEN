@@ -390,7 +390,7 @@ class MultiRootState:
     def beacon_overlaps_window(
         self,
         beacon_time_us: int,
-        window: "TdmaWindow",
+        window: TdmaWindow,
     ) -> bool:
         """Overlap test per 2a.5.3/R-02a-040: a candidate beacon overlaps
         the current root's window when it arrives within
