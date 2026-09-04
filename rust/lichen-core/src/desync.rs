@@ -42,6 +42,9 @@ pub fn initial_startup_delay(nodes_heard: u32) -> u32 {
 /// RECOMMENDED; parity with C LICHEN_DESYNC_RECOVERY_BEACONS and python
 /// TDMA_BEACON_TIMEOUT_SUPERFRAMES).
 const RECOVERY_BEACONS: u8 = 3;
+/// R-02a-081 SYNCED row: >= 3 consecutive missed beacons -> DESYNCED
+/// (spec/02a-coordinated-capacity.md:267).
+const SYNCED_MISSED_BEACON_DESYNC: u8 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DesyncState {
@@ -163,8 +166,20 @@ impl DesyncFSM {
 
     /// Advance the bounded RECOVERING listen timeout by one superframe
     /// (spec 09 14.7: 3-superframe RECOMMENDED; parity with C tdma.c and
-    /// python timing/sfn.py). No-op outside RECOVERING.
+    /// python timing/sfn.py). In SYNCED, tracks missed superframes for the
+    /// R-02a-081 transition-table row: >= 3 consecutive missed beacons
+    /// (spec/02a-coordinated-capacity.md:267) -> DESYNCED with counter
+    /// resets. No-op outside SYNCED/RECOVERING.
     pub fn on_missed_superframe(&mut self) -> DesyncState {
+        if self.state == DesyncState::Synced {
+            self.missed_superframes += 1;
+            if self.missed_superframes >= SYNCED_MISSED_BEACON_DESYNC {
+                self.state = DesyncState::Desynced;
+                self.consecutive_valid = 0;
+                self.missed_superframes = 0;
+            }
+            return self.state;
+        }
         if self.state != DesyncState::Recovering {
             return self.state;
         }
