@@ -118,17 +118,9 @@ class EventHandlersMixin:
         if node is None or not node.connected:
             return
 
-        self._debug_log(  # type: ignore[attr-defined]
-            "tx_start_delayed",
-            sim_id=self._id,
-            node_id=event.node_id,
-            payload_len=len(event.payload),
-            node_state=node.state.name if node is not None else None,
-            queue_size=len(self._event_queue),
-            jitter_enabled=True,
-            current_time=self._current_time_us,
-        )
-
+        # Debug logging for the delayed start happens in RadioMixin's
+        # _handle_tx_start_delayed override (radio.py), which runs first in
+        # Simulation's MRO and logs the full field set before delegating here.
         self._do_start_transmission(  # type: ignore[attr-defined]
             node_id=event.node_id,
             payload=event.payload,
