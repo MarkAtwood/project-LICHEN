@@ -119,6 +119,12 @@ impl DesyncFSM {
         self.consecutive_valid
     }
 
+    /// Missed-superframe streak (RECOVERING listen timeout / SYNCED
+    /// R-02a-081 tracking).
+    pub const fn missed_superframes(&self) -> u8 {
+        self.missed_superframes
+    }
+
     /// Handle SFN wrap event.
     ///
     /// If time is invalid and currently synced, transitions to Desynced.
