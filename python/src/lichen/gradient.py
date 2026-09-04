@@ -28,6 +28,22 @@ MAX_ENTRIES = 64
 GRADIENT_TIMEOUT_MS = 600_000  # announce/rrep gradients (spec section 9)
 DATA_GRADIENT_TIMEOUT_MS = 60_000  # passive-learning gradients (spec 11.2)
 
+# Adaptive SF thresholds (CCP-16, spec 02a-coordinated-capacity.md 2a.8).
+# Mirrors lichen/subsys/lichen/routing/gradient.h LICHEN_SNR_* and the
+# lichen_gradient_sf_update/sf_select implementation (zrh2.2); the sf_* tests
+# (zrh2.8) use these names, so keep them in sync with the C defines.
+SNR_UPGRADE_THRESHOLD = 8  # EWMA SNR above this may upgrade (decrease SF)
+SNR_DOWNGRADE_THRESHOLD = 0  # EWMA SNR below this forces downgrade (increase SF)
+UPGRADE_COUNT_THRESHOLD = 3  # consecutive good samples before upgrade
+DOWNGRADE_COUNT_THRESHOLD = 2  # consecutive bad samples before downgrade
+DENSITY_UPGRADE_MAX = 5  # density must be below this for the SF -1 upgrade
+DEFAULT_SF = 10  # LICHEN_DEFAULT_SF (Kconfig default): SF absent at step 2
+SF_MIN = 7
+SF_MAX = 12
+# Q16.16 fixed-point thresholds matching the C constants
+EMA_LOSS_THRESHOLD_FP = 16384  # 0.25 loss
+LOAD_FACTOR_THRESHOLD_FP = 52429  # strictly greater than 0.8
+
 # Sequence number constants for RFC 1982 comparison
 SEQ_BITS = 16
 SEQ_HALF = 1 << (SEQ_BITS - 1)  # 32768
@@ -98,6 +114,12 @@ class GradientEntry:
     source: GradientSource
     expires: int
     coords: tuple[float, float] | None = None  # (lat, lon) from app_data (spec 9.7)
+    # Per-neighbor adaptive SF tracking (CCP-16, spec 02a 2a.8, zrh2.2):
+    # None current_sf means "SF absent" (sf_select applies the default).
+    current_sf: int | None = None
+    snr_ewma: int = 0
+    upgrade_count: int = 0
+    downgrade_count: int = 0
 
     def __post_init__(self) -> None:
         self.destination = routing_key(self.destination)
@@ -179,6 +201,97 @@ class GradientTable:
         for dest in stale:
             del self._entries[dest]
         return len(stale)
+
+    def sf_update(self, neighbor: IPv6Address | str, snr: int, now: int | None = None) -> None:
+        """Update per-neighbor SF tracking from an RX sample (CCP-16).
+
+        Mirrors ``lichen_gradient_sf_update`` (gradient.c:261): advances the
+        SNR EWMA (``avg = avg + (sample - avg) >> 2``, alpha = 1/4) and the
+        upgrade/downgrade consecutive-sample counters. Silent no-op when the
+        neighbor has no gradient entry (same as the C NULL-lookup return).
+        """
+        entry = self.lookup(neighbor, now)
+        if entry is None:
+            return
+        delta = (snr - entry.snr_ewma) >> 2
+        entry.snr_ewma = entry.snr_ewma + delta
+        # ponytail: clamp to the C int8_t storage range; unreachable for
+        # realistic LoRa SNR, and the C two-slot upgrade path is fixed-point.
+        entry.snr_ewma = max(-128, min(127, entry.snr_ewma))
+        if entry.snr_ewma > SNR_UPGRADE_THRESHOLD:
+            entry.upgrade_count += 1
+            entry.downgrade_count = 0
+        elif entry.snr_ewma < SNR_DOWNGRADE_THRESHOLD:
+            entry.downgrade_count += 1
+            entry.upgrade_count = 0
+        else:
+            entry.upgrade_count = 0
+            entry.downgrade_count = 0
+
+    def sf_select(
+        self,
+        neighbor: IPv6Address | str,
+        density: int,
+        utilization: int,
+        ema_loss_fp: int,
+        load_factor_fp: int,
+        now: int | None = None,
+    ) -> tuple[int, bool] | None:
+        """Select the TX spreading factor for ``neighbor`` (CCP-16 2a.8).
+
+        Mirrors ``lichen_gradient_sf_select`` (gradient.c:298) step for step,
+        including the post-step-6 minimum-SF floors. Returns None when the
+        neighbor has no gradient entry (C: -ENOENT). Persists the selected SF
+        on the entry (C: ``entry->sf.current_sf = sf``).
+        """
+        entry = self.lookup(neighbor, now)
+        if entry is None:
+            return None
+
+        # Step 1-2: assigned SF, or the default when absent/out of range.
+        sf = entry.current_sf
+        if sf is None or sf < SF_MIN or sf > SF_MAX:
+            sf = DEFAULT_SF
+
+        # Step 3: high density or high utilization triggers SF +2.
+        if density > 10 or utilization > 150:
+            sf = min(SF_MAX, sf + 2)
+
+        # Step 4: good SNR and low density allows the SF -1 upgrade.
+        if (
+            entry.snr_ewma > SNR_UPGRADE_THRESHOLD
+            and density < DENSITY_UPGRADE_MAX
+            and entry.upgrade_count >= UPGRADE_COUNT_THRESHOLD
+            and sf > SF_MIN
+        ):
+            sf = max(SF_MIN, sf - 1)
+
+        # Step 5: high loss / very high utilization / load factor > 0.8.
+        tx_allowed = True
+        if (
+            ema_loss_fp > EMA_LOSS_THRESHOLD_FP
+            or load_factor_fp >= LOAD_FACTOR_THRESHOLD_FP
+            or utilization > 200
+        ):
+            sf = min(SF_MAX, sf + 1)
+            if utilization > 200:
+                # Spec: utilization > 200 forces SF=12 and blocks tx.
+                sf = SF_MAX
+                tx_allowed = False
+
+        # Post-step-6 minimum-SF floors, applied in order a-d (spec 2a.8
+        # Downgrade MUST column); floor (a) subsumes (b).
+        if entry.snr_ewma < -5:
+            sf = SF_MAX
+        elif entry.snr_ewma < 0:
+            sf = max(11, sf)
+        if density > 10:
+            sf = max(11, sf)
+        if load_factor_fp >= LOAD_FACTOR_THRESHOLD_FP:
+            sf = max(11, sf)
+
+        entry.current_sf = sf
+        return (sf, tx_allowed)
 
     def _evict_if_needed(self) -> None:
         while len(self._entries) > self.max_entries:
