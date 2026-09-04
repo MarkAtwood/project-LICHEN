@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-97tr",
+  "title": "Python CapabilityTable has the same LRU-eviction replay-floor hole as Rust had (fawm)",
+  "description": "Mirror of the Rust fawm defect, found while fixing it: python/src/lichen/coap/resources/capability_announce.py CapabilityTable.record() LRU-evicts via self._entries.popitem(last=False) (:105) which drops the evicted announcer's seq entirely; cached_seq (:64-70) returns None for a missing entry, and the resource's verify call (:168) passes cached_seq=None -\u003e the seq replay gate is skipped (if-not-None semantics in verify_capability_announcement). Identical attack to the filed Rust one: flood the table to evict a gateway, replay its older still-unexpired announcement, roll the table back. Fix (mirror the landed Rust fix): monotone per-IID seq-floor ledger captured at popitem eviction; cached_seq returns max(entry seq, floor); ledger bounded (drop lowest-iid stale floors when over capacity). Also note verify_capability_announcement's cached_seq=None path must keep refusing... check its semantics: if None means 'no gate', the fix MUST pass the floor from the ledger instead. Add tests mirroring capability.rs tests eviction_preserves_replay_floor and floor_ledger_stays_bounded. Note the restart-persistence gap applies to both stacks (table not persisted at all today) - durable floors tracked separately if wanted.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T07:31:52.71055802Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T07:43:04.033966305Z",
+  "started_at": "2026-09-04T07:43:04.033966305Z",
+  "lease_expires_at": "2026-09-04T07:48:04.033966305Z",
+  "heartbeat_at": "2026-09-04T07:43:04.033966305Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-97tr",
+      "depends_on_id": "project-LICHEN-worker6-fawm",
+      "type": "discovered-from",
+      "created_at": "2026-09-04T07:31:52.831698169Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
