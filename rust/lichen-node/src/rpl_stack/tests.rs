@@ -19,6 +19,7 @@ use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::mem::MemStorage;
 use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
+use lichen_link::keys::PublicKey;
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_link::keys::Seed;
@@ -2721,4 +2722,159 @@ fn root_seq_cache_is_reachable_from_stack_state() {
     assert!(stack.root_seqs.accept(dodag_a, 0, 5).is_err());
     assert_eq!(stack.root_seq_cached(dodag_a, 0), Some(5));
     assert_eq!(stack.root_seq_cached(dodag_a, 1), None);
+}
+
+// ── Root DIO signature: R-06-307 expired-signature -> Baseline (b7z9.88.3) ──
+//
+// The receiver pins the root key via the test-only hook (the shared vector
+// fixture's private key is not available for a real announce), then the
+// same signed DIO is delivered under three clocks: before expiry
+// (Verified + replay-rejected), past expiry (Baseline: admitted, NOT
+// rejected), and the clockless default (Baseline).
+
+const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
+
+#[tokio::test]
+async fn valid_root_signature_is_verified_and_replay_rejected() {
+    let (mut sender, mut receiver, packet) = baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1));
+    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+
+    // Positive control: clock BEFORE expiry -> Verified -> processed, and
+    // the root_seq cache then rejects the replayed duplicate.
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        "valid signature must not be rejected: {outcome:?}"
+    );
+    sender_ipv6(&mut sender, &packet).await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::RplRejected)
+    ));
+}
+
+#[tokio::test]
+async fn expired_root_signature_admitted_as_baseline_not_rejected() {
+    // THE PIN (R-06-307): clock past expiry -> Baseline BEFORE the replay
+    // gate - the replayed DIO is admitted (treated as unsigned), not
+    // rejected, even though the same DIO WAS rejected while the clock was
+    // valid (positive control first).
+    let (mut sender, mut receiver, packet) = baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1));
+    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        "valid signature must not be rejected: {outcome:?}"
+    );
+
+    receiver.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX + 1);
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        "expired signature must degrade to baseline, not reject: {outcome:?}"
+    );
+}
+
+#[tokio::test]
+async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
+    // Unassessable clock (no set_wall_clock_unix call) -> Baseline.
+    let (mut sender, mut receiver, packet) = baseline_fixture(None);
+    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        "unassessable clock must degrade to baseline, not reject: {outcome:?}"
+    );
+}
+
+/// Sender + receiver on an adjacent two-node mesh, the receiver pinned to
+/// the vector root key, and the root-signed DIO packet (Dio + 0x17 option
+/// carrying VALID_COSE_SIGN1). `clock` wires the receiver's wall clock.
+fn baseline_fixture(
+    clock: Option<fn() -> u64>,
+) -> (
+    RplStack<MeshRadio, MemStorage>,
+    RplStack<MeshRadio, MemStorage>,
+    Vec<u8>,
+) {
+    let relay_identity = identity(21);
+    let recv_identity = identity(22);
+    let mut relay_eui64 = relay_identity.iid;
+    relay_eui64[0] ^= 0x02;
+    let mut recv_eui64 = recv_identity.iid;
+    recv_eui64[0] ^= 0x02;
+    let (_mesh, [relay_radio, recv_radio, _spare]) =
+        MeshHarness::new([relay_eui64, recv_eui64, [0u8; 8]]);
+
+    use crate::rpl_stack::root_sig;
+    let cose = root_sig::tests::vector_cose();
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
+    let root_iid = decoded.root_iid;
+
+    let dio = lichen_rpl::message::Dio {
+        rpl_instance_id: decoded.payload.instance,
+        version: decoded.payload.version,
+        rank: decoded.payload.rank,
+        grounded: true,
+        mode_of_operation: decoded.payload.mop,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: decoded.payload.dodag_id,
+    };
+    let mut body = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
+    let dio_len = dio.write_to(&mut body).unwrap();
+    let opt_len = lichen_rpl::message::RootDioSignature::write_to(
+        &cose,
+        &mut body[dio_len..],
+    )
+    .unwrap();
+    let packet = rpl_ipv6_packet(
+        address(&relay_identity, 1),
+        RPL_ALL_NODES,
+        rpl_code::DIO,
+        &body[..dio_len + opt_len],
+    )
+    .unwrap();
+
+    let mut sender = RplStack::provision_leaf(
+        Stack::new(relay_radio, relay_identity.clone(), 129, 0),
+        address(&relay_identity, 1),
+        decoded.payload.dodag_id,
+        announces(decoded.payload.dodag_id[8..16].try_into().unwrap()),
+        MemStorage::new(),
+    )
+    .unwrap();
+    let mut receiver = RplStack::provision_leaf(
+        Stack::new(recv_radio, recv_identity.clone(), 129, 0),
+        address(&recv_identity, 1),
+        decoded.payload.dodag_id,
+        announces(decoded.payload.dodag_id[8..16].try_into().unwrap()),
+        MemStorage::new(),
+    )
+    .unwrap();
+    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+    if let Some(clock) = clock {
+        receiver.set_wall_clock_unix(clock);
+    }
+    (sender, receiver, packet)
+}
+
+async fn sender_ipv6(
+    stack: &mut RplStack<MeshRadio, MemStorage>,
+    packet: &[u8],
+) {
+    // Canonical DIO delivery: uncompressed control frame, broadcast L2
+    // (identical to send_dio's transmission of R-09-005 frames).
+    stack
+        .stack
+        .send_ipv6_uncompressed_to(packet, &[])
+        .await
+        .unwrap();
 }
