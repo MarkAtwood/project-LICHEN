@@ -3,3 +3,4 @@
 {"id":"01a055fe-a320-71bb-a937-48cc168a76ce","issue_id":"lora-ipv6-mesh-o9l.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: oscore","created_at":"2026-08-31T04:05:46.400114737Z"}
 {"id":"01a055fe-a4b5-7c38-89d6-0045c4209f30","issue_id":"lora-ipv6-mesh-o9l.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-31T04:05:46.80580199Z"}
 {"id":"01a05606-1914-713b-b00a-6c97fc370249","issue_id":"lora-ipv6-mesh-o9l.12","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:13:55.348081665Z"}
+{"id":"01a06a6e-953d-70c2-9921-f2aa4a5853b0","issue_id":"lora-ipv6-mesh-o9l.12","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-09-04T03:20:27.197050426Z"}
