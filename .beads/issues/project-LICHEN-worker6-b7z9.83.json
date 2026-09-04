@@ -11,8 +11,7 @@
   "updated_at": "2026-09-01T16:48:13.897391477Z",
   "labels": [
     "oscore",
-    "spec-gap",
-    "human-only"
+    "spec-gap"
   ],
   "dependencies": [
     {
