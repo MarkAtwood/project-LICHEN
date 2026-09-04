@@ -38,7 +38,7 @@ use lichen_node::secure::{SecureRequestData, SecureResponse, SecureStack};
 use lichen_node::RplEvent;
 use lichen_oscore::{ContextId, ContextStateStore, RecipientReplayState, SenderSequenceState};
 use lichen_schc::codec;
-use schnorr48::{derive_keypair, sign};
+use schnorr48::derive_keypair;
 
 #[derive(Default)]
 struct TestSenderStore(Option<(ContextId, SenderSequenceState)>);
@@ -989,8 +989,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     // Spec GCP-6.5 COSE_Sign1 envelope (bead l1qw.16.2.2): expiry (key 4)
     // and ordinal (key 7) are required on the wire; expiry must be strictly
     // future (the timing gate rejects expiry <= now), so stamp an offset.
-    let mut claim = SlotClaim::new(remote_iid, slots, current_superframe, 0)
-        .with_federation(2, 0);
+    let mut claim = SlotClaim::new(remote_iid, slots, current_superframe, 0).with_federation(2, 0);
     claim.timestamp = Some(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

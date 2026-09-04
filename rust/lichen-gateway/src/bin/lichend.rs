@@ -1991,8 +1991,7 @@ mod tests {
         let iid = lichen_gateway::trust::iid_from_pubkey(&pubkey);
         // Spec GCP-6.5 COSE_Sign1 envelope; the ordinal (key 7) is required
         // on the wire, expiry is required and in-window.
-        let mut claim = SlotClaim::new(iid, slots, superframe, sequence)
-            .with_federation(2, 0);
+        let mut claim = SlotClaim::new(iid, slots, superframe, sequence).with_federation(2, 0);
         claim.timestamp = Some(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
