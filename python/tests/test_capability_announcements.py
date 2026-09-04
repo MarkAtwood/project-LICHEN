@@ -7,6 +7,7 @@ import time
 import cbor2
 import pytest
 
+from lichen.coap.resources.capability_announce import CapabilityTable
 from lichen.crypto import (
     SCHNORR48_ED25519_ALG,
     Capability,
@@ -498,3 +499,50 @@ class TestSpecCompliance:
             seq=1,
         )
         assert len(announcement.signature) == 48
+
+
+class TestCapabilityTableReplayFloor:
+    """The anti-replay floor survives LRU eviction (bead 97tr, mirroring
+    the Rust capability.rs tests eviction_preserves_replay_floor and
+    floor_ledger_stays_bounded from bead fawm)."""
+
+    def _table(self, capacity: int = 8) -> CapabilityTable:
+        return CapabilityTable(capacity=capacity, egress_reservation=capacity // 4)
+
+    def test_eviction_preserves_replay_floor(self) -> None:
+        table = self._table()
+        iid = b"\xaa" * 8
+        assert table.record(iid, seq=500, expiry=2000, capabilities=0) is True
+        assert table.cached_seq(iid) == 500
+
+        # Flood with EGRESS announcements (capacity 8): the 9th insert
+        # LRU-evicts the oldest entry - iid, the victim.
+        for i in range(8):
+            assert table.record(
+                b"\x01" + bytes([i]) + b"\x00" * 6, seq=1,
+                expiry=2000, capabilities=1, egress=True,
+            ) is True
+        assert iid not in table._entries
+
+        # The floor survived eviction: the replay gate still sees seq 500.
+        assert table.cached_seq(iid) == 500
+
+        # Re-admission with a stale seq keeps the floor and must NOT
+        # lower it; a strictly newer seq re-enters the table.
+        assert table.record(iid, seq=499, expiry=2000, capabilities=1,
+                            egress=True) is True
+        assert table.cached_seq(iid) == 500
+        assert table.record(iid, seq=501, expiry=2000, capabilities=1,
+                            egress=True) is True
+        assert table.cached_seq(iid) == 501
+
+    def test_floor_ledger_stays_bounded(self) -> None:
+        capacity = 8
+        table = self._table(capacity=capacity)
+        # Egress inserts past capacity force repeated eviction + floor
+        # capture; the ledger never exceeds capacity.
+        for i in range(capacity + 8):
+            iid = bytes([0x02]) + i.to_bytes(7, "big")
+            assert table.record(iid, seq=i + 1, expiry=2000,
+                                capabilities=1, egress=True) is True
+            assert len(table._seq_floors) <= capacity
