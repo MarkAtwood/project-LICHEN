@@ -1,0 +1,7 @@
+{
+  "id": "1788505160743011467-1",
+  "issue_id": "project-LICHEN-worker6-7nnl",
+  "author": "opencode-worker-1",
+  "text": "Child .3 closed by worker-1 stale-check: the full dispatch + table + verify + tests were already landed (see .3 close reason). The audit surfaced two real defects filed as project-LICHEN-worker6-fawm (replay floor dies on LRU eviction) and project-LICHEN-worker6-hdb3 (insert refusal -\u003e false 2.04, Python 5.03 parity + missing dispatch-level test mirrors). Parent scope remaining: root-side 8.12-\u003e8.11 consumption is 99sg's re-announce-after-root-change scope; the C-side resource is p7mv.",
+  "created_at": "2026-09-04T06:59:20.743011467Z"
+}
