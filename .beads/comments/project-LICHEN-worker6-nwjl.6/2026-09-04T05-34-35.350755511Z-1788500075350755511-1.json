@@ -1,0 +1,7 @@
+{
+  "id": "1788500075350755511-1",
+  "issue_id": "project-LICHEN-worker6-nwjl.6",
+  "author": "opencode-worker-1",
+  "text": "Status from worker-1 (2026-09-04): Rust leg DONE - tests/gcp_slot_claim_vectors.rs drives all 13 corpus cases (commit 2727e3cc41). Python leg: NO consumer of the corpus exists yet, and decode_cose still accepts ordinal-less claims (vector ordinal_absent says reject) plus encode omits key 7 when ordinal None - tracked on l1qw.16.2.5 with the vector-mirror task. C leg: implementation verified COSE-conformant (parent nwjl audit) but the coap_slot_claim host test cannot build until the coap_oscore.h double-declaration break is fixed (bead project-LICHEN-worker6-y5em). Three-way cross-validation is blocked on y5em + l1qw.16.2.5. Parent nwjl: the five defect points verified FIXED in C (see its close attempt note - released open only because this child and the cross-validation remain).",
+  "created_at": "2026-09-04T05:34:35.350755511Z"
+}
