@@ -252,7 +252,10 @@ class SlotClaim:
         if type(claim_seq) is not int or claim_seq < 0:
             raise ClaimError("claim_seq must be a non-negative integer")
         ordinal = fields.get(_PAYLOAD_ORDINAL)
-        if ordinal is not None and (type(ordinal) is not int or ordinal < 0):
+        # Key 7 is required (shared corpus gcp_slot_claim_cose_sign1.json
+        # case ordinal_absent: without the ordinal the receiver cannot
+        # register the gateway — reject as malformed).
+        if type(ordinal) is not int or ordinal < 0:
             raise ClaimError("ordinal must be a non-negative integer")
 
         return cls(
@@ -306,8 +309,11 @@ def encode_claim_canonical(claim: SlotClaim) -> bytes:
         _PAYLOAD_GATEWAY_IID: bytes.fromhex(claim.gateway_iid),
         _PAYLOAD_CLAIM_SEQ: claim.claim_seq,
     }
-    if claim.ordinal is not None:
-        payload[_PAYLOAD_ORDINAL] = claim.ordinal
+    # Key 7 (ordinal) is required on the wire: a claim without it cannot be
+    # registered by any receiver (spec 08 GCP-6.5 / corpus ordinal_absent).
+    if claim.ordinal is None:
+        raise ClaimError("ordinal is required to serialize a slot claim")
+    payload[_PAYLOAD_ORDINAL] = claim.ordinal
     return cbor2.dumps(payload, canonical=True)
 
 
