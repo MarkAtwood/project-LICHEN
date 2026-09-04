@@ -880,7 +880,7 @@ static int config_radio_put(struct coap_resource *resource,
 	struct lichen_config_radio radio_cfg;
 	int ret;
 
-coap_oscore_authorize_mutating_result(tating(resource, request, addr,
+	int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 						     addr_len, COAP_METHOD_PUT,
 						     &oscore);
 	if (ret != 0) {

@@ -1454,19 +1454,36 @@ static int slots_post(struct coap_resource *resource,
 		      struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
 {
+	/* Expanded authorize gate: the result struct is assembled from the
+	 * out-params so the downstream respond-resource calls keep their
+	 * shape (y5em.2 legacy-shim migration). */
 	struct coap_oscore_unprotect_result oscore;
 	struct lichen_slot_claim claim;
 	struct lichen_slot_grant grant;
 	const uint8_t *payload;
 	uint16_t payload_len;
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len;
+	bool is_protected;
+	struct oscore_ctx *oscore_ctx;
 	int ret;
 
-	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
+	ret = coap_oscore_authorize_mutating(resource, request, addr,
 					     addr_len, COAP_METHOD_POST,
-					     &oscore);
+					     oscore.plainbuf,
+					     sizeof(oscore.plainbuf),
+					     &payload, &payload_len,
+					     &oscore_ctx, piv, &piv_len,
+					     &is_protected);
 	if (ret != 0) {
 		return ret;
 	}
+	oscore.ctx = oscore_ctx;
+	memcpy(oscore.piv, piv, piv_len);
+	oscore.piv_len = piv_len;
+	oscore.is_protected = is_protected;
+	oscore.payload = (uint8_t *)payload;
+	oscore.payload_len = payload_len;
 
 	/* GCP-6.4: "All CoAP messages use OSCORE." Local-admin (LCI) callers
 	 * are the only transport exception, per the house dispatch gate. */
