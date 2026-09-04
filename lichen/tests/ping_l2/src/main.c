@@ -466,7 +466,8 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	 * net_if_down may return -EALREADY/-EPERM if the iface is already
 	 * down from the teardown path — the state machine's own deinit()
 	 * handles ABORTED directly (drains RX, reinitializes mutexes). */
-	(void)net_if_down(test_iface);
+	/* Documented ABORTED recovery (lora_l2.c:263): deinit() handles
+	 * ABORTED directly (drains RX, reinitializes mutexes), then init(). */
 	ret = lichen_lora_l2_deinit();
 	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
 	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
