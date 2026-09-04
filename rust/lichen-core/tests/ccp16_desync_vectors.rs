@@ -7,7 +7,6 @@
 //! and the python oracle (timing.sfn DesyncFSM). Two-suite+ contract: the
 //! corpus is the committed independent oracle for all three suites.
 
-
 use lichen_core::desync::{DesyncFSM, DesyncState};
 
 fn vectors() -> Vec<Value> {
