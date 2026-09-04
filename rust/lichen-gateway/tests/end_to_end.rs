@@ -986,12 +986,19 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     assert_eq!(claim_public.as_bytes(), &remote_pubkey);
     let current_superframe = gateway.current_superframe();
     let slots = vec![1, 2, 3];
-    let claim_transcript =
-        lichen_gateway::slot::slot_claim_transcript(&remote_iid, &slots, current_superframe, 0)
-            .unwrap();
-    let mut claim = SlotClaim::new(remote_iid, slots, current_superframe, 0);
-    claim.signature = Some(sign(&claim_private, &claim_public, &claim_transcript));
-    let payload = claim.encode();
+    // Spec GCP-6.5 COSE_Sign1 envelope (bead l1qw.16.2.2): expiry (key 4)
+    // and ordinal (key 7) are required on the wire; expiry must be strictly
+    // future (the timing gate rejects expiry <= now), so stamp an offset.
+    let mut claim = SlotClaim::new(remote_iid, slots, current_superframe, 0)
+        .with_federation(2, 0);
+    claim.timestamp = Some(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+            + 100,
+    );
+    let payload = claim.encode_cose(&claim_private, &claim_public).unwrap();
     let mut correlation = client
         .send_secure_request(
             &Addr(gateway_addr),

@@ -1982,20 +1982,26 @@ mod tests {
         slots: Vec<u32>,
         superframe: u64,
         sequence: u32,
-    ) -> (lichen_gateway::resources::SlotClaim, [u8; 32]) {
+    ) -> (Vec<u8>, [u8; 32]) {
         use lichen_gateway::resources::SlotClaim;
-        use schnorr48::{derive_keypair, sign};
+        use schnorr48::derive_keypair;
 
         let (private, public) = derive_keypair(&Seed::new(seed_bytes));
         let pubkey = *public.as_bytes();
         let iid = lichen_gateway::trust::iid_from_pubkey(&pubkey);
-        let transcript =
-            lichen_gateway::slot::slot_claim_transcript(&iid, &slots, superframe, sequence)
-                .unwrap();
-        let signature = sign(&private, &public, &transcript);
-        let mut claim = SlotClaim::new(iid, slots, superframe, sequence);
-        claim.signature = Some(signature);
-        (claim, pubkey)
+        // Spec GCP-6.5 COSE_Sign1 envelope; the ordinal (key 7) is required
+        // on the wire, expiry is required and in-window.
+        let mut claim = SlotClaim::new(iid, slots, superframe, sequence)
+            .with_federation(2, 0);
+        claim.timestamp = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0)
+                + 100,
+        );
+        let envelope = claim.encode_cose(&private, &public).unwrap();
+        (envelope, pubkey)
     }
 
     fn provision_noninitial_slot_store(
@@ -2022,7 +2028,7 @@ mod tests {
             owned: None,
         };
         let (claim, pubkey) = signed_slot_claim([0x52; 32], vec![10, 11], 4, 0);
-        let response = coordinator.handle_post_slots(&claim.encode(), true, Some(&pubkey), 4);
+        let response = coordinator.handle_post_slots(&claim, true, Some(&pubkey), 4);
         assert_eq!(response.code, 0x44);
         let generation = coordinator.slot_replay_generation();
         assert!(generation > 1);

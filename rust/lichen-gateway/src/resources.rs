@@ -802,8 +802,11 @@ impl SlotClaim {
     /// Mirrors Python `sign_slot_claim` (l1qw.16.1): payload integer keys
     /// 1-7 over the shared `{1: -65537}` protected header, signature =
     /// Schnorr48(privkey, SHA256(CBOR(Sig_structure))). Expiry (payload key
-    /// 4) comes from `timestamp`, which is REQUIRED — build with
-    /// [`SlotClaim::with_timestamp`]. `gateway_count` is a local allocation
+    /// 4) comes from `timestamp`, which is REQUIRED and must be strictly
+    /// future (validate_claim_timing rejects expiry <= now) and no more
+    /// than MAX_CLAIM_DURATION_SECONDS past now — stamp an in-window
+    /// expiry yourself (e.g. `now + 100`), not the bare issue second.
+    /// `gateway_count` is a local allocation
     /// parameter and is never serialized (GCP-6.5). Rust `SlotClaim` has no
     /// allocation-mode field, so the payload is emitted interleaved (mode
     /// 0); the ordinal (key 7) is REQUIRED on the wire (corpus vector
