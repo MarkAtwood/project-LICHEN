@@ -1211,6 +1211,13 @@ impl MultiRootState {
         self.holdoff_selected = None;
     }
 
+    /// Desync state version binding, if any (test/parity accessor for the
+    /// ccp16-desync vector consumer: 2a.5.4 step 2 clears it on version
+    /// change).
+    pub fn desync_state_version(&self) -> Option<u8> {
+        self.desync_state_version
+    }
+
     /// Mark that desync state depends on the given version.
     pub fn set_desync_state_version(&mut self, version: u8) {
         self.desync_state_version = Some(version);
