@@ -45,9 +45,20 @@ struct Slot {
 /// Non-egress entries occupy at most `capacity - reserved` slots; egress
 /// entries may use the whole table. Eviction is strict LRU over the
 /// eligible partition. Inserting an existing IID refreshes it in place.
+///
+/// Replay floors: LRU eviction must not lower an announcer's anti-replay
+/// floor (spec 8.12 seq must strictly exceed the cached seq). Evicting an
+/// entry records its seq in a bounded monotone ledger; [`Self::cached_seq`]
+/// then reports max(entry.seq, floor) so an evicted announcer cannot replay
+/// an older announcement to roll the table back (bead fawm).
 #[derive(Debug, Default)]
 pub struct CapabilityTable {
     slots: HashMap<[u8; 8], Slot>,
+    /// Monotone per-IID seq floors captured at eviction. Floors for IIDs
+    /// still present in `slots` are redundant (their entry.seq already
+    /// satisfies the floor) but kept until the bound requires dropping
+    /// stale ones.
+    seq_floors: HashMap<[u8; 8], u64>,
     tick: u64,
 }
 
@@ -55,6 +66,36 @@ impl CapabilityTable {
     /// An empty table.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Raise the monotone replay floor for `iid` to at least `seq`.
+    fn raise_seq_floor(&mut self, iid: [u8; 8], seq: u64) {
+        let floor = self.seq_floors.entry(iid).or_insert(seq);
+        if *floor < seq {
+            *floor = seq;
+        }
+    }
+
+    /// Keep the floor ledger bounded: while over capacity, drop the
+    /// lowest-IID floor whose IID is no longer in the table (its
+    /// protection only matters while the announcer is absent). Floors
+    /// belonging to active entries are always retained; if every floor
+    /// is active the ledger equals the table and cannot exceed capacity.
+    fn bound_seq_floors(&mut self) {
+        while self.seq_floors.len() > CAPABILITY_TABLE_CAPACITY {
+            let stale = self
+                .seq_floors
+                .iter()
+                .filter(|(iid, _)| !self.slots.contains_key(*iid))
+                .min_by_key(|(iid, _)| *iid)
+                .map(|(iid, _)| *iid);
+            match stale {
+                Some(iid) => {
+                    self.seq_floors.remove(&iid);
+                }
+                None => break,
+            }
+        }
     }
 
     /// Insert or refresh an announcement. Returns `false` when the entry
@@ -77,8 +118,11 @@ impl CapabilityTable {
             return false;
         }
         if let Some(slot) = self.slots.get_mut(&entry.iid) {
+            let iid = entry.iid;
+            let seq = entry.seq;
             slot.entry = entry;
             slot.tick = tick;
+            self.raise_seq_floor(iid, seq);
             return true;
         }
         let egress = entry.is_egress();
@@ -93,6 +137,8 @@ impl CapabilityTable {
                 return false;
             }
         }
+        self.raise_seq_floor(entry.iid, entry.seq);
+        self.bound_seq_floors();
         self.slots.insert(entry.iid, Slot { entry, tick });
         true
     }
@@ -108,8 +154,19 @@ impl CapabilityTable {
     }
 
     /// Cached sequence for an announcer (replay check: new seq must exceed).
+    ///
+    /// Reports max(entry.seq, eviction-captured floor): the anti-replay
+    /// floor survives LRU eviction, so an evicted announcer cannot replay
+    /// an older (still-valid) announcement to roll the table back.
     pub fn cached_seq(&self, iid: &[u8; 8]) -> Option<u64> {
-        self.slots.get(iid).map(|slot| slot.entry.seq)
+        let entry_seq = self.slots.get(iid).map(|slot| slot.entry.seq);
+        let floor = self.seq_floors.get(iid).copied();
+        match (entry_seq, floor) {
+            (Some(entry), Some(floor)) => Some(entry.max(floor)),
+            (Some(entry), None) => Some(entry),
+            (None, Some(floor)) => Some(floor),
+            (None, None) => None,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -139,6 +196,13 @@ impl CapabilityTable {
             .map(|(iid, _)| *iid);
         match victim {
             Some(iid) => {
+                // Capture the victim's seq as a monotone replay floor so
+                // eviction cannot enable a seq rollback (bead fawm).
+                if let Some(slot) = self.slots.get(&iid) {
+                    let seq = slot.entry.seq;
+                    self.raise_seq_floor(iid, seq);
+                    self.bound_seq_floors();
+                }
                 self.slots.remove(&iid);
                 true
             }
@@ -248,5 +312,55 @@ mod tests {
         assert!(t.insert(newer));
         assert_eq!(t.len(), 1);
         assert_eq!(t.cached_seq(&[5; 8]), Some(2));
+    }
+
+    #[test]
+    fn eviction_preserves_replay_floor() {
+        // Bead fawm: an evicted announcer must not be able to replay an
+        // older (still-unexpired) announcement to roll the table back.
+        let mut t = CapabilityTable::new();
+        let mut current = entry(iid(1), 0);
+        current.seq = 500;
+        assert!(t.insert(current));
+        assert_eq!(t.cached_seq(&iid(1)), Some(500));
+
+        // Flood the regular partition so IID 1 is LRU-evicted.
+        for i in 2..(CAPABILITY_TABLE_CAPACITY - CAPABILITY_RESERVED + 2) {
+            assert!(t.insert(entry(iid(i as u16), 0)));
+        }
+        assert!(t.lookup(&iid(1)).is_none());
+
+        // The floor survived eviction: cached_seq still reports 500, so a
+        // replay of seq <= 500 is refused by the dispatch gate.
+        assert_eq!(t.cached_seq(&iid(1)), Some(500));
+
+        // Re-admission with a stale seq keeps the floor and must NOT
+        // lower it; a strictly newer seq re-enters the table.
+        let mut stale = entry(iid(1), 0);
+        stale.seq = 499;
+        assert!(t.insert(stale));
+        assert_eq!(t.cached_seq(&iid(1)), Some(500));
+        let mut fresh = entry(iid(1), 0);
+        fresh.seq = 501;
+        assert!(t.insert(fresh));
+        assert_eq!(t.cached_seq(&iid(1)), Some(501));
+    }
+
+    #[test]
+    fn floor_ledger_stays_bounded() {
+        // The floor ledger never grows past capacity: stale floors (IIDs
+        // no longer in the table) are dropped lowest-IID-first.
+        let mut t = CapabilityTable::new();
+        // More distinct evicted IIDs than capacity: force repeated
+        // eviction + floor capture, then assert the ledger bound.
+        let total = CAPABILITY_TABLE_CAPACITY + CAPABILITY_RESERVED;
+        for i in 0..total {
+            let mut e = entry(iid(i as u16), CAPABILITY_EGRESS_BIT);
+            e.seq = i as u64;
+            assert!(t.insert(e));
+        }
+        // Every insert either lands or evicts+floors; the loop-bounded
+        // ledger never exceeds capacity.
+        assert!(t.seq_floors.len() <= CAPABILITY_TABLE_CAPACITY);
     }
 }
