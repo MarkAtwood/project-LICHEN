@@ -93,13 +93,21 @@ int coap_oscore_authorize_mutating_result(
   int ret = coap_oscore_unprotect_resource_request(resource, request, addr,
                                                    addr_len, expected_method,
                                                    &result);
+  size_t copied = 0;
   if (ret == 0 && result.is_protected) {
-    memcpy(plain_buf, result.payload,
-           result.payload_len > plain_buf_len ? plain_buf_len
-                                              : result.payload_len);
+    /* result.payload points into the local result.plainbuf, which dies at
+     * return: copy into the caller's plain_buf and hand out THAT pointer. */
+    copied = result.payload_len > plain_buf_len ? plain_buf_len
+                                                : result.payload_len;
+    memcpy(plain_buf, result.payload, copied);
+    *payload_out = plain_buf;
+    *payload_len_out = (uint16_t)copied;
+  } else {
+    /* Unprotected request: the payload aliases the request packet, which
+     * outlives this call. */
+    *payload_out = result.payload;
+    *payload_len_out = result.payload_len;
   }
-  *payload_out = result.payload;
-  *payload_len_out = result.payload_len;
   *ctx_out = result.ctx;
   memcpy(piv_out, result.piv, result.piv_len);
   *piv_len_out = result.piv_len;
