@@ -832,9 +832,7 @@ impl SlotClaim {
         // Payload key 7 is required on the wire (corpus vector
         // "ordinal_absent"): an ordinal-less envelope is rejected by every
         // spec-conformant receiver, including this crate's from_cose.
-        let ordinal = self
-            .ordinal
-            .ok_or(ResourceError::MissingField("ordinal"))?;
+        let ordinal = self.ordinal.ok_or(ResourceError::MissingField("ordinal"))?;
         let payload = slot::SlotClaimPayload {
             slots: self.slots.clone(),
             superframe_epoch: self.superframe_id,
@@ -867,7 +865,6 @@ impl SlotClaim {
         buf.truncate(len);
         Ok(buf)
     }
-
 }
 
 // ─── Channel info ────────────────────────────────────────────────────────────
@@ -2144,7 +2141,7 @@ impl GatewayCoordinator {
 mod tests {
     use super::*;
     use lichen_link::keys::Seed;
-    use schnorr48::{derive_keypair, sign};
+    use schnorr48::derive_keypair;
 
     fn coordinator(iid: [u8; 16]) -> GatewayCoordinator {
         GatewayCoordinator::new_ephemeral(iid, 60, 64).unwrap()
@@ -2159,13 +2156,7 @@ mod tests {
         superframe: u64,
         sequence: u32,
     ) -> (Vec<u8>, [u8; 32]) {
-        signed_slot_claim_with_expiry(
-            seed_bytes,
-            slots,
-            superframe,
-            sequence,
-            unix_now() + 100,
-        )
+        signed_slot_claim_with_expiry(seed_bytes, slots, superframe, sequence, unix_now() + 100)
     }
 
     fn signed_slot_claim_with_expiry(
@@ -2178,8 +2169,7 @@ mod tests {
         let (private, public) = derive_keypair(&Seed::new(seed_bytes));
         let pubkey = *public.as_bytes();
         let iid = crate::trust::iid_from_pubkey(&pubkey);
-        let mut claim =
-            SlotClaim::new(iid, slots, superframe, sequence).with_federation(3, 0);
+        let mut claim = SlotClaim::new(iid, slots, superframe, sequence).with_federation(3, 0);
         claim.timestamp = Some(expiry);
         let envelope = claim.encode_cose(&private, &public).unwrap();
         (envelope, pubkey)
