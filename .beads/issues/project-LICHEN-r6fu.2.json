@@ -16,8 +16,7 @@
     "oscore",
     "owner-reserved",
     "security",
-    "local-ok",
-    "human-only"
+    "local-ok"
   ],
   "dependencies": [
     {

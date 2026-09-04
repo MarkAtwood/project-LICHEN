@@ -1,2 +1,3 @@
 {"id":"01a045de-cfcd-7e9a-a05e-b4e11ed3d58c","issue_id":"project-LICHEN-r6fu.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: local-ok","created_at":"2026-08-28T00:57:05.229958Z"}
 {"id":"01a05608-6508-77aa-89ba-fe45e80930e3","issue_id":"project-LICHEN-r6fu.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:16:25.864503205Z"}
+{"id":"01a06a6e-9ae8-723d-8b42-4f44ebcec1e5","issue_id":"project-LICHEN-r6fu.2","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-09-04T03:20:28.648147484Z"}
