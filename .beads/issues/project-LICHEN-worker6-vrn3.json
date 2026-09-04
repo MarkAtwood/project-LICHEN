@@ -11,8 +11,7 @@
   "updated_at": "2026-08-29T05:19:37.209894Z",
   "labels": [
     "spec",
-    "vectors",
-    "human-only"
+    "vectors"
   ],
   "dependencies": [
     {
