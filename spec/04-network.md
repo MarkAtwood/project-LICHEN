@@ -55,7 +55,7 @@ Each LICHEN LoRa mesh is a leaf cluster. Primary 02xx addresses enable seamless 
 
 ### 6.2. Interface Identifier (IID) Derivation
 
-IID and primary 02xx address are derived from Ed25519 public key via the unified normative function in 06-security.md §8.5 (MUST match test vectors exactly; see also 03-addressing.md:12-18, draft-lichen-schnorr-00, rust/lichen-core/src/addr.rs:70, python/src/lichen/crypto/identity.py):
+IID and primary 02xx address are derived from Ed25519 public key via the unified normative function in 06-security.md §8.5 (MUST match test vectors exactly; see also 03-addressing.md:12-18, draft-lichen-schnorr-00, rust/lichen-core/src/addr.rs:86-117 (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), python/src/lichen/crypto/identity.py):
 
 ```
 // IID (8 bytes, link-local and lower half of primary address)
