@@ -1,0 +1,7 @@
+{
+  "id": "1788559561596999669-1",
+  "issue_id": "project-LICHEN-worker6-d7hg",
+  "author": "opencode-worker-1",
+  "text": "Partial wire landed (worker-1, commits 6c2a3f5471 + 4e5c0c0361): lichen_l2_input now (a) calls lichen_desync_on_beacon(\u0026link_ctx.tdma, true) after a signature-verified frame (DESYNCED-\u003eSYNCED recovery path per spec 14.7), and (b) calls lichen_desync_on_beacon(false) for unsigned 5-byte neighbor beacons (invalid-beacon input, no recovery credit). These compile into every native_sim build (routing_dispatch 1/1, tdma_guard_budget green). REMAINING for full d7hg closure: (1) lichen_desync_on_sfn_wrap(time_valid = lichen_wall_clock_valid()) on the SFN wrap event — wrap detection point not yet located in the production path; (2) lichen_desync_on_missed_superframe() driven from the superframe tick (TDMA slot scheduler); (3) epoch-floor validation per time_sync.c:571 (floor acceptance before beacon-valid); (4) tdma-\u003esynced latching with the CCP state machine if required. All in native_sim territory (heft/CI), plus a beacon-validity test on the TDMA path. The two FSM-input wires landed here cover the primary recovery path.",
+  "created_at": "2026-09-04T22:06:01.596999669Z"
+}
