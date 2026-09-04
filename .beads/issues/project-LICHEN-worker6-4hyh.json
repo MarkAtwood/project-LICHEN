@@ -12,8 +12,7 @@
   "started_at": "2026-08-28T05:34:05.265436Z",
   "labels": [
     "local-ok",
-    "coap",
-    "human-only"
+    "coap"
   ],
   "dependencies": [
     {
