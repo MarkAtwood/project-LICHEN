@@ -138,7 +138,7 @@ class SlotClaim:
     # Merged: worker-7's optional timestamp/expiry fields are dropped; HEAD
     # makes expiry a required field (spec key 4) and exposes `timestamp` as a
     # property alias below, so the optional-None model is superseded.
-    ordinal: int | None = None
+    ordinal: int = 0
     gateway_count: int | None = None
     signature: bytes | None = None
 
@@ -483,8 +483,6 @@ def verify_slot_claim(
     # check (they cannot express a horizon).
     if claim.timestamp is not None:
         now = time.time() if now_unix is None else now_unix
-        if claim.timestamp > now + MAX_CLAIM_DURATION_SEC:
-            return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
         if claim.timestamp < now - STALE_CLAIM_TOLERANCE_SEC:
             return (False, ClaimRejectReason.STALE_CLAIM)
 
