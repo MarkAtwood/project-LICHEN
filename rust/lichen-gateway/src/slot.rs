@@ -392,8 +392,9 @@ pub struct RawSlotClaim {
 
 /// COSE_Sign1 slot-claim payload (spec/08 GCP-6.5).
 ///
-/// Integer keys 1-7: 1 slots, 2 superframe_epoch, 3 mode, 4 expiry,
-/// 5 gateway_iid bstr(8), 6 claim_seq, 7 optional ordinal. `gateway_count`
+/// Integer keys 1-7, all required on the wire (see [`RawSlotClaim::from_cose`]):
+/// 1 slots, 2 superframe_epoch, 3 mode, 4 expiry,
+/// 5 gateway_iid bstr(8), 6 claim_seq, 7 ordinal. `gateway_count`
 /// is a local allocation parameter and is never serialized (l1qw.16.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SlotClaimPayload {
@@ -504,12 +505,16 @@ impl RawSlotClaim {
     /// Mirrors Python `SlotClaim.decode_cose` (l1qw.16.1): 4-element array,
     /// protected header byte-identical to the shared `{1: -65537}` encoding
     /// (any other alg is a decoy and is rejected as such), unprotected map
-    /// `{4: kid bstr(8)}`, payload map with integer keys 1-7, 48-byte
-    /// Schnorr48 signature. Structural validation only — signature
-    /// verification happens in [`SlotClaimVerifier::verify`].
+    /// `{4: kid bstr(8)}`, payload map with integer keys 1-7 all required
+    /// (the shared corpus vector "ordinal_absent" mandates rejecting an
+    /// ordinal-less claim; Python's decoder still accepts it — that parity
+    /// gap is tracked on the Python slot-claim beads), 48-byte Schnorr48
+    /// signature. Structural validation only — signature verification
+    /// happens in [`SlotClaimVerifier::verify`].
     ///
-    /// Stricter than the Python decoder in three ways, all invisible to
-    /// spec-conformant peers: duplicate payload keys are rejected (cbor2
+    /// Stricter than the Python decoder in four ways, all invisible to
+    /// spec-conformant peers: the ordinal (key 7) is required (see above),
+    /// duplicate payload keys are rejected (cbor2
     /// would keep the last), unknown payload keys are rejected (cbor2
     /// ignores them), and the unprotected kid must equal the payload's
     /// gateway_iid (Python ignores the kid beyond its 8-byte shape).
@@ -541,7 +546,7 @@ impl RawSlotClaim {
 
         let mut p = Reader::new(payload_bytes);
         let pairs = p.head(5).map_err(malformed)?;
-        if !(6..=7).contains(&pairs) {
+        if pairs != 7 {
             return Err(SlotError::MalformedClaim);
         }
         let mut slots: Option<Vec<u32>> = None;
@@ -587,8 +592,10 @@ impl RawSlotClaim {
                 _ => ordinal = Some(p.uint().map_err(malformed)?),
             }
         }
-        // Keys 1-6 required, 7 optional.
-        if seen & 0b0111_1110 != 0b0111_1110 {
+        // Keys 1-7 all required (vector "ordinal_absent": without the ordinal the
+        // receiver cannot register the gateway, so an ordinal-less claim is
+        // malformed — spec/08 GCP-6.5).
+        if seen & 0b1111_1110 != 0b1111_1110 {
             return Err(SlotError::MalformedClaim);
         }
         let mode = match mode {
@@ -1959,7 +1966,7 @@ mod tests {
             expiry: 5_000_000,
             gateway_iid: iid,
             claim_seq: 0,
-            ordinal: None,
+            ordinal: Some(0),
         };
         let payload_bytes = payload.encode_canonical().unwrap();
         let digest = payload.cose_sig_digest().unwrap();
@@ -2009,7 +2016,7 @@ mod tests {
         assert_eq!(claim.slots(), &[3, 5, 9]);
         assert_eq!(claim.expiry, 5_000_000);
         assert_eq!(claim.mode, AllocationMode::Interleaved);
-        assert_eq!(claim.ordinal, None);
+        assert_eq!(claim.ordinal, Some(0));
         assert_eq!(claim.sig_form, ClaimSigForm::CoseSign1);
 
         let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
