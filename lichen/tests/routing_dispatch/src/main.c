@@ -1273,6 +1273,8 @@ static int test_gradient_sf_ewma_counters(void)
 	const uint8_t neighbor[8] = {0x02, 0, 0, 0, 0, 0, 0, 0x5c};
 	uint8_t next_hop[16] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0,
 				0x02, 0,   0, 0, 0, 0, 0, 0x5c};
+	uint8_t sf = 0U;
+	bool tx_allowed = false;
 
 	memcpy(entry.destination_iid, neighbor, 8U);
 	memcpy(entry.next_hop, next_hop, sizeof(entry.next_hop));
@@ -1324,6 +1326,24 @@ static int test_gradient_sf_ewma_counters(void)
 	REQUIRE(table.entries[0].sf.snr_ewma == 0);
 	REQUIRE(table.entries[0].sf.upgrade_count == 0U);
 	REQUIRE(table.entries[0].sf.downgrade_count == 0U);
+
+	/* Step-4 upgrade gate: UPGRADE_COUNT_THRESHOLD (3) consecutive
+	 * above-threshold samples are required; one good sample must not
+	 * upgrade (mirrors Python test_sf_select_upgrade_gate...). */
+	memset(&table, 0, sizeof(table));
+	REQUIRE(lichen_gradient_update(&table, &entry, 500U) == 0);
+	lichen_gradient_sf_update(&table, neighbor, 15, 501U);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 4U, 0U, 0U, 0U,
+					  501U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 10U);
+	table.entries[0].sf.snr_ewma = 9;
+	for (int i = 0; i < 3; i++) {
+		lichen_gradient_sf_update(&table, neighbor, 9, 502U + (uint32_t)i);
+	}
+	REQUIRE(table.entries[0].sf.upgrade_count == 3U);
+	REQUIRE(lichen_gradient_sf_select(&table, neighbor, 4U, 0U, 0U, 0U,
+					  510U, &sf, &tx_allowed) == 0);
+	REQUIRE(sf == 9U);
 #endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
 	return 0;
 }
