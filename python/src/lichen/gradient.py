@@ -177,6 +177,16 @@ class GradientTable:
                 wrap_detected = True
 
         if existing is None or expired or wrap_detected or entry._rank() >= existing._rank():
+            # Preserve per-neighbor SF tracking state across routing updates
+            # (mirrors the C save/restore in lichen_gradient_update,
+            # gradient.c:158-181): the SF fields are maintained by the RX
+            # path via sf_update() and must not reset when the routing layer
+            # refreshes hop_count/seq_num/source.
+            if existing is not None:
+                entry.current_sf = existing.current_sf
+                entry.snr_ewma = existing.snr_ewma
+                entry.upgrade_count = existing.upgrade_count
+                entry.downgrade_count = existing.downgrade_count
             self._entries[dest] = entry
             self._entries.move_to_end(dest)
             self._evict_if_needed()
