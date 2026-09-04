@@ -1089,6 +1089,15 @@ impl CoapResponse {
             content_format: 0,
         }
     }
+
+    /// 5.03 Service Unavailable (capability-table insertion refused).
+    pub fn service_unavailable() -> Self {
+        Self {
+            code: 0xA3, // 5.03 Service Unavailable
+            payload: Zeroizing::new(Vec::new()),
+            content_format: 0,
+        }
+    }
 }
 
 /// Content format constants.
@@ -1743,8 +1752,16 @@ impl GatewayCoordinator {
             cached_seq,
         ) {
             Ok(()) => {
-                self.capability_table.insert(announcement.into_entry());
-                CoapResponse::changed(Vec::new())
+                // Parity with the Python resource: a refused insert (the
+                // non-egress partition is full) must NOT claim success —
+                // respond 5.03 so the announcer knows the capability was
+                // not cached. Silently dropping the insert behind a 2.04
+                // would leave the table stale while reporting success.
+                if self.capability_table.insert(announcement.into_entry()) {
+                    CoapResponse::changed(Vec::new())
+                } else {
+                    CoapResponse::service_unavailable()
+                }
             }
             Err(_) => CoapResponse::forbidden(),
         }
@@ -2300,6 +2317,133 @@ mod tests {
             0,
         );
         assert_eq!(response.code, 0x83);
+    }
+
+    #[test]
+    fn capability_announce_rejects_recover_and_table_full_is_503() {
+        use crate::capability::CapabilityEntry;
+        use crate::capability_announcements::{create_announcement, CapabilityPayload};
+
+        fn announce_wire(
+            private: &schnorr48::PrivateKey,
+            public: &schnorr48::PublicKey,
+            announcer_iid: [u8; 8],
+            seq: u64,
+            expiry: u64,
+            capabilities: u32,
+        ) -> Vec<u8> {
+            create_announcement(
+                &CapabilityPayload {
+                    capabilities,
+                    prefix: Vec::new(),
+                    prefix_len: 0,
+                    expiry,
+                    seq,
+                    announcer_iid,
+                },
+                private,
+                public,
+            )
+        }
+
+        let mut coordinator = coordinator([0x23; 16]);
+        let (private, public) = derive_keypair(&Seed::new([10; 32]));
+        let pubkey = *public.as_bytes();
+        let addr = lichen_link::ygg_addr_from_pubkey(&pubkey);
+        let mut announcer_iid = [0u8; 8];
+        announcer_iid.copy_from_slice(&addr[8..]);
+        let far_future = 4102444800; // 2100-01-01
+
+        // Expired announcement (expiry in the past) -> 4.03.
+        let wire = announce_wire(&private, &public, announcer_iid, 1, 1, 1);
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x83);
+
+        // Seq regression then recovery: 5 accepted, 4 rejected, 6 accepted.
+        let wire5 = announce_wire(&private, &public, announcer_iid, 5, far_future, 1);
+        let wire4 = announce_wire(&private, &public, announcer_iid, 4, far_future, 1);
+        let wire6 = announce_wire(&private, &public, announcer_iid, 6, far_future, 1);
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire5,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x44);
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire4,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x83);
+        assert_eq!(
+            coordinator.capability_table.cached_seq(&announcer_iid),
+            Some(5)
+        );
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire6,
+            true,
+            Some(&pubkey),
+            0,
+        );
+        assert_eq!(response.code, 0x44);
+        assert_eq!(
+            coordinator.capability_table.cached_seq(&announcer_iid),
+            Some(6)
+        );
+
+        // The insert() refusal path fires only when the table is at capacity
+        // AND no non-egress victim exists for LRU eviction: fill all 256
+        // slots with egress entries (egress refreshes/consumes the whole
+        // table), then a non-egress announcement cannot be admitted.
+        let capacity = crate::capability::CAPABILITY_TABLE_CAPACITY;
+        for i in 0..capacity {
+            let mut iid = [0u8; 8];
+            iid.copy_from_slice(&(i as u64).to_be_bytes());
+            coordinator.capability_table.insert(CapabilityEntry {
+                iid,
+                capabilities: 1, // egress: may consume the reserved tail
+                prefix: [0u8; 16],
+                prefix_len: 0,
+                expiry_unix: u32::try_from(far_future).unwrap(),
+                seq: 1,
+            });
+        }
+        // A new non-egress announcer is refused -> 5.03, not a false 2.04.
+        // The kid binding ties the payload IID to the signer key, so this
+        // needs a distinct signing keypair (fresh IID), not just a
+        // rewritten payload field.
+        let (private2, public2) = derive_keypair(&Seed::new([11; 32]));
+        let pubkey2 = *public2.as_bytes();
+        let addr2 = lichen_link::ygg_addr_from_pubkey(&pubkey2);
+        let mut announcer_iid2 = [0u8; 8];
+        announcer_iid2.copy_from_slice(&addr2[8..]);
+        let wire7 = announce_wire(&private2, &public2, announcer_iid2, 1, far_future, 0);
+        let response = coordinator.handle_request(
+            CoapMethod::Post,
+            "capability-announce",
+            &wire7,
+            true,
+            Some(&pubkey2),
+            0,
+        );
+        assert_eq!(response.code, 0xA3); // 5.03 Service Unavailable
+        // The refused announcement must NOT be cached.
+        assert_eq!(coordinator.capability_table.cached_seq(&announcer_iid2), None);
     }
 
     #[test]
