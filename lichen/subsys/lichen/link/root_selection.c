@@ -1,52 +1,82 @@
-/* SPDX-License-Identifier: GPL-3.0-or-later */
-/* SPDX-FileCopyrightText: The contributors to the LICHEN project */
+// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-FileCopyrightText: The contributors to the LICHEN project
 
-#include <lichen/root_selection.h>
+/**
+ * @file root_selection.c
+ * @brief Multi-root conflict resolution: ordered deterministic root
+ *        selection (spec/02a-coordinated-capacity.md 2a.5.2, R-02a-029).
+ *
+ * Mirrors python/src/lichen/link/slot_coordination.py select_root() and
+ * rust lichen-rpl multi_instance.rs select_root_index(): candidates with
+ * invalid signatures are discarded first (2a.5.1), then the best candidate
+ * is chosen by, in order of precedence:
+ *   1. RPL DODAG Preference (higher wins)
+ *   2. Stratum (lower wins)
+ *   3. RSSI+SNR combined score (higher wins, RSSI weighted 2:1 over SNR)
+ *   4. EUI-64 tiebreak (numerically smaller IID wins)
+ */
 
+#include <lichen/link/root_selection.h>
+
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 
-int lichen_root_candidate_compare(const struct lichen_root_candidate *a,
+static int root_selection_compare(const struct lichen_root_candidate *a,
 				  const struct lichen_root_candidate *b)
 {
-	/* 1. Higher DODAG Preference wins (b higher -> b wins -> >0). */
+	/* 1. DODAG Preference: higher wins. */
 	if (a->dodag_preference != b->dodag_preference) {
-		return (int)b->dodag_preference - (int)a->dodag_preference;
+		return (a->dodag_preference > b->dodag_preference) ? -1 : 1;
 	}
-
-	/* 2. Lower stratum wins. */
+	/* 2. Stratum: lower wins (0 = GNSS, higher = worse). */
 	if (a->stratum != b->stratum) {
-		return (int)a->stratum - (int)b->stratum;
+		return (a->stratum < b->stratum) ? -1 : 1;
 	}
+	/* 3. Combined RSSI+SNR score: higher wins (RSSI weighted 2:1). */
+	{
+		int32_t score_a = 2 * (int32_t)a->rssi_ema + (int32_t)a->snr_ema;
+		int32_t score_b = 2 * (int32_t)b->rssi_ema + (int32_t)b->snr_ema;
 
-	/* 3. Higher combined score wins (RSSI weighted 2:1 over SNR). */
-	int32_t score_a = 2 * (int32_t)a->rssi_ema_dbm + (int32_t)a->snr_ema_db;
-	int32_t score_b = 2 * (int32_t)b->rssi_ema_dbm + (int32_t)b->snr_ema_db;
-	if (score_a != score_b) {
-		return (score_b > score_a) ? 1 : -1;
+		if (score_a != score_b) {
+			return (score_a > score_b) ? -1 : 1;
+		}
 	}
-
-	/* 4. Numerically smaller EUI-64 (big-endian) wins. */
-	return memcmp(a->eui64, b->eui64, LICHEN_ROOT_EUI64_LEN);
+	/* 4. EUI-64 tiebreak: numerically smaller IID wins (unsigned
+	 * big-endian compare of the 8-byte IID). */
+	for (unsigned int i = 0U; i < 8U; i++) {
+		if (a->eui64[i] != b->eui64[i]) {
+			return (a->eui64[i] < b->eui64[i]) ? -1 : 1;
+		}
+	}
+	return 0;
 }
 
-const struct lichen_root_candidate *
-lichen_root_select(const struct lichen_root_candidate *candidates, size_t count)
+int lichen_root_select(const struct lichen_root_candidate *candidates,
+		       size_t count)
 {
 	if (candidates == NULL || count == 0) {
-		return NULL;
+		return -1;
 	}
 
-	const struct lichen_root_candidate *best = NULL;
-	for (size_t i = 0; i < count; i++) {
-		const struct lichen_root_candidate *candidate = &candidates[i];
-		if (!candidate->signature_valid) {
-			/* 2a.5.1: discard unverified beacons (fail-closed). */
+	size_t best = SIZE_MAX;
+
+	for (size_t i = 0U; i < count; i++) {
+		if (!candidates[i].signature_valid) {
+			/* 2a.5.1: unverified beacons are never selectable
+			 * (fail-closed, mirroring the Python/Rust
+			 * signature_valid gate). */
 			continue;
 		}
-		if (best == NULL ||
-		    lichen_root_candidate_compare(candidate, best) < 0) {
-			best = candidate;
+		if (best == SIZE_MAX) {
+			best = i;
+			continue;
+		}
+		if (root_selection_compare(&candidates[i],
+					   &candidates[best]) < 0) {
+			best = i;
 		}
 	}
-	return best;
+	return (best == SIZE_MAX) ? -1 : (int)best;
 }
