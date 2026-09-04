@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-7wpz",
+  "title": "5yea-followup: wire duty-congestion 5.03 into coap_status/waypoints/location/rangetest call sites (needs congestion-state source decision)",
+  "description": "Follow-up from 5yea (builder landed: duty_response.c + tests green, commit a5e780e98d + 779bdeedcf). REMAINING: the 4 call sites that emit generic bare 5.03s today must switch to lichen_duty_congestion_response(level, retry_after, out): coap_status.c:961, coap_waypoints.c:997/1120, coap_location.c:1248, coap_rangetest.c:836-890. BLOCKING DECISION (needs Mark): the congestion level + retry_after must come from the hal_duty tracker's usage_permille (lichen_duty_cycle_usage_permille + lichen_congestion_level_from_usage), but the CoAP resources don't currently hold a pointer to the lora_data duty ctx — plumb lichen_duty_cycle_usage_permille(ctx) through a getter or pass the ctx at resource init (same pattern as slot_rate_limiter in resources.rs). Each call site keeps its own policy gate (status/waypoints/etc.) and swaps only the response construction. Tests: extend the existing ztest suites to assert the CBOR body + Max-Age. Also fixes the §10.2.3-vs-§10.2.4 section mislabel inherited from python/vector side (cosmetic).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T22:20:26.790971835Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T22:20:26.790971835Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7wpz",
+      "depends_on_id": "project-LICHEN-worker6-5yea",
+      "type": "discovered-from",
+      "created_at": "2026-09-04T22:20:26.903624242Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
