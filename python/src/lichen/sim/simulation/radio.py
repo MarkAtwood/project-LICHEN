@@ -138,6 +138,11 @@ class RadioMixin:
                 "tx_delayed",
                 sim_id=self._id,
                 node_id=node_id,
+                payload_len=len(payload),
+                node_state=node.state.name,
+                queue_size=len(self._event_queue),
+                jitter_enabled=self._jitter_max_us > 0,
+                current_time=self._current_time_us,
                 delay_us=delay_us,
                 fire_at_us=delayed_event.time_us,
             )
