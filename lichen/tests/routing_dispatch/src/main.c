@@ -1253,6 +1253,81 @@ static int test_gradient_sf_floors(void)
 	return 0;
 }
 
+static int test_gradient_sf_ewma_counters(void)
+{
+#if defined(CONFIG_LICHEN_ADAPTIVE_SF_ENABLED)
+	/* zrh2.8: EWMA convergence (alpha = 1/4), threshold transitions, and
+	 * the consecutive-sample upgrade/downgrade counters of
+	 * lichen_gradient_sf_update, mirroring the Python test_gradient_sf_*
+	 * cases so the two implementations pin the same semantics. */
+	struct lichen_gradient_table table = {0};
+	struct lichen_gradient_entry entry = {
+		.hop_count = 1U,
+		.seq_num = 1U,
+		.source = LICHEN_GRADIENT_ANNOUNCE,
+		.expires_ms = 100000U,
+		.valid = true,
+		.sf.current_sf = 10U,
+		.sf.snr_ewma = 0,
+	};
+	const uint8_t neighbor[8] = {0x02, 0, 0, 0, 0, 0, 0, 0x5c};
+	uint8_t next_hop[16] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0,
+				0x02, 0,   0, 0, 0, 0, 0, 0x5c};
+
+	memcpy(entry.destination_iid, neighbor, 8U);
+	memcpy(entry.next_hop, next_hop, sizeof(entry.next_hop));
+	REQUIRE(lichen_gradient_update(&table, &entry, 1U) == 0);
+
+	/* EWMA convergence: 0 -> 3 -> 6 -> 8 -> 9 -> 10. The upgrade counter
+	 * only advances once the EWMA exceeds the threshold, so five good
+	 * samples yield two. */
+	for (int i = 0; i < 5; i++) {
+		lichen_gradient_sf_update(&table, neighbor, 15, 100U + (uint32_t)i);
+	}
+	REQUIRE(table.entries[0].sf.snr_ewma == 10);
+	REQUIRE(table.entries[0].sf.upgrade_count == 2U);
+	REQUIRE(table.entries[0].sf.downgrade_count == 0U);
+
+	/* A mid-threshold sample resets both counters. */
+	lichen_gradient_sf_update(&table, neighbor, 0, 200U);
+	REQUIRE(table.entries[0].sf.snr_ewma == 7);
+	REQUIRE(table.entries[0].sf.upgrade_count == 0U);
+	REQUIRE(table.entries[0].sf.downgrade_count == 0U);
+
+	/* Downgrade path: consecutive below-threshold samples count up.
+	 * Re-seed the EWMA to 0 directly, then: -3, -5, -7 (floor-division
+	 * shifts of -10/4, -7/4, -5/4). */
+	table.entries[0].sf.snr_ewma = 0;
+	for (int i = 0; i < 3; i++) {
+		lichen_gradient_sf_update(&table, neighbor, -10, 300U + (uint32_t)i);
+	}
+	REQUIRE(table.entries[0].sf.snr_ewma == -7);
+	REQUIRE(table.entries[0].sf.downgrade_count == 3U);
+	REQUIRE(table.entries[0].sf.upgrade_count == 0U);
+
+	/* Strict boundaries driven from direct EWMA seeds: EWMA 9 upgrades
+	 * (strictly greater than 8), EWMA 8 does not; EWMA -1 downgrades
+	 * (strictly less than 0), EWMA 0 does not. */
+	table.entries[0].sf.snr_ewma = 9;
+	lichen_gradient_sf_update(&table, neighbor, 9, 400U);
+	REQUIRE(table.entries[0].sf.upgrade_count == 1U);
+	table.entries[0].sf.snr_ewma = 8;
+	lichen_gradient_sf_update(&table, neighbor, 8, 401U);
+	REQUIRE(table.entries[0].sf.upgrade_count == 0U);
+	REQUIRE(table.entries[0].sf.downgrade_count == 0U);
+	table.entries[0].sf.snr_ewma = 0;
+	lichen_gradient_sf_update(&table, neighbor, -1, 402U);
+	REQUIRE(table.entries[0].sf.snr_ewma == -1);
+	REQUIRE(table.entries[0].sf.downgrade_count == 1U);
+	table.entries[0].sf.snr_ewma = 1;
+	lichen_gradient_sf_update(&table, neighbor, 0, 403U);
+	REQUIRE(table.entries[0].sf.snr_ewma == 0);
+	REQUIRE(table.entries[0].sf.upgrade_count == 0U);
+	REQUIRE(table.entries[0].sf.downgrade_count == 0U);
+#endif /* CONFIG_LICHEN_ADAPTIVE_SF_ENABLED */
+	return 0;
+}
+
 static int run_all_tests(void)
 {
 	int ret;
@@ -1276,6 +1351,8 @@ static int run_all_tests(void)
 	ret = test_gradient_sf_density_threshold();
 	if (ret != 0) return ret;
 	ret = test_gradient_sf_floors();
+	if (ret != 0) return ret;
+	ret = test_gradient_sf_ewma_counters();
 	if (ret != 0) return ret;
 	return 0;
 }

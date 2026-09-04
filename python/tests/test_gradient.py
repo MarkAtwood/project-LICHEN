@@ -286,3 +286,105 @@ def test_monotonic_time_nondecreasing() -> None:
     # After calling with later time, entry is definitely expired
     table.expire_old(now=600)
     assert table.lookup(DEST, now=400) is None  # entry removed
+
+
+# ── Adaptive SF (CCP-16, spec 02a 2a.8; C parity with routing_dispatch's
+#    test_gradient_sf_ewma_counters / test_gradient_sf_density_threshold /
+#    test_gradient_sf_floors, bead zrh2.8) ────────────────────────────────────
+
+SF_IID = IPv6Address("fe80::5c")
+
+
+def _sf_table(current_sf=None, snr_ewma=0, expires=100000) -> GradientTable:
+    table = GradientTable()
+    table.update(
+        GradientEntry(
+            SF_IID, SF_IID, 1, 1, GradientSource.ANNOUNCE, expires,
+            current_sf=current_sf, snr_ewma=snr_ewma,
+        ),
+        now=1,
+    )
+    return table
+
+
+def test_sf_update_ewma_convergence_and_counters() -> None:
+    table = _sf_table(current_sf=10)
+    for i in range(5):
+        table.sf_update(SF_IID, 15, now=100 + i)
+    entry = table.lookup(SF_IID)
+    assert entry.snr_ewma == 10  # 0 -> 3 -> 6 -> 8 -> 9 -> 10 (alpha = 1/4)
+    assert entry.upgrade_count == 2  # only samples where EWMA > 8 count
+    assert entry.downgrade_count == 0
+
+    table.sf_update(SF_IID, 0, now=200)  # mid-threshold sample
+    entry = table.lookup(SF_IID)
+    assert entry.snr_ewma == 7
+    assert entry.upgrade_count == 0 and entry.downgrade_count == 0
+
+    # Downgrade path from a reseeded EWMA 0: -3, -5, -7 (floor division).
+    table.lookup(SF_IID).snr_ewma = 0
+    for i in range(3):
+        table.sf_update(SF_IID, -10, now=300 + i)
+    entry = table.lookup(SF_IID)
+    assert entry.snr_ewma == -7
+    assert entry.downgrade_count == 3 and entry.upgrade_count == 0
+
+
+def test_sf_update_threshold_transitions_strict() -> None:
+    table = _sf_table(snr_ewma=9)
+    table.sf_update(SF_IID, 9, now=400)
+    assert table.lookup(SF_IID).upgrade_count == 1  # EWMA 9 > 8
+    table.sf_update(SF_IID, 8, now=401)  # EWMA stays 8: reset, not > 8
+    assert table.lookup(SF_IID).upgrade_count == 0
+    table.lookup(SF_IID).snr_ewma = 0
+    table.sf_update(SF_IID, -1, now=402)  # EWMA -1 < 0
+    assert table.lookup(SF_IID).downgrade_count == 1
+    table.lookup(SF_IID).snr_ewma = 1  # reseed above the threshold
+    table.sf_update(SF_IID, 0, now=403)  # EWMA lands on 0: not below
+    assert table.lookup(SF_IID).snr_ewma == 0
+    assert table.lookup(SF_IID).upgrade_count == 0
+    assert table.lookup(SF_IID).downgrade_count == 0
+
+
+def test_sf_update_missing_neighbor_is_noop() -> None:
+    table = GradientTable()
+    table.sf_update(SF_IID, 15)  # no entry: silent no-op (C NULL-lookup return)
+    assert len(table) == 0
+
+
+def test_sf_select_density_threshold_persists_baseline() -> None:
+    table = _sf_table(current_sf=10)
+    assert table.sf_select(SF_IID, 10, 0, 0, 0, now=1) == (10, True)
+    assert table.sf_select(SF_IID, 11, 0, 0, 0, now=2) == (12, True)
+
+
+def test_sf_select_floors_in_order() -> None:
+    assert _sf_table(9, -6).sf_select(SF_IID, 10, 0, 0, 0, now=2000) == (12, True)
+    assert _sf_table(9, -1).sf_select(SF_IID, 10, 0, 0, 0, now=2001) == (11, True)
+    # Floor c: density > 11 raises SF to >= 11 even from step-3 result 9.
+    assert _sf_table(7, 0).sf_select(SF_IID, 11, 0, 0, 0, now=2002)[0] == 11
+    # Floor d: load factor >= 52429 (strictly > 0.8) raises SF to >= 11.
+    assert _sf_table(7, 0).sf_select(SF_IID, 10, 0, 0, 60000, now=2003)[0] == 11
+    assert _sf_table(9, 0).sf_select(SF_IID, 10, 0, 0, 52428, now=2004) == (9, True)
+    # ema_loss threshold is strict (16384 = 0.25 exactly does not trigger).
+    assert _sf_table(10, 0).sf_select(SF_IID, 10, 0, 16384, 0, now=2005) == (10, True)
+
+
+def test_sf_select_utilization_over_200_blocks_tx() -> None:
+    table = _sf_table(current_sf=7)
+    assert table.sf_select(SF_IID, 10, 250, 0, 0, now=3) == (12, False)
+
+
+def test_sf_select_absent_sf_defaults_to_10() -> None:
+    assert _sf_table(None).sf_select(SF_IID, 10, 0, 0, 0, now=5) == (10, True)
+
+
+def test_sf_state_survives_routing_updates() -> None:
+    table = _sf_table(current_sf=9, snr_ewma=-7)
+    table.sf_update(SF_IID, -10, now=100)  # EWMA -7 -> -8, downgrade 1
+    table.update(
+        GradientEntry(SF_IID, SF_IID, 1, 2, GradientSource.RPL, 100000), now=101
+    )
+    entry = table.lookup(SF_IID)
+    assert entry.hop_count == 1  # routing fields refreshed
+    assert (entry.current_sf, entry.snr_ewma, entry.downgrade_count) == (9, -8, 1)
