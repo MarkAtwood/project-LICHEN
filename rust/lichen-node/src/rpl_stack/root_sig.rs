@@ -425,7 +425,7 @@ impl DecodedRootSig {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use lichen_rpl::root_seq_cache::RootSeqCache;
     use std::vec;
@@ -446,6 +446,14 @@ mod tests {
         0xfb, 0x65, 0x74, 0x84, 0x60, 0x65, 0x8e, 0x67, 0xd1, 0x3b, 0x75, 0xed, 0xf5, 0xf2, 0xf5,
         0x04, 0x87,
     ];
+
+    pub(crate) fn vector_cose() -> std::vec::Vec<u8> {
+        decode_hex(VALID_COSE_SIGN1)
+    }
+
+    pub(crate) fn vector_pubkey() -> lichen_link::keys::PublicKey {
+        lichen_link::keys::PublicKey::new(VALID_PUBKEY)
+    }
 
     pub(crate) fn decode_hex(value: &str) -> Vec<u8> {
         (0..value.len())

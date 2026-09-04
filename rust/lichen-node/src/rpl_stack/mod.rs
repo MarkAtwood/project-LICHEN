@@ -7,7 +7,7 @@ mod dao_tx_timing;
 mod error;
 mod provisioning;
 mod receive;
-mod root_sig;
+pub(crate) mod root_sig;
 mod runtime;
 mod secure;
 mod transmit;
