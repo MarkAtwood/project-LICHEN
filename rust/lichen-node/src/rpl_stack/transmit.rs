@@ -62,7 +62,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     }
 
     pub async fn send_dio(&mut self, _destination: [u8; 16]) -> Result<(), TxError> {
-        let mut body = [0u8; 512];
+        let mut body = [0u8; 256];
         // Root-signature producer (spec 06 8.10.1, bead b7z9.88.2): when
         // this stack is the DODAG root with a valid wall clock, sign the
         // DIO (expiry = now + ROOT_SIG_TTL_SECONDS) and append the 0x17

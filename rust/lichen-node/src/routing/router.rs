@@ -935,6 +935,7 @@ impl Router {
     }
 
     pub fn build_authenticated_dio(&self, out: &mut [u8], link: &LinkLayer) -> usize {
+        
         let authorization = if self.dodag.is_root() {
             let root_pubkey = *link.local_public_key().as_bytes();
             if lichen_core::addr::ygg_addr_from_pubkey(&root_pubkey) != self.dodag_id {
