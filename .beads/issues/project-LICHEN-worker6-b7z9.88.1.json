@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.88.1",
+  "title": "b7z9.88.a: C - authorized-consume call site for root DIO signature in dodag.c DIO path + CONFIG_LICHEN_RPL_ROOT_SIG Kconfig",
+  "description": "Child of b7z9.88 (root DIO signature residuals). The C library is complete but test-only: lichen/subsys/lichen/rpl/root_dio_sig.c:401-445 + root_dio_replay.c have ZERO production call sites - the dodag.c DIO receive path never consumes the 0x17 option. Deliverable: one authorized-consume call site in lichen/subsys/lichen/rpl/dodag.c's DIO handling (mirror the Rust receiver rust/lichen-node/src/rpl_stack/receive.rs:522-\u003e657-747 semantics: Reject on tamper/duplicate, Baseline on absent option/expired/unassessable clock per R-06-307, cache mutation only after full validation) + the CONFIG_LICHEN_RPL_ROOT_SIG Kconfig (spec 06-security.md L694; default n or y per spec - check the spec text). Host-verifiable: lichen/tests/rpl_root_sig exists; add a dodag-path test there or in routing_dispatch mirroring the C DTN test pattern (routing_dispatch make_dtn_hbh_packet idiom). All host rpl suites currently green (rpl_dao_auth/sequence/tx_persist/redundant_slot/hal_storage_redundant 100%).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T10:31:49.318639405Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T10:31:49.318639405Z",
+  "labels": [
+    "zephyr",
+    "rpl",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.88.1",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.88",
+      "type": "parent-child",
+      "created_at": "2026-09-04T10:31:49.447457888Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

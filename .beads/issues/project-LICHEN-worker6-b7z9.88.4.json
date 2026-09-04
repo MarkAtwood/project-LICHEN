@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.88.4",
+  "title": "b7z9.88.d: Python - mark crypto/root_dio_signature.py explicitly as oracle-only (unwired production status)",
+  "description": "Child of b7b9.88: python/src/lichen/crypto/root_dio_signature.py:291-377 (verify) is an unwired oracle and :242 create_root_dio_signature is the ONLY root-side signer across all stacks. Per the parent bead the Python resolution may be 'explicitly mark oracle-only': add a module-level status docstring stating precisely that (a) verify_root_dio_signature is a REFERENCE oracle matching the C (root_dio_sig.c) and Rust (receive.rs) receivers, (b) it is NOT wired into any production Python DIO receive path (state where the Python DIO receive path lives, if one exists), (c) create_root_dio_signature is the reference for the C/Rust signers (b7z9.88.b). Cross-link the parent bead and the spec-coverage entry (docs/spec-coverage/06-security-part3.md R-06-305/310). Keep the wired-integration decision for Mark if the Python stack ever needs the live path.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T10:32:19.162776245Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T10:33:33.760706412Z",
+  "started_at": "2026-09-04T10:32:36.296658832Z",
+  "closed_at": "2026-09-04T10:33:33.760706412Z",
+  "close_reason": "DONE: python/src/lichen/crypto/root_dio_signature.py now carries an IMPLEMENTATION STATUS block in its module docstring (commit 9b3c916674) stating explicitly per the parent bead's resolution option: (a) the module is a REFERENCE ORACLE not wired into any production Python DIO receive path, (b) the wired receivers are the C root_dio_sig.c/root_dio_replay.c (dodag.c consumption = child b7z9.88.1) and the Rust receive.rs verify_dio_root_signature, (c) create_root_dio_signature is the reference signer with no stack-side producer (Rust producer = b7z9.88.2), (d) cross-links to the shared fixture test/vectors/root_dio_signature.json, the spec-coverage entry docs/spec-coverage/06-security-part3.md (R-06-305/310), and the parent bead. Verification: root_dio/root_sig Python tests 71 passed, 5 skipped (the 5 errors are the pre-existing httpx-era collection set, unrelated); ruff clean. Doc-only change. Parent b7z9.88 remains open with children .1 (C dodag consume + Kconfig), .2 (Rust producer), .3 (Rust expired-signature Baseline test pin) - each filed with implementation pointers.",
+  "labels": [
+    "python",
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.88.4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.88",
+      "type": "parent-child",
+      "created_at": "2026-09-04T10:32:19.285809308Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
