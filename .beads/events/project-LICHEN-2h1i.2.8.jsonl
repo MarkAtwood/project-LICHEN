@@ -9,3 +9,4 @@
 {"id":"01a055fd-1985-72b9-a689-b51c8b277f5f","issue_id":"project-LICHEN-2h1i.2.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: oscore","created_at":"2026-08-31T04:04:05.637179385Z"}
 {"id":"01a055fd-1ae0-7a19-8f35-5bf7fb7efd71","issue_id":"project-LICHEN-2h1i.2.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-08-31T04:04:05.984663001Z"}
 {"id":"01a05606-9647-7846-8a58-10816a9e2132","issue_id":"project-LICHEN-2h1i.2.8","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:14:27.399543288Z"}
+{"id":"01a06a5c-d7c0-72e2-84dc-5b41d177b074","issue_id":"project-LICHEN-2h1i.2.8","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-09-04T03:01:04.576189607Z"}
