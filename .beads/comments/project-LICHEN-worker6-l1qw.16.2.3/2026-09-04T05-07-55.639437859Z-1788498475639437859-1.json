@@ -1,0 +1,7 @@
+{
+  "id": "1788498475639437859-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.2.3",
+  "author": "opencode-worker-1",
+  "text": "Progress + release note (worker-1, 2026-09-04): lichend.rs signed_slot_claim migrated to COSE (encode_cose, expiry now+100 inline clock read, with_federation(2,0), commit f5c9359f7d; its only call site provision_noninitial_slot_store passes the envelope directly). end_to_end.rs migrated in the same commits; ONE test remains RED by design pending the transport decision (see .16.2.2 comment and beads ljgs/.16.2.6). cargo fmt + clippy clean on touched lines. Released with .16.2.2 - the red runtime_ingress test is the shared gate.",
+  "created_at": "2026-09-04T05:07:55.639437859Z"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-ljgs",
+  "title": "Adjudicate: spec ~110B COSE slot-claim + mandatory OSCORE cannot fit a single SCHC frame (needs Mark's call)",
+  "description": "Discovered by worker-1 migrating handle_post_slots to COSE_Sign1 (l1qw.16.2.2, commit eaa719bc14). FACTS: (1) GCP-6.3 mandates OSCORE on slot-claim POSTs (handler 4.01 without it); (2) the spec COSE_Sign1 envelope is 106-110B (vector happy_path_n4 is 'the ~110-byte on-air shape from the spec'); (3) lichen-node send path preflight_secure_frame (secure.rs:1814-1870) bounds the single frame at max_schc_len=193B; on the global-address path (gateway gateways address each other via ygg 0200::/8, gw_native/ygg_addr_from_pubkey) schc_len = coap_len + 38, so coap_len \u003c= 155; the COSE claim needs coap_len \u003e= 163 (envelope 106 + class-E uri-path 29 + tag 16 + CoAP/OSCORE headers ~29) - structurally impossible. Link-local would allow coap_len \u003c= 171: envelope needs 160-171 with oscore option 6-11 bytes - only fits if the OSCORE option carries flags+PIV only (no kid/context in the option) AND both sides use link-local addressing. The legacy raw-map claim (73B) fit with margin; the spec envelope does not. OPTIONS: (A) Block1 blockwise for slot-claim POSTs (gateway-side Block1 reassembly for GCP dispatch: unverified, likely absent); (B) gateway-to-gateway claims over link-local addresses (check whether GCP dispatch/runtime ingress accepts link-local dst, and whether the OSCORE option can stay \u003c= 7 bytes); (C) raise the SCHC/frame budget for gateway frames; (D) different transport for claims entirely. Note Python gateway posts slot claims too (slot_claim.py encode path) - same limit presumably applies there. Blocks: runtime_ingress_dispatches_authenticated_gcp_slot_claim (end_to_end.rs:989) left RED on purpose, and the end_to_end COSE-claim test-completion bead. Reference: validate_claim_timing, preflight_secure_frame (lichen-node/src/secure.rs:1814-1870).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T05:06:58.374644955Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T05:06:58.374644955Z",
+  "labels": [
+    "gateway",
+    "human"
+  ]
+}
