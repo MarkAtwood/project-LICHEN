@@ -1,3 +1,4 @@
 {"id":"01a053d8-76e6-7e50-b079-e1dad4d9cf15","issue_id":"project-LICHEN-worker6-2m0f","event_type":"created","actor":"opencode-worker-6","old_value":"","new_value":"","created_at":"2026-08-30T18:04:50.278939Z"}
 {"id":"01a05609-6c1f-75b3-a59a-2d4efe6c487b","issue_id":"project-LICHEN-worker6-2m0f","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T04:17:33.215374525Z"}
 {"id":"01a06a6c-5910-7869-a3dd-4110d2785f33","issue_id":"project-LICHEN-worker6-2m0f","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-09-04T03:18:00.720551876Z"}
+{"id":"01a06a6c-5a69-7c04-a66e-258a3e2efb07","issue_id":"project-LICHEN-worker6-2m0f","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human","created_at":"2026-09-04T03:18:01.065788066Z"}
