@@ -459,7 +459,19 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 
 	/* Re-provision the signing key + peer: the shared link context may
 	 * have been wiped by the teardown test above (ztest runs cases
-	 * alphabetically, and the disable/destroy teardown wipes the key). */
+	 * alphabetically, and the disable/destroy teardown wipes the key).
+	 * The module may also be in LORA_ABORTED from the teardown's
+	 * corrupted-queue retry; force a clean deinit/init cycle first. */
+	/* Documented ABORTED recovery (lora_l2.c:263): deinit() then init().
+	 * net_if_down may return -EALREADY/-EPERM if the iface is already
+	 * down from the teardown path — the state machine's own deinit()
+	 * handles ABORTED directly (drains RX, reinitializes mutexes). */
+	(void)net_if_down(test_iface);
+	ret = lichen_lora_l2_deinit();
+	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
+	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
+	ret = net_if_up(test_iface);
+	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
 	reprovision_after_reinit();
 
 	sock = bind_udp_observer();
