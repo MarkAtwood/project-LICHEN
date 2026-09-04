@@ -905,11 +905,17 @@ impl Router {
         // The 0x17 COSE signature supersedes the version-auth option
         // (both bind the root to version/rank; the COSE covers a superset
         // and omitting version-auth makes the signed DIO fit the link
-        // frame — qe1t sizing resolution). Build WITHOUT it.
-        let base = self.build_dio_with_authorization(out, None);
+        // frame — qe1t sizing resolution). Build WITHOUT it, and without
+        // the ASSIGNED_SF option (qe1t sizing).
+        let base = self.build_dio_with_authorization_ext(out, None, false);
         if base == 0 {
             return 0;
         }
+        // Sizing (qe1t): the signed DIO must fit one link frame. The
+        // ASSIGNED_SF option (6B) and DODAG_CONFIG (10B) ride along on
+        // every unsigned config DIO; dropping ASSIGNED_SF from the SIGNED
+        // variant is safe because assignments are re-announced on the
+        // next periodic unsigned DIO.
         let pubkey = link.local_public_key();
         let signer_iid = lichen_core::addr::iid_from_pubkey_bytes(pubkey.as_bytes());
         let signer = |digest: &[u8]| link.sign_digest(digest);
@@ -967,6 +973,19 @@ impl Router {
         out: &mut [u8],
         authorization: Option<&DodagVersionAuthorization>,
     ) -> usize {
+        self.build_dio_with_authorization_ext(out, authorization, true)
+    }
+
+    /// Full builder: `include_sf` suppresses the ASSIGNED_SF option for
+    /// the root-signed variant (qe1t sizing — the COSE supersedes
+    /// per-option authorization and the assignment is re-announced on the
+    /// next periodic unsigned DIO).
+    fn build_dio_with_authorization_ext(
+        &self,
+        out: &mut [u8],
+        authorization: Option<&DodagVersionAuthorization>,
+        include_sf: bool,
+    ) -> usize {
         let dio = Dio {
             rpl_instance_id: RPL_INSTANCE_ID,
             version: self.dodag.version,
@@ -990,6 +1009,9 @@ impl Router {
         // routers with an installed tracker emit; the gateway registers
         // joined nodes and least-loads the assignment (GatewaySfTracker).
         if let (Some(tracker), true) = (&self.sf_tracker, self.dodag.is_root()) {
+            if !include_sf {
+                return length;
+            }
             let assigned = tracker
                 .load_by_sf()
                 .iter()

@@ -112,6 +112,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             &body[..len],
         )
         .ok_or(TxError::BufferTooSmall)?;
+        #[cfg(feature = "root-sig")]
+        if self.rpl.router.dodag.is_root() {
+            // Round-trip sizing probe (bead b7z9.88.2): emit the packet
+            // length so the frame-budget accounting can be verified.
+            std::eprintln!("TRACE send_dio: len={} ipv6={}", len, packet.len());
+        }
         let l2_destination = ipv6_l2_destination(control_destination);
         // RPL DIO is control traffic (P1) and is carried uncompressed
         // (Rule 255): the authenticated-DIO admission gate accepts only
