@@ -1,0 +1,7 @@
+{
+  "id": "1788523172340853338-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.88.2",
+  "author": "opencode-worker-1",
+  "text": "Round 3 (worker-1, released per timebox): producer infrastructure LANDED - root_sig.rs produce_root_dio_signature_option (canonical payload labels 1-7, COSE_Tag(18) wrap, std-gated) + Router.root_dio_seq (starts 1, terminal u64::MAX) + build_authenticated_dio_with_root_sig(expiry) appending the option + send_dio feature-gated emission (root + valid clock -\u003e expiry=clock()+300) + round-trip test written (two DIOs admitted pinning the seq advance). BLOCKER discovered: the full uncompressed DIO (~290B) exceeds the 254B link frame - sizing decision filed as project-LICHEN-worker6-qe1t (sibling of ljgs). The round-trip test is #[ignore]d pending that decision. Suite baseline preserved: 345 passed + 1 ehcn-gated red + 4 ignored.",
+  "created_at": "2026-09-04T11:59:32.340853338Z"
+}

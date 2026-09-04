@@ -8,7 +8,8 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-04T10:31:49.676135295Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-04T11:32:09.383586217Z",
+  "updated_at": "2026-09-04T11:59:32.108268602Z",
+  "started_at": "2026-09-04T11:51:39.837614568Z",
   "labels": [
     "rust",
     "networking",
