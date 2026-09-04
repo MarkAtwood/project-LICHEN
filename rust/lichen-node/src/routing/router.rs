@@ -903,7 +903,7 @@ impl Router {
         expiry_unix: u64,
     ) -> usize {
         let base = self.build_authenticated_dio(out, link);
-        if base == 0 { panic!("TRACE root-sig: base=0 expiry={expiry_unix}"); }
+        
         if base == 0 {
             return 0;
         }
@@ -930,10 +930,7 @@ impl Router {
                     base
                 }
             }
-            Err(error) => {
-                panic!("TRACE root-sig: producer err {error:?}");
-                base
-            }
+            Err(_) => base,
         }
     }
 
