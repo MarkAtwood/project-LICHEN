@@ -16,8 +16,7 @@
     "crypto",
     "edhoc",
     "owner-reserved",
-    "local-ok",
-    "human-only"
+    "local-ok"
   ],
   "dependencies": [
     {
