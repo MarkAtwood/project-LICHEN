@@ -362,8 +362,10 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 		 * authenticated signer (spec 03 5.7); exactly one
 		 * notification per consecutive run. Static in-context
 		 * storage keeps the footprint bounded. */
-		lichen_schc_failure_record(&ctx->schc_failures,
-					   ctx->ed25519_pk);
+		if (ctx->schc_failures != NULL && ctx->peer_pubkey != NULL) {
+			lichen_schc_failure_record(ctx->schc_failures,
+						   ctx->peer_pubkey);
+		}
 		ret = -EINVAL;
 		goto cleanup;
 	}
@@ -385,7 +387,10 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	memcpy(out_ipv6, ipv6_buf, ipv6_len);
 	*out_len = ipv6_len;
 	memcpy(src_eui64, auth.info.src_eui64, LICHEN_EUI64_LEN);
-	lichen_schc_failure_clear(&ctx->schc_failures, ctx->ed25519_pk);
+	if (ctx->schc_failures != NULL && ctx->peer_pubkey != NULL) {
+		lichen_schc_failure_clear(ctx->schc_failures,
+					  ctx->peer_pubkey);
+	}
 	ret = 0;
 
 cleanup:

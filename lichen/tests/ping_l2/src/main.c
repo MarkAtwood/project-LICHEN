@@ -496,12 +496,12 @@ ZTEST(ping_l2, test_adaptive_duty_permille_matches_ccp13_vectors)
 		{ "sparse_region0", 0, 0, 20 },
 		{ "sparse_boundary_region0", 2, 0, 20 },
 		{ "moderate_start_region0", 3, 0, 10 },
-		{ "moderate_end_region0", 8, 0, 10 },
-		{ "dense_start_region0", 9, 0, 5 },
+		{ "moderate_end_region0", 10, 0, 10 },
+		{ "dense_start_region0", 11, 0, 5 },
 		{ "dense_extreme_region0", 255, 0, 5 },
 		{ "sparse_region1", 0, 1, 50 },
 		{ "moderate_region1", 5, 1, 20 },
-		{ "dense_start_region1", 9, 1, 10 },
+		{ "dense_start_region1", 11, 1, 10 },
 		{ "dense_extreme_region1", 200, 1, 10 },
 	};
 
@@ -527,14 +527,14 @@ ZTEST(ping_l2, test_adaptive_duty_wiring_tracks_density)
 	 * boot density 0 is sparse -> 50 permille per ccp13.json. */
 	at_boot = lichen_lora_l2_current_duty_permille();
 
-	lichen_lora_l2_set_density(9);
+	lichen_lora_l2_set_density(11);
 	dense = lichen_lora_l2_current_duty_permille();
 	lichen_lora_l2_set_density(5);
 	moderate = lichen_lora_l2_current_duty_permille();
 	lichen_lora_l2_set_density(0);
 
 	zassert_equal(at_boot, 50, "boot budget should be sparse US 50 permille");
-	zassert_equal(dense, 10, "density 9 must shrink budget to 10 permille");
+	zassert_equal(dense, 10, "density 11 must shrink budget to 10 permille");
 	zassert_equal(moderate, 20, "density 5 must yield 20 permille");
 	zassert_equal(lichen_lora_l2_current_duty_permille(), 50,
 		      "restore to sparse budget failed");
