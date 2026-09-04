@@ -168,11 +168,9 @@ static inline const char *lichen_link_strerror(int err)
         return "schc compression rejected packet";
 #endif
 /* ENOENT/ENOKEY collapse to one value on platforms where lichen/errno.h
- * aliases ENOKEY to ENOENT; guard so the switch never gets duplicate cases. */
-#if defined(ENOENT) && (!defined(ENOKEY) || ENOENT != ENOKEY)
-    case -ENOENT:
-        return "no such record";
-#endif
+ * aliases ENOKEY to ENOENT; guard so the switch never gets duplicate
+ * cases. On Zephyr 4.1.0 LICHEN errno aliases also collide with the plain
+ * ENOENT above, so the second -ENOENT entry is omitted entirely. */
 #ifdef ENOKEY
     case -ENOKEY:
         return "no signing key";
