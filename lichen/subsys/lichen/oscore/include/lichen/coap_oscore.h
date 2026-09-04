@@ -104,7 +104,11 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
  * @return 0 on success (result->payload valid), positive CoAP response code
  *         on error (caller must return it without sending)
  */
-int coap_oscore_authorize_mutating(struct coap_resource *resource,
+/* TEMPORARY legacy shim (bead y5em.1): the 6-arg result-struct form of
+ * the mutating authorize gate, renamed out of the expanded form's way.
+ * Tracked for deletion by the y5em.2 caller migration - do not add new
+ * callers. */
+int coap_oscore_authorize_mutating_result(struct coap_resource *resource,
 				   struct coap_packet *request,
 				   struct sockaddr *addr, socklen_t addr_len,
 				   uint8_t expected_method,

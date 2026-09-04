@@ -1461,7 +1461,7 @@ static int slots_post(struct coap_resource *resource,
 	uint16_t payload_len;
 	int ret;
 
-	ret = coap_oscore_authorize_mutating(resource, request, addr,
+	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 					     addr_len, COAP_METHOD_POST,
 					     &oscore);
 	if (ret != 0) {

@@ -743,7 +743,7 @@ int lichen_rangetest_post_handler(struct coap_resource *resource,
 	int len;
 	int ret;
 
-	ret = coap_oscore_authorize_mutating(
+	ret = coap_oscore_authorize_mutating_result(
 		resource, request, addr, addr_len, COAP_METHOD_POST, &oscore);
 	if (ret != 0) {
 		return ret;

@@ -7,7 +7,7 @@
  *
  * Zephyr glue over lichen/checkin.h. See checkin_resource.h for the
  * endpoint contract. Write endpoints (POST/PUT) authorize the request
- * with coap_oscore_authorize_mutating() and require it to be
+ * with coap_oscore_authorize_mutating_result() and require it to be
  * OSCORE-protected or to originate from the local admin (4.01
  * otherwise); all handler responses go through
  * coap_oscore_send_protected(). Handler return values follow the
