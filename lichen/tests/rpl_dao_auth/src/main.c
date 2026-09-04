@@ -24,6 +24,11 @@
 #include <lichen/rpl_addr.h>
 #include <lichen/rpl_messages.h>
 #include <lichen/rpl_routing.h>
+/* The origin-signature helper below uses the monocypher SHA-512 and the
+ * Schnorr48 APIs directly; include them explicitly rather than relying on
+ * transitive includes that only exist in the Zephyr build. */
+#include <monocypher-ed25519.h>
+#include <lichen/schnorr48.h>
 
 static int tests_run;
 static int tests_passed;
@@ -111,7 +116,7 @@ static uint64_t origin_seq_ctr;
 /* Spec/05-routing.md 8.6 transcript: append the 0x12 DAO Origin Signature
  * option (seq BE u64 + Schnorr48 over SHA-512(domain || origin || dodagid ||
  * seq_be || unsigned DAO bytes)) using the suite's test signing key. */
-static void add_origin_signature(uint8_t *dao, size_t *len,
+static void sign_origin(uint8_t *dao, size_t *len,
 				 const uint8_t origin[16])
 {
 	crypto_sha512_ctx ctx;
@@ -130,7 +135,12 @@ static void add_origin_signature(uint8_t *dao, size_t *len,
 	crypto_sha512_update(&ctx, seq_be, sizeof(seq_be));
 	crypto_sha512_update(&ctx, dao, *len);
 	crypto_sha512_final(&ctx, digest);
-	schnorr48_sign(origin_priv, origin_pub, digest, sizeof(digest), sig);
+	int sign_ret =
+		schnorr48_sign(origin_priv, origin_pub, digest, sizeof(digest), sig);
+	if (sign_ret != 0) {
+		fprintf(stderr, "schnorr48_sign failed (%d)\n", sign_ret);
+		abort();
+	}
 	dao[(*len)++] = 0x12;
 	dao[(*len)++] = 56;
 	memcpy(&dao[*len], seq_be, 8);
@@ -211,7 +221,11 @@ static const uint8_t slash64[8] = {
  * canonical routing keys expect. Initialized in main(). */
 static uint8_t slash64_full[16];
 
-/* One matrix row per dao_prefix_authorization.rs allow/deny case. */
+/* One matrix row per dao_prefix_authorization.rs allow/deny case.
+ * `authenticated` selects the origin pubkey handed to process_dao_ex:
+ * true -> the key matching the origin signature (verified), false -> a
+ * mismatched key (the Schnorr48 verification fails, which is the
+ * API's unauthenticated-origin fail-closed path since 65ca175106). */
 static const struct {
 	const char *name;
 	uint8_t target;
@@ -233,16 +247,23 @@ static int test_dao_origin_authorization_matrix(void)
 {
 	uint8_t dao[512];
 	uint8_t origin[16];
+	uint8_t wrong_pub[32];
 	size_t len;
+
+	memset(wrong_pub, 0xA5, sizeof(wrong_pub));
 
 	for (size_t i = 0; i < sizeof(origin_cases) / sizeof(origin_cases[0]);
 	     i++) {
 		const uint8_t *case_origin = NULL;
+		const uint8_t *case_pubkey = origin_pub;
 
 		fresh_manager();
 		if (origin_cases[i].origin_id != 0) {
 			address(origin, origin_cases[i].origin_id);
 			case_origin = origin;
+		}
+		if (!origin_cases[i].authenticated) {
+			case_pubkey = wrong_pub;
 		}
 		len = dao_begin(dao, 1);
 		add_target(dao, &len, origin_cases[i].target);
@@ -252,7 +273,7 @@ static int test_dao_origin_authorization_matrix(void)
 		enum lichen_rpl_dao_process_result result =
 			lichen_rpl_dao_manager_process_dao_ex(
 				&manager, dao, len, 1, case_origin,
-				origin_cases[i].authenticated, NULL, 0);
+				case_pubkey, NULL, 0);
 
 		ASSERT_EQ(result, origin_cases[i].expected, origin_cases[i].name);
 		ASSERT_EQ(route_present(origin_cases[i].target),
@@ -285,7 +306,7 @@ static int test_foreign_host_route_preserves_installed_route(void)
 	address(origin, 2);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_APPLIED, "self route install");
 	ASSERT_EQ(route_present(2), true, "self route present");
 
@@ -296,7 +317,7 @@ static int test_foreign_host_route_preserves_installed_route(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 2,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "foreign route accepted");
 	ASSERT_EQ(route_present(3), false, "foreign route installed");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
@@ -333,7 +354,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 	add_transit(dao, &len, 2, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "foreign /64 accepted");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "foreign /64 mutated routing state");
@@ -344,7 +365,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "default route accepted");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "default route mutated routing state");
@@ -355,7 +376,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "truncated target accepted");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "truncated target mutated routing state");
@@ -366,7 +387,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "prefix_len 129 accepted");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "prefix_len 129 mutated routing state");
@@ -379,7 +400,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "short target body accepted");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "short target body mutated routing state");
@@ -389,7 +410,7 @@ static int test_gate_denies_undelegated_and_malformed_targets(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "targetless DAO accepted");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "targetless DAO mutated routing state");
@@ -533,7 +554,7 @@ static int test_delegated_slash64_end_to_end(void)
 
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "undelegated /64 applied");
 	ASSERT_EQ(route_present_bytes(installed), false, "/64 route installed");
 	ASSERT_EQ(route_present(2), false, "self route installed");
@@ -545,7 +566,7 @@ static int test_delegated_slash64_end_to_end(void)
 		  LICHEN_RPL_OK, "delegate /64");
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_APPLIED, "delegated /64 rejected");
 	ASSERT_EQ(route_present_bytes(installed), true, "canonical /64 route");
 	ASSERT_EQ(route_present(2), true, "self route missing");
@@ -570,7 +591,7 @@ static int test_delegated_slash64_end_to_end(void)
 	add_transit(dao, &len, 2, 0x40, 2, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 2,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_APPLIED, "delegated foreign /128 rejected");
 	ASSERT_EQ(route_present(3), true, "delegated foreign route missing");
 
@@ -616,7 +637,7 @@ static int test_gate_generalized_body_literals(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_APPLIED, "non-canonical body rejected");
 	ASSERT_EQ(route_present_bytes(installed), true, "canonical /64 route");
 	ASSERT_TRUE(find_snapshot(installed) != NULL, "canonical /64 snapshot");
@@ -638,7 +659,7 @@ static int test_gate_generalized_body_literals(void)
 	struct lichen_rpl_dao_root_state flags_saved = root_state;
 
 	ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "nonzero Target flags accepted");
 	ASSERT_MEM_EQ(&root_state, &flags_saved, sizeof(root_state),
 		      "nonzero flags DAO mutated routing state");
@@ -662,7 +683,7 @@ static int test_gate_generalized_body_literals(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_APPLIED, "/127 boundary rejected");
 	ASSERT_EQ(route_present_bytes(slash127_canonical), true,
 		  "canonical /127 route");
@@ -682,7 +703,7 @@ static int test_gate_generalized_body_literals(void)
 	add_transit(dao, &len, 1, 0x40, 1, 255);
 	sign_origin(dao, &len, origin);
 		ASSERT_EQ(lichen_rpl_dao_manager_process_dao_ex(&manager, dao, len, 1,
-							origin, true, NULL, 0),
+							origin, origin_pub, NULL, 0),
 		  LICHEN_RPL_DAO_REJECTED, "/63 accepted by /64 delegation");
 	ASSERT_MEM_EQ(&root_state, &saved, sizeof(root_state),
 		      "/63 denial mutated routing state");
