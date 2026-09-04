@@ -334,7 +334,7 @@ def test_sf_update_threshold_transitions_strict() -> None:
     table = _sf_table(snr_ewma=9)
     table.sf_update(SF_IID, 9, now=400)
     assert table.lookup(SF_IID).upgrade_count == 1  # EWMA 9 > 8
-    table.sf_update(SF_IID, 8, now=401)  # EWMA stays 8: reset, not > 8
+    table.sf_update(SF_IID, 8, now=401)  # delta (8-9)>>2 = -1 -> EWMA 8: reset, not > 8
     assert table.lookup(SF_IID).upgrade_count == 0
     table.lookup(SF_IID).snr_ewma = 0
     table.sf_update(SF_IID, -1, now=402)  # EWMA -1 < 0
@@ -361,7 +361,8 @@ def test_sf_select_density_threshold_persists_baseline() -> None:
 def test_sf_select_floors_in_order() -> None:
     assert _sf_table(9, -6).sf_select(SF_IID, 10, 0, 0, 0, now=2000) == (12, True)
     assert _sf_table(9, -1).sf_select(SF_IID, 10, 0, 0, 0, now=2001) == (11, True)
-    # Floor c: density > 11 raises SF to >= 11 even from step-3 result 9.
+    # Floor c: density > 10 raises SF to >= 11 (11 passed here) even from
+    # step-3's +2 result 9.
     assert _sf_table(7, 0).sf_select(SF_IID, 11, 0, 0, 0, now=2002)[0] == 11
     # Floor d: load factor >= 52429 (strictly > 0.8) raises SF to >= 11.
     assert _sf_table(7, 0).sf_select(SF_IID, 10, 0, 0, 60000, now=2003)[0] == 11
@@ -386,5 +387,18 @@ def test_sf_state_survives_routing_updates() -> None:
         GradientEntry(SF_IID, SF_IID, 1, 2, GradientSource.RPL, 100000), now=101
     )
     entry = table.lookup(SF_IID)
-    assert entry.hop_count == 1  # routing fields refreshed
+    assert entry.seq_num == 2  # replacement actually applied (not a no-op)
     assert (entry.current_sf, entry.snr_ewma, entry.downgrade_count) == (9, -8, 1)
+
+
+def test_sf_select_upgrade_gate_needs_consecutive_samples() -> None:
+    # Step 4 upgrade requires UPGRADE_COUNT_THRESHOLD (3) consecutive
+    # samples above the SNR threshold — one good RX sample must not
+    # upgrade SF (forged/lucky-sample resistance).
+    table = _sf_table(current_sf=10)
+    table.sf_update(SF_IID, 15, now=100)  # EWMA 3: below upgrade threshold
+    assert table.sf_select(SF_IID, 4, 0, 0, 0, now=101) == (10, True)
+    table.lookup(SF_IID).snr_ewma = 9  # seed above threshold
+    for i in range(3):
+        table.sf_update(SF_IID, 9, now=102 + i)  # delta 0: count 1, 2, 3
+    assert table.sf_select(SF_IID, 4, 0, 0, 0, now=110) == (9, True)
