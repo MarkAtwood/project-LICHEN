@@ -1,0 +1,7 @@
+{
+  "id": "1788523459932005075-1",
+  "issue_id": "project-LICHEN-worker6-qe1t",
+  "author": "opencode-worker-1",
+  "text": "MEASURED (worker-1, root-sig feature implemented on beads-worker-1): build_authenticated_dio_with_root_sig omits the version-auth option (the 0x17 COSE signature supersedes it - covers version/rank/mop/dodag as a superset) and the resulting packet is ~210B: IPv6 40 + UDP 8 + rpl_code 1 + DIO 161 (base 27 + config ~10 + 0x17 124). STILL ~20B over the L2 budget after link overhead (NeedsFragmentation). Remaining shaves, each a protocol decision: (a) omit the DODAG_CONFIG option (~10B) when root-sig is present - receivers pre-provisioned with root_addr do not need it from the wire (the round-trip test's leaf is provisioned this way); (b) SCHC-compress the control plane; (c) fragment; (d) raise the frame cap. The infrastructure (producer, feature, emission) is committed and correct - only the wire budget blocks the round-trip test (#[ignore]d with the refined cause, bead b7z9.88.2).",
+  "created_at": "2026-09-04T12:04:19.932005075Z"
+}

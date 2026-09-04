@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.25.3",
+  "title": "b7z9.25.c: consume sfn_reset on version change (R-02a-045)",
+  "description": "Child of b7z9.25 (spec 02a 2a.5.4, R-02a-045): on_version_change returns VersionChangeResult(sfn_reset=True) at python/src/lichen/link/slot_coordination.py:486,496 (both ACCEPTED and HOLDOFF_RESET paths) and rust multi_instance.rs:1154+ returns the flag, but NO production caller consumes the flag to actually reset the SFN relative to the new epoch. Deliverable: find the SFN owner (python/src/lichen/timing/sfn.py or the production driver) and wire: when the version-change result carries sfn_reset=True, reset the SFN per the new epoch; add a test asserting the SFN actually restarts. Note: on_version_change itself currently has no production caller (oracle-style) - if the caller wiring is itself missing, coordinate with b7z9.25.b's FSM integration rather than inventing a parallel path.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T12:11:26.061090635Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T12:11:26.061090635Z",
+  "labels": [
+    "python",
+    "spec-gap",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.25.3",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.25",
+      "type": "parent-child",
+      "created_at": "2026-09-04T12:11:26.185517615Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.25.5",
+  "title": "b7z9.25.e: missed-superframe SYNCED-\u003eDESYNCED transition + drift gate (R-02a-081) Python side",
+  "description": "Child of b7z9.25 (spec 02a-coordinated-capacity.md:267 transition table, R-02a-081): python/src/lichen/timing/sfn.py:148-157 on_missed_superframe EARLY-RETURNS unless RECOVERING, so the SYNCED -\u003e DESYNCED transition on \u003e=3 missed beacons (transition table :267: 'SYNCED | \u003e=3 missed beacons | DESYNCED | Suppress TX, reset counters'; BEACON_TIMEOUT_SUPERFRAMES = 3) is unimplemented. Deliverable: track missed superframes in SYNCED too (increment per on_missed_superframe, transition to DESYNCED at \u003e= 3 with counter resets, valid beacon resets the count), mirror in the drift gate thread if trivially adjacent (drift_ppm \u003e GUARD_PPM transition is ALSO absent per the parent bead), add unit tests to python/tests/timing/test_sfn.py. NOTE the R-02a-082 GUARD_PPM 250-vs-5000 conflict is an adjudication bead (separate).",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "opencode-worker-1",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T12:11:55.961062126Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T12:12:15.997475756Z",
+  "started_at": "2026-09-04T12:12:15.997475756Z",
+  "lease_expires_at": "2026-09-04T12:17:15.997475756Z",
+  "heartbeat_at": "2026-09-04T12:12:15.997475756Z",
+  "labels": [
+    "python",
+    "spec-gap",
+    "tdma"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.25.5",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.25",
+      "type": "parent-child",
+      "created_at": "2026-09-04T12:11:56.078163822Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
