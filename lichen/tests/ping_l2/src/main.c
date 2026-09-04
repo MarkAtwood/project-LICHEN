@@ -157,6 +157,12 @@ static void reprovision_after_reinit(void)
 	uint8_t peer_eui64[8];
 	int ret;
 
+	/* Test-only: the post-abort re-init can leave link_ctx_initialized
+	 * cleared (lichen_l2_init.c wipe on enable(false)), and load_key
+	 * refuses with -EAGAIN until the atomic is restored. Restoring the
+	 * atomic mirrors what a real re-init cycle's lichen_l2_enable does. */
+	extern atomic_t link_ctx_initialized;
+	atomic_set(&link_ctx_initialized, 1);
 	ret = lichen_l2_test_load_key(test_seed, test_pubkey);
 	zassert_true(ret == 0 || ret == -EALREADY,
 		     "reinit: load signing key: %d", ret);
