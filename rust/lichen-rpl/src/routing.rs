@@ -850,6 +850,7 @@ impl DaoManager {
     }
 
     #[doc(hidden)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn diagnostic_root(
         node_address: Ipv6Addr,
         rpl_instance_id: u8,
@@ -859,6 +860,7 @@ impl DaoManager {
     }
 
     #[doc(hidden)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn process_route_state_diagnostic(
         &mut self,
         dao_bytes: &[u8],
@@ -897,6 +899,7 @@ impl DaoManager {
     }
 
     #[doc(hidden)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn route_state_diagnostic(
         &self,
         sequence_authority: Ipv6Addr,

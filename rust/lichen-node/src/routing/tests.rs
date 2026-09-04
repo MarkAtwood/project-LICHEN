@@ -893,6 +893,33 @@ fn aggregated_dao_uses_parent_for_packet_source_group() {
 }
 
 #[test]
+fn external_transit_is_not_forwarded_toward_the_root() {
+    // project-LICHEN-worker6-7gvp: E=1 marks external reachability, and the
+    // root rejects E=1 transits in DAO authorization — relaying them wastes
+    // LoRa airtime, so dao_parents_for_source drops the parent set.
+    let root_addr = ula(1);
+    let packet_source = ula(2);
+    let mut sender = DaoManager::new(packet_source.into(), RPL_INSTANCE_ID, root_addr.into());
+    let mut dao = sender.build_dao(root_addr.into());
+    let external_transit = TransitInfo {
+        external: true,
+        path_control: 1,
+        path_sequence: 241,
+        path_lifetime: 255,
+        parent_address: alternate(3),
+    };
+    let mut option = [0u8; 22];
+    let option_len = external_transit.write_to(&mut option).unwrap();
+    dao.extend_from_slice(&option[..option_len]);
+
+    assert_eq!(dao_parents_for_source(&dao, &packet_source), None);
+}
+
+fn alternate(id: u8) -> [u8; 16] {
+    ula(id)
+}
+
+#[test]
 fn dao_helper_returns_every_parent_for_source_group() {
     let root_addr = ula(1);
     let packet_source = ula(2);
