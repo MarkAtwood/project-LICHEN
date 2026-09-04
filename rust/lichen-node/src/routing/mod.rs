@@ -11,6 +11,7 @@
 
 #[cfg(feature = "std")]
 mod dtn;
+pub mod dtn_option;
 #[cfg(feature = "std")]
 mod gpsr;
 mod neighbor;
@@ -18,6 +19,8 @@ mod neighbor;
 mod router;
 #[cfg(all(test, feature = "std"))]
 mod tests;
+
+pub use dtn_option::{decide_expiry_action, parse_dtn_option, DtnOption, ExpiryAction, DTN_FLAG_S};
 
 // Re-exports from neighbor module
 #[cfg(feature = "std")]
