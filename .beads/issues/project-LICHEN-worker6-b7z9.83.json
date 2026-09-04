@@ -2,13 +2,14 @@
   "id": "project-LICHEN-worker6-b7z9.83",
   "title": "[spec-gap][R-06-204/R-06-205] OSCORE context bound (≤64) + LRU eviction divergent across stacks",
   "description": "spec/06-security.md §8.8: 'Implementations MUST bound OSCORE security contexts to at most 64 entries. On overflow, implementations MUST evict the least-recently-used context (LRU by last message timestamp).'\n\nEvidence (sweep 2026-09-01, docs/spec-coverage/06-security-part2.md):\n- C: bound ≤64 OK (lichen/subsys/lichen/oscore/Kconfig:20-23 LICHEN_OSCORE_MAX_CONTEXTS default 8, range 2-32) but NO eviction — full table returns OSCORE_ERR_NO_MEMORY (oscore_ctx.c:379-388).\n- Python: LRU eviction exists (channel.py:416-435 _evict_peer_contexts_if_needed) but bound is _MAX_ACTIVE_PEER_CONTEXTS=2048 \u003e 64 (channel.py:144).\n- Rust node: contexts HashMap unbounded, no eviction (rust/lichen-node/src/secure.rs:443, inserts :565/:579).\n\nhuman-only: oscore internals have the human-only edit bar; do not plan an agent fix. Question for mark: align spec to implementations (raise 64, drop LRU mandate) or align implementations to spec?",
+  "notes": "Decision: amend spec. MUST bound contexts, RECOMMENDED 64, evict LRU on overflow, minimum 8 for constrained nodes. Align all three stacks: C adds LRU eviction, Python caps at 64, Rust adds bound+LRU. Agent-implementable.",
   "status": "open",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T16:48:13.897391477Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T16:48:13.897391477Z",
+  "updated_at": "2026-09-04T03:05:08.714591396Z",
   "labels": [
     "oscore",
     "spec-gap"

@@ -5,3 +5,4 @@
 {"id":"01a05752-9edf-78d2-bbd0-eefecf3ffadf","issue_id":"project-LICHEN-worker6-b7z9.32","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: human-only","created_at":"2026-08-31T10:17:07.551578798Z"}
 {"id":"01a05752-9ee1-777e-81ff-f3d7f398a701","issue_id":"project-LICHEN-worker6-b7z9.32","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-08-31T10:17:07.553491962Z"}
 {"id":"01a05752-9ee3-77ec-9abb-2e2e8d4bdc41","issue_id":"project-LICHEN-worker6-b7z9.32","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: python","created_at":"2026-08-31T10:17:07.555519787Z"}
+{"id":"01a06a61-2f20-7745-934b-4fbe79d9d505","issue_id":"project-LICHEN-worker6-b7z9.32","event_type":"label_removed","actor":"Mark Atwood","comment":"Removed label: human-only","created_at":"2026-09-04T03:05:49.088477589Z"}

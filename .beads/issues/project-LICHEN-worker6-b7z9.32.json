@@ -13,7 +13,6 @@
     "spec-gap",
     "oscore",
     "coap",
-    "human-only",
     "zephyr",
     "python"
   ],
