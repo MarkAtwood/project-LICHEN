@@ -923,7 +923,7 @@ class TestClaimExpiryHorizon:
     ) -> None:
         privkey, _ = keypair
         now = 1_900_000_000.0
-        horizon = slot_claim.MAX_CLAIM_DURATION_SEC
+        horizon = slot_claim.MAX_CLAIM_DURATION_SECONDS
         signed = self._signed(privkey, pubkey, int(now) + horizon)
         is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
         assert is_valid
@@ -934,7 +934,7 @@ class TestClaimExpiryHorizon:
     ) -> None:
         privkey, _ = keypair
         now = 1_900_000_000.0
-        horizon = slot_claim.MAX_CLAIM_DURATION_SEC
+        horizon = slot_claim.MAX_CLAIM_DURATION_SECONDS
         signed = self._signed(privkey, pubkey, int(now) + horizon + 1)
         is_valid, reason = verify_slot_claim(signed, pubkey, now_unix=now)
         assert not is_valid
@@ -957,7 +957,7 @@ class TestClaimExpiryHorizon:
             bytes.fromhex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
         )
         now = 1_900_000_000.0
-        horizon = slot_claim.MAX_CLAIM_DURATION_SEC
+        horizon = slot_claim.MAX_CLAIM_DURATION_SECONDS
         signed = self._signed(privkey, keypair[1], int(now) + horizon + 1)
         is_valid, reason = verify_slot_claim(signed, other_pubkey, now_unix=now)
         assert not is_valid

@@ -423,7 +423,7 @@ def verify_slot_claim(
             signature-valid claims.
         now_unix: Current Unix timestamp for the claim-horizon check;
             defaults to the wall clock. Claims with a timestamp further
-            than MAX_CLAIM_DURATION_SEC ahead are rejected EXPIRY_TOO_FAR.
+            than MAX_CLAIM_DURATION_SECONDS ahead are rejected EXPIRY_TOO_FAR.
 
     Returns:
         Tuple of (is_valid, rejection_reason or None)
@@ -473,8 +473,7 @@ def verify_slot_claim(
     now = time.time() if now_unix is None else now_unix
     if claim.expiry > now + MAX_CLAIM_DURATION_SECONDS:
         # The upper bound is checked against the worker constant; the
-        # tighter HEAD constant below may still reject, matching tests.
-        return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
+                return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
 
     # GCP-6.3 hardening: bound how far ahead a claim may pre-book slots.
     # The timestamp is covered by the signature, so this rejects a
