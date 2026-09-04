@@ -1062,6 +1062,8 @@ pub struct MultiRootState {
     holdoff_counter: u8,
     /// Desync state that depends on prior version.
     desync_state_version: Option<u8>,
+    /// SFN at which the post-holdoff rejoin was initiated (R-02a-043).
+    rejoin_sf: Option<u64>,
 }
 
 #[cfg(feature = "std")]
