@@ -11,7 +11,6 @@
   "updated_at": "2026-08-29T19:30:02.685969Z",
   "labels": [
     "oscore",
-    "tests",
-    "human-only"
+    "tests"
   ]
 }
