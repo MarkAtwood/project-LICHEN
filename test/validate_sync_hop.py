@@ -368,9 +368,9 @@ def main() -> int:
         python_results = test_python(vectors)
         total_failures += print_results("Python", python_results)
     except ImportError as e:
-        print(f"\n=== Python ===")
+        print("\n=== Python ===")
         print(f"  [SKIP] Cannot import lichen.link.channel: {e}")
-        print(f"         Run: pip install -e python/")
+        print("         Run: pip install -e python/")
 
     # Test Rust
     rust_results = test_rust(vectors)

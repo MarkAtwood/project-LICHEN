@@ -267,7 +267,7 @@ def main():
         if args.provision_seed:
             seed_prefix = args.provision_seed[:8] if len(args.provision_seed) > 8 else args.provision_seed
             print(f"Provisioning seed {seed_prefix}... (hex redacted for security)")
-            print(f"Full seed written directly to device, not logged")
+            print("Full seed written directly to device, not logged")
             ser.write(f"provision seed={args.provision_seed}\n".encode())
             time.sleep(2)
             ser.write(b"test vector schnorr48 oscore\n")
