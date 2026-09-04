@@ -2886,7 +2886,7 @@ async fn sender_ipv6(
 
 #[tokio::test]
 #[cfg(feature = "root-sig")]
-#[ignore = "SIZING: signed DIO packet (~210B) still exceeds the L2 budget by ~20B (link frame 254 incl. LLSec) - needs the qe1t protocol decision (omit DODAG_CONFIG option / compress / fragment)"]
+#[ignore = "BLOCKED on qe1t sizing decision: even with version-auth omitted (~201B packet) the frame budget is exceeded by ~8B (DODAG_CONFIG option ~10B) - omitting config from signed DIOs is a protocol decision"]
 async fn root_dio_signature_roundtrip_produces_and_advances() {
     let root_identity = identity(31);
     let leaf_identity = identity(32);
