@@ -147,9 +147,10 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
  * forcing the module into ABORTED immediately so callers see needs_reinit()
  * instead of a silently deaf radio.
  */
+static uint8_t consecutive_failures;
+
 static void lora_l2_rx_arm(void)
 {
-	static uint8_t consecutive_failures;
 	int ret;
 
 	if (atomic_get(&tx_pending) > 0) {
@@ -338,6 +339,7 @@ int lora_l2_rx_start(void)
 {
 	int ret;
 
+	consecutive_failures = 0;
 	atomic_clear(&rx_pending);
 	atomic_set(&rx_enabled, 1);
 	atomic_inc(&rx_session);
