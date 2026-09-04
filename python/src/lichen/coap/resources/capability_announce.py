@@ -57,17 +57,47 @@ class CapabilityTable:
         self.egress_reservation = min(egress_reservation, capacity)
         self._clock = clock or (lambda: 0)
         self._entries: OrderedDict[bytes, dict[str, Any]] = OrderedDict()
+        # Monotone per-IID seq floors captured at LRU eviction: an evicted
+        # announcer must not be able to replay an older (still-valid)
+        # announcement to roll the table back (bead fawm / 97tr, mirrors
+        # the Rust CapabilityTable seq_floors ledger).
+        self._seq_floors: dict[bytes, int] = {}
 
     def __len__(self) -> int:
         return len(self._entries)
 
+    def _raise_floor(self, announcer_iid: bytes, seq: int) -> None:
+        floor = self._seq_floors.get(announcer_iid)
+        if floor is None or floor < seq:
+            self._seq_floors[announcer_iid] = seq
+
+    def _bound_floors(self) -> None:
+        """Keep the floor ledger bounded.
+
+        While over capacity, drop the lowest-IID floor whose IID is no
+        longer in the table (floors for active entries are redundant but
+        always retained; if every floor is active the ledger equals the
+        table and cannot exceed capacity).
+        """
+        while len(self._seq_floors) > self.capacity:
+            stale = min(
+                iid
+                for iid in self._seq_floors
+                if iid not in self._entries
+            )
+            del self._seq_floors[stale]
+
     def cached_seq(self, announcer_iid: bytes) -> int | None:
+        # max(entry seq, eviction-captured floor): the anti-replay floor
+        # survives LRU eviction.
+        floor = self._seq_floors.get(announcer_iid)
         entry = self._entries.get(announcer_iid)
         if entry is None:
-            return None
+            return floor
         entry["last_used"] = self._clock()
         self._entries.move_to_end(announcer_iid)
-        return int(entry["seq"])
+        seq = int(entry["seq"])
+        return seq if floor is None or seq > floor else floor
 
     def record(
         self,
@@ -96,13 +126,19 @@ class CapabilityTable:
             entry["capabilities"] = capabilities
             entry["last_used"] = self._clock()
             self._entries.move_to_end(announcer_iid)
+            self._raise_floor(announcer_iid, seq)
             return True
         if len(self._entries) >= effective:
             # LRU eviction only for egress-sourced inserts that need the
             # reserved tail; non-egress inserts are refused instead.
             if not egress:
                 return False
-            self._entries.popitem(last=False)
+            evicted_iid, evicted = self._entries.popitem(last=False)
+            # Capture the victim's seq so eviction cannot enable a seq
+            # rollback (bead fawm).
+            self._raise_floor(evicted_iid, int(evicted["seq"]))
+        self._raise_floor(announcer_iid, seq)
+        self._bound_floors()
         self._entries[announcer_iid] = {
             "seq": seq,
             "expiry": expiry,
