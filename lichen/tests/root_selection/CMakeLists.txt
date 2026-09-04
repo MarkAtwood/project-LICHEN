@@ -6,9 +6,11 @@ project(root_selection_test C)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/test_common.cmake)
 
+set(LINK_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link)
+
 add_executable(root_selection_test
   main.c
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/root_selection.c
+  ${LINK_SRC}/root_selection.c
 )
 
 target_include_directories(root_selection_test PRIVATE
@@ -16,7 +18,6 @@ target_include_directories(root_selection_test PRIVATE
 )
 
 lichen_test_target(root_selection_test)
-target_link_libraries(root_selection_test PRIVATE pthread)
 
 include(CTest)
 add_test(NAME root_selection COMMAND root_selection_test)
