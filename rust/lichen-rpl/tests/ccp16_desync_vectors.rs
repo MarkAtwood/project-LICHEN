@@ -148,7 +148,6 @@ fn holdoff_complete_rejoin_not_in_holdoff() {
     assert!(!state.holdoff_complete_rejoin(0));
 }
 
-
 #[test]
 fn synced_missed_beacons_desync_vector() {
     // R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267): a

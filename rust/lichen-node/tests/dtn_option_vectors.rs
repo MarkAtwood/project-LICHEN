@@ -35,7 +35,11 @@ fn dtn_hbh_option_vectors() {
         }
         let parsed = parse_dtn_option(&hex(case["option_hex"].as_str().unwrap()))
             .unwrap_or_else(|| panic!("{name}: expected parse"));
-        assert_eq!(parsed.s_flag, case["s_flag"].as_i64().unwrap() != 0, "{name}");
+        assert_eq!(
+            parsed.s_flag,
+            case["s_flag"].as_i64().unwrap() != 0,
+            "{name}"
+        );
         assert_eq!(
             parsed.expiry_unix,
             case["expiry_unix"].as_u64().unwrap(),
@@ -56,7 +60,11 @@ fn dtn_expiry_decision_vectors() {
             case["now_unix"].as_u64().unwrap(),
             case["wall_clock_valid"].as_bool().unwrap(),
         );
-        assert_eq!(action.as_str(), case["expected"].as_str().unwrap(), "{name}");
+        assert_eq!(
+            action.as_str(),
+            case["expected"].as_str().unwrap(),
+            "{name}"
+        );
     }
 }
 

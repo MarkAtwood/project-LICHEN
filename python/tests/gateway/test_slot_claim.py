@@ -17,7 +17,6 @@ import pytest
 from lichen.crypto import schnorr48
 from lichen.crypto.identity import Identity, _pubkey_to_iid
 from lichen.gateway import slot_claim
-from lichen.crypto.identity import _pubkey_to_iid
 from lichen.gateway.slot_claim import (
     MAX_CLAIM_DURATION_SECONDS,
     ClaimError,

@@ -19,9 +19,9 @@ use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::mem::MemStorage;
 use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
-use lichen_link::keys::PublicKey;
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::{Identity, PeerIdentity};
+use lichen_link::keys::PublicKey;
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
@@ -2738,7 +2738,9 @@ const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 #[ignore = "R-06-307 pin WIP: valid signatures still RplRejected at stack level - likely the DODAG version-authorization gate on the hand-built DIO; see bead b7z9.88.3 diagnosis (worker-1 round 2)"]
 async fn valid_root_signature_is_verified_and_replay_rejected() {
     let (mut sender, mut receiver, packet) = baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1));
-    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+    receiver
+        .announces
+        .pin_for_test(root_sig::tests::vector_pubkey());
 
     // Positive control: clock BEFORE expiry -> Verified -> processed, and
     // the root_seq cache then rejects the replayed duplicate.
@@ -2763,7 +2765,9 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
     // rejected, even though the same DIO WAS rejected while the clock was
     // valid (positive control first).
     let (mut sender, mut receiver, packet) = baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1));
-    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+    receiver
+        .announces
+        .pin_for_test(root_sig::tests::vector_pubkey());
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
@@ -2786,7 +2790,9 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
 async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
     // Unassessable clock (no set_wall_clock_unix call) -> Baseline.
     let (mut sender, mut receiver, packet) = baseline_fixture(None);
-    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+    receiver
+        .announces
+        .pin_for_test(root_sig::tests::vector_pubkey());
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
@@ -2833,11 +2839,8 @@ fn baseline_fixture(
     };
     let mut body = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
     let dio_len = dio.write_to(&mut body).unwrap();
-    let opt_len = lichen_rpl::message::RootDioSignature::write_to(
-        &cose,
-        &mut body[dio_len..],
-    )
-    .unwrap();
+    let opt_len =
+        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..]).unwrap();
     let packet = rpl_ipv6_packet(
         address(&relay_identity, 1),
         RPL_ALL_NODES,
@@ -2862,17 +2865,16 @@ fn baseline_fixture(
         MemStorage::new(),
     )
     .unwrap();
-    receiver.announces.pin_for_test(root_sig::tests::vector_pubkey());
+    receiver
+        .announces
+        .pin_for_test(root_sig::tests::vector_pubkey());
     if let Some(clock) = clock {
         receiver.set_wall_clock_unix(clock);
     }
     (sender, receiver, packet)
 }
 
-async fn sender_ipv6(
-    stack: &mut RplStack<MeshRadio, MemStorage>,
-    packet: &[u8],
-) {
+async fn sender_ipv6(stack: &mut RplStack<MeshRadio, MemStorage>, packet: &[u8]) {
     // Canonical DIO delivery: uncompressed control frame, broadcast L2
     // (identical to send_dio's transmission of R-09-005 frames).
     stack

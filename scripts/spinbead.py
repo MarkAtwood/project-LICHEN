@@ -616,9 +616,9 @@ Return JSON:
                 if verdict == "REFUTED":
                     print(f"         ❌ Refuted: {result.get('reasoning', '')[:60]}")
                 elif verdict == "CONFIRMED":
-                    print(f"         ✓ Confirmed")
+                    print("         ✓ Confirmed")
                 else:
-                    print(f"         ? Uncertain")
+                    print("         ? Uncertain")
             else:
                 finding.verified = "UNCERTAIN"
         else:

@@ -466,8 +466,7 @@ mod tests {
     fn tx_sf_tlv_roundtrip_and_bounds() {
         assert_eq!(parse_tx_sf(&[0x06, 9]), 9);
         // TLV after other app data.
-        let mut chained: ::std::vec::Vec<u8> =
-            ::std::vec![0x01, 0, 0, 0, 0, 0, 0, 0, 0];
+        let mut chained: ::std::vec::Vec<u8> = ::std::vec![0x01, 0, 0, 0, 0, 0, 0, 0, 0];
         chained.extend_from_slice(&encode_tx_sf(12).unwrap());
         assert_eq!(parse_tx_sf(&chained), 12);
         // Malformed out-of-range SF clamps to the SF10 baseline.

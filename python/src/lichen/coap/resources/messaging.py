@@ -5,15 +5,18 @@
 from __future__ import annotations
 
 import copy
+import time
 from collections.abc import Callable, Mapping, Sequence
 from ipaddress import IPv4Address, IPv6Address
 from typing import Any
 
 import aiocoap
+import cbor2
 from aiocoap import (
     BAD_REQUEST,
     CHANGED,
     INTERNAL_SERVER_ERROR,
+    REQUEST_ENTITY_TOO_LARGE,
     SERVICE_UNAVAILABLE,
     UNAUTHORIZED,
     Message,

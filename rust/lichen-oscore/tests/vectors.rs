@@ -4,7 +4,8 @@
 //! Tests using RFC 8613 test vectors from test/vectors/oscore.json
 
 use lichen_oscore::{
-    validate_option, Context, ContextId, OscoreError, SenderSequenceState, ContextStateStore, RecipientReplayState,
+    validate_option, Context, ContextId, ContextStateStore, OscoreError, RecipientReplayState,
+    SenderSequenceState,
 };
 
 struct TestStore(Option<SenderSequenceState>);
@@ -45,8 +46,19 @@ impl ContextStateStore for TestStore {
         Ok(true)
     }
 
-    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
-    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+    fn load_recipient(
+        &mut self,
+        _: &ContextId,
+    ) -> Result<Option<RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+    fn save_recipient(
+        &mut self,
+        _: &ContextId,
+        _: &RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 use serde::Deserialize;
 use std::fs;
