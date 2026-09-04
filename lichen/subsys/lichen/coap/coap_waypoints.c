@@ -1114,7 +1114,7 @@ int lichen_waypoint_detail_put_handler(struct coap_resource *resource,
                                        struct sockaddr *addr,
                                        socklen_t addr_len) {
   struct coap_oscore_unprotect_result oscore;
-  intcoap_oscore_authorize_mutating_result(tating(
+  int ret = coap_oscore_authorize_mutating_result(
       resource, request, addr, addr_len, COAP_METHOD_PUT, &oscore);
 
   if (ret != 0) {
