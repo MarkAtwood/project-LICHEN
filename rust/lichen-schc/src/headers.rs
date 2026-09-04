@@ -1233,8 +1233,8 @@ mod udp_checksum_tests {
         let src: [u8; 16] = fe80_parse(1);
         let dst: [u8; 16] = fe80_parse(2);
         let payload = [0x45, 0x01, 0x91, 0x6b]; // one payload bit flipped
-        // Independent oracle: flipping one payload bit decrements the folded
-        // sum by one, so the true checksum is 0xFFFE (0x0000 + one borrow).
+                                                // Independent oracle: flipping one payload bit decrements the folded
+                                                // sum by one, so the true checksum is 0xFFFE (0x0000 + one borrow).
         let c = udp_checksum(&src, &dst, 5683, 5683, &payload);
         assert_eq!(c, 0xFFFE);
     }

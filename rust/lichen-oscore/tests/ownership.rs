@@ -9,7 +9,8 @@
 //! accepted once per instance (a double-accept defeating replay protection).
 
 use lichen_oscore::{
-    Context, ContextId, OwnershipError, OwnershipRegistry, SenderSequenceState, ContextStateStore, RecipientReplayState,
+    Context, ContextId, ContextStateStore, OwnershipError, OwnershipRegistry, RecipientReplayState,
+    SenderSequenceState,
 };
 
 const SECRET: [u8; 16] = [0x77; 16];
@@ -39,8 +40,19 @@ impl ContextStateStore for MemoryStore {
         Ok(true)
     }
 
-    fn load_recipient(&mut self, _: &ContextId) -> Result<Option<RecipientReplayState>, Self::Error> { Ok(None) }
-    fn save_recipient(&mut self, _: &ContextId, _: &RecipientReplayState) -> Result<(), Self::Error> { Ok(()) }
+    fn load_recipient(
+        &mut self,
+        _: &ContextId,
+    ) -> Result<Option<RecipientReplayState>, Self::Error> {
+        Ok(None)
+    }
+    fn save_recipient(
+        &mut self,
+        _: &ContextId,
+        _: &RecipientReplayState,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
 
 /// Context of the peer whose requests the receiver unprotects.

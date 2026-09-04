@@ -71,14 +71,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         #[cfg(feature = "root-sig")]
         let len = if self.rpl.router.dodag.is_root() {
             match self.wall_clock_unix {
-                Some(clock) => self
-                    .rpl
-                    .router
-                    .build_authenticated_dio_with_root_sig(
-                        &mut body,
-                        self.stack.link_ref(),
-                        clock() + ROOT_SIG_TTL_SECONDS,
-                    ),
+                Some(clock) => self.rpl.router.build_authenticated_dio_with_root_sig(
+                    &mut body,
+                    self.stack.link_ref(),
+                    clock() + ROOT_SIG_TTL_SECONDS,
+                ),
                 None => self
                     .rpl
                     .router

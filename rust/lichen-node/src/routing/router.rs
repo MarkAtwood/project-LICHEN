@@ -931,7 +931,13 @@ impl Router {
             1, // Non-Storing, matching build_dio_with_authorization.
         ) {
             Ok(option) => {
-                if !(base + option.len() <= out.len()) { panic!("TRACE root-sig: option {} + base {base} > out {}", option.len(), out.len()); }
+                if !(base + option.len() <= out.len()) {
+                    panic!(
+                        "TRACE root-sig: option {} + base {base} > out {}",
+                        option.len(),
+                        out.len()
+                    );
+                }
                 if base + option.len() <= out.len() {
                     out[base..base + option.len()].copy_from_slice(&option);
                     base + option.len()
@@ -944,7 +950,6 @@ impl Router {
     }
 
     pub fn build_authenticated_dio(&self, out: &mut [u8], link: &LinkLayer) -> usize {
-        
         let authorization = if self.dodag.is_root() {
             let root_pubkey = *link.local_public_key().as_bytes();
             if lichen_core::addr::ygg_addr_from_pubkey(&root_pubkey) != self.dodag_id {
@@ -1362,9 +1367,7 @@ mod sf_emission_tests {
         let link = LinkLayer::new(lichen_link::identity::Identity::from_seed(
             lichen_link::keys::Seed::new([7u8; 32]),
         ));
-        let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(
-            link.local_public_key().as_bytes(),
-        );
+        let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(link.local_public_key().as_bytes());
         let mut router = Router::new_root(dodag_id);
         let mut out = [0u8; 256];
         let len = router.build_authenticated_dio(&mut out, &link);
@@ -1384,9 +1387,7 @@ mod sf_emission_tests {
         let link = LinkLayer::new(lichen_link::identity::Identity::from_seed(
             lichen_link::keys::Seed::new([9u8; 32]),
         ));
-        let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(
-            link.local_public_key().as_bytes(),
-        );
+        let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(link.local_public_key().as_bytes());
         let mut router = Router::new_root(dodag_id);
         let mut tracker = lichen_core::sf_assignment::GatewaySfTracker::new();
         tracker.assign_sf([0x01; 8]);

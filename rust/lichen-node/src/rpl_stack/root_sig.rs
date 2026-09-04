@@ -474,8 +474,7 @@ pub(crate) fn produce_root_dio_signature_option(
         Value::Bytes(payload.clone()),
     ]);
     let mut sig_structure_bytes = std::vec::Vec::new();
-    into_writer(&sig_structure, &mut sig_structure_bytes)
-        .map_err(|_| RootSigError::Decode)?;
+    into_writer(&sig_structure, &mut sig_structure_bytes).map_err(|_| RootSigError::Decode)?;
     let digest: [u8; 32] = Sha256::digest(&sig_structure_bytes).into();
     let signature = signer(&digest);
 
@@ -524,7 +523,6 @@ pub(crate) mod tests {
         0xfb, 0x65, 0x74, 0x84, 0x60, 0x65, 0x8e, 0x67, 0xd1, 0x3b, 0x75, 0xed, 0xf5, 0xf2, 0xf5,
         0x04, 0x87,
     ];
-
 
     pub(crate) fn vector_cose() -> std::vec::Vec<u8> {
         decode_hex(VALID_COSE_SIGN1)

@@ -28,16 +28,16 @@ pub use oscore::{
     // Core types
     Context,
     ContextId,
+    ContextStateStore,
     ContextStoreError,
     OscoreError,
     OscoreSeqNum,
     PendingResponse,
+    RecipientReplayState,
     RequestIdentifiers,
     ReservationError,
     ReservedSender,
     SenderSequenceState,
-    RecipientReplayState,
-    ContextStateStore,
     // Constants
     ALG_AEAD,
     COAP_OPTION_OSCORE,

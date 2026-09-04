@@ -33,7 +33,7 @@
 
 use heapless::Vec;
 
-use crate::{Context, ContextId, ContextStoreError, ContextStateStore};
+use crate::{Context, ContextId, ContextStateStore, ContextStoreError};
 
 /// Default maximum number of concurrently owned context records.
 const DEFAULT_CAPACITY: usize = 8;
