@@ -158,6 +158,7 @@ static void reprovision_after_reinit(void)
 	int ret;
 
 	ret = lichen_l2_test_load_key(test_seed, test_pubkey);
+	printk("TRACE reprovision: load_key ret=%d\n", ret);
 	zassert_true(ret == 0 || ret == -EALREADY,
 		     "reinit: load signing key: %d", ret);
 	ret = lichen_pubkey_to_iid(test_pubkey, peer_eui64);
@@ -456,6 +457,11 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	int ret;
 
 	k_sleep(K_MSEC(100));
+
+	/* Re-provision the signing key + peer: the shared link context may
+	 * have been wiped by the teardown test above (ztest runs cases
+	 * alphabetically, and the disable/destroy teardown wipes the key). */
+	reprovision_after_reinit();
 
 	sock = bind_udp_observer();
 	zassert_true(sock >= 0, "failed to bind UDP observer: %d", sock);
