@@ -1,0 +1,7 @@
+{
+  "id": "1788538627604102763-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.88.2",
+  "author": "opencode-worker-1",
+  "text": "DEFINITIVE SIZING DIAGNOSIS (worker-1 round 4, instrumented): the round-trip fails with NeedsFragmentation — NOT BufferTooSmall. MEASURED: DODAG_CONFIG encodes to ~128B, the 0x17 COSE option to ~124B, DIO base 27B → total DIO ≈ 279B, exceeding even the 256B body buffer (the 0x17 append silently fails; the packet goes out at 155B and still misses the 194B frame budget: ipv6=196, l2=198 \u003e 194). CONCLUSION: config-carrying root-signed DIOs CANNOT fit one link frame in any configuration — qe1t is confirmed as the hard gate. Options unchanged: (a) fragment/config-carrying DIOs, (a1) omit DODAG_CONFIG from signed DIOs — the config rides periodic unsigned DIOs (the unsigned DIO alone: 27+128=155, ipv6=196, l2=198 — STILL exceeds 194 because the config ALONE exceeds the budget! ipv6=40+1+155=196 \u003e 194), so config-carrying DIOs need SCHC compression or fragmentation regardless of the signature — (b) SCHC-compress the control plane, (c) fragment, (d) raise the frame cap. Round-trip test #[ignore]d with this cause. The producer infrastructure (feature, producer, seq counter, emission path) is correct and committed; only the wire budget blocks the round-trip.",
+  "created_at": "2026-09-04T16:17:07.604102763Z"
+}
