@@ -5,9 +5,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any
-
 from ipaddress import IPv6Address
+from typing import Any
 
 import aiocoap
 import cbor2
@@ -51,10 +50,7 @@ def _ipv6_source_iid(request: Message) -> str | None:
     hostinfo = hostinfo.strip()
     if hostinfo.startswith("["):
         end = hostinfo.find("]")
-        if end > 0:
-            host = hostinfo[1:end]
-        else:
-            host = hostinfo
+        host = hostinfo[1:end] if end > 0 else hostinfo
     elif hostinfo.count(":") == 1:
         host = hostinfo.rsplit(":", 1)[0]
     else:
