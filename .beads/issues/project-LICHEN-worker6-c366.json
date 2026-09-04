@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-c366",
+  "title": "Decision: orphaned SLOT_CLAIM: prefix verify path in gcp/gcp_trust.c - delete or migrate when CONFIG_LICHEN_GCP goes live",
+  "description": "Residual from l1qw.16.4's stale-check (worker-1, kimi-k3-verified): gcp_trust_verify_slot_claim (lichen/subsys/lichen/gcp/gcp_trust.c:126, the SLOT_CLAIM: prefix transcript per :139) has ZERO callers anywhere in lichen (grep across .c/.h) and the gcp module is only built under CONFIG_LICHEN_GCP, which no test or app enables - it is orphaned pre-live code. The LIVE C slot-claim path is coap_slot_coord.c (COSE_Sign1 per GCP-6.5, host test tests/coap_slot_claim green), so the legacy prefix path cannot cause an interop break. However b7z9.33 contemplates future use of gcp_trust ROTATION helpers - deleting the whole module is NOT implied. Decision needed: (a) delete the dead verify path now (dead-code hygiene; the COSE path supersedes it), (b) migrate it to COSE when the gcp module goes live (keep as a marker), or (c) leave as-is with a doc note. Note the function's schnorr48_verify is declared via an inline extern inside the function body (:152) - if kept, it should move to a proper include.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T10:07:01.195659982Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T10:07:01.195659982Z",
+  "labels": [
+    "lci"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-c366",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.16.4",
+      "type": "discovered-from",
+      "created_at": "2026-09-04T10:07:01.309767802Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
