@@ -1964,49 +1964,75 @@ pub(crate) fn secure_datagram_from_received(
 }
 
 fn secure_transport(ipv6: &[u8], header: &Ipv6Header) -> Result<(u8, usize, usize, Addr), RxError> {
+    // Aligned with survey_routing_headers (C-parity; srh_admission.json):
+    // HBH may precede RH3, the degenerate 8-octet RH3 (zero addresses,
+    // SL=0) is admitted, and reserved octets beyond the Cmpr/Pad bits are
+    // ignored (project-LICHEN-worker6-nuz5).
     let payload_len = usize::from(header.payload_len);
-    if header.next_header != 43 {
-        if matches!(header.next_header, 0 | 44 | 50 | 51 | 60) {
+    let mut offset = IPV6_HEADER_LEN;
+    let mut next_header = header.next_header;
+    if matches!(next_header, 44 | 50 | 51 | 60) {
+        return Err(RxError::SchcDecompress);
+    }
+    if next_header == 0 {
+        // Hop-by-Hop: unique and immediately after the IPv6 header.
+        if payload_len < 8 || ipv6.len() < IPV6_HEADER_LEN + 8 {
             return Err(RxError::SchcDecompress);
         }
-        return Ok((header.next_header, IPV6_HEADER_LEN, payload_len, header.dst));
+        offset = IPV6_HEADER_LEN + (usize::from(ipv6[41]) + 1) * 8;
+        if offset + 8 > ipv6.len() || offset > IPV6_HEADER_LEN + payload_len {
+            return Err(RxError::SchcDecompress);
+        }
+        next_header = ipv6[40];
     }
-    if payload_len < 24 || ipv6.len() < 48 {
+    let remaining = IPV6_HEADER_LEN + payload_len - offset;
+    if next_header == 43 {
+        if remaining < 8 || ipv6.len() < offset + 8 {
+            return Err(RxError::SchcDecompress);
+        }
+        let routing_len = (usize::from(ipv6[offset + 1]) + 1) * 8;
+        if routing_len < 8
+            || routing_len > remaining
+            || (routing_len - 8) % 16 != 0
+            || offset + routing_len > ipv6.len()
+            || ipv6[offset + 2] != 3
+            || ipv6[offset + 4] != 0
+            || (ipv6[offset + 5] & 0xf0) != 0
+        {
+            return Err(RxError::SchcDecompress);
+        }
+        let address_count = (routing_len - 8) / 16;
+        let segments_left = usize::from(ipv6[offset + 3]);
+        if segments_left > address_count {
+            return Err(RxError::SchcDecompress);
+        }
+        // SECURITY: RFC 6554 + LICHEN spec §5 line 418: Segments Left MUST be
+        // strictly less than Hop Limit. If equal or greater, the packet cannot
+        // complete the source route before TTL expiry.
+        if segments_left > 0 && segments_left >= usize::from(header.hop_limit) {
+            return Err(RxError::SchcDecompress);
+        }
+        let final_destination = if segments_left == 0 {
+            header.dst
+        } else {
+            let start = offset + 8 + (address_count - 1) * 16;
+            Addr(ipv6[start..start + 16].try_into().unwrap())
+        };
+        let upper = ipv6[offset];
+        if matches!(upper, 0 | 43 | 44 | 50 | 51 | 60) {
+            return Err(RxError::SchcDecompress);
+        }
+        return Ok((
+            upper,
+            offset + routing_len,
+            remaining - routing_len,
+            final_destination,
+        ));
+    }
+    if matches!(next_header, 0 | 43) {
         return Err(RxError::SchcDecompress);
     }
-    let routing_len = (usize::from(ipv6[41]) + 1) * 8;
-    if routing_len < 24
-        || routing_len > payload_len
-        || (routing_len - 8) % 16 != 0
-        || IPV6_HEADER_LEN + routing_len > ipv6.len()
-        || ipv6[42] != 3
-        || ipv6[44..48] != [0, 0, 0, 0]
-    {
-        return Err(RxError::SchcDecompress);
-    }
-    let address_count = (routing_len - 8) / 16;
-    let segments_left = usize::from(ipv6[43]);
-    if segments_left > address_count {
-        return Err(RxError::SchcDecompress);
-    }
-    // SECURITY: RFC 6554 + LICHEN spec §5 line 418: Segments Left MUST be
-    // strictly less than Hop Limit. If equal or greater, the packet cannot
-    // complete the source route before TTL expiry.
-    if segments_left > 0 && segments_left >= usize::from(header.hop_limit) {
-        return Err(RxError::SchcDecompress);
-    }
-    let final_destination = if segments_left == 0 {
-        header.dst
-    } else {
-        let start = 48 + (address_count - 1) * 16;
-        Addr(ipv6[start..start + 16].try_into().unwrap())
-    };
-    Ok((
-        ipv6[40],
-        IPV6_HEADER_LEN + routing_len,
-        payload_len - routing_len,
-        final_destination,
-    ))
+    Ok((next_header, offset, remaining, header.dst))
 }
 
 impl<R: Radio> From<Stack<R>> for SecureStack<R> {
@@ -2017,6 +2043,90 @@ impl<R: Radio> From<Stack<R>> for SecureStack<R> {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    // nuz5: secure_transport RH3 admission aligned with survey_routing_headers
+    // (srh_admission.json: hbh_then_routing_in_transit, degenerate_zero_address_consumed,
+    // reserved_ignored_octets_admitted).
+    #[test]
+    fn secure_transport_admits_hbh_then_rh3_degenerate_and_ignored_reserved() {
+        let build = |hbh: bool, addresses: usize, cmpr: u8, reserved_mid: u8| {
+            let mut p = vec![0u8; 40];
+            p[0] = 0x60;
+            p[6] = if hbh { 0 } else { 43 };
+            p[7] = 200;
+            for i in 0..16 {
+                p[8 + i] = i as u8; // source 0000..000f
+            }
+            let mut leaf = [0u8; 16];
+            leaf[15] = 0xAA;
+            p[24..40].copy_from_slice(&leaf);
+            let mut offset = 40usize;
+            if hbh {
+                p.extend_from_slice(&[0u8; 8]);
+                p[40] = 43; // HBH next = Routing
+                p[41] = 0; // 8-byte HBH
+                offset = 48;
+            }
+            let routing_len = 8 + 16 * addresses;
+            let mut payload = vec![0u8; routing_len + 8];
+            payload[0] = 17; // next = UDP
+            payload[1] = (routing_len / 8 - 1) as u8;
+            payload[2] = 3; // SRH type
+            payload[3] = if addresses == 0 { 0 } else { 1 }; // segments left
+            payload[4] = cmpr;
+            payload[5] = reserved_mid;
+            if addresses > 0 {
+                let mut hop = [0u8; 16];
+                hop[15] = 0x55;
+                payload[8..24].copy_from_slice(&hop);
+            }
+            let udp_off = routing_len;
+            payload[udp_off] = 0x16;
+            payload[udp_off + 1] = 0x33;
+            payload[udp_off + 2] = 0x16;
+            payload[udp_off + 3] = 0x33;
+            let ulen = 8u16;
+            payload[udp_off + 4..udp_off + 6].copy_from_slice(&ulen.to_be_bytes());
+            p.extend_from_slice(&payload);
+            let total = (p.len() - 40) as u16;
+            p[4..6].copy_from_slice(&total.to_be_bytes());
+            p
+        };
+        let header_of = |p: &Vec<u8>| Ipv6Header::from_bytes(p).unwrap();
+
+        // HBH-then-RH3 in transit (SL=1, one address): admitted.
+        let p = build(true, 1, 0, 0);
+        let header = header_of(&p);
+        let (upper, off, len, dst) = secure_transport(&p, &header).unwrap();
+        assert_eq!(upper, 17);
+        assert_eq!(off, 48 + 24);
+        assert_eq!(len, 8);
+        assert_eq!(dst.0[15], 0x55);
+
+        // Degenerate zero-address RH3 (SL=0): admitted, payload after it.
+        let p = build(false, 0, 0, 0);
+        let header = header_of(&p);
+        let (upper, off, len, dst) = secure_transport(&p, &header).unwrap();
+        assert_eq!(upper, 17);
+        assert_eq!(off, 48);
+        assert_eq!(len, 8);
+        assert_eq!(dst.0[15], 0xAA);
+
+        // Reserved low-nibble / octets 6-7 nonzero: ignored, admitted.
+        let p = build(false, 1, 0, 0x0F);
+        let header = header_of(&p);
+        assert!(secure_transport(&p, &header).is_ok());
+
+        // Cmpr octet nonzero: rejected (survey parity).
+        let p = build(false, 1, 0x01, 0);
+        let header = header_of(&p);
+        assert!(secure_transport(&p, &header).is_err());
+
+        // Pad high nibble nonzero: rejected (survey parity).
+        let p = build(false, 1, 0, 0xF0);
+        let header = header_of(&p);
+        assert!(secure_transport(&p, &header).is_err());
+    }
+
     use super::*;
     use core::convert::Infallible;
     use lichen_coap::{ObserveSequence, ObserveServer, ServerNotification};
