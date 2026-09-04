@@ -371,6 +371,31 @@ class TestDesyncFSM:
         assert fsm.state == DesyncState.DESYNCED
         assert fsm.consecutive_valid == 0
 
+    def test_synced_desyncs_after_three_missed_superframes(self) -> None:
+        # R-02a-081 transition table (spec/02a-coordinated-capacity.md:267):
+        # SYNCED with >= 3 consecutive missed beacons -> DESYNCED
+        # ("Suppress TX, reset counters"). Previously unimplemented.
+        fsm = DesyncFSM()
+        fsm.state = DesyncState.SYNCED
+        assert fsm.on_missed_superframe() == DesyncState.SYNCED
+        assert fsm.missed_superframes == 1
+        assert fsm.on_missed_superframe() == DesyncState.SYNCED
+        assert fsm.missed_superframes == 2
+        assert fsm.on_missed_superframe() == DesyncState.DESYNCED
+        assert fsm.consecutive_valid == 0
+        assert fsm.missed_superframes == 0
+
+    def test_synced_valid_beacon_resets_missed_counter(self) -> None:
+        # A valid beacon in SYNCED clears the missed-superframe streak.
+        fsm = DesyncFSM()
+        fsm.state = DesyncState.SYNCED
+        assert fsm.on_missed_superframe() == DesyncState.SYNCED
+        assert fsm.on_missed_superframe() == DesyncState.SYNCED
+        assert fsm.missed_superframes == 2
+        fsm.on_beacon(valid=True, wall_clock_valid=True)
+        assert fsm.missed_superframes == 0
+        assert fsm.state == DesyncState.SYNCED
+
     @pytest.mark.parametrize("valid_count", [1, 2])
     def test_recovery_timeout_at_each_incomplete_count(self, valid_count: int) -> None:
         fsm = DesyncFSM()
