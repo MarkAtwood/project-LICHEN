@@ -203,11 +203,12 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 		 * of WRN. (lora_ipv6_mesh-v6g6)
 		 */
 		if (len == 5 && data[0] == 4 && data[1] == 0x00) {
-				LOG_INF("lichen_l2: neighbor beacon epoch=%u seq=%u "
-					"rssi=%d snr=%d",
-					data[2],
-					(uint16_t)(((uint16_t)data[3] << 8) | data[4]),
-					rssi, snr);
+				/* Unsigned neighbor beacon: not a valid
+				 * signature path; still a tick of the
+				 * superframe — no recovery credit. */
+				(void)lichen_desync_on_beacon(
+					&link_ctx.tdma, false);
+				slot_coord_log_recovered_superframe(data);
 				secure_zero(rx_link_key, sizeof(rx_link_key));
 				k_mutex_unlock(&rx_mutex);
 				return;
@@ -234,6 +235,12 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 					  snr, k_uptime_get_32());
 	}
 #endif
+
+	/* DesyncFSM input (d7hg): a verified frame counts as a beacon result.
+	 * Validity = signature-verified; floor/SFN validation is the caller's
+	 * epoch-floor path (see time_sync.c:571). Drives DESYNCED -> SYNCED
+	 * recovery per spec 14.7. */
+	(void)lichen_desync_on_beacon(&link_ctx.tdma, true);
 
 	/* SECURITY: Validate ipv6_len before using it (project-LICHEN-3pun.5) */
 	if (ipv6_len > sizeof(rx_ipv6_buf)) {
