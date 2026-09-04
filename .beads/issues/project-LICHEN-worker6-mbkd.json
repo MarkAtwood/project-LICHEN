@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-mbkd",
+  "title": "Parity decision: SF counters wrap at 255 in C (uint8_t) vs unbounded ints in Python port",
+  "description": "Found by reviewer pass 1 on bead project-LICHEN-zrh2.7 (Python adaptive-SF port, gradient.py). C lichen_gradient_sf_update (gradient.c) uses uint8_t upgrade_count/downgrade_count: after 255 consecutive same-side samples the counter wraps to 0, suppressing the step-4 upgrade for UPGRADE_COUNT_THRESHOLD (3) samples; the Python port (python/src/lichen/gradient.py GradientTable.sf_update) uses unbounded ints so the count keeps rising and the step-4 gate (upgrade_count \u003e= 3) never suppresses. Deliberate decision needed: (a) treat the C wrap as accidental (probable - a 255-sample consecutive-same-side run overflows) and change C to saturate at 255 (uint8 clamp, matches Python), or (b) reproduce the wrap in Python for exact parity. Sibling zrh2.8 (unit tests for adaptive SF, both C and Python) should pin whichever semantics are chosen. Python behavior today: unbounded (matches the documented consecutive-samples semantics, not the C storage quirk).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T06:13:40.599702874Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T06:13:40.599702874Z",
+  "labels": [
+    "phy"
+  ]
+}
