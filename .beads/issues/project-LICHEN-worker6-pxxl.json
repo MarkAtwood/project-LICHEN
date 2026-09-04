@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-pxxl",
+  "title": "SYNCED-\u003eDESYNCED missed-beacons row: implement in Rust desync.rs + C tdma.c, add ccp16-desync vector case",
+  "description": "Found by reviewer pass on bead b7z9.25.5 (Python SYNCED missed-superframe tracking landed, commit pending). Spec/02a-coordinated-capacity.md:267 row 'SYNCED | \u003e=3 missed beacons | DESYNCED | Suppress TX, reset counters' is now implemented in Python (sfn.py on_missed_superframe SYNCED branch + on_beacon valid-beacon streak reset) but NOT in: (1) Rust rust/lichen-core/src/desync.rs (no missed-superframe tracking at all per the parent bead; also stale docstring desync.rs:164-166), (2) C lichen/subsys/lichen/link/tdma.c:148-162 lichen_desync_on_missed_superframe (still no-op outside RECOVERING). Also test/vectors/ccp16-desync.json lacks a SYNCED missed-beacons case to pin the row across implementations (the all-implementations rule). Deliverables: implement the row in Rust + C mirroring sfn.py (increment per missed superframe, \u003e= 3 -\u003e DESYNCED with counter resets, valid beacon clears the streak), add the vector case + consume it in all three suites, un-ignore nothing (new coverage). Parent context: b7z9.25.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T12:19:40.978835743Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T12:19:40.978835743Z",
+  "labels": [
+    "python",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pxxl",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.25.5",
+      "type": "discovered-from",
+      "created_at": "2026-09-04T12:19:41.100402092Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
