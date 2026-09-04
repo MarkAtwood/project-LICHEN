@@ -1,0 +1,7 @@
+{
+  "id": "1788510011229675803-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.11",
+  "author": "opencode-worker-1",
+  "text": "Verification status (worker-1, 2026-09-04, released open): the bead is STALE in its central claim - the C/Zephyr 64-bit DAO origin sequence + persistence IS implemented at the current tip: rpl_dao_build.c reserve_origin_sequence (R-09-009/010), rpl_dao_tx_persist.c (crash-safe two-slot commit, UINT64_MAX terminal-wrap check at :258), keyed by pubkey, dedicated host tests. VERIFIED GREEN: rpl_dao_sequence 2/2 (incl. 65536-pair exhaustive sweep), rpl_dao_tx_persist, redundant_slot, hal_storage_redundant - all host CMake builds repaired where stale (rpl_dao_sequence CMakeLists was missing rpl_sf_assignment.c/hash32.c/link includes; fixed). NOT GREEN: rpl_dao_auth (the auth-matrix test) was left half-migrated by wip 4700ce883b and needed a CMakeLists rebuild + full API migration (16 process_dao_ex call sites) - I did that (commits 24c42d0e6e + 28687c2ac6) and it now builds/runs but the first matrix case still rejects (debug task: project-LICHEN-worker6-1hjs). Because one verification test remains red, the bead is RELEASED OPEN rather than closed, per the no-red-gates rule. Remaining for closure: 1hjs green + a residual check of the equal-sequence-rebuild and missing/corrupt-state-stops-origination requirements against the tx-persist code.",
+  "created_at": "2026-09-04T08:20:11.229675803Z"
+}
