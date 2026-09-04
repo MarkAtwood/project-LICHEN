@@ -88,7 +88,8 @@ int coap_oscore_unprotect_resource_request(struct coap_resource *resource,
 	return 0;
 }
 
-int coap_oscore_authorize_mutating(struct coap_resource *resource,
+/* TEMPORARY legacy shim (bead y5em.1) - see the header doc. */
+int coap_oscore_authorize_mutating_result(struct coap_resource *resource,
 				   struct coap_packet *request,
 				   struct sockaddr *addr, socklen_t addr_len,
 				   uint8_t expected_method,
