@@ -2,13 +2,15 @@
   "id": "project-LICHEN-wutk.10.5",
   "title": "OSCORE spec gap: OSCORE+Observe interaction unimplemented in C; spec silent — decision needed",
   "description": "SPEC STATUS: spec/06-security.md is silent on OSCORE Observe interaction. RFC 8613 makes Observe support optional (§4.1.3.5 MAY), but once OSCORE-protected notifications are used it is normative: server SHALL include a fresh Partial IV in responses to Observe registrations except the first (§4.1.3.5, §8.3.1), Inner+Outer Observe handling, Outer Code FETCH for registrations, and client-side Notification Number replay tracking (§4.1.3.5.2, §7.4.1).\n\nIMPL (C): no OSCORE-protected Observe exists. coap_oscore.c always protects responses via oscore_protect_response (no-PIV/request-nonce mode; coap_oscore.c:280-286) — never oscore_protect_response_with_piv (oscore_protect.c:885, which exists for exactly the §8.4 fresh-PIV mode). The C CoAP client cannot send an OSCORE-protected Observe registration (protect path passes NULL inner options, coap_client.c:534-537; only the OSCORE option rides on the outer request). Server-side position Observe (lichen/subsys/lichen/coap/coap_location.c:385-410,880) sends cleartext notifications only, gated to privacy=PUBLIC. Rust side delegates to the external oscore crate and has observe_responses.rs tests.\n\nIMPACT: none today because C never emits OSCORE-protected notifications; but spec/12-apps observable resources and private/group position modes imply protected streaming is expected eventually. If OSCORE-protected Observe is added to C naively through the existing coap_oscore_protect_response, notifications would reuse the registration request's nonce for every update and clients could not order/replay-check them (RFC 8613 §4.1.3.5.2 violations).\n\nDECISION NEEDED (informational, P4): either (a) commit to OSCORE-protected Observe in C — wire the fresh-PIV path for notifications, Inner/Outer Observe, FETCH outer code, and client Notification Number tracking, or (b) document C as cleartext-Observe-only for public resources and keep protected resources non-observable. Filing so the choice is explicit rather than accidental.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-29T02:36:53.917204Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-29T02:36:53.917204Z",
+  "updated_at": "2026-09-04T03:20:30.218116483Z",
+  "closed_at": "2026-09-04T03:20:30.218116483Z",
+  "close_reason": "Covered by b7z9.32 (observe fresh-PIV). C observe wiring is part of that bead.",
   "labels": [
     "human-only"
   ],
