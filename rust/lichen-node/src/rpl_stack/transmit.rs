@@ -23,6 +23,12 @@ use super::util::{
 };
 use super::{RplRole, RplStack};
 
+/// Root DIO signature validity window (spec 06 8.10.1: expiry is an
+/// absolute Unix timestamp; 5 minutes bounds the replay-useful window
+/// while tolerating clock skew).
+#[cfg(feature = "root-sig")]
+pub(crate) const ROOT_SIG_TTL_SECONDS: u64 = 300;
+
 impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     pub fn configure_radio(&mut self, config: &RadioConfig) {
         self.stack.radio().configure(config);
@@ -56,7 +62,34 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     }
 
     pub async fn send_dio(&mut self, _destination: [u8; 16]) -> Result<(), TxError> {
-        let mut body = [0u8; 160];
+        let mut body = [0u8; 512];
+        // Root-signature producer (spec 06 8.10.1, bead b7z9.88.2): when
+        // this stack is the DODAG root with a valid wall clock, sign the
+        // DIO (expiry = now + ROOT_SIG_TTL_SECONDS) and append the 0x17
+        // option. Receivers without a pin or with an unassessable clock
+        // degrade to link-layer baseline (R-06-307).
+        #[cfg(feature = "root-sig")]
+        let len = if self.rpl.router.dodag.is_root() {
+            match self.wall_clock_unix {
+                Some(clock) => self
+                    .rpl
+                    .router
+                    .build_authenticated_dio_with_root_sig(
+                        &mut body,
+                        self.stack.link_ref(),
+                        clock() + ROOT_SIG_TTL_SECONDS,
+                    ),
+                None => self
+                    .rpl
+                    .router
+                    .build_authenticated_dio(&mut body, self.stack.link_ref()),
+            }
+        } else {
+            self.rpl
+                .router
+                .build_authenticated_dio(&mut body, self.stack.link_ref())
+        };
+        #[cfg(not(feature = "root-sig"))]
         let len = self
             .rpl
             .router

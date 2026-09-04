@@ -424,7 +424,7 @@ impl DecodedRootSig {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "std")]
 /// Producer side (bead b7z9.88.2): build the complete 0x17 option for
 /// the given DIO fields, signed with the root's digest signer. Mirrors
 /// the Python create_root_dio_signature oracle byte-for-byte: canonical
@@ -499,7 +499,7 @@ pub(crate) fn produce_root_dio_signature_option(
     option.push(OPT_ROOT_DIO_SIGNATURE);
     option.push(cose.len() as u8);
     option.extend_from_slice(&cose);
-    let _ = RootDioSignature::from_bytes(&option[2..]).ok_or(RootSigError::Decode)?;
+    let _ = RootDioSignature::from_bytes(&option[2..]).map_err(|_| RootSigError::Decode)?;
     Ok(option)
 }
 

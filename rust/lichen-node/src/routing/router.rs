@@ -903,6 +903,7 @@ impl Router {
         expiry_unix: u64,
     ) -> usize {
         let base = self.build_authenticated_dio(out, link);
+        if base == 0 { panic!("TRACE root-sig: base=0 expiry={expiry_unix}"); }
         if base == 0 {
             return 0;
         }
@@ -912,7 +913,7 @@ impl Router {
         match crate::rpl_stack::root_sig::produce_root_dio_signature_option(
             &signer,
             signer_iid,
-            &self.dodag_id,
+            self.dodag_id,
             RPL_INSTANCE_ID,
             self.dodag.version,
             self.dodag.rank,
@@ -921,6 +922,7 @@ impl Router {
             1, // Non-Storing, matching build_dio_with_authorization.
         ) {
             Ok(option) => {
+                if !(base + option.len() <= out.len()) { panic!("TRACE root-sig: option {} + base {base} > out {}", option.len(), out.len()); }
                 if base + option.len() <= out.len() {
                     out[base..base + option.len()].copy_from_slice(&option);
                     base + option.len()
@@ -928,7 +930,10 @@ impl Router {
                     base
                 }
             }
-            Err(_) => base,
+            Err(error) => {
+                panic!("TRACE root-sig: producer err {error:?}");
+                base
+            }
         }
     }
 
