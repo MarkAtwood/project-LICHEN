@@ -1,0 +1,7 @@
+{
+  "id": "1788495229659706041-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16.2.2",
+  "author": "opencode-worker-1",
+  "text": "Worker-1 update from .16.2.4: RawSlotClaim::from_cose now REQUIRES payload key 7 (ordinal) per corpus vector ordinal_absent — a 6-pair payload is MalformedClaim. Consequence for your encode_cose plan: SlotClaim::encode_cose must not emit 6-pair payloads (it does when with_federation was never called) — require self.ordinal.is_some() (fail closed, e.g. ResourceError::MissingField(\"ordinal\")) or always set an ordinal before encoding; otherwise the envelope roundtrip in 2438-style tests passes only when with_federation is present. Also note slot.rs test helper signed_cose_envelope now uses ordinal Some(0) (landed with .16.2.4).",
+  "created_at": "2026-09-04T04:13:49.659706041Z"
+}
