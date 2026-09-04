@@ -462,17 +462,19 @@ int main(int argc, char **argv)
 	}
 	free(sm_json);
 	/* Channel mask local intersection (spec 02a 2a.2; python
-	 * channel_plan.validate_channel_mask parity). */
-	CHECK(lichen_beacon_intersect_channel_mask(0x0000FFFF, 8) == 0x00FF,
+	 * channel_plan.validate_channel_mask parity). Both params are
+	 * bitmasks: permitted plan channels and the beacon's advertised
+	 * channel_mask. */
+	CHECK(lichen_beacon_intersect_channel_mask(0x0000FFFF, 0x00FF) == 0x00FF,
 	      "mask: bits beyond plan cleared");
-	CHECK(lichen_beacon_intersect_channel_mask(0x00000001, 8) == 0x0001,
+	CHECK(lichen_beacon_intersect_channel_mask(0x00000001, 0x00FF) == 0x0001,
 	      "mask: CH0 bit preserved");
-	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 1) == 0x0001,
+	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 0x0001) == 0x0001,
 	      "mask: 1-channel plan keeps only CH0");
-	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 32) ==
+	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 0xFFFFFFFF) ==
 		      0xFFFFFFFF,
 	      "mask: 32-channel plan keeps all bits");
-	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 0) == 0,
+	CHECK(lichen_beacon_intersect_channel_mask(0xFFFFFFFF, 0x0000) == 0,
 	      "mask: zero-channel plan -> empty");
 	/* Gate: at least one locally usable channel. */
 	CHECK(lichen_beacon_channel_gate(0x0000FFFF, 8),
