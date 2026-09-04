@@ -2,14 +2,16 @@
   "id": "project-LICHEN-worker6-4dmd",
   "title": "Waypoint per-originator bound keyed on client-supplied creator string is evadable (spec 18.3.2 hardening)",
   "description": "Design follow-up from codereview of worker6-07pj (waypoint bounds 32/256 + 5.03 landed). The per-originator bound (32/IID) is keyed on the POST body's 'creator' string, which an unauthenticated client can rotate to get a fresh 32-slot budget each time; only the global 256 cap contains the DoS (bounded memory, DELETE frees slots). Spec 18.3.2 says 'per originator IID' — the bound should key on a peer-derived identity (source IID from the authenticated/requested-from address), not client metadata. Fix needs a design decision: aiocoap resources don't currently receive the peer's source address/IID; plumb request.remote or the LCI identity context into WaypointsResource and use that as the bucket key when available (fall back to creator string for local-client submissions), or move waypoint admission behind the authenticated mesh path. After deciding, add tests: rotating-creator attacker fills at most 256 global but cannot exceed 32 per TRUE identity.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T20:10:50.144182825Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-08-31T20:25:04.29042164Z",
+  "updated_at": "2026-09-04T18:43:06.256398509Z",
   "started_at": "2026-08-31T20:23:25.353000232Z",
+  "closed_at": "2026-09-04T18:43:06.256398509Z",
+  "close_reason": "DONE: the per-originator waypoint bound now keys on the transport-bound peer identity, not client metadata. Implementation (commits 567a48558c + 70c81ff4ce): (1) added _ipv6_source_iid(request) and _admission_identity(request) to waypoints.py — reusing the proven confessions.py pattern: prefer the IPv6 source IID from request.remote (low 64 bits of link-local fe80::/10 or native 0200::/8; multicast/unspecified/IPv4-mapped rejected), then OSCORE identity, else None; (2) render_post keys the per-originator bound on _admission_identity(request) when a transport identity exists — rotating the client-supplied 'creator' string cannot yield a fresh 32-slot budget for the same peer; 'creator' is stored for display but never used as the bound key; (3) local-client submissions without a transport identity fall back to 'creator' as documented. Tests: new tests/gateway/test_waypoint_admission_identity.py (7 cases): IID extraction from link-local and native 0200 addresses, multicast/IPv4-mapped rejection, no-remote None, admission-identity preference, and the rotating-creator evasion regression (same peer -\u003e same bucket regardless of 'creator' rotation). Verification: 7/7 green, ruff clean (I001 import-sort fixed, SIM108 ternary). Scope notes: aiocoap resources DO receive request.remote (the bead's 'needs design decision' was outdated — confessions.py already established the pattern); the global 256 cap still bounds memory as before. The 27 pre-existing test_waypoints_resource.py failures are the missing pytest-asyncio plugin in the env (verified pre-existing via stash), not related to this change.",
   "labels": [
     "python",
     "lci"

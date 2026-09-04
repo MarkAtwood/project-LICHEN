@@ -1,13 +1,15 @@
 {
   "id": "project-LICHEN-worker6-l1qw.21",
   "title": "GCP-6.5: claim_seq high-water cache - spec requires \u003c=64 entries with LRU eviction; C=8 fail-closed, Rust=256 fail-closed, no LRU anywhere",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:02:31.141716109Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T12:02:31.141716109Z",
+  "updated_at": "2026-09-04T18:53:02.290772334Z",
+  "closed_at": "2026-09-04T18:53:02.290772334Z",
+  "close_reason": "TRIAGED AS OWNER-GATED (Mark): the claim_seq high-water cache has three independent dimensions that each need a design decision this bead flags: (1) SPEC THRESHOLD: spec/08 GCP-6.5 says \u003c=64 entries with LRU eviction by last claim timestamp; C currently defines CONFIG_LICHEN_SLOT_CLAIM_SEQ_CACHE_MAX=64 in coap_slot_coord.h (matching spec) but the actual persistence hooks are weak stubs returning -ENOENT/0 (fail-closed) — the real cache lives in the settings-backed NVS layer (slot_claim_settings host test exists), so C is a hook-side issue not a cache-size issue; (2) RUST: handle_post_slots provisions the verifier at 256 max_gateways (lichend.rs:1230) vs spec's 64 — the Rust RootSeqCache (lichen-rpl root_seq_cache.rs) also has max_gateways from provisioning; changing 256-\u003e64 needs a decision because it would reject legitimate claims from federations \u003e64; (3) LRU: neither C nor Rust implements LRU eviction today (Rust fails closed StateFull at capacity, C weak-hooks to the persistence layer); the capability table DOES have LRU (256/64-reserved) as the in-tree pattern. This requires Mark's adjudication on the spec-vs-federation-size question (64 per spec vs 256 deployed) — filing the tradeoff here rather than picking silently: a 64-entry LRU cache would silently drop high-water for gateways beyond 64, enabling replay windows; a 256 fail-closed bound preserves security but diverges from spec text. Also note Python has no claim_seq cache at all (verify_slot_claim relies on the caller-provided cache).",
   "labels": [
     "gcp",
     "spec-gap",
