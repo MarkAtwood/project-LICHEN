@@ -208,7 +208,6 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 				 * superframe — no recovery credit. */
 				(void)lichen_desync_on_beacon(
 					&link_ctx.tdma, false);
-				slot_coord_log_recovered_superframe(data);
 				secure_zero(rx_link_key, sizeof(rx_link_key));
 				k_mutex_unlock(&rx_mutex);
 				return;
