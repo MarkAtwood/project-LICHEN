@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-y5em",
   "title": "C coap build broken: coap_oscore.c/coap_oscore.h carry TWO same-name coap_oscore_authorize_mutating generations (worker-7 half-landed refactor)",
   "description": "Discovered by worker-1 building the coap_slot_claim host test (while verifying bead nwjl): lichen/subsys/lichen/oscore/include/lichen/coap_oscore.h declares coap_oscore_authorize_mutating TWICE with incompatible signatures (result-struct form at :107, expanded out-param form at :270), and lichen/subsys/lichen/oscore/coap_oscore.c DEFINES both (result-struct impl at :91, expanded impl at :412) with no #if guards - conflicting-types error on any TU including the header (C has no overloading). Root cause: merge 3641e9196d (beads-worker-7, Sep 1) reconciled the bc824fb302 'centralize mutating OSCORE authorize gate' refactor only halfway - both generations of decl+impl survived AND callers are split between them: checkin_resource.c:159 uses the 12-arg expanded form, coap_slot_coord.c uses the 6-arg (\u0026oscore result-struct) form; ~15 call sites across 9 files (checkin_resource.c x3, coap_config.c x2, coap_dtn.c x2, coap_location.c, coap_msg.c, coap_slot_coord.c, coap_waypoints.c, coap_rangetest.c, coap_server.c). Evidence: lichen/tests/coap_slot_claim host build fails with 'conflicting types for coap_oscore_authorize_mutating'. FIX DIRECTION: the checkin_resource.c comment (155-158) says the centralized expanded gate supersedes worker-7's result-struct wrapper ('nothing is lost') - so the expanded signature (header :270 / impl :412) is the intended API: delete the result-struct declaration+definition pair, migrate the remaining old-style callers (coap_slot_coord.c, coap_config.c, coap_dtn.c, coap_location.c, coap_msg.c, coap_waypoints.c, coap_rangetest.c, coap_server.c as applicable) to the expanded form, rebuild. NOTE oscore-adjacent: the authorize gate is security-relevant; the reconcile direction is determinable from the landed comment but the worker chose not to touch lichen/subsys/lichen/oscore/ per the oscore edit bar. Blocks: ALL C/Zephyr coap builds including the coap_slot_claim host test (and CI gates using it). Discovered-from: project-LICHEN-worker6-nwjl.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-04T05:14:26.279541634Z",
   "created_by": "opencode-worker-1",
-  "updated_at": "2026-09-04T05:14:26.279541634Z",
+  "updated_at": "2026-09-04T09:59:24.330241722Z",
+  "closed_at": "2026-09-04T09:59:24.330241722Z",
+  "close_reason": "RESOLVED via staged children: y5em.1 renamed the legacy generation (tree compiled again), y5em.2 + y5em.2.1 migrated all 13 callers to the single expanded 13-arg coap_oscore_authorize_mutating form and deleted the shim. The C coap tree has exactly one authorize-gate generation; host coap_slot_claim green; subsystem files syntax-CLEAN; native_sim execution sweep remains as the standard CI check post-merge. All work on beads-worker-1 (commits 9a437d5999, abdc3c5811, 335a965083, 485130ae3a + sync partials).",
   "labels": [
     "coap"
   ],
