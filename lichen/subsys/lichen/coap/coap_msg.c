@@ -1113,9 +1113,9 @@ int lichen_msg_sent_id_get(struct coap_resource *resource,
 	int opt_count;
 	struct coap_option opts[4];
 
-	int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
-						     addr_len, COAP_METHOD_GET,
-						     &oscore);
+	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
+						       addr_len, COAP_METHOD_GET,
+						       &oscore);
 	if (ret != 0) {
 		return ret;
 	}
@@ -1340,9 +1340,10 @@ int lichen_msg_sent_get_handler(struct coap_resource *resource,
 	uint8_t cbor_buf[MSG_CBOR_MAX_SIZE];
 	size_t len;
 	int observe_count;
-		int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
-						     addr_len, COAP_METHOD_GET,
-						     &oscore);
+	int ret;
+	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
+						    addr_len, COAP_METHOD_GET,
+						    &oscore);
 	if (ret != 0) {
 		return ret;
 	}
@@ -1742,10 +1743,12 @@ int lichen_msg_inbox_get_handler(struct coap_resource *resource,
 	uint8_t cbor_buf[MSG_CBOR_MAX_SIZE];
 	size_t offset;
 	size_t limit;
+	size_t len;
 	int observe;
-		int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
-						     addr_len, COAP_METHOD_GET,
-						     &oscore);
+	int ret;
+	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
+						       addr_len, COAP_METHOD_GET,
+						       &oscore);
 	if (ret != 0) {
 		return ret;
 	}
@@ -1794,13 +1797,15 @@ int lichen_msg_inbox_id_get(struct coap_resource *resource,
 	struct coap_oscore_unprotect_result oscore;
 	struct coap_option paths[4];
 	struct lichen_msg msg;
+	size_t len;
 	uint8_t cbor_buf[MSG_INBOX_ENTRY_MAX_CBOR];
 	uint64_t id = 0U;
 	bool changed = false;
 	int count;
-	int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
-						     addr_len, COAP_METHOD_GET,
-						     &oscore);
+	int ret;
+	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
+						       addr_len, COAP_METHOD_GET,
+						       &oscore);
 	if (ret != 0) {
 		return ret;
 	}
@@ -1920,6 +1925,7 @@ int lichen_msg_ack_post(struct coap_resource *resource,
 			struct sockaddr *addr, socklen_t addr_len)
 {
 	struct coap_oscore_unprotect_result oscore;
+	bool local_admin;
 	uint64_t msg_id = 0U;
 	uint32_t timestamp = 0U;
 	enum lichen_msg_status status = LICHEN_MSG_STATUS_QUEUED;
