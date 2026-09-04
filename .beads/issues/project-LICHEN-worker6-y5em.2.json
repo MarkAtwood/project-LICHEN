@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-y5em.2",
+  "title": "y5em.2: migrate legacy authorize_mutating_result callers to the expanded form and delete the shim",
+  "description": "Child 2 of y5em (after y5em.1 renames the legacy generation to coap_oscore_authorize_mutating_result): migrate the 13 legacy call sites to the EXPANDED 12-arg form (coap_oscore_authorize_mutating: resource, request, addr, addr_len, expected_method, plain_buf, plain_buf_len, \u0026payload_out, \u0026payload_len_out, \u0026ctx_out, piv_out, \u0026piv_len_out, \u0026is_protected - see header :270 docs and checkin_resource.c:159 for the canonical usage) and then DELETE the legacy declaration + definition. Per-file census (worker-1): coap_msg.c 6, coap_waypoints.c 2, coap_config.c 2, checkin_resource.c 1, coap_rangetest.c 1, coap_slot_coord.c 1. Migration per site: declare local uint8_t plain_buf[...], const uint8_t *payload; uint16_t payload_len; struct oscore_ctx *ctx; uint8_t piv[OSCORE_PIV_MAX_LEN]; size_t piv_len; bool is_protected; call the expanded gate; adapt downstream uses (result-\u003epayload -\u003e payload/payload_len; result-\u003ectx/is_protected/piv equivalents). Preserve each resource's response-code behavior exactly (the gate returns a CoAP response code to propagate). VERIFY: tests/coap_slot_claim host build + every touched resource's host test if present + native_sim sweep on heft when available. NOTE: y5em.1's rename makes the tree compile; this child finishes the cleanup and removes the shim. Coordinate with the oev1/7nnl family only if response semantics change (they must not).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T08:58:19.733119883Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T08:58:19.733119883Z",
+  "labels": [
+    "coap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-y5em.2",
+      "depends_on_id": "project-LICHEN-worker6-y5em",
+      "type": "parent-child",
+      "created_at": "2026-09-04T08:58:19.842795019Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
