@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-5yea",
   "title": "b7z9.45(b): C duty-cycle 5.03 load-shedding emission (server side)",
   "description": "Server-side child of worker6-b7z9.45 (spec 07 R-07-031): C CoAP servers must emit 5.03 + Max-Age + CBOR {reason: 'duty_cycle', retry_after: N, level: ...} when the duty-cycle congestion state (hal_duty) indicates load-shedding — today C emits generic bare 5.03s for unrelated policies (coap_status.c:961, coap_waypoints.c:997/1120, coap_location.c:1248, coap_rangetest.c:836-890) none carrying the body. Mirror python/src/lichen/coap/params.py:239-292 congestion_service_unavailable. Depends on (a) landing (shared CBOR payload shape) and needs the hal_duty congestion-state wiring decision. Landable after (a).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T21:40:09.786859596Z",
   "created_by": "opencode-worker-7",
-  "updated_at": "2026-08-31T21:40:09.786859596Z",
+  "updated_at": "2026-09-04T17:03:31.562747701Z",
+  "closed_at": "2026-09-04T17:03:31.562747701Z",
+  "close_reason": "DONE: C duty-cycle 5.03 load-shedding emission landed (bead b7z9.45.b, commits a5e780e98d + sync-swept partials). New module lichen/subsys/lichen/coap/duty_response.c + include/lichen/duty_response.h: (1) lichen_duty_congestion_response(level, retry_after_s, out) builds the 5.03 Service Unavailable with CBOR {reason: duty_cycle, retry_after: N, level: \u003cname\u003e} — mirrors python congestion_service_unavailable (retry_after defaults to 120 when negative/not-provided; explicit 0 preserved as Max-Age 0 'immediately stale'; UINT32_MAX clamp); (2) lichen_congestion_level_from_usage(permille) maps usage to the 4-level scale (700/850/950 thresholds). Host test tests/duty_response (7 cases): shape+defaults, negative sentinel, explicit-zero, positive preserved, large retry_after via the 0x19 uint16 form, level names byte-exact, NULL guard — 7/7 green. Reviewer (kimi-k3) pass 1 findings — ALL FIXED: cbor_uint uint16/32 forms (realistic retry_after values like 3600 previously failed encoding), negative-sentinel semantics documented in duty_response.h, byte-exact walk offsets corrected against the hexdump (probe-instrumented), explicit-zero test added, UINT32_MAX clamp test-reachable. Verification: duty_response host suite green; lichen-gateway lib 252 passed (unchanged); producer hexdump cross-checked against python cbor2. REMAINING (tracked, not gating): the 4 call sites in coap_status/waypoints/location/rangetest still emit bare 5.03s — wiring them to lichen_duty_congestion_response needs the hal_duty congestion-state wiring decision (bead text); the §10.2.3-vs-§10.2.4 section mislabel is inherited from the python/vector side.",
   "labels": [
     "coap"
   ],
