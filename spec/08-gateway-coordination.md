@@ -74,11 +74,90 @@ Non-goals: No central authority, no blockchain, no mandatory PKI.
 
 ## GCP-5. RPL Multi-Instance Coordination
 
-- All cooperating gateways use the **same RPLInstanceID**.
-- Each gateway acts as DODAG root for that instance.
-- Nodes see a unified DODAG with multiple possible parents.
-- DAO messages propagate across backbone as needed for route aggregation.
-- See RFC 6550 Section 5 for multi-instance details; LICHEN-specific parameters in appendix-rpl.md.
+All cooperating gateways participate in exactly one RPL instance while each
+acting as the DODAG root for that instance from its own LoRa segment's
+perspective. This section defines the coordination contract that makes the
+resulting multi-root DODAG coherent for nodes and for backbone routing.
+
+### GCP-5.1. Single Instance, Multiple Roots
+
+- All cooperating gateways MUST use the same RPLInstanceID (0 per
+  appendix-rpl; see `constants.toml` `[rpl]`).
+- Each gateway MUST act as DODAG root for that instance within its own LoRa
+  segment: it originates DIOs, owns the DODAG Version, and terminates DAOs
+  for destinations it serves.
+- A node MUST treat every gateway's DIO as a candidate parent of the same
+  logical DODAG: nodes see a unified DODAG with multiple possible parents,
+  one per gateway in range.
+- The root identity is key-derived (04-network.md §6.2): the DODAGID equals
+  the gateway's Yggdrasil address, so a node cannot confuse two gateways
+  even when both announce identical Preference and stratum.
+
+### GCP-5.2. Root Selection and Conflict Resolution
+
+When a node hears multiple gateway DIOs (or TDMA beacons from multiple
+candidate roots), it MUST resolve the conflict deterministically per
+Section 2a.5:
+
+1. Signature verification of every candidate beacon first (2a.5.1);
+   unverified candidates are discarded without state transition.
+2. Ordered selection criteria: DODAG Preference (higher wins), Stratum
+   (lower wins), combined RSSI+SNR score (higher wins, RSSI weighted 2:1),
+   EUI-64 tiebreak (numerically smaller IID wins) — 2a.5.2.
+3. A differing selected root defers the transition for a 3-superframe
+   hold-off; completion MUST initiate desync and rejoin per 2a.6 (2a.5.3).
+4. An RPL version change from the current root MUST reset the SFN relative
+   to the new epoch and re-verify the root's signature on the first beacon
+   with the new version (2a.5.4).
+
+The selection MUST be deterministic across implementations: the ordered
+criteria and tiebreaks are pinned by `test/vectors/ccp16-desync.json` and
+the root-selection fixtures. Reference implementations:
+python/src/lichen/link/slot_coordination.py (`select_root`),
+rust lichen-rpl `multi_instance.rs` (`select_root_index`),
+C lichen/subsys/lichen/link/root_selection.c (`lichen_root_select`).
+
+### GCP-5.3. DAO Propagation Across the Backbone
+
+- A node's DAO is terminated by its selected root (the gateway it reached).
+- Gateways MUST aggregate reachable destinations and propagate them across
+  the backbone so that any gateway can forward to any node in the merged
+  mesh: a gateway serving destination D registers D in its backbone-visible
+  route set, and peer gateways import it for downstream forwarding.
+- Backbone propagation uses the gateway trust model of GCP-3; a gateway
+  MUST NOT import backbone routes for destinations that fail the same
+  signature and admission gates it applies to local nodes.
+- Route staleness follows the RPL route lifetimes (appendix-rpl); a gateway
+  MUST withdraw a destination's backbone route when the corresponding node
+  disassociates or its DAO lifetime expires.
+
+### GCP-5.4. Desync and Rejoin Interplay
+
+A gateway entering the desync recovery FSM (2a.6) MUST stop originating
+DIOs until it regains a valid wall clock and synchronization. Nodes that
+were joined to a desynced gateway follow the 2a.6 transitions and MAY
+re-parent to another gateway whose DIO passes the same verification gates.
+A gateway returning from desync MUST increment its DODAG Version (signaling
+the change per 2a.5.4) and MAY re-announce its capabilities per GCP-6.
+
+### GCP-5.5. Security Properties
+
+- Root identity is key-derived and verifiable: every DIO is attributable to
+  a gateway (link-layer Schnorr48) and, when enabled, cryptographically
+  bound to the DODAG state by the root DIO signature (spec 8.10.1).
+- Multi-root diversity bounds the blast radius of a compromised gateway: a
+  node re-parents to a surviving gateway rather than trusting the
+  compromised one (see 2a.5 compromise recovery).
+- Backbone ingress is a trust boundary: gateways MUST NOT forward backbone
+  control claims into the mesh without the GCP-3 trust checks.
+
+### GCP-5.6. References
+
+- RFC 6550 Section 5 (multi-instance); RFC 6550 Section 18 (security).
+- appendix-rpl (LICHEN RPL configuration); spec/02a-coordinated-capacity.md
+  2a.5-2a.6 (conflict resolution and desync FSM).
+- docs/spec-coverage/06-security-part3.md (R-06-305/310 root DIO
+  signature coverage).
 
 ## GCP-6. Slot Coordination (6TiSCH-lite for LoRa)
 
