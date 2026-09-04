@@ -11,8 +11,7 @@
   "updated_at": "2026-09-01T16:48:35.144823019Z",
   "labels": [
     "edhoc",
-    "spec-gap",
-    "human-only"
+    "spec-gap"
   ],
   "dependencies": [
     {

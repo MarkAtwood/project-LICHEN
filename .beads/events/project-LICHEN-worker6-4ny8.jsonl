@@ -2,3 +2,4 @@
 {"id":"01a0595a-63ae-71e7-9a72-27da934cde9a","issue_id":"project-LICHEN-worker6-4ny8","event_type":"label_added","actor":"opencode-worker-7","comment":"Added label: zephyr","created_at":"2026-08-31T19:44:51.118126123Z"}
 {"id":"01a0595a-63b1-7d61-9c1f-71f6231b5515","issue_id":"project-LICHEN-worker6-4ny8","event_type":"label_added","actor":"opencode-worker-7","comment":"Added label: c-safety","created_at":"2026-08-31T19:44:51.121878053Z"}
 {"id":"01a0595a-63b5-7b1b-8cd8-8fb06512e2b8","issue_id":"project-LICHEN-worker6-4ny8","event_type":"label_added","actor":"opencode-worker-7","comment":"Added label: human","created_at":"2026-08-31T19:44:51.125729197Z"}
+{"id":"01a06a68-1ed9-76ff-bc35-e37dcc6af39b","issue_id":"project-LICHEN-worker6-4ny8","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Already decided: heap-validate-scope. Debug-only overlay, production conformant as-is.","created_at":"2026-09-04T03:13:23.673459531Z"}

@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-2myn",
   "title": "Question: gradient sf_select step-4 upgrade_count hysteresis deviates from spec 2a.8 pseudocode",
   "description": "Found during b7z9.30 decomposition. Spec 2a.8 step 4: 'IF (Neighbor.EMA_SNR \u003e 8) AND (Density \u003c 5) THEN SF = MAX(7, SF - 1)'. C impl (lichen/subsys/lichen/routing/gradient.c ~line 322) adds a third condition: entry-\u003esf.upgrade_count \u003e= LICHEN_UPGRADE_COUNT_THRESHOLD (hysteresis on how many upgrades already happened). Not in the spec pseudocode; no vector pins it (ccp16/ccp_load_balancing don't cover adaptive paths). Either the spec should document the hysteresis (anti-flapping rationale) or the impl should drop it. Needs Mark's call — spec-authoring vs impl change, and Rust rf_health.rs parity depends on the answer. Discovered from project-LICHEN-worker6-b7z9.30.",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T21:25:57.267696009Z",
   "created_by": "opencode-worker-2",
-  "updated_at": "2026-08-31T21:25:57.267696009Z",
+  "updated_at": "2026-09-04T03:13:07.848638555Z",
+  "closed_at": "2026-09-04T03:13:07.848638555Z",
+  "close_reason": "Already decided: sf-upgrade-hysteresis. Add hysteresis to spec, Rust must match.",
   "labels": [
     "zephyr",
     "human"
