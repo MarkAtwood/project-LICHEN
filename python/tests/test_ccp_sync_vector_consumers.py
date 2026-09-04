@@ -533,7 +533,7 @@ class TestAllVectorsAccountedFor:
     EXPECTED_COUNTS = {
         SYNC_HOP: 24,
         CCP16_HOP: 10,
-        CCP16_DESYNC: 4,
+        CCP16_DESYNC: 5,
         CCP9_UNDERSCORE: 4,
         CCP9_HYPHEN: 4,
         CARRY_HASH: 8,
@@ -556,3 +556,22 @@ class TestAllVectorsAccountedFor:
         underscore_names = {n for n, _ in _cases(CCP9_UNDERSCORE)}
         hyphen_names = {n for n, _ in _cases(CCP9_HYPHEN)}
         assert underscore_names.isdisjoint(hyphen_names)
+
+
+def test_synced_missed_beacons_desync_vector() -> None:
+    """R-02a-081 SYNCED row (b7z9.25.5): >= 3 consecutive missed
+    superframes in SYNCED -> DESYNCED, counters reset (mirrors the Rust
+    ccp16_desync_vectors consumer and the sfn.py SYNCED branch)."""
+    vec = _case(CCP16_DESYNC, "synced_missed_beacons_desync")
+    assert vec["type"] == "missed_beacons"
+    assert vec["state"] == "synced"
+    assert vec["missed_count"] == 3
+    assert vec["expected"] == "desynced"
+
+    fsm = DesyncFSM()
+    fsm.state = DesyncState.SYNCED
+    for _ in range(vec["missed_count"]):
+        fsm.on_missed_superframe()
+    assert fsm.state is DesyncState.DESYNCED
+    assert fsm.consecutive_valid == 0
+    assert fsm.missed_superframes == 0

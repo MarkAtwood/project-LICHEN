@@ -147,3 +147,30 @@ fn holdoff_complete_rejoin_not_in_holdoff() {
     let mut state = MultiRootState::new();
     assert!(!state.holdoff_complete_rejoin(0));
 }
+
+
+#[test]
+fn synced_missed_beacons_desync_vector() {
+    // R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267): a
+    // SYNCED node with >= 3 consecutive missed superframes transitions to
+    // DESYNCED, counters reset — mirroring the python sfn.py SYNCED
+    // branch (b7z9.25.5) and the C tdma.c SYNCED branch.
+    let vec = case("synced_missed_beacons_desync");
+    assert_eq!(vec["type"].as_str(), Some("missed_beacons"));
+    assert_eq!(vec["state"].as_str(), Some("synced"));
+    assert_eq!(vec["missed_count"].as_u64(), Some(3));
+    assert_eq!(vec["expected"].as_str(), Some("desynced"));
+
+    // DesyncFSM::default() starts SYNCED (spec 9.8 initial state).
+    let mut fsm = DesyncFSM::default();
+    let mut last_state = fsm.on_missed_superframe();
+    assert_eq!(last_state, DesyncState::Synced);
+    last_state = fsm.on_missed_superframe();
+    assert_eq!(last_state, DesyncState::Synced);
+    // Third consecutive miss crosses the threshold -> DESYNCED, counters
+    // reset.
+    last_state = fsm.on_missed_superframe();
+    assert_eq!(last_state, DesyncState::Desynced);
+    assert_eq!(fsm.missed_superframes(), 0);
+    assert_eq!(fsm.consecutive_valid(), 0);
+}

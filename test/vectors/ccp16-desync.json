@@ -29,5 +29,13 @@
     "type": "recovery",
     "sfn": 100,
     "expected": "recovering"
+  },
+  {
+    "name": "synced_missed_beacons_desync",
+    "description": "R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267): a SYNCED node with >= 3 consecutive missed superframes transitions to DESYNCED ('Suppress TX, reset counters'). Mirrors the python timing/sfn.py SYNCED branch landed in b7z9.25.5 and the Rust desync.rs SYNCED branch (b7z9.25.4-era pxxl follow-up).",
+    "type": "missed_beacons",
+    "state": "synced",
+    "missed_count": 3,
+    "expected": "desynced"
   }
 ]
