@@ -11,6 +11,8 @@ project(rpl_dao_auth_test C)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/test_common.cmake)
 
 set(RPL_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl)
+set(LINK_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link)
+set(CRYPTO_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/crypto)
 # Host stubs (zephyr/kernel.h) so real headers parse outside Zephyr.
 set(HOST_STUB_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
@@ -18,14 +20,32 @@ add_executable(rpl_dao_auth_test
   src/main.c
   ${RPL_SRC_DIR}/rpl_dao_process.c
   ${RPL_SRC_DIR}/rpl_dao_build.c
+  ${RPL_SRC_DIR}/rpl_dao_tx_persist.c
   ${RPL_SRC_DIR}/rpl_routing_table.c
   ${RPL_SRC_DIR}/rpl_prefix.c
   ${RPL_SRC_DIR}/messages.c
+  ${RPL_SRC_DIR}/rpl_sf_assignment.c
+  ${LINK_SRC}/schnorr48.c
+  ${LINK_SRC}/frame.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/hal_storage_redundant.c
+  ${CRYPTO_SRC}/monocypher.c
+  ${CRYPTO_SRC}/monocypher-ed25519.c
 )
 
 target_include_directories(rpl_dao_auth_test PRIVATE
   ${RPL_SRC_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
+  ${LINK_SRC}
+  ${CRYPTO_SRC}
   ${HOST_STUB_INCLUDE_DIR}
+)
+
+# Frame constants schnorr48.c expects (same as tests/coap_slot_claim).
+target_compile_definitions(rpl_dao_auth_test PRIVATE
+  LICHEN_MAX_FRAME_LEN=254
+  LICHEN_MAX_FRAME_BODY_LEN=250
 )
 # Match lichen/tests/rpl_routing/prj.conf so capacity semantics agree.
 target_compile_definitions(rpl_dao_auth_test PRIVATE

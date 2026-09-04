@@ -17,12 +17,15 @@ add_executable(rpl_dao_sequence_test
   ${RPL_SRC_DIR}/rpl_dao_build.c
   ${RPL_SRC_DIR}/messages.c
   ${RPL_SRC_DIR}/rpl_dao_tx_persist.c
+  ${RPL_SRC_DIR}/rpl_sf_assignment.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/hal_storage_redundant.c
 )
 
 target_include_directories(rpl_dao_sequence_test PRIVATE
   ${RPL_SRC_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
   ${HOST_STUB_INCLUDE_DIR}
 )
 target_compile_definitions(rpl_dao_sequence_test PRIVATE LICHEN_RPL_TEST=1)
@@ -45,12 +48,15 @@ add_executable(rpl_dao_sequence_sweep
   ${RPL_SRC_DIR}/messages.c
   ${RPL_SRC_DIR}/trickle.c
   ${RPL_SRC_DIR}/rpl_dao_tx_persist.c
+  ${RPL_SRC_DIR}/rpl_sf_assignment.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/hal_storage_redundant.c
 )
 
 target_include_directories(rpl_dao_sequence_sweep PRIVATE
   ${RPL_SRC_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
   ${HOST_STUB_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/../rpl_dodag/stub
 )
