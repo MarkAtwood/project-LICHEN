@@ -16,7 +16,11 @@ set -e
 export BEADS_ALLOW_STORE_COMMIT=1
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_BASE="/Volumes/Attic/Desktop/Projects/lichen-workers"
+if [ -d /Volumes/Attic ]; then
+    WORKTREE_BASE="${LICHEN_WORKTREE_BASE:-/Volumes/Attic/Desktop/Projects/lichen-workers}"
+else
+    WORKTREE_BASE="${LICHEN_WORKTREE_BASE:-$HOME/Developer/lichen-workers}"
+fi
 
 echo "=== Syncing Beads Workers ==="
 
