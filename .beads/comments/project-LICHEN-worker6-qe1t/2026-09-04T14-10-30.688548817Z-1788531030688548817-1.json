@@ -1,0 +1,7 @@
+{
+  "id": "1788531030688548817-1",
+  "issue_id": "project-LICHEN-worker6-qe1t",
+  "author": "opencode-worker-1",
+  "text": "REFINED MEASUREMENT (worker-1, root-sig feature): with version-auth omitted (qe1t option e partial), the signed DIO packet is ~201B (IPv6 40 + rpl_code 1 + DIO base 27 + config ~10 + 0x17 124). The remaining ~8B overflow comes from the DODAG_CONFIG option (~10B): omitting it from root-signed DIOs would fit (191 \u003c= 194 broadcast budget) but removes the MOP/heartbeat info joining nodes need from the wire. DECISION OPTIONS updated: (a1) omit DODAG_CONFIG from signed DIOs (joiners learn config from a separate periodic mechanism); (a2) emit DODAG_CONFIG only every Nth DIO; (b) SCHC-compress control; (c) fragment; (d) raise the frame cap. The round-trip test root_dio_signature_roundtrip_produces_and_advances is #[ignore]d with this exact cause (tests.rs:2736-2739).",
+  "created_at": "2026-09-04T14:10:30.688548817Z"
+}
