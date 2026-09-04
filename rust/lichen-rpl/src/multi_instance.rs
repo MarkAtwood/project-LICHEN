@@ -1035,6 +1035,18 @@ fn select_root_index(candidates: &[RootCandidate]) -> Option<usize> {
 /// - 2a.5.2: Root selection criteria
 /// - 2a.5.3: Overlap resolution with holdoff
 /// - 2a.5.4: RPL version change during multi-root conflict
+/// Timing window for one TDMA slot (R-02a-040 overlap computation).
+///
+/// Mirrors python/src/lichen/link/slot_coordination.py ``TdmaWindow``.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TdmaWindow {
+    pub slot_start_us: i64,
+    pub setup_window_us: i64,
+    pub occupied_time_us: i64,
+    pub guard_us: i64,
+}
+
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Default)]
 pub struct MultiRootState {
@@ -1218,6 +1230,19 @@ impl MultiRootState {
         self.desync_state_version
     }
 
+    /// Overlap test per 2a.5.3/R-02a-040: a candidate beacon overlaps the
+    /// current root's window when it arrives within
+    /// setup_window + occupied_time + guard of the window's slot. Beacons
+    /// from the current root itself always overlap by definition; only
+    /// conflicting-root beacons are gated here. Mirrors python
+    /// MultiRootState.beacon_overlaps_window.
+    pub fn beacon_overlaps_window(&self, beacon_time_us: i64, window: &TdmaWindow) -> bool {
+        let slot_end_us = window.slot_start_us + window.setup_window_us + window.occupied_time_us;
+        let window_start_us = window.slot_start_us - window.setup_window_us;
+        let window_end_us = slot_end_us + window.guard_us;
+        window_start_us <= beacon_time_us && beacon_time_us <= window_end_us
+    }
+
     /// Mark that desync state depends on the given version.
     pub fn set_desync_state_version(&mut self, version: u8) {
         self.desync_state_version = Some(version);
@@ -1247,6 +1272,48 @@ pub fn parse_ipv6(s: &str) -> Option<[u8; 16]> {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    use super::*;
+
+    // R-02a-040 overlap window (mirrors python
+    // tests/test_multi_root_rejoin.py beacon_overlaps_window cases).
+    #[test]
+    fn beacon_overlaps_window_inside() {
+        let state = MultiRootState::new();
+        let window = TdmaWindow {
+            slot_start_us: 1000,
+            setup_window_us: 20,
+            occupied_time_us: 2300,
+            guard_us: 50,
+        };
+        assert!(state.beacon_overlaps_window(1000 + 500, &window));
+    }
+
+    #[test]
+    fn beacon_before_window_outside() {
+        let state = MultiRootState::new();
+        let window = TdmaWindow {
+            slot_start_us: 1000,
+            setup_window_us: 20,
+            occupied_time_us: 2300,
+            guard_us: 50,
+        };
+        // 1000 - 20 = 980 is window start; 900 is before it.
+        assert!(!state.beacon_overlaps_window(900, &window));
+    }
+
+    #[test]
+    fn beacon_after_window_outside() {
+        let state = MultiRootState::new();
+        let window = TdmaWindow {
+            slot_start_us: 1000,
+            setup_window_us: 20,
+            occupied_time_us: 2300,
+            guard_us: 50,
+        };
+        // slot end 3320 + guard 50 = 3370; 3400 is after.
+        assert!(!state.beacon_overlaps_window(3400, &window));
+    }
+
     use super::*;
     use std::vec;
 
