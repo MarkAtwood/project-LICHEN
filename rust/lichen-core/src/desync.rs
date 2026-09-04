@@ -159,6 +159,13 @@ impl DesyncFSM {
                     self.missed_superframes = 0;
                 }
             }
+            // R-02a-081 SYNCED row support: a valid beacon clears the
+            // missed-superframe streak so an isolated miss cannot
+            // accumulate toward the SYNCED -> DESYNCED transition
+            // (parity with python timing/sfn.py on_beacon).
+            DesyncState::Synced if valid => {
+                self.missed_superframes = 0;
+            }
             _ => {}
         }
         self.state
@@ -625,5 +632,32 @@ mod tests {
         let st = fsm.on_beacon(true, false);
         let st = fsm.on_beacon(true, false);
         assert_eq!(st, DesyncState::Synced);
+    }
+    #[test]
+    fn synced_missed_superframes_desync_after_three() {
+        // R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267),
+        // mirroring the C tdma.c SYNCED branch: >= 3 consecutive missed
+        // superframes in SYNCED -> DESYNCED with counter resets.
+        let mut fsm = DesyncFSM::default();
+        fsm.state = DesyncState::Synced;
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+        assert_eq!(fsm.missed_superframes, 1);
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+        assert_eq!(fsm.missed_superframes, 2);
+        assert_eq!(fsm.on_missed_superframe(), DesyncState::Desynced);
+        assert_eq!(fsm.missed_superframes, 0);
+        assert_eq!(fsm.consecutive_valid, 0);
+    }
+
+    #[test]
+    fn synced_valid_beacon_resets_missed_streak() {
+        let mut fsm = DesyncFSM::default();
+        fsm.state = DesyncState::Synced;
+        fsm.on_missed_superframe();
+        fsm.on_missed_superframe();
+        assert_eq!(fsm.missed_superframes, 2);
+        fsm.on_beacon(true, true);
+        assert_eq!(fsm.missed_superframes, 0);
+        assert_eq!(fsm.state, DesyncState::Synced);
     }
 }
