@@ -1113,7 +1113,7 @@ int lichen_msg_sent_id_get(struct coap_resource *resource,
 	int opt_count;
 	struct coap_option opts[4];
 
-coap_oscore_authorize_mutating_result(tating(resource, request, addr,
+	int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 						     addr_len, COAP_METHOD_GET,
 						     &oscore);
 	if (ret != 0) {
@@ -1340,7 +1340,7 @@ int lichen_msg_sent_get_handler(struct coap_resource *resource,
 	uint8_t cbor_buf[MSG_CBOR_MAX_SIZE];
 	size_t len;
 	int observe_count;
-	intcoap_oscore_authorize_mutating_result(rize_mutating(resource, request, addr,
+		int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 						     addr_len, COAP_METHOD_GET,
 						     &oscore);
 	if (ret != 0) {
@@ -1743,7 +1743,7 @@ int lichen_msg_inbox_get_handler(struct coap_resource *resource,
 	size_t offset;
 	size_t limit;
 	int observe;
-	int lecoap_oscore_authorize_mutating_result(e_authorize_mutating(resource, request, addr,
+		int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 						     addr_len, COAP_METHOD_GET,
 						     &oscore);
 	if (ret != 0) {
@@ -1798,7 +1798,7 @@ int lichen_msg_inbox_id_get(struct coap_resource *resource,
 	uint64_t id = 0U;
 	bool changed = false;
 	int count;
-coap_oscore_authorize_mutating_result(p_oscore_authorize_mutating(resource, request, addr,
+	int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 						     addr_len, COAP_METHOD_GET,
 						     &oscore);
 	if (ret != 0) {
@@ -1925,7 +1925,7 @@ int lichen_msg_ack_post(struct coap_resource *resource,
 	enum lichen_msg_status status = LICHEN_MSG_STATUS_QUEUED;
 	uint8_t peer_addr[16];
 	const uint8_t *authenticated_peer = NULL;
-	bcoap_oscore_authorize_mutating_result(t = coap_oscore_authorize_mutating(resource, request, addr,
+	int ret = coap_oscore_authorize_mutating_result(resource, request, addr,
 						     addr_len, COAP_METHOD_POST,
 						     &oscore);
 	if (ret != 0) {

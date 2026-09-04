@@ -171,7 +171,7 @@ int coap_oscore_unprotect_resource_request(
   return 0;
 }
 
-int coap_oscore_authorize_mutating(
+int coap_oscore_authorize_mutating_result(
     struct coap_resource *resource, struct coap_packet *request,
     struct sockaddr *addr, socklen_t addr_len, uint8_t expected_method,
     struct coap_oscore_unprotect_result *result) {
