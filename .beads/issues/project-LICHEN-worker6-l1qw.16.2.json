@@ -8,7 +8,8 @@
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T20:36:38.248087832Z",
   "created_by": "opencode-worker-4",
-  "updated_at": "2026-08-31T20:36:38.248087832Z",
+  "updated_at": "2026-09-04T04:09:18.62065442Z",
+  "started_at": "2026-09-04T04:05:47.153950163Z",
   "labels": [
     "gcp",
     "lci",

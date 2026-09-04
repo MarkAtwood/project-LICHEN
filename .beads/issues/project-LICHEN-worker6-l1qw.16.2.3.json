@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.16.2.3",
+  "title": "Migrate lichend.rs and end_to_end.rs slot-claim tests to COSE_Sign1",
+  "description": "Child of l1qw.16.2, LANDS AFTER l1qw.16.2.2 (that one deletes legacy SlotClaim::encode/decode, which these files still use - compile breaks until migrated). (1) lichend.rs test helper signed_slot_claim (src/bin/lichend.rs:1980-1999) signs the legacy slot_claim_transcript and sets claim.signature - switch to: SlotClaim::new(iid, slots, superframe, sequence) with timestamp=Some(unix_now()+100) then claim.encode_cose(\u0026private,\u0026public) -\u003e (Vec\u003cu8\u003e envelope, [u8;32] pubkey); update its call sites (at least :2024-2025 provision_noninitial_slot_store, grep for signed_slot_claim). (2) tests/end_to_end.rs:985-994 builds SlotClaim with legacy transcript signature and claim.encode() - replace with SlotClaim::new(remote_iid, slots, current_superframe, 0).with_timestamp() and claim.encode_cose(\u0026claim_private,\u0026claim_public); drop the slot_claim_transcript import. Keep assertions unchanged. Verify: cargo test -p lichen-gateway.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-04T04:09:05.020923701Z",
+  "created_by": "opencode-worker-1",
+  "updated_at": "2026-09-04T04:09:05.020923701Z",
+  "labels": [
+    "gateway",
+    "decomposed",
+    "gcp",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.16.2.3",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.16.2",
+      "type": "parent-child",
+      "created_at": "2026-09-04T04:09:05.134031428Z",
+      "created_by": "opencode-worker-1",
+      "metadata": "{}"
+    }
+  ]
+}
