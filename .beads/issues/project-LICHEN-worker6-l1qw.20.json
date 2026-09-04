@@ -1,13 +1,14 @@
 {
   "id": "project-LICHEN-worker6-l1qw.20",
   "title": "GCP-6.5: sender-side claim_seq machinery absent (no NVS persistence, no atomic increment-before-claim); Python receiver missing; Rust replay semantics differ",
+  "notes": "Unblocked: COSE_Sign1 payload format decided (slot-claim-cose-sign1). Sender wraps {iid, superframe, seq, slots} in COSE_Sign1, atomically increments seq in NVS before signing. Agent-implementable.",
   "status": "open",
   "priority": 1,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T12:02:30.766396293Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T12:02:30.766396293Z",
+  "updated_at": "2026-09-04T02:54:00.154012307Z",
   "labels": [
     "gcp",
     "spec-gap",
