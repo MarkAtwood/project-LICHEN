@@ -902,8 +902,11 @@ impl Router {
         link: &LinkLayer,
         expiry_unix: u64,
     ) -> usize {
-        let base = self.build_authenticated_dio(out, link);
-        if base == 0 { panic!("TRACE root-sig: base=0 expiry={expiry_unix}"); }
+        // The 0x17 COSE signature supersedes the version-auth option
+        // (both bind the root to version/rank; the COSE covers a superset
+        // and omitting version-auth makes the signed DIO fit the link
+        // frame — qe1t sizing resolution). Build WITHOUT it.
+        let base = self.build_dio_with_authorization(out, None);
         if base == 0 {
             return 0;
         }
@@ -930,14 +933,12 @@ impl Router {
                     base
                 }
             }
-            Err(error) => {
-                panic!("TRACE root-sig: producer err {error:?}");
-                base
-            }
+            Err(_) => base,
         }
     }
 
     pub fn build_authenticated_dio(&self, out: &mut [u8], link: &LinkLayer) -> usize {
+        
         let authorization = if self.dodag.is_root() {
             let root_pubkey = *link.local_public_key().as_bytes();
             if lichen_core::addr::ygg_addr_from_pubkey(&root_pubkey) != self.dodag_id {
