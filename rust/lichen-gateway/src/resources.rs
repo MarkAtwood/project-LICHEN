@@ -2442,8 +2442,11 @@ mod tests {
             0,
         );
         assert_eq!(response.code, 0xA3); // 5.03 Service Unavailable
-        // The refused announcement must NOT be cached.
-        assert_eq!(coordinator.capability_table.cached_seq(&announcer_iid2), None);
+                                         // The refused announcement must NOT be cached.
+        assert_eq!(
+            coordinator.capability_table.cached_seq(&announcer_iid2),
+            None
+        );
     }
 
     #[test]
