@@ -1450,6 +1450,98 @@ static int slots_get(struct coap_resource *resource,
 				   CBOR_CONTENT_FORMAT, resp_buf, e.off);
 }
 
+/* GCP-6.5 slot-claim rate limiter (spec/08:281): at most 10 claims/min
+ * per peer IID and 60 claims/min globally. Claims exceeding either limit
+ * MUST be silently dropped (same indistinguishable empty 2.04 as
+ * signature failures; l1qw.22). */
+#define LICHEN_SLOT_RATE_WINDOW_MS 60000U
+#define LICHEN_SLOT_RATE_PER_PEER_MAX 10U
+#define LICHEN_SLOT_RATE_GLOBAL_MAX 60U
+#define LICHEN_SLOT_RATE_PEERS 32U
+
+struct lichen_slot_rate_entry {
+	uint8_t peer_iid[8];
+	uint32_t stamps[LICHEN_SLOT_RATE_PER_PEER_MAX];
+	uint8_t stamp_len;
+};
+
+static struct lichen_slot_rate_entry s_rate_entries[LICHEN_SLOT_RATE_PEERS];
+static uint32_t s_rate_global[LICHEN_SLOT_RATE_GLOBAL_MAX];
+static size_t s_rate_global_len;
+static struct k_mutex s_rate_lock = K_MUTEX_INITIALIZER(s_rate_lock);
+
+static bool rate_stamp_in_window(uint32_t stamp, uint32_t now_ms)
+{
+	return (int32_t)(now_ms - stamp) >= 0 &&
+	       (uint32_t)(now_ms - stamp) < LICHEN_SLOT_RATE_WINDOW_MS;
+}
+
+static bool slot_rate_global_allow(uint32_t now_ms)
+{
+	size_t kept = 0U;
+
+	for (size_t i = 0U; i < s_rate_global_len; i++) {
+		if (rate_stamp_in_window(s_rate_global[i], now_ms)) {
+			s_rate_global[kept++] = s_rate_global[i];
+		}
+	}
+	s_rate_global_len = kept;
+	if (s_rate_global_len >= LICHEN_SLOT_RATE_GLOBAL_MAX) {
+		return false;
+	}
+	s_rate_global[s_rate_global_len++] = now_ms;
+	return true;
+}
+
+static bool slot_rate_allow(const uint8_t peer_iid[8], uint32_t now_ms)
+{
+	bool allowed = false;
+	struct lichen_slot_rate_entry *entry = NULL;
+
+	k_mutex_lock(&s_rate_lock, K_FOREVER);
+
+	for (size_t i = 0U; i < LICHEN_SLOT_RATE_PEERS; i++) {
+		if (memcmp(s_rate_entries[i].peer_iid, peer_iid, 8U) == 0) {
+			entry = &s_rate_entries[i];
+			break;
+		}
+	}
+	if (entry == NULL) {
+		for (size_t i = 0U; i < LICHEN_SLOT_RATE_PEERS; i++) {
+			if (s_rate_entries[i].stamp_len == 0U) {
+				entry = &s_rate_entries[i];
+				memcpy(entry->peer_iid, peer_iid, 8U);
+				break;
+			}
+		}
+	}
+	if (entry == NULL) {
+		/* Peer table full: drop (bounded memory). */
+		k_mutex_unlock(&s_rate_lock);
+		return false;
+	}
+
+	uint8_t kept_peer = 0U;
+	for (uint8_t i = 0U; i < entry->stamp_len; i++) {
+		if (rate_stamp_in_window(entry->stamps[i], now_ms)) {
+			entry->stamps[kept_peer++] = entry->stamps[i];
+		}
+	}
+	entry->stamp_len = kept_peer;
+	if (kept_peer >= LICHEN_SLOT_RATE_PER_PEER_MAX) {
+		k_mutex_unlock(&s_rate_lock);
+		return false;
+	}
+	entry->stamps[kept_peer++] = now_ms;
+	allowed = true;
+
+	if (!slot_rate_global_allow(now_ms)) {
+		allowed = false;
+	}
+	k_mutex_unlock(&s_rate_lock);
+	return allowed;
+}
+
 static int slots_post(struct coap_resource *resource,
 		      struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
@@ -1504,13 +1596,20 @@ static int slots_post(struct coap_resource *resource,
 						    0, NULL, 0);
 	}
 
-	/* Decode claim (COSE_Sign1 per GCP-6.5). Malformed or structurally
-	 * invalid claims are silently discarded per GCP-6.3, logged at a
-	 * rate-limited WARN. */
+	/* GCP-6.5 rate limit (spec/08:281): peer IID derives from the claim
+	 * after decode; the limiter check runs before processing so
+	 * rate-exceeded claims are dropped without consuming replay state. */
 	ret = lichen_slot_coord_decode_claim(payload, payload_len, &claim);
 	if (ret < 0) {
 		slot_coord_log_discard("decode failed");
 		return 0;
+	}
+	{
+		uint32_t now_ms = (uint32_t)(k_uptime_get() / 1000U);
+		if (!slot_rate_allow(claim.gateway_iid, now_ms)) {
+			slot_coord_log_discard("rate limit exceeded");
+			return 0;
+		}
 	}
 
 	/* Process claim: COSE verify, expiry, claim_seq, conflicts */
