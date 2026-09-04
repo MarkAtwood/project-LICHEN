@@ -11,6 +11,8 @@ description = "LICHEN integration crate: combines link, SCHC, CoAP, and routing 
 
 [features]
 default = []
+# Root-side DIO signature (0x17) producer (spec 06 8.10.1, bead b7z9.88.2).
+root-sig = []
 std = [
     "lichen-hal/std",
     "lichen-link/std",

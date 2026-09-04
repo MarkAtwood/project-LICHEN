@@ -425,6 +425,84 @@ impl DecodedRootSig {
 }
 
 #[cfg(test)]
+/// Producer side (bead b7z9.88.2): build the complete 0x17 option for
+/// the given DIO fields, signed with the root's digest signer. Mirrors
+/// the Python create_root_dio_signature oracle byte-for-byte: canonical
+/// payload labels 1-7, protected {1: -65537}, Sig_structure
+/// ["Signature1", protected, h'', payload], Schnorr48 over SHA-256.
+pub(crate) fn produce_root_dio_signature_option(
+    signer: &dyn Fn(&[u8]) -> [u8; 48],
+    signer_iid: [u8; 8],
+    dodag_id: [u8; 16],
+    instance: u8,
+    version: u8,
+    rank: u16,
+    expiry: u64,
+    root_seq: u64,
+    mop: u8,
+) -> Result<std::vec::Vec<u8>, RootSigError> {
+    use ciborium::ser::into_writer;
+    use lichen_rpl::message::{RootDioSignature, OPT_ROOT_DIO_SIGNATURE};
+    use sha2::{Digest, Sha256};
+
+    if expiry == 0 || root_seq == 0 {
+        return Err(RootSigError::Decode);
+    }
+    let payload_value = Value::Map(std::vec![
+        (Value::Integer(1.into()), Value::Bytes(dodag_id.to_vec())),
+        (Value::Integer(2.into()), Value::Integer(instance.into())),
+        (Value::Integer(3.into()), Value::Integer(version.into())),
+        (Value::Integer(4.into()), Value::Integer(rank.into())),
+        (Value::Integer(5.into()), Value::Integer(expiry.into())),
+        (Value::Integer(6.into()), Value::Integer(root_seq.into())),
+        (Value::Integer(7.into()), Value::Integer(mop.into())),
+    ]);
+    let mut payload = std::vec::Vec::new();
+    into_writer(&payload_value, &mut payload).map_err(|_| RootSigError::Decode)?;
+
+    let protected_value = Value::Map(std::vec![(
+        Value::Integer(1.into()),
+        Value::Integer((-65537).into()),
+    )]);
+    let mut protected = std::vec::Vec::new();
+    into_writer(&protected_value, &mut protected).map_err(|_| RootSigError::Decode)?;
+
+    let sig_structure = Value::Array(std::vec![
+        Value::Text(std::string::String::from("Signature1")),
+        Value::Bytes(protected.clone()),
+        Value::Bytes(std::vec::Vec::new()),
+        Value::Bytes(payload.clone()),
+    ]);
+    let mut sig_structure_bytes = std::vec::Vec::new();
+    into_writer(&sig_structure, &mut sig_structure_bytes)
+        .map_err(|_| RootSigError::Decode)?;
+    let digest: [u8; 32] = Sha256::digest(&sig_structure_bytes).into();
+    let signature = signer(&digest);
+
+    // COSE_Sign1 tagged array: [protected, {4: kid}, payload, signature].
+    let cose_value = Value::Tag(
+        COSE_SIGN1_TAG,
+        std::boxed::Box::new(Value::Array(std::vec![
+            Value::Bytes(protected),
+            Value::Map(std::vec![(
+                Value::Integer(4.into()),
+                Value::Bytes(signer_iid.to_vec()),
+            )]),
+            Value::Bytes(payload),
+            Value::Bytes(signature.to_vec()),
+        ])),
+    );
+    let mut cose = std::vec::Vec::new();
+    into_writer(&cose_value, &mut cose).map_err(|_| RootSigError::Decode)?;
+
+    let mut option = std::vec::Vec::with_capacity(cose.len() + 2);
+    option.push(OPT_ROOT_DIO_SIGNATURE);
+    option.push(cose.len() as u8);
+    option.extend_from_slice(&cose);
+    let _ = RootDioSignature::from_bytes(&option[2..]).ok_or(RootSigError::Decode)?;
+    Ok(option)
+}
+
 pub(crate) mod tests {
     use super::*;
     use lichen_rpl::root_seq_cache::RootSeqCache;
@@ -446,6 +524,7 @@ pub(crate) mod tests {
         0xfb, 0x65, 0x74, 0x84, 0x60, 0x65, 0x8e, 0x67, 0xd1, 0x3b, 0x75, 0xed, 0xf5, 0xf2, 0xf5,
         0x04, 0x87,
     ];
+
 
     pub(crate) fn vector_cose() -> std::vec::Vec<u8> {
         decode_hex(VALID_COSE_SIGN1)
