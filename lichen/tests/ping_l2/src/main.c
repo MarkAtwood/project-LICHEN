@@ -477,6 +477,9 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	ret = lichen_lora_l2_deinit();
 	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
 	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
+	/* init() leaves the module STOPPED; restore RUNNING so the L2 send
+	 * path sees a live radio (parity with the pre-abort state). */
+	zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
 	reprovision_after_reinit();
