@@ -463,22 +463,14 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 
 	k_sleep(K_MSEC(100));
 
-	/* Re-provision the signing key + peer: the shared link context may
-	 * have been wiped by the teardown test above (ztest runs cases
-	 * alphabetically, and the disable/destroy teardown wipes the key).
-	 * The module may also be in LORA_ABORTED from the teardown's
-	 * corrupted-queue retry; force a clean deinit/init cycle first. */
-	/* Documented ABORTED recovery (lora_l2.c:263): deinit() then init().
-	 * net_if_down may return -EALREADY/-EPERM if the iface is already
-	 * down from the teardown path — the state machine's own deinit()
-	 * handles ABORTED directly (drains RX, reinitializes mutexes). */
-	/* Documented ABORTED recovery (lora_l2.c:263): deinit() handles
-	 * ABORTED directly (drains RX, reinitializes mutexes), then init(). */
+	/* The teardown test left the module in LORA_ABORTED (its
+	 * corrupted-queue retry aborted the RX thread), which wiped the
+	 * link_ctx and blocked enable(). Run the documented recovery:
+	 * deinit() handles ABORTED directly, then init() + start() restore
+	 * the running state, and reprovision re-loads key + peer. */
 	ret = lichen_lora_l2_deinit();
 	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
 	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
-	/* init() leaves the module STOPPED; restore RUNNING so the L2 send
-	 * path sees a live radio (parity with the pre-abort state). */
 	zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
