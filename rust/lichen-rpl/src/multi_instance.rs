@@ -1154,6 +1154,30 @@ impl MultiRootState {
         false
     }
 
+    /// R-02a-043: after holdoff completes ([`MultiRootState::advance_holdoff`]
+    /// returns true), the node MUST initiate desync and rejoin: the old
+    /// root's state is dropped, candidates are cleared for a fresh beacon
+    /// window, and the version-scoped desync state is invalidated. Returns
+    /// true when the rejoin was initiated (callers then reset SFN per
+    /// R-02a-045). Mirrors python MultiRootState.holdoff_complete_rejoin.
+    pub fn holdoff_complete_rejoin(&mut self, now_sf: u64) -> bool {
+        if !self.is_in_holdoff() {
+            return false;
+        }
+        self.desync_state_version = None;
+        self.current_root = None;
+        self.clear_candidates();
+        self.holdoff_counter = 0;
+        self.holdoff_selected = None;
+        self.rejoin_sf = Some(now_sf);
+        true
+    }
+
+    /// The SFN at which the post-holdoff rejoin was initiated, if any.
+    pub fn rejoin_sf(&self) -> Option<u64> {
+        self.rejoin_sf
+    }
+
     /// Handle RPL DODAG version change per spec 2a.5.4.
     pub fn on_version_change(
         &mut self,

@@ -116,3 +116,34 @@ fn excessive_clock_drift_premise_holds() {
     );
     assert_eq!(fsm.state(), DesyncState::Desynced);
 }
+
+#[test]
+fn holdoff_complete_rejoin_drops_old_root() {
+    // R-02a-043: holdoff completion initiates desync + rejoin rather than
+    // silently switching roots (mirrors python holdoff_complete_rejoin).
+    let mut state = MultiRootState::new();
+    let old = RootCandidate::new([0x11; 8]).with_signature_valid(true);
+    let new = RootCandidate::new([0x22; 8]).with_signature_valid(true);
+    state.current_root = Some(old);
+    assert!(state.add_candidate(new.clone()));
+    // A differing selected root defers the transition: holdoff = 3 superframes.
+    state.process_beacon_window();
+
+    // Two of the three holdoff superframes elapse without completing.
+    assert!(!state.advance_holdoff());
+    assert!(!state.advance_holdoff());
+    // The third completes the holdoff: R-02a-043 initiates desync + rejoin
+    // (old root dropped, candidates cleared, holdoff and desync state reset).
+    assert!(state.holdoff_complete_rejoin(42));
+    assert!(state.current_root.is_none());
+    assert_eq!(state.rejoin_sf(), Some(42));
+    // Rejoin initiated: a fresh beacon window starts with no candidates
+    // (cleared) and no holdoff pending.
+    assert!(!state.is_in_holdoff());
+}
+
+#[test]
+fn holdoff_complete_rejoin_not_in_holdoff() {
+    let mut state = MultiRootState::new();
+    assert!(!state.holdoff_complete_rejoin(0));
+}
