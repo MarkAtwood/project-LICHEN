@@ -7,6 +7,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from ipaddress import IPv6Address
+
 import aiocoap
 import cbor2
 from aiocoap import Message, resource
@@ -34,6 +36,61 @@ def _is_valid_float(value: Any) -> bool:
 def _is_valid_uint(value: Any) -> bool:
     """Check if value is a valid unsigned integer."""
     return type(value) is int and value >= 0
+
+
+def _ipv6_source_iid(request: Message) -> str | None:
+    """Return the 16-hex IPv6 source IID from ``request.remote``, or None.
+
+    Same derivation as confessions.py: link-local fe80::/10 and native
+    0200::/8 carry the key-derived IID in the low 64 bits (spec 6.1).
+    """
+    remote = getattr(request, "remote", None)
+    hostinfo = getattr(remote, "hostinfo", None)
+    if not isinstance(hostinfo, str) or not hostinfo:
+        return None
+    hostinfo = hostinfo.strip()
+    if hostinfo.startswith("["):
+        end = hostinfo.find("]")
+        if end > 0:
+            host = hostinfo[1:end]
+        else:
+            host = hostinfo
+    elif hostinfo.count(":") == 1:
+        host = hostinfo.rsplit(":", 1)[0]
+    else:
+        host = hostinfo
+    try:
+        addr = IPv6Address(host)
+    except ValueError:
+        return None
+    if addr.is_multicast or addr.is_unspecified or addr.ipv4_mapped is not None:
+        return None
+    return addr.packed[8:16].hex()
+
+
+def _admission_identity(request: Message) -> str | None:
+    """Return the authenticated peer identity for a waypoint POST.
+
+    Preference (spec 18.3.2: per originator IID):
+    1. IPv6 source IID from ``request.remote``
+    2. OSCORE identity when present (no IPv6 source)
+    """
+    iid = _ipv6_source_iid(request)
+    if iid is not None:
+        return iid
+    oscore_context = getattr(request, "oscore_context", None)
+    if isinstance(oscore_context, str) and oscore_context:
+        return f"oscore:{oscore_context}"
+    oscore_context = getattr(request, "oscore_context", None)
+    if oscore_context is not None:
+        identity = getattr(oscore_context, "recipient_id", None) or getattr(
+            oscore_context, "kid", None
+        )
+        if isinstance(identity, bytes | bytearray) and identity:
+            return f"oscore:{bytes(identity).hex()}"
+        if isinstance(identity, str) and identity:
+            return f"oscore:{identity}"
+    return None
 
 
 class WaypointsResource(resource.Resource):
@@ -224,9 +281,20 @@ class WaypointsResource(resource.Resource):
         # creator is the per-originator bound's bucket key (spec 18.3.2):
         # it must be a tstr, otherwise bound accounting fragments across
         # mixed-type keys and the per-originator limit is bypassed.
-        creator = body.get("creator", self._creator_id)
-        if not _is_valid_tstr(creator):
-            return Message(code=aiocoap.BAD_REQUEST)
+        # SECURITY (bead 4dmd, spec 18.3.2): the per-originator bound keys on
+        # the transport-bound peer identity (IPv6 source IID or OSCORE), never
+        # on the client-supplied 'creator' string — an unauthenticated
+        # attacker could rotate 'creator' for a fresh 32-slot budget. The
+        # 'creator' field is stored for display but never used as the bound
+        # key. Local-client submissions without a transport identity fall
+        # back to the shared local bucket.
+        identity = _admission_identity(request)
+        if identity is not None:
+            creator = identity
+        else:
+            creator = body.get("creator", self._creator_id)
+            if not _is_valid_tstr(creator):
+                return Message(code=aiocoap.BAD_REQUEST)
 
         # Build waypoint with auto-generated fields
         wpt_id = body.get("id")
