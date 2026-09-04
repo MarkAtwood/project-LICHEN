@@ -1,0 +1,7 @@
+{
+  "id": "1788520261732643071-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.88.3",
+  "author": "opencode-worker-1",
+  "text": "Worker-1 round 2 result: the three-scenario harness is BUILT and committed as ignored-WIP (tests.rs, commit follows) - valid+replay-reject, expired-Baseline, clockless-Baseline scenarios share baseline_fixture(clock: Option\u003cfn() -\u003e u64\u003e) with the pin injected via the pre-existing AnnounceProcessor::pin_for_test(pubkey) (announce.rs:359 - no new backdoor needed; direct field access works from rpl_stack::tests). FINDING: with a VALID vector signature and matching DIO fields the stack still returns RplRejected - localized away from the sig gate itself (the vector passes decode+structural in root_sig.rs unit tests) - leading hypothesis: the DODAG version-authorization gate rejects the hand-built DIO (no DODAG_VERSION_AUTHORIZATION option; that producer is b7z9.88.2). Implementer options: (a) extend the test DIO with a valid version-authorization option (build via build_authenticated_dio on a provisioned ROOT sender whose link key differs from the COSE key - the receiver pins BOTH: link key via the announce flow, COSE key via pin_for_test - the real two-key shape), or (b) confirm Baseline-admitted DIOs are version-auth-exempt (spec question for Mark). Tests are #[ignore]d with this reason; un-ignore and iterate. Also: receive.rs debug traces were fully reverted (net zero); root_sig.rs test fixtures made pub(crate) for cross-test reuse.",
+  "created_at": "2026-09-04T11:11:01.732643071Z"
+}
