@@ -184,6 +184,9 @@ pub struct Router {
     version_authorization: Option<DodagVersionAuthorization>,
     /// DODAG Grounded state: the root has an identity-preserving global path.
     grounded: bool,
+    /// Root-side 0x17 DIO signature sequence counter (spec 06 8.10.1):
+    /// starts at 1 (seq 0 is wire-illegal), monotone, terminal at u64::MAX.
+    pub(crate) root_dio_seq: u64,
     /// This node's geographic coordinates for GPSR (spec 9.7).
     /// None if GPS unavailable or privacy mode enabled.
     pub node_coords: Option<GeoCoords>,
@@ -202,6 +205,7 @@ impl Router {
     pub fn new(node_addr: [u8; 16], dodag_id: [u8; 16]) -> Self {
         let dodag_config = DodagConfig::default();
         Self {
+            root_dio_seq: 1,
             dodag: DodagState::new(RPL_INSTANCE_ID, dodag_id, 0),
             trickle: trickle_from_config(&dodag_config).expect("default Trickle config is valid"),
             dao_manager: DaoManager::new(
@@ -250,6 +254,7 @@ impl Router {
             dodag_config.max_rank_increase,
         )?;
         Some(Self {
+            root_dio_seq: 1,
             dodag,
             trickle,
             dao_manager,
@@ -885,6 +890,48 @@ impl Router {
 
     /// Build a DIO with the root authorization minted locally by a root or
     /// propagated unchanged by a non-root router.
+    /// Build the authenticated DIO and append the root's 0x17 signature
+    /// option (spec 06 8.10.1, bead b7z9.88.2). `expiry_unix` comes from
+    /// the caller's wall clock; the signature binds dodag_id, instance,
+    /// version, rank, expiry, root_seq and mop so the receiver's
+    /// cross-check and replay gates apply to the signed form.
+    #[cfg(feature = "root-sig")]
+    pub fn build_authenticated_dio_with_root_sig(
+        &self,
+        out: &mut [u8],
+        link: &LinkLayer,
+        expiry_unix: u64,
+    ) -> usize {
+        let base = self.build_authenticated_dio(out, link);
+        if base == 0 {
+            return 0;
+        }
+        let pubkey = link.local_public_key();
+        let signer_iid = lichen_core::addr::iid_from_pubkey_bytes(pubkey.as_bytes());
+        let signer = |digest: &[u8]| link.sign_digest(digest);
+        match crate::rpl_stack::root_sig::produce_root_dio_signature_option(
+            &signer,
+            signer_iid,
+            &self.dodag_id,
+            RPL_INSTANCE_ID,
+            self.dodag.version,
+            self.dodag.rank,
+            expiry_unix,
+            self.root_dio_seq,
+            1, // Non-Storing, matching build_dio_with_authorization.
+        ) {
+            Ok(option) => {
+                if base + option.len() <= out.len() {
+                    out[base..base + option.len()].copy_from_slice(&option);
+                    base + option.len()
+                } else {
+                    base
+                }
+            }
+            Err(_) => base,
+        }
+    }
+
     pub fn build_authenticated_dio(&self, out: &mut [u8], link: &LinkLayer) -> usize {
         let authorization = if self.dodag.is_root() {
             let root_pubkey = *link.local_public_key().as_bytes();
