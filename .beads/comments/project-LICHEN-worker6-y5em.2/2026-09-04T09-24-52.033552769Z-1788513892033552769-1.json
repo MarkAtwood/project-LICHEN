@@ -1,0 +1,7 @@
+{
+  "id": "1788513892033552769-1",
+  "issue_id": "project-LICHEN-worker6-y5em.2",
+  "author": "opencode-worker-1",
+  "text": "Progress (worker-1, 2026-09-04): 1 of 13 legacy sites migrated and host-verified - coap_slot_coord.c slots_post (commit abdc3c5811): expanded 12-arg gate with a locally assembled coap_oscore_unprotect_result (out-params copied in) so all downstream coap_oscore_respond_resource calls keep their shape; coap_slot_claim host suite green. The migration pattern is now demonstrated in-tree for the remaining worker. Released: the other 12 sites are in Zephyr-only files requiring the native_sim sweep (heft/CI) - filed as y5em.2.1 with the full per-site census, the coap_msg.c corruption-repair provenance note, and the shim-deletion checklist. The shim (decl+impl marked TEMPORARY) stays until y5em.2.1 completes.",
+  "created_at": "2026-09-04T09:24:52.033552769Z"
+}
