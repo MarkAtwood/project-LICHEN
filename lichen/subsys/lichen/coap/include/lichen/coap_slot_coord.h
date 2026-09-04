@@ -187,7 +187,7 @@ struct lichen_slot_claim {
 };
 
 /**
- * @brief Slot grant response (2.01 Created)
+ * @brief Slot grant response (2.04 Changed, GCP-6.5 step 10)
  */
 struct lichen_slot_grant {
 	uint8_t granted_slots[CONFIG_LICHEN_SLOT_COORD_MAX_SLOTS];
