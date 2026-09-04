@@ -111,7 +111,9 @@ static void add_target(uint8_t *buf, size_t *len, uint8_t id)
 
 static uint8_t origin_priv[32];
 static uint8_t origin_pub[32];
-static uint64_t origin_seq_ctr;
+/* Spec 09 14.2: sequence 0 is not a legal wire seq (the tx-persist parser
+ * rejects it), so the test counter starts at 1. */
+static uint64_t origin_seq_ctr = 1;
 
 /* Spec/05-routing.md 8.6 transcript: append the 0x12 DAO Origin Signature
  * option (seq BE u64 + Schnorr48 over SHA-512(domain || origin || dodagid ||
