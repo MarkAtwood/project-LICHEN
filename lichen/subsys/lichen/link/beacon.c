@@ -280,9 +280,14 @@ size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
  * the (beacon_mask, num_channels) shape and must be reconciled with
  * this API. */
 uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
-					      uint32_t advertised)
+					      uint8_t num_channels)
 {
-	return permitted & advertised;
+	/* Build a bitmask of num_channels low bits and intersect with the
+	 * permitted set (spec/02a 2a.2 channel-plan gating). */
+	uint32_t mask = num_channels >= 32U
+			    ? UINT32_MAX
+			    : ((uint32_t)1U << num_channels) - 1U;
+	return permitted & mask;
 }
 
 

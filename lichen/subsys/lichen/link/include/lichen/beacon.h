@@ -196,7 +196,7 @@ size_t lichen_beacon_write_slot_map(const uint8_t *slots, size_t slot_count,
  * primitive.
  */
 uint32_t lichen_beacon_intersect_channel_mask(uint32_t permitted,
-					      uint32_t advertised);
+					      uint8_t num_channels);
 
 /** Gate (beads-worker-1): true when the mask intersection with the plan's
  *  num_channels width is nonzero (at least one locally usable channel).
