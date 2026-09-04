@@ -16,6 +16,18 @@ Sig_structure = [
     payload                 ; payload bytes
 ]
 sig = Schnorr48(root_privkey, SHA256(CBOR(Sig_structure)))
+
+IMPLEMENTATION STATUS (bead b7z9.88.d): this module is a REFERENCE ORACLE,
+not wired into any production Python DIO receive path. The wired receivers
+are the C root_dio_sig.c/root_dio_replay.c (consumed by dodag.c per bead
+b7z9.88.1) and the Rust receiver rust/lichen-node/src/rpl_stack/receive.rs
+(verify_dio_root_signature). ``create_root_dio_signature`` is likewise the
+reference signer: no stack currently appends the 0x17 option to outgoing
+DIOs (Rust producer tracked as bead b7z9.88.2). Cross-checked against the
+shared fixture test/vectors/root_dio_signature.json. See
+docs/spec-coverage/06-security-part3.md (R-06-305/310) and the parent bead
+b7z9.88. Whether the Python stack gains a live path is an open product
+decision.
 """
 
 from __future__ import annotations
