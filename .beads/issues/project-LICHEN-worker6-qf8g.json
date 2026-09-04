@@ -11,8 +11,7 @@
   "updated_at": "2026-08-28T20:00:58.281087Z",
   "labels": [
     "oscore",
-    "spec",
-    "human-only"
+    "spec"
   ],
   "dependencies": [
     {
