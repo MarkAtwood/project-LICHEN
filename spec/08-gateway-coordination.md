@@ -82,16 +82,19 @@ resulting multi-root DODAG coherent for nodes and for backbone routing.
 ### GCP-5.1. Single Instance, Multiple Roots
 
 - All cooperating gateways MUST use the same RPLInstanceID (0 per
-  appendix-rpl; see `constants.toml` `[rpl]`).
+  draft-lichen-rpl-lora-00.md and `constants.toml` `[rpl]`).
 - Each gateway MUST act as DODAG root for that instance within its own LoRa
   segment: it originates DIOs, owns the DODAG Version, and terminates DAOs
   for destinations it serves.
-- A node MUST treat every gateway's DIO as a candidate parent of the same
-  logical DODAG: nodes see a unified DODAG with multiple possible parents,
-  one per gateway in range.
-- The root identity is key-derived (04-network.md §6.2): the DODAGID equals
-  the gateway's Yggdrasil address, so a node cannot confuse two gateways
-  even when both announce identical Preference and stratum.
+- Nodes see a unified DODAG view (the `unified_dodag_view` contract): every
+  gateway DIO in range is a candidate parent, and the node selects exactly
+  one root at a time per GCP-5.2. Each gateway is a distinct DODAG per
+  RFC 6550 §2 ((RPLInstanceID, DODAGID) is the DODAG identity); the
+  coordination contract makes the merged view coherent rather than merging
+  the DODAGs on the wire.
+- The root identity is key-derived (04-network.md §6.2): each gateway's
+  DODAGID equals its own Yggdrasil address, so a node cannot confuse two
+  gateways even when both announce identical Preference and stratum.
 
 ### GCP-5.2. Root Selection and Conflict Resolution
 
@@ -133,12 +136,15 @@ C lichen/subsys/lichen/link/root_selection.c (`lichen_root_select`).
 
 ### GCP-5.4. Desync and Rejoin Interplay
 
-A gateway entering the desync recovery FSM (2a.6) MUST stop originating
-DIOs until it regains a valid wall clock and synchronization. Nodes that
+A gateway whose wall clock or upstream time reference becomes invalid
+MUST apply the 2a.6 DESYNCED semantics to its own DIO origination —
+suppressing DIOs until it regains a valid wall clock and synchronization
+(the 2a.6 FSM states are defined node-relative-to-root; a desynced root
+occupies the DESYNCED role with respect to its own segment). Nodes that
 were joined to a desynced gateway follow the 2a.6 transitions and MAY
 re-parent to another gateway whose DIO passes the same verification gates.
 A gateway returning from desync MUST increment its DODAG Version (signaling
-the change per 2a.5.4) and MAY re-announce its capabilities per GCP-6.
+the change per 2a.5.4) and MAY re-announce its capabilities per GCP-4.1.
 
 ### GCP-5.5. Security Properties
 
