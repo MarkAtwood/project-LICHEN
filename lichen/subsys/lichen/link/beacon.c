@@ -19,6 +19,8 @@
 
 #include <lichen/beacon.h>
 
+#include <stdint.h>
+
 #include <string.h>
 
 enum lichen_beacon_status
@@ -303,4 +305,16 @@ bool lichen_beacon_verify_gate(const uint8_t *beacon, size_t len,
 	sig = &beacon[len - LICHEN_BEACON_SIG_SIZE];
 	return verify_fn(signed_data, len - LICHEN_BEACON_SIG_SIZE, sig,
 			 LICHEN_BEACON_SIG_SIZE, user);
+}
+
+/* Channel-plan gate: true when the beacon's advertised channel_mask
+ * intersects the plan's permitted channel width (num_channels bitmask).
+ * Mirrors rust tdma_beacon.rs intersect_channel_mask + the channel_gate
+ * predicate (beads-worker-1 merge note in beacon.h). */
+bool lichen_beacon_channel_gate(uint32_t beacon_mask, uint8_t num_channels)
+{
+	uint32_t permitted = num_channels >= 32U
+				  ? UINT32_MAX
+				  : ((uint32_t)1U << num_channels) - 1U;
+	return (beacon_mask & permitted) != 0U;
 }
