@@ -73,6 +73,10 @@ zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_WAYPOINTS
   coap_waypoints.c
 )
 
+zephyr_library_sources_ifdef(CONFIG_LICHEN_DUTY_CYCLE
+  duty_response.c
+)
+
 zephyr_library_sources_ifdef(CONFIG_LICHEN_COAP_CODEC
   coap_codec.c
 )
