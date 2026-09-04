@@ -37,6 +37,7 @@ target_include_directories(rpl_dao_auth_test PRIVATE
   ${RPL_SRC_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/hal/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../include
   ${LINK_SRC}
   ${CRYPTO_SRC}
   ${HOST_STUB_INCLUDE_DIR}
@@ -46,6 +47,7 @@ target_include_directories(rpl_dao_auth_test PRIVATE
 target_compile_definitions(rpl_dao_auth_test PRIVATE
   LICHEN_MAX_FRAME_LEN=254
   LICHEN_MAX_FRAME_BODY_LEN=250
+  CONFIG_LICHEN_CRYPTO_MONOCYPHER=1
 )
 # Match lichen/tests/rpl_routing/prj.conf so capacity semantics agree.
 target_compile_definitions(rpl_dao_auth_test PRIVATE
