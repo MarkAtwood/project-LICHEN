@@ -453,57 +453,6 @@ ZTEST(ping_l2, test_l2_publish_app_identity_uses_link_context_key)
 	zassert_mem_equal(self.firmware_name, "LICHEN", sizeof("LICHEN"));
 }
 
-ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
-{
-	struct lichen_l2_test_stats l2_before;
-	struct lora_loopback_test_stats loop_before;
-	uint8_t rx_buf[sizeof(coap_test_payload)];
-	int sock;
-	int ret;
-
-	k_sleep(K_MSEC(100));
-
-	/* The teardown test left the module in LORA_ABORTED (its
-	 * corrupted-queue retry aborted the RX thread), which wiped the
-	 * link_ctx and blocked enable(). Run the documented recovery:
-	 * deinit() handles ABORTED directly, then init() + start() restore
-	 * the running state, and reprovision re-loads key + peer. */
-	ret = lichen_lora_l2_deinit();
-	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
-	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
-	zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
-	ret = net_if_up(test_iface);
-	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
-	reprovision_after_reinit();
-
-	sock = bind_udp_observer();
-	zassert_true(sock >= 0, "failed to bind UDP observer: %d", sock);
-
-	lichen_l2_test_reset_stats();
-	lora_loopback_test_reset(lora_dev);
-
-	lichen_l2_test_get_stats(&l2_before);
-	lora_loopback_test_get_stats(lora_dev, &loop_before);
-
-	ret = send_l2_packet(expected_udp_packet, expected_udp_packet_len,
-			     IPPROTO_UDP);
-	if (ret != 0) {
-		(void)zsock_close(sock);
-	}
-	zassert_equal(ret, 0, "failed to send UDP packet: %d", ret);
-
-	ret = recv_udp_observer(sock, rx_buf, sizeof(rx_buf));
-	(void)zsock_close(sock);
-
-	zassert_equal(ret, sizeof(coap_test_payload),
-		      "UDP observer did not receive payload: %d", ret);
-	zassert_mem_equal(rx_buf, coap_test_payload, sizeof(coap_test_payload));
-	zassert_true(wait_for_packet_path(&l2_before, &loop_before,
-					  expected_udp_packet,
-					  expected_udp_packet_len),
-		     "UDP packet was not observed through full L2 injection path");
-}
-
 ZTEST(ping_l2, test_adaptive_duty_permille_matches_ccp13_vectors)
 {
 	static const struct {
@@ -659,6 +608,57 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 	 * helper also re-adds the peer, which a bare key re-load would miss
 	 * (RX SIID lookup would fail with -LICHEN_EAUTH). */
 	reprovision_after_reinit();
+}
+
+ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
+{
+	struct lichen_l2_test_stats l2_before;
+	struct lora_loopback_test_stats loop_before;
+	uint8_t rx_buf[sizeof(coap_test_payload)];
+	int sock;
+	int ret;
+
+	k_sleep(K_MSEC(100));
+
+	/* The teardown test left the module in LORA_ABORTED (its
+	 * corrupted-queue retry aborted the RX thread), which wiped the
+	 * link_ctx and blocked enable(). Run the documented recovery:
+	 * deinit() handles ABORTED directly, then init() + start() restore
+	 * the running state, and reprovision re-loads key + peer. */
+	ret = lichen_lora_l2_deinit();
+	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
+	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
+	zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
+	ret = net_if_up(test_iface);
+	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
+	reprovision_after_reinit();
+
+	sock = bind_udp_observer();
+	zassert_true(sock >= 0, "failed to bind UDP observer: %d", sock);
+
+	lichen_l2_test_reset_stats();
+	lora_loopback_test_reset(lora_dev);
+
+	lichen_l2_test_get_stats(&l2_before);
+	lora_loopback_test_get_stats(lora_dev, &loop_before);
+
+	ret = send_l2_packet(expected_udp_packet, expected_udp_packet_len,
+			     IPPROTO_UDP);
+	if (ret != 0) {
+		(void)zsock_close(sock);
+	}
+	zassert_equal(ret, 0, "failed to send UDP packet: %d", ret);
+
+	ret = recv_udp_observer(sock, rx_buf, sizeof(rx_buf));
+	(void)zsock_close(sock);
+
+	zassert_equal(ret, sizeof(coap_test_payload),
+		      "UDP observer did not receive payload: %d", ret);
+	zassert_mem_equal(rx_buf, coap_test_payload, sizeof(coap_test_payload));
+	zassert_true(wait_for_packet_path(&l2_before, &loop_before,
+					  expected_udp_packet,
+					  expected_udp_packet_len),
+		     "UDP packet was not observed through full L2 injection path");
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);
