@@ -272,7 +272,7 @@ mod tests {
         for sfn in 0..100 {
             let ch = synchronized_hop_channel(sfn, 0x12345678, 8);
             assert!(
-                ch >= 1 && ch < 8,
+                (1..8).contains(&ch),
                 "channel {} out of range for sfn {}",
                 ch,
                 sfn
@@ -304,8 +304,8 @@ mod tests {
         let ch2 = synchronized_hop_channel(1, 0x12345678, 16);
         // Not guaranteed to differ, but highly likely with good hash
         // We just verify they're both valid
-        assert!(ch1 >= 1 && ch1 < 16);
-        assert!(ch2 >= 1 && ch2 < 16);
+        assert!((1..16).contains(&ch1));
+        assert!((1..16).contains(&ch2));
     }
 
     #[test]
@@ -313,8 +313,8 @@ mod tests {
         // Different seeds should (usually) produce different channels
         let ch1 = synchronized_hop_channel(0, 0x12345678, 16);
         let ch2 = synchronized_hop_channel(0, 0x87654321, 16);
-        assert!(ch1 >= 1 && ch1 < 16);
-        assert!(ch2 >= 1 && ch2 < 16);
+        assert!((1..16).contains(&ch1));
+        assert!((1..16).contains(&ch2));
     }
 
     // --- select_channel_with_gnss tests ---
@@ -351,7 +351,7 @@ mod tests {
         let ch = select_channel_with_gnss(None, &config, Some(&peer_eui), 0, 8);
 
         // Should be hash-based, in valid range [1, n_channels]
-        assert!(ch >= 1 && ch <= 8, "channel {} out of range", ch);
+        assert!((1..=8).contains(&ch), "channel {} out of range", ch);
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod tests {
 
         // Both should use hash-based (same result)
         assert_eq!(ch_with_time, ch_no_time);
-        assert!(ch_with_time >= 1 && ch_with_time < 8);
+        assert!((1..8).contains(&ch_with_time));
     }
 
     #[test]
@@ -399,8 +399,8 @@ mod tests {
         let ch_epoch1 = select_channel_with_gnss(None, &config, Some(&peer_eui), 1, 16);
 
         // Both valid, and deterministic
-        assert!(ch_epoch0 >= 1 && ch_epoch0 < 16);
-        assert!(ch_epoch1 >= 1 && ch_epoch1 < 16);
+        assert!((1..16).contains(&ch_epoch0));
+        assert!((1..16).contains(&ch_epoch1));
 
         // Same inputs should be deterministic
         let ch_epoch0_again = select_channel_with_gnss(None, &config, Some(&peer_eui), 0, 16);
@@ -416,8 +416,8 @@ mod tests {
         let ch1 = select_channel_with_gnss(None, &config, Some(&peer1), 0, 16);
         let ch2 = select_channel_with_gnss(None, &config, Some(&peer2), 0, 16);
 
-        assert!(ch1 >= 1 && ch1 < 16);
-        assert!(ch2 >= 1 && ch2 < 16);
+        assert!((1..16).contains(&ch1));
+        assert!((1..16).contains(&ch2));
     }
 
     #[test]
@@ -429,7 +429,7 @@ mod tests {
             let peer = [seed_byte; 8];
             for epoch in 0..8u8 {
                 let ch = select_channel_with_gnss(None, &config, Some(&peer), epoch, 8);
-                assert!(ch >= 1 && ch < 8, "channel {} out of range", ch);
+                assert!((1..8).contains(&ch), "channel {} out of range", ch);
             }
         }
         // Degenerate channel plans fail closed to CH0

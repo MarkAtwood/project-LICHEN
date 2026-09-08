@@ -24,6 +24,7 @@ fn load_document() -> Value {
     serde_json::from_str(VECTORS_JSON).expect("yggdrasil_address.json must parse")
 }
 
+#[allow(clippy::manual_is_multiple_of)]
 fn decode_hex(value: &str) -> Vec<u8> {
     assert!(value.len() % 2 == 0, "odd-length hex: {value}");
     (0..value.len())
@@ -32,7 +33,7 @@ fn decode_hex(value: &str) -> Vec<u8> {
         .collect()
 }
 
-fn native_vectors<'a>(document: &'a Value) -> Vec<&'a Value> {
+fn native_vectors(document: &Value) -> Vec<&Value> {
     document["vectors"]
         .as_array()
         .expect("vectors array")
