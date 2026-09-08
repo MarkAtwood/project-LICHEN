@@ -309,7 +309,12 @@ Content-Format: application/senml+cbor
 ]
 ```
 
-Beacon interval: configurable, default 60 seconds when moving, 300 when stationary.
+Beacon interval: configurable, default 60 seconds when moving, 300 when
+stationary. In dense deployments the interval is density-adaptive: when the
+local density estimate (`EstimateDensity`, 02a-coordinated-capacity.md
+§2a.10.3) exceeds 20, the beacon interval MUST be at least 300 seconds
+regardless of motion state, preventing position broadcast from dominating
+airtime. Parameters take effect on the next beacon cycle.
 
 Nodes receiving beacons update their position cache:
 
