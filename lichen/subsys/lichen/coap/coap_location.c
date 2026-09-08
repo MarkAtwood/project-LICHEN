@@ -257,19 +257,20 @@ static int encode_location_snapshot(
     const struct lichen_hal_location_time_snapshot *snap, uint8_t *payload,
     size_t payload_len) {
   char base_name[BASE_NAME_MAX];
-  float alt = snap->altitude_m_valid ? (float)snap->altitude_m : NAN;
-  float hacc = snap->horizontal_accuracy_mm_valid
-                   ? (float)snap->horizontal_accuracy_mm / 1000.0f
-                   : NAN;
-  float vacc = snap->vertical_accuracy_mm_valid
-                   ? (float)snap->vertical_accuracy_mm / 1000.0f
-                   : NAN;
+  double alt = snap->altitude_m_valid ? (double)snap->altitude_m : NAN;
+  double hacc = snap->horizontal_accuracy_mm_valid
+                    ? (double)snap->horizontal_accuracy_mm / 1000.0
+                    : NAN;
+  double vacc = snap->vertical_accuracy_mm_valid
+                    ? (double)snap->vertical_accuracy_mm / 1000.0
+                    : NAN;
   uint64_t base_time = snap->fix_time_unix_valid ? snap->fix_time_unix : 0U;
 
   build_base_name(base_name, sizeof(base_name));
   return senml_encode_location_full(
       base_name[0] != '\0' ? base_name : NULL, base_time,
-      (float)snap->latitude_e7 / 1e7f, (float)snap->longitude_e7 / 1e7f, alt,
+      (double)snap->latitude_e7 / 1e7, (double)snap->longitude_e7 / 1e7,
+      alt,
       NAN, NAN, hacc, vacc, payload, payload_len);
 }
 
@@ -524,9 +525,9 @@ int lichen_position_beacon_poll(int64_t now_ms) {
   uint8_t payload[LOCATION_SENML_MAX];
   uint32_t interval_ms;
   uint64_t base_time;
-  float alt;
-  float hacc;
-  float vacc;
+  double alt;
+  double hacc;
+  double vacc;
   bool was_moving;
   int len;
   int ret;
@@ -589,17 +590,18 @@ int lichen_position_beacon_poll(int64_t now_ms) {
   k_mutex_unlock(&position_beacon_mutex);
 
   build_base_name(base_name, sizeof(base_name));
-  alt = snap.altitude_m_valid ? (float)snap.altitude_m : NAN;
+  alt = snap.altitude_m_valid ? (double)snap.altitude_m : NAN;
   hacc = snap.horizontal_accuracy_mm_valid
-             ? (float)snap.horizontal_accuracy_mm / 1000.0f
+             ? (double)snap.horizontal_accuracy_mm / 1000.0
              : NAN;
   vacc = snap.vertical_accuracy_mm_valid
-             ? (float)snap.vertical_accuracy_mm / 1000.0f
+             ? (double)snap.vertical_accuracy_mm / 1000.0
              : NAN;
   base_time = snap.fix_time_unix_valid ? snap.fix_time_unix : 0U;
   len = senml_encode_location_full(base_name[0] != '\0' ? base_name : NULL,
-                                   base_time, (float)snap.latitude_e7 / 1e7f,
-                                   (float)snap.longitude_e7 / 1e7f, alt, NAN,
+                                   base_time,
+                                   (double)snap.latitude_e7 / 1e7,
+                                   (double)snap.longitude_e7 / 1e7, alt, NAN,
                                    NAN, hacc, vacc, payload, sizeof(payload));
   if (len < 0) {
     k_mutex_lock(&position_beacon_mutex, K_FOREVER);
@@ -1242,13 +1244,13 @@ static int sensors_location_get(struct coap_resource *resource,
   struct lichen_hal_location_time_snapshot snap;
   char base_name[BASE_NAME_MAX];
   uint8_t senml[LOCATION_SENML_MAX];
-  float lat;
-  float lon;
-  float alt;
-  float speed;
-  float heading;
-  float hacc;
-  float vacc;
+  double lat;
+  double lon;
+  double alt;
+  double speed;
+  double heading;
+  double hacc;
+  double vacc;
   uint64_t base_time;
   uint8_t token[COAP_TOKEN_MAX_LEN];
   uint8_t token_len;
@@ -1262,17 +1264,17 @@ static int sensors_location_get(struct coap_resource *resource,
                                COAP_RESPONSE_CODE_NOT_FOUND, 0, NULL, 0);
   }
 
-  lat = (float)snap.latitude_e7 / 1e7f;
-  lon = (float)snap.longitude_e7 / 1e7f;
-  alt = snap.altitude_m_valid ? (float)snap.altitude_m : NAN;
+  lat = (double)snap.latitude_e7 / 1e7;
+  lon = (double)snap.longitude_e7 / 1e7;
+  alt = snap.altitude_m_valid ? (double)snap.altitude_m : NAN;
   /* speed, heading: not yet in HAL snapshot; always NAN */
   speed = NAN;
   heading = NAN;
   hacc = snap.horizontal_accuracy_mm_valid
-             ? (float)snap.horizontal_accuracy_mm / 1000.0f
+             ? (double)snap.horizontal_accuracy_mm / 1000.0
              : NAN;
   vacc = snap.vertical_accuracy_mm_valid
-             ? (float)snap.vertical_accuracy_mm / 1000.0f
+             ? (double)snap.vertical_accuracy_mm / 1000.0
              : NAN;
   base_time = snap.fix_time_unix_valid ? snap.fix_time_unix : 0U;
 

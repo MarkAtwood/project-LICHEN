@@ -44,7 +44,8 @@ static int tests_passed = 0;
 
 /*
  * Test vector: temperature 25.0 Celsius, no base name/time
- * Python: cbor2.dumps([{0: 'temp', 1: 'Cel', 2: 25.0}])  (with float32)
+ * Python: cbor2.dumps([{0: 'temp', 1: 'Cel', 2: 25.0}])  (float64 per
+ * test/vectors/senml_location.json oracle; matches Python/Rust encoders)
  * Base time 0 is omitted (defaults to 0 per RFC 8428 §6.1).
  * CBOR structure:
  *   81        array(1)
@@ -54,13 +55,13 @@ static int tests_passed = 0;
  *   01        label 1 (u = unit)
  *   63 43656c     tstr(3) "Cel"
  *   02        label 2 (v = value)
- *   fa 41c80000   float32(25.0)
+ *   fa 41c80000   float32(25.0) → fb 4039000000000000 float64(25.0)
  */
 static const uint8_t VEC_TEMP_SIMPLE[] = {
 	0x81, 0xa3,
 	0x00, 0x64, 0x74, 0x65, 0x6d, 0x70,
 	0x01, 0x63, 0x43, 0x65, 0x6c,
-	0x02, 0xfa, 0x41, 0xc8, 0x00, 0x00
+	0x02, 0xfb, 0x40, 0x39, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 /*
@@ -385,6 +386,32 @@ static int test_location_valid_coordinates(void)
 
 	ret = senml_encode_location(NULL, 0, -90.0f, -180.0f, NAN, buf, sizeof(buf));
 	ASSERT_EQ(ret > 0, 1, "boundary values (-90, -180) encode successfully");
+
+	return 1;
+}
+
+/*
+ * Oracle: test/vectors/senml_location.json vector "senml-location-minimal"
+ * (Python reference + Rust lichen-senml are byte-identical to this hex).
+ * Pins CBOR float64 (0xfb) value encoding for location records.
+ */
+static int test_location_matches_spec_vector_bytes(void)
+{
+	static const uint8_t expected[] = {
+		0x82, 0xa3, 0x00, 0x63, 0x6c, 0x61, 0x74, 0x01, 0x63, 0x6c,
+		0x61, 0x74, 0x02, 0xfb, 0x40, 0x42, 0xe3, 0x30, 0xdf, 0x9b,
+		0xdc, 0x6a, 0xa3, 0x00, 0x63, 0x6c, 0x6f, 0x6e, 0x01, 0x63,
+		0x6c, 0x6f, 0x6e, 0x02, 0xfb, 0xc0, 0x5e, 0x9a, 0xd7, 0xb6,
+		0x34, 0xda, 0xd3,
+	};
+	uint8_t buf[128];
+	int ret;
+
+	ret = senml_encode_location(NULL, 0, 37.774929, -122.419416, NAN, buf,
+				    sizeof(buf));
+	ASSERT_EQ(ret, (int)sizeof(expected), "vector byte length matches");
+	ASSERT_MEM_EQ(buf, expected, sizeof(expected),
+		      "encode matches senml-location-minimal vector bytes");
 
 	return 1;
 }
@@ -808,6 +835,7 @@ int main(void)
 	RUN_TEST(test_location_rejects_out_of_range_lat);
 	RUN_TEST(test_location_rejects_out_of_range_lon);
 	RUN_TEST(test_location_valid_coordinates);
+	RUN_TEST(test_location_matches_spec_vector_bytes);
 	RUN_TEST(test_null_name_rejected);
 	RUN_TEST(test_add_float_rejects_nan);
 	RUN_TEST(test_add_float_rejects_inf);

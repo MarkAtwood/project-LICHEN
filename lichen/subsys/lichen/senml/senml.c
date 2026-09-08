@@ -94,7 +94,7 @@ int senml_pack_init(struct senml_pack *pack,
 int senml_add_float(struct senml_pack *pack,
 		    const char *name,
 		    const char *unit,
-		    float value)
+		    double value)
 {
 	if (pack == NULL || name == NULL) {
 		return -EINVAL;
@@ -126,7 +126,7 @@ int senml_add_float(struct senml_pack *pack,
 int senml_add_float_t(struct senml_pack *pack,
 		      const char *name,
 		      const char *unit,
-		      float value,
+		      double value,
 		      int32_t time_offset)
 {
 	if (pack == NULL || name == NULL) {
@@ -304,7 +304,7 @@ static int encode_record(zcbor_state_t *state,
 	switch (rec->type) {
 	case SENML_VALUE_FLOAT:
 		if (!zcbor_int32_put(state, SENML_LABEL_V) ||
-		    !zcbor_float32_put(state, rec->value.f)) {
+		    !zcbor_float64_put(state, rec->value.f)) {
 			return -ENOMEM;
 		}
 		break;
@@ -894,7 +894,7 @@ int senml_decode_cbor(const uint8_t *buf, size_t buflen,
 }
 
 int senml_encode_location(const char *base_name, uint64_t base_time,
-			  float lat, float lon, float alt,
+			  double lat, double lon, double alt,
 			  uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
@@ -906,7 +906,7 @@ int senml_encode_location(const char *base_name, uint64_t base_time,
 	}
 
 	/* Validate WGS84 coordinate ranges */
-	if (lat < -90.0f || lat > 90.0f || lon < -180.0f || lon > 180.0f) {
+	if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
 		return -ERANGE;
 	}
 
@@ -936,9 +936,9 @@ int senml_encode_location(const char *base_name, uint64_t base_time,
 }
 
 int senml_encode_location_full(const char *base_name, uint64_t base_time,
-			       float lat, float lon, float alt,
-			       float speed, float heading,
-			       float hacc, float vacc,
+			       double lat, double lon, double alt,
+			       double speed, double heading,
+			       double hacc, double vacc,
 			       uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
@@ -950,7 +950,7 @@ int senml_encode_location_full(const char *base_name, uint64_t base_time,
 	}
 
 	/* Validate WGS84 coordinate ranges */
-	if (lat < -90.0f || lat > 90.0f || lon < -180.0f || lon > 180.0f) {
+	if (lat < -90.0 || lat > 90.0 || lon < -180.0 || lon > 180.0) {
 		return -ERANGE;
 	}
 
@@ -1020,12 +1020,12 @@ int senml_encode_battery(const char *base_name, uint64_t base_time,
 	}
 
 	/* Use "%" for battery percentage (not %RH which is relative humidity) */
-	ret = senml_add_float(&pack, SENML_BATTERY_PCT, SENML_BATTERY_UNIT_PCT, (float)percent);
+	ret = senml_add_float(&pack, SENML_BATTERY_PCT, SENML_BATTERY_UNIT_PCT, (double)percent);
 	if (ret < 0) {
 		return ret;
 	}
 
-	ret = senml_add_float(&pack, SENML_BATTERY_MV, SENML_BATTERY_UNIT_MV, (float)mv);
+	ret = senml_add_float(&pack, SENML_BATTERY_MV, SENML_BATTERY_UNIT_MV, (double)mv);
 	if (ret < 0) {
 		return ret;
 	}
@@ -1039,7 +1039,7 @@ int senml_encode_battery(const char *base_name, uint64_t base_time,
 }
 
 int senml_encode_temperature(const char *base_name, uint64_t base_time,
-			     float temp_c,
+			     double temp_c,
 			     uint8_t *buf, size_t buflen)
 {
 	struct senml_pack pack;
@@ -1070,7 +1070,7 @@ int senml_encode_deaddrop(const char *base_name, uint64_t base_time,
 		return ret;
 	}
 
-	ret = senml_add_float(&pack, SENML_DEADDROP_PENDING, NULL, (float)pending);
+	ret = senml_add_float(&pack, SENML_DEADDROP_PENDING, NULL, (double)pending);
 	if (ret < 0) {
 		return ret;
 	}
