@@ -3,7 +3,7 @@ if(CONFIG_LORA_LICHEN_SIM OR CONFIG_LORA_LICHEN_RENODE OR CONFIG_LORA_LR1110)
 endif()
 add_subdirectory_ifdef(CONFIG_LORA_LOOPBACK lora_loopback)
 
-if (CONFIG_GNSS_AG3335)
+if (CONFIG_GNSS_AG3335 OR CONFIG_GNSS_L76K)
 	add_subdirectory(gnss)
 endif()
 add_subdirectory_ifdef(CONFIG_INPUT_LILYGO_TDECK_KEYBOARD input)
