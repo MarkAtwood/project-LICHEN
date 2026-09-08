@@ -99,6 +99,29 @@ PY
     fi
     READY=$(BEADS_DIR="$BEADS_DIR" bd ready --json 2>/dev/null | jq "length" 2>/dev/null || echo 0)
 
+    # Outcome canary (the week's real lesson): if the fleet closes almost
+    # nothing in 24h, ALARM — components can all look alive while the
+    # worktrees are gone. Marker + bead so it's visible on any host.
+    DAY_CLOSES=$(BEADS_DIR="$BEADS_DIR" bd list --status=closed --json 2>/dev/null | python3 -c "
+import json, sys, datetime
+now = datetime.datetime.now(datetime.timezone.utc)
+n = 0
+for i in json.load(sys.stdin):
+    t = i.get('closed_at') or ''
+    try:
+        c = datetime.datetime.fromisoformat(t.replace('Z','+00:00'))
+        if (now - c).total_seconds() <= 86400: n += 1
+    except Exception: pass
+print(n)" 2>/dev/null || echo 0)
+    echo "   24h closures: $DAY_CLOSES"
+    if [ "${DAY_CLOSES:-0}" -lt 5 ] && [ ! -f "$REPO_ROOT/.fleet-stalled" ]; then
+        date '+%F %T' > "$REPO_ROOT/.fleet-stalled"
+        BEADS_DIR="$BEADS_DIR" bd create --title="[ALARM] Fleet stalled: $DAY_CLOSES closures in 24h" --description="The outcome canary fired: fewer than 5 closures in 24 hours while the fleet should be closing 15-20/h. Components may look alive (windows present, sessions busy) while being unable to work — the 2026-09-02..07 outage looked exactly like this (vanished worktrees). CHECK: worktree dirs exist, driver dispatching, workers actually closing, merge state healthy." -t bug -p 1 --json >/dev/null 2>&1
+        echo "   ALARM: fleet outcome stalled — bead filed"
+    elif [ "${DAY_CLOSES:-0}" -ge 5 ]; then
+        rm -f "$REPO_ROOT/.fleet-stalled"
+    fi
+
     if [ "$READY" -eq 0 ]; then
         echo "   ready queue empty — nothing to dispatch"
         EMPTY_N=$((EMPTY_N + 1))
