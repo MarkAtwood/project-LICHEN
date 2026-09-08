@@ -9,13 +9,15 @@ REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 SESSION="lichen-workers"
 cd "$REPO" || exit 1
 
-ensure_window() {  # $1=index $2=name $3=command — create only if missing
+ensure_window() {  # $1=name $2=command — create only if missing (append at
+    # end; never target indices — they drift as windows die and rebuild)
     if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-        tmux new-session -d -s "$SESSION" -n "$2" "cd $REPO && exec bash"
+        tmux new-session -d -s "$SESSION" -n "$1" "cd $REPO && exec bash"
     fi
-    if ! tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -qx "$2"; then
-        tmux new-window -d -t "$SESSION:$1" -n "$2" "cd $REPO && $3"
-        echo "$(date '+%F %T') watchdog: recreated $2" >> "$REPO/.beads-sync.log"
+    if ! tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -qx "$1"; then
+        tmux new-window -d -t "$SESSION" -n "$1" "cd $REPO && $2"
+        tmux set-window-option -t "$SESSION:$1" automatic-rename off 2>/dev/null
+        echo "$(date '+%F %T') watchdog: recreated $1" >> "$REPO/.beads-sync.log"
     fi
 }
 
@@ -35,9 +37,9 @@ for n in 1 2 3 4 5 6 7; do
 done
 
 # The four controllers (worker windows are the driver's responsibility)
-ensure_window 7 sync  "exec ./scripts/sync-beads-loop.sh 15"
-ensure_window 8 driver "exec ./scripts/fleet-driver.sh 10 0"
-ensure_window 10 janitor "exec ./scripts/merge-janitor.sh"
+ensure_window sync "exec ./scripts/sync-beads-loop.sh 15"
+ensure_window driver "exec ./scripts/fleet-driver.sh 10 0"
+ensure_window janitor "exec ./scripts/merge-janitor.sh"
 
 # sweep-all: only if discovery is still pending (any of the section stems
 # missing) — a completed sweep must NOT be resurrected.
@@ -50,5 +52,5 @@ for s in 09-packets-timing 02a-coordinated-capacity 03-adaptation 06-security \
     [ -f "docs/spec-coverage/$s.md" ] || PENDING=1
 done
 if [ "$PENDING" -eq 1 ] && ! pgrep -f 'Spec Coverage Sweep' >/dev/null 2>&1; then
-    ensure_window 9 sweep-all "exec ./scripts/spec-sweep-all.sh"
+    ensure_window sweep-all "exec ./scripts/spec-sweep-all.sh"
 fi
