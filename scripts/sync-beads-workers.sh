@@ -81,9 +81,15 @@ llm_semantic_merge() {
 
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Do not run git commit or git merge; leave the resolved files for the caller to stage and commit. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1
-    rc=$?
-    echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log
+    # Reconciled merge resolution (main vs beads-worker-3): main intentionally
+    # removed the early `return "$rc"` (fix 6a41f4a64b — it skipped staging and
+    # sent single-file conflicts to manual resolution, bead worker6-1dyx) and
+    # judges from the post-staging index below; worker-3's LICHEN_KIMI_LOG
+    # env-overridable log path is kept as an orthogonal improvement.
+    local log="${LICHEN_KIMI_LOG:-/tmp/lichen-kimi-last.log}"
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Do not run git commit or git merge; leave the resolved files for the caller to stage and commit. Finish with the single word RESOLVED on its own line." >> "$log" 2>&1
+    local rc=$?
+    echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> "$log"
 
     # The session exit code alone is not the verdict: kimi may exit nonzero
     # after a complete resolution (or leave markers after a timeout), so stage
