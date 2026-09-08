@@ -1071,3 +1071,78 @@ class TestSlotClaimRateLimiter:
         )
         assert not ok
         assert reason == ClaimRejectReason.RATE_LIMITED
+
+
+class TestClaimSeqStore:
+    """Tests for the sender-side claim_seq persistence (GCP-6.5, l1qw.20.1)."""
+
+    def test_missing_file_initializes_to_zero(self, tmp_path: Path) -> None:
+        store = slot_claim.ClaimSeqStore(tmp_path / "claim_seq")
+        assert store.next_seq() == 1
+
+    def test_increment_persists_before_return(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+        seq = store.next_seq()
+        assert seq == 1
+        # GCP-6.5 "Before claim" row: persist to NVS, then sign and send —
+        # the value is durable the moment next_seq() returns it.
+        assert path.read_text(encoding="ascii").strip() == str(seq)
+
+    def test_monotonic_across_restart(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        first = slot_claim.ClaimSeqStore(path)
+        assert first.next_seq() == 1
+        assert first.next_seq() == 2
+        rebooted = slot_claim.ClaimSeqStore(path)
+        assert rebooted.next_seq() == 3
+
+    def test_corrupt_file_initializes_to_zero(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        path.write_text("not a number", encoding="ascii")
+        store = slot_claim.ClaimSeqStore(path)
+        # Safe direction: a rewound counter only makes receivers reject the
+        # claims as replays (step 8) until the sender climbs past their
+        # cached high-water.
+        assert store.next_seq() == 1
+
+    def test_stale_temp_files_never_read(self, tmp_path: Path) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+        assert store.next_seq() == 1
+        (tmp_path / ".claim_seq.crashed.tmp").write_text("999", encoding="ascii")
+        reloaded = slot_claim.ClaimSeqStore(path)
+        assert reloaded.next_seq() == 2
+
+    def test_persist_failure_raises_and_state_stays_consistent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "claim_seq"
+        store = slot_claim.ClaimSeqStore(path)
+
+        def broken_replace(src: object, dst: object) -> None:
+            raise OSError("disk gone")
+
+        monkeypatch.setattr(slot_claim.os, "replace", broken_replace)
+        with pytest.raises(OSError):
+            store.next_seq()
+        monkeypatch.undo()
+        # The failed sequence was not consumed: the retry persists and
+        # returns it.
+        assert store.next_seq() == 1
+        assert path.read_text(encoding="ascii").strip() == "1"
+
+    def test_signed_claim_carries_store_sequence(self, tmp_path: Path) -> None:
+        identity = Identity.from_seed(bytes([9]) * 32)
+        store = slot_claim.ClaimSeqStore(tmp_path / "claim_seq")
+        seq = store.next_seq()
+        claim = SlotClaim(
+            gateway_iid=identity.iid.hex(),
+            slots=(0, 1),
+            superframe_id=10,
+            expiry=int(time.time()) + 8,
+            claim_seq=seq,
+        )
+        signed = sign_slot_claim(claim, identity.privkey, identity.pubkey)
+        ok, reason = verify_slot_claim(signed, identity.pubkey)
+        assert ok, reason
