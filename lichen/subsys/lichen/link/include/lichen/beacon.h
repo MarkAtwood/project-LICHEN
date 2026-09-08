@@ -90,7 +90,8 @@ struct lichen_beacon_header {
  * @return LICHEN_BEACON_OK on success; LICHEN_BEACON_TOO_SHORT if the
  *         buffer is short (or data/out is NULL);
  *         LICHEN_BEACON_RESERVED_FLAG_SET if any reserved flag bit
- *         (4-7) is set
+ *         (4-7) is set; LICHEN_BEACON_INVALID_FIELD if num_slots is 0
+ *         (structurally meaningless slot modulus)
  */
 enum lichen_beacon_status
 lichen_beacon_header_parse(const uint8_t *data, size_t len,

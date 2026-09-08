@@ -67,6 +67,8 @@ pub enum ParseError {
     TooShort,
     /// Reserved flag bits (4-7) are set.
     ReservedFlagSet,
+    /// num_slots is zero (structurally meaningless slot modulus).
+    NumSlotsZero,
 }
 
 impl core::fmt::Display for ParseError {
@@ -74,6 +76,7 @@ impl core::fmt::Display for ParseError {
         match self {
             Self::TooShort => write!(f, "buffer too short for TDMA beacon header"),
             Self::ReservedFlagSet => write!(f, "reserved flag bits (4-7) must be zero"),
+            Self::NumSlotsZero => write!(f, "num_slots must be nonzero"),
         }
     }
 }
@@ -87,6 +90,9 @@ impl TdmaBeaconHeader {
         let flags = data[13];
         if flags & flags::RESERVED_MASK != 0 {
             return Err(ParseError::ReservedFlagSet);
+        }
+        if data[4] == 0 {
+            return Err(ParseError::NumSlotsZero);
         }
         Ok(Self {
             epoch: u32::from_be_bytes([data[0], data[1], data[2], data[3]]),
@@ -524,6 +530,13 @@ mod tests {
             TdmaBeaconHeader::parse(&buf),
             Err(ParseError::ReservedFlagSet)
         );
+    }
+
+    #[test]
+    fn test_num_slots_zero_rejected() {
+        let mut buf = [0u8; HEADER_SIZE];
+        buf[4] = 0;
+        assert_eq!(TdmaBeaconHeader::parse(&buf), Err(ParseError::NumSlotsZero));
     }
 
     #[test]
