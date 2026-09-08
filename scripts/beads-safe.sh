@@ -3,11 +3,12 @@
 # agents in the main checkout). Fleet workers use bare bd; everyone else MUST
 # use this wrapper.
 #
-# Why: bd writes land in the shared .beads working tree immediately (any bd
-# list/show sees them), but they are DURABLE only after a checkpoint commit —
-# and the sync loop's merge normalizations rewind uncommitted store state.
-# This wrapper serializes each mutation against the sync lock and commits it
-# before releasing, so nothing can eat it (bead biod, the orchestrator loss).
+# Why: bare bd writes are now DURABLE in the main checkout (the .beads
+# normalization rewind was removed — gated to legacy branches only, bead
+# biod follow-up). This wrapper remains for extra safety: it serializes
+# against the sync lock and checkpoint-commits immediately, which matters
+# for long-running sessions writing many mutations (the store working tree
+# is only as durable as the next checkpoint while uncommitted).
 #
 # Usage: scripts/beads-safe.sh <bd subcommand> [args...]
 #   scripts/beads-safe.sh create --title="..." ...

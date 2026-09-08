@@ -94,9 +94,12 @@ janitor_merge_branch() {
         git -C "$REPO_ROOT" merge --abort >/dev/null 2>&1
         return 1
     fi
-    # Clean merge (rerere replayed everything): normalize .beads like the sync loop, commit.
-    git -C "$REPO_ROOT" rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
-    git -C "$REPO_ROOT" checkout HEAD -- .beads 2>/dev/null || true
+    # Clean merge (rerere replayed everything): normalize .beads ONLY if the
+    # branch carried store content (post-hook branches never do — bead biod).
+    if git -C "$REPO_ROOT" diff --cached --name-only -- .beads rust/crates/oscore | grep -q .; then
+        git -C "$REPO_ROOT" rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
+        git -C "$REPO_ROOT" checkout HEAD -- .beads 2>/dev/null || true
+    fi
     if git -C "$REPO_ROOT" commit --no-edit --quiet; then
         echo "   janitor: $branch merged (rerere replay)"
         rm -f "$STATE_DIR/$branch.count"

@@ -119,13 +119,17 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
     echo "Merging $branch ($ahead commits ahead)..."
 
     if git merge --no-commit --no-ff "$branch" >/dev/null 2>&1; then
-        # Normalize: beads store lives in main only; discard branch-side .beads entries.
-        # rust/crates/oscore was vendored-then-removed (registry dep 0.1.2): worker
-        # branches from before the deletion re-add stale copies — drop them too.
-        git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
-        git checkout HEAD -- .beads 2>/dev/null || true
-        git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
-        git checkout HEAD -- .beads 2>/dev/null || true
+        # Normalize ONLY if the branch actually carried store content — the
+        # pre-commit hook blocks worker-side .beads staging (bead biod), so
+        # post-hook branches never do and this never fires. With it gone,
+        # bare bd writes from any session are never rewound: no special
+        # tooling needed for durable bead mutations.
+        if git diff --cached --name-only -- .beads rust/crates/oscore | grep -q .; then
+            git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
+            git checkout HEAD -- .beads 2>/dev/null || true
+            git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
+            git checkout HEAD -- .beads 2>/dev/null || true
+        fi
         if git commit --no-edit --quiet; then
             echo "  merged (code only)"
         else
@@ -154,7 +158,6 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         else
             echo "  CONFLICT — LLM merge failed, branch kept for manual resolution"
             git merge --abort 2>/dev/null || true
-            git checkout -- .beads 2>/dev/null || true
             conflicted+=("$branch")
         fi
     fi
