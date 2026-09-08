@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-gy32.7.1",
+  "title": "Impl: C/Zephyr fatal error handler with key state dump",
+  "description": "Register k_sys_fatal_error_handler in lichen/subsys/lichen/diag/ that dumps key scalars via LOG_ERR before halt: TX queue depth (tx_queue_count()), replay counter, routing table entry count, modem state (tx_pending atomic), last RX size. Use printk if LOG is unavailable at fault time. Gate behind CONFIG_LICHEN_DIAG_FATAL_DUMP (new Kconfig bool, default y). Verify: build compiles.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:19:48.005675538Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:19:48.005675538Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "diagnosability",
+    "cross-impl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.7.1",
+      "depends_on_id": "project-LICHEN-worker6-gy32.7",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:19:48.126559665Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
