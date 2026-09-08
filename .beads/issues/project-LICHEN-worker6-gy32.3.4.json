@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-gy32.3.4",
+  "title": "Add defmt logfmt conventions to lichen-node",
+  "description": "In lichen-node runtime_receive() and runtime_poll(), add defmt::debug! with logfmt-style format strings: defmt::debug!(\"pkt_id={} event=rx_frame len={}\", pkt_id, len). Use conditional compilation (#[cfg(feature = \"defmt\")]) for embedded, log::debug! for std. Verify: cd rust \u0026\u0026 cargo test -p lichen-node",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:18:58.009984238Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:18:58.009984238Z",
+  "labels": [
+    "rust",
+    "structured-logging",
+    "cross-impl",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.3.4",
+      "depends_on_id": "project-LICHEN-worker6-gy32.3",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:18:58.13275996Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
