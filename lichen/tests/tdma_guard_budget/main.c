@@ -35,13 +35,20 @@ static void test_desync_fsm(void)
 	assert(lichen_desync_on_sfn_wrap(&tdma, false) ==
 	       LICHEN_DESYNC_DESYNCED);
 
+	/* R-02a-084: a signature-valid beacon does not start recovery
+	 * while the wall clock is unsynced (python test_sfn.py
+	 * test_wall_clock_invalid_blocks_desynced_recovery). */
+	assert(lichen_desync_on_beacon(&tdma, true, false) ==
+	       LICHEN_DESYNC_DESYNCED);
+	assert(tdma.desync_consecutive_valid == 0U);
+
 	/* First valid beacon in DESYNCED -> RECOVERING (count 1). */
-	assert(lichen_desync_on_beacon(&tdma, true) ==
+	assert(lichen_desync_on_beacon(&tdma, true, true) ==
 	       LICHEN_DESYNC_RECOVERING);
 	assert(tdma.desync_consecutive_valid == 1U);
 
 	/* Invalid beacon in RECOVERING -> back to DESYNCED, counters reset. */
-	assert(lichen_desync_on_beacon(&tdma, false) ==
+	assert(lichen_desync_on_beacon(&tdma, false, true) ==
 	       LICHEN_DESYNC_DESYNCED);
 	assert(tdma.desync_consecutive_valid == 0U);
 
@@ -50,18 +57,18 @@ static void test_desync_fsm(void)
 	       LICHEN_DESYNC_DESYNCED);
 
 	/* Three consecutive valid beacons recover to SYNCED. */
-	assert(lichen_desync_on_beacon(&tdma, true) ==
+	assert(lichen_desync_on_beacon(&tdma, true, true) ==
 	       LICHEN_DESYNC_RECOVERING);
-	assert(lichen_desync_on_beacon(&tdma, true) ==
+	assert(lichen_desync_on_beacon(&tdma, true, true) ==
 	       LICHEN_DESYNC_RECOVERING);
 	assert(tdma.desync_consecutive_valid == 2U);
-	assert(lichen_desync_on_beacon(&tdma, true) == LICHEN_DESYNC_SYNCED);
+	assert(lichen_desync_on_beacon(&tdma, true, true) == LICHEN_DESYNC_SYNCED);
 	assert(tdma.desync_consecutive_valid == 0U);
 
 	/* NULL guards on every entry point. */
 	assert(lichen_desync_on_sfn_wrap(NULL, false) ==
 	       LICHEN_DESYNC_DESYNCED);
-	assert(lichen_desync_on_beacon(NULL, true) ==
+	assert(lichen_desync_on_beacon(NULL, true, true) ==
 	       LICHEN_DESYNC_DESYNCED);
 	assert(lichen_desync_on_missed_superframe(NULL) ==
 	       LICHEN_DESYNC_DESYNCED);
@@ -81,7 +88,7 @@ static void test_desync_fsm(void)
 	assert(lichen_desync_on_sfn_wrap(&tdma, false) ==
 	       LICHEN_DESYNC_DESYNCED);
 	/* First valid beacon in DESYNCED -> RECOVERING. */
-	assert(lichen_desync_on_beacon(&tdma, true) ==
+	assert(lichen_desync_on_beacon(&tdma, true, true) ==
 	       LICHEN_DESYNC_RECOVERING);
 
 	/* sfn.py:115-116: a valid beacon in RECOVERING resets the missed
@@ -91,7 +98,7 @@ static void test_desync_fsm(void)
 	assert(lichen_desync_on_missed_superframe(&tdma) ==
 	       LICHEN_DESYNC_RECOVERING);
 	assert(tdma.desync_missed_superframes == 1U);
-	assert(lichen_desync_on_beacon(&tdma, true) ==
+	assert(lichen_desync_on_beacon(&tdma, true, true) ==
 	       LICHEN_DESYNC_RECOVERING);
 	assert(tdma.desync_consecutive_valid == 2U);
 	assert(tdma.desync_missed_superframes == 0U);
@@ -128,7 +135,7 @@ static void test_desync_fsm(void)
 		assert(lichen_desync_on_sfn_wrap(&tdma, false) ==
 		       LICHEN_DESYNC_DESYNCED);
 		for (uint8_t i = 0U; i < valid_count; i++) {
-			assert(lichen_desync_on_beacon(&tdma, true) ==
+			assert(lichen_desync_on_beacon(&tdma, true, true) ==
 			       LICHEN_DESYNC_RECOVERING);
 		}
 		assert(tdma.desync_consecutive_valid == valid_count);
@@ -164,7 +171,7 @@ static void test_version_change_sfn_reset(void)
 	 * observably non-zero before the version change. */
 	assert(lichen_desync_on_sfn_wrap(&tdma, false) ==
 	       LICHEN_DESYNC_DESYNCED);
-	assert(lichen_desync_on_beacon(&tdma, true) ==
+	assert(lichen_desync_on_beacon(&tdma, true, true) ==
 	       LICHEN_DESYNC_RECOVERING);
 	assert(tdma.desync_consecutive_valid == 1U);
 	/* Make desync_missed_superframes observably non-zero too. */

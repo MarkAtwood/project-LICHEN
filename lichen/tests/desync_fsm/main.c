@@ -183,9 +183,9 @@ static void case_sfn_wrap(const char *obj, const char *end)
 
 	memset(&link_ctx, 0, sizeof(link_ctx));
 	CHECK(lichen_tdma_init(&tdma, &link_ctx) == 0, "sfn_wrap: tdma init");
-	lichen_desync_on_beacon(&tdma, true);
-	lichen_desync_on_beacon(&tdma, true);
-	lichen_desync_on_beacon(&tdma, true);
+	lichen_desync_on_beacon(&tdma, true, true);
+	lichen_desync_on_beacon(&tdma, true, true);
+	lichen_desync_on_beacon(&tdma, true, true);
 	CHECK(lichen_desync_on_sfn_wrap(&tdma, false) ==
 		      LICHEN_DESYNC_DESYNCED,
 	      "sfn_wrap: wrap with invalid provider -> DESYNCED");
@@ -193,7 +193,7 @@ static void case_sfn_wrap(const char *obj, const char *end)
 	/* ...and the first valid beacon afterwards re-enters RECOVERING;
 	 * bounded recovery timeout drops back to DESYNCED after 3 missed
 	 * superframes (14.7, LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES). */
-	CHECK(lichen_desync_on_beacon(&tdma, true) ==
+	CHECK(lichen_desync_on_beacon(&tdma, true, true) ==
 		      LICHEN_DESYNC_RECOVERING,
 	      "sfn_wrap: recovery begins after wrap desync");
 	lichen_desync_on_missed_superframe(&tdma);
@@ -289,7 +289,7 @@ static void case_recovery_revalidate(const char *obj, const char *end)
 	CHECK(lichen_desync_on_sfn_wrap(&tdma, false) ==
 		      LICHEN_DESYNC_DESYNCED,
 	      "recovery: desynced before revalidation");
-	CHECK(lichen_desync_on_beacon(&tdma, true) ==
+	CHECK(lichen_desync_on_beacon(&tdma, true, true) ==
 		      LICHEN_DESYNC_RECOVERING,
 	      "recovery: first valid beacon re-enters RECOVERING");
 	CHECK(tdma.desync_consecutive_valid == 1U,
@@ -351,7 +351,7 @@ static void case_synced_missed_beacons(const char *obj, const char *end)
 	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
 		      LICHEN_DESYNC_SYNCED,
 	      "interleaved: 1st miss stays SYNCED");
-	CHECK(lichen_desync_on_beacon(&tdma, true) == LICHEN_DESYNC_SYNCED,
+	CHECK(lichen_desync_on_beacon(&tdma, true, true) == LICHEN_DESYNC_SYNCED,
 	      "interleaved: valid beacon stays SYNCED");
 	CHECK(tdma.desync_missed_superframes == 0U,
 	      "interleaved: valid beacon cleared the streak");
@@ -363,6 +363,33 @@ static void case_synced_missed_beacons(const char *obj, const char *end)
 	      "interleaved: 2nd consecutive miss stays SYNCED");
 	CHECK(tdma.desync_state == LICHEN_DESYNC_SYNCED,
 	      "interleaved: miss,valid,miss,miss does NOT desync");
+}
+
+/* R-02a-084 (spec/02a): the node MUST NOT leave DESYNCED while the wall
+ * clock is unsynced — a signature-valid beacon earns no recovery credit
+ * until the clock is valid. Mirrors python tests/timing/test_sfn.py
+ * test_wall_clock_invalid_blocks_desynced_recovery (sfn.py:114-119) and
+ * rust desync.rs:149-153. */
+static void case_wall_clock_gate(void)
+{
+	struct lichen_tdma_ctx tdma;
+	struct lichen_link_ctx link_ctx;
+
+	memset(&link_ctx, 0, sizeof(link_ctx));
+	CHECK(lichen_tdma_init(&tdma, &link_ctx) == 0, "clk_gate: tdma init");
+	CHECK(lichen_desync_on_sfn_wrap(&tdma, false) ==
+		      LICHEN_DESYNC_DESYNCED,
+	      "clk_gate: desynced before gate");
+	CHECK(lichen_desync_on_beacon(&tdma, true, false) ==
+		      LICHEN_DESYNC_DESYNCED,
+	      "clk_gate: valid beacon with unsynced clock stays DESYNCED");
+	CHECK(tdma.desync_consecutive_valid == 0U,
+	      "clk_gate: no recovery credit while clock unsynced");
+	CHECK(lichen_desync_on_beacon(&tdma, true, true) ==
+		      LICHEN_DESYNC_RECOVERING,
+	      "clk_gate: valid beacon with valid clock recovers");
+	CHECK(tdma.desync_consecutive_valid == 1U,
+	      "clk_gate: recovery counter started");
 }
 
 /* The corpus is a flat array of cases, each with a top-level "name"
@@ -418,6 +445,7 @@ int main(int argc, char **argv)
 	if (obj != NULL) {
 		case_synced_missed_beacons(obj, end);
 	}
+	case_wall_clock_gate();
 	/* Corpus case count pin (bead qmkt): must match the Rust
 	 * (ccp16_desync_vectors.rs) and python (EXPECTED_COUNTS) pins so
 	 * a new vector case cannot silently skip the C consumer. */
