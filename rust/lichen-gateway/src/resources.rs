@@ -1028,6 +1028,9 @@ impl CoapResponse {
     }
 
     /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict, spec/08:226-236).
+    // ponytail: content format fixed to CBOR — the sole call site (slot-conflict
+    // rejection) is CBOR; add a content_format parameter if a non-CBOR 4.09
+    // ever appears (beads-worker-4 carried that generality, unused so far).
     pub fn conflict(payload: Vec<u8>) -> Self {
         Self {
             code: 0x93, // 4.09 Conflict
