@@ -1130,11 +1130,21 @@ pub struct GatewayCoordinator {
     pub channel_map: ChannelMap,
     /// Peer slot claims (for conflict detection).
     peer_claims: Vec<slot::VerifiedSlotClaim>,
+    /// This gateway's own accepted COSE_Sign1 claim envelope, echoed as the
+    /// 4.09 Conflict payload per GCP-6.5 step 11 (C `claim_store_cose`
+    /// parity). RAM-only like the C coordination table; the claim sender
+    /// records it whenever it (re)claims slots.
+    own_claim_cose: Option<Vec<u8>>,
     slot_verifier: slot::SlotClaimVerifier,
     slot_rate_limiter: slot::SlotClaimRateLimiter,
     slots_per_superframe: u32,
     replay_persistence: Option<SlotReplayPersistence>,
 }
+
+/// Bound mirroring C `LICHEN_SLOT_CLAIM_COSE_MAX`
+/// (lichen/subsys/lichen/coap/include/lichen/coap_slot_coord.h): an echoable
+/// COSE_Sign1 claim envelope never exceeds 255 bytes.
+const OWN_CLAIM_COSE_MAX: usize = 255;
 
 #[derive(Debug)]
 struct SlotReplayPersistence {
@@ -1717,6 +1727,7 @@ impl GatewayCoordinator {
             channel_map: ChannelMap { channels },
             capability_table: crate::capability::CapabilityTable::new(),
             peer_claims: Vec::new(),
+            own_claim_cose: None,
             slot_verifier: verifier,
             slot_rate_limiter: slot::SlotClaimRateLimiter::new(),
             slots_per_superframe,
@@ -1726,6 +1737,31 @@ impl GatewayCoordinator {
 
     pub fn slot_replay_generation(&self) -> u64 {
         self.slot_verifier.generation()
+    }
+
+    /// Record this gateway's own accepted COSE_Sign1 claim envelope for
+    /// echo in 4.09 Conflict payloads (GCP-6.5 step 11).
+    ///
+    /// C `claim_store_cose` parity (coap_slot_coord.c): the coordination
+    /// table keeps the accepted envelope per gateway entry, RAM-only, and
+    /// the conflict path echoes the winner's bytes verbatim. The claim
+    /// sender calls this whenever it (re)claims slots; the envelope is
+    /// retained until replaced or the process restarts. Mirroring the C
+    /// store-from-verified-parts invariant, the envelope must decode as a
+    /// well-formed COSE_Sign1 claim whose kid binds THIS gateway's IID —
+    /// the echo is sent to a peer, so unverified bytes are never echoed.
+    pub fn record_own_claim_envelope(&mut self, envelope: &[u8]) -> Result<(), ResourceError> {
+        if envelope.len() > OWN_CLAIM_COSE_MAX {
+            return Err(ResourceError::InvalidCbor);
+        }
+        let claim = slot::RawSlotClaim::from_cose(envelope, self.slots_per_superframe)
+            .map_err(|_| ResourceError::InvalidCbor)?;
+        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        if *claim.gateway_iid() != own_iid {
+            return Err(ResourceError::InvalidFieldType("gateway_iid"));
+        }
+        self.own_claim_cose = Some(envelope.to_vec());
+        Ok(())
     }
 
     /// Handle POST /.well-known/lichen-gw/capability-announce (spec 8.12):
@@ -1954,7 +1990,16 @@ impl GatewayCoordinator {
                 }
                 // We win, reject their claim. GCP-6.5 step 11
                 // (spec/08:226-236): an unresolved slot conflict responds
-                // 4.09 Conflict, not 2.05 Content.
+                // 4.09 Conflict carrying the WINNING gateway's claim as
+                // payload — the C peer (coap_slot_coord.c conflict arm)
+                // echoes the winner's stored COSE_Sign1 bytes with no
+                // Content-Format option, so the same shape goes out here
+                // (content_format 0 = no option). The legacy rejection map
+                // remains only as the transitional fallback until the claim
+                // sender records envelopes via record_own_claim_envelope.
+                if let Some(own_cose) = self.own_claim_cose.clone() {
+                    return CoapResponse::conflict(own_cose, 0);
+                }
                 let reject = Value::Map(vec![
                     (
                         Value::Text("status".to_string()),
@@ -3024,6 +3069,70 @@ mod tests {
 
         fs::remove_file(state_path).unwrap();
         fs::remove_file(floor_path).unwrap();
+    }
+
+    #[test]
+    fn conflict_response_echoes_own_recorded_envelope() {
+        // GCP-6.5 step 11: the 4.09 payload is the winning gateway's claim
+        // — byte-for-byte the envelope recorded via
+        // record_own_claim_envelope (C claim_store_cose parity: the
+        // winner's stored COSE_Sign1 with no Content-Format option).
+        let (a_priv, a_pub) = derive_keypair(&Seed::new([0x77; 32]));
+        let (b_priv, b_pub) = derive_keypair(&Seed::new([0x41; 32]));
+        let a_pubkey = *a_pub.as_bytes();
+        let b_pubkey = *b_pub.as_bytes();
+        let a_iid = crate::trust::iid_from_pubkey(&a_pubkey);
+        let b_iid = crate::trust::iid_from_pubkey(&b_pubkey);
+        // Lowest IID wins the conflict arm; assign roles deterministically
+        // from the derived (hash) IIDs rather than assuming an ordering.
+        let (own_priv, own_pub, own_iid, peer_pubkey, peer_seed) =
+            if slot::compare_iids(&a_iid, &b_iid) == std::cmp::Ordering::Less {
+                (a_priv, a_pub, a_iid, b_pubkey, [0x41; 32])
+            } else {
+                (b_priv, b_pub, b_iid, a_pubkey, [0x77; 32])
+            };
+        let mut address = [0u8; 16];
+        address[8..].copy_from_slice(&own_iid);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Contiguous,
+            gateway_count: 2,
+            ordinal: 0,
+            start_slot: Some(0),
+            slot_count: Some(30),
+            owned: None,
+        };
+        let mut own_claim = SlotClaim::new(own_iid, vec![0, 1, 2], 4, 0).with_federation(2, 0);
+        own_claim.timestamp = Some(unix_now() + 100);
+        let envelope = own_claim.encode_cose(&own_priv, &own_pub).unwrap();
+        coordinator.record_own_claim_envelope(&envelope).unwrap();
+
+        let (conflict, conflict_pubkey) = signed_slot_claim(peer_seed, vec![5], 4, 0);
+        assert_eq!(conflict_pubkey, peer_pubkey);
+        let response = coordinator.handle_post_slots(&conflict, true, Some(&peer_pubkey), 4);
+        assert_eq!(response.code, 0x89); // 4.09 Conflict
+        assert_eq!(response.content_format, 0); // C parity: no Content-Format option
+        assert_eq!(response.payload.as_slice(), envelope.as_slice());
+    }
+
+    #[test]
+    fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
+        let mut address = [0u8; 16];
+        address[8..].fill(0x02);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        // Well-formed envelope whose kid is not this gateway's IID: never
+        // echoed (the echo goes to a peer, so unbound bytes are refused).
+        let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
+        assert!(matches!(
+            coordinator.record_own_claim_envelope(&foreign),
+            Err(ResourceError::InvalidFieldType("gateway_iid"))
+        ));
+        // Oversize never echoes (C LICHEN_SLOT_CLAIM_COSE_MAX = 255).
+        assert!(matches!(
+            coordinator.record_own_claim_envelope(&vec![0xa1; 256]),
+            Err(ResourceError::InvalidCbor)
+        ));
+        assert!(coordinator.own_claim_cose.is_none());
     }
 
     #[test]
