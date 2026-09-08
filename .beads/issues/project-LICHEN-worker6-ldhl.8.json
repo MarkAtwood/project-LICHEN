@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ldhl.8",
+  "title": "Custody handshake idempotency (dedup retransmissions)",
+  "description": "If a CoAP CON retransmission arrives for a message already in custody (matched by message id), respond 2.01 without storing a duplicate. Spec: 05-routing.md §9.8.1 Idempotency. All three impls. Depends on: custody store (ldhl.3), custody resource handler (ldhl.5).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:54:06.709749244Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:54:06.709749244Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ldhl.8",
+      "depends_on_id": "project-LICHEN-worker6-ldhl",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:54:06.870374224Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
