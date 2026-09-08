@@ -1941,6 +1941,10 @@ impl GatewayCoordinator {
             return CoapResponse::unauthorized();
         };
 
+        if payload.len() > OWN_CLAIM_COSE_MAX {
+            return CoapResponse::empty_success();
+        }
+
         // Spec GCP-6.5: the claim arrives as a COSE_Sign1 envelope (payload
         // integer keys 1-7, all required — from_cose enforces). Malformed
         // envelopes are silently discarded (GCP-6.3): an indistinguishable
@@ -3186,6 +3190,22 @@ mod tests {
             Err(ResourceError::InvalidCbor)
         ));
         assert!(coordinator.own_claim_cose.is_none());
+    }
+
+    #[test]
+    fn post_slots_silently_discards_oversize_peer_claim() {
+        let mut address = [0u8; 16];
+        address[8..].fill(0x02);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let peer_pubkey = [0x43; 32];
+        let response = coordinator.handle_post_slots(
+            &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],
+            true,
+            Some(&peer_pubkey),
+            4,
+        );
+        assert_eq!(response.code, 0x44);
+        assert!(response.payload.is_empty());
     }
 
     #[test]
