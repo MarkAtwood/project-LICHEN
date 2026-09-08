@@ -17,7 +17,6 @@ pub const DTN_FLAG_S: u8 = 0x80;
 /// Option length for the DTN option body (flags + 4-byte expiry).
 const DTN_OPTION_LEN: usize = 5;
 const OPT_PAD1: u8 = 0x00;
-const OPT_PADN: u8 = 0x01;
 const OPT_DTN: u8 = 0x03;
 
 /// One parsed DTN intent option.
