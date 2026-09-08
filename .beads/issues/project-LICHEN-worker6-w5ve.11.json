@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-w5ve.11",
+  "title": "SOS long-press from any screen (e-ink)",
+  "description": "Long-press SELECT button triggers SOS from any screen on e-ink devices. Confirmation screen before sending. Uses SOS/emergency messaging (12-apps.md). Priority P0 transmission. Spec: 11-lci.md §17.8.7 e-ink specifics. C/Zephyr firmware.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:40:12.180009941Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:40:12.180009941Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w5ve.11",
+      "depends_on_id": "project-LICHEN-worker6-w5ve",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:40:12.419370352Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
