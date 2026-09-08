@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-hp2i.5",
+  "title": "Synchronized cross-mesh log correlation",
+  "description": "Include ts (unix_timestamp) field in all LCI diagnostic event payloads: /status/node, /status/queues, /status/neighbors, /status/routes, and any future diagnostic resources. Because all nodes share GNSS time, events from different nodes and meshes are directly comparable without NTP correction. Enables cross-mesh timeline reconstruction, custody chain debugging, and congestion analysis. Spec: 11-lci.md §17.2. All three impls.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:01:36.726550005Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:01:36.726550005Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-hp2i.5",
+      "depends_on_id": "project-LICHEN-worker6-hp2i",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:01:36.829923012Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
