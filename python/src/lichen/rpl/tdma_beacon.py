@@ -95,8 +95,9 @@ def _require_u32(value: int, name: str) -> int:
 def parse_header(data: bytes) -> TdmaBeaconHeader:
     """Parse the 24-byte beacon header.
 
-    Raises BeaconFormatError when the buffer is too short or a reserved
-    flag bit (4-7) is set.
+    Raises BeaconFormatError when the buffer is too short, a reserved
+    flag bit (4-7) is set, or num_slots is zero (structurally
+    meaningless slot modulus).
     """
     if len(data) < HEADER_SIZE:
         raise BeaconFormatError("beacon header too short")

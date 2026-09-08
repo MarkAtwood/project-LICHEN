@@ -68,7 +68,7 @@ enum lichen_beacon_status {
 	LICHEN_BEACON_OK = 0,		  /**< success */
 	LICHEN_BEACON_TOO_SHORT = -1,	  /**< buffer too short */
 	LICHEN_BEACON_RESERVED_FLAG_SET = -2, /**< reserved flag bits set */
-	LICHEN_BEACON_INVALID_FIELD = -3, /**< field out of wire range */
+	LICHEN_BEACON_INVALID_FIELD = -3, /**< structurally invalid field (num_slots == 0) */
 };
 
 /** Parsed TDMA beacon header fields. */
@@ -103,7 +103,8 @@ lichen_beacon_header_parse(const uint8_t *data, size_t len,
  *         output buffer is short (or header/out is NULL);
  *         LICHEN_BEACON_RESERVED_FLAG_SET if reserved flag bits are set.
  *         Member widths match the wire widths exactly, so no field can
- *         be out of range; LICHEN_BEACON_INVALID_FIELD is kept for API
+ *         be out of range. LICHEN_BEACON_INVALID_FIELD is reserved for
+ *         parse (num_slots == 0) and kept on serialize for API
  *         stability with the Python/Rust codecs.
  */
 enum lichen_beacon_status
