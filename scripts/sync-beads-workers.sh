@@ -102,6 +102,10 @@ llm_semantic_merge() {
     # Session output goes to a private file: the sentinel check must not be
     # satisfiable by a bare RESOLVED appended to the shared last.log by a
     # concurrent janitor session or a sibling worker's copy of this script.
+    # (Resolution note: beads-worker-6's early-return-on-failure restructure
+    # is retained below; its shared-log append form is not — the RESOLVED
+    # sentinel check further down greps "$session_log", so the private file
+    # is load-bearing, and the shared log still gets a copy via cat >>.)
     session_log=$(mktemp) || { echo "  mktemp failed — aborting merge"; return 1; }
     timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." > "$session_log" 2>&1; rc=$?
     cat "$session_log" >> "$log" 2>/dev/null || true
