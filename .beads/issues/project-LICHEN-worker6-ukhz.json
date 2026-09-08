@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-ukhz",
+  "title": "Rust: bare .unwrap() in test code needs .expect()",
+  "description": "50+ instances of bare .unwrap() in test code (lichen-senml, lichen-ipv6, lichen-client tests). When these panic, the AI sees 'called unwrap() on Err(...)' with a line number but no semantic context about what was being attempted. Fix: replace with .expect(\"description of what should have succeeded\") so test failures are self-documenting. Prioritize shared_vectors test files since those are the cross-impl conformance tests.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T18:48:04.10813337Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T18:48:04.10813337Z",
+  "labels": [
+    "rust",
+    "testing",
+    "diagnosability"
+  ]
+}
