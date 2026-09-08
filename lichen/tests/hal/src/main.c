@@ -98,6 +98,19 @@ static void loopback_async_rx_cb(const struct device *dev, uint8_t *data,
 	atomic_inc(&loopback_async_ctx.deliveries);
 }
 
+/* Distinct symbol so a conflicting-receiver arm can be pinned (-EBUSY). */
+static void loopback_async_rx_cb_other(const struct device *dev, uint8_t *data,
+				       uint16_t size, int16_t rssi, int8_t snr,
+				       void *user_data)
+{
+	ARG_UNUSED(dev);
+	ARG_UNUSED(data);
+	ARG_UNUSED(size);
+	ARG_UNUSED(rssi);
+	ARG_UNUSED(snr);
+	ARG_UNUSED(user_data);
+}
+
 ZTEST(hal, test_loopback_recv_async_delivers_frames)
 {
 	const struct device *dev = NULL;
@@ -115,9 +128,17 @@ ZTEST(hal, test_loopback_recv_async_delivers_frames)
 	rc = lora_recv_async(dev, loopback_async_rx_cb, NULL);
 	zassert_equal(rc, 0, "arming async RX failed: %d", rc);
 
-	/* Double-arm conflicts with the pending reception. */
+	/* Re-arming the SAME callback is an idempotent no-op (bead
+	 * project-LICHEN-worker6-m4yk): this driver's registration persists
+	 * across deliveries, so the L2 path's mandatory post-delivery re-arm
+	 * must succeed, not conflict. */
 	rc = lora_recv_async(dev, loopback_async_rx_cb, NULL);
-	zassert_equal(rc, -EBUSY, "second arm must be -EBUSY, got %d", rc);
+	zassert_equal(rc, 0, "same-cb re-arm must be idempotent, got %d", rc);
+
+	/* Arming a DIFFERENT callback while one is registered still conflicts
+	 * with the pending reception: one receiver at a time. */
+	rc = lora_recv_async(dev, loopback_async_rx_cb_other, NULL);
+	zassert_equal(rc, -EBUSY, "second receiver must be -EBUSY, got %d", rc);
 
 	rc = lora_send(dev, payload, sizeof(payload));
 	zassert_equal(rc, 0, "loopback send failed: %d", rc);

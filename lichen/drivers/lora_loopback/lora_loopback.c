@@ -273,6 +273,24 @@ static int lora_loopback_recv_async(const struct device *dev,
 
 	k_spinlock_key_t key = k_spin_lock(&data->rx_lock);
 
+	if (data->recv_cb == cb) {
+		/* Idempotent re-arm (bead project-LICHEN-worker6-m4yk): this
+		 * driver's registration is persistent across deliveries, so
+		 * the L2 RX path's mandatory post-delivery re-arm must be a
+		 * no-op success, not a conflict — otherwise every delivery
+		 * starts a -EBUSY retry storm that aborts RX after 3 strikes
+		 * and deafens the module. Arming a DIFFERENT callback while
+		 * one is registered still conflicts: one receiver at a time
+		 * (upstream sx12xx semantics). */
+#if KERNEL_VERSION_NUMBER >= 0x040000
+		data->recv_user_data = user_data;
+#endif
+		k_spin_unlock(&data->rx_lock, key);
+		/* Deliver anything already queued (sent before the re-arm). */
+		k_work_submit(&data->rx_work);
+		return 0;
+	}
+
 	if (data->recv_cb != NULL) {
 		k_spin_unlock(&data->rx_lock, key);
 		return -EBUSY;
