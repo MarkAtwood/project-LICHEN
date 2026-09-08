@@ -14,6 +14,7 @@
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/net_pkt.h>
+#include <zephyr/net/net_pkt_filter.h>
 
 #if defined(CONFIG_LICHEN_TUNNEL_AUTH)
 #include <lichen/gateway/tunnel_auth.h>
@@ -69,6 +70,14 @@ int lichen_forwarding_init(void)
 				     NET_EVENT_IPV6_CMD_ROUTE_DEL);
 	net_mgmt_add_event_callback(&fwd_mgmt_cb);
 
+#if defined(CONFIG_NET_PKT_FILTER)
+	/* Live egress call site: every queued TX runs the forwarding gate.
+	 * The terminating accept rule is required — when no rule matches,
+	 * npf evaluation drops the packet. */
+	npf_append_send_rule(&lichen_forwarding_egress_drop);
+	npf_append_send_rule(&npf_default_ok);
+#endif
+
 	LOG_INF("IPv6 forwarding active: mesh MTU=%u", LICHEN_MESH_MTU);
 
 	s_initialized = true;
@@ -114,17 +123,46 @@ static void tunnel_stats_denied(void)
 	k_mutex_unlock(&s_stats_mutex);
 }
 
-void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
+#if defined(CONFIG_NET_PKT_FILTER)
+/*
+ * NPF send-rule test: true (match) when the forwarding gate denied the
+ * packet, so the rule result NET_DROP drops it; false lets evaluation fall
+ * through to the terminating npf_default_ok rule.
+ *
+ * net_pkt_orig_iface() is the ingress interface for forwarded packets
+ * (set by net_recv_data()/ipv6_route_packet()) and NULL for packets the
+ * gateway originates itself; lichen_forwarding_handle() allows both.
+ */
+static bool lichen_forwarding_egress_test(struct npf_test *test,
+					  struct net_pkt *pkt)
+{
+	ARG_UNUSED(test);
+
+	return !lichen_forwarding_handle(pkt, net_pkt_orig_iface(pkt),
+					 net_pkt_iface(pkt));
+}
+
+static struct {
+	struct npf_test test;
+} lichen_forwarding_egress = {
+	.test.fn = lichen_forwarding_egress_test,
+};
+
+static NPF_RULE(lichen_forwarding_egress_drop, NET_DROP,
+		lichen_forwarding_egress);
+#endif /* CONFIG_NET_PKT_FILTER */
+
+bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			      struct net_if *out_iface)
 {
 	uint32_t pkt_len;
 
 	if (pkt == NULL || in_iface == NULL || out_iface == NULL) {
-		return;
+		return true;
 	}
 
 	if (in_iface == out_iface) {
-		return;
+		return true;
 	}
 
 #if defined(CONFIG_LICHEN_TUNNEL_AUTH)
@@ -135,7 +173,7 @@ void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 		if (s_mesh_iface == NULL) {
 			tunnel_stats_denied();
 			LOG_WRN("Egress dropped: mesh iface unidentified");
-			return;
+			return false;
 		}
 		if (in_iface == s_mesh_iface) {
 			uint8_t ip6[40];
@@ -149,7 +187,7 @@ void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			if (rread != 0) {
 				tunnel_stats_denied();
 				LOG_WRN("Egress dropped: unreadable IPv6 header");
-				return;
+				return false;
 			}
 			/* Single-hop route: this gateway is the egress.
 			 * ponytail: multi-hop SRH route extraction is not
@@ -166,7 +204,7 @@ void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 				tunnel_stats_denied();
 				LOG_WRN("Egress dropped: tunnel denial %d",
 					(int)r.denial);
-				return;
+				return false;
 			}
 		}
 	}
@@ -183,6 +221,8 @@ void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 	}
 
 	k_mutex_unlock(&s_stats_mutex);
+
+	return true;
 }
 
 int lichen_forwarding_stats_get(struct lichen_forwarding_stats *stats)
