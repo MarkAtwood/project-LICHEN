@@ -216,6 +216,20 @@ Optimizations for this mode:
 
 ---
 
+## "Silent Observer" Passive Node Detection
+
+**Promoted to real feature — see bead epic for implementation.**
+
+Nodes that participate in routing but never originate application traffic,
+have TOFU-only identity, and are unvouched by any peer are tagged "Silent
+observer" in the UI. The implication is obvious; the firmware doesn't say
+it. The community will coin their own term.
+
+Detection: `app_packets_seen == 0 && vouch_count == 0 && age > 1 hour`.
+Three per-neighbor counters, zero protocol changes, pure local heuristic.
+
+---
+
 ## Identity Verification via Stripe / ID.me / CLEAR
 
 LICHEN CA attestation doesn't require a physical passport reader booth.
