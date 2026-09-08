@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-bt3w.7",
+  "title": "Test: C silent observer detection on native_sim",
+  "description": "Write native_sim ztest: simulate DIO-only neighbor for 3601 seconds. Verify flagged. Send app packet. Verify unflagged. Verify on heft/native_sim.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:43:57.796775743Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:43:57.796775743Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "security",
+    "testing",
+    "cross-impl",
+    "feature",
+    "ui"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bt3w.7",
+      "depends_on_id": "project-LICHEN-worker6-bt3w",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:43:57.972020672Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
