@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-tsn3.2.5",
+  "title": "Test: Python uplink holdoff buffers and drains correctly",
+  "description": "Write test matching Rust sibling: buffer during outage, drain on recovery, preemption on overflow, deadline expiry. Verify: cd python \u0026\u0026 python -m pytest tests/test_uplink_holdoff.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:41:46.124972345Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:41:46.124972345Z",
+  "labels": [
+    "python",
+    "buffering",
+    "gateway",
+    "testing",
+    "cross-impl",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tsn3.2.5",
+      "depends_on_id": "project-LICHEN-worker6-tsn3.2",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:41:46.276283816Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
