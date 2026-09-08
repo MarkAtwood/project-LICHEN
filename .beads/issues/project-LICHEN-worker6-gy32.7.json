@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-gy32.7",
+  "title": "C/Zephyr: state dump on assertion/panic",
+  "description": "When a C node hits __ASSERT or fatal error, only file:line is logged — no surrounding state. Fix: register a fatal error handler that dumps key scalars before halt: TX queue depth, replay counter, routing table size, TDMA slot, modem state, last RX packet size/sender. Use Zephyr coredump subsystem (CONFIG_DEBUG_COREDUMP) for full post-mortem on native_sim, compact LOG_ERR summary for embedded. Even 5-6 key values make most assertion failures diagnosable from logs alone.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T18:51:03.505821462Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T18:51:03.505821462Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "diagnosability",
+    "cross-impl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.7",
+      "depends_on_id": "project-LICHEN-worker6-gy32",
+      "type": "parent-child",
+      "created_at": "2026-09-08T18:51:03.664832791Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
