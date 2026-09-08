@@ -16,6 +16,7 @@ set -e
 export BEADS_ALLOW_STORE_COMMIT=1
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
+GIT_DIR=$(git rev-parse --absolute-git-dir)
 if [ -d /Volumes/Attic ]; then
     WORKTREE_BASE="${LICHEN_WORKTREE_BASE:-/Volumes/Attic/Desktop/Projects/lichen-workers}"
 else
@@ -90,6 +91,30 @@ llm_semantic_merge() {
 
 conflicted=()
 
+# True when the in-flight merge put store entries in the INDEX (staged
+# M/A/D/R or unmerged U under .beads) — legacy worker branches carried .beads
+# commits; modern ones never do. Worktree-only changes (concurrent bd writes
+# landing during the merge) have a space in the index column and never match.
+merge_staged_store_entries() {
+    git status --porcelain -- .beads | grep -qE '^[MADRU]'
+}
+
+# Snapshot the store worktree (committed + uncommitted) into .git before any
+# operation that can rewind it (merge abort, normalization checkout). A no-op
+# when the store is clean. Snapshots are never deleted automatically; recover
+# with: tar -xf <file> -C <repo-root>. Without this, concurrent bd writes made
+# during an up-to-900s kimi session are destroyed by the rewind (bead bd8h,
+# 0i1p loss window).
+snapshot_store() {
+    git status --porcelain .beads/ | grep -q . || return 0
+    local dir="$GIT_DIR/store-snapshots"
+    mkdir -p "$dir"
+    local f
+    f="$dir/$(date +%Y%m%dT%H%M%S)-$1.tar"
+    tar -C "$REPO_ROOT" -cf "$f" .beads 2>/dev/null || return 0
+    echo "  store snapshot (concurrent bd writes preserved): $f"
+}
+
 # Checkpoint pending bd writes (closes, comments, new beads) BEFORE any
 # merge: the merge normalization below runs `git checkout HEAD -- .beads`,
 # which would silently discard store writes still uncommitted in this
@@ -125,10 +150,26 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         # Normalize: beads store lives in main only; discard branch-side .beads entries.
         # rust/crates/oscore was vendored-then-removed (registry dep 0.1.2): worker
         # branches from before the deletion re-add stale copies — drop them too.
-        git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
-        git checkout HEAD -- .beads 2>/dev/null || true
-        git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
-        git checkout HEAD -- .beads 2>/dev/null || true
+        # Only when the merge actually staged store entries: a blind rewind here
+        # destroys concurrent bd writes made during the merge (0i1p).
+        snapshot_store "$branch-clean"
+        if merge_staged_store_entries; then
+            git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
+            git checkout HEAD -- .beads 2>/dev/null || true
+            git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
+            git checkout HEAD -- .beads 2>/dev/null || true
+            # Merge-ADDED store/vendor files: the pair above unstages them but
+            # leaves them as untracked worktree files (git rm skips untracked,
+            # checkout HEAD only restores HEAD paths), and the final checkpoint
+            # below would re-commit them. Delete only paths that exist on the
+            # merged branch — concurrent bd writes are never branch-side.
+            git ls-tree -r --name-only "$branch" -- .beads rust/crates/oscore 2>/dev/null |
+                while IFS= read -r f; do
+                    if [ -f "$f" ] && ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+                        rm -f "$f"
+                    fi
+                done
+        fi
         if git commit --no-edit --quiet; then
             echo "  merged (code only)"
         else
@@ -142,22 +183,31 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         # measured), pure wasted spend.
         CONFLICT_N=$(git diff --name-only --diff-filter=U | wc -l)
         if [ "$CONFLICT_N" -le 1 ] && llm_semantic_merge "$branch"; then
+            store_staged=0; merge_staged_store_entries && store_staged=1
             if git diff --name-only --diff-filter=U | grep -q .; then
                 echo "  semantic merge left unresolved files — aborting"
+                snapshot_store "$branch-unresolved"
                 git merge --abort 2>/dev/null || true
-                git checkout -- .beads 2>/dev/null || true
+                if [ "$store_staged" = 1 ]; then
+                    git checkout HEAD -- .beads 2>/dev/null || true
+                fi
                 conflicted+=("$branch")
             elif git commit --no-edit --quiet; then
                 echo "  merged via LLM semantic reconciliation"
             else
                 echo "  semantic merge produced no commit — aborting"
+                snapshot_store "$branch-nocommit"
                 git merge --abort 2>/dev/null || true
                 conflicted+=("$branch")
             fi
         else
             echo "  CONFLICT — LLM merge failed, branch kept for manual resolution"
+            store_staged=0; merge_staged_store_entries && store_staged=1
+            snapshot_store "$branch-conflict"
             git merge --abort 2>/dev/null || true
-            git checkout -- .beads 2>/dev/null || true
+            if [ "$store_staged" = 1 ]; then
+                git checkout HEAD -- .beads 2>/dev/null || true
+            fi
             conflicted+=("$branch")
         fi
     fi
