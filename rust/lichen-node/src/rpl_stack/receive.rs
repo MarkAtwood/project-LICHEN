@@ -637,7 +637,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
 
 /// Outcome of root-signature validation for one received DIO.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DioRootSigOutcome {
+pub(crate) enum DioRootSigOutcome {
     /// Signature verified and sequence admitted to the cache.
     Verified,
     /// Process the DIO on link-layer baseline alone (spec L679): no option,
@@ -654,7 +654,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// the option, without a pinned root key, or with an elapsed/unassessable
     /// expiry are processed on link-layer baseline; forged, tampered, and
     /// replayed signatures reject the DIO.
-    fn verify_dio_root_signature(
+    pub(crate) fn verify_dio_root_signature(
         &mut self,
         dio_body: &[u8],
         dio_fields: &DioFields,
