@@ -70,7 +70,11 @@ llm_semantic_merge() {
     local branch="$1"
     local model="openrouter/moonshotai/kimi-k3"
     local files
-    files=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
+    # Store paths are never handed to the session: the prompt forbids touching
+    # .beads/, so a .beads conflict there is self-contradictory, and the LLM
+    # must not stage store content for the success-path commit. A conflict
+    # that is ONLY under .beads/ leaves $files empty -> manual resolution.
+    files=$(git diff --name-only --diff-filter=U | grep -v '^\.beads/' | tr '\n' ' ')
     if [ -z "$files" ]; then
         return 1
     fi
@@ -116,6 +120,31 @@ snapshot_store() {
     echo "  store snapshot (concurrent bd writes preserved): $f"
 }
 
+# Drop branch-side .beads entries and stale vendored oscore from the merge
+# index + worktree. Shared by the clean-merge path and the LLM-reconciled
+# success path — both commits must carry code only. No-op unless the in-flight
+# merge actually staged store entries: a blind rewind here destroys concurrent
+# bd writes made during the merge (0i1p).
+normalize_merge_store_entries() {
+    local branch="$1"
+    merge_staged_store_entries || return 0
+    git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
+    git checkout HEAD -- .beads 2>/dev/null || true
+    git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
+    git checkout HEAD -- .beads 2>/dev/null || true
+    # Merge-ADDED store/vendor files: the pair above unstages them but
+    # leaves them as untracked worktree files (git rm skips untracked,
+    # checkout HEAD only restores HEAD paths), and the final checkpoint
+    # below would re-commit them. Delete only paths that exist on the
+    # merged branch — concurrent bd writes are never branch-side.
+    git ls-tree -r --name-only "$branch" -- .beads rust/crates/oscore 2>/dev/null |
+        while IFS= read -r f; do
+            if [ -f "$f" ] && ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
+                rm -f "$f"
+            fi
+        done
+}
+
 # Checkpoint pending bd writes (closes, comments, new beads) BEFORE any
 # merge: the merge normalization below runs `git checkout HEAD -- .beads`,
 # which would silently discard store writes still uncommitted in this
@@ -151,26 +180,8 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         # Normalize: beads store lives in main only; discard branch-side .beads entries.
         # rust/crates/oscore was vendored-then-removed (registry dep 0.1.2): worker
         # branches from before the deletion re-add stale copies — drop them too.
-        # Only when the merge actually staged store entries: a blind rewind here
-        # destroys concurrent bd writes made during the merge (0i1p).
         snapshot_store "$branch-clean"
-        if merge_staged_store_entries; then
-            git rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
-            git checkout HEAD -- .beads 2>/dev/null || true
-            git rm -rq --ignore-unmatch .beads rust/crates/oscore >/dev/null 2>&1 || true
-            git checkout HEAD -- .beads 2>/dev/null || true
-            # Merge-ADDED store/vendor files: the pair above unstages them but
-            # leaves them as untracked worktree files (git rm skips untracked,
-            # checkout HEAD only restores HEAD paths), and the final checkpoint
-            # below would re-commit them. Delete only paths that exist on the
-            # merged branch — concurrent bd writes are never branch-side.
-            git ls-tree -r --name-only "$branch" -- .beads rust/crates/oscore 2>/dev/null |
-                while IFS= read -r f; do
-                    if [ -f "$f" ] && ! git ls-files --error-unmatch -- "$f" >/dev/null 2>&1; then
-                        rm -f "$f"
-                    fi
-                done
-        fi
+        normalize_merge_store_entries "$branch"
         if BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
             echo "  merged (code only)"
         else
@@ -193,13 +204,21 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
                     git checkout HEAD -- .beads 2>/dev/null || true
                 fi
                 conflicted+=("$branch")
-            elif BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
-                echo "  merged via LLM semantic reconciliation"
             else
-                echo "  semantic merge produced no commit — aborting"
-                snapshot_store "$branch-nocommit"
-                git merge --abort 2>/dev/null || true
-                conflicted+=("$branch")
+                # Same store normalization as the clean-merge path (bead
+                # qfkj): the merge auto-staged non-conflicted branch-side
+                # .beads/oscore entries, and the kimi session may have staged
+                # more — none of that may land in main's commit.
+                snapshot_store "$branch-llm"
+                normalize_merge_store_entries "$branch"
+                if BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
+                    echo "  merged via LLM semantic reconciliation"
+                else
+                    echo "  semantic merge produced no commit — aborting"
+                    snapshot_store "$branch-nocommit"
+                    git merge --abort 2>/dev/null || true
+                    conflicted+=("$branch")
+                fi
             fi
         else
             echo "  CONFLICT — LLM merge failed, branch kept for manual resolution"
