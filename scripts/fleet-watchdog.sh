@@ -23,7 +23,7 @@ ensure_window() {  # $1=name $2=command — create only if missing (append at
 
 # Worker worktrees: if a worktree vanished (the week-long outage root cause),
 # rebuild it from its branch + .beads symlink BEFORE the driver looks at it.
-for n in 1 2 3 4 5 6 7; do
+for n in 1 2 3 4 5 6 7 8; do
     if [ ! -d "$HOME/Developer/lichen-workers/worker$n" ]; then
         if git show-ref --verify -q "refs/heads/beads-worker-$n"; then
             git worktree add "$HOME/Developer/lichen-workers/worker$n" "beads-worker-$n" >/dev/null 2>&1

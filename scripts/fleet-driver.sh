@@ -55,6 +55,8 @@ worker_in_progress() {  # worker number; count of that actor's in_progress beads
 
 echo "fleet driver: cycle ${CYCLE_MIN}m, no credit gating (auto-topup) — Ctrl+C to stop"
 
+HARD_PROMPT='SELF-CHECK first: if you notice yourself repeating actions you already did, arguing with your own output, or unable to form a next step — touch ~/Developer/lichen-workers/worker<YOUR_N>/SELF-REPORT-DEGENERATE and end the round immediately. Otherwise: You are the HARD-BEAD LANE (worker8, stronger model): claim P0/P1 priority beads first (bd ready --json, filter priority 0 or 1) — the beads others timebox out of. Same loop otherwise (instructions: scripts/beads-worker-full.txt): claim, complete fully (tests, 3x codereview, findings filed as beads, close, commit), then stop and report. Exactly one bead this round. If no P0/P1 is ready, take any ready bead.'
+
 EMPTY_N=0
 mkdir -p /tmp/fleet-driver-state
 while :; do
@@ -106,7 +108,7 @@ PY
         EMPTY_N=0
         rm -f "$REPO_ROOT/.fleet-drained"
         echo "   workers have work"
-        for i in 1 2 3 4 5 6 7; do
+        for i in 1 2 3 4 5 6 7 8; do
             WIN="$SESSION:worker$i"
             tmux has-session -t "$SESSION" 2>/dev/null || break
             if ! tmux select-window -t "$WIN" 2>/dev/null; then
@@ -190,9 +192,10 @@ print(n)" 2>/dev/null || echo 0)
                 continue
             fi
             echo "$((TOTAL + 1))" > "$STATEF.total"
-            echo "   worker$i: dispatching round (session round $((TOTAL + 1))/8)"
+            if [ "$i" -eq 8 ]; then PROMPT="$HARD_PROMPT"; else PROMPT="$ROUND_PROMPT"; fi
+            echo "   worker$i: dispatching round (session round $((TOTAL + 1))/8)${i:+}"
             wait_ready "$WIN"
-            tmux send-keys -t "$WIN" -l "$ROUND_PROMPT"
+            tmux send-keys -t "$WIN" -l "$PROMPT"
             sleep 1
             tmux send-keys -t "$WIN" Enter
             sleep 3
