@@ -25,6 +25,14 @@
       "created_at": "2026-09-08T21:01:56.106764634Z",
       "created_by": "Mark Atwood",
       "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-cwqh.25",
+      "depends_on_id": "project-LICHEN-worker6-cwqh.2",
+      "type": "blocks",
+      "created_at": "2026-09-08T21:02:54.417281849Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
     }
   ]
 }
