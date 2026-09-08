@@ -71,31 +71,31 @@ static int metrics_get(struct coap_resource *resource,
 				    COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
 	}
 
-	ret = senml_add_float(&pack, "pkt_tx", NULL, (float)tx_attempts);
+	ret = senml_add_float(&pack, "pkt_tx", NULL, (double)tx_attempts);
 	if (ret < 0) goto encode_err;
 
-	ret = senml_add_float(&pack, "pkt_rx", NULL, (float)rx_frames);
+	ret = senml_add_float(&pack, "pkt_rx", NULL, (double)rx_frames);
 	if (ret < 0) goto encode_err;
 
-	ret = senml_add_float(&pack, "tx_fail", NULL, (float)tx_errors);
+	ret = senml_add_float(&pack, "tx_fail", NULL, (double)tx_errors);
 	if (ret < 0) goto encode_err;
 
-	ret = senml_add_float(&pack, "rx_accepted", NULL, (float)rx_accepted);
+	ret = senml_add_float(&pack, "rx_accepted", NULL, (double)rx_accepted);
 	if (ret < 0) goto encode_err;
 
 	ret = senml_add_float(&pack, "rx_dropped", NULL,
-			      (float)(rx_frames - rx_accepted));
+			      (double)(rx_frames - rx_accepted));
 	if (ret < 0) goto encode_err;
 
-	float pkt_rate = (float)(tx_attempts + rx_frames) / uptime_s;
+	double pkt_rate = (double)(tx_attempts + rx_frames) / uptime_s;
 	ret = senml_add_float(&pack, "pkt_rate", NULL, pkt_rate);
 	if (ret < 0) goto encode_err;
 
-	ret = senml_add_float(&pack, "uptime_s", "s", k_uptime_get() / 1000.0f);
+	ret = senml_add_float(&pack, "uptime_s", "s", k_uptime_get() / 1000.0);
 	if (ret < 0) goto encode_err;
 
 	ret = senml_add_float(&pack, "total_packets", NULL,
-			      (float)(tx_attempts + rx_frames));
+			      (double)(tx_attempts + rx_frames));
 	if (ret < 0) goto encode_err;
 
 	len = senml_encode_cbor(&pack, senml, sizeof(senml));
