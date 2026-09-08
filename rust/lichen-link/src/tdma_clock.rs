@@ -79,6 +79,28 @@ pub const fn tx_allowed(
         && current_ms < slot_start_ms.saturating_add(slot_duration_ms)
 }
 
+/// Slot-membership TX gate over the adopted beacon slot_map (spec 02a 2a.2,
+/// R-02a-014: joiners MUST NOT transmit outside their assigned slots).
+///
+/// Parity with Python `slot_coordination.tx_allowed` and C
+/// `lichen_slot_map_tx_allowed`: a `current_slot` at or past `num_slots`,
+/// an empty map, or an out-of-map slot all deny; membership allows.
+/// The time-window gate is [`tx_allowed`]; this is the schedule-membership
+/// half of admission.
+pub const fn slot_map_tx_allowed(slot_map: &[u8], current_slot: u8, num_slots: u8) -> bool {
+    if current_slot >= num_slots {
+        return false;
+    }
+    let mut i = 0;
+    while i < slot_map.len() {
+        if slot_map[i] == current_slot {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Holdover ends when measured |drift_ppm| exceeds the configured guard.
 pub const fn holdover_expired(measured_drift_ppm: i64, guard_ppm: u64) -> bool {
     measured_drift_ppm.unsigned_abs() > guard_ppm
@@ -115,5 +137,24 @@ mod tests {
     #[test]
     fn zero_interval_has_no_ppm() {
         assert_eq!(drift_ppm(10, 0), None);
+    }
+
+    #[test]
+    fn slot_map_gate_matches_python_tx_allowed() {
+        // Parity: python/tests/link/test_slot_coordination.py
+        // test_tx_allowed_* and the C lichen_slot_map_tx_allowed gate matrix
+        // (lichen/tests/tdma_guard_budget): in-map allowed, out-of-map denied,
+        // empty map denies all, current_slot >= num_slots denied.
+        let map = [0u8, 3, 5];
+        assert!(slot_map_tx_allowed(&map, 3, 8)); // in-slot
+        assert!(slot_map_tx_allowed(&map, 0, 8));
+        assert!(!slot_map_tx_allowed(&map, 2, 8)); // out-of-map
+        assert!(!slot_map_tx_allowed(&map, 4, 8));
+        assert!(!slot_map_tx_allowed(&[], 0, 8)); // empty denies all
+        assert!(!slot_map_tx_allowed(&map, 8, 8)); // at num_slots
+        assert!(!slot_map_tx_allowed(&map, 255, 8));
+        assert!(slot_map_tx_allowed(&[0], 0, 8)); // first slot
+        assert!(slot_map_tx_allowed(&[7], 7, 8)); // last slot
+        assert!(!slot_map_tx_allowed(&[0], 0, 0)); // degenerate num_slots=0
     }
 }

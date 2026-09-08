@@ -278,6 +278,49 @@ pub fn parse_slot_map(
     Ok(slots)
 }
 
+/// Encode a slot_map as the CBOR array of u8 carried in beacon cbor_options
+/// (R-02a-013: the root MUST set slot_map on each beacon).
+///
+/// Byte-parity with C `lichen_beacon_write_slot_map`
+/// (lichen/subsys/lichen/link/beacon.c): header `0x80 + len` for up to 23
+/// entries, `0x98` + one-byte length for 24..=MAX_SLOT_MAP_ENTRIES; entries
+/// are CBOR immediates for 0..=23 and `0x18` + byte for 24..=255. The writer
+/// is a pure encoder — sortedness and bounds are the receiver's job
+/// (`parse_slot_map`), mirroring the C split.
+///
+/// Returns the encoded length, or `None` when `out` is too small or `slots`
+/// exceeds [`MAX_SLOT_MAP_ENTRIES`].
+pub fn write_slot_map(slots: &[u8], out: &mut [u8]) -> Option<usize> {
+    if slots.len() > MAX_SLOT_MAP_ENTRIES {
+        return None;
+    }
+
+    let mut pos = 0;
+    if slots.len() <= 23 {
+        *out.get_mut(pos)? = 0x80 + slots.len() as u8;
+        pos += 1;
+    } else {
+        *out.get_mut(pos)? = 0x98;
+        pos += 1;
+        *out.get_mut(pos)? = slots.len() as u8;
+        pos += 1;
+    }
+
+    for &v in slots {
+        if v <= 0x17 {
+            *out.get_mut(pos)? = v;
+            pos += 1;
+        } else {
+            *out.get_mut(pos)? = 0x18;
+            pos += 1;
+            *out.get_mut(pos)? = v;
+            pos += 1;
+        }
+    }
+
+    Some(pos)
+}
+
 /// Errors from slot_map parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SlotMapError {
@@ -360,6 +403,73 @@ mod tests {
         // Empty intersection on either side yields 0.
         assert_eq!(intersect_channel_mask(0x00, 0xFF), 0x00);
         assert_eq!(intersect_channel_mask(0xFF, 0x00), 0x00);
+    }
+
+    #[test]
+    fn test_write_slot_map_exact_bytes_and_roundtrip() {
+        // Expected bytes are the standard CBOR encoding (cross-checked
+        // against cbor2.dumps) and byte-parity with the C writer landed in
+        // project-LICHEN-worker6-oamc: header 0x80+len, entries immediate
+        // 0..23.
+        let slots = [0u8, 3, 7];
+        let mut out = [0u8; 16];
+        let n = write_slot_map(&slots, &mut out).unwrap();
+        assert_eq!(n, 4);
+        assert_eq!(&out[..n], &[0x83, 0x00, 0x03, 0x07]);
+        let back = parse_slot_map(&out[..n], 8).unwrap();
+        assert_eq!(back.as_slice(), &slots);
+
+        // Empty map: bare short-form array header 0x80, parses back empty.
+        let mut out = [0u8; 4];
+        let n = write_slot_map(&[], &mut out).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(out[0], 0x80);
+        assert!(parse_slot_map(&out[..n], 8).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_write_slot_map_long_form_and_multibyte_entries() {
+        // 30 entries forces the 0x98 long-form header; values 24..29 force
+        // the 0x18 two-byte entry encoding (parity with the C writer tests).
+        let slots: heapless::Vec<u8, 64> = (0u8..30).collect();
+        let mut out = [0u8; 128];
+        let n = write_slot_map(&slots, &mut out).unwrap();
+        assert_eq!(n, 2 + 24 + 6 * 2);
+        assert_eq!(out[0], 0x98);
+        assert_eq!(out[1], 30);
+        assert_eq!(&out[2..6], &[0x00, 0x01, 0x02, 0x03]);
+        assert_eq!(&out[26..30], &[0x18, 24, 0x18, 25]);
+        let back = parse_slot_map(&out[..n], 64).unwrap();
+        assert_eq!(back.as_slice(), slots.as_slice());
+
+        // Entries at the top of the u8 range with a num_slots that admits
+        // them roundtrip through the two-byte encoding.
+        let slots = [24u8, 29, 63];
+        let mut out = [0u8; 16];
+        let n = write_slot_map(&slots, &mut out).unwrap();
+        assert_eq!(&out[..n], &[0x83, 0x18, 24, 0x18, 29, 0x18, 63]);
+        let back = parse_slot_map(&out[..n], 64).unwrap();
+        assert_eq!(back.as_slice(), &slots);
+    }
+
+    #[test]
+    fn test_write_slot_map_rejects() {
+        // Over the 64-entry cap (C returns 0; Rust None).
+        let slots = [0u8; 65];
+        let mut out = [0u8; 256];
+        assert!(write_slot_map(&slots, &mut out).is_none());
+
+        // Output buffer too small for the header + entries.
+        let mut out = [0u8; 3];
+        assert!(write_slot_map(&[0u8, 3, 7], &mut out).is_none());
+
+        // Exact fit succeeds.
+        let mut out = [0u8; 4];
+        assert_eq!(write_slot_map(&[0u8, 3, 7], &mut out), Some(4));
+
+        // Two-byte entry truncated at the second byte.
+        let mut out = [0u8; 2];
+        assert!(write_slot_map(&[24u8], &mut out).is_none());
     }
 
     #[test]
