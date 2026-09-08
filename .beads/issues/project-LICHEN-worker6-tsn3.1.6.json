@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-tsn3.1.6",
+  "title": "Impl: is_retransmit flag in C tx_queue",
+  "description": "Add bool is_retransmit to struct tx_item in lichen/subsys/lichen/link/tx_queue.c. Update comparison function: within same priority, retransmit sorts first. Preemption unchanged. Verify: build compiles.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:41:51.469553993Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:41:51.469553993Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "buffering",
+    "coap",
+    "cross-impl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tsn3.1.6",
+      "depends_on_id": "project-LICHEN-worker6-tsn3.1",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:41:51.632065994Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
