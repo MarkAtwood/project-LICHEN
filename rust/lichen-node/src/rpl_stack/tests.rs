@@ -2741,10 +2741,9 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 
 #[tokio::test]
-#[ignore = "R-06-307 slice 2: carrier passes send+SCHC gates but downstream DIO admission still RplRejected - minimal carrier (no DODAG_CONFIG) proposes the unjoined leaf's default config, rejected in set_rank_config/process_dio_with_version_authorization; next step: join receiver via real root.send_dio first, then deliver the signed carrier; see bead project-LICHEN-worker6-b7z9.88.3 (worker-6 round 3)"]
 async fn expired_root_signature_admitted_as_baseline_not_rejected() {
     let (mut root, mut receiver, packet, decoded) =
-        root_sig_baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX + 1));
+        root_sig_baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX + 1)).await;
 
     root.stack
         .send_ipv6_uncompressed_to(&packet, &[])
@@ -2766,9 +2765,8 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
 }
 
 #[tokio::test]
-#[ignore = "R-06-307 slice 2: same downstream admission reject as the expired-clock test; see bead project-LICHEN-worker6-b7z9.88.3 (worker-6 round 3)"]
 async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
-    let (mut root, mut receiver, packet, decoded) = root_sig_baseline_fixture(None);
+    let (mut root, mut receiver, packet, decoded) = root_sig_baseline_fixture(None).await;
 
     root.stack
         .send_ipv6_uncompressed_to(&packet, &[])
@@ -2789,9 +2787,13 @@ async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
 
 /// Real DODAG root (identity 21) + adjacent leaf receiver pinned to the
 /// vector root key, plus the root's production DIO packet carrying the
-/// vector-signed 0x17 option. `clock` wires the receiver's wall clock;
-/// `None` leaves it unassessable (the provisioning default).
-fn root_sig_baseline_fixture(
+/// vector-signed 0x17 option. The leaf first joins via a REAL production
+/// DIO (`root.send_dio`) so it carries the production DODAG_CONFIG — the
+/// carrier omits DODAG_CONFIG, and admission rejects a config proposal
+/// that conflicts with the unjoined leaf's default (b7z9.88.3.1).
+/// `clock` wires the receiver's wall clock; `None` leaves it unassessable
+/// (the provisioning default).
+async fn root_sig_baseline_fixture(
     clock: Option<fn() -> u64>,
 ) -> (
     RplStack<LoopbackRadio, MemStorage>,
@@ -2810,7 +2812,7 @@ fn root_sig_baseline_fixture(
     root_stack.add_peer(PeerIdentity::from_pubkey(leaf_identity.pubkey));
     let mut leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_identity);
     leaf_stack.add_peer(PeerIdentity::from_pubkey(root_identity.pubkey));
-    let root = RplStack::provision_root(
+    let mut root = RplStack::provision_root(
         root_stack,
         root_addr,
         root_addr,
@@ -2833,10 +2835,10 @@ fn root_sig_baseline_fixture(
     // Minimal gate-passing carrier DIO: the production
     // build_authenticated_dio body (rule-version + DODAG_CONFIG) plus the
     // 124-byte 0x17 option exceeds the 254-byte IPv6 send bound (bead
-    // qe1t), so the carrier carries only the mandatory SCHC rule-version
-    // option. The admission and DIO-processing gates require no
-    // DODAG_CONFIG option (the receiver keeps its default config).
-    use lichen_schc::rules::{RULE_SET_VERSION, SCHC_RULE_VERSION_TYPE};
+    // qe1t), so the carrier carries only the rule-version option that
+    // Dio::write_to already inserts. The receiver joined via the
+    // production DIO above, so it already holds the production config and
+    // keeps it (no config proposal in the carrier).
     let dio = lichen_rpl::message::Dio {
         rpl_instance_id: lichen_core::constants::RPL_INSTANCE_ID,
         version: 0,
@@ -2850,10 +2852,6 @@ fn root_sig_baseline_fixture(
     };
     let mut body = [0u8; 256];
     let dio_len = dio.write_to(&mut body).unwrap();
-    body[dio_len] = SCHC_RULE_VERSION_TYPE;
-    body[dio_len + 1] = 1;
-    body[dio_len + 2] = RULE_SET_VERSION;
-    let dio_len = dio_len + 3;
     let opt_len = lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..])
         .expect("0x17 option fits");
     let packet = rpl_ipv6_packet(
@@ -2870,6 +2868,20 @@ fn root_sig_baseline_fixture(
     if let Some(clock) = clock {
         receiver.set_wall_clock_unix(clock);
     }
+
+    // Join the receiver with a REAL production DIO first: an unjoined
+    // leaf's default dodag_config conflicts with the carrier's (absent)
+    // config proposal and admission rejects in set_rank_config. The
+    // joined leaf holds the production config, so the config-less carrier
+    // refreshes its existing state instead of proposing a new one.
+    root.send_dio(RPL_ALL_NODES).await.unwrap();
+    let join = receiver.receive(1, 0).await.unwrap().expect("join frame");
+    assert!(
+        matches!(join, RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })),
+        "receiver must join via the production DIO: {join:?}"
+    );
+    assert!(receiver.rpl_node().is_joined());
+
     (root, receiver, packet, decoded)
 }
 // ── Root-side 0x17 producer round-trip (b7z9.88.2, feature "root-sig") ──────
