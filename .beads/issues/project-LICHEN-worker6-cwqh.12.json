@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-cwqh.12",
+  "title": "Test: Python ForwardingBuffer uses relay-class limits",
+  "description": "Write test: create ForwardingBuffer with NodeClass.RELAY. Verify it accepts 128 packets (32 sources × 4 per source) before rejecting. Verify leaf-class buffer still rejects at 16. Verify: cd python \u0026\u0026 python -m pytest tests/test_forward_node_class.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:01:25.911019014Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:01:25.911019014Z",
+  "labels": [
+    "python",
+    "node-class",
+    "buffering",
+    "testing",
+    "cross-impl",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cwqh.12",
+      "depends_on_id": "project-LICHEN-worker6-cwqh",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:01:26.037144511Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
