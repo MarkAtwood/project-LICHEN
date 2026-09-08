@@ -78,6 +78,13 @@ static int8_t rx_stage_snr;
 static atomic_t rx_enabled;
 static atomic_t rx_pending;
 static atomic_t rx_armed;
+
+/*
+ * One-shot second chance for the -EBUSY-still-armed fast path (see
+ * lora_l2_rx_arm): 0 = first -EBUSY gets a retry, 1 = retry spent, accept
+ * the still-armed state. Cleared on a successful arm and on rx_start().
+ */
+static atomic_t ebusy_second_chance;
 static atomic_t rx_session;
 
 /** Consecutive re-arm failures before the module gives up (ABORTED). */
@@ -179,6 +186,7 @@ static void lora_l2_rx_arm(void)
 
 	if (ret == 0) {
 		consecutive_failures = 0;
+		atomic_set(&ebusy_second_chance, 0);
 		atomic_set(&rx_armed, 1);
 		lichen_radio_progress();
 		return;
@@ -198,7 +206,20 @@ static void lora_l2_rx_arm(void)
 		 * healthy still-armed state, not a dead radio: reset the
 		 * failure counter and stop retrying - the driver will call
 		 * us on the next frame.
+		 *
+		 * Guard against a stale rx_armed on a driver that DOES
+		 * disarm at delivery (one-shot contract): a transient -EBUSY
+		 * there would otherwise silence the radio forever, since no
+		 * retry is scheduled and arm is only reached from a delivery
+		 * or a scheduled retry. Grant exactly one second-chance
+		 * retry; if it also reports -EBUSY with rx_armed set, accept
+		 * the still-armed state. Persistent-registration drivers
+		 * merely burn one 10 ms timer per abort-recovery cycle.
 		 */
+		if (atomic_cas(&ebusy_second_chance, 0, 1)) {
+			goto retry;
+		}
+		atomic_set(&ebusy_second_chance, 0);
 		consecutive_failures = 0;
 		lichen_radio_progress();
 		return;
@@ -355,6 +376,7 @@ int lora_l2_rx_start(void)
 
 	consecutive_failures = 0;
 	atomic_clear(&rx_pending);
+	atomic_set(&ebusy_second_chance, 0);
 	atomic_set(&rx_enabled, 1);
 	atomic_inc(&rx_session);
 
@@ -366,6 +388,24 @@ int lora_l2_rx_start(void)
 
 	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	k_mutex_unlock(&modem_mutex);
+
+	if (ret == -EBUSY && atomic_get(&rx_armed)) {
+		/*
+		 * The driver still holds the registration from a previous
+		 * session (persistent-registration drivers; e.g. lora_loopback
+		 * rejects re-arm while recv_cb != NULL). Our callback is the
+		 * same one this session would have installed, so accept the
+		 * existing arm instead of wedging every future start(): stop()
+		 * may have skipped the disarm (session mismatch, modem busy)
+		 * believing this start owned the arm - if this start also
+		 * failed, nothing would ever clear it short of deinit.
+		 */
+		LOG_DBG("lora_l2: start reusing driver arm from prior session");
+		atomic_set(&rx_enabled, 1);
+		atomic_set(&ebusy_second_chance, 0);
+		atomic_set(&rx_armed, 1);
+		return 0;
+	}
 
 	if (ret < 0) {
 		atomic_set(&rx_enabled, 0);

@@ -482,7 +482,8 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 		zassert_true(ret == 0 || ret == -EINVAL,
 			     "stale driver arm not clearable: %d", ret);
 		ret = lichen_lora_l2_deinit();
-		zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
+		zassert_true(ret == 0 || ret == -EBUSY,
+			     "post-abort deinit: %d", ret);
 		zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
 		zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
 		ret = net_if_up(test_iface);
