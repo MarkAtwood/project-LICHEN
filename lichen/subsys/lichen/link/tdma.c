@@ -123,6 +123,12 @@ enum lichen_desync_state lichen_desync_on_beacon(struct lichen_tdma_ctx *tdma,
 		tdma->desync_state = LICHEN_DESYNC_RECOVERING;
 		tdma->desync_consecutive_valid = 1;
 		tdma->desync_missed_superframes = 0;
+	} else if (tdma->desync_state == LICHEN_DESYNC_SYNCED && valid) {
+		/* R-02a-081 SYNCED row: a valid beacon clears the
+		 * missed-superframe streak so isolated misses cannot
+		 * accumulate toward the SYNCED -> DESYNCED transition.
+		 * Mirrors python sfn.py on_beacon SYNCED branch. */
+		tdma->desync_missed_superframes = 0;
 	} else if (tdma->desync_state == LICHEN_DESYNC_RECOVERING) {
 		if (valid) {
 			tdma->desync_consecutive_valid++;

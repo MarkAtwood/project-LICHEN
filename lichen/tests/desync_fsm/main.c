@@ -317,10 +317,8 @@ static void case_synced_missed_beacons(const char *obj, const char *end)
 
 	/* C oracle (R-02a-081 SYNCED row): a SYNCED node that misses >= 3
 	 * consecutive superframes drops to DESYNCED ("Suppress TX, reset
-	 * counters"). Known divergence (bead x4s6): C does not yet clear
-	 * the missed-superframe streak on a valid beacon in SYNCED the way
-	 * python sfn.py / rust desync.rs do, so only back-to-back misses
-	 * are asserted here. */
+	 * counters"). Mirrors the rust ccp16_desync_vectors.rs and python
+	 * sfn.py back-to-back miss assertions. */
 	struct lichen_tdma_ctx tdma;
 	struct lichen_link_ctx link_ctx;
 
@@ -340,6 +338,31 @@ static void case_synced_missed_beacons(const char *obj, const char *end)
 	CHECK(tdma.desync_missed_superframes == 0U &&
 		      tdma.desync_consecutive_valid == 0U,
 	      "missed: counters reset on transition");
+
+	/* R-02a-081 SYNCED row, interleaved case (bead x4s6): a valid
+	 * beacon in SYNCED clears the missed-superframe streak so isolated
+	 * misses never accumulate toward DESYNCED. Mirrors rust
+	 * ccp16_desync_vectors.rs:137-144 and python sfn.py on_beacon
+	 * SYNCED branch: miss,valid,miss,miss must stay SYNCED (the
+	 * pre-fix cumulative behavior desynced on the 4th event). */
+	memset(&tdma, 0, sizeof(tdma));
+	CHECK(lichen_tdma_init(&tdma, &link_ctx) == 0,
+	      "interleaved: tdma init");
+	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
+		      LICHEN_DESYNC_SYNCED,
+	      "interleaved: 1st miss stays SYNCED");
+	CHECK(lichen_desync_on_beacon(&tdma, true) == LICHEN_DESYNC_SYNCED,
+	      "interleaved: valid beacon stays SYNCED");
+	CHECK(tdma.desync_missed_superframes == 0U,
+	      "interleaved: valid beacon cleared the streak");
+	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
+		      LICHEN_DESYNC_SYNCED,
+	      "interleaved: miss after valid beacon stays SYNCED");
+	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
+		      LICHEN_DESYNC_SYNCED,
+	      "interleaved: 2nd consecutive miss stays SYNCED");
+	CHECK(tdma.desync_state == LICHEN_DESYNC_SYNCED,
+	      "interleaved: miss,valid,miss,miss does NOT desync");
 }
 
 /* The corpus is a flat array of cases, each with a top-level "name"
