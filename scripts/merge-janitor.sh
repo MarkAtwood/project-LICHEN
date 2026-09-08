@@ -18,9 +18,11 @@ MODEL="openrouter/moonshotai/kimi-k3"
 STATE_DIR="/tmp/lichen-merge-janitor-state"
 export PATH="$HOME/.opencode/bin:$PATH"
 export BEADS_DIR="${BEADS_DIR:-$REPO_ROOT/.beads}"
-# This script's merge commits are legitimate .beads/ writers (the pre-commit
-# hook blocks worker-side store staging, bead biod); opt out of the hook.
-export BEADS_ALLOW_STORE_COMMIT=1
+# This script's checkpoint and merge commits are legitimate .beads/ writers
+# (the pre-commit hook blocks worker-side store staging, bead biod). Each
+# commit below opts itself out per-command. The opt-out must NOT be exported
+# process-wide: it would reach the opencode/kimi subprocess and disable the
+# guard for the one actor consuming untrusted branch content.
 mkdir -p "$STATE_DIR"
 
 resolve_file() {
@@ -47,7 +49,7 @@ janitor_merge_branch() {
     # this branch's normalization rewinds .beads to HEAD (bead biod).
     if [ -n "$(git -C "$REPO_ROOT" status --porcelain .beads/)" ]; then
         git -C "$REPO_ROOT" add .beads/
-        git -C "$REPO_ROOT" commit -m "chore(beads): per-branch store checkpoint" --quiet || true
+        BEADS_ALLOW_STORE_COMMIT=1 git -C "$REPO_ROOT" commit -m "chore(beads): per-branch store checkpoint" --quiet || true
     fi
     # Sweep debris from interrupted earlier merge cycles: locally modified
     # files that this branch's merge would rewrite anyway. Without this, a
@@ -86,7 +88,7 @@ janitor_merge_branch() {
             git -C "$REPO_ROOT" merge --abort >/dev/null 2>&1
             return 1
         fi
-        if git -C "$REPO_ROOT" diff --check >/dev/null 2>&1 && git -C "$REPO_ROOT" commit --no-edit --quiet; then
+        if git -C "$REPO_ROOT" diff --check >/dev/null 2>&1 && BEADS_ALLOW_STORE_COMMIT=1 git -C "$REPO_ROOT" commit --no-edit --quiet; then
             echo "   janitor: $branch merged via per-file kimi resolution"
             rm -f "$STATE_DIR/$branch.count"
             return 0
@@ -100,7 +102,7 @@ janitor_merge_branch() {
         git -C "$REPO_ROOT" rm -rq --ignore-unmatch --cached .beads rust/crates/oscore >/dev/null 2>&1 || true
         git -C "$REPO_ROOT" checkout HEAD -- .beads 2>/dev/null || true
     fi
-    if git -C "$REPO_ROOT" commit --no-edit --quiet; then
+    if BEADS_ALLOW_STORE_COMMIT=1 git -C "$REPO_ROOT" commit --no-edit --quiet; then
         echo "   janitor: $branch merged (rerere replay)"
         rm -f "$STATE_DIR/$branch.count"
     else
