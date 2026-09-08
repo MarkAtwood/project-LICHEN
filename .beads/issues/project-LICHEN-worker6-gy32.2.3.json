@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-gy32.2.3",
+  "title": "Migrate link/ module logging to structlog",
+  "description": "Replace logging in python/src/lichen/link/ files (link_layer.py, tx_queue.py, forwarding_buffer.py) with structlog. Bind layer='link'. Use key=value for all fields. Verify: cd python \u0026\u0026 python -m pytest tests/test_link*.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:18:42.37618786Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:18:42.37618786Z",
+  "labels": [
+    "python",
+    "structured-logging",
+    "cross-impl",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.2.3",
+      "depends_on_id": "project-LICHEN-worker6-gy32.2",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:18:42.500633166Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
