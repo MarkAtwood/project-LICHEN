@@ -601,6 +601,9 @@ impl RawSlotClaim {
         if seen & 0b1111_1110 != 0b1111_1110 {
             return Err(SlotError::MalformedClaim);
         }
+        if ordinal.map_or(true, |value| value >= MAX_COORDINATING_GATEWAYS as u64) {
+            return Err(SlotError::InvalidOrdinal);
+        }
         let mode = match mode {
             Some(0) => AllocationMode::Interleaved,
             Some(1) => AllocationMode::Contiguous,
@@ -657,6 +660,10 @@ impl RawSlotClaim {
 
     pub fn expiry(&self) -> u64 {
         self.expiry
+    }
+
+    pub fn mode(&self) -> AllocationMode {
+        self.mode
     }
 
     pub fn ordinal(&self) -> Option<u64> {
@@ -740,6 +747,8 @@ pub struct VerifiedSlotClaim {
     slots: Vec<u32>,
     superframe_id: u64,
     claim_sequence: u32,
+    mode: AllocationMode,
+    ordinal: Option<u64>,
 }
 
 impl VerifiedSlotClaim {
@@ -759,11 +768,21 @@ impl VerifiedSlotClaim {
         self.claim_sequence
     }
 
+    pub fn mode(&self) -> AllocationMode {
+        self.mode
+    }
+
+    pub fn ordinal(&self) -> Option<u64> {
+        self.ordinal
+    }
+
     pub(crate) fn restore(
         gateway_iid: Iid,
         slots: Vec<u32>,
         superframe_id: u64,
         claim_sequence: u32,
+        mode: AllocationMode,
+        ordinal: Option<u64>,
         slots_per_superframe: u32,
     ) -> Result<Self, SlotError> {
         validate_claim_slots(&slots, slots_per_superframe)?;
@@ -772,6 +791,8 @@ impl VerifiedSlotClaim {
             slots,
             superframe_id,
             claim_sequence,
+            mode,
+            ordinal,
         })
     }
 
@@ -880,6 +901,8 @@ impl SlotClaimVerifier {
             slots: claim.slots,
             superframe_id: claim.superframe_id,
             claim_sequence: claim.claim_sequence,
+            mode: claim.mode,
+            ordinal: claim.ordinal,
         })
     }
 
@@ -2199,13 +2222,18 @@ mod tests {
                     .try_into()
                     .unwrap();
             let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
-            verifier
+            let verified = verifier
                 .verify(
                     claim,
                     &public_key,
                     vector["superframe_epoch"].as_u64().unwrap(),
                 )
                 .unwrap();
+            assert_eq!(verified.mode(), expected_mode, "{name}");
+            assert_eq!(
+                verified.ordinal(),
+                Some(vector["ordinal"].as_u64().unwrap())
+            );
         }
 
         let rejects = [

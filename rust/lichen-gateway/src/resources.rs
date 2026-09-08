@@ -752,6 +752,8 @@ pub struct SlotClaim {
     pub superframe_id: u64,
     /// Monotonic per-gateway sequence within a superframe.
     pub claim_sequence: u32,
+    /// Allocation mode advertised by the claim.
+    pub mode: AllocationMode,
     /// Unix timestamp of claim (for replay protection).
     pub timestamp: Option<i64>,
     /// Total gateways in federation (for interleaved mode).
@@ -775,6 +777,7 @@ impl SlotClaim {
             slots,
             superframe_id,
             claim_sequence,
+            mode: AllocationMode::Interleaved,
             timestamp: None,
             gateway_count: None,
             ordinal: None,
@@ -798,6 +801,12 @@ impl SlotClaim {
         self
     }
 
+    /// Set the allocation mode advertised in the COSE payload.
+    pub fn with_mode(mut self, mode: AllocationMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     /// Encode and sign as a spec GCP-6.5 COSE_Sign1 envelope (l1qw.16.2.3).
     ///
     /// Mirrors Python `sign_slot_claim` (l1qw.16.1): payload integer keys
@@ -808,9 +817,8 @@ impl SlotClaim {
     /// than MAX_CLAIM_DURATION_SECONDS past now — stamp an in-window
     /// expiry yourself (e.g. `now + 100`), not the bare issue second.
     /// `gateway_count` is a local allocation
-    /// parameter and is never serialized (GCP-6.5). Rust `SlotClaim` has no
-    /// allocation-mode field, so the payload is emitted interleaved (mode
-    /// 0); the ordinal (key 7) is REQUIRED on the wire (corpus vector
+    /// parameter and is never serialized (GCP-6.5). The allocation mode and
+    /// ordinal are signed in the payload; the ordinal (key 7) is REQUIRED on the wire (corpus vector
     /// "ordinal_absent") — build with [`SlotClaim::with_federation`].
     pub fn encode_cose(
         &self,
@@ -837,7 +845,7 @@ impl SlotClaim {
         let payload = slot::SlotClaimPayload {
             slots: self.slots.clone(),
             superframe_epoch: self.superframe_id,
-            mode: slot::AllocationMode::Interleaved,
+            mode: self.mode,
             expiry,
             gateway_iid: self.gateway_iid,
             claim_seq: self.claim_sequence,
@@ -1163,7 +1171,7 @@ struct SlotReplayPersistence {
 }
 
 const COORDINATOR_STATE_MAGIC: &[u8; 8] = b"LCHNGCS1";
-const COORDINATOR_STATE_VERSION: u16 = 1;
+const COORDINATOR_STATE_VERSION: u16 = 2;
 const COORDINATOR_STATE_SEAL_DOMAIN: &[u8] = b"LICHEN-GCP-COORDINATOR-STATE-v1";
 
 struct PersistedCoordinatorState {
@@ -1187,7 +1195,7 @@ fn coordinator_state_max_len(
         .ok_or(slot::SlotError::ArithmeticOverflow)?;
     let peer_entry = slots
         .checked_mul(4)
-        .and_then(|value| value.checked_add(8 + 8 + 4 + 4))
+        .and_then(|value| value.checked_add(8 + 8 + 4 + 1 + 1 + 8 + 4))
         .ok_or(slot::SlotError::ArithmeticOverflow)?;
     let peers = max_gateways
         .checked_mul(peer_entry)
@@ -1282,6 +1290,14 @@ fn encode_coordinator_state(
         payload.extend_from_slice(claim.gateway_iid());
         payload.extend_from_slice(&claim.superframe_id().to_be_bytes());
         payload.extend_from_slice(&claim.claim_sequence().to_be_bytes());
+        payload.push(allocation_mode_to_wire(claim.mode()));
+        match claim.ordinal() {
+            Some(ordinal) => {
+                payload.push(1);
+                payload.extend_from_slice(&ordinal.to_be_bytes());
+            }
+            None => payload.push(0),
+        }
         payload.extend_from_slice(&(claim.slots().len() as u32).to_be_bytes());
         for claimed_slot in claim.slots() {
             payload.extend_from_slice(&claimed_slot.to_be_bytes());
@@ -1454,11 +1470,14 @@ fn load_coordinator_state(
     }
 
     let mut cursor = CoordinatorStateCursor::new(payload);
-    if cursor.take(8)? != COORDINATOR_STATE_MAGIC
-        || cursor.u16()? != COORDINATOR_STATE_VERSION
-        || cursor.array::<16>()? != *expected_local_iid
-        || cursor.u32()? != slots_per_superframe
-    {
+    if cursor.take(8)? != COORDINATOR_STATE_MAGIC {
+        return Err(slot::SlotError::CorruptState);
+    }
+    let state_version = cursor.u16()?;
+    if state_version != 1 && state_version != COORDINATOR_STATE_VERSION {
+        return Err(slot::SlotError::CorruptState);
+    }
+    if cursor.array::<16>()? != *expected_local_iid || cursor.u32()? != slots_per_superframe {
         return Err(slot::SlotError::CorruptState);
     }
     let generation = cursor.u64()?;
@@ -1505,6 +1524,21 @@ fn load_coordinator_state(
         let iid = cursor.array()?;
         let superframe = cursor.u64()?;
         let sequence = cursor.u32()?;
+        let (mode, ordinal) = if state_version == 1 {
+            (AllocationMode::Interleaved, None)
+        } else {
+            let mode = match cursor.u8()? {
+                0 => AllocationMode::Interleaved,
+                1 => AllocationMode::Contiguous,
+                _ => return Err(slot::SlotError::CorruptState),
+            };
+            let ordinal = match cursor.u8()? {
+                0 => None,
+                1 => Some(cursor.u64()?),
+                _ => return Err(slot::SlotError::CorruptState),
+            };
+            (mode, ordinal)
+        };
         let slot_count = cursor.u32()? as usize;
         if slot_count > slots_per_superframe as usize {
             return Err(slot::SlotError::CorruptState);
@@ -1518,6 +1552,8 @@ fn load_coordinator_state(
             claimed_slots,
             superframe,
             sequence,
+            mode,
+            ordinal,
             slots_per_superframe,
         )?);
     }
@@ -2323,7 +2359,8 @@ mod tests {
         let iid = crate::trust::iid_from_pubkey(&pubkey);
         let claim = SlotClaim::new(iid, vec![4, 8, 15], 42, 1)
             .with_timestamp()
-            .with_federation(3, 0);
+            .with_federation(3, 0)
+            .with_mode(AllocationMode::Contiguous);
         let envelope = claim.encode_cose(&private, &public).unwrap();
 
         // Field-level round-trip through the strict decoder (16.2.1).
@@ -2334,6 +2371,7 @@ mod tests {
         assert_eq!(decoded.claim_sequence(), 1);
         assert_eq!(decoded.expiry(), claim.timestamp.unwrap() as u64);
         assert_eq!(decoded.ordinal(), Some(0));
+        assert_eq!(decoded.mode(), AllocationMode::Contiguous);
 
         // End-to-end: the envelope verifies under the COSE signature form.
         let mut verifier = slot::SlotClaimVerifier::new_ephemeral(16).unwrap();
