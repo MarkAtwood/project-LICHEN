@@ -30,6 +30,12 @@ static struct lichen_tunnel_result permit(void)
 	return (struct lichen_tunnel_result){ true, LICHEN_TUNNEL_DENIAL_NONE, 204 };
 }
 
+uint8_t lichen_tunnel_auth_coap_code(uint16_t coap_code)
+{
+	/* 2.04 = 0x44, 4.03 = 0x83 (class << 5 | detail). */
+	return (uint8_t)(((coap_code / 100U) << 5) | (coap_code % 100U));
+}
+
 static void lock_ctx(struct lichen_tunnel_auth_ctx *ctx)
 {
 	while (atomic_flag_test_and_set_explicit(&ctx->lock, memory_order_acquire)) {

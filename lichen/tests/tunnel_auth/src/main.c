@@ -167,9 +167,22 @@ static void test_encoder_exact_vector(void)
 	crypto_wipe(private_key, sizeof(private_key));
 }
 
+static void test_coap_code_mapping(void)
+{
+	/* The wiring boundary maps the module's human codes 204/403 to the
+	 * CoAP wire encodings 2.04 (0x44) / 4.03 (0x83). */
+	assert(lichen_tunnel_auth_coap_code(204) == 0x44);
+	assert(lichen_tunnel_auth_coap_code(403) == 0x83);
+	struct lichen_tunnel_result allowed = { true, LICHEN_TUNNEL_DENIAL_NONE, 204 };
+	struct lichen_tunnel_result denied = { false, LICHEN_TUNNEL_DENIAL_SIGNATURE, 403 };
+	assert(lichen_tunnel_auth_coap_code(allowed.coap_code) == 0x44);
+	assert(lichen_tunnel_auth_coap_code(denied.coap_code) == 0x83);
+}
+
 int main(void)
 {
 	test_shared_vectors(); test_auth_and_policy(); test_revocation_rotation_and_atomicity(); test_encoder_exact_vector();
+	test_coap_code_mapping();
 	run_fixture_post_cases(); run_fixture_decap_cases();
 	puts("tunnel_auth: all tests passed"); return 0;
 }
