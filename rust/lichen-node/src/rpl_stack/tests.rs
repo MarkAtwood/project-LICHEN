@@ -2739,8 +2739,27 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 // replay-rejected. The gate-level positive control covers the
 // valid-signature path that is structurally impossible to exercise
 // end-to-end with the shared vector (see above).
+//
+// Merge note (main x beads-worker-5): both sides pin the same R-06-307
+// contract and both were verified empirically before reconciling. HEAD's
+// stack-level fixture shape is kept because it is green against the
+// current SCHC authenticated-DIO admission gate: the carrier keeps the
+// single 0x13 rule-version option emitted by Dio::write_to and the
+// canonical fe80::+IID control source. worker-5's fixture shape was red
+// on its own branch — its hand-appended second 0x13 option trips
+// DuplicateRuleVersion and its native 02xx source trips
+// SourceSignerMismatch at that gate. Preserved from worker-5: the
+// NON_STORING_MOP name below, and the stronger positive `DioReceived`
+// outcome assertions at stack level (verified green against HEAD's
+// fixture). worker-5's gate-level positive control duplicates HEAD's
+// valid_root_signature_gate_verifies_then_replay_rejects (which
+// additionally pins root_seq cache admission), so the HEAD test stands
+// and the duplicate helper pair (pinned_receiver /
+// vector_signed_dio_body) is not kept.
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
+
+const NON_STORING_MOP: u8 = 1;
 
 #[tokio::test]
 async fn expired_root_signature_admitted_as_baseline_not_rejected() {
@@ -2754,7 +2773,10 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
     assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
         "expired signature must degrade to baseline, not reject: {outcome:?}"
     );
 
@@ -2764,7 +2786,10 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
     assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
         "replayed expired signature must stay on baseline, not reject: {outcome:?}"
     );
 }
@@ -2778,7 +2803,10 @@ async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
     assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
         "unassessable clock must degrade to baseline, not reject: {outcome:?}"
     );
 }
@@ -2837,7 +2865,7 @@ fn baseline_fixture(
         version: 0,
         rank: 512,
         grounded: true,
-        mode_of_operation: 1,
+        mode_of_operation: NON_STORING_MOP,
         preference: 0,
         dtsn: 0,
         flags: 0,
