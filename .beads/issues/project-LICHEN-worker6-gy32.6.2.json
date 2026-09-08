@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-gy32.6.2",
+  "title": "Test: enum mapping coverage assertions",
+  "description": "For each enum-to-value dict modified by sibling bead, add a test asserting len(mapping) == len(EnumClass). This catches future enum additions that forget to update the mapping. Verify: cd python \u0026\u0026 python -m pytest tests/test_enum_coverage.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:19:37.679433592Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:19:37.679433592Z",
+  "labels": [
+    "python",
+    "diagnosability",
+    "testing",
+    "cross-impl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.6.2",
+      "depends_on_id": "project-LICHEN-worker6-gy32.6",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:19:37.82828819Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
