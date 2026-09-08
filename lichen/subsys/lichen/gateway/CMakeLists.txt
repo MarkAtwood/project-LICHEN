@@ -2,5 +2,5 @@
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
 
 zephyr_library()
-zephyr_library_sources(tunnel_auth.c)
+zephyr_library_sources(tunnel_auth.c capability_announce.c)
 zephyr_include_directories(include)
