@@ -21,9 +21,13 @@ All implementations MUST match test vectors in:
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum, auto
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import cbor2
@@ -38,6 +42,7 @@ __all__ = [
     "AllocationMode",
     "ClaimError",
     "ClaimRejectReason",
+    "ClaimSeqStore",
     "SlotClaim",
     "compute_contiguous_slots",
     "compute_interleaved_slots",
@@ -393,6 +398,75 @@ class SlotClaimReplayCache:
         return (True, None)
 
 
+class ClaimSeqStore:
+    """Persistent claim_seq counter for the claiming gateway (GCP-6.5).
+
+    spec/08-gateway-coordination.md "claim_seq Persistence": the counter
+    MUST survive gateway reboots and each claim MUST increment, persist to
+    non-volatile storage, and only then sign and send. Persisting before
+    returning means a crash between persist and send only costs a sequence
+    number; the reverse ordering would let a rebooted gateway re-send a
+    claim_seq the receivers already cached, getting every claim rejected
+    as a replay (validation step 8) until it climbs past the high-water.
+
+    Missing or unreadable state initializes to 0 per the spec "Gateway
+    boot" row. A counter that resets backwards is safe, not an attack
+    surface: receivers reject any claim_seq at or below their cached
+    per-IID high-water, so the sender simply climbs past the old value.
+
+    ponytail: single-writer plain-file store with no inter-process lock —
+    one gateway process owns the state file; a file lock plus read-modify-
+    -write under it is the upgrade path if a second writer appears.
+    """
+
+    def __init__(self, path: str | os.PathLike[str]) -> None:
+        self._path = Path(path)
+        self._seq = self._load()
+
+    def _load(self) -> int:
+        try:
+            text = self._path.read_text(encoding="ascii")
+        except (OSError, ValueError):
+            return 0
+        try:
+            seq = int(text.strip())
+        except ValueError:
+            return 0
+        return seq if seq >= 0 else 0
+
+    def next_seq(self) -> int:
+        """Increment, atomically persist, then return the new claim_seq.
+
+        Raises OSError when the value could not be durably persisted; the
+        caller MUST NOT sign or send a claim carrying an unpersisted
+        sequence (GCP-6.5 "Before claim" row).
+        """
+        seq = self._seq + 1
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{self._path.name}.", suffix=".tmp", dir=self._path.parent
+        )
+        try:
+            with os.fdopen(fd, "wb", closefd=True) as f:
+                f.write(str(seq).encode("ascii"))
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, self._path)
+        except BaseException:
+            with suppress(OSError):
+                os.unlink(tmp_name)
+            raise
+
+        # Sync the directory so the rename itself survives a power loss.
+        dir_fd = os.open(self._path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+        self._seq = seq
+        return seq
+
+
 def verify_slot_claim(
     claim: SlotClaim,
     gateway_pubkey: bytes,
@@ -473,7 +547,7 @@ def verify_slot_claim(
     now = time.time() if now_unix is None else now_unix
     if claim.expiry > now + MAX_CLAIM_DURATION_SECONDS:
         # The upper bound is checked against the worker constant; the
-                return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
+        return (False, ClaimRejectReason.EXPIRY_TOO_FAR)
 
     # GCP-6.3 hardening: bound how far ahead a claim may pre-book slots.
     # The timestamp is covered by the signature, so this rejects a
