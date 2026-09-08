@@ -1,17 +1,23 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GCP-6.5 slot-claim COSE_Sign1 admission corpus (spec/08 9.8)",
+  "description": "Closed schema for gcp_slot_claim_cose_sign1.json: matches the committed generator output shape (generate_gcp_slot_claim_cose_sign1.py --check is the freshness oracle). Document fields: constants, identities, cases (bead project-LICHEN-worker6-m9pi).",
   "type": "object",
   "required": [
+    "$schema",
     "vector_type",
     "format_version",
     "description",
     "oracle",
     "constants",
-    "claims"
+    "identities",
+    "cases"
   ],
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "type": "string"
+    },
     "vector_type": {
       "const": "gcp_slot_claim_cose_sign1"
     },
@@ -26,7 +32,8 @@
       "required": [
         "basis",
         "implementation",
-        "generator_command"
+        "generator_command",
+        "freshness_command"
       ],
       "additionalProperties": false,
       "properties": {
@@ -38,36 +45,94 @@
         },
         "generator_command": {
           "type": "string"
+        },
+        "freshness_command": {
+          "type": "string"
         }
       }
     },
     "constants": {
       "type": "object",
       "required": [
-        "protected_alg_hex",
-        "decoy_alg_hex",
-        "cose_key_kid",
-        "signature_len"
+        "algorithm",
+        "protected_hex",
+        "evaluation_time",
+        "max_claim_duration_s",
+        "clock_tolerance_s",
+        "payload_keys",
+        "reject_reasons"
       ],
       "additionalProperties": false,
       "properties": {
-        "protected_alg_hex": {
+        "algorithm": {
+          "const": -65537
+        },
+        "protected_hex": {
           "type": "string",
           "pattern": "^(?:[0-9a-f]{2})+$"
         },
-        "decoy_alg_hex": {
-          "type": "string",
-          "pattern": "^(?:[0-9a-f]{2})+$"
+        "evaluation_time": {
+          "type": "integer",
+          "minimum": 0
         },
-        "cose_key_kid": {
-          "type": "integer"
+        "max_claim_duration_s": {
+          "type": "integer",
+          "minimum": 0
         },
-        "signature_len": {
-          "const": 48
+        "clock_tolerance_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payload_keys": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer"
+          }
+        },
+        "reject_reasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
-    "claims": {
+    "identities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "seed_hex",
+          "public_key_hex",
+          "iid_hex"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "seed_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "public_key_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "iid_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          }
+        }
+      }
+    },
+    "cases": {
       "type": "array",
       "minItems": 1,
       "items": {
@@ -75,18 +140,30 @@
         "required": [
           "name",
           "description",
-          "gateway_seed_hex",
-          "gateway_public_key_hex",
-          "gateway_iid_hex",
-          "claim_seq",
-          "expiry",
-          "now_unix",
-          "clock_valid",
+          "expect_valid",
+          "expected_reject_reason",
+          "signer_name",
+          "signer_seed_hex",
+          "signer_public_key_hex",
+          "signer_iid_hex",
+          "kid_iid_hex",
+          "algorithm",
+          "protected_hex",
           "payload_hex",
+          "signed_payload_hex",
+          "sig_structure_hex",
+          "digest_hex",
           "signature_hex",
-          "protected_alg_hex",
           "cose_sign1_hex",
-          "expect"
+          "evaluation_time",
+          "slots",
+          "superframe_epoch",
+          "mode",
+          "expiry",
+          "claim_seq",
+          "ordinal",
+          "max_claim_duration_s",
+          "clock_tolerance_s"
         ],
         "additionalProperties": false,
         "properties": {
@@ -97,19 +174,86 @@
           "description": {
             "type": "string"
           },
-          "gateway_seed_hex": {
+          "expect_valid": {
+            "type": "boolean"
+          },
+          "expected_reject_reason": {
+            "enum": [
+              "none",
+              "signature",
+              "replay",
+              "expired",
+              "algorithm",
+              "kid_payload_mismatch",
+              "ordinal_missing"
+            ]
+          },
+          "signer_name": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "signer_seed_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "signer_public_key_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "signer_iid_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "kid_iid_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "algorithm": {
+            "type": "integer"
+          },
+          "protected_hex": {
             "type": "string",
             "pattern": "^(?:[0-9a-f]{2})+$"
           },
-          "gateway_public_key_hex": {
+          "payload_hex": {
             "type": "string",
             "pattern": "^(?:[0-9a-f]{2})+$"
           },
-          "gateway_iid_hex": {
+          "signed_payload_hex": {
             "type": "string",
             "pattern": "^(?:[0-9a-f]{2})+$"
           },
-          "claim_seq": {
+          "sig_structure_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "digest_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "signature_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{96}$"
+          },
+          "cose_sign1_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})+$"
+          },
+          "evaluation_time": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "superframe_epoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mode": {
             "type": "integer",
             "minimum": 0
           },
@@ -117,37 +261,25 @@
             "type": "integer",
             "minimum": 0
           },
-          "now_unix": {
+          "claim_seq": {
             "type": "integer",
             "minimum": 0
           },
-          "clock_valid": {
-            "type": "boolean"
+          "ordinal": {
+            "type": "integer",
+            "minimum": 0
           },
-          "payload_hex": {
-            "type": "string",
-            "pattern": "^(?:[0-9a-f]{2})+$"
+          "max_claim_duration_s": {
+            "type": "integer",
+            "minimum": 0
           },
-          "signature_hex": {
-            "type": "string",
-            "pattern": "^(?:[0-9a-f]{2})+$"
+          "clock_tolerance_s": {
+            "type": "integer",
+            "minimum": 0
           },
-          "protected_alg_hex": {
-            "type": "string",
-            "pattern": "^(?:[0-9a-f]{2})+$"
-          },
-          "cose_sign1_hex": {
-            "type": "string",
-            "pattern": "^(?:[0-9a-f]{2})+$"
-          },
-          "expect": {
-            "enum": [
-              "admit",
-              "reject_replay",
-              "reject_expired",
-              "reject_signature",
-              "reject_alg"
-            ]
+          "receiver_cached_claim_seq": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
