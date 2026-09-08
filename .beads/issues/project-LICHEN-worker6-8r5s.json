@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-8r5s",
+  "title": "C: (void) casts hide persistence failures in link_ctx.c",
+  "description": "link_ctx.c has 9 instances of (void)save_tuple(ctx) and (void)seq_unlock(ctx) that silently discard NVS/lock errors. Comments say 'ignore errors to not block boot' but no LOG_ERR or metric is emitted, so downstream replay/state bugs have no root-cause trail. Fix: add LOG_WRN on failure paths even if the return is still ignored, so an AI watching logs can correlate persistence failures with later state corruption.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T18:48:00.192238775Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T18:48:00.192238775Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "diagnosability"
+  ]
+}
