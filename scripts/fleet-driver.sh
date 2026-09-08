@@ -59,6 +59,9 @@ HARD_PROMPT='SELF-CHECK first: if you notice yourself repeating actions you alre
 
 EMPTY_N=0
 mkdir -p /tmp/fleet-driver-state
+worker_cmd() {  # worker8 is the hard-bead lane on a stronger model
+    if [ "$1" -eq 8 ]; then echo "opencode -m openai/gpt-5.6-luna"; else echo "opencode"; fi
+}
 while :; do
     CREDITS=$(remaining_credits)
     echo "── driver $(date '+%F %T') credits=$CREDITS ──"
@@ -117,7 +120,7 @@ PY
                 # w4/w7 context-death sat unnoticed for hours (bead biod era).
                 echo "   worker$i: window missing — recreating"
                 tmux new-window -d -t "$SESSION" -n "worker$i" \
-                    "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                    "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
                 tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                 continue
             fi
@@ -129,7 +132,7 @@ PY
             if [ -f "$HOME/Developer/lichen-workers/worker$i/SELF-REPORT-DEGENERATE" ]; then
                 rm -f "$HOME/Developer/lichen-workers/worker$i/SELF-REPORT-DEGENERATE"
                 tmux kill-window -t "$WIN" 2>/dev/null
-                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
                 tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                 rm -f "$STATEF"
                 BEADS_DIR="$BEADS_DIR" bd create --title="[info] worker$i self-reported degenerate (restarted)" --description="Worker$i touched SELF-REPORT-DEGENERATE: it detected its own context rot and asked for a fresh session. Driver restarted it. Watch for repeat self-reports from the same worker within a day." -t task -p 4 --json >/dev/null 2>&1
@@ -137,13 +140,17 @@ PY
                 continue
             fi
             # Session-age rotation: cap context-rot exposure at 24h.
-            BORN=$(cat "$STATEF.born" 2>/dev/null || echo 0)
             NOW=$(date +%s)
-            if [ "$BORN" -eq 0 ]; then echo "$NOW" > "$STATEF.born"; fi
+            if [ ! -f "$STATEF.born" ]; then
+                echo "$NOW" > "$STATEF.born"   # first sight: no rotation
+                BORN=$NOW
+            else
+                BORN=$(cat "$STATEF.born")
+            fi
             if [ $((NOW - BORN)) -gt 86400 ]; then
                 echo "   worker$i: session older than 24h — rotating (context-rot cap)"
                 tmux kill-window -t "$WIN" 2>/dev/null
-                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
                 tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                 echo "$NOW" > "$STATEF.born"
                 echo 0 > "$STATEF.rounds"
@@ -170,7 +177,7 @@ print(n)" 2>/dev/null || echo 0)
                 if [ "$ROUNDS" -ge 5 ]; then
                     rm -f "$STATEF.rounds" "$STATEF.born"
                     tmux kill-window -t "$WIN" 2>/dev/null
-                    tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                    tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
                     tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                     BEADS_DIR="$BEADS_DIR" bd create --title="[info] worker$i stalled (0 closes in 5+ rounds, restarted)" --description="Driver stall detector: worker$i burned 5+ dispatched rounds with zero closures in 24h — the 'jabbering' degeneration signature. Session restarted fresh. If it recurs on the same worker, investigate its affinity pool (hard beads repeating?)." -t task -p 4 --json >/dev/null 2>&1
                     echo "   worker$i: STALLED (5 rounds, 0 closes) — restarted fresh"
@@ -184,7 +191,7 @@ print(n)" 2>/dev/null || echo 0)
             if [ "$TOTAL" -ge 8 ]; then
                 echo "   worker$i: 8-round freshness rotation"
                 tmux kill-window -t "$WIN" 2>/dev/null
-                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
                 tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                 echo "$(date +%s)" > "$STATEF.born"
                 echo 0 > "$STATEF.rounds"
