@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-w5ve.9",
+  "title": "Web dashboard — unified 4+2 screen layout",
+  "description": "Single-page web app matching the unified screen vocabulary. 4-tab layout with sidebar for peer detail. WebSocket for CoAP Observe push. Leaflet/OSM for map. Same status bar. Builds on existing python dashboard. Spec: 11-lci.md §17.8.7 web specifics. Python/JS.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:40:10.372453755Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:40:10.372453755Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w5ve.9",
+      "depends_on_id": "project-LICHEN-worker6-w5ve",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:40:10.570177527Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
