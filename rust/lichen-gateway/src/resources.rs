@@ -69,6 +69,12 @@ const KEY_MAP_ORDINAL: i64 = 4;
 const KEY_MAP_START: i64 = 5;
 const KEY_MAP_COUNT: i64 = 6;
 
+/// Spec GCP-6.4 (R-08-014): GET /slots, /channels and /nodes responses are
+/// limited to at most 32 entries per response; larger result sets require
+/// Block2 pagination. Until block-wise transfer is wired (bead
+/// l1qw.18.3), responses truncate at this bound rather than exceed the MUST.
+pub(crate) const MAX_GET_RESPONSE_ENTRIES: usize = 32;
+
 /// GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim
 /// may not reserve capacity further than this past now (5 superframes x
 /// 60 s + 5 s clock tolerance). The wire key-4 field decoded as
@@ -913,9 +919,15 @@ pub struct ChannelMap {
 impl ChannelMap {
     /// Encode as CBOR for transmission.
     pub fn encode(&self) -> Vec<u8> {
+        self.encode_capped(usize::MAX)
+    }
+
+    /// Encode as CBOR, emitting at most `max_entries` channel entries.
+    pub fn encode_capped(&self, max_entries: usize) -> Vec<u8> {
         let entries: Vec<Value> = self
             .channels
             .iter()
+            .take(max_entries)
             .map(|c| Value::Map(c.to_cbor_map()))
             .collect();
 
@@ -944,7 +956,10 @@ pub struct NodeEntry {
 }
 
 /// Encode node registry as SenML/CBOR for GET /nodes response.
-pub fn encode_nodes_senml(registry: &NodeRegistry) -> Vec<u8> {
+///
+/// Emits at most `max_nodes` node records after the base record (spec
+/// GCP-6.4 / R-08-014 response bound).
+pub fn encode_nodes_senml(registry: &NodeRegistry, max_nodes: usize) -> Vec<u8> {
     // SenML pack: array of records
     // Each record is a map with keys per RFC 8428:
     // "bn" = base name, "n" = name, "v" = value, "t" = time
@@ -958,8 +973,8 @@ pub fn encode_nodes_senml(registry: &NodeRegistry) -> Vec<u8> {
     )]);
     records.push(base_record);
 
-    for addr in nodes {
-        if let Some(entry) = registry.get(&addr) {
+    for addr in nodes.iter().take(max_nodes) {
+        if let Some(entry) = registry.get(addr) {
             // Format address as hex string for SenML name
             let addr_hex: String = addr.iter().map(|b| format!("{:02x}", b)).collect();
 
@@ -1791,6 +1806,7 @@ impl GatewayCoordinator {
             .owned_slots(self.info.capabilities.max_slots);
         let slots_values: Vec<Value> = slots
             .iter()
+            .take(MAX_GET_RESPONSE_ENTRIES)
             .map(|&s| Value::Integer((s as i64).into()))
             .collect();
 
@@ -2072,7 +2088,7 @@ impl GatewayCoordinator {
 
     /// Handle GET /channels request.
     pub fn handle_get_channels(&self) -> CoapResponse {
-        let payload = self.channel_map.encode();
+        let payload = self.channel_map.encode_capped(MAX_GET_RESPONSE_ENTRIES);
         CoapResponse::content(payload, CONTENT_FORMAT_CBOR)
     }
 
@@ -2133,7 +2149,7 @@ impl GatewayCoordinator {
 
     /// Handle GET /nodes request.
     pub fn handle_get_nodes(&self) -> CoapResponse {
-        let payload = encode_nodes_senml(&self.node_registry);
+        let payload = encode_nodes_senml(&self.node_registry, MAX_GET_RESPONSE_ENTRIES);
         CoapResponse::content(payload, CONTENT_FORMAT_SENML_CBOR)
     }
 
@@ -3191,6 +3207,96 @@ mod tests {
         } else {
             panic!("expected array response");
         }
+    }
+
+    /// Spec GCP-6.4 (R-08-014): GET /slots responses carry at most 32 owned
+    /// slots; a 60-slot interleaved map truncates (Block2 pagination is
+    /// tracked separately in l1qw.18.3).
+    #[test]
+    fn get_slots_caps_owned_entries_at_32() {
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Interleaved,
+            gateway_count: 1,
+            ordinal: 0,
+            start_slot: None,
+            slot_count: None,
+            owned: None,
+        };
+
+        let response = coordinator.handle_get_slots();
+        assert_eq!(response.code, 0x45);
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Map(map) = value else {
+            panic!("expected map response");
+        };
+        let owned = map
+            .iter()
+            .find(|(k, _)| *k == Value::Integer(KEY_MAP_OWNED.into()))
+            .map(|(_, v)| v)
+            .expect("owned key present");
+        let Value::Array(entries) = owned else {
+            panic!("owned value must be an array");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+        assert_eq!(entries[0], Value::Integer(0.into()));
+        assert_eq!(entries[31], Value::Integer(31.into()));
+    }
+
+    /// Spec GCP-6.4 (R-08-014): GET /channels responses carry at most 32
+    /// channel entries.
+    #[test]
+    fn get_channels_caps_entries_at_32() {
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        for channel in 0..48u8 {
+            coordinator.channel_map.channels.push(ChannelInfo {
+                channel_id: channel,
+                frequency_hz: 869_525_000 + u32::from(channel) * 200_000,
+                owner_iid: None,
+            });
+        }
+        assert!(coordinator.channel_map.channels.len() > MAX_GET_RESPONSE_ENTRIES);
+
+        let response = coordinator.handle_get_channels();
+        assert_eq!(response.code, 0x45);
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+    }
+
+    /// Spec GCP-6.4 (R-08-014): GET /nodes responses carry the base record
+    /// plus at most 32 node records.
+    #[test]
+    fn get_nodes_caps_records_at_32() {
+        use crate::handoff::NodeRegistryEntry;
+
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        for i in 0..40u8 {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+
+        let response = coordinator.handle_get_nodes();
+        assert_eq!(response.code, 0x45);
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        // Base record + capped node records
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
+        let Value::Map(base) = &records[0] else {
+            panic!("first record must be the SenML base record");
+        };
+        assert!(base.iter().any(|(k, v)| *k == Value::Text("bn".to_string())
+            && *v == Value::Text("urn:lichen:gw:nodes:".to_string())));
     }
 
     #[test]

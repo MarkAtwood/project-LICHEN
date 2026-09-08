@@ -2709,89 +2709,155 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 
 // ── Root DIO signature: R-06-307 expired-signature -> Baseline (b7z9.88.3) ──
 //
-// The receiver pins the root key via the test-only hook (the shared vector
-// fixture's private key is not available for a real announce), then the
-// same signed DIO is delivered under three clocks: before expiry
-// (Verified + replay-rejected), past expiry (Baseline: admitted, NOT
-// rejected), and the clockless default (Baseline).
+// The vector COSE (VALID_COSE_SIGN1, expiry VECTOR_EXPIRY_UNIX) is the
+// root-signed option. Its payload pins rank 256 / MOP 2, so a payload-
+// matching carrier DIO is Root-role at the SCHC admission gate and can
+// only be processed end-to-end when sent by the true DODAG root (key-
+// derived address == DODAGID) — the vector's private key is unavailable
+// by construction. The contract is therefore pinned at two layers:
+//
+// - gate level: verify_dio_root_signature on the payload-matched carrier:
+//   Verified (fresh root_seq admitted) then Reject (replay) under a live
+//   clock — no router policy in the way.
+// - stack level: a router-admissible carrier (Peer rank, non-storing MOP)
+//   carrying the expired signature is ADMITTED as unsigned with a past-
+//   expiry or absent clock (R-06-307: expired -> Baseline, never Reject).
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 
-#[tokio::test]
-#[ignore = "R-06-307 pin WIP: valid signatures still RplRejected at stack level - likely the DODAG version-authorization gate on the hand-built DIO; see bead b7z9.88.3 diagnosis (worker-1 round 2)"]
-async fn valid_root_signature_is_verified_and_replay_rejected() {
-    let (mut sender, mut receiver, packet) =
-        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1)).await;
+const NON_STORING_MOP: u8 = 1;
+
+use crate::rpl_stack::root_sig;
+
+/// DIO body (header + options) with the carrier rank/MOP chosen by the
+/// caller; all other header fields come from the signed payload. Options:
+/// the mandatory SCHC rule-version advertisement (0x13, per the evidence
+/// parser's MissingRuleVersion gate) followed by the 0x17 root signature
+/// carrying the vector COSE.
+fn vector_signed_dio_body(rank: u16, mop: u8) -> Vec<u8> {
+    let cose = root_sig::tests::vector_cose();
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
+    let dio = lichen_rpl::message::Dio {
+        rpl_instance_id: decoded.payload.instance,
+        version: decoded.payload.version,
+        rank,
+        grounded: true,
+        mode_of_operation: mop,
+        preference: 0,
+        dtsn: 0,
+        flags: 0,
+        dodag_id: decoded.payload.dodag_id,
+    };
+    let mut body = vec![0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 3 + 2 + 255];
+    let dio_len = dio.write_to(&mut body).unwrap();
+    body[dio_len..dio_len + 3].copy_from_slice(&[0x13, 1, lichen_schc::rules::RULE_SET_VERSION]);
+    let opt_len =
+        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len + 3..]).unwrap();
+    body.truncate(dio_len + 3 + opt_len);
+    body
+}
+
+/// Receiver provisioned for the vector DODAG, pinned to the vector root
+/// key, with the caller's wall clock (None = unassessable).
+fn pinned_receiver(clock: Option<fn() -> u64>) -> RplStack<MeshRadio, MemStorage> {
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
+        .unwrap();
+    let recv_identity = identity(22);
+    let mut recv_eui64 = recv_identity.iid;
+    recv_eui64[0] ^= 0x02;
+    let (_mesh, [recv_radio, _spare_a, _spare_b]) =
+        MeshHarness::new([recv_eui64, [0u8; 8], [0u8; 8]]);
+    let mut receiver = RplStack::provision_leaf(
+        Stack::new(recv_radio, recv_identity.clone(), 129, 0),
+        address(&recv_identity, 1),
+        decoded.payload.dodag_id,
+        announces(decoded.payload.dodag_id[8..16].try_into().unwrap()),
+        MemStorage::new(),
+    )
+    .unwrap();
     receiver
         .announces
         .pin_for_test(root_sig::tests::vector_pubkey());
+    if let Some(clock) = clock {
+        receiver.set_wall_clock_unix(clock);
+    }
+    receiver
+}
 
-    // Positive control: clock BEFORE expiry -> Verified -> processed, and
-    // the root_seq cache then rejects the replayed duplicate.
-    sender_ipv6(&mut sender, &packet).await;
-    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
-    assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
-        "valid signature must not be rejected: {outcome:?}"
-    );
-    sender_ipv6(&mut sender, &packet).await;
+#[test]
+fn valid_root_signature_is_verified_and_replay_rejected() {
+    use super::receive::DioRootSigOutcome;
+
+    let mut receiver = pinned_receiver(Some(|| VECTOR_EXPIRY_UNIX - 1));
+    // Carrier exactly matches the signed payload (rank 256, MOP 2).
+    let body = vector_signed_dio_body(256, 2);
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
+        .unwrap();
+    let fields = root_sig::DioFields {
+        dodag_id: Some(decoded.payload.dodag_id),
+        instance: Some(decoded.payload.instance),
+        version: Some(decoded.payload.version),
+        rank: Some(decoded.payload.rank),
+        mop: Some(decoded.payload.mop),
+    };
+
+    // Live clock before expiry -> Verified: root_seq 1 admitted to cache.
     assert!(matches!(
-        receiver.receive(1, 0).await.unwrap(),
-        Some(RplReceiveOutcome::RplRejected)
+        receiver.verify_dio_root_signature(&body, &fields),
+        DioRootSigOutcome::Verified
+    ));
+    // Replay: the same root_seq is rejected from the cache.
+    assert!(matches!(
+        receiver.verify_dio_root_signature(&body, &fields),
+        DioRootSigOutcome::Reject
     ));
 }
 
 #[tokio::test]
-#[ignore = "R-06-307 pin WIP: valid signatures still RplRejected at stack level - likely the DODAG version-authorization gate on the hand-built DIO; see bead b7z9.88.3 diagnosis (worker-1 round 2)"]
 async fn expired_root_signature_admitted_as_baseline_not_rejected() {
-    // THE PIN (R-06-307): clock past expiry -> Baseline BEFORE the replay
-    // gate - the replayed DIO is admitted (treated as unsigned), not
-    // rejected, even though the same DIO WAS rejected while the clock was
-    // valid (positive control first).
+    // THE PIN (R-06-307): clock past expiry -> Baseline BEFORE cross_check
+    // -> the signed DIO is processed as unsigned and admitted, not
+    // rejected. Carrier is router-admissible (Peer rank, non-storing MOP).
     let (mut sender, mut receiver, packet) =
-        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1)).await;
-    receiver
-        .announces
-        .pin_for_test(root_sig::tests::vector_pubkey());
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX + 1), 512, NON_STORING_MOP).await;
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
     assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
-        "valid signature must not be rejected: {outcome:?}"
-    );
-
-    receiver.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX + 1);
-    sender_ipv6(&mut sender, &packet).await;
-    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
-    assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
         "expired signature must degrade to baseline, not reject: {outcome:?}"
     );
 }
 
 #[tokio::test]
-#[ignore = "R-06-307 pin WIP: valid signatures still RplRejected at stack level - likely the DODAG version-authorization gate on the hand-built DIO; see bead b7z9.88.3 diagnosis (worker-1 round 2)"]
 async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
-    // Unassessable clock (no set_wall_clock_unix call) -> Baseline.
-    let (mut sender, mut receiver, packet) = baseline_fixture(None).await;
-    receiver
-        .announces
-        .pin_for_test(root_sig::tests::vector_pubkey());
+    // Unassessable clock (no wall clock wired) -> Baseline: the DIO is
+    // admitted as unsigned, not rejected.
+    let (mut sender, mut receiver, packet) = baseline_fixture(None, 512, NON_STORING_MOP).await;
 
     sender_ipv6(&mut sender, &packet).await;
     let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
     assert!(
-        !matches!(outcome, RplReceiveOutcome::RplRejected),
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
         "unassessable clock must degrade to baseline, not reject: {outcome:?}"
     );
 }
 
 /// Sender + receiver on an adjacent two-node mesh, the receiver pinned to
-/// the vector root key, and the root-signed DIO packet (Dio + 0x17 option
-/// carrying VALID_COSE_SIGN1). `clock` wires the receiver's wall clock.
+/// the vector root key, and a root-signed DIO packet (Dio + 0x17 option
+/// carrying VALID_COSE_SIGN1) with the caller's carrier rank/MOP.
+/// `clock` wires the receiver's wall clock. Link-layer trust is
+/// established with a signed announce from the sender.
 async fn baseline_fixture(
     clock: Option<fn() -> u64>,
+    carrier_rank: u16,
+    carrier_mop: u8,
 ) -> (
     RplStack<MeshRadio, MemStorage>,
     RplStack<MeshRadio, MemStorage>,
@@ -2806,31 +2872,14 @@ async fn baseline_fixture(
     let (_mesh, [relay_radio, recv_radio, _spare]) =
         MeshHarness::new([relay_eui64, recv_eui64, [0u8; 8]]);
 
-    use crate::rpl_stack::root_sig;
-    let cose = root_sig::tests::vector_cose();
-    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&cose).unwrap();
-    let root_iid = decoded.root_iid;
-
-    let dio = lichen_rpl::message::Dio {
-        rpl_instance_id: decoded.payload.instance,
-        version: decoded.payload.version,
-        rank: decoded.payload.rank,
-        grounded: true,
-        mode_of_operation: decoded.payload.mop,
-        preference: 0,
-        dtsn: 0,
-        flags: 0,
-        dodag_id: decoded.payload.dodag_id,
-    };
-    let mut body = [0u8; lichen_rpl::message::Dio::SERIALIZED_LEN + 2 + 255];
-    let dio_len = dio.write_to(&mut body).unwrap();
-    let opt_len =
-        lichen_rpl::message::RootDioSignature::write_to(&cose, &mut body[dio_len..]).unwrap();
+    let decoded = root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose())
+        .unwrap();
+    let body = vector_signed_dio_body(carrier_rank, carrier_mop);
     let packet = rpl_ipv6_packet(
         address(&relay_identity, 1),
         RPL_ALL_NODES,
         rpl_code::DIO,
-        &body[..dio_len + opt_len],
+        &body,
     )
     .unwrap();
 
