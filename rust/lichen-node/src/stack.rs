@@ -30,7 +30,7 @@ use crate::Node;
 /// Maximum wire frame size (LoRa MTU with some headroom).
 pub const MAX_FRAME_SIZE: usize = 255;
 
-/// TX packet priority levels (spec section 10.2.3 Priority Queue).
+/// TX packet priority levels (spec section 10.2.4 Priority Queue).
 ///
 /// Lower numeric value = higher priority. Maps 1:1 to the spec's P0-P4 levels.
 /// This mirrors the Python `lichen.link.tx_queue.Priority` enum.
