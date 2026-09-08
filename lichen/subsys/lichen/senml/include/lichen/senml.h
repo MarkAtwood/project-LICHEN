@@ -110,7 +110,7 @@ struct senml_record {
 	const char *_Nullable unit; /**< Unit (u) - may be NULL */
 	enum senml_value_type type;
 	union {
-		double f;          /**< Float value */
+		double f;          /**< Float value (encoded as CBOR f64) */
 		bool b;            /**< Boolean value */
 		const char *_Nullable s; /**< String value (vs) */
 		struct senml_span data;  /**< Binary value (vd) */

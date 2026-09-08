@@ -915,6 +915,9 @@ async fn config_removal_revokes_durable_pin_and_context() {
 async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     let gateway_identity = gateway_identity();
     let gateway_addr = gw_native(&gateway_identity);
+    // GCP coordination is link-local control traffic; using the native address
+    // here selects the mixed-address SCHC budget and rejects the COSE claim.
+    let gateway_link_addr = Addr::link_local_from_eui64(&gateway_identity.iid);
     let remote_identity = Identity::from_seed(Seed::new([0x76; 32]));
     let remote_pubkey = *remote_identity.pubkey.as_bytes();
     let remote_iid = remote_identity.iid;
@@ -1000,7 +1003,7 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
     let payload = claim.encode_cose(&claim_private, &claim_public).unwrap();
     let mut correlation = client
         .send_secure_request(
-            &Addr(gateway_addr),
+            &gateway_link_addr,
             &gateway_identity.iid,
             SecureRequestData {
                 uri_path: &[".well-known", "lichen-gw", "slots"],
@@ -1039,10 +1042,13 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
         .decrypt_response(&protected_response, &mut correlation)
         .await
         .unwrap();
+    // The default slot_map owns every slot and this gateway's IID is the
+    // lower one, so the claim [1,2,3] deterministically lands in the we-win
+    // conflict arm: GCP-6.5 step 11 responds 4.09 Conflict (spec/08:315).
     assert!(matches!(
         response,
         lichen_node::secure::SecureResponse::Decrypted { code, options, .. }
-            if matches!(code.0, 0x44 | 0x45) && options == [0xc1, 60]
+            if matches!(code.0, 0x89) && options == [0xc1, 60]
     ));
     assert_eq!(
         gateway

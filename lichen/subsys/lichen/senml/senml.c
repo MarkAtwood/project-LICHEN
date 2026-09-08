@@ -235,10 +235,15 @@ int senml_add_data(struct senml_pack *pack, const char *name,
 	return 0;
 }
 
-/* Encode the base record: a value-less first record carrying only base
- * fields (RFC 8428 §6; matches the spec vectors and the Python/Rust
- * encoders — see the integral_base_time test in Rust lichen-senml
- * wire.rs, which pins the same a2 {bn, bt} head bytes). */
+/*
+ * Encode the base fields (bn/bt) as their own value-less leading record
+ * (RFC 8428 §6). This is the cross-implementation canonical form: python
+ * senml.codec.pack() and the Rust wire codec emit a base-only first record
+ * (see test/vectors/senml_location.json; the integral_base_time test in
+ * Rust lichen-senml wire.rs pins the same a2 {bn, bt} head bytes).
+ *
+ * Returns 0 on success, negative errno on failure.
+ */
 static int encode_base_record(zcbor_state_t *state,
 			      const struct senml_pack *pack)
 {

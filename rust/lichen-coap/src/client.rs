@@ -7,7 +7,7 @@
 //! block-wise transfer.  It is suitable for CLI and TUI tools that talk to a
 //! local LICHEN node over the loopback or LAN.
 //!
-//! # 5.03 Service Unavailable Backoff (spec 07 section 10.2.3)
+//! # 5.03 Service Unavailable Backoff (spec 07 section 10.2.4)
 //!
 //! Per spec: "Senders receiving 5.03 MUST back off for the indicated duration."
 //! The [`CoapClient`] struct tracks peer backoff state and refuses new requests
@@ -31,7 +31,7 @@ use crate::option::{content_format, OptionNumber};
 
 const TIMEOUT_S: u64 = 5;
 
-/// Default backoff when 5.03 has no Max-Age option (spec 07 section 10.2.3).
+/// Default backoff when 5.03 has no Max-Age option (spec 07 section 10.2.4).
 const DEFAULT_503_BACKOFF_S: u64 = 60;
 
 /// SECURITY: Cap backoff to 1 hour to prevent DoS from malicious Max-Age values.
@@ -57,7 +57,7 @@ impl Response {
         self.code >> 5 == 2
     }
 
-    /// True for 5.03 Service Unavailable (spec 07 section 10.2.3).
+    /// True for 5.03 Service Unavailable (spec 07 section 10.2.4).
     pub fn is_service_unavailable(&self) -> bool {
         self.code == MessageCode::SERVICE_UNAVAILABLE.0
     }
@@ -67,7 +67,7 @@ impl Response {
         format!("{}.{:02}", self.code >> 5, self.code & 0x1f)
     }
 
-    /// Returns retry-after duration for 5.03 responses (spec 07 section 10.2.3).
+    /// Returns retry-after duration for 5.03 responses (spec 07 section 10.2.4).
     ///
     /// Returns `None` for non-5.03 responses. For 5.03 responses, returns
     /// Max-Age value (capped at MAX_BACKOFF_S) or DEFAULT_503_BACKOFF_S.
@@ -85,7 +85,7 @@ impl Response {
 
 /// Error returned when a peer is backed off or returns 5.03 Service Unavailable.
 ///
-/// Per spec 07 section 10.2.3: "Senders receiving 5.03 MUST back off for the
+/// Per spec 07 section 10.2.4: "Senders receiving 5.03 MUST back off for the
 /// indicated duration."
 #[derive(Debug)]
 pub struct ServiceUnavailableError {
@@ -156,7 +156,7 @@ impl From<ServiceUnavailableError> for ClientError {
     }
 }
 
-/// Stateful CoAP client with 5.03 backoff tracking (spec 07 section 10.2.3).
+/// Stateful CoAP client with 5.03 backoff tracking (spec 07 section 10.2.4).
 ///
 /// Tracks peer backoff state and refuses new requests to peers that are in
 /// backoff. Use [`CoapClient::new`] to create a client, then call methods
@@ -211,9 +211,9 @@ impl CoapClient {
         self.request(addr, MessageCode::DELETE, path, None).await
     }
 
-    /// Perform a CoAP request with backoff enforcement (spec 07 section 10.2.3).
+    /// Perform a CoAP request with backoff enforcement (spec 07 section 10.2.4).
     ///
-    /// SECURITY: Blocks requests to peers in backoff per spec 07 section 10.2.3.
+    /// SECURITY: Blocks requests to peers in backoff per spec 07 section 10.2.4.
     /// The spec MUST requirement ("Senders receiving 5.03 MUST back off for the
     /// indicated duration") protects peers from traffic they've explicitly asked
     /// to stop receiving.
@@ -645,7 +645,7 @@ mod tests {
         assert_eq!(sequence.load(Ordering::Relaxed), u64::MAX);
     }
 
-    // ── 5.03 Service Unavailable Tests (spec 07 section 10.2.3) ─────────────
+    // ── 5.03 Service Unavailable Tests (spec 07 section 10.2.4) ─────────────
 
     #[test]
     fn response_is_service_unavailable() {

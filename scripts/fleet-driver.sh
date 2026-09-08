@@ -12,7 +12,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/Developer/l
 export BEADS_DIR="${BEADS_DIR:-$REPO_ROOT/.beads}"
 export PATH="$HOME/.opencode/bin:$PATH"
 
-ROUND_PROMPT='Continue the beads worker loop (instructions: scripts/beads-worker-full.txt). Claim the next ready bead, complete it fully (tests, 3x codereview delegating each pass to the reviewer model per step 4, findings filed as new beads, close, commit), then stop and report. Exactly one bead this round. TIMEBOX: if the bead is too big to finish within ~15 minutes, follow the TIMEBOX rule — commit the slice, file follow-ups, release, end the round.'
+ROUND_PROMPT='SELF-CHECK first: if you notice yourself repeating actions you already did, arguing with your own output, or unable to form a next step — touch ~/Developer/lichen-workers/worker<YOUR_N>/SELF-REPORT-DEGENERATE and end the round immediately; the driver will restart you fresh. Otherwise: Continue the beads worker loop (instructions: scripts/beads-worker-full.txt). Claim the next ready bead, complete it fully (tests, 3x codereview delegating each pass to the reviewer model per step 4, findings filed as new beads, close, commit). Exactly one P0/P1/P2 bead this round. TAIL BATCHING: after your first bead, if it was quick, you may claim and close up to 3 more, but ONLY priority 3 or 4 beads (small polish) — never batch P0-P2. TIMEBOX: if any bead is too big to finish within ~15 minutes, follow the TIMEBOX rule — commit the slice, file follow-ups, release, end the round.'
 
 remaining_credits() {
     KEY=$(python3 - <<PYEOF
@@ -55,8 +55,19 @@ worker_in_progress() {  # worker number; count of that actor's in_progress beads
 
 echo "fleet driver: cycle ${CYCLE_MIN}m, no credit gating (auto-topup) — Ctrl+C to stop"
 
+HARD_PROMPT='SELF-CHECK first: if you notice yourself repeating actions you already did, arguing with your own output, or unable to form a next step — touch ~/Developer/lichen-workers/worker<YOUR_N>/SELF-REPORT-DEGENERATE and end the round immediately. Otherwise: You are the HARD-BEAD LANE (worker8, stronger model): claim P0/P1 priority beads first (bd ready --json, filter priority 0 or 1) — the beads others timebox out of. Same loop otherwise (instructions: scripts/beads-worker-full.txt): claim, complete fully (tests, 3x codereview, findings filed as beads, close, commit), then stop and report. Exactly one bead this round. If no P0/P1 is ready, take any ready bead.'
+
 EMPTY_N=0
+mkdir -p /tmp/fleet-driver-state
+worker_cmd() {  # worker8 is the hard-bead lane on a stronger model
+    if [ "$1" -eq 8 ]; then echo "opencode -m openai/gpt-5.6-luna"; else echo "opencode"; fi
+}
 while :; do
+    if [ -f "$REPO_ROOT/.fleet-paused" ]; then
+        echo "driver PAUSED: $(head -1 "$REPO_ROOT/.fleet-paused")"
+        sleep $((CYCLE_MIN * 60))
+        continue
+    fi
     CREDITS=$(remaining_credits)
     echo "── driver $(date '+%F %T') credits=$CREDITS ──"
     # Burn ceiling marker (Mark: $2000 is the 'tell me' line). Marker only —
@@ -93,6 +104,29 @@ PY
     fi
     READY=$(BEADS_DIR="$BEADS_DIR" bd ready --json 2>/dev/null | jq "length" 2>/dev/null || echo 0)
 
+    # Outcome canary (the week's real lesson): if the fleet closes almost
+    # nothing in 24h, ALARM — components can all look alive while the
+    # worktrees are gone. Marker + bead so it's visible on any host.
+    DAY_CLOSES=$(BEADS_DIR="$BEADS_DIR" bd list --status=closed --json 2>/dev/null | python3 -c "
+import json, sys, datetime
+now = datetime.datetime.now(datetime.timezone.utc)
+n = 0
+for i in json.load(sys.stdin):
+    t = i.get('closed_at') or ''
+    try:
+        c = datetime.datetime.fromisoformat(t.replace('Z','+00:00'))
+        if (now - c).total_seconds() <= 86400: n += 1
+    except Exception: pass
+print(n)" 2>/dev/null || echo 0)
+    echo "   24h closures: $DAY_CLOSES"
+    if [ "${DAY_CLOSES:-0}" -lt 5 ] && [ ! -f "$REPO_ROOT/.fleet-stalled" ]; then
+        date '+%F %T' > "$REPO_ROOT/.fleet-stalled"
+        BEADS_DIR="$BEADS_DIR" bd create --title="[ALARM] Fleet stalled: $DAY_CLOSES closures in 24h" --description="The outcome canary fired: fewer than 5 closures in 24 hours while the fleet should be closing 15-20/h. Components may look alive (windows present, sessions busy) while being unable to work — the 2026-09-02..07 outage looked exactly like this (vanished worktrees). CHECK: worktree dirs exist, driver dispatching, workers actually closing, merge state healthy." -t bug -p 1 --json >/dev/null 2>&1
+        echo "   ALARM: fleet outcome stalled — bead filed"
+    elif [ "${DAY_CLOSES:-0}" -ge 5 ]; then
+        rm -f "$REPO_ROOT/.fleet-stalled"
+    fi
+
     if [ "$READY" -eq 0 ]; then
         echo "   ready queue empty — nothing to dispatch"
         EMPTY_N=$((EMPTY_N + 1))
@@ -105,7 +139,7 @@ PY
         EMPTY_N=0
         rm -f "$REPO_ROOT/.fleet-drained"
         echo "   workers have work"
-        for i in 1 2 3 4 5 6 7; do
+        for i in 1 2 3 4 5 6 7 8; do
             WIN="$SESSION:worker$i"
             tmux has-session -t "$SESSION" 2>/dev/null || break
             if ! tmux select-window -t "$WIN" 2>/dev/null; then
@@ -113,16 +147,90 @@ PY
                 # a fatal API error) is recreated automatically — the overnight
                 # w4/w7 context-death sat unnoticed for hours (bead biod era).
                 echo "   worker$i: window missing — recreating"
-                tmux new-window -d -t "$SESSION:$i" -n "worker$i" \
-                    "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                tmux new-window -d -t "$SESSION" -n "worker$i" \
+                    "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
+                tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                 continue
             fi
             pane_busy "$WIN" && { echo "   worker$i: busy"; continue; }
             NIP=$(worker_in_progress "$i")
             [ "$NIP" -gt 0 ] && { echo "   worker$i: holds $NIP in-progress bead(s) — waiting"; continue; }
-            echo "   worker$i: dispatching round"
+            STATEF="/tmp/fleet-driver-state/worker$i"
+            # Self-report bridge: the agent flagged itself degenerate.
+            if [ -f "$HOME/Developer/lichen-workers/worker$i/SELF-REPORT-DEGENERATE" ]; then
+                rm -f "$HOME/Developer/lichen-workers/worker$i/SELF-REPORT-DEGENERATE"
+                tmux kill-window -t "$WIN" 2>/dev/null
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
+                tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
+                rm -f "$STATEF"
+                BEADS_DIR="$BEADS_DIR" bd create --title="[info] worker$i self-reported degenerate (restarted)" --description="Worker$i touched SELF-REPORT-DEGENERATE: it detected its own context rot and asked for a fresh session. Driver restarted it. Watch for repeat self-reports from the same worker within a day." -t task -p 4 --json >/dev/null 2>&1
+                echo "   worker$i: self-reported degenerate — restarted fresh"
+                continue
+            fi
+            # Session-age rotation: cap context-rot exposure at 24h.
+            NOW=$(date +%s)
+            if [ ! -f "$STATEF.born" ]; then
+                echo "$NOW" > "$STATEF.born"   # first sight: no rotation
+                BORN=$NOW
+            else
+                BORN=$(cat "$STATEF.born")
+            fi
+            if [ $((NOW - BORN)) -gt 86400 ]; then
+                echo "   worker$i: session older than 24h — rotating (context-rot cap)"
+                tmux kill-window -t "$WIN" 2>/dev/null
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
+                tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
+                echo "$NOW" > "$STATEF.born"
+                echo 0 > "$STATEF.rounds"
+                continue
+            fi
+            # Stall detection: 5+ dispatched rounds with zero closes = degenerate.
+            CLOSES=$(BEADS_DIR="$BEADS_DIR" bd list --status=closed --assignee "opencode-worker-$i" --json 2>/dev/null | python3 -c "
+import json, sys, datetime
+now = datetime.datetime.now(datetime.timezone.utc)
+n = 0
+for i in json.load(sys.stdin):
+    t = i.get('closed_at') or ''
+    try:
+        c = datetime.datetime.fromisoformat(t.replace('Z','+00:00'))
+        if (now - c).total_seconds() <= 86400: n += 1
+    except Exception: pass
+print(n)" 2>/dev/null || echo 0)
+            if [ "${CLOSES:-0}" -gt 0 ]; then
+                echo 0 > "$STATEF.rounds"
+            else
+                ROUNDS=$(cat "$STATEF.rounds" 2>/dev/null || echo 0)
+                ROUNDS=$((ROUNDS + 1))
+                echo "$ROUNDS" > "$STATEF.rounds"
+                if [ "$ROUNDS" -ge 5 ]; then
+                    rm -f "$STATEF.rounds" "$STATEF.born"
+                    tmux kill-window -t "$WIN" 2>/dev/null
+                    tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
+                    tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
+                    BEADS_DIR="$BEADS_DIR" bd create --title="[info] worker$i stalled (0 closes in 5+ rounds, restarted)" --description="Driver stall detector: worker$i burned 5+ dispatched rounds with zero closures in 24h — the 'jabbering' degeneration signature. Session restarted fresh. If it recurs on the same worker, investigate its affinity pool (hard beads repeating?)." -t task -p 4 --json >/dev/null 2>&1
+                    echo "   worker$i: STALLED (5 rounds, 0 closes) — restarted fresh"
+                    continue
+                fi
+            fi
+            # Freshness rotation: 8 rounds (beads) per session max — fresh
+            # sessions close briskly, old ones rot (the 4-day insanity lesson).
+            # Fires only on idle bead-free workers, so no work is killed.
+            TOTAL=$(cat "$STATEF.total" 2>/dev/null || echo 0)
+            if [ "$TOTAL" -ge 8 ]; then
+                echo "   worker$i: 8-round freshness rotation"
+                tmux kill-window -t "$WIN" 2>/dev/null
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec $(worker_cmd $i)"
+                tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
+                echo "$(date +%s)" > "$STATEF.born"
+                echo 0 > "$STATEF.rounds"
+                echo 0 > "$STATEF.total"
+                continue
+            fi
+            echo "$((TOTAL + 1))" > "$STATEF.total"
+            if [ "$i" -eq 8 ]; then PROMPT="$HARD_PROMPT"; else PROMPT="$ROUND_PROMPT"; fi
+            echo "   worker$i: dispatching round (session round $((TOTAL + 1))/8)${i:+}"
             wait_ready "$WIN"
-            tmux send-keys -t "$WIN" -l "$ROUND_PROMPT"
+            tmux send-keys -t "$WIN" -l "$PROMPT"
             sleep 1
             tmux send-keys -t "$WIN" Enter
             sleep 3

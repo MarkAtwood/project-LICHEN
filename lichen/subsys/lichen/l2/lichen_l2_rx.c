@@ -48,6 +48,21 @@ STATS_SECT_DECL(lichen_l2rx_stats) lichen_l2rx_stats;
 
 LOG_MODULE_DECLARE(lichen_l2, CONFIG_LICHEN_L2_LOG_LEVEL);
 
+#if defined(CONFIG_LICHEN_TDMA) && defined(CONFIG_LICHEN_CCP_TIME_SYNC)
+static bool l2_desync_wall_clock_valid(void)
+{
+	return lichen_wall_clock_valid();
+}
+#elif defined(CONFIG_LICHEN_TDMA)
+/* TDMA without the time-sync subsystem: no wall clock exists, so R-02a-084
+ * keeps the DESYNCED recovery gate closed (fail-closed) without creating a
+ * link dependency on time_sync.c. */
+static bool l2_desync_wall_clock_valid(void)
+{
+	return false;
+}
+#endif
+
 /**
  * @brief LoRa RX callback - invoked from lora_l2 RX thread
  */
@@ -204,11 +219,12 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 		 */
 		if (len == 5 && data[0] == 4 && data[1] == 0x00) {
 #if defined(CONFIG_LICHEN_TDMA)
-				/* Unsigned neighbor beacon: not a valid
-				 * signature path; still a tick of the
-				 * superframe — no recovery credit. */
-				(void)lichen_desync_on_beacon(
-					&link_ctx.tdma, false);
+			/* Unsigned neighbor beacon: not a valid
+			 * signature path; still a tick of the
+			 * superframe — no recovery credit. */
+			(void)lichen_desync_on_beacon(
+				&link_ctx.tdma, false,
+				l2_desync_wall_clock_valid());
 #endif
 				secure_zero(rx_link_key, sizeof(rx_link_key));
 				k_mutex_unlock(&rx_mutex);
@@ -241,8 +257,10 @@ void lichen_l2_input(struct net_if *iface, const uint8_t *data, size_t len,
 	/* DesyncFSM input (d7hg): a verified frame counts as a beacon result.
 	 * Validity = signature-verified; floor/SFN validation is the caller's
 	 * epoch-floor path (see time_sync.c:571). Drives DESYNCED -> SYNCED
-	 * recovery per spec 14.7. */
-	(void)lichen_desync_on_beacon(&link_ctx.tdma, true);
+	 * recovery per spec 14.7. R-02a-084: recovery may not start while
+	 * the wall clock is unsynced. */
+	(void)lichen_desync_on_beacon(&link_ctx.tdma, true,
+				      l2_desync_wall_clock_valid());
 #endif
 
 	/* SECURITY: Validate ipv6_len before using it (project-LICHEN-3pun.5) */

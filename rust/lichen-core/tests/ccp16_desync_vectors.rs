@@ -8,6 +8,7 @@
 //! corpus is the committed independent oracle for all three suites.
 
 use lichen_core::desync::{DesyncFSM, DesyncState};
+use serde_json::Value;
 
 fn vectors() -> Vec<Value> {
     let content = include_str!("../../../test/vectors/ccp16-desync.json");
@@ -23,9 +24,13 @@ fn find_case(name: &str) -> Value {
 
 #[test]
 fn corpus_case_count_is_pinned() {
-    // Guard against corpus case-count drift (beads-worker-4); the C and
-    // Python consumers pin the same count.
-    assert_eq!(vectors().len(), 4, "corpus case count changed");
+    // Guard against corpus case-count drift (beads-worker-4, qmkt): the
+    // Python consumer pins the same count (EXPECTED_COUNTS) and the C
+    // consumer pins it in lichen/tests/desync_fsm/main.c count_cases.
+    // (Merge resolution: kept HEAD's comment — verified against the sources:
+    // main.c CHECK(count_cases(json) == 5U) and python EXPECTED_COUNTS both
+    // exist; beads-worker-5's "no C count pin" claim predates bead qmkt.)
+    assert_eq!(vectors().len(), 5, "corpus case count changed");
 }
 
 #[test]
@@ -108,4 +113,35 @@ fn multi_root_version_conflict_vector_semantics() {
     let v = find_case("multi_root_version_conflict_desync");
     assert_eq!(v["expected"], "desync");
     assert_ne!(v["version"], v["alternate_version"]);
+}
+
+#[test]
+fn synced_missed_beacons_desync_vector() {
+    // R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267): a
+    // SYNCED node with >= 3 consecutive missed superframes transitions
+    // to DESYNCED, counters reset (mirrors the lichen-rpl consumer and
+    // the python sfn.py SYNCED branch from 468ac9cfb4).
+    let v = find_case("synced_missed_beacons_desync");
+    assert_eq!(v["type"], "missed_beacons");
+    assert_eq!(v["state"], "synced");
+    assert_eq!(v["missed_count"], 3);
+    assert_eq!(v["expected"], "desynced");
+
+    let mut fsm = DesyncFSM::new();
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    // Third consecutive miss crosses the threshold -> DESYNCED.
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Desynced);
+    assert_eq!(fsm.missed_superframes(), 0);
+    assert_eq!(fsm.consecutive_valid(), 0);
+
+    // A valid beacon in SYNCED clears the streak so isolated misses
+    // never accumulate (on_beacon SYNCED branch).
+    let mut fsm = DesyncFSM::new();
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.on_beacon(true, true), DesyncState::Synced);
+    assert_eq!(fsm.missed_superframes(), 0);
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
+    assert_eq!(fsm.state(), DesyncState::Synced);
 }

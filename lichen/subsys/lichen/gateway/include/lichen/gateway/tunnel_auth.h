@@ -160,6 +160,12 @@ struct lichen_tunnel_result lichen_tunnel_auth_decapsulate(
 	const uint8_t destination[16], const uint8_t *route_iids, size_t route_hops,
 	enum lichen_tunnel_direction direction, uint64_t now);
 
+/**
+ * Map a verdict's human CoAP code to the one-byte wire encoding
+ * (class << 5 | detail): 204 -> 2.04 (0x44), 403 -> 4.03 (0x83).
+ */
+uint8_t lichen_tunnel_auth_coap_code(uint16_t coap_code);
+
 #ifdef __cplusplus
 }
 #endif

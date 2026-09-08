@@ -115,13 +115,25 @@ lichen_desync_on_sfn_wrap(struct lichen_tdma_ctx *tdma, bool time_valid)
 }
 
 enum lichen_desync_state lichen_desync_on_beacon(struct lichen_tdma_ctx *tdma,
-						  bool valid)
+						  bool valid,
+						  bool wall_clock_valid)
 {
 	if (tdma == NULL) return LICHEN_DESYNC_DESYNCED;
 
-	if (tdma->desync_state == LICHEN_DESYNC_DESYNCED && valid) {
+	/* R-02a-084: the node MUST NOT leave DESYNCED while the wall clock
+	 * is unsynced, so a signature-valid beacon only starts recovery
+	 * when wall_clock_valid is also true (python sfn.py:114-119, rust
+	 * desync.rs:149-153). */
+	if (tdma->desync_state == LICHEN_DESYNC_DESYNCED && valid &&
+	    wall_clock_valid) {
 		tdma->desync_state = LICHEN_DESYNC_RECOVERING;
 		tdma->desync_consecutive_valid = 1;
+		tdma->desync_missed_superframes = 0;
+	} else if (tdma->desync_state == LICHEN_DESYNC_SYNCED && valid) {
+		/* R-02a-081 SYNCED row: a valid beacon clears the
+		 * missed-superframe streak so isolated misses cannot
+		 * accumulate toward the SYNCED -> DESYNCED transition.
+		 * Mirrors python sfn.py on_beacon SYNCED branch. */
 		tdma->desync_missed_superframes = 0;
 	} else if (tdma->desync_state == LICHEN_DESYNC_RECOVERING) {
 		if (valid) {

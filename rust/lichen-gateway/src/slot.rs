@@ -601,6 +601,9 @@ impl RawSlotClaim {
         if seen & 0b1111_1110 != 0b1111_1110 {
             return Err(SlotError::MalformedClaim);
         }
+        if ordinal.map_or(true, |value| value >= MAX_COORDINATING_GATEWAYS as u64) {
+            return Err(SlotError::InvalidOrdinal);
+        }
         let mode = match mode {
             Some(0) => AllocationMode::Interleaved,
             Some(1) => AllocationMode::Contiguous,
@@ -659,6 +662,10 @@ impl RawSlotClaim {
         self.expiry
     }
 
+    pub fn mode(&self) -> AllocationMode {
+        self.mode
+    }
+
     pub fn ordinal(&self) -> Option<u64> {
         self.ordinal
     }
@@ -689,6 +696,12 @@ pub struct SlotClaimRateLimiter {
 const CLAIM_RATE_WINDOW_MS: u64 = 60_000;
 const CLAIM_PER_PEER_LIMIT: usize = 10;
 const CLAIM_GLOBAL_LIMIT: usize = 60;
+
+impl Default for SlotClaimRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl SlotClaimRateLimiter {
     pub fn new() -> Self {
@@ -734,6 +747,8 @@ pub struct VerifiedSlotClaim {
     slots: Vec<u32>,
     superframe_id: u64,
     claim_sequence: u32,
+    mode: AllocationMode,
+    ordinal: Option<u64>,
 }
 
 impl VerifiedSlotClaim {
@@ -753,11 +768,21 @@ impl VerifiedSlotClaim {
         self.claim_sequence
     }
 
+    pub fn mode(&self) -> AllocationMode {
+        self.mode
+    }
+
+    pub fn ordinal(&self) -> Option<u64> {
+        self.ordinal
+    }
+
     pub(crate) fn restore(
         gateway_iid: Iid,
         slots: Vec<u32>,
         superframe_id: u64,
         claim_sequence: u32,
+        mode: AllocationMode,
+        ordinal: Option<u64>,
         slots_per_superframe: u32,
     ) -> Result<Self, SlotError> {
         validate_claim_slots(&slots, slots_per_superframe)?;
@@ -766,6 +791,8 @@ impl VerifiedSlotClaim {
             slots,
             superframe_id,
             claim_sequence,
+            mode,
+            ordinal,
         })
     }
 
@@ -874,6 +901,8 @@ impl SlotClaimVerifier {
             slots: claim.slots,
             superframe_id: claim.superframe_id,
             claim_sequence: claim.claim_sequence,
+            mode: claim.mode,
+            ordinal: claim.ordinal,
         })
     }
 
@@ -2147,6 +2176,90 @@ mod tests {
             verifier.verify(broken, &pubkey, 7).unwrap_err(),
             SlotError::InvalidSignature
         );
+    }
+
+    #[test]
+    fn cose_claim_vectors_decode_and_verify() {
+        let vectors: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/vectors/gcp_slot_claim_cose_sign1.json"
+        ))
+        .unwrap();
+        let cases = vectors["cases"].as_array().unwrap();
+        let case = |name: &str| {
+            cases
+                .iter()
+                .find(|case| case["name"] == name)
+                .unwrap_or_else(|| panic!("missing vector {name}"))
+        };
+
+        for name in [
+            "happy_path_n1",
+            "happy_path_n4",
+            "happy_path_n60",
+            "claim_seq_cache_seed",
+            "expiry_boundary_future",
+        ] {
+            let vector = case(name);
+            let envelope = hex::decode(vector["cose_sign1_hex"].as_str().unwrap()).unwrap();
+            let claim = RawSlotClaim::from_cose(&envelope, 60).unwrap();
+            let expected_slots: Vec<u32> = vector["slots"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|slot| slot.as_u64().unwrap() as u32)
+                .collect();
+            assert_eq!(claim.slots(), expected_slots.as_slice(), "{name}");
+            assert_eq!(
+                claim.superframe_id(),
+                vector["superframe_epoch"].as_u64().unwrap()
+            );
+            assert_eq!(
+                claim.claim_sequence(),
+                vector["claim_seq"].as_u64().unwrap() as u32
+            );
+            let expected_mode = match vector["mode"].as_u64().unwrap() {
+                0 => AllocationMode::Interleaved,
+                1 => AllocationMode::Contiguous,
+                mode => panic!("unknown vector mode {mode}"),
+            };
+            assert_eq!(claim.mode, expected_mode, "{name}");
+            assert_eq!(claim.expiry(), vector["expiry"].as_u64().unwrap());
+            assert_eq!(claim.ordinal(), Some(vector["ordinal"].as_u64().unwrap()));
+
+            let public_key: [u8; 32] =
+                hex::decode(vector["signer_public_key_hex"].as_str().unwrap())
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+            let mut verifier = SlotClaimVerifier::new_ephemeral(16).unwrap();
+            let verified = verifier
+                .verify(
+                    claim,
+                    &public_key,
+                    vector["superframe_epoch"].as_u64().unwrap(),
+                )
+                .unwrap();
+            assert_eq!(verified.mode(), expected_mode, "{name}");
+            assert_eq!(
+                verified.ordinal(),
+                Some(vector["ordinal"].as_u64().unwrap())
+            );
+        }
+
+        let rejects = [
+            ("header_alg_decoy", SlotError::UnsupportedAlgorithm),
+            ("kid_payload_iid_mismatch", SlotError::IdentityMismatch),
+            ("ordinal_absent", SlotError::MalformedClaim),
+        ];
+        for (name, expected) in rejects {
+            let vector = case(name);
+            let envelope = hex::decode(vector["cose_sign1_hex"].as_str().unwrap()).unwrap();
+            assert_eq!(
+                RawSlotClaim::from_cose(&envelope, 60).unwrap_err(),
+                expected,
+                "{name}"
+            );
+        }
     }
 
     #[test]

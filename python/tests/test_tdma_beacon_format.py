@@ -75,6 +75,17 @@ def test_parse_rejects_reserved_flag_bits() -> None:
         parse_header(bytes(data))
 
 
+def test_parse_rejects_num_slots_zero() -> None:
+    """beacon_header_num_slots_zero_rejected: shared cross-runtime oracle."""
+    vector = next(
+        v
+        for v in VECTORS["vectors"]
+        if v["name"] == "beacon_header_num_slots_zero_rejected"
+    )
+    with pytest.raises(BeaconFormatError):
+        parse_header(bytes.fromhex(vector["input"]["header_hex"]))
+
+
 def test_serialize_rejects_reserved_flag_bits() -> None:
     header = TdmaBeaconHeader(
         epoch=1, num_slots=16, sfn=0, timestamp=0, flags=0x80,

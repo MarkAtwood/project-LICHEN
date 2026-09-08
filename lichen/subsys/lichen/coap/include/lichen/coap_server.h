@@ -123,6 +123,37 @@ typedef int (*lichen_coap_msg_post_cb)(const uint8_t *_Nonnull payload,
 typedef int (*lichen_coap_deaddrop_cb)(const uint8_t *_Nonnull payload, size_t payload_len);
 
 /**
+ * @brief Verdict for a tunnel-auth POST (human CoAP code: 204 or 403;
+ * the server maps it to the wire encoding via lichen_tunnel_auth_coap_code).
+ */
+struct lichen_coap_tunnel_verdict {
+	bool allowed;
+	uint16_t coap_code;
+};
+
+/**
+ * @brief Tunnel grant receiver callback (/.well-known/tunnel-auth POST)
+ *
+ * Called only for OSCORE-protected requests; the server rejects plaintext
+ * requests before this runs (the grant signer is the DODAG root, so there
+ * is no local-admin fallback).
+ *
+ * @param[in] body COSE_Sign1 grant body
+ * @param[in] body_len Body length
+ * @param[in] oscore_authenticated Always true at the current call site
+ * @param[in] oscore_sender_iid Sender IID derived from the request address
+ * @param[in] now_seconds Time source in seconds (uptime seconds until
+ *                        wall-clock sync exists)
+ * @param[out] verdict Verdict to fill in (pre-initialized to deny 403)
+ */
+typedef void (*lichen_coap_tunnel_auth_cb)(const uint8_t *_Nonnull body,
+					   size_t body_len,
+					   bool oscore_authenticated,
+					   const uint8_t oscore_sender_iid[_Nonnull 8],
+					   uint64_t now_seconds,
+					   struct lichen_coap_tunnel_verdict *_Nonnull verdict);
+
+/**
  * @brief Common helper for sending CoAP responses (avoids duplication in resource handlers).
  *
  * Constructs ACK/NON response matching the request's token and ID, appends content-format
@@ -148,6 +179,7 @@ struct lichen_coap_server_handlers {
 	lichen_coap_msg_get_cb msg_get;       /**< /msg/inbox GET */
 	lichen_coap_msg_post_cb msg_post;     /**< /msg/inbox POST */
 	lichen_coap_deaddrop_cb deaddrop;
+	lichen_coap_tunnel_auth_cb tunnel_auth; /**< /.well-known/tunnel-auth POST (NULL -> 4.04) */
 };
 
 /**

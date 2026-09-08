@@ -565,17 +565,36 @@ Content-Format: application/cbor
 
 Senders receiving 5.03 MUST back off for the indicated duration.
 
+**Delivery Services:**
+
+LICHEN provides two delivery services, selected per-message by the application:
+
+| | Datagram Service | Message Service |
+|---|---|---|
+| Model | Best-effort, fire-and-forget | Custody-transfer, store-and-forward |
+| Stale after | Seconds (configurable deadline) | Hours to days (absolute TTL) |
+| On no route | Drop | Buffer at custody-capable nodes |
+| On relay | Forward immediately, do not persist | Persist to flash, forward when possible |
+| Scope | Local mesh + immediate Yggdrasil | Planetary (multi-gateway, multi-mesh) |
+| CoAP type | NON | CON |
+| DTN S-flag | Not set | Set |
+| Use cases | Position, telemetry, sensor data | IM, SOS, tactical chat |
+
+Telemetry and position use the datagram service. IMs and SOS use the message
+service. The application selects the service; the network layer distinguishes
+them via the DTN S-flag (see 05-routing.md §9.8).
+
 **Priority Queue:**
 
 TX queue ordered by priority:
 
-| Priority | Traffic Type |
-|----------|--------------|
-| 0 (highest) | SOS, emergency |
-| 1 | RPL control (DIO, DAO) |
-| 2 | CoAP CON, tactical chat |
-| 3 | CoAP NON, telemetry, position |
-| 4 (lowest) | Bulk transfer, firmware |
+| Priority | Traffic Type | Delivery Service |
+|----------|--------------|------------------|
+| 0 (highest) | SOS, emergency | Message |
+| 1 | RPL control (DIO, DAO) | Datagram |
+| 2 | CoAP CON, tactical chat, custody handshakes | Message |
+| 3 | CoAP NON, telemetry, position | Datagram |
+| 4 (lowest) | Bulk transfer, firmware | Datagram |
 
 During congestion, low-priority traffic is dropped first.
 
@@ -619,6 +638,23 @@ Observe: 0
 
 Observe reduces polling overhead but requires state on both endpoints.
 Use for slowly-changing resources where push notification saves bandwidth.
+
+**Absolute Cache Deadlines (GNSS-Enabled):**
+
+Because all nodes have GNSS wall-clock time, CoAP proxy caches SHOULD
+convert the relative Max-Age option to an absolute deadline internally:
+
+```
+cache_deadline = received_at + max_age_seconds
+```
+
+On a multi-hop cache chain, each proxy independently knows the absolute
+instant when the response expires. This eliminates clock-drift accumulation
+that occurs when each hop starts its own relative Max-Age countdown at
+its own receive time. A response with Max-Age=60 generated at T=100 expires
+at T=160 everywhere in the mesh, regardless of propagation delay.
+
+Proxies MUST NOT serve a cached response after `now() > cache_deadline`.
 
 **Subscription Limits:**
 
