@@ -1359,6 +1359,47 @@ impl Gateway {
             .await
     }
 
+    /// Spec 06-security 8.11 egress gate: a mesh-ingress unicast datagram
+    /// forwarded to external networks must be covered by a current-root
+    /// tunnel authorization (fail-closed). Hairpinned mesh-destined traffic
+    /// is mesh-internal forwarding, not egress, and an unprovisioned table
+    /// keeps the gate open (C `s_tunnel_ready == false` parity). Route
+    /// evidence mirrors the C call site in `forwarding.c`: single-hop
+    /// `[egress_iid]` — this gateway is the egress. ponytail: multi-hop SRH
+    /// route extraction is not wired, so grants issued over longer routes
+    /// fail closed here; upgrade path is SRH parsing at the node decap site.
+    fn egress_tunnel_authorized(
+        &mut self,
+        received: &lichen_node::stack::ReceivedIpv6,
+        now_ms: u64,
+    ) -> bool {
+        if received.ipv6.len() < 40 {
+            return true;
+        }
+        let destination: [u8; 16] = received.ipv6[24..40].try_into().expect("len checked");
+        if self.is_local_mesh(&destination) {
+            return true;
+        }
+        let Some(egress_iid) = self.coordinator.tunnel_auth_root() else {
+            return true;
+        };
+        let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
+        let route = [egress_iid];
+        match self
+            .coordinator
+            .authorize_egress(inner_source, false, &route, now_ms)
+        {
+            Ok(()) => true,
+            Err(error) => {
+                warn!(
+                    ?error,
+                    "egress dropped: tunnel denial (spec 06-security 8.11)"
+                );
+                false
+            }
+        }
+    }
+
     /// Deterministic runtime ingress with the current synchronized
     /// superframe supplied by the caller/test harness.
     pub async fn ingest_mesh_frame_at_superframe(
@@ -1384,8 +1425,10 @@ impl Gateway {
                 {
                     gcp_dispatched = true;
                     (None, RplEvent::None)
-                } else {
+                } else if self.egress_tunnel_authorized(&received, now_ms) {
                     (Some(received.ipv6), RplEvent::None)
+                } else {
+                    (None, RplEvent::None)
                 }
             }
             Some(RplBorderIngressOutcome::Control(outcome)) => {
