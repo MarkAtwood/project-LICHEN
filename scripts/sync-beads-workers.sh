@@ -75,7 +75,19 @@ llm_semantic_merge() {
 
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log; return $rc
+    local log="${LICHEN_KIMI_LOG:-/tmp/lichen-kimi-last.log}"
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >> "$log" 2>&1
+    local rc=$?
+    echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> "$log"
+    if [ "$rc" -ne 0 ]; then
+        return "$rc"
+    fi
+
+    # Reject marker-poisoned resolutions BEFORE staging: git add clears the
+    # unmerged state even when conflict markers remain, which would commit
+    # them silently. --check catches unstaged markers; --cached --check
+    # catches markers the session staged itself.
+    git diff --check >/dev/null 2>&1 && git diff --cached --check >/dev/null 2>&1 || return 1
 
     # stage whatever the LLM resolved; fail if anything is still conflicted
     git add -- $files
