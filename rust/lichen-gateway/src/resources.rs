@@ -3353,6 +3353,109 @@ mod tests {
         assert_eq!(names, expected);
     }
 
+    /// Boundary pinning for the GCP-6.4 cap (finding bead bsaw): exactly-32
+    /// entries must not truncate, empty sets must stay well-formed, and 33
+    /// inputs must truncate by exactly one.
+    #[test]
+    fn get_response_entry_boundaries() {
+        use crate::handoff::NodeRegistryEntry;
+
+        // /channels: empty map -> well-formed empty CBOR array; exactly 32 ->
+        // no truncation; 33 -> truncated by one. The default coordinator
+        // ships 8 built-in channels, so clear them to control the set.
+        let mut coordinator_channels = coordinator([0u8; 16]);
+        coordinator_channels.channel_map.channels.clear();
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(value, Value::Array(vec![]));
+
+        for entry in 0..33u8 {
+            coordinator_channels.channel_map.channels.push(ChannelInfo {
+                channel_id: entry,
+                frequency_hz: 868_100_000 + u32::from(entry) * 200_000,
+                owner_iid: None,
+            });
+        }
+        coordinator_channels.channel_map.channels.pop();
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), 32);
+
+        coordinator_channels.channel_map.channels.push(ChannelInfo {
+            channel_id: 99,
+            frequency_hz: 869_525_000,
+            owner_iid: None,
+        });
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+
+        // /slots: exactly 32 owned slots must not truncate. The explicit
+        // owned list bypasses mode arithmetic; validate() accepts it because
+        // every entry is < max_slots (60).
+        let mut coordinator_slots = coordinator([0u8; 16]);
+        coordinator_slots.info.slot_map.owned = Some((0..32u16).collect());
+        let value: Value =
+            ciborium::from_reader(coordinator_slots.handle_get_slots().payload.as_slice()).unwrap();
+        let Value::Map(map) = value else {
+            panic!("expected map response");
+        };
+        let owned = map
+            .iter()
+            .find(|(k, _)| *k == Value::Integer(KEY_MAP_OWNED.into()))
+            .map(|(_, v)| v)
+            .expect("owned key present");
+        let Value::Array(entries) = owned else {
+            panic!("owned value must be an array");
+        };
+        assert_eq!(entries.len(), 32);
+
+        // /nodes: empty registry -> base record only; 33 registered -> base +
+        // 32 (truncated by exactly one).
+        let mut coordinator_nodes = coordinator([0u8; 16]);
+        let value: Value =
+            ciborium::from_reader(coordinator_nodes.handle_get_nodes().payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), 1);
+
+        for i in 0..33u8 {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator_nodes
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+        let value: Value =
+            ciborium::from_reader(coordinator_nodes.handle_get_nodes().payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
+    }
+
     #[test]
     fn gateway_coordinator_routing() {
         let iid = [0u8; 16];
