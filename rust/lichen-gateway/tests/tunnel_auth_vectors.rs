@@ -399,3 +399,141 @@ fn expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant() {
         Err(TunnelAuthError::Expired)
     );
 }
+
+// ---- Wired CoAP dispatch (spec 06-security 8.11, POST /.well-known/tunnel-auth) ----
+
+use lichen_gateway::resources::{CoapMethod, GatewayCoordinator};
+
+fn corpus() -> Value {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../test/vectors/tunnel_authorization.json"
+    )))
+    .unwrap()
+}
+
+fn ygg_addr(iid: [u8; 8]) -> [u8; 16] {
+    let mut addr = [0u8; 16];
+    addr[0] = 0x02;
+    addr[1..8].copy_from_slice(&iid[..7]);
+    addr[8..16].copy_from_slice(&iid);
+    addr
+}
+
+fn egress_coordinator(corpus: &Value, egress_name: &str) -> GatewayCoordinator {
+    let (egress_iid, _) = identity(corpus, egress_name);
+    let mut coordinator = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    coordinator.set_tunnel_auth_root(identity(corpus, "root").0);
+    coordinator
+}
+
+fn vector_envelope(vector: &Value) -> Vec<u8> {
+    hex::decode(vector["cose_sign1_hex"].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn wired_coap_tunnel_auth_accepts_valid_vector_then_replay_is_forbidden() {
+    let corpus = corpus();
+    let vector = named(&corpus, "authorizations", "valid");
+    let mut coordinator = egress_coordinator(&corpus, "egress");
+    let (root_iid, root_key) = identity(&corpus, "root");
+    let wire = vector_envelope(vector);
+    assert_eq!(root_iid, bytes(vector["kid_iid_hex"].as_str().unwrap()));
+
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x44);
+    assert!(response.payload.is_empty());
+
+    // An identical replayed POST hits the replay floor: 4.03, nothing cached.
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+}
+
+#[test]
+fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_egress() {
+    let corpus = corpus();
+    let vector = named(&corpus, "authorizations", "valid");
+    let (_, root_key) = identity(&corpus, "root");
+    let (_, other_root_key) = identity(&corpus, "other_root");
+    let wire = vector_envelope(vector);
+
+    // A table with no bound root never accepts (WrongRoot, fail-closed).
+    let (egress_iid, _) = identity(&corpus, "egress");
+    let mut unbound = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    let response = unbound.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // Missing OSCORE authentication is refused before any table mutation.
+    let mut coordinator = egress_coordinator(&corpus, "egress");
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        false,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // A different root (kid binding fails against the bound root) is denied.
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(other_root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // The claim binds a specific egress IID; another egress is denied.
+    let mut other_egress = egress_coordinator(&corpus, "other_egress");
+    let response = other_egress.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // Corrupting any envelope byte fails signature verification.
+    let mut corrupted = wire.clone();
+    let last = corrupted.len() - 1;
+    corrupted[last] ^= 0x01;
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &corrupted,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // GET is not a tunnel-auth method.
+    let response = coordinator.handle_request(CoapMethod::Get, "tunnel-auth", &wire, true, None, 0);
+    assert_eq!(response.code, 0x84); // 4.04 Not Found
+}
