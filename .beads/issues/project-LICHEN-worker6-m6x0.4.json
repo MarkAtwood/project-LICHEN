@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-m6x0.4",
+  "title": "Add messages to bare asserts in crypto/ module",
+  "description": "Files under python/src/lichen/crypto/ have bare asserts. Grep for 'assert ' without a comma. Add descriptive messages explaining crypto invariants. Do not change logic. Verify: cd python \u0026\u0026 python -m pytest tests/test_crypto*.py tests/test_schnorr*.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:16:53.725469825Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:16:53.725469825Z",
+  "labels": [
+    "python",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-m6x0.4",
+      "depends_on_id": "project-LICHEN-worker6-m6x0",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:16:53.838845966Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
