@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-cwqh.22",
+  "title": "Test: C tx_queue relay deadlines are 5x",
+  "description": "Write host cmake or native_sim test: build with RELAY class. Push forwarded NORMAL — verify deadline 300000ms. Locally-originated — verify 60000ms. Verify: host cmake or heft/native_sim.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:01:43.513330464Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:01:43.513330464Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "node-class",
+    "buffering",
+    "testing",
+    "cross-impl",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cwqh.22",
+      "depends_on_id": "project-LICHEN-worker6-cwqh",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:01:43.664940628Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
