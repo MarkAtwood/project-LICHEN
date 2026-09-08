@@ -1,0 +1,7 @@
+{
+  "id": "1788892975817766942-1",
+  "issue_id": "project-LICHEN-worker6-biod",
+  "author": "Mark Atwood",
+  "text": "Protocol for external AI sessions (Opus, coordinators, one-off agents): file and update beads ONLY via scripts/beads-safe.sh (\u003cbd subcommand\u003e [args]) — it takes the sync lock, runs bd, and checkpoint-commits the store before releasing. Bare bd from a non-fleet session is what got the orchestrator's decompositions rewound (the ldzz rescue happened because of it). Reads need no wrapper.",
+  "created_at": "2026-09-08T18:42:55.817766942Z"
+}
