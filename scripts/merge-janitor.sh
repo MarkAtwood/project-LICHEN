@@ -125,6 +125,11 @@ escalate() {
 echo "merge janitor: cycle ${CYCLE_MIN}m, model $MODEL, escalate after $MAX_FAIL failures — Ctrl+C to stop"
 
 while :; do
+    if [ -f "$REPO_ROOT/.fleet-paused" ]; then
+        echo "janitor paused"
+        sleep $((CYCLE_MIN * 60))
+        continue
+    fi
     echo "── janitor $(date '+%F %T') ──"
     # Single-flight with the sync loop: skip if either lock is held.
     if ! mkdir /tmp/lichen-beads-sync.lock 2>/dev/null; then

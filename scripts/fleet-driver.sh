@@ -63,6 +63,11 @@ worker_cmd() {  # worker8 is the hard-bead lane on a stronger model
     if [ "$1" -eq 8 ]; then echo "opencode -m openai/gpt-5.6-luna"; else echo "opencode"; fi
 }
 while :; do
+    if [ -f "$REPO_ROOT/.fleet-paused" ]; then
+        echo "driver PAUSED: $(head -1 "$REPO_ROOT/.fleet-paused")"
+        sleep $((CYCLE_MIN * 60))
+        continue
+    fi
     CREDITS=$(remaining_credits)
     echo "── driver $(date '+%F %T') credits=$CREDITS ──"
     # Burn ceiling marker (Mark: $2000 is the 'tell me' line). Marker only —
