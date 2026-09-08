@@ -1030,7 +1030,7 @@ impl CoapResponse {
     /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict).
     pub fn conflict(payload: Vec<u8>, content_format: u16) -> Self {
         Self {
-            code: 0x93, // 4.09 Conflict
+            code: 0x89, // 4.09 Conflict
             payload: Zeroizing::new(payload),
             content_format,
         }
@@ -2747,7 +2747,7 @@ mod tests {
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim: GCP-6.5 step 11
         // responds 4.09 Conflict for an unresolved slot conflict.
-        assert_eq!(response.code, 0x93); // 4.09 Conflict (rejection payload)
+        assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
 
         // Decode response to verify rejection
         let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
@@ -2947,7 +2947,7 @@ mod tests {
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 9)
                 .code,
-            0x93
+            0x89
         );
         assert!(coordinator.slot_replay_generation() > original_generation);
         fs::remove_file(state_path).unwrap();
@@ -2991,7 +2991,7 @@ mod tests {
         // one transaction even though the claim itself is rejected.
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
-        assert_eq!(response.code, 0x93); // 4.09 Conflict (rejection payload)
+        assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
         assert_eq!(coordinator.peer_claims[0].slots(), &[5]);
