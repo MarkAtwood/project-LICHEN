@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-cwqh.4",
+  "title": "Spec: DTN store-and-forward in spec/07-transport-app.md",
+  "description": "Add section defining DTN store semantics. DTN store is separate from real-time TX/forward queues. Opt-in per message via CoAP option (DTN-TTL). Stored messages persist to flash/disk (survive reboot). Custody transfer: storing node ACKs sender so sender stops retransmitting. Explicit TTL set by sender (5min/1hr/24hr). Node class determines store size: leaf=none, router=4 msgs RAM, relay=256 msgs flash, gateway=4096+ disk. Verify: markdown renders.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:00:49.807614005Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:00:49.807614005Z",
+  "labels": [
+    "spec",
+    "node-class",
+    "dtn",
+    "buffering",
+    "cross-impl"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cwqh.4",
+      "depends_on_id": "project-LICHEN-worker6-cwqh",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:00:49.948402245Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
