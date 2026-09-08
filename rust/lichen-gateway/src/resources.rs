@@ -964,6 +964,10 @@ pub fn encode_nodes_senml(registry: &NodeRegistry, max_nodes: usize) -> Vec<u8> 
     // Each record is a map with keys per RFC 8428:
     // "bn" = base name, "n" = name, "v" = value, "t" = time
     let nodes = registry.list_nodes();
+    // Truncation must be deterministic: list_nodes() walks a HashMap, so
+    // sort lowest-address-first before capping (finding bead d1so).
+    let mut nodes = nodes;
+    nodes.sort_unstable();
     let mut records: Vec<Value> = Vec::with_capacity(nodes.len() + 1);
 
     // Base record with base name
@@ -3297,6 +3301,56 @@ mod tests {
         };
         assert!(base.iter().any(|(k, v)| *k == Value::Text("bn".to_string())
             && *v == Value::Text("urn:lichen:gw:nodes:".to_string())));
+    }
+
+    /// With >32 registered nodes the capped /nodes response must be
+    /// deterministic: the 32 lowest addresses, ascending (finding bead d1so —
+    /// list_nodes() walks a HashMap, so without the sort the subset would
+    /// depend on hash iteration order).
+    #[test]
+    fn get_nodes_truncation_is_deterministic_lowest_addresses() {
+        use crate::handoff::NodeRegistryEntry;
+
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        // Register 40 nodes in reverse order; the cap must still surface the
+        // 32 lowest addresses in ascending order.
+        for i in (0..40u8).rev() {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+
+        let response = coordinator.handle_get_nodes();
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
+        let mut names: Vec<String> = Vec::new();
+        for record in records.iter().skip(1) {
+            let Value::Map(entries) = record else {
+                panic!("node record must be a map");
+            };
+            let (_, n) = entries
+                .iter()
+                .find(|(k, _)| *k == Value::Text("n".to_string()))
+                .expect("node record carries a name");
+            let Value::Text(name) = n else {
+                panic!("node name must be text");
+            };
+            names.push(name.clone());
+        }
+        let expected: Vec<String> = (0..32u8)
+            .map(|i| {
+                let mut addr = [0x02u8; 16];
+                addr[15] = i;
+                addr.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            })
+            .collect();
+        assert_eq!(names, expected);
     }
 
     #[test]
