@@ -837,6 +837,14 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 		/* Cancel: disarm under cb_lock (exactly one of the cancel
 		 * path and a handler SPI-failure disarm may release the
 		 * modem), quiesce the work item, stop RX, park in standby. */
+		/* A queued item on the same workqueue must run before the lease
+		 * can be released; the running item is this handler and may
+		 * self-cancel from its callback. */
+		unsigned int busy = k_work_busy_get(&drv->irq_work);
+		if (k_current_get() == &k_sys_work_q.thread &&
+		    busy != 0U && (busy & K_WORK_RUNNING) == 0U) {
+			return -EBUSY;
+		}
 		k_spinlock_key_t key = k_spin_lock(&drv->cb_lock);
 		bool was_armed = drv->async_cb != NULL;
 
@@ -844,7 +852,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 		drv->async_cb_user_data = NULL;
 		k_spin_unlock(&drv->cb_lock, key);
 		if (!was_armed) {
-			return -EINVAL;
+			return 0;
 		}
 
 		gpio_pin_interrupt_configure_dt(&lr1110_gpio_dio9,
@@ -861,6 +869,7 @@ static int lr1110_lora_recv_async(const struct device *dev, lora_recv_cb cb,
 		} else if (k_work_busy_get(&drv->irq_work) == 0) {
 			/* On the sysworkq but our item is idle (cancel from a
 			 * different sysworkq item): nothing to race. */
+			(void)k_work_cancel(&drv->irq_work);
 			(void)lr1110_system_clear_irq(dev, 0xFFFFFFFFu);
 			(void)lr1110_system_set_standby(dev,
 						LR1110_SYSTEM_STDBY_CONFIG_RC);

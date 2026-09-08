@@ -67,6 +67,7 @@ LOG_MODULE_REGISTER(lora_sim, CONFIG_LORA_LOG_LEVEL);
 struct lora_sim_data {
 	int fd;
 	struct k_sem rx_go;
+	struct k_sem rx_idle;
 	struct k_spinlock rx_lock;
 	lora_recv_cb recv_cb;
 	void *recv_cb_user_data;
@@ -474,6 +475,7 @@ static int lora_sim_init(const struct device *dev)
 	data->rx_thread_started = false;
 	data->modem_usage = 0;
 	k_sem_init(&data->rx_go, 0, 1);
+	k_sem_init(&data->rx_idle, 1, 1);
 
 	rc = lora_sim_connect(data);
 	if (rc < 0) {
@@ -624,6 +626,7 @@ static void lora_sim_rx_thread_fn(void *p1, void *p2, void *p3)
 		drv->recv_cb_user_data = NULL;
 		k_spin_unlock(&drv->rx_lock, key);
 		sim_modem_release(drv);
+		k_sem_give(&drv->rx_idle);
 	}
 }
 
@@ -644,15 +647,17 @@ static int lora_sim_recv_async(const struct device *dev, lora_recv_cb cb,
 		k_spin_unlock(&drv->rx_lock, key);
 
 		if (!was_armed) {
-			return -EINVAL;
+			return 0;
 		}
-		/* Do NOT release the modem here: the RX thread may still be
-		 * inside a window exchange on the shared socket. It releases
-		 * the lock itself when it parks, so sync paths stay excluded
-		 * until the socket is genuinely idle (bounded by
-		 * SIM_RX_WINDOW_MS under a live server). The server closes
-		 * the window itself after the pending RX_ENTER completes, so
-		 * no RX_EXIT is written (it would race the thread's writes). */
+		/* The RX thread owns the modem until its in-flight window is idle. */
+		if (k_current_get() != &drv->rx_thread &&
+		    k_sem_take(&drv->rx_idle,
+			       K_MSEC(SOCKET_TIMEOUT_MS + 1000)) != 0) {
+			return -ETIMEDOUT;
+		}
+		if (k_current_get() != &drv->rx_thread) {
+			k_sem_give(&drv->rx_idle);
+		}
 		return 0;
 	}
 
@@ -660,6 +665,10 @@ static int lora_sim_recv_async(const struct device *dev, lora_recv_cb cb,
 		return -ENOTCONN;
 	}
 	if (!sim_modem_acquire(drv)) {
+		return -EBUSY;
+	}
+	if (k_sem_take(&drv->rx_idle, K_NO_WAIT) != 0) {
+		sim_modem_release(drv);
 		return -EBUSY;
 	}
 

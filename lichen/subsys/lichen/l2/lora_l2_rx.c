@@ -149,7 +149,23 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
  */
 static uint8_t consecutive_failures;
 
-static void lora_l2_rx_arm(void)
+int lora_l2_rx_disarm_locked(void)
+{
+	int ret;
+
+	if (!atomic_get(&rx_armed)) {
+		return 0;
+	}
+
+	ret = LORA_RECV_ASYNC(lora_data.lora_dev, NULL);
+	if (ret == 0) {
+		atomic_set(&rx_armed, 0);
+		return 0;
+	}
+	return ret;
+}
+
+void lora_l2_rx_arm(void)
 {
 	int ret;
 
@@ -174,15 +190,23 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
-	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
-	k_mutex_unlock(&modem_mutex);
+	/* Drivers hold their modem lease across an async RX arm. */
+	ret = lora_l2_rx_disarm_locked();
+	if (ret < 0) {
+		k_mutex_unlock(&modem_mutex);
+		LOG_ERR("lora_l2: recv_async disarm failed (%d), retrying", ret);
+		goto retry;
+	}
 
+	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
 	if (ret == 0) {
 		consecutive_failures = 0;
 		atomic_set(&rx_armed, 1);
+		k_mutex_unlock(&modem_mutex);
 		lichen_radio_progress();
 		return;
 	}
+	k_mutex_unlock(&modem_mutex);
 
 	if (ret == -ENOTSUP) {
 		LOG_ERR("lora_l2: driver lacks recv_async; RX impossible");
@@ -226,7 +250,7 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 	ARG_UNUSED(dev);
 	LORA_RECV_CB_UNUSED;
 
-	if (!atomic_get(&rx_enabled)) {
+	if (!atomic_get(&rx_enabled) || lora_get_state() != LORA_RUNNING) {
 		/* Stop raced the delivery; the packet is dropped, which is
 		 * what the radio would have lost anyway when disarming. The
 		 * gate comes first so a stale-armed driver cannot flip the
@@ -241,8 +265,9 @@ static void lora_l2_rx_isr_cb(const struct device *dev, uint8_t *data,
 		/* Driver-contract violation: disable further staging and fail
 		 * closed. The radio stays unarmed for this session. */
 		atomic_set(&rx_enabled, 0);
-		atomic_set(&rx_armed, 0);
 		atomic_set(&current_state, LORA_ABORTED);
+		/* Cancellation must run outside interrupt context. */
+		RX_WORK_SUBMIT(&rx_work);
 		return;
 	}
 
@@ -318,6 +343,10 @@ static void rx_work_fn(struct k_work *work)
 
 	if (lora_get_state() == LORA_RUNNING) {
 		lora_l2_rx_arm();
+	} else if (atomic_get(&rx_armed) &&
+		   k_mutex_lock(&modem_mutex, K_MSEC(RX_TIMEOUT_MS + 1000)) == 0) {
+		(void)lora_l2_rx_disarm_locked();
+		k_mutex_unlock(&modem_mutex);
 	}
 }
 
@@ -341,7 +370,6 @@ int lora_l2_rx_start(void)
 
 	consecutive_failures = 0;
 	atomic_clear(&rx_pending);
-	atomic_set(&rx_enabled, 1);
 	atomic_inc(&rx_session);
 
 	if (k_mutex_lock(&modem_mutex, K_MSEC(RX_TIMEOUT_MS + 1000)) != 0) {
@@ -350,15 +378,20 @@ int lora_l2_rx_start(void)
 		return -EBUSY;
 	}
 
-	ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	ret = lora_l2_rx_disarm_locked();
+	if (ret == 0) {
+		ret = LORA_RECV_ASYNC(lora_data.lora_dev, lora_l2_rx_isr_cb);
+	}
+	if (ret == 0) {
+		atomic_set(&rx_armed, 1);
+	}
 	k_mutex_unlock(&modem_mutex);
 
 	if (ret < 0) {
 		atomic_set(&rx_enabled, 0);
 		return ret;
 	}
-
-	atomic_set(&rx_armed, 1);
+	atomic_set(&rx_enabled, 1);
 	return 0;
 }
 
@@ -392,8 +425,6 @@ void lora_l2_rx_stop(void)
 	atomic_val_t session = atomic_get(&rx_session);
 	int ret;
 
-	atomic_set(&rx_enabled, 0);
-
 	if (atomic_get(&rx_session) == session) {
 		k_work_cancel_delayable(&rx_work);
 		{
@@ -418,14 +449,14 @@ void lora_l2_rx_stop(void)
 		k_mutex_unlock(&modem_mutex);
 		return;
 	}
+	atomic_set(&rx_enabled, 0);
 
 	if (atomic_get(&rx_armed)) {
-		ret = LORA_RECV_ASYNC(dev, NULL);
+		ret = lora_l2_rx_disarm_locked();
 		if (ret < 0) {
 			LOG_WRN("lora_l2: recv_async disarm failed (%d)", ret);
 		}
 	}
-	atomic_set(&rx_armed, 0);
 	atomic_clear(&rx_pending);
 	k_mutex_unlock(&modem_mutex);
 }
