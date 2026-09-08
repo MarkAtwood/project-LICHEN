@@ -146,7 +146,6 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
             if git diff --name-only --diff-filter=U | grep -q .; then
                 echo "  semantic merge left unresolved files — aborting"
                 git merge --abort 2>/dev/null || true
-                git checkout -- .beads 2>/dev/null || true
                 conflicted+=("$branch")
             elif git commit --no-edit --quiet; then
                 echo "  merged via LLM semantic reconciliation"

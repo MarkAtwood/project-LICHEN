@@ -262,7 +262,9 @@ struct senml_decoded_record {
 
 /** Fixed-capacity, allocation-free decoded SenML pack. */
 struct senml_decoded_pack {
-	struct senml_decoded_record records[SENML_MAX_RECORDS];
+	/* +1 slot for the value-less base record the encoder emits when
+	 * bn/bt are set (SENML_MAX_RECORDS bounds value records). */
+	struct senml_decoded_record records[SENML_MAX_RECORDS + 1];
 	size_t record_count;
 };
 
