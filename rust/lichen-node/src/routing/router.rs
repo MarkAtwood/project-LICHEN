@@ -186,6 +186,8 @@ pub struct Router {
     grounded: bool,
     /// Root-side 0x17 DIO signature sequence counter (spec 06 8.10.1):
     /// starts at 1 (seq 0 is wire-illegal), monotone, terminal at u64::MAX.
+    /// Read only by the root-sig DIO producer; dead in builds without it.
+    #[cfg_attr(not(feature = "root-sig"), allow(dead_code))]
     pub(crate) root_dio_seq: u64,
     /// This node's geographic coordinates for GPSR (spec 9.7).
     /// None if GPS unavailable or privacy mode enabled.
@@ -366,7 +368,7 @@ impl Router {
         const PER_SOURCE_MAX: usize = 30;
         // Lazy prune of stale entries.
         self.dio_rate_log
-            .retain(|(source, at)| now_ms.wrapping_sub(*at) < WINDOW_MS);
+            .retain(|(_source, at)| now_ms.wrapping_sub(*at) < WINDOW_MS);
         let arrivals = self
             .dio_rate_log
             .iter()
