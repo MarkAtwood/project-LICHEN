@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-gy32.4.1",
+  "title": "Define LICHEN_LOG macro wrapper with logfmt field convention",
+  "description": "Create lichen/include/lichen/diag.h with LICHEN_LOG_DBG/INF/WRN/ERR macros that enforce logfmt field ordering: ts, level, layer, pkt_id, event first, then variable fields. These wrap Zephyr LOG_* macros. Define field name constants. Gate behind CONFIG_LICHEN_DIAG_VERBOSE for DBG level. Verify: header compiles in isolation.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:19:16.254423004Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:19:16.254423004Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "structured-logging",
+    "cross-impl",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.4.1",
+      "depends_on_id": "project-LICHEN-worker6-gy32.4",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:19:16.385312175Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
