@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-cwqh.7",
+  "title": "Impl: NodeClass enum and buffer params in Rust lichen-core",
+  "description": "Add NodeClass enum to rust/lichen-core/src/constants.rs or new node_class.rs. Add struct NodeClassParams { forward_buffer_size: usize, per_source_limit: usize, deadline_multiplier: u32, dtn_store_size: usize }. Add const fn params_for(class: NodeClass) -\u003e NodeClassParams. Values per spec. Verify: cd rust \u0026\u0026 cargo test -p lichen-core",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:01:08.616048372Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:01:08.616048372Z",
+  "labels": [
+    "rust",
+    "node-class",
+    "buffering",
+    "cross-impl",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cwqh.7",
+      "depends_on_id": "project-LICHEN-worker6-cwqh",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:01:08.7648771Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
