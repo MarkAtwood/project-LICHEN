@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-gy32.4.5",
+  "title": "Add CONFIG_LICHEN_DIAG_VERBOSE Kconfig symbol",
+  "description": "Add Kconfig bool CONFIG_LICHEN_DIAG_VERBOSE, default n. Help: 'Enable verbose logfmt diagnostic logging on packet processing path. Increases flash and CPU usage. For debugging and CI only.' Gate LOG_DBG calls from sibling beads behind this config. Verify: Kconfig parses, builds with y and n.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:19:18.085597573Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:19:18.085597573Z",
+  "labels": [
+    "c",
+    "zephyr",
+    "structured-logging",
+    "cross-impl",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gy32.4.5",
+      "depends_on_id": "project-LICHEN-worker6-gy32.4",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:19:18.224461206Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
