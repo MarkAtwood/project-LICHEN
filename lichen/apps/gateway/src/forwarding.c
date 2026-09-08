@@ -54,6 +54,35 @@ static void forwarding_mgmt_event_handler(struct net_mgmt_event_callback *cb,
 	}
 }
 
+#if defined(CONFIG_NET_PKT_FILTER)
+/*
+ * NPF send-rule test: true (match) when the forwarding gate denied the
+ * packet, so the rule result NET_DROP drops it; false lets evaluation fall
+ * through to the terminating npf_default_ok rule.
+ *
+ * net_pkt_orig_iface() is the ingress interface for forwarded packets
+ * (set by net_recv_data()/ipv6_route_packet()) and NULL for packets the
+ * gateway originates itself; lichen_forwarding_handle() allows both.
+ */
+static bool lichen_forwarding_egress_test(struct npf_test *test,
+					  struct net_pkt *pkt)
+{
+	ARG_UNUSED(test);
+
+	return !lichen_forwarding_handle(pkt, net_pkt_orig_iface(pkt),
+					 net_pkt_iface(pkt));
+}
+
+static struct {
+	struct npf_test test;
+} lichen_forwarding_egress = {
+	.test.fn = lichen_forwarding_egress_test,
+};
+
+static NPF_RULE(lichen_forwarding_egress_drop, NET_DROP,
+		lichen_forwarding_egress);
+#endif /* CONFIG_NET_PKT_FILTER */
+
 int lichen_forwarding_init(void)
 {
 	if (s_initialized) {
@@ -122,35 +151,6 @@ static void tunnel_stats_denied(void)
 	s_stats.tunnel_auth_denied++;
 	k_mutex_unlock(&s_stats_mutex);
 }
-
-#if defined(CONFIG_NET_PKT_FILTER)
-/*
- * NPF send-rule test: true (match) when the forwarding gate denied the
- * packet, so the rule result NET_DROP drops it; false lets evaluation fall
- * through to the terminating npf_default_ok rule.
- *
- * net_pkt_orig_iface() is the ingress interface for forwarded packets
- * (set by net_recv_data()/ipv6_route_packet()) and NULL for packets the
- * gateway originates itself; lichen_forwarding_handle() allows both.
- */
-static bool lichen_forwarding_egress_test(struct npf_test *test,
-					  struct net_pkt *pkt)
-{
-	ARG_UNUSED(test);
-
-	return !lichen_forwarding_handle(pkt, net_pkt_orig_iface(pkt),
-					 net_pkt_iface(pkt));
-}
-
-static struct {
-	struct npf_test test;
-} lichen_forwarding_egress = {
-	.test.fn = lichen_forwarding_egress_test,
-};
-
-static NPF_RULE(lichen_forwarding_egress_drop, NET_DROP,
-		lichen_forwarding_egress);
-#endif /* CONFIG_NET_PKT_FILTER */
 
 bool lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			      struct net_if *out_iface)
