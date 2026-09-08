@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-w5ve.1",
+  "title": "E-ink display subsystem (T-Echo firmware)",
+  "description": "Firmware display driver and screen renderer for T-Echo 200x200 1-bit e-ink. Implements: status bar (battery, hops, time, unread, sync state), 4 primary screens (Messages, Map/Peers-nearby, Peers, Status), 2 secondary (Settings, Keys). 3-button navigation (PREV/SELECT/NEXT). Partial refresh for status bar, full refresh on screen change. Sleep after 30s, wake on button/radio. Unread badge on sleep screen. Spec: 11-lci.md §17.8.7 e-ink specifics. C/Zephyr in subsys/lichen or apps/puck.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:39:28.08722749Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:39:28.08722749Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w5ve.1",
+      "depends_on_id": "project-LICHEN-worker6-w5ve",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:39:28.236748833Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
