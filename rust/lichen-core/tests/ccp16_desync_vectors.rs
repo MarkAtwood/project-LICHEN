@@ -24,8 +24,8 @@ fn find_case(name: &str) -> Value {
 
 #[test]
 fn corpus_case_count_is_pinned() {
-    // Guard against corpus case-count drift (beads-worker-4); the C and
-    // Python consumers pin the same count.
+    // Guard against corpus case-count drift (beads-worker-4); Python pins
+    // the same count. The C consumer does name-lookups without a count pin.
     assert_eq!(vectors().len(), 5, "corpus case count changed");
 }
 
