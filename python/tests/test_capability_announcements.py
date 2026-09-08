@@ -120,6 +120,41 @@ class TestCapabilityPayload:
                 announcer_iid=bytes(8),
             )
 
+    def test_prefix_zero_padded_accepted(self) -> None:
+        """Zero-padded prefixes are valid (corpus/Rust/C rule, bead 45or)."""
+        payload = CapabilityPayload(
+            capabilities=Capability.EGRESS,
+            prefix=bytes.fromhex("fd000000000000000000000000000000"),  # 16 bytes
+            prefix_len=64,  # 8 significant bytes, zero-padded
+            expiry=int(time.time()) + 3600,
+            seq=1,
+            announcer_iid=bytes(8),
+        )
+        assert len(payload.prefix) == 16
+        assert payload.prefix_len == 64
+
+    def test_prefix_nonzero_padding_rejected(self) -> None:
+        with pytest.raises(ValueError, match="padding beyond prefix_len"):
+            CapabilityPayload(
+                capabilities=Capability.EGRESS,
+                prefix=bytes.fromhex("fd00000000000000ff00000000000000"),
+                prefix_len=64,
+                expiry=int(time.time()) + 3600,
+                seq=1,
+                announcer_iid=bytes(8),
+            )
+
+    def test_prefix_too_long_rejected(self) -> None:
+        with pytest.raises(ValueError, match="at most 16 bytes"):
+            CapabilityPayload(
+                capabilities=Capability.EGRESS,
+                prefix=bytes(17),
+                prefix_len=128,
+                expiry=int(time.time()) + 3600,
+                seq=1,
+                announcer_iid=bytes(8),
+            )
+
     def test_invalid_iid_length(self) -> None:
         with pytest.raises(ValueError, match="announcer_iid must be 8 bytes"):
             CapabilityPayload(
@@ -385,6 +420,42 @@ class TestCoseSign1Encoding:
         assert decoded.payload.seq == announcement.payload.seq
         assert decoded.payload.announcer_iid == announcement.payload.announcer_iid
         assert decoded.signature == announcement.signature
+
+    def test_cose_sign1_tag18_wrapped_decode(self, identity: Identity) -> None:
+        """Tag-18 wrapped COSE_Sign1 decodes identically (Rust parity)."""
+        announcement = create_capability_announcement(
+            identity=identity,
+            capabilities=Capability.PREFIX_DELEGATION,
+            prefix=bytes.fromhex("fd000000000000000000000000000000"),
+            prefix_len=64,
+            expiry=1700000000,
+            seq=7,
+        )
+
+        untagged = announcement.to_cose_sign1()
+        wrapped = cbor2.dumps(cbor2.CBORTag(18, cbor2.loads(untagged)))
+
+        decoded = decode_cose_sign1_announcement(wrapped)
+        assert decoded.payload.prefix_len == announcement.payload.prefix_len
+        assert decoded.payload.prefix == announcement.payload.prefix
+        assert decoded.payload.announcer_iid == announcement.payload.announcer_iid
+        assert decoded.signature == announcement.signature
+
+    def test_decode_unexpected_cbor_tag_rejected(self, identity: Identity) -> None:
+        """Tags other than COSE_Sign1 (18) are not unwrapped."""
+        announcement = create_capability_announcement(
+            identity=identity,
+            capabilities=Capability.EGRESS,
+            prefix=b"",
+            prefix_len=0,
+            expiry=1700000000,
+            seq=1,
+        )
+        untagged = announcement.to_cose_sign1()
+        wrong_tag = cbor2.dumps(cbor2.CBORTag(999, cbor2.loads(untagged)))
+
+        with pytest.raises(ValueError, match="4-element array"):
+            decode_cose_sign1_announcement(wrong_tag)
 
     def test_cose_sign1_structure(self, identity: Identity) -> None:
         announcement = create_capability_announcement(
