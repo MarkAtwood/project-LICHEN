@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-1yll",
+  "title": "Rust: .ok()? chains lose error context in routing",
+  "description": "lichen-node/src/routing/router.rs and lichen-node/src/dispatch.rs use .ok()? to convert structured errors (DaoError, CoapError) into None, discarding diagnostic information. An AI watching test failures sees 'returned None' with no indication of why parsing/validation failed. Fix: propagate errors with ? operator, or log before converting. Example: Dao::from_bytes(data).ok()? hides the specific DaoError variant.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T18:47:55.411050183Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T18:47:55.411050183Z",
+  "labels": [
+    "rust",
+    "diagnosability"
+  ]
+}
