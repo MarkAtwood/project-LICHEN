@@ -110,13 +110,18 @@ impl TdmaBeaconHeader {
 
     /// Serialize header to bytes.
     ///
-    /// Returns `Err(ReservedFlagSet)` if reserved flag bits (4-7) are set.
+    /// Returns `Err(ReservedFlagSet)` if reserved flag bits (4-7) are set,
+    /// or `Err(NumSlotsZero)` if `num_slots` is zero (structurally
+    /// meaningless slot modulus that every receiver's parse gate rejects).
     pub fn serialize(&self, out: &mut [u8]) -> Result<(), ParseError> {
         if out.len() < HEADER_SIZE {
             return Err(ParseError::TooShort);
         }
         if self.flags & flags::RESERVED_MASK != 0 {
             return Err(ParseError::ReservedFlagSet);
+        }
+        if self.num_slots == 0 {
+            return Err(ParseError::NumSlotsZero);
         }
         out[0..4].copy_from_slice(&self.epoch.to_be_bytes());
         out[4] = self.num_slots;
@@ -542,6 +547,24 @@ mod tests {
         };
         let mut buf = [0u8; HEADER_SIZE];
         assert_eq!(hdr.serialize(&mut buf), Err(ParseError::ReservedFlagSet));
+    }
+
+    #[test]
+    fn test_serialize_rejects_num_slots_zero() {
+        let hdr = TdmaBeaconHeader {
+            epoch: 0,
+            num_slots: 0,
+            sfn: 0,
+            timestamp: 0,
+            flags: 0,
+            rx_chains: 1,
+            setup_window: 0,
+            occupied_time: 0,
+            guard: 0,
+            channel_mask: 0,
+        };
+        let mut buf = [0u8; HEADER_SIZE];
+        assert_eq!(hdr.serialize(&mut buf), Err(ParseError::NumSlotsZero));
     }
 
     #[test]

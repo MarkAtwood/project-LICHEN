@@ -101,11 +101,11 @@ lichen_beacon_header_parse(const uint8_t *data, size_t len,
  * @brief Serialize the 24-byte beacon header.
  * @return LICHEN_BEACON_OK on success; LICHEN_BEACON_TOO_SHORT if the
  *         output buffer is short (or header/out is NULL);
- *         LICHEN_BEACON_RESERVED_FLAG_SET if reserved flag bits are set.
- *         Member widths match the wire widths exactly, so no field can
- *         be out of range. LICHEN_BEACON_INVALID_FIELD is reserved for
- *         parse (num_slots == 0) and kept on serialize for API
- *         stability with the Python/Rust codecs.
+ *         LICHEN_BEACON_RESERVED_FLAG_SET if reserved flag bits are set;
+ *         LICHEN_BEACON_INVALID_FIELD if num_slots is 0 (structurally
+ *         meaningless slot modulus that every receiver's parse gate
+ *         rejects — fail-closed on TX, matching the reserved-flags
+ *         convention).
  */
 enum lichen_beacon_status
 lichen_beacon_header_serialize(const struct lichen_beacon_header *header,

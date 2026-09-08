@@ -96,6 +96,18 @@ def test_serialize_rejects_reserved_flag_bits() -> None:
         serialize_header(header)
 
 
+def test_serialize_rejects_num_slots_zero() -> None:
+    """TX-side mirror of beacon_header_num_slots_zero_rejected: a header
+    every receiver's parse gate rejects must not be emittable."""
+    header = TdmaBeaconHeader(
+        epoch=1, num_slots=0, sfn=0, timestamp=0, flags=0,
+        rx_chains=1, setup_window=0, occupied_time=0, guard=50,
+        channel_mask=1,
+    )
+    with pytest.raises(BeaconFormatError):
+        serialize_header(header)
+
+
 def test_serialize_rejects_out_of_range_fields() -> None:
     base = {
         "epoch": 1,

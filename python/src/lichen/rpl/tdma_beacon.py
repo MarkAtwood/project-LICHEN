@@ -125,6 +125,8 @@ def serialize_header(header: TdmaBeaconHeader) -> bytes:
     flags = _require_u8(header.flags, "flags")
     if flags & FLAG_RESERVED_MASK:
         raise BeaconFormatError("reserved flag bits set")
+    if header.num_slots == 0:
+        raise BeaconFormatError("num_slots must be nonzero")
     out = bytearray(HEADER_SIZE)
     out[0:4] = _require_u32(header.epoch, "epoch").to_bytes(4, "big")
     out[4] = _require_u8(header.num_slots, "num_slots")
