@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-qpzt.15",
+  "title": "Spec: multi-gateway route validation",
+  "description": "Define protocol for nodes hearing multiple gateways to cross-validate routing information. When a node receives DIOs from 2+ gateways, it compares: DODAG version, root identity, advertised metrics. If one gateway's routing diverges significantly from consensus (different root, inconsistent version, metric outlier), flag it and prefer the consensus gateways. Add to spec/05-routing.md and spec/08-gateway-coordination.md. This detects a compromised gateway advertising bogus routes to attract traffic.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:35:21.94931732Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:35:21.94931732Z",
+  "labels": [
+    "spec",
+    "security",
+    "routing",
+    "gateway",
+    "hardening"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qpzt.15",
+      "depends_on_id": "project-LICHEN-worker6-qpzt",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:35:22.075516212Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
