@@ -839,12 +839,50 @@ least-recently-updated entry (LRU by last announce timestamp).
 
 ### 9.4. Announce Parameters
 
+**Baseline (density <= 20):**
+
 | Parameter | Value | Description |
 |-----------|-------|-------------|
 | ANNOUNCE_INTERVAL | 300 sec | Time between announces |
 | MAX_ANNOUNCE_HOPS | 15 | Maximum propagation |
 | GRADIENT_TIMEOUT | 600 sec | 2× announce interval |
 | ANNOUNCE_JITTER | 0-30 sec | Random delay to prevent collision |
+
+**Density-Adaptive Scaling:**
+
+Announce traffic is broadcast and scales with both node count and hop
+propagation. At high density, announce flooding dominates airtime. Nodes
+MUST adapt announce parameters based on local density (the same
+`EstimateDensity` from 02a-coordinated-capacity.md §2a.10.3):
+
+| Density | ANNOUNCE_INTERVAL | MAX_ANNOUNCE_HOPS | GRADIENT_TIMEOUT |
+|---------|-------------------|-------------------|------------------|
+| sparse (< 5) | 300 sec | 15 | 600 sec |
+| moderate (5-20) | 300 sec | 10 | 600 sec |
+| dense (21-50) | 600 sec | 5 | 1200 sec |
+| very dense (51-100) | 1200 sec | 3 | 2400 sec |
+| extreme (> 100) | 1800 sec | 2 | 3600 sec |
+
+Rationale: at density 50 (a node hearing 50 neighbors), each announce at
+hop limit 15 generates thousands of relay transmissions across the mesh. At
+hop limit 3, the announce reaches ~50 additional nodes — enough for local
+routing. Distant destinations are reached via border routers and Yggdrasil
+backhaul.
+
+ANNOUNCE_JITTER scales with interval: `ANNOUNCE_JITTER = ANNOUNCE_INTERVAL / 10`,
+capped at 120 seconds.
+
+Nodes SHOULD re-evaluate density-dependent parameters at each density
+estimate update (once per metrics window). Changes take effect on the next
+announce cycle; a node MUST NOT abort a pending announce due to a density
+change.
+
+**Interaction with multi-DODAG deployments (§9.10):**
+
+In dense deployments with multiple BRs, scoped announces + Yggdrasil
+backhaul provide full reachability. A node reaches its local neighborhood
+via announces and the rest of the mesh via its BR. This is the intended
+operating mode for events (DEF CON, Burning Man) and urban deployments.
 
 **Announce Age (GNSS-Enabled):**
 
@@ -864,10 +902,21 @@ the absolute `received_at` timestamp. This enables two optimizations:
 
 ### 9.5. Bandwidth Budget
 
-For a 20-node mesh:
+**Sparse (20 nodes, baseline parameters):**
 - 20 nodes × 92 bytes × 12 announces/hr = 22 KB/hr
 - At SF10/125kHz: ~15 seconds airtime/hr network-wide
 - ~0.04% of 1% duty cycle
+
+**Dense DODAG (200 nodes, density-adaptive):**
+- 200 nodes × 92 bytes × 3 announces/hr × 3 relay hops = 166 KB/hr
+- At SF10/125kHz: ~110 seconds airtime/hr network-wide
+- ~3% of 1% duty cycle — elevated but sustainable per DODAG
+
+**Event scale (8,000 nodes across 40 DODAGs):**
+- Per-DODAG: same as dense DODAG above (~110 sec/hr)
+- Cross-DODAG traffic: via backbone (not LoRa airtime)
+- Total LoRa announce overhead: 40 × 110 sec = 4,400 sec/hr aggregate
+  across 40 independent DODAGs (each on its own channel/TDMA schedule)
 
 Acceptable overhead for instant peer-to-peer routing.
 
@@ -1218,6 +1267,188 @@ Sender chooses opportunistic mode when:
 Routers only. Constrained nodes use standard unicast forwarding--timing coordination adds code complexity.
 
 <!-- ponytail: no ACK-based batch, add if throughput matters -->
+
+### 9.10. Dense Deployment Architecture (Multi-DODAG)
+
+Large-scale deployments (hundreds to thousands of nodes) require multiple
+border routers forming independent DODAGs, connected via backbone. This
+section defines the deployment architecture and protocol interactions for
+events (DEF CON, Burning Man) and urban/campus networks.
+
+#### 9.10.1. Problem Statement
+
+The protocol's control plane does not scale linearly with node count:
+
+| Mechanism | Scaling behavior | Bottleneck at N nodes |
+|-----------|------------------|-----------------------|
+| Announces | N × relay_hops broadcasts per interval | Airtime saturation ~500 nodes |
+| RPL DAO | N messages converge on single root | Root DAO processing ~300 nodes |
+| Gradient table | O(N) entries, LRU eviction | RAM exhaustion at 128+ peers |
+| TDMA slots | N/num_slots contention per slot | Collision rate >50% at ~200 nodes/8 slots |
+
+Single-DODAG deployments are appropriate for up to ~200 nodes. Beyond that,
+the mesh MUST be partitioned into multiple DODAGs.
+
+#### 9.10.2. Architecture
+
+```
+                        ┌─────────────────────┐
+                        │  Yggdrasil Backbone  │
+                        │  (WiFi / Ethernet /  │
+                        │   StarLink / Cell)   │
+                        └──┬────┬────┬────┬───┘
+                           │    │    │    │
+                     ┌─────┤    │    │    ├─────┐
+                     │     │    │    │    │     │
+                   ┌─▼─┐ ┌─▼─┐ ┌▼──┐ ┌──▼┐ ┌──▼┐
+                   │BR1│ │BR2│ │BR3│ │BR4│ │BR5│
+                   └─┬─┘ └─┬─┘ └─┬─┘ └──┬┘ └──┬┘
+                     │     │     │      │     │
+                  ┌──▼──┐┌─▼──┐┌─▼──┐┌──▼─┐┌──▼─┐
+                  │DODAG││DODAG││DODAG││DODAG││DODAG│
+                  │ ~200││ ~200││ ~200││~200 ││~200 │
+                  │nodes││nodes││nodes││nodes││nodes│
+                  └─────┘└────┘└────┘└─────┘└─────┘
+```
+
+Each BR is a DODAG root for its local segment. Nodes join the nearest BR
+based on RPL rank (best signal). Inter-DODAG traffic flows through the
+backbone via Yggdrasil.
+
+**Target partition size:** 100-300 nodes per DODAG. This keeps announce
+flooding, DAO convergence, gradient table size, and TDMA contention within
+the protocol's design envelope.
+
+**BR placement:** One BR per geographic zone. Zones should overlap slightly
+so nodes at boundaries can hear multiple BRs and select the best one via
+the root selection criteria in GCP-5.2.
+
+#### 9.10.3. Message Flow
+
+**Local (same DODAG):** Standard three-tier routing (RPL + Announce + LOADng).
+No backbone involvement.
+
+**Cross-DODAG (different BRs):**
+
+```
+Alice (DODAG-1)
+  → Announce/RPL to BR1
+    → BR1 forwards via Yggdrasil backbone to BR3
+      → BR3 delivers via RPL/Announce to Bob (DODAG-3)
+```
+
+This is already how Yggdrasil fallback works (§7.2). The difference in a
+dense deployment is that cross-DODAG is the *common case* for distant
+nodes, not a fallback. Announce hop limits (§9.4) ensure a node's announces
+only cover its local DODAG, not the entire mesh.
+
+**Custody transfer across DODAGs:**
+
+IM messages use the custody chain (§9.8.1). The custody path naturally
+follows the cross-DODAG architecture:
+
+```
+Alice → local relay (custody) → BR1 (custody)
+  → Yggdrasil → BR3 (custody) → Bob
+```
+
+Each custody handoff is a CoAP CON/ACK. The backbone segment (BR1 → BR3)
+uses TCP, which is reliable by default.
+
+#### 9.10.4. TDMA Coordination Across BRs
+
+Each BR runs its own TDMA schedule (epoch, num_slots, slot_map). Adjacent
+BRs SHOULD coordinate via GCP (08-gateway-coordination.md) to avoid slot
+collisions in the overlap zone:
+
+- BRs MUST use the same RPLInstanceID (GCP-5.1)
+- BRs SHOULD stagger epochs to avoid simultaneous beacons
+- BRs SHOULD partition channel_mask so adjacent DODAGs use different data
+  channels where the regional plan permits
+
+**num_slots scaling:** The root SHOULD increase `num_slots` proportional to
+DODAG size. Recommended: `num_slots = MAX(8, CEIL(dodag_size / 25))`.
+At 200 nodes with num_slots=8, each slot holds 25 nodes. The root MAY
+increase to 16 or 32 slots to reduce per-slot contention.
+
+#### 9.10.5. Deployment Reference: DEF CON (~2,000 nodes)
+
+| Parameter | Value |
+|-----------|-------|
+| Venue | Indoor convention center, multiple floors |
+| BRs | 5-10 (one per floor or wing) |
+| Backbone | Venue WiFi or dedicated Ethernet |
+| Nodes per DODAG | ~200-400 |
+| Expected density | 20-50 per node (indoor, short range) |
+| ANNOUNCE_INTERVAL | 600-1200 sec (density-adaptive) |
+| MAX_ANNOUNCE_HOPS | 3-5 (density-adaptive) |
+| num_slots | 16-32 per BR |
+| LoRa challenges | Indoor propagation, steel/concrete walls |
+
+**Indoor LoRa notes:** LoRa at 915 MHz penetrates 1-2 interior walls but
+attenuates ~10-20 dB per wall. Effective range indoors: 30-100m. Deploy BRs
+in central locations per floor. Nodes in the same room have high density
+but short paths; nodes across the building route through the BR backbone.
+
+#### 9.10.6. Deployment Reference: Burning Man (~8,000 nodes)
+
+| Parameter | Value |
+|-----------|-------|
+| Venue | Flat open playa, ~5 sq mi |
+| BRs | 20-40 (along esplanade and deep playa) |
+| Backbone | StarLink terminals + WiFi mesh between BRs |
+| Nodes per DODAG | ~200-400 |
+| Expected density | 30-100+ near center camp, <10 deep playa |
+| ANNOUNCE_INTERVAL | 1200-1800 sec (density-adaptive) |
+| MAX_ANNOUNCE_HOPS | 2-3 (density-adaptive) |
+| num_slots | 32-64 per BR |
+| LoRa challenges | Excellent propagation, extreme density |
+
+**Playa LoRa notes:** Flat desert with no obstructions. LoRa SF10 range is
+5-10 km line-of-sight. A node at center camp hears hundreds of peers. The
+density-adaptive parameters (§9.4) are critical: at density 100+, announces
+are limited to 2 hops and 1800s intervals. Most traffic routes through BRs.
+
+**Power:** Week-long event. Nodes run on 850mAh batteries (T-Echo). At
+density-adaptive duty cycle (10 permille US), battery life is ~3-5 days.
+Nodes near charging (camp infrastructure) act as powered relays. BRs run
+on generator or solar.
+
+**StarLink backbone:** 2-4 StarLink terminals distributed across playa,
+bridged via WiFi to BR cluster. Each terminal provides ~50-200 Mbps
+downlink — orders of magnitude more than the mesh needs. The backbone is
+not the bottleneck; the LoRa last-mile is.
+
+#### 9.10.7. Capacity Math
+
+Per-DODAG capacity at SF10/125kHz with 8 data channels:
+
+```
+Packet airtime (100 bytes, SF10): ~800 ms
+Channel capacity: ~1.25 packets/sec per channel
+8 data channels: ~10 packets/sec total
+TDMA efficiency (8 slots, 50ms guard): ~90%
+Effective: ~9 packets/sec per DODAG
+```
+
+Per-node budget at 200 nodes/DODAG, density-adaptive 10 permille duty:
+
+```
+Airtime budget: 36 sec/hour per node
+Avg packet: 800 ms
+Max packets/hour: ~45 per node
+```
+
+This comfortably supports:
+- Position beacon every 5 minutes (12/hour)
+- Several IMs per hour (custody handshakes)
+- Announce every 20 minutes (3/hour)
+- RPL DIO/DAO maintenance (~5/hour)
+- Remaining: ~25 packets/hour for telemetry, CoAP, etc.
+
+At 8,000 nodes across 40 DODAGs, aggregate mesh capacity:
+~360 packets/sec mesh-wide, ~324,000 packets/hour. Adequate for IM +
+position + control at event scale.
 
 ---
 
