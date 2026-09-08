@@ -1103,27 +1103,40 @@ impl ClaimSeqStore {
             .checked_add(1)
             .ok_or(SlotError::ArithmeticOverflow)?;
         let temp_path = slot_claim_seq_temp_path(&self.path, value)?;
+        // A crash between temp-create and rename leaves the temp behind; if
+        // the rebooting process lands on the same PID and value, create_new
+        // would fail forever. A stale temp is garbage from a dead attempt
+        // whose rename never landed, so remove it and retry once.
+        let mut open = OpenOptions::new();
+        open.write(true).create_new(true);
+        let mut file = match open.open(&temp_path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                fs::remove_file(&temp_path)
+                    .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+                open.open(&temp_path)
+                    .map_err(|error| SlotError::StorageIo(error.to_string()))?
+            }
+            Err(error) => return Err(SlotError::StorageIo(error.to_string())),
+        };
         let result = (|| -> Result<(), SlotError> {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temp_path)
-                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             file.write_all(CLAIM_SEQ_MAGIC)
                 .and_then(|_| file.write_all(&value.to_be_bytes()))
                 .and_then(|_| file.sync_all())
                 .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             fs::rename(&temp_path, &self.path)
                 .map_err(|error| SlotError::StorageIo(error.to_string()))?;
-            if let Some(parent) = self
+            // Bare relative paths have an empty parent(); "." is the real
+            // parent and skipping its fsync would allow the rename to be lost
+            // after next_seq already returned.
+            let parent = self
                 .path
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
-            {
-                File::open(parent)
-                    .and_then(|directory| directory.sync_all())
-                    .map_err(|error| SlotError::StorageIo(error.to_string()))?;
-            }
+                .unwrap_or_else(|| Path::new("."));
+            File::open(parent)
+                .and_then(|directory| directory.sync_all())
+                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
             Ok(())
         })();
         if result.is_err() {
@@ -1142,10 +1155,7 @@ fn slot_claim_seq_temp_path(path: &Path, value: u32) -> Result<PathBuf, SlotErro
         .ok_or_else(|| SlotError::StorageIo("claim-seq path has no UTF-8 file name".into()))?;
     // The ever-increasing value keeps successive saves from colliding with a
     // leftover temp (mirrors the generation suffix in slot_replay_temp_path).
-    Ok(path.with_file_name(format!(
-        ".{name}.tmp-{value}-{}",
-        std::process::id()
-    )))
+    Ok(path.with_file_name(format!(".{name}.tmp-{value}-{}", std::process::id())))
 }
 
 /// Canonical, domain-separated signed transcript for a slot claim.
@@ -2637,5 +2647,17 @@ mod tests {
             ClaimSeqStore::load(&path),
             Err(SlotError::CorruptState)
         ));
+    }
+
+    #[test]
+    fn claim_seq_recovers_from_stale_temp() {
+        let path = test_claim_seq_path("stale-temp");
+        // Crash artifact: the temp for value 1 left behind by a dead attempt.
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let stale = path.with_file_name(format!(".{name}.tmp-1-{}", std::process::id()));
+        fs::write(&stale, b"junk").unwrap();
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(store.next_seq().unwrap(), 1);
+        assert!(!stale.exists());
     }
 }
