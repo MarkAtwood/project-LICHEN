@@ -155,7 +155,16 @@ the user decides whether to resend manually.
 
 #### 18.1.3. Canned Messages
 
-Pre-defined messages for quick sending (configurable):
+Pre-defined messages for quick sending. Nodes ship with a default set and
+users can replace any slot via PUT. Canned messages are the primary input
+method on e-ink devices (3-button cycle + select) and a shortcut on
+full-keyboard surfaces.
+
+**Design criteria:** Each message must make sense as a standalone
+transmission with no follow-up required. Short enough for LoRa efficiency.
+Unambiguous without context.
+
+**Default Set (16 messages in 4 categories):**
 
 ```
 GET coap://[node]/msg/canned
@@ -163,21 +172,83 @@ Content-Format: application/cbor
 
 {
   "messages": [
-    {"id": 0, "text": "I'm OK"},
-    {"id": 1, "text": "Need assistance"},
-    {"id": 2, "text": "At checkpoint"},
-    {"id": 3, "text": "Returning to base"},
-    {"id": 4, "text": "Emergency - send help"}
+    {"id": 0,  "cat": "status",  "text": "I'm OK"},
+    {"id": 1,  "cat": "status",  "text": "Busy, can't talk"},
+    {"id": 2,  "cat": "status",  "text": "Low battery"},
+    {"id": 3,  "cat": "status",  "text": "Heading out, back later"},
+
+    {"id": 4,  "cat": "move",    "text": "On my way"},
+    {"id": 5,  "cat": "move",    "text": "At checkpoint"},
+    {"id": 6,  "cat": "move",    "text": "Returning to base"},
+    {"id": 7,  "cat": "move",    "text": "Stopped, holding position"},
+
+    {"id": 8,  "cat": "coord",   "text": "Copy"},
+    {"id": 9,  "cat": "coord",   "text": "Negative"},
+    {"id": 10, "cat": "coord",   "text": "Wait one"},
+    {"id": 11, "cat": "coord",   "text": "Meet at my position"},
+
+    {"id": 12, "cat": "urgent",  "text": "Need assistance (non-emergency)"},
+    {"id": 13, "cat": "urgent",  "text": "Medical issue, need help"},
+    {"id": 14, "cat": "urgent",  "text": "Lost, need directions"},
+    {"id": 15, "cat": "urgent",  "text": "EMERGENCY - send help NOW"}
   ]
 }
 ```
+
+Category `cat` is a display hint for grouping in the UI. IDs 0-11 are
+normal priority; 12-14 are priority=1 (high); 15 is priority=2 (emergency,
+triggers SOS path per §18.5).
+
+**Sending:**
 
 ```
 POST coap://[destination]/msg/inbox
 Content-Format: application/cbor
 
-{"canned": 4, "ack": true}
+{"canned": 8, "ack": true}
 ```
+
+Recipients render the canned text. The `canned` field is the ID; the
+recipient's node looks up the text locally. This saves airtime — only
+the ID (1 byte) is transmitted, not the full text string.
+
+**User Customization:**
+
+Users can replace any canned message via PUT. Custom messages persist
+across reboots (stored in flash).
+
+```
+PUT coap://[node]/msg/canned/7
+Content-Format: application/cbor
+
+{"text": "Grabbing beer, want one?"}
+
+Response: 2.04 Changed
+```
+
+To reset a slot to its default:
+
+```
+DELETE coap://[node]/msg/canned/7
+
+Response: 2.02 Deleted    ; slot reverts to factory default
+```
+
+**Constraints:**
+- Maximum 16 slots (IDs 0-15)
+- Maximum text length: 64 bytes UTF-8
+- Slot 15 is always emergency; users MAY change its text but it always
+  sends as priority=2 and triggers SOS path
+- Custom messages MUST be transmitted as full text (not ID) when the
+  recipient may not have the same customization — implementations SHOULD
+  include both `canned` ID and `body` text when the slot has been
+  customized
+
+**E-ink compose flow:**
+1. PREV/NEXT cycles through canned messages grouped by category
+2. Category headers shown: STATUS / MOVEMENT / COORD / URGENT
+3. SELECT sends immediately (with confirmation for urgent category)
+4. Long-press SELECT on any message opens recipient picker first
 
 #### 18.1.4. Store-and-Forward
 
