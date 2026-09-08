@@ -1027,10 +1027,10 @@ impl CoapResponse {
         }
     }
 
-    /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict).
+    /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict, spec/08:315).
     pub fn conflict(payload: Vec<u8>, content_format: u16) -> Self {
         Self {
-            code: 0x89, // 4.09 Conflict
+            code: 0x89, // 4.09 Conflict = (4<<5)|9
             payload: Zeroizing::new(payload),
             content_format,
         }
@@ -1072,10 +1072,11 @@ impl CoapResponse {
         }
     }
 
-    // Merge note: beads-worker-5 added a one-arg `conflict(payload)` here
-    // hardcoding CONTENT_FORMAT_CBOR. Dropped in favor of the two-arg
-    // `conflict(payload, content_format)` above, which is strictly more
-    // general; keeping both would be a duplicate method definition.
+    // Merge note: beads-worker-5 (and again beads-worker-3) added a one-arg
+    // `conflict(payload)` here hardcoding CONTENT_FORMAT_CBOR. Dropped in
+    // favor of the two-arg `conflict(payload, content_format)` above, which
+    // is strictly more general and matches the only call site; keeping both
+    // would be a duplicate method definition.
     /// 4.04 Not Found.
     pub fn not_found() -> Self {
         Self {
@@ -1957,8 +1958,10 @@ impl GatewayCoordinator {
                     return CoapResponse::internal_error("slot state persistence failed");
                 }
                 // We win, reject their claim. GCP-6.5 step 11
-                // (spec/08:226-236): an unresolved slot conflict responds
-                // 4.09 Conflict, not 2.05 Content.
+                // (spec/08:226-236, response at spec/08:315): an unresolved
+                // slot conflict responds 4.09 Conflict, not 2.05 Content, so
+                // the loser knows to re-claim and broadcast an updated
+                // schedule (GCP-6.3 step 3).
                 let reject = Value::Map(vec![
                     (
                         Value::Text("status".to_string()),
@@ -2755,7 +2758,7 @@ mod tests {
 
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim: GCP-6.5 step 11
-        // responds 4.09 Conflict for an unresolved slot conflict.
+        // responds 4.09 Conflict for an unresolved slot conflict (spec/08:315).
         assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
 
         // Decode response to verify rejection
@@ -2948,10 +2951,11 @@ mod tests {
         assert_eq!(coordinator.info.slot_map.owned, original_owned);
 
         coordinator.replay_persistence.as_mut().unwrap().path = original_path;
-        // The retry commits and reaches the conflict arm: the default
-        // slot_map is interleaved stride-1 over all 60 slots, so claim [40]
-        // overlaps our owned range and the all-zero IID wins the tiebreak —
-        // GCP-6.5 step 11 responds 4.09 Conflict.
+        // The retry commits and reaches the conflict arm: the provisioned
+        // default slot_map is Interleaved (gateway_count=1, ordinal=0), so
+        // owned_slots() spans all 60 slots and claim [40] overlaps; the
+        // all-zero local IID wins the tiebreak (GCP-6.3). GCP-6.5 step 11
+        // responds 4.09 Conflict (spec/08:315).
         assert_eq!(
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 9)
