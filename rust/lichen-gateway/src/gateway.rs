@@ -1220,7 +1220,7 @@ impl Gateway {
         // atomically with the floor below).
         let configured: std::collections::HashSet<[u8; 8]> = peer_pubkeys
             .iter()
-            .map(|p| lichen_core::addr::iid_from_pubkey_bytes(p))
+            .map(lichen_core::addr::iid_from_pubkey_bytes)
             .collect();
         let revoked: Vec<[u8; 8]> = candidate
             .list_iids()

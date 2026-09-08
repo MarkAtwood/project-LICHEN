@@ -687,6 +687,12 @@ const CLAIM_RATE_WINDOW_MS: u64 = 60_000;
 const CLAIM_PER_PEER_LIMIT: usize = 10;
 const CLAIM_GLOBAL_LIMIT: usize = 60;
 
+impl Default for SlotClaimRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SlotClaimRateLimiter {
     pub fn new() -> Self {
         Self {

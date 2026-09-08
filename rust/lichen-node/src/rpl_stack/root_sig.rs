@@ -430,6 +430,7 @@ impl DecodedRootSig {
 /// the Python create_root_dio_signature oracle byte-for-byte: canonical
 /// payload labels 1-7, protected {1: -65537}, Sig_structure
 /// ["Signature1", protected, h'', payload], Schnorr48 over SHA-256.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn produce_root_dio_signature_option(
     signer: &dyn Fn(&[u8]) -> [u8; 48],
     signer_iid: [u8; 8],
@@ -502,6 +503,7 @@ pub(crate) fn produce_root_dio_signature_option(
     Ok(option)
 }
 
+#[cfg(test)]
 pub(crate) mod tests {
     use super::*;
     use lichen_rpl::root_seq_cache::RootSeqCache;

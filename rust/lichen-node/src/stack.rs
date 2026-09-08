@@ -1043,6 +1043,7 @@ pub fn find_dtn_hbh_option(next_header: u8, payload: &[u8]) -> Option<DtnSFlag> 
     None
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use lichen_hal::loopback::LoopbackRadio;
