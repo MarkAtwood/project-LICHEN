@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ylsf.2",
+  "title": "Replace __ASSERT_NO_MSG with __ASSERT in l2/lora_l2_tx.c",
+  "description": "lora_l2_tx.c line 514 uses __ASSERT_NO_MSG(!k_is_in_isr()). Replace with __ASSERT(!k_is_in_isr(), \"TX must not be called from ISR context\"). Check for any other __ASSERT_NO_MSG in the file. Verify: build compiles.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:17:46.823621469Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:17:46.823621469Z",
+  "labels": [
+    "c",
+    "diagnosability",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ylsf.2",
+      "depends_on_id": "project-LICHEN-worker6-ylsf",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:17:46.944631592Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
