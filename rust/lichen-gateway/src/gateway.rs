@@ -1371,7 +1371,6 @@ impl Gateway {
     fn egress_tunnel_authorized(
         &mut self,
         received: &lichen_node::stack::ReceivedIpv6,
-        now_ms: u64,
     ) -> bool {
         if received.ipv6.len() < 40 {
             return true;
@@ -1387,7 +1386,7 @@ impl Gateway {
         let route = [egress_iid];
         match self
             .coordinator
-            .authorize_egress(inner_source, false, &route, now_ms)
+            .authorize_egress(inner_source, false, &route)
         {
             Ok(()) => true,
             Err(error) => {
@@ -1425,7 +1424,7 @@ impl Gateway {
                 {
                     gcp_dispatched = true;
                     (None, RplEvent::None)
-                } else if self.egress_tunnel_authorized(&received, now_ms) {
+                } else if self.egress_tunnel_authorized(&received) {
                     (Some(received.ipv6), RplEvent::None)
                 } else {
                     (None, RplEvent::None)
