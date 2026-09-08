@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-tsn3.3.3",
+  "title": "Test: Python DAO storm window allows burst after parent change",
+  "description": "Write test: trigger parent_changed, try_buffer 4 DAOs from same source — all accepted. Wait 6s, 3rd DAO from same source — rejected. Verify: cd python \u0026\u0026 python -m pytest tests/test_dao_storm.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:53:11.31356772Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:53:11.31356772Z",
+  "labels": [
+    "python",
+    "buffering",
+    "testing",
+    "cross-impl",
+    "routing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tsn3.3.3",
+      "depends_on_id": "project-LICHEN-worker6-tsn3.3",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:53:11.453580705Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
