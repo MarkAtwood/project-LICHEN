@@ -41,6 +41,7 @@ use crate::handoff::{HandoffRequest, NodeRegistry};
 use crate::slot;
 use crate::trust::SIGNATURE_LEN;
 use crate::tunnel_auth;
+use crate::tunnel_auth::{AuthenticatedRoot, TunnelAuthorizationTable};
 
 // ─── CBOR map keys (short integers for constrained links) ────────────────────
 
@@ -1144,6 +1145,9 @@ pub struct GatewayCoordinator {
     slot_rate_limiter: slot::SlotClaimRateLimiter,
     slots_per_superframe: u32,
     replay_persistence: Option<SlotReplayPersistence>,
+    /// Egress tunnel authorizations (spec 06-security 8.11): OSCORE-delivered
+    /// root COSE_Sign1 grants, keyed by (prefix, route_hash), fail-closed.
+    tunnel_auth: TunnelAuthorizationTable,
 }
 
 /// Bound mirroring C `LICHEN_SLOT_CLAIM_COSE_MAX`
@@ -1737,6 +1741,7 @@ impl GatewayCoordinator {
             slot_rate_limiter: slot::SlotClaimRateLimiter::new(),
             slots_per_superframe,
             replay_persistence,
+            tunnel_auth: TunnelAuthorizationTable::default(),
         })
     }
 
@@ -1813,6 +1818,45 @@ impl GatewayCoordinator {
                     CoapResponse::service_unavailable()
                 }
             }
+            Err(_) => CoapResponse::forbidden(),
+        }
+    }
+
+    /// Bind the tunnel-auth table to the current DODAG root (spec 06-security
+    /// 8.11 step 3: the POST kid must match the current root IID). A root
+    /// change atomically revokes every cached authorization.
+    pub fn set_tunnel_auth_root(&mut self, root_iid: [u8; 8]) {
+        self.tunnel_auth.set_root(root_iid);
+    }
+
+    /// Handle POST /.well-known/tunnel-auth (spec 06-security 8.11): an
+    /// OSCORE-authenticated root delivers a COSE_Sign1 (alg -65537) egress
+    /// authorization for caching. Fail-closed: every validation failure maps
+    /// to 4.03 Forbidden without revealing which check failed (C
+    /// `tunnel_auth.c` `deny()` parity), and nothing is cached on failure.
+    pub fn handle_post_tunnel_auth(
+        &mut self,
+        payload: &[u8],
+        oscore_verified: bool,
+        peer_pubkey: Option<&[u8; 32]>,
+    ) -> CoapResponse {
+        let Some(pubkey) = peer_pubkey else {
+            return CoapResponse::forbidden();
+        };
+        let authenticated = AuthenticatedRoot {
+            iid: lichen_core::addr::iid_from_pubkey_bytes(pubkey),
+            public_key: &PublicKey::new(*pubkey),
+            oscore_authenticated: oscore_verified,
+        };
+        // Egress identity: the low 8 bytes of the gateway's key-derived
+        // native address (same derivation as record_own_claim_envelope).
+        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        let now = u64::try_from(unix_now()).unwrap_or(0);
+        match self
+            .tunnel_auth
+            .accept_post(payload, authenticated, own_iid, now)
+        {
+            Ok(_) => CoapResponse::changed(Vec::new()),
             Err(_) => CoapResponse::forbidden(),
         }
     }
@@ -2216,6 +2260,9 @@ impl GatewayCoordinator {
             (CoapMethod::Get, "nodes") => self.handle_get_nodes(),
             (CoapMethod::Post, "capability-announce") => {
                 self.handle_post_capability_announce(payload, oscore_verified, peer_pubkey)
+            }
+            (CoapMethod::Post, "tunnel-auth") => {
+                self.handle_post_tunnel_auth(payload, oscore_verified, peer_pubkey)
             }
             (CoapMethod::Get, _) | (CoapMethod::Post, _) => CoapResponse::not_found(),
             _ => CoapResponse::method_not_allowed(),

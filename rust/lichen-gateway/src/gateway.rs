@@ -1016,10 +1016,11 @@ impl Gateway {
         identity: Identity,
         safe_epoch: u8,
         trust_store: TrustStore,
-        coordinator: GatewayCoordinator,
+        mut coordinator: GatewayCoordinator,
         backing: GatewayBacking,
     ) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let root_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
         if coordinator.info.iid != root_addr {
             return Err(GatewayOpenError::RplProvision);
         }
@@ -1043,6 +1044,10 @@ impl Gateway {
             let public = lichen_link::keys::PublicKey::new(pinned.pubkey);
             rpl_stack.install_verified_link_peer(PeerIdentity::from_pubkey(public));
         }
+        // This gateway is the DODAG root (provision_root/open_root above), so
+        // the tunnel-auth table binds to its own key-derived IID (spec
+        // 06-security 8.11: the POST kid must match the current root).
+        coordinator.set_tunnel_auth_root(root_iid);
         Ok(Self {
             rpl_stack,
             radio_peer,
@@ -1471,10 +1476,22 @@ impl Gateway {
                 segments.push(option.value);
             }
         }
-        if segments.len() != 3 || segments[0] != b".well-known" || segments[1] != b"lichen-gw" {
-            return true;
-        }
-        let Ok(resource) = core::str::from_utf8(segments[2]) else {
+        let resource = if segments.len() == 3
+            && segments[0] == b".well-known"
+            && segments[1] == b"lichen-gw"
+        {
+            match core::str::from_utf8(segments[2]) {
+                Ok(resource) => resource,
+                Err(_) => return true,
+            }
+        } else if segments.len() == 2
+            && segments[0] == b".well-known"
+            && segments[1] == b"tunnel-auth"
+        {
+            // Spec 06-security 8.11: the root delivers egress tunnel
+            // authorizations outside the lichen-gw prefix.
+            "tunnel-auth"
+        } else {
             return true;
         };
         let method = if request.code == MessageCode::GET {

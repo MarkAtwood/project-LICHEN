@@ -160,13 +160,13 @@ pub fn build_root_post(
     })
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Entry {
     claim: TunnelAuthorization,
     used: u64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct ReplayFloor {
     prefix: [u8; 16],
     prefix_len: u8,
@@ -186,6 +186,7 @@ const FLOOR_HISTORY_PER_ENTRY: usize = 4;
 /// evicted, while the replay-floor history fail-closes with
 /// [`TunnelAuthError::Capacity`] when full (Python parity: silent floor
 /// eviction would let a captured revoked post re-arm the data plane).
+#[derive(Debug)]
 pub struct TunnelAuthorizationTable<const N: usize = DEFAULT_AUTHORIZATION_CAPACITY> {
     entries: [Option<Entry>; N],
     replay_floors: Vec<ReplayFloor>,
