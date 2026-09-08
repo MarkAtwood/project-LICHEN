@@ -464,8 +464,19 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	 * peer. A settle wait follows because one-shot async senders (e.g.
 	 * the app-identity beacon queued by the publish test) can fire their
 	 * driver send after the fresh arm and re-trip the re-arm abort; the
-	 * stragglers are finite, so a bounded retry converges. */
-	for (int attempt = 0; attempt < 3; attempt++) {
+	 * stragglers are finite, so a bounded retry converges.
+	 *
+	 * With the root cause fixed (uhyf: a same-callback re-arm -EBUSY is
+	 * now treated as healthy-still-armed), the module usually stays
+	 * RUNNING here. The recovery dance must then NOT run: its driver-
+	 * level disarm would deafen an armed, healthy L2 (deinit correctly
+	 * refuses to tear down a RUNNING module). Only the ABORTED path
+	 * needs the full deinit/init/start recovery. */
+	if (lichen_lora_l2_is_running() && !lichen_lora_l2_needs_reinit()) {
+		lora_loopback_test_reset(lora_dev);
+		k_sleep(K_MSEC(150));
+	} else {
+		for (int attempt = 0; attempt < 3; attempt++) {
 		lora_loopback_test_reset(lora_dev);
 		ret = lora_recv_async(lora_dev, NULL, NULL);
 		zassert_true(ret == 0 || ret == -EINVAL,
@@ -479,9 +490,10 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 			     "post-abort net_if_up: %d", ret);
 		reprovision_after_reinit();
 		k_sleep(K_MSEC(150));
-		if (lichen_lora_l2_is_running() &&
-		    !lichen_lora_l2_needs_reinit()) {
-			break;
+			if (lichen_lora_l2_is_running() &&
+			    !lichen_lora_l2_needs_reinit()) {
+				break;
+			}
 		}
 	}
 	zassert_true(lichen_lora_l2_is_running() &&

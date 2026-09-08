@@ -190,6 +190,20 @@ static void lora_l2_rx_arm(void)
 		return;
 	}
 
+	if (ret == -EBUSY && atomic_get(&rx_armed)) {
+		/*
+		 * The driver is still armed with OUR callback (persistent
+		 * registration across deliveries; e.g. lora_loopback, which
+		 * returns -EBUSY on re-arm while recv_cb != NULL). That is a
+		 * healthy still-armed state, not a dead radio: reset the
+		 * failure counter and stop retrying - the driver will call
+		 * us on the next frame.
+		 */
+		consecutive_failures = 0;
+		lichen_radio_progress();
+		return;
+	}
+
 	if (consecutive_failures < UINT8_MAX) {
 		consecutive_failures++;
 	}
