@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-m6x0.5",
+  "title": "Sweep remaining bare asserts across python/src/lichen/",
+  "description": "Grep all remaining files under python/src/lichen/ for bare 'assert ' without descriptive messages (no comma after condition). Add messages to each. Skip files already covered by sibling beads (dao_manager.py, schc/reassembly.py, link/, crypto/). Verify: cd python \u0026\u0026 python -m pytest -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:16:54.144437923Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:16:54.144437923Z",
+  "labels": [
+    "python",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-m6x0.5",
+      "depends_on_id": "project-LICHEN-worker6-m6x0",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:16:54.268343584Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
