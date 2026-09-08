@@ -67,6 +67,9 @@ lichen_beacon_header_serialize(const struct lichen_beacon_header *header,
 	if (header->flags & LICHEN_BEACON_FLAG_RESERVED_MASK) {
 		return LICHEN_BEACON_RESERVED_FLAG_SET;
 	}
+	if (header->num_slots == 0U) {
+		return LICHEN_BEACON_INVALID_FIELD;
+	}
 	out[0] = (uint8_t)(header->epoch >> 24);
 	out[1] = (uint8_t)(header->epoch >> 16);
 	out[2] = (uint8_t)(header->epoch >> 8);

@@ -80,6 +80,18 @@ static void test_num_slots_zero_rejected(void)
 	       LICHEN_BEACON_INVALID_FIELD);
 }
 
+/* TX-side mirror of the num_slots=0 rejection: serialize must not emit a
+ * header every receiver's parse gate rejects. */
+static void test_serialize_num_slots_zero_rejected(void)
+{
+	struct lichen_beacon_header bad = { .num_slots = 0U,
+					    .rx_chains = 1U };
+	uint8_t tmp[24];
+
+	assert(lichen_beacon_header_serialize(&bad, tmp, sizeof(tmp)) ==
+	       LICHEN_BEACON_INVALID_FIELD);
+}
+
 static void test_short_buffer_rejected(void)
 {
 	struct lichen_beacon_header h;
@@ -173,6 +185,7 @@ int main(void)
 	test_serialize_roundtrip();
 	test_reserved_flag_rejected();
 	test_num_slots_zero_rejected();
+	test_serialize_num_slots_zero_rejected();
 	test_short_buffer_rejected();
 	test_null_guards();
 	test_intersect_channel_mask();
