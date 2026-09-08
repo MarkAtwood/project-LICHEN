@@ -154,6 +154,21 @@ bool zcbor_float32_put(zcbor_state_t *state, float value)
 	return emit(state, buf, 5);
 }
 
+bool zcbor_float64_put(zcbor_state_t *state, double value)
+{
+	/* CBOR float64: major type 7, additional info 27 (0xfb) */
+	union { double f; uint64_t u; } conv;
+	conv.f = value;
+	uint8_t buf[9] = {
+		0xfb,
+		(uint8_t)(conv.u >> 56), (uint8_t)(conv.u >> 48),
+		(uint8_t)(conv.u >> 40), (uint8_t)(conv.u >> 32),
+		(uint8_t)(conv.u >> 24), (uint8_t)(conv.u >> 16),
+		(uint8_t)(conv.u >> 8), (uint8_t)conv.u
+	};
+	return emit(state, buf, 9);
+}
+
 bool zcbor_bool_put(zcbor_state_t *state, bool value)
 {
 	/* CBOR simple values: false=0xf4, true=0xf5 */

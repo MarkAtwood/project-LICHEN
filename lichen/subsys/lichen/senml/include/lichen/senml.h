@@ -110,7 +110,7 @@ struct senml_record {
 	const char *_Nullable unit; /**< Unit (u) - may be NULL */
 	enum senml_value_type type;
 	union {
-		float f;           /**< Float value */
+		double f;          /**< Float value (encoded as CBOR f64) */
 		bool b;            /**< Boolean value */
 		const char *_Nullable s; /**< String value (vs) */
 		struct senml_span data;  /**< Binary value (vd) */
@@ -158,7 +158,7 @@ int senml_pack_init(struct senml_pack *_Nullable pack,
 int senml_add_float(struct senml_pack *_Nullable pack,
 		    const char *_Nullable name,
 		    const char *_Nullable unit,
-		    float value);
+		    double value);
 
 /**
  * @brief Add a float record with time offset.
@@ -174,7 +174,7 @@ int senml_add_float(struct senml_pack *_Nullable pack,
 int senml_add_float_t(struct senml_pack *_Nullable pack,
 		      const char *_Nullable name,
 		      const char *_Nullable unit,
-		      float value,
+		      double value,
 		      int32_t time_offset);
 
 /**
@@ -300,7 +300,7 @@ int senml_decode_cbor(const uint8_t *_Nullable buf, size_t buflen,
  */
 LICHEN_WARN_UNUSED_RESULT
 int senml_encode_location(const char *_Nullable base_name, uint64_t base_time,
-			  float lat, float lon, float alt,
+			  double lat, double lon, double alt,
 			  uint8_t *_Nonnull buf, size_t buflen);
 
 
@@ -325,9 +325,9 @@ int senml_encode_location(const char *_Nullable base_name, uint64_t base_time,
  */
 LICHEN_WARN_UNUSED_RESULT
 int senml_encode_location_full(const char *_Nullable base_name, uint64_t base_time,
-			       float lat, float lon, float alt,
-			       float speed, float heading,
-			       float hacc, float vacc,
+			       double lat, double lon, double alt,
+			       double speed, double heading,
+			       double hacc, double vacc,
 			       uint8_t *_Nonnull buf, size_t buflen);
 
 /**
@@ -359,7 +359,7 @@ int senml_encode_battery(const char *_Nullable base_name, uint64_t base_time,
  */
 LICHEN_WARN_UNUSED_RESULT
 int senml_encode_temperature(const char *_Nullable base_name, uint64_t base_time,
-			     float temp_c,
+			     double temp_c,
 			     uint8_t *_Nonnull buf, size_t buflen);
 LICHEN_WARN_UNUSED_RESULT
 int senml_encode_deaddrop(const char *_Nullable base_name, uint64_t base_time,

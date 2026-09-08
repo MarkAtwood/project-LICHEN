@@ -35,11 +35,11 @@ static uint8_t default_payload[LICHEN_POSITION_BEACON_PAYLOAD_MAX];
 static uint32_t default_request_calls;
 static char encoded_base_name[40];
 static uint64_t encoded_base_time;
-static float encoded_latitude;
-static float encoded_longitude;
-static float encoded_altitude;
-static float encoded_hacc;
-static float encoded_vacc;
+static double encoded_latitude;
+static double encoded_longitude;
+static double encoded_altitude;
+static double encoded_hacc;
+static double encoded_vacc;
 static uint8_t response_code;
 static uint16_t response_format;
 static uint8_t response_payload[LICHEN_POSITION_CACHE_PAYLOAD_MAX];
@@ -130,10 +130,10 @@ int lichen_lora_l2_copy_eui64(uint8_t eui64[8]) {
 }
 
 int senml_encode_location_full(const char *base_name, uint64_t base_time,
-                               float latitude, float longitude, float altitude,
-                               float speed, float heading,
-                               float horizontal_accuracy,
-                               float vertical_accuracy, uint8_t *buf,
+                               double latitude, double longitude,
+                               double altitude, double speed, double heading,
+                               double horizontal_accuracy,
+                               double vertical_accuracy, uint8_t *buf,
                                size_t buf_len) {
   static const uint8_t encoded[] = {
       0x82, 0xa1, 0x00, 0x63, 0x6c, 0x61, 0x74,
@@ -387,11 +387,11 @@ ZTEST(coap_location_beacon, test_payload_fields_are_bounded_and_canonical) {
   zassert_true(tx.payload_len <= LICHEN_POSITION_BEACON_PAYLOAD_MAX);
   zassert_str_equal(encoded_base_name, "urn:dev:mac:0011223344556677:");
   zassert_equal(encoded_base_time, 1710000000U);
-  zassert_within(encoded_latitude, 47.620613f, 0.000001f);
-  zassert_within(encoded_longitude, -122.3493f, 0.00001f);
-  zassert_within(encoded_altitude, 42.0f, 0.001f);
-  zassert_within(encoded_hacc, 1.25f, 0.001f);
-  zassert_within(encoded_vacc, 2.5f, 0.001f);
+  zassert_within(encoded_latitude, 47.620613, 0.000001);
+  zassert_within(encoded_longitude, -122.3493, 0.00001);
+  zassert_within(encoded_altitude, 42.0, 0.001);
+  zassert_within(encoded_hacc, 1.25, 0.001);
+  zassert_within(encoded_vacc, 2.5, 0.001);
 }
 
 ZTEST(coap_location_beacon, test_no_fix_and_privacy_modes_never_transmit) {
