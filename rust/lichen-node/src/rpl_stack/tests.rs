@@ -2780,7 +2780,9 @@ async fn link_introduce(
     receiver: &mut RplStack<MeshRadio, MemStorage>,
     relay_identity: &Identity,
 ) {
-    send_announce(&mut sender.stack, relay_identity, 1).await;
+    // RplStack.stack is a SecureStack; announces are link-layer frames and
+    // must bypass OSCORE, so pass the wrapped inner Stack.
+    send_announce(&mut sender.stack.stack, relay_identity, 1).await;
     assert!(matches!(
         receiver.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::AnnouncementAccepted { .. })
