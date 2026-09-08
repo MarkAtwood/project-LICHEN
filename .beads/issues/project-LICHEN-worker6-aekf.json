@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-aekf",
+  "title": "Custody Transfer \u0026 Message Delivery Service",
+  "description": "Implement the two-delivery-service architecture (datagram vs message) with custody transfer for reliable planetary-scale IM. Spec changes landed in 07-transport-app.md (delivery services framing), 05-routing.md §9.8/§9.8.1 (C-flag, custody handshake, TTL budget check), 12-apps.md §18.1.2/§18.1.4 (ack_through receipts, sender UX states, custody-based store-and-forward), and appendix-bufferbloat.md (two-service deadlines/priorities). All three implementations (Python, Rust, C/Zephyr) need work.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:42:14.961209762Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:42:14.961209762Z"
+}
