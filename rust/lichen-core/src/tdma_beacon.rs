@@ -332,6 +332,87 @@ pub fn verify_gate(beacon: &[u8], verify_fn: impl Fn(&[u8], &[u8]) -> bool) -> b
     verify_fn(signed, sig)
 }
 
+/// Errors from the beacon acceptance path.
+///
+/// Acceptance is fail-closed: every variant means the beacon MUST be
+/// dropped with no TDMA/RPL state change (ccp_beacon_sig_gate.json
+/// primary invariant).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AcceptError {
+    /// Malformed header, reserved flags set, or shorter than
+    /// MIN_BEACON_SIZE.
+    Parse(ParseError),
+    /// Schnorr48 beacon_sig verification failed.
+    BadSignature,
+    /// The advertised channel_mask has no channel in common with the
+    /// locally permitted mask (spec 02a 2a.2 "local intersection
+    /// computed"); the caller MUST reject/ignore the beacon.
+    NoCommonChannel,
+}
+
+impl core::fmt::Display for AcceptError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Parse(e) => write!(f, "beacon parse: {}", e),
+            Self::BadSignature => write!(f, "beacon_sig verification failed"),
+            Self::NoCommonChannel => {
+                write!(f, "advertised channel_mask has no locally usable channel")
+            }
+        }
+    }
+}
+
+/// A beacon that passed the full acceptance gate.
+///
+/// Acceptance proves format and signature only. Freshness is the
+/// caller's obligation: replay of a stale-but-validly-signed beacon
+/// returns `Ok`, so the caller MUST enforce epoch-floor / SFN
+/// monotonicity before acting on the schedule (the C runtime does this
+/// at time_sync.c:571; the Rust RX seam must do the equivalent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AcceptedBeacon {
+    pub header: TdmaBeaconHeader,
+    /// Intersection of the advertised channel_mask with the permitted
+    /// mask passed to [`accept_beacon`]; guaranteed nonzero.
+    pub usable_channels: u32,
+}
+
+/// Acceptance gate for a received TDMA beacon (spec 02a 2a.2).
+///
+/// Composes the mandatory checks in order: parse (including the
+/// reserved-flags fail-closed rule), Schnorr48 beacon_sig verification
+/// via [`verify_gate`] (MUST reject before any TDMA/RPL state change,
+/// per ccp_beacon_sig_gate.json), then the channel-mask local
+/// intersection gate. `permitted_mask` is the caller's locally usable
+/// channel bitmask (bit 0 = CH0); pass `(1u32 << num_channels) - 1` for a
+/// plan narrower than 32 channels, or `u32::MAX` for a full 32-channel
+/// plan (`1u32 << 32` would overflow — see [`intersect_channel_mask`]).
+///
+/// NOTE: acceptance proves signature and format only; it does NOT
+/// establish freshness. See [`AcceptedBeacon`] for the caller's
+/// epoch-floor / SFN-monotonicity obligation.
+pub fn accept_beacon(
+    beacon: &[u8],
+    verify_fn: impl Fn(&[u8], &[u8]) -> bool,
+    permitted_mask: u32,
+) -> Result<AcceptedBeacon, AcceptError> {
+    if beacon.len() < MIN_BEACON_SIZE {
+        return Err(AcceptError::Parse(ParseError::TooShort));
+    }
+    let header = TdmaBeaconHeader::parse(beacon).map_err(AcceptError::Parse)?;
+    if !verify_gate(beacon, verify_fn) {
+        return Err(AcceptError::BadSignature);
+    }
+    let usable_channels = intersect_channel_mask(permitted_mask, header.channel_mask);
+    if usable_channels == 0 {
+        return Err(AcceptError::NoCommonChannel);
+    }
+    Ok(AcceptedBeacon {
+        header,
+        usable_channels,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
