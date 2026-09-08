@@ -195,6 +195,7 @@ class LinkLayer:
     # SECURITY: Use secrets module for cryptographically secure random epoch.
     _epoch: int = field(default_factory=lambda: secrets.randbelow(128) + 128, repr=False)
     _seqnum: int = field(default=0, repr=False)
+    _pkt_id: int = field(default=0, init=False, repr=False)
     _exhausted: bool = field(default=False, repr=False)
     _pinned_keys: OrderedDict[bytes, bytes] = field(default_factory=OrderedDict, repr=False)
     _tx_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
@@ -1544,6 +1545,11 @@ class LinkLayer:
 
         return False
 
+    def _next_pkt_id(self) -> int:
+        """Return the next monotonic packet correlation id (u32, wrapping)."""
+        self._pkt_id = (self._pkt_id + 1) & 0xFFFFFFFF
+        return self._pkt_id
+
     async def receive(self, timeout_ms: int) -> RxFrame | ReceiveError | None:
         """Receive and validate a frame.
 
@@ -1689,6 +1695,7 @@ class LinkLayer:
             key_generation = self._key_generations.setdefault(sender.pubkey, object())
 
             canonical_sender = PeerIdentity.from_pubkey(sender.pubkey)
+            pkt_id = self._next_pkt_id()
             received = object.__new__(RxFrame)
             object.__setattr__(received, "sender", canonical_sender)
             object.__setattr__(received, "rssi_dbm", rssi_dbm)
@@ -1717,6 +1724,7 @@ class LinkLayer:
                 "_authenticated_receiving_link_identity",
                 self._receiving_link_identity,
             )
+            object.__setattr__(received, "_authenticated_pkt_id", pkt_id)
 
             # Keep a detached, unexposed snapshot behind the one-use receipt.
             # Timing and other security-sensitive consumers receive this copy,
@@ -1743,6 +1751,7 @@ class LinkLayer:
                 "_authenticated_clock_domain",
                 "_authenticated_key_generation",
                 "_authenticated_receiving_link_identity",
+                "_authenticated_pkt_id",
             ):
                 object.__setattr__(snapshot, attribute, getattr(received, attribute))
             self._store_verified_receipt_unlocked(
@@ -1755,7 +1764,8 @@ class LinkLayer:
 
         # Success! Return the validated frame
         logger.debug(
-            "RX valid frame: epoch=%d seqnum=%d sender=%s payload=%d bytes",
+            "RX valid frame: pkt_id=%d epoch=%d seqnum=%d sender=%s payload=%d bytes",
+            received.pkt_id,
             frame.epoch,
             frame.seqnum,
             sender.iid.hex(),

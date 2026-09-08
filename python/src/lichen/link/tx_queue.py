@@ -185,6 +185,7 @@ class TxQueueEntry:
         enqueue_time_ms: When packet was queued (for latency stats).
         channel: Radio channel for transmission (CCP-9 rendezvous).
         reservation: Optional reservation for the send() caller to await.
+        pkt_id: Monotonic correlation id assigned at push (u32, wrapping).
     """
 
     data: bytes
@@ -194,6 +195,7 @@ class TxQueueEntry:
     enqueue_time_ms: int
     channel: int = 0
     reservation: TxReservation | None = field(default=None, repr=False)
+    pkt_id: int = 0
 
 
 @dataclass
@@ -269,6 +271,12 @@ class TxQueue:
         self._entries: list[TxQueueEntry] = []
         self.stats = TxQueueStats()
         self._avg_latency_ema: float = 0.0
+        self._pkt_id: int = 0
+
+    def _next_pkt_id(self) -> int:
+        """Return the next monotonic packet correlation id (u32, wrapping)."""
+        self._pkt_id = (self._pkt_id + 1) & 0xFFFFFFFF
+        return self._pkt_id
 
     def __len__(self) -> int:
         """Return number of packets currently queued."""
@@ -380,6 +388,7 @@ class TxQueue:
             enqueue_time_ms=now,
             channel=channel,
             reservation=reservation,
+            pkt_id=self._next_pkt_id(),
         )
 
         if len(self._entries) < self._capacity:
