@@ -12,8 +12,9 @@ set -e
 
 # This script's checkpoint and merge commits are the only legitimate writers
 # of .beads/ (the pre-commit hook blocks worker-side store staging, bead
-# biod); opt this process out of the hook.
-export BEADS_ALLOW_STORE_COMMIT=1
+# biod). Each commit below opts itself out per-command. The opt-out must NOT
+# be exported process-wide: it would reach the opencode/kimi subprocess and
+# disable the guard for the one actor consuming untrusted branch content.
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 GIT_DIR=$(git rev-parse --absolute-git-dir)
@@ -48,7 +49,7 @@ for worktree in "$WORKTREE_BASE"/worker*/; do
     git add -u -- ':!.beads' ':!.beads/**'
 
     if [ -n "$(git diff --cached --name-only)" ]; then
-        git commit -m "chore(beads): $name sync"
+        BEADS_ALLOW_STORE_COMMIT=1 git commit -m "chore(beads): $name sync"
         echo "$name: committed"
     fi
 done
@@ -124,7 +125,7 @@ snapshot_store() {
 # state, which now includes those closes.
 if [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
-    git commit -m "chore(beads): checkpoint store writes before merge" --quiet &&
+    BEADS_ALLOW_STORE_COMMIT=1 git commit -m "chore(beads): checkpoint store writes before merge" --quiet &&
         echo "checkpointed pending bd writes before merge"
 fi
 
@@ -140,7 +141,7 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
     # are destroyed (bead biod — the measured loss mechanism).
     if [ -n "$(git status --porcelain .beads/)" ]; then
         git add .beads/
-        git commit -m "chore(beads): per-branch store checkpoint" --quiet ||
+        BEADS_ALLOW_STORE_COMMIT=1 git commit -m "chore(beads): per-branch store checkpoint" --quiet ||
             true
     fi
 
@@ -170,7 +171,7 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
                     fi
                 done
         fi
-        if git commit --no-edit --quiet; then
+        if BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
             echo "  merged (code only)"
         else
             echo "  nothing to commit after normalization"
@@ -192,7 +193,7 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
                     git checkout HEAD -- .beads 2>/dev/null || true
                 fi
                 conflicted+=("$branch")
-            elif git commit --no-edit --quiet; then
+            elif BEADS_ALLOW_STORE_COMMIT=1 git commit --no-edit --quiet; then
                 echo "  merged via LLM semantic reconciliation"
             else
                 echo "  semantic merge produced no commit — aborting"
@@ -222,7 +223,7 @@ done
 # right before exit, so the window for losing a write is one script step.
 if [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
-    git commit -m "chore(beads): sync from workers"
+    BEADS_ALLOW_STORE_COMMIT=1 git commit -m "chore(beads): sync from workers"
     echo "Main: committed beads sync"
 fi
 
@@ -232,7 +233,7 @@ fi
 # worker (bead project-LICHEN-worker6-bd8h, recurring revert pattern).
 if [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
-    git commit -m "chore(beads): checkpoint store writes after merge loop" --quiet &&
+    BEADS_ALLOW_STORE_COMMIT=1 git commit -m "chore(beads): checkpoint store writes after merge loop" --quiet &&
         echo "checkpointed post-merge store writes"
 fi
 
