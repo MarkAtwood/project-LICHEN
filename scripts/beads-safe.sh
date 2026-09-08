@@ -1,7 +1,8 @@
 #!/bin/bash
 # Safe bead mutations for NON-FLEET AI sessions (coordinators, Opus, one-off
-# agents in the main checkout). Fleet workers use bare bd; everyone else MUST
-# use this wrapper.
+# agents in the main checkout). Safe for anyone; recommended for
+# long-running sessions writing many mutations. Single mutations from short
+# sessions are durable with bare bd too (the rewind is gated off).
 #
 # Why: bare bd writes are now DURABLE in the main checkout (the .beads
 # normalization rewind was removed — gated to legacy branches only, bead
