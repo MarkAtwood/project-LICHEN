@@ -1,5 +1,0 @@
-{"id":"01a082cb-d070-7c0d-8091-0933832b186b","issue_id":"project-LICHEN-worker6-tsn3.3.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T20:53:10.384790583Z"}
-{"id":"01a082cb-d075-779f-85be-e76be43998ef","issue_id":"project-LICHEN-worker6-tsn3.3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-09-08T20:53:10.389500798Z"}
-{"id":"01a082cb-d07a-73fb-bb39-614eac37a018","issue_id":"project-LICHEN-worker6-tsn3.3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: buffering","created_at":"2026-09-08T20:53:10.39426197Z"}
-{"id":"01a082cb-d07e-7d7b-a4f6-d918649f8e94","issue_id":"project-LICHEN-worker6-tsn3.3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: routing","created_at":"2026-09-08T20:53:10.398884558Z"}
-{"id":"01a082cb-d083-76ff-ab3d-079ca4b3be1b","issue_id":"project-LICHEN-worker6-tsn3.3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: cross-impl","created_at":"2026-09-08T20:53:10.403459318Z"}

@@ -1,7 +1,0 @@
-{"id":"01a082f2-cb9b-77b1-a431-d544da5b4773","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T21:35:45.051505931Z"}
-{"id":"01a082f2-cba0-7487-844d-c926424e85c9","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: cross-impl","created_at":"2026-09-08T21:35:45.056297509Z"}
-{"id":"01a082f2-cba5-732a-aa39-62660ddfd62e","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-09-08T21:35:45.061208178Z"}
-{"id":"01a082f2-cba9-7b0d-8922-33c474b8869c","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: traffic-analysis","created_at":"2026-09-08T21:35:45.065725107Z"}
-{"id":"01a082f2-cbae-786a-8f43-dceb1ddfd138","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: testing","created_at":"2026-09-08T21:35:45.070552264Z"}
-{"id":"01a082f2-cbb3-7137-ad59-96f39c74332f","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: gateway","created_at":"2026-09-08T21:35:45.075080345Z"}
-{"id":"01a082f2-cbb7-7acd-9ea4-50c5525e7c51","issue_id":"project-LICHEN-worker6-qpzt.24","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: hardening","created_at":"2026-09-08T21:35:45.079708667Z"}

@@ -1,4 +1,0 @@
-{"id":"01a082ab-a256-77e3-a079-2f2b84e87eb6","issue_id":"project-LICHEN-worker6-pi87.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T20:18:01.430517743Z"}
-{"id":"01a082ab-a25b-790d-ad15-927df35779c0","issue_id":"project-LICHEN-worker6-pi87.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: c","created_at":"2026-09-08T20:18:01.435593885Z"}
-{"id":"01a082ab-a260-742e-b908-8227695dab7d","issue_id":"project-LICHEN-worker6-pi87.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: diagnosability","created_at":"2026-09-08T20:18:01.440274825Z"}
-{"id":"01a082ab-a265-7102-baa9-9aeb3d611eea","issue_id":"project-LICHEN-worker6-pi87.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-09-08T20:18:01.445066861Z"}

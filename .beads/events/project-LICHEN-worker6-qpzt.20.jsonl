@@ -1,7 +1,0 @@
-{"id":"01a082f2-7a97-7eaf-ad8d-4ea6cc0fd98e","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T21:35:24.311963426Z"}
-{"id":"01a082f2-7a9c-784a-9090-bb43c6be2fc8","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: c","created_at":"2026-09-08T21:35:24.316543873Z"}
-{"id":"01a082f2-7aa1-7292-b8a9-09e66439cd8c","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-09-08T21:35:24.32116903Z"}
-{"id":"01a082f2-7aa5-7a1e-9c7a-fb16bdcadcfd","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-09-08T21:35:24.325663813Z"}
-{"id":"01a082f2-7aaa-71d8-bbe9-c6add25f16dd","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: routing","created_at":"2026-09-08T21:35:24.330127821Z"}
-{"id":"01a082f2-7aae-760a-8c4c-4bfa6380bb75","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: gateway","created_at":"2026-09-08T21:35:24.334396114Z"}
-{"id":"01a082f2-7ab2-7c5a-ab7e-c91e3d2b5143","issue_id":"project-LICHEN-worker6-qpzt.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: hardening","created_at":"2026-09-08T21:35:24.338809803Z"}

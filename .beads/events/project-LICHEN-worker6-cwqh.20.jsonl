@@ -1,7 +1,0 @@
-{"id":"01a082d3-a145-7833-ba51-9e837e27edd8","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T21:01:42.597538054Z"}
-{"id":"01a082d3-a14a-72aa-84c8-77e7f2ffd0f1","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-08T21:01:42.602175229Z"}
-{"id":"01a082d3-a14e-7ca5-9b05-efbc0bcfd3af","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: node-class","created_at":"2026-09-08T21:01:42.606829315Z"}
-{"id":"01a082d3-a157-79dc-b6c5-86551ad5e060","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: buffering","created_at":"2026-09-08T21:01:42.61564679Z"}
-{"id":"01a082d3-a15c-71a3-bf6a-b9899f81b24a","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: testing","created_at":"2026-09-08T21:01:42.620109357Z"}
-{"id":"01a082d3-a160-7c1c-a707-8be86f320162","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: cross-impl","created_at":"2026-09-08T21:01:42.624794136Z"}
-{"id":"01a082d3-a165-7837-afd8-65f6b5fb3e81","issue_id":"project-LICHEN-worker6-cwqh.20","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-09-08T21:01:42.629538843Z"}

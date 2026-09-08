@@ -1,4 +1,0 @@
-{"id":"01a08290-0e3c-7dbb-b159-5690cc72fa1f","issue_id":"project-LICHEN-worker6-tsn3.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T19:47:54.044902759Z"}
-{"id":"01a08290-0e41-7b3f-b017-d26e83859e6a","issue_id":"project-LICHEN-worker6-tsn3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: buffering","created_at":"2026-09-08T19:47:54.049738718Z"}
-{"id":"01a08290-0e46-72b5-a216-04ce16b07810","issue_id":"project-LICHEN-worker6-tsn3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: cross-impl","created_at":"2026-09-08T19:47:54.054178717Z"}
-{"id":"01a08290-0e4a-7abf-8b1a-6ef7723248fd","issue_id":"project-LICHEN-worker6-tsn3.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: coap","created_at":"2026-09-08T19:47:54.058705462Z"}
