@@ -812,6 +812,7 @@ def process_announce(announce, from_neighbor):
         next_hop=from_neighbor,
         hop_count=announce.hop_count,
         seq_num=announce.seq_num,
+        received_at=now(),          # GNSS wall-clock timestamp
         source="announce",
         expires=now() + GRADIENT_TIMEOUT
     )
@@ -844,6 +845,22 @@ least-recently-updated entry (LRU by last announce timestamp).
 | MAX_ANNOUNCE_HOPS | 15 | Maximum propagation |
 | GRADIENT_TIMEOUT | 600 sec | 2× announce interval |
 | ANNOUNCE_JITTER | 0-30 sec | Random delay to prevent collision |
+
+**Announce Age (GNSS-Enabled):**
+
+Because all nodes have GNSS wall-clock time, gradient table entries record
+the absolute `received_at` timestamp. This enables two optimizations:
+
+1. **Age-aware route selection:** When multiple gradient entries exist for the
+   same destination, prefer the most recently received announce (smallest
+   `now() - received_at`) as a tiebreaker after hop count. A 30-second-old
+   announce is more likely to reflect current topology than a 5-minute-old one.
+
+2. **Rejoin stale detection:** A node rejoining the mesh can immediately
+   assess the age of cached gradient entries. Entries older than
+   `GRADIENT_TIMEOUT` are stale and SHOULD be evicted on rejoin rather than
+   used for forwarding. Without wall-clock time, a rejoining node cannot
+   distinguish "received 10 seconds ago" from "received 10 minutes ago."
 
 ### 9.5. Bandwidth Budget
 
@@ -953,19 +970,23 @@ TOFU binding are valid.
 
 ### 9.8. Store-and-Forward (DTN)
 
-Border routers MAY buffer messages for unreachable destinations, delivering when a path appears.
+Border routers and powered relays MAY buffer messages for unreachable
+destinations, delivering when a path appears. This is the network-layer
+foundation of the **message delivery service** (see 07-transport-app.md §10.2).
 
 **When used:**
 - Destination has no gradient and LOADng fails (both local mesh and Yggdrasil fallback per §7.2)
-- Message has store-and-forward flag set
+- Message has store-and-forward flag set (S-flag)
 - Router has buffer space
 
-For 02xx destinations, Yggdrasil fallback is attempted before DTN buffering. DTN is only used when the destination is unreachable via both local mesh and Yggdrasil.
+For 02xx destinations, Yggdrasil fallback is attempted before DTN buffering.
+DTN is only used when the destination is unreachable via both local mesh and
+Yggdrasil.
 
 **Message Header Extension:**
 
 Store-and-forward uses a single IPv6 hop-by-hop option (Type=0x03, 5 bytes)
-carrying both the S-flag and absolute expiry:
+carrying flags and absolute expiry:
 
 ```
 DTN Option (Type=0x03, Length=5, in IPv6 hop-by-hop options):
@@ -975,29 +996,44 @@ DTN Option (Type=0x03, Length=5, in IPv6 hop-by-hop options):
 
 Flags byte:
 +-+-+-+-+-+-+-+-+
-|S|   Reserved  |
+|S|C|  Reserved |
 +-+-+-+-+-+-+-+-+
 S = Store-and-forward requested
+C = Custody transfer requested
 Reserved bits MUST be zero on send, MUST be ignored on receive.
 ```
+
+When both S and C are set, custody-capable nodes MUST use the custody
+transfer handshake (§9.8.1) rather than silent store-and-forward.
 
 **Absolute TTL:**
 
 Store-and-forward messages carry absolute expiry (Unix timestamp, 4 bytes)
-instead of hop limit. Expired messages are dropped silently. Expiry
-comparison requires valid wall-clock time from the firmware time provider
-(see `docs/firmware-time-provider.md`). Nodes without valid wall-clock time
-MUST NOT drop messages based on expiry timestamp alone; they SHOULD forward
-or store messages and let downstream nodes with valid time enforce expiry.
+instead of hop limit. Expired messages are dropped silently. All nodes have
+GNSS-derived wall-clock time (see 09-packets-timing.md §14.6) and enforce
+expiry directly. Nodes in the transient pre-GNSS-lock interval MUST NOT
+accept custody (cannot verify TTL budget) but MAY forward without storing.
 
 **Storage Policy:**
 
 | Parameter | Value |
 |-----------|-------|
 | Max buffer | 64 KB per router |
-| Eviction | Oldest-first when full |
 | Default TTL | 24 hours |
 | Max TTL | 7 days |
+
+**Eviction (GNSS-Enabled):**
+
+Because all nodes have GNSS wall-clock time, the custody store uses
+TTL-aware eviction rather than simple FIFO:
+
+1. **Expired messages:** `now() > msg.expiry` — always evict first
+2. **Least remaining TTL:** `msg.expiry - now()` — a message with 5 minutes
+   left is worth less storage than one with 23 hours left, regardless of
+   arrival order
+3. **Per-destination fairness:** If one destination exceeds fair share
+   (total / active_destinations), evict its lowest-remaining-TTL message first
+4. **FIFO:** Oldest arrival time as final tiebreaker
 
 **Handoff via Announce:**
 
@@ -1010,11 +1046,122 @@ App Data (pending destinations):
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-When a node sees its IID in a pending list, it sends a pull request to retrieve buffered messages.
+When a node sees its IID in a pending list, it sends a pull request to
+retrieve buffered messages.
 
 **Scope:**
 
-Border routers and powered routers only. Constrained nodes set the S flag but do not buffer--they forward or drop.
+Border routers and powered routers are custody-capable. Constrained battery
+nodes set the S and C flags on outgoing messages but do not accept custody
+from others -- they forward or drop.
+
+#### 9.8.1. Custody Transfer
+
+Custody transfer provides hop-by-hop reliability for the message delivery
+service. Each custody-capable node that accepts a message takes
+responsibility for forwarding it toward the destination until TTL expires.
+The previous custodian deletes the message after receiving confirmation.
+
+**Custody-capable nodes** MUST:
+- Have non-volatile storage (flash) for custody messages
+- Persist custody messages across reboots
+- Advertise `rt=msg.custody` in `/.well-known/core`
+
+**Handshake:**
+
+The custody handshake uses standard CoAP CON/ACK semantics:
+
+```
+Sender                          Custodian
+  |                                 |
+  |  POST /msg/custody  (CON)      |
+  |  Content-Format: application/cbor
+  |  { "id": <msg-id>,             |
+  |    "dst": <dest-iid>,          |
+  |    "exp": <unix-timestamp>,    |
+  |    "body": <OSCORE blob> }     |
+  | -----------------------------→ |
+  |                                 |  write to flash
+  |         2.01 Created  (ACK)    |
+  |  Location: /msg/custody/<id>   |
+  | ←----------------------------- |
+  |                                 |
+  sender deletes message            custodian owns it
+```
+
+The `body` field is the original OSCORE-encrypted application payload.
+Custodians cannot read message contents; they store and forward opaquely.
+
+**TTL Budget Check:**
+
+Before accepting custody, a node SHOULD estimate whether the message can
+reach its destination before expiry. All nodes have GNSS-derived wall-clock
+time, so this check is always possible:
+
+```
+remaining_s  = msg.expiry - now()
+est_hops     = routing_distance(msg.dst)   // from RPL rank or announce
+est_delay_s  = est_hops * avg_hop_latency  // platform default: 10 s/hop
+
+if remaining_s < est_delay_s:
+    reject with 5.03 (TTL insufficient)
+```
+
+A custodian that rejects on TTL budget SHOULD respond 5.03 with
+`"reason": "ttl_insufficient"` so the sender can try an alternate path
+or give up. This avoids wasting flash and airtime on doomed messages.
+
+**Response Codes:**
+
+| Response | Meaning | Sender action |
+|----------|---------|---------------|
+| 2.01 Created | Custody accepted | Delete message |
+| 4.04 Not Found | Custodian has no route or pending info for destination | Try another node |
+| 5.03 Service Unavailable | Storage full or TTL insufficient | Hold message, try another node or give up |
+
+**Idempotency:**
+
+If the sender retries (CoAP CON retransmission) and the custodian already
+holds the message (matched by `id`), the custodian MUST respond 2.01 without
+storing a duplicate.
+
+**Custody Chain:**
+
+Each custodian independently forwards the message toward the destination
+using the same handshake:
+
+```
+Alice → Relay (custody) → BR (custody) → Yggdrasil → Remote BR (custody) → Bob
+```
+
+At each arrow, the accepting node sends 2.01 and the previous node deletes.
+Over Yggdrasil (TCP), the transfer is reliable by default; the remote BR
+stores to flash before ACKing.
+
+When the final custodian delivers to the recipient:
+
+```
+Custodian                       Recipient
+  |                                 |
+  |  POST /msg/inbox  (CON)        |
+  | -----------------------------→ |
+  |                                 |
+  |         2.04 Changed  (ACK)    |
+  | ←----------------------------- |
+  |                                 |
+  custodian deletes message
+```
+
+The 2.04 from the recipient is the end of the custody chain. Delivery
+receipts back to the original sender are handled at the application layer
+(see 12-apps.md §18.1.2).
+
+**Failure Handling:**
+
+If a custodian cannot forward and the message TTL expires, the message is
+silently dropped. Custodians do not send failure notifications upstream --
+the original sender's application layer handles TTL expiry (see 12-apps.md
+§18.1.2).
 
 <!-- ponytail: spray-and-wait if single-copy delivery too slow -->
 

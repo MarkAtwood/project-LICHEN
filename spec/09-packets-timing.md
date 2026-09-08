@@ -537,16 +537,30 @@ clock-adoption API, and a positive scalar result MUST NOT update wall-clock
 state without the structured verifier/provider evidence and policy checks
 above.
 
-**Constrained Node Behavior:**
+**GNSS Time Assumption:**
 
-Nodes without a valid wall-clock source:
+All LICHEN nodes have on-device GNSS and therefore have valid wall-clock
+time under normal operation. The protocol exploits this assumption throughout:
+custody TTL budget checks (05-routing.md §9.8.1), time-bounded dedup tables
+(06-security.md §15.3), announce age comparison (05-routing.md §9.3),
+absolute CoAP cache deadlines (07-transport-app.md §10.3), and synchronized
+diagnostics (11-lci.md §17.2). Implementations SHOULD treat
+`wall_clock_valid=true` as the steady-state assumption and optimize
+accordingly — no dual code paths for clockless operation.
+
+**Degraded Node Behavior (GNSS denied or pre-lock):**
+
+In the interval between power-on and GNSS lock, or when GNSS is jammed:
 - Use link sequence numbers for replay protection within a power cycle; the
   DAO Origin Sequence in Section 14.2 remains persistent across power cycles
 - SHOULD persist replay epoch counter across reboots (increment on boot)
 - MAY omit absolute timestamps from SenML (use relative `t` offsets only)
 - MUST NOT originate time-sensitive operations (scheduled check-in, message
   TTL that requires wall-clock comparison)
-- Report `wall_clock_valid=false` via LCI status until a valid source appears
+- MUST NOT accept custody of store-and-forward messages (cannot verify TTL
+  budget)
+- Report `wall_clock_valid=false` via LCI status until GNSS lock is obtained
+- This is a transient startup state, not a permanent configuration
 
 **Border Router Responsibilities:**
 

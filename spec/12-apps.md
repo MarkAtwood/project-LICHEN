@@ -39,14 +39,14 @@ Text messaging between nodes, supporting unicast, multicast, and broadcast.
 **Timestamp Semantics:**
 
 The `ts` field is a Unix timestamp (seconds since 1970-01-01T00:00:00Z) from
-the firmware time provider. Senders SHOULD include `ts` only when their time
-provider reports `wall_clock_valid=true`. Receivers MAY accept messages without
-`ts` or with `ts=0` as "time unknown" rather than rejecting them.
+the firmware time provider. All nodes have GNSS-derived wall-clock time under
+normal operation (see 09-packets-timing.md §14.6) and MUST include `ts`.
+During the transient pre-GNSS-lock interval, senders MAY omit `ts` or set
+`ts=0`; receivers SHOULD accept such messages as "time unknown."
 
-The `ttl` field is a relative duration in seconds. Expiry comparison uses the
-receiver's wall-clock time when available. Nodes without valid wall-clock time
-SHOULD NOT enforce TTL-based expiry (messages remain valid until storage
-eviction).
+The `ttl` field is a relative duration in seconds. Expiry is computed as
+`ts + ttl` and compared against the receiver's GNSS wall-clock time. All
+nodes enforce TTL-based expiry under normal operation.
 
 #### 18.1.2. Resources
 
@@ -85,9 +85,42 @@ Content-Format: application/cbor
 
 New messages trigger Observe notifications.
 
-**Delivery Receipt:**
+**Delivery Service Selection:**
 
-When `ack: true`, recipient sends:
+Messages use the **message delivery service** (custody transfer,
+store-and-forward) by default. The sender's node sets the DTN S and C flags
+(see 05-routing.md §9.8) and sends via CoAP CON. This enables planetary-scale
+delivery across multiple meshes and gateways, surviving hours or days of
+recipient unavailability.
+
+Broadcast messages (`to: "ff02::1"`) use the datagram service (no custody,
+best-effort).
+
+**Delivery Receipts:**
+
+Delivery confirmation uses two complementary mechanisms:
+
+*Piggybacked receipt (default):* When Bob replies to Alice, his reply
+implicitly acknowledges all prior messages from her. The reply carries an
+`ack_through` field naming the highest message ID received:
+
+```
+POST coap://[alice]/msg/inbox
+Content-Format: application/cbor
+
+{
+  "body": "Got it, on my way",
+  "reply_to": 12345,
+  "ack_through": 12345          ; ACKs all messages up through this ID
+}
+```
+
+This costs zero extra airtime -- the acknowledgment piggybacks on a message
+that was being sent anyway.
+
+*Explicit receipt (fallback):* When `ack: true` and the recipient does not
+reply within a receipt window (RECOMMENDED: 5 minutes), the recipient's node
+sends a standalone receipt:
 
 ```
 POST coap://[sender]/msg/ack
@@ -95,10 +128,30 @@ Content-Format: application/cbor
 
 {
   "id": 12345,
-  "status": "delivered",    ; "delivered", "read", "failed"
+  "status": "delivered",
   "ts": 1716742900
 }
 ```
+
+Explicit receipts are themselves custody-transfer messages and traverse
+the network using the same store-and-forward path.
+
+Senders SHOULD treat `ack_through` in any reply as equivalent to an explicit
+receipt for all messages with ID <= the `ack_through` value.
+
+**Sender UX States:**
+
+| State | Display | Trigger |
+|---|---|---|
+| No custody yet | Sending... | POST not yet ACKed by any custodian |
+| Custody accepted | Sent | 2.01 from first custodian (or relay/BR) |
+| Delivered | Delivered | Explicit receipt or `ack_through` in reply |
+| Expired | May not have been delivered | TTL expired, no receipt received |
+
+The sender does not retry after TTL expiry. The custody chain is the retry
+mechanism -- each custodian keeps attempting the next hop until TTL expires.
+If a message expires without confirmation, the sender's UI indicates this and
+the user decides whether to resend manually.
 
 #### 18.1.3. Canned Messages
 
@@ -128,22 +181,31 @@ Content-Format: application/cbor
 
 #### 18.1.4. Store-and-Forward
 
-Nodes MAY implement store-and-forward for offline recipients:
+Messages use custody transfer (05-routing.md §9.8.1) for reliable
+store-and-forward delivery. When the destination is unreachable, each
+custody-capable node in the path persists the message to flash and takes
+responsibility for forwarding it.
 
-1. Sender POSTs to destination
-2. If destination unreachable, intermediate node stores message
-3. When destination appears, stored messages are delivered
-4. TTL prevents unbounded storage
+The custody chain works as follows:
 
-Store-and-forward nodes advertise capability:
+1. Sender POSTs to first custody-capable node (relay or BR)
+2. Custodian stores message, responds 2.01 Created
+3. Sender deletes message -- custodian now owns it
+4. Custodian forwards to next hop when available, transferring custody
+5. Final custodian delivers to recipient; recipient ACKs with 2.04
+6. Delivery receipt propagates back to sender (piggybacked or explicit,
+   see §18.1.2)
+
+Custody-capable nodes advertise capability:
 
 ```
-GET /.well-known/core?rt=msg.store
+GET /.well-known/core?rt=msg.custody
 
-</msg/store>;rt="msg.store"
+</msg/custody>;rt="msg.custody"
 ```
 
-Implementation is OPTIONAL. Implementations that support store-and-forward
+Implementation is OPTIONAL for leaf nodes but RECOMMENDED for powered relays
+and REQUIRED for border routers. Implementations that support custody
 MUST comply with the limits below.
 
 **Storage Limits:**

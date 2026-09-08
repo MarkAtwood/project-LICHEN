@@ -336,6 +336,21 @@ time sample.
 
 Status updates pushed via Observe on significant changes.
 
+**Cross-Mesh Log Correlation (GNSS-Enabled):**
+
+All diagnostic events (`/status/node`, `/status/queues`, neighbor tables,
+routing changes) carry GNSS-derived timestamps. Because all nodes share a
+common wall-clock reference, events from different nodes and different meshes
+are directly comparable without NTP-style clock correction. This enables:
+
+- Reconstructing cross-mesh timelines for debugging planetary-scale routing
+- Correlating custody-transfer handshake logs across sender/relay/BR/recipient
+- Comparing queue depth and duty cycle events across nodes to diagnose congestion
+- Post-incident analysis using log exports from multiple nodes with aligned timestamps
+
+Implementations SHOULD include `"ts": <unix_timestamp>` in all diagnostic
+event payloads exposed via LCI.
+
 **Neighbor Table (Observable)**
 
 ```
