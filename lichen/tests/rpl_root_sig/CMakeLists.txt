@@ -19,6 +19,10 @@ set(LINK_SRC ${RPL_SRC_DIR}/../link)
 add_executable(rpl_root_sig_test
   src/main.c
   ${RPL_SRC_DIR}/messages.c
+  ${RPL_SRC_DIR}/dodag.c
+  ${RPL_SRC_DIR}/trickle.c
+  ${RPL_SRC_DIR}/rpl_sf_assignment.c
+  ${LINK_SRC}/hash32.c
   ${RPL_SRC_DIR}/root_dio_sig.c
   ${RPL_SRC_DIR}/root_dio_replay.c
   ${LINK_SRC}/identity_addr.c
@@ -32,6 +36,8 @@ target_compile_definitions(rpl_root_sig_test PRIVATE
   LICHEN_RPL_TEST=1
   CONFIG_LICHEN_CRYPTO_MONOCYPHER=1
   CONFIG_LICHEN_LINK_SCHNORR=1
+  CONFIG_LICHEN_RPL_ROOT_SIG=1
+  CONFIG_LICHEN_LINK_MAX_NEIGHBORS=16
 )
 # NOTE: deliberately does not call lichen_test_target() — this host's gcc 13
 # rejects its -std=c23 flag. The test builds with the default dialect and

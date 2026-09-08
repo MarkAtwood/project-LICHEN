@@ -278,6 +278,53 @@ pub fn parse_slot_map(
     Ok(slots)
 }
 
+/// Encode a slot_map as a CBOR array (beacon CBOR options section).
+///
+/// Root-side writer for the slot_map option (spec 02a 2a.2 R-02a-013).
+/// Wire format (parity: C `lichen_beacon_write_slot_map`):
+/// - Array header `0x80 + len` for 0..=23 entries, long form `0x98, len`
+///   for 24..=[`MAX_SLOT_MAP_ENTRIES`]
+/// - Entries: CBOR immediate `0x00..=0x17` for slots 0..=23, `0x18` prefix
+///   + one byte for slots 24..=255
+///
+/// Returns `Some(bytes_written)` on success, or `None` when the map
+/// exceeds [`MAX_SLOT_MAP_ENTRIES`] or `out` lacks capacity.
+pub fn write_slot_map(slots: &[u8], out: &mut [u8]) -> Option<usize> {
+    if slots.len() > MAX_SLOT_MAP_ENTRIES {
+        return None;
+    }
+
+    let mut pos = 0;
+    if slots.len() <= 23 {
+        out.get_mut(pos)?;
+        out[pos] = 0x80 + slots.len() as u8;
+        pos += 1;
+    } else {
+        if out.len() < 2 {
+            return None;
+        }
+        out[pos] = 0x98;
+        out[pos + 1] = slots.len() as u8;
+        pos += 2;
+    }
+
+    for &v in slots {
+        let need = if v <= 0x17 { 1 } else { 2 };
+        if out.len() - pos < need {
+            return None;
+        }
+        if v <= 0x17 {
+            out[pos] = v;
+            pos += 1;
+        } else {
+            out[pos] = 0x18;
+            out[pos + 1] = v;
+            pos += 2;
+        }
+    }
+    Some(pos)
+}
+
 /// Errors from slot_map parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SlotMapError {
@@ -527,6 +574,56 @@ mod tests {
         let err = parse_slot_map(&cbor, 16).unwrap_err();
         assert_eq!(err, SlotMapError::TrailingBytes);
     }
+
+    #[test]
+    fn test_slot_map_write_roundtrip_simple() {
+        let mut buf = [0u8; 16];
+        let n = write_slot_map(&[1, 3, 5], &mut buf).unwrap();
+        assert_eq!(n, 4);
+        assert_eq!(&buf[..n], &[0x83, 0x01, 0x03, 0x05]);
+        let slots = parse_slot_map(&buf[..n], 16).unwrap();
+        assert_eq!(&slots[..], &[1, 3, 5]);
+    }
+
+    #[test]
+    fn test_slot_map_write_roundtrip_over_23_entries() {
+        // 0x98 long-form header; values 24..29 exercise two-byte entries.
+        let slots: Vec<u8> = (0..30).map(|i| 24 + i as u8).collect();
+        let mut buf = [0u8; MAX_SLOT_MAP_ENTRIES * 2 + 2];
+        let n = write_slot_map(&slots, &mut buf).unwrap();
+        assert_eq!(n, 2 + 30 * 2);
+        assert_eq!(buf[0], 0x98);
+        assert_eq!(buf[1], 30);
+        let parsed = parse_slot_map(&buf[..n], 64).unwrap();
+        assert_eq!(&parsed[..], &slots[..]);
+    }
+
+    #[test]
+    fn test_slot_map_write_empty() {
+        let mut buf = [0u8; 4];
+        let n = write_slot_map(&[], &mut buf).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(buf[0], 0x80);
+        assert!(parse_slot_map(&buf[..n], 16).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_slot_map_write_rejects_over_64_entries() {
+        let slots = [0u8; MAX_SLOT_MAP_ENTRIES + 1];
+        let mut buf = [0u8; 256];
+        assert!(write_slot_map(&slots, &mut buf).is_none());
+    }
+
+    #[test]
+    fn test_slot_map_write_rejects_short_output() {
+        let mut buf = [0u8; 3];
+        // Needs 4 bytes: header + [1, 3, 5]
+        assert!(write_slot_map(&[1, 3, 5], &mut buf).is_none());
+        // Two-byte entry needs capacity for header + 0x18 + value
+        let mut tiny = [0u8; 2];
+        assert!(write_slot_map(&[24], &mut tiny).is_none());
+    }
+
     fn make_beacon(signed_byte: u8, sig_byte: u8) -> Vec<u8> {
         let mut b = vec![0u8; MIN_BEACON_SIZE];
         b[0] = signed_byte;

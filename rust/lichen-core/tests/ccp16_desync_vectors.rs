@@ -8,6 +8,7 @@
 //! corpus is the committed independent oracle for all three suites.
 
 use lichen_core::desync::{DesyncFSM, DesyncState};
+use serde_json::Value;
 
 fn vectors() -> Vec<Value> {
     let content = include_str!("../../../test/vectors/ccp16-desync.json");
@@ -25,7 +26,7 @@ fn find_case(name: &str) -> Value {
 fn corpus_case_count_is_pinned() {
     // Guard against corpus case-count drift (beads-worker-4); the C and
     // Python consumers pin the same count.
-    assert_eq!(vectors().len(), 4, "corpus case count changed");
+    assert_eq!(vectors().len(), 5, "corpus case count changed");
 }
 
 #[test]
