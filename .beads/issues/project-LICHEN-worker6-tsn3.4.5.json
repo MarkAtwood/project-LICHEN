@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-tsn3.4.5",
+  "title": "Test: Rust RX staging ring holds frames during TX",
+  "description": "Write test that simulates TX contention (modem busy) while 2 frames arrive. Verify both frames processed, none dropped. Verify: cd rust \u0026\u0026 cargo test -p lichen-node -- rx_ring",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:20:11.341924745Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:20:11.341924745Z",
+  "labels": [
+    "rust",
+    "buffering",
+    "testing",
+    "cross-impl",
+    "schc"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tsn3.4.5",
+      "depends_on_id": "project-LICHEN-worker6-tsn3.4",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:20:11.466216321Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
