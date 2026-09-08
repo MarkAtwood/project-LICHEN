@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-qpzt.23",
+  "title": "Impl: OSCORE padding in all three implementations",
+  "description": "After spec defines size classes, implement padding in OSCORE protect functions. Python: crypto/oscore.py. Rust: lichen-coap or lichen-core OSCORE module. C: lichen/subsys/lichen/oscore/oscore_protect.c. Pad plaintext to next size class boundary before AES-CCM encryption. Verify: existing OSCORE tests still pass, output sizes match class boundaries.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:35:44.607612505Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:35:44.607612505Z",
+  "labels": [
+    "cross-impl",
+    "security",
+    "traffic-analysis",
+    "gateway",
+    "hardening"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qpzt.23",
+      "depends_on_id": "project-LICHEN-worker6-qpzt",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:35:44.733574091Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
