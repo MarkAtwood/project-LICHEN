@@ -7,9 +7,8 @@
 //! and the python oracle (timing.sfn DesyncFSM). Two-suite+ contract: the
 //! corpus is the committed independent oracle for all three suites.
 
-use serde_json::Value;
-
 use lichen_core::desync::{DesyncFSM, DesyncState};
+use serde_json::Value;
 
 fn vectors() -> Vec<Value> {
     let content = include_str!("../../../test/vectors/ccp16-desync.json");
@@ -28,6 +27,9 @@ fn corpus_case_count_is_pinned() {
     // Guard against corpus case-count drift (beads-worker-4, qmkt): the
     // Python consumer pins the same count (EXPECTED_COUNTS) and the C
     // consumer pins it in lichen/tests/desync_fsm/main.c count_cases.
+    // (Merge resolution: kept HEAD's comment — verified against the sources:
+    // main.c CHECK(count_cases(json) == 5U) and python EXPECTED_COUNTS both
+    // exist; beads-worker-5's "no C count pin" claim predates bead qmkt.)
     assert_eq!(vectors().len(), 5, "corpus case count changed");
 }
 

@@ -19,6 +19,7 @@
 #include <lichen/sf_assignment.h>
 
 #ifdef CONFIG_LICHEN_RPL_ROOT_SIG
+#include <lichen/link_ctx.h>
 #include <lichen/rpl_root_dio_sig.h>
 #include <lichen/root_dio_replay.h>
 #endif
