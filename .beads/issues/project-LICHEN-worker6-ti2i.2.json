@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ti2i.2",
+  "title": "Reconcile lifecycles and retain spec synthesis",
+  "description": "Integrate layer reports into a coherent mental model of identity, boot/join, authenticated forwarding, compression, time/capacity, route scope, security, custody, gateways, and LCI. Verify disputed passages against decisions and primary chapters. Persist concise durable Beads notes and provide source-linked user synthesis.",
+  "acceptance_criteria": "Source-backed end-to-end explanation; unresolved ambiguities identified without inventing decisions or claiming implementation conformance; no source/spec edits.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T23:14:30.964621857Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T23:14:30.964621857Z",
+  "labels": [
+    "analysis",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ti2i.2",
+      "depends_on_id": "project-LICHEN-worker6-ti2i",
+      "type": "parent-child",
+      "created_at": "2026-09-08T23:14:31.086892675Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
