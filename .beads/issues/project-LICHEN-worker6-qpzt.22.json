@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-qpzt.22",
+  "title": "Spec: OSCORE packet padding to fixed size classes",
+  "description": "Define 2-3 OSCORE packet size classes to prevent message-type inference from packet size. All OSCORE-protected messages padded to the nearest class boundary before encryption. Proposed classes: small (64 bytes), medium (128 bytes), large (224 bytes — near LoRa MTU). Add to spec/06-security.md. Low cost (wastes some airtime on padding) but eliminates size-based traffic classification.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:35:44.126627992Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:35:44.126627992Z",
+  "labels": [
+    "spec",
+    "security",
+    "traffic-analysis",
+    "gateway",
+    "hardening"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qpzt.22",
+      "depends_on_id": "project-LICHEN-worker6-qpzt",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:35:44.247563191Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
