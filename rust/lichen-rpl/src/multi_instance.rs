@@ -1341,7 +1341,6 @@ mod tests {
         assert!(!state.beacon_overlaps_window(3400, &window));
     }
 
-    use super::*;
     use std::vec;
 
     /// Parse IPv6 address for tests.

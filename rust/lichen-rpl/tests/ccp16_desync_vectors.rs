@@ -31,7 +31,7 @@ fn desync_on_sfn_wrap() {
     // Unsigned 32-bit delta wraps to a huge value, flagging desync.
     assert_eq!(
         (vec["current_sfn"].as_i64().unwrap() - vec["last_sfn"].as_i64().unwrap()) as u32,
-        4294901761u32 & 0xFFFF_FFFF
+        4294901761u32
     );
     let mut fsm = DesyncFSM::default();
     assert_eq!(fsm.state(), DesyncState::Synced);
@@ -48,7 +48,7 @@ fn multi_root_version_conflict_desync() {
     assert_eq!(vec["alternate_version"].as_u64(), Some(1));
 
     let eui64: [u8; 8] = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77];
-    let root = RootCandidate::new(eui64).with_signature_valid(true);
+    let _root = RootCandidate::new(eui64).with_signature_valid(true);
     let mut state = MultiRootState::new();
     state.set_desync_state_version(0);
     // RootCandidate carries its own version registration through
