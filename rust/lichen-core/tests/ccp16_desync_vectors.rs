@@ -25,8 +25,9 @@ fn find_case(name: &str) -> Value {
 
 #[test]
 fn corpus_case_count_is_pinned() {
-    // Guard against corpus case-count drift (beads-worker-4); the C and
-    // Python consumers pin the same count.
+    // Guard against corpus case-count drift (beads-worker-4, qmkt): the
+    // Python consumer pins the same count (EXPECTED_COUNTS) and the C
+    // consumer pins it in lichen/tests/desync_fsm/main.c count_cases.
     assert_eq!(vectors().len(), 5, "corpus case count changed");
 }
 

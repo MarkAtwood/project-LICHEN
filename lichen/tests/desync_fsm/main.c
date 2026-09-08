@@ -3,9 +3,10 @@
 
 /**
  * Host test consuming test/vectors/ccp16-desync.json (bead b7z9.12.3):
- * drives the C desync FSM (lichen_desync_on_sfn_wrap / on_beacon), the CCP
- * FSM version-change path, and the drift guard against the vector file.
- * on_missed_superframe is exercised by tests/tdma_guard_budget.
+ * drives the C desync FSM (lichen_desync_on_sfn_wrap / on_beacon /
+ * on_missed_superframe), the CCP FSM version-change path, and the drift
+ * guard against the vector file (bead qmkt: the SYNCED missed-superframe
+ * row is consumed here; tests/tdma_guard_budget exercises it further).
  * Oracles: python timing.sfn DesyncFSM and rust desync.rs DesyncFSM
  * (spec/09 14.7).
  */
@@ -296,6 +297,65 @@ static void case_recovery_revalidate(const char *obj, const char *end)
 	(void)sfn;
 }
 
+static void case_synced_missed_beacons(const char *obj, const char *end)
+{
+	long long missed = 0;
+	char expected[32];
+
+	CHECK(find_int(obj, end, "missed_count", &missed),
+	      "missed: vector fields present");
+	CHECK(find_expected(obj, end, expected, sizeof(expected)) &&
+		      strcmp(expected, "desynced") == 0,
+	      "missed: expected field");
+	CHECK(missed == LICHEN_TDMA_BEACON_TIMEOUT_SUPERFRAMES,
+	      "missed: threshold matches the spec 09 14.7 timeout");
+
+	const char *state = strstr(obj, "\"state\": \"synced\"");
+
+	CHECK(state != NULL && state < end,
+	      "missed: SYNCED row (state field)");
+
+	/* C oracle (R-02a-081 SYNCED row): a SYNCED node that misses >= 3
+	 * consecutive superframes drops to DESYNCED ("Suppress TX, reset
+	 * counters"). Known divergence (bead x4s6): C does not yet clear
+	 * the missed-superframe streak on a valid beacon in SYNCED the way
+	 * python sfn.py / rust desync.rs do, so only back-to-back misses
+	 * are asserted here. */
+	struct lichen_tdma_ctx tdma;
+	struct lichen_link_ctx link_ctx;
+
+	memset(&link_ctx, 0, sizeof(link_ctx));
+	CHECK(lichen_tdma_init(&tdma, &link_ctx) == 0, "missed: tdma init");
+	CHECK(tdma.desync_state == LICHEN_DESYNC_SYNCED,
+	      "missed: fresh node starts SYNCED");
+	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
+		      LICHEN_DESYNC_SYNCED,
+	      "missed: 1st miss stays SYNCED");
+	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
+		      LICHEN_DESYNC_SYNCED,
+	      "missed: 2nd miss stays SYNCED");
+	CHECK(lichen_desync_on_missed_superframe(&tdma) ==
+		      LICHEN_DESYNC_DESYNCED,
+	      "missed: 3rd consecutive miss -> DESYNCED");
+	CHECK(tdma.desync_missed_superframes == 0U &&
+		      tdma.desync_consecutive_valid == 0U,
+	      "missed: counters reset on transition");
+}
+
+/* The corpus is a flat array of cases, each with a top-level "name"
+ * (no nested "name" keys), so counting the needle counts the cases. */
+static size_t count_cases(const char *json)
+{
+	size_t n = 0;
+	const char *at = json;
+
+	while ((at = strstr(at, "\"name\": \"")) != NULL) {
+		n++;
+		at++;
+	}
+	return n;
+}
+
 int main(int argc, char **argv)
 {
 	const char *path = argc > 1
@@ -330,6 +390,16 @@ int main(int argc, char **argv)
 	if (obj != NULL) {
 		case_recovery_revalidate(obj, end);
 	}
+	obj = find_case(json, "synced_missed_beacons_desync", &end);
+	CHECK(obj != NULL, "vector synced_missed_beacons_desync found");
+	if (obj != NULL) {
+		case_synced_missed_beacons(obj, end);
+	}
+	/* Corpus case count pin (bead qmkt): must match the Rust
+	 * (ccp16_desync_vectors.rs) and python (EXPECTED_COUNTS) pins so
+	 * a new vector case cannot silently skip the C consumer. */
+	CHECK(count_cases(json) == 5U,
+	      "corpus case count pinned at 5 (all cases consumed)");
 	free(json);
 
 	if (failures == 0) {
