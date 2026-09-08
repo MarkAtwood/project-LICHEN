@@ -140,6 +140,23 @@ while :; do
             fi
             LEFTOVERS="$LEFTOVERS $branch"
         done
+        # Circuit breaker: beads with 3+ lease-reclaim events (workers died
+        # holding them, repeatedly — the 'insanity loop' of 2026-09-04/05)
+        # are labeled blocked:repeat-failure and escalated once.
+        for iss in $(cd "$REPO_ROOT/.beads/issues" && grep -l '"status": "open"' *.json 2>/dev/null); do
+            ev="$REPO_ROOT/.beads/events/${iss%.json}.jsonl"
+            [ -f "$ev" ] || continue
+            n=$(grep -c '"event_type":"lease_reclaimed"' "$ev" 2>/dev/null || echo 0)
+            if [ "$n" -ge 3 ]; then
+                BEADS_DIR="$BEADS_DIR" bd update "${iss%.json}" --label "blocked:repeat-failure" --json >/dev/null 2>&1
+                if [ ! -f "$STATE_DIR/${iss%.json}.breaker" ]; then
+                    touch "$STATE_DIR/${iss%.json}.breaker"
+                    BEADS_DIR="$BEADS_DIR" bd create --title="[blocked:repeat-failure] ${iss%.json} killed 3+ workers" --description="Bead ${iss%.json} has $n lease-reclaim events with no close: every worker that claims it dies (context-length or timeout) before finishing. Skipped by the swarm until a human splits it, adds budget, or unblocks. Evidence: .beads/events/${iss%.json}.jsonl" -t bug -p 2 --json >/dev/null 2>&1
+                    echo "   breaker: ${iss%.json} escalated ($n reclaims)"
+                fi
+            fi
+        done
+
         if [ -z "$LEFTOVERS" ]; then
             echo "   no conflicted leftovers"
         else
