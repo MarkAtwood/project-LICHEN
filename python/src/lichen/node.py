@@ -863,7 +863,11 @@ class Node:
         """Process a received and verified frame.
 
         Why separate method: Keeps receive loop simple, allows testing.
+
+        ``rx.pkt_id`` is the link-assigned correlation id; every packet-path
+        log inside this method carries it so an id can be traced from RX entry.
         """
+        pkt_id = rx.pkt_id
         payload = rx.payload
 
         kind = classify_l2_payload(payload)
@@ -880,8 +884,9 @@ class Node:
             # (other routing subtypes, malformed or truncated routing frames)
             # is consumed here: it never reaches the application callback.
             logger.debug(
-                "dropping non-ANNOUNCE routing frame from %s",
+                "dropping non-ANNOUNCE routing frame from %s pkt_id=%d",
                 rx.sender,
+                pkt_id,
             )
             return
 
@@ -894,8 +899,9 @@ class Node:
             # Either way there is nothing for the application; undefined
             # dispatch values remain an application extension point.
             logger.debug(
-                "dropping empty or truncated dispatch frame from %s",
+                "dropping empty or truncated dispatch frame from %s pkt_id=%d",
                 rx.sender,
+                pkt_id,
             )
             return
 
@@ -1007,7 +1013,7 @@ class Node:
         # of 0 is exhausted upstream, so the datagram is rejected before any
         # routing, local consumption, or relay re-encoding.
         if packet.header.hop_limit == 0:
-            logger.debug("dropping IPv6 packet with exhausted Hop Limit")
+            logger.debug("dropping IPv6 packet with exhausted Hop Limit pkt_id=%d", pkt_id)
             return
         relay_identity = _relay_identity(packet)
 
@@ -1035,7 +1041,9 @@ class Node:
             if self._relay_seen_recently(relay_identity, now_ms):
                 return
             if packet.header.hop_limit <= 1:
-                logger.debug("dropping IPv6 packet with exhausted Hop Limit")
+                logger.debug(
+                    "dropping IPv6 packet with exhausted Hop Limit pkt_id=%d", pkt_id
+                )
                 return
             packet.header.hop_limit -= 1
             forwarded_ipv6 = packet.to_bytes()
@@ -1044,7 +1052,9 @@ class Node:
             # routable gradient table for its asserted IPv6 source.
             peer = self._peer_for_next_hop(next_hop)
             if peer is None:
-                logger.warning("forwarding next hop has no pinned peer identity")
+                logger.warning(
+                    "forwarding next hop has no pinned peer identity pkt_id=%d", pkt_id
+                )
                 return
             try:
                 forwarded = self.link.compress_schc_for_peer(
@@ -1053,13 +1063,16 @@ class Node:
                     allow_fragmentation=True,
                 )
             except (SchcError, TypeError, ValueError):
-                logger.warning("forwarding next-hop SCHC policy rejected packet")
+                logger.warning(
+                    "forwarding next-hop SCHC policy rejected packet pkt_id=%d", pkt_id
+                )
                 return
             if not await self._transmit_peer_schc(forwarded, peer):
                 return
             # Cache only a packet accepted for transmission; a transient
             # sender-capacity/radio failure must remain retryable.
             self._remember_relay(relay_identity, now_ms)
+            logger.debug("forwarded IPv6 packet in_pkt_id=%d", pkt_id)
 
     async def _relay_source_routed(
         self,
