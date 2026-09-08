@@ -113,8 +113,9 @@ PY
                 # a fatal API error) is recreated automatically — the overnight
                 # w4/w7 context-death sat unnoticed for hours (bead biod era).
                 echo "   worker$i: window missing — recreating"
-                tmux new-window -d -t "$SESSION:$i" -n "worker$i" \
+                tmux new-window -d -t "$SESSION" -n "worker$i" \
                     "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
                 continue
             fi
             pane_busy "$WIN" && { echo "   worker$i: busy"; continue; }

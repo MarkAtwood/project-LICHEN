@@ -19,7 +19,22 @@ ensure_window() {  # $1=index $2=name $3=command — create only if missing
     fi
 }
 
-# The four controllers (worker windows 0-6 are the driver's responsibility)
+# Worker worktrees: if a worktree vanished (the week-long outage root cause),
+# rebuild it from its branch + .beads symlink BEFORE the driver looks at it.
+for n in 1 2 3 4 5 6 7; do
+    if [ ! -d "$HOME/Developer/lichen-workers/worker$n" ]; then
+        if git show-ref --verify -q "refs/heads/beads-worker-$n"; then
+            git worktree add "$HOME/Developer/lichen-workers/worker$n" "beads-worker-$n" >/dev/null 2>&1
+        else
+            git worktree add -b "beads-worker-$n" "$HOME/Developer/lichen-workers/worker$n" main >/dev/null 2>&1
+        fi
+        [ -e "$HOME/Developer/lichen-workers/worker$n/.beads" ] || \
+            ln -s "$REPO/.beads" "$HOME/Developer/lichen-workers/worker$n/.beads"
+        echo "$(date '+%F %T') watchdog: rebuilt worktree worker$n" >> "$REPO/.beads-sync.log"
+    fi
+done
+
+# The four controllers (worker windows are the driver's responsibility)
 ensure_window 7 sync  "exec ./scripts/sync-beads-loop.sh 15"
 ensure_window 8 driver "exec ./scripts/fleet-driver.sh 10 0"
 ensure_window 10 janitor "exec ./scripts/merge-janitor.sh"
