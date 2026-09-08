@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-w5ve.3",
+  "title": "Flutter phone app — Messages screen",
+  "description": "Conversation list with custody status indicators. CoAP Observe on /msg/inbox for push updates. Conversation thread view. Full-keyboard compose with canned shortcuts. Bottom tab bar navigation. Spec: 11-lci.md §17.8.3, §17.8.9. Flutter/Dart in lichen-mobile/.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:39:29.241688827Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:39:29.241688827Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w5ve.3",
+      "depends_on_id": "project-LICHEN-worker6-w5ve",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:39:29.37961772Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
