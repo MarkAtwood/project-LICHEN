@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ukhz.3",
+  "title": "Replace bare .unwrap() with .expect() in lichen-client tests",
+  "description": "Test files under rust/lichen-client/tests/ have bare .unwrap(). These are cross-impl vector tests — especially important for diagnosability. Replace with .expect('vector_name: what failed'). Include the vector filename where possible. Verify: cd rust \u0026\u0026 cargo test -p lichen-client",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:17:35.621146917Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:17:35.621146917Z",
+  "labels": [
+    "rust",
+    "testing",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ukhz.3",
+      "depends_on_id": "project-LICHEN-worker6-ukhz",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:17:35.746845983Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
