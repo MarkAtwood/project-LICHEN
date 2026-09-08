@@ -1027,10 +1027,10 @@ impl CoapResponse {
         }
     }
 
-    /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict, spec/08:226-236).
+    /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict, spec/08:315).
     pub fn conflict(payload: Vec<u8>) -> Self {
         Self {
-            code: 0x93, // 4.09 Conflict
+            code: 0x89, // 4.09 Conflict = (4<<5)|9
             payload: Zeroizing::new(payload),
             content_format: CONTENT_FORMAT_CBOR,
         }
@@ -1952,7 +1952,7 @@ impl GatewayCoordinator {
                 {
                     return CoapResponse::internal_error("slot state persistence failed");
                 }
-                // We win, reject their claim: GCP-6.5 step 11 (spec/08:226-236)
+                // We win, reject their claim: GCP-6.5 step 11 (spec/08:315)
                 // responds 4.09 Conflict so the loser knows to re-claim and
                 // broadcast an updated schedule (GCP-6.3 step 3).
                 let reject = Value::Map(vec![
@@ -2746,8 +2746,8 @@ mod tests {
 
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim: GCP-6.5 step 11
-        // responds 4.09 Conflict (spec/08:226-236).
-        assert_eq!(response.code, 0x93); // 4.09 Conflict (rejection payload)
+        // responds 4.09 Conflict (spec/08:315).
+        assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
 
         // Decode response to verify rejection
         let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
@@ -2943,12 +2943,12 @@ mod tests {
         // default slot map is Interleaved (gateway_count=1, ordinal=0), so
         // owned_slots() spans all 60 slots and the claimed slot 40 overlaps;
         // the all-zero local IID wins the tiebreak (GCP-6.3). GCP-6.5 step 11
-        // responds 4.09 Conflict (spec/08:226-236).
+        // responds 4.09 Conflict (spec/08:315).
         assert_eq!(
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 9)
                 .code,
-            0x93
+            0x89
         );
         assert!(coordinator.slot_replay_generation() > original_generation);
         fs::remove_file(state_path).unwrap();
@@ -2992,7 +2992,7 @@ mod tests {
         // one transaction even though the claim itself is rejected.
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
-        assert_eq!(response.code, 0x93); // 4.09 Conflict (GCP-6.5 step 11)
+        assert_eq!(response.code, 0x89); // 4.09 Conflict (GCP-6.5 step 11)
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
         assert_eq!(coordinator.peer_claims[0].slots(), &[5]);
