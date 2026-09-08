@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-m6x0.3",
+  "title": "Add messages to bare asserts in link/ module",
+  "description": "Files under python/src/lichen/link/ (link_layer.py, tx_queue.py, forwarding_buffer.py, frame.py) have bare asserts. Grep for 'assert ' without a comma after the condition. Add descriptive messages. Do not change logic. Verify: cd python \u0026\u0026 python -m pytest tests/test_link*.py tests/test_tx_queue*.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:16:53.327200781Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:16:53.327200781Z",
+  "labels": [
+    "python",
+    "diagnosability"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-m6x0.3",
+      "depends_on_id": "project-LICHEN-worker6-m6x0",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:16:53.436636928Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
