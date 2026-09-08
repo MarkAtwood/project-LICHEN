@@ -470,7 +470,7 @@ struct CryptoMeta {
 }
 
 #[test]
-fn canonical_vector_frame_verifies_through_relay_path_then_is_resigned() {
+fn canonical_vector_signature_verifies_and_relay_resigns_fresh_frame() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/vectors/link_frame.json");
     let content = fs::read_to_string(path).expect("read canonical link-frame vectors");
     let vectors: VectorFile = serde_json::from_str(&content).expect("parse vectors");
