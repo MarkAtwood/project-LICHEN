@@ -3,7 +3,7 @@
 
 /**
  * @file duty_response.c
- * @brief Duty-cycle congestion 5.03 response builder (spec 07 10.2.3,
+ * @brief Duty-cycle congestion 5.03 response builder (spec 07 10.2.4,
  *        R-07-031; bead b7z9.45.b). Mirrors python params.py
  *        congestion_service_unavailable().
  */

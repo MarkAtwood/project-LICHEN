@@ -11,7 +11,7 @@
 //! # Duty Cycle Integration
 //!
 //! The [`TxQueue::pop_if_allowed`] method integrates with congestion levels
-//! (spec 07 section 10.2.3) to gate transmission based on duty cycle budget:
+//! (spec 07 section 10.2.4) to gate transmission based on duty cycle budget:
 //! - NORMAL: all priorities allowed
 //! - ELEVATED: only SOS/ROUTING/URGENT (P0-P2)
 //! - CRITICAL: only SOS/ROUTING (P0-P1)
@@ -662,7 +662,7 @@ impl TxQueue {
 
     /// Pop the highest priority item that is allowed at the given congestion level.
     ///
-    /// This method integrates TX queue with duty cycle gating per spec 07 section 10.2.3:
+    /// This method integrates TX queue with duty cycle gating per spec 07 section 10.2.4:
     /// - NORMAL: all priorities allowed (P0-P4)
     /// - ELEVATED: only P0-P2 (SOS, ROUTING, URGENT)
     /// - CRITICAL: only P0-P1 (SOS, ROUTING)
@@ -1501,7 +1501,7 @@ mod tests {
         assert_eq!(item.enqueue_time_ms(), now);
     }
 
-    // --- Duty cycle integration tests (spec 07 section 10.2.3) ---
+    // --- Duty cycle integration tests (spec 07 section 10.2.4) ---
 
     #[test]
     fn pop_if_allowed_normal_allows_all() {
