@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-ldhl.12",
+  "title": "Sender UX state machine",
+  "description": "Track per-message delivery state on the sender side: (1) Sending - POST not yet ACKed by any custodian, (2) Sent - 2.01 from first custodian, (3) Delivered - explicit receipt or ack_through received, (4) Expired - TTL expired with no receipt. No retry after expiry; user decides whether to resend. Expose state to UI/client API. Spec: 12-apps.md §18.1.2 sender UX states table. All three impls. Depends on: ack_through (ldhl.10), explicit receipt (ldhl.11).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:54:39.49332355Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:54:39.49332355Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ldhl.12",
+      "depends_on_id": "project-LICHEN-worker6-ldhl",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:54:39.60410485Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
