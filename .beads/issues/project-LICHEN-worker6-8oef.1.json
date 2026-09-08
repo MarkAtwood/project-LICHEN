@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-8oef.1",
+  "title": "Density-adaptive ANNOUNCE_INTERVAL",
+  "description": "ANNOUNCE_INTERVAL scales with local density: 300s at sparse (\u003c5), 600s at dense (21-50), 1200s at very dense (51-100), 1800s at extreme (\u003e100). Reuse EstimateDensity from CCP §2a.10.3. Re-evaluate on each density update; apply on next announce cycle. Spec: 05-routing.md §9.4. All three impls.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:31:14.295250881Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:31:14.295250881Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8oef.1",
+      "depends_on_id": "project-LICHEN-worker6-8oef",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:31:14.433833087Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
