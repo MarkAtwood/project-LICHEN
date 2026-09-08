@@ -1,0 +1,22 @@
+{
+  "id": "project-LICHEN-worker6-w5ve.2",
+  "title": "E-ink message compose (canned + T9)",
+  "description": "Compose flow for 3-button e-ink: pick recipient from peers/recent, choose canned message or T9 free text, confirm and send. Show custody status progression (Sending→Sent→Delivered). Canned messages from /msg/canned resource. Spec: 11-lci.md §17.8.9. C/Zephyr.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T22:39:28.656990851Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T22:39:28.656990851Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-w5ve.2",
+      "depends_on_id": "project-LICHEN-worker6-w5ve",
+      "type": "parent-child",
+      "created_at": "2026-09-08T22:39:28.795415061Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
