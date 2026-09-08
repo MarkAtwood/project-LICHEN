@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-qpzt.5",
+  "title": "Test: Rust rejects unprotected CoAP by default",
+  "description": "Write test matching Python sibling: unprotected → 4.01, protected → 2.05, discovery → allowed. Verify: cd rust \u0026\u0026 cargo test -- oscore_default",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:34:42.470968951Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:34:42.470968951Z",
+  "labels": [
+    "rust",
+    "security",
+    "oscore",
+    "testing",
+    "gateway",
+    "hardening"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qpzt.5",
+      "depends_on_id": "project-LICHEN-worker6-qpzt",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:34:42.619290032Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
