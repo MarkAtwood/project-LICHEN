@@ -64,8 +64,12 @@ echo ""
 echo "=== Merging worker branches to main ==="
 
 # LLM semantic merge (AgentSpawn-style, arXiv:2602.07072): reconcile both
-# sides of a conflicted merge with an LLM, verified by the touched tests.
-# Returns 0 only if every conflict is resolved AND the result compiles/tests.
+# sides of a conflicted merge with an LLM. Returns 0 only when the session
+# reported RESOLVED, no conflict markers remain in the content being
+# committed, and the staged set stayed bounded to the merge's own changes
+# plus the session's worktree edits. Every gate runs BEFORE the caller's
+# commit: a commit is also the point where rerere records the resolution,
+# so a rejected reconciliation is never replayed into later syncs.
 llm_semantic_merge() {
     local branch="$1"
     local model="openrouter/moonshotai/kimi-k3"
@@ -79,28 +83,97 @@ llm_semantic_merge() {
         return 1
     fi
 
+    # Staged-set bound: the session runs with shell/git access and consumes
+    # branch-controlled content (prompt-injection channel), so anything it
+    # stages on its own must not reach the merge commit. Everything staged
+    # right now is merge-auto-staged; together with the conflict files that
+    # form the complete allowed set. Snapshot it before the session can touch
+    # the index. Also snapshot the unstaged tracked set: the pickup below may
+    # only take files the session NEWLY dirtied, not whatever main's worktree
+    # already had dirty.
+    local expected unstaged_before
+    expected=$( { git diff --cached --name-only; printf '%s\n' $files; } | sort -u )
+    unstaged_before=$(git diff --name-only | grep -v '^\.beads/' | sort -u)
+
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
-    # Reconciled merge resolution (main vs beads-worker-3): main intentionally
-    # removed the early `return "$rc"` (fix 6a41f4a64b — it skipped staging and
-    # sent single-file conflicts to manual resolution, bead worker6-1dyx) and
-    # judges from the post-staging index below; worker-3's LICHEN_KIMI_LOG
-    # env-overridable log path is kept as an orthogonal improvement.
-    local log="${LICHEN_KIMI_LOG:-/tmp/lichen-kimi-last.log}"
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Do not run git commit or git merge; leave the resolved files for the caller to stage and commit. Finish with the single word RESOLVED on its own line." >> "$log" 2>&1
-    local rc=$?
+    local log=/tmp/lichen-kimi-last.log
+    local session_log rc
+    # Session output goes to a private file: the sentinel check must not be
+    # satisfiable by a bare RESOLVED appended to the shared last.log by a
+    # concurrent janitor session or a sibling worker's copy of this script.
+    session_log=$(mktemp) || { echo "  mktemp failed — aborting merge"; return 1; }
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." > "$session_log" 2>&1; rc=$?
+    cat "$session_log" >> "$log" 2>/dev/null || true
     echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> "$log"
+    if [ "$rc" -ne 0 ]; then
+        rm -f "$session_log"
+        return "$rc"
+    fi
 
-    # The session exit code alone is not the verdict: kimi may exit nonzero
-    # after a complete resolution (or leave markers after a timeout), so stage
-    # the result and judge from the index instead. `return $rc` here was the
-    # bug: it skipped staging entirely, sending every single-file conflict to
-    # manual resolution (bead project-LICHEN-worker6-1dyx).
+    # Success sentinel: the prompt demands RESOLVED on its own line, but exit
+    # 0 alone is emitted for any finished session — a session that never
+    # resolved must be treated as a failure, not a success.
+    if ! grep -qx 'RESOLVED' "$session_log"; then
+        rm -f "$session_log"
+        echo "  LLM session did not report RESOLVED — treating as failure"
+        return 1
+    fi
+    rm -f "$session_log"
+
+    # Stage the resolved files; fail if anything is still conflicted. git add
+    # resolves an unmerged index entry regardless of content, so the marker
+    # and bound gates below carry the real verification.
     git add -- $files
     if git diff --name-only --diff-filter=U | grep -q .; then
         return 1
     fi
-    if ! git diff --cached --check >/dev/null 2>&1; then
+
+    # Index-integrity gates, before any commit:
+    # - nothing beyond the allowed set may be staged (session staging foreign
+    #   content — possibly injected — must abort, not land on main);
+    # - nothing merge-staged may have been unstaged (a silent drop of one
+    #   merge side).
+    local staged_now extra missing
+    staged_now=$(git diff --cached --name-only | sort -u)
+    extra=$(comm -13 <(printf '%s\n' "$expected") <(printf '%s\n' "$staged_now"))
+    missing=$(comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$staged_now"))
+    if [ -n "$extra" ]; then
+        echo "  LLM session staged unexpected paths — aborting: $(echo "$extra" | tr '\n' ' ')"
+        return 1
+    fi
+    if [ -n "$missing" ]; then
+        echo "  LLM session unstaged merge-side paths — aborting: $(echo "$missing" | tr '\n' ' ')"
+        return 1
+    fi
+
+    # Pick up the session's edits to other tracked files (the compile/test
+    # fixes it made for the resolution): they must land WITH the merge
+    # commit, not strand in main's worktree while the commit implies they
+    # are in. Only files NEWLY dirtied since the pre-session snapshot may be
+    # staged — whatever main's worktree already had dirty (or a session edit
+    # to such a file) stays unstaged; untracked files are left for the
+    # per-worker sync loop.
+    local touched_others
+    touched_others=$(git diff --name-only | grep -v '^\.beads/' | sort)
+    if [ -n "$touched_others" ] && [ -n "$unstaged_before" ]; then
+        touched_others=$(comm -13 <(printf '%s\n' "$unstaged_before") <(printf '%s\n' "$touched_others"))
+    fi
+    if [ -n "$touched_others" ]; then
+        echo "  LLM session also modified: $(echo "$touched_others" | tr '\n' ' ')"
+        git add -- $touched_others
+    fi
+
+    # Final content gate over the exact commit set (the index): no conflict
+    # markers anywhere. git grep --cached reads index content directly, so
+    # staged deletions cannot error the check and paths are parsed safely;
+    # -I skips binaries; grep rc 2 (error) aborts rather than passing. The
+    # bare ======= / ||||||| forms are included: a false positive only
+    # demotes to manual resolution, never to a wrong commit.
+    local mrc=0
+    git grep --cached -qIE -e '^<{7}' -e '^={7}$' -e '^\|{7}' -e '^>{7}' -- || mrc=$?
+    if [ "$mrc" -ne 1 ]; then
+        echo "  conflict-marker gate failed (grep rc=$mrc) — aborting"
         return 1
     fi
     return 0

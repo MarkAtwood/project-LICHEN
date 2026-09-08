@@ -225,6 +225,13 @@ impl<const N: usize> TunnelAuthorizationTable<N> {
         }
     }
 
+    /// The bound root IID, if any. `None` means the feature was never
+    /// provisioned: a data-path consumer keeps its gate open (C
+    /// `s_tunnel_ready == false` parity).
+    pub fn root_iid(&self) -> Option<[u8; 8]> {
+        self.root_iid
+    }
+
     pub fn clear(&mut self) {
         self.entries.fill(None);
         self.replay_floors.clear();
