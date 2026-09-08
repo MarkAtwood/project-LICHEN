@@ -95,6 +95,16 @@ def test_serialize_rejects_reserved_flag_bits() -> None:
     with pytest.raises(BeaconFormatError):
         serialize_header(header)
 
+    # Dual fault: reserved-flags precedence over num_slots == 0 must
+    # match parse order and the C codec (beacon.c checks flags first).
+    dual = TdmaBeaconHeader(
+        epoch=1, num_slots=0, sfn=0, timestamp=0, flags=0x80,
+        rx_chains=1, setup_window=0, occupied_time=0, guard=50,
+        channel_mask=1,
+    )
+    with pytest.raises(BeaconFormatError):
+        serialize_header(dual)
+
 
 def test_serialize_rejects_num_slots_zero() -> None:
     """TX-side mirror of beacon_header_num_slots_zero_rejected: a header

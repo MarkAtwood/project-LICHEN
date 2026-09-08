@@ -547,6 +547,15 @@ mod tests {
         };
         let mut buf = [0u8; HEADER_SIZE];
         assert_eq!(hdr.serialize(&mut buf), Err(ParseError::ReservedFlagSet));
+
+        // Dual fault: reserved-flags precedence over num_slots == 0 must
+        // match parse order and the C codec (beacon.c checks flags first).
+        let dual = TdmaBeaconHeader {
+            flags: 0x10,
+            num_slots: 0,
+            ..hdr
+        };
+        assert_eq!(dual.serialize(&mut buf), Err(ParseError::ReservedFlagSet));
     }
 
     #[test]
