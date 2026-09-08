@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-cwqh.24",
+  "title": "Test: Python CCP node class round-trips correctly",
+  "description": "Write test: encode CCP with node_class=RELAY, decode, verify field preserved. Test all 4 values. Verify: cd python \u0026\u0026 python -m pytest tests/test_ccp_node_class.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:01:55.501619795Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:01:55.501619795Z",
+  "labels": [
+    "python",
+    "node-class",
+    "ccp",
+    "testing",
+    "buffering",
+    "cross-impl",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cwqh.24",
+      "depends_on_id": "project-LICHEN-worker6-cwqh",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:01:55.631377774Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
