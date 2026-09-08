@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-qpzt.16",
+  "title": "Impl: Python multi-gateway route validation",
+  "description": "When Python RPL stack receives DIOs from multiple gateways, compare root identity and DODAG version. If one gateway advertises a different root or version inconsistent with majority, log warning and deprioritize that gateway in parent selection. File: python/src/lichen/rpl/dodag.py or dao_manager.py. Verify: cd python \u0026\u0026 python -m pytest tests/test_rpl*.py -x",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T21:35:22.403538388Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T21:35:22.403538388Z",
+  "labels": [
+    "python",
+    "security",
+    "routing",
+    "gateway",
+    "hardening"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-qpzt.16",
+      "depends_on_id": "project-LICHEN-worker6-qpzt",
+      "type": "parent-child",
+      "created_at": "2026-09-08T21:35:22.555723404Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
