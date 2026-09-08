@@ -103,6 +103,8 @@ def parse_header(data: bytes) -> TdmaBeaconHeader:
     flags = data[13]
     if flags & FLAG_RESERVED_MASK:
         raise BeaconFormatError("reserved flag bits set")
+    if data[4] == 0:
+        raise BeaconFormatError("num_slots must be nonzero")
     return TdmaBeaconHeader(
         epoch=int.from_bytes(data[0:4], "big"),
         num_slots=data[4],

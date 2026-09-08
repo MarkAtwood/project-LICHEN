@@ -193,6 +193,27 @@ fn reserved_flag_beacon_rejects() {
     assert_eq!(result, Err(AcceptError::Parse(ParseError::ReservedFlagSet)));
 }
 
+/// beacon_header_num_slots_zero_rejected: num_slots=0 (structurally
+/// meaningless slot modulus, spec 02a 2a.2 default 8) fails closed at the
+/// parse gate in every runtime.
+#[test]
+fn num_slots_zero_beacon_rejects() {
+    #[allow(clippy::manual_is_multiple_of)]
+    fn decode_hex(s: &str) -> Vec<u8> {
+        assert!(s.len() % 2 == 0, "odd-length hex: {s}");
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("valid hex"))
+            .collect()
+    }
+    let vector = find_vector(BEACON_VECTORS, "beacon_header_num_slots_zero_rejected");
+    let header_hex = vector["input"]["header_hex"].as_str().unwrap();
+    let mut beacon = oracle_beacon(&[]);
+    beacon[..HEADER_SIZE].copy_from_slice(&decode_hex(header_hex));
+    let result = accept_beacon(&beacon, |_, _| true, 0xFF);
+    assert_eq!(result, Err(AcceptError::Parse(ParseError::NumSlotsZero)));
+}
+
 /// Replay-deferral contract (AcceptedBeacon doc): the gate proves format
 /// and signature only. A stale-but-validly-signed beacon (epoch, SFN and
 /// timestamp all zero) MUST still be accepted; freshness (epoch-floor /
