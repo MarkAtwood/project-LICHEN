@@ -1,0 +1,12 @@
+{
+  "id": "project-LICHEN-worker6-v03n",
+  "title": "[info] worker8 stalled (0 closes in 5+ rounds, restarted)",
+  "description": "Driver stall detector: worker8 burned 5+ dispatched rounds with zero closures in 24h — the 'jabbering' degeneration signature. Session restarted fresh. If it recurs on the same worker, investigate its affinity pool (hard beads repeating?).",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T23:32:43.151955151Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T23:32:43.151955151Z"
+}
