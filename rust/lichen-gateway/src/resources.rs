@@ -1072,6 +1072,10 @@ impl CoapResponse {
         }
     }
 
+    // Merge note: beads-worker-5 added a one-arg `conflict(payload)` here
+    // hardcoding CONTENT_FORMAT_CBOR. Dropped in favor of the two-arg
+    // `conflict(payload, content_format)` above, which is strictly more
+    // general; keeping both would be a duplicate method definition.
     /// 4.04 Not Found.
     pub fn not_found() -> Self {
         Self {
@@ -1976,6 +1980,11 @@ impl GatewayCoordinator {
                 ]);
                 let mut payload = Vec::new();
                 ciborium::into_writer(&reject, &mut payload).unwrap();
+                // GCP-6.5 step 11 (spec/08:315): an unresolved slot
+                // conflict responds 4.09 Conflict. The spec payload is the
+                // winning gateway's claim; this gateway cannot mint a signed
+                // COSE claim (no sender-side claim_seq machinery, l1qw.20),
+                // so the descriptor map below stands in until that lands.
                 return CoapResponse::conflict(payload, CONTENT_FORMAT_CBOR);
             }
             // They win. Relinquish every overlapping slot before returning
@@ -2991,6 +3000,7 @@ mod tests {
         // one transaction even though the claim itself is rejected.
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
+        // We win the IID tiebreak: GCP-6.5 step 11 responds 4.09 Conflict.
         assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
