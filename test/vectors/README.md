@@ -173,6 +173,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 |------|--------|
 | `announce_coords.json` | Announce app_data Type=0x01 lat/lon e7 big-endian encoding |
 | `announce_signed_data.json` | Announce signed_data transcript format (CCP-9, spec 05 §9.2) |
+| `density_scaling.json` | Density-adaptive announce parameters (interval/hops/timeout/jitter per tier, spec 05 §9.4), root num_slots from DODAG size (spec 05 §9.10.4), and position beacon rate per density (spec 12 §18.2.1); closed schema `density_scaling.schema.json` |
 
 ### App Compatibility
 

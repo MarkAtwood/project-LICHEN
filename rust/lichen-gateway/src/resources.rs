@@ -1889,13 +1889,14 @@ impl GatewayCoordinator {
     /// forwarding of one mesh-ingress datagram against the root-signed
     /// authorization table. Mirrors the C call site in
     /// `lichen/apps/gateway/src/forwarding.c` (`lichen_tunnel_auth_decapsulate`,
-    /// fail-closed on every denial).
+    /// fail-closed on every denial). The table's clock domain is unix seconds
+    /// (`handle_post_tunnel_auth` observes the same), so the caller's
+    /// monotonic runtime clock must never reach it here.
     pub fn authorize_egress(
         &mut self,
         inner_source: [u8; 16],
         destination_is_mesh: bool,
         route: &[[u8; 8]],
-        now: u64,
     ) -> Result<(), tunnel_auth::TunnelAuthError> {
         self.tunnel_auth.authorize_decapsulation(
             tunnel_auth::DecapsulationRequest {
@@ -1905,7 +1906,7 @@ impl GatewayCoordinator {
                 destination_is_mesh,
                 route,
             },
-            now,
+            u64::try_from(unix_now()).unwrap_or(0),
         )
     }
 
