@@ -118,7 +118,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `gateway_discovery.json` | GCP-4 backbone multicast + LoRa fallback discovery |
 | `gcp_iid_comparison.json` | IID comparison/conflict-resolution algorithm (GCP-6.3) |
 | `gcp_psk_oscore.json` | PSK-based OSCORE HKDF derivation intermediates (RFC 8613) |
-| `gcp_slot_claim.json` | Slot-claim message Schnorr48 signing over CBOR-canonical form |
+| `gcp_slot_claim.json` | GCP-6.5 slot-claim basic tier: COSE_Sign1 envelopes, Schnorr48 over SHA-256(CBOR(Sig_structure)); generator `generate_gcp_slot_claim.py` |
 | `gcp_slot_claim_cose_sign1.json` | GCP-6.5 slot-claim COSE_Sign1: slots-mutation forgery, claim_seq replay, expiry boundaries, alg decoy, kid mismatch, missing ordinal |
 | `gcp_handoff_cose_sign1.json` | GCP-7.1 handoff request/confirm COSE_Sign1: RFC 9052 Sig_structure, mutations, verification cases |
 | `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid) |

@@ -894,6 +894,43 @@ class TestSlotClaimVectors:
                 )
                 break
 
+    def test_cose_envelope_vectors(self, vectors: list[dict]) -> None:
+        """Every envelope_hex vector decodes and verifies per its expectation
+        (l1qw.16.2: the basic tier documents the spec COSE_Sign1 form)."""
+        path = VECTORS_DIR / "gcp_slot_claim.json"
+        with open(path) as f:
+            doc = json.load(f)
+        now = doc["constants"]["evaluation_time"]
+        envelope_vectors = [v for v in vectors if "envelope_hex" in v]
+        assert envelope_vectors, "basic tier lost its COSE envelope vectors"
+
+        for v in envelope_vectors:
+            envelope = bytes.fromhex(v["envelope_hex"])
+            expected = v["expected"]
+            if expected.get("reason") == "missing_signature":
+                # An empty signature bstr is structurally malformed.
+                with pytest.raises(ClaimError):
+                    SlotClaim.decode_cose(envelope)
+                continue
+            claim = SlotClaim.decode_cose(envelope)
+            pubkey = bytes.fromhex(v["signer"]["public_key_hex"])
+            is_valid, reason = verify_slot_claim(claim, pubkey, now_unix=now)
+            expect_valid = expected.get(
+                "valid", expected.get("verify_with_gateway_pubkey", False)
+            )
+            if expect_valid:
+                assert (is_valid, reason) == (True, None), v["name"]
+                if "signature_length" in expected:
+                    assert len(claim.signature) == expected["signature_length"]
+                if "allocation_mode" in expected:
+                    mode = slot_claim.AllocationMode[
+                        expected["allocation_mode"].upper()
+                    ]
+                    assert claim.allocation_mode == mode, v["name"]
+            else:
+                assert not is_valid, v["name"]
+                assert reason == ClaimRejectReason.INVALID_SIGNATURE
+
 
 class TestClaimExpiryHorizon:
     """GCP-6.3 hardening: bound how far ahead a claim may pre-book."""
