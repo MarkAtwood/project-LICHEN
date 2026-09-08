@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-pi87.5",
+  "title": "Test: verify LOG_HEXDUMP output on injected parse failure",
+  "description": "After hex dump beads land, write a native_sim test that sends a malformed L2 frame and verifies LOG_HEXDUMP_DBG output appears when CONFIG_LICHEN_DIAG_HEXDUMP=y. Use Zephyr log capture API or parse native_sim stdout. Verify on heft/native_sim.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T20:18:03.194200579Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T20:18:03.194200579Z",
+  "labels": [
+    "c",
+    "diagnosability",
+    "testing",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pi87.5",
+      "depends_on_id": "project-LICHEN-worker6-pi87",
+      "type": "parent-child",
+      "created_at": "2026-09-08T20:18:03.313490836Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
