@@ -609,8 +609,10 @@ COAP_RESOURCE_DEFINE(lichen_sos, lichen_coap_server, {
  * DODAG root, so there is no local-admin plaintext fallback. The verdict's
  * human code (204/403) maps to the wire encoding 2.04 (0x44) / 4.03 (0x83)
  * via lichen_tunnel_auth_coap_code(); BUILD_ASSERTs pin that mapping.
+ * Note: 2.04 is Zephyr's COAP_RESPONSE_CODE_CHANGED (Zephyr's "CREATED"
+ * is RFC 7252's 2.01), hence the CHANGED reference below.
  */
-BUILD_ASSERT(COAP_RESPONSE_CODE_CREATED == 0x44, "2.04 wire encoding drifted");
+BUILD_ASSERT(COAP_RESPONSE_CODE_CHANGED == 0x44, "2.04 wire encoding drifted");
 BUILD_ASSERT(COAP_RESPONSE_CODE_FORBIDDEN == 0x83, "4.03 wire encoding drifted");
 
 static int tunnel_auth_post(struct coap_resource *resource,

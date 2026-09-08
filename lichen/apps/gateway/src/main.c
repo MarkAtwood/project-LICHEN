@@ -39,9 +39,18 @@
 #include "forwarding.h"
 
 #if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH)
-#include <lichen/coap_server.h>
-#include <lichen/gateway/tunnel_auth.h>
 #include <lichen/link_ctx.h>
+#endif
+
+/* The CoAP-facing tunnel-auth surface needs the CoAP subsystem headers
+ * (lichen_coap service resources, OSCORE authorize helper) and the
+ * verdict type from coap_server.h. */
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP)
+#include <lichen/coap_server.h>
+#include <lichen/coap_oscore.h>
+#include <lichen/gateway/tunnel_auth.h>
+#include <lichen/l2/ipv6_addr.h>
+#include <zephyr/sys_clock.h>
 #endif
 
 #ifdef CONFIG_LORA_LICHEN_BLE
@@ -754,7 +763,7 @@ K_THREAD_DEFINE(lora_rx, LORA_RX_STACKSZ,
 		LORA_RX_PRIORITY, 0, 0);
 #endif /* !CONFIG_LICHEN_L2 && LICHEN_GATEWAY_HAS_LORA */
 
-#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP_SERVER)
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP)
 static void gateway_tunnel_auth_coap_adapt(const uint8_t *body, size_t body_len,
 					   bool oscore_authenticated,
 					   const uint8_t oscore_sender_iid[8],
@@ -767,7 +776,66 @@ static void gateway_tunnel_auth_coap_adapt(const uint8_t *body, size_t body_len,
 	verdict->allowed = r.allowed;
 	verdict->coap_code = r.coap_code;
 }
-#endif
+
+/*
+ * POST /.well-known/tunnel-auth on the gateway's own lichen_coap service:
+ * root-issued COSE_Sign1 egress grants. OSCORE-protected requests only -
+ * the grant signer is the DODAG root, so there is no local-admin
+ * plaintext fallback (unlike the modular mutating resources). Requires
+ * CONFIG_LICHEN_OSCORE; without it no resource is registered and grants
+ * cannot be delivered over CoAP.
+ */
+#if IS_ENABLED(CONFIG_LICHEN_OSCORE)
+static int tunnel_auth_gw_post(struct coap_resource *resource,
+			       struct coap_packet *request,
+			       struct sockaddr *addr, socklen_t addr_len)
+{
+	struct coap_oscore_unprotect_result oscore;
+	int ret;
+
+	ret = coap_oscore_authorize_mutating_result(resource, request, addr,
+						    addr_len, COAP_METHOD_POST,
+						    &oscore);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!oscore.is_protected) {
+		return coap_oscore_respond_resource(resource, request, addr,
+						    addr_len, &oscore,
+						    COAP_RESPONSE_CODE_UNAUTHORIZED,
+						    0, NULL, 0);
+	}
+
+	/* Peer identity: same sockaddr -> IID derivation the OSCORE context
+	 * lookup uses (coap_oscore.c). */
+	uint8_t sender_iid[8] = { 0 };
+	if (addr_len >= sizeof(struct sockaddr_in6) && addr->sa_family == AF_INET6) {
+		const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)addr;
+		memcpy(sender_iid, &in6->sin6_addr.s6_addr[8], 8);
+		lichen_eui64_to_iid(sender_iid, sender_iid);
+	}
+
+	/* Uptime seconds stand in for unix time until wall-clock sync lands;
+	 * expiry enforcement stays dormant, replay floors do not. */
+	uint64_t now = (uint64_t)k_uptime_get() / MSEC_PER_SEC;
+	struct lichen_coap_tunnel_verdict verdict = { false, 403 };
+	gateway_tunnel_auth_coap_adapt(oscore.payload, oscore.payload_len,
+				       true, sender_iid, now, &verdict);
+
+	return coap_oscore_respond_resource(resource, request, addr, addr_len,
+					    &oscore,
+					    lichen_tunnel_auth_coap_code(verdict.coap_code),
+					    0, NULL, 0);
+}
+
+static const char * const tunnel_auth_gw_path[] = { ".well-known", "tunnel-auth", NULL };
+
+COAP_RESOURCE_DEFINE(tunnel_auth_gw, lichen_coap, {
+	.post = tunnel_auth_gw_post,
+	.path = tunnel_auth_gw_path,
+});
+#endif /* CONFIG_LICHEN_OSCORE */
+#endif /* TUNNEL_AUTH && COAP */
 
 /* --------------------------------------------------------------------------
  * main
@@ -891,7 +959,11 @@ int main(void)
 			CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS);
 	}
 
-#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP_SERVER)
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP_SERVER_STANDALONE)
+	/* Standalone-server builds (e.g. puck-style apps): register the
+	 * tunnel-auth handler via the subsystem server. The gateway app
+	 * instead serves /.well-known/tunnel-auth through its own
+	 * lichen_coap service resource above. */
 	static const struct lichen_coap_server_handlers coap_handlers = {
 		.tunnel_auth = gateway_tunnel_auth_coap_adapt,
 	};
