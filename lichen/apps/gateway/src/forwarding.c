@@ -10,10 +10,14 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys_clock.h>
 #include <zephyr/net/net_if.h>
-#include <zephyr/net/net_ip.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/net_pkt.h>
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+#include <lichen/gateway/tunnel_auth.h>
+#endif
 
 LOG_MODULE_REGISTER(lichen_forwarding, LOG_LEVEL_INF);
 
@@ -23,6 +27,13 @@ static struct k_mutex s_stats_mutex;
 static struct lichen_forwarding_stats s_stats;
 
 static bool s_initialized;
+
+static struct net_if *s_mesh_iface;
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+static struct lichen_tunnel_auth_ctx s_tunnel_ctx;
+static bool s_tunnel_ready;
+#endif
 
 static void forwarding_stats_init(struct lichen_forwarding_stats *stats)
 {
@@ -64,6 +75,45 @@ int lichen_forwarding_init(void)
 	return 0;
 }
 
+void lichen_forwarding_set_mesh_iface(struct net_if *iface)
+{
+	s_mesh_iface = iface;
+}
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+int lichen_gateway_tunnel_auth_init(const uint8_t egress_iid[8],
+				    const uint8_t root_iid[8],
+				    const uint8_t root_pubkey[32])
+{
+	struct lichen_tunnel_crypto crypto;
+	int ret = lichen_tunnel_auth_default_crypto(&crypto);
+
+	if (ret != 0) {
+		return ret;
+	}
+	ret = lichen_tunnel_auth_init(&s_tunnel_ctx, egress_iid, root_iid,
+				      root_pubkey, &crypto);
+	s_tunnel_ready = (ret == 0);
+	return ret;
+}
+
+struct lichen_tunnel_result lichen_gateway_tunnel_auth_receive(
+	const uint8_t *body, size_t body_len, bool oscore_authenticated,
+	const uint8_t oscore_sender_iid[8], uint64_t now_seconds)
+{
+	return lichen_tunnel_auth_receive(&s_tunnel_ctx, body, body_len,
+					  oscore_authenticated,
+					  oscore_sender_iid, now_seconds);
+}
+#endif
+
+static void tunnel_stats_denied(void)
+{
+	k_mutex_lock(&s_stats_mutex, K_FOREVER);
+	s_stats.tunnel_auth_denied++;
+	k_mutex_unlock(&s_stats_mutex);
+}
+
 void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 			      struct net_if *out_iface)
 {
@@ -76,6 +126,51 @@ void lichen_forwarding_handle(struct net_pkt *pkt, struct net_if *in_iface,
 	if (in_iface == out_iface) {
 		return;
 	}
+
+#if defined(CONFIG_LICHEN_TUNNEL_AUTH)
+	if (s_tunnel_ready) {
+		/* Fail closed if the mesh iface was never identified: with
+		 * tunnel authorization on, unclassified cross-iface traffic
+		 * is not forwardable. */
+		if (s_mesh_iface == NULL) {
+			tunnel_stats_denied();
+			LOG_WRN("Egress dropped: mesh iface unidentified");
+			return;
+		}
+		if (in_iface == s_mesh_iface) {
+			uint8_t ip6[40];
+			struct net_pkt_cursor backup;
+			struct lichen_tunnel_result r;
+			int rread;
+
+			net_pkt_cursor_save(pkt, &backup);
+			rread = net_pkt_read(pkt, ip6, sizeof(ip6));
+			net_pkt_cursor_restore(pkt, &backup);
+			if (rread != 0) {
+				tunnel_stats_denied();
+				LOG_WRN("Egress dropped: unreadable IPv6 header");
+				return;
+			}
+			/* Single-hop route: this gateway is the egress.
+			 * ponytail: multi-hop SRH route extraction is not
+			 * wired, so grants issued over longer routes fail
+			 * closed here; upgrade path is SRH parsing at the
+			 * L2 decapsulation site. Uptime seconds stand in
+			 * for unix time (expiry dormant, replay floors not). */
+			r = lichen_tunnel_auth_decapsulate(
+				&s_tunnel_ctx, ip6 + 8, ip6 + 24,
+				s_tunnel_ctx.egress_iid, 1,
+				LICHEN_TUNNEL_MESH_TO_EXTERNAL,
+				(uint64_t)k_uptime_get() / MSEC_PER_SEC);
+			if (!r.allowed) {
+				tunnel_stats_denied();
+				LOG_WRN("Egress dropped: tunnel denial %d",
+					(int)r.denial);
+				return;
+			}
+		}
+	}
+#endif
 
 	pkt_len = net_pkt_get_len(pkt);
 

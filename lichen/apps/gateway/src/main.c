@@ -36,6 +36,13 @@
 #include "config_apply.h"
 #include "config_cbor.h"
 #include "status_cbor.h"
+#include "forwarding.h"
+
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH)
+#include <lichen/coap_server.h>
+#include <lichen/gateway/tunnel_auth.h>
+#include <lichen/link_ctx.h>
+#endif
 
 #ifdef CONFIG_LORA_LICHEN_BLE
 #include "ble_uart.h"
@@ -173,6 +180,24 @@ static int gateway_rpl_init(void) {
 		return -EINVAL;
 	}
 	LOG_INF("RPL DODAG root initialized (rank=%u, role=ROOT)", s_rpl_root.dodag.rank);
+
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH)
+	/* Root gateway: the egress gate is bound to this node's own key.
+	 * Grant egress IIDs are pubkey-derived, so the EUI64-derived iid
+	 * above is not the tunnel identity. */
+	uint8_t root_iid[8];
+	ret = lichen_key_pubkey_to_iid(self.public_key, root_iid);
+	if (ret != 0) {
+		return ret;
+	}
+	ret = lichen_gateway_tunnel_auth_init(root_iid, root_iid, self.public_key);
+	if (ret != 0) {
+		LOG_ERR("tunnel auth init failed: %d", ret);
+		return ret;
+	}
+	lichen_forwarding_set_mesh_iface(net_if_get_default());
+	LOG_INF("Tunnel egress authorization active (root-bound)");
+#endif
 
 	k_work_init_delayable(&s_rpl_tick_work, rpl_tick_handler);
 	k_work_schedule(&s_rpl_tick_work, K_MSEC(CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS / 4));
@@ -729,6 +754,21 @@ K_THREAD_DEFINE(lora_rx, LORA_RX_STACKSZ,
 		LORA_RX_PRIORITY, 0, 0);
 #endif /* !CONFIG_LICHEN_L2 && LICHEN_GATEWAY_HAS_LORA */
 
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP_SERVER)
+static void gateway_tunnel_auth_coap_adapt(const uint8_t *body, size_t body_len,
+					   bool oscore_authenticated,
+					   const uint8_t oscore_sender_iid[8],
+					   uint64_t now_seconds,
+					   struct lichen_coap_tunnel_verdict *verdict)
+{
+	struct lichen_tunnel_result r = lichen_gateway_tunnel_auth_receive(
+		body, body_len, oscore_authenticated, oscore_sender_iid,
+		now_seconds);
+	verdict->allowed = r.allowed;
+	verdict->coap_code = r.coap_code;
+}
+#endif
+
 /* --------------------------------------------------------------------------
  * main
  * -------------------------------------------------------------------------- */
@@ -839,12 +879,26 @@ int main(void)
 	gateway_backhaul_init();  /* registers handlers early, follows AGENTS.md init order before RPL */
 #endif
 
+	int fwd_ret = lichen_forwarding_init();
+	if (fwd_ret < 0 && fwd_ret != -EALREADY) {
+		LOG_WRN("Forwarding init failed: %d", fwd_ret);
+	}
+
 	if (gateway_rpl_init() < 0) {
 		LOG_WRN("RPL root init failed - continuing without full DODAG support");
 	} else if (IS_ENABLED(CONFIG_LORA_LICHEN_GATEWAY_RPL_ROOT)) {
 		LOG_INF("RPL root signalling enabled (DODAG root active, Trickle Imin=%ums)",
 			CONFIG_LICHEN_RPL_TRICKLE_IMIN_MS);
 	}
+
+#if IS_ENABLED(CONFIG_LICHEN_TUNNEL_AUTH) && IS_ENABLED(CONFIG_LICHEN_COAP_SERVER)
+	static const struct lichen_coap_server_handlers coap_handlers = {
+		.tunnel_auth = gateway_tunnel_auth_coap_adapt,
+	};
+	if (lichen_coap_server_init(&coap_handlers) < 0) {
+		LOG_WRN("CoAP server init failed - /.well-known/tunnel-auth inactive");
+	}
+#endif
 
 #if !IS_ENABLED(CONFIG_LORA_LICHEN_GATEWAY_RPL_ROOT)
 	LOG_WRN("RPL root signalling disabled - advertising /status rpl=false");
