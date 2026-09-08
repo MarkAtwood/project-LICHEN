@@ -1979,6 +1979,10 @@ impl GatewayCoordinator {
                 ]);
                 let mut payload = Vec::new();
                 ciborium::into_writer(&reject, &mut payload).unwrap();
+                // The spec payload is the winning gateway's claim; this
+                // gateway cannot mint a signed COSE claim (no sender-side
+                // claim_seq machinery, l1qw.20), so the descriptor map above
+                // stands in until that lands.
                 return CoapResponse::conflict(payload);
             }
             // They win. Relinquish every overlapping slot before returning
@@ -2942,11 +2946,12 @@ mod tests {
         assert_eq!(coordinator.info.slot_map.owned, original_owned);
 
         coordinator.replay_persistence.as_mut().unwrap().path = original_path;
-        // The retry hits the CONFLICT arm, not the accept arm: the provisioned
-        // default slot map is Interleaved (gateway_count=1, ordinal=0), so
-        // owned_slots() spans all 60 slots and the claimed slot 40 overlaps;
-        // the all-zero local IID wins the tiebreak (GCP-6.3). GCP-6.5 step 11
-        // responds 4.09 Conflict (spec/08:226-236).
+        // Retry with persistence restored — hits the CONFLICT arm, not the
+        // accept arm: the provisioned default slot map is Interleaved
+        // (gateway_count=1, ordinal=0), so owned_slots() spans all 60 slots
+        // and the claimed slot 40 overlaps; the all-zero local IID wins the
+        // tiebreak (GCP-6.3). GCP-6.5 step 11 responds 4.09 Conflict
+        // (spec/08:226-236).
         assert_eq!(
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 9)
@@ -2995,7 +3000,9 @@ mod tests {
         // one transaction even though the claim itself is rejected.
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
-        assert_eq!(response.code, 0x93); // 4.09 Conflict (GCP-6.5 step 11)
+        // We win the IID tiebreak: GCP-6.5 step 11 responds 4.09 Conflict
+        // (spec/08:226-236).
+        assert_eq!(response.code, 0x93); // 4.09 Conflict
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
         assert_eq!(coordinator.peer_claims[0].slots(), &[5]);
