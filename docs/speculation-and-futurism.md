@@ -216,6 +216,51 @@ Optimizations for this mode:
 
 ---
 
+## Identity Verification via Stripe / ID.me / CLEAR
+
+LICHEN CA attestation doesn't require a physical passport reader booth.
+Third-party identity verification services handle the PII; the LICHEN
+cert carries only the signed attestation result — zero PII on the node.
+
+**Services:**
+- **Stripe Identity:** Government ID via photo + selfie. $1.50/verification.
+  Self-service API. Returns pass/fail + metadata. Best for basic "is a real
+  human with a government ID" verification.
+- **ID.me:** Government ID + group affiliation verification. Military (active,
+  veteran, dependent), first responder, nurse, teacher, student — verified
+  against state/federal databases. OAuth flow. Best for professional trust
+  ("this person is a verified first responder") without LICHEN ever seeing
+  their name or credentials.
+- **CLEAR Verified:** Biometric identity (iris + fingerprint + face) plus a
+  digital ID flow similar to ID.me. Enterprise partnership model. Best for
+  high-security deployments.
+
+**The cert contains NO PII:**
+```
+Subject: Ed25519 key a3b2c1d4...
+Issuer: LICHEN Community Root CA
+Attributes:
+  verification_service: id.me
+  verification_date: 2027-03-15
+  verified_groups: [first_responder]
+  verified_level: government_id
+```
+
+**Remote verification changes the game.** No booth needed. Buy a radio →
+go to `verify.lichen.network` → complete Stripe/ID.me/CLEAR flow → signed
+cert downloaded to node via USB/BLE. Works from anywhere.
+
+**Growth hack:** Subsidize first-responder and military group verification
+(free via ID.me). SAR teams adopt at zero cost. Their use generates the
+credibility stories that sell enterprise accounts.
+
+**The DEF CON booth offers all three paths:**
+1. Physical passport/eID/CAC reader (theatrical, fun, free)
+2. Stripe Identity QR code (scan, verify on phone, $15)
+3. ID.me/CLEAR OAuth (richest attributes — group verification)
+
+---
+
 ## P25-Style IETF Network
 
 What if we built something like P25 (public safety land mobile radio) but
