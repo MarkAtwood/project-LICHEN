@@ -470,16 +470,24 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	 *   publish test) can fire their driver send after the fresh arm
 	 *   and re-trip the re-arm abort; the stragglers are finite, so a
 	 *   bounded retry converges.
-	 * - still RUNNING (the teardown path completed without aborting):
-	 *   deinit() refuses with "still running, call stop() first"
+	 * - still RUNNING (the teardown path completed without aborting;
+	 *   with the uhyf root cause fixed — a same-callback re-arm -EBUSY
+	 *   is now treated as healthy-still-armed — this is the common
+	 *   case): deinit() refuses with "still running, call stop() first"
 	 *   (-EBUSY) and init() would refuse too, so the unconditional
-	 *   cycle degrades into refusals (bead m4yk). The running module
-	 *   is already the state we want — skip the cycle, and never
-	 *   disarm a live RX arm out from under it.
+	 *   cycle degrades into refusals (bead m4yk), and its driver-level
+	 *   disarm would deafen an armed, healthy L2. The running module
+	 *   is already the state we want — skip the cycle, just drain the
+	 *   driver queue and let straggler sends settle, and never disarm
+	 *   a live RX arm out from under it.
 	 *
 	 * Either way the disable path wiped the link_ctx at net_if_down,
 	 * so reprovision re-loads key + peer afterwards. */
-	if (lichen_lora_l2_needs_reinit()) {
+	if (lichen_lora_l2_is_running() && !lichen_lora_l2_needs_reinit()) {
+		/* Healthy: no recovery cycle — just quiesce straggler sends. */
+		lora_loopback_test_reset(lora_dev);
+		k_sleep(K_MSEC(150));
+	} else {
 		for (int attempt = 0; attempt < 3; attempt++) {
 			lora_loopback_test_reset(lora_dev);
 			ret = lora_recv_async(lora_dev, NULL, NULL);
