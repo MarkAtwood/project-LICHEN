@@ -1756,12 +1756,10 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         relay_outcome,
         Some(RplReceiveOutcome::AnnouncementAccepted { relayed: true, .. })
     ));
-    // The root first hears the relay's multicast DIO echo: as the DODAG
-    // root it rejects foreign DIOs, consuming one receive cycle (possibly
-    // two if the relay re-emitted the SF-annotated DIO with a changed
-    // authorization). Then it processes the relayed leaf announce.
-    // Drain until the announce lands (bounded). The exact number of
-    // interposed DIO echoes depends on the relay's re-emission path.
+    // The relay forwards the announce without emitting a DIO (see
+    // process_announce), so the relayed leaf announce is the first frame
+    // root pops. Drain until the announce lands (bounded) in case future
+    // relay re-emission paths interpose frames.
     let mut root_outcome = None;
     for _ in 0..12 {
         let outcome = root.receive(1, 0).await.unwrap();

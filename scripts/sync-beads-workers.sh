@@ -81,14 +81,20 @@ llm_semantic_merge() {
 
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log
-    if [ "$rc" -ne 0 ]; then
-        return "$rc"
-    fi
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Do not run git commit or git merge; leave the resolved files for the caller to stage and commit. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1
+    rc=$?
+    echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log
 
-    # stage whatever the LLM resolved; fail if anything is still conflicted
+    # The session exit code alone is not the verdict: kimi may exit nonzero
+    # after a complete resolution (or leave markers after a timeout), so stage
+    # the result and judge from the index instead. `return $rc` here was the
+    # bug: it skipped staging entirely, sending every single-file conflict to
+    # manual resolution (bead project-LICHEN-worker6-1dyx).
     git add -- $files
     if git diff --name-only --diff-filter=U | grep -q .; then
+        return 1
+    fi
+    if ! git diff --cached --check >/dev/null 2>&1; then
         return 1
     fi
     return 0

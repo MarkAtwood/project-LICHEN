@@ -261,6 +261,53 @@ int lichen_rpl_dodag_process_dio_bytes_authorized(
 	uint16_t link_etx, uint8_t load_factor, uint32_t now,
 	bool authenticated, bool version_authorized);
 
+#ifdef CONFIG_LICHEN_RPL_ROOT_SIG
+#include <lichen/root_dio_replay.h>
+
+/**
+ * Wire receive variant with Root DIO Signature admission
+ * (spec 06-security.md 8.10.1, CONFIG_LICHEN_RPL_ROOT_SIG=y).
+ *
+ * Mirrors the Rust receiver (rust/lichen-node/src/rpl_stack/receive.rs
+ * verify_dio_root_signature): a well-formed, correctly bound, unexpired
+ * signature whose root_seq is admitted by @p replay admits the DIO for
+ * ordinary processing; a missing option, a missing trust pin, no wall
+ * clock, or an expired signature falls back to the link-layer baseline
+ * (the DIO is still processed); a forged, tampered, malformed, or
+ * replayed signature rejects the DIO. The replay cache is mutated only
+ * after full validation.
+ *
+ * @param d             DODAG state
+ * @param dio_bytes     DIO wire bytes (base, plus options if present)
+ * @param dio_len       Length of @p dio_bytes
+ * @param neighbor_addr IPv6 address of the DIO sender (16 bytes)
+ * @param link_etx      Fixed-point ETX estimate (256 = perfect link)
+ * @param load_factor   Advertised load factor
+ * @param now           Current timestamp for lifetime tracking
+ * @param authenticated True if the DIO was received with a valid frame
+ *                      signature
+ * @param replay        Anti-replay cache for root_seq (caller-owned)
+ * @param root_pubkey   32-byte TOFU-pinned root public key, or NULL when
+ *                      no pin is known for this root (baseline)
+ * @param have_clock    True when @p now_unix is a trusted wall clock
+ * @param now_unix      Current Unix timestamp (ignored when !have_clock)
+ * @param sha256        Hash function: (input, len, out[32]), 0 on success
+ *
+ * @return 0 or 1 from lichen_rpl_dodag_process_dio_bytes() on success,
+ *         LICHEN_RPL_ERR_BAD_OPT when the signature option must reject
+ *         the DIO, or a negative LICHEN_RPL_ERR_* parse/argument code.
+ */
+int lichen_rpl_dodag_process_dio_bytes_root_sig(
+	struct lichen_rpl_dodag *_Nullable d,
+	const uint8_t *_Nullable dio_bytes, size_t dio_len,
+	const uint8_t *_Nullable neighbor_addr,
+	uint16_t link_etx, uint8_t load_factor, uint32_t now,
+	bool authenticated, struct root_dio_replay_cache *_Nonnull replay,
+	const uint8_t *_Nullable root_pubkey, bool have_clock,
+	uint64_t now_unix,
+	int (*sha256)(const uint8_t *input, size_t len, uint8_t out[32]));
+#endif /* CONFIG_LICHEN_RPL_ROOT_SIG */
+
 /**
  * @brief Drop a neighbor (e.g., link failure) and re-select parent.
  *

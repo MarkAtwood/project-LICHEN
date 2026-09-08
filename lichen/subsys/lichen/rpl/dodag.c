@@ -18,6 +18,11 @@
 #include <lichen/rpl_dodag.h>
 #include <lichen/sf_assignment.h>
 
+#ifdef CONFIG_LICHEN_RPL_ROOT_SIG
+#include <lichen/rpl_root_dio_sig.h>
+#include <lichen/root_dio_replay.h>
+#endif
+
 /* Layering bridge: the RPL layer consumes the ASSIGNED_SF option and pushes
  * the effective assignment down to the LoRa L2 modem configuration. */
 extern void lora_l2_assign_sf(uint8_t sf);
@@ -772,3 +777,134 @@ int lichen_rpl_dodag_expire_parents(struct lichen_rpl_dodag *d,
 
 	return expired;
 }
+
+#ifdef CONFIG_LICHEN_RPL_ROOT_SIG
+
+/* Root DIO Signature admission outcome (spec 06-security.md 8.10.1).
+ * Mirrors rust/lichen-node/src/rpl_stack/receive.rs DioRootSigOutcome:
+ * a missing option, missing trust pin, absent wall clock, or expired
+ * signature processes on the link-layer baseline; forged, tampered,
+ * malformed, or replayed signatures reject the DIO. */
+enum root_sig_outcome {
+	ROOT_SIG_OUTCOME_BASELINE,
+	ROOT_SIG_OUTCOME_REJECT,
+};
+
+static enum root_sig_outcome verify_root_sig_option(
+	const struct lichen_rpl_dio *dio, const uint8_t *dio_bytes,
+	size_t dio_len, struct root_dio_replay_cache *replay,
+	const uint8_t *root_pubkey, bool have_clock, uint64_t now_unix,
+	int (*sha256)(const uint8_t *input, size_t len, uint8_t out[32]))
+{
+	/* Option-chain validation (singleton, length bounds) already ran in
+	 * lichen_rpl_dio_parse; locate the byte-transparent blob. */
+	const uint8_t *opts = lichen_rpl_dio_options(dio_bytes, dio_len);
+	size_t opts_len = lichen_rpl_dio_options_len(dio_len);
+	const uint8_t *blob = NULL;
+	size_t blob_len = 0;
+
+	if (opts != NULL) {
+		struct lichen_rpl_opt_iter it;
+		struct lichen_rpl_raw_opt opt;
+
+		lichen_rpl_opt_iter_init(&it, opts, opts_len);
+		for (;;) {
+			int oret = lichen_rpl_opt_iter_next(&it, &opt);
+			if (oret == 1) {
+				break;
+			}
+			if (oret != LICHEN_RPL_OK) {
+				return ROOT_SIG_OUTCOME_REJECT;
+			}
+			if (opt.opt_type == LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE) {
+				blob = opt.data;
+				blob_len = opt.data_len;
+			}
+		}
+	}
+	if (blob == NULL) {
+		/* No option: link-layer baseline (graceful degradation). */
+		return ROOT_SIG_OUTCOME_BASELINE;
+	}
+
+	struct root_dio_sig sig;
+
+	if (root_dio_sig_decode(blob, blob_len, &sig) != ROOT_SIG_OK) {
+		/* Malformed COSE_Sign1: reject, never process unsigned. */
+		return ROOT_SIG_OUTCOME_REJECT;
+	}
+	if (root_pubkey == NULL) {
+		/* No TOFU pin for this root yet: fresh-node baseline. */
+		return ROOT_SIG_OUTCOME_BASELINE;
+	}
+	uint8_t pin_iid[8];
+
+	if (lichen_key_pubkey_to_iid(root_pubkey, pin_iid) != 0 ||
+	    memcmp(pin_iid, sig.root_iid, 8U) != 0) {
+		/* The caller's pin is for a different identity: no pin for
+		 * the claimed root, so process on the baseline (the Rust
+		 * receiver's pinned_pubkey_for(kid) -> None flow). */
+		return ROOT_SIG_OUTCOME_BASELINE;
+	}
+	if (root_dio_sig_verify_signature(&sig, root_pubkey, sha256) !=
+	    ROOT_SIG_OK) {
+		/* Tampered signature: reject, never admit to the cache. */
+		return ROOT_SIG_OUTCOME_REJECT;
+	}
+	if (!have_clock) {
+		/* Expiry unassessable: degrade to baseline like an expired
+		 * signature rather than trusting it (R-06-307). */
+		return ROOT_SIG_OUTCOME_BASELINE;
+	}
+	int sret = root_dio_sig_verify_structural(
+		&sig, root_pubkey, 32U, now_unix, dio->dodag_id,
+		dio->rpl_instance_id, dio->version, dio->rank,
+		dio->mode_of_operation);
+	if (sret != ROOT_SIG_OK) {
+		if (sret == ROOT_SIG_ERR_EXPIRED) {
+			/* Expired: treat as unsigned (spec Security Notes). */
+			return ROOT_SIG_OUTCOME_BASELINE;
+		}
+		/* kid/DODAGID binding or carrier cross-check failed. */
+		return ROOT_SIG_OUTCOME_REJECT;
+	}
+	/* Replay: cache mutation only after full validation, so a
+	 * mismatched carrier cannot burn the root's current sequence. */
+	if (root_dio_replay_cache_check_and_admit(
+		    replay, sig.payload.dodag_id, sig.payload.instance,
+		    sig.payload.root_seq) != ROOT_SIG_OK) {
+		return ROOT_SIG_OUTCOME_REJECT;
+	}
+	return ROOT_SIG_OUTCOME_BASELINE;
+}
+
+int lichen_rpl_dodag_process_dio_bytes_root_sig(
+	struct lichen_rpl_dodag *d, const uint8_t *dio_bytes, size_t dio_len,
+	const uint8_t *neighbor_addr, uint16_t link_etx, uint8_t load_factor,
+	uint32_t now, bool authenticated, struct root_dio_replay_cache *replay,
+	const uint8_t *root_pubkey, bool have_clock, uint64_t now_unix,
+	int (*sha256)(const uint8_t *input, size_t len, uint8_t out[32]))
+{
+	if (d == NULL || dio_bytes == NULL || neighbor_addr == NULL ||
+	    replay == NULL || sha256 == NULL) {
+		return LICHEN_RPL_ERR_INVALID;
+	}
+
+	struct lichen_rpl_dio dio;
+	int ret = lichen_rpl_dio_parse(&dio, dio_bytes, dio_len);
+	if (ret != LICHEN_RPL_OK) {
+		return ret;
+	}
+
+	if (verify_root_sig_option(&dio, dio_bytes, dio_len, replay,
+				   root_pubkey, have_clock, now_unix,
+				   sha256) == ROOT_SIG_OUTCOME_REJECT) {
+		return LICHEN_RPL_ERR_BAD_OPT;
+	}
+
+	return lichen_rpl_dodag_process_dio_bytes_authorized(
+		d, dio_bytes, dio_len, neighbor_addr, link_etx, load_factor,
+		now, authenticated, false);
+}
+
+#endif /* CONFIG_LICHEN_RPL_ROOT_SIG */
