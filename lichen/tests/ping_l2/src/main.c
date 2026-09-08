@@ -620,15 +620,23 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 
 	k_sleep(K_MSEC(100));
 
-	/* The teardown test left the module in LORA_ABORTED (its
-	 * corrupted-queue retry aborted the RX thread), which wiped the
-	 * link_ctx and blocked enable(). Run the documented recovery:
-	 * deinit() handles ABORTED directly, then init() + start() restore
-	 * the running state, and reprovision re-loads key + peer. */
-	ret = lichen_lora_l2_deinit();
-	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
-	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
-	zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
+	/* Recover from the teardown test's end state, whichever it is:
+	 * - LORA_ABORTED (its corrupted-queue retry aborted the RX
+	 *   thread): deinit() handles ABORTED directly, then init() +
+	 *   start() restore the running state.
+	 * - still RUNNING (the teardown path completed without aborting):
+	 *   deinit() refuses with "still running, call stop() first" and
+	 *   the running module is already the state we want, so skip the
+	 *   recovery cycle instead of no-op'ing through it.
+	 * (The old unconditional cycle assumed ABORTED and degraded into
+	 * refusals when the teardown stopped aborting — bead m4yk.)
+	 * Either way the disable path wiped the link_ctx at net_if_down,
+	 * so reprovision re-loads key + peer afterwards. */
+	if (lichen_lora_l2_needs_reinit()) {
+		zassert_ok(lichen_lora_l2_deinit(), "post-abort deinit: %d");
+		zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
+		zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
+	}
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
 	reprovision_after_reinit();
