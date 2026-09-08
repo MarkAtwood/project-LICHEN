@@ -452,68 +452,54 @@ ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
 	k_sleep(K_MSEC(100));
 
 	/* The teardown tests ran before this one (ztest executes cases in
-	 * sorted section order, not source order) and leave the module in
-	 * one of two end states; key the recovery off the module state,
-	 * not off teardown folklore:
+	 * sorted section order, not source order) and left the module
+	 * LORA_ABORTED: earlier tests' traffic trips the RX re-arm failure
+	 * counter, the aborted module keeps the loopback driver armed, and no
+	 * deinit/init cycle clears that stale arm
+	 * (project-LICHEN-worker6-uhyf). Recover manually and quiesce: drain
+	 * the driver queue (leftovers would be replayed into the fresh arm),
+	 * disarm the stale driver arm at driver level, then run the
+	 * documented recovery: deinit handles ABORTED directly, init() +
+	 * start() restore the running state, and reprovision re-loads key +
+	 * peer. A settle wait follows because one-shot async senders (e.g.
+	 * the app-identity beacon queued by the publish test) can fire their
+	 * driver send after the fresh arm and re-trip the re-arm abort; the
+	 * stragglers are finite, so a bounded retry converges.
 	 *
-	 * - LORA_ABORTED (earlier tests' traffic trips the RX re-arm
-	 *   failure counter, or a corrupted-queue retry aborts the RX
-	 *   thread): the aborted module keeps the loopback driver armed,
-	 *   and no deinit/init cycle clears that stale arm
-	 *   (project-LICHEN-worker6-uhyf). Recover manually and quiesce:
-	 *   drain the driver queue (leftovers would be replayed into the
-	 *   fresh arm), disarm the stale driver arm at driver level, then
-	 *   run the documented recovery: deinit handles ABORTED directly,
-	 *   init() + start() restore the running state, and reprovision
-	 *   re-loads key + peer. A settle wait follows because one-shot
-	 *   async senders (e.g. the app-identity beacon queued by the
-	 *   publish test) can fire their driver send after the fresh arm
-	 *   and re-trip the re-arm abort; the stragglers are finite, so a
-	 *   bounded retry converges.
-	 * - still RUNNING (the teardown path completed without aborting;
-	 *   with the uhyf root cause fixed — a same-callback re-arm -EBUSY
-	 *   is now treated as healthy-still-armed — this is the common
-	 *   case): deinit() refuses with "still running, call stop() first"
-	 *   (-EBUSY) and init() would refuse too, so the unconditional
-	 *   cycle degrades into refusals (bead m4yk), and its driver-level
-	 *   disarm would deafen an armed, healthy L2. The running module
-	 *   is already the state we want — skip the cycle, just drain the
-	 *   driver queue and let straggler sends settle, and never disarm
-	 *   a live RX arm out from under it.
-	 *
-	 * Either way the disable path wiped the link_ctx at net_if_down,
-	 * so reprovision re-loads key + peer afterwards. */
+	 * With the root cause fixed (uhyf: a same-callback re-arm -EBUSY is
+	 * now treated as healthy-still-armed), the module usually stays
+	 * RUNNING here. The recovery dance must then NOT run: its driver-
+	 * level disarm would deafen an armed, healthy L2 (deinit correctly
+	 * refuses to tear down a RUNNING module). Only the ABORTED path
+	 * needs the full deinit/init/start recovery. */
 	if (lichen_lora_l2_is_running() && !lichen_lora_l2_needs_reinit()) {
-		/* Healthy: no recovery cycle — just quiesce straggler sends. */
 		lora_loopback_test_reset(lora_dev);
 		k_sleep(K_MSEC(150));
 	} else {
 		for (int attempt = 0; attempt < 3; attempt++) {
-			lora_loopback_test_reset(lora_dev);
-			ret = lora_recv_async(lora_dev, NULL, NULL);
-			zassert_true(ret == 0 || ret == -EINVAL,
-				     "stale driver arm not clearable: %d", ret);
-			ret = lichen_lora_l2_deinit();
-			zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
-			zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
-			zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
-			ret = net_if_up(test_iface);
-			zassert_true(ret == 0 || ret == -EALREADY,
-				     "post-abort net_if_up: %d", ret);
-			reprovision_after_reinit();
-			k_sleep(K_MSEC(150));
+		lora_loopback_test_reset(lora_dev);
+		ret = lora_recv_async(lora_dev, NULL, NULL);
+		zassert_true(ret == 0 || ret == -EINVAL,
+			     "stale driver arm not clearable: %d", ret);
+		ret = lichen_lora_l2_deinit();
+		zassert_true(ret == 0 || ret == -EBUSY,
+			     "post-abort deinit: %d", ret);
+		zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
+		zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
+		ret = net_if_up(test_iface);
+		zassert_true(ret == 0 || ret == -EALREADY,
+			     "post-abort net_if_up: %d", ret);
+		reprovision_after_reinit();
+		k_sleep(K_MSEC(150));
 			if (lichen_lora_l2_is_running() &&
 			    !lichen_lora_l2_needs_reinit()) {
 				break;
 			}
 		}
-		zassert_true(lichen_lora_l2_is_running() &&
-			     !lichen_lora_l2_needs_reinit(),
-			     "module did not quiesce after recovery");
 	}
-	ret = net_if_up(test_iface);
-	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
-	reprovision_after_reinit();
+	zassert_true(lichen_lora_l2_is_running() &&
+		     !lichen_lora_l2_needs_reinit(),
+		     "module did not quiesce after recovery");
 
 	sock = bind_udp_observer();
 	zassert_true(sock >= 0, "failed to bind UDP observer: %d", sock);
