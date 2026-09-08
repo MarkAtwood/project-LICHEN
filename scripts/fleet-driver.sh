@@ -175,7 +175,22 @@ print(n)" 2>/dev/null || echo 0)
                     continue
                 fi
             fi
-            echo "   worker$i: dispatching round"
+            # Freshness rotation: 8 rounds (beads) per session max — fresh
+            # sessions close briskly, old ones rot (the 4-day insanity lesson).
+            # Fires only on idle bead-free workers, so no work is killed.
+            TOTAL=$(cat "$STATEF.total" 2>/dev/null || echo 0)
+            if [ "$TOTAL" -ge 8 ]; then
+                echo "   worker$i: 8-round freshness rotation"
+                tmux kill-window -t "$WIN" 2>/dev/null
+                tmux new-window -d -t "$SESSION" -n "worker$i" "cd $HOME/Developer/lichen-workers/worker$i && exec opencode"
+                tmux set-window-option -t "$SESSION:worker$i" automatic-rename off 2>/dev/null
+                echo "$(date +%s)" > "$STATEF.born"
+                echo 0 > "$STATEF.rounds"
+                echo 0 > "$STATEF.total"
+                continue
+            fi
+            echo "$((TOTAL + 1))" > "$STATEF.total"
+            echo "   worker$i: dispatching round (session round $((TOTAL + 1))/8)"
             wait_ready "$WIN"
             tmux send-keys -t "$WIN" -l "$ROUND_PROMPT"
             sleep 1

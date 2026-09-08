@@ -235,17 +235,58 @@ int senml_add_data(struct senml_pack *pack, const char *name,
 	return 0;
 }
 
-/* Encode a single SenML record as a CBOR map. */
-static int encode_record(zcbor_state_t *state,
-			 const struct senml_record *rec,
-			 const struct senml_pack *pack,
-			 bool is_first)
-
+/*
+ * Encode the base fields (bn/bt) as their own leading record. This is the
+ * cross-implementation canonical form: python senml.codec.pack() and the Rust
+ * wire codec emit a base-only first record (see test/vectors/senml_location.json).
+ *
+ * Returns 1 if a base record was emitted, 0 if the pack has no base fields,
+ * negative errno on failure.
+ */
+static int encode_base_record(zcbor_state_t *state,
+			      const struct senml_pack *pack)
 {
-	/* Count map entries (order matches encoding: BT, BN, N, U, V/VB/VS, T) */
+	size_t entries = 0U;
+
+	if (pack->base_name != NULL) {
+		if (validate_name(pack->base_name) < 0) {
+			return -EMSGSIZE;
+		}
+		entries++;
+	}
+	if (pack->has_base_time) {
+		entries++;
+	}
+	if (entries == 0U) {
+		return 0;
+	}
+
+	if (!zcbor_map_start_encode(state, entries)) {
+		return -ENOMEM;
+	}
+	if (pack->base_name != NULL) {
+		if (!zcbor_int32_put(state, SENML_LABEL_BN) ||
+		    !zcbor_tstr_put_term(state, pack->base_name, 256)) {
+			return -ENOMEM;
+		}
+	}
+	if (pack->has_base_time) {
+		if (!zcbor_int32_put(state, SENML_LABEL_BT) ||
+		    !zcbor_uint64_put(state, pack->base_time)) {
+			return -ENOMEM;
+		}
+	}
+	if (!zcbor_map_end_encode(state, entries)) {
+		return -ENOMEM;
+	}
+	return 1;
+}
+
+/* Encode a single SenML record as a CBOR map. */
+static int encode_record(zcbor_state_t *state, const struct senml_record *rec)
+{
+	/* Count map entries (order matches encoding: N, U, V/VB/VS/VD, T) */
 	size_t entries = 1; /* value always present */
-	if (is_first && pack->has_base_time) entries++;
-	if (is_first && pack->base_name != NULL) entries++;
 	if (rec->name != NULL) entries++;
 	if (rec->unit != NULL) entries++;
 	if (rec->has_time) entries++;
@@ -253,8 +294,7 @@ static int encode_record(zcbor_state_t *state,
 	if (rec->type == SENML_VALUE_FLOAT && !isfinite(rec->value.f)) {
 		return -EINVAL;
 	}
-	if ((is_first && validate_name(pack->base_name) < 0) ||
-	    validate_name(rec->name) < 0 ||
+	if (validate_name(rec->name) < 0 ||
 	    validate_unit(rec->unit) < 0 ||
 	    (rec->type == SENML_VALUE_STRING && rec->value.s != NULL &&
 	     validate_string(rec->value.s) < 0) ||
@@ -266,22 +306,6 @@ static int encode_record(zcbor_state_t *state,
 
 	if (!zcbor_map_start_encode(state, entries)) {
 		return -ENOMEM;
-	}
-
-	/* Base time (first record only) — encoded before base name per canonical CBOR ordering (RFC 8428 §6) */
-	if (is_first && pack->has_base_time) {
-		if (!zcbor_int32_put(state, SENML_LABEL_BT) ||
-		    !zcbor_uint64_put(state, pack->base_time)) {
-			return -ENOMEM;
-		}
-	}
-
-	/* Base name (first record only) */
-	if (is_first && pack->base_name != NULL) {
-		if (!zcbor_int32_put(state, SENML_LABEL_BN) ||
-		    !zcbor_tstr_put_term(state, pack->base_name, 256)) {
-			return -ENOMEM;
-		}
 	}
 
 	/* Name */
@@ -374,14 +398,27 @@ int senml_encode_cbor(const struct senml_pack *pack,
 
 	ZCBOR_STATE_E(state, 1, buf, buflen, 1);
 
-	/* SenML is an array of records */
-	if (!zcbor_list_start_encode(state, pack->record_count)) {
+	/* SenML is an array of records; base fields go in a standalone
+	 * leading record when present. */
+	size_t extra_records =
+		((pack->base_name != NULL) || pack->has_base_time) ? 1U : 0U;
+
+	if (!zcbor_list_start_encode(state,
+				     pack->record_count + extra_records)) {
 		return -ENOMEM;
+	}
+
+	if (extra_records == 1U) {
+		int ret = encode_base_record(state, pack);
+
+		if (ret < 0) {
+			return ret;
+		}
 	}
 
 	/* Encode each record */
 	for (size_t i = 0; i < pack->record_count; i++) {
-		int ret = encode_record(state, &pack->records[i], pack, (i == 0));
+		int ret = encode_record(state, &pack->records[i]);
 		if (ret < 0) {
 			return ret;
 		}
