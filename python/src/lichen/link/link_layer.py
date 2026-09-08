@@ -331,6 +331,9 @@ class LinkLayer:
         self._receipts = ReceiptStore(self._receipt_now)
         self._dio = DioHandler(self)
         self._schc = SchcHandler(self)
+        # One monotonic pkt_id space per node: locally-originated TX entries
+        # draw from the same counter as received frames (spec bead gy32.1).
+        self.tx_queue.set_pkt_id_source(self._next_pkt_id)
         # Create persistence handler (delegates all persistence operations)
         self._persistence = LinkPersistence(
             persist_path=self.persist_path,
