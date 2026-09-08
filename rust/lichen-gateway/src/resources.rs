@@ -1066,7 +1066,7 @@ impl CoapResponse {
     /// 4.09 Conflict (GCP-6.5 step 11: unresolved slot conflict).
     pub fn conflict(payload: Vec<u8>) -> Self {
         Self {
-            code: 0x93, // 4.09 Conflict
+            code: 0x89, // 4.09 Conflict = (4 << 5) | 9
             payload: Zeroizing::new(payload),
             content_format: CONTENT_FORMAT_CBOR,
         }
@@ -1974,7 +1974,7 @@ impl GatewayCoordinator {
                 ]);
                 let mut payload = Vec::new();
                 ciborium::into_writer(&reject, &mut payload).unwrap();
-                // GCP-6.5 step 11 (spec/08:226-236): an unresolved slot
+                // GCP-6.5 step 11 (spec/08:315): an unresolved slot
                 // conflict responds 4.09 Conflict. The spec payload is the
                 // winning gateway's claim; this gateway cannot mint a signed
                 // COSE claim (no sender-side claim_seq machinery, l1qw.20),
@@ -2750,7 +2750,7 @@ mod tests {
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim: GCP-6.5 step 11
         // responds 4.09 Conflict for an unresolved slot conflict.
-        assert_eq!(response.code, 0x93); // 4.09 Conflict
+        assert_eq!(response.code, 0x89); // 4.09 Conflict
 
         // Decode response to verify rejection
         let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
@@ -2950,7 +2950,7 @@ mod tests {
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 9)
                 .code,
-            0x93
+            0x89
         );
         assert!(coordinator.slot_replay_generation() > original_generation);
         fs::remove_file(state_path).unwrap();
@@ -2995,7 +2995,7 @@ mod tests {
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
         // We win the IID tiebreak: GCP-6.5 step 11 responds 4.09 Conflict.
-        assert_eq!(response.code, 0x93); // 4.09 Conflict
+        assert_eq!(response.code, 0x89); // 4.09 Conflict
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
         assert_eq!(coordinator.peer_claims[0].slots(), &[5]);

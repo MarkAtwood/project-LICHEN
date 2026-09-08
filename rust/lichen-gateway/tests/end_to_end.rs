@@ -1039,10 +1039,13 @@ async fn runtime_ingress_dispatches_authenticated_gcp_slot_claim() {
         .decrypt_response(&protected_response, &mut correlation)
         .await
         .unwrap();
+    // The default slot_map owns every slot and this gateway's IID is the
+    // lower one, so the claim [1,2,3] deterministically lands in the we-win
+    // conflict arm: GCP-6.5 step 11 responds 4.09 Conflict (spec/08:315).
     assert!(matches!(
         response,
         lichen_node::secure::SecureResponse::Decrypted { code, options, .. }
-            if matches!(code.0, 0x44 | 0x45) && options == [0xc1, 60]
+            if matches!(code.0, 0x89) && options == [0xc1, 60]
     ));
     assert_eq!(
         gateway
