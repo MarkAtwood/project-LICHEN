@@ -2720,7 +2720,8 @@ const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 #[tokio::test]
 #[ignore = "R-06-307 pin WIP: valid signatures still RplRejected at stack level - likely the DODAG version-authorization gate on the hand-built DIO; see bead b7z9.88.3 diagnosis (worker-1 round 2)"]
 async fn valid_root_signature_is_verified_and_replay_rejected() {
-    let (mut sender, mut receiver, packet) = baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1));
+    let (mut sender, mut receiver, packet) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1)).await;
     receiver
         .announces
         .pin_for_test(root_sig::tests::vector_pubkey());
@@ -2747,7 +2748,8 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
     // gate - the replayed DIO is admitted (treated as unsigned), not
     // rejected, even though the same DIO WAS rejected while the clock was
     // valid (positive control first).
-    let (mut sender, mut receiver, packet) = baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1));
+    let (mut sender, mut receiver, packet) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX - 1)).await;
     receiver
         .announces
         .pin_for_test(root_sig::tests::vector_pubkey());
@@ -2772,7 +2774,7 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
 #[ignore = "R-06-307 pin WIP: valid signatures still RplRejected at stack level - likely the DODAG version-authorization gate on the hand-built DIO; see bead b7z9.88.3 diagnosis (worker-1 round 2)"]
 async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
     // Unassessable clock (no set_wall_clock_unix call) -> Baseline.
-    let (mut sender, mut receiver, packet) = baseline_fixture(None);
+    let (mut sender, mut receiver, packet) = baseline_fixture(None).await;
     receiver
         .announces
         .pin_for_test(root_sig::tests::vector_pubkey());
@@ -2788,7 +2790,7 @@ async fn clockless_root_signature_admitted_as_baseline_not_rejected() {
 /// Sender + receiver on an adjacent two-node mesh, the receiver pinned to
 /// the vector root key, and the root-signed DIO packet (Dio + 0x17 option
 /// carrying VALID_COSE_SIGN1). `clock` wires the receiver's wall clock.
-fn baseline_fixture(
+async fn baseline_fixture(
     clock: Option<fn() -> u64>,
 ) -> (
     RplStack<MeshRadio, MemStorage>,
@@ -2854,6 +2856,18 @@ fn baseline_fixture(
     if let Some(clock) = clock {
         receiver.set_wall_clock_unix(clock);
     }
+
+    // Link-layer trust: the receiver must TOFU the sender's link key from a
+    // signed announce, or every frame from the sender is UnknownSender.
+    sender
+        .send_announce(&signed_announce(&relay_identity, 1), 0)
+        .await
+        .unwrap();
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::AnnouncementAccepted { .. })
+    ));
+
     (sender, receiver, packet)
 }
 
