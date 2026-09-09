@@ -1,0 +1,15 @@
+{
+  "id": "project-LICHEN-worker6-hr8t",
+  "title": "[bug] lichen-node rpl_stack test three_rpl_stacks_send_leaf_dao_via_preferred_parent fails on main (announce relay)",
+  "description": "rust/lichen-node/src/rpl_stack/tests.rs:1792 — 'root did not accept the relayed leaf announce' panics. Reproduced on a CLEAN tree (git stash of unrelated changes) with: cargo test -p lichen-node --lib rpl_stack::tests::three_rpl_stacks_send_leaf_dao_via_preferred_parent. The test drains up to 6 frames looking for RplReceiveOutcome::AnnouncementAccepted from the leaf's iid and finds none. Appears to be an announce-relay delivery/timing issue in the rpl_stack test harness, pre-existing and unrelated to routing-table path changes. Found during worker6-4iax verification.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:09:46.258157055Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:09:46.258157055Z",
+  "labels": [
+    "networking"
+  ]
+}
