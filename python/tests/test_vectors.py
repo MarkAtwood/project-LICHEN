@@ -2339,17 +2339,15 @@ def test_x25519_key_derivation_vector(name: str, vector: dict) -> None:
     These vectors verify RFC 8032 clamping is correctly applied during key generation.
     The clamped_scalar/private_key is used for both Ed25519 signing and X25519 ECDH.
     Derivation-consistency vectors additionally pin the full seed->key-material bundle
-    (Ed25519 keypair, X25519 public, IID, native 02xx address), require identical
+    (Ed25519 keypair, X25519 public, IID, routable 02xx address), require identical
     bytes across repeated derivation calls, and cover non-32-byte seed rejection.
 
-    QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
-    ygg_addr field and the ygg_addr[8:16] == iid binding encode the rejected
-    SHA-512 native address profile from the legacy corpus (test/vectors/legacy/);
-    the iid itself is the retained link-local IID per the preserved local IID
-    rules. They pin internal derivation consistency only and MUST NOT be
-    treated as addressing conformance oracles; when the upstream AddrForKey
-    migration lands these fields must be regenerated as pinned upstream
-    byte-equality vectors.
+    Per spec/decisions.jsonl upstream-yggdrasil-addressing: ygg_addr pins the
+    upstream Yggdrasil AddrForKey byte-equality value for the vector public key
+    (the pinned conformance oracle; computed with the same algorithm anchored
+    by test/vectors/yggdrasil_address.json and upstream address_test.go). The
+    iid is the retained link-local IID (SHA-512) and is NOT embedded in the
+    routable address.
     """
     from hashlib import sha512
 

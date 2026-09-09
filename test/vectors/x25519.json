@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "format_version": 2,
   "name": "x25519",
-  "description": "X25519/Ed25519 link-key derivation and clamping test vectors. Verifies RFC 8032 clamping is correctly applied during key generation, that the full seed->key-material bundle (Ed25519 keypair, X25519 static DH public, IID, native 02xx address) is consistent and deterministic (QUARANTINE NOTE per spec/decisions.jsonl upstream-yggdrasil-addressing: the ygg_addr field and the ygg_addr[8:16]==iid binding encode the rejected SHA-512 native address profile from the legacy corpus; the iid itself is the retained link-local IID per the preserved local IID rules. The quarantined fields are internal-consistency pins only, MUST NOT be used as conformance oracles for addressing, and MUST be regenerated as pinned upstream AddrForKey byte-equality vectors when the migration lands) (consumers MUST derive each bundle twice and require identical bytes across calls), and that non-32-byte seeds are rejected.",
+  "description": "X25519/Ed25519 link-key derivation and clamping test vectors. Verifies RFC 8032 clamping is correctly applied during key generation, that the full seed->key-material bundle (Ed25519 keypair, X25519 static DH public, IID, routable 02xx address) is consistent and deterministic (per spec/decisions.jsonl upstream-yggdrasil-addressing: ygg_addr is the upstream Yggdrasil AddrForKey byte-equality pin for the vector public key \u2014 the pinned conformance oracle, computed with the same algorithm anchored by test/vectors/yggdrasil_address.json and upstream address_test.go; the iid is the retained link-local IID (SHA-512) and is NOT embedded in the routable address) (consumers MUST derive each bundle twice and require identical bytes across calls), and that non-32-byte seeds are rejected.",
   "spec": "https://www.rfc-editor.org/rfc/rfc8032",
   "vectors": [
     {
@@ -17,7 +17,7 @@
         "public_key": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
         "x25519_public": "5bf55c73b82ebe22be80f3430667af570fae2556a6415e6b30d4065300aa947d",
         "iid": "7dd5cfc679ab6342",
-        "ygg_addr": "027dd5cfc679ab637dd5cfc679ab6342"
+        "ygg_addr": "020224aec2198a4ade94eae2b97eac87"
       },
       "clamping_checks": {
         "byte0": "0x50",
@@ -39,7 +39,7 @@
         "public_key": "76a1592044a6e4f511265bca73a604d90b0529d1df602be30a19a9257660d1f5",
         "x25519_public": "d1fa3f01826bd8b78e057c086c7b22c7ad4358ca918099cd7b7e5d3acd7e285b",
         "iid": "f57a7baa1226b50c",
-        "ygg_addr": "02f77a7baa1226b5f57a7baa1226b50c"
+        "ygg_addr": "0201257a9b7eed646c2bbb6690d63167"
       },
       "clamping_checks": {
         "byte0": "0x20",
@@ -62,9 +62,9 @@
         "public_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
         "x25519_public": "d85e07ec22b0ad881537c2f44d662d1a143cf830c57aca4305d85c7a90f6b62e",
         "iid": "0c02a50225b4baaa",
-        "ygg_addr": "020e02a50225b4ba0c02a50225b4baaa"
+        "ygg_addr": "0200514acffcfa9dea90556802586d37"
       },
-      "note": "SHA-512 of empty message signed with this key is the RFC 8032 test signature. public_key is the RFC 8032 constant (external anchor). iid/ygg_addr match test/vectors/legacy/yggdrasil-derivation.json vector 3 (QUARANTINED legacy SHA-512 native profile; not a conformance oracle); x25519_public cross-checked with the cryptography-library X25519 implementation."
+      "note": "SHA-512 of empty message signed with this key is the RFC 8032 test signature. public_key is the RFC 8032 constant (external anchor). iid matches test/vectors/legacy/yggdrasil-derivation.json vector 3 (QUARANTINED legacy corpus; link-local IID retained, not a conformance oracle); ygg_addr is the upstream AddrForKey byte-equality pin and intentionally diverges from that quarantined native-profile value; x25519_public cross-checked with the cryptography-library X25519 implementation."
     },
     {
       "name": "invalid_seed_length_empty",
