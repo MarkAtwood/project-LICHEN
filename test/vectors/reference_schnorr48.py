@@ -29,6 +29,52 @@ _GROUP_ORDER = 2**252 + 27742317777372353535851937790883648493
 LINK_SIGNATURE_DOMAIN = b"LICHEN-LINK-v1\x00"
 
 
+def upstream_addr_for_key(public_key: bytes) -> bytes:
+    """Return the upstream yggdrasil-go ``AddrForKey`` address for a key.
+
+    Implements the ``upstream_go_addr_for_key`` profile from
+    yggdrasil_address.json: bit-invert the Ed25519 public key, store the
+    count of leading 1 bits in ``addr[1]`` (wrapping u8, matching the Go
+    ``byte`` overflow for the degenerate all-ones inverted key), skip the
+    leading 1s and the first 0 bit, then bit-pack the remainder MSB-first
+    into whole bytes filling ``addr[2:16]`` (trailing partial byte
+    discarded, zero tail). No hashing involved.
+
+    Validated against the pinned ``upstream_addr_for_key`` anchor in
+    yggdrasil_address.json (verbatim upstream address_test.go bytes) and
+    the live yggdrasil-go implementation; never against a LICHEN
+    implementation under test.
+    """
+
+    if len(public_key) != 32:
+        raise ValueError("Ed25519 public key must be exactly 32 bytes")
+    address = bytearray(16)
+    address[0] = 0x02
+    leading_ones = 0
+    done = False
+    packed: list[int] = []
+    accumulator = 0
+    bit_count = 0
+    for index in range(256):
+        inverted_bit = 1 - ((public_key[index // 8] >> (7 - (index % 8))) & 1)
+        if not done and inverted_bit == 1:
+            leading_ones = (leading_ones + 1) % 256
+            continue
+        if not done:
+            done = True
+            continue
+        accumulator = (accumulator << 1) | inverted_bit
+        bit_count += 1
+        if bit_count == 8:
+            packed.append(accumulator)
+            accumulator = 0
+            bit_count = 0
+    address[1] = leading_ones
+    for offset, value in enumerate(packed[:14]):
+        address[2 + offset] = value
+    return bytes(address)
+
+
 def _private_scalar(seed: bytes) -> bytes:
     if len(seed) != 32:
         raise ValueError("Schnorr-48 seed must be exactly 32 bytes")
@@ -41,42 +87,6 @@ def _private_scalar(seed: bytes) -> bytes:
 
 def _canonical_scalar(value: bytes) -> bytes:
     return (int.from_bytes(value, "little") % _GROUP_ORDER).to_bytes(32, "little")
-
-
-def _addr_for_key(pubkey: bytes) -> bytes:
-    """Upstream Yggdrasil ``AddrForKey`` byte-for-byte (yggdrasil-go@422836ee
-    src/address/address.go; settled ``upstream-yggdrasil-addressing``
-    decision in spec/decisions.jsonl). Bit-invert the key; addr[0]=0x02;
-    addr[1] = leading-1 count mod 256; skip leading 1s + the first 0
-    separator bit; pack the rest MSB-first into whole bytes, discarding the
-    trailing partial byte; copy into addr[2:16], zero tail. No hashing.
-    """
-    inv = bytes(b ^ 0xFF for b in pubkey)
-    addr = bytearray(16)
-    addr[0] = 0x02
-    temp = bytearray()
-    done = False
-    ones = 0
-    cur = 0
-    nbits = 0
-    for idx in range(8 * len(inv)):
-        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
-        if not done:
-            if bit:
-                ones = (ones + 1) & 0xFF
-                continue
-            done = True  # first leading 0 bit: separator, skipped
-            continue
-        cur = (cur << 1) | bit
-        nbits += 1
-        if nbits == 8:
-            nbits = 0
-            temp.append(cur)
-            cur = 0
-    addr[1] = ones
-    n = min(len(temp), 14)
-    addr[2 : 2 + n] = temp[:n]
-    return bytes(addr)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +113,7 @@ class ReferenceIdentity:
         digest = hashlib.sha512(public).digest()
         iid = bytearray(digest[:8])
         iid[0] &= 0xFD
-        return cls(bytes(seed), private, public, bytes(iid), _addr_for_key(public))
+        return cls(bytes(seed), private, public, bytes(iid), upstream_addr_for_key(public))
 
 
 def sign(identity: ReferenceIdentity, message: bytes) -> bytes:
@@ -166,5 +176,6 @@ __all__ = [
     "ReferenceIdentity",
     "sign",
     "signature_transcript",
+    "upstream_addr_for_key",
     "verify",
 ]

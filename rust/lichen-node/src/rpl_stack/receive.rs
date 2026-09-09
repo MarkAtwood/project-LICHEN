@@ -586,9 +586,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                // The DAO source is the origin's routable /128, which does
-                // not embed the origin IID under upstream AddrForKey (i72x.2);
-                // resolve the signer key through the pinned table instead.
+                // Merge resolution (HEAD over beads-worker-2): the DAO source
+                // is the origin's routable 02xx /128 (spec 05-routing §8.6),
+                // which under upstream AddrForKey embeds no IID (i72x.2), so
+                // the pinned key resolves by full-address match — never by
+                // slicing the low 64 bits. Both parents implemented this
+                // exact-match lookup as duplicate announce-table methods
+                // (`pinned_pubkey_for_routable` in HEAD, `pinned_pubkey_for_addr`
+                // in beads-worker-2); the `_routable` form is kept because the
+                // already-merged node.rs DAO-admission path uses it.
                 let admitted = self
                     .announces
                     .pinned_pubkey_for_routable(&source)
@@ -751,12 +757,28 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
 
         // Replay: root_seq must strictly exceed the cached high-water mark.
-        // The mark is persisted BEFORE the in-memory cache is admitted: an
-        // unpersisted mark must never verify, because the reboot boundary
-        // would reopen the replay window (worker6-eebl). A storage fault is
-        // a local failure, not a forgery: degrade to baseline (treat as
-        // unsigned, L679) rather than rejecting the DIO, and leave the
-        // in-memory cache untouched so a healthy redelivery can verify.
+        // Merge resolution (HEAD + beads-worker-2): a tracked key's
+        // replay/regression is forgery and hard-Rejects (worker-2
+        // cached()-pre-check); a NEW key that no longer fits in the table
+        // degrades to the L679 baseline (worker-2 rationale: mapping capacity
+        // to Reject would let an on-link adversary hard-Reject a genuine new
+        // root's first signed DIO — punishing the signed option itself). The
+        // mark is persisted BEFORE the in-memory cache is admitted (HEAD,
+        // worker6-eebl): an unpersisted mark must never verify, because the
+        // reboot boundary would reopen the replay window. A storage fault is
+        // a local failure, not a forgery: degrade to baseline and leave the
+        // in-memory cache untouched so a healthy redelivery can verify. For
+        // a tracked key the pre-check above rejects any non-increasing
+        // root_seq, so accept() cannot fail; for an untracked key its only
+        // failure is capacity, which degrades per the rationale above.
+        let cached = self
+            .root_seqs
+            .cached(decoded.payload.dodag_id, decoded.payload.instance);
+        if let Some(cached) = cached {
+            if decoded.payload.root_seq <= cached {
+                return DioRootSigOutcome::Reject;
+            }
+        }
         let mut proposed = self.root_seqs.clone();
         if proposed
             .accept(
@@ -766,7 +788,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             )
             .is_err()
         {
-            return DioRootSigOutcome::Reject;
+            return DioRootSigOutcome::Baseline;
         }
         let Ok(current) = proposed.persist(&mut self.storage, self.root_seq_store) else {
             return DioRootSigOutcome::Baseline;

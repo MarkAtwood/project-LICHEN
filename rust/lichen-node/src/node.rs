@@ -402,9 +402,12 @@ impl RplNode {
         now_ms: u64,
         dao_admission: &lichen_rpl::routing::DaoAdmissionState,
     ) -> DaoHandlingOutcome {
-        // The DAO origin is the origin's routable /128, which embeds no IID
-        // post-AddrForKey (i72x.2): resolve the pin by full address, not by
-        // slicing the low half (which can collide with another peer's IID).
+        // The DAO origin is the origin's routable /128 (its primary 02xx
+        // address, spec 05-routing §8.6), which embeds no IID post-AddrForKey
+        // (i72x.2): resolve the pin by full-address match against every pinned
+        // identity's AddrForKey, not by slicing the low half (which can collide
+        // with another peer's IID), then fall back to the bounded snapshot
+        // (which re-verifies the signature).
         let pinned_key = announces.pinned_pubkey_for_routable(&origin).or_else(|| {
             resolve_dao_signer_from_bounded_snapshot(
                 dao_bytes,

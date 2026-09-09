@@ -44,7 +44,7 @@ def derive_elided_destination(schc_payload: bytes) -> IPv6Address:
     In elided mode the destination is not carried in the link-layer header;
     it is recovered from the IPv6 destination address inside the SCHC payload.
     The payload begins with a dispatch byte (0x14 for SCHC, 0x15 for
-    routing/control). For SCHC payloads the residue is decompressed to obtain
+    routing/control, 0x16 for SOS). For SCHC payloads the residue is decompressed to obtain
     the full IPv6 packet; for raw IPv6 payloads (uncompressed rule 255) the
     header is parsed directly.
 
@@ -91,7 +91,9 @@ def derive_elided_destination(schc_payload: bytes) -> IPv6Address:
         except Exception:
             pass
 
-    raise ValueError(f"unknown dispatch 0x{dispatch:02x}: cannot derive destination")
+    raise ValueError(
+        f"dispatch 0x{dispatch:02x} carries no IPv6 destination: cannot derive destination"
+    )
 
 
 def resolve_destination(

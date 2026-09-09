@@ -2004,6 +2004,7 @@
           "enum": [
             "schc",
             "routing",
+            "sos",
             "unknown"
           ]
         },

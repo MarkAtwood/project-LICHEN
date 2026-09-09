@@ -21,6 +21,7 @@ from reference_schnorr48 import (  # noqa: E402
     ReferenceIdentity,
     sign,
     signature_transcript,
+    upstream_addr_for_key,
     verify,
 )
 
@@ -50,35 +51,14 @@ def _addr_for_key(public_key: bytes) -> bytes:
     return b"\x02" + digest[:7] + _iid_for_key(public_key)
 
 
-def _upstream_addr_for_key(public_key: bytes) -> bytes:
-    """Upstream yggdrasil-go AddrForKey: bit-invert the key, count leading 1
-    bits into addr[1], drop them plus the separator 0, then pack the rest
-    MSB-first into addr[2:16]. No hashing.
-
-    Migration split (spec/decisions.jsonl upstream-yggdrasil-addressing):
-    corpora already regenerated to upstream (root_signature.json,
-    authenticated_schc_dio.json) use this oracle; root_authorization.json
-    still on the rejected SHA-512 profile keeps the legacy ``_addr_for_key``
-    until its own regeneration lands.
-    """
-    inverted = bytes(b ^ 0xFF for b in public_key)
-    ones = 0
-    while ones < 256 and (inverted[ones // 8] >> (7 - ones % 8)) & 1:
-        ones += 1
-    payload = bytearray(14)
-    acc = 0
-    nbits = 0
-    pos = 0
-    for i in range(ones + 1, 256):
-        acc = (acc << 1) | ((inverted[i // 8] >> (7 - i % 8)) & 1)
-        nbits += 1
-        if nbits == 8:
-            if pos < 14:
-                payload[pos] = acc
-                pos += 1
-            acc = 0
-            nbits = 0
-    return bytes((0x02, ones & 0xFF)) + bytes(payload)
+# Upstream AddrForKey comes from reference_schnorr48.upstream_addr_for_key,
+# which is validated against the pinned yggdrasil-go anchor vectors; a
+# duplicate local copy (verified byte-identical) would only drift.
+# Migration split (spec/decisions.jsonl upstream-yggdrasil-addressing):
+# corpora already regenerated to upstream (root_signature.json,
+# authenticated_schc_dio.json) use that oracle; root_authorization.json
+# still on the rejected SHA-512 profile keeps the legacy ``_addr_for_key``
+# until its own regeneration lands.
 
 
 def _ones_complement_sum(data: bytes) -> int:
@@ -389,7 +369,7 @@ def test_authenticated_schc_dio_construction_has_independent_security_checks() -
             vector["name"]
         )
         if vector["trusted_role"] == "root":
-            root_binding = dio[8:24] == _upstream_addr_for_key(public_key)
+            root_binding = dio[8:24] == upstream_addr_for_key(public_key)
             assert root_binding is (vector["expected"]["admitted"] is True), vector["name"]
 
 
@@ -471,7 +451,7 @@ def test_root_vectors_bind_dodagid_and_use_independent_signatures() -> None:
         if public_hex is None or len(public_hex) != 64:
             continue
         public_key = bytes.fromhex(public_hex)
-        binding = bytes.fromhex(vector["dodagid"]) == _upstream_addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid"]) == upstream_addr_for_key(public_key)
         assert binding is vector.get("binding_valid", vector.get("error") != "DODAGID_MISMATCH")
         if "signature" in vector and "message" in vector:
             valid_signature = verify(
@@ -497,7 +477,7 @@ def test_root_vectors_bind_dodagid_and_use_independent_signatures() -> None:
     # DIO DODAGID is a root routable address: upstream AddrForKey, not the
     # rejected SHA-512 native profile (spec/decisions.jsonl
     # upstream-yggdrasil-addressing). Independent oracle, not the impl.
-    expected_upstream = _upstream_addr_for_key(ReferenceIdentity.from_seed(bytes(32)).pubkey)
+    expected_upstream = upstream_addr_for_key(ReferenceIdentity.from_seed(bytes(32)).pubkey)
     for vector in _load("rpl_messages.json")["vectors"]:
         if vector["type"] == "dio":
             assert IPv6Address(vector["fields"]["dodag_id"]).packed == expected_upstream

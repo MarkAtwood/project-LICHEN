@@ -366,6 +366,9 @@ ZTEST(link_crypto, test_l2_payload_dispatch_distinguishes_global_coap_from_annou
 	const uint8_t unwrapped_global_coap[] = {
 		SCHC_RULE_GLOBAL_COAP, 0x40
 	};
+	const uint8_t wrapped_sos[] = {
+		LICHEN_L2_DISPATCH_SOS, 0x01
+	};
 	size_t body_len;
 	const uint8_t *body;
 
@@ -385,6 +388,10 @@ ZTEST(link_crypto, test_l2_payload_dispatch_distinguishes_global_coap_from_annou
 	zassert_equal(body_len, sizeof(wrapped_announce) - 1U);
 	zassert_equal(body[0], LICHEN_L2_ROUTING_TYPE_ANNOUNCE);
 	zassert_equal(wrapped_global_coap[1], wrapped_announce[1]);
+
+	zassert_equal(lichen_l2_payload_classify(wrapped_sos,
+						 sizeof(wrapped_sos)),
+		      LICHEN_L2_PAYLOAD_SOS);
 
 	zassert_equal(lichen_l2_payload_classify(unwrapped_global_coap,
 						 sizeof(unwrapped_global_coap)),
