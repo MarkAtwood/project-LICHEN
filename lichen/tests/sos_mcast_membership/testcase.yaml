@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+common:
+  tags:
+    - lichen
+    - coap
+    - networking
+  # R-APPC-009 (spec/appendix-c-safety.md): ASan+UBSan on native_sim builds.
+  extra_conf_files:
+    - ../../tests/sanitizers.conf
+tests:
+  net.lichen.sos_mcast_membership.mld_on:
+    # R-12-036 (spec/12-apps.md 18.4): POST coap://[ff02::1]/sos requires
+    # the all-nodes group joined, which Zephyr only does under MLD.
+    extra_configs:
+      - CONFIG_NET_IPV6_MLD=y
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    integration_platforms:
+      - native_sim
+  net.lichen.sos_mcast_membership.mld_off:
+    extra_configs:
+      - CONFIG_NET_IPV6_MLD=n
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+    integration_platforms:
+      - native_sim
