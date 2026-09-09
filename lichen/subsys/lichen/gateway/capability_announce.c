@@ -259,3 +259,194 @@ int lichen_capability_announce_default_crypto(struct lichen_capability_crypto *c
 int lichen_capability_announce_default_crypto(struct lichen_capability_crypto *crypto)
 { (void)crypto; return -ENOTSUP; }
 #endif
+
+/* ---------------------------------------------------------------------------
+ * Capability table (spec 8.12)
+ *
+ * Bounded LRU cache of accepted announcements keyed by announcer IID, with a
+ * monotone per-IID seq floor captured at eviction.  Semantics mirror the
+ * Python CapabilityTable and Rust CapabilityTable so all three stacks agree
+ * on supersession, egress reservation, and rollback resistance.
+ */
+
+static void table_lock(struct lichen_capability_table *t)
+{
+	while (atomic_flag_test_and_set_explicit(&t->lock, memory_order_acquire)) {
+	}
+}
+
+static void table_unlock(struct lichen_capability_table *t)
+{
+	atomic_flag_clear_explicit(&t->lock, memory_order_release);
+}
+
+static int entry_find(struct lichen_capability_table *t, const uint8_t iid[8])
+{
+	for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++)
+		if (t->entries[i].used && memcmp(t->entries[i].announcer_iid, iid, 8) == 0)
+			return (int)i;
+	return -1;
+}
+
+static int floor_find(struct lichen_capability_table *t, const uint8_t iid[8])
+{
+	for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++)
+		if (t->floors[i].used && memcmp(t->floors[i].announcer_iid, iid, 8) == 0)
+			return (int)i;
+	return -1;
+}
+
+/* Pick the floor slot to reclaim when the ledger is full: the lowest-IID
+ * floor whose IID is no longer a live entry.  Floors for active entries
+ * are redundant (their entry.seq already pins the floor) and always
+ * retained; if every floor is live-pinned nothing can be reclaimed.  A
+ * pending raiser whose entry does not exist yet participates as a virtual
+ * candidate — its floor would be redundant with the entry about to go
+ * live, so when it is the lowest candidate the references' raise-then-
+ * bound order drops the fresh floor again, i.e. no floor is created.
+ * Mirrors Python CapabilityTable._bound_floors / Rust bound_seq_floors so
+ * a dead announcer's floor cannot permanently starve eviction-captured
+ * floors for newly evicted IIDs.  Returns the slot index, or -1.
+ * O(capacity^2) worst case, bounded by
+ * CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY. */
+static int floor_prune(struct lichen_capability_table *t, const uint8_t pending[8],
+		       bool pending_eligible)
+{
+	int victim = -1;
+
+	for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++) {
+		if (!t->floors[i].used) continue;
+		if (entry_find(t, t->floors[i].announcer_iid) >= 0) continue;
+		if (victim < 0 ||
+		    memcmp(t->floors[i].announcer_iid,
+			   t->floors[victim].announcer_iid, 8) < 0) {
+			victim = (int)i;
+		}
+	}
+	if (!pending_eligible) return victim;
+	if (victim < 0 || memcmp(pending, t->floors[victim].announcer_iid, 8) < 0) return -1;
+	return victim;
+}
+
+static void floor_raise(struct lichen_capability_table *t, const uint8_t iid[8], uint64_t seq)
+{
+	int fi = floor_find(t, iid);
+	if (fi < 0) {
+		int slot = -1;
+		for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++)
+			if (!t->floors[i].used) { slot = (int)i; break; }
+		if (slot < 0) {
+			slot = floor_prune(t, iid, entry_find(t, iid) < 0);
+			if (slot < 0) return; /* all floors live-pinned, or a
+						 pending raiser that is itself
+						 the lowest prune candidate */
+			t->floors[slot].used = false;
+		}
+		t->floors[slot].used = true;
+		memcpy(t->floors[slot].announcer_iid, iid, 8);
+		t->floors[slot].floor = seq;
+		return;
+	}
+	if (seq > t->floors[fi].floor) t->floors[fi].floor = seq;
+}
+
+void lichen_capability_table_init(struct lichen_capability_table *table)
+{
+	if (table == NULL) return;
+	memset(table, 0, sizeof(*table));
+	atomic_flag_clear(&table->lock);
+}
+
+int64_t lichen_capability_table_cached_seq(struct lichen_capability_table *table,
+					   const uint8_t announcer_iid[8])
+{
+	if (table == NULL || announcer_iid == NULL) return -1;
+	table_lock(table);
+	int64_t best = -1;
+	int fi = floor_find(table, announcer_iid);
+	if (fi >= 0) best = (int64_t)table->floors[fi].floor;
+	int ei = entry_find(table, announcer_iid);
+	if (ei >= 0) {
+		if ((int64_t)table->entries[ei].seq > best) best = (int64_t)table->entries[ei].seq;
+		table->entries[ei].last_used = ++table->tick;
+	}
+	table_unlock(table);
+	return best;
+}
+
+bool lichen_capability_table_record(struct lichen_capability_table *table,
+				    const struct lichen_capability_payload *payload)
+{
+	if (table == NULL || payload == NULL) return false;
+	bool egress = (payload->capabilities & LICHEN_CAPABILITY_EGRESS) != 0U;
+	size_t effective = egress ? CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY
+				  : CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY - LICHEN_CAPABILITY_EGRESS_RESERVED;
+	table_lock(table);
+	int ei = entry_find(table, payload->announcer_iid);
+	if (ei >= 0) {
+		struct lichen_capability_table_entry *e = &table->entries[ei];
+		e->capabilities = payload->capabilities;
+		e->expiry = payload->expiry;
+		e->seq = payload->seq;
+		e->last_used = ++table->tick;
+		floor_raise(table, payload->announcer_iid, payload->seq);
+		table_unlock(table);
+		return true;
+	}
+	if (table->entry_count >= effective) {
+		/* Table full for this class.  Only an egress insert may reclaim
+		 * the reserved tail by evicting the LRU entry; a non-egress
+		 * insert is refused so egress announcements always have room. */
+		if (!egress) { table_unlock(table); return false; }
+		int lru = -1; uint64_t oldest = UINT64_MAX;
+		for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++)
+			if (table->entries[i].used && table->entries[i].last_used < oldest) {
+				oldest = table->entries[i].last_used; lru = (int)i;
+			}
+		if (lru < 0) { table_unlock(table); return false; }
+		floor_raise(table, table->entries[lru].announcer_iid, table->entries[lru].seq);
+		table->entries[lru].used = false;
+		table->entry_count--;
+	}
+	int slot = -1;
+	for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++)
+		if (!table->entries[i].used) { slot = (int)i; break; }
+	if (slot < 0) { table_unlock(table); return false; }
+	/* Raise and bound the announcer's floor BEFORE the entry goes live
+	 * (mirrors Python record() / Rust insert()): while the entry is
+	 * still absent the fresh floor is prune-eligible, so the prune
+	 * never sacrifices a lower-IID dead floor for a floor the live
+	 * entry makes redundant. */
+	floor_raise(table, payload->announcer_iid, payload->seq);
+	struct lichen_capability_table_entry *e = &table->entries[slot];
+	e->used = true;
+	memcpy(e->announcer_iid, payload->announcer_iid, 8);
+	e->capabilities = payload->capabilities;
+	e->expiry = payload->expiry;
+	e->seq = payload->seq;
+	e->last_used = ++table->tick;
+	table->entry_count++;
+	table_unlock(table);
+	return true;
+}
+
+size_t lichen_capability_table_purge_expired(struct lichen_capability_table *table,
+					     uint64_t now)
+{
+	if (table == NULL) return 0;
+	size_t purged = 0;
+	table_lock(table);
+	for (size_t i = 0; i < CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY; i++) {
+		if (table->entries[i].used && table->entries[i].expiry <= now) {
+			/* No floor capture at purge: Python purge_expired (the
+			 * only reference with expiry) just deletes the entry —
+			 * floors there are already >= entry.seq, and capturing
+			 * a floor for a floorless entry here would diverge. */
+			table->entries[i].used = false;
+			table->entry_count--;
+			purged++;
+		}
+	}
+	table_unlock(table);
+	return purged;
+}

@@ -331,7 +331,8 @@ static int msg_inbox_post(struct coap_resource *resource,
 		int r = coap_oscore_protect_response(oscore_ctx, piv, piv_len,
 						     request,
 						     COAP_RESPONSE_CODE_CREATED,
-						     NULL, 0, &resp, buf, sizeof(buf));
+						     NULL, 0, NULL, 0, &resp, buf,
+						     sizeof(buf));
 		if (r < 0) {
 			return lichen_coap_respond(resource, request, addr, addr_len,
 						   COAP_RESPONSE_CODE_INTERNAL_ERROR,
@@ -632,6 +633,77 @@ COAP_RESOURCE_DEFINE(lichen_tunnel_auth, lichen_coap_server, {
 	.path = tunnel_auth_path,
 });
 #endif /* CONFIG_LICHEN_TUNNEL_AUTH */
+
+#ifdef CONFIG_LICHEN_CAPABILITY_ANNOUNCE
+#include <zephyr/sys_clock.h>
+#include <lichen/gateway/capability_announce.h>
+#include <lichen/gateway/tunnel_auth.h>
+/*
+ * /.well-known/capability-announce resource - node capability COSE_Sign1
+ * announcements to the DODAG root (spec 06-security.md 8.12). POST only,
+ * OSCORE-protected only: the announcement is authenticated against the
+ * link-authenticated sender's pinned pubkey, so there is no local-admin
+ * plaintext fallback. The handler (app side) resolves the pinned pubkey,
+ * verifies, and records into the capability table; the verdict's human code
+ * (204/403/503) maps to the wire encoding via lichen_tunnel_auth_coap_code().
+ * 5.03 = (5<<5)|3 = 0xA3 (COAP_MAKE_RESPONSE_CODE uses class<<5).
+ */
+BUILD_ASSERT(COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE == 0xA3, "5.03 wire encoding drifted");
+
+static int capability_announce_post(struct coap_resource *resource,
+				    struct coap_packet *request,
+				    struct sockaddr *addr, socklen_t addr_len)
+{
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
+	int ret;
+
+	if (s_handlers.capability_announce == NULL) {
+		return COAP_RESPONSE_CODE_NOT_FOUND;
+	}
+
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, server_plain_buf,
+					     sizeof(server_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!is_protected) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
+	}
+
+	/* Peer identity, canonical pubkey-IID space (U/L cleared), same as
+	 * tunnel_auth_post: the OSCORE context lookup keys on the wire-EUI64
+	 * space, so no flip is applied here. */
+	uint8_t sender_iid[8] = { 0 };
+	(void)lichen_tunnel_sender_iid_from_sockaddr(addr, (size_t)addr_len,
+						     sender_iid);
+
+	uint64_t now = (uint64_t)k_uptime_get() / MSEC_PER_SEC;
+	struct lichen_coap_capability_verdict verdict = { false, 403 };
+	s_handlers.capability_announce(payload, payload_len, true, sender_iid,
+				       now, &verdict);
+
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  lichen_tunnel_auth_coap_code(verdict.coap_code));
+}
+
+static const char * const capability_announce_path[] = { ".well-known", "capability-announce", NULL };
+
+COAP_RESOURCE_DEFINE(lichen_capability_announce, lichen_coap_server, {
+	.post = capability_announce_post,
+	.path = capability_announce_path,
+});
+#endif /* CONFIG_LICHEN_CAPABILITY_ANNOUNCE */
 
 /*
  * Define the CoAP service

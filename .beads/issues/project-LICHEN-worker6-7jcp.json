@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-7jcp",
+  "title": "route_hash over hop ADDRESSES (16B): Rust lichen-gateway tunnel_auth migration",
+  "description": "Spec changed (5muj): 06-security.md §8.11 route_hash now hashes full 16-byte hop ADDRESSES (concat hop[i].addr -\u003e SHA-256[0:16]), not 8-byte IIDs — a 02xx primary embeds no IID post-AddrForKey. rust/lichen-gateway/src/tunnel_auth.rs currently: route_hash(hops: \u0026[[u8; 8]]) -\u003e SHA-256 over hop bytes; DecapsulationRequest.route: \u0026[[u8; 8]]; egress check 'route.last() == claim.egress_iid'. Migrate: hops become \u0026[[u8; 16]] (full SRH hop addresses); route.last() compares the full 16-byte egress address against the claim's egress identity (egress_iid claim may need to become egress_addr [u8;16] or the comparison derives the address from the pinned egress pubkey via AddrForKey). Callers: gateway.rs DecapsulationRequest construction (must pass SRH 16-byte hops, not addr[8:16] slices), tunnel_auth_vectors.rs. COORDINATE with the shared-vector child (test/vectors/tunnel_authorization.json route_hash + identity address_hex fields must regenerate to AddrForKey form) — do not land against stale vectors. Discovered-from 5muj.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T08:42:25.094282182Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:42:25.094282182Z",
+  "labels": [
+    "rust",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-7jcp",
+      "depends_on_id": "project-LICHEN-worker6-5muj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T08:42:25.213755205Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

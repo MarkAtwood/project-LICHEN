@@ -179,7 +179,11 @@ once (spec/02-physical-link.md §4.2); it is never the source of the IID. The
 client is a generic IPv6 host and MAY use a static address or one derived from
 its device MAC; such an IID is link-interoperability only and is not a LICHEN
 node identity. `fe80::1` in examples throughout this document is illustrative
-shorthand for the node's link-local address.
+shorthand for the node's link-local address. Likewise, every
+`0200:1234:5678:9abc::...` address in this document is an illustrative
+placeholder, not a literal `AddrForKey` output: a real node primary is
+bit-packed `AddrForKey` bytes (spec/06-security.md §8.5) and has no
+human-friendly form.
 
 The node acts as default router for the client. Client's routing table:
 

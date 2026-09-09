@@ -59,58 +59,12 @@ COAP_SERVICE_DEFINE(fb_svc, NULL, &fb_svc_port, 0);
 static const char * const fb_path[] = { "fb", NULL };
 
 /*
- * Test-local replacement for lichen_coap_server.c's lichen_coap_respond()
- * (house pattern from tests/coap_config): mirrors the real implementation's
- * observable behavior — packet init, content-format option, payload — and
- * sends through the real coap_resource_send() capture path.
+ * lichen_coap_respond() is NOT stubbed here: this suite sets
+ * CONFIG_LICHEN_COAP_SERVER=y, so the real implementation
+ * (subsys/lichen/coap/coap_respond.c) links in and the plain-request
+ * assertions below exercise it directly. A local double would collide with
+ * it at link time (multiple definition).
  */
-int lichen_coap_respond(struct coap_resource *resource,
-			struct coap_packet *request,
-			struct sockaddr *addr, socklen_t addr_len,
-			uint8_t resp_code, uint16_t content_format,
-			const uint8_t *payload, size_t payload_len)
-{
-	static uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
-	struct coap_packet response;
-	uint8_t token[COAP_TOKEN_MAX_LEN];
-	uint16_t id;
-	uint8_t tkl;
-	int ret;
-
-	id = coap_header_get_id(request);
-	tkl = coap_header_get_token(request, token);
-
-	uint8_t type = (coap_header_get_type(request) == COAP_TYPE_CON)
-		       ? COAP_TYPE_ACK : COAP_TYPE_NON_CON;
-
-	ret = coap_packet_init(&response, buf, sizeof(buf), COAP_VERSION_1,
-			       type, tkl, token, resp_code, id);
-	if (ret < 0) {
-		return ret;
-	}
-
-	if (payload != NULL && payload_len > 0) {
-		ret = coap_append_option_int(&response, COAP_OPTION_CONTENT_FORMAT,
-					     content_format);
-		if (ret < 0) {
-			return ret;
-		}
-
-		ret = coap_packet_append_payload_marker(&response);
-		if (ret < 0) {
-			return ret;
-		}
-
-		ret = coap_packet_append_payload(&response, payload,
-						 (uint16_t)payload_len);
-		if (ret < 0) {
-			return ret;
-		}
-	}
-
-	return coap_resource_send(resource, &response, addr, addr_len, NULL);
-}
-
 static int fb_handler(struct coap_resource *resource, struct coap_packet *request,
 		      struct sockaddr *addr, socklen_t addr_len)
 {
@@ -295,8 +249,80 @@ ZTEST(coap_oscore_fallback, test_protected_response_roundtrip)
 					&code, dopts, &dopts_len, dpl, &dpl_len);
 	zassert_equal(ret, OSCORE_OK, "client unprotect failed: %d", ret);
 	zassert_equal(code, COAP_RESPONSE_CODE_CHANGED, "inner code mismatch");
+	zassert_equal(dopts_len, 0U, "cf=0 must omit the inner Content-Format");
 	zassert_equal(dpl_len, sizeof(payload) - 1U, "inner payload length mismatch");
 	zassert_mem_equal(dpl, payload, sizeof(payload) - 1U, "inner payload mismatch");
+}
+
+/*
+ * A nonzero content_format must survive protection: Content-Format is Class
+ * E under OSCORE, so the inner message decrypts with the encoded option
+ * (0xc1 0x3c = Content-Format: 60, application/cbor) — wire parity with the
+ * Rust gateway, which emits it on every protected response with cf != 0.
+ */
+ZTEST(coap_oscore_fallback, test_protected_response_carries_content_format)
+{
+	static const uint8_t token[] = {0x9A, 0x9B, 0x9C, 0x9D};
+	static const uint8_t piv[] = {0x15};
+	static const uint8_t payload[] = {0xa1, 0x01, 0x02}; /* CBOR body */
+
+	uint8_t req_buf[64];
+	uint8_t cap_buf[CAPTURE_BUF_LEN];
+	struct coap_packet req;
+	struct coap_packet resp;
+	struct coap_oscore_unprotect_result result;
+	size_t recv_len = 0;
+	int ret;
+
+	ret = build_request(&req, req_buf, sizeof(req_buf), 1007,
+			    token, sizeof(token));
+	zassert_equal(ret, 0, "request build failed: %d", ret);
+
+	memset(&result, 0, sizeof(result));
+	result.is_protected = true;
+	result.ctx = server_ctx;
+	memcpy(result.piv, piv, sizeof(piv));
+	result.piv_len = sizeof(piv);
+
+	ret = coap_oscore_respond_resource(&fb_res, &req,
+					   (struct sockaddr *)&client_addr,
+					   sizeof(client_addr), &result,
+					   COAP_RESPONSE_CODE_CHANGED, 60,
+					   payload, sizeof(payload));
+	zassert_equal(ret, 0, "respond failed: %d", ret);
+
+	ret = capture_response(&resp, cap_buf, sizeof(cap_buf), &recv_len,
+			       CAPTURE_TIMEOUT_MS);
+	zassert_true(ret, "no response captured");
+	zassert_true(has_oscore_option(&resp), "response must carry OSCORE option");
+
+	uint16_t ct_len16 = 0;
+	size_t ct_len;
+	const uint8_t *ct = coap_packet_get_payload(&resp, &ct_len16);
+
+	ct_len = ct_len16;
+	zassert_not_null(ct, "no ciphertext in response");
+
+	uint8_t oscore_opt[32];
+	size_t opt_len = sizeof(oscore_opt);
+	zassert_equal(coap_oscore_get_option(&resp, oscore_opt, &opt_len),
+		      OSCORE_OK, "missing OSCORE option");
+
+	uint8_t code = 0;
+	uint8_t dopts[32];
+	size_t dopts_len = sizeof(dopts);
+	uint8_t dpl[64];
+	size_t dpl_len = sizeof(dpl);
+	ret = oscore_unprotect_response(client_ctx, piv, sizeof(piv),
+					oscore_opt, opt_len, ct, ct_len,
+					&code, dopts, &dopts_len, dpl, &dpl_len);
+	zassert_equal(ret, OSCORE_OK, "client unprotect failed: %d", ret);
+	zassert_equal(code, COAP_RESPONSE_CODE_CHANGED, "inner code mismatch");
+	zassert_equal(dopts_len, 2U, "inner Content-Format option missing");
+	zassert_mem_equal(dopts, ((uint8_t[]){0xc1, 60}), 2U,
+			  "inner Content-Format must be 0xc1 0x3c");
+	zassert_equal(dpl_len, sizeof(payload), "inner payload length mismatch");
+	zassert_mem_equal(dpl, payload, sizeof(payload), "inner payload mismatch");
 }
 
 /*
@@ -394,7 +420,8 @@ ZTEST(coap_oscore_fallback, test_protect_failure_twice_drops_silently)
 
 	ret = coap_oscore_protect_response(server_ctx, piv, sizeof(piv), &req,
 					   COAP_RESPONSE_CODE_CHANGED,
-					   NULL, 0, &consume_resp, consume_buf,
+					   NULL, 0, NULL, 0,
+					   &consume_resp, consume_buf,
 					   sizeof(consume_buf));
 	zassert_equal(ret, 0, "correlation consume failed: %d", ret);
 

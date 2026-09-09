@@ -237,10 +237,9 @@ impl CapabilityAnnouncement {
 
 /// Derive the announcer IID from a public key.
 ///
-/// The IID is the LICHEN SHA-512 link-local IID (`iid_from_pubkey_bytes`),
-/// independent of the routable address. After the upstream-AddrForKey
-/// migration the routable address's lower 64 bits are no longer the IID, so
-/// the IID MUST be derived directly, not extracted from `ygg_addr_from_pubkey`.
+/// The IID is the canonical SHA-512 derivation (i72x.2): upstream AddrForKey
+/// does not embed the IID, so it must not be sliced out of the routable
+/// address.
 fn pubkey_to_iid(pubkey: &[u8; 32]) -> [u8; 8] {
     lichen_core::addr::iid_from_pubkey_bytes(pubkey)
 }

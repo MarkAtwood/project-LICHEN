@@ -40,8 +40,12 @@ static K_MUTEX_DEFINE(s_mutex);
 /*
  * App identity is usable without CONFIG_LICHEN_IPV6 or
  * CONFIG_LICHEN_COAP_KEYS, so its address derivation must not depend on
- * translation units owned by either optional feature.  Both addresses use
- * the canonical SHA-512 identity digest from specs 6.1 and 8.5/8.7.
+ * translation units owned by either optional feature.  The IID uses the
+ * canonical SHA-512 identity digest from specs 6.1 and 8.5/8.7; the
+ * routable address delegates to the single C derivation site
+ * (lichen_identity_ygg_addr_from_ed25519, link module, always built) so
+ * app identity cannot diverge from the link path's upstream Yggdrasil
+ * AddrForKey (spec/decisions.jsonl upstream-yggdrasil-addressing).
  */
 static void derive_addresses(
 	const uint8_t pubkey[_Nonnull LICHEN_APP_IDENTITY_PUBLIC_KEY_LEN],
@@ -53,12 +57,11 @@ static void derive_addresses(
 	crypto_sha512(hash, pubkey, LICHEN_APP_IDENTITY_PUBLIC_KEY_LEN);
 	memcpy(iid, hash, LICHEN_APP_IDENTITY_EUI64_LEN);
 	iid[0] &= (uint8_t)~0x02U;
-
-	ygg_addr[0] = 0x02U;
-	memcpy(&ygg_addr[1], hash, 7U);
-	memcpy(&ygg_addr[8], hash, 8U);
-	ygg_addr[8] &= (uint8_t)~0x02U;
 	crypto_wipe(hash, sizeof(hash));
+
+	/* Upstream AddrForKey, NOT the rejected SHA-512 native profile.
+	 * Fails only on NULL inputs, excluded by the _Nonnull contract. */
+	(void)lichen_identity_ygg_addr_from_ed25519(pubkey, ygg_addr);
 }
 
 static int copy_string(char *dst, size_t dst_len, const char *src)

@@ -25,7 +25,7 @@ use lichen_core::loadng::{Idle, RouteDiscovery, Rreq, Searching};
 pub enum AddressClass {
     /// fe80::/10 - direct neighbor, one hop away.
     LinkLocal,
-    /// Native 0200::/8 (plus operator-configured mesh prefixes) - peer in mesh.
+    /// Native 0200::/8 (plus configured mesh prefixes) - peer in mesh.
     MeshLocal,
     /// Other GUA or unknown - route via border router.
     External,
@@ -176,7 +176,7 @@ pub struct HybridRouter {
     rpl_parent: Option<[u8; 16]>,
     /// Whether this node is joined to an RPL DODAG.
     rpl_joined: bool,
-    /// Mesh-local prefixes (operator-configured; no implicit ULA entry).
+    /// Configured mesh-local prefixes.
     mesh_prefixes: Vec<MeshPrefix>,
     /// Packets waiting for route discovery.
     pending_queue: std::collections::HashMap<[u8; 16], VecDeque<PendingPacket>>,
@@ -227,10 +227,6 @@ impl HybridRouter {
         if addr[0] == 0x02 {
             return AddressClass::MeshLocal;
         }
-
-        // No implicit ULA classification: fd00::/8 has no LICHEN routing role
-        // under the settled no-ULA model; it falls through to External unless
-        // an operator explicitly configures a matching mesh prefix below.
 
         // Check configured mesh prefixes
         for prefix in &self.mesh_prefixes {
@@ -283,8 +279,8 @@ impl HybridRouter {
 
         // Local paths are always preferred for native addresses.  When local
         // discovery is unavailable/exhausted, use the identity-preserving
-        // Yggdrasil path by forwarding up the RPL DODAG.  Configured prefixes
-        // have no implicit Yggdrasil fallback.
+        // Yggdrasil path by forwarding up the RPL DODAG.  Configured
+        // prefixes have no implicit Yggdrasil fallback.
         if dst[0] == 0x02 {
             return self.route_external();
         }
@@ -690,22 +686,14 @@ mod tests {
     }
 
     #[test]
-    fn classify_ula_is_external() {
-        // Regression pin: fd00::/8 has no LICHEN routing role under the
-        // settled no-ULA model (upstream-yggdrasil-addressing, zt3c.7); it
-        // must classify External, not MeshLocal.
-        let router = HybridRouter::new(link_local(1));
-        assert_eq!(router.classify_address(&ula(2)), AddressClass::External);
-    }
-
-    #[test]
-    fn classify_ula_with_configured_prefix_is_mesh_local() {
-        // The generic MeshPrefix mechanism still admits ULA when an operator
-        // explicitly configures it.
+    fn classify_ula_is_external_without_configured_prefix() {
+        // No-ULA model (zt3c.7, spec/05-routing.md §7.2): fd00::/8 has no
+        // hardcoded mesh-local status. It is external unless an operator
+        // configures a mesh prefix covering it.
         let mut router = HybridRouter::new(link_local(1));
-        let mut prefix = ula(0);
-        prefix[15] = 0;
-        router.add_mesh_prefix(prefix, 64);
+        assert_eq!(router.classify_address(&ula(2)), AddressClass::External);
+
+        router.add_mesh_prefix(ula(0), 8);
         assert_eq!(router.classify_address(&ula(2)), AddressClass::MeshLocal);
     }
 
@@ -754,14 +742,10 @@ mod tests {
     }
 
     #[test]
-    fn route_mesh_local_no_gradient_is_queue() {
-        // Configured-prefix mesh-local destination with no gradient queues
-        // for LOADng discovery.
+    fn route_mesh_local_configured_prefix_no_gradient_is_queue() {
         let mut router = HybridRouter::new(link_local(1));
-        let mut prefix = gua(0);
-        prefix[15] = 0;
-        router.add_mesh_prefix(prefix, 64);
-        let result = router.route(&gua(2), 1000);
+        router.add_mesh_prefix(ula(0), 8);
+        let result = router.route(&ula(2), 1000);
         assert_eq!(result.decision, RouteDecision::Queue);
     }
 
@@ -833,11 +817,11 @@ mod tests {
     #[test]
     fn route_mesh_local_with_gradient_is_forward() {
         let mut router = HybridRouter::new(link_local(1));
-        let ygg = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
+        router.add_mesh_prefix(ula(0), 8);
 
         // Install gradient
         let entry = GradientEntry {
-            destination: ygg,
+            destination: ula(2),
             next_hop: link_local(10),
             hop_count: 3,
             seq_num: 100,
@@ -847,7 +831,7 @@ mod tests {
         };
         router.gradient_table.update(entry, 1000);
 
-        let result = router.route(&ygg, 1000);
+        let result = router.route(&ula(2), 1000);
         assert_eq!(result.decision, RouteDecision::Forward);
         assert_eq!(result.next_hop, Some(link_local(10)));
     }

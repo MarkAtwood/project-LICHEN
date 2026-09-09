@@ -17,6 +17,27 @@
 | Routing attacks | Link-layer signatures REQUIRED on all RPL control frames (DIO/DAO/DIS); RPL secure mode optional |
 | DoS | Rate limiting, admission control |
 
+**Broadcast budget key not authenticated end-to-end (acknowledged ceiling):**
+the 04-network.md §6.3.3 broadcast relay budget is keyed on the packet's
+source IID field, which the limiter never binds to any authenticated
+identity. Link-layer Schnorr signatures are per-hop (relays re-sign with
+their own keys, 02-physical-link.md:305-308); OSCORE (pairwise or group)
+secures CoAP payloads, not the network-layer source field; and DAO-origin
+authentication is DAO-only (§8.4). End-to-end-signed broadcast classes do
+exist — SOS origin signatures (12-apps.md §18.4.1) and self-authenticating
+announces (05-routing.md §9.2) — but the §6.3.3 limiter does not consult
+them; it keys on the unauthenticated inner source field. A radio adversary
+therefore gets fresh budget identities for free by inventing arbitrary source
+IIDs under a single existing keypair (no new keypair needed), and can also
+spoof a victim's source to exhaust that victim's budget; IID spoofing
+additionally pressures the un-capped §6.3.3 relay-state table. Residual risk:
+per-hop budgets still bound the blast radius any single claimed identity can
+cause through one honest relay, so the budgets remain worthwhile as a
+rate-of-amplification limiter — not as proof of origin. This ceiling is
+acknowledged here; it is not closed at this layer (the limiter would have to
+key on a verified end-to-end identity, which §8.4 scopes to DAO only).
+Coordinate any change with the open 06-security addressing-consistency audit.
+
 ### 8.2. Security Layers
 
 ```
@@ -205,7 +226,7 @@ For managed fleets, border router can provision keypairs. Nodes still derive IID
 1. Node boots in commissioning mode
 2. Connects to BR via secure channel (USB/BLE/LCI)
 3. BR generates Ed25519 keypair
-4. BR transmits private key + pubkey (node derives IID/02xx/Yggdrasil addr from pubkey)
+4. BR transmits private key + pubkey (node derives the IID and the 0200::/8 `AddrForKey` primary from pubkey)
 5. Node stores keypair, derives addresses, exits commissioning
 6. BR records (derived IID, PubKey) in trust anchor list
 7. BR distributes anchors to other nodes via CoAP
@@ -350,6 +371,14 @@ of the NEW public key.
 ```
 
 Integer keys minimize payload size. The payload is the serialized CBOR map.
+
+**Abuse-state non-continuity (acknowledged):** the attestation proves key
+succession only; it carries NO application-layer abuse state. Rate-limit
+buckets and reputation scores keyed on IID (e.g. the SOS 3/hour bucket and
+soft-blacklist in 12-apps.md §18.4.1) do not transfer to the new key — a node
+that rotates starts with a fresh bucket and clean score. This evasion window
+is accepted: closing it would require carrying signed abuse history in the
+attestation, which §8.7.4 deliberately does not do.
 
 **Signature Computation (COSE_Sign1):**
 
@@ -759,13 +788,23 @@ Integer keys minimize payload size. The payload is the serialized CBOR map.
 **Route Hash Computation:**
 
 ```
-route_bytes = concat(hop[0].iid, hop[1].iid, ..., hop[n].iid)
+route_bytes = concat(hop[0].addr, hop[1].addr, ..., hop[n].addr)
 route_hash  = SHA-256(route_bytes)[0:16]
 ```
 
-Each `hop[i].iid` is the 8-byte IID from the transit node's address, in
-source-route order (first hop to last hop / egress). This matches the
-order in the IPv6 Source-Route Header.
+Each `hop[i].addr` is the full 16-byte primary 02xx address of the transit
+node as reconstructed from the IPv6 Source-Route Header, in source-route
+order (first hop to last hop / egress). This matches the order and the
+16-byte hop values carried in the IPv6 Source-Route Header (RFC 6554). The
+hash input is the hop ADDRESSES, not IIDs: under the AddrForKey profile
+(§8.5/§8.7) a primary 02xx address embeds no IID, so slicing 8 bytes off it
+yields a value with no identity meaning and would break the
+root-signer/egress-validator binding. (The IID remains a real identity —
+the SHA-512(pubkey) link-local derivation used for `kid` and `egress_iid`
+below — it is just not recoverable from the 02xx address.) Hashing the full
+addresses is deterministic for both root and egress without any pubkey
+lookup, and removes the 64-bit IID-collision false loop-rejection inherent
+in 8-byte hop comparison.
 
 **Signature Computation (COSE_Sign1):**
 
@@ -1209,6 +1248,30 @@ Gateway decides policy (who gets what facts) out of band.
 | `lichen:channel` | [tstr] | Authorized channel/group IDs |
 | `lichen:quota` | uint | Monthly bytes (0=unlimited) |
 | `lichen:sponsored` | tstr | "Traffic sponsored by X" |
+| `lichen:expiry` | uint | Unix timestamp after which the fact is invalid |
+| `lichen:seq` | uint | Strictly increasing per-issuer sequence number |
+
+**Freshness and Revocation:**
+
+A fact carrying no freshness claim is mesh-lifetime only: it cannot be
+revoked or superseded while the issuing gateway's key remains trusted.
+Gateways SHOULD therefore include `lichen:expiry` and `lichen:seq` on every
+issued fact. A gateway revokes a grant by issuing a replacement fact with a
+higher `lichen:seq` and ceasing to renew it; verifiers reject a fact whose
+`lichen:expiry` is not greater than the current time, and whose `lichen:seq`
+is not strictly greater than the highest seq previously seen from the same
+issuer. Verifiers MUST fail closed: a fact carrying `lichen:expiry` cannot
+be accepted without a current time to check against, and a fact carrying
+`lichen:seq` cannot be accepted without a per-issuer sequence cache.
+
+On first contact with an issuer the cache has no entry; the verifier treats
+the empty cache as "highest seq = -1", accepts any non-negative seq, and
+seeds the cache from the verified fact. A verifier MUST NOT derive the
+comparison baseline from the fact being verified. The per-issuer cache MUST
+be updated only after the fact's signature verifies, and the update MUST be
+atomic with acceptance: updating from an unverified fact lets an
+unauthenticated sender poison the cache with a large seq and deny service to
+the legitimate issuer.
 
 **Emergency Services Authorization:**
 
@@ -1242,7 +1305,9 @@ COSE_Sign with multiple COSE_Signature entries
 **Validity:**
 
 Local facts are mesh-lifetime. Gateway restart or root re-election
-invalidates cached facts; nodes re-request from new gateway.
+invalidates cached facts; nodes re-request from new gateway. Within a mesh
+lifetime, `lichen:expiry` and `lichen:seq` (above) provide revocation and
+supersession without waiting for infrastructural invalidation.
 
 #### 8.13.2. CA Credentials (Portable)
 
