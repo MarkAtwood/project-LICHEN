@@ -195,7 +195,7 @@ impl Node {
             // ULA (0xfd) is not answered: under the single-primary model
             // (spec/05-routing.md:30) ULA is external, not mesh-local (i72x.4).
             // The 2000::/3 arm is equally promiscuous; both arms become an
-            // exact check against this node's 0200::/7 AddrForKey identity
+            // exact check against this node's 0200::/8 AddrForKey identity
             // once i72x.2 lands the NodeId accessor (tracked in beads).
             if dst_bytes == self.node_id.link_local_addr().0
                 || (dst_bytes[0] & 0xe0) == 0x20
