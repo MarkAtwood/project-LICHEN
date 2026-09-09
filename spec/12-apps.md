@@ -720,12 +720,32 @@ Each node enforces per-source SOS rate limits:
 |-----------|-------|-----------|
 | SOS cooldown | 10 minutes | Prevents accidental spam |
 | Max SOS per hour | 3 | Limits intentional abuse |
-| Burst allowance | 2 | Allows rapid updates to same SOS |
+| Burst allowance | 2 | Rate-limiter headroom for the first 2 SOS per window (see note) |
 
 Nodes track (source IID, SOS count, last SOS uptime). Rate limiting uses
 monotonic uptime rather than wall-clock time to ensure enforcement works even
 when wall-clock is unavailable. An SOS from a node that exceeds rate limits
 is dropped and logged but not relayed.
+
+Two acknowledged limitations of this tuple (tracking gaps, not new
+requirements):
+
+- **No SOS-ID/seq dimension.** The tuple carries (origin, count, uptime) only;
+  the §18.4.2 payload `seq` field is not tracked by the limiter, so updates
+  to an existing SOS and distinct SOSes are indistinguishable to it. The
+  "burst" row above therefore means limiter headroom for the first 2 SOS of
+  any kind per window, not per-incident updates. Tracking `(origin, seq)` is
+  a future refinement; it is NOT required by this section. Consequence:
+  cancel and update messages (§18.4.2 `seq`, §18.4.4) share the same bucket —
+  a node that exhausts its 3/hour budget may be unable to withdraw an active
+  SOS until refill, leaving it visible mesh-wide until the §18.4.6 timeout.
+  Senders SHOULD reserve headroom for a cancel (guidance, not a requirement).
+- **Key rotation resets abuse state.** Rotation (06-security.md §8.7.4)
+  derives and pins a new identity, so the new IID starts with a fresh 3/hour
+  bucket and a clean soft-blacklist score; an abuser can rotate to evade.
+  This evasion window is accepted and documented here rather than closed:
+  rotation attestations carry no abuse-state hand-over. (Acknowledged;
+  see §8.7.4 for the attestation shape.)
 
 **Soft Blacklist (RECOMMENDED):**
 

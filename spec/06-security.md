@@ -351,6 +351,14 @@ of the NEW public key.
 
 Integer keys minimize payload size. The payload is the serialized CBOR map.
 
+**Abuse-state non-continuity (acknowledged):** the attestation proves key
+succession only; it carries NO application-layer abuse state. Rate-limit
+buckets and reputation scores keyed on IID (e.g. the SOS 3/hour bucket and
+soft-blacklist in 12-apps.md §18.4.1) do not transfer to the new key — a node
+that rotates starts with a fresh bucket and clean score. This evasion window
+is accepted: closing it would require carrying signed abuse history in the
+attestation, which §8.7.4 deliberately does not do.
+
 **Signature Computation (COSE_Sign1):**
 
 Per RFC 9052, the Sig_structure for COSE_Sign1:
