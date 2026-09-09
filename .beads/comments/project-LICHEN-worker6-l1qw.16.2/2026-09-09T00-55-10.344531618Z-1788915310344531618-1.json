@@ -1,7 +1,0 @@
-{
-  "id": "1788915310344531618-1",
-  "issue_id": "project-LICHEN-worker6-l1qw.16.2",
-  "author": "Mark Atwood",
-  "text": "worker5 2026-09-08: claimed then released — core scope is landed and verified (child .16.2.2 closed with 252/252 passing, legacy raw-map encode/decode deleted); sole open child .16.2.6 is blocked on human bead ljgs (SCHC frame-budget adjudication). Parent cannot close until ljgs is adjudicated; no agent-actionable work remains here.",
-  "created_at": "2026-09-09T00:55:10.344531618Z"
-}

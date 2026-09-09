@@ -64,9 +64,16 @@ worker_cmd() {  # worker8 is the hard-bead lane on a stronger model
 }
 while :; do
     if [ -f "$REPO_ROOT/.fleet-paused" ]; then
-        echo "driver PAUSED: $(head -1 "$REPO_ROOT/.fleet-paused")"
-        sleep $((CYCLE_MIN * 60))
-        continue
+        PAUSE_AGE=$(( $(date +%s) - $(stat -c %Y "$REPO_ROOT/.fleet-paused") ))
+        if [ "$PAUSE_AGE" -gt 3600 ]; then
+            rm -f "$REPO_ROOT/.fleet-paused"
+            BEADS_DIR="$BEADS_DIR" bd create --title="[ALARM] Pause expired after 60 min - auto-resumed" --description="A fleet-pause marker outlived 60 minutes (age: ${PAUSE_AGE}s). The pause protocol exists for short repairs; an orphaned pause is pure waste (2026-09-09: 2 hours lost this way). Auto-resumed; the operator who paused should verify their repair landed." -t bug -p 1 --json >/dev/null 2>&1
+            echo "ALARM: pause expired (${PAUSE_AGE}s) — auto-resumed"
+        else
+            echo "driver PAUSED: $(head -1 "$REPO_ROOT/.fleet-paused") ($((PAUSE_AGE/60))m old)"
+            sleep $((CYCLE_MIN * 60))
+            continue
+        fi
     fi
     CREDITS=$(remaining_credits)
     echo "── driver $(date '+%F %T') credits=$CREDITS ──"
@@ -125,6 +132,55 @@ print(n)" 2>/dev/null || echo 0)
         echo "   ALARM: fleet outcome stalled — bead filed"
     elif [ "${DAY_CLOSES:-0}" -ge 5 ]; then
         rm -f "$REPO_ROOT/.fleet-stalled"
+    fi
+    # Waste alarm: function-per-dollar. Burn over 24h ÷ closures over 24h.
+    # If cost-per-close exceeds $3 (2.5x the ~$1.20 baseline), that is the
+    # signature of spend buying no function — the dead-week signature.
+    BURN_24H=$(python3 - <<'BURN'
+import json, os, urllib.request
+try:
+    c = json.load(open(os.path.expanduser("~/.config/opencode/opencode.json")))
+    def find(d):
+        if isinstance(d, dict):
+            for k, v in d.items():
+                if k == "apiKey" and isinstance(v, str) and v.startswith("sk-or-"):
+                    return v
+                r = find(v)
+                if r: return r
+        elif isinstance(d, list):
+            for x in d:
+                r = find(x)
+                if r: return r
+        return None
+    key = find(c)
+    req = urllib.request.Request("https://openrouter.ai/api/v1/credits", headers={"Authorization": "Bearer " + key})
+    d = json.load(urllib.request.urlopen(req, timeout=30)).get("data", {})
+    # total_usage is lifetime; snapshot it daily to derive the delta
+    snap_path = "/tmp/fleet-driver-state/burn-snapshot.json"
+    now_s = __import__("time").time()
+    prev = json.load(open(snap_path)) if os.path.exists(snap_path) else None
+    cur = {"usage": float(d.get("total_usage", 0)), "ts": now_s}
+    json.dump(cur, open(snap_path, "w"))
+    if prev and (now_s - prev["ts"]) > 20 * 3600:  # ~24h window
+        burn = max(0.0, cur["usage"] - prev["usage"])
+        print(f"{burn:.2f}")
+    else:
+        print("unknown")
+except Exception:
+    print("unknown")
+BURN
+)
+    if [ "$BURN_24H" != "unknown" ] && [ "${DAY_CLOSES:-0}" -gt 0 ]; then
+        CPC=$(python3 -c "print(f'{$BURN_24H/$DAY_CLOSES:.2f}')")
+        echo "   cost-per-close (24h): \$${CPC} (burn \$${BURN_24H} / ${DAY_CLOSES})"
+        OVER=$(python3 -c "print(1 if $BURN_24H/$DAY_CLOSES > 3.0 else 0)")
+        if [ "$OVER" = "1" ] && [ ! -f "$REPO_ROOT/.fleet-waste" ]; then
+            date '+%F %T' > "$REPO_ROOT/.fleet-waste"
+            BEADS_DIR="$BEADS_DIR" bd create --title="[ALARM] Waste: cost-per-close \$${CPC} exceeds \$3" --description="24h burn \$$BURN_24H / $DAY_CLOSES closures = \$${CPC} per close (baseline ~\$1.20). Spend is buying less than half its normal function — the dead-week signature. Check: fleet stall? incident repair eating cycles? failed merge sessions? self-modification gone wrong?" -t bug -p 1 --json >/dev/null 2>&1
+            echo "   ALARM: waste signature — \$${CPC}/close"
+        elif [ "$OVER" = "0" ]; then
+            rm -f "$REPO_ROOT/.fleet-waste"
+        fi
     fi
 
     if [ "$READY" -eq 0 ]; then

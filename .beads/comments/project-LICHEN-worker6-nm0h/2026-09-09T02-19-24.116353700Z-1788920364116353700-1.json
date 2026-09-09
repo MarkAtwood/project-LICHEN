@@ -1,7 +1,0 @@
-{
-  "id": "1788920364116353700-1",
-  "issue_id": "project-LICHEN-worker6-nm0h",
-  "author": "Mark Atwood",
-  "text": "d42k implementation (worker2, 2026-09-08): pin now covers HEAD id + symbolic-ref + replace-ref purge + rr-cache manifest/content (in-memory, not /tmp — same-UID forgeability) + MERGE_HEAD ancestry check + rewind self-verification (fail-stop). Reviewer passes on the implementation surfaced these residuals NOT already in your list: (a) KILL-PARENT: session can pkill the sync script itself (same UID) after committing — guards only run if the guard process survives; needs watchdog or different-UID session wrapper. (b) DELAYED MOVER TOCTOU: setsid background process (sleep 30; git update-ref refs/heads/main \u003cevil\u003e) fires after all gates pass; true fix is killing the session's process group after timeout returns (timeout only signals the direct child). (c) .git IDENTITY SWAP: pin reads session-mutable repo state; a session that swaps .git for a crafted dir controls the pin's ref reads — verify git rev-parse --absolute-git-dir and .git-is-directory pre/post session. (d) NO FLOCK: two concurrent sync runs interleave pins/rewinds/rr-cache restores. (e) stray tmp-session branch litter after a symref attack (reported, not deleted, to avoid racing legit worker pushes).",
-  "created_at": "2026-09-09T02:19:24.1163537Z"
-}

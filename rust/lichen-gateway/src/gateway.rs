@@ -894,6 +894,29 @@ impl fmt::Debug for Gateway {
     }
 }
 
+/// Encode the CoAP Content-Format option (option 12, delta 12) for a secure
+/// response. Returns the encoded length written into `buf`.
+///
+/// CoAP uint option values use their shortest big-endian representation
+/// (RFC 7252 §3.2). A `content_format` of 0 means "no content format": the
+/// option is OMITTED (length 0) for byte-parity with C's `lichen_coap_respond`
+/// and `coap_oscore.h` ("0 for none"), which never emit a present-but-empty
+/// option. Encoding 0 as a zero-length `0xc0` option would be wrong — an empty
+/// uint decodes as value 0 = `text/plain;charset=utf-8`.
+fn encode_content_format_option(content_format: u16, buf: &mut [u8; 3]) -> usize {
+    if content_format == 0 {
+        0
+    } else if content_format <= u16::from(u8::MAX) {
+        buf[0] = 0xc1;
+        buf[1] = content_format as u8;
+        2
+    } else {
+        buf[0] = 0xc2;
+        buf[1..].copy_from_slice(&content_format.to_be_bytes());
+        3
+    }
+}
+
 impl Gateway {
     /// Create a new root gateway with the given identity.
     ///
@@ -1569,21 +1592,14 @@ impl Gateway {
         };
         // Content-Format is CoAP option 12. It is Class E under OSCORE and
         // therefore belongs in the encrypted inner message. CoAP uint option
-        // values use their shortest big-endian representation, including an
-        // empty value for zero.
+        // values use their shortest big-endian representation. A content_format
+        // of 0 means "no content format" and the option is OMITTED entirely —
+        // byte-parity with C's lichen_coap_respond / coap_oscore.h ("0 for
+        // none"), which never emits a present-but-empty 0xc0 option (that would
+        // decode as value 0 = text/plain;charset=utf-8).
         let mut content_format_option = [0u8; 3];
-        let content_format_option_len = if response.content_format == 0 {
-            content_format_option[0] = 0xc0;
-            1
-        } else if response.content_format <= u16::from(u8::MAX) {
-            content_format_option[0] = 0xc1;
-            content_format_option[1] = response.content_format as u8;
-            2
-        } else {
-            content_format_option[0] = 0xc2;
-            content_format_option[1..].copy_from_slice(&response.content_format.to_be_bytes());
-            3
-        };
+        let content_format_option_len =
+            encode_content_format_option(response.content_format, &mut content_format_option);
         let response_data = SecureResponseData {
             code: MessageCode(response.code),
             options: &content_format_option[..content_format_option_len],
@@ -2362,6 +2378,28 @@ mod tests {
 
         std::fs::remove_dir_all(path).unwrap();
         std::fs::remove_dir_all(floor_path).unwrap();
+    }
+
+    #[test]
+    fn content_format_zero_omits_the_option() {
+        let mut buf = [0u8; 3];
+        // cf 0 = "no content format": option OMITTED (byte-parity with C),
+        // never a present-but-empty 0xc0 that decodes as text/plain.
+        assert_eq!(encode_content_format_option(0, &mut buf), 0);
+
+        // Single-byte values use delta 12 + len 1 (0xc1).
+        assert_eq!(encode_content_format_option(60, &mut buf), 2);
+        assert_eq!(&buf[..2], &[0xc1, 60]);
+        assert_eq!(encode_content_format_option(112, &mut buf), 2);
+        assert_eq!(&buf[..2], &[0xc1, 112]);
+        assert_eq!(encode_content_format_option(u16::from(u8::MAX), &mut buf), 2);
+        assert_eq!(&buf[..2], &[0xc1, 0xff]);
+
+        // Values above u8::MAX use delta 12 + len 2 (0xc2), big-endian.
+        assert_eq!(encode_content_format_option(256, &mut buf), 3);
+        assert_eq!(&buf[..3], &[0xc2, 0x01, 0x00]);
+        assert_eq!(encode_content_format_option(u16::MAX, &mut buf), 3);
+        assert_eq!(&buf[..3], &[0xc2, 0xff, 0xff]);
     }
 
     #[test]

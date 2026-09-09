@@ -1,7 +1,0 @@
-{
-  "id": "1788917236595841395-1",
-  "issue_id": "project-LICHEN-worker6-l1qw.20.5",
-  "author": "Mark Atwood",
-  "text": "Reviewer-corroborated specifics (3x codereview on the Rust twin l1qw.20.4, all passes flagged this independently): (1) divergence is BIDIRECTIONAL — SlotClaimReplayCache.check_and_update (python/src/lichen/gateway/slot_claim.py:379-393) high-waters on superframe_id only, so Python ACCEPTS cross-superframe seq rollback (spec violation) AND REJECTS a same-superframe loser-reclaim with advanced claim_seq (breaks GCP-6.3 step 3 loser-reclaim flow); (2) call site python/src/lichen/gateway/slot_claim.py:492 passes claim.superframe_id instead of claim.claim_seq; (3) docstring at slot_claim.py:363 claims it 'mirrors Rust slot.rs last_seen semantics' — stale once 20.4 lands; (4) with Rust now spec-conformant, mixed Py/Rust deployments reach OPPOSITE verdicts on the same wire claim. Note: nwjl.6 (old cross-validation gate) is closed — no coverage conflict. C parity ref: coap_slot_coord.c:454 already pure-seq.",
-  "created_at": "2026-09-09T01:27:16.595841395Z"
-}

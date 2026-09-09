@@ -1,7 +1,0 @@
-{
-  "id": "1788916804079520257-1",
-  "issue_id": "project-LICHEN-3ffq",
-  "author": "Mark Atwood",
-  "text": "Concrete instance found during utw0 verification: the extract+flip convention (coap_oscore.c:421-427, coap_keys.c:143-144, coap_server.c:648-653) applied to key-derived link-local IIDs (U/L-cleared per lichen_pubkey_to_iid) yields U/L-SET values, which cannot equal the U/L-cleared root_iid bound in gateway main.c:193-198 — filed as project-LICHEN-worker6-jzx5 (tunnel-auth WRONG_ROOT denials). This bead's doc gap and that correctness bug share the same root cause: the XOR helper's input contract (MAC vs already-derived IID) is nowhere stated.",
-  "created_at": "2026-09-09T01:20:04.079520257Z"
-}

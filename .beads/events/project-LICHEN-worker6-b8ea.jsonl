@@ -1,4 +1,0 @@
-{"id":"01a0839d-bfcb-7710-9092-bd6fb95117ca","issue_id":"project-LICHEN-worker6-b8ea","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-09T00:42:28.68346497Z"}
-{"id":"01a0839d-bfcf-796e-9890-e65cbb1ac27e","issue_id":"project-LICHEN-worker6-b8ea","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-09T00:42:28.68762043Z"}
-{"id":"01a0839d-bfd3-798b-bb09-f50f09ecc5ba","issue_id":"project-LICHEN-worker6-b8ea","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: networking","created_at":"2026-09-09T00:42:28.691627849Z"}
-{"id":"01a0839d-bfd7-77d5-b96c-3f49b8f0d165","issue_id":"project-LICHEN-worker6-b8ea","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: security","created_at":"2026-09-09T00:42:28.695515866Z"}
