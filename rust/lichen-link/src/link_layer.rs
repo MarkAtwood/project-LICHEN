@@ -42,6 +42,8 @@ pub enum LinkRxError {
     TooShort(TooShort),
     /// A previously-pinned IID appeared with a different public key.
     KeyChange,
+    /// An authenticated frame uses an address that is not local to this node.
+    NotForUs,
     /// The caller-supplied reception timestamp moved backwards.
     ClockRegression,
     /// The caller mixed incompatible reception clock units in one link.
@@ -83,6 +85,7 @@ impl std::fmt::Display for LinkRxError {
             Self::Replay => write!(f, "replay detected"),
             Self::TooShort(e) => write!(f, "payload {}", e),
             Self::KeyChange => write!(f, "key change detected"),
+            Self::NotForUs => write!(f, "frame is not addressed to this node"),
             Self::ClockRegression => write!(f, "reception clock moved backwards"),
             Self::ClockModeMismatch => write!(f, "reception clock mode changed"),
         }
@@ -1141,6 +1144,14 @@ impl LinkLayer {
             return Err(LinkRxError::UnknownSender);
         }
 
+        if frame.addr_mode == AddrMode::Short
+            || (frame.addr_mode == AddrMode::Extended && frame.dst_addr != self.local_eui64())
+        {
+            #[cfg(feature = "log")]
+            debug!("link_layer: frame is not addressed to this node");
+            return Err(LinkRxError::NotForUs);
+        }
+
         let old_state = self.peer_auth_state(&sender.iid);
         match self.pinned.get(&sender.iid) {
             Some(pinned) if pinned.pubkey != sender.pubkey => {
@@ -1392,6 +1403,60 @@ mod tests {
                 &mut wire,
             ),
             Err(FrameError::AddrLenMismatch)
+        );
+    }
+
+    #[test]
+    fn receive_rejects_authenticated_frame_for_another_extended_address() {
+        let alice = Identity::from_seed(Seed::new([0x01u8; 32]));
+        let mut bob = make_ll(0x02);
+        bob.add_peer(PeerIdentity::from_pubkey(alice.pubkey));
+        let alice_layer = LinkLayer::new(alice);
+        let mut wire = [0u8; 256];
+
+        let length = alice_layer
+            .build_frame_with_addr_mode(
+                1,
+                seq(1),
+                &[0xaa; 8],
+                b"not for bob",
+                AddrMode::Extended,
+                &mut wire,
+            )
+            .unwrap();
+        assert!(matches!(
+            bob.receive_frame(&wire[..length]),
+            Err(LinkRxError::NotForUs)
+        ));
+
+        let length = alice_layer
+            .build_frame_with_addr_mode(
+                1,
+                seq(1),
+                &[0xbb, 0xcc],
+                b"unknown short address",
+                AddrMode::Short,
+                &mut wire,
+            )
+            .unwrap();
+        assert!(matches!(
+            bob.receive_frame(&wire[..length]),
+            Err(LinkRxError::NotForUs)
+        ));
+
+        let length = alice_layer
+            .build_frame_with_addr_mode(
+                1,
+                seq(1),
+                &bob.local_eui64(),
+                b"for bob",
+                AddrMode::Extended,
+                &mut wire,
+            )
+            .unwrap();
+        assert_eq!(
+            bob.receive_frame(&wire[..length]).unwrap().payload(),
+            b"for bob"
         );
     }
 
