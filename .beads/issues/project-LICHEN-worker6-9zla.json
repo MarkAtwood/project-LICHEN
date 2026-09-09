@@ -1,0 +1,18 @@
+{
+  "id": "project-LICHEN-worker6-9zla",
+  "title": "Radio-owned identity and optional portability",
+  "description": "Record Mark's decision that normal messaging identity belongs to the radio, not the attached phone. Optional identity-key export/import may be supported by radios in future, but is explicitly deferred. Scope now is policy/LCI/agent guidance and deferred task tracking; no key movement, export endpoint, automatic migration or runtime changes.",
+  "acceptance_criteria": "Radio-owned baseline is explicit and consistent with upstream Yggdrasil identity and node-owned UI state. Changing clients does not transfer/regenerate radio identity. Optional key portability is tracked as deferred and is not a baseline requirement.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:30:47.116024603Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:30:47.116024603Z",
+  "labels": [
+    "spec",
+    "identity",
+    "lci"
+  ]
+}
