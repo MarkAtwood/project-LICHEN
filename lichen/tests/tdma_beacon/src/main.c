@@ -66,6 +66,32 @@ static void test_reserved_flag_rejected(void)
 	       LICHEN_BEACON_RESERVED_FLAG_SET);
 }
 
+/* Vector beacon_header_num_slots_zero_rejected from
+ * ccp_beacon_format.json (beacon_wire_example bytes with byte[4]=0):
+ * a zero slot modulus is structurally invalid in every runtime. */
+static void test_num_slots_zero_rejected(void)
+{
+	uint8_t bad_wire[24];
+	struct lichen_beacon_header h;
+
+	memcpy(bad_wire, WIRE, 24);
+	bad_wire[4] = 0x00;
+	assert(lichen_beacon_header_parse(bad_wire, 24, &h) ==
+	       LICHEN_BEACON_INVALID_FIELD);
+}
+
+/* TX-side mirror of the num_slots=0 rejection: serialize must not emit a
+ * header every receiver's parse gate rejects. */
+static void test_serialize_num_slots_zero_rejected(void)
+{
+	struct lichen_beacon_header bad = { .num_slots = 0U,
+					    .rx_chains = 1U };
+	uint8_t tmp[24];
+
+	assert(lichen_beacon_header_serialize(&bad, tmp, sizeof(tmp)) ==
+	       LICHEN_BEACON_INVALID_FIELD);
+}
+
 static void test_short_buffer_rejected(void)
 {
 	struct lichen_beacon_header h;
@@ -158,6 +184,8 @@ int main(void)
 	test_parse_vector();
 	test_serialize_roundtrip();
 	test_reserved_flag_rejected();
+	test_num_slots_zero_rejected();
+	test_serialize_num_slots_zero_rejected();
 	test_short_buffer_rejected();
 	test_null_guards();
 	test_intersect_channel_mask();

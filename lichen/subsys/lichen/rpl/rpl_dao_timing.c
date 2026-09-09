@@ -420,6 +420,8 @@ bool lichen_rpl_dao_tx_timing_is_due(
     return lichen_rpl_dao_retry_timer_is_due(&t->retry, now_ms);
   case LICHEN_RPL_DAO_TX_REFRESH_PENDING:
     return lichen_rpl_dao_refresh_timer_is_due(&t->refresh, now_ms);
+  case LICHEN_RPL_DAO_TX_IDLE:
+  case LICHEN_RPL_DAO_TX_EXHAUSTED:
   default:
     return false;
   }

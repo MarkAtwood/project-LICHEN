@@ -1,0 +1,38 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.4",
+  "title": "Qualify narrowband amateur experiments",
+  "description": "Evaluate ordinary bidirectional narrow-BW LoRa on exact SX1262/LR1110/board variants separately from LR-FHSS. Verify driver support (current Zephyr bandwidth enum is not all silicon bandwidths), LDRO, SF/header/CRC, RF switching/calibration, retune/settling, receive deadlines and oscillator offset/drift over long packets. Use corrected SF10 airtime:31.25kHz/255B11.149312s and10B1.155072s; never claim400ms fragments by excluding preamble/authentication. Part97 qualification must identify station/control operator, emission classification, geography, identification, control/shutdown, permitted traffic and SS10WPEP limit where applicable. Human review must resolve OSCORE confidentiality versus message-obscuring restrictions; do not weaken production security or pick a licensing fallback. No physical ports or RF work before bench safety and explicit operational authorization.",
+  "acceptance_criteria": "Exact qualified configuration and authoritative rule sources; independent airtime/bitrate vectors and actual oscillator/retune/CPU/RF measurements distinguished; station call sign/control and power/emission constraints demonstrated where authorized. No blanket1500W/all-legal/TCXO-guarantees-accuracy claim. Research outcome may be no-go; no new normative PHY or automatic enablement.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:55:42.865094838Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:55:42.865094838Z",
+  "labels": [
+    "experimental",
+    "regulatory",
+    "hardware",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T01:55:43.079283363Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4",
+      "depends_on_id": "project-LICHEN-worker6-q74u",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:01:08.39259009Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

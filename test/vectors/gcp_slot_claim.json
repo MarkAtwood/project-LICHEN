@@ -1,55 +1,111 @@
 {
   "$schema": "./schema.json",
-  "format_version": 2,
+  "format_version": 3,
   "name": "gcp_slot_claim",
-  "description": "Gateway Coordination Protocol slot claim message signing. Schnorr48 signature covers CBOR-canonicalized claim data.",
-  "spec": "spec/08-gateway-coordination.md Section 6.2-6.3",
+  "description": "Gateway Coordination Protocol slot claim basic tier: GCP-6.5 COSE_Sign1 envelopes signed with Schnorr48 over SHA-256(CBOR(Sig_structure)). Exhaustive negative cases live in gcp_slot_claim_cose_sign1.json.",
+  "spec": "spec/08-gateway-coordination.md Section 6.2-6.5",
   "signature_format": {
     "algorithm": "schnorr48",
-    "signed_data": "CBOR deterministic encoding (RFC 8949 Section 4.2) of slot claim object",
-    "canonicalization": "CBOR deterministic encoding: map keys sorted, shortest integer form"
+    "signed_data": "SHA-256(CBOR(Sig_structure)) where Sig_structure is [\"Signature1\", protected_bstr, h''(empty bstr), payload_bstr] (RFC 9052 Section 4.4) and the protected header is {1: -65537}",
+    "canonicalization": "CBOR deterministic encoding (RFC 8949 Section 4.2): map keys sorted, shortest integer form"
+  },
+  "oracle": {
+    "generator": "test/vectors/generate_gcp_slot_claim.py",
+    "reference": "test/vectors/reference_schnorr48.py (independent PyNaCl implementation of draft-lichen-schnorr-00)"
+  },
+  "constants": {
+    "evaluation_time": 1900000000,
+    "max_claim_duration_s": 300,
+    "clock_tolerance_s": 5
   },
   "vectors": [
     {
       "name": "slot_claim_basic",
-      "description": "Basic slot claim for slots [0,1,2] by gateway with IID.",
+      "description": "Basic slot claim for slots [0,1,2] as a spec GCP-6.5 COSE_Sign1 envelope: signature = Schnorr48(SHA-256(CBOR(Sig_structure))) over the canonical integer-key payload.",
       "claim": {
-        "gateway_iid": "0011223344556677",
-        "slots": [0, 1, 2],
+        "gateway_iid": "ed4242ead4ac6948",
+        "slots": [
+          0,
+          1,
+          2
+        ],
         "superframe_id": 1000,
-        "timestamp": 1700000000
+        "claim_seq": 0,
+        "expiry": 1900000300,
+        "mode": 0,
+        "ordinal": 0
       },
-      "cbor_canonical_hex": "a46367617465776179bf686f306c746f5f696964480011223344556677ff66736c6f7473830001026c73757065726672616d655f69641903e86974696d657374616d701a65528e80",
-      "signing_seed": "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
+      "signer": {
+        "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+        "iid_hex": "ed4242ead4ac6948"
+      },
+      "payload_hex": "a70183000102021903e80300041a713fb42c0548ed4242ead4ac694806000700",
+      "envelope_hex": "8447a1013a00010000a10448ed4242ead4ac69485820a70183000102021903e80300041a713fb42c0548ed4242ead4ac694806000700583098462fc20954b94eb2a4e706ed6e8291114ab004c8d92adfce8c3b4c4daa319a8550af02a3891e31d990bb29a8954c02",
+      "evaluation_time": 1900000000,
       "expected": {
         "signature_length": 48,
-        "verify_with_gateway_pubkey": true
+        "verify_with_gateway_pubkey": true,
+        "allocation_mode": "interleaved"
       },
-      "note": "CBOR map keys sorted: gateway_iid, slots, superframe_id, timestamp"
+      "sig_structure_hex": "846a5369676e61747572653147a1013a00010000405820a70183000102021903e80300041a713fb42c0548ed4242ead4ac694806000700"
     },
     {
       "name": "slot_claim_single_slot",
-      "description": "Claim single slot (contiguous block mode).",
+      "description": "Claim single slot (contiguous block mode, payload key 3 = 1).",
       "claim": {
-        "gateway_iid": "aabbccddeeff0011",
-        "slots": [5],
-        "superframe_id": 42
+        "gateway_iid": "b19edad2958934e1",
+        "slots": [
+          5
+        ],
+        "superframe_id": 42,
+        "claim_seq": 0,
+        "expiry": 1900000300,
+        "mode": 1,
+        "ordinal": 0
       },
+      "signer": {
+        "seed_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
+        "iid_hex": "b19edad2958934e1"
+      },
+      "payload_hex": "a701810502182a0301041a713fb42c0548b19edad2958934e106000700",
+      "envelope_hex": "8447a1013a00010000a10448b19edad2958934e1581da701810502182a0301041a713fb42c0548b19edad2958934e10600070058305d1958591640b02ce3f2c4e452d359a04464aaf0129610c664cf7f7ec9e4d64f031301705c4a795b0dd78c7caca8e70b",
+      "evaluation_time": 1900000000,
       "expected": {
+        "signature_length": 48,
+        "verify_with_gateway_pubkey": true,
         "slot_count": 1,
         "allocation_mode": "contiguous"
       }
     },
     {
       "name": "slot_claim_interleaved",
-      "description": "Interleaved mode: gateway ordinal 0 of 3 claims slots 0,3,6...",
+      "description": "Interleaved mode: gateway ordinal 0 of 3 claims slots 0,3,6,9,12.",
       "claim": {
-        "gateway_iid": "0000000000000001",
-        "slots": [0, 3, 6, 9, 12],
+        "gateway_iid": "ed4242ead4ac6948",
+        "slots": [
+          0,
+          3,
+          6,
+          9,
+          12
+        ],
         "superframe_id": 100,
-        "gateway_count": 3,
-        "ordinal": 0
+        "claim_seq": 0,
+        "expiry": 1900000300,
+        "mode": 0,
+        "ordinal": 0,
+        "gateway_count": 3
       },
+      "signer": {
+        "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+        "iid_hex": "ed4242ead4ac6948"
+      },
+      "payload_hex": "a70185000306090c0218640300041a713fb42c0548ed4242ead4ac694806000700",
+      "envelope_hex": "8447a1013a00010000a10448ed4242ead4ac69485821a70185000306090c0218640300041a713fb42c0548ed4242ead4ac69480600070058308a4435f08ae0b90175f4cc3c0607e7d11f7b143aa7c86c267395ec8cd8761da8e702d973a0642d4d55ad0d81d346d30f",
+      "evaluation_time": 1900000000,
       "expected": {
         "allocation_mode": "interleaved",
         "valid": true,
@@ -57,21 +113,37 @@
       }
     },
     {
-      "name": "slot_claim_map_key_order",
-      "description": "CBOR deterministic encoding requires sorted keys. 'gateway_iid' < 'slots' < 'superframe_id' < 'timestamp' (lexicographic).",
-      "claim_fields_in_order": ["gateway_iid", "slots", "superframe_id", "timestamp"],
+      "name": "slot_claim_payload_key_order",
+      "description": "CBOR deterministic encoding orders the payload map by ascending integer key 1..7 (slots, superframe_epoch, mode, expiry, gateway_iid, claim_seq, ordinal); integers use the shortest form. gateway_count is a local parameter and is never serialized.",
+      "claim_fields_in_order": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
       "expected": {
-        "key_sort_method": "lexicographic_byte_comparison"
+        "key_sort_method": "ascending_numeric_key"
       }
     },
     {
       "name": "slot_claim_missing_signature_reject",
-      "description": "Slot claim without signature MUST be rejected.",
+      "description": "Slot claim without a signature MUST be rejected. On the wire this is a COSE_Sign1 with an empty signature bstr; API-level callers present a claim with no signature at all.",
       "claim": {
-        "gateway_iid": "0011223344556677",
-        "slots": [0]
+        "gateway_iid": "ed4242ead4ac6948",
+        "slots": [
+          0
+        ]
       },
       "signature": null,
+      "signer": {
+        "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+        "iid_hex": "ed4242ead4ac6948"
+      },
+      "envelope_hex": "8447a1013a00010000a10448ed4242ead4ac6948581ca701810002010300041a713fb42c0548ed4242ead4ac69480600070040",
       "expected": {
         "valid": false,
         "reason": "missing_signature"
@@ -79,12 +151,20 @@
     },
     {
       "name": "slot_claim_invalid_signature_reject",
-      "description": "Slot claim with invalid signature MUST be rejected.",
+      "description": "Slot claim with an invalid signature MUST be rejected (all-zero 48-byte signature over a well-formed envelope).",
       "claim": {
-        "gateway_iid": "0011223344556677",
-        "slots": [0]
+        "gateway_iid": "ed4242ead4ac6948",
+        "slots": [
+          0
+        ]
       },
       "signature": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "signer": {
+        "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+        "iid_hex": "ed4242ead4ac6948"
+      },
+      "envelope_hex": "8447a1013a00010000a10448ed4242ead4ac6948581ca701810002010300041a713fb42c0548ed4242ead4ac6948060007005830000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
       "expected": {
         "valid": false,
         "reason": "invalid_signature"
@@ -95,11 +175,17 @@
       "description": "Overlapping claims where both signatures verify: lowest IID wins.",
       "claim_a": {
         "gateway_iid": "0011223344556677",
-        "slots": [5, 6]
+        "slots": [
+          5,
+          6
+        ]
       },
       "claim_b": {
         "gateway_iid": "0022334455667788",
-        "slots": [5, 6]
+        "slots": [
+          5,
+          6
+        ]
       },
       "both_signatures_valid": true,
       "expected": {

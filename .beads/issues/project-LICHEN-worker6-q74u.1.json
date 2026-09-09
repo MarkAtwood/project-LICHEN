@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-q74u.1",
+  "title": "Align companion CCP2 algorithms and FSMs",
+  "description": "Independent CCP2 correctness and robustness reviews found four related active companion conflicts: (1)02-physical-link:50-52 and appendix-ccp12-hopping:86-99 still select1+hash%(N-1), ignoring receiverpermittedset; forEUI0011223344556677/generation1/N128/set{0,64,127} oldformula81 vsCCP2-007 home64. (2)02a-tdma:95-101 still preferslowerstratum contraryto09qualityordering/currentGCPselection. (3)02a-tdma:83 and09-packets-timing:742,756 retain\u003e3misses instead ofCCP2-014\u003e=3. (4)09timing recoveryDRIFTING-\u003eACQUIRING-\u003eSYNCED admitsaftertwo validbeacons instead ofthree. Duplicate observations from two reviewers consolidated here; all four must be corrected.",
+  "acceptance_criteria": "Companionformulasreference/useexactreceiverpermittedset/generationsemantics; fullrootselectionandtimepolicycanonical; exactlythree missesdesync andthree consecutivevalidbeaconsrecovery; no initial/recoveryFSMambiguity. Scopedchecks and three independent re-reviews pass with all four findingsresolved; no runtimeorfixturechanges.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:06:54.491719418Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:20:53.565715075Z",
+  "closed_at": "2026-09-09T02:20:53.565715075Z",
+  "close_reason": "All five distinct documentary contradictions corrected: permitted-set channel selection, root/time quality, \u003e=3 missed beacons, three-consecutive recovery, and candidate rejection versus accepted-state invalidation. Three final independent correctness/security/robustness reviews returned no findings. Requirement/link/arithmetic and scoped diff checks passed; no runtime claim.",
+  "labels": [
+    "spec",
+    "review",
+    "ccp"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-q74u.1",
+      "depends_on_id": "project-LICHEN-worker6-q74u",
+      "type": "parent-child",
+      "created_at": "2026-09-09T02:06:54.649195303Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

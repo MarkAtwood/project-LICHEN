@@ -470,7 +470,7 @@ struct CryptoMeta {
 }
 
 #[test]
-fn canonical_vector_frame_verifies_through_relay_path_then_is_resigned() {
+fn canonical_vector_signature_verifies_and_relay_resigns_fresh_frame() {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test/vectors/link_frame.json");
     let content = fs::read_to_string(path).expect("read canonical link-frame vectors");
     let vectors: VectorFile = serde_json::from_str(&content).expect("parse vectors");
@@ -480,17 +480,46 @@ fn canonical_vector_frame_verifies_through_relay_path_then_is_resigned() {
         .find(|v| v.name == "short_addr_signed")
         .expect("canonical short_addr_signed vector");
     let crypto = vector.crypto.as_ref().expect("crypto metadata");
-    let wire = hex(&vector.encoded);
+    let vector_wire = hex(&vector.encoded);
     let origin_pubkey = PublicKey::new(hex(&crypto.public_key).try_into().unwrap());
 
+    // The canonical vector's signature verifies directly against the
+    // PyNaCl reference oracle (same use as the Python test suite, which
+    // checks the transcript rather than routing it through receive()).
+    let vector_frame = LichenFrame::from_bytes(&vector_wire).unwrap();
+    assert!(verify_frame(
+        vector_wire[0],
+        vector_frame.llsec_byte(),
+        vector_frame.epoch,
+        vector_frame.seqnum,
+        vector_frame.dst_addr,
+        vector_frame.signer_eui64,
+        vector_frame.payload,
+        vector_frame.mic,
+        &origin_pubkey,
+    ));
+
+    // The relay path needs an inbound frame addressed to the relay: the
+    // destination-admission filter (bead project-LICHEN-worker6-er31,
+    // mirroring Python's NOT_FOR_US) rejects the vector's Short-address
+    // destination, as the Python reference does without a configured
+    // short address. A freshly signed Extended frame for the relay from
+    // any configured origin exercises the same verify-then-resign pipeline.
+    let origin_identity = Identity::from_seed(Seed::new([0x11; 32]));
+    let origin = LinkLayer::new(origin_identity.clone());
     let relay_identity = Identity::from_seed(Seed::new([0x44; 32]));
     let mut relay = LinkLayer::new(relay_identity.clone());
-    relay.add_peer(PeerIdentity::from_pubkey(origin_pubkey));
+    relay.add_peer(PeerIdentity::from_pubkey(origin_identity.pubkey));
+
+    let mut inbound = [0u8; 256];
+    let inbound_len = origin
+        .build_frame(2, seq(9), &eui64(&relay_identity), b"hello!", &mut inbound)
+        .unwrap();
 
     let mut out = [0xA5u8; 256];
     let outcome = relay
         .relay_verified_frame(
-            &wire,
+            &inbound[..inbound_len],
             &[0x12, 0x34],
             AddrMode::Short,
             None,

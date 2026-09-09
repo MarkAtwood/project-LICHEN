@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-gqr5",
+  "title": "tunnel_auth_zephyr ztest panics at boot on native_sim (shared 4.1.0 workspace): invalid thread priority 15, allowed 14..-16",
+  "description": "Found while compile-verifying gyfs. Build of lichen/tests/tunnel_auth_zephyr for native_sim/native/64 against the shared Zephyr v4.1.0 workspace (~/Developer/lichen-workspace/project-LICHEN) succeeds (256/256, coap_server.c compiled with CONFIG_LICHEN_TUNNEL_AUTH=y), but running build-gyfs/zephyr/zephyr.exe panics at boot: ASSERTION FAIL in zephyr/kernel/thread.c:517 'invalid priority (15); allowed range: 14 to -16', current thread main, ZEPHYR FATAL ERROR 4. Some LICHEN thread is created at priority 15 while this config caps preempt priorities at 14 (CONFIG_NUM_PREEMPT_PRIORITIES). Likely a v4.1.0-vs-v3.7.0 split symptom (LICHEN is pinned to v3.7.0 per west.yml; the 4.1.0 workspace is known-incompatible per kpnp), or a genuine off-by-one in a LICHEN thread priority that v3.7.0 tolerated. Compile verification of CONFIG_LICHEN_TUNNEL_AUTH=y is unaffected. Next step: reproduce under the pinned v3.7.0 tree (blocked on project-LICHEN-worker6-xplt v3.7.0 west-tree repair) or find the offending K_PRIO_PREEMPT(15)/k_thread_create priority-15 call site.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:32:52.664213014Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:32:52.664213014Z",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gqr5",
+      "depends_on_id": "project-LICHEN-worker6-gyfs",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:32:52.813055702Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -19,6 +19,10 @@ set(LINK_SRC ${RPL_SRC_DIR}/../link)
 add_executable(rpl_root_sig_test
   src/main.c
   ${RPL_SRC_DIR}/messages.c
+  ${RPL_SRC_DIR}/dodag.c
+  ${RPL_SRC_DIR}/trickle.c
+  ${RPL_SRC_DIR}/rpl_sf_assignment.c
+  ${LINK_SRC}/hash32.c
   ${RPL_SRC_DIR}/root_dio_sig.c
   ${RPL_SRC_DIR}/root_dio_replay.c
   ${LINK_SRC}/identity_addr.c
@@ -32,10 +36,27 @@ target_compile_definitions(rpl_root_sig_test PRIVATE
   LICHEN_RPL_TEST=1
   CONFIG_LICHEN_CRYPTO_MONOCYPHER=1
   CONFIG_LICHEN_LINK_SCHNORR=1
+  CONFIG_LICHEN_RPL_ROOT_SIG=1
+  CONFIG_LICHEN_LINK_MAX_NEIGHBORS=16
 )
-# NOTE: deliberately does not call lichen_test_target() — this host's gcc 13
-# rejects its -std=c23 flag. The test builds with the default dialect and
-# keeps LICHEN_RPL_TEST=1 (required by the host byteorder stub).
+# LICHEN_RPL_TEST=1 (required by the host byteorder stub) stays a suite-local
+# define; sanitizers, hardening, and the compiler-probed -std flag come from
+# the shared config.
+lichen_test_target(rpl_root_sig_test)
+
+# Vendored upstream tinycrypt stubs (unmodified, shared with coap_slot_claim):
+# same policy as that suite — silence -Wconversion inside vendored sources
+# only; no local patches to third-party crypto code for host-only lints.
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../coap_slot_claim/stub/tinycrypt/sha256.c
+  PROPERTIES
+  COMPILE_OPTIONS "-Wno-conversion;-Wno-shorten-64-to-32"
+)
+set_source_files_properties(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../coap_slot_claim/stub/tinycrypt/utils.c
+  PROPERTIES
+  COMPILE_OPTIONS "-Wno-conversion"
+)
 
 target_include_directories(rpl_root_sig_test PRIVATE
   ${RPL_SRC_DIR}/include
@@ -47,3 +68,6 @@ target_include_directories(rpl_root_sig_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../coap_slot_claim/stub
   ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
+
+include(CTest)
+add_test(NAME rpl_root_sig COMMAND rpl_root_sig_test)

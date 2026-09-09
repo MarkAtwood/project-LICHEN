@@ -369,9 +369,13 @@ static int validate_dao_options(const uint8_t *data, size_t len, size_t base_len
 		case LICHEN_RPL_OPT_RPL_TARGET:
 			/* Generalized Target body (spec 05-routing.md 8.7.1):
 			 * prefix_len <= 128 and at least ceil(prefix_len/8)
-			 * prefix octets; reserved flags and bits beyond the
-			 * Prefix Length are ignored. Authorization of the
-			 * prefix is a routing-layer decision (8.7.2). */
+			 * prefix octets. This layer is structure-only: it
+			 * does not inspect the reserved flags octet or bits
+			 * beyond the Prefix Length. Flag semantics are
+			 * deferred to semantic ingest, where nonzero flags
+			 * reject the DAO (8.6 R-05-035, rpl_dao_process.c).
+			 * Authorization of the prefix is a routing-layer
+			 * decision (8.7.2). */
 			if (data_len < 2U || data[pos + 3U] > 128U ||
 			    data_len - 2U < ((size_t)data[pos + 3U] + 7U) / 8U) {
 				return LICHEN_RPL_ERR_BAD_OPT;

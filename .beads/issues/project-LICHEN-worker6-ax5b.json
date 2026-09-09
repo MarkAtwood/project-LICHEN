@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ax5b",
+  "title": "gnss_l76k.c: same Zephyr 4.1 modem_pipe arity + -Wswitch-enum breaks as gnss_ag3335 (gvf1) - migrates when CONFIG_GNSS_L76K=y",
+  "description": "Found during gvf1 3x codereview (2 independent reviewer passes flagged it). lichen/drivers/gnss/gnss_l76k.c carries the identical two Zephyr 4.1 break classes just fixed in gnss_ag3335.c: (1) modem_pipe_open(data-\u003euart_pipe) at :152 and modem_pipe_close(data-\u003euart_pipe) at :160/:216 still use the removed single-arg pre-4.1 API (pipe.h:99/176 now require k_timeout_t) -\u003e hard compile error; (2) gnss_l76k_pm_action at :223-232 uses default: on enum pm_device_action, naming only 2 of 4 members (missing PM_DEVICE_ACTION_TURN_ON/TURN_OFF) -\u003e fatal under -Werror -Wswitch-enum (lichen/zephyr/CMakeLists.txt:52,113). Fix mirrors gvf1: add K_SECONDS(10) to the three pipe calls; convert default: to explicit PM_DEVICE_ACTION_TURN_ON/PM_DEVICE_ACTION_TURN_OFF cases + trailing return -ENOTSUP. Latent today (CONFIG_GNSS_L76K=y in no current app conf; AG3335 is the t1000_e part) but the gnss_l76k native_sim test overlays enable the DT node, so the first L76K-enabled build against 4.1 fails in 4 places. Relates to project-LICHEN-worker6-jtl6 (L76K build validation). Verify with a native_sim or ARM build enabling CONFIG_GNSS_L76K.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:51:30.254347234Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:51:30.254347234Z",
+  "labels": [
+    "zephyr",
+    "hal"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ax5b",
+      "depends_on_id": "project-LICHEN-worker6-gvf1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:51:30.388986107Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

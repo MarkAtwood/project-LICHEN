@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-2s92",
+  "title": "Workspace MSRV sweep: lichen-node/schc/link/rpl lack rust-version declarations; MSRV-1.82+ API (is_none_or, is_multiple_of) may hide there",
+  "description": "Residual from bead d5tj (2026-09-09, reviewer out-of-scope note): rust/lichen-kiss/Cargo.toml and lichen-senml declare rust-version.workspace = true, but lichen-node, lichen-schc, lichen-link, lichen-rpl (and other workspace members) do not — so stable clippy's MSRV-aware lints do not apply there and Rust-1.82+ API (is_none_or stabilized 1.82, usize::is_multiple_of 1.87) can hide under the workspace MSRV 1.81. Sweep: add rust-version.workspace = true to each member Cargo.toml, then cargo clippy --workspace --all-targets -- -D warnings and fix any incompatible-msrv hits mechanically (map_or(true,...), % 2 != 0). Note lichen-kiss/src/ble_platform.rs has at least one map_or(true/false,...) instance that clippy may rewrite once its gate runs.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "chore",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:57:52.125373691Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:57:52.125373691Z",
+  "labels": [
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2s92",
+      "depends_on_id": "project-LICHEN-worker6-d5tj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:57:52.253095718Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -11,6 +11,35 @@ A standards-based LoRa mesh networking protocol built on IPv6, SCHC, RPL, and Co
 - Documentation (specs, docs): **CC-BY-4.0**
 - Software (reference implementations): **GPL-3.0**
 
+## Settled Protocol Decisions
+
+The `upstream-yggdrasil-addressing` and `custody-best-effort` decisions in
+`spec/decisions.jsonl` take precedence over conflicting historical prose,
+issue descriptions, implementation behavior, and fixture expectations.
+
+- **Yggdrasil addressing everywhere:** Every node's routable IPv6 identity
+  MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)`, both in isolated
+  meshes and across backhauls. Routing, SCHC, identity checks, LCI, and gateways
+  MUST preserve upstream-compatible addressing; connectivity limitations do
+  not authorize a different address derivation.
+- `0200::/7` is the aggregate: node `/128`s are in `0200::/8`; routed `/64`s,
+  when used, MUST come from upstream `SubnetForKey` in `0300::/8`. Do not
+  mechanically replace every `/8` with `/7`. Standard link-local and multicast
+  control addresses retain their scope.
+- The SHA-512-based "LICHEN native" address profile is rejected. Do not alter
+  an upstream address to preserve a local IID-equality invariant. Use pinned
+  upstream byte-equality vectors as the independent conformance oracle;
+  agreement among LICHEN implementations is not a substitute. Report conflicting
+  legacy fixtures instead of weakening tests or generating expected results
+  from the implementation under test. Upstream compatibility is settled, not
+  a design question to reopen. Existing migration work remains incomplete.
+- **Custody is best effort:** `MUST` requirements define the obligations of
+  conforming custodians, not an enforceable guarantee that other nodes comply
+  or that delivery succeeds. Acceptance records responsibility, not delivery;
+  a delivery receipt confirms recipient acceptance, not human reading. Do not
+  invent mechanisms to force cooperation or change eviction/TTL/retry policy
+  merely to claim guaranteed delivery.
+
 ## Task Tracking: Beads (NOT TodoWrite)
 
 **CRITICAL:** This project uses **beads** (`bd`) for all task tracking.
@@ -34,8 +63,9 @@ Run `bd prime` for full command reference. See the Beads section at the end of t
 ## Project Overview
 
 **What we're building:** LICHEN -- a LoRa mesh network that uses real IPv6
-addressing rather than proprietary node IDs. Native key-derived addresses route
-inside isolated meshes; global Yggdrasil participation is a separate profile.
+addressing rather than proprietary node IDs. The same upstream Yggdrasil
+key-derived addresses route inside isolated meshes and across backhauls;
+connectivity may differ, but address derivation does not.
 Think "Meshtastic but with proper IP."
 
 **Relationship to Meshtastic:** LICHEN runs on the same hardware (reflash), but the protocol is **not backward compatible**. Different sync word (0x34 vs 0x2B), different framing, real IPv6 instead of proprietary addressing. A device runs one or the other, not both.
@@ -53,7 +83,7 @@ Think "Meshtastic but with proper IP."
 Application:  CoAP / MQTT-SN / Raw UDP
 Security:     OSCORE (E2E) + Ed25519 link signatures
 Transport:    UDP (compressed via SCHC)
-Network:      IPv6 (link-local fe80::/10 or native 0200::/8 /128)
+Network:      IPv6 (link-local control + upstream Yggdrasil /128)
 Routing:      RPL (DODAG mesh formation)
 Adaptation:   6LoWPAN + SCHC header compression
 Link:         Custom frame format with truncated Ed25519 sigs
@@ -796,13 +826,14 @@ Check `bd list` for issues tracking these decisions.
 - **Hardware**: Meshtastic-compatible devices (reflash)
 - **Embedded RTOS**: Zephyr (primary), RIOT (STM32WL fallback if needed)
 - **Why not Arduino**: No native IPv6/6LoWPAN/RPL/CoAP; Zephyr has all
-- **IPv6 addressing** (see spec 6.1, 12):
+- **IPv6 addressing** (see `upstream-yggdrasil-addressing` in `spec/decisions.jsonl`):
   - Link-local always (`fe80::` + key-derived IID) for control traffic
-  - Native Yggdrasil `/128` in `0200::/8` for application unicast
-  - Both derive from the node Ed25519 public key; ULA is not used
-  - Isolated meshes route native addresses without a Yggdrasil daemon
-  - Global reachability requires identity-preserving Yggdrasil participation
-    defined by a separate profile
+  - Routable node `/128` MUST equal upstream `AddrForKey`, in `0200::/8`
+  - Routed `/64`s, when used, MUST equal upstream `SubnetForKey`, in `0300::/8`
+  - Both use the node Ed25519 key; no custom SHA-512 native profile or ULA
+  - Local IID derivation MUST NOT change the upstream routable address
+  - Isolated and global operation use the same addressing; backhaul work
+    MUST preserve node identity rather than substitute another address scheme
   - Multiple BRs tolerated (no coordination required)
 - **Local Client Interface** (see spec 17):
   - IPv6 + CoAP over SLIP/BLE/IPC (not proprietary protobuf)

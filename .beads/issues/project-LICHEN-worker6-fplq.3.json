@@ -1,0 +1,38 @@
+{
+  "id": "project-LICHEN-worker6-fplq.3",
+  "title": "Screen ring and screen anatomy (E/O tiers)",
+  "description": "Implement the v0.1 screen ring from spec 19 §5, §14: Boot→Status→Position→Last message→screensaver. Each screen shows one primary fact (§3). Status bar fixed at top with battery, GPS state, message-waiting count — same fields on every screen (§5). No chrome, no borders, no titles, no scroll indicators. Body uses largest readable weight. Data sources are CoAP resources from spec 17/18. No scrolling text ever (§3). Spans spec 19 requirements 5-7, 31-34, 73-74.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:48:24.757049573Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:48:24.757049573Z",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fplq.3",
+      "depends_on_id": "project-LICHEN-worker6-fplq",
+      "type": "parent-child",
+      "created_at": "2026-09-09T02:48:24.862615214Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-fplq.3",
+      "depends_on_id": "project-LICHEN-worker6-fplq.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:49:01.989016557Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-fplq.3",
+      "depends_on_id": "project-LICHEN-worker6-fplq.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:49:02.733903963Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

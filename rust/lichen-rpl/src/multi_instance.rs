@@ -1035,6 +1035,7 @@ fn select_root_index(candidates: &[RootCandidate]) -> Option<usize> {
 /// - 2a.5.2: Root selection criteria
 /// - 2a.5.3: Overlap resolution with holdoff
 /// - 2a.5.4: RPL version change during multi-root conflict
+///
 /// Timing window for one TDMA slot (R-02a-040 overlap computation).
 ///
 /// Mirrors python/src/lichen/link/slot_coordination.py ``TdmaWindow``.
@@ -1340,7 +1341,6 @@ mod tests {
         assert!(!state.beacon_overlaps_window(3400, &window));
     }
 
-    use super::*;
     use std::vec;
 
     /// Parse IPv6 address for tests.

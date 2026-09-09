@@ -1,0 +1,53 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.12",
+  "title": "Test RF admission and occupancy compliance",
+  "description": "Implement independent configured-constraint tests at every Python/Rust/C transmission path. Validate both legal and adaptive ceilings, physical-frequency/channel-group alias accounting, control/forwarding/retry/parity costs, future complete-operation fit and restart/wall-clock safety. For ordinary narrow FHSS enforce aggregate0.4s perfrequency in20s evenwith128channels; two250ms emissions insidewindow cannotbothpass. Distinguish DTSbandwidth andhybridcomponentconditions; channelcount/tuning are notapproval. Cover empty/insufficient eligiblehopset, duplicatefrequencies, sparsemasks, unknownplans, power/antenna configurationconstraints, band-edge inputs and remotepermission expansion. Independently validate interval-boundary overlap/rounding; don't reuse production duty tracker as oracle.",
+  "acceptance_criteria": "Tests prove actual TX denied on constraint violations, including fallback/SOS/control and aliases; all three implementations agree with independently encoded constraints under declared operating basis. Exactly recorded legal sources/configuration and raw results; software compliance distinguished from RF emissions/equipment authorization. Three independent code reviews with findings filed/fixed; no hardware/Part97 bypass.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:11:24.742951706Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:11:27.654215799Z",
+  "labels": [
+    "testing",
+    "regulatory",
+    "ccp",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T02:11:24.975129165Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:11:25.728142772Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:11:26.46674652Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:11:27.225219513Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

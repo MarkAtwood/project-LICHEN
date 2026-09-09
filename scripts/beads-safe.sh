@@ -40,7 +40,10 @@ bd "$@"
 rc=$?
 
 # Checkpoint: make the mutation durable before anyone can rewind it.
-if [ -n "$(git status --porcelain .beads/)" ]; then
+# NEVER commit while a merge is in flight — committing mid-merge would commit
+# the merge state prematurely (MERGE_HEAD present); durability then waits
+# for the fleet's next checkpoint, which is fine.
+if [ ! -f .git/MERGE_HEAD ] && [ -n "$(git status --porcelain .beads/)" ]; then
     git add .beads/
     BEADS_ALLOW_STORE_COMMIT=1 git commit -m "chore(beads): safe-write $1" --quiet || true
 fi

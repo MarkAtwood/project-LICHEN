@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-pkln",
+  "title": "rpl_dodag host suite no longer links: messages.c references lichen_rpl_sf_assignment_parse, absent from its CMakeLists",
+  "description": "Pre-existing break found while verifying b7z9.88.1 (no code changed by that verification). Building lichen/tests/rpl_dodag on heft (gcc 13) fails: messages.c:(.text+0xd9d): undefined reference to `lichen_rpl_sf_assignment_parse'. The SF-assignment parse was added to lichen/subsys/lichen/rpl/messages.c by the TX_SF announce TLV work (merge 931926d03f / feat ea3181bc63, RF-metrics DIO option codec + TX_SF announce TLV), but lichen/tests/rpl_dodag/CMakeLists.txt was never updated to compile rpl_sf_assignment.c (sibling suite lichen/tests/rpl_root_sig/CMakeLists.txt DOES include ${RPL_SRC_DIR}/rpl_sf_assignment.c and links fine). Fix: add rpl_sf_assignment.c to rpl_dodag's add_executable list (and any other newly-required objects), rebuild, run the binary to green. NOTE: the suite's CMakeLists has its own host-dialect workaround (no lichen_test_target), mirror the rpl_root_sig pattern if definitions are needed. C host suites are not in ci.yml, so this break is invisible to CI — worth considering a heft-side build sweep, but that is out of scope here.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T00:41:38.43339653Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:33:05.575289662Z",
+  "started_at": "2026-09-09T01:25:43.19320347Z",
+  "closed_at": "2026-09-09T01:33:05.575289662Z",
+  "close_reason": "Fixed: added rpl_sf_assignment.c + link/hash32.c to rpl_dodag_test add_executable and link/include to include dirs (mirrors rpl_root_sig pattern). Reproduced original link failure first, then verified: build clean under -Werror+sanitizers, ctest 1/1 green. 3x codereview by kimi-k3 (correctness/security/edge): all PASS, no findings.",
+  "labels": [
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-pkln",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.88.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T00:41:38.559884106Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

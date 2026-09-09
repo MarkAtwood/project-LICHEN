@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-fr9b",
+  "title": "root_seq admitted before downstream DIO acceptance: post-gate rejection burns the high-water mark",
+  "description": "Review finding (b7z9.88.3 security pass, P3): verify_dio_root_signature mutates the seq cache (rust/lichen-node/src/rpl_stack/receive.rs:734-744) and returns Verified, but the DIO is only then handed to process_authenticated_dio (receive.rs:530), which can still reject (e.g. RoleScopeMismatch). A receiver that verifies a genuine seq-N DIO but rejects it downstream will replay-reject (receive.rs:730-731) the root's genuine retransmission of seq N, cutting the node off from that DODAG state until the root increments to N+1. In-gate ordering (cross-check before cache mutation, receive.rs:717-723) is correct; the gap is across the gate boundary. Fix: defer root_seqs.accept until the DIO survives downstream processing, or roll back on downstream rejection. No forgery vector (requires genuine signed DIOs), self-healing. NOTE: currently dead in production because the clock is never wired (see wall-clock bead) — still worth fixing before clock wiring lands.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T00:42:29.335166052Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T00:42:29.335166052Z",
+  "labels": [
+    "rust",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-fr9b",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.88.3",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T00:42:29.582807366Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

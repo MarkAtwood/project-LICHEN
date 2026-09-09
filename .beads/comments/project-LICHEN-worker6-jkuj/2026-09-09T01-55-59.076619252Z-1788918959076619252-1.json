@@ -1,0 +1,7 @@
+{
+  "id": "1788918959076619252-1",
+  "issue_id": "project-LICHEN-worker6-jkuj",
+  "author": "Mark Atwood",
+  "text": "NOTE: the code for this fix landed in commit 1031782f76 titled 'chore(beads): worker5 sync' — the sync process swept the staged python/ files in with the .beads store checkpoint before my explicit fix commit ran. Content is exactly the intended diff (61+/5- across the 3 files, verified via git diff 56057be3b2..HEAD). Working tree is now clean of python/ changes. Left as-is (no amend — history rewrite would fight the shared sync process). The intended commit message was: 'fix(gateway): bound Python slot-claim claim_seq to u32'.",
+  "created_at": "2026-09-09T01:55:59.076619252Z"
+}

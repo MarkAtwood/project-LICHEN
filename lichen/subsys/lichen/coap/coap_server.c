@@ -18,6 +18,7 @@
  * - /diag/traceroute - Mesh path discovery (GET, spec 18.7.4, when enabled)
  * - /deaddrop - DTN dead drop (POST, GET?recipient=...) when enabled
  * - /confessions - Anonymous board (POST/GET, rate-limited RAM-only, per project-LICHEN-2nnd.4.2)
+ * - /.well-known/tunnel-auth - Egress tunnel grants (POST, OSCORE-only, when CONFIG_LICHEN_TUNNEL_AUTH)
  *
  * All payloads use CBOR (content-format 60) for compact encoding.
  */
@@ -45,7 +46,6 @@
 /* Plaintext staging for the mutating handlers' authorize helper (the old
  * per-handler unprotect result carried an equivalent on-stack buffer). */
 static uint8_t server_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
-#include <lichen/l2/ipv6_addr.h>
 #include <lichen/transport/slip_transport.h>
 
 LOG_MODULE_REGISTER(lichen_coap_server, CONFIG_LICHEN_COAP_SERVER_LOG_LEVEL);
@@ -597,6 +597,83 @@ COAP_RESOURCE_DEFINE(lichen_sos, lichen_coap_server, {
 		.attributes = sos_attrs,
 	}),
 });
+
+#ifdef CONFIG_LICHEN_TUNNEL_AUTH
+#include <zephyr/sys_clock.h>
+#include <lichen/gateway/tunnel_auth.h>
+
+/*
+ * /.well-known/tunnel-auth resource - root-issued COSE_Sign1 egress grants.
+ * POST only, and OSCORE-protected requests only: the grant signer is the
+ * DODAG root, so there is no local-admin plaintext fallback. The verdict's
+ * human code (204/403) maps to the wire encoding 2.04 (0x44) / 4.03 (0x83)
+ * via lichen_tunnel_auth_coap_code(); BUILD_ASSERTs pin that mapping.
+ * Note: 2.04 is Zephyr's COAP_RESPONSE_CODE_CHANGED (Zephyr's "CREATED"
+ * is RFC 7252's 2.01), hence the CHANGED reference below.
+ */
+BUILD_ASSERT(COAP_RESPONSE_CODE_CHANGED == 0x44, "2.04 wire encoding drifted");
+BUILD_ASSERT(COAP_RESPONSE_CODE_FORBIDDEN == 0x83, "4.03 wire encoding drifted");
+
+static int tunnel_auth_post(struct coap_resource *resource,
+			    struct coap_packet *request,
+			    struct sockaddr *addr, socklen_t addr_len)
+{
+	uint8_t piv[OSCORE_PIV_MAX_LEN];
+	size_t piv_len = 0;
+	struct oscore_ctx *oscore_ctx = NULL;
+	const uint8_t *payload = NULL;
+	uint16_t payload_len = 0;
+	bool is_protected = false;
+	int ret;
+
+	if (s_handlers.tunnel_auth == NULL) {
+		return COAP_RESPONSE_CODE_NOT_FOUND;
+	}
+
+	ret = coap_oscore_authorize_mutating(resource, request, addr, addr_len,
+					     COAP_METHOD_POST, server_plain_buf,
+					     sizeof(server_plain_buf), &payload,
+					     &payload_len, &oscore_ctx, piv,
+					     &piv_len, &is_protected);
+	if (ret != 0) {
+		return ret;
+	}
+	if (!is_protected) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
+	}
+
+	/* Peer identity: LICHEN key-derived link-locals embed the canonical
+	 * pubkey IID (U/L cleared) in the low 8 bytes; pass it through
+	 * UNFLIPPED. lichen_tunnel_auth_receive() compares in canonical
+	 * pubkey-IID space (the root_iid binding and the COSE kid) - NOT in
+	 * the wire-EUI64 space (U/L set) the OSCORE context lookup keys on,
+	 * so the extract+flip from coap_oscore.c must NOT be applied here.
+	 * An unidentifiable sender stays all-zero and is denied WRONG_ROOT. */
+	uint8_t sender_iid[8] = { 0 };
+	(void)lichen_tunnel_sender_iid_from_sockaddr(addr, (size_t)addr_len,
+						     sender_iid);
+
+	/* Uptime seconds stand in for unix time until wall-clock sync lands;
+	 * expiry enforcement stays dormant, replay floors do not. */
+	uint64_t now = (uint64_t)k_uptime_get() / MSEC_PER_SEC;
+	struct lichen_coap_tunnel_verdict verdict = { false, 403 };
+	s_handlers.tunnel_auth(payload, payload_len, true, sender_iid, now,
+			       &verdict);
+
+	return coap_oscore_send_protected(resource, request, addr, addr_len,
+					  oscore_ctx, piv, piv_len,
+					  lichen_tunnel_auth_coap_code(verdict.coap_code));
+}
+
+static const char * const tunnel_auth_path[] = { ".well-known", "tunnel-auth", NULL };
+
+COAP_RESOURCE_DEFINE(lichen_tunnel_auth, lichen_coap_server, {
+	.post = tunnel_auth_post,
+	.path = tunnel_auth_path,
+});
+#endif /* CONFIG_LICHEN_TUNNEL_AUTH */
 
 /*
  * Define the CoAP service

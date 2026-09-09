@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 use std::fmt;
+use std::net::Ipv6Addr;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1016,10 +1017,11 @@ impl Gateway {
         identity: Identity,
         safe_epoch: u8,
         trust_store: TrustStore,
-        coordinator: GatewayCoordinator,
+        mut coordinator: GatewayCoordinator,
         backing: GatewayBacking,
     ) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let root_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
         if coordinator.info.iid != root_addr {
             return Err(GatewayOpenError::RplProvision);
         }
@@ -1043,6 +1045,10 @@ impl Gateway {
             let public = lichen_link::keys::PublicKey::new(pinned.pubkey);
             rpl_stack.install_verified_link_peer(PeerIdentity::from_pubkey(public));
         }
+        // This gateway is the DODAG root (provision_root/open_root above), so
+        // the tunnel-auth table binds to its own key-derived IID (spec
+        // 06-security 8.11: the POST kid must match the current root).
+        coordinator.set_tunnel_auth_root(root_iid);
         Ok(Self {
             rpl_stack,
             radio_peer,
@@ -1118,7 +1124,7 @@ impl Gateway {
         if self
             .trust_store
             .get(&peer_iid)
-            .is_none_or(|entry| entry.pubkey != *peer_pubkey)
+            .map_or(true, |entry| entry.pubkey != *peer_pubkey)
         {
             return Err(SecureError::NoContext);
         }
@@ -1284,7 +1290,7 @@ impl Gateway {
                 || self
                     .trust_store
                     .get(&iid)
-                    .is_none_or(|entry| entry.pubkey != *pubkey)
+                    .map_or(true, |entry| entry.pubkey != *pubkey)
             {
                 return CoapResponse::unauthorized();
             }
@@ -1354,6 +1360,46 @@ impl Gateway {
             .await
     }
 
+    /// Spec 06-security 8.11 egress gate: a mesh-ingress unicast datagram
+    /// forwarded to external networks must be covered by a current-root
+    /// tunnel authorization (fail-closed). Hairpinned mesh-destined traffic
+    /// is mesh-internal forwarding, not egress, and an unprovisioned table
+    /// keeps the gate open (C `s_tunnel_ready == false` parity). Route
+    /// evidence mirrors the C call site in `forwarding.c`: single-hop
+    /// `[egress_iid]` — this gateway is the egress. ponytail: multi-hop SRH
+    /// route extraction is not wired, so grants issued over longer routes
+    /// fail closed here; upgrade path is SRH parsing at the node decap site.
+    fn egress_tunnel_authorized(
+        &mut self,
+        received: &lichen_node::stack::ReceivedIpv6,
+    ) -> bool {
+        if received.ipv6.len() < 40 {
+            return true;
+        }
+        let destination: [u8; 16] = received.ipv6[24..40].try_into().expect("len checked");
+        if self.is_local_mesh(&destination) {
+            return true;
+        }
+        let Some(egress_iid) = self.coordinator.tunnel_auth_root() else {
+            return true;
+        };
+        let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
+        let route = [egress_iid];
+        match self
+            .coordinator
+            .authorize_egress(inner_source, false, &route)
+        {
+            Ok(()) => true,
+            Err(error) => {
+                warn!(
+                    ?error,
+                    "egress dropped: tunnel denial (spec 06-security 8.11)"
+                );
+                false
+            }
+        }
+    }
+
     /// Deterministic runtime ingress with the current synchronized
     /// superframe supplied by the caller/test harness.
     pub async fn ingest_mesh_frame_at_superframe(
@@ -1379,8 +1425,10 @@ impl Gateway {
                 {
                     gcp_dispatched = true;
                     (None, RplEvent::None)
-                } else {
+                } else if self.egress_tunnel_authorized(&received) {
                     (Some(received.ipv6), RplEvent::None)
+                } else {
+                    (None, RplEvent::None)
                 }
             }
             Some(RplBorderIngressOutcome::Control(outcome)) => {
@@ -1471,10 +1519,22 @@ impl Gateway {
                 segments.push(option.value);
             }
         }
-        if segments.len() != 3 || segments[0] != b".well-known" || segments[1] != b"lichen-gw" {
-            return true;
-        }
-        let Ok(resource) = core::str::from_utf8(segments[2]) else {
+        let resource = if segments.len() == 3
+            && segments[0] == b".well-known"
+            && segments[1] == b"lichen-gw"
+        {
+            match core::str::from_utf8(segments[2]) {
+                Ok(resource) => resource,
+                Err(_) => return true,
+            }
+        } else if segments.len() == 2
+            && segments[0] == b".well-known"
+            && segments[1] == b"tunnel-auth"
+        {
+            // Spec 06-security 8.11: the root delivers egress tunnel
+            // authorizations outside the lichen-gw prefix.
+            "tunnel-auth"
+        } else {
             return true;
         };
         let method = if request.code == MessageCode::GET {
@@ -1693,7 +1753,7 @@ impl Gateway {
                 .rpl_stack
                 .rpl_node()
                 .router()
-                .lookup_route(dst)
+                .lookup_route(Ipv6Addr::from(*dst))
                 .is_some();
         }
 
@@ -1742,8 +1802,10 @@ impl Gateway {
                 .rpl_stack
                 .rpl_node()
                 .router()
-                .lookup_route(&dst)?
-                .to_vec();
+                .lookup_route(Ipv6Addr::from(dst))?
+                .iter()
+                .map(Ipv6Addr::octets)
+                .collect::<Vec<[u8; 16]>>();
             if route.last() != Some(&dst) {
                 return None;
             }
@@ -2602,11 +2664,14 @@ mod tests {
         let mut gw = test_gateway();
         let relay_addr = [0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
         let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
-        let path = [relay_addr, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(relay_addr),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
 
         // Upstream-originated (src != root), so the encapsulation branch
         // applies: HL 3 - 1 forward = 2 remaining, initial SL 1 < 2 would
@@ -2654,11 +2719,14 @@ mod tests {
 
         // Inject a DAO route
         let root_addr = gw.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
-        let path = [root_addr, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(root_addr),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
 
         // Now the 02xx address is local mesh
         assert!(gw.is_local_mesh(&node_addr));
@@ -2670,11 +2738,14 @@ mod tests {
         let node_addr = [0x02u8, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
 
         let root_addr = gw.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
-        let path = [root_addr, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(root_addr),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
 
         assert!(gw.is_local_mesh(&node_addr));
     }
@@ -2693,7 +2764,13 @@ mod tests {
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(
+                core::net::Ipv6Addr::from(node_addr),
+                &[
+                    core::net::Ipv6Addr::from(relay_addr),
+                    core::net::Ipv6Addr::from(node_addr),
+                ],
+            );
 
         // Build IPv6 packet FROM root TO node_addr
         let payload = b"hello";
@@ -2756,11 +2833,15 @@ mod tests {
         let relay1 = ll(2).0;
         let relay2 = ll(3).0;
         let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
-        let path = [relay1, relay2, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(relay1),
+            core::net::Ipv6Addr::from(relay2),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
         (gw, relay1, relay2, node_addr)
     }
 

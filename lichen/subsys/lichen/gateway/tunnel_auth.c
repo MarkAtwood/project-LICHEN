@@ -7,9 +7,15 @@
 #include <lichen/gateway/tunnel_auth.h>
 
 #ifdef __ZEPHYR__
+/* Both sides reconciled: worker-8 routes SHA-256 through lichen_util.h
+ * (TinyCrypt is deprecated in Zephyr 4.1, so its headers are gone), while
+ * HEAD's sender_iid_from_sockaddr() needs net_ip.h for sockaddr_in6. */
 #include "lichen_util.h"
+#include <zephyr/net/net_ip.h>
 #include <lichen/link_ctx.h>
 #include <lichen/schnorr48.h>
+#else
+#include <netinet/in.h>
 #endif
 
 static const uint8_t protected_header[] = { 0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00 };
@@ -27,6 +33,12 @@ static struct lichen_tunnel_result deny(enum lichen_tunnel_denial reason)
 static struct lichen_tunnel_result permit(void)
 {
 	return (struct lichen_tunnel_result){ true, LICHEN_TUNNEL_DENIAL_NONE, 204 };
+}
+
+uint8_t lichen_tunnel_auth_coap_code(uint16_t coap_code)
+{
+	/* 2.04 = 0x44, 4.03 = 0x83 (class << 5 | detail). */
+	return (uint8_t)(((coap_code / 100U) << 5) | (coap_code % 100U));
 }
 
 static void lock_ctx(struct lichen_tunnel_auth_ctx *ctx)
@@ -365,6 +377,21 @@ struct lichen_tunnel_result lichen_tunnel_auth_receive(struct lichen_tunnel_auth
 	unlock_ctx(ctx); return permit();
 }
 
+int lichen_tunnel_sender_iid_from_sockaddr(const struct sockaddr *addr,
+					   size_t addr_len, uint8_t iid[8])
+{
+	const struct sockaddr_in6 *in6;
+
+	if (addr == NULL || iid == NULL ||
+	    addr_len < sizeof(struct sockaddr_in6) ||
+	    addr->sa_family != AF_INET6) {
+		return -EINVAL;
+	}
+	in6 = (const struct sockaddr_in6 *)addr;
+	memcpy(iid, &in6->sin6_addr.s6_addr[8], 8);
+	return 0;
+}
+
 int lichen_tunnel_auth_change_root(struct lichen_tunnel_auth_ctx *ctx, const uint8_t root_iid[8],
 				   const uint8_t root_pubkey[32])
 {
@@ -416,19 +443,24 @@ struct lichen_tunnel_result lichen_tunnel_auth_decapsulate(struct lichen_tunnel_
 	const uint8_t source[16], const uint8_t destination[16], const uint8_t *route_iids,
 	size_t route_hops, enum lichen_tunnel_direction direction, uint64_t now)
 {
-	uint8_t hash[16]; int best = -1; uint8_t best_bits = 0;
+	uint8_t hash[16]; int best = -1; uint8_t best_bits = 0; bool had_expired = false;
 	if (ctx == NULL || source == NULL || destination == NULL || route_iids == NULL) return deny(LICHEN_TUNNEL_DENIAL_MALFORMED);
 	if (direction != LICHEN_TUNNEL_MESH_TO_EXTERNAL) return deny(LICHEN_TUNNEL_DENIAL_WRONG_DIRECTION);
 	if (lichen_tunnel_route_hash(&ctx->crypto, route_iids, route_hops, hash) != 0 ||
 	    memcmp(route_iids + (route_hops - 1U) * 8U, ctx->egress_iid, 8) != 0) return deny(LICHEN_TUNNEL_DENIAL_INVALID_ROUTE);
 	lock_ctx(ctx);
 	if (!observe_time(ctx, now)) { unlock_ctx(ctx); return deny(LICHEN_TUNNEL_DENIAL_CLOCK_REGRESSION); }
-	for (size_t i = 0; i < CONFIG_LICHEN_TUNNEL_AUTH_MAX_ENTRIES; i++)
-		if (ctx->entries[i].used && memcmp(ctx->entries[i].claims.route_hash, hash, 16) == 0 &&
-		    prefix_match(source, ctx->entries[i].claims.prefix, ctx->entries[i].claims.prefix_len) &&
-		    (best < 0 || ctx->entries[i].claims.prefix_len > best_bits)) { best = (int)i; best_bits = ctx->entries[i].claims.prefix_len; }
-	if (best < 0) { unlock_ctx(ctx); return deny(LICHEN_TUNNEL_DENIAL_NO_AUTHORIZATION); }
-	if (ctx->entries[best].claims.expiry <= now) { ctx->entries[best].used = false; unlock_ctx(ctx); return deny(LICHEN_TUNNEL_DENIAL_EXPIRED); }
+	/* Expired entries are not candidates: evict and skip them so a lapsed
+	 * longest-prefix grant cannot shadow a live shorter-prefix grant for
+	 * the same route. EXPIRED is still reported when every match lapsed
+	 * (pinned by the expired_at_boundary shared vector). */
+	for (size_t i = 0; i < CONFIG_LICHEN_TUNNEL_AUTH_MAX_ENTRIES; i++) {
+		if (!ctx->entries[i].used || memcmp(ctx->entries[i].claims.route_hash, hash, 16) != 0 ||
+		    !prefix_match(source, ctx->entries[i].claims.prefix, ctx->entries[i].claims.prefix_len)) continue;
+		if (ctx->entries[i].claims.expiry <= now) { ctx->entries[i].used = false; had_expired = true; continue; }
+		if (best < 0 || ctx->entries[i].claims.prefix_len > best_bits) { best = (int)i; best_bits = ctx->entries[i].claims.prefix_len; }
+	}
+	if (best < 0) { unlock_ctx(ctx); return deny(had_expired ? LICHEN_TUNNEL_DENIAL_EXPIRED : LICHEN_TUNNEL_DENIAL_NO_AUTHORIZATION); }
 	if (unsafe_addr(source) || (source[0] == 0xfeU && (source[1] & 0xc0U) == 0x80U)) { unlock_ctx(ctx); return deny(LICHEN_TUNNEL_DENIAL_SOURCE_SCOPE); }
 	if (unsafe_addr(destination) || (destination[0] == 0xfeU && (destination[1] & 0xc0U) == 0x80U) || destination[0] == 0x02U) {
 		unlock_ctx(ctx); return deny(LICHEN_TUNNEL_DENIAL_DESTINATION_SCOPE);

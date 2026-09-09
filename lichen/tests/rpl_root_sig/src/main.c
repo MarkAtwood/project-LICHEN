@@ -412,6 +412,344 @@ static int test_root_sig_verify_signature_rejects_zero(void)
 	return 1;
 }
 
+/* ── dodag-path admission (lichen_rpl_dodag_process_dio_bytes_root_sig,
+ *    spec 06-security.md 8.10.1; mirrors the Rust receiver semantics) ──── */
+
+#include <lichen/rpl_dodag.h>
+
+/* dodag.c's ASSIGNED_SF push (extern declaration in dodag.c). */
+static uint8_t lora_l2_last_assigned_sf;
+void lora_l2_assign_sf(uint8_t sf) { lora_l2_last_assigned_sf = sf; }
+
+/* Vector dodag_id: test/vectors/root_dio_signature.json
+ * root_dio_signature_valid_basic.dodag_id (02203df4662ab81f203df4662ab81f5a). */
+static const uint8_t vector_dodag_id[16] = {
+	0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f,
+	0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a,
+};
+
+/* Impersonation vector attacker pubkey:
+ * root_dio_signature_impersonation.attacker_pubkey. */
+static const uint8_t attacker_pubkey[32] = {
+	0x68, 0xae, 0x16, 0xcc, 0x01, 0xf1, 0xe7, 0x40, 0xb2, 0x57, 0x53, 0xba,
+	0x11, 0x73, 0x6c, 0xfb, 0x65, 0x74, 0x84, 0x60, 0x65, 0x8e, 0x67, 0xd1,
+	0x3b, 0x75, 0xed, 0xf5, 0xf2, 0xf5, 0x04, 0x87,
+};
+
+/* root_dio_signature_impersonation.cose_sign1 (attacker-signed claim over
+ * the victim-derived DODAGID; expected.error = dodagid_mismatch). */
+static const uint8_t impersonation_cose_sign1[] = {
+	0xd2, 0x84, 0x47, 0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00, 0xa1, 0x04,
+	0x48, 0xb0, 0xb6, 0x49, 0x8d, 0x1d, 0x36, 0x94, 0x86, 0x58, 0x25, 0xa7,
+	0x01, 0x50, 0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x20, 0x3d,
+	0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a, 0x02, 0x00, 0x03, 0x01, 0x04, 0x19,
+	0x01, 0x00, 0x05, 0x1a, 0x67, 0x74, 0x85, 0x80, 0x06, 0x01, 0x07, 0x02,
+	0x58, 0x30, 0x8e, 0x20, 0x06, 0x48, 0x0f, 0xfd, 0x1f, 0x55, 0xff, 0xea,
+	0xda, 0x2d, 0x21, 0xf0, 0x76, 0x60, 0xa4, 0xa4, 0x35, 0xd6, 0xf6, 0xd9,
+	0xfb, 0xf0, 0x9c, 0xe3, 0x5a, 0x90, 0xf9, 0x52, 0x65, 0x49, 0x25, 0x1d,
+	0xbb, 0x74, 0x62, 0x0e, 0x60, 0x82, 0xfe, 0xa8, 0x1a, 0xac, 0x01, 0x93,
+	0x35, 0x02,
+};
+
+/* root_dio_signature_valid_far_expiry.cose_sign1 (same key/DODAGID as
+ * valid_basic, expiry 4102444800). */
+static const uint8_t far_expiry_cose_sign1[] = {
+	0xd2, 0x84, 0x47, 0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00, 0xa1, 0x04,
+	0x48, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a, 0x58, 0x25, 0xa7,
+	0x01, 0x50, 0x02, 0x20, 0x3d, 0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x20, 0x3d,
+	0xf4, 0x66, 0x2a, 0xb8, 0x1f, 0x5a, 0x02, 0x00, 0x03, 0x01, 0x04, 0x19,
+	0x01, 0x00, 0x05, 0x1a, 0xf4, 0x86, 0x57, 0x00, 0x06, 0x01, 0x07, 0x02,
+	0x58, 0x30, 0x50, 0x60, 0x9e, 0x48, 0x70, 0xa6, 0x7c, 0xf1, 0xce, 0x79,
+	0x00, 0xe4, 0xce, 0xb9, 0x60, 0x46, 0x47, 0x11, 0xa7, 0xda, 0x6e, 0x59,
+	0xfb, 0xaf, 0xc2, 0x33, 0x4a, 0x83, 0xd4, 0x7b, 0x53, 0x56, 0x0b, 0xb2,
+	0x7e, 0x8f, 0xae, 0xc1, 0xdf, 0x88, 0x73, 0xb5, 0xd9, 0x1c, 0x73, 0xe6,
+	0x75, 0x03,
+};
+
+#define DODAG_TEST_BASIC_EXPIRY 1735689600U
+#define DODAG_TEST_FAR_EXPIRY 4102444800U
+
+/* Build a DIO carrying the given COSE blob plus the mandatory SCHC Rule
+ * Version option; rank_carrier allows a deliberately mismatched carrier. */
+static size_t build_signed_dio(uint8_t *buf, size_t buflen,
+			       const uint8_t *cose, size_t cose_len,
+			       uint16_t rank_carrier)
+{
+	static const uint8_t schc_opt[3] = { LICHEN_RPL_OPT_SCHC_RULE_VERSION,
+					     0x01,
+					     LICHEN_SCHC_RULE_SET_VERSION };
+	struct lichen_rpl_dio dio = { 0 };
+
+	dio.rpl_instance_id = 0;
+	dio.version = 1;
+	dio.rank = rank_carrier;
+	dio.grounded = true;
+	dio.mode_of_operation = 2;
+	memcpy(dio.dodag_id, vector_dodag_id, 16);
+
+	uint8_t options[2 + LICHEN_RPL_ROOT_DIO_SIGNATURE_MAX_LEN + 3];
+	size_t pos = 0;
+
+	if (cose != NULL) {
+		options[pos++] = LICHEN_RPL_OPT_ROOT_DIO_SIGNATURE;
+		options[pos++] = (uint8_t)cose_len;
+		memcpy(&options[pos], cose, cose_len);
+		pos += cose_len;
+	}
+	memcpy(&options[pos], schc_opt, sizeof(schc_opt));
+	pos += sizeof(schc_opt);
+
+	int n = lichen_rpl_dio_write_with_options(&dio, options, pos, buf,
+						  buflen);
+	return (size_t)n;
+}
+
+static size_t build_plain_dio(uint8_t *buf, size_t buflen)
+{
+	return build_signed_dio(buf, buflen, NULL, 0, 256U);
+}
+
+/* Far-expiry vector always validates against the pinned root key. */
+static int dodag_process_far_expiry(struct lichen_rpl_dodag *d,
+				    struct root_dio_replay_cache *replay,
+				    const uint8_t *root_pubkey,
+				    uint8_t *buf, size_t buflen)
+{
+	size_t len = build_signed_dio(buf, buflen, far_expiry_cose_sign1,
+				      sizeof(far_expiry_cose_sign1), 256U);
+	return lichen_rpl_dodag_process_dio_bytes_root_sig(
+		d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, replay,
+		root_pubkey, true, DODAG_TEST_FAR_EXPIRY - 1U, test_sha256);
+}
+
+static int test_dodag_absent_option_is_baseline(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	size_t len = build_plain_dio(buf, sizeof(buf));
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		vector_pubkey, true, DODAG_TEST_FAR_EXPIRY - 1U, test_sha256);
+	/* L679: no option -> link-layer baseline; DIO still processes
+	 * (returns without the root-sig reject code). */
+	ASSERT_EQ(ret, 0, "absent option processed");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "baseline does not touch cache");
+	return 1;
+}
+
+static int test_dodag_verified_admits_seq(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	int ret = dodag_process_far_expiry(&d, &cache, vector_pubkey, buf, sizeof(buf));
+	ASSERT_EQ(ret >= 0, 1, "verified DIO not rejected");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  true, "root_seq admitted after full validation");
+	return 1;
+}
+
+static int test_dodag_tampered_rejects_without_cache_mutation(void)
+{
+	uint8_t buf[300];
+	uint8_t blob[sizeof(vector_cose_sign1)];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	memcpy(blob, vector_cose_sign1, sizeof(blob));
+	blob[62] ^= 0x01; /* signature bit flip (root_dio_signature_tampered) */
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	size_t len = build_signed_dio(buf, sizeof(buf), blob, sizeof(blob), 256U);
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		vector_pubkey, true, DODAG_TEST_BASIC_EXPIRY - 1U, test_sha256);
+	ASSERT_EQ(ret, LICHEN_RPL_ERR_BAD_OPT, "tampered rejected");
+	ASSERT_EQ(d.role, LICHEN_RPL_UNJOINED, "state unchanged on reject");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "cache untouched on tamper");
+	return 1;
+}
+
+static int test_dodag_impersonation_rejects(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	/* Pin the ATTACKER key: kid matches the pin, signature verifies, but
+	 * the claimed DODAGID does not derive from the attacker key. */
+	size_t len = build_signed_dio(buf, sizeof(buf), impersonation_cose_sign1,
+				      sizeof(impersonation_cose_sign1), 256U);
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		attacker_pubkey, true, DODAG_TEST_BASIC_EXPIRY - 1U,
+		test_sha256);
+	ASSERT_EQ(ret, LICHEN_RPL_ERR_BAD_OPT, "impersonation rejected");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "cache untouched on binding failure");
+	return 1;
+}
+
+static int test_dodag_replay_rejected(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	ASSERT_EQ(dodag_process_far_expiry(&d, &cache, vector_pubkey, buf, sizeof(buf)) >= 0, 1,
+		  "first admitted");
+	int ret = dodag_process_far_expiry(&d, &cache, vector_pubkey, buf, sizeof(buf));
+	ASSERT_EQ(ret, LICHEN_RPL_ERR_BAD_OPT, "same root_seq replayed");
+	return 1;
+}
+
+static int test_dodag_expired_is_baseline(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	/* basic vector expiry 1735689600: at the boundary the signature is
+	 * expired -> treat as unsigned, DIO still processes, seq NOT cached. */
+	size_t len = build_signed_dio(buf, sizeof(buf), vector_cose_sign1,
+				      sizeof(vector_cose_sign1), 256U);
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		vector_pubkey, true, DODAG_TEST_BASIC_EXPIRY, test_sha256);
+	ASSERT_EQ(ret, 0, "expired processed on baseline");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "baseline does not admit seq");
+	return 1;
+}
+
+static int test_dodag_no_pin_is_baseline(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	ASSERT_EQ(dodag_process_far_expiry(&d, &cache, NULL, buf, sizeof(buf)) >=
+			  0,
+		  1, "no pin: baseline");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "no pin: cache untouched");
+	return 1;
+}
+
+static int test_dodag_foreign_pin_is_baseline(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	/* Pin held for a different identity: no pin for the claimed root
+	 * (Rust pinned_pubkey_for(kid) -> None), so baseline, not reject. */
+	size_t len = build_signed_dio(buf, sizeof(buf), far_expiry_cose_sign1,
+				      sizeof(far_expiry_cose_sign1), 256U);
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		attacker_pubkey, true, DODAG_TEST_FAR_EXPIRY - 1U, test_sha256);
+	ASSERT_EQ(ret >= 0, 1, "foreign pin: baseline");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "foreign pin: cache untouched");
+	return 1;
+}
+
+static int test_dodag_no_clock_is_baseline(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	/* have_clock=false: expiry unassessable (R-06-307). */
+	size_t len = build_signed_dio(buf, sizeof(buf), far_expiry_cose_sign1,
+				      sizeof(far_expiry_cose_sign1), 256U);
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		vector_pubkey, false, 0U, test_sha256);
+	ASSERT_EQ(ret >= 0, 1, "no clock: baseline");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "no clock: cache untouched");
+	return 1;
+}
+
+static int test_dodag_carrier_mismatch_rejects(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+
+	/* Valid far-expiry signature carried on a rank-mismatched DIO: the
+	 * cross-check must reject and must NOT burn root_seq 1. */
+	size_t len = build_signed_dio(buf, sizeof(buf), far_expiry_cose_sign1,
+				      sizeof(far_expiry_cose_sign1), 512U);
+	int ret = lichen_rpl_dodag_process_dio_bytes_root_sig(
+		&d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true, &cache,
+		vector_pubkey, true, DODAG_TEST_FAR_EXPIRY - 1U, test_sha256);
+	ASSERT_EQ(ret, LICHEN_RPL_ERR_BAD_OPT, "carrier mismatch rejected");
+	ASSERT_EQ(root_dio_replay_cache_seen(&cache, vector_dodag_id, 0, 1),
+		  false, "cache untouched on carrier mismatch");
+	return 1;
+}
+
+static int test_dodag_null_guards(void)
+{
+	uint8_t buf[300];
+	struct lichen_rpl_dodag d;
+	struct root_dio_replay_cache cache;
+
+	ASSERT_EQ(lichen_rpl_dodag_init(&d, 0, vector_dodag_id, 1), 0, "init");
+	root_dio_replay_cache_init(&cache);
+	size_t len = build_plain_dio(buf, sizeof(buf));
+	ASSERT_EQ(lichen_rpl_dodag_process_dio_bytes_root_sig(
+			  NULL, buf, len, vector_dodag_id, 256U, 0U, 1000U,
+			  true, &cache, vector_pubkey, true, 0U, test_sha256),
+		  LICHEN_RPL_ERR_INVALID, "null dodag");
+	ASSERT_EQ(lichen_rpl_dodag_process_dio_bytes_root_sig(
+			  &d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true,
+			  NULL, vector_pubkey, true, 0U, test_sha256),
+		  LICHEN_RPL_ERR_INVALID, "null cache");
+	ASSERT_EQ(lichen_rpl_dodag_process_dio_bytes_root_sig(
+			  &d, buf, len, vector_dodag_id, 256U, 0U, 1000U, true,
+			  &cache, vector_pubkey, true, 0U, NULL),
+		  LICHEN_RPL_ERR_INVALID, "null sha256");
+	return 1;
+}
+
 int main(void)
 {
 	run_test(test_option_constants_in_sync_with_spec);
@@ -431,6 +769,17 @@ int main(void)
 	run_test(test_replay_cache_rejects_equal_and_lower);
 	run_test(test_replay_cache_keys_isolated);
 	run_test(test_replay_cache_full_table_fails_closed);
+	run_test(test_dodag_absent_option_is_baseline);
+	run_test(test_dodag_verified_admits_seq);
+	run_test(test_dodag_tampered_rejects_without_cache_mutation);
+	run_test(test_dodag_impersonation_rejects);
+	run_test(test_dodag_replay_rejected);
+	run_test(test_dodag_expired_is_baseline);
+	run_test(test_dodag_no_pin_is_baseline);
+	run_test(test_dodag_foreign_pin_is_baseline);
+	run_test(test_dodag_no_clock_is_baseline);
+	run_test(test_dodag_carrier_mismatch_rejects);
+	run_test(test_dodag_null_guards);
 
 	printf("%d/%d passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;

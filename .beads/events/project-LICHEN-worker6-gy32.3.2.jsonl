@@ -1,5 +1,0 @@
-{"id":"01a082ac-7bd6-72ac-b403-ed501ad4f999","issue_id":"project-LICHEN-worker6-gy32.3.2","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T20:18:57.110176479Z"}
-{"id":"01a082ac-7bda-7c97-aca3-49712b0a310b","issue_id":"project-LICHEN-worker6-gy32.3.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-08T20:18:57.114826624Z"}
-{"id":"01a082ac-7bdf-75bc-b88a-ad94765e1470","issue_id":"project-LICHEN-worker6-gy32.3.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: structured-logging","created_at":"2026-09-08T20:18:57.119376684Z"}
-{"id":"01a082ac-7be4-705c-98aa-5b750eab1d74","issue_id":"project-LICHEN-worker6-gy32.3.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: cross-impl","created_at":"2026-09-08T20:18:57.124024736Z"}
-{"id":"01a082ac-7be8-7ad5-8406-b4afd70f8d16","issue_id":"project-LICHEN-worker6-gy32.3.2","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: diagnosability","created_at":"2026-09-08T20:18:57.128710967Z"}

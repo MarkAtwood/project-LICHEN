@@ -62,6 +62,9 @@ pub const MAX_COORDINATING_GATEWAYS: usize = 256;
 const SLOT_CLAIM_DOMAIN: &[u8] = b"LICHEN-GCP-SLOT-CLAIM-v1";
 const SLOT_REPLAY_MAGIC: &[u8; 8] = b"LCHNSRP1";
 const SLOT_REPLAY_VERSION: u16 = 1;
+/// Sender-side `claim_seq` counter file (spec/08 GCP-6.5): magic + u32.
+const CLAIM_SEQ_MAGIC: &[u8; 8] = b"LCHNCSQ1";
+const CLAIM_SEQ_ENCODED_LEN: usize = 12;
 const SLOT_REPLAY_SEAL_DOMAIN: &[u8] = b"LICHEN-GCP-SLOT-REPLAY-v1";
 
 /// Slot coordination validation error.
@@ -832,8 +835,10 @@ impl SlotClaimVerifier {
     /// Verify one claim for exactly the current superframe.
     ///
     /// Exact matching rejects both captured old claims and pre-played future
-    /// claims. A gateway may re-claim within a superframe only by advancing the
-    /// signed `claim_sequence`, preserving the required loser-reclaim flow.
+    /// claims. The replay gate is the pure `claim_seq` high-water per gateway
+    /// IID (GCP-6.5 step 8): a re-claim — in any superframe — must advance the
+    /// signed `claim_sequence`, preserving the loser-reclaim flow and blocking
+    /// seq rollback from a rebooted or NVS-wiped sender.
     pub fn verify(
         &mut self,
         claim: RawSlotClaim,
@@ -873,7 +878,12 @@ impl SlotClaimVerifier {
             });
         }
         if let Some(previous) = self.last_seen.get(&claim.gateway_iid) {
-            if (claim.superframe_id, claim.claim_sequence) <= *previous {
+            // GCP-6.5 step 8 (spec/08): pure claim_seq high-water per gateway
+            // IID — reject claim_seq <= cached regardless of superframe. The
+            // stale/future-superframe gate above already rejects old- and
+            // future-superframe claims; this gate additionally blocks seq
+            // rollback inside a newer superframe.
+            if claim.claim_sequence <= previous.1 {
                 return Err(SlotError::Replay {
                     gateway_iid: claim.gateway_iid,
                     superframe_id: claim.superframe_id,
@@ -1071,6 +1081,116 @@ pub(crate) struct SlotReplaySnapshot {
     pub generation: u64,
     pub max_gateways: usize,
     pub entries: Vec<(Iid, u64, u32)>,
+}
+
+/// File-backed monotonic `claim_seq` counter for slot-claim senders
+/// (spec/08 GCP-6.5 "claim_seq Persistence").
+///
+/// Loads default to 0 when the file is absent; a present-but-corrupt file is
+/// an error, never a silent reset (a reset would restart the sequence below
+/// receiver high-water marks). `next_seq` persists durably before returning,
+/// so a crash can only skip a sequence number, never reuse one. Not `Clone`:
+/// two live instances for one path could hand out the same sequence value.
+#[derive(Debug)]
+pub struct ClaimSeqStore {
+    path: PathBuf,
+    next: u32,
+}
+
+impl ClaimSeqStore {
+    /// Load the persisted counter; `next_seq` starts at 1 on a fresh path.
+    pub fn load(path: &Path) -> Result<Self, SlotError> {
+        let mut file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self {
+                    path: path.to_path_buf(),
+                    next: 0,
+                });
+            }
+            Err(error) => return Err(SlotError::StorageIo(error.to_string())),
+        };
+        let mut bytes = Vec::new();
+        Read::by_ref(&mut file)
+            .take(CLAIM_SEQ_ENCODED_LEN as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+        if bytes.len() != CLAIM_SEQ_ENCODED_LEN || !bytes.starts_with(CLAIM_SEQ_MAGIC) {
+            return Err(SlotError::CorruptState);
+        }
+        Ok(Self {
+            path: path.to_path_buf(),
+            next: u32::from_be_bytes(
+                bytes[CLAIM_SEQ_MAGIC.len()..]
+                    .try_into()
+                    .map_err(|_| SlotError::CorruptState)?,
+            ),
+        })
+    }
+
+    /// Atomically increment, persist, and return the value to sign with.
+    ///
+    /// In-memory state advances only after the durable write succeeds, so a
+    /// failed call leaves memory and disk consistent for a retry.
+    pub fn next_seq(&mut self) -> Result<u32, SlotError> {
+        let value = self
+            .next
+            .checked_add(1)
+            .ok_or(SlotError::ArithmeticOverflow)?;
+        let temp_path = slot_claim_seq_temp_path(&self.path, value)?;
+        // A crash between temp-create and rename leaves the temp behind; if
+        // the rebooting process lands on the same PID and value, create_new
+        // would fail forever. A stale temp is garbage from a dead attempt
+        // whose rename never landed, so remove it and retry once.
+        let mut open = OpenOptions::new();
+        open.write(true).create_new(true);
+        let mut file = match open.open(&temp_path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                fs::remove_file(&temp_path)
+                    .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+                open.open(&temp_path)
+                    .map_err(|error| SlotError::StorageIo(error.to_string()))?
+            }
+            Err(error) => return Err(SlotError::StorageIo(error.to_string())),
+        };
+        let result = (|| -> Result<(), SlotError> {
+            file.write_all(CLAIM_SEQ_MAGIC)
+                .and_then(|_| file.write_all(&value.to_be_bytes()))
+                .and_then(|_| file.sync_all())
+                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+            fs::rename(&temp_path, &self.path)
+                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+            // Bare relative paths have an empty parent(); "." is the real
+            // parent and skipping its fsync would allow the rename to be lost
+            // after next_seq already returned.
+            let parent = self
+                .path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            File::open(parent)
+                .and_then(|directory| directory.sync_all())
+                .map_err(|error| SlotError::StorageIo(error.to_string()))?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temp_path);
+        }
+        result?;
+        self.next = value;
+        Ok(value)
+    }
+}
+
+fn slot_claim_seq_temp_path(path: &Path, value: u32) -> Result<PathBuf, SlotError> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| SlotError::StorageIo("claim-seq path has no UTF-8 file name".into()))?;
+    // The ever-increasing value keeps successive saves from colliding with a
+    // leftover temp (mirrors the generation suffix in slot_replay_temp_path).
+    Ok(path.with_file_name(format!(".{name}.tmp-{value}-{}", std::process::id())))
 }
 
 /// Canonical, domain-separated signed transcript for a slot claim.
@@ -2559,6 +2679,34 @@ mod tests {
     }
 
     #[test]
+    fn replay_gate_is_pure_claim_seq_highwater_across_superframes() {
+        let mut verifier = SlotClaimVerifier::new_ephemeral(4).unwrap();
+        let (first, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![1], 10, 5, 60);
+        verifier.verify(first, &pubkey, 10).unwrap();
+
+        // Lower seq in a newer superframe: (superframe, seq) tuple ordering
+        // would accept it; the GCP-6.5 step 8 high-water MUST reject it.
+        let (rollback, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![2], 11, 4, 60);
+        assert!(matches!(
+            verifier.verify(rollback, &pubkey, 11),
+            Err(SlotError::Replay { .. })
+        ));
+
+        // Equal seq in a newer superframe is replay too.
+        let (equal, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![2], 11, 5, 60);
+        assert!(matches!(
+            verifier.verify(equal, &pubkey, 11),
+            Err(SlotError::Replay { .. })
+        ));
+
+        // Advancing seq re-claims normally across the superframe boundary.
+        let (advance, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![3], 11, 6, 60);
+        let accepted = verifier.verify(advance, &pubkey, 11).unwrap();
+        assert_eq!(accepted.claim_sequence(), 6);
+        assert_eq!(accepted.slots(), &[3]);
+    }
+
+    #[test]
     fn claim_signature_binds_slots_identity_and_superframe() {
         let (raw, pubkey) = signed_raw_claim([32; 32], vec![1, 2], 10, 60);
         let mut verifier = SlotClaimVerifier::new_ephemeral(4).unwrap();
@@ -2658,5 +2806,73 @@ mod tests {
 
         let result = resolve_conflict(&claim_a, &claim_b, 1000);
         assert_eq!(result, ConflictResolution::NoConflict);
+    }
+
+    fn test_claim_seq_path(label: &str) -> PathBuf {
+        let sequence = TEST_PATH_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "lichen-claim-seq-{label}-{}-{sequence}.bin",
+            std::process::id()
+        ))
+    }
+
+    // Spec/08 GCP-6.5 claim_seq persistence (l1qw.20.2)
+
+    #[test]
+    fn claim_seq_missing_file_defaults_to_zero() {
+        let path = test_claim_seq_path("missing");
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(store.next_seq().unwrap(), 1);
+        assert_eq!(store.next_seq().unwrap(), 2);
+    }
+
+    #[test]
+    fn claim_seq_increments_before_use_and_persists_each_step() {
+        let path = test_claim_seq_path("order");
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        let first = store.next_seq().unwrap();
+        assert_eq!(first, 1);
+        // The durable file must already show the value that was handed out.
+        let reloaded = ClaimSeqStore::load(&path).unwrap();
+        let second = store.next_seq().unwrap();
+        assert_eq!(second, 2);
+        assert_eq!(second, reloaded.next + 1);
+    }
+
+    #[test]
+    fn claim_seq_monotonic_across_re_creation() {
+        let path = test_claim_seq_path("restart");
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(store.next_seq().unwrap(), 1);
+        assert_eq!(store.next_seq().unwrap(), 2);
+        // Reboot: re-create from the same path, counter continues.
+        let mut restarted = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(restarted.next_seq().unwrap(), 3);
+        let mut again = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(again.next_seq().unwrap(), 4);
+    }
+
+    #[test]
+    fn claim_seq_corrupt_file_is_rejected_not_reset() {
+        let path = test_claim_seq_path("corrupt");
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        store.next_seq().unwrap();
+        fs::write(&path, b"LCHNCSQ1\x00\x00\x00").unwrap();
+        assert!(matches!(
+            ClaimSeqStore::load(&path),
+            Err(SlotError::CorruptState)
+        ));
+    }
+
+    #[test]
+    fn claim_seq_recovers_from_stale_temp() {
+        let path = test_claim_seq_path("stale-temp");
+        // Crash artifact: the temp for value 1 left behind by a dead attempt.
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let stale = path.with_file_name(format!(".{name}.tmp-1-{}", std::process::id()));
+        fs::write(&stale, b"junk").unwrap();
+        let mut store = ClaimSeqStore::load(&path).unwrap();
+        assert_eq!(store.next_seq().unwrap(), 1);
+        assert!(!stale.exists());
     }
 }

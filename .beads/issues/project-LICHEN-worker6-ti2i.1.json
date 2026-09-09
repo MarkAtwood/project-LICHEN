@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-ti2i.1",
+  "title": "Read protocol layers and classify authority",
+  "description": "Read core spec chapters, appendices, standalone drafts, and relevant canonical vector metadata via parallel layer-specific research. Record wire contracts, state transitions, invariants, dependencies, optional profiles, and document conflicts. Do not change code, specs, or existing issues.",
+  "acceptance_criteria": "All current protocol areas covered with file/line references and normative versus historical/proposed distinctions.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-08T23:14:30.944668362Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-08T23:34:28.576526123Z",
+  "started_at": "2026-09-08T23:14:37.371319032Z",
+  "closed_at": "2026-09-08T23:34:28.576526123Z",
+  "close_reason": "Completed full reading of current spec Markdown corpus through seven bounded parallel layer reports plus coordinator architecture/rationale/history reading; eighth research pass covered canonical vector metadata and constants. Read all 17 adjudicated decisions. Distinguished hop/origin auth, local/global routing, independent clock domains, packet/application custody, and current versus historical/proposed profiles. No code/spec edits or tests.",
+  "labels": [
+    "analysis",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ti2i.1",
+      "depends_on_id": "project-LICHEN-worker6-ti2i",
+      "type": "parent-child",
+      "created_at": "2026-09-08T23:14:31.108310496Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-s61e",
+  "title": "Python slot claim: sibling payload fields (slots elements, superframe_epoch, expiry, ordinal) lack upper bounds — same bignum/oversized divergence class as jkuj",
+  "description": "Codereview finding (jkuj security pass, reviewer kimi-k3). The jkuj fix bounds claim_seq at u32::MAX, but the same cbor2-bignum divergence remains open on the other SlotClaim payload fields. At decode (python/src/lichen/gateway/slot_claim.py): slots elements checked only for int-ness (:240-243); superframe_epoch (:245), expiry (:255), ordinal (:267) checked int+non-negative only — all unbounded above. Rust bounds each: per-slot u32::try_from (slot.rs:574) plus count \u003c= MAX_SLOTS_PER_SUPERFRAME and per-slot \u003c slots_per_superframe; superframe_epoch/expiry/ordinal read as u64 (slot.rs:579/581/592), so CBOR tag-2 bignums above 2**64-1 are MalformedClaim. Consequence: a gateway-key holder can sign a claim carrying slots=[2**100] or superframe_epoch=2**100; Python verifies the signature and advances the replay high-water while every Rust peer discards identical bytes as malformed — the same cross-implementation replay-state poisoning class as jkuj. __post_init__ has the same gaps (:168-178). Minimal fix: bound slot elements to 0 \u003c= s \u003c= 0xFFFFFFFF (or slots_per_superframe ceiling where known) and the three scalar fields to 0 \u003c= v \u003c= 0xFFFFFFFFFFFFFFFF at both validation sites, matching Rust decode ranges. Distinct from jkuj (claim_seq, now fixed) and from qpco.5 (bit-exact CBOR parity sweep, broader).",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:53:52.137847712Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:17:00.025978226Z",
+  "started_at": "2026-09-09T01:57:25.158946351Z",
+  "closed_at": "2026-09-09T02:17:00.025978226Z",
+  "close_reason": "Done. Rust-parity bounds at both validation sites (__post_init__ + decode_cose): slot elements 0..u32::MAX (also rejects negatives/bools), slot count \u003c= MAX_SLOTS_PER_SUPERFRAME=4096 (new public constant, slot.rs:57 parity), superframe_epoch/expiry/ordinal 0..u64::MAX; ordinal=None local sentinel preserved. Pins: construct boundary test (u32/u64 maxima accepted, above-max/-1/bool/4097-count rejected) + parametrized wire tests on the happy_path_n1 envelope (6 reject cases incl. tag-2 bignums, 4 boundary-accept cases). 93 passed, 3 skipped (pre-existing divergence skips). 3x delegated codereview: correctness PASS (+1 cosmetic message nit, declined — keeping pre-existing message strings avoids churn on existing tests); edge PASS after adding its 3 coverage suggestions inline; security PASS on the diff with 2 findings on adjacent gaps filed: ft5w (mode key-3 bool/float type-strictness, P2) and prgb (payload materialized before count check, P3) — both pre-existing, distinct defects, not in this bead's scope.",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-s61e",
+      "depends_on_id": "project-LICHEN-worker6-jkuj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:53:52.404656082Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

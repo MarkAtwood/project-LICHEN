@@ -1,0 +1,19 @@
+{
+  "id": "project-LICHEN-worker6-psxx",
+  "title": "lichen-core ccp16 desync consumer missed 468ac9cfb4 corpus update: import stripped, pin 4 stale, no synced_missed_beacons consumer",
+  "description": "Commit 468ac9cfb4 added the 5th corpus case synced_missed_beacons_desync (R-02a-081) and updated the python consumer (EXPECTED_COUNTS CCP16_DESYNC=5) and added the lichen-rpl consumer, but skipped rust/lichen-core/tests/ccp16_desync_vectors.rs: (1) a later clippy cleanup stripped the now-needed use serde_json::Value so the test target no longer compiles at HEAD (uncommitted one-line restore sits in worker3's tree); (2) corpus_case_count_is_pinned asserts 4, corpus has 5 -\u003e corpus_case_count_is_pinned RED; (3) no consumer drive for the new case. Fix: restore import, bump pin to 5, add synced_missed_beacons_desync_vector FSM drive mirroring lichen-rpl/tests/ccp16_desync_vectors.rs (3 on_missed_superframe -\u003e Desynced, counters reset). Discovered-from: project-LICHEN-worker6-ba39 lineage via worker3 round startup verification.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:04:37.390825996Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:09:22.016066732Z",
+  "started_at": "2026-09-09T01:04:56.533067928Z",
+  "closed_at": "2026-09-09T01:09:22.016066732Z",
+  "close_reason": "Fixed in commit 8c1e26b1b5 (worker3): restored use serde_json::Value (test target did not compile at HEAD), bumped corpus pin 4-\u003e5, added synced_missed_beacons_desync_vector FSM drive mirroring lichen-rpl/tests/ccp16_desync_vectors.rs (3 on_missed_superframe -\u003e Desynced, missed_superframes+consecutive_valid reset to 0). Reviewer-found P4 fixed in same commit: pin-test comment falsely claimed the C consumer pins the count — corrected to name Python-only pinning (C desync_fsm consumes named cases only). Verification: ccp16 suite 6/6, cargo test -p lichen-core all green, clippy --test ccp16_desync_vectors -D warnings clean, fmt --check clean. 3x kimi-k3 reviewer passes: correctness PASS, security PASS-with-comment (the comment finding), edge-cases PASS-with-comment (same finding); zero logic defects across passes.",
+  "labels": [
+    "rust"
+  ]
+}

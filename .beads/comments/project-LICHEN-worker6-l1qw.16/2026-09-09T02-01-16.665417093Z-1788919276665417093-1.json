@@ -1,0 +1,7 @@
+{
+  "id": "1788919276665417093-1",
+  "issue_id": "project-LICHEN-worker6-l1qw.16",
+  "author": "Mark Atwood",
+  "text": "Evidence (worker7, 2026-09-08): gateway test 'runtime_ingress_dispatches_authenticated_gcp_slot_claim' (rust/lichen-gateway/tests/end_to_end.rs:1014) FAILS on current main with 'called Result::unwrap() on an Err value: CoapEncode' — independent of routing changes (reproduced with clean tree). This is the GCP slot-claim COSE_Sign1 encode divergence surfacing in the gateway slot-claim end-to-end path. Likely the same root cause as this bead.",
+  "created_at": "2026-09-09T02:01:16.665417093Z"
+}

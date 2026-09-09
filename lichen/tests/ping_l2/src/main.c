@@ -7,6 +7,7 @@
  */
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/lora.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/icmp.h>
@@ -441,6 +442,113 @@ ZTEST(ping_l2, test_full_l2_loopback_ping)
 		     "full LICHEN_L2 loopback packet path was not observed");
 }
 
+ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
+{
+	struct lichen_l2_test_stats l2_before;
+	struct lora_loopback_test_stats loop_before;
+	uint8_t rx_buf[sizeof(coap_test_payload)];
+	int sock;
+	int ret;
+
+	k_sleep(K_MSEC(100));
+
+	/* The teardown tests ran before this one (ztest executes cases in
+	 * sorted section order, not source order) and leave the module in
+	 * one of two end states; key the recovery off the module state,
+	 * not off teardown folklore:
+	 *
+	 * - LORA_ABORTED (earlier tests' traffic trips the RX re-arm
+	 *   failure counter, or a corrupted-queue retry aborts the RX
+	 *   thread): the aborted module keeps the loopback driver armed,
+	 *   and no deinit/init cycle clears that stale arm
+	 *   (project-LICHEN-worker6-uhyf). Recover manually and quiesce:
+	 *   drain the driver queue (leftovers would be replayed into the
+	 *   fresh arm), disarm the stale driver arm at driver level, then
+	 *   run the documented recovery: deinit handles ABORTED directly,
+	 *   init() + start() restore the running state, and reprovision
+	 *   re-loads key + peer. A settle wait follows because one-shot
+	 *   async senders (e.g. the app-identity beacon queued by the
+	 *   publish test) can fire their driver send after the fresh arm
+	 *   and re-trip the re-arm abort; the stragglers are finite, so a
+	 *   bounded retry converges.
+	 * - still RUNNING (the teardown path completed without aborting;
+	 *   with the uhyf root cause fixed — a same-callback re-arm -EBUSY
+	 *   is now treated as healthy-still-armed — this is the common
+	 *   case): deinit() refuses with "still running, call stop() first"
+	 *   (-EBUSY) and init() would refuse too, so the unconditional
+	 *   cycle degrades into refusals (bead m4yk), and its driver-level
+	 *   disarm would deafen an armed, healthy L2. The running module
+	 *   is already the state we want — skip the cycle, just drain the
+	 *   driver queue and let straggler sends settle, and never disarm
+	 *   a live RX arm out from under it.
+	 *
+	 * Either way the disable path wiped the link_ctx at net_if_down,
+	 * so reprovision re-loads key + peer afterwards. */
+	if (lichen_lora_l2_is_running() && !lichen_lora_l2_needs_reinit()) {
+		/* Healthy: no recovery cycle — just quiesce straggler sends. */
+		lora_loopback_test_reset(lora_dev);
+		/* Idempotent (-EALREADY tolerated): the UDP TX path must not
+		 * depend on earlier teardown tests remembering to
+		 * reprovision (project-LICHEN-worker6-m4yk). */
+		reprovision_after_reinit();
+		k_sleep(K_MSEC(150));
+	} else {
+		for (int attempt = 0; attempt < 3; attempt++) {
+			lora_loopback_test_reset(lora_dev);
+			ret = lora_recv_async(lora_dev, NULL, NULL);
+			zassert_true(ret == 0 || ret == -EINVAL,
+				     "stale driver arm not clearable: %d", ret);
+			ret = lichen_lora_l2_deinit();
+			zassert_true(ret == 0 || ret == -EBUSY,
+				     "post-abort deinit: %d", ret);
+			zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
+			zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
+			ret = net_if_up(test_iface);
+			zassert_true(ret == 0 || ret == -EALREADY,
+				     "post-abort net_if_up: %d", ret);
+			reprovision_after_reinit();
+			k_sleep(K_MSEC(150));
+			if (lichen_lora_l2_is_running() &&
+			    !lichen_lora_l2_needs_reinit()) {
+				break;
+			}
+		}
+		zassert_true(lichen_lora_l2_is_running() &&
+			     !lichen_lora_l2_needs_reinit(),
+			     "module did not quiesce after recovery");
+	}
+	ret = net_if_up(test_iface);
+	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
+	reprovision_after_reinit();
+
+	sock = bind_udp_observer();
+	zassert_true(sock >= 0, "failed to bind UDP observer: %d", sock);
+
+	lichen_l2_test_reset_stats();
+	lora_loopback_test_reset(lora_dev);
+
+	lichen_l2_test_get_stats(&l2_before);
+	lora_loopback_test_get_stats(lora_dev, &loop_before);
+
+	ret = send_l2_packet(expected_udp_packet, expected_udp_packet_len,
+			     IPPROTO_UDP);
+	if (ret != 0) {
+		(void)zsock_close(sock);
+	}
+	zassert_equal(ret, 0, "failed to send UDP packet: %d", ret);
+
+	ret = recv_udp_observer(sock, rx_buf, sizeof(rx_buf));
+	(void)zsock_close(sock);
+
+	zassert_equal(ret, sizeof(coap_test_payload),
+		      "UDP observer did not receive payload: %d", ret);
+	zassert_mem_equal(rx_buf, coap_test_payload, sizeof(coap_test_payload));
+	zassert_true(wait_for_packet_path(&l2_before, &loop_before,
+					  expected_udp_packet,
+					  expected_udp_packet_len),
+		     "UDP packet was not observed through full L2 injection path");
+}
+
 ZTEST(ping_l2, test_l2_publish_app_identity_uses_link_context_key)
 {
 	struct lichen_app_identity_self self;
@@ -601,67 +709,22 @@ ZTEST(ping_l2, test_disable_retries_incomplete_queue_destruction)
 	ret = net_if_up(test_iface);
 	zassert_true(ret == 0 || ret == -EALREADY, "net_if_up failed: %d", ret);
 
-	/* The teardown ran lichen_link_cleanup(), which wiped the signing key
-	 * from the shared link context. The suite fixture runs once, so later
-	 * tests would TX with an unkeyed context (-ENOKEY). Restore the full
-	 * deterministic identity (signing key + canonical-EUI-64 peer) the
-	 * same way a real disable -> enable -> load_key cycle does; the
-	 * helper also re-adds the peer, which a bare key re-load would miss
-	 * (RX SIID lookup would fail with -LICHEN_EAUTH). */
+	/* The teardown ran lichen_link_cleanup(), which wipes the signing key
+	 * from the shared link context. Restore the full deterministic
+	 * identity (signing key + canonical-EUI-64 peer) the same way a real
+	 * disable -> enable -> load_key cycle does, so the suite ends in the
+	 * provisioned state ping_l2_setup built; the helper also re-adds the
+	 * peer, which a bare key re-load would miss (RX SIID lookup would
+	 * fail with -LICHEN_EAUTH). */
 	reprovision_after_reinit();
 }
 
-ZTEST(ping_l2, test_udp_payload_reaches_socket_after_l2_injection)
-{
-	struct lichen_l2_test_stats l2_before;
-	struct lora_loopback_test_stats loop_before;
-	uint8_t rx_buf[sizeof(coap_test_payload)];
-	int sock;
-	int ret;
-
-	k_sleep(K_MSEC(100));
-
-	/* The teardown test left the module in LORA_ABORTED (its
-	 * corrupted-queue retry aborted the RX thread), which wiped the
-	 * link_ctx and blocked enable(). Run the documented recovery:
-	 * deinit() handles ABORTED directly, then init() + start() restore
-	 * the running state, and reprovision re-loads key + peer. */
-	ret = lichen_lora_l2_deinit();
-	zassert_true(ret == 0 || ret < 0, "post-abort deinit: %d", ret);
-	zassert_ok(lichen_lora_l2_init(), "post-abort re-init failed");
-	zassert_ok(lichen_lora_l2_start(), "post-abort lora start failed");
-	ret = net_if_up(test_iface);
-	zassert_true(ret == 0 || ret == -EALREADY, "post-abort net_if_up: %d", ret);
-	reprovision_after_reinit();
-
-	sock = bind_udp_observer();
-	zassert_true(sock >= 0, "failed to bind UDP observer: %d", sock);
-
-	lichen_l2_test_reset_stats();
-	lora_loopback_test_reset(lora_dev);
-
-	lichen_l2_test_get_stats(&l2_before);
-	lora_loopback_test_get_stats(lora_dev, &loop_before);
-
-	ret = send_l2_packet(expected_udp_packet, expected_udp_packet_len,
-			     IPPROTO_UDP);
-	if (ret != 0) {
-		(void)zsock_close(sock);
-	}
-	zassert_equal(ret, 0, "failed to send UDP packet: %d", ret);
-
-	ret = recv_udp_observer(sock, rx_buf, sizeof(rx_buf));
-	(void)zsock_close(sock);
-
-	zassert_equal(ret, sizeof(coap_test_payload),
-		      "UDP observer did not receive payload: %d", ret);
-	zassert_mem_equal(rx_buf, coap_test_payload, sizeof(coap_test_payload));
-	zassert_true(wait_for_packet_path(&l2_before, &loop_before,
-					  expected_udp_packet,
-					  expected_udp_packet_len),
-		     "UDP packet was not observed through full L2 injection path");
-}
-
+/* Merge resolution: beads-worker-8 carried an older copy of
+ * test_udp_payload_reaches_socket_after_l2_injection here; main superseded
+ * it with the state-keyed recovery version above (beads m4yk /
+ * worker6-uhyf), so the stale duplicate is dropped (a duplicate ZTEST name
+ * would also fail to link). The branch's genuinely new uwip.3 CAD test
+ * below is kept. */
 /* uwip.3: the emulated async CAD path (loopback registers a NULL starter)
  * must arm, deliver exactly one clear-channel verdict from the completion
  * context, reject a concurrent arm while in flight, and free the slot for

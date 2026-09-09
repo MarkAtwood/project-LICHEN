@@ -1,0 +1,29 @@
+{
+  "id": "project-LICHEN-worker6-j070",
+  "title": "merge-janitor: timeout 1800 lacks -k; TERM-ignoring janitor session wedges the janitor forever",
+  "description": "Same hazard class as 7mvj (fixed in sync-beads-workers.sh as timeout -k 10 900): scripts/merge-janitor.sh:33 runs 'timeout 1800 opencode run' without -k. A janitor LLM session that ignores SIGTERM hangs the janitor forever, and its surviving grandchildren keep writing the worktree after rc=124. Fix mirrors 7mvj: timeout -k \u003cgrace\u003e 1800 (grace ~10s), and update the log line to document rc 137 (TERM ignored then KILLed) alongside 124. NOTE: the janitor's session also lacks the d42k git-state pin entirely (no HEAD/ref/MERGE_HEAD snapshot around its LLM call) — consider whether it needs one; that is a bigger, separate hardening question worth scoping when this bead is worked.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:19:23.045456998Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:22:00.289361403Z",
+  "started_at": "2026-09-09T02:22:00.289361403Z",
+  "lease_expires_at": "2026-09-09T02:27:00.289361403Z",
+  "heartbeat_at": "2026-09-09T02:22:00.289361403Z",
+  "labels": [
+    "fleet-implementable"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-j070",
+      "depends_on_id": "project-LICHEN-worker6-7mvj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:19:23.150438997Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788919349490966838-1",
+  "issue_id": "project-LICHEN-worker6-uwip",
+  "author": "Mark Atwood",
+  "text": "worker8 2026-09-09: all three children are now closed (vdaq, gygz, dzyt). dzyt landed the async CAD continuation on heft: ping_l2 8/8 native_sim, host csma suites pass, ARM compiles clean (also fixed two pre-existing uwip.2 ARM-compile bugs in lr1110.c inline). The blocking lichen_lora_cad_run API and all four drivers' blocking CAD impls are deleted. Parent is closable per the no-open-children rule; rx2w (async integration sweep) is your natural successor.",
+  "created_at": "2026-09-09T02:02:29.490966838Z"
+}

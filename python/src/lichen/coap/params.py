@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""LICHEN CoAP transmission parameters and duty cycle awareness (spec 07 §10.2.2-10.2.3).
+"""LICHEN CoAP transmission parameters and duty cycle awareness (spec 07 §10.2.3-10.2.4).
 
 Implements the LICHEN-specific overrides for RFC 7252 retransmission and
 the duty cycle tracking mandated by spec/07-transport-app.md.
@@ -116,7 +116,7 @@ PORT_ALLOCATION: dict[int, str] = {
 
 
 class CongestionLevel(StrEnum):
-    """Duty cycle congestion levels (spec §10.2.3)."""
+    """Duty cycle congestion levels (spec §10.2.4)."""
 
     NORMAL = "normal"
     ELEVATED = "elevated"
@@ -152,7 +152,7 @@ def congestion_level(duty_used_ratio: float) -> CongestionLevel:
 # This alias preserves backward compatibility for existing coap imports.
 TxPriority = Priority
 
-# Application-to-priority mapping (spec §10.2.3)
+# Application-to-priority mapping (spec §10.2.4 Priority Queue)
 # Uses semantic names from Priority enum for clarity.
 APP_PRIORITY: dict[tuple[int, str], Priority] = {
     (5681, "alert"): Priority.SOS,  # CoT subtype 0x20 -> P0
@@ -182,7 +182,7 @@ def app_priority(port: int, subtype: str) -> Priority:
 class CongestionError(Exception):
     """Raised when transmission is blocked due to duty cycle congestion.
 
-    Per spec 07 section 10.2.3, congested nodes must shed traffic:
+    Per spec 07 section 10.2.4, congested nodes must shed traffic:
     - ELEVATED: delay non-urgent (NORMAL/BULK)
     - CRITICAL: only SOS/routing
     - EXHAUSTED: stop all TX
@@ -211,7 +211,7 @@ class CongestionError(Exception):
 def check_congestion_allows(level: CongestionLevel, priority: Priority) -> bool:
     """Check if a transmission is allowed at the given congestion level.
 
-    Implements spec 07 section 10.2.3:
+    Implements spec 07 section 10.2.4:
     - NORMAL (<50%): all traffic allowed
     - ELEVATED (50-80%): delay non-urgent (NORMAL/BULK), allow SOS/ROUTING/URGENT
     - CRITICAL (80-95%): only SOS/ROUTING
@@ -240,7 +240,7 @@ def congestion_service_unavailable(
     level: CongestionLevel,
     retry_after_s: int | float | None = None,
 ) -> Message:
-    """Build a 5.03 Service Unavailable response per spec 07 section 10.2.3.
+    """Build a 5.03 Service Unavailable response per spec 07 section 10.2.4.
 
     When congested, respond to new requests with:
         5.03 Service Unavailable
@@ -286,7 +286,7 @@ def congestion_service_unavailable(
     })
     msg = Message(code=SERVICE_UNAVAILABLE, payload=payload)
     msg.opt.content_format = ContentFormat.CBOR
-    # Always set Max-Age to match retry_after per spec 07 section 10.2.3.
+    # Always set Max-Age to match retry_after per spec 07 section 10.2.4.
     # Max-Age=0 is valid per RFC 7252 (means "immediately stale").
     msg.opt.max_age = retry_after_s
     return msg

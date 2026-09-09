@@ -35,7 +35,8 @@
           "type": "string",
           "enum": [
             "rpl_route_state",
-            "dao_origin_signature"
+            "dao_origin_signature",
+            "density_adaptive"
           ]
         },
         "oracle": {
@@ -202,7 +203,8 @@
                 "$ref": "#/definitions/root_signature_vector"
               },
               {
-                "$ref": "#/definitions/rangetest_vector"
+                "$ref": "#/definitions/rangetest_vector",
+                "$ref": "#/definitions/density_adaptive_vector"
               }
             ]
           }
@@ -6743,6 +6745,86 @@
           }
         }
       ]
+    },
+    "density_adaptive_vector": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "input",
+        "output"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "density": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "dodag_size": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tier": {
+              "enum": [
+                "sparse",
+                "moderate",
+                "dense",
+                "very_dense",
+                "extreme"
+              ]
+            },
+            "announce_interval_sec": {
+              "type": "integer",
+              "minimum": 300
+            },
+            "max_announce_hops": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 15
+            },
+            "gradient_timeout_sec": {
+              "type": "integer",
+              "minimum": 600
+            },
+            "announce_jitter_sec": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 120
+            },
+            "num_slots": {
+              "type": "integer",
+              "minimum": 8
+            },
+            "position_beacon_interval_sec": {
+              "enum": [
+                30,
+                300
+              ]
+            }
+          }
+        },
+        "assert": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
     }
   }
 }

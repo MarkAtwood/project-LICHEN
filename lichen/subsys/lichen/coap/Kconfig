@@ -115,7 +115,11 @@ config LICHEN_COAP_CONFIG
 	bool "LCI /config resource handlers"
 	depends on LICHEN_COAP_SERVER
 	imply ZCBOR
-	select LICHEN_COAP_KEYS
+	# LICHEN_COAP_KEYS genuinely requires LICHEN_SLIP_TRANSPORT + ZCBOR
+	# (bd a2a2); selecting it unconditionally produces an unsatisfied-deps
+	# Kconfig warning (fatal under WARN_TO_ERROR) on builds without the
+	# SLIP transport, e.g. the native_sim gateway (jy0a).
+	select LICHEN_COAP_KEYS if LICHEN_SLIP_TRANSPORT && ZCBOR
 	help
 	  Enable CoAP server resources for node configuration per LCI spec
 	  section 17.5.2:

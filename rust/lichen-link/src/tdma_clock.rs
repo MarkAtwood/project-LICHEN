@@ -79,6 +79,26 @@ pub const fn tx_allowed(
         && current_ms < slot_start_ms.saturating_add(slot_duration_ms)
 }
 
+/// Slot_map-granular TX gate (spec 02a 2a.2 R-02a-014).
+///
+/// A joiner with an adopted slot_map MUST NOT transmit outside its assigned
+/// slots: TX is allowed only when `current_slot` is one of the mapped
+/// entries and within the superframe bounds. An empty map denies all TX
+/// (parity: C `lichen_slot_map_tx_allowed`, Python `slot_coordination.tx_allowed`).
+pub const fn slot_map_tx_allowed(slot_map: &[u8], current_slot: u8, num_slots: u8) -> bool {
+    if current_slot >= num_slots {
+        return false;
+    }
+    let mut i = 0;
+    while i < slot_map.len() {
+        if slot_map[i] == current_slot {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Holdover ends when measured |drift_ppm| exceeds the configured guard.
 pub const fn holdover_expired(measured_drift_ppm: i64, guard_ppm: u64) -> bool {
     measured_drift_ppm.unsigned_abs() > guard_ppm
@@ -115,5 +135,22 @@ mod tests {
     #[test]
     fn zero_interval_has_no_ppm() {
         assert_eq!(drift_ppm(10, 0), None);
+    }
+
+    #[test]
+    fn slot_map_gate_matches_py_and_c_parity() {
+        // Parity matrix mirrors Python slot_coordination.tx_allowed tests and
+        // the C lichen_slot_map_tx_allowed gate matrix (oamc).
+        assert!(slot_map_tx_allowed(&[0, 3, 5], 3, 8));
+        assert!(!slot_map_tx_allowed(&[0, 3, 5], 2, 8));
+        // Empty map denies all TX.
+        assert!(!slot_map_tx_allowed(&[], 0, 8));
+        // Out-of-range current_slot is denied.
+        assert!(!slot_map_tx_allowed(&[0, 3, 5], 8, 8));
+        // First and last assigned slots transmit.
+        assert!(slot_map_tx_allowed(&[0], 0, 8));
+        assert!(slot_map_tx_allowed(&[7], 7, 8));
+        // Boundary: num_slots-1 without an assignment is denied.
+        assert!(!slot_map_tx_allowed(&[0], 7, 8));
     }
 }

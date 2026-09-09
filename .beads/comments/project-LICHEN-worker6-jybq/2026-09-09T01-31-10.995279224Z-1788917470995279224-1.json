@@ -1,0 +1,7 @@
+{
+  "id": "1788917470995279224-1",
+  "issue_id": "project-LICHEN-worker6-jybq",
+  "author": "Mark Atwood",
+  "text": "Rebase note (worker3): my branch commit b9dca9fc83 was dropped during rebase onto main because f93406d4be 'fix(rust): clear lichen-core clippy -D warnings' (landed 2026-09-08 15:00 PDT, before my session) already cleared the same 35 warnings in the same 6 files with equivalent rewrites. Duplicate work across workers — the close stands on substance: verified on rebased tree that clippy -p lichen-core --all-targets -D warnings is clean and 419 lib tests pass.",
+  "created_at": "2026-09-09T01:31:10.995279224Z"
+}

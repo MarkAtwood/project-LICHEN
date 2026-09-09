@@ -1,0 +1,7 @@
+{
+  "id": "1788919253974252571-1",
+  "issue_id": "project-LICHEN-worker6-dzyt",
+  "author": "Mark Atwood",
+  "text": "Build evidence (worker6, gvf1 verification, Zephyr 4.1.0 workspace): lichen/drivers/lora/lr1110/lr1110.c fails -Werror compile on main: (1) :1119 lr1110_radio_set_cad_params, :1121 lr1110_system_set_dio_irq_params, :1126 lr1110_radio_set_cad all return void in the vendored loramac-node lr1110 driver ('void value not ignored') — restructure like lr1110_cad_poll_fn does (call, then lr1110_hal_get_last_error()); (2) :1058 CONTAINER_OF(work, struct lr1110_data, cad_poll) static-asserts pointer-type mismatch because cad_poll is k_work_delayable — use CONTAINER_OF(k_work_delayable_from_work(work), struct lr1110_data, cad_poll). gnss_ag3335.c/native.c (gvf1 scope) now compile clean; lr1110.c is the only remaining blocker for the t1000_e puck build.",
+  "created_at": "2026-09-09T02:00:53.974252571Z"
+}

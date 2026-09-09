@@ -44,6 +44,12 @@ if(CONFIG_LICHEN_L2_DEV_PROVISIONING)
   zephyr_library_include_directories(${ZEPHYR_BASE}/subsys/net/ip)
 endif()
 
+# lichen_util.c uses mbedTLS SHA-256 under Zephyr (TinyCrypt deprecated in
+# 4.1); link the mbedTLS interface library so its include dirs propagate.
+if(CONFIG_MBEDTLS)
+  zephyr_library_link_libraries(mbedTLS)
+endif()
+
 zephyr_include_directories(.)
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../link/include)
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../routing/include)

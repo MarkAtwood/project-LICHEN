@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-gvf1",
+  "title": "puck/t1000_e ARM build broken: gnss_ag3335 modem_pipe API arity + native.c -Werror=switch-enum",
+  "description": "Discovered-from project-LICHEN-worker6-dzyt (uwip.3 validation, worker8/heft 2026-09-09). Building lichen/apps/puck for t1000_e/nrf52840 (full west module set, SOURCE_DATE_EPOCH set) fails on pre-existing errors unrelated to dzyt: (1) lichen/drivers/gnss/gnss_ag3335.c:197/205/213/225 'too few arguments to function modem_pipe_open/modem_pipe_close' — Zephyr 4.1 modem_pipe API gained an arg the driver doesn't pass; (2) gnss_ag3335.c:232 and lichen/lib/native/native.c:104 (7 sites) -Werror=switch-enum unhandled enumerators (PM_DEVICE_ACTION_TURN_ON/OFF; USB_DC_*). Neither file was touched by dzyt. Fix: add the missing modem_pipe argument per Zephyr 4.1 API and add the missing switch cases (or default) in both files.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:23:35.716255333Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:53:51.706271395Z",
+  "started_at": "2026-09-09T01:42:08.631846899Z",
+  "closed_at": "2026-09-09T01:53:51.706271395Z",
+  "close_reason": "Fixed: (1) gnss_ag3335.c modem_pipe_open/close now pass the Zephyr 4.1 k_timeout_t arg (K_SECONDS(10), matching in-tree gnss_u_blox_m8/gnss_nmea_generic); (2) gnss_ag3335_pm_action and native.c lichen_usb_status_cb switches made exhaustive for -Wswitch-enum - pm_device_action names all 4 members (TURN_ON/OFF -\u003e -ENOTSUP + trailing return), usb_dc_status_code names all 12 members (replacing default:; RESET/CONFIGURED wedge accounting unchanged). Verified on heft: built both objects for t1000_e/nrf52840 under the real ARM -Werror/-Wswitch-enum flags via ninja object targets -\u003e ninja_exit=0, zero error:/switch-enum/arity diagnostics (the full west build stops earlier on PRE-EXISTING, unrelated breaks in lr1110.c and slip_transport.c on that base, out of scope for this bead). 3x delegated kimi-k3 reviews: all PASS. Finding filed: gnss_l76k.c has the identical two break classes -\u003e project-LICHEN-worker6-ax5b (P2).",
+  "labels": [
+    "zephyr",
+    "hal"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-gvf1",
+      "depends_on_id": "project-LICHEN-worker6-dzyt",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:23:35.836070503Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

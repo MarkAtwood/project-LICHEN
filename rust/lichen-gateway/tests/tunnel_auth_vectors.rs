@@ -399,3 +399,429 @@ fn expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant() {
         Err(TunnelAuthError::Expired)
     );
 }
+
+// ---- Wired CoAP dispatch (spec 06-security 8.11, POST /.well-known/tunnel-auth) ----
+
+use lichen_gateway::resources::{CoapMethod, GatewayCoordinator};
+
+fn corpus() -> Value {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../test/vectors/tunnel_authorization.json"
+    )))
+    .unwrap()
+}
+
+fn ygg_addr(iid: [u8; 8]) -> [u8; 16] {
+    let mut addr = [0u8; 16];
+    addr[0] = 0x02;
+    addr[1..8].copy_from_slice(&iid[..7]);
+    addr[8..16].copy_from_slice(&iid);
+    addr
+}
+
+fn egress_coordinator(corpus: &Value, egress_name: &str) -> GatewayCoordinator {
+    let (egress_iid, _) = identity(corpus, egress_name);
+    let mut coordinator = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    coordinator.set_tunnel_auth_root(identity(corpus, "root").0);
+    coordinator
+}
+
+fn vector_envelope(vector: &Value) -> Vec<u8> {
+    hex::decode(vector["cose_sign1_hex"].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn wired_coap_tunnel_auth_accepts_valid_vector_then_replay_is_forbidden() {
+    let corpus = corpus();
+    let vector = named(&corpus, "authorizations", "valid");
+    let mut coordinator = egress_coordinator(&corpus, "egress");
+    let (root_iid, root_key) = identity(&corpus, "root");
+    let wire = vector_envelope(vector);
+    assert_eq!(root_iid, bytes(vector["kid_iid_hex"].as_str().unwrap()));
+
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x44);
+    assert!(response.payload.is_empty());
+
+    // An identical replayed POST hits the replay floor: 4.03, nothing cached.
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+}
+
+#[test]
+fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_egress() {
+    let corpus = corpus();
+    let vector = named(&corpus, "authorizations", "valid");
+    let (_, root_key) = identity(&corpus, "root");
+    let (_, other_root_key) = identity(&corpus, "other_root");
+    let wire = vector_envelope(vector);
+
+    // A table with no bound root never accepts (WrongRoot, fail-closed).
+    let (egress_iid, _) = identity(&corpus, "egress");
+    let mut unbound = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    let response = unbound.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // Missing OSCORE authentication is refused before any table mutation.
+    let mut coordinator = egress_coordinator(&corpus, "egress");
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        false,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // A different root (kid binding fails against the bound root) is denied.
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(other_root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // The claim binds a specific egress IID; another egress is denied.
+    let mut other_egress = egress_coordinator(&corpus, "other_egress");
+    let response = other_egress.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &wire,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // Corrupting any envelope byte fails signature verification.
+    let mut corrupted = wire.clone();
+    let last = corrupted.len() - 1;
+    corrupted[last] ^= 0x01;
+    let response = coordinator.handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        &corrupted,
+        true,
+        Some(root_key.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83);
+
+    // GET is not a tunnel-auth method.
+    let response = coordinator.handle_request(CoapMethod::Get, "tunnel-auth", &wire, true, None, 0);
+    assert_eq!(response.code, 0x84); // 4.04 Not Found
+}
+
+// ── Wired data-path egress gate (spec 06-security 8.11) ─────────────────────
+//
+// The egress half of the tunnel-auth contract: mesh-ingress unicast datagrams
+// forwarded to external networks must be covered by a current-root grant
+// (Gateway::ingest_mesh_frame_at_superframe → GatewayCoordinator::authorize_egress).
+
+use lichen_core::constants::L2_DISPATCH_SCHC;
+use lichen_core::icmpv6;
+use lichen_core::addr::Ipv6Addr as CoreIpv6Addr;
+use lichen_gateway::Gateway;
+use lichen_link::identity::{Identity, PeerIdentity};
+use lichen_link::keys::Seed as LinkSeed;
+use lichen_link::link_layer::LinkLayer;
+use lichen_link::schnorr;
+use lichen_link::seqnum::LinkSeqNum;
+use lichen_schc::codec;
+
+const EXTERNAL_DST: [u8; 16] = [0x20, 0x01, 0x48, 0x60, 0x48, 0x60, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0x88];
+const GRANTED_SRC: [u8; 16] = [0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
+const OUTSIDE_SRC: [u8; 16] = [0x02, 0x00, 0x99, 0x99, 0x99, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
+const GRANT_PREFIX: [u8; 16] = [0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+fn gateway_identity() -> Identity {
+    Identity::from_seed(LinkSeed::new([0x02; 32]))
+}
+
+fn fresh_gateway() -> Gateway {
+    Gateway::new_ephemeral(gateway_identity(), 128).unwrap()
+}
+
+/// A mesh peer whose link keys are installed in the gateway via a signed
+/// Announce (the sole unknown-key bootstrap), so subsequent SCHC frames
+/// authenticate at the gateway's link layer.
+struct MeshPeer {
+    identity: Identity,
+    link: LinkLayer,
+    next_sequence: u16,
+}
+
+impl MeshPeer {
+    fn new() -> Self {
+        let identity = Identity::from_seed(LinkSeed::new([9; 32]));
+        let mut link = LinkLayer::new(identity.clone());
+        link.add_peer(PeerIdentity::from_pubkey(gateway_identity().pubkey));
+        Self {
+            identity,
+            link,
+            next_sequence: 1,
+        }
+    }
+
+    fn root_eui64() -> [u8; 8] {
+        let mut eui = gateway_identity().iid;
+        eui[0] ^= 0x02;
+        eui
+    }
+
+    fn build_wire(&mut self, l2_payload: &[u8], destination: &[u8]) -> Vec<u8> {
+        let mut wire = [0u8; 255];
+        let len = self
+            .link
+            .build_frame(
+                128,
+                LinkSeqNum::new(self.next_sequence),
+                destination,
+                l2_payload,
+                &mut wire,
+            )
+            .unwrap();
+        self.next_sequence += 1;
+        wire[..len].to_vec()
+    }
+
+    fn signed_announce(&self) -> Vec<u8> {
+        let rx_channel = 3;
+        let sequence = 1u16;
+        let mut signed = [0u8; 64];
+        lichen_core::announce::write_announce_signed_data(
+            &self.identity.iid,
+            self.identity.pubkey.as_bytes(),
+            sequence,
+            rx_channel,
+            &[],
+            &mut signed,
+        )
+        .unwrap();
+        let signature = schnorr::sign(&self.identity.privkey, &self.identity.pubkey, &signed);
+        let mut announce = vec![0u8; 93];
+        let len = lichen_core::announce::AnnounceBuilder {
+            originator_iid: &self.identity.iid,
+            pubkey: self.identity.pubkey.as_bytes(),
+            seq_num: sequence,
+            hop_count: 0,
+            rx_channel,
+            signature: &signature,
+            app_data: &[],
+        }
+        .write_to(&mut announce)
+        .unwrap();
+        announce.truncate(len);
+        let mut payload = vec![lichen_core::constants::L2_DISPATCH_ROUTING];
+        payload.extend_from_slice(&announce);
+        payload
+    }
+
+    async fn bootstrap(&mut self, gateway: &mut Gateway, now_ms: u64) {
+        let announce = self.signed_announce();
+        let wire = self.build_wire(&announce, &[]);
+        gateway
+            .ingest_mesh_frame(&wire, Some(-50), Some(10), now_ms)
+            .await
+            .unwrap();
+    }
+}
+
+fn unix_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+/// POST an already-elapsed grant; the coordinator must refuse it (4.03).
+fn provision_expired_grant_refused(gateway: &mut Gateway) {
+    let identity = gateway_identity();
+    let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
+    let route = [gw_iid];
+    let claim = TunnelAuthorization::new(
+        GRANT_PREFIX,
+        40,
+        route_hash(&route).unwrap(),
+        7,
+        unix_secs().saturating_sub(1),
+        gw_iid,
+    )
+    .unwrap();
+    let post =
+        build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let response = gateway.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(identity.pubkey.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x83, "expired grant must be refused (4.03)");
+}
+
+/// SCHC-compressed ICMPv6 echo request (L2 payload) from `src` to `dst`.
+fn egress_frame(src: [u8; 16], dst: [u8; 16]) -> Vec<u8> {
+    let mut pkt = [0u8; 64];
+    let n = icmpv6::echo_request(
+        &CoreIpv6Addr(src),
+        &CoreIpv6Addr(dst),
+        0xaaaa,
+        1,
+        b"tunnel-auth",
+        &mut pkt,
+    );
+    let ipv6 = &pkt[..n];
+    let mut out = vec![0u8; ipv6.len() + 3];
+    out[0] = L2_DISPATCH_SCHC;
+    let compressed = codec::compress(ipv6, &mut out[1..]).expect("SCHC compress");
+    out.truncate(compressed + 1);
+    out
+}
+
+/// Mint a single-hop root grant over `[gateway IID]` and POST it into the
+/// gateway's coordinator (0x44 expected). Root seed and address shapes follow
+/// the tunnel_authorization vector corpus (root = the gateway itself).
+fn provision_grant(gateway: &mut Gateway, expiry: u64) {
+    let identity = gateway_identity();
+    let gw_iid = iid_from_pubkey_bytes(identity.pubkey.as_bytes());
+    let route = [gw_iid];
+    let claim =
+        TunnelAuthorization::new(GRANT_PREFIX, 40, route_hash(&route).unwrap(), 7, expiry, gw_iid)
+            .unwrap();
+    let post =
+        build_root_post(claim, &route, gw_iid, &identity.privkey, &identity.pubkey).unwrap();
+    let response = gateway.coordinator_mut().handle_request(
+        CoapMethod::Post,
+        "tunnel-auth",
+        post.body.as_bytes(),
+        true,
+        Some(identity.pubkey.as_bytes()),
+        0,
+    );
+    assert_eq!(response.code, 0x44, "grant POST must be accepted (2.04)");
+}
+
+async fn ingest_source_to(
+    peer: &mut MeshPeer,
+    gateway: &mut Gateway,
+    source: [u8; 16],
+    destination: [u8; 16],
+) -> Option<Vec<u8>> {
+    let l2 = egress_frame(source, destination);
+    let wire = peer.build_wire(&l2, &MeshPeer::root_eui64());
+    gateway
+        .ingest_mesh_frame(&wire, Some(-50), Some(10), 1000)
+        .await
+        .unwrap()
+        .into_upstream_ipv6()
+}
+
+#[tokio::test]
+async fn wired_egress_forwards_authorized_tunnel() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+    provision_grant(&mut gateway, unix_secs() + 3600);
+
+    let upstream = ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+        .await
+        .expect("authorized tunnel must be forwarded upstream");
+    assert_eq!(upstream[0] >> 4, 6, "upstream datagram is IPv6");
+    assert_eq!(&upstream[8..24], &GRANTED_SRC, "inner source preserved");
+    assert_eq!(&upstream[24..40], &EXTERNAL_DST, "inner destination preserved");
+}
+
+#[tokio::test]
+async fn wired_egress_drops_unauthorized_tunnel() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+            .await
+            .is_none(),
+        "no grant provisioned: egress must fail closed"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_drops_source_outside_granted_prefix() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+    provision_grant(&mut gateway, unix_secs() + 3600);
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, OUTSIDE_SRC, EXTERNAL_DST)
+            .await
+            .is_none(),
+        "source outside the signed prefix must be dropped"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_refuses_expired_grant_and_stays_closed() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+
+    // accept_post refuses already-elapsed grants outright (Expired -> 4.03),
+    // so an expired grant can never arm the data path. The table-level
+    // Expired-on-authorize branch is covered by the corpus decapsulation
+    // cases (canonical_decapsulation_cases_enforce_least_privilege).
+    provision_expired_grant_refused(&mut gateway);
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, EXTERNAL_DST)
+            .await
+            .is_none(),
+        "no live grant cached: egress must fail closed"
+    );
+}
+
+#[tokio::test]
+async fn wired_egress_hairpin_bypasses_gate() {
+    let mut gateway = fresh_gateway();
+    let mut peer = MeshPeer::new();
+    peer.bootstrap(&mut gateway, 0).await;
+
+    let mut destination = [0u8; 16];
+    destination[..8].copy_from_slice(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0]);
+    destination[8..].copy_from_slice(&gateway_identity().iid);
+
+    assert!(
+        ingest_source_to(&mut peer, &mut gateway, GRANTED_SRC, destination)
+            .await
+            .is_some(),
+        "mesh-destined (hairpin) traffic is mesh-internal forwarding, not egress"
+    );
+}

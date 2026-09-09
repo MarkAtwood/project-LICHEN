@@ -16,11 +16,13 @@ import pytest
 from lichen.link.slot_coordination import (
     HOLDOFF_SUPERFRAMES,
     MAX_CANDIDATES,
+    MAX_SLOT_MAP_ENTRIES,
     MultiRootState,
     RootCandidate,
     SlotMapError,
     VersionChangeOutcome,
     compare_iid,
+    encode_slot_map,
     hash_32,
     select_root,
     sfn_delta,
@@ -647,3 +649,113 @@ class TestMultiRootState:
         assert len(state.candidates) == 0
         assert state.holdoff_counter == 0
         assert state.desync_state_version is None
+
+
+class TestSlotMapWriter:
+    """Test encode_slot_map (R-02a-013 root-side writer, spec 02a 2a.2).
+
+    Byte-level expectations are cross-implementation vectors: the same
+    wire bytes are pinned by the C suite (lichen/tests/tdma_beacon/main.c)
+    and the Rust suite (rust/lichen-core/src/tdma_beacon.rs unit tests),
+    both landed independently against the spec.
+    """
+
+    @staticmethod
+    def _decode_slot_map(cbor: bytes) -> list[int]:
+        """Minimal CBOR slot_map decoder mirroring the Rust parser rules.
+
+        Accepts short-form array headers 0x80..=0x97, long form 0x98 + len;
+        entries are immediate 0x00..=0x17 or 0x18-prefixed. Anything else
+        fails the test.
+        """
+        pos = 0
+        first = cbor[pos]
+        pos += 1
+        if 0x80 <= first <= 0x97:
+            length = first - 0x80
+        elif first == 0x98:
+            length = cbor[pos]
+            pos += 1
+        else:
+            pytest.fail("decoder input is not a supported array header")
+        slots: list[int] = []
+        for _ in range(length):
+            entry = cbor[pos]
+            pos += 1
+            if entry <= 0x17:
+                slots.append(entry)
+            elif entry == 0x18:
+                slots.append(cbor[pos])
+                pos += 1
+            else:
+                pytest.fail("decoder input has unsupported entry encoding")
+        assert pos == len(cbor), "trailing bytes after CBOR array"
+        return slots
+
+    def test_encode_empty(self) -> None:
+        assert encode_slot_map([]) == b"\x80"
+
+    def test_encode_short_form(self) -> None:
+        # Byte vector from Rust test_slot_map_write_roundtrip_simple; the
+        # C suite (main.c "slot_map writer short-form", input {0,1,2}) pins
+        # the same wire shape with different values.
+        assert encode_slot_map([1, 3, 5]) == b"\x83\x01\x03\x05"
+
+    def test_encode_two_byte_entries(self) -> None:
+        # Cross-impl vector: Rust test_slot_map_value_over_23 wire shape.
+        assert encode_slot_map([24, 30]) == b"\x82\x18\x18\x18\x1e"
+
+    def test_encode_header_boundary_23_24(self) -> None:
+        # 23 entries: short-form header 0x80+23 == 0x97.
+        slots_23 = list(range(23))
+        encoded = encode_slot_map(slots_23)
+        assert encoded[0] == 0x97
+        assert len(encoded) == 1 + 23
+        # 24 entries: long-form header 0x98 + one-byte length.
+        encoded_24 = encode_slot_map(list(range(24)))
+        assert encoded_24[0] == 0x98
+        assert encoded_24[1] == 24
+
+    def test_encode_long_form_30_entries(self) -> None:
+        # Cross-impl vector: Rust test_slot_map_write_roundtrip_over_23_entries
+        # (values 24..53 exercise two-byte entries).
+        slots = list(range(24, 54))
+        encoded = encode_slot_map(slots)
+        assert len(encoded) == 2 + 30 * 2
+        assert encoded[0] == 0x98
+        assert encoded[1] == 30
+        assert self._decode_slot_map(encoded) == slots
+
+    def test_encode_max_64_entries_ok(self) -> None:
+        slots = list(range(64))
+        encoded = encode_slot_map(slots)
+        # 2 header bytes + 24 immediates (0..23) + 40 two-byte entries.
+        assert len(encoded) == 2 + 24 + 40 * 2
+        assert self._decode_slot_map(encoded) == slots
+
+    def test_encode_rejects_65_entries(self) -> None:
+        with pytest.raises(ValueError, match="maximum entries"):
+            encode_slot_map(list(range(65)))
+
+    def test_encode_rejects_out_of_u8_range(self) -> None:
+        with pytest.raises(ValueError, match="u8 range"):
+            encode_slot_map([1, 256])
+        with pytest.raises(ValueError, match="u8 range"):
+            encode_slot_map([-1])
+
+    def test_encode_constant_matches_sibling_implementations(self) -> None:
+        assert MAX_SLOT_MAP_ENTRIES == 64
+
+    def test_roundtrip_through_validate(self) -> None:
+        # Encode -> decode -> spec validator: the writer feeds the same
+        # slot_map values the receiver-side validator accepts.
+        for slots, num_slots in (([1, 3, 5], 16), ([24, 30], 64), ([], 8)):
+            decoded = self._decode_slot_map(encode_slot_map(slots))
+            is_valid, error = validate_slot_map(decoded, num_slots)
+            assert is_valid, error
+            assert decoded == slots
+
+    def test_roundtrip_tx_allowed(self) -> None:
+        decoded = self._decode_slot_map(encode_slot_map([3]))
+        assert tx_allowed(decoded, 3, 8)
+        assert not tx_allowed(decoded, 4, 8)

@@ -1,6 +1,0 @@
-{"id":"01a082c1-569b-7804-b97e-75a6da0810e6","issue_id":"project-LICHEN-worker6-tsn3.2.1","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T20:41:43.835526795Z"}
-{"id":"01a082c1-56a0-7767-9fdf-8582975f36c8","issue_id":"project-LICHEN-worker6-tsn3.2.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: spec","created_at":"2026-09-08T20:41:43.840486416Z"}
-{"id":"01a082c1-56a5-7397-a783-1a2a4d4012aa","issue_id":"project-LICHEN-worker6-tsn3.2.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: buffering","created_at":"2026-09-08T20:41:43.845236561Z"}
-{"id":"01a082c1-56aa-7164-a638-34e5933dc011","issue_id":"project-LICHEN-worker6-tsn3.2.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: gateway","created_at":"2026-09-08T20:41:43.850092194Z"}
-{"id":"01a082c1-56af-7561-8cb8-472fa1ed28ce","issue_id":"project-LICHEN-worker6-tsn3.2.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: cross-impl","created_at":"2026-09-08T20:41:43.855353352Z"}
-{"id":"01a082c1-56b4-7271-ada4-bfa96827dc5d","issue_id":"project-LICHEN-worker6-tsn3.2.1","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-08T20:41:43.860160973Z"}

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-8exz",
+  "title": "sync script: session artifacts mishandled on failure — new files orphaned, non-merge edits stranded blocking later merges",
+  "description": "Reviewer kimi-k3 passes 1.6/3.5 (converged). (a) :159-160 comment claims untracked session files go to the per-worker sync loop, but that loop (:33-55) only scans WORKTREE_BASE/worker*/ — a resolution depending on a session-created new file is silently never committed. (b) 'git merge --abort' (reset --merge) preserves worktree changes outside the merge, so a rejected session's edits to non-merge files strand dirty in main's worktree and block later branches' merges ('local changes would be overwritten'). Fix: fail the run when session-created untracked files exist in the allowed paths; explicitly clean/checkout session-dirtied non-merge paths on the abort paths (:291/:308/:316).",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:17:25.321532687Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:17:25.321532687Z",
+  "labels": [
+    "fleet-implementable"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-8exz",
+      "depends_on_id": "project-LICHEN-worker6-1dyx",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T01:17:25.449094679Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
