@@ -113,8 +113,13 @@ def test_eui_and_short_vectors_are_interop_helpers_not_identity() -> None:
 
 
 def test_native_corpora_agree_without_byte_reversal() -> None:
+    # QUARANTINE-INTEGRITY cross-check: both corpora encode the REJECTED
+    # SHA-512 native profile (test/vectors/legacy/README.md). The
+    # ipv6-addresses.json native-side fields are quarantine-tracked
+    # separately (q6ko.3); until the upstream AddrForKey migration lands,
+    # this pins the pre-migration agreement between the two legacy corpora.
     ipv6_document = _load("ipv6-addresses.json")
-    native_document = _load("yggdrasil_address.json")
+    native_document = _load("legacy/yggdrasil_address_native_sha512.json")
     assert isinstance(ipv6_document, dict)
     assert isinstance(native_document, dict)
 

@@ -32,3 +32,4 @@ Files:
 |------|----------|
 | `yggdrasil.json` | Two legacy-profile spot vectors (`ygg_addr_from_pubkey` shape) |
 | `yggdrasil-derivation.json` | Legacy-profile derivation corpus: U/L-bit cases, IID binding invariant, substitution-attack negative entry |
+| `yggdrasil_address_native_sha512.json` | The ten `lichen_native_sha512` vectors moved verbatim out of `test/vectors/yggdrasil_address.json`, which now holds only the pinned upstream anchor and the length-rejection cases |

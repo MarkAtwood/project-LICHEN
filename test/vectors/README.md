@@ -7,7 +7,7 @@ Language-neutral fixtures for the LICHEN protocol using **format_version=2** str
 
 ## File Index
 
-Complete index of every vector file (174 files, excluding `schema.json` and the per-family `*.schema.json` files). Byte strings are lowercase hex (possibly empty).
+Complete index of every vector file (excluding `schema.json` and the per-family `*.schema.json` files). Byte strings are lowercase hex (possibly empty).
 
 ### Schema
 
@@ -208,9 +208,10 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 |------|--------|
 | `node-addresses.json` | Human-readable node addresses, canonical set (**content-overlaps `node_address.json`**) |
 | `node_address.json` | Base32-from-SHA-512(pubkey[:8]) 13-char node address (**content-overlaps `node-addresses.json`**) |
+| `legacy/yggdrasil_address_native_sha512.json` | QUARANTINED legacy SHA-512 native profile corpus, moved verbatim out of `yggdrasil_address.json` (see `legacy/README.md`) — not a conformance oracle |
 | `legacy/yggdrasil-derivation.json` | QUARANTINED legacy SHA-512 native profile derivation corpus (see `legacy/README.md`) — not a conformance oracle |
 | `legacy/yggdrasil.json` | QUARANTINED legacy-profile `ygg_addr_from_pubkey` spot vectors (see `legacy/README.md`) — not a conformance oracle |
-| `yggdrasil_address.json` | Native Yggdrasil-range derivation corpus: verbatim upstream Go `AddrForKey` anchor (divergence pinned) + LICHEN SHA-512 profile cases incl. length-rejections |
+| `yggdrasil_address.json` | Conformance corpus: verbatim upstream Go `AddrForKey` anchor (pinned external oracle) + profile-agnostic pubkey length-rejections. The rejected LICHEN SHA-512 profile cases are quarantined in `legacy/` |
 
 ### Simulation Models
 
