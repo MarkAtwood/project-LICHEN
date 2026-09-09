@@ -110,6 +110,15 @@
       "note": "single bit set at position 255 (LSB of byte 31)"
     },
     {
+      "name": "lci_shared_seed_000102_1f_key",
+      "profile": "upstream_addr_for_key",
+      "public_key": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+      "address": "02062f7c200618f7a0f14791738c5a1f",
+      "ipv6": "206:2f7c:2006:18f7:a0f1:4791:738c:5a1f",
+      "iid": "ed4242ead4ac6948",
+      "note": "Ed25519 pubkey for seed 000102..1f; shared by lci_identity.json, root_signature.json, root_authorization.json, rust lichen-link key_generation.rs and C coap_config fixtures. Address independently re-derived from upstream yggdrasil-go AddrForKey (@422836ee) and anchored byte-exact to the genuine Go reference vector above. The iid field is the link-local IID only; it is NOT embedded in the routable address."
+    },
+    {
       "name": "pubkey_31_bytes_rejected",
       "profile": "error_case",
       "expect_error": "pubkey_length",
