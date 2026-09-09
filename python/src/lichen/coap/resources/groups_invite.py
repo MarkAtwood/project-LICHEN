@@ -18,8 +18,8 @@ from lichen.coap.resources.groups_collection import (
     _origin_locally_trusted,
 )
 from lichen.crypto.delegation_tokens import (
-    DelegationToken,
     DelegationScope,
+    DelegationToken,
     check_delegation_scope,
     verify_delegation_token,
 )
@@ -64,11 +64,7 @@ class GroupsInviteResource(resource.Resource):
         # Delegation-token replay cache (spec 18.8.6 validation step 7):
         # highest accepted seq per (delegator_iid, delegate_iid, resource).
         # In-RAM by policy, like the invitation nonce ring.
-        self.delegation_seq_cache = (
-            delegation_seq_cache
-            if delegation_seq_cache is not None
-            else {}
-        )
+        self.delegation_seq_cache = delegation_seq_cache if delegation_seq_cache is not None else {}
         if node_pubkey is not None:
             if type(node_pubkey) is not bytes or len(node_pubkey) != 32:
                 raise ValueError("node_pubkey must be a 32-byte Ed25519 public key")
