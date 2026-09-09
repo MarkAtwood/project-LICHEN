@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-prgb",
+  "title": "Python slot claim: payload fully materialized by cbor2.loads before size/count checks (decode asymmetry with Rust)",
+  "description": "Codereview finding (s61e security pass, reviewer kimi-k3), P3. python/src/lichen/gateway/slot_claim.py:263: cbor2.loads(payload) builds the entire slots list (~28B/int) before the MAX_SLOTS_PER_SUPERFRAME count check at :275 runs; Rust reads the CBOR array head and rejects count \u003e 4096 before allocating (slot.rs:567-570). Attacker-chosen payload size drives memory/CPU before rejection. On the LoRa radio path this is bounded by the SCHC reassembly buffer, so in-threat-model exposure is modest — but the decode asymmetry is real and the fix is cheap: reject the envelope/payload above a byte cap before cbor2.loads (a max-size legit claim payload is ~21 KB: 4096 x 5-byte u32 + map overhead). Add a payload-length pre-check plus a test with a syntactically huge slots array.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:16:41.491926423Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:16:41.491926423Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-prgb",
+      "depends_on_id": "project-LICHEN-worker6-s61e",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:16:41.637650764Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
