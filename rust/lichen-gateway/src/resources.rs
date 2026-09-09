@@ -2375,7 +2375,10 @@ mod tests {
     use schnorr48::derive_keypair;
 
     fn coordinator(iid: [u8; 16]) -> GatewayCoordinator {
-        GatewayCoordinator::new_ephemeral(iid, 60, 64).unwrap()
+        // Test-local identity IID (U/L-clear); no routable correlation happens
+        // in these unit tests, so a synthetic IID is sufficient.
+        let identity_iid = [0u8; 8];
+        GatewayCoordinator::new_ephemeral(iid, identity_iid, 60, 64).unwrap()
     }
 
     /// Build a spec GCP-6.5 COSE_Sign1 slot-claim envelope signed by the seed's
@@ -3041,6 +3044,7 @@ mod tests {
         local_address[8..].fill(0xff);
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
+            [0u8; 8],
             60,
             4,
             &state_path,
@@ -3069,6 +3073,7 @@ mod tests {
 
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
+            [0u8; 8],
             60,
             4,
             &state_path,
@@ -3100,6 +3105,7 @@ mod tests {
         let sealing_seed = [0x73; 32];
         let mut coordinator = GatewayCoordinator::provision_persistent(
             [0u8; 16],
+            [0u8; 8],
             60,
             4,
             &state_path,
@@ -3154,6 +3160,7 @@ mod tests {
         local_address[8..].fill(0x01);
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
+            [0u8; 8],
             60,
             4,
             &state_path,
@@ -3169,7 +3176,7 @@ mod tests {
             slot_count: Some(30),
             owned: None,
         };
-        let (claim, pubkey) = signed_slot_claim([0x41; 32], vec![40, 41], 4, 0);
+        let (claim, pubkey) = signed_slot_claim([0x55; 32], vec![5], 4, 0);
         assert_eq!(
             coordinator
                 .handle_post_slots(&claim, true, Some(&pubkey), 4)
@@ -3195,6 +3202,7 @@ mod tests {
         drop(coordinator);
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
+            [0u8; 8],
             60,
             4,
             &state_path,
@@ -3241,7 +3249,7 @@ mod tests {
             };
         let mut address = [0u8; 16];
         address[8..].copy_from_slice(&own_iid);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         coordinator.info.slot_map = SlotMap {
             mode: AllocationMode::Contiguous,
             gateway_count: 2,
@@ -3272,7 +3280,8 @@ mod tests {
     fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
         let mut address = [0u8; 16];
         address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, [0x02u8; 8], 60, 4).unwrap();
         // Well-formed envelope whose kid is not this gateway's IID: never
         // echoed (the echo goes to a peer, so unbound bytes are refused).
         let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
@@ -3292,7 +3301,8 @@ mod tests {
     fn post_slots_silently_discards_oversize_peer_claim() {
         let mut address = [0u8; 16];
         address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, [0x02u8; 8], 60, 4).unwrap();
         let peer_pubkey = [0x43; 32];
         let response = coordinator.handle_post_slots(
             &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],

@@ -2455,7 +2455,8 @@ mod tests {
         private_test_dir(&path);
         let identity = Identity::from_seed(Seed::new([0x61; 32]));
         let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-        let coordinator = GatewayCoordinator::new_ephemeral(root, 60, 8).unwrap();
+        let coordinator =
+            GatewayCoordinator::new_ephemeral(root, lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()), 60, 8).unwrap();
         let result = Gateway::new_persistent(
             identity,
             128,
@@ -2494,6 +2495,7 @@ mod tests {
         let trust = TrustStore::new_ephemeral(8).unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             root,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             64,
             &replay_path,
@@ -2580,6 +2582,7 @@ mod tests {
         .unwrap();
         let coordinator = GatewayCoordinator::load_persistent(
             root,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             64,
             &replay_path,

@@ -1804,6 +1804,7 @@ mod tests {
             .unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             address,
+            lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()),
             60,
             8,
             &root.join("gateway-slot-replay.bin"),
@@ -2085,6 +2086,7 @@ mod tests {
     ) -> u64 {
         let mut coordinator = GatewayCoordinator::provision_persistent(
             address,
+            [0u8; 8],
             60,
             256,
             slot_path,
@@ -2190,6 +2192,7 @@ mod tests {
 
         GatewayCoordinator::provision_persistent(
             address,
+            [0u8; 8],
             60,
             256,
             &slot_path,
