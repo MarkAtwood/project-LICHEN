@@ -409,6 +409,7 @@ async fn main() -> ExitCode {
     } else {
         let coordinator = match GatewayCoordinator::load_persistent(
             lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
+            id.iid,
             60,
             256,
             &slot_path,
@@ -1269,6 +1270,8 @@ fn recover_or_provision_slot_replay(
     slot_floor_path: &Path,
     sealing_seed: &[u8; 32],
 ) -> Result<(GatewayCoordinator, ProvisionManifest), String> {
+    // The IID derives from the key, never from the routable address (i72x.2).
+    let own_iid = lichen_core::addr::iid_from_pubkey_bytes(&identity_pubkey);
     let store_exists = slot_path.exists();
     let floor_exists = slot_floor_path.exists();
     if stage >= PROVISION_STAGE_SLOT && (!store_exists || !floor_exists) {
@@ -1286,10 +1289,19 @@ fn recover_or_provision_slot_replay(
         }
     }
     let coordinator = if slot_path.exists() {
-        GatewayCoordinator::load_persistent(iid, 60, 256, slot_path, slot_floor_path, sealing_seed)
+        GatewayCoordinator::load_persistent(
+            iid,
+            own_iid,
+            60,
+            256,
+            slot_path,
+            slot_floor_path,
+            sealing_seed,
+        )
     } else {
         GatewayCoordinator::provision_persistent(
             iid,
+            own_iid,
             60,
             256,
             slot_path,
@@ -1794,6 +1806,7 @@ mod tests {
             .unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             address,
+            address[8..16].try_into().unwrap(),
             60,
             8,
             &root.join("gateway-slot-replay.bin"),
@@ -2075,6 +2088,7 @@ mod tests {
     ) -> u64 {
         let mut coordinator = GatewayCoordinator::provision_persistent(
             address,
+            address[8..16].try_into().unwrap(),
             60,
             256,
             slot_path,
@@ -2180,6 +2194,7 @@ mod tests {
 
         GatewayCoordinator::provision_persistent(
             address,
+            address[8..16].try_into().unwrap(),
             60,
             256,
             &slot_path,

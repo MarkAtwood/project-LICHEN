@@ -136,6 +136,15 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         self.stack.add_peer(peer);
     }
 
+    /// This node's key-derived IID (SHA-512 derivation; link-local identity).
+    ///
+    /// Distinct from the low half of the routable address: upstream
+    /// `AddrForKey` bit-packs the inverted key and does not embed the IID
+    /// (i72x.2).
+    pub fn local_iid(&self) -> [u8; 8] {
+        lichen_link::identity::iid_from_pubkey(&self.stack.local_public_key())
+    }
+
     pub fn rpl_node(&self) -> &RplNode {
         &self.rpl
     }

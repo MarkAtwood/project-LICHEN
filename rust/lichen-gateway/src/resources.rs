@@ -1157,6 +1157,10 @@ pub const CONTENT_FORMAT_SENML_CBOR: u16 = 112;
 pub struct GatewayCoordinator {
     /// This gateway's info.
     pub info: GatewayInfo,
+    /// This gateway's key-derived IID. Kept separately from `info.iid` (the
+    /// routable address): under upstream AddrForKey the address's low half is
+    /// not the IID (i72x.2).
+    pub own_iid: [u8; 8],
     /// Validated capability announcements (spec 8.12, bounded LRU).
     pub capability_table: crate::capability::CapabilityTable,
     /// Node registry.
@@ -1658,16 +1662,18 @@ impl GatewayCoordinator {
     /// Create an explicitly ephemeral coordinator for tests/simulations.
     pub fn new_ephemeral(
         iid: [u8; 16],
+        own_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
     ) -> Result<Self, slot::SlotError> {
         let verifier = slot::SlotClaimVerifier::new_ephemeral(max_gateways)?;
-        Self::with_verifier(iid, slots_per_superframe, verifier, None)
+        Self::with_verifier(iid, own_iid, slots_per_superframe, verifier, None)
     }
 
     /// Provision new durable replay state. Existing files fail closed.
     pub fn provision_persistent(
         iid: [u8; 16],
+        own_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
         replay_path: &Path,
@@ -1678,7 +1684,8 @@ impl GatewayCoordinator {
             return Err(slot::SlotError::CorruptState);
         }
         let verifier = slot::SlotClaimVerifier::new_ephemeral(max_gateways)?;
-        let mut coordinator = Self::with_verifier(iid, slots_per_superframe, verifier, None)?;
+        let mut coordinator =
+            Self::with_verifier(iid, own_iid, slots_per_superframe, verifier, None)?;
         save_coordinator_state_atomic(
             replay_path,
             &coordinator.info.iid,
@@ -1704,6 +1711,7 @@ impl GatewayCoordinator {
     /// minimum generation floor before serving coordination resources.
     pub fn load_persistent(
         iid: [u8; 16],
+        own_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
         replay_path: &Path,
@@ -1721,6 +1729,7 @@ impl GatewayCoordinator {
         )?;
         let mut coordinator = Self::with_verifier(
             iid,
+            own_iid,
             slots_per_superframe,
             restored.verifier,
             Some(SlotReplayPersistence {
@@ -1736,6 +1745,7 @@ impl GatewayCoordinator {
 
     fn with_verifier(
         iid: [u8; 16],
+        own_iid: [u8; 8],
         slots_per_superframe: u32,
         verifier: slot::SlotClaimVerifier,
         replay_persistence: Option<SlotReplayPersistence>,
@@ -1789,6 +1799,7 @@ impl GatewayCoordinator {
 
         Ok(Self {
             info: GatewayInfo::new(iid),
+            own_iid,
             node_registry: NodeRegistry::new(),
             channel_map: ChannelMap { channels },
             capability_table: crate::capability::CapabilityTable::new(),
@@ -1823,7 +1834,7 @@ impl GatewayCoordinator {
         }
         let claim = slot::RawSlotClaim::from_cose(envelope, self.slots_per_superframe)
             .map_err(|_| ResourceError::InvalidCbor)?;
-        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        let own_iid = self.own_iid;
         if *claim.gateway_iid() != own_iid {
             return Err(ResourceError::InvalidFieldType("gateway_iid"));
         }
@@ -1937,7 +1948,7 @@ impl GatewayCoordinator {
         };
         // Egress identity: the low 8 bytes of the gateway's key-derived
         // native address (same derivation as record_own_claim_envelope).
-        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        let own_iid = self.own_iid;
         let now = u64::try_from(unix_now()).unwrap_or(0);
         match self
             .tunnel_auth
@@ -2108,7 +2119,7 @@ impl GatewayCoordinator {
         if !overlap.is_empty() {
             // Conflict resolution: lowest IID wins (GCP-6.3)
             // Use slot module's comparison function for consistent IID ordering
-            let our_iid: [u8; 8] = self.info.iid[8..16].try_into().unwrap();
+            let our_iid = self.own_iid;
             let their_iid = *claim.gateway_iid();
 
             if slot::compare_iids(&our_iid, &their_iid) == std::cmp::Ordering::Less {
@@ -2351,7 +2362,9 @@ mod tests {
     use schnorr48::derive_keypair;
 
     fn coordinator(iid: [u8; 16]) -> GatewayCoordinator {
-        GatewayCoordinator::new_ephemeral(iid, 60, 64).unwrap()
+        // Fixture addresses are arbitrary byte patterns, not key-derived;
+        // keep the low half as the test IID (pre-migration semantics).
+        GatewayCoordinator::new_ephemeral(iid, iid[8..16].try_into().unwrap(), 60, 64).unwrap()
     }
 
     /// Build a spec GCP-6.5 COSE_Sign1 slot-claim envelope signed by the seed's
@@ -3017,6 +3030,7 @@ mod tests {
         local_address[8..].fill(0xff);
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
+            local_address[8..16].try_into().unwrap(),
             60,
             4,
             &state_path,
@@ -3045,6 +3059,7 @@ mod tests {
 
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
+            local_address[8..16].try_into().unwrap(),
             60,
             4,
             &state_path,
@@ -3076,6 +3091,7 @@ mod tests {
         let sealing_seed = [0x73; 32];
         let mut coordinator = GatewayCoordinator::provision_persistent(
             [0u8; 16],
+            [0u8; 8],
             60,
             4,
             &state_path,
@@ -3130,6 +3146,7 @@ mod tests {
         local_address[8..].fill(0x01);
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
+            local_address[8..16].try_into().unwrap(),
             60,
             4,
             &state_path,
@@ -3171,6 +3188,7 @@ mod tests {
         drop(coordinator);
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
+            local_address[8..16].try_into().unwrap(),
             60,
             4,
             &state_path,
@@ -3217,7 +3235,7 @@ mod tests {
             };
         let mut address = [0u8; 16];
         address[8..].copy_from_slice(&own_iid);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         coordinator.info.slot_map = SlotMap {
             mode: AllocationMode::Contiguous,
             gateway_count: 2,
@@ -3248,7 +3266,8 @@ mod tests {
     fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
         let mut address = [0u8; 16];
         address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
+            .unwrap();
         // Well-formed envelope whose kid is not this gateway's IID: never
         // echoed (the echo goes to a peer, so unbound bytes are refused).
         let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
@@ -3268,7 +3287,8 @@ mod tests {
     fn post_slots_silently_discards_oversize_peer_claim() {
         let mut address = [0u8; 16];
         address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
+            .unwrap();
         let peer_pubkey = [0x43; 32];
         let response = coordinator.handle_post_slots(
             &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],
