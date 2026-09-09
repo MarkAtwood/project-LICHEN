@@ -165,7 +165,7 @@ llm_semantic_merge() {
     fi
     if [ -n "$touched_others" ]; then
         echo "  LLM session also modified: $(echo "$touched_others" | tr '\n' ' ')"
-        git add -- $touched_others
+        git add -- $touched_others || return 1
     fi
 
     # Final content gate over the exact commit set (the index): no conflict
