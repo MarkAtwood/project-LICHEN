@@ -2227,7 +2227,6 @@ fn production_handler_requires_announce_pin() {
         .unwrap();
     let mut announces = crate::announce::AnnounceProcessor::new(
         crate::gradient::GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
-        [0xfd; 8],
     );
     assert_eq!(
         node.handle_dao(
