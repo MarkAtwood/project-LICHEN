@@ -7,6 +7,9 @@ name = "lichen-gateway"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+# Declare the workspace MSRV so clippy MSRV-aware lints apply (bead d5tj):
+# without it clippy 1.81+ suggests MSRV-1.82 methods (is_none_or) here.
+rust-version.workspace = true
 description = "LICHEN border router (6LBR) daemon for Linux."
 
 [features]
