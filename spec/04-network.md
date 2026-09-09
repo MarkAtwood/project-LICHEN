@@ -57,20 +57,18 @@ Each LICHEN LoRa mesh is a leaf cluster. Primary 02xx addresses enable seamless 
 
 IID and primary 02xx address are derived from Ed25519 public key via the unified normative function in 06-security.md §8.5 (MUST match test vectors exactly; see also 03-addressing.md:12-18, draft-lichen-schnorr-00, rust/lichen-core/src/addr.rs:86-117 (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), python/src/lichen/crypto/identity.py).
 
-**Migration note (spec/decisions.jsonl `upstream-yggdrasil-addressing`):** the pseudocode block below shows the REJECTED SHA-512 native profile for both the IID and the primary address. For the IID it remains the live derivation; for the primary it is superseded — the normative primary derivation is upstream `AddrForKey` per §12.1 (no hashing, no embedded IID). The block is retained until the 06-security.md §8.5/§8.7 normative steps are migrated (tracked under epic i72x), at which point this section loses the primary-address half.
+The IID below is the live link-local derivation. The primary 0200::/8 address is NOT derived here: it is upstream Yggdrasil `AddrForKey(pubkey)` per §12.1 (no hashing, no embedded IID). The former SHA-512 primary half of this block is withdrawn (spec/decisions.jsonl `upstream-yggdrasil-addressing`); it is recorded only in the quarantined legacy corpus `test/vectors/legacy/yggdrasil-derivation.json`.
 
 ```
-// IID (8 bytes, link-local; the rejected profile also embedded it in the primary)
+// IID (8 bytes, link-local identity)
 hash512 = SHA-512(pubkey)
 IID = hash512[0:8]
 IID[0] &= 0b11111101                      // clear U/L bit (RFC 4291)
 
-// REJECTED primary derivation (SHA-512 native profile) — superseded by
-// upstream AddrForKey per §12.1; retained for pre-migration reference only.
-hash512 = SHA-512(pubkey)
-addr[0] = 0x02                             // native 0200::/8 prefix
-addr[1..8] = hash512[0:7]                 // remaining upper-address bytes
-addr[8..16] = IID                         // lower 64 bits == IID (key binding)
+// Primary 0200::/8 address: upstream Yggdrasil AddrForKey(pubkey) — see §12.1
+// (bit-invert the pubkey, count leading 1-bits into addr[1], skip the leading
+// 1s and first 0 bit, pack the remainder MSB-first; no hashing; the address
+// does NOT embed the IID).
 ```
 
 **Stable cryptographic IIDs only.** The IID binds the IPv6 address to the Ed25519 keypair used for signatures and OSCORE (no new key material). Temporary (RFC 4941) and opaque (RFC 7217) IIDs MUST NOT be used. See 06-security.md §8.7 for full analysis and privacy considerations. Short address derivation for 6LoWPAN remains compatible but defers to the key-derived IID for identity.
@@ -300,7 +298,7 @@ Link-local:  fe80::<IID>                                  (control only)
 Primary:     AddrForKey(pubkey)                           (upstream Yggdrasil /128, 0200::/8, all routable traffic)
 ```
 
-**Primary (normative, spec/decisions.jsonl `upstream-yggdrasil-addressing`):** a node /128 MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)` byte-for-byte: bit-invert the 32-byte pubkey; `addr[0] = 0x02`; `addr[1]` = count of leading 1-bits in the inverted key (a whole-byte value that wraps at 256 per Go overflow semantics for a degenerate all-ones inverted key); skip the leading 1s and the first 0 bit; pack the remaining bits MSB-first into whole bytes, discarding the trailing partial byte; `addr[2:16]`, zero tail. No hashing. The independent conformance oracle is the pinned upstream `address_test.go` anchor in `test/vectors/yggdrasil_address.json`. Routed /64s, when used, MUST equal upstream `SubnetForKey` in `0300::/8`. The SHA-512-based native profile formerly shown here is REJECTED and quarantined in `test/vectors/legacy/yggdrasil-derivation.json`.
+**Primary (normative, spec/decisions.jsonl `upstream-yggdrasil-addressing`):** a node /128 MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)` byte-for-byte: bit-invert the 32-byte pubkey; `addr[0] = 0x02`; `addr[1]` = count of leading 1-bits in the inverted key (a whole-byte value that wraps at 256 per Go overflow semantics for a degenerate all-ones inverted key); skip the leading 1s and the first 0 bit; pack the remaining bits MSB-first into whole bytes, discarding the trailing partial byte; keep only the first 14 packed bytes (`addr[2:16]`), discarding any packed bytes beyond the 14th; zero tail when fewer than 14 packed bytes remain. No hashing. The independent conformance oracle is the pinned upstream `address_test.go` anchor in `test/vectors/yggdrasil_address.json`. Routed /64s, when used, MUST equal upstream `SubnetForKey` in `0300::/8`. The SHA-512-based native profile formerly shown here is REJECTED and quarantined in `test/vectors/legacy/yggdrasil-derivation.json`.
 
 The former "lower 64 bits of primary address == IID" binding invariant is withdrawn: the primary address no longer embeds the IID, and the local IID derivation MUST NOT alter upstream address bytes. Key binding of the primary address is by self-derivation (the address IS `AddrForKey(pubkey)`, verifiable by anyone holding the pubkey) and by TOFU (06-security.md §8.5/§8.7) pinning the pubkey itself. The IID remains the link-local identity (`fe80::<IID>`), unchanged. No ULA or layered GUA model.
 
@@ -315,8 +313,8 @@ Examples use the `rfc8032_test_public_key` vector from
 `test/vectors/ipv6-addresses.json`: IID = `SHA-512(pubkey)[0:8]` with the U/L
 bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID. Node uses
 link-local for control + single primary 02xx for everything else. (Migration
-state: consistent with 05-routing.md; 06-security.md §8.5/§8.7 normative steps
-still show the rejected derivation — migration tracked under epic i72x.)
+state: consistent with 05-routing.md and 06-security.md; implementation
+migration is tracked under epic i72x.)
 Note: the primary/native
 derivation shown in the table above (`[0x02] + SHA-512(pubkey)[0:7] + IID`,
 lower 64 bits == IID) — and the corpus's `native`/`native_packed` fields, now

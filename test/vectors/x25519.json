@@ -64,7 +64,7 @@
         "iid": "0c02a50225b4baaa",
         "ygg_addr": "020e02a50225b4ba0c02a50225b4baaa"
       },
-      "note": "SHA-512 of empty message signed with this key is the RFC 8032 test signature. public_key is the RFC 8032 constant (external anchor). iid/ygg_addr match test/vectors/yggdrasil-derivation.json vector 3; x25519_public cross-checked with the cryptography-library X25519 implementation."
+      "note": "SHA-512 of empty message signed with this key is the RFC 8032 test signature. public_key is the RFC 8032 constant (external anchor). iid/ygg_addr match test/vectors/legacy/yggdrasil-derivation.json vector 3 (QUARANTINED legacy SHA-512 native profile; not a conformance oracle); x25519_public cross-checked with the cryptography-library X25519 implementation."
     },
     {
       "name": "invalid_seed_length_empty",

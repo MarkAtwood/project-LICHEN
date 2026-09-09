@@ -2392,20 +2392,30 @@ def test_x25519_key_derivation_vector(name: str, vector: dict) -> None:
 
 
 def _yggdrasil_derivation_cases():
-    doc = _load("yggdrasil-derivation.json")
+    # QUARANTINED corpus: rejected SHA-512 native profile (see
+    # test/vectors/legacy/README.md). Not a conformance oracle.
+    doc = _load("legacy/yggdrasil-derivation.json")
     assert isinstance(doc, list) and doc, "expected bare-array derivation vectors"
     return [(entry.get("name", entry.get("description", "")[:40]), entry) for entry in doc]
 
 
 @pytest.mark.parametrize("name,vector", _yggdrasil_derivation_cases())
 def test_yggdrasil_derivation_vector(name: str, vector: dict) -> None:
-    """Consume seed->address derivation consistency vectors.
+    """Quarantine-integrity pin for the legacy SHA-512 native profile corpus.
 
-    Gives test/vectors/yggdrasil-derivation.json a Python machine consumer
-    alongside the Zephyr C hardcoded checks: every positive entry is re-derived
-    from its pubkey via yggdrasil_address/_pubkey_to_iid, the binding-invariant
-    entry proves ygg_addr[8:16] == iid, and the negative entry proves an
-    attacker pubkey cannot derive a victim's IID.
+    The vectors live in test/vectors/legacy/yggdrasil-derivation.json
+    (QUARANTINED per spec/decisions.jsonl upstream-yggdrasil-addressing;
+    see test/vectors/legacy/README.md). The current Python derivation still
+    implements the rejected profile — a known, tracked migration gap — so
+    this test documents pre-migration behavior and trips if the derivation
+    is changed accidentally. It is NOT a conformance oracle: when the
+    upstream AddrForKey migration lands, this test MUST be deleted or
+    replaced with pinned upstream byte-equality vectors.
+
+    Every positive entry is re-derived from its pubkey via
+    yggdrasil_address/_pubkey_to_iid, the binding-invariant entry proves
+    ygg_addr[8:16] == iid, and the negative entry proves an attacker pubkey
+    cannot derive a victim's IID.
     """
     from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
 
@@ -5630,8 +5640,6 @@ _PENDING_EXPLICIT_SCHEMA_POLICY = frozenset({
         "tx_queue_implementation.json",
         "tx_queue_priority.json",
         "waypoint.json",
-        "yggdrasil-derivation.json",
-        "yggdrasil.json",
         "yggdrasil_address.json",
 })
 
