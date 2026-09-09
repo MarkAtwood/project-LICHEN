@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import cbor2
 import pytest
 
 from lichen.gateway.slot_claim import (
@@ -153,3 +154,20 @@ def test_ordinal_absent_rejected() -> None:
     case = _case("ordinal_absent")
     with pytest.raises(ClaimError):
         SlotClaim.decode_cose(_hex(case["cose_sign1_hex"]))
+
+
+def test_claim_seq_over_u32_rejected_at_decode() -> None:
+    # The Rust decoder bounds claim_seq with u32::try_from (slot.rs:590);
+    # Python must reject the same range or a signed claim with
+    # claim_seq > 2**32-1 diverges cross-implementation (accepted by
+    # Python, MalformedClaim to Rust). Both the u64-width form (major
+    # type 0, 8-byte argument) and the tag-2 bignum form must fail.
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+
+    for over in (0x1_0000_0000, 2**64 + 1):  # u64-width and tag-2 bignum
+        payload = cbor2.loads(elements[2])
+        payload[6] = over
+        body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+        with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
+            SlotClaim.decode_cose(body)
