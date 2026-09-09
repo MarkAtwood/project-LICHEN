@@ -56,10 +56,10 @@ def _upstream_addr_for_key(public_key: bytes) -> bytes:
     MSB-first into addr[2:16]. No hashing.
 
     Migration split (spec/decisions.jsonl upstream-yggdrasil-addressing):
-    corpora already regenerated to upstream (root_signature.json) use this
-    oracle; corpora still on the rejected SHA-512 profile
-    (root_authorization.json, authenticated_schc_dio.json) keep the legacy
-    ``_addr_for_key`` until their own regeneration lands.
+    corpora already regenerated to upstream (root_signature.json,
+    authenticated_schc_dio.json) use this oracle; root_authorization.json
+    still on the rejected SHA-512 profile keeps the legacy ``_addr_for_key``
+    until its own regeneration lands.
     """
     inverted = bytes(b ^ 0xFF for b in public_key)
     ones = 0
@@ -389,7 +389,7 @@ def test_authenticated_schc_dio_construction_has_independent_security_checks() -
             vector["name"]
         )
         if vector["trusted_role"] == "root":
-            root_binding = dio[8:24] == _addr_for_key(public_key)
+            root_binding = dio[8:24] == _upstream_addr_for_key(public_key)
             assert root_binding is (vector["expected"]["admitted"] is True), vector["name"]
 
 

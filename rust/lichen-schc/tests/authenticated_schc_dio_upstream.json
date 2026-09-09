@@ -1,6 +1,6 @@
 {
   "format_version": 2,
-  "description": "Canonical signed Link/SCHC/RPL DIO admission vectors for the one-byte SCHC Rule Set Version option (type 0x13).",
+  "description": "Canonical signed Link/SCHC/RPL DIO admission vectors for the one-byte SCHC Rule Set Version option (type 0x13). UPSTREAM-AddrForKey variant (i72x.2): DODAGIDs recomputed with yggdrasil-go@422836ee semantics; shared corpus flips in i72x.6.",
   "provenance": {
     "security_oracle": "Schnorr-48 keys and signatures are derived independently with PyNaCl group/scalar primitives in reference_schnorr48.py over fixed Link Signature Domain Version 1. Expected admission verdicts are fixed spec-derived literals, not production return values.",
     "construction_helpers": "A literal spec encoder constructs IPv6, ICMPv6 checksum, Rule 255, L2 dispatch, and link-frame bytes without importing production codecs; multicast ff02::1a selects Rule 255, and independent consumer tests revalidate the exact domain-separated signature transcript, checksums, source/signer binding, and root AddrForKey binding."
