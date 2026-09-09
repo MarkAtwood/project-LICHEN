@@ -10,8 +10,11 @@
 
 /* Zephyr 4.1 marks TinyCrypt DEPRECATED (Kconfig aborts on the warning);
  * mbedTLS supplies the identical SHA-256 there. Host tests keep TinyCrypt
- * (stub or module) so existing host harnesses are unchanged. */
-#ifdef __ZEPHYR__
+ * (stub or module) so existing host harnesses are unchanged. The provider
+ * key is CONFIG_MBEDTLS_SHA256, not __ZEPHYR__: a bare-Zephyr build with
+ * no LICHEN configs (e.g. tests/util compiling this file standalone) may
+ * still select the mbedTLS path via CONFIG_MBEDTLS=y in its prj.conf. */
+#if defined(__ZEPHYR__) && defined(CONFIG_MBEDTLS_SHA256)
 #include <mbedtls/sha256.h>
 #define LICHEN_SHA256_DIGEST_SZ 32
 #else
@@ -34,7 +37,7 @@ int lichen_sha256(const uint8_t *input, size_t inlen,
         return -ENOMEM;
     }
 
-#ifdef __ZEPHYR__
+#if defined(__ZEPHYR__) && defined(CONFIG_MBEDTLS_SHA256)
     /* One-shot: mbedtls_sha256 only fails on internal errors; preserve the
      * historic stage-mapped errno contract as -EIO. */
     return mbedtls_sha256(input, inlen, output, 0) == 0 ? 0 : -EIO;
