@@ -102,20 +102,6 @@ static void icmpv6_write_checksum(uint8_t *icmp, uint16_t cksum)
 	write_be16(&icmp[2], cksum);
 }
 
-struct lichen_rpl_root {
-	struct lichen_rpl_dodag dodag;
-	struct lichen_trickle trickle;
-	struct lichen_rpl_dao_manager dao_manager;
-	struct lichen_rpl_dao_root_state root_state;
-	uint8_t prefix[16];
-	uint8_t prefix_len;
-	/* Root's own link-local address; DIOs originate from it (the DODAGID
-	 * is the root's 02xx:: Yggdrasil address and must not be reused as
-	 * the link-local IID). */
-	uint8_t self_addr[16];
-	struct net_if *iface;
-};
-
 struct lichen_rpl_root *lichen_rpl_root_init(struct lichen_rpl_root *root, struct net_if *iface,
 					     const uint8_t *dodag_id, const uint8_t *node_addr)
 {
