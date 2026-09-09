@@ -19,7 +19,7 @@ LICHEN nodes have a stable cryptographic identity based on an Ed25519 keypair. H
 
 **Example:** `KCVN-MRPX-QWERT`
 
-This address is short enough to speak, type, and remember. It has acceptable collision probability up to 5B nodes (~0.5 expected collisions). It is cryptographically bound to the Ed25519 public key used for signatures, OSCORE, and IPv6 Interface Identifiers. The same IID is used for the link-local address (`fe80::/10`) and the lower 64 bits of the node's key-derived native `0200::/8` `/128`, constructed as `addr = [0x02] + SHA-512(pubkey)[0:7] + IID`; ULA addresses (`fc00::/7`) are not used (see 04-network.md §6.2 and §12, 06-security.md §8.5).
+This address is short enough to speak, type, and remember. It has acceptable collision probability up to 5B nodes (~0.5 expected collisions). It is cryptographically bound to the Ed25519 public key used for signatures, OSCORE, and IPv6 Interface Identifiers. The same IID is used for the link-local address (`fe80::/10`). The node's routable native `0200::/8` `/128` MUST equal upstream Yggdrasil `AddrForKey(pubkey)` (04-network.md §12.1): it bit-packs the inverted pubkey with no hashing and embeds no IID bytes, so the former "lower 64 bits == IID" binding no longer applies — key binding of the primary address is by self-derivation and by TOFU pinning of the pubkey (06-security.md §8.5/§8.7). ULA addresses (`fc00::/7`) are not used (see 04-network.md §6.2 and §12, 06-security.md §8.5).
 
 On first contact, nodes exchange the full pubkey; TOFU pins the binding. Collisions (rare) are resolved by context, GNSS, or full key verification (DANE/PKIX optional).
 

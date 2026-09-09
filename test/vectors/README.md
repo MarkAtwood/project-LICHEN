@@ -7,7 +7,7 @@ Language-neutral fixtures for the LICHEN protocol using **format_version=2** str
 
 ## File Index
 
-Complete index of every vector file (174 files, excluding `schema.json` and the per-family `*.schema.json` files). Byte strings are lowercase hex (possibly empty).
+Complete index of every vector file (excluding `schema.json` and the per-family `*.schema.json` files). Byte strings are lowercase hex (possibly empty).
 
 ### Schema
 
@@ -63,7 +63,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `address_classification.schema.json` | Closed schema for `address_classification.json` operation scenarios |
 | `dao_origin_signature.json` | Shared DAO Origin Signature conformance (v2 schema) |
 | `gradient_entry.json` | Gradient table entry ranking/comparison order (spec 11) |
-| `ipv6-addresses.json` | Pubkey → IID → fe80::/10 and primary/native address derivation |
+| `ipv6-addresses.json` | Pubkey → IID → fe80::/10 derivation (the primary/native 0200::/8 fields are the rejected SHA-512 profile, quarantined in `legacy/ipv6_addresses_native_sha512.json`) |
 | `ipv6-icmpv6.json` | ICMPv6 Echo/errors with pseudo-header checksum (RFC 4443, spec 6.4) |
 | `ipv6_malformed.json` | Malformed IPv6/ICMPv6/UDP rejection (RFC 8200/4443/768) |
 | `loadng.json` | LOADng 16-bit sequence-number wrap-aware freshness (RFC 1982) |
@@ -118,7 +118,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `gateway_discovery.json` | GCP-4 backbone multicast + LoRa fallback discovery |
 | `gcp_iid_comparison.json` | IID comparison/conflict-resolution algorithm (GCP-6.3) |
 | `gcp_psk_oscore.json` | PSK-based OSCORE HKDF derivation intermediates (RFC 8613) |
-| `gcp_slot_claim.json` | Slot-claim message Schnorr48 signing over CBOR-canonical form |
+| `gcp_slot_claim.json` | GCP-6.5 slot-claim basic tier: COSE_Sign1 envelopes, Schnorr48 over SHA-256(CBOR(Sig_structure)); generator `generate_gcp_slot_claim.py` |
 | `gcp_slot_claim_cose_sign1.json` | GCP-6.5 slot-claim COSE_Sign1: slots-mutation forgery, claim_seq replay, expiry boundaries, alg decoy, kid mismatch, missing ordinal |
 | `gcp_handoff_cose_sign1.json` | GCP-7.1 handoff request/confirm COSE_Sign1: RFC 9052 Sig_structure, mutations, verification cases |
 | `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid) |
@@ -173,6 +173,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 |------|--------|
 | `announce_coords.json` | Announce app_data Type=0x01 lat/lon e7 big-endian encoding |
 | `announce_signed_data.json` | Announce signed_data transcript format (CCP-9, spec 05 §9.2) |
+| `density_scaling.json` | Density-adaptive announce parameters (interval/hops/timeout/jitter per tier, spec 05 §9.4), root num_slots from DODAG size (spec 05 §9.10.4), and position beacon rate per density (spec 12 §18.2.1); closed schema `density_scaling.schema.json` |
 
 ### App Compatibility
 
@@ -207,9 +208,11 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 |------|--------|
 | `node-addresses.json` | Human-readable node addresses, canonical set (**content-overlaps `node_address.json`**) |
 | `node_address.json` | Base32-from-SHA-512(pubkey[:8]) 13-char node address (**content-overlaps `node-addresses.json`**) |
-| `yggdrasil-derivation.json` | Seed→address derivation matched across Rust/C/Python |
-| `yggdrasil.json` | `ygg_addr_from_pubkey` spot vectors (e.g. SHA-256(b"") key) |
-| `yggdrasil_address.json` | Native Yggdrasil-range derivation corpus: verbatim upstream Go `AddrForKey` anchor (divergence pinned) + LICHEN SHA-512 profile cases incl. length-rejections |
+| `legacy/ipv6_addresses_native_sha512.json` | QUARANTINED primary/native 0200::/8 fields moved out of `ipv6-addresses.json` key vectors (see `legacy/README.md`) — not a conformance oracle |
+| `legacy/yggdrasil_address_native_sha512.json` | QUARANTINED legacy SHA-512 native profile corpus, moved verbatim out of `yggdrasil_address.json` (see `legacy/README.md`) — not a conformance oracle |
+| `legacy/yggdrasil-derivation.json` | QUARANTINED legacy SHA-512 native profile derivation corpus (see `legacy/README.md`) — not a conformance oracle |
+| `legacy/yggdrasil.json` | QUARANTINED legacy-profile `ygg_addr_from_pubkey` spot vectors (see `legacy/README.md`) — not a conformance oracle |
+| `yggdrasil_address.json` | Conformance corpus: verbatim upstream Go `AddrForKey` anchor (pinned external oracle) + profile-agnostic pubkey length-rejections. The rejected LICHEN SHA-512 profile cases are quarantined in `legacy/` |
 
 ### Simulation Models
 

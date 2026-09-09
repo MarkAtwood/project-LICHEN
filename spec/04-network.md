@@ -19,9 +19,9 @@
 | Type | Prefix | Availability | Purpose |
 |------|--------|--------------|---------|
 | Link-local | fe80::/10 | After `lichen_link_init()` | Control traffic only (NDP, RPL control, neighbor discovery) |
-| Primary (native) | 0200::/8 | Always (self-derived from Ed25519 pubkey) | All routable traffic (mesh, inter-mesh, BR forwarding). Cryptographically bound to key per 06-security.md §8.5 |
+| Primary | 0200::/8 | Always (self-derived from Ed25519 pubkey via upstream `AddrForKey`, §12.1) | All routable traffic (mesh, inter-mesh, BR forwarding). Cryptographically bound to key per 06-security.md §8.5 |
 
-All addresses use stable IID derived from Ed25519 public key (unified derivation in 06-security.md §8.5, test/vectors/yggdrasil-derivation.json, 03-addressing.md). This provides cryptographic identity binding with no additional secrets. Link-local restricted to post-`lichen_link_init()` per AGENTS.md initialization graph. Single-primary model eliminates ULA/GUA layering, scope selection bugs, and prefix advertisement complexity while preserving isolated-mesh and multi-BR behavior via Yggdrasil.
+All addresses use stable IID derived from Ed25519 public key (unified derivation in 06-security.md §8.5, 03-addressing.md; legacy corpus `test/vectors/legacy/yggdrasil-derivation.json` — quarantined rejected SHA-512 native profile per spec/decisions.jsonl `upstream-yggdrasil-addressing`, not a conformance oracle). This provides cryptographic identity binding with no additional secrets. Link-local restricted to post-`lichen_link_init()` per AGENTS.md initialization graph. Single-primary model eliminates ULA/GUA layering, scope selection bugs, and prefix advertisement complexity while preserving isolated-mesh and multi-BR behavior via Yggdrasil.
 
 **Isolated Meshes (No BR):**
 
@@ -33,7 +33,7 @@ Unchanged mechanics (lowest EUI-64 deterministic election, DIO monitoring, >50% 
 
 **Multiple Border Routers & Yggdrasil:**
 
-BRs attach LICHEN meshes to Yggdrasil overlay using nodes' native 02xx addresses. 
+BRs attach LICHEN meshes to Yggdrasil overlay using nodes' 02xx primary addresses.
 
 - Local traffic stays on LoRa (RPL/gradient/LOADng on primary addresses)
 - Off-mesh 02xx traffic forwards to BR Yggdrasil TUN
@@ -55,15 +55,18 @@ Each LICHEN LoRa mesh is a leaf cluster. Primary 02xx addresses enable seamless 
 
 ### 6.2. Interface Identifier (IID) Derivation
 
-IID and primary 02xx address are derived from Ed25519 public key via the unified normative function in 06-security.md §8.5 (MUST match test vectors exactly; see also 03-addressing.md:12-18, draft-lichen-schnorr-00, rust/lichen-core/src/addr.rs:86-117 (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), python/src/lichen/crypto/identity.py):
+IID and primary 02xx address are derived from Ed25519 public key via the unified normative function in 06-security.md §8.5 (MUST match test vectors exactly; see also 03-addressing.md:12-18, draft-lichen-schnorr-00, rust/lichen-core/src/addr.rs:86-117 (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), python/src/lichen/crypto/identity.py).
+
+**Migration note (spec/decisions.jsonl `upstream-yggdrasil-addressing`):** the pseudocode block below shows the REJECTED SHA-512 native profile for both the IID and the primary address. For the IID it remains the live derivation; for the primary it is superseded — the normative primary derivation is upstream `AddrForKey` per §12.1 (no hashing, no embedded IID). The block is retained until the 06-security.md §8.5/§8.7 normative steps are migrated (tracked under epic i72x), at which point this section loses the primary-address half.
 
 ```
-// IID (8 bytes, link-local and lower half of primary address)
+// IID (8 bytes, link-local; the rejected profile also embedded it in the primary)
 hash512 = SHA-512(pubkey)
 IID = hash512[0:8]
 IID[0] &= 0b11111101                      // clear U/L bit (RFC 4291)
 
-// Primary 02xx address (16 bytes, all routable traffic)
+// REJECTED primary derivation (SHA-512 native profile) — superseded by
+// upstream AddrForKey per §12.1; retained for pre-migration reference only.
 hash512 = SHA-512(pubkey)
 addr[0] = 0x02                             // native 0200::/8 prefix
 addr[1..8] = hash512[0:7]                 // remaining upper-address bytes
@@ -133,6 +136,7 @@ Each node tracks broadcasts it relays, per sender:
 Broadcast Relay State:
   sender_iid: <IID of original sender>
   hop_bucket[1-7]: <count in rolling 1-hour window>
+  sos_count: <SOS count in rolling 1-hour window>
   last_seen: <timestamp>
 ```
 
@@ -146,7 +150,30 @@ Higher Hop Limit = larger blast radius = stricter limit:
 | 2 | 100 | Small radius |
 | 3-4 | 30 | Medium radius |
 | 5-7 | 10 | Mesh-wide, expensive |
-| SOS (any) | 3 | Emergency, always relay once |
+| 8-255 (clamped) | 10 | §6.3.2's 255 (flood) and any hl > 7 use the hl=7 row |
+| SOS (any) | 3 | Emergency, per sender per hour across ALL hop buckets (see SOS note) |
+
+`hop_bucket` is indexed 1-7. Two out-of-table values are defined here:
+
+- **hl = 0:** the packet is consume-only at this node (§6.3.2 step 3) — the
+  relay decision returns before any bucket lookup, so hl=0 never indexes
+  `hop_bucket`. No budget row is needed.
+- **hl = 8..255:** clamped to bucket 7 before lookup (`bucket = min(hl, 7)`),
+  so §6.3.2's 255 (flood) and any oversized hl share the most restrictive
+  (hl=7) budget. Senders that want a wider flood accept the tighter budget.
+
+**SOS counting and detection:** SOS traffic uses its own per-sender counter,
+NOT the shared `hop_bucket` — so the "first SOS is never dropped" property
+holds even for a sender with non-SOS broadcasts in the window (count starts
+at 0 < budget 3, and the yellow-zone probabilistic relay applies only at
+count >= 50% of budget, i.e. not on the first). The row value 3 is per
+sender per hour across all hop limits, not 3 per bucket. Relays detect SOS
+by the link-layer dispatch marker (an L2 SOS dispatch type; a wire value
+must be assigned in 02-physical-link.md before this is implementable —
+tracked). The CoAP `/sos` path (12-apps.md §18.4.3) is NOT a usable relay
+signal: OSCORE encrypts Uri-Path end-to-end and SCHC elides it, so relays
+cannot see it. The "always relay once" rationale refers to the first SOS
+counting at 0 and is consistent with drop-at-budget, not an exemption.
 
 **Relay decision:**
 
@@ -155,11 +182,21 @@ on_receive_broadcast(packet):
   sender = packet.source_iid
   hl = packet.hop_limit
 
+  if hl == 0:
+    consume(packet)  # §6.3.2: consume-only, never budgeted or relayed
+    return
+
   if sender not in relay_state:
     relay_state[sender] = new_entry()
 
-  budget = get_budget(hl)
-  count = relay_state[sender].hop_bucket[hl]
+  is_sos = (packet.l2_dispatch == L2_DISPATCH_SOS)  # link-layer marker
+  if is_sos:
+    budget = 3                        # SOS row, per sender per hour, all hops
+    count = relay_state[sender].sos_count
+  else:
+    bucket = min(hl, 7)               # hl 8..255 clamp to bucket 7
+    budget = get_budget(hl)
+    count = relay_state[sender].hop_bucket[bucket]
 
   if count >= budget:
     drop(packet)  # sender exceeded budget
@@ -171,7 +208,10 @@ on_receive_broadcast(packet):
       drop(packet)
       return
 
-  relay_state[sender].hop_bucket[hl] += 1
+  if is_sos:
+    relay_state[sender].sos_count += 1
+  else:
+    relay_state[sender].hop_bucket[bucket] += 1
   decrement_hop_limit(packet)
 
   if packet.hop_limit > 0:
@@ -188,7 +228,7 @@ on_receive_broadcast(packet):
 
 **State size:**
 
-Per-sender entry: ~20 bytes (IID + 7 bucket counters + timestamp)
+Per-sender entry: ~20 bytes (IID + 7 hop-bucket counters + SOS counter + timestamp)
 At 100 active senders: ~2 KB
 
 #### 6.3.4. Border Router Multicast Filtering
@@ -253,28 +293,39 @@ Standard ICMPv6 (RFC 4443) for:
 
 ### 12.1. Address Structure
 
-See Section 6.1 for single-primary model (unified Ed25519 derivation per 06-security.md §8.5 and test/vectors/yggdrasil-derivation.json). Summary:
+See Section 6.1 for single-primary model (unified Ed25519 identity per 06-security.md §8.5). Summary:
 
 ```
 Link-local:  fe80::<IID>                                  (control only)
-Primary:     [0x02] + SHA-512(pubkey)[0:7] + IID          (0200::/8 native /128, all routable traffic)
+Primary:     AddrForKey(pubkey)                           (upstream Yggdrasil /128, 0200::/8, all routable traffic)
 ```
 
-IID and full 02xx address derived from same Ed25519 pubkey (MUST: lower 64 bits of primary address == IID for binding; see 06-security.md). No ULA or layered GUA model.
+**Primary (normative, spec/decisions.jsonl `upstream-yggdrasil-addressing`):** a node /128 MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)` byte-for-byte: bit-invert the 32-byte pubkey; `addr[0] = 0x02`; `addr[1]` = count of leading 1-bits in the inverted key (a whole-byte value that wraps at 256 per Go overflow semantics for a degenerate all-ones inverted key); skip the leading 1s and the first 0 bit; pack the remaining bits MSB-first into whole bytes, discarding the trailing partial byte; `addr[2:16]`, zero tail. No hashing. The independent conformance oracle is the pinned upstream `address_test.go` anchor in `test/vectors/yggdrasil_address.json`. Routed /64s, when used, MUST equal upstream `SubnetForKey` in `0300::/8`. The SHA-512-based native profile formerly shown here is REJECTED and quarantined in `test/vectors/legacy/yggdrasil-derivation.json`.
+
+The former "lower 64 bits of primary address == IID" binding invariant is withdrawn: the primary address no longer embeds the IID, and the local IID derivation MUST NOT alter upstream address bytes. Key binding of the primary address is by self-derivation (the address IS `AddrForKey(pubkey)`, verifiable by anyone holding the pubkey) and by TOFU (06-security.md §8.5/§8.7) pinning the pubkey itself. The IID remains the link-local identity (`fe80::<IID>`), unchanged. No ULA or layered GUA model.
 
 ### 12.2. Example Addresses
 
 | Type | Example | Routable To |
 |------|---------|-------------|
 | Link-local | fe80::c02:a502:25b4:baaa | Direct neighbors (control) |
-| Primary (02xx) | 020e:02a5:0225:b4ba:0c02:a502:25b4:baaa | Mesh, inter-mesh via Yggdrasil, internet |
+| Primary (02xx) | 020e:02a5:0225:b4ba:0c02:a502:25b4:baaa (REJECTED profile — see note) | Mesh, inter-mesh via Yggdrasil, internet |
 
-Examples use the canonical `rfc8032_test_public_key` vector from
+Examples use the `rfc8032_test_public_key` vector from
 `test/vectors/ipv6-addresses.json`: IID = `SHA-512(pubkey)[0:8]` with the U/L
-bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID, and primary =
-`[0x02] + SHA-512(pubkey)[0:7] + IID` (lower 64 bits == IID). Node uses
-link-local for control + single primary 02xx for everything else. Consistent
-with updated 05-routing.md and 06-security.md. Matches all test vectors.
+bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID. Node uses
+link-local for control + single primary 02xx for everything else. (Migration
+state: consistent with 05-routing.md; 06-security.md §8.5/§8.7 normative steps
+still show the rejected derivation — migration tracked under epic i72x.)
+Note: the primary/native
+derivation shown in the table above (`[0x02] + SHA-512(pubkey)[0:7] + IID`,
+lower 64 bits == IID) — and the corpus's `native`/`native_packed` fields, now
+quarantined in `test/vectors/legacy/ipv6_addresses_native_sha512.json` —
+record the REJECTED SHA-512 native profile (spec/decisions.jsonl
+`upstream-yggdrasil-addressing`): pre-migration reference, not a conformance
+oracle; the routable address MUST equal upstream Yggdrasil `AddrForKey`
+(§12.1), which embeds no IID bytes. The IID and link-local derivations remain
+the live profile.
 
 ### 12.3. Short Address Assignment
 

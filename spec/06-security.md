@@ -17,6 +17,27 @@
 | Routing attacks | Link-layer signatures REQUIRED on all RPL control frames (DIO/DAO/DIS); RPL secure mode optional |
 | DoS | Rate limiting, admission control |
 
+**Broadcast budget key not authenticated end-to-end (acknowledged ceiling):**
+the 04-network.md §6.3.3 broadcast relay budget is keyed on the packet's
+source IID field, which the limiter never binds to any authenticated
+identity. Link-layer Schnorr signatures are per-hop (relays re-sign with
+their own keys, 02-physical-link.md:305-308); OSCORE (pairwise or group)
+secures CoAP payloads, not the network-layer source field; and DAO-origin
+authentication is DAO-only (§8.4). End-to-end-signed broadcast classes do
+exist — SOS origin signatures (12-apps.md §18.4.1) and self-authenticating
+announces (05-routing.md §9.2) — but the §6.3.3 limiter does not consult
+them; it keys on the unauthenticated inner source field. A radio adversary
+therefore gets fresh budget identities for free by inventing arbitrary source
+IIDs under a single existing keypair (no new keypair needed), and can also
+spoof a victim's source to exhaust that victim's budget; IID spoofing
+additionally pressures the un-capped §6.3.3 relay-state table. Residual risk:
+per-hop budgets still bound the blast radius any single claimed identity can
+cause through one honest relay, so the budgets remain worthwhile as a
+rate-of-amplification limiter — not as proof of origin. This ceiling is
+acknowledged here; it is not closed at this layer (the limiter would have to
+key on a verified end-to-end identity, which §8.4 scopes to DAO only).
+Coordinate any change with the open 06-security addressing-consistency audit.
+
 ### 8.2. Security Layers
 
 ```
@@ -102,13 +123,13 @@ remains future `.44.9` work.
 
 ### 8.5. Unified Ed25519 Identity Derivation
 
-All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), stable IID, and primary 0200::/8 native address. No separate keys or ULA. See normative steps and full key management in §8.7, `rust/lichen-core/src/addr.rs:86-117` (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`; re-exported via `rust/lichen-link/src/lib.rs`), `python/src/lichen/crypto/identity.py:116-234` (`_pubkey_to_iid`, `yggdrasil_address`), `test/vectors/yggdrasil-derivation.json`, 04-network.md:§6.2, and 03-addressing.md.
+All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), stable IID, and primary 0200::/8 address (upstream Yggdrasil `AddrForKey`). No separate keys or ULA. See normative steps and full key management in §8.7, `rust/lichen-core/src/addr.rs` (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), `python/src/lichen/crypto/identity.py` (`_pubkey_to_iid`, `yggdrasil_address`), the pinned upstream oracle `test/vectors/yggdrasil_address.json` (spec/decisions.jsonl `upstream-yggdrasil-addressing`; the rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json`, not a conformance oracle), 04-network.md §6.2 and §12.1, and 03-addressing.md.
 
 **Overview (MUST match §8.7 and test vectors exactly):**
 
 1. 32-byte seed → Ed25519 keypair (deterministic per draft-lichen-schnorr-00).
-2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291; previous `|=0x02` incorrect). **MUST be SHA-512, not SHA-256**. The native address profile fixes the first address byte to `0x02` (0200::/8).
-3. 02xx addr = `[0x02] + SHA-512(pubkey)[0:7] + IID` (lower 64 bits bind key to address; prevents substitution).
+2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291; previous `|=0x02` incorrect). **MUST be SHA-512, not SHA-256**. The IID is the link-local identity (`fe80::<IID>`).
+3. 0200::/8 primary address = upstream Yggdrasil `AddrForKey(pubkey)` byte-for-byte (spec/decisions.jsonl `upstream-yggdrasil-addressing`; normative algorithm in 04-network.md §12.1: bit-invert the pubkey, count leading 1-bits into `addr[1]`, skip the leading 1s and first 0 bit, pack the remainder MSB-first, no hashing). The address no longer embeds the IID; key binding is by self-derivation (the address IS `AddrForKey(pubkey)`, verifiable by anyone holding the pubkey) — substitution resistance is preserved, stronger than IID-embedding.
 4. X25519 priv = clamp(SHA-512(seed)[0:32]) for OSCORE/EDHOC.
 5. TOFU pins pubkey to derived IID/02xx (cryptographically enforced).
 
@@ -136,13 +157,13 @@ high-security deployments, enable per-hop verification (costs CPU, not bytes).
 ### 8.7. Key Management
 
 
-A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (for EDHOC/OSCORE), stable IID, and the primary 0200::/8 native address. Single key for all purposes. Supports the simplified no-ULA model (fe80::IID + 0200::/8 primary only) per 04-network.md §6.1 and 05-routing.md. Matches test/vectors/yggdrasil-derivation.json exactly; see `python/src/lichen/crypto/identity.py:60` (from_seed), `rust/lichen-link/src/identity.rs:69` (Identity::from_seed).
+A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (for EDHOC/OSCORE), stable IID, and the primary 0200::/8 address (upstream Yggdrasil `AddrForKey`). Single key for all purposes. Supports the simplified no-ULA model (fe80::IID + 0200::/8 primary only) per 04-network.md §6.1 and 05-routing.md. Conforms to the pinned upstream oracle `test/vectors/yggdrasil_address.json` (spec/decisions.jsonl `upstream-yggdrasil-addressing`); the rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). See `python/src/lichen/crypto/identity.py:60` (from_seed), `rust/lichen-link/src/identity.rs:69` (Identity::from_seed).
 
 **Normative Derivation (MUST match test vectors exactly):**
 
 1. **Keypair**: `privkey, pubkey = derive_keypair(seed)` per draft-lichen-schnorr-00.md:97 (h=SHA-512(seed); privkey=clamp(h[0:32]); pubkey=basepoint_mult). Matches schnorr48.py:96 and Rust exactly.
-2. **IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291). **MUST be SHA-512** — this is the LICHEN native profile's own derivation digest; upstream Yggdrasil `AddrForKey` does not hash at all (it bit-packs the inverted key), and the two schemes agree only on the leading `0x02` byte (see the divergence note in `test/vectors/yggdrasil_address.json`). See 04-network.md §6.2, `rust/lichen-core/src/addr.rs:86` (`iid_from_pubkey_bytes`; re-exported via `lichen-link::iid_from_pubkey`).
-3. **0200::/8 Address**: `addr=[0x02] + SHA-512(pubkey)[0:7] + IID` (MUST: lower 64 bits == IID to bind key to address and prevent substitution attacks; bytes 1 through 7 are from SHA-512(pubkey)). No ULA. See addr.rs:109 (`ygg_addr_from_pubkey`), test/vectors/yggdrasil-derivation.json.
+2. **IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291). **MUST be SHA-512**. The IID is the LICHEN link-local identity and hashes the pubkey; upstream Yggdrasil `AddrForKey` (the routable primary, step 3) does NOT hash at all (it bit-packs the inverted key). The IID and the primary address share no bytes (the IID has no leading `0x02` byte); they are independent derivations from the same pubkey (see the pinned upstream anchor and rejected-profile note in `test/vectors/yggdrasil_address.json`; the rejected profile's vectors are quarantined in `test/vectors/legacy/` per spec/decisions.jsonl `upstream-yggdrasil-addressing`). See 04-network.md §6.2, `rust/lichen-core/src/addr.rs` (`iid_from_pubkey_bytes`).
+3. **0200::/8 Address**: `addr = AddrForKey(pubkey)` — upstream Yggdrasil `AddrForKey` byte-for-byte (normative algorithm in 04-network.md §12.1; no hashing, no embedded IID). Substitution resistance comes from self-derivation: the address IS `AddrForKey(pubkey)`, so anyone holding the pubkey recomputes and verifies it; the former "lower 64 bits == IID" MUST is withdrawn (the local IID derivation MUST NOT alter upstream address bytes). No ULA. See `test/vectors/yggdrasil_address.json` (pinned upstream `address_test.go` oracle), spec/decisions.jsonl `upstream-yggdrasil-addressing`; the rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle).
  4. **X25519**: `x25519_priv=clamp(SHA-512(seed)[0:32])` per RFC 7748 §5 for EDHOC static DH (see 8.9). Matches Python identity.py:109, standards/crypto.md:79.
 
 
@@ -205,7 +226,7 @@ For managed fleets, border router can provision keypairs. Nodes still derive IID
 1. Node boots in commissioning mode
 2. Connects to BR via secure channel (USB/BLE/LCI)
 3. BR generates Ed25519 keypair
-4. BR transmits private key + pubkey (node derives IID/02xx/Yggdrasil addr from pubkey)
+4. BR transmits private key + pubkey (node derives the IID and the 0200::/8 `AddrForKey` primary from pubkey)
 5. Node stores keypair, derives addresses, exits commissioning
 6. BR records (derived IID, PubKey) in trust anchor list
 7. BR distributes anchors to other nodes via CoAP
@@ -350,6 +371,14 @@ of the NEW public key.
 ```
 
 Integer keys minimize payload size. The payload is the serialized CBOR map.
+
+**Abuse-state non-continuity (acknowledged):** the attestation proves key
+succession only; it carries NO application-layer abuse state. Rate-limit
+buckets and reputation scores keyed on IID (e.g. the SOS 3/hour bucket and
+soft-blacklist in 12-apps.md §18.4.1) do not transfer to the new key — a node
+that rotates starts with a fresh bucket and clean score. This evasion window
+is accepted: closing it would require carrying signed abuse history in the
+attestation, which §8.7.4 deliberately does not do.
 
 **Signature Computation (COSE_Sign1):**
 
@@ -1196,18 +1225,6 @@ Local facts and CA credentials can coexist. A node might have:
 - CA credential: `oidc:name = "Mark Atwood"` (portable identity)
 - Local fact: `lichen:priority = 2` (this mesh only)
 
-**X.509v3 Certificate Profile:**
-
-The end-entity certificate carried in `x5chain` MUST conform to the
-LICHEN node attestation profile (appendix-x509-cert-profile.md;
-intermediate and root CA certificates are unconstrained ordinary
-RFC 5280 CA certificates): Ed25519 subject
-key, iPAddress SAN carrying the key-derived native `/128` (critical
-when the subject is empty), optional non-critical mesh role extension,
-and the verifier key-to-address binding check. The profile is minimal
-enough that any RFC 8410-capable CA can issue interoperable
-certificates.
-
 ---
 
 ## 15. Security Considerations
@@ -1234,6 +1251,7 @@ Private keys MUST be stored in:
 | Link | 8-bit epoch + 16-bit SeqNum (24-bit logical counter) |
 | OSCORE | Partial IV / Sequence Number |
 | RPL | Link-layer seqnum (baseline), secure mode counters (optional) |
+| Message/DTN | Absolute-time dedup keyed by message ID |
 
 **Link-Layer Replay Window:**
 
@@ -1242,6 +1260,41 @@ window for out-of-order tolerance. Epoch persisted to flash; increments
 on reboot. The epoch space is never wrapped: exhaustion at 255 fails
 closed and requires identity rotation. See 02-physical-link.md:4.4
 (and draft-lichen-link-01.md:5.2).
+
+**Time-Assisted Replay Rejection (GNSS-Enabled):**
+
+Because all nodes have GNSS wall-clock time, link-layer replay protection
+MAY augment the sequence-number sliding window with a time-based check.
+Receivers record the wall-clock timestamp of each accepted frame's
+reception. A frame whose link-layer timestamp (if present) or reception
+time falls outside `[now - REPLAY_TIME_WINDOW, now]` is rejected
+regardless of sequence number validity.
+
+This provides two benefits:
+1. **Reboot resilience:** After a reboot, sequence state may be lost or
+   stale. The time window provides an independent rejection mechanism that
+   survives reboots without persisting per-sender sequence state.
+2. **Bounded memory:** The time window implicitly limits how long per-sender
+   replay state must be retained. Entries older than `REPLAY_TIME_WINDOW`
+   can be garbage-collected.
+
+RECOMMENDED `REPLAY_TIME_WINDOW`: 600 seconds (2x `ANNOUNCE_INTERVAL`).
+This is an additional defense layer; the epoch+seqnum sliding window
+remains the primary replay protection mechanism.
+
+**Time-Bounded Dedup Tables:**
+
+Because all nodes have GNSS wall-clock time (see 09-packets-timing.md §14.6),
+dedup tables for store-and-forward messages use absolute expiry rather than
+fixed-size sliding windows. Each dedup entry is keyed by message ID and
+expires at exactly the message's absolute TTL. This provides a deterministic
+memory budget: the maximum number of dedup entries equals the maximum number
+of unexpired messages the node could have seen.
+
+Implementations MUST retain dedup entries until the corresponding message's
+absolute expiry timestamp. Implementations MUST NOT accept a message whose
+ID matches an existing dedup entry (even if received from a different path).
+After expiry, the dedup entry is garbage-collected.
 
 **OSCORE Replay Window:**
 
