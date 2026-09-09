@@ -126,17 +126,13 @@ class CapabilityPayload:
                 f"for prefix_len {self.prefix_len}, got {len(self.prefix)}"
             )
         if len(self.prefix) > 16:
-            raise ValueError(
-                f"prefix must be at most 16 bytes, got {len(self.prefix)}"
-            )
+            raise ValueError(f"prefix must be at most 16 bytes, got {len(self.prefix)}")
         if any(self.prefix[significant_prefix_bytes:]):
             raise ValueError("prefix padding beyond prefix_len bits must be zero")
 
         # Validate announcer_iid
         if len(self.announcer_iid) != 8:
-            raise ValueError(
-                f"announcer_iid must be 8 bytes, got {len(self.announcer_iid)}"
-            )
+            raise ValueError(f"announcer_iid must be 8 bytes, got {len(self.announcer_iid)}")
 
         # Validate expiry is positive
         if self.expiry <= 0:
@@ -236,8 +232,7 @@ class CapabilityAnnouncement:
         protected = cbor2.loads(protected_bytes)
         if protected.get(COSE_ALG_LABEL) != SCHNORR48_ED25519_ALG:
             raise ValueError(
-                f"Algorithm must be {SCHNORR48_ED25519_ALG}, "
-                f"got {protected.get(COSE_ALG_LABEL)}"
+                f"Algorithm must be {SCHNORR48_ED25519_ALG}, got {protected.get(COSE_ALG_LABEL)}"
             )
 
         # Decode payload

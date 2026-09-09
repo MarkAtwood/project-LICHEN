@@ -147,9 +147,7 @@ class TestRootDioSignatureVectorFile:
             sig,
             bytes.fromhex(vector["public_key"]),
             current_time=vector.get("expiry", 1) - 1,
-            dio_dodag_id=(
-                bytes.fromhex(vector["dodag_id"]) if "dodag_id" in vector else None
-            ),
+            dio_dodag_id=(bytes.fromhex(vector["dodag_id"]) if "dodag_id" in vector else None),
             dio_instance=vector.get("instance"),
             dio_version=vector.get("version"),
             dio_rank=vector.get("rank"),

@@ -244,10 +244,7 @@ class TestCreateAndVerify:
     @pytest.fixture
     def identity(self) -> Identity:
         """Create a test identity with deterministic seed."""
-        seed = bytes.fromhex(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-        )
+        seed = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         return Identity.from_seed(seed)
 
     def test_create_announcement(self, identity: Identity) -> None:
@@ -391,10 +388,7 @@ class TestCoseSign1Encoding:
 
     @pytest.fixture
     def identity(self) -> Identity:
-        seed = bytes.fromhex(
-            "000102030405060708090a0b0c0d0e0f"
-            "101112131415161718191a1b1c1d1e1f"
-        )
+        seed = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         return Identity.from_seed(seed)
 
     def test_cose_sign1_roundtrip(self, identity: Identity) -> None:
@@ -492,14 +486,16 @@ class TestCoseSign1Encoding:
         # Create a fake COSE_Sign1 with wrong algorithm
         protected = cbor2.dumps({COSE_ALG_LABEL: -8})  # EdDSA instead of Schnorr48
         unprotected = {COSE_KID_LABEL: bytes(8)}
-        payload = cbor2.dumps({
-            1: 1,
-            2: bytes(16),
-            3: 128,
-            4: 1700000000,
-            5: 1,
-            6: bytes(8),
-        })
+        payload = cbor2.dumps(
+            {
+                1: 1,
+                2: bytes(16),
+                3: 128,
+                4: 1700000000,
+                5: 1,
+                6: bytes(8),
+            }
+        )
         signature = bytes(48)
 
         fake_cose = cbor2.dumps([protected, unprotected, payload, signature])
@@ -511,14 +507,16 @@ class TestCoseSign1Encoding:
         """Test rejection when kid doesn't match announcer_iid."""
         protected = _encode_protected_header()
         unprotected = {COSE_KID_LABEL: bytes(8)}  # All zeros
-        payload = cbor2.dumps({
-            1: 1,
-            2: bytes(16),
-            3: 128,
-            4: 1700000000,
-            5: 1,
-            6: bytes.fromhex("0102030405060708"),  # Different IID
-        })
+        payload = cbor2.dumps(
+            {
+                1: 1,
+                2: bytes(16),
+                3: 128,
+                4: 1700000000,
+                5: 1,
+                6: bytes.fromhex("0102030405060708"),  # Different IID
+            }
+        )
         signature = bytes(48)
 
         fake_cose = cbor2.dumps([protected, unprotected, payload, signature])
@@ -589,10 +587,16 @@ class TestCapabilityTableReplayFloor:
         # Flood with EGRESS announcements (capacity 8): the 9th insert
         # LRU-evicts the oldest entry - iid, the victim.
         for i in range(8):
-            assert table.record(
-                b"\x01" + bytes([i]) + b"\x00" * 6, seq=1,
-                expiry=2000, capabilities=1, egress=True,
-            ) is True
+            assert (
+                table.record(
+                    b"\x01" + bytes([i]) + b"\x00" * 6,
+                    seq=1,
+                    expiry=2000,
+                    capabilities=1,
+                    egress=True,
+                )
+                is True
+            )
         assert iid not in table._entries
 
         # The floor survived eviction: the replay gate still sees seq 500.
@@ -600,11 +604,9 @@ class TestCapabilityTableReplayFloor:
 
         # Re-admission with a stale seq keeps the floor and must NOT
         # lower it; a strictly newer seq re-enters the table.
-        assert table.record(iid, seq=499, expiry=2000, capabilities=1,
-                            egress=True) is True
+        assert table.record(iid, seq=499, expiry=2000, capabilities=1, egress=True) is True
         assert table.cached_seq(iid) == 500
-        assert table.record(iid, seq=501, expiry=2000, capabilities=1,
-                            egress=True) is True
+        assert table.record(iid, seq=501, expiry=2000, capabilities=1, egress=True) is True
         assert table.cached_seq(iid) == 501
 
     def test_floor_ledger_stays_bounded(self) -> None:
@@ -614,6 +616,5 @@ class TestCapabilityTableReplayFloor:
         # capture; the ledger never exceeds capacity.
         for i in range(capacity + 8):
             iid = bytes([0x02]) + i.to_bytes(7, "big")
-            assert table.record(iid, seq=i + 1, expiry=2000,
-                                capabilities=1, egress=True) is True
+            assert table.record(iid, seq=i + 1, expiry=2000, capabilities=1, egress=True) is True
             assert len(table._seq_floors) <= capacity
