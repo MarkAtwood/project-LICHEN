@@ -2137,18 +2137,18 @@ impl GatewayCoordinator {
                 // the WINNING gateway's claim as payload — the C peer
                 // (coap_slot_coord.c conflict arm) echoes the winner's stored
                 // COSE_Sign1 bytes with the Content-Format option omitted;
-                // the Rust serializer (gateway.rs) instead maps
-                // content_format 0 to a present zero-length option, so the
-                // wire is not byte-identical to C. The
-                // spec payload is the winning gateway's claim; this
-                // gateway cannot mint a signed COSE claim on the responder
-                // path (no sender-side claim_seq machinery, l1qw.20), so
-                // when no envelope was recorded the 4.09 carries an empty
-                // payload. There is no C behavior to mirror here: C always
-                // has the winner's COSE recorded (claim_store_cose,
-                // coap_slot_coord.c:557-571), so this empty-payload fallback
-                // is Rust-only — but 4.09 per spec/08:315 is the right code,
-                // and the legacy rejection map was spec-divergent.
+                // the Rust serializer (gateway.rs encode_content_format_option)
+                // now omits it for content_format 0 too (49e460a2), so the
+                // wire is byte-identical to C on this point. The spec payload
+                // is the winning gateway's claim; this gateway cannot mint a
+                // signed COSE claim on the responder path (no sender-side
+                // claim_seq machinery, l1qw.20), so when no envelope was
+                // recorded the 4.09 carries an empty payload. There is no C
+                // behavior to mirror here: C always has the winner's COSE
+                // recorded (claim_store_cose, coap_slot_coord.c:557-571), so
+                // this empty-payload fallback is Rust-only — but 4.09 per
+                // spec/08:315 is the right code, and the legacy rejection map
+                // was spec-divergent.
                 if let Some(own_cose) = self.own_claim_cose.clone() {
                     return CoapResponse::conflict(own_cose, 0);
                 }
@@ -3241,9 +3241,9 @@ mod tests {
         assert_eq!(conflict_pubkey, peer_pubkey);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&peer_pubkey), 4);
         assert_eq!(response.code, 0x89); // 4.09 Conflict
-                                         // The Rust serializer (gateway.rs) maps content_format 0 to a
-                                         // present zero-length Content-Format option (0xc0), NOT an omitted
-                                         // option as C does.
+                                         // content_format 0 means the Content-Format option is OMITTED
+                                         // on the wire (gateway.rs encode_content_format_option),
+                                         // byte-identical to C (49e460a2).
         assert_eq!(response.content_format, 0);
         assert_eq!(response.payload.as_slice(), envelope.as_slice());
     }
