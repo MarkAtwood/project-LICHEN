@@ -1805,7 +1805,7 @@ Or `GET /confessions/8a4f2b` for a specific entry. Supports query params such as
 | Total storage | 2 KB (leaf), 8 KB (BR) | RAM-only; smaller than deaddrop budget |
 | Default retention | 12 h (max 48 h) | Ephemeral by design |
 
-Rate limiting uses per-node IID (not OSCORE context, since anonymous posts may skip OSCORE). Enforced via monotonic uptime (not wall-clock) to prevent clock-spoof bypass.
+Rate limiting keys on the full 16-byte IPv6 source address (preserved end-to-end per 04-network.md §6.3.2) — the same accounting key as the §6.3.3 broadcast relay budget. It MUST NOT key on an extracted IID: the primary /128 embeds no IID (§6.2). Which key applies: when a post is OSCORE-protected, the recipient OSCORE context (sender/recipient ID pair) is the key; otherwise (a post without OSCORE protection, e.g. an anonymous link-local post) the key is the full IPv6 source address. Enforced via monotonic uptime (not wall-clock) to prevent clock-spoof bypass. Source-address keying inherits the §6.3.3 spoofed-source ceiling: an attacker spoofing source addresses can exhaust budget attributed to victims but cannot amplify their own posting rate beyond one identity's worth.
 
 Exceeding limits returns `4.29 Too Many Requests` with `Retry-After` header.
 
