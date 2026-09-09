@@ -21,6 +21,7 @@ from reference_schnorr48 import (  # noqa: E402
     ReferenceIdentity,
     sign,
     signature_transcript,
+    upstream_addr_for_key,
     verify,
 )
 
@@ -463,7 +464,7 @@ def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> No
         )
         assert (binding and signature) is vector["expected_valid"]
 
-    expected = ReferenceIdentity.from_seed(bytes(32)).ygg_addr
+    expected = upstream_addr_for_key(ReferenceIdentity.from_seed(bytes(32)).pubkey)
     for vector in _load("rpl_messages.json")["vectors"]:
         if vector["type"] == "dio":
             assert IPv6Address(vector["fields"]["dodag_id"]).packed == expected

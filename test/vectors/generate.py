@@ -3197,7 +3197,7 @@ def rpl_messages_vectors() -> list[dict]:
             "description": "LICHEN root RPL DIO whose DODAGID is AddrForKey for the deterministic all-zero identity seed, with the mandatory current SCHC Rule Version option.",
             "schc_version_mode": "insert_current",
             "options_hex": "",
-            "encoded": "0001010091000000027dd5cfc679ab637dd5cfc679ab6342130103",
+            "encoded": "0001010091000000020224aec2198a4ade94eae2b97eac87130103",
             "fields": {
                 "rpl_instance_id": 0,
                 "version": 1,
@@ -3207,7 +3207,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3217,7 +3217,7 @@ def rpl_messages_vectors() -> list[dict]:
             "schc_version_mode": "propagate_root",
             "root_originated_schc_version": 3,
             "options_hex": "130103",
-            "encoded": "0001020091000000027dd5cfc679ab637dd5cfc679ab6342130103",
+            "encoded": "0001020091000000020224aec2198a4ade94eae2b97eac87130103",
             "fields": {
                 "rpl_instance_id": 0,
                 "version": 1,
@@ -3227,7 +3227,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3237,7 +3237,7 @@ def rpl_messages_vectors() -> list[dict]:
             "schc_version_mode": "explicit",
             "advertised_schc_version": 2,
             "options_hex": "130102",
-            "encoded": "0001020091000000027dd5cfc679ab637dd5cfc679ab6342130102",
+            "encoded": "0001020091000000020224aec2198a4ade94eae2b97eac87130102",
             "fields": {
                 "rpl_instance_id": 0,
                 "version": 1,
@@ -3247,7 +3247,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3266,7 +3266,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3285,7 +3285,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3304,7 +3304,7 @@ def rpl_messages_vectors() -> list[dict]:
                 "preference": 1,
                 "dtsn": 0,
                 "flags": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3356,15 +3356,15 @@ def rpl_messages_vectors() -> list[dict]:
                 "AddrForKey DODAGID of the deterministic all-zero identity seed, "
                 "and DODAGVersionNumber 66."
             ),
-            "options_hex": "071300c0027dd5cfc679ab637dd5cfc679ab634242",
-            "encoded": "0000071300c0027dd5cfc679ab637dd5cfc679ab634242",
+            "options_hex": "071300c0020224aec2198a4ade94eae2b97eac8742",
+            "encoded": "0000071300c0020224aec2198a4ade94eae2b97eac8742",
             "fields": {
                 "flags": 0,
                 "reserved": 0,
                 "solicited_information": {
                     "rpl_instance_id": 0,
                     "flags": 192,
-                    "dodag_id": "027d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                    "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
                     "version": 66,
                 },
             },
@@ -3425,13 +3425,13 @@ def rpl_messages_vectors() -> list[dict]:
                 "D-flag DAO-ACK carries the AddrForKey DODAGID of the "
                 "deterministic all-zero identity seed after the four-byte base."
             ),
-            "encoded": "00800900027dd5cfc679ab637dd5cfc679ab6342",
+            "encoded": "00800900020224aec2198a4ade94eae2b97eac87",
             "fields": {
                 "rpl_instance_id": 0,
                 "flags": 0,
                 "dao_sequence": 9,
                 "status": 0,
-                "dodag_id": "27d:d5cf:c679:ab63:7dd5:cfc6:79ab:6342",
+                "dodag_id": "202:24ae:c219:8a4a:de94:eae2:b97e:ac87",
             },
         },
         {
@@ -3490,7 +3490,7 @@ def rpl_messages_vectors() -> list[dict]:
             "name": "dao_ack_malformed_options_d1",
             "type": "dao_ack",
             "description": "D=1 followed by a truncated type-5 option is rejected.",
-            "encoded": "00800900027dd5cfc679ab637dd5cfc679ab6342050401",
+            "encoded": "00800900020224aec2198a4ade94eae2b97eac87050401",
             "expect_error": "malformed_options",
         },
         {
