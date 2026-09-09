@@ -119,6 +119,9 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
     assert_eq!(document["format_version"], 2);
     let legacy: Value = serde_json::from_str(LEGACY_IPV6_NATIVE_VECTORS)
         .expect("legacy/ipv6_addresses_native_sha512.json must parse");
+    // The quarantined corpus is frozen: pin its format so a restructuring
+    // there cannot silently change what the quarantine-integrity pins mean.
+    assert_eq!(legacy["format_version"], 1);
     let legacy_by_name: std::collections::BTreeMap<&str, &Value> = legacy["vectors"]
         .as_array()
         .expect("legacy vectors array")
@@ -173,11 +176,21 @@ fn key_derived_identity_binds_link_local_and_upstream_native() {
 
         assert_eq!(iid, expected_iid, "{name}");
         // Routable address: upstream AddrForKey, pinned per key from the
-        // external oracle (table above; the corpus's native_packed and
-        // iid_in_native fields are cross-checked against the same oracle at
-        // the top of the loop, so worker-8's per-field asserts are not
-        // repeated here).
-        assert_eq!(native, upstream_addr_for_pubkey(&pubkey), "{name}");
+        // external oracle (table above, yggdrasil-go@422836ee).
+        // Merge reconciliation: the corpus's native_packed byte equality and
+        // iid_in_native flag are already cross-checked against the same oracle
+        // at the top of the loop, so worker-8's per-field byte/flag asserts
+        // here are dropped as duplicates. Worker-8's `native` text-form check
+        // is kept: nothing at the top of the loop pins the corpus's
+        // human-readable form against the packed bytes.
+        let upstream = upstream_addr_for_pubkey(&pubkey);
+        assert_eq!(native, upstream, "{name}");
+        // The human-readable `native` text form must agree with native_packed.
+        assert_eq!(
+            std::net::Ipv6Addr::from(upstream).to_string(),
+            vector["native"].as_str().expect("native"),
+            "{name}: native text must match native_packed"
+        );
         assert_eq!(link_local, expected_link_local, "{name}");
         assert_eq!(native[0], 0x02, "{name}: 0200::/8 prefix");
         assert_eq!(iid[0] & 0x02, 0, "{name}: U/L bit must be clear");
