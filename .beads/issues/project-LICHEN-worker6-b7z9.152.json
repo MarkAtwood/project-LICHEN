@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.152",
+  "title": "[spec-gap][R-05-139] Monotonic high-water mark missing in Rust GradientTable and C routing tables (spec 11.5)",
+  "description": "Spec 11.5 Monotonic Progression: Tables MUST track a high-water mark (last_now_ms) of the greatest timestamp passed to any update, prune, or lookup method; effective now_ms = max(now_ms, last_now_ms); age uses saturating subtraction. Classification: divergent (partial). Conformant: Rust NeighborTable (u64 last_seen_ms + last_now_ms + saturating, rust/lichen-node/src/routing/neighbor.rs:44,55,95-96,16-19) and Rust Router single high-water epoch (rust/lichen-node/src/routing/router.rs:182,818-834) and Python GradientTable per the spec Python note (caller-supplied nondecreasing, python/src/lichen/gradient.py:142-213). Divergent: Rust GradientTable uses u32 timestamps with NO high-water (gradient.rs:86 expires_ms u32, now_ms u32 API; only half-range wrap compensation is_expired :267-270) - a stale now_ms passed to update/lookup can make time appear to go backward. C gradient functions take u32 caller-supplied now_ms with (int32_t) half-range compares but NO high-water (lichen/subsys/lichen/routing/gradient.c:99,130,141,152). Suggested placement: add wrap-aware last_now_ms high-water to Rust GradientTable and C lichen_gradient_* entry points, or amend spec 11.5 to scope the MUST to the tables that implement it (Rust NeighborTable/Router already match the spec Rust note).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:54:05.589100472Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T22:54:05.589100472Z",
+  "labels": [
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.152",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:54:05.716800951Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
