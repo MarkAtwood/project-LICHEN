@@ -601,7 +601,7 @@ impl RawSlotClaim {
         if seen & 0b1111_1110 != 0b1111_1110 {
             return Err(SlotError::MalformedClaim);
         }
-        if ordinal.map_or(true, |value| value >= MAX_COORDINATING_GATEWAYS as u64) {
+        if ordinal.is_none_or(|value| value >= MAX_COORDINATING_GATEWAYS as u64) {
             return Err(SlotError::InvalidOrdinal);
         }
         let mode = match mode {
