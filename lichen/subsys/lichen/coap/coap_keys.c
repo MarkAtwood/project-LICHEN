@@ -113,7 +113,8 @@ static int keys_oscore_respond(struct coap_resource *resource,
 	uint8_t buf[CONFIG_COAP_SERVER_MESSAGE_SIZE];
 	struct coap_packet resp;
 	int ret = coap_oscore_protect_response(ctx, piv, piv_len, request, code,
-					       NULL, 0, &resp, buf, sizeof(buf));
+					       NULL, 0, NULL, 0,
+					       &resp, buf, sizeof(buf));
 	if (ret < 0) {
 		return lichen_coap_respond(resource, request, addr, addr_len,
 					   COAP_RESPONSE_CODE_INTERNAL_ERROR, 0, NULL, 0);
