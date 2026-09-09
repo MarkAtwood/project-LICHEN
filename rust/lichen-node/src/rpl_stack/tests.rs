@@ -2842,7 +2842,7 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
 
 #[tokio::test]
 async fn expiry_equal_now_root_signature_admitted_as_baseline_not_rejected() {
-    // THE EQUALITY PIN: receive.rs:719 degrades on `expiry <= now_unix`, so
+    // THE EQUALITY PIN: receive.rs:715 degrades on `expiry <= now_unix`, so
     // now == expiry is already Baseline. The stack-level +1 (expired) case is
     // above; the -1 pre-expiry cases exist only at gate level below (a
     // stack-level pre-expiry Verified is structurally impossible with the
