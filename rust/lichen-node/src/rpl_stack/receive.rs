@@ -340,6 +340,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         }
     }
 
+    // Merge resolution (HEAD over beads-worker-5): both sides implement the
+    // same post-AddrForKey semantics — the sender's routable /128 is loop
+    // poison and the next hop resolves through the authenticated peer table.
+    // The precomputed-address form is kept because the already-merged
+    // mod.rs/transmit.rs use the same inline peer-table pattern, and
+    // util.rs's exact-match anti-loop check takes a `[u8; 16]`, not a key.
     async fn process_source_route(
         &mut self,
         mut received: ReceivedIpv6,

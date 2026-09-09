@@ -188,7 +188,10 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Interim `dead_code` expectation: the receiver call site lands with the
     /// root-signature validation bead (b7z9.37.1); the expectation then stops
     /// being fulfilled and must be removed.
-    #[allow(dead_code, reason = "root-signature receiver call site lands in b7z9.37.1")]
+    #[allow(
+        dead_code,
+        reason = "root-signature receiver call site lands in b7z9.37.1"
+    )]
     pub(crate) fn root_seqs_mut(&mut self) -> &mut RootSeqCache {
         &mut self.root_seqs
     }
@@ -247,9 +250,11 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             {
                 return None;
             }
-            return Some(RoutePlan {
-                next_hop: util::ipv6_eui64(destination),
-                source_route: Vec::new(),
+            return util::l2_destination(destination, self.stack.link_ref()).map(|next_hop| {
+                RoutePlan {
+                    next_hop,
+                    source_route: Vec::new(),
+                }
             });
         }
         if self.rpl.router.is_root() {
@@ -272,6 +277,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 return Some(RoutePlan {
                     next_hop,
                     source_route,
+                // The first hop is this node's direct neighbor, but post-AddrForKey
+                // it is a routable 02xx address with no embedded IID, so the L2
+                // destination resolves through the authenticated peer table.
+                return source_route.first().copied().and_then(|first| {
+                    Some(RoutePlan {
+                        next_hop: util::l2_destination(first, self.stack.link_ref())?,
+                        source_route,
+                    })
                 });
             }
         }
@@ -280,18 +293,23 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             .gradient_table_mut()
             .lookup(&destination, now_ms as u32)
         {
-            return Some(RoutePlan {
-                next_hop: util::ipv6_eui64(entry.next_hop),
-                source_route: Vec::new(),
+            return util::l2_destination(entry.next_hop, self.stack.link_ref()).map(|next_hop| {
+                RoutePlan {
+                    next_hop,
+                    source_route: Vec::new(),
+                }
             });
         }
         if from_parent {
             return None;
         }
-        self.rpl.preferred_parent().map(|parent| RoutePlan {
-            next_hop: util::ipv6_eui64(parent),
-            source_route: Vec::new(),
-        })
+        self.rpl
+            .preferred_parent()
+            .and_then(|parent| util::l2_destination(parent, self.stack.link_ref()))
+            .map(|next_hop| RoutePlan {
+                next_hop,
+                source_route: Vec::new(),
+            })
     }
 }
 
