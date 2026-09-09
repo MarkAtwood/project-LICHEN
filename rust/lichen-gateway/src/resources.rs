@@ -3233,8 +3233,12 @@ mod tests {
             } else {
                 (b_priv, b_pub, b_iid, a_pubkey, [0x77; 32])
             };
-        let mut address = [0u8; 16];
-        address[8..].copy_from_slice(&own_iid);
+        // Realistic routable /128 for this gateway's own identity: under
+        // upstream AddrForKey the address low half is NOT the IID (i72x.2),
+        // so the previous `[0;8] || iid` fabrication masked the plane split
+        // between the routable address (info.iid) and the SHA-512 IID
+        // (own_iid) used by the slot-conflict tiebreak.
+        let address = lichen_core::addr::ygg_addr_from_pubkey(own_pub.as_bytes());
         let mut coordinator = GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         coordinator.info.slot_map = SlotMap {
             mode: AllocationMode::Contiguous,
@@ -3264,10 +3268,15 @@ mod tests {
 
     #[test]
     fn record_own_claim_envelope_rejects_foreign_iid_and_oversize() {
-        let mut address = [0u8; 16];
-        address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
-            .unwrap();
+        // Realistic identity: routable /128 from AddrForKey (low half is NOT
+        // the SHA-512 IID, i72x.2); the coordinator's own IID is derived from
+        // the same key. The prior `[0;8] || iid` fabrication equated the two
+        // planes and masked the binding this test pins.
+        let (_own_priv, own_pub) = derive_keypair(&Seed::new([0x23; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(own_pub.as_bytes());
+        let own_iid = crate::trust::iid_from_pubkey(own_pub.as_bytes());
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         // Well-formed envelope whose kid is not this gateway's IID: never
         // echoed (the echo goes to a peer, so unbound bytes are refused).
         let (foreign, _pubkey) = signed_slot_claim([0x41; 32], vec![1], 4, 0);
@@ -3285,10 +3294,14 @@ mod tests {
 
     #[test]
     fn post_slots_silently_discards_oversize_peer_claim() {
-        let mut address = [0u8; 16];
-        address[8..].fill(0x02);
-        let mut coordinator = GatewayCoordinator::new_ephemeral(address, address[8..16].try_into().unwrap(), 60, 4)
-            .unwrap();
+        // Realistic identity (AddrForKey routable + derived SHA-512 IID);
+        // the oversized-payload discard is orthogonal but must not depend on
+        // the old low-half==IID fabrication.
+        let (_own_priv, own_pub) = derive_keypair(&Seed::new([0x25; 32]));
+        let address = lichen_core::addr::ygg_addr_from_pubkey(own_pub.as_bytes());
+        let own_iid = crate::trust::iid_from_pubkey(own_pub.as_bytes());
+        let mut coordinator =
+            GatewayCoordinator::new_ephemeral(address, own_iid, 60, 4).unwrap();
         let peer_pubkey = [0x43; 32];
         let response = coordinator.handle_post_slots(
             &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],
