@@ -2419,11 +2419,14 @@ def test_yggdrasil_derivation_vector(name: str, vector: dict) -> None:
         assert first != victim_iid, f"{name}: attacker pubkey must not derive victim IID"
         return
 
-    if vector.get("test_type") == "binding_invariant":
+    if vector.get("test_type") == "binding_invariant_rejected":
+        # Post-AddrForKey migration (i72x.6): the old invariant
+        # ygg_addr[8:16] == IID is REJECTED; the corpus pins that it does
+        # NOT hold so nobody reinstates it by accident.
         pubkey = bytes.fromhex(vector["pubkey"])
         addr = yggdrasil_address(pubkey)
         iid = _pubkey_to_iid(pubkey)
-        assert bytes(addr.packed[8:16]) == iid, f"{name}: ygg lower-64 != IID"
+        assert bytes(addr.packed[8:16]) != iid, f"{name}: rejected invariant must not hold"
         return
 
     pubkey = bytes.fromhex(vector["pubkey"])

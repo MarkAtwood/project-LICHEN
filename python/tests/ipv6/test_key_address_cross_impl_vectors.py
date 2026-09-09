@@ -156,7 +156,7 @@ def test_native_corpora_agree_without_byte_reversal() -> None:
     native_by_key = {
         item["public_key"]: item
         for item in native_document["vectors"]
-        if item.get("profile") == "lichen_native_sha512"
+        if item.get("profile") == "upstream_addr_for_key"
     }
     shared_keys = ipv6_by_key.keys() & native_by_key.keys()
 
@@ -171,7 +171,7 @@ def test_native_corpora_agree_without_byte_reversal() -> None:
     # An asymmetric anchor catches accidental word/byte-order reversal.
     rfc8032 = ipv6_by_key["d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"]
     assert rfc8032["iid"] == "0c02a50225b4baaa"
-    assert rfc8032["native_packed"] == "020e02a50225b4ba0c02a50225b4baaa"
+    assert rfc8032["native_packed"] == "0200514acffcfa9dea90556802586d37"
 
 
 def test_address_derivation_accepts_exact_width_raw_key_octets() -> None:

@@ -92,10 +92,26 @@ def _anchor() -> dict:
     return anchors[0]
 
 
+def _upstream_cases() -> list[tuple[str, dict]]:
+    return [
+        (v["name"], v)
+        for v in _document()["vectors"]
+        if v.get("profile") == "upstream_addr_for_key"
+    ]
+
+
 def _error_cases() -> list[tuple[str, dict]]:
     return [
         (v["name"], v) for v in _document()["vectors"] if v.get("expect_error") == "pubkey_length"
     ]
+
+
+def test_corpus_shape() -> None:
+    """Guard against regression to the original single-vector corpus."""
+    vectors = _document()["vectors"]
+    assert len(_upstream_cases()) >= 10
+    assert len(_error_cases()) >= 2
+    assert len(vectors) == len(_upstream_cases()) + len(_error_cases()) + 1
 
 
 def test_upstream_anchor_is_verbatim_go_reference() -> None:
@@ -116,21 +132,21 @@ def test_upstream_anchor_byte_exact_through_production() -> None:
     assert subnet_for_key(public_key).hex() == GO_ANCHOR_SUBNET
 
 
-def test_legacy_native_fixtures_are_not_upstream_vectors() -> None:
-    """Guard against re-interpreting rejected-profile fixtures as upstream.
+@pytest.mark.parametrize("name,vector", _upstream_cases())
+def test_upstream_vectors_byte_exact(name: str, vector: dict) -> None:
+    """Corpus derivation vectors pass byte-exact through production."""
+    public_key = bytes.fromhex(vector["public_key"])
+    derived = yggdrasil_address(public_key)
+    iid = _pubkey_to_iid(public_key)
 
-    The lichen_native_sha512 entries are legacy fixtures pending i72x.6
-    corpus regeneration. Every one of them MUST carry its profile tag so
-    nobody consumes it as an upstream AddrForKey expectation by accident.
-    """
-    native = [v for v in _document()["vectors"] if v.get("profile") == "lichen_native_sha512"]
-    assert len(native) >= 10, "legacy fixtures must remain profile-tagged until i72x.6"
-    for vector in native:
-        # The rejected profile's binding invariant (lower 64 bits == IID) is
-        # exactly what upstream AddrForKey does NOT have; if any legacy
-        # fixture happens to collide with upstream derivation that is fine,
-        # but the profile tag is what keeps it out of upstream consumption.
-        assert "iid" in vector, vector["name"]
+    assert derived.packed.hex() == vector["address"], name
+    assert str(derived) == vector["ipv6"], name
+    assert derived.packed[0] == 0x02, name
+
+    # The iid field is the link-local IID only; it is NOT the address tail.
+    assert iid.hex() == vector["iid"], name
+    assert iid[0] & 0x02 == 0, f"{name}: U/L bit must be clear in IID"
+    assert derived.packed[8:] != iid, f"{name}: rejected IID-embedding invariant"
 
 
 @pytest.mark.parametrize(
