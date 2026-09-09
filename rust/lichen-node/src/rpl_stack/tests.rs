@@ -6,6 +6,8 @@
 use std::vec;
 
 use super::*;
+use core::net::Ipv6Addr;
+
 use crate::announce::MAX_TRACKED_ORIGINATORS;
 use crate::routing::{Router, ROOT_RANK};
 use crate::runtime::{RplRuntimeAction, RplRuntimeActionError, RplRuntimeConfig};
@@ -1872,8 +1874,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
         "{leaf_dao_outcome:?}"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([relay_addr, leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(relay_addr), Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     let secret = [0x42; 16];
@@ -2013,7 +2015,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert!(root.rpl.router.dao_origin_keys().is_empty());
-    assert!(root.rpl_node().router.lookup_route(&leaf_addr).is_none());
+    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)).is_none());
 
     root.admit_dao_origin(leaf_identity.iid).unwrap();
     leaf.send_ipv6_to(
@@ -2028,8 +2030,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Applied))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
     let persisted = root.storage().clone();
     let mut replay_only = MemStorage::new();
@@ -2084,17 +2086,17 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::IidMismatch))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&substituted_source),
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(substituted_source)),
         None,
         "a rejected prefix alias must not resolve through an IID-only fallback"
     );
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice()),
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice()),
         "the rejected DAO must not mutate the canonical host route"
     );
 
-    let before = root.rpl_node().router.lookup_route(&unknown_addr);
+    let before = root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr));
     assert!(before.is_none());
     let mut unknown_storage = MemStorage::new();
     let mut unknown_tx = DaoTxState::provision(
@@ -2127,7 +2129,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         root.receive(1, 0).await.unwrap(),
         Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
-    assert!(root.rpl_node().router.lookup_route(&unknown_addr).is_none());
+    assert!(root.rpl_node().router.lookup_route(Ipv6Addr::from(unknown_addr)).is_none());
 
     let mut second = leaf_router
         .build_signed_dao(leaf_addr, &mut leaf_tx, &mut leaf_storage, &leaf_link)
@@ -2145,8 +2147,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::BadSignature))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     let third = leaf_router
@@ -2165,8 +2167,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        root.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        root.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     leaf.send_ipv6_to(
@@ -2222,8 +2224,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Duplicate))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     // First replay: valid DAO with old sequence should be detected as Replay
@@ -2253,8 +2255,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Replay))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 
     leaf.send_ipv6_to(
@@ -2269,8 +2271,8 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::Persistence))
     ));
     assert_eq!(
-        reopened.rpl_node().router.lookup_route(&leaf_addr),
-        Some([leaf_addr].as_slice())
+        reopened.rpl_node().router.lookup_route(Ipv6Addr::from(leaf_addr)),
+        Some([Ipv6Addr::from(leaf_addr)].as_slice())
     );
 }
 

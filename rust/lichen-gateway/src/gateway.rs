@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 use std::fmt;
+use std::net::Ipv6Addr;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1693,7 +1694,7 @@ impl Gateway {
                 .rpl_stack
                 .rpl_node()
                 .router()
-                .lookup_route(dst)
+                .lookup_route(Ipv6Addr::from(*dst))
                 .is_some();
         }
 
@@ -1742,8 +1743,10 @@ impl Gateway {
                 .rpl_stack
                 .rpl_node()
                 .router()
-                .lookup_route(&dst)?
-                .to_vec();
+                .lookup_route(Ipv6Addr::from(dst))?
+                .iter()
+                .map(Ipv6Addr::octets)
+                .collect::<Vec<[u8; 16]>>();
             if route.last() != Some(&dst) {
                 return None;
             }
@@ -2602,11 +2605,14 @@ mod tests {
         let mut gw = test_gateway();
         let relay_addr = [0xfeu8, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2];
         let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
-        let path = [relay_addr, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(relay_addr),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
 
         // Upstream-originated (src != root), so the encapsulation branch
         // applies: HL 3 - 1 forward = 2 remaining, initial SL 1 < 2 would
@@ -2654,11 +2660,14 @@ mod tests {
 
         // Inject a DAO route
         let root_addr = gw.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
-        let path = [root_addr, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(root_addr),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
 
         // Now the 02xx address is local mesh
         assert!(gw.is_local_mesh(&node_addr));
@@ -2670,11 +2679,14 @@ mod tests {
         let node_addr = [0x02u8, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01];
 
         let root_addr = gw.rpl_stack.rpl_node().node().node_id.link_local_addr().0;
-        let path = [root_addr, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(root_addr),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
 
         assert!(gw.is_local_mesh(&node_addr));
     }
@@ -2693,7 +2705,13 @@ mod tests {
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(
+                core::net::Ipv6Addr::from(node_addr),
+                &[
+                    core::net::Ipv6Addr::from(relay_addr),
+                    core::net::Ipv6Addr::from(node_addr),
+                ],
+            );
 
         // Build IPv6 packet FROM root TO node_addr
         let payload = b"hello";
@@ -2756,11 +2774,15 @@ mod tests {
         let relay1 = ll(2).0;
         let relay2 = ll(3).0;
         let node_addr = [0x02u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x42];
-        let path = [relay1, relay2, node_addr];
+        let path = [
+            core::net::Ipv6Addr::from(relay1),
+            core::net::Ipv6Addr::from(relay2),
+            core::net::Ipv6Addr::from(node_addr),
+        ];
         gw.rpl_stack
             .rpl_node_mut()
             .router_mut()
-            .inject_route(node_addr, &path);
+            .inject_route(core::net::Ipv6Addr::from(node_addr), &path);
         (gw, relay1, relay2, node_addr)
     }
 

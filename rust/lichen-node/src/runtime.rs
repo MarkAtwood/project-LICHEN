@@ -323,6 +323,7 @@ impl RplRuntime {
 mod tests {
     use super::*;
     use lichen_core::addr::NodeId;
+    use core::net::Ipv6Addr;
     use lichen_core::constants::RPL_INSTANCE_ID;
     use lichen_link::{identity::Identity, keys::Seed};
     use lichen_rpl::routing::DaoManager;
@@ -518,14 +519,14 @@ mod tests {
         let _ = runtime
             .complete_receive(&mut node, p1.action, 1_999, 1)
             .unwrap();
-        assert!(node.router.lookup_route(&target).is_some());
+        assert!(node.router.lookup_route(Ipv6Addr::from(target)).is_some());
 
         let p2 = runtime.poll(&mut node, 2_000, 1).unwrap();
         assert!(p2.maintenance.unwrap().routes_expired);
         let _ = runtime
             .complete_receive(&mut node, p2.action, 2_000, 1)
             .unwrap();
-        assert!(node.router.lookup_route(&target).is_none());
+        assert!(node.router.lookup_route(Ipv6Addr::from(target)).is_none());
     }
 
     #[test]

@@ -958,7 +958,7 @@ impl DaoManager {
                                 preference_subfield: Self::path_control_rank(
                                     candidate.path_control,
                                 )? + 1,
-                                path: path.iter().map(|hop| Ipv6Addr::from(*hop)).collect(),
+                                path: path.to_vec(),
                             })
                         })
                 } else {

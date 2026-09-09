@@ -3,6 +3,7 @@
 use super::gpsr::{haversine, is_valid_coords};
 use super::router::{dao_parents_for_source, sign_dao};
 use super::*;
+use core::net::Ipv6Addr;
 use lichen_core::constants::RPL_INSTANCE_ID;
 use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
 use lichen_rpl::dodag::{DodagState, MIN_HOP_RANK_INCREASE};
@@ -868,9 +869,9 @@ fn spoofed_dao_target_is_rejected_before_replay_state_changes() {
     let mut root = Router::new_root(root_addr);
 
     assert!(!root.process_dao_at_ms(&dao, target, link_local(3), 0));
-    assert!(root.lookup_route(&target).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
     assert!(root.process_dao_at_ms(&dao, target, target, 0));
-    assert_eq!(root.lookup_route(&target), Some([target].as_slice()));
+    assert_eq!(root.lookup_route(Ipv6Addr::from(target)), Some([Ipv6Addr::from(target)].as_slice()));
 }
 
 #[test]
@@ -1134,10 +1135,10 @@ fn processing_dao_expires_routes_with_active_lifetime_unit() {
     assert!(root.set_dao_lifetime_unit(10));
 
     assert!(root.process_dao_at_ms(&first_dao, first_target, first_target, 100_000));
-    assert!(root.lookup_route(&first_target).is_some());
+    assert!(root.lookup_route(Ipv6Addr::from(first_target)).is_some());
     assert!(root.process_dao_at_ms(&second_dao, second_target, second_target, 110_000));
-    assert!(root.lookup_route(&first_target).is_none());
-    assert!(root.lookup_route(&second_target).is_some());
+    assert!(root.lookup_route(Ipv6Addr::from(first_target)).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(second_target)).is_some());
 }
 
 #[test]
@@ -1154,9 +1155,9 @@ fn exact_dao_at_expiry_reports_accepted_update() {
 
     assert!(root.process_dao_at_ms(&dao, target, target, 1_000));
     assert!(!root.process_dao_at_ms(&exact, target, link_local(3), 2_000));
-    assert!(root.lookup_route(&target).is_some());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_some());
     assert!(root.process_dao_at_ms(&exact, target, target, 2_000));
-    assert!(root.lookup_route(&target).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
 }
 
 #[test]
@@ -1169,9 +1170,9 @@ fn finite_route_expires_during_idle_lookup_and_timer() {
     assert!(root.set_dao_lifetime_unit(1));
 
     assert!(root.process_dao_at_ms(&dao, target, target, 1_000));
-    assert!(root.lookup_route_at(&target, 1_999).is_some());
+    assert!(root.lookup_route_at(Ipv6Addr::from(target), 1_999).is_some());
     root.trickle_start(2_000, 0);
-    assert!(root.lookup_route(&target).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
 }
 
 #[test]
@@ -1190,7 +1191,7 @@ fn maintenance_expires_idle_route_at_boundary_without_changing_trickle() {
         root.maintain(1_999, 10_000, &()),
         RplMaintenanceOutcome::default()
     );
-    assert!(root.lookup_route(&target).is_some());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_some());
     assert_eq!(root.poll_trickle(), trickle);
 
     assert_eq!(
@@ -1201,7 +1202,7 @@ fn maintenance_expires_idle_route_at_boundary_without_changing_trickle() {
             topology_changed: false,
         }
     );
-    assert!(root.lookup_route(&target).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
     assert_eq!(root.poll_trickle(), trickle);
 }
 
@@ -1216,8 +1217,8 @@ fn dao_clock_expires_across_u32_boundary() {
     assert!(root.set_dao_lifetime_unit(1));
 
     assert!(root.process_dao_at_ms(&dao, target, target, WRAP - 296));
-    assert!(root.lookup_route_at(&target, WRAP + 703).is_some());
-    assert!(root.lookup_route_at(&target, WRAP + 704).is_none());
+    assert!(root.lookup_route_at(Ipv6Addr::from(target), WRAP + 703).is_some());
+    assert!(root.lookup_route_at(Ipv6Addr::from(target), WRAP + 704).is_none());
 }
 
 #[test]
@@ -1232,7 +1233,7 @@ fn dao_clock_expires_after_half_range_gap() {
 
     let start = 1_000u64;
     assert!(root.process_dao_at_ms(&dao, target, target, start));
-    assert!(root.lookup_route_at(&target, start + HALF).is_none());
+    assert!(root.lookup_route_at(Ipv6Addr::from(target), start + HALF).is_none());
 }
 
 #[test]
@@ -1246,21 +1247,21 @@ fn dao_is_rejected_when_no_future_deadline_is_representable() {
     let mut root = Router::new_root(root_addr);
 
     assert!(!root.process_dao_at_ms(&dao, target, target, u64::MAX - 1_000));
-    assert!(root.lookup_route(&target).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
     assert!(root.process_dao_at_ms(
         &infinite.build_dao(root_addr.into()),
         infinite_target,
         infinite_target,
         u64::MAX,
     ));
-    assert!(root.lookup_route(&infinite_target).is_some());
+    assert!(root.lookup_route(Ipv6Addr::from(infinite_target)).is_some());
     assert!(root.process_dao_at_ms(
         &infinite.build_dao_with_lifetime(root_addr.into(), 0),
         infinite_target,
         infinite_target,
         u64::MAX,
     ));
-    assert!(root.lookup_route(&infinite_target).is_none());
+    assert!(root.lookup_route(Ipv6Addr::from(infinite_target)).is_none());
 }
 
 #[test]

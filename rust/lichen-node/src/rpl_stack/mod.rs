@@ -241,8 +241,13 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             });
         }
         if self.rpl.router.is_root() {
-            if let Some(path) = self.rpl.router.lookup_route_at(&destination, now_ms) {
-                let source_route = path.to_vec();
+            if let Some(path) = self
+                .rpl
+                .router
+                .lookup_route_at(core::net::Ipv6Addr::from(destination), now_ms)
+            {
+                let source_route: Vec<[u8; 16]> =
+                    path.iter().map(core::net::Ipv6Addr::octets).collect();
                 if source_route.last() != Some(&destination) {
                     return None;
                 }
