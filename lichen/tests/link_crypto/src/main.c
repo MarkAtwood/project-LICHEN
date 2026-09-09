@@ -496,7 +496,11 @@ ZTEST(link_crypto, test_derived_node_keys_authenticate_cross_node)
 
 ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 {
-	/* Uses test/vectors/yggdrasil-derivation.json vectors (first two).
+	/* QUARANTINED-PENDING-UPSTREAM-MIGRATION: test/vectors/yggdrasil-derivation.json
+	 * vectors pinned below encode the rejected SHA-512 LICHEN-native profile.
+	 * Per the upstream-yggdrasil-addressing decision in spec/decisions.jsonl
+	 * every routable address MUST equal upstream AddrForKey; these literals are
+	 * pinned only until the C derivation migrates (bead project-LICHEN-worker6-q6ko).
 	 * Matches Rust lichen-core::addr::ygg_addr_from_pubkey,
 	 * C lichen_identity_ygg_addr_from_ed25519 oracle, and Python.
 	 * addr = [0x02] + SHA-512(pubkey)[0:7] + SHA-512(pubkey)[0:8] (U/L cleared)

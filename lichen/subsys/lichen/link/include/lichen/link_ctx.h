@@ -450,6 +450,11 @@ int lichen_link_copy_identity(const struct lichen_link_ctx *_Nonnull ctx,
  * Matches test vectors in test/vectors/yggdrasil-derivation.json (cross-validated
  * across Rust, Python, C implementations).
  *
+ * QUARANTINED-PENDING-UPSTREAM-MIGRATION: this profile and its vectors are the
+ * rejected SHA-512 native profile; per the upstream-yggdrasil-addressing
+ * decision in spec/decisions.jsonl the address MUST equal upstream
+ * AddrForKey. Do not extend; tracked by bead project-LICHEN-worker6-q6ko.
+ *
  * @param pubkey 32-byte Ed25519 public key
  * @param ygg_addr Output buffer for 16-byte address
  * @return 0 on success, negative errno on error
