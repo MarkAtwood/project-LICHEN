@@ -290,9 +290,8 @@ example is the pinned upstream Go `AddrForKey` reference vector from
 `bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb`); its bytes
 bit-pack the inverted key and contain no IID. The two rows derive from
 different keys and illustrate each address form; they are not one node's
-address pair. Node uses link-local for control
-+ single primary 02xx for everything else. Consistent with updated
-05-routing.md and 06-security.md. Matches the pinned upstream test vectors.
+address pair. Node uses link-local for control + single primary 02xx for
+everything else. Consistent with updated 05-routing.md and 06-security.md. Matches the pinned upstream test vectors.
 
 ### 12.3. Short Address Assignment
 
