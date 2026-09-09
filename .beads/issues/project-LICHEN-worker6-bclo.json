@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-bclo",
+  "title": "hybrid.rs process_announce still derives gradient destination as fe80::+IID (legacy)",
+  "description": "Found during v9ke review pass 2 (destination = AddrForKey sweep). rust/lichen-node/src/hybrid.rs:474-498 HybridRouter::process_announce builds the gradient destination as link-local fe80:: + originator_iid and stores it with GradientSource::Announce — the rejected LICHEN-native correlation, inconsistent with lichen-node/src/announce.rs which now (v9ke) stores the upstream AddrForKey(originator pubkey) full address. No production caller found (only its own unit test process_announce_installs_gradient at hybrid.rs:903); other HybridRouter writers (on_rrep_received, learn_from_data, forward-path entries) use full packet addresses, so no split-brain today, but any future caller wiring announces through HybridRouter would reintroduce the wrong derivation. Fix: change the parameter to the originator pubkey ([u8;32]) and derive via lichen_core::addr::ygg_addr_from_pubkey (mirroring announce.rs), or delete the unused method; update the test to match. Verify cargo test -p lichen-node hybrid.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:45:18.658649317Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:45:18.658649317Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bclo",
+      "depends_on_id": "project-LICHEN-worker6-v9ke",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T14:45:18.800452255Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

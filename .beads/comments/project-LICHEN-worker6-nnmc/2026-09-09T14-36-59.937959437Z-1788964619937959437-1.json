@@ -1,0 +1,7 @@
+{
+  "id": "1788964619937959437-1",
+  "issue_id": "project-LICHEN-worker6-nnmc",
+  "author": "Mark Atwood",
+  "text": "Landed context: the i72x.2 migration is complete on beads-worker-8 (commits 85a70ec445 + 7331d087c5, plus earlier driver-merged halves 1dfd15a9c8/46ea60fcaf). Full 7-crate suite: 1120 passed, this test is the ONLY remaining failure. All analysis in this bead's description was verified against the final tree.",
+  "created_at": "2026-09-09T14:36:59.937959437Z"
+}

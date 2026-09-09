@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-010x",
+  "title": "7ecb(b): wire identity_iid into gateway test harness (26 call sites)",
+  "description": "Follow-up to 7ecb slice (commit 8d6a00e161 on beads-worker-6). The production fix is committed: GatewayCoordinator now stores identity_iid (SHA-512 canonical IID, distinct from routable info.iid AddrForKey /128) + own_identity_iid() accessor; replaced 4 routable-slice sites (resources.rs record_own_claim_envelope + tunnel-auth accept_post + conflict tiebreak; gateway.rs install_gcp_context OSCORE id) that were silently broken post-i72x.2. Production lib+bin compile clean. REMAINING: 26 test call sites need the new identity_iid argument. Files/lines (from cargo check --tests): gateway.rs:2458,2495,2581,2962; resources.rs:2378,3042,3070,3101,3155,3196,3244,3275,3295; lichend.rs:1805,2086,2191; tunnel_auth.rs:1028,1111. Each test builds a coordinator from an Identity/seed — pass lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes()) (or the identity.iid field) as the new arg. Verify cargo test -p lichen-gateway green.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:59:45.305964372Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:59:45.305964372Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-010x",
+      "depends_on_id": "project-LICHEN-worker6-7ecb",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T14:59:45.426955625Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
