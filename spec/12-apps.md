@@ -1672,7 +1672,7 @@ Asynchronous, rate-limited data drops for store-and-forward style communication 
 /deaddrop CoAP messages MUST use the project's SCHC rule set. SenML payloads >~100 bytes after compression trigger fragmentation/reassembly per the SCHC profile. Rules for path `/deaddrop`, content-format 112, and OSCORE options are pre-provisioned (see appendix-schc.md and constants.toml). Implementations MUST match test vector outputs for compressed packets.
 
 **Rate Limits (REQUIRED):**
-Prevents spam and storage exhaustion on constrained nodes. Enforced per-source (IID or OSCORE context). Values aligned with SOS (max 3-6/hour) and store-and-forward budgets (18.1.4).
+Prevents spam and storage exhaustion on constrained nodes. Enforced per-source. Since POSTs are OSCORE-protected (:1692), the key is the sender's OSCORE identity — the sender/recipient ID pair for a pairwise context, or the (group context, Sender ID) pair for a group context. It MUST NOT key on an extracted IID: the routable /128 is upstream `AddrForKey` and embeds no IID (04-network.md §6.2). Values aligned with SOS (max 3-6/hour) and store-and-forward budgets (18.1.4).
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
