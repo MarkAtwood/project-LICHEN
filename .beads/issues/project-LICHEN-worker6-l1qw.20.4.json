@@ -1,0 +1,33 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.20.4",
+  "title": "Rust receiver replay gate: pure claim_seq high-water (drop (superframe,seq) tuple compare)",
+  "description": "Child of l1qw.20 (receiver semantics leg). SlotClaimVerifier::verify (rust/lichen-gateway/src/slot.rs:849-856) rejects only when (superframe_id, claim_sequence) tuple fails to advance. spec/08 step 8 + claim_seq persistence table mandate a PURE claim_seq high-water per gateway IID: reject iff claim_seq \u003c= cached_seq, independent of superframe. Divergence: cached (N,5), current superframe N+1, validly-signed claim (N+1,4) is ACCEPTED by Rust but MUST be rejected (4 \u003c= 5) — this defeats the anti-rollback design for rebooted/NVS-wiped senders (spec: re-init to 0 after wipe must be rejected by coordinators holding the old high-water). Fix: compare claim_sequence only; keep last_seen entries (iid, superframe, seq) and the sealed SlotReplaySnapshot format UNCHANGED so persisted state loads without migration. Keep StaleSuperframe exact-match gate upstream. Keep loser-reclaim (higher seq, same superframe) working. Align with test/vectors/gcp_slot_claim_cose_sign1.json claim_seq_replay_equal/claim_seq_replay_lower. Note: capacity 256/no-LRU is nug9's scope, not this bead.",
+  "status": "in_progress",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T01:08:05.010329469Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T01:08:38.350166021Z",
+  "started_at": "2026-09-09T01:08:38.350166021Z",
+  "lease_expires_at": "2026-09-09T01:13:38.350166021Z",
+  "heartbeat_at": "2026-09-09T01:08:38.350166021Z",
+  "labels": [
+    "gateway",
+    "gcp",
+    "lci",
+    "spec",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.20.4",
+      "depends_on_id": "project-LICHEN-worker6-l1qw.20",
+      "type": "parent-child",
+      "created_at": "2026-09-09T01:08:05.184196253Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
