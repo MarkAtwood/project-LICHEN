@@ -221,6 +221,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         &self.storage
     }
 
+    /// Get the local link-layer IID (SHA-512 of the local public key).
+    ///
+    /// Same identity plane as peer IIDs derived via `iid_from_pubkey_bytes`;
+    /// use this wherever the node's own IID is compared against peer IIDs.
+    pub fn local_iid(&self) -> [u8; 8] {
+        self.stack.local_iid()
+    }
+
     pub(crate) fn route_for(
         &mut self,
         destination: [u8; 16],

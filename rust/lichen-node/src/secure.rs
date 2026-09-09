@@ -600,6 +600,17 @@ impl<R: Radio> SecureStack<R> {
         self.stack.local_public_key()
     }
 
+    /// Get the local link-layer IID (SHA-512 of the local public key).
+    ///
+    /// This is the same identity plane `iid_from_pubkey_bytes` produces for
+    /// peers, so it is the correct value whenever a node's own IID must be
+    /// compared against a peer-derived IID (e.g. GCP OSCORE sender/recipient
+    /// IDs). It is NOT the low half of the routable /128 (AddrForKey), whose
+    /// low 8 bytes are bit-packed key material.
+    pub fn local_iid(&self) -> [u8; 8] {
+        lichen_core::addr::iid_from_pubkey_bytes(self.local_public_key().as_bytes())
+    }
+
     /// Send an OSCORE-protected GET after atomically reserving its sender sequence.
     pub async fn send_secure_get<S: ContextStateStore>(
         &mut self,

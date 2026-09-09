@@ -1151,9 +1151,12 @@ impl Gateway {
         {
             return Err(SecureError::NoContext);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .map_err(|_| SecureError::NoContext)?;
+        // Local identity must be the same SHA-512 IID plane as the peer's
+        // (iid_from_pubkey_bytes), not the routable /128's low half — the
+        // routable low half is AddrForKey key material and never matches the
+        // peer's view of this gateway's IID, so the OSCORE sender/recipient
+        // IDs would not mirror on the peer (7ecb).
+        let local_iid = self.rpl_stack.local_iid();
         const OSCORE_ID_LEN: usize = 7;
         if context.sender_id() != &local_iid[..OSCORE_ID_LEN]
             || context.recipient_id() != &peer_iid[..OSCORE_ID_LEN]
@@ -1208,9 +1211,11 @@ impl Gateway {
         if peer_pubkeys.len() > MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayFederationError::TooManyPeers);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .expect("gateway address has a complete IID");
+        // Local identity must be the same SHA-512 IID plane as the peers'
+        // (iid_from_pubkey_bytes), not the routable /128's low half. Using the
+        // routable low half both breaks OSCORE ID mirroring and makes the
+        // LocalPeer self-guard below fail open (7ecb).
+        let local_iid = self.rpl_stack.local_iid();
         let mut contexts = Vec::with_capacity(peer_pubkeys.len());
         let mut peer_iids = Vec::with_capacity(peer_pubkeys.len());
         for pubkey in peer_pubkeys {
@@ -1976,6 +1981,89 @@ mod tests {
     fn test_gateway() -> Gateway {
         let identity = Identity::from_seed(Seed::new([0x01; 32]));
         Gateway::new_ephemeral(identity, 128).unwrap()
+    }
+
+    /// 7ecb(a): the local GCP identity must be the SHA-512 IID plane (same as
+    /// the peer's), not the routable /128's low half. Pre-fix the LocalPeer
+    /// guard compared the SHA-512 peer IID against the routable low half, so
+    /// provisioning the gateway's own key slipped through (failed open).
+    #[test]
+    fn provision_closed_federation_rejects_self_peering() {
+        let identity = Identity::from_seed(Seed::new([0x42; 32]));
+        let own_pubkey = *identity.pubkey.as_bytes();
+        let mut gateway = Gateway::new_ephemeral(identity, 128).unwrap();
+        let federation = PskFederation::new(&[0x01; 16], None, None).unwrap();
+        let result = gateway.provision_closed_federation(&federation, &[own_pubkey]);
+        assert!(
+            matches!(result, Err(GatewayFederationError::LocalPeer)),
+            "self-peering must be rejected, got {result:?}"
+        );
+    }
+
+    /// Build a durable (persistent-trust) gateway in a private temp dir, which
+    /// `provision_closed_federation` requires.
+    fn persistent_test_gateway(seed: [u8; 32], tag: &str) -> Gateway {
+        let suffix = PERSISTENT_TEST_PATH.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "lichen-gateway-gcp-mirror-{tag}-{}-{suffix}",
+            std::process::id()
+        ));
+        let floor_root = path.with_extension("floors");
+        private_test_dir(&path);
+        private_test_dir(&floor_root);
+        let identity = Identity::from_seed(Seed::new(seed));
+        let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let sealing_seed = [0x5a; 32];
+        let coordinator = GatewayCoordinator::provision_persistent(
+            root,
+            60,
+            64,
+            &path.join("gateway-slot-replay.bin"),
+            &floor_root.join("gateway-slot-replay.generation"),
+            &sealing_seed,
+        )
+        .unwrap();
+        Gateway::new_persistent(
+            identity,
+            128,
+            TrustStore::new_ephemeral(8).unwrap(),
+            coordinator,
+            GatewayPersistence::new(
+                FileStorage::new(&path).unwrap(),
+                true,
+                path.clone(),
+                floor_root.clone(),
+                sealing_seed,
+            ),
+        )
+        .unwrap()
+    }
+
+    /// 7ecb(a): two gateways in one federation must be able to install a GCP
+    /// context for each other. `install_gcp_context` validates sender_id ==
+    /// local IID and recipient_id == peer IID, so mutual installation only
+    /// succeeds when both endpoints resolve to the same IID plane on both
+    /// gateways (self == SHA-512 IID, peer == SHA-512 IID).
+    #[test]
+    fn gcp_contexts_install_mutually_between_gateways() {
+        let alice_pubkey = *Identity::from_seed(Seed::new([0x0a; 32]))
+            .pubkey
+            .as_bytes();
+        let bob_pubkey = *Identity::from_seed(Seed::new([0x0b; 32]))
+            .pubkey
+            .as_bytes();
+        let mut alice = persistent_test_gateway([0x0a; 32], "alice");
+        let mut bob = persistent_test_gateway([0x0b; 32], "bob");
+        let federation = PskFederation::new(&[0x02; 16], None, None).unwrap();
+
+        alice
+            .provision_closed_federation(&federation, &[bob_pubkey])
+            .unwrap();
+        bob.provision_closed_federation(&federation, &[alice_pubkey])
+            .unwrap();
+
+        assert_eq!(alice.gcp_context_count(), 1);
+        assert_eq!(bob.gcp_context_count(), 1);
     }
 
     fn l2_from_wire(wire: &[u8]) -> &[u8] {
