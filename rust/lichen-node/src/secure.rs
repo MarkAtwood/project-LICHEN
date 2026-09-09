@@ -1136,7 +1136,12 @@ impl<R: Radio> SecureStack<R> {
     ) -> Result<SecureResponse, SecureError> {
         let source = received.destination();
         let destination = received.source();
-        let mut l2_destination: [u8; 8] = destination.0[8..].try_into().unwrap();
+        // The response's IPv6 source is the peer's routable 02xx address,
+        // which post-AddrForKey embeds no IID. The L2 destination for the
+        // confirmable-ACK retransmit is the peer's link-authenticated IID
+        // (validated against the correlation in decrypt_response_to), not
+        // the low 64 bits of the 02xx source.
+        let mut l2_destination: [u8; 8] = received.sender_iid;
         l2_destination[0] ^= 0x02;
         self.decrypt_response_to(
             Some(SecureRoute {
@@ -1284,7 +1289,10 @@ impl<R: Radio> SecureStack<R> {
     ) -> Result<SecureObserveResponse, SecureError> {
         let source = received.destination();
         let destination = received.source();
-        let mut l2_destination: [u8; 8] = destination.0[8..].try_into().unwrap();
+        // As in decrypt_response: the response's 02xx source embeds no IID
+        // post-AddrForKey, so the L2 destination is derived from the peer's
+        // link-authenticated sender_iid, not the low 64 bits of the source.
+        let mut l2_destination: [u8; 8] = received.sender_iid;
         l2_destination[0] ^= 0x02;
         self.decrypt_observe_response_to(
             Some(SecureRoute {
