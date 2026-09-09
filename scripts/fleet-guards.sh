@@ -59,9 +59,18 @@ while :; do
     if [ -f "$REPO/.fleet-paused" ]; then
         PAUSE_AGE=$(( $(date +%s) - $(stat -c %Y "$REPO/.fleet-paused") ))
         if [ "$PAUSE_AGE" -gt 3600 ]; then
-            rm -f "$REPO/.fleet-paused"
+            rm -f "$REPO/.fleet-paused" "$REPO/.fleet-workers-paused"
             bd create --title="[ALARM] Pause expired after 60 min - auto-resumed" --description="Fleet pause outlived 60 minutes (${PAUSE_AGE}s). Auto-resumed by the guards loop; the operator who paused should verify their repair landed." -t bug -p 1 --json >/dev/null 2>&1
             echo "$(date '+%F %T') ALARM: pause expired (${PAUSE_AGE}s) — auto-resumed"
+        fi
+    fi
+
+    # Workers-pause expiry: same 60-min guard, independent of full pause
+    if [ -f "$REPO/.fleet-workers-paused" ]; then
+        WP_AGE=$(( $(date +%s) - $(stat -c %Y "$REPO/.fleet-workers-paused") ))
+        if [ "$WP_AGE" -gt 3600 ]; then
+            rm -f "$REPO/.fleet-workers-paused"
+            bd create --title="[ALARM] Workers-pause expired after 60 min - auto-resumed" --description="Workers-only pause outlived 60 minutes (${WP_AGE}s). Auto-resumed; merge drain should be checked." -t bug -p 1 --json >/dev/null 2>&1
         fi
     fi
 
