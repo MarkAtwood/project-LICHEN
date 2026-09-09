@@ -1,0 +1,7 @@
+{
+  "id": "1788914584310971527-1",
+  "issue_id": "project-LICHEN-worker6-kvfd",
+  "author": "Mark Atwood",
+  "text": "Same-family E0425 in lichen-core/tests/yggdrasil_addr_vectors.rs:28,35 (bare Value, missing use serde_json::Value) — same 1-line fix family; seen in clippy -p lichen-core --all-targets. Also pre-existing clippy warning desync.rs:638 unused variable st (test code), out of this bead's fix scope unless trivial while here.",
+  "created_at": "2026-09-09T00:43:04.310971527Z"
+}

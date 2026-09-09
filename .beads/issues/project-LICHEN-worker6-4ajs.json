@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-4ajs",
+  "title": "Rust seq_is_newer retains bflq-class naming inversion: LOLLIPOP_CIRCULAR_BIT=128 and both-circular branch commented 'Linear region'",
+  "description": "Sibling residual of b7z9.88.1 verification round; bflq's deliverable (C rename LOLLIPOP_CIRCULAR_BIT-\u003eLOLLIPOP_LINEAR_BASE + RFC-correct region comments in lichen/subsys/lichen/rpl/dodag.c) is DONE at HEAD — but the Rust port kept the old shape: rust/lichen-rpl/src/routing.rs:61 'const LOLLIPOP_CIRCULAR_BIT: u8 = 128' and routing.rs:71-72 comments 'Linear region' on the (true,true) branch, where (true,true) means BOTH seqs \u003c 128 — the RFC 6550 §7.2 CIRCULAR region (RFC: [128..255] linear, [0..127] circular). Behavior verified correct (region-agnostic same-region window arithmetic matches C dodag.c lollipop_is_newer and the golden sweep); the hazard is the same as bflq's: a maintainer 'fixing' the comment or constant to RFC region names breaks interop. Fix: rename LOLLIPOP_CIRCULAR_BIT-\u003eLOLLIPOP_LINEAR_BASE (or REGION_SPLIT), correct routing.rs:71+ region comments, leave seq_is_newer arithmetic and the rpl_dao_sequence golden sweep untouched (tests/rpl_dao_sequence/gen_golden_sweep.py:25-30 documents the cross-impl constant mapping — update its comment to the new name). Also mirror-check python lollipop comments if they carry the same inversion. Verify: cargo test -p lichen-rpl (std feature), rpl_dao_sequence host suite still green.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T00:43:57.373259489Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T00:43:57.373259489Z",
+  "labels": [
+    "rust",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-4ajs",
+      "depends_on_id": "project-LICHEN-worker6-bflq",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T00:43:57.508788294Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
