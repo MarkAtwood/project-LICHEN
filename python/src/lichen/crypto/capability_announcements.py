@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
-from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG
 from .identity import Identity, _pubkey_to_iid
+from .schnorr48 import COSE_ALG_LABEL, COSE_KID_LABEL, SCHNORR48_ED25519_ALG
 
 if TYPE_CHECKING:
     pass
