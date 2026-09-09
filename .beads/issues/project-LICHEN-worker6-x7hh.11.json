@@ -1,0 +1,46 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.11",
+  "title": "Qualify CCP2 radios and full-band plans",
+  "description": "Qualify exact selected board/radio/antenna/firmware configurations for CCP2 baseline and separately proposed wider conventional-LoRa plans. Candidate128 grid902.3+i*0.2MHz ends927.7MHz; it is not active or automatically approved. Measure low/mid/high-band tuning/performance, occupied spectrum/band-edge behavior, oscillator error/drift, actual retune/CAD/settling/IRQ timing and complete operation scheduling. Exercise RX commitments versus TX, driverfailure and recovery. Concentrator tests must model actual passbands/channelbanks/demodulator counts and TX concurrency, not128-channel simultaneousRX. Follow docs/bench-operations.md; no device ports, fieldRF, purchases or external approvals without explicit authorization. Keep unsupported variants/operatingbases disabled.",
+  "acceptance_criteria": "Repeatable captures/timing/emissions evidence and device-specific authorization source correlate to exact profile and software revision. Show actual indexed plan lookup, masks and radio settings; do not infer from PLLrange or compilechecks. Report tested/notassessed configurations and any no-go findings; no genericcertification,capacity,TCXOaccuracyor100usretune claims.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:11:24.531389999Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:11:26.711565785Z",
+  "labels": [
+    "hardware",
+    "qualification",
+    "ccp",
+    "blocked:hardware",
+    "conformance"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.11",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T02:11:24.745804508Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.11",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:11:25.475930084Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.11",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T02:11:26.248908975Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

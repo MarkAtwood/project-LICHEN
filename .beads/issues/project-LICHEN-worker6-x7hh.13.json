@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.13",
+  "title": "Publish CCP2 traceability and evidence docs",
+  "description": "After core conformance and qualification evidence exists, update docs/ccp-conformance.md, CCP/PHY pages under docs/spec-coverage, flagged companions, vectorcatalog/provenance, standalone draft/index revision references, operator plan/profile and LCI diagnostics documentation. Reuse worker6-0aod,7kzp and CCPportion ofb7z9; keep unrelatedspec coverageoutofscope. Document actual supported wireversion,home-versus-tunedchannel,receiver resources,generation/stale states andadmission reasons. Distinguish policytested,wiretested,integrated,RFmeasured andauthorizationreviewed. Experimental fullband/narrowband/microfrag/LRFHSS proposals stay separately labeled; noautomatic SCHC/securityreplacement or speculativecapacity/CPUclaim. Include migrationinstructions andknownunsupportedconfigurations ratherthan assertingallimplcomplete.",
+  "acceptance_criteria": "Each CCP2 requirement links to actual production/test/evidence artifacts and reproducible commands or explicitnotassessed status; no stale olddensitySF/CH0instructions treatedascurrent. Published scope matches actual qualifiedprofile/device versions; no softwaretest presentedasFCCapproval. Independent docreview and local links/identifiers/structural checks pass.",
+  "status": "blocked",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:11:24.796668362Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T02:11:24.796668362Z",
+  "labels": [
+    "docs",
+    "conformance",
+    "ccp"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13",
+      "depends_on_id": "project-LICHEN-worker6-x7hh",
+      "type": "parent-child",
+      "created_at": "2026-09-09T02:11:25.006028714Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
