@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.107",
+  "title": "[spec-gap][R-02-012] Rendezvous: pinned peer rx_channel is never used for unicast TX in any stack",
+  "description": "Req R-02-012 (spec/02-physical-link.md 3.3): Rendezvous — Announce includes rx_channel; sender uses the announced channel (TOFU pinning). DIVERGENT (selection layer only, unwired): Announce rx_channel encode/decode/validate exists in all three (python/src/lichen/announce/messages.py:46,97,109; lichen/subsys/lichen/routing/announce.c:144,267,290,304). Python stores _peer_rx_channel (node.py:305, populated :1514-1515) but Node.send (:1558-1604) -\u003e _transmit_peer_schc (:1227-1239) -\u003e link.send() carries no channel; LinkLayer.send (link_layer.py:1284-1294) has no channel parameter and drain loop calls radio.transmit(entry.data) (:1480) dropping the tx_queue entry's channel field (tx_queue.py:198,356,413). Selection helper select_channel(announce_rx_channel=...) exists (link/channel.py:86-116) but has no caller in node/link_layer. C stores entry-\u003erx_channel (gradient.c:243-256) but rg '-\u003erx_channel' finds only the write — no TX read site. Related open beads: fw0f (scheduler accessors use nonexistent state), f0vn (relay stores origin RX under sender), hxqj (range validation). Suggested placement: python link_layer.send + tx_queue channel propagation to radio.transmit; C lichen_link_tx channel selection from gradient entry.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:27:59.186115504Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:27:59.186115504Z",
+  "labels": [
+    "spec-gap",
+    "link-layer",
+    "rendezvous"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.107",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:27:59.312450543Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

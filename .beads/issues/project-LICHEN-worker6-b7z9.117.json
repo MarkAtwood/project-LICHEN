@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.117",
+  "title": "GCP-6.5 slot-claim timing parity: C lacks +5s clock tolerance (300s vs spec 305s, interop reject); Python accepts stale claims \u003c=5s contrary to strict expiry\u003enow",
+  "description": "spec/08-gateway-coordination.md GCP-6.5 validation (L310-311, R-08-039/042), sweep 2026-09-09. Step 7: 'Verify expiry \u003e now'. Step 7a: 'Verify expiry - now \u003c= MAX_CLAIM_DURATION (5 superframes = 300s, +5s clock tolerance = 305s); respond 4.03 Forbidden if exceeded.' Evidence: Rust conforms — MAX_CLAIM_DURATION_SECONDS=305 (rust/lichen-gateway/src/resources.rs:84, validate :95-100, 4.03 :2067-2072, test gateway_coordinator_post_slots_enforces_max_claim_duration :2826; gcp_slot_claim_expiry_future_passes_timing_gate tests/gcp_slot_claim_vectors.rs:182). C enforces 300s with NO +5s tolerance (lichen/subsys/lichen/coap/coap_slot_coord.c:435-456, LICHEN_SLOT_CLAIM_MAX_DURATION_SEC = CONFIG_LICHEN_CCP_SUPERFRAME_SEC x 5; the C host test comment at lichen/tests/coap_slot_claim/src/main.c:604-607 says the merge deliberately dropped the +5s) -\u003e a legitimate claim with expiry=now+302s is accepted by Rust/Python and rejected by C: cross-stack interop divergence. Python enforces the 305s upper bound (slot_claim.py:135-137, EXPIRY_TOO_FAR :703-705) but violates the LOWER bound: STALE_CLAIM tolerance accepts claims expired up to 5s (slot_claim.py:67-71,712-715), pinned as PYTHON DIVERGENCE against vector expiry_boundary_past in python/tests/gateway/test_slot_claim_cose_vectors.py:105-121 (vectors gcp_slot_claim_cose_sign1.json expiry_boundary_past|now|future; constants max_claim_duration_s=300 + clock_tolerance_s=5). Suggested placement: C coap_slot_coord.c claim validation (+5s) and python slot_claim.py verify (strict expiry\u003enow). Acceptance: all three stacks accept/reject identically for expiry = now-5, now, now+300, now+302, now+306; gcp_slot_claim_cose_sign1.json boundary cases pass unconditionally in all three (python test un-skipped).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T20:01:45.968922997Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T20:01:45.968922997Z",
+  "labels": [
+    "gateway",
+    "coap",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.117",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T20:01:46.107878691Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

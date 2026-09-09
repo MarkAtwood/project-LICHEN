@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.112",
+  "title": "[spec-gap][R-02-001] SX127x has no LICHEN radio driver in any stack (airtime model + Kconfig + Renode only) (spec 02 3.1)",
+  "description": "Req R-02-001 (spec/02-physical-link.md 3.1): LoRa CSS as implemented by Semtech SX126x AND SX127x. DIVERGENT (partial): SX126x is supported end-to-end (rust/lichen-embassy esp32s3.rs/stm32wl.rs via lora-phy Sx1262; Zephyr upstream sx126x; C LR1110). SX127x exists only as: airtime calculation (rust/lichen-core/src/airtime.rs:4,20,32,71,145 + tests airtime.rs:203, lichen/tests/airtime/src/main.c:59), Kconfig choice CONFIG_LICHEN_RADIO_MODEL_SX127X with BUILD_ASSERT on zephyr,lora = semtech,sx1272/1276 (lichen/subsys/lichen/hal/Kconfig:120-122, hal_caps.c:80-83) delegating to Zephyr's in-tree driver, and a Renode register-level model (lichen/boards/renode/peripherals/SX127x.cs, ttgo_lora32.resc:9-16 — 'Working' per board README). No LICHEN-authored SX127x driver in lichen/drivers/lora/ (lr1110, sim, renode, loopback only); no Rust SX127x path at all. TTGO T-Beam / Heltec V2 (ESP32+SX1276) are listed Meshtastic-compatible targets. Suggested placement: decide whether Zephyr-upstream-driver delegation satisfies the MUST (then amend spec wording) or add a lora-phy sx127x backend in lichen-embassy.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:28:27.07609009Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:28:27.07609009Z",
+  "labels": [
+    "spec-gap",
+    "radio",
+    "sx127x"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.112",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:28:27.196556116Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

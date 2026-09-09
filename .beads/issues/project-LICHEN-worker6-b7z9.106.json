@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.106",
+  "title": "[spec-gap][R-02-011/029/034] CCP-16 vector reconciliation: spec-cited cases absent, stale density\u003e8 text, uneven consumers",
+  "description": "Req R-02-011/034 (spec 02 3.3/3.5): 'all implementations MUST match test/vectors/ccp16.json, ccp_select_channel_endianness.json, ccp_load_balancing.json exactly'. DIVERGENT (vector corpus + consumers): (1) Spec-cited load_balancing cases DO NOT exist: no 'SF11 for density=12/snr=-2' and no 'SF12+tx_allowed=false for density=255/utilization=255' anywhere in ccp16/ccp15/ccp_load_balancing.json; closest are ccp16_load_balance.json adaptive_sf_poor_snr_sf11_floor (density=5) and ccp16_utilization.json utilization_255_saturated (density=5). (2) ccp16.json descriptions still say density\u003e8 (stale vs density-high decision \u003e10) and select_channel_density_high_ch0 description says 'sf=11 (density\u003e8)' while output is sf=10 (description/output mismatch); file predates the density-high adjudication (generator test/vectors/generate.py:2669-2804 is current). (3) Consumer asymmetry: ccp_select_channel_endianness.json + ccp_load_balancing.json + ccp16-hop.json are Python-only; Rust consumes neither ccp16.json nor those three (covers select_channel via ccp15.json + ccp16_utilization.json); C consumes ccp16.json for SF-threshold cases only (lichen/tests/rf_health_vectors/main.c:168-197), never the channel-hash cases. (4) Residual density\u003e8 code/docs: link_load_balance.h:17 LICHEN_LB_DENSITY_HIGH=8u live in dead divergent lichen_lb_select_channel (link_load_balance.c:119-136, also wrong modulus %n_channels not %n-1); dead constant LICHEN_DENSITY_DOWNGRADE_MIN=8 (gradient.h:195); stale doc link.h:650 ('\u003e8 forces channel 0'); stale doc rf_health.rs:384 ('exceeds eight peers'); stale test-oracle ccp16_utilization_vectors.rs:53 uses density\u003e8; ccp11.json description says density\u003e8. Suggested placement: regenerate ccp16.json + ccp11.json descriptions; add spec-cited cases; add Rust/C consumers (or amend spec 02 to name the files each stack actually consumes); delete dead C LB code or fix it.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:27:53.737120678Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:27:53.737120678Z",
+  "labels": [
+    "spec-gap",
+    "ccp",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.106",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:27:53.875353548Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.99",
+  "title": "Key-rotation COSE_Sign1 attestation (spec 8.7.4) unwired: no /.well-known/key-rotation endpoint, Rust/C attestation absent (R-06-051/052/055)",
+  "description": "§8.7.4 COSE_Sign1 key-rotation attestation is implemented and tested only as an unwired Python library: python/src/lichen/crypto/key_rotation_attestation.py (create/verify, alg -65537, payload {1:old_pk,2:new_pk,3:rotation_seq,4:expiry}, RFC 9052 Sig_structure, steps IID_MISMATCH/OLD_PUBKEY_MISMATCH/SIGNATURE_INVALID/EXPIRED/REPLAY_DETECTED :299-358; tests python/tests/crypto/test_key_rotation_attestation.py 21+). Gaps: (1) no /.well-known/key-rotation CoAP endpoint exists in any stack (R-06-055); (2) no Rust or C implementation of the COSE attestation — Rust gateway and C gcp_trust implement only the §8.7 raw transcript (b7z9.28 tracks the rust-link 'KEY_ROTATE:' third format); (3) receiver steps 10-11 (pin new key preserving seq, clear per-key replay state) have no production consumer anywhere. Store-level §8.7 raw-transcript rotation IS implemented+tested (rust gateway trust.rs:972-1041, python trust.py:604-707, C gcp_trust.c:164-249); C rotation-seq NV persistence is separately tracked (b7z9.33). Related Opus question (see 06-security-part1-flagged A10): whether §8.7.4 COSE form supersedes or complements the §8.7 transcript. Suggested placement: CoAP resources in all three stacks + rust/C attestation module + two-form vectors.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T19:05:28.584968086Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T19:05:28.584968086Z",
+  "labels": [
+    "security",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.99",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T19:05:28.70093172Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
