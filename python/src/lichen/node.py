@@ -172,6 +172,11 @@ SCHC_RETRANSMISSION_TIMEOUT_SECONDS = 10.0
 CAPABILITY_ANNOUNCE_TTL_S = 3600
 # Spec 8.12 capability bits: 0 = egress, 1 = prefix-delegation (2-7 reserved).
 MAX_CAPABILITY_BITMASK = 0b11
+# Bounded recovery for the spec-8.12 re-announce MUST (bead 2kem): a single
+# lost/jammed NON datagram must not permanently drop the announcement, so a
+# failed initial send is retried at most this many times in total.
+CAPABILITY_ANNOUNCE_MAX_ATTEMPTS = 3
+CAPABILITY_ANNOUNCE_RETRY_DELAY_S = 5.0
 
 
 def _validated_receive_timeout_ms(value: object) -> int:
@@ -357,6 +362,11 @@ class Node:
     # message ID is a per-node 16-bit counter for the NON POSTs.
     _capability_announce_seq: int = field(default=0, init=False, repr=False)
     _capability_announce_mid: int = field(default=0, init=False, repr=False)
+    # Bounded retry tasks for failed re-announces (bead 2kem); cancelled in
+    # _cleanup_started so stop() never leaves a pending retry behind.
+    _capability_retry_tasks: set[asyncio.Task[None]] = field(
+        default_factory=set, init=False, repr=False
+    )
 
     def __setattr__(self, name: str, value: object) -> None:
         if name == "peer_db" and isinstance(self.__dict__.get("peer_db"), MappingProxyType):
