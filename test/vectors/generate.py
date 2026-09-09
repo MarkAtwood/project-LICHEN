@@ -4666,7 +4666,8 @@ def root_authorization_vectors() -> list[dict]:
 
     Fixture construction uses deterministic production primitives. The committed
     results are independently checked by test_protocol_vector_security.py using
-    reference_schnorr48.py and direct SHA-512 address derivation.
+    reference_schnorr48.py and the upstream AddrForKey bit-packing oracle
+    (test/vectors/yggdrasil_address.json anchor).
     """
     from lichen.crypto.identity import Identity, yggdrasil_address
     from lichen.crypto.schnorr48 import sign
@@ -5012,7 +5013,7 @@ VECTOR_FILES: tuple[_VectorFile, ...] = (
     ),
     _VectorFile(
         "root_authorization.json",
-        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and direct SHA-512 address derivation.",
+        "Root authorization validation vectors (spec 8.2, 8.4). Tests DODAGID == AddrForKey(root_pubkey) binding and Schnorr48 signature verification. Covers valid root, invalid signature, DODAGID mismatch (impersonation), and pubkey validation. Fixed literals are independently checked with reference_schnorr48.py and the upstream AddrForKey bit-packing oracle (test/vectors/yggdrasil_address.json anchor).",
         builder="root_authorization_vectors",
     ),
     _VectorFile(

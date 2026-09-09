@@ -19,6 +19,7 @@ if str(VECTORS_DIR) not in sys.path:
 from reference_schnorr48 import (  # noqa: E402
     LINK_SIGNATURE_DOMAIN,
     ReferenceIdentity,
+    addr_for_key,
     sign,
     signature_transcript,
     verify,
@@ -455,7 +456,7 @@ def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> No
         if len(public_key) != 32:
             assert vector["expected_valid"] is False
             continue
-        binding = bytes.fromhex(vector["dodagid_hex"]) == _addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid_hex"]) == addr_for_key(public_key)
         signature = verify(
             public_key,
             bytes.fromhex(vector["message_hex"]),
