@@ -126,8 +126,19 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     pub async fn send_dis(&mut self, destination: [u8; 16]) -> Result<(), TxError> {
         let control_destination = if destination[0] == 0xff {
             destination
+        } else if destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+            destination
         } else {
-            link_local_from_iid(destination[8..].try_into().expect("complete IPv6 IID"))
+            // Unicast DIS to a routable address: the link-local control
+            // destination needs the peer's IID, which upstream AddrForKey does
+            // not embed in the address (i72x.2) — resolve it through the
+            // authenticated peer table, failing closed for unknown peers.
+            let iid = self
+                .stack
+                .link()
+                .peer_iid_for_routable_addr(&destination)
+                .ok_or(TxError::NoRoute)?;
+            link_local_from_iid(iid)
         };
         let packet = rpl_ipv6_packet(
             self.local_control_addr,

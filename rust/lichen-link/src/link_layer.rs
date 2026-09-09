@@ -595,6 +595,22 @@ impl LinkLayer {
         self.identity.pubkey
     }
 
+    /// Resolve a peer's routable 0200::/8 address to its link-layer IID.
+    ///
+    /// Upstream AddrForKey does not embed the IID in the address (i72x.2,
+    /// spec/decisions.jsonl `upstream-yggdrasil-addressing`), so the low half
+    /// of a routable address is not the IID; the only sound mapping is the
+    /// authenticated peer table. Returns `None` for unknown peers. Bounded by
+    /// the peer-table capacity (64).
+    pub fn peer_iid_for_routable_addr(&self, addr: &[u8; 16]) -> Option<[u8; 8]> {
+        self.peers
+            .values()
+            .find(|peer| {
+                lichen_core::addr::ygg_addr_from_pubkey(peer.identity.pubkey.as_bytes()) == *addr
+            })
+            .map(|peer| peer.identity.iid)
+    }
+
     /// Local key-derived interface identifier used for addressed controls.
     pub fn local_iid(&self) -> [u8; 8] {
         self.identity.iid

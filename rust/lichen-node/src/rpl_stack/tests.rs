@@ -303,6 +303,15 @@ impl Radio for MeshRadio {
     }
 }
 
+/// Wire EUI-64 for a test identity: key-derived IID with the U/L bit toggled.
+/// Post-i72x.2 the routable address's low half is not the IID, so tests must
+/// not slice it out of `ygg_addr_from_pubkey` output.
+fn eui64_of(identity: &Identity) -> [u8; 8] {
+    let mut eui64 = identity.iid;
+    eui64[0] ^= 0x02;
+    eui64
+}
+
 fn identity(seed: u8) -> Identity {
     Identity::from_seed(Seed::new([seed; 32]))
 }
@@ -952,6 +961,7 @@ async fn rpl_dispatch_rejects_invalid_ipv6_length_and_checksum() {
     let root_addr = root_address(&root_identity);
     let leaf_addr = address(&leaf_identity, 1);
     let (root_radio, leaf_radio) = LoopbackRadio::pair();
+    let leaf_eui64 = eui64_of(&leaf_identity);
     let mut root = Stack::new_default_epoch(root_radio, root_identity.clone());
     let leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_identity);
     let prefix = root_addr[..8].try_into().unwrap();
@@ -984,7 +994,7 @@ async fn rpl_dispatch_rejects_invalid_ipv6_length_and_checksum() {
 
     for packet in cases {
         if matches!(
-            root.send_ipv6_to(&packet, &ipv6_eui64(leaf_addr), Priority::Routing)
+            root.send_ipv6_to(&packet, &leaf_eui64, Priority::Routing)
                 .await,
             Err(crate::stack::TxError::SchcCompress)
         ) {
@@ -1938,6 +1948,7 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
 #[tokio::test]
 async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     let root_identity = identity(8);
+    let root_eui64_derived = eui64_of(&root_identity);
     let leaf_identity = identity(9);
     let unknown_identity = identity(10);
     let root_addr = root_address(&root_identity);
@@ -1991,7 +2002,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         .unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2006,7 +2017,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     root.admit_dao_origin(leaf_identity.iid).unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2062,14 +2073,17 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     substituted_source[0] ^= 1;
     leaf.send_ipv6_to(
         &dao_ipv6_packet(substituted_source, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
     .unwrap();
+    // Post-i72x.2 the claimed origin carries no IID, so a substituted source
+    // resolves to no pinned identity and fails closed as NotAdmitted (the
+    // pre-migration IidMismatch class required the address-embedded IID).
     assert!(matches!(
         root.receive(1, 0).await.unwrap(),
-        Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::IidMismatch))
+        Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert_eq!(
         root.rpl_node().router.lookup_route(Ipv6Addr::from(substituted_source)),
@@ -2106,7 +2120,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         .unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(unknown_addr, root_addr, &unknown_dao).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2123,7 +2137,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     second[3] ^= 1;
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &second).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2143,7 +2157,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     root.fail_next_storage_write();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2159,7 +2173,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
 
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2200,7 +2214,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     reopened.fail_next_storage_write();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2217,7 +2231,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     // First replay: valid DAO with old sequence should be detected as Replay
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2231,7 +2245,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     // as Replay first (replay check precedes route validation per RFC 6550).
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &malformed_replay).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2247,7 +2261,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
 
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &fourth).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await

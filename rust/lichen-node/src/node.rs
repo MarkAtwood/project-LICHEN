@@ -122,6 +122,28 @@ fn resolve_dao_signer_from_bounded_snapshot(
         envelope.unsigned_bytes,
     );
     let candidates = announces.pinned_pubkeys_snapshot()?;
+    // Prefer the pin whose upstream AddrForKey equals the claimed origin
+    // (i72x.2: the origin address no longer embeds the IID, so address-based
+    // candidate selection keeps UnknownKey/BadSignature semantics intact).
+    // The claimed origin is only used to SELECT the candidate; the signature
+    // still proves the binding.
+    let by_origin: std::vec::Vec<_> = candidates
+        .iter()
+        .filter(|candidate| {
+            lichen_core::addr::ygg_addr_from_pubkey(candidate.as_bytes()) == origin
+        })
+        .collect();
+    if by_origin.len() > 1 {
+        // Multiple verifying-capable pins for one origin: identity collision.
+        return None;
+    }
+    if let Some(candidate) = by_origin.first() {
+        return Some((*candidate).clone());
+    }
+    // No pin matches the claimed origin: either the origin is unpinned, or the
+    // packet lies about its origin. Fall back to the signature scan so a
+    // signed DAO from a pinned key under a mismatched origin still resolves
+    // (the caller rejects on the origin check afterwards).
     let mut resolved = None;
     for candidate in candidates {
         if lichen_link::schnorr::verify(&candidate, &digest, envelope.origin.signature) {
@@ -605,9 +627,23 @@ impl RplNode {
                         else {
                             return (0, RplEvent::None);
                         };
+                        // Direct-child anti-relay gate: a DAO that names me
+                        // as parent (in either of my own address forms —
+                        // link-local IID half or exact routable /128) must
+                        // arrive from the origin itself. The
+                        // source↔sender-IID binding is derivable only for
+                        // link-local sources; for routable sources the origin
+                        // proof is the mandatory DAO origin signature check
+                        // downstream (i72x.2: upstream AddrForKey does not
+                        // embed the IID).
+                        let my_routable = self.router.dao_manager.node_address().octets();
+                        let source_is_link_local =
+                            sender_addr[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0];
                         if advertised_parents.iter().any(|parent| {
                             same_interface(parent, &self.node.node_id.link_local_addr().0)
-                        }) && !source_matches_sender_iid(&sender_addr, &sender_iid)
+                                || *parent == my_routable
+                        }) && source_is_link_local
+                            && !source_matches_sender_iid(&sender_addr, &sender_iid)
                         {
                             return (0, RplEvent::None);
                         }
@@ -1156,8 +1192,15 @@ mod tests {
             )
             .unwrap();
         let leaf_packet = l2_dao_packet(leaf_addr, root_addr, &leaf_dao);
+        // Link-local DAO sources are bound to the sender IID at this raw
+        // gate; routable sources defer to the DAO origin signature (i72x.2).
+        let mut leaf_ll = [0u8; 16];
+        leaf_ll[0] = 0xfe;
+        leaf_ll[1] = 0x80;
+        leaf_ll[8..].copy_from_slice(&leaf_identity.iid);
+        let ll_packet = l2_dao_packet(leaf_ll, root_addr, &leaf_dao);
         assert_eq!(
-            parent.handle_frame_rpl(&leaf_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
+            parent.handle_frame_rpl(&ll_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
             (0, RplEvent::None)
         );
         let (forwarded_len, event) =
@@ -1428,10 +1471,17 @@ mod tests {
         let leaf_dao = unsigned;
 
         let leaf_packet = l2_dao_packet(leaf_addr, root_addr, &leaf_dao);
-        // A sender whose link-layer IID does not match the DAO origin is not
-        // forwarded, grouped Targets or not.
+        // A sender whose link-layer IID does not match a link-local DAO
+        // source is not forwarded, grouped Targets or not. For routable
+        // sources the binding proof is the DAO origin signature (i72x.2:
+        // the routable address no longer embeds the IID).
+        let mut leaf_ll = [0u8; 16];
+        leaf_ll[0] = 0xfe;
+        leaf_ll[1] = 0x80;
+        leaf_ll[8..].copy_from_slice(&leaf_identity.iid);
+        let ll_packet = l2_dao_packet(leaf_ll, root_addr, &leaf_dao);
         assert_eq!(
-            parent.handle_frame_rpl(&leaf_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
+            parent.handle_frame_rpl(&ll_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
             (0, RplEvent::None)
         );
         // The grouped DAO is forwarded at the non-root hop: before the
