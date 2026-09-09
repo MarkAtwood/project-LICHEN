@@ -16,6 +16,7 @@ import pytest
 from lichen.rpl.dodag import (
     INFINITE_RANK,
     MAX_PARENTS,
+    ROOT_CHANGE_HISTORY_MAX,
     ROOT_RANK,
     SEQUENCE_WINDOW,
     DodagRole,
@@ -824,3 +825,78 @@ def test_existing_parent_update_at_capacity() -> None:
     assert len(node.parents) == MAX_PARENTS
     assert node.parents[P1].last_heard == 50.0
     assert node.preferred_parent == P1
+
+
+def _dio_from(dodag_id: str, rank: int = 256, version: int = 1) -> DIO:
+    return DIO(
+        rpl_instance_id=0,
+        version=version,
+        rank=rank,
+        dtsn=0,
+        dodag_id=dodag_id,
+    )
+
+
+def test_root_change_recorded_on_first_join() -> None:
+    node = _node()
+    assert node.take_root_changes() == []
+    node.process_dio(_dio(256), P1, link_etx=1.0)
+    assert node.take_root_changes() == [(None, IPv6Address(DODAG_ID))]
+    assert node.take_root_changes() == []  # drained
+
+
+def test_root_change_recorded_on_dodagid_switch() -> None:
+    node = _node()
+    node.process_dio(_dio(256), P1, link_etx=1.0)
+    assert node.take_root_changes() == [(None, IPv6Address(DODAG_ID))]
+    # A poisoned DIO evicts the parent and unjoins the node...
+    node.process_dio(_dio(INFINITE_RANK), P1, link_etx=1.0)
+    assert node.role is DodagRole.UNJOINED
+    # ...then it joins a different DODAGID: that is a root change.
+    node.process_dio(_dio_from("0200::99"), P2, link_etx=1.0)
+    assert node.role is DodagRole.JOINED
+    assert node.take_root_changes() == [(IPv6Address(DODAG_ID), IPv6Address("200::99"))]
+
+
+def test_same_dodagid_rejoin_is_not_root_change() -> None:
+    node = _node()
+    node.process_dio(_dio(256), P1, link_etx=1.0)
+    node.take_root_changes()
+    node.process_dio(_dio(INFINITE_RANK), P1, link_etx=1.0)
+    assert node.role is DodagRole.UNJOINED
+    node.process_dio(_dio(256), P2, link_etx=1.0)  # same DODAGID, rejoin
+    assert node.role is DodagRole.JOINED
+    assert node.take_root_changes() == []
+
+
+def test_version_bump_and_parent_switch_are_not_root_changes() -> None:
+    node = _node()
+    node.process_dio(_dio(512), P1, link_etx=1.0)
+    node.take_root_changes()
+    node.process_dio(_dio(256, version=2), P2, link_etx=1.0)
+    assert node.role is DodagRole.JOINED
+    assert node.take_root_changes() == []
+
+
+def test_root_role_records_no_root_changes() -> None:
+    root = DodagState.as_root(0, DODAG_ID, 1)
+    root.process_dio(_dio(128), P1, link_etx=1.0)
+    assert root.take_root_changes() == []
+
+
+def test_root_change_history_is_bounded() -> None:
+    node = _node()
+    node.process_dio(_dio(256), P1, link_etx=1.0)  # first join
+    assert node.take_root_changes() == [(None, IPv6Address(DODAG_ID))]
+    for _ in range(12):
+        # Poison from the current DODAGID unjoins; a foreign DIO then re-joins
+        # elsewhere. Every iteration records exactly one root change.
+        node.process_dio(_dio_from(str(node.dodag_id), rank=INFINITE_RANK), P1, link_etx=1.0)
+        node.process_dio(_dio_from(str(node.dodag_id), rank=INFINITE_RANK), P2, link_etx=1.0)
+        assert node.role is DodagRole.UNJOINED
+        next_dodag = "0200::99" if str(node.dodag_id) == "200::1" else DODAG_ID
+        node.process_dio(_dio_from(next_dodag), P2, link_etx=1.0)
+    events = node.take_root_changes()
+    assert len(events) == ROOT_CHANGE_HISTORY_MAX
+    for _previous, new in events:
+        assert new in (IPv6Address(DODAG_ID), IPv6Address("200::99"))
