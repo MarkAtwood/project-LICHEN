@@ -3077,6 +3077,103 @@ fn valid_root_signature_gate_verifies_then_replay_rejects() {
     assert_eq!(replay, DioRootSigOutcome::Reject);
 }
 
+#[test]
+fn tampered_root_signature_rejects_even_when_expired() {
+    // THE PIN (a): verify_signature runs BEFORE the expiry check, so a
+    // forged signature cannot ride the expired->Baseline degrade: tampered
+    // sig + clock past expiry => Reject, never Baseline.
+    let (mut stack, mut body) = gate_fixture();
+    let last = body.len() - 1;
+    body[last] ^= 0x01; // flip a signature byte (the COSE sig is the body tail)
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX + 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn tampered_root_signature_rejects_without_clock() {
+    // THE PIN (b): verify_signature runs BEFORE the clockless degrade, so
+    // tampered sig + no wall clock => Reject, never Baseline.
+    let (mut stack, mut body) = gate_fixture();
+    let last = body.len() - 1;
+    body[last] ^= 0x01;
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn valid_signature_on_mismatched_carrier_rejects() {
+    // THE PIN (c): the cross-check arm executes for a VALID, unexpired
+    // signature when the carrier DIO fields do not bind to the COSE
+    // payload => Reject, and the seq cache is not touched.
+    let (mut stack, body) = gate_fixture();
+    let mut fields = gate_fields();
+    fields.rank = Some(fields.rank.unwrap() + 1);
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &fields);
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn unpinned_root_signature_gate_degrades_to_baseline() {
+    // THE PIN (d): no trust pin for the signer IID (announces.pin_for_test
+    // absent) => Baseline even with a valid clock, never Reject, and no
+    // seq is admitted.
+    let (mut stack, body) = gate_fixture();
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn duplicate_root_signature_option_rejects() {
+    // THE PIN (e): a second well-formed 0x17 option => Reject (duplicate
+    // detection precedes decode), even with the pin and a valid clock.
+    let (mut stack, mut body) = gate_fixture();
+    let option = body[lichen_rpl::message::Dio::SERIALIZED_LEN..].to_vec();
+    body.extend_from_slice(&option);
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn truncated_root_signature_option_rejects() {
+    // THE PIN (f): an option whose length prefix overruns the body
+    // (truncated mid-COSE) => Reject via the OptionIter error arm, even
+    // with the pin and a valid clock.
+    let (mut stack, body) = gate_fixture();
+    let body = &body[..body.len() - 64];
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    let outcome = stack.verify_dio_root_signature(body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Reject);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
+#[test]
+fn clock_equal_to_expiry_boundary_degrades_to_baseline() {
+    // THE PIN (g): expiry == now exercises the gate's own `<=`
+    // (payload.expiry <= now_unix) => Baseline, not Verified and not
+    // Reject; no seq is admitted. (The root_sig.rs oracle pin exercises
+    // the same rule on the component path, not this gate arm.)
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX);
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+}
+
 fn root_sig_vector_pubkey() -> PublicKey {
     use crate::rpl_stack::root_sig;
     root_sig::tests::vector_pubkey()
