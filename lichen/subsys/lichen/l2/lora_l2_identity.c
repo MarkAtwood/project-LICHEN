@@ -16,7 +16,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/hwinfo.h>
 #include <lichen/hal.h>
-#include <tinycrypt/sha256.h>
+/* SHA-256 via lichen_sha256() (lichen_util.h); no direct crypto includes. */
 
 LOG_MODULE_DECLARE(lichen_lora_l2, CONFIG_LICHEN_LORA_L2_LOG_LEVEL);
 
