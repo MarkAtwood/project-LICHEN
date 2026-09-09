@@ -214,6 +214,50 @@ static void test_sender_iid_from_sockaddr(void)
 		(const struct sockaddr *)&sa, sizeof(sa), extracted) == -EINVAL);
 }
 
+static void test_decap_expired_shadow(void)
+{
+	/* 3lk7 regression: a lapsed longest-prefix grant must not shadow a live
+	 * shorter-prefix grant for the same route; once every matching grant
+	 * has lapsed the denial stays EXPIRED (expired_at_boundary vector). */
+	struct lichen_tunnel_auth_ctx ctx = fresh();
+	uint8_t private_key[32], public_key[32];
+	uint8_t wire_a[LICHEN_TUNNEL_AUTH_MAX_WIRE_SIZE], wire_b[LICHEN_TUNNEL_AUTH_MAX_WIRE_SIZE];
+	size_t len_a = 0, len_b = 0;
+	/* Both prefixes match the decap source below; trailing bytes are zero
+	 * so prefix_valid() accepts both lengths. */
+	uint8_t prefix[16] = { 0x02, 0x00, 0x12, 0x34, 0x56 };
+	struct lichen_tunnel_claims claims = { .path_seq = 1, .expiry = UINT64_C(1900000001) };
+	uint8_t source[16] = { 0x02, 0x00, 0x12, 0x34, 0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+	uint8_t external[16] = { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
+	struct lichen_tunnel_result r;
+
+	schnorr48_derive_keypair(root_seed, private_key, public_key);
+	memcpy(claims.prefix, prefix, 16);
+	memcpy(claims.route_hash, valid_route_hash, 16);
+	memcpy(claims.egress_iid, egress_iid, 8);
+
+	/* Grant A: specific /64, lapses at 1900000001. Grant B: broader /48,
+	 * same route, lives to 1900000300. */
+	claims.prefix_len = 64;
+	assert(lichen_tunnel_auth_encode(&crypto, private_key, public_key, root_iid, &claims,
+					 valid_route, 2, wire_a, sizeof(wire_a), &len_a) == 0);
+	claims.prefix_len = 48; claims.path_seq = 2; claims.expiry = UINT64_C(1900000300);
+	assert(lichen_tunnel_auth_encode(&crypto, private_key, public_key, root_iid, &claims,
+					 valid_route, 2, wire_b, sizeof(wire_b), &len_b) == 0);
+	assert(receive_as(&ctx, wire_a, len_a, true, root_iid, UINT64_C(1900000000)).allowed);
+	assert(receive_as(&ctx, wire_b, len_b, true, root_iid, UINT64_C(1900000000)).allowed);
+
+	/* Past A's expiry the live /48 authorizes the packet (was: EXPIRED). */
+	r = lichen_tunnel_auth_decapsulate(&ctx, source, external, valid_route, 2,
+					    LICHEN_TUNNEL_MESH_TO_EXTERNAL, UINT64_C(1900000002));
+	assert(r.allowed);
+	/* Past both expiries the denial is still EXPIRED, not NO_AUTHORIZATION. */
+	r = lichen_tunnel_auth_decapsulate(&ctx, source, external, valid_route, 2,
+					    LICHEN_TUNNEL_MESH_TO_EXTERNAL, UINT64_C(1900000301));
+	assert(r.denial == LICHEN_TUNNEL_DENIAL_EXPIRED);
+	crypto_wipe(private_key, sizeof(private_key));
+}
+
 static void test_coap_code_mapping(void)
 {
 	/* The wiring boundary maps the module's human codes 204/403 to the
@@ -229,7 +273,7 @@ static void test_coap_code_mapping(void)
 int main(void)
 {
 	test_shared_vectors(); test_auth_and_policy(); test_revocation_rotation_and_atomicity(); test_encoder_exact_vector();
-	test_sender_iid_from_sockaddr(); test_coap_code_mapping();
+	test_sender_iid_from_sockaddr(); test_decap_expired_shadow(); test_coap_code_mapping();
 	run_fixture_post_cases(); run_fixture_decap_cases();
 	puts("tunnel_auth: all tests passed"); return 0;
 }
