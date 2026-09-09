@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-lcf4",
+  "title": "fragmented-DIO re-announce call site untested (process_authenticated_dio_evidence path)",
+  "description": "Robustness review of 99sg.2 (pass 3, finding 3): tests/test_node_capability_reannounce.py exercises the drain directly and the unfragmented ingress path (node.py process_authenticated_dio site), but the fragment-reassembly call site (process_authenticated_dio_evidence, node.py ~1003-1012) has no test. The sites are symmetric so risk is low; add a fragmented-DIO variant of test_dio_ingress_wiring_triggers_reannounce.",
+  "status": "open",
+  "priority": 4,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:43:15.204794913Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:43:15.204794913Z",
+  "labels": [
+    "python",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-lcf4",
+      "depends_on_id": "project-LICHEN-worker6-99sg.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T17:43:15.3402966Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
