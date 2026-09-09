@@ -639,11 +639,14 @@ impl RfHealthMetrics {
         utilization: Option<u32>,
         ema_loss_fp: Option<u32>,
     ) -> (u8, bool) {
-        // Step 1-2: assigned SF, or the spec step-2 default of 10. The
+        // Step 1-2: assigned SF, or the spec step-2 default of 10, clamped
+        // to the spec 2a.8 valid range (SF_MIN/SF_MAX = 7/12) — ASSIGNED_SF
+        // is a DIO-signaled byte, so an out-of-range value must never reach
+        // radio configuration (matches python ccp.py step 1-2 clamp). The
         // baseline is NOT the adaptive_sf() table form — that would
         // double-count load/density before steps 3-6 and the floors see
-        // them a second time (b7z9.29.3; matches python ccp.py step 1-2).
-        let mut sf = assigned_sf.unwrap_or(10);
+        // them a second time (b7z9.29.3).
+        let mut sf = assigned_sf.unwrap_or(10).clamp(7, 12);
         let util = utilization.unwrap_or(0);
         let loss_fp = ema_loss_fp.unwrap_or(0);
         let snr_ema = self.snr.avg().unwrap_or(0);
@@ -727,6 +730,27 @@ mod tests {
         m8.record_rx(10);
         let (sf8, _) = m8.adaptive_sf_select(Some(7), None, None);
         assert_eq!(sf8, 7);
+    }
+
+    #[test]
+    fn adaptive_sf_select_clamps_assigned_sf_to_spec_range() {
+        // spec 2a.8 SF_MIN/SF_MAX = 7/12: an out-of-range ASSIGNED_SF byte
+        // must never reach radio configuration (python ccp.py step 1-2
+        // clamp parity). Benign RF (density 8 <= 10, SNR 10 >= 0, no
+        // loss/load) so no step or floor masks the entry clamp.
+        let benign = || {
+            let mut m = RfHealthMetrics::new();
+            m.record_density(8);
+            m.record_rx(10);
+            m
+        };
+        assert_eq!(benign().adaptive_sf_select(Some(0), None, None).0, 7);
+        assert_eq!(benign().adaptive_sf_select(Some(6), None, None).0, 7);
+        assert_eq!(benign().adaptive_sf_select(Some(13), None, None).0, 12);
+        assert_eq!(benign().adaptive_sf_select(Some(200), None, None).0, 12);
+        // In-range values pass through untouched.
+        assert_eq!(benign().adaptive_sf_select(Some(7), None, None).0, 7);
+        assert_eq!(benign().adaptive_sf_select(Some(12), None, None).0, 12);
     }
 
     #[test]
