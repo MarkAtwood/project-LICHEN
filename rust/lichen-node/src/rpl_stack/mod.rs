@@ -21,7 +21,6 @@ mod tests;
 use std::collections::{HashSet, VecDeque};
 use std::vec::Vec;
 
-use lichen_hal::storage::RedundantValue;
 use lichen_hal::{NonVolatile, Radio};
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::PeerAuthState;
@@ -122,10 +121,6 @@ pub struct RplStack<R: Radio, S: NonVolatile> {
     bootstrap_peers: VecDeque<[u8; 8]>,
     dao_admissions: Option<DaoAdmissionState>,
     root_seqs: RootSeqCache,
-    /// Durable redundant-slot handle for `root_seqs` (spec 06 §8.10.1
-    /// anti-replay across reboots); `None` until the first verified DIO
-    /// creates the record.
-    root_seq_store: Option<RedundantValue>,
     /// DAO TX scheduler state (b7z9.16.1(b) wires the TX consumer).
     dao_tx_sched: DaoTxScheduler,
     wall_clock_unix: Option<fn() -> u64>,

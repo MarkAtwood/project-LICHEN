@@ -3,7 +3,6 @@
 
 //! Error types for the production RPL stack.
 
-use lichen_hal::storage::RedundantOpenError;
 use lichen_rpl::routing::{DaoPersistentOpenError, DaoProvisionError, DaoTxError};
 
 use crate::runtime::RplRuntimeActionError;
@@ -17,7 +16,6 @@ pub enum RplStackProvisionError<E> {
     Dao(DaoProvisionError<E>),
     Admission(DaoProvisionError<E>),
     ExistingNonEmpty,
-    RootSeq(RedundantOpenError<E>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -28,7 +26,6 @@ pub enum RplStackOpenError<E> {
     Dao(DaoPersistentOpenError<E>),
     Admission(DaoPersistentOpenError<E>),
     AdmissionInconsistent,
-    RootSeq(RedundantOpenError<E>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -93,7 +90,6 @@ impl<E: core::fmt::Debug> core::fmt::Display for RplStackProvisionError<E> {
                     "existing DAO root state is nonempty and cannot be reprovisioned"
                 )
             }
-            Self::RootSeq(error) => write!(f, "root-seq replay state open failed: {error:?}"),
         }
     }
 }
@@ -110,7 +106,6 @@ impl<E: core::fmt::Debug> core::fmt::Display for RplStackOpenError<E> {
             Self::AdmissionInconsistent => {
                 write!(f, "DAO high-water contains an origin that is not admitted")
             }
-            Self::RootSeq(error) => write!(f, "root-seq replay state open failed: {error:?}"),
         }
     }
 }
