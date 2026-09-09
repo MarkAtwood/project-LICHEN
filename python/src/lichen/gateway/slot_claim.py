@@ -80,6 +80,16 @@ Python, malformed to Rust)."""
 MAX_SLOTS_PER_SUPERFRAME = 4_096
 """Rust slot.rs:57 parity: decode-side bound on the slot array length."""
 
+MAX_CLAIM_ENVELOPE_BYTES = 24_576
+"""Decode-side envelope cap (prgb): cbor2.loads materializes the entire
+payload — including the slots list — before the count check can run, so a
+hostile oversized envelope costs memory/CPU ahead of rejection. Rust reads
+the CBOR array head and rejects count > MAX_SLOTS_PER_SUPERFRAME before
+allocating (slot.rs:567-570). Python cannot read the head without decoding,
+so the envelope is capped instead: a maximum legitimate claim is ~21.1 KB
+(4096 u32 slots x 5B + 7-key map + protected/kid/signature); 24 KB covers
+that with margin while bounding pre-rejection decode work."""
+
 _MAX_SLOT_INDEX = 0xFFFF_FFFF
 """Per-slot u32 bound (Rust slot.rs:574 u32::try_from). Also rejects
 negative slot indices, which Rust's uint() never admits."""
@@ -221,6 +231,11 @@ class SlotClaim:
         ):
             raise ClaimError("ordinal must be a non-negative integer")
 
+        # allocation_mode must be the enum: a raw int constructs silently and
+        # encode_claim_canonical would invert it (non-INTERLEAVED -> CONTIGUOUS)
+        if not isinstance(self.allocation_mode, AllocationMode):
+            raise ClaimError("allocation_mode must be an AllocationMode")
+
         # Validate signature length if present
         if self.signature is not None and len(self.signature) != 48:
             raise ClaimError(f"signature must be 48 bytes, got {len(self.signature)}")
@@ -241,6 +256,8 @@ class SlotClaim:
         payload key/type conformance. Signature verification is the caller's
         (verify_slot_claim) with the resolved gateway pubkey.
         """
+        if len(envelope) > MAX_CLAIM_ENVELOPE_BYTES:
+            raise ClaimError("slot-claim envelope exceeds maximum size")
         try:
             document = cbor2.loads(envelope)
         except (cbor2.CBORDecodeError, OverflowError) as e:
@@ -283,12 +300,14 @@ class SlotClaim:
         if type(superframe_epoch) is not int or superframe_epoch < 0 or superframe_epoch > _MAX_U64:
             raise ClaimError("superframe_epoch must be a non-negative integer")
         mode = fields.get(_PAYLOAD_MODE)
-        if mode == _MODE_INTERLEAVED:
-            allocation_mode = AllocationMode.INTERLEAVED
-        elif mode == _MODE_CONTIGUOUS:
-            allocation_mode = AllocationMode.CONTIGUOUS
-        else:
+        # Type-strict: value equality admits CBOR false/true (bool) and
+        # float 0.0/1.0 as modes, which Rust's p.uint() rejects as
+        # MalformedClaim (slot.rs:580) — a signed-claim divergence.
+        if type(mode) is not int or mode not in (_MODE_INTERLEAVED, _MODE_CONTIGUOUS):
             raise ClaimError("mode must be 0 (interleaved) or 1 (contiguous)")
+        allocation_mode = (
+            AllocationMode.INTERLEAVED if mode == _MODE_INTERLEAVED else AllocationMode.CONTIGUOUS
+        )
         expiry = fields.get(_PAYLOAD_EXPIRY)
         if type(expiry) is not int or expiry < 0 or expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")
