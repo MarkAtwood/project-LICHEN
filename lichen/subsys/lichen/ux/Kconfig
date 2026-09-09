@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: The contributors to the LICHEN project
+
+config LICHEN_UX
+	bool "LICHEN device UX (spec 19)"
+	depends on LICHEN
+	default y
+	help
+	  Device UX components from spec/19-device-ux.md. Compiles the pure,
+	  host-testable engines (LED timing, etc.); GPIO/display backends are
+	  individually selectable.
+
+config LICHEN_UX_LED
+	bool "Spec 19 §10 LED status language (led0 blink engine)"
+	depends on LICHEN_UX
+	default y
+	help
+	  Drive the device status LED with the fixed 6-state blink table from
+	  spec 19 §10 (joined-idle off, joining, message-waiting, SOS, hold,
+	  fault). Selects the GPIO backend that drives led0 via the HAL.
+	  Boards set CONFIG_LICHEN_HAS_LEDS (which BUILD_ASSERTs an led0 alias);
+	  targets with no LED (hal_led_get fails) degrade to a quiet no-op and
+	  the driver does not schedule any periodic work.
