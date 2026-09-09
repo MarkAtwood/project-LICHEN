@@ -2127,39 +2127,17 @@ impl GatewayCoordinator {
                 // (coap_slot_coord.c conflict arm) echoes the winner's stored
                 // COSE_Sign1 bytes with no Content-Format option, so the same
                 // shape goes out here (content_format 0 = no option). The
-                // legacy rejection map remains only as the transitional
-                // fallback until the claim sender records envelopes via
-                // record_own_claim_envelope.
+                // spec payload is the winning gateway's claim; this
+                // gateway cannot mint a signed COSE claim on the responder
+                // path (no sender-side claim_seq machinery, l1qw.20), so
+                // when no envelope was recorded the 4.09 carries an empty
+                // payload — C parity (coap_slot_coord.c:1640-1645), which
+                // likewise responds 4.09 with resp_len 0 rather than a
+                // descriptor map.
                 if let Some(own_cose) = self.own_claim_cose.clone() {
                     return CoapResponse::conflict(own_cose, 0);
                 }
-                let reject = Value::Map(vec![
-                    (
-                        Value::Text("status".to_string()),
-                        Value::Text("rejected".to_string()),
-                    ),
-                    (
-                        Value::Text("reason".to_string()),
-                        Value::Text("slot_conflict".to_string()),
-                    ),
-                    (
-                        Value::Text("conflicting_slots".to_string()),
-                        Value::Array(
-                            overlap
-                                .iter()
-                                .map(|&s| Value::Integer((s as i64).into()))
-                                .collect(),
-                        ),
-                    ),
-                ]);
-                let mut payload = Vec::new();
-                ciborium::into_writer(&reject, &mut payload).unwrap();
-                // GCP-6.5 step 11 (spec/08:315): an unresolved slot
-                // conflict responds 4.09 Conflict. The spec payload is the
-                // winning gateway's claim; this gateway cannot mint a signed
-                // COSE claim (no sender-side claim_seq machinery, l1qw.20),
-                // so the descriptor map below stands in until that lands.
-                return CoapResponse::conflict(payload, CONTENT_FORMAT_CBOR);
+                return CoapResponse::conflict(Vec::new(), 0);
             }
             // They win. Relinquish every overlapping slot before returning
             // success, then replace it from slots not occupied by any current
@@ -2937,21 +2915,13 @@ mod tests {
         // responds 4.09 Conflict for an unresolved slot conflict (spec/08:315).
         assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
 
-        // Decode response to verify rejection
-        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
-        if let Value::Map(m) = value {
-            let status = m.iter().find_map(|(k, v)| {
-                if let (Value::Text(key), Value::Text(val)) = (k, v) {
-                    if key == "status" {
-                        return Some(val.clone());
-                    }
-                }
-                None
-            });
-            assert_eq!(status, Some("rejected".to_string()));
-        } else {
-            panic!("expected map response");
-        }
+        // No envelope recorded via record_own_claim_envelope in this setup,
+        // so the 4.09 carries an empty payload — C parity
+        // (coap_slot_coord.c:1640-1645: code 4.09, resp_len 0). The
+        // spec-shaped echo of a recorded envelope is covered by
+        // conflict_response_echoes_own_recorded_envelope.
+        assert!(response.payload.is_empty());
+        assert_eq!(response.content_format, 0);
     }
 
     #[test]
