@@ -894,6 +894,29 @@ impl fmt::Debug for Gateway {
     }
 }
 
+/// Encode the CoAP Content-Format option (option 12, delta 12) for a secure
+/// response. Returns the encoded length written into `buf`.
+///
+/// CoAP uint option values use their shortest big-endian representation
+/// (RFC 7252 §3.2). A `content_format` of 0 means "no content format": the
+/// option is OMITTED (length 0) for byte-parity with C's `lichen_coap_respond`
+/// and `coap_oscore.h` ("0 for none"), which never emit a present-but-empty
+/// option. Encoding 0 as a zero-length `0xc0` option would be wrong — an empty
+/// uint decodes as value 0 = `text/plain;charset=utf-8`.
+fn encode_content_format_option(content_format: u16, buf: &mut [u8; 3]) -> usize {
+    if content_format == 0 {
+        0
+    } else if content_format <= u16::from(u8::MAX) {
+        buf[0] = 0xc1;
+        buf[1] = content_format as u8;
+        2
+    } else {
+        buf[0] = 0xc2;
+        buf[1..].copy_from_slice(&content_format.to_be_bytes());
+        3
+    }
+}
+
 impl Gateway {
     /// Create a new root gateway with the given identity.
     ///
@@ -1068,7 +1091,7 @@ impl Gateway {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let trust_store =
             TrustStore::new_ephemeral(64).map_err(|_| GatewayOpenError::RplProvision)?;
-        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, 60, 64)
+        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity.iid, 60, 64)
             .map_err(|_| GatewayOpenError::RplProvision)?;
         Self::new(identity, safe_epoch, trust_store, coordinator)
     }
@@ -1128,9 +1151,9 @@ impl Gateway {
         {
             return Err(SecureError::NoContext);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .map_err(|_| SecureError::NoContext)?;
+        // The OSCORE IDs derive from the key-derived IID; the routable
+        // address's low half is not the IID under upstream AddrForKey (i72x.2).
+        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
         const OSCORE_ID_LEN: usize = 7;
         if context.sender_id() != &local_iid[..OSCORE_ID_LEN]
             || context.recipient_id() != &peer_iid[..OSCORE_ID_LEN]
@@ -1185,9 +1208,8 @@ impl Gateway {
         if peer_pubkeys.len() > MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayFederationError::TooManyPeers);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .expect("gateway address has a complete IID");
+        // Key-derived IID, not the low half of the routable address (i72x.2).
+        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
         let mut contexts = Vec::with_capacity(peer_pubkeys.len());
         let mut peer_iids = Vec::with_capacity(peer_pubkeys.len());
         for pubkey in peer_pubkeys {
@@ -1369,20 +1391,27 @@ impl Gateway {
     /// `[egress_iid]` — this gateway is the egress. ponytail: multi-hop SRH
     /// route extraction is not wired, so grants issued over longer routes
     /// fail closed here; upgrade path is SRH parsing at the node decap site.
-    fn egress_tunnel_authorized(
-        &mut self,
-        received: &lichen_node::stack::ReceivedIpv6,
-    ) -> bool {
+    fn egress_tunnel_authorized(&mut self, received: &lichen_node::stack::ReceivedIpv6) -> bool {
         if received.ipv6.len() < 40 {
-            return true;
+            warn!(
+                len = received.ipv6.len(),
+                "egress dropped: datagram too short for an IPv6 header"
+            );
+            return false;
         }
         let destination: [u8; 16] = received.ipv6[24..40].try_into().expect("len checked");
         if self.is_local_mesh(&destination) {
             return true;
         }
-        let Some(egress_iid) = self.coordinator.tunnel_auth_root() else {
+        // The table must be provisioned (by a current-root POST) before the
+        // gate engages; an unprovisioned table keeps egress open (C
+        // `s_tunnel_ready == false` parity).
+        if self.coordinator.tunnel_auth_root().is_none() {
             return true;
-        };
+        }
+        // Route evidence is this gateway's own IID — it is the egress — not
+        // the DODAG root IID, which may differ after a root rebind.
+        let egress_iid: [u8; 8] = self.rpl_stack.local_iid();
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
         let route = [egress_iid];
         match self
@@ -1569,21 +1598,14 @@ impl Gateway {
         };
         // Content-Format is CoAP option 12. It is Class E under OSCORE and
         // therefore belongs in the encrypted inner message. CoAP uint option
-        // values use their shortest big-endian representation, including an
-        // empty value for zero.
+        // values use their shortest big-endian representation. A content_format
+        // of 0 means "no content format" and the option is OMITTED entirely —
+        // byte-parity with C's lichen_coap_respond / coap_oscore.h ("0 for
+        // none"), which never emits a present-but-empty 0xc0 option (that would
+        // decode as value 0 = text/plain;charset=utf-8).
         let mut content_format_option = [0u8; 3];
-        let content_format_option_len = if response.content_format == 0 {
-            content_format_option[0] = 0xc0;
-            1
-        } else if response.content_format <= u16::from(u8::MAX) {
-            content_format_option[0] = 0xc1;
-            content_format_option[1] = response.content_format as u8;
-            2
-        } else {
-            content_format_option[0] = 0xc2;
-            content_format_option[1..].copy_from_slice(&response.content_format.to_be_bytes());
-            3
-        };
+        let content_format_option_len =
+            encode_content_format_option(response.content_format, &mut content_format_option);
         let response_data = SecureResponseData {
             code: MessageCode(response.code),
             options: &content_format_option[..content_format_option_len],
@@ -1708,6 +1730,10 @@ impl Gateway {
         let mut dst = [0u8; 16];
         dst.copy_from_slice(&ipv6_packet[field::DST_OFFSET..field::DST_OFFSET + 16]);
         if dst[0] == 0xfd {
+            // ULA-specific by design (i72x.4): ULA is external under the
+            // single-primary model, and without this early drop the
+            // fall-through would hairpin the packet back onto the upstream
+            // wire (is_local_mesh is false for ULA).
             warn!("upstream ULA destination is outside the LICHEN native profile");
             return None;
         }
@@ -2365,6 +2391,28 @@ mod tests {
     }
 
     #[test]
+    fn content_format_zero_omits_the_option() {
+        let mut buf = [0u8; 3];
+        // cf 0 = "no content format": option OMITTED (byte-parity with C),
+        // never a present-but-empty 0xc0 that decodes as text/plain.
+        assert_eq!(encode_content_format_option(0, &mut buf), 0);
+
+        // Single-byte values use delta 12 + len 1 (0xc1).
+        assert_eq!(encode_content_format_option(60, &mut buf), 2);
+        assert_eq!(&buf[..2], &[0xc1, 60]);
+        assert_eq!(encode_content_format_option(112, &mut buf), 2);
+        assert_eq!(&buf[..2], &[0xc1, 112]);
+        assert_eq!(encode_content_format_option(u16::from(u8::MAX), &mut buf), 2);
+        assert_eq!(&buf[..2], &[0xc1, 0xff]);
+
+        // Values above u8::MAX use delta 12 + len 2 (0xc2), big-endian.
+        assert_eq!(encode_content_format_option(256, &mut buf), 3);
+        assert_eq!(&buf[..3], &[0xc2, 0x01, 0x00]);
+        assert_eq!(encode_content_format_option(u16::MAX, &mut buf), 3);
+        assert_eq!(&buf[..3], &[0xc2, 0xff, 0xff]);
+    }
+
+    #[test]
     fn protected_request_sequence_requires_one_nonempty_partial_iv() {
         let request = [0x40, MessageCode::POST.0, 0, 1, 0x92, 0x01, 0x2a];
         assert_eq!(Gateway::protected_request_sequence(&request), Some(42));
@@ -2397,7 +2445,7 @@ mod tests {
         private_test_dir(&path);
         let identity = Identity::from_seed(Seed::new([0x61; 32]));
         let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-        let coordinator = GatewayCoordinator::new_ephemeral(root, 60, 8).unwrap();
+        let coordinator = GatewayCoordinator::new_ephemeral(root, identity.iid, 60, 8).unwrap();
         let result = Gateway::new_persistent(
             identity,
             128,
@@ -2436,6 +2484,7 @@ mod tests {
         let trust = TrustStore::new_ephemeral(8).unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             root,
+            identity.iid,
             60,
             64,
             &replay_path,
@@ -2522,6 +2571,7 @@ mod tests {
         .unwrap();
         let coordinator = GatewayCoordinator::load_persistent(
             root,
+            identity.iid,
             60,
             64,
             &replay_path,
