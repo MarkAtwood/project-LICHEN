@@ -405,7 +405,7 @@ static int lora_renode_recv_async(const struct device *dev,
 		k_spin_unlock(&drv->rx_lock, key);
 
 		if (!was_armed) {
-			return -EINVAL;
+			return 0;
 		}
 		/* Quiesce the poller before releasing the modem so a sync
 		 * recv that follows cannot race a mid-run poll. Waiting is
