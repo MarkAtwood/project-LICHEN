@@ -166,9 +166,8 @@ holds even for a sender with non-SOS broadcasts in the window (count starts
 at 0 < budget 3, and the yellow-zone probabilistic relay applies only at
 count >= 50% of budget, i.e. not on the first). The row value 3 is per
 sender per hour across all hop limits, not 3 per bucket. Relays detect SOS
-by the link-layer dispatch marker (an L2 SOS dispatch type; a wire value
-must be assigned in 02-physical-link.md before this is implementable —
-tracked). The CoAP `/sos` path (12-apps.md §18.4.3) is NOT a usable relay
+by the link-layer dispatch marker `0x16` (02-physical-link.md §4.1 dispatch
+table). The CoAP `/sos` path (12-apps.md §18.4.3) is NOT a usable relay
 signal: OSCORE encrypts Uri-Path end-to-end and SCHC elides it, so relays
 cannot see it. The "always relay once" rationale refers to the first SOS
 counting at 0 and is consistent with drop-at-budget, not an exemption.
@@ -187,7 +186,7 @@ on_receive_broadcast(packet):
   if sender not in relay_state:
     relay_state[sender] = new_entry()
 
-  is_sos = (packet.l2_dispatch == L2_DISPATCH_SOS)  # link-layer marker
+  is_sos = (packet.l2_dispatch == 0x16)  # L2 SOS dispatch (02 §4.1)
   if is_sos:
     budget = 3                        # SOS row, per sender per hour, all hops
     count = relay_state[sender].sos_count
