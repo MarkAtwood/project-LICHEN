@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <openssl/sha.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,6 +168,52 @@ static void test_encoder_exact_vector(void)
 	crypto_wipe(private_key, sizeof(private_key));
 }
 
+static void test_sender_iid_from_sockaddr(void)
+{
+	/* jzx5 regression: the CoAP wiring must hand receive() the canonical
+	 * pubkey IID carried in the source link-local (U/L cleared), NOT the
+	 * U/L-flipped wire-EUI64 form the OSCORE context store keys on. Drive
+	 * the real extraction helper used by coap_server.c. */
+	struct lichen_tunnel_auth_ctx ctx;
+	struct sockaddr_in6 sa;
+	uint8_t extracted[8];
+	struct lichen_tunnel_result r;
+
+	memset(&sa, 0, sizeof(sa));
+	sa.sin6_family = AF_INET6;
+	sa.sin6_addr.s6_addr[0] = 0xfe;
+	sa.sin6_addr.s6_addr[1] = 0x80;
+	memcpy(&sa.sin6_addr.s6_addr[8], root_iid, 8);
+	assert(lichen_tunnel_sender_iid_from_sockaddr(
+		(const struct sockaddr *)&sa, sizeof(sa), extracted) == 0);
+	assert(memcmp(extracted, root_iid, 8) == 0);
+
+	/* The extracted identity must be accepted for an authentic grant... */
+	ctx = fresh();
+	r = receive_as(&ctx, wire_valid, sizeof(wire_valid), true, extracted,
+		       UINT64_C(1900000000));
+	assert(r.allowed && r.coap_code == 204);
+
+	/* ...while the old U/L-flipped (wire-EUI64) form is denied. */
+	sa.sin6_addr.s6_addr[8] = (uint8_t)(sa.sin6_addr.s6_addr[8] ^ 0x02U);
+	assert(lichen_tunnel_sender_iid_from_sockaddr(
+		(const struct sockaddr *)&sa, sizeof(sa), extracted) == 0);
+	ctx = fresh();
+	r = receive_as(&ctx, wire_valid, sizeof(wire_valid), true, extracted,
+		       UINT64_C(1900000000));
+	assert(r.denial == LICHEN_TUNNEL_DENIAL_WRONG_ROOT);
+
+	/* Fail-closed argument validation. */
+	assert(lichen_tunnel_sender_iid_from_sockaddr(NULL, sizeof(sa), extracted) == -EINVAL);
+	assert(lichen_tunnel_sender_iid_from_sockaddr(
+		(const struct sockaddr *)&sa, sizeof(sa), NULL) == -EINVAL);
+	assert(lichen_tunnel_sender_iid_from_sockaddr(
+		(const struct sockaddr *)&sa, 4, extracted) == -EINVAL);
+	sa.sin6_family = AF_INET;
+	assert(lichen_tunnel_sender_iid_from_sockaddr(
+		(const struct sockaddr *)&sa, sizeof(sa), extracted) == -EINVAL);
+}
+
 static void test_coap_code_mapping(void)
 {
 	/* The wiring boundary maps the module's human codes 204/403 to the
@@ -182,7 +229,7 @@ static void test_coap_code_mapping(void)
 int main(void)
 {
 	test_shared_vectors(); test_auth_and_policy(); test_revocation_rotation_and_atomicity(); test_encoder_exact_vector();
-	test_coap_code_mapping();
+	test_sender_iid_from_sockaddr(); test_coap_code_mapping();
 	run_fixture_post_cases(); run_fixture_decap_cases();
 	puts("tunnel_auth: all tests passed"); return 0;
 }

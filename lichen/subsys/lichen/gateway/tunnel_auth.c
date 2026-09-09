@@ -9,8 +9,11 @@
 #ifdef __ZEPHYR__
 #include <tinycrypt/sha256.h>
 #include <tinycrypt/constants.h>
+#include <zephyr/net/net_ip.h>
 #include <lichen/link_ctx.h>
 #include <lichen/schnorr48.h>
+#else
+#include <netinet/in.h>
 #endif
 
 static const uint8_t protected_header[] = { 0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00 };
@@ -370,6 +373,21 @@ struct lichen_tunnel_result lichen_tunnel_auth_receive(struct lichen_tunnel_auth
 	memcpy(ctx->history[hi].route_hash, claims.route_hash, 16); ctx->history[hi].floor = claims.path_seq;
 	ctx->entries[ei].used = true; ctx->entries[ei].claims = claims; ctx->entries[ei].age = ++ctx->age;
 	unlock_ctx(ctx); return permit();
+}
+
+int lichen_tunnel_sender_iid_from_sockaddr(const struct sockaddr *addr,
+					   size_t addr_len, uint8_t iid[8])
+{
+	const struct sockaddr_in6 *in6;
+
+	if (addr == NULL || iid == NULL ||
+	    addr_len < sizeof(struct sockaddr_in6) ||
+	    addr->sa_family != AF_INET6) {
+		return -EINVAL;
+	}
+	in6 = (const struct sockaddr_in6 *)addr;
+	memcpy(iid, &in6->sin6_addr.s6_addr[8], 8);
+	return 0;
 }
 
 int lichen_tunnel_auth_change_root(struct lichen_tunnel_auth_ctx *ctx, const uint8_t root_iid[8],
