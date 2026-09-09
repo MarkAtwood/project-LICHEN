@@ -1,7 +1,0 @@
-{
-  "id": "1788935742752006647-1",
-  "issue_id": "project-LICHEN-worker6-i72x.6",
-  "author": "Mark Atwood",
-  "text": "Additional corpus in scope (worker7, from i72x.5): test/vectors/tunnel_authorization.json also embeds a native-profile address (address_hex 02ed4242ead4ac69... for pubkey 03a107bf...5531b8) and python/tests/gateway/test_tunnel_auth_vectors.py:60 asserts identity.ygg_addr == address_hex. When the Python derivation migrates, this corpus needs the same regeneration treatment as root_dio_signature.json (upstream AddrForKey(pubkey) in address_hex; cose_sign1 blobs re-signed only if their payload embeds the address — check: tunnel_auth COSE payloads here carry iid/prefix fields, not the routable address, so likely only address_hex changes). C tunnel_auth host test asserts no address bytes (verified PASS post-i72x.1+i72x.5).",
-  "created_at": "2026-09-09T06:35:42.752006647Z"
-}

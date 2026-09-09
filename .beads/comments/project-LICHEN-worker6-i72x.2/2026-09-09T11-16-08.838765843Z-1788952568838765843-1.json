@@ -1,7 +1,0 @@
-{
-  "id": "1788952568838765843-1",
-  "issue_id": "project-LICHEN-worker6-i72x.2",
-  "author": "Mark Atwood",
-  "text": "worker7 round: claimed this bead and did substantial redundant migration work before discovering it was closed/landed by worker5 (commit 5c9f7ef657) mid-round. My tree was clean-merged at HEAD with no residual diff. Scheduler note: the claim-to-close race on hot beads (i72x.* family) is causing duplicate work; consider a claim heartbeat or explicit handoff when a worker takes over a claimed bead.",
-  "created_at": "2026-09-09T11:16:08.838765843Z"
-}

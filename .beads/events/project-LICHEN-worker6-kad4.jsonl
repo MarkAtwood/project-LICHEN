@@ -1,5 +1,0 @@
-{"id":"01a08572-8cd5-7f0e-894f-7464ee505e60","issue_id":"project-LICHEN-worker6-kad4","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-09T09:14:32.021987912Z"}
-{"id":"01a08572-8cda-707e-b06e-fea24834faa7","issue_id":"project-LICHEN-worker6-kad4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: yggdrasil","created_at":"2026-09-09T09:14:32.02603309Z"}
-{"id":"01a08572-8cde-7357-95ff-53651544904b","issue_id":"project-LICHEN-worker6-kad4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: rust","created_at":"2026-09-09T09:14:32.03022069Z"}
-{"id":"01a08572-8ce2-74a2-8159-1c75e8019288","issue_id":"project-LICHEN-worker6-kad4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: zephyr","created_at":"2026-09-09T09:14:32.034304959Z"}
-{"id":"01a08572-8ce6-7665-b5f1-589a4380de5b","issue_id":"project-LICHEN-worker6-kad4","event_type":"label_added","actor":"Mark Atwood","comment":"Added label: needs-linux","created_at":"2026-09-09T09:14:32.038420947Z"}

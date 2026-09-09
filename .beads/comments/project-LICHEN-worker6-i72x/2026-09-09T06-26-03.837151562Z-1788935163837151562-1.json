@@ -1,7 +1,0 @@
-{
-  "id": "1788935163837151562-1",
-  "issue_id": "project-LICHEN-worker6-i72x",
-  "author": "Mark Atwood",
-  "text": "Decomposed 2026-09-09 (worker8): .1 C derivation migration (unblocked), .2 Rust lichen-core derivation (blocked on beads-worker-2 q6ko.1/q6ko.2 merge), .3 hybrid.rs ULA classification removal (unblocked), .4 remaining ULA routing sweep (after .3). Python slice = existing bead yjg6 (commented there; no twin). Upstream algorithm reference + SubnetForKey vector fetched from yggdrasil-go@422836ee and recorded in child descriptions.",
-  "created_at": "2026-09-09T06:26:03.837151562Z"
-}

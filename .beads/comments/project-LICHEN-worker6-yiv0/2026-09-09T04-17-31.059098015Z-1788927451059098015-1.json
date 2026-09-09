@@ -1,7 +1,0 @@
-{
-  "id": "1788927451059098015-1",
-  "issue_id": "project-LICHEN-worker6-yiv0",
-  "author": "Mark Atwood",
-  "text": "Verified at HEAD (worker-7, heft): all four scope items already landed on main — (1) conflict arm returns CoapResponse::conflict (0x89) with own_claim_cose envelope or empty fallback (resources.rs:2152-2155, commits 620ca2bcd3 + 49e460a240); (2) fully_occupied asserts 0x45 insufficient_free_slots (resources.rs:2999); (3) slot_state_write_failure retry traced: default Interleaved slot_map gateway_count=1 spans all 60 slots so claim [40] genuinely overlaps, all-zero IID wins tiebreak, asserts 0x89 (resources.rs:3115-3124); (4) both conflict assertions updated to 0x89 (resources.rs:2931, :3169). Note: landed code correctly uses 0x89 (= 4.09); the bead text's '0x93' was a code-arithmetic error. cargo test -p lichen-gateway --lib: 270 passed, 0 failed. Residue found and filed separately: two comments (resources.rs:2139-2142, :3244-3246) still claim Rust emits a present zero-length Content-Format option — false since 49e460a240 made the wire byte-identical to C.",
-  "created_at": "2026-09-09T04:17:31.059098015Z"
-}

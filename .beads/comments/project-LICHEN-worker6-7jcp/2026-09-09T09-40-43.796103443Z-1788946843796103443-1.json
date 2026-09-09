@@ -1,7 +1,0 @@
-{
-  "id": "1788946843796103443-1",
-  "issue_id": "project-LICHEN-worker6-7jcp",
-  "author": "Mark Atwood",
-  "text": "Observed on main @ 93692f19fe (during beads-worker-3 merge resolution, 2026-09-09): 'cargo test -p lichen-gateway --test tunnel_auth_vectors' fails 3 wired_egress tests — wired_egress_drops_source_outside_granted_prefix, wired_egress_forwards_authorized_tunnel, wired_egress_matches_grant_under_distinct_root_via_own_iid_route_evidence — all with grant POST rejected 4.03 (expected 2.04) at tunnel_auth_vectors.rs:741/778. Verified independent of the merge: zero code diff vs HEAD. Python equivalents (python/tests/gateway/test_tunnel_auth*.py) pass 19/1 skipped. Possibly related to ff2618fd73 own-IID route evidence checks; likely falls under this migration bead's scope.",
-  "created_at": "2026-09-09T09:40:43.796103443Z"
-}

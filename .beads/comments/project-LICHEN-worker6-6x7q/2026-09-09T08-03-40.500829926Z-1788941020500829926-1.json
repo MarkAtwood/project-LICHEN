@@ -1,7 +1,0 @@
-{
-  "id": "1788941020500829926-1",
-  "issue_id": "project-LICHEN-worker6-6x7q",
-  "author": "Mark Atwood",
-  "text": "Cannot reproduce on beads-worker-2: bd emits no corrupt-issue warnings here and .beads/issues/project-LICHEN-worker6-cdwm.json parses clean in this checkout (verified). The corrupt flatfiles are local to the worker7 checkout (per bead text) — repair must happen there; files need human inspection before deletion per workspace no-delete default. Not actionable from this worker.",
-  "created_at": "2026-09-09T08:03:40.500829926Z"
-}

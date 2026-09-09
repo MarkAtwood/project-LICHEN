@@ -1,7 +1,0 @@
-{
-  "id": "1788949222849466612-1",
-  "issue_id": "project-LICHEN-worker6-lptm",
-  "author": "Mark Atwood",
-  "text": "Worker4 (7xyr tunnel_auth migration): TunnelAuthorizationTable.receive_post binds the root via oscore_sender_iid == root_iid where root_iid is the SHA-512 IID (_pubkey_to_iid(root_pubkey)); the lptm fix for python/src/lichen/coap/resources/tunnel_auth.py:107 must supply that same IID form (e.g. from the OSCORE sender kid or a pinned pubkey-\u003eIID lookup), not remote.packed[8:]. Tests tests/coap/resources/test_tunnel_auth_resource.py::{test_valid_authorization_post_returns_changed,test_replay_is_denied_and_table_grows_once} are xfail(non-strict) pending that fix — remove the marks when it lands.",
-  "created_at": "2026-09-09T10:20:22.849466612Z"
-}

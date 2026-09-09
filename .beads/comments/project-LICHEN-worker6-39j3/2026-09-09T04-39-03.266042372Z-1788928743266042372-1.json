@@ -1,7 +1,0 @@
-{
-  "id": "1788928743266042372-1",
-  "issue_id": "project-LICHEN-worker6-39j3",
-  "author": "Mark Atwood",
-  "text": "Duplicate of project-LICHEN-worker6-ksr9 (identical title and 9-item description, minor typo differences only). All 9 items fixed under ksr9 in spec/appendix-x509-cert-profile.md + spec/06-security.md §8.13.2; see ksr9 close reason for the full fix and 3x codereview record. Superseding this twin.",
-  "created_at": "2026-09-09T04:39:03.266042372Z"
-}

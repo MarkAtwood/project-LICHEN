@@ -1,7 +1,0 @@
-{
-  "id": "1788928433761211582-1",
-  "issue_id": "project-LICHEN-worker6-er31",
-  "author": "Mark Atwood",
-  "text": "VERIFIED FIXED in tree (worker4, 2026-09-09): Rust receive_frame_with_receipt (rust/lichen-link/src/link_layer.rs:1176-1180) enforces the destination filter via wire_is_for_local (:610-629) after authentication and before replay/pinning — exact Python parity incl. ordering comment at :1171-1175. Semantics: AddrMode::None/Elided accepted (Elided check deferred to node stack per ponytail comment :617-622), Extended requires exact local EUI-64 match, Short rejected; failure returns LinkRxError::NotForUs (:51, display :91). The bead's contract question (a) is what the tree implements. Not claiming (one-P2-per-round rule) — safe to close on this evidence.",
-  "created_at": "2026-09-09T04:33:53.761211582Z"
-}
