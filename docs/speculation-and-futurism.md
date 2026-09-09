@@ -165,8 +165,20 @@ transmitter on one frequency within that window exceed it; hashing fragments
 across 128 indices does not prove compliant use. Fixed rendezvous/control traffic
 needs particular care.
 Section 15.247(h) restricts coordination between hopping systems for the express
-purpose of avoiding simultaneous frequency occupancy; CCP coordination needs
-operating-basis review, not an assumption that all distributed scheduling is legal.
+purpose of avoiding simultaneous frequency occupancy. The rule targets a specific
+abuse: two devices programmed to "hop" in a coordinated pattern that keeps both
+on the same channel simultaneously, getting FHSS power limits without actually
+spreading their interference. The text prohibits designing hopping systems to
+coordinate "for the express purpose of concentrating their transmissions on a
+reduced number of channels." CCP coordinates for the opposite purpose —
+*deconcentrating* transmissions across channels and avoiding collisions — but
+the rule's text makes coordination itself suspect regardless of intent. Proving
+that cooperative scheduling reduces rather than concentrates interference
+requires measured RF evidence and possibly formal legal interpretation, not an
+assumption that all distributed scheduling is legal. This is a core argument for
+the experimental-license-first approach: demonstrate the actual per-channel
+occupancy and victim-receiver impact, then make the case that CCP coordination
+falls outside the abuse 15.247(h) was designed to prevent.
 
 Standalone DTS under 15.247(a)(2) instead needs at least **500 kHz measured
 6 dB bandwidth**, plus its other limits. Nominal 125 kHz CSS is not automatically
@@ -411,6 +423,27 @@ target, not proof that tuning/acquisition or authenticated framing fits.
   300 ms" alone; the measured-bandwidth, spacing, synchronization, equal-use,
   aggregate occupancy, coordination, and grant checks above still apply
 
+**Interference physics:** By every metric that matters to a victim receiver,
+microfrag is *less* interfering than the already-legal baseline. A single SF10
+packet occupies one 125 kHz channel for 2.3 seconds continuously. Microfrag
+spreads the same energy across dozens of channels at ≤300 ms each: lower
+per-channel duty, lower spectral density at any single frequency, more
+noise-like from any one observer's perspective. The aggregate radiated energy is
+higher (parity and repeated preambles), but it is distributed across the band
+rather than concentrated on one victim channel. This is a strong measured-evidence
+argument for an experimental license or eventual waiver petition — the proposed
+mode demonstrably causes less single-channel interference than the mode it
+replaces. The regulatory obstacle is not physics but category: FCC 15.247's
+hopping rules were written around 1980s–90s modulation definitions, and the
+question the rules ask is not "does this interfere less?" but "does this match
+the procedural checklist for FHSS/DTS/hybrid?" The 15.247(h) coordination
+restriction is particularly ill-fitted: it was designed to prevent systems from
+colluding to evade the hopping requirement, but its text makes cooperative
+scheduling — the behavior that *reduces* interference — legally suspect. Measured
+RF evidence comparing per-channel occupancy, spectral density, and victim-receiver
+impact between baseline single-channel LoRa and microfrag hopping would be the
+core of any Part 5 experimental application or subsequent rulemaking petition.
+
 **300 ms frame-fit check:** For BW 125 kHz, CR 4/5, preamble 8, explicit header,
 CRC, and applicable LDRO, the Semtech formula gives these upper bounds. They
 include each packet's PHY overhead in its airtime but **do not reserve time for
@@ -483,6 +516,20 @@ latency, even if that costs 3x/4x airtime and latency. Idle periods may make tha
 trade attractive, but airtime still consumes regulated occupancy, shared spectrum,
 receiver opportunities, and energy. It is not free, and parity cannot bypass
 CCP admission or displace a committed receive/control window.
+
+**User experience:** The burst model changes how transmission *feels*. Under
+baseline SCHC fragmentation, each fragment waits for its own CCP slot — the TX
+LED blinks once, goes dark for seconds, blinks again. The user cannot tell
+whether a transfer is progressing, stalled, or failed. Under microfrag, pressing
+send immediately starts a continuous burst of channel hops: the radio is visibly
+active for the entire block duration. The user sees the equivalent of a progress
+bar rather than intermittent blinks separated by silence. Completion is a single
+atomic event — one burst, one result — rather than a fragile chain where any
+dropped fragment triggers opaque retransmit negotiation. This also aligns with
+the protocol: the burst occupies a single receiver rendezvous window, so sender
+and receiver stay committed to the same time context. With SCHC ACK-on-Error,
+if the receiver sleeps or moves between fragments across separate slots, the
+session can break silently.
 
 The experimental stack would be: IPv6 -> SCHC compression -> microfragmentation
 with outer FEC -> ordinary LoRa channel hops. One fragmentation layer, not two,
