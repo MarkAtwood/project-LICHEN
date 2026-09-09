@@ -722,10 +722,16 @@ Each node enforces per-source SOS rate limits:
 | Max SOS per hour | 3 | Limits intentional abuse |
 | Burst allowance | 2 | Allows rapid updates to same SOS |
 
-Nodes track (source IID, SOS count, last SOS uptime). Rate limiting uses
-monotonic uptime rather than wall-clock time to ensure enforcement works even
-when wall-clock is unavailable. An SOS from a node that exceeds rate limits
-is dropped and logged but not relayed.
+Nodes track (origin IPv6 source address, SOS count, last SOS uptime). The key
+is the full 16-byte IPv6 source, which relays MUST preserve end-to-end
+(04-network.md §6.3.2) — the same accounting key as the §6.3.3 broadcast relay
+budget, whose spoofed-source ceiling applies here as well. Under mesh-wide
+flooding the source is the upstream primary /128, which embeds no IID
+(04-network.md §6.2); implementations MUST NOT attempt IID extraction. The key
+is also the node identifier carried in the alert payload (§18.4.2). Rate
+limiting uses monotonic uptime rather than wall-clock time to ensure
+enforcement works even when wall-clock is unavailable. An SOS from a node
+that exceeds rate limits is dropped and logged but not relayed.
 
 **Soft Blacklist (RECOMMENDED):**
 
