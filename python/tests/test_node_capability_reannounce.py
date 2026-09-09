@@ -217,3 +217,26 @@ def test_node_capabilities_bitmask_validation() -> None:
 
 def test_capability_enum_matches_config_mask() -> None:
     assert int(Capability.EGRESS | Capability.PREFIX_DELEGATION) == MAX_CAPABILITY_BITMASK
+
+
+@pytest.mark.asyncio
+async def test_root_flap_announces_only_to_current_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bead v89j: a multi-transition drain announces once, to the newest root.
+
+    Flapping A -> B -> A before the drain leaves two ledger entries; only the
+    final membership (A) is the current root and may receive the announcement.
+    """
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    assert node.dodag is not None
+    # Poison -> foreign B -> poison -> back to A: two transitions queued.
+    node.dodag.process_dio(_dio(DODAG_A, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_B, rank=INFINITE_RANK), P1, link_etx=1.0)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    await node._reannounce_capabilities_to_new_root()
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    assert message.code == POST

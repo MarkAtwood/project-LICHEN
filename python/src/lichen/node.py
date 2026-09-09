@@ -1183,9 +1183,10 @@ class Node:
         """spec 8.12: re-announce capabilities to the new root after a root change.
 
         Drains the DODAG's recorded DODAGID membership transitions and POSTs
-        a COSE_Sign1 capability announcement to each new root's
+        a COSE_Sign1 capability announcement to the newest drained root's
         /.well-known/capability-announce over the SCHC/UDP/CoAP mesh
-        transport (fire-and-forget NON; the root's 2.04/4.03 is not awaited).
+        transport (earlier entries are superseded flap history; fire-and-forget
+        NON, the root's 2.04/4.03 is not awaited).
         A node configured with no capabilities has nothing the root needs
         and stays silent.
         """
@@ -1193,35 +1194,38 @@ class Node:
             return
         changes = self.dodag.take_root_changes()
         capabilities = self.config.node_capabilities
-        if capabilities == 0:
+        if not changes or capabilities == 0:
             return
-        for _previous, new_root in changes:
-            self._capability_announce_seq += 1
-            self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
-            announcement = create_capability_announcement(
-                self.identity,
-                capabilities,
-                prefix=b"",
-                prefix_len=0,
-                expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
-                seq=self._capability_announce_seq,
-            )
-            request = Message(
-                code=POST,
-                _mtype=NON,
-                _mid=self._capability_announce_mid,
-                uri=f"coap://[{new_root}]/.well-known/capability-announce",
-                payload=announcement.to_cose_sign1(),
-            )
-            ipv6_bytes = wrap_coap(
-                yggdrasil_address(self.identity.pubkey),
-                new_root,
-                cast(bytes, request.encode()),
-                src_port=DEFAULT_COAP_PORT,
-                dst_port=DEFAULT_COAP_PORT,
-            )
-            if not await self.send(ipv6_bytes):
-                logger.warning("capability re-announce to new root %s routed to drop", new_root)
+        # Only the newest DODAGID is the current root (bead v89j): earlier
+        # entries are superseded flap history, and announcing to them would
+        # disclose capabilities to DODAGs the node no longer belongs to.
+        _previous, new_root = changes[-1]
+        self._capability_announce_seq += 1
+        self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
+        announcement = create_capability_announcement(
+            self.identity,
+            capabilities,
+            prefix=b"",
+            prefix_len=0,
+            expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
+            seq=self._capability_announce_seq,
+        )
+        request = Message(
+            code=POST,
+            _mtype=NON,
+            _mid=self._capability_announce_mid,
+            uri=f"coap://[{new_root}]/.well-known/capability-announce",
+            payload=announcement.to_cose_sign1(),
+        )
+        ipv6_bytes = wrap_coap(
+            yggdrasil_address(self.identity.pubkey),
+            new_root,
+            cast(bytes, request.encode()),
+            src_port=DEFAULT_COAP_PORT,
+            dst_port=DEFAULT_COAP_PORT,
+        )
+        if not await self.send(ipv6_bytes):
+            logger.warning("capability re-announce to new root %s routed to drop", new_root)
 
     async def _transmit_peer_schc(
         self,
