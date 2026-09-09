@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-wfmx",
+  "title": "RootSeqCache saturation holds new roots at unsigned Baseline indefinitely (residual of r2oz fix)",
+  "description": "Residual design risk noted in r2oz security review, NOT introduced by that fix: a persistent on-link adversary who keeps the 16-entry RootSeqCache (lichen-rpl/src/root_seq_cache.rs MAX_ROOT_SEQ_KEYS) saturated holds every NEW genuine DODAG's signed DIOs at Baseline indefinitely, so per-root signed replay tracking never engages for them. Pre-r2oz this was a hard DoS; post-r2oz it is parity with unsigned-DIO processing (which the adversary could emit anyway), so no guarantee is weakened — but the 0x17 anti-replay guarantee never activates for new roots under sustained saturation. Candidate mitigations (design tradeoff, needs spec input): larger table, eviction by verification recency/preference, operator-visible saturation metric, or persistent high-water marks (intersects eebl's storage work). File under spec 06 8.10.1 hardening.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T16:40:49.786248222Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T16:40:49.786248222Z",
+  "labels": [
+    "rust",
+    "networking",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-wfmx",
+      "depends_on_id": "project-LICHEN-worker6-r2oz",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T16:40:49.911360903Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
