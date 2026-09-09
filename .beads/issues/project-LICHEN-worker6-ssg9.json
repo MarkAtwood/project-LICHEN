@@ -1,0 +1,17 @@
+{
+  "id": "project-LICHEN-worker6-ssg9",
+  "title": "router.rs:721 direct-child anti-spoof gate silently dead post-migration",
+  "description": "Discovered from the lost project-LICHEN-worker6-i72x.2 (worker8). rust/lichen-node/src/routing/router.rs:718-724: the DAO direct-child check 'parents.any(|p| same_interface(p, \u0026self.dodag_id)) \u0026\u0026 !same_interface(\u0026authenticated_sender, \u0026packet_source) =\u003e reject' compares advertised DAO parents against the DODAG ID (root's routable /128) by low-half (same_interface = a[8..]==b[8..]). Production DAOs name parents in link-local form (see sibling bead on the two parent forms), so the first condition never fires post-migration and the relay-spoofing rejection is silently dead. No test covers it (all DAO tests pass target==authenticated_sender). The node.rs sibling gate (:604) was fixed in the i72x.2 rollup by matching BOTH own forms (link-local IID half + exact routable via dao_manager.node_address()); the router.rs gate cannot do that for the ROOT's identity - the node has no key-\u003eIID binding for the root. Needs the same design decision as the parent-forms bead: likely the DODAG should learn the root's link-local binding at authenticated DIO acceptance (frame.sender().pubkey -\u003e routable == dodag_id -\u003e remember root IID). C parity audit needed.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:17:03.984709863Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:17:03.984709863Z",
+  "labels": [
+    "yggdrasil",
+    "rust",
+    "rpl"
+  ]
+}

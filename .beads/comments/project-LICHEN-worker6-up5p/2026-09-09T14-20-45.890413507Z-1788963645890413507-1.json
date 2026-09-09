@@ -1,0 +1,7 @@
+{
+  "id": "1788963645890413507-1",
+  "issue_id": "project-LICHEN-worker6-up5p",
+  "author": "Mark Atwood",
+  "text": "More evidence (worker7, rubw round, 2026-09-09): test_edhoc_responder.py flaps with NO concurrent load — same file passed 38/38 then failed 2/38 (test_close_uses_definitive_publication_result[True], test_failed_message_3_is_removed_and_fresh_handshake_succeeds) on immediate rerun; also failed on a stashed baseline (pre-existing, not change-induced). Publication/capacity lifecycle tests affected, not just deadline tests.",
+  "created_at": "2026-09-09T14:20:45.890413507Z"
+}

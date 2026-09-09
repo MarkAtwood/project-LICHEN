@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-qr3c",
+  "title": "lichen-rpl address_assignment: authenticated_identity_derives_wire_eui test red post-AddrForKey",
+  "description": "Observed on beads-worker-7 @ b3626a253c (worker7 sync), isolated target dir: cargo test -p lichen-rpl --lib — 252 passed, 1 failed: address_assignment::tests::authenticated_identity_derives_wire_eui_from_key_not_native_origin_bytes (address_assignment.rs:1346). Test name says 'not_native_origin_bytes' — likely pins the rejected SHA-512 native origin derivation for the EUI-64 wire mapping. Same post-AddrForKey expectation-rot family as kd0p (lichen-gateway, fixed) and this round's rubw. Not caused by rubw (zero Rust changes in that diff). FIX: pin expectation to upstream AddrForKey-derived bytes per the pinned yggdrasil_address.json oracle; check eui64_from_authenticated_identity's actual profile first — if the FUNCTION is still native while siblings moved to upstream, the function (not the test) is the bug.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T14:20:49.723609367Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T14:20:49.723609367Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ]
+}
