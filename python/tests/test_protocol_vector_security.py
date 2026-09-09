@@ -494,10 +494,13 @@ def test_root_vectors_bind_dodagid_and_use_independent_signatures() -> None:
         )
         assert (binding and signature) is vector["expected_valid"]
 
-    expected = ReferenceIdentity.from_seed(bytes(32)).ygg_addr
+    # DIO DODAGID is a root routable address: upstream AddrForKey, not the
+    # rejected SHA-512 native profile (spec/decisions.jsonl
+    # upstream-yggdrasil-addressing). Independent oracle, not the impl.
+    expected_upstream = _upstream_addr_for_key(ReferenceIdentity.from_seed(bytes(32)).pubkey)
     for vector in _load("rpl_messages.json")["vectors"]:
         if vector["type"] == "dio":
-            assert IPv6Address(vector["fields"]["dodag_id"]).packed == expected
+            assert IPv6Address(vector["fields"]["dodag_id"]).packed == expected_upstream
 
 
 def _rule7_valid(source: IPv6Address, destination: IPv6Address) -> bool:
