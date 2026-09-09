@@ -1228,7 +1228,9 @@ Private keys MUST be stored in:
 
 Receivers track per-sender (epoch, seqnum) state with a 32-entry sliding
 window for out-of-order tolerance. Epoch persisted to flash; increments
-on wrap or reboot. See 02-physical-link.md:4.4 (and draft-lichen-link-01.md:5.2).
+on reboot. The epoch space is never wrapped: exhaustion at 255 fails
+closed and requires identity rotation. See 02-physical-link.md:4.4
+(and draft-lichen-link-01.md:5.2).
 
 **Time-Assisted Replay Rejection (GNSS-Enabled):**
 
