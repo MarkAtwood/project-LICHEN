@@ -172,6 +172,15 @@ SCHC_RETRANSMISSION_TIMEOUT_SECONDS = 10.0
 CAPABILITY_ANNOUNCE_TTL_S = 3600
 # Spec 8.12 capability bits: 0 = egress, 1 = prefix-delegation (2-7 reserved).
 MAX_CAPABILITY_BITMASK = 0b11
+# Bounded recovery for the spec-8.12 re-announce MUST (bead 2kem): a single
+# lost/jammed NON datagram must not permanently drop the announcement, so a
+# failed initial send is retried at most this many times in total.
+CAPABILITY_ANNOUNCE_MAX_ATTEMPTS = 3
+# Retry delay ceiling; each attempt sleeps uniform(delay/2, delay) — root
+# changes are mesh-wide events, so a fixed delay would synchronize every
+# retrying node onto the same collision windows (same rationale as
+# scheduled_send's jitter) and make retries precisely predictable to a jammer.
+CAPABILITY_ANNOUNCE_RETRY_DELAY_S = 5.0
 
 
 def _validated_receive_timeout_ms(value: object) -> int:
@@ -357,6 +366,11 @@ class Node:
     # message ID is a per-node 16-bit counter for the NON POSTs.
     _capability_announce_seq: int = field(default=0, init=False, repr=False)
     _capability_announce_mid: int = field(default=0, init=False, repr=False)
+    # Bounded retry tasks for failed re-announces (bead 2kem); cancelled in
+    # _cleanup_started so stop() never leaves a pending retry behind.
+    _capability_retry_tasks: set[asyncio.Task[None]] = field(
+        default_factory=set, init=False, repr=False
+    )
 
     def __setattr__(self, name: str, value: object) -> None:
         if name == "peer_db" and isinstance(self.__dict__.get("peer_db"), MappingProxyType):
@@ -386,7 +400,8 @@ class Node:
         if self.config.rreq_jitter_min_ms > self.config.rreq_jitter_max_ms:
             raise ValueError("rreq_jitter_min_ms must not exceed rreq_jitter_max_ms")
         if (
-            type(self.config.node_capabilities) is not int
+            not isinstance(self.config.node_capabilities, int)
+            or isinstance(self.config.node_capabilities, bool)
             or not 0 <= self.config.node_capabilities <= MAX_CAPABILITY_BITMASK
         ):
             raise ValueError(
@@ -813,14 +828,34 @@ class Node:
         self._receive_task = None
         if task is not None:
             task.cancel()
-            results = await asyncio.gather(task, return_exceptions=True)
-            result = results[0]
-            if (
-                error is None
-                and isinstance(result, BaseException)
-                and not isinstance(result, asyncio.CancelledError)
-            ):
-                error = result
+            try:
+                results = await asyncio.gather(task, return_exceptions=True)
+            except BaseException as exc:
+                # Cancellation of cleanup itself must not skip the retry-task
+                # cancellation below (codereview 2kem round 2).
+                if error is None:
+                    error = exc
+            else:
+                result = results[0]
+                if (
+                    error is None
+                    and isinstance(result, BaseException)
+                    and not isinstance(result, asyncio.CancelledError)
+                ):
+                    error = result
+        # After the receive task is dead: it is the sole production caller of
+        # the re-announce path, so cancelling retries here (not earlier) closes
+        # the window where a DIO processed mid-cleanup schedules a retry that
+        # would outlive stop() (codereview 2kem).
+        try:
+            retry_tasks = tuple(self._capability_retry_tasks)
+            for retry_task in retry_tasks:
+                retry_task.cancel()
+            if retry_tasks:
+                await asyncio.gather(*retry_tasks, return_exceptions=True)
+        except BaseException as exc:
+            if error is None:
+                error = exc
         return error
 
     async def _cancel_fragment_sessions(self) -> None:
@@ -1184,9 +1219,10 @@ class Node:
         """spec 8.12: re-announce capabilities to the new root after a root change.
 
         Drains the DODAG's recorded DODAGID membership transitions and POSTs
-        a COSE_Sign1 capability announcement to each new root's
+        a COSE_Sign1 capability announcement to the newest drained root's
         /.well-known/capability-announce over the SCHC/UDP/CoAP mesh
-        transport (fire-and-forget NON; the root's 2.04/4.03 is not awaited).
+        transport (earlier entries are superseded flap history; fire-and-forget
+        NON, the root's 2.04/4.03 is not awaited).
         A node configured with no capabilities has nothing the root needs
         and stays silent.
         """
@@ -1194,35 +1230,127 @@ class Node:
             return
         changes = self.dodag.take_root_changes()
         capabilities = self.config.node_capabilities
-        if capabilities == 0:
+        if not changes or capabilities == 0:
             return
-        for _previous, new_root in changes:
-            self._capability_announce_seq += 1
-            self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
-            announcement = create_capability_announcement(
-                self.identity,
-                capabilities,
-                prefix=b"",
-                prefix_len=0,
-                expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
-                seq=self._capability_announce_seq,
-            )
-            request = Message(
-                code=POST,
-                _mtype=NON,
-                _mid=self._capability_announce_mid,
-                uri=f"coap://[{new_root}]/.well-known/capability-announce",
-                payload=announcement.to_cose_sign1(),
-            )
-            ipv6_bytes = wrap_coap(
-                yggdrasil_address(self.identity.pubkey),
+        # Only the newest DODAGID is the current root (bead v89j): earlier
+        # entries are superseded flap history, and announcing to them would
+        # disclose capabilities to DODAGs the node no longer belongs to.
+        _previous, new_root = changes[-1]
+        try:
+            sent = await self._send_capability_announcement(new_root, capabilities)
+        except Exception:
+            # Fire-and-forget (bead 5e79): a build/sign/encode/send failure
+            # must not escape into the receive loop as an opaque traceback.
+            logger.exception("capability re-announce to new root %s failed", new_root)
+            sent = False
+        if not sent:
+            logger.warning(
+                "capability re-announce to new root %s failed; scheduling bounded retry",
                 new_root,
-                cast(bytes, request.encode()),
-                src_port=DEFAULT_COAP_PORT,
-                dst_port=DEFAULT_COAP_PORT,
             )
-            if not await self.send(ipv6_bytes):
-                logger.warning("capability re-announce to new root %s routed to drop", new_root)
+            self._schedule_capability_retry(new_root, capabilities)
+
+    async def _send_capability_announcement(self, new_root: IPv6Address, capabilities: int) -> bool:
+        """Build and send one signed capability announcement datagram.
+
+        Returns True when the datagram was accepted by the link layer, False
+        when the route resolved to drop. Raises on build/encode errors; each
+        attempt consumes one seq/MID increment (gaps are harmless — the
+        root's replay floor is monotonic).
+        """
+        self._capability_announce_seq += 1
+        self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
+        announcement = create_capability_announcement(
+            self.identity,
+            capabilities,
+            prefix=b"",
+            prefix_len=0,
+            expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
+            seq=self._capability_announce_seq,
+        )
+        request = Message(
+            code=POST,
+            _mtype=NON,
+            _mid=self._capability_announce_mid,
+            uri=f"coap://[{new_root}]/.well-known/capability-announce",
+            payload=announcement.to_cose_sign1(),
+        )
+        ipv6_bytes = wrap_coap(
+            yggdrasil_address(self.identity.pubkey),
+            new_root,
+            cast(bytes, request.encode()),
+            src_port=DEFAULT_COAP_PORT,
+            dst_port=DEFAULT_COAP_PORT,
+        )
+        return await self.send(ipv6_bytes)
+
+    def _schedule_capability_retry(self, new_root: IPv6Address, capabilities: int) -> None:
+        """Schedule the bounded retry task for a failed re-announce (bead 2kem).
+
+        One pending retry at a time: a newly scheduled retry supersedes any
+        earlier one (its target is stale by construction — the node only
+        re-announces to the newest root, bead v89j).
+        """
+        for pending in tuple(self._capability_retry_tasks):
+            pending.cancel()
+            # Synchronous discard keeps the one-pending invariant observable
+            # immediately (the done callback also discards, but only after a
+            # loop turn).
+            self._capability_retry_tasks.discard(pending)
+        try:
+            task = asyncio.get_running_loop().create_task(
+                self._retry_capability_announcement(new_root, capabilities)
+            )
+        except RuntimeError:
+            # No running loop (e.g. unit-test direct call outside asyncio):
+            # the retry is best-effort on top of the drained ledger, so a
+            # failed schedule degrades to the old one-shot behavior.
+            logger.warning(
+                "capability re-announce retry to %s not scheduled: no running loop", new_root
+            )
+            return
+        self._capability_retry_tasks.add(task)
+        task.add_done_callback(self._capability_retry_tasks.discard)
+
+    async def _retry_capability_announcement(
+        self, new_root: IPv6Address, capabilities: int
+    ) -> None:
+        """Re-send the announcement up to the attempt bound, then give up.
+
+        The target is re-validated before every attempt: if membership has
+        moved to a different DODAGID since the retry was scheduled, the
+        target root is stale and announcing to it would disclose capabilities
+        to a DODAG the node no longer belongs to (bead v89j).
+        """
+        for attempt in range(2, CAPABILITY_ANNOUNCE_MAX_ATTEMPTS + 1):
+            await asyncio.sleep(
+                random.uniform(
+                    CAPABILITY_ANNOUNCE_RETRY_DELAY_S / 2, CAPABILITY_ANNOUNCE_RETRY_DELAY_S
+                )
+            )
+            if self.dodag is None or self.dodag.dodag_id != new_root:
+                logger.info(
+                    "capability re-announce retry to %s aborted: no longer the current root",
+                    new_root,
+                )
+                return
+            try:
+                if await self._send_capability_announcement(new_root, capabilities):
+                    logger.info(
+                        "capability re-announce to %s succeeded on attempt %d",
+                        new_root,
+                        attempt,
+                    )
+                    return
+            except Exception:
+                logger.exception(
+                    "capability re-announce attempt %d to %s failed", attempt, new_root
+                )
+        logger.warning(
+            "capability re-announce to new root %s abandoned after %d attempts",
+            new_root,
+            CAPABILITY_ANNOUNCE_MAX_ATTEMPTS,
+        )
 
     async def _transmit_peer_schc(
         self,
