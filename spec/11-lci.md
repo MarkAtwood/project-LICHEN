@@ -288,10 +288,14 @@ Content-Format: application/cbor
   "pubkey_fingerprint": "SHA256:xY7...",
   "addrs": {
     "link_local": "fe80::0211:22ff:fe33:4455",
-    "primary": "0200:1234:5678:9abc::0211:22ff:fe33:4455"
+    "primary": "0200:1234:5678:9abc:c557:1e9a:04b2:77d0"
   }
 }
 ```
+
+The `primary` lower half above is illustrative: a real primary address is
+upstream `AddrForKey(pubkey)` bit-packed bytes (§17.4, spec/04-network.md §6.2)
+and never contains the EUI-64/IID.
 
 #### 17.5.3. Status Resources
 
@@ -418,7 +422,7 @@ Content-Format: application/cbor
 {
   "routes": [
     {
-      "prefix": "0200:1234:5678:9abc::/64",
+      "prefix": "0300:1234:5678:9abc::/64",
       "via": "fe80::1234:5678:9abc:def0",
       "metric": 512,
       "lifetime_s": 1800

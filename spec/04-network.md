@@ -298,8 +298,12 @@ Assignment methods (no central authority required):
 
 Collision resolution: If DAD detects duplicate, regenerate and retry.
 
-Short addresses are mesh-local; they compress the IID for routing efficiency
-but the full key-derived IID remains the stable identifier for security (key binding per 06-security).
+Short addresses are mesh-local; they compress the IID for link-layer
+forwarding efficiency but the full key-derived IID remains the stable
+link-local identifier for security (key binding per 06-security). Because the
+routable /128 is upstream `AddrForKey` and embeds no IID (§6.2), a short
+address can stand in only for the link-local IID, never for the primary
+address.
 
 ---
 
