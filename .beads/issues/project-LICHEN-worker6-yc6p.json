@@ -2,17 +2,17 @@
   "id": "project-LICHEN-worker6-yc6p",
   "title": "ci.yml: add permissions: contents: read (rust jobs run with default GITHUB_TOKEN)",
   "description": "Security review finding (mbzu pass-2): ci.yml has no permissions block, so all jobs run with the repo-default GITHUB_TOKEN; rust-build-test/clippy/all-features compile cloned external content (oscore-fork build.rs executes). Workflow never writes via the token. Fix: permissions: contents: read at workflow top level (or per-job) in ci.yml; check other workflows too.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "task",
   "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T07:30:00.772442795Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-09-09T13:36:54.36659637Z",
+  "updated_at": "2026-09-09T13:44:46.831207402Z",
   "started_at": "2026-09-09T13:36:54.36659637Z",
-  "lease_expires_at": "2026-09-09T13:41:54.36659637Z",
-  "heartbeat_at": "2026-09-09T13:36:54.36659637Z",
+  "closed_at": "2026-09-09T13:44:46.831207402Z",
+  "close_reason": "Fixed: added top-level 'permissions: contents: read' to all 7 workflows that lacked it (ci, coverity, ec2-arm64, fuzz, mutation, renode-firmware, renode), matching interop.yml's existing pattern. Checked every workflow first: no GITHUB_TOKEN/GH_TOKEN/gh-CLI writes anywhere, no OIDC id-token consumers (renode-firmware uses static AWS keys), caches/artifacts use the runtime token (unaffected). All 8 YAML files parse. 3x delegated codereview (kimi-k3): all PASS. Two pre-existing observations filed separately: tvw5 (fork-PR self-hosted runner gate) and bttv (renode-firmware failure-bead never persisted).",
   "labels": [
     "rust"
   ]

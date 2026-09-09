@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-r1ur",
   "title": "Regen authenticated_schc_dio.json DODAGIDs to upstream AddrForKey + flip line-361 binding oracle",
   "description": "Discovered-from 1p2r.4. test/vectors/authenticated_schc_dio.json DIO DODAGIDs still encode the rejected native SHA-512 profile; python/tests/test_protocol_vector_security.py:361 (test_authenticated_schc_dio_construction_has_independent_security_checks) checks root binding dio[8:24] == _addr_for_key(public_key) against it (stale-but-green per 1p2r comment: validates the rejected profile). Fix: regen corpus DODAGIDs to upstream AddrForKey (oracle: pinned yggdrasil_address.json anchor / independent reimplementation), flip the binding check to _upstream_addr_for_key, then delete the legacy native _addr_for_key helper if no consumers remain (root_authorization.json flip is the other last consumer — coordinate with its bead).",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T11:59:44.80593104Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T13:31:03.859520216Z",
+  "updated_at": "2026-09-09T13:43:07.38389754Z",
+  "closed_at": "2026-09-09T13:43:07.38389754Z",
+  "close_reason": "authenticated_schc_dio.json regenerated with upstream AddrForKey DODAGIDs: root 0202d5e2368077b55775c4a91be4b124 (seed 64..96), victim 020065d69900d522d59cd60100918984 (seed 128..160); 9 peer vectors byte-identical, 2 root vectors changed (re-signed inside wire by generator). Oracle stack: generator-local upstream helper vs test-side _upstream_addr_for_key vs production yggdrasil_address vs main's independent upstream fixture (all 11 vectors byte-identical to rust/lichen-schc/tests/authenticated_schc_dio_upstream.json from 48c64007d1) — four-way agreement. Line-361 binding check flipped to upstream oracle; native _addr_for_key now has exactly one consumer left (root_authorization.json loop, own bead exists). Restored missing upstream fixture from main (fixes pre-existing Rust red; lichen-schc authenticated_dio_vectors 5/5 pass). Python consumers: 199 passed incl. previously-red test_authenticated_schc_dio_vectors. Generator --check byte-exact (verified in safe scratch dir). Pre-existing host-env failures (3 freshness tests: atomic_json rejects group-writable dirs on this Linux host, incl. hash_32 staleness content failure on untouched corpus) verified identical on HEAD worktree — not from this change; filed no bead (host group config, not code). 3x codereview via kimi-k3: correctness PASS (hand-verified ICMPv6 checksums), security PASS (+1 docstring finding filed+fixed as glg4 tail batch), edge PASS after retry (pinned-anchor fuzz of helper edges). Note: _upstream_addr_for_key docstring updated (glg4). Also restored .beads/last-touched to HEAD after an accidental stash-pop touched it (worker stashes intact).",
   "labels": [
     "vectors",
     "yggdrasil"
