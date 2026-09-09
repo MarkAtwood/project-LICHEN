@@ -35,13 +35,6 @@ from lichen.ipv6.addr import (
 SPEC_EUI64 = bytes([0x10, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0])
 SPEC_IID = bytes([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0])
 VECTORS = Path(__file__).resolve().parents[3] / "test" / "vectors" / "ipv6-addresses.json"
-LEGACY_NATIVE = (
-    Path(__file__).resolve().parents[3]
-    / "test"
-    / "vectors"
-    / "legacy"
-    / "ipv6_addresses_native_sha512.json"
-)
 
 
 def test_eui64_to_iid_flips_ul_bit() -> None:
@@ -128,12 +121,11 @@ def test_key_derived_address_helpers_reject_noncanonical_public_keys(pubkey) -> 
 
 def test_key_derived_ipv6_vectors_match_production_boundaries() -> None:
     document = json.loads(VECTORS.read_text())
-    # QUARANTINE-INTEGRITY pin: the primary/native address fields encode the
-    # REJECTED SHA-512 native profile and live in the legacy corpus
-    # (test/vectors/legacy/README.md); delete when the upstream AddrForKey
-    # migration lands.
-    legacy = json.loads(LEGACY_NATIVE.read_text())
-    legacy_by_name = {v["name"]: v for v in legacy["vectors"]}
+    # The routable primary address is upstream Yggdrasil AddrForKey (see
+    # test_yggdrasil_address_vectors.py); the rejected SHA-512 native profile
+    # and its quarantined corpus are no longer consumed here. This test pins
+    # only the IID/link-local derivations, which are unchanged by the
+    # migration.
     key_vectors = [
         vector for vector in document["vectors"]
         if vector["profile"] == "key_derived_identity"
@@ -141,9 +133,6 @@ def test_key_derived_ipv6_vectors_match_production_boundaries() -> None:
     assert len(key_vectors) >= 5
     for vector in key_vectors:
         public_key = bytes.fromhex(vector["pubkey"])
-        legacy_vector = legacy_by_name[vector["name"]]
-        assert native_address_from_pubkey(public_key).packed.hex() == legacy_vector["native_packed"]
-        assert str(native_address_from_pubkey(public_key)) == legacy_vector["native"]
         assert link_local_from_pubkey(public_key).packed.hex() == vector["link_local_packed"]
 
 
