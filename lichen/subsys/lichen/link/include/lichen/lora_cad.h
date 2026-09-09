@@ -14,12 +14,11 @@
 extern "C" {
 #endif
 
-typedef int (*lichen_lora_cad_fn)(const struct device *dev,
-				  k_timeout_t timeout, bool *busy);
-
 /** CAD completion delivered from the driver's own context (work/IRQ):
  * busy reflects the CadDetected verdict; status is 0 or a negative errno
- * (e.g. -ETIMEDOUT when CAD never completed, fail-closed). */
+ * (e.g. -ETIMEDOUT when CAD never completed, fail-closed). The callback
+ * runs under the CAD registry mutex (thread/work context only) and must
+ * never block — record the verdict and signal/return. */
 typedef void (*lichen_lora_cad_done_fn)(const struct device *dev, bool busy,
 					int status, void *user_data);
 
@@ -28,26 +27,22 @@ typedef void (*lichen_lora_cad_done_fn)(const struct device *dev, bool busy,
 typedef int (*lichen_lora_cad_start_fn)(const struct device *dev,
 					k_timeout_t timeout);
 
-/** Register a CAD callback for a concrete LoRa device. */
-int lichen_lora_cad_register(const struct device *dev,
-			     lichen_lora_cad_fn callback);
-
-/** Run CAD through the registered LICHEN extension; errors fail closed. */
-int lichen_lora_cad_run(const struct device *dev, k_timeout_t timeout,
-		       bool *busy);
-
-/** Register a driver-side async CAD start (lr1110-class hardware). */
+/** Register a device for CAD, optionally with a driver-side async CAD
+ * start (lr1110-class hardware). A NULL start selects the emulated
+ * clear-channel completion (sim/renode/loopback have no hardware CAD). */
 int lichen_lora_cad_start_register(const struct device *dev,
 				   lichen_lora_cad_start_fn start);
 
 /** Begin CAD without blocking; the verdict arrives via done() from the
  * driver's completion context. Fails closed (-EBUSY in flight, -ENOTSUP
- * without a registered starter, -EINVAL on bad args). */
+ * without a registered device, -EINVAL on bad args). */
 int lichen_lora_cad_start(const struct device *dev, k_timeout_t timeout,
 			  lichen_lora_cad_done_fn done, void *user_data);
 
 /** Driver completion entry point: deliver the CAD verdict exactly once
- * (no-op if no CAD is in flight for this device). */
+ * (no-op if no CAD is in flight for this device). The consumer callback
+ * is invoked under the CAD registry mutex; call from thread/work context
+ * only. */
 void lichen_lora_cad_done(const struct device *dev, bool busy, int status);
 
 #ifdef __cplusplus

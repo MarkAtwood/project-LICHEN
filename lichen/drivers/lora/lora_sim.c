@@ -458,11 +458,6 @@ out:
 
 /* --- device init -------------------------------------------------------- */
 
-#if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lora_sim_cad(const struct device *dev, k_timeout_t timeout,
-			 bool *busy);
-#endif
-
 static int lora_sim_init(const struct device *dev)
 {
 	struct lora_sim_data *data = dev->data;
@@ -488,7 +483,8 @@ static int lora_sim_init(const struct device *dev)
 		return rc;
 	}
 #if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-	rc = lichen_lora_cad_register(dev, lora_sim_cad);
+	/* No hardware CAD: emulated clear-channel completion (lora_cad). */
+	rc = lichen_lora_cad_start_register(dev, NULL);
 	if (rc < 0) {
 		zsock_close(data->fd);
 		data->fd = -1;
@@ -497,20 +493,6 @@ static int lora_sim_init(const struct device *dev)
 #endif
 	return 0;
 }
-
-#if IS_ENABLED(CONFIG_LICHEN_LORA_L2)
-static int lora_sim_cad(const struct device *dev, k_timeout_t timeout,
-			 bool *busy)
-{
-	ARG_UNUSED(dev);
-	ARG_UNUSED(timeout);
-	if (busy == NULL) {
-		return -EINVAL;
-	}
-	*busy = false; /* simulator assumes clear for testing */
-	return 0;
-}
-#endif
 
 static int lora_sim_send_async(const struct device *dev, uint8_t *data,
 			       uint32_t data_len, struct k_poll_signal *async)
