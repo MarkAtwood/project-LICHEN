@@ -1,0 +1,80 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.1.4.1",
+  "title": "Prove full CCP2 control-exchange feasibility",
+  "description": "Scope: exact-wire size tables in /home/mark/Developer/lichen-workspace/project-LICHEN/spec/02b-ccp-receiver-aware.md and arithmetic evidence in /home/mark/Developer/lichen-workspace/project-LICHEN/docs/ccp-conformance.md. Independently count complete bootstrap/control records and required responses, including dispatch, identities, signatures and outer framing, then calculate setup/CCA/retune/response/guard occupation and emitted airtime against declared source-backed constraints. Reuse project-LICHEN-worker6-qe1t sizing evidence if the chosen carrier uses authenticated DIOs, and preserve project-LICHEN-worker6-ljgs as the existing mandatory human sizing prerequisite. Do not drop signatures, extend frame caps, enable an operating basis, or run RF experiments to obtain a fit.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Perform a bounded documentary/arithmetic feasibility check, not a new transport implementation. Preserve the existing ljgs human blocker rather than replacing or bypassing it with an arithmetic result. Unverified operating authority remains unverified; representation capability alone does not activate a profile.",
+  "acceptance_criteria": "Minimum and maximum records have independently checked byte totals and complete-operation timing. Frame-body length, complete PHY length, slot occupation and legal emitted-airtime accounting are distinguished. Applicable bandwidth/hopset/occupancy constraints are cited from the authority handoffs. Any chosen carrier that exceeds its real frame/control budget is explicitly disabled or resolved within the exact contract; no oversized DIO assumption is hidden. The existing ljgs human gate must be resolved through its authorized workflow before this contract is declared ready. The 2346 ms SF10 frame-plus-guard anchor is not credited with free setup or response time.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:09.653441854Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:20.685730748Z",
+  "external_ref": "lichen-decomp-hpc8-deep:wire.10",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "wire.10",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "d7a99b997dc40b0c87afe1b5adc267d8ce41214e70cfcebce73c9b6f17082f48"
+  },
+  "labels": [
+    "airtime",
+    "ccp",
+    "conformance",
+    "decomp-hpc8-deep",
+    "wire"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.4.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.4",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:09.782449741Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.4.1",
+      "depends_on_id": "project-LICHEN-worker6-ljgs",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:55.808253671Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.4.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:56.901429189Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.4.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:58.159242891Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.4.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:59.574635034Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.4.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:00.810657502Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

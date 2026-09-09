@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.12.2.1",
+  "title": "Test airtime aliases across plan and SF changes",
+  "description": "Scope: physical-resource alias and reconfiguration cases in the admission supplement under /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/. Independently enumerate plan indices/versions that map to the same frequency or regulatory group, then apply SF change, retuning, plan change and multiple logical-account operations while restrictions remain active. Expected accounting follows actual physical resources and source-backed group rules, not production account keys. Do not change regional-plan policy or introduce a new production tracker in this fixture leaf.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Use explicit alias maps and finite emission histories. Preserve global plan indices while accounting by physical resource; this is not permission to renumber a receiver's advertised set.",
+  "acceptance_criteria": "An independent resource-identity table and interval ledger show that aliased indices share frequency restrictions and grouped frequencies share applicable group ceilings. Reconfiguration cannot reset or duplicate an allowance or count duplicate frequencies as additional available hop channels. Distinct physical resources remain distinct where the operating basis requires it. Exact expected totals/rejections survive schema validation and are listed for actual Python/Rust/C path consumers.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 90,
+  "created_at": "2026-09-09T06:24:43.746303962Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:15.586706597Z",
+  "external_ref": "lichen-decomp-hpc8-deep:admission.04",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "admission.04",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "6a8a62bd1f77ade6e8ad42f66fb09467a64b3f004e457e3d270eb081f03b168b"
+  },
+  "labels": [
+    "accounting",
+    "ccp",
+    "channel-plan",
+    "decomp-hpc8-deep",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:43.88622032Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:17.902499499Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

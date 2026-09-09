@@ -1,0 +1,96 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.3.2",
+  "title": "Rust: gateway integration qualification gate",
+  "description": "Qualify the joined gateway behavior delivered by rust.14.capabilities and rust.14.admission through rust/lichen-gateway/src/gateway.rs, rust/lichen-gateway/src/capability_announcements.rs and rust/lichen-hal/src/lib.rs. Verify published capabilities agree with actual admitted radio resources, and that all gateway traffic classes traverse the common CCP2 path. This task owns focused integration qualification and its evidence gate, not a second implementation of capability publication or admission.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "rust.14.capabilities owns gateway capability extraction/publication and rust.14.admission owns traffic-class wiring. Reuse their outputs, the rust.13 runtime and existing deterministic HAL tests rather than add a benchmark framework or duplicate policy. vectors.13 remains a separately owned consumer, not a reverse prerequisite. Preserve radio-owned identity, upstream Yggdrasil, baseline SCHC/security, best-effort custody and deferred portability; audited OSCORE/EDHOC stays untouched. Qualification here is software-only, with no hardware ports, RF transmission or authorization claim.",
+  "acceptance_criteria": "Use independent vectors.04/.08/.09 traces through production gateway publication, allocation, traffic dispatch and HAL calls. Cover one radio, multiple RX/one TX, restricted passbands, demodulator exhaustion, overlapping roots, control returns, expiry and mixed traffic sharing an account. Assert advertised capabilities cannot overstate executable resources and rejected operations never transmit. Preserve failed/zero-delivery results as failures with separate loss/latency/airtime evidence. Run rust/lichen-gateway/tests and relevant node integration suites using checked-in manifest features, plus shared-crate no_std checks, fmt and clippy. Unsupported hardware remains not assessed.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:28.537045646Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:10.164756847Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rust.14",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rust.14",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "f293f9837e42c090f2a485545ff6deb4db6f70aefd029f889ebd1414fe44de86"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.3",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:28.686255935Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:16.95170292Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:18.007091352Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:19.046734259Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:20.169482516Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.12",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:21.200734654Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:22.235181902Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.3.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:23.382597028Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

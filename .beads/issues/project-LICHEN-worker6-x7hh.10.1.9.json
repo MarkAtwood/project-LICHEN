@@ -1,0 +1,80 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.10.1.9",
+  "title": "Add required Python CCP2 parser property checks",
+  "description": "Scope: a focused CCP2 property/negative-seed test module under /home/mark/Developer/lichen-workspace/project-LICHEN/python/tests/ and scoped job wiring in /home/mark/Developer/lichen-workspace/project-LICHEN/.github/workflows/fuzz.yml or the existing interop workflow. Exercise completed production parser/adoption paths using independently classified malformed wire seeds and bounded mutations. Validate rejection/nonmutation and resource bounds with reproducible seeds. Do not use production encoding as the sole oracle, rely on a name filter that selects zero tests, or introduce new fuzz infrastructure when installed tooling suffices.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse Hypothesis/pytest and existing CI conventions. This CI leaf waits for python.14 and the real Python consumer rather than a coarse implementation parent.",
+  "acceptance_criteria": "Committed independent negative seeds execute on required PR checks with a nonzero case count; bounded property tests record reproducible seeds/examples. Invalid lengths, counts, masks, duplicate fields, revisions and freshness inputs cannot produce TX or alter adopted state. Known-valid corpus inputs retain their independent expected results. Crashes or failed properties fail the CCP2 gate; missing tests and skipped selection cannot pass. Minimized failures retain exact reproduction input and command.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:36.544912089Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:16.662212385Z",
+  "external_ref": "lichen-decomp-hpc8-deep:ci.11",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "ci.11",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "6ef7c73d5134bca6bafa36650bf524b57111079c4c8e9f5f5dbebff1e37150b6"
+  },
+  "labels": [
+    "ccp",
+    "ci",
+    "decomp-hpc8-deep",
+    "fuzz",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:36.700604957Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:11.440792944Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:12.489413861Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:13.5474402Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.3.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:14.621341668Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.3.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:33:15.649479152Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

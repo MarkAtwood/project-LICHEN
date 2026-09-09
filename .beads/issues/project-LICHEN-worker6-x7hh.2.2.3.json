@@ -1,0 +1,56 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.2.2.3",
+  "title": "Specify bandwidth and hopset constraints",
+  "description": "Specify source-backed bandwidth, spacing and eligible-hopset constraints as inputs for admission.01 and production ledger work. Distinguish nominal bandwidth from measured 20 dB or 6 dB bandwidth, physical frequencies from indices, and ordinary FHSS branches from DTS and hybrid conditions.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Deliver a declarative constraint and example-case handoff, not a second admission implementation or production-derived oracle. admission.01 should consume this output through a coordinator-wired dependency; this producer must not depend on its consumer. No RF or regulatory classification is authorized.",
+  "acceptance_criteria": "Independent tables cover the below-250-kHz FHSS 49/50-channel boundary, the separate at-least-250-kHz branch, spacing, duplicate frequencies, band edges and masks reducing eligibility. Each expected result has a rule citation and declared operating-basis assumption. Unknown measured bandwidth cannot become a pass.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:50.312323123Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:07.69514397Z",
+  "external_ref": "lichen-decomp-hpc8-deep:authority.05",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "authority.05",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "8822cddf679c40e6d113438765a79b4b721d1957fb09c2b700985168d60a87f1"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "handoff",
+    "independent-oracle",
+    "regulatory",
+    "research"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:50.480680875Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:29.424818947Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.2.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:30.438176301Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

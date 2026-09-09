@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.4.2.2",
+  "title": "Specify callsign and station-control evidence",
+  "description": "Specify identification and control evidence for the human-reviewed emission/station classification. Define candidate authorized callsign methods, identification timing during and at the end of communication, transmitting-channel treatment, overload behavior, shutdown and recovery. Account for identification airtime and control opportunities.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Documentary design only, not permission to transmit identification or select a callsign. Do not infer that identification on a convenient common channel satisfies every hopping case. No station-control implementation or external coordination occurs here.",
+  "acceptance_criteria": "Independent rule-derived event tables cover identification deadlines, interrupted exchanges, restart and loss of control. EUI-64 or IPv6 is never a callsign substitute. Explicitly identify method choices still requiring human approval and provide testable inputs to narrow.08 and narrow.11.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:17.324458548Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:25.034202574Z",
+  "external_ref": "lichen-decomp-hpc8-deep:narrow.07",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "narrow.07",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "7d4565d68999315fbdbd78422dde8e008108b6a4c73fb625fbd0c171c484a39b"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "experimental",
+    "regulatory",
+    "research",
+    "review-input"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:17.463442929Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:02.393126999Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

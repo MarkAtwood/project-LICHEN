@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-bw88",
+  "title": "Migrate 06-security.md §8.5/§8.7 + 03-addressing.md normative derivation blocks to upstream AddrForKey (spec half of i72x.6)",
+  "description": "04-network.md §12.1 is now migrated (98kb). The remaining normative SHA-512-native blocks: (1) spec/06-security.md §8.5 step 3 '02xx addr = [0x02] + SHA-512(pubkey)[0:7] + IID (lower 64 bits bind key to address; prevents substitution)' and its step-5 TOFU mention; (2) §8.7 step 3 same formula + 'MUST: lower 64 bits == IID to bind key to address and prevent substitution attacks'; (3) spec/03-addressing.md line ~22 'the lower 64 bits of the node's key-derived native 0200::/8 /128, constructed as addr = [0x02] + SHA-512(pubkey)[0:7] + IID'. All must become upstream AddrForKey (bit-invert/count/pack; no hashing; IID embedding withdrawn) with the key-binding story retold as self-derivation + TOFU, matching the rewritten 04-network.md §12.1. SEQUENCING: these blocks cite the legacy corpus and are referenced by 09-packets-timing.md (DODAGID == AddrForKey already landed) — coordinate with i72x.6 (shared corpus regeneration) and i72x.2 (Rust impl) so prose, corpus, and code land consistently; do not half-migrate citations of test/vectors/legacy/. Sweep afterwards for residual 'lower 64 bits == IID' claims elsewhere in spec/.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:51:51.627509937Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:30:46.8495813Z",
+  "started_at": "2026-09-09T08:20:20.972167542Z",
+  "closed_at": "2026-09-09T08:30:46.8495813Z",
+  "close_reason": "DONE (worker2). Migrated the remaining normative SHA-512-native derivation blocks to upstream AddrForKey: (1) 06-security.md §8.5 step 3 + §8.7 step 3 now 'addr = AddrForKey(pubkey)' byte-for-byte (normative algorithm deferred to 04-network.md §12.1; no hashing, no embedded IID); the 'lower 64 bits == IID' substitution MUST withdrawn, retold as self-derivation (address IS AddrForKey(pubkey), recomputable by any pubkey holder) + TOFU. (2) §8.5 step 2 + §8.7 step 2: IID re-scoped to link-local identity; the false 'the two schemes agree only on leading 0x02' claim corrected (IID has no 0x02 byte; IID and primary share no bytes). (3) Both §8.5/§8.7 intro sentences: 'native address' -\u003e 'address (upstream Yggdrasil AddrForKey)'; legacy-corpus references now point at the pinned upstream oracle yggdrasil_address.json. (4) 03-addressing.md:22 normative claim + :30 cross-ref migrated and de-'native'd. (5) Fixed 4 review findings: §8.7 BR-provisioning 'IID/02xx/Yggdrasil addr' duality collapsed (they are the same address now); 04-network.md §12.2 stale 'still shows the rejected derivation' note corrected (this IS the migration); §6.2 REJECTED primary half DROPPED (retention condition satisfied by this diff) — block now shows only the live IID + an AddrForKey pointer. Follow-up: 5muj (P2 — §8.11 route_hash 'hop IID from address' unimplementable post-migration; needs a design decision: hash hop addresses vs derive IID from pinned pubkeys; affects tunnel_auth C/Rust/vectors). 3x codereview delegated to kimi-k3: pass1 correctness PASS (all formulas/cross-refs/oracle verified; substitution story coherent); pass2 security 2 findings (route_hash gap -\u003e 5muj; stale §12.2 note -\u003e fixed); pass3 edge-cases 4 findings (2 stale migration notes -\u003e fixed; §8.7 duality -\u003e fixed; 'the two agree' antecedent -\u003e fixed). Residual 'SHA-512(pubkey)[0:7]+IID' appears only inside §12.2's explicitly REJECTED-labeled note — correct.",
+  "labels": [
+    "spec",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-bw88",
+      "depends_on_id": "project-LICHEN-worker6-98kb",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T07:51:51.762531304Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

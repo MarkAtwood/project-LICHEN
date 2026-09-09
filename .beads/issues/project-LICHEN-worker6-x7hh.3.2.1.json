@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.3.2.1",
+  "title": "Implement bounded experimental reassembly",
+  "description": "Implement only the human-approved experimental decoder/reassembly scope on its selected backend. Enforce identity/block/generation binding, duplicate handling, bounded per-peer and global storage, decode-work limits, expiry and abort. Release recovered data only after the approved whole-block authentication succeeds.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Require affirmative microfrag.06 approval, not merely a closed decision. Keep the code isolated and default-off; do not rewrite baseline SCHC or OSCORE. Hardware/ports and on-air tests are excluded from this implementation unit.",
+  "acceptance_criteria": "Independent microfrag.07 vectors and state traces cover mixed-block injection, oversized counts, corruption, exhausted memory/work budgets, timeout and restart. Fuzz the parser and state transitions. Report measured offline resource bounds and rejected cases without relaxing authentication to obtain success.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:07.249178183Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:26.307567182Z",
+  "external_ref": "lichen-decomp-hpc8-deep:microfrag.08",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "microfrag.08",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "7a96137ba4980340bfb3152a8d413fdada607c6e24e13d32d677128ecfc382ff"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "experimental",
+    "fec",
+    "implementation",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:07.466649522Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:21.100536245Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:22.146691728Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.3.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.3.1.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:23.200832301Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

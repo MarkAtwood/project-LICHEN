@@ -1,0 +1,72 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.1.2.2",
+  "title": "Specify receiver commitments and next-hop binding",
+  "description": "Scope: receiver-commitment encoding in /home/mark/Developer/lichen-workspace/project-LICHEN/spec/02b-ccp-receiver-aware.md and the relevant Announce ownership references in /home/mark/Developer/lichen-workspace/project-LICHEN/spec/05-routing.md. Specify exact receiver identity, context, permitted global indices, home channel, profile, RX intervals, validity, and explicit versus derived-home semantics. Distinguish relayed Announce origin from the actual next-hop receiver. Deliver worked bindings and unavailable-channel cases. Do not add a per-packet reservation protocol or silently fall back to CH0 data.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Receiver availability is authoritative. Reuse standing Announce/rendezvous mechanisms where they fit the finalized envelope, while keeping next-hop metadata distinct from origin identity.",
+  "acceptance_criteria": "The wire contract uniquely binds a receiver's authenticated commitment to its plan and generation. Independent examples cover sender/receiver identity differences, forwarded origins, expired commitments, sparse sets, and a home channel the sender cannot use. Such a sender suppresses TX or follows a separately valid discovery path, never rehashing its local subset. The reused hash specification is checked against CCP2 rather than trusted from an old issue status.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 120,
+  "created_at": "2026-09-09T06:24:06.112910989Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:21.324557522Z",
+  "external_ref": "lichen-decomp-hpc8-deep:wire.05",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "wire.05",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "bade49b901fc58090452d2d5a192187becc366a6b492974e0a40ee3ee9149127"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "rendezvous",
+    "spec",
+    "wire"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:06.278068521Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:36.781645629Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:37.852596182Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:38.972065286Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "depends_on_id": "project-LICHEN-worker6-xzen",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:40.062709262Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

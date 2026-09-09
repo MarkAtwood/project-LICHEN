@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-i72x.6",
+  "title": "Regenerate root_dio_signature.json + migrate Python derivation (upstream DODAGIDs)",
+  "description": "Discovered from i72x.1 (worker7). test/vectors/root_dio_signature.json (15 vectors, 2 identities) embeds native-profile DODAGIDs (02203df4... / 02b2b649...) and signatures over them. After i72x.1, C root_dio_sig.c binds DODAGID to the UPSTREAM AddrForKey, so the shared JSON is stale for C — but Rust root_sig.rs (i72x.2, blocked-on-merge) and Python root_dio_signature.py still derive native, so the JSON cannot regenerate until BOTH migrate. i72x.1 regenerated only the C test's LOCAL copies in lichen/tests/rpl_root_sig/src/main.c (oracles: upstream address_test.go anchor for DODAGID bytes; Python schnorr48 for signatures). Sequencing: (1) land i72x.2 (Rust); (2) create + land the MISSING Python migration child (python/src/lichen/crypto/identity.py:206-234 yggdrasil_address -\u003e upstream AddrForKey/SubnetForKey, mirror pinned vectors); (3) regenerate root_dio_signature.json with Python create_root_dio_signature + upstream DODAGIDs (the exact procedure worker7 used for the C test: same seeds, same fields, dodag_id=AddrForKey(pubkey), re-sign); (4) resync the C test's local copies to the JSON and flip Rust/Python root-sig tests to the new corpus. NOTE the wire-level consequence until then: C and Rust/Python root-sig receivers derive DIFFERENT expected DODAGIDs for the same root key (tracked migration gap, same class as slot-claim's coordinated landing).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:28:31.565825873Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T06:28:31.565825873Z",
+  "labels": [
+    "yggdrasil",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-i72x.6",
+      "depends_on_id": "project-LICHEN-worker6-i72x",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:28:31.715154223Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

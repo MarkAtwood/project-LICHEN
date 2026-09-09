@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-utw0",
   "title": "b7z9.35(b): C gateway — register tunnel_auth CoAP resource + app wiring",
   "description": "Child of b7z9.35. lichen/subsys/lichen/gateway/tunnel_auth.c (receive 327-367, decapsulate 416-457) compiles into the gateway subsys but has no coap_server resource registration and no app reference (grep lichen/apps/ = 0 hits). Wire: register the /.well-known/tunnel-auth resource in the C coap_server, reference the auth check from the gateway app egress path, and confirm the permit()/deny() literal 204/403 ints (tunnel_auth.c:24-33) map to CoAP 2.04 (0x44)/4.03 (0x83) at the wiring boundary. Host tests under lichen/tests/tunnel_auth.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T20:49:36.339539538Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-31T20:49:36.339539538Z",
+  "updated_at": "2026-09-09T06:53:06.998913972Z",
+  "closed_at": "2026-09-09T06:53:06.998913972Z",
+  "close_reason": "Already landed by worker-8 (commits ce47b0db12 'wire tunnel_auth coap and egress' + 60eca1c83f 'egress tunnel-auth gate on mesh-to-internet forwarding', merged 199ac8a3fe). Verified on main: (1) coap_server resource registered — coap_server.c:562-620 tunnel_auth_post + COAP_RESOURCE_DEFINE behind CONFIG_LICHEN_TUNNEL_AUTH, with BUILD_ASSERTs pinning 2.04=0x44/4.03=0x83 mapping via lichen_tunnel_auth_coap_code(); (2) gateway app wiring — main.c:202 lichen_gateway_tunnel_auth_init + main.c:789-834 resource/adapter; (3) egress gate — forwarding.c:198 calls lichen_tunnel_auth_decapsulate on the mesh-to-external path (single-hop SRH, fail-closed ponytail note for multi-hop). Host tests lichen/tests/tunnel_auth build+pass (1/1). No code changes needed; bead was stale.",
   "labels": [
     "gateway"
   ],

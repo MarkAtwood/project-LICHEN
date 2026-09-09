@@ -1,0 +1,96 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.1.9",
+  "title": "Rust: bounded physical-resource airtime ledger",
+  "description": "Extend rust/lichen-core/src/duty_cycle.rs with bounded physical-frequency/regulatory-group accounting and provisioned operating-basis enforcement alongside the adaptive ceiling. Charge complete control, data, forwarding and retry emissions without duplicating allowances across index aliases, plan changes or SF changes. Remote advertisements may narrow but never expand local frequency, power, profile or budget permissions.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse DutyCycleTracker and fixed-memory patterns; do not replace them with a parallel accounting framework or silently clear full state. Authority dependencies provide explicit constraints, not RF approval. Admission-test leaves are downstream consumers, not prerequisites. Preserve baseline SCHC/security, identity ownership, best-effort custody and deferred portability. No hardware access or operating-basis fallback is authorized.",
+  "acceptance_criteria": "Use vectors.09's independent interval ledger and constraints supplied by authority.02/.05/.06. Test legal/adaptive ceiling precedence, rolling overlap boundaries, all TX classes, alias aggregation, plan/SF retuning, remote expansion rejection and fail-closed record-capacity exhaustion. Under a configured narrow-FHSS ledger, reject a second 250 ms emission on the same frequency inside 20 s. Extend core duty-cycle tests and production API regressions; run tests, core no_std checks, fmt and clippy.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:24.975769269Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:10.72604956Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rust.10",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rust.10",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "b2932f2aa28f8b669fddd2f366c986d8d9fb261fd2d3607163641faff637224a"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:25.13473705Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:47.495611997Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:48.545792041Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:49.556139001Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:50.543096382Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:51.554300537Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:52.623323434Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:53.675408219Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

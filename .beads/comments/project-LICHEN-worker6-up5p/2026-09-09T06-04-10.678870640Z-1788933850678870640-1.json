@@ -1,0 +1,7 @@
+{
+  "id": "1788933850678870640-1",
+  "issue_id": "project-LICHEN-worker6-up5p",
+  "author": "Mark Atwood",
+  "text": "worker6-yoyy triage (2026-09-09, worker4): additional edhoc_responder flake observed with DISTINCT mechanism from the wall-clock set. test_restart_m1_is_rejected_and_original_can_complete FAILED once in full-suite ordering (announce+coap+gateway, 2510 passed) but PASSED standalone (1/1) and with its whole file alone (38/38). This is a test-isolation/ordering leak (shared session/TOFU state across tests), not a wall-clock deadline issue. Same fix family (fake clock / per-test state isolation) likely applies, but flagging that the flake surface is broader than the 4 named tests and includes an ordering-dependent case.",
+  "created_at": "2026-09-09T06:04:10.67887064Z"
+}

@@ -1,0 +1,82 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.9.1.4",
+  "title": "C: bounded grants and committed receive intervals",
+  "description": "Extend lichen/subsys/lichen/link/tdma.c and its link.h/link_ctx.h public state with bounded owner-qualified grants and receive commitments. TX eligibility requires the sender's valid grant and the next-hop receiver's compatible opportunity on the same physical channel/profile. Prevent half-duplex overlaps and preemption of committed RX by newly queued urgent traffic. Candidate hashes and anonymous slot maps remain nonexclusive.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "This is b7z9.22's C CCP2 integration slice. Reuse oamc's closed slot-map gate/writer and existing validators rather than reimplement them or add an old-roll-up edge. Keep source, headers and shims synchronized, with no dynamic hot-path allocation. No per-packet reservation exchange, universal link ACK, queue expansion, custody-policy change, identity migration or OSCORE/EDHOC modification is introduced.",
+  "acceptance_criteria": "Consume vectors.04/.08 through production C eligibility with independent event traces. Cover wrong/absent grant owner, missing receiver RX, RX/TX overlap, expiry, channel/profile mismatch, queued SOS during RX, zero slots and persistent equal hash residues through wrap. Extend lichen/tests/ccp_slot_map and lichen/tests/tdma_guard_budget, keeping assertions and ASan/UBSan active. Run scoped C lint and header/native compile checks on local Linux/heft using the manifest-qualified toolchain; no device access.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:33.863253251Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:09.435272478Z",
+  "external_ref": "lichen-decomp-hpc8-deep:zephyr.04",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "zephyr.04",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "23caccd1200766db5de4039024aed677f94e72b5cc22c995e91828035081c980"
+  },
+  "labels": [
+    "c",
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "needs-linux",
+    "no-hardware",
+    "production",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:34.022272358Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:54.799964275Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:55.868174513Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:57.023841243Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:58.141608635Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:59.221452058Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

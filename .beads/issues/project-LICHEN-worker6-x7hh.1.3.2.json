@@ -1,0 +1,98 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.1.3.2",
+  "title": "Freeze CCP2 authentication and adoption rejection",
+  "description": "Scope: authenticated transcripts, parsing and adoption rules in /home/mark/Developer/lichen-workspace/project-LICHEN/spec/02b-ccp-receiver-aware.md and its exact-wire material. Specify signature placement and covered bytes for every schedule, receiver, grant and capability object; required, duplicate, unknown and reserved-field handling; replay/freshness ownership; retired signers; and atomic state adoption. Independently enumerate field-substitution and malformed-object outcomes. Preserve existing signature domains and the audited OSCORE boundary; no implementation or new cryptographic primitive is requested.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.\n\nDecomposition review scope: Include the directional observation report specified by wire.07 in the field-by-field authenticated-transcript and parser-rejection contract. Cover wrong observer/direction/context, duplicate or noncanonical fields, unknown/stale evidence and spliced report content before schedule/metric adoption.",
+  "design": "Define deterministic parse/validation/adoption boundaries before implementations exist. Reuse existing authentication primitives and domains; changing scheduling semantics requires the explicit wire discriminator, not spare legacy bits.",
+  "acceptance_criteria": "A complete field-to-transcript coverage table and rejection table exist. Worked cases reject wrong authority, cross-context splicing, stale generation, bad signatures, duplicate required fields, unknown incompatible modes and truncation. Rejected objects do not update clock binding, schedule, grants, RX commitments or recovery counters. Link replay epoch, schedule freshness and SFN remain separate. The reused xzen preimage contract is verified against the adopted CCP2 policy.\n\nAdditional required acceptance: Authentication coverage and rejection tables explicitly include directional observation reports as well as schedule, commitment, grant and hardware-capability objects before wire.12 freezes the contract.",
+  "notes": "Task-definition amendment after independent decomposition review. This commissions future work only; nothing was implemented or tested. The initial CLI-input fingerprint is retained as initial_scope_sha256; current native Beads fields are authoritative. Do not rerun the seed applicator over this reviewed amendment.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 180,
+  "created_at": "2026-09-09T06:24:08.760761684Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:20.851528358Z",
+  "external_ref": "lichen-decomp-hpc8-deep:wire.09",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "decomposition_review": "scope-handoff-correction",
+    "initial_scope_sha256": "f3880722fa904aae0b102854df6c0ddcabd5d9f99661df6b6e10c6e87dde5e0a",
+    "leaf_key": "wire.09",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1"
+  },
+  "labels": [
+    "authentication",
+    "ccp",
+    "decomp-hpc8-deep",
+    "spec",
+    "wire"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:08.915754839Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:47.959116268Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:49.097031641Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:50.226661731Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:51.30660298Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:52.386748271Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:53.547281202Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.3.2",
+      "depends_on_id": "project-LICHEN-worker6-xzen",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:54.656999512Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,7 +1,0 @@
-{
-  "id": "1788925581031023740-1",
-  "issue_id": "project-LICHEN-worker6-b7z9.88.2",
-  "author": "Mark Atwood",
-  "text": "Investigated (worker5): NOT stale, but blocked, not a quick fix. The producer IS implemented on main: produce_root_dio_signature_option (root_sig.rs:439), wired into root DIO TX (transmit.rs:64-96, feature-gated), router call site (router.rs:934), feature 'root-sig' in Cargo.toml:15, and a round-trip test (tests.rs:2936). TWO blockers remain: (1) 'cargo check/test -p lichen-node --features root-sig' FAILS — but the errors are at router.rs:1070/1081 (raw [u8;16] vs Ipv6Addr in add_route/lookup), which is ow1e.111's newtype migration (still OPEN), NOT the root-sig producer; the feature path just happens to compile that broken code. (2) The round-trip test is #[ignore]-blocked on qe1t (frame sizing, an open protocol decision). Leftover debug eprintln! at transmit.rs:116 violates no-dead-code. Completion requires ow1e.111's newtype fix + a qe1t sizing ruling — both out of scope for a leaf. Releasing for a worker after those land.",
-  "created_at": "2026-09-09T03:46:21.03102374Z"
-}

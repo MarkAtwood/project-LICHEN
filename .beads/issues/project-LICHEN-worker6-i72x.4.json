@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-i72x.4",
+  "title": "Sweep remaining ULA routing behavior beyond hybrid.rs",
+  "description": "Follow-up sweep after i72x.3 (hybrid.rs). Remaining ULA routing/classification sites found by grep: python/src/lichen/routing/router.py:412 (_ULA_PREFIX=fd00::/8 in classifier), rust/lichen-node/src/node.rs:196,526 (dst_bytes[0]==0xfd branches), :612-613 + :750-756 (is_ula_or_global gate), :828 (ula_addr fixture), :1266 (fd00 delegated_prefix), rust/lichen-gateway/src/gateway.rs:1710 (fd branch) + tests/end_to_end.rs:685-700 (is_local_mesh ULA expectations), python/src/lichen/coap/node_channel.py:7,43 (host ULA addressing docstrings - check behavior vs doc), rust/lichen-node/src/announce.rs:493 + routing/tests.rs + secure.rs test fixtures (fd-prefixed test addresses - assess, not necessarily wrong). For EACH site: assess against the settled no-ULA model (spec/05-routing.md:30, zt3c.7); remove ULA-specific routing behavior or leave a comment justifying retention (e.g. generic predicates lichen-ipv6 is_ula / addr.rs ula_addr are address-type utilities, not routing behavior - keep unless dead). Land AFTER i72x.3. Verify: cargo test -p lichen-node -p lichen-gateway + python routing/coap test suites green.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:24:32.495309373Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T07:36:36.115652683Z",
+  "started_at": "2026-09-09T07:03:58.221200766Z",
+  "closed_at": "2026-09-09T07:36:36.115652683Z",
+  "close_reason": "DONE (worker2). Per-site dispositions: (1) python router.py: REMOVED hardcoded _ULA_PREFIX=fd00::/8 classifier arm — ULA falls through to EXTERNAL unless operator-configured mesh_prefix (same change as i72x.3 hybrid.rs, landing concurrently on beads-worker-4); docstrings fixed. (2) test_router.py: shared fixture opts in via mesh_prefixes={fd00::/8}; ULA classifier tests rewritten (unconfigured-\u003eEXTERNAL, configured-\u003eMESH_LOCAL). (3) node.rs echo (both sites): REMOVED 0xfd arm; retained 2000::/3 arm with comment; follow-up 0no0 filed (identity-based echo pending i72x.2). (4) node.rs DAO-forward gate: REMOVED is_ula arm; renamed is_ula_or_global-\u003eis_native_or_global (0200::/8 || GUA). (5) node.rs test fixtures: ula() helper repointed fd-\u003e0x02 (renamed native()); delegated_prefix fd00-\u003e0300::/8 (SubnetForKey space). (6) gateway.rs:1726 ULA drop RETAINED with justification comment (prevents upstream hairpin). (7) end_to_end.rs already consistent (asserts ULA not local mesh) — no change. (8) node_channel.py docstrings updated. (9) schc headers.rs is_ula RETAINED with justification (compression well-formedness, not routing). (10) announce.rs/routing/tests.rs/secure.rs fd fixtures RETAINED (opaque test data / configured-prefix params, no ULA routing semantics); lichen-core ula_addr RETAINED (generic prefix utility per bead text). lichen-rpl crate fd test fixtures: out of enumerated scope, test-only. Tests: python routing 84/84, gpsr sim + routing 94/94, coap+loadng+vectors 2958 pass (2 pre-existing flakes: edhoc timing flake passes in isolation; test_committed_icmpv6_vectors_match_stdlib_generator fails on clean tree too). Rust: lichen-node 358 lib + all integration green (3x lib runs; one non-reproducing single-test failure observed in one full-run invocation, name not captured, 3 subsequent full+lib runs green), lichen-gateway all green, clippy only pre-existing warnings in untouched files, fmt clean. 3x codereview delegated to kimi-k3: pass1 correctness 2 findings (gpsr_sim vacuous-test regression — fixed via mesh_prefixes opt-in; headers.rs comment line-number self-invalidation — fixed by dropping citations), pass2 security 1 finding (comment claimed in-tree mirror of i72x.3 which is not an ancestor of this HEAD — reworded to 'landing concurrently'), pass3 edge-cases reviewer timed out (900s) so done by implementer: PASS (fc00::/7 vs fd00::/8 asymmetry now uniformly external; 0200::/8-vs-/7 correct for DAO node /128s; empty mesh_prefixes safe; no test-order dependence; comments verified accurate). Follow-up: 0no0 (echo GUA arm).",
+  "labels": [
+    "yggdrasil",
+    "decomposed"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-i72x.4",
+      "depends_on_id": "project-LICHEN-worker6-i72x",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:32.624927788Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

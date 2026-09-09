@@ -1,0 +1,80 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.4.2.1",
+  "title": "Approve narrowband profile and station scope",
+  "description": "Obtain human review of the exact proposed narrowband profile, emission classification, station/control mode and bounded implementation scope. Address SS versus data implications, 97.109, 97.221, forwarding, control/shutdown and actual chip/driver feasibility. No emission classification is selected automatically by code capability.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Do not close this gate merely because the proposal exists. Closure without affirmative matching scope does not authorize narrow.09 coding or any hardware task. No baseline PHY, OSCORE semantics, license fallback or future-session clearance is granted here.",
+  "acceptance_criteria": "Record a source-backed profile/station review, including valid revision-request, unresolved or no-go outcomes that confer no execution permission. For positive profile/station/coding approval: Require recorded, scoped, explicit approval from Mark for the named action. Automatic-control eligibility is not inferred merely from band or a data label. Security/traffic approval remains separately required under narrow.08, and RF session authority remains authority.10.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "decision",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:16.42961649Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:06.816054057Z",
+  "external_ref": "lichen-decomp-hpc8-deep:narrow.06",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "narrow.06",
+    "permission": "human",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "d80d667245cc5354880292bf060b887062bfe432e31b11c7a52e2aa7ff852cb1"
+  },
+  "labels": [
+    "approval-gate",
+    "ccp",
+    "decomp-hpc8-deep",
+    "experimental",
+    "human",
+    "regulatory"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:16.574348405Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:57.294461436Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:58.38629413Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:59.462516267Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:00.440363577Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:01.425035897Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

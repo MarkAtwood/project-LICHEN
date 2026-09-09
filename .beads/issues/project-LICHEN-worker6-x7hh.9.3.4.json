@@ -1,0 +1,180 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.9.3.4",
+  "title": "C: full L2 node and gateway CCP2 integration",
+  "description": "Integrate zephyr.03-.13 through lichen/subsys/lichen/l2/lichen_l2_tx.c, routing/router.c, lichen/apps/gateway/src/rpl_root.c and forwarding.c. All origin, control, forwarding, retry and baseline SCHC traffic must use receiver-aware scheduling and shared physical-resource accounting. Explicitly verify zephyr.05's full-operation geometry beyond zephyr.06's reused frame-plus-guard minimum at the actual driver boundary. Preserve queue/deadline/back-pressure and custody policy.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.\n\nDecomposition review scope: Explicitly own or verify and reuse bounded coalescing of pending, explicitly replaceable position/status updates in the C/Zephyr application-to-L2 enqueue path. Keep the latest value only for the same resource/recipient/context. Do not coalesce distinct messages, commands, receipts, historical samples or custody records. Prefer the pre-protection boundary; preserve existing security interfaces and nonce lifecycle.",
+  "design": "Reuse 0l5j.4's compatibility work and current L2/gateway owners, not another stack. vectors.14 is the separate C production-consumer leaf and is not a reverse prerequisite here. b7z9.45 helper fixes and 7wpz CoAP response integration stay outside this rewrite; reference 7wpz only if its existing scoped response contract is needed. Preserve upstream Yggdrasil/radio-owned identity, baseline SCHC/security and best-effort custody. Key portability is deferred and audited OSCORE/EDHOC internals remain human-only.",
+  "acceptance_criteria": "Run independent wire/calendar/airtime/queue/ledger cases through real L2/node/gateway paths, asserting no transmit bypass, no queued-TX preemption of RX, correct complete signed-frame charges and rejection when setup/CCA/turnaround/response plus one guard exceeds the boundary. Exercise lichen/tests/ping_l2, routing_dispatch, regional_duty_cycle and affected gateway native suites on local Linux/heft. Compile affected node/gateway and LR1110/SX12xx target configurations against the verified lichen/west.yml pin, currently v4.1.0; record SDK/west/features and run sanitizers/lint. No ports, RF measurements or authorization claims.\n\nAdditional required acceptance: Native production tests cover the positive coalescing cases commissioned by vectors.08 and ci.09, with an identified implementation/reuse owner. Nonreplaceable and distinct-context cases remain separate; no new congestion controller or human-only OSCORE edit is implied.",
+  "notes": "Task-definition amendment after independent decomposition review. This commissions future work only; nothing was implemented or tested. The initial CLI-input fingerprint is retained as initial_scope_sha256; current native Beads fields are authoritative. Do not rerun the seed applicator over this reviewed amendment.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:44.979480054Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:08.319699946Z",
+  "external_ref": "lichen-decomp-hpc8-deep:zephyr.14",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "decomposition_review": "scope-handoff-correction",
+    "initial_scope_sha256": "8233e10947b7f85c3e914d995eb1cb4522096664ac265a4edefeb5359131417f",
+    "leaf_key": "zephyr.14",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1"
+  },
+  "labels": [
+    "c",
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "needs-linux",
+    "no-hardware",
+    "production",
+    "zephyr"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.3",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:45.248138217Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-b7z9.17",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:40:46.12012334Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:40:47.391318078Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:40:48.473707634Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:40:49.523268905Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:40:50.568406438Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:10.441341872Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:11.541093466Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:12.59672615Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:13.620054242Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:14.753469559Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:15.839608335Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:16.978094525Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.2.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:18.054831383Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.2.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:19.093620608Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.2.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:20.048313259Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:21.03708912Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.3.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:41:22.041852448Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

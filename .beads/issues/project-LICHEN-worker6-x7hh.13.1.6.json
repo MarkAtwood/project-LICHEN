@@ -1,0 +1,104 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.13.1.6",
+  "title": "Publish verified CCP2 operator migration guidance",
+  "description": "Scope: operator migration guidance linked from /home/mark/Developer/lichen-workspace/project-LICHEN/docs/ccp-conformance.md and the suitable existing deployment document under /home/mark/Developer/lichen-workspace/project-LICHEN/docs/; create a dedicated focused runbook only if existing scope cannot hold it clearly. Document actual supported wire versions, evidence checks, compatible control-only or isolated migration, generation invalidation, loss of sync, rollback limits and unsupported configurations. Verify commands/observables against completed production and qualification artifacts. Do not execute flash/port/RF operations, invent a new control API or imply blanket activation permission.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Publish a minimal concrete operational path grounded in docs.09's disposition matrix. Keep deployment actions separately authorized; use leaf evidence rather than parent closure to support instructions.",
+  "acceptance_criteria": "Instructions identify the exact qualified configuration tuples and required wire/corpus/software/RF/authority evidence before enablement. Described commands, status fields and failure behavior match the recorded Python/Rust/C integration revision and can be checked offline or read-only. Old/unknown wire, stale context and loss of synchronization have explicit safe outcomes, not CH0/security/legal bypasses. Rollback/migration limitations and unassessed variants are visible, and no firmware or device is changed by documentation validation.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 120,
+  "created_at": "2026-09-09T06:24:58.611359995Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:27.899243101Z",
+  "external_ref": "lichen-decomp-hpc8-deep:docs.07",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "docs.07",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "16141854ef2b55c7c17c6e654854669c1bda22e4ca204f33f70627eb5af60269"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "docs",
+    "migration",
+    "operations"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.13.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:58.759261407Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:04.109533679Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:05.070456642Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.2.5",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:06.147570621Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.1.12",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:07.113645532Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.13.1.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:08.144882906Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.3.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:09.21011355Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:10.328045921Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.13.1.6",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.9.3.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:11.317728173Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

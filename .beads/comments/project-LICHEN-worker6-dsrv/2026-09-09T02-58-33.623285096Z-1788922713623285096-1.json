@@ -1,7 +1,0 @@
-{
-  "id": "1788922713623285096-1",
-  "issue_id": "project-LICHEN-worker6-dsrv",
-  "author": "Mark Atwood",
-  "text": "Update from jy0a codereview (worker3): the current coap_server.c config_put (:128) is WORSE than this bead describes — it now calls coap_oscore_authorize_mutating (:150) but NEVER checks is_protected and has no local_admin fallback: unprotected plaintext PUT /config passes the gate (returns 0 + payload) and commits via s_handlers.config_put (:167). Under LICHEN_COAP_SERVER_STANDALONE, PUT /config is served WITHOUT ANY authentication to anyone who can reach the port. Contrast the modular coap_config.c config_put (:751-766) which does check !is_protected \u0026\u0026 !is_local_admin -\u003e 4.01. The fix here must add the is_protected-or-local_admin gate, not just adopt the helper. Also confirmed: no duplicate 'config' path co-registration (standalone and modular are mutually exclusive via Kconfig !LICHEN_COAP_CONFIG dep).",
-  "created_at": "2026-09-09T02:58:33.623285096Z"
-}

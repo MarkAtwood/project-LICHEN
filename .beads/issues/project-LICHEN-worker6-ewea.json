@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-ewea",
+  "title": "[docs] ccp-conformance.md cites bare epic project-LICHEN-worker6-x7hh which is not a bead",
+  "description": "From x7hh.13.1.1 codereview pass 1 (correctness, kimi-k3, 2026-09-09). docs/ccp-conformance.md:9 says 'Work is tracked under project-LICHEN-worker6-x7hh', but no bare x7hh epic exists in the store: bd show reports the ID ambiguous against 203 descendants (x7hh.N.M...) whose parents chain up to project-LICHEN-kudc, and .beads/issues/ has no bare x7hh json. The x7hh family is real and resolves via parent links to kudc, so the reference is de-facto followable, but the exact ID does not resolve. Scoped fix (belongs to the publication owner or the final audit x7hh.13.1.10, NOT the verbatim recovery): amend the citation to project-LICHEN-kudc or to the actual root epic once one exists. Do not edit the recovered accepted text without the publication owner.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:43:20.347158216Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:03:39.941353957Z",
+  "labels": [
+    "spec",
+    "docs"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ewea",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.13.1.1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T07:43:20.495284562Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

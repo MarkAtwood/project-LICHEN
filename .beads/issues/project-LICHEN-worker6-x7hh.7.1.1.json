@@ -1,0 +1,56 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.7.1.1",
+  "title": "Python: versioned plans and full permitted sets",
+  "description": "Implement CCP2-003/005/006/023 plan representation in python/src/lichen/channel_plan.py and reconcile its boundary with python/src/lichen/link/op_class.py. Retain ordered integer-Hz entries, stable global indices, distinct plan/version and operating-class identifiers, and canonical variable-length permitted masks. Unknown or unqualified plans must not establish a usable control frequency. A representable candidate plan is not permission to enable it.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse b7z9.23's existing intersection mechanics, but do not carry its legacy u32 truncation or least-significant-bit convention into CCP2. The old issue is a reference, not a prerequisite edge. Extend current modules and tests without a new registry framework or dependency. Preserve upstream Yggdrasil identity, radio ownership, baseline SCHC/security and best-effort custody; key portability remains deferred.",
+  "acceptance_criteria": "Consume frozen vectors.03 through production lookup and mask APIs. Exercise counts 0, 1, 8, 32, 64, 128, 255 and 256; boundary indices; wrong mask lengths; nonzero padding; empty and CH0-only sets; and sparse indices {0,64,127}. Assert the independent mask bytes 80000000000000008000000000000001 and exact physical frequencies. Run python/tests/test_channel_plan.py, python/tests/test_channel_plan_boundaries.py and python/tests/test_ccp4_regional_channel_plans.py, preserving explicitly legacy expectations. Run scoped pytest, ruff and configured channel_plan typing from python/pyproject.toml.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:03.159299111Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:14.070741683Z",
+  "external_ref": "lichen-decomp-hpc8-deep:python.01",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "python.01",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "d785f14ab60b74801e7a93eae80249b56660ba74b7d3a7f27a11818039b8519f"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:03.312659021Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:36.807710221Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:37.968787346Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.12.1.2",
+  "title": "Test legal and adaptive airtime ceilings together",
+  "description": "Scope: the legal/adaptive-ceiling case group of the independent admission supplement under /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/ and its strict validation checks. Specify cases where the locally configured legal ceiling is stricter, the retained adaptive ceiling is stricter, or either is exhausted; include density boundaries and the rolling one-hour window. Derive expected totals from the independent interval ledger and adopted tier table, not production defaults. Control and priority traffic do not gain exemptions. Actual language TX-path execution is owned by the later admission consumers.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Add one bounded case group using existing oracle and supplement machinery. Separate mathematical contract completion from subsequent proof that every real TX path enforces it.",
+  "acceptance_criteria": "Independently checked fixtures require both ceilings to pass and pin exact boundary, one-unit excess, exhausted-budget and rolling-window recovery outcomes. Retained density tiers are transcribed from the adopted source contract at the specified boundaries rather than recomputed by production. No category bypasses one ceiling because it passes the other. The schema/inventory includes every case for all applicable language consumers and no test changes legal or adaptive permissions.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 90,
+  "created_at": "2026-09-09T06:24:41.879797746Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:15.855698923Z",
+  "external_ref": "lichen-decomp-hpc8-deep:admission.02",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "admission.02",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "04e143b2dd28a40a0055cb40c839236dcd2208667500cdae7426ff345b305d6e"
+  },
+  "labels": [
+    "admission",
+    "airtime",
+    "ccp",
+    "decomp-hpc8-deep",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:42.042387383Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.12.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:11.911837359Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.7",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:13.507438269Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.12.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:34:14.653369199Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

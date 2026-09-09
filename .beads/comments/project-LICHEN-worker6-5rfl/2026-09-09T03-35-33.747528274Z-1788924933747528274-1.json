@@ -1,7 +1,0 @@
-{
-  "id": "1788924933747528274-1",
-  "issue_id": "project-LICHEN-worker6-5rfl",
-  "author": "Mark Atwood",
-  "text": "Independent re-confirmation during ft5w verify round (worker3): reviewer kimi-k3 probed main @ b1b9cd4c76 end-to-end and reproduced both findings — tag-2 bignum mode (c2 41 00/01) and non-minimal long-form uint mode (18 00 etc.) pass decode_cose AND verify_slot_claim on main, returning (True, None). Root cause on main: fix commit 5ff76606fb is only on beads-worker-5, not yet merged to main. No new bead filed (this one already covers it); noting main-side exposure window until worker-5 merges.",
-  "created_at": "2026-09-09T03:35:33.747528274Z"
-}

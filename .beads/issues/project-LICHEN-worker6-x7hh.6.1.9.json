@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.6.1.9",
+  "title": "Freeze an independent CCP2 interval-ledger oracle",
+  "description": "Scope: CCP2 accounting fixtures and a focused independent interval calculation in /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/. Specify generic configured-window overlap, prospective complete-emission admission, endpoint/rounding treatment, resource aliases, restart and clock-correction histories. Consume the source-backed occupancy interpretation from authority.06 rather than reinterpreting legal text or using a production duty tracker as oracle. Include one-hour and configured 400 ms/20 s examples. No legal permission, production persistence implementation or hardware experiment belongs here.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "The ledger is a test oracle parameterized only by explicitly declared constraints, not a new production framework. Keep source interpretation with authority.06 and leave later configured-path supplements separately versioned.",
+  "acceptance_criteria": "Independent interval arithmetic reproduces committed totals, remaining allowances and earliest eligible times, including partial overlap, exact boundary, one-unit excess and future operation fit. Two 250 ms emissions on one frequency within the applicable 20-second window cannot both pass 400 ms occupancy. Physical-frequency/group aliases share restrictions and restart/clock correction does not erase active limits. Inputs and outputs are exact integer units with provenance; no expected value comes from production accounting.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:19.525147586Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:19.233746542Z",
+  "external_ref": "lichen-decomp-hpc8-deep:vectors.09",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "vectors.09",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "6d8a3390444005ffb01bc0afdcfba6774d883ee121bfe692b28ce9e0ccba0563"
+  },
+  "labels": [
+    "accounting",
+    "airtime",
+    "ccp",
+    "decomp-hpc8-deep",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:19.670121735Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:30.541346393Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:31.610745173Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.9",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:32.735012425Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

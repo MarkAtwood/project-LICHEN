@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-era9",
+  "title": "C capability table: floor ledger not bounded (diverges from Python/Rust)",
+  "description": "Discovered reviewing p7mv. lichen/subsys/lichen/gateway/capability_announce.c floor_raise() appends to a fixed CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY floor ledger and silently drops new floors when full ('ledger full; live entries still pin their own seq'). Python CapabilityTable._bound_floors and Rust bound_seq_floors actively prune the ledger (drop the lowest-IID floor whose IID is no longer a live entry) so it stays bounded by live eviction churn. The C version never prunes, so long-gone IIDs permanently consume floor slots and eventually block anti-replay floors for genuinely-evicted IIDs (rollback-protection gap under sustained churn). Note: Python/Rust RETAIN floors for live entries (cached_seq returns max(entry.seq, floor)); the prune only targets floors for IIDs no longer resident. Implement floor_prune matching that semantic + a host test cycling \u003ecapacity evictions. Host test: lichen/tests/capability_announce (CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY=8 there).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:46:28.818291845Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T08:38:15.129915616Z",
+  "labels": [
+    "gateway",
+    "security"
+  ]
+}

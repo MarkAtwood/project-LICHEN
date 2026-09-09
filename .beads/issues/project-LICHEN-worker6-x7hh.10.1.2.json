@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.10.1.2",
+  "title": "Validate machine-readable CCP2 evidence results",
+  "description": "Scope: the evidence contract in /home/mark/Developer/lichen-workspace/project-LICHEN/docs/ccp-conformance.md and focused result-validation code/tests in the existing /home/mark/Developer/lichen-workspace/project-LICHEN/tools/ and /home/mark/Developer/lichen-workspace/project-LICHEN/python/tests/ locations as needed. Define a small machine-readable result schema containing requirement/case IDs, implementation, source revision, corpus digest, command, environment, artifact and pass/fail/not-assessed evidence class. Use independently authored result documents to check the validator. Do not create a generic reporting framework or treat policy tests as integrated/RF/authorization evidence.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse existing result/report helpers where suitable; add only the minimal schema and validation needed for joined CCP2 evidence. This is downstream of independent corpus freezing and upstream of final CI aggregation.",
+  "acceptance_criteria": "Focused validator tests accept complete correctly classified result records and reject empty results, missing artifacts, unknown cases/classes, duplicate records and mismatched source/corpus revisions. Missing evidence stays not assessed and cannot upgrade a claim. A changed source, vector or affected waveform invalidates the corresponding evidence binding. The format accommodates separate frozen base-corpus and admission-supplement digests without rewriting either oracle.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 120,
+  "created_at": "2026-09-09T06:24:27.571785551Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:17.971812399Z",
+  "external_ref": "lichen-decomp-hpc8-deep:ci.01",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "ci.01",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "8eac72fef8a7ddde65b4ea94e2606c316286b1c3d58bcb0c27f4308614e67e2d"
+  },
+  "labels": [
+    "ccp",
+    "ci",
+    "decomp-hpc8-deep",
+    "evidence",
+    "schema"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.10.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:27.73447553Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.10.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:32:40.414136523Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

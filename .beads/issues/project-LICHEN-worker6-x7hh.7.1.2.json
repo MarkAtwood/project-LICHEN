@@ -1,0 +1,72 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.7.1.2",
+  "title": "Python: CCP2 codecs and activation gate",
+  "description": "Implement the finalized wire.12 contract in python/src/lichen/rpl/tdma_beacon.py, python/src/lichen/announce/messages.py and the applicable dispatch in python/src/lichen/rpl/messages.py. Bind schedule, receiver and grant ownership to the specified root, DODAG, generation, plan and profile. Keep all version namespaces distinct. Unversioned, incompatible or malformed advertisements must not activate a CCP2 data schedule or partially mutate its state.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse existing codecs and signature interfaces. b7z9.74 identifies the shared signaling work but is not a dependency on an old roll-up; python.09 owns directional report publication after this generic codec boundary. Do not invent allocations, repurpose SCHC or signature-domain versions, weaken legacy tests, or edit audited OSCORE/EDHOC internals. No on-air activation is authorized by this task.",
+  "acceptance_criteria": "Consume independently encoded and signed vectors.02 through production parsing, serialization and admission. Check exact bytes and signatures, every truncation boundary, duplicate and unknown fields, unsupported versions, invalid bounds, wrong root/DODAG/generation, activation and expiry, and unchanged state after rejection. Run python/tests/test_tdma_beacon_format.py, python/tests/rpl/test_ccp_beacon_sig_gate.py and python/tests/announce/test_messages.py with new revision-specific cases. Round trips alone are insufficient. Run scoped pytest, ruff and applicable configured typing.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:04.026414518Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:13.946079671Z",
+  "external_ref": "lichen-decomp-hpc8-deep:python.02",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "python.02",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "e008b5d0a784ec5b274a6e6fc549949683398b8d5d71e3812a9170a4bc554862"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:04.176097008Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:39.114058906Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:40.230157057Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:41.271012966Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.7.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.7.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:36:42.37039368Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}
