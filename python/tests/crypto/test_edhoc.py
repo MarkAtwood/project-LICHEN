@@ -6,7 +6,13 @@ import cbor2
 import pytest
 
 from lichen.crypto import edhoc as edhoc_module
-from lichen.crypto.edhoc import EdhocInitiator, EdhocResponder, Method
+from lichen.crypto.edhoc import (
+    EdhocInitiator,
+    EdhocResponder,
+    Method,
+    _decode_connection_id,
+    _encode_connection_id,
+)
 from lichen.crypto.identity import Identity
 
 
@@ -112,6 +118,53 @@ class TestEdhocHandshake:
         assert ctx_i.recipient_id == b"\xde\xad"
         assert ctx_r.sender_id == b"\xde\xad"
         assert ctx_r.recipient_id == b"\xbe\xef"
+
+    def test_compact_connection_id_roundtrip(self) -> None:
+        """CID bytes coinciding with single-byte CBOR ints round-trip exactly.
+
+        RFC 9528 Section 3.3.2: bytes 0x00-0x17 transport as uint 0..23,
+        bytes 0x20-0x37 transport as negative -24..-1, everything else
+        stays a bstr. Decoding must recover the original byte in all cases.
+        """
+        for byte in range(256):
+            raw = bytes([byte])
+            encoded = _encode_connection_id(raw)
+            decoded = _decode_connection_id(cbor2.loads(encoded))
+            assert decoded == raw, f"byte 0x{byte:02x}: {encoded.hex()} -> {decoded.hex()}"
+
+        # Pinned wire forms from the RFC transport rule (and function docstring).
+        assert _encode_connection_id(b"\x00") == b"\x00"
+        assert _encode_connection_id(b"\x17") == b"\x17"
+        assert _encode_connection_id(b"\x20") == b"\x20"  # CBOR int -1
+        assert _encode_connection_id(b"\x21") == b"\x21"  # CBOR int -2
+        assert _encode_connection_id(b"\x37") == b"\x37"  # CBOR int -24
+        assert _encode_connection_id(b"\x18") == b"\x41\x18"
+        assert _encode_connection_id(b"\x38") == b"\x41\x38"
+
+    def test_full_handshake_compact_range_c_r(self) -> None:
+        """Handshake succeeds when C_R is a compact-range byte (0x20-0x37).
+
+        Regression: decoding compact-integer C_R produced wrong bytes, so
+        the initiator rebuilt a different context_2/MAC_2 and rejected the
+        responder's valid Signature_2 for ~9% of random C_R values.
+        """
+        initiator_id = Identity.generate()
+        responder_id = Identity.generate()
+
+        initiator = EdhocInitiator.create(initiator_id, c_i=b"\x00")
+        responder = EdhocResponder.create(responder_id, c_r=b"\x21")
+
+        msg1 = initiator.create_message_1()
+        msg2 = responder.process_message_1(msg1, initiator_id.pubkey)
+        msg3 = initiator.process_message_2(msg2, responder_id.pubkey)
+        responder.process_message_3(msg3, initiator_id.pubkey)
+
+        ctx_i = initiator.export_oscore()
+        ctx_r = responder.export_oscore()
+
+        assert ctx_i.master_secret == ctx_r.master_secret
+        assert ctx_i.sender_id == b"\x21"
+        assert ctx_r.recipient_id == b"\x21"
 
     def test_export_before_complete_fails(self) -> None:
         """Exporting OSCORE context before handshake complete raises."""

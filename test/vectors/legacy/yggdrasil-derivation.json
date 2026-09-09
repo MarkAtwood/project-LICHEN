@@ -2,7 +2,7 @@
   {
     "description": "Yggdrasil address derivation test vector with an arbitrary input pubkey (SHA-256 of empty string). Matches Rust ygg_addr_from_pubkey, C lichen_identity_ygg_addr_from_ed25519, and Python yggdrasil_address. NOTE: this pubkey is a raw hash value used as input, not the Ed25519 public key of any seed; a previous revision wrongly labeled it as derived from seed 0x01*32 (the true keypair for that seed has pubkey 8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c).",
     "pubkey": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "ygg_addr": "026b4e6c1fe36504694e6c1fe36504e1",
+    "ygg_addr": "0200389e777ace07c7d6ca08166ecd20",
     "iid": "694e6c1fe36504e1",
     "oracle_rust": "ygg_addr_from_pubkey",
     "oracle_c": "lichen_identity_ygg_addr_from_ed25519",
@@ -11,19 +11,19 @@
   {
     "description": "Zero pubkey vector verifying U/L bit clear in IID and Yggdrasil prefix.",
     "pubkey": "0000000000000000000000000000000000000000000000000000000000000000",
-    "ygg_addr": "025046adc1dba8385046adc1dba83886",
+    "ygg_addr": "02000000000000000000000000000000",
     "iid": "5046adc1dba83886"
   },
   {
     "description": "Known vector from Yggdrasil official test suite (pubkey from Ed25519 test vector).",
     "pubkey": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
-    "ygg_addr": "020e02a50225b4ba0c02a50225b4baaa",
+    "ygg_addr": "0200514acffcfa9dea90556802586d37",
     "note": "LICHEN IID = SHA-512(pubkey)[0:8] with U/L bit cleared"
   },
   {
     "description": "U/L bit forced clear: pubkey 0x02 repeated hashes to byte0=0xaa with U/L bit set. Verifies implementation clears the Universal/Local bit (0x02 mask).",
     "pubkey": "0202020202020202020202020202020202020202020202020202020202020202",
-    "ygg_addr": "02aa3c626bc9c38ca83c626bc9c38c8c",
+    "ygg_addr": "0206fefefefefefefefefefefefefefe",
     "iid": "a83c626bc9c38c8c",
     "ul_bit_test": {
       "raw_hash_byte0": "aa",
@@ -35,7 +35,7 @@
   {
     "description": "U/L bit already clear: pubkey 0x01 repeated where hash naturally has U/L bit clear, no transformation needed.",
     "pubkey": "0101010101010101010101010101010101010101010101010101010101010101",
-    "ygg_addr": "025ce86efb75fa4e5ce86efb75fa4e2c",
+    "ygg_addr": "0207fefefefefefefefefefefefefefe",
     "iid": "5ce86efb75fa4e2c",
     "ul_bit_test": {
       "raw_hash_byte0": "5c",
@@ -45,9 +45,9 @@
   },
   {
     "name": "iid_yggdrasil_binding_verification",
-    "description": "Lower 64 bits of 02xx Yggdrasil address MUST equal IID from same Ed25519 pubkey (spec §6 security: prevents substitution attacks).",
+    "description": "REJECTED invariant: under the settled upstream-yggdrasil-addressing decision the lower 64 bits of a 02xx primary address are a bit-packed fragment of the inverted key, NOT the SHA-512 IID. This entry now pins that the old invariant does NOT hold (ygg_addr[8:16] != iid).",
     "spec_ref": "spec/06-security.md line 111, 145",
-    "test_type": "binding_invariant",
+    "test_type": "binding_invariant_rejected",
     "pubkey": "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
     "assertions": [
       {

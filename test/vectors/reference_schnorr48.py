@@ -43,6 +43,42 @@ def _canonical_scalar(value: bytes) -> bytes:
     return (int.from_bytes(value, "little") % _GROUP_ORDER).to_bytes(32, "little")
 
 
+def _addr_for_key(pubkey: bytes) -> bytes:
+    """Upstream Yggdrasil ``AddrForKey`` byte-for-byte (yggdrasil-go@422836ee
+    src/address/address.go; settled ``upstream-yggdrasil-addressing``
+    decision in spec/decisions.jsonl). Bit-invert the key; addr[0]=0x02;
+    addr[1] = leading-1 count mod 256; skip leading 1s + the first 0
+    separator bit; pack the rest MSB-first into whole bytes, discarding the
+    trailing partial byte; copy into addr[2:16], zero tail. No hashing.
+    """
+    inv = bytes(b ^ 0xFF for b in pubkey)
+    addr = bytearray(16)
+    addr[0] = 0x02
+    temp = bytearray()
+    done = False
+    ones = 0
+    cur = 0
+    nbits = 0
+    for idx in range(8 * len(inv)):
+        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
+        if not done:
+            if bit:
+                ones = (ones + 1) & 0xFF
+                continue
+            done = True  # first leading 0 bit: separator, skipped
+            continue
+        cur = (cur << 1) | bit
+        nbits += 1
+        if nbits == 8:
+            nbits = 0
+            temp.append(cur)
+            cur = 0
+    addr[1] = ones
+    n = min(len(temp), 14)
+    addr[2 : 2 + n] = temp[:n]
+    return bytes(addr)
+
+
 @dataclass(frozen=True, slots=True)
 class ReferenceIdentity:
     """Spec-derived deterministic identity used only by vector tooling."""
@@ -67,8 +103,7 @@ class ReferenceIdentity:
         digest = hashlib.sha512(public).digest()
         iid = bytearray(digest[:8])
         iid[0] &= 0xFD
-        address = bytes((0x02,)) + digest[:7] + bytes(iid)
-        return cls(bytes(seed), private, public, bytes(iid), address)
+        return cls(bytes(seed), private, public, bytes(iid), _addr_for_key(public))
 
 
 def sign(identity: ReferenceIdentity, message: bytes) -> bytes:

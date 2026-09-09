@@ -22,28 +22,28 @@
       "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
       "public_key_hex": "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
       "iid_hex": "ed4242ead4ac6948",
-      "address_hex": "02ed4242ead4ac69ed4242ead4ac6948"
+      "address_hex": "02062f7c200618f7a0f14791738c5a1f"
     },
     {
       "name": "other_root",
       "seed_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
       "public_key_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
       "iid_hex": "796a1405e47be084",
-      "address_hex": "027b6a1405e47be0796a1405e47be084"
+      "address_hex": "0201192aa745c066ac1afe1d3bb45d59"
     },
     {
       "name": "egress",
       "seed_hex": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
       "public_key_hex": "29acbae141bccaf0b22e1a94d34d0bc7361e526d0bfe12c89794bc9322966dd7",
       "iid_hex": "b19edad2958934e1",
-      "address_hex": "02b19edad2958934b19edad2958934e1"
+      "address_hex": "0202b29a28f5f219a87a6e8f2b596597"
     },
     {
       "name": "other_egress",
       "seed_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
       "public_key_hex": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
       "iid_hex": "1dae2ad7f75a0ded",
-      "address_hex": "021fae2ad7f75a0d1dae2ad7f75a0ded"
+      "address_hex": "0202d5e2368077b55775c4a91be4b124"
     }
   ],
   "authorizations": [
