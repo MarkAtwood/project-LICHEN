@@ -1,0 +1,64 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.5.2.2",
+  "title": "Validate receiver loss and corruption behavior",
+  "description": "Evaluate the approved receiver's header, coding and rejection behavior using independently specified vectors and captured inputs. Cover erasures, corruption, header loss, wrong profiles, offset/timing errors and near-threshold conditions without assuming arbitrary loss recovery from coding rate alone.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Keep experiments offline and within affirmative lrfhss.09 scope. Do not change baseline link security or call PHY CRC authentication. New restricted dependencies, external contact and new RF capture collection require separate permission.",
+  "acceptance_criteria": "Known payloads and controlled independent impairment definitions determine acceptance and rejection expectations. Report false accepts, decode failures and unsupported cases. Corrupted or insufficiently specified captures cannot become expected outputs by running the decoder under test.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:28.486183259Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:23.837096423Z",
+  "external_ref": "lichen-decomp-hpc8-deep:lrfhss.05",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "lrfhss.05",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "94241c44214e7d91fe9dbd30d18bfd5e42621ef3200e5dd559885da3fd14704b"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "experimental",
+    "independent-oracle",
+    "lr-fhss",
+    "testing"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:28.681154915Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:42.297319445Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.1.6",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:43.352976944Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.5.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.5.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:43:44.478597899Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

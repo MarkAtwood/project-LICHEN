@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-5hbz",
+  "title": "Rust trust-anchor store + /.well-known/trust-anchors resource (port of Python viku.2)",
+  "description": "Follow-up from viku.2 (Python reference landed). Port TrustAnchorStore + TrustAnchorsResource to rust/lichen-gateway: same semantics — anchors keyed by issuer IID, raw Ed25519 or X.509 DER CA certs (x509-cert crate), cross-signed = same-key cert attachment (kind flip raw-\u003ex509), provisioned anchors immutable-but-cert-extendable, bounds MAX_ANCHORS=64 / MAX_CERTS_PER_ANCHOR=8 / MAX_CERT_DER_BYTES=1024 / MAX_METADATA_ENTRIES=8 / MAX_METADATA_BYTES=256, GET open + POST/DELETE guarded by injected authorize over OSCORE identity (fail-closed), strict per-path field sets, cert chain validation out of scope (viku.6). Mirror the Python test matrix.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T09:04:36.114055888Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T09:04:36.114055888Z",
+  "labels": [
+    "gateway",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-5hbz",
+      "depends_on_id": "project-LICHEN-worker6-viku.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T09:04:36.244979796Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

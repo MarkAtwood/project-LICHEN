@@ -29,24 +29,54 @@ def _load(name: str) -> object:
 
 
 def _independent_derivation(public_key: bytes) -> tuple[bytes, bytes, bytes]:
+    """Independent oracle for IID, link-local, and routable 0200::/8 address.
+
+    The IID and link-local use the LICHEN SHA-512 IID profile. The routable
+    address implements upstream Yggdrasil ``AddrForKey`` directly from the
+    public reference (yggdrasil-go ``src/address/address.go`` @422836ee),
+    independently of ``lichen.crypto.identity.yggdrasil_address`` under test.
+    """
     digest = hashlib.sha512(public_key).digest()
     iid = bytearray(digest[:8])
     iid[0] &= 0xFD
     link_local = b"\xfe\x80" + bytes(6) + iid
-    native = b"\x02" + digest[:7] + iid
-    return bytes(iid), bytes(link_local), bytes(native)
+
+    # Upstream AddrForKey: bit-invert, count leading 1s, drop separator 0,
+    # pack remaining bits MSB-first into whole bytes (discard trailing partial).
+    inv = bytearray(b ^ 0xFF for b in public_key)
+    addr = bytearray(16)
+    addr[0] = 0x02
+    ones = 0
+    done = False
+    cur = 0
+    nbits = 0
+    temp = bytearray()
+    for idx in range(8 * len(inv)):
+        bit = (inv[idx // 8] >> (7 - (idx % 8))) & 0x01
+        if not done and bit != 0:
+            ones = (ones + 1) & 0xFF
+            continue
+        if not done:
+            done = True
+            continue
+        cur = ((cur << 1) | bit) & 0xFF
+        nbits += 1
+        if nbits == 8:
+            nbits = 0
+            temp.append(cur)
+    addr[1] = ones
+    n = min(len(temp), 14)
+    addr[2 : 2 + n] = temp[:n]
+    return bytes(iid), bytes(link_local), bytes(addr)
 
 
 def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> None:
     document = _load("ipv6-addresses.json")
-    # QUARANTINE-INTEGRITY pin: the primary/native address fields encode the
-    # REJECTED SHA-512 native profile and live in the legacy corpus
-    # (test/vectors/legacy/README.md); delete when the upstream AddrForKey
-    # migration lands.
-    legacy = _load("legacy/ipv6_addresses_native_sha512.json")
+    # The live corpus pins IID + link-local (unchanged by the migration). The
+    # routable 0200::/8 address is upstream AddrForKey; the rejected SHA-512
+    # native profile and its quarantined corpus are no longer consumed here.
+    # The independent oracle above provides the upstream-address oracle.
     assert isinstance(document, dict)
-    assert isinstance(legacy, dict)
-    legacy_by_name = {item["name"]: item for item in legacy["vectors"]}
     vectors = document["vectors"]
     assert isinstance(vectors, list)
     key_vectors = [item for item in vectors if item["profile"] == "key_derived_identity"]
@@ -54,23 +84,21 @@ def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> Non
     assert len(key_vectors) >= 5
     for vector in key_vectors:
         public_key = bytes.fromhex(vector["pubkey"])
-        iid, link_local, native = _independent_derivation(public_key)
-        legacy_vector = legacy_by_name[vector["name"]]
+        iid, link_local, routable = _independent_derivation(public_key)
 
         assert iid.hex() == vector["iid"], vector["name"]
         assert link_local.hex() == vector["link_local_packed"], vector["name"]
-        assert native.hex() == legacy_vector["native_packed"], vector["name"]
         assert str(IPv6Address(link_local)) == vector["link_local"], vector["name"]
-        assert str(IPv6Address(native)) == legacy_vector["native"], vector["name"]
 
         assert _pubkey_to_iid(public_key) == iid, vector["name"]
         assert link_local_from_pubkey(public_key).packed == link_local, vector["name"]
-        assert yggdrasil_address(public_key).packed == native, vector["name"]
-        assert native_address_from_pubkey(public_key).packed == native, vector["name"]
+        # Routable address == independent upstream AddrForKey oracle.
+        assert yggdrasil_address(public_key).packed == routable, vector["name"]
+        assert native_address_from_pubkey(public_key).packed == routable, vector["name"]
 
         assert link_local[:8] == bytes.fromhex("fe80000000000000"), vector["name"]
-        assert link_local[8:] == iid == native[8:], vector["name"]
-        assert native[0] == 0x02, vector["name"]
+        assert link_local[8:] == iid, vector["name"]
+        assert routable[0] == 0x02, vector["name"]
         assert iid[0] & 0x02 == 0, vector["name"]
 
 
@@ -120,50 +148,14 @@ def test_eui_and_short_vectors_are_interop_helpers_not_identity() -> None:
         assert short_addr_to_iid(vector["short_addr"]) == iid, vector["name"]
 
 
-def test_native_corpora_agree_without_byte_reversal() -> None:
-    # QUARANTINE-INTEGRITY cross-check: both native corpora encode the
-    # REJECTED SHA-512 native profile (test/vectors/legacy/README.md;
-    # spec/decisions.jsonl upstream-yggdrasil-addressing) and are consumed
-    # here only as pre-migration pins — delete when the upstream AddrForKey
-    # migration lands. The agreement still matters: it is the tripwire
-    # against word/byte-order reversal in the derivation both corpora record.
-    ipv6_document = _load("legacy/ipv6_addresses_native_sha512.json")
-    native_document = _load("legacy/yggdrasil_address_native_sha512.json")
-    assert isinstance(ipv6_document, dict)
-    assert isinstance(native_document, dict)
-
-    ipv6_by_key = {
-        item["pubkey"]: item for item in ipv6_document["vectors"]
-    }
-    native_by_key = {
-        item["public_key"]: item
-        for item in native_document["vectors"]
-        if item.get("profile") == "lichen_native_sha512"
-    }
-    shared_keys = ipv6_by_key.keys() & native_by_key.keys()
-
-    assert len(shared_keys) >= 4
-    for public_key in shared_keys:
-        ipv6_vector = ipv6_by_key[public_key]
-        native_vector = native_by_key[public_key]
-        assert ipv6_vector["iid"] == native_vector["iid"]
-        assert ipv6_vector["native_packed"] == native_vector["address"]
-        assert ipv6_vector["native"] == native_vector["ipv6"]
-
-    # An asymmetric anchor catches accidental word/byte-order reversal.
-    rfc8032 = ipv6_by_key["d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"]
-    assert rfc8032["iid"] == "0c02a50225b4baaa"
-    assert rfc8032["native_packed"] == "020e02a50225b4ba0c02a50225b4baaa"
-
-
 def test_address_derivation_accepts_exact_width_raw_key_octets() -> None:
     """Addressing is a 32-byte hash map; subgroup checks belong to signature use."""
     low_order_encoding = bytes(32)
-    iid, link_local, native = _independent_derivation(low_order_encoding)
+    iid, link_local, routable = _independent_derivation(low_order_encoding)
 
     assert _pubkey_to_iid(low_order_encoding) == iid
     assert link_local_from_pubkey(low_order_encoding).packed == link_local
-    assert yggdrasil_address(low_order_encoding).packed == native
+    assert yggdrasil_address(low_order_encoding).packed == routable
 
 
 @pytest.mark.parametrize("public_key", [b"", bytes(31), bytes(33)])

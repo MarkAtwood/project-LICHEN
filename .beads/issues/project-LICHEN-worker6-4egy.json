@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-4egy",
+  "title": "[review] local-fact: verifier clock spoof re-admits revoked fact (expiry killed only by GPS time)",
+  "description": "Codereview pass 2 (security, kimi-k3) on project-LICHEN-worker6-xeli surfaced a residual rooted in the local-fact 'Freshness and Revocation' text (spec/06-security.md 8.13.1, lines ~1153-1173, from unmerged b4fu ca2f9161d9) — NOT in xeli's restart-continuity paragraph, so filed separately. The revocation-by-non-renewal path leaves the revoked fact as the highest-seq fact, so only its lichen:expiry kills it. A radio adversary (in LICHEN's threat model) that spoofs a verifier's GPS/RTC clock BACKWARD makes an expired revoked fact look unexpired; the seq check passes (it is the highest seen), so the revoked grant is re-admitted until the clock recovers or the fact truly expires. Fix direction: (a) make expiry checks robust to clock rollback (e.g. verifier clamps expiry comparison against a monotonic elapsed-time floor or the highest observed wall-clock, similar to xeli's issuer-side max(floor+1, time-derived) clamp), or (b) require issuers to actively supersede (issue a higher-seq replacement with short expiry) rather than rely on non-renewal alone. Adjacent to xeli (issuer-side GPS spoof, fixed there) and b4fu. Decide with the 8.13.1 freshness model.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:18:10.363432797Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T10:15:26.744438361Z",
+  "started_at": "2026-09-09T10:15:26.744438361Z",
+  "lease_expires_at": "2026-09-09T10:20:26.744438361Z",
+  "heartbeat_at": "2026-09-09T10:15:26.744438361Z",
+  "labels": [
+    "spec",
+    "security"
+  ]
+}

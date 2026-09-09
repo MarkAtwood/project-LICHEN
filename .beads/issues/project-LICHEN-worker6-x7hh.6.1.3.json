@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.6.1.3",
+  "title": "Freeze CCP2 plan and rendezvous arithmetic",
+  "description": "Scope: CCP2 plan/mask/hash fixtures and focused independent arithmetic in /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/, reusing independently verified hash_32 and slot-carry anchors where unchanged. Cover counts 0/1/8/32/64/128/255/256, global-index boundaries, sparse masks, padding, sender versus receiver identity/generation, sender-unusable home, candidate-slot carry and persistent collisions. Encode exact integer-Hz candidate-grid entries only as disabled feasibility examples. This is an oracle contract, not a channel-plan registry or production selector implementation.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Use literal independent arithmetic and published primitive anchors; keep plan indices global. Preserve legacy vectors and their separate applicability instead of changing their outputs to match CCP2.",
+  "acceptance_criteria": "Independent FNV/bitset/ordered-set calculations reproduce every committed expected value. The {0,64,127} 128-entry mask is 80000000000000008000000000000001; index 255 and count 256 fail their respective bounds. Cases distinguish receiver generation LE-u32 from link epoch/SFN and forbid sender-local rehash. Zero slots reject, u32 carry precedes modulus, and colliding modulo-eight residues remain colliding through SFN wrap. No candidate plan is enabled.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:13.986068117Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:20.020344641Z",
+  "external_ref": "lichen-decomp-hpc8-deep:vectors.03",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "vectors.03",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "1990e00e3c34ce5fbb1ebc5694fdd4eef99eec10600a2b28a466547b6db28d0d"
+  },
+  "labels": [
+    "ccp",
+    "channel-plan",
+    "decomp-hpc8-deep",
+    "hash",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:14.117825849Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:18.884205636Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

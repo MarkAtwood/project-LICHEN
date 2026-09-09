@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-fh1z",
   "title": "SOS rate-limit tuple lacks SOS-ID/seq dimension; rotation silently resets buckets",
   "description": "Edge-pass notes from project-LICHEN-worker6-lzgc review (both pre-existing, unacknowledged). (1) spec/12-apps.md §18.4.1 tracks (origin address, count, uptime) only — 'Burst allowance 2: allows rapid updates to same SOS' is not implementable as stated because the tuple has no SOS-ID/seq dimension (§18.4.2 seq field exists in the payload but is not tracked); updates and distinct SOSes are indistinguishable to the limiter. Either track (origin, SOS-ID) or reword the rationale. (2) Key rotation (06-security.md §8.7.4 derives and pins a new identity) silently resets the 3/hour bucket and soft-blacklist score — an abuser rotates to evade; acknowledge in §18.4.1 or §8.7.4 (e.g., rotation attestation carries over abuse state, or accept and document the evasion window).",
-  "status": "open",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T05:30:47.299655988Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T05:30:47.299655988Z",
+  "updated_at": "2026-09-09T08:08:45.355910399Z",
+  "closed_at": "2026-09-09T08:08:45.355910399Z",
+  "close_reason": "DONE (worker2). Both pre-existing gaps acknowledged, spec-only, no new normative requirements: (1) spec/12-apps.md §18.4.1 — burst-row rationale reworded from 'Allows rapid updates to same SOS' (unimplementable: the limiter tuple has no SOS-ID/seq dimension) to 'Rate-limiter headroom for the first 2 SOS per window'; added a two-bullet acknowledged-limitations note covering (a) the missing (origin, seq) tracking — updates and distinct SOSes indistinguishable, (origin,seq) tracking a future refinement NOT required, plus the cancel-starvation consequence (cancel/update share the bucket; exhausted budget leaves an active SOS visible until §18.4.6 timeout; senders SHOULD reserve headroom — guidance only), and (b) key-rotation resets abuse state. (2) spec/06-security.md §8.7.4 — added 'Abuse-state non-continuity (acknowledged)' note: the attestation proves key succession only and carries no application-layer abuse state; IID-keyed buckets/scores (SOS 3/hour, soft-blacklist) do not transfer; evasion window accepted, closing it would require signed abuse history the attestation deliberately omits. 3x codereview delegated to kimi-k3: pass1 correctness PASS (all claims verified against §18.4.1 tuple/§18.4.2 seq/§8.7.4 payload keys 1-4; cross-refs resolve; zero normative drift), pass2 security PASS (documents the window without weakening posture; removes a pre-existing overclaim; non-blocking 'per window' ambiguity predates diff), pass3 edge-cases 1 finding (cancel-starvation consequence undocumented) — fixed with the 'Consequence' + reserve-headroom sentence. Formatting/fences clean.",
   "labels": [
     "app-interface"
   ],

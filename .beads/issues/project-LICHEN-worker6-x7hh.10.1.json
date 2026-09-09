@@ -1,19 +1,18 @@
 {
   "id": "project-LICHEN-worker6-x7hh.10.1",
-  "title": "x7hh.10 leaf: CCP2-001..026 to vector-consumption mapping matrix",
+  "title": "x7hh.10 roll-up: CCP2-001..026 to vector-consumption mapping matrix",
   "description": "Map every CCP2-001..026 requirement to nonzero independent vector consumption across the three stacks' CI; no requirement without a consuming test.",
+  "design": "\n\n[hpc8-deep original]\n{\"acceptance_criteria\": \"Published matrix with per-requirement consuming test names across Python/Rust/C.\", \"actor\": \"opencode-decomposition\", \"dependencies\": [{\"created_at\": \"2026-09-09T03:37:40.231794237Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.10\", \"issue_id\": \"project-LICHEN-worker6-x7hh.10.1\", \"metadata\": \"{}\", \"type\": \"parent-child\"}, {\"created_at\": \"2026-09-09T03:38:27.411657446Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.7.3\", \"issue_id\": \"project-LICHEN-worker6-x7hh.10.1\", \"metadata\": \"{}\", \"type\": \"blocks\"}, {\"created_at\": \"2026-09-09T03:38:27.996150962Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.8.3\", \"issue_id\": \"project-LICHEN-worker6-x7hh.10.1\", \"metadata\": \"{}\", \"type\": \"blocks\"}, {\"created_at\": \"2026-09-09T03:38:28.551352562Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.9.3\", \"issue_id\": \"project-LICHEN-worker6-x7hh.10.1\", \"metadata\": \"{}\", \"type\": \"blocks\"}], \"description\": \"Map every CCP2-001..026 requirement to nonzero independent vector consumption across the three stacks' CI; no requirement without a consuming test.\", \"design\": null, \"id\": \"project-LICHEN-worker6-x7hh.10.1\", \"issue_type\": \"task\", \"notes\": null, \"plan_sha256\": \"c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1\", \"title\": \"x7hh.10 leaf: CCP2-001..026 to vector-consumption mapping matrix\"}\n[/hpc8-deep original]\nDecomposition only, not completion or approval. Preserve original requirements through the reviewed child contracts. Prerequisites belong on leaves, not rollups. Child keys: ci.01, ci.05, ci.06, ci.07, ci.08, ci.09, ci.10, ci.11, ci.12, ci.13, vectors.15.\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
   "acceptance_criteria": "Published matrix with per-requirement consuming test names across Python/Rust/C.",
-  "status": "in_progress",
+  "notes": "Claim-first decomposition completed and independently reviewed: this record is a roll-up, not completed implementation. Its child definitions and concrete prerequisites are now available to the dependency-aware frontier. Across the 31 roll-ups there are 172 new leaves and 771 blocking edges, with all scoped references resolved and no hierarchy/completion cycles. Human/RF/security authorization remains explicit; external contacts/filings stay deferred. Nine staged definitions received reviewed producer/handoff amendments in their native Beads fields; those current fields, not the initial temporary import inputs, are authoritative. No feature code, project tests, or RF work was executed as part of decomposition. No underlying work item was closed.",
+  "status": "open",
   "priority": 2,
-  "issue_type": "task",
-  "assignee": "opencode-decomposition",
+  "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T03:37:40.06514835Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T05:42:53.82891203Z",
+  "updated_at": "2026-09-09T07:18:29.655937072Z",
   "started_at": "2026-09-09T05:42:53.82891203Z",
-  "lease_expires_at": "2026-09-09T05:47:53.82891203Z",
-  "heartbeat_at": "2026-09-09T05:42:53.82891203Z",
   "labels": [
     "testing",
     "ci",
@@ -24,34 +23,10 @@
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-x7hh.10.1",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.10",
+      "depends_on_id": "project-LICHEN-kudc",
       "type": "parent-child",
-      "created_at": "2026-09-09T03:37:40.231794237Z",
-      "created_by": "Mark Atwood",
-      "metadata": "{}"
-    },
-    {
-      "issue_id": "project-LICHEN-worker6-x7hh.10.1",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.7.3",
-      "type": "blocks",
-      "created_at": "2026-09-09T03:38:27.411657446Z",
-      "created_by": "Mark Atwood",
-      "metadata": "{}"
-    },
-    {
-      "issue_id": "project-LICHEN-worker6-x7hh.10.1",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.8.3",
-      "type": "blocks",
-      "created_at": "2026-09-09T03:38:27.996150962Z",
-      "created_by": "Mark Atwood",
-      "metadata": "{}"
-    },
-    {
-      "issue_id": "project-LICHEN-worker6-x7hh.10.1",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.9.3",
-      "type": "blocks",
-      "created_at": "2026-09-09T03:38:28.551352562Z",
-      "created_by": "Mark Atwood",
+      "created_at": "2026-09-09T06:28:36.708711084Z",
+      "created_by": "opencode-decomposition",
       "metadata": "{}"
     }
   ]

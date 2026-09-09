@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-98kb",
+  "title": "04-network.md §12.1 normative block still shows rejected SHA-512 primary formula + IID-equality MUST",
+  "description": "Discovered during g2ao review (kimi-k3 security pass): spec/04-network.md §12.1 'Address Structure' (line ~260) still specifies 'Primary: [0x02] + SHA-512(pubkey)[0:7] + IID (0200::/8 native /128)' and the MUST at ~line 263 'lower 64 bits of primary address == IID' — the REJECTED lichen-native SHA-512 profile (spec/decisions.jsonl upstream-yggdrasil-addressing). The AddrForKey corrective exists only as §12.2 prose (lines ~277-283), so the normative block and the corrective contradict each other; a reader landing on §12.1 (e.g. from the new 11-lci disclaimer citation) sees IID-embedding restated as a MUST. Under the settled decision: node /128 MUST equal upstream AddrForKey in 0200::/8, and the IID-equality invariant must NOT be preserved by altering the upstream address. Fix: rewrite §12.1's primary row and strike/adjust the IID-equality MUST to match the settled decision (upstream AddrForKey bit-packed bytes; the IID binding applies to link-local only), keeping the §6.1 single-primary cross-ref. Part of the i72x migration sweep.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T07:48:42.157659647Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T07:59:38.740285834Z",
+  "started_at": "2026-09-09T07:49:45.364883476Z",
+  "closed_at": "2026-09-09T07:59:38.740285834Z",
+  "close_reason": "Fixed spec/04-network.md §12.1 normative block + §12.2 examples to match the settled upstream-yggdrasil-addressing decision. §12.1: primary row now 'AddrForKey(pubkey)' (0200::/8 upstream /128) replacing the rejected '[0x02]+SHA-512(pubkey)[0:7]+IID' native formula; rewrote the IID-equality MUST to scope the SHA-512 IID binding to link-local only and forbid altering the primary to preserve IID-equality; added SubnetForKey 0300::/8 for routed /64s; corrected the vector reference to test/vectors/yggdrasil_address.json (the upstream byte-equality corpus). §12.2: example addresses now use the genuine upstream anchor vector (pubkey bdbacfd8...6efb, primary 0200848a604fbb7e438465db8db66895, link-local fe80::cd97:71d9:dd74:5946 — IID independently recomputed via SHA-512+U/L-clear and confirmed against the corpus). No code; spec-text only. 3x codereview: reviewer model (kimi-k3) timed out reading the file 2x (ping OK), passes done directly per worker fallback — correctness (formula matches corpus upstream_go_addr_for_key note verbatim; example bytes match anchor; IID recomputed), security (IID-equality MUST removed per decision; link-local-only binding), consistency (no self-contradiction within §12). Residual: §6.1/§6.2 carry the same rejected formula one section up — out of 98kb's §12.1 scope, filed as a separate P2 follow-up (also flags 03-addressing.md:22).",
+  "labels": [
+    "spec",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-98kb",
+      "depends_on_id": "project-LICHEN-worker6-g2ao",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T07:48:42.288164093Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

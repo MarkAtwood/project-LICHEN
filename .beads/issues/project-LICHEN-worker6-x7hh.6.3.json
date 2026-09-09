@@ -1,19 +1,18 @@
 {
   "id": "project-LICHEN-worker6-x7hh.6.3",
-  "title": "x7hh.6 leaf: Corpus consumed by real production consumers",
+  "title": "x7hh.6 roll-up: Independent corpus freeze and consumer contract",
   "description": "Wire the corpus into real production consumers (node/scheduler/radio paths), not test-only harnesses.",
-  "acceptance_criteria": "Each corpus fixture consumed by at least one production code path in one stack; consumed-by matrix recorded.",
-  "status": "in_progress",
+  "design": "\n\n[hpc8-deep original]\n{\"acceptance_criteria\": \"Each corpus fixture consumed by at least one production code path in one stack; consumed-by matrix recorded.\", \"actor\": \"opencode-decomposition\", \"dependencies\": [{\"created_at\": \"2026-09-09T03:37:34.537626217Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.6\", \"issue_id\": \"project-LICHEN-worker6-x7hh.6.3\", \"metadata\": \"{}\", \"type\": \"parent-child\"}, {\"created_at\": \"2026-09-09T03:38:19.92608051Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.6.1\", \"issue_id\": \"project-LICHEN-worker6-x7hh.6.3\", \"metadata\": \"{}\", \"type\": \"blocks\"}, {\"created_at\": \"2026-09-09T03:38:20.509255488Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.6.2\", \"issue_id\": \"project-LICHEN-worker6-x7hh.6.3\", \"metadata\": \"{}\", \"type\": \"blocks\"}], \"description\": \"Wire the corpus into real production consumers (node/scheduler/radio paths), not test-only harnesses.\", \"design\": null, \"id\": \"project-LICHEN-worker6-x7hh.6.3\", \"issue_type\": \"task\", \"notes\": null, \"plan_sha256\": \"c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1\", \"title\": \"x7hh.6 leaf: Corpus consumed by real production consumers\"}\n[/hpc8-deep original]\nDecomposition only, not completion or approval. Preserve original requirements through the reviewed child contracts. Prerequisites belong on leaves, not rollups. Child keys: vectors.11, vectors.11.audit.\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.\nScope clarification: Independent corpus freeze and consumer contract only: freeze revision/provenance, independent expected results, strict schema/rejection rules, and nonzero-consumption contracts. Actual consumers are vectors.12/.13/.14 under x7hh.7.3/.8.3/.9.3; vectors.15 is under CI x7hh.10.1. Their downstream execution and measurements do not gate independent corpus authority. Preserve original coverage requirements in the retained original record and the consumer/CI leaf contracts. HPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "acceptance_criteria": "Independent corpus freeze and consumer contract only: freeze revision/provenance, independent expected results, strict schema/rejection rules, and nonzero-consumption contracts. Actual consumers are vectors.12/.13/.14 under x7hh.7.3/.8.3/.9.3; vectors.15 is under CI x7hh.10.1. Their downstream execution and measurements do not gate independent corpus authority. Preserve original coverage requirements in the retained original record and the consumer/CI leaf contracts. HPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "notes": "Claim-first decomposition completed and independently reviewed: this record is a roll-up, not completed implementation. Its child definitions and concrete prerequisites are now available to the dependency-aware frontier. Across the 31 roll-ups there are 172 new leaves and 771 blocking edges, with all scoped references resolved and no hierarchy/completion cycles. Human/RF/security authorization remains explicit; external contacts/filings stay deferred. Nine staged definitions received reviewed producer/handoff amendments in their native Beads fields; those current fields, not the initial temporary import inputs, are authoritative. No feature code, project tests, or RF work was executed as part of decomposition. No underlying work item was closed.",
+  "status": "open",
   "priority": 2,
-  "issue_type": "task",
-  "assignee": "opencode-decomposition",
+  "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T03:37:34.3721154Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T05:42:55.092492885Z",
+  "updated_at": "2026-09-09T07:18:32.063223872Z",
   "started_at": "2026-09-09T05:42:55.092492885Z",
-  "lease_expires_at": "2026-09-09T05:47:55.092492885Z",
-  "heartbeat_at": "2026-09-09T05:42:55.092492885Z",
   "labels": [
     "testing",
     "vectors",
@@ -23,26 +22,10 @@
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-x7hh.6.3",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.6",
+      "depends_on_id": "project-LICHEN-kudc",
       "type": "parent-child",
-      "created_at": "2026-09-09T03:37:34.537626217Z",
-      "created_by": "Mark Atwood",
-      "metadata": "{}"
-    },
-    {
-      "issue_id": "project-LICHEN-worker6-x7hh.6.3",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1",
-      "type": "blocks",
-      "created_at": "2026-09-09T03:38:19.92608051Z",
-      "created_by": "Mark Atwood",
-      "metadata": "{}"
-    },
-    {
-      "issue_id": "project-LICHEN-worker6-x7hh.6.3",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.6.2",
-      "type": "blocks",
-      "created_at": "2026-09-09T03:38:20.509255488Z",
-      "created_by": "Mark Atwood",
+      "created_at": "2026-09-09T06:28:17.773819164Z",
+      "created_by": "opencode-decomposition",
       "metadata": "{}"
     }
   ]

@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-lptm",
+  "title": "[design] IID-from-wire-address extraction broken post-AddrForKey at 4 call sites (dao_manager delegate binding, tunnel_auth peer IID, waypoints/confessions admission keys)",
+  "description": "Sweep result from 7pt2 (Python AddrForKey migration). Four production call sites extract an IID as address.packed[8:16] from a wire address; post-migration a 02xx primary's lower 64 bits are a bit-packed fragment of the inverted key, NOT the SHA-512 IID, so these break or change semantics:\n\n1. python/src/lichen/rpl/dao_manager.py:1172 — entry.delegate_iid (a real SHA-512 IID from the signed delegation token, crypto/delegation_tokens.py) compared against source_address.packed[8:16]. DAO sources are primary 02xx (spec 05-routing 8.6), so the legitimate delegate now gets delegate_mismatch. Same class as o5bl (validator cannot reverse address-\u003eIID).\n2. python/src/lichen/coap/resources/tunnel_auth.py:107 — returns address.packed[8:] of the OSCORE request remote as peer IID; consumers compare against pinned root IID. Broken when the request arrives on the root's 02xx primary; still correct if it arrives link-local (fe80::IID still embeds the IID).\n3. python/src/lichen/coap/resources/waypoints.py:64 — admission identity = addr.packed[8:16].hex() (spec 18.3.2 per-originator IID).\n4. python/src/lichen/coap/resources/confessions.py:118 — same pattern.\n\nDESIGN DECISION NEEDED (same class as o5bl/5muj): (a) re-key these bindings on the full 16-byte address; (b) carry the IID explicitly in the payload/token; or (c) normatively require these exchanges to arrive link-local. Note the link-local caveat: extraction remains valid for fe80:: sources, so (c) may already be the de-facto wire reality for waypoints/confessions; dao_manager/tunnel_auth deal with 02xx sources and definitely break. Related: o5bl (dao_origin pin table), i72x.6 (corpus regen).",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T09:47:48.439445307Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T09:47:48.439445307Z",
+  "labels": [
+    "python",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-lptm",
+      "depends_on_id": "project-LICHEN-worker6-7pt2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T09:47:48.575444725Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

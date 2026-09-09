@@ -1,0 +1,56 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.2.3",
+  "title": "Rust: canonical permitted masks and sparse sets",
+  "description": "Implement bounded CCP2 permitted-set validation and operations alongside the plan primitives exported by rust/lichen-core/src/lib.rs. Represent masks as ceil(channel_count/8) bytes with index i at bit 7-(i mod 8), require zero unused bits and retain sparse global indices during membership, intersection and ascending iteration. Counts and indices must be validated before use. Do not apply legacy u32/u64 clipping or renumber the set after intersection.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "This extracts only mask/set mechanics from rust.01. Reuse b7z9.23's admission/intersection structure where compatible, preserving legacy behavior in rust/lichen-core/src/tdma_beacon.rs and rf_health.rs until explicit versioned integration. The registry is rust.01.registry; rust.01 validates their combined boundary. No new bitset dependency, framework or wire allocation is required. Preserve identity/radio ownership, baseline SCHC/security, best-effort custody and deferred portability; no audited OSCORE/EDHOC edits or hardware access.",
+  "acceptance_criteria": "Consume independent vectors.03 byte strings and set expectations through production mask APIs in rust/lichen-core/tests. Check counts 0/1/8/32/64/128/255/256, wrong lengths, nonzero padding, all-zero and CH0-only sets, upper indices and sparse {0,64,127} encoded as 80000000000000008000000000000001. Verify intersection and iteration retain original global indices and bounded no_std storage. Run targeted core tests, cargo check --no-default-features -p lichen-core, fmt and scoped clippy. Round trips and implementation-generated expected masks are not independent oracles.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:17.035325172Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:12.020812384Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rust.01.masks",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rust.01.masks",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "a491b36c3ce3e91864fb9a46a7d528e80e5a66543456b098d8fd4e9545fe3f0d"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:17.196813737Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:03.23643942Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.2.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:04.318871988Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

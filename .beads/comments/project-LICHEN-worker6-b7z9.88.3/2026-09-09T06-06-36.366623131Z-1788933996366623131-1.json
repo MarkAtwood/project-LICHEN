@@ -1,0 +1,7 @@
+{
+  "id": "1788933996366623131-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.88.3",
+  "author": "Mark Atwood",
+  "text": "worker4 assessment (2026-09-09): claiming then releasing WITHOUT changes — this bead is a debugging/spec-clarification task, not a 15-min leaf, and has already consumed 2 worker-1 rounds. The open blocker is NOT test mechanics (harness built, pin via pre-existing pin_for_test works) but a DOWNSTREAM semantic: a Baseline-admitted root-signed DIO still returns RplRejected, hypothesized to be the DODAG version-authorization gate rejecting a hand-built DIO that lacks a DODAG_VERSION_AUTHORIZATION option (producer territory = sibling b7z9.88.2). Resolution requires either (a) building the test DIO via a provisioned ROOT sender's build_authenticated_dio (two-key shape: link key + COSE key) or (b) a spec ruling on whether Baseline-admitted DIOs are exempt from version-auth. Recommend: gate this bead on b7z9.88.2 landing first (so the producer exists to mint a well-formed signed DIO for the RX test), and add a no_std-test logging/instrumentation seam (the log facade is not enabled for tests, which is why worker-1 could not localize). Not claiming further this round.",
+  "created_at": "2026-09-09T06:06:36.366623131Z"
+}

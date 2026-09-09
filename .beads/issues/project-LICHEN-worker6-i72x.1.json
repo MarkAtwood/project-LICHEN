@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-i72x.1",
+  "title": "Migrate C Yggdrasil derivation to upstream AddrForKey",
+  "description": "Rewrite lichen_identity_ygg_addr_from_ed25519 (lichen/subsys/lichen/link/identity_addr.c:49-67) to exact upstream AddrForKey per spec/decisions.jsonl upstream-yggdrasil-addressing: invert 32-byte pubkey; addr[0]=0x02; addr[1]=count of leading 1 bits in inverted key; skip those 1s and the first 0 bit; pack remaining bits MSB-first into WHOLE bytes, DISCARD trailing partial byte; copy into addr[2:16] with unwritten tail zero. NO hashing. Reference: yggdrasil-go@422836ee src/address/address.go (fetched copy verified; upstream test anchor pubkey bdbacfd8...6efb -\u003e 0200848a604fbb7e438465db8db66895). Keep lichen_key_pubkey_to_iid UNCHANGED (SHA-512 IID stays for link-local per settled decision). Sync the vendored copy firmware/bridge-zephyr/subsys/lichen/ipv6_addr.c:155-195 (same algorithm swap). Fix stale doc comments presenting the SHA-512 native profile as live: lichen/subsys/lichen/link/include/lichen/link_ctx.h:~439, lichen/subsys/lichen/l2/ipv6_addr.h:11 area. Fix C test fallout with expected bytes derived from the UPSTREAM algorithm (external oracle = upstream address_test.go vectors / verified independent port, NEVER the C impl): lichen/tests/pubkey_to_iid/main.c (native ygg bytes ~L38-101 asserted at L168), lichen/tests/link_crypto/src/main.c:497-555 (3 vectors). Survey+fix any other C tests pinning old-profile 02xx bytes (candidates: lichen/tests/ping_l2/src/main.c:200, native_init, rpl_root_sig via rpl/root_dio_sig.c:419). IID assertions stay as-is. Verify: cmake host builds + ctest green for every touched/suspect suite. Overlaps scope of open survey bead project-LICHEN-worker6-q6ko.4 - comment there when landing.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:21:25.268705951Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T06:30:59.054386516Z",
+  "started_at": "2026-09-09T06:23:39.428364553Z",
+  "closed_at": "2026-09-09T06:30:59.054386516Z",
+  "close_reason": "Migrated C AddrForKey to upstream Yggdrasil. lichen_identity_ygg_addr_from_ed25519 (identity_addr.c:51-108) now implements exact upstream AddrForKey @422836ee (invert, leading-1 count with uint8 wrap at 256, skip 1s+first 0, MSB-first whole-byte packing, trailing partial discarded, zero tail; NO hashing). lichen_key_pubkey_to_iid UNCHANGED (SHA-512 IID link-local-only). Doc comments fixed in link_ctx.h + ipv6_addr.h. Bridge-copy sync skipped: firmware/bridge-zephyr ipv6_addr.c has NO derivation (bead's :155-195 ref is stale — that region is make_link_local/make_ula). Test vectors from independent oracles ONLY: upstream address_test.go anchor (bdbacfd8..6efb -\u003e 0200848a604fbb7e438465db8db66895, cross-checked against an independent Python port at /tmp/opencode/ygg_ref.py) + Python schnorr48 signer for rpl_root_sig blob regeneration. Fixed C test fallout in the TWO named files (pubkey_to_iid: new expected bytes + 4th anchor vector + dead addr[8:16]==IID invariant dropped; link_crypto: same 3 vectors + anchor + comment) PLUS one file the bead missed: rpl_root_sig (its DODAGID-coupled blobs embed native-profile addresses — regenerated vector_cose_sign1/far_expiry/impersonation + vector_dodag_id for the same seeds/fields with upstream DODAGID 020030ad221f03322adb901f8b731688). Shared root_dio_signature.json deliberately NOT regenerated (Rust i72x.2 + Python still native; regeneration tracked in i72x.6). Verified: pubkey_to_iid host PASS (ASan/UBSan), link_crypto native_sim FULL SUITE PASS, rpl_root_sig host PASS, rpl_dodag host PASS, ping_l2 native_sim 8/8 PASS. 3x codereview (correctness/security/edge) all PASS — reviewer delegation (opencode run plan agent) produced empty output again on substantive prompts (2nd round in a row), passes done inline per documented fallback. Follow-ups filed: i72x.5 (app_identity.c:46-63 + gcp_trust.c:51-66 duplicate native derivations — must migrate WITH Python/Rust, not piecemeal), i72x.6 (root_dio_signature.json regeneration + missing Python migration child). Commit 653b7b08cf.",
+  "labels": [
+    "yggdrasil",
+    "zephyr",
+    "decomposed"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-i72x.1",
+      "depends_on_id": "project-LICHEN-worker6-i72x",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:21:25.395008511Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,25 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: The contributors to the LICHEN project
-"""Consume the yggdrasil addressing corpora through the real derivation.
+"""Consume the yggdrasil addressing corpus through the real derivation.
 
 Per spec/decisions.jsonl ``upstream-yggdrasil-addressing``, a node's routable
-address MUST equal upstream Yggdrasil ``AddrForKey(Ed25519PublicKey)``. The
-former ``lichen_native_sha512`` profile is REJECTED.
+address MUST equal upstream Yggdrasil ``AddrForKey(Ed25519PublicKey)`` and a
+routed /64 subnet MUST equal upstream ``SubnetForKey`` in ``0300::/8``. The
+implementation under test IS the upstream algorithm; the single upstream
+yggdrasil-go anchor (``upstream_addr_for_key``) is the pinned external oracle,
+kept verbatim, and MUST match byte-for-byte.
 
-Two files are consumed:
-
-1. ``test/vectors/yggdrasil_address.json`` (LIVE) — the pinned upstream
-   yggdrasil-go ``AddrForKey`` anchor (verbatim external oracle) plus
-   profile-agnostic ``error_case`` length rejections.
-2. ``test/vectors/legacy/yggdrasil_address_native_sha512.json`` (QUARANTINED,
-   see ``test/vectors/legacy/README.md``) — the ten rejected-profile vectors,
-   moved verbatim out of the live corpus. They are consumed ONLY as a
-   quarantine-integrity pin of pre-migration behavior, never as a conformance
-   oracle: the current Python derivation still implements the rejected
-   profile, so the byte-exact cases document that state and trip if the
-   derivation changes accidentally before the upstream AddrForKey migration
-   lands. When the migration lands, those cases MUST be deleted and the
-   anchor divergence test MUST flip from inequality to byte-equality.
+The former ``lichen_native_sha512`` profile is REJECTED; its vectors are
+quarantined in ``test/vectors/legacy/yggdrasil_address_native_sha512.json``
+and are NOT consumed here (the upstream AddrForKey migration has landed).
 """
 
 from __future__ import annotations
@@ -29,16 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from lichen.crypto.identity import _pubkey_to_iid, yggdrasil_address
+from lichen.crypto.identity import _pubkey_to_iid, subnet_for_key, yggdrasil_address
 
 VECTORS = Path(__file__).resolve().parents[3] / "test" / "vectors" / "yggdrasil_address.json"
-LEGACY_NATIVE = (
-    Path(__file__).resolve().parents[3]
-    / "test"
-    / "vectors"
-    / "legacy"
-    / "yggdrasil_address_native_sha512.json"
-)
 
 ANCHOR_NAME = "upstream_addr_for_key"
 
@@ -48,16 +33,11 @@ ANCHOR_NAME = "upstream_addr_for_key"
 GO_ANCHOR_PUBKEY = "bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb"
 GO_ANCHOR_ADDRESS = "0200848a604fbb7e438465db8db66895"
 GO_ANCHOR_IPV6 = "200:848a:604f:bb7e:4384:65db:8db6:6895"
+GO_ANCHOR_SUBNET = "0300848a604fbb7e"
 
 
 def _document() -> dict:
     document = json.loads(VECTORS.read_text())
-    assert document["format_version"] == 1
-    return document
-
-
-def _legacy_document() -> dict:
-    document = json.loads(LEGACY_NATIVE.read_text())
     assert document["format_version"] == 1
     return document
 
@@ -68,14 +48,6 @@ def _anchor() -> dict:
     return anchors[0]
 
 
-def _legacy_native_cases() -> list[tuple[str, dict]]:
-    return [
-        (v["name"], v)
-        for v in _legacy_document()["vectors"]
-        if v.get("profile") == "lichen_native_sha512"
-    ]
-
-
 def _error_cases() -> list[tuple[str, dict]]:
     return [
         (v["name"], v) for v in _document()["vectors"] if v.get("expect_error") == "pubkey_length"
@@ -83,13 +55,9 @@ def _error_cases() -> list[tuple[str, dict]]:
 
 
 def test_corpus_shape() -> None:
-    """Live corpus holds anchor + error cases only; native vectors stay quarantined."""
+    """Live corpus holds the anchor + error cases; no rejected native vectors."""
     vectors = _document()["vectors"]
-    assert len(_legacy_native_cases()) >= 10
     assert len(_error_cases()) >= 2
-    assert len(vectors) == len(_error_cases()) + 1, (
-        "live corpus must hold exactly the anchor plus the error cases"
-    )
     assert all(v.get("profile") != "lichen_native_sha512" for v in vectors), (
         "live corpus must not hold rejected native-profile vectors"
     )
@@ -103,47 +71,48 @@ def test_upstream_anchor_is_verbatim_go_reference() -> None:
     assert anchor["ipv6"] == GO_ANCHOR_IPV6
 
 
-def test_upstream_anchor_diverges_from_current_native_profile() -> None:
-    """PINNED MIGRATION GAP, not a target state.
-
-    Upstream AddrForKey bit-packs the inverted key; the current derivation
-    still implements the REJECTED SHA-512 profile (decisions.jsonl
-    upstream-yggdrasil-addressing). The only shared byte is the leading 0x02
-    prefix. When the upstream AddrForKey migration lands, the inequality
-    below MUST flip to byte-equality (it will fail loudly until flipped).
-    """
+def test_upstream_addr_for_key_byte_equality() -> None:
+    """yggdrasil_address MUST equal upstream AddrForKey byte-for-byte."""
     anchor = _anchor()
     derived = yggdrasil_address(bytes.fromhex(anchor["public_key"]))
-    assert derived.packed.hex() != anchor["address"], (
-        "upstream AddrForKey migration has landed: flip this test to byte-equality"
+    assert derived.packed.hex() == anchor["address"], (
+        "yggdrasil_address must equal upstream AddrForKey byte-for-byte"
     )
-    assert derived.packed[0] == bytes.fromhex(anchor["address"])[0]
+    assert str(derived) == anchor["ipv6"]
+    assert derived.packed[0] == 0x02
 
 
-@pytest.mark.parametrize("name,vector", _legacy_native_cases())
-def test_quarantined_native_vectors_byte_exact_pin(name: str, vector: dict) -> None:
-    """QUARANTINE-INTEGRITY PIN, not a conformance oracle.
+def test_upstream_subnet_for_key_byte_equality() -> None:
+    """subnet_for_key MUST equal upstream SubnetForKey byte-for-byte."""
+    anchor = _anchor()
+    pubkey = bytes.fromhex(anchor["public_key"])
+    subnet = subnet_for_key(pubkey)
+    assert subnet.hex() == GO_ANCHOR_SUBNET, (
+        "subnet_for_key must equal upstream SubnetForKey byte-for-byte"
+    )
+    # Subnet lives in 0300::/8 (prefix low bit set) and shares the
+    # leading-1 count byte with the address.
+    assert subnet[0] & 0x01 == 0x01
+    assert subnet[1] == yggdrasil_address(pubkey).packed[1]
 
-    The vectors encode the REJECTED SHA-512 native profile
-    (test/vectors/legacy/README.md). The implementation still derives that
-    profile — a known, tracked migration gap. This test trips if the
-    derivation changes accidentally before the upstream AddrForKey migration
-    lands; when it lands, this test MUST be deleted.
+
+def test_degenerate_all_zero_key_matches_upstream_semantics() -> None:
+    """All-zero key -> inverted all-ones -> no separator -> empty payload.
+
+    The leading-1 count wraps 256 -> 0 (Go byte overflow) and no payload bits
+    are appended, yielding 0200:: (0x02 followed by fifteen zero bytes).
     """
-    public_key = bytes.fromhex(vector["public_key"])
-    derived = yggdrasil_address(public_key)
-    iid = _pubkey_to_iid(public_key)
+    derived = yggdrasil_address(bytes(32))
+    assert derived.packed == b"\x02" + bytes(15)
 
-    # Byte-exact address and canonical text form.
-    assert derived.packed.hex() == vector["address"], name
-    assert str(derived) == vector["ipv6"], name
-    assert derived.packed[0] == 0x02, name
 
-    # IID agreement plus the legacy binding invariant: lower 64 bits of the
-    # address equal the key-derived IID.
-    assert iid.hex() == vector["iid"], name
-    assert derived.packed[8:] == iid, name
-    assert iid[0] & 0x02 == 0, f"{name}: U/L bit must be clear in IID"
+def test_routable_address_does_not_embed_iid() -> None:
+    """The routable address carries no SHA-512 IID in its lower 64 bits."""
+    anchor = _anchor()
+    pubkey = bytes.fromhex(anchor["public_key"])
+    derived = yggdrasil_address(pubkey)
+    iid = _pubkey_to_iid(pubkey)
+    assert derived.packed[8:] != iid, "routable address must not embed the IID"
 
 
 @pytest.mark.parametrize("name,vector", _error_cases())

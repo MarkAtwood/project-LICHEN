@@ -1,0 +1,55 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.4.1.5",
+  "title": "Research amateur station and site eligibility",
+  "description": "Assemble primary Part 97 requirements for station/operator eligibility, proposed sites, sharing obligations, permitted emissions and power. Include 97.303 33-cm geographic restrictions and complete emission envelopes, not just channel centers. Record missing operator or location information without inventing it.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Read-only research, not station authorization or licensing selection. Do not request licenses, contact coordinators, inspect physical devices or turn an existing Part 15 deployment into an amateur deployment. Human emission/control review is narrow.06.",
+  "acceptance_criteria": "A clause-backed applicability table identifies known, excluded and unresolved site/configuration cases. Independently checked geographic boundary examples distinguish restricted segments and areas. Include minimum necessary power and applicable SS limits without assuming a blanket 1500 W allowance.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:26:15.556814784Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:25.152359027Z",
+  "external_ref": "lichen-decomp-hpc8-deep:narrow.05",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "narrow.05",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "82e8acaed67864ac56ba7f0702d63a3301ae2ce5375e6542c916058f7309be68"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "experimental",
+    "regulatory",
+    "research"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.1.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.4.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:26:15.70234067Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.1.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.11.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:55.127460501Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.4.1.5",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.2.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:42:56.201762476Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

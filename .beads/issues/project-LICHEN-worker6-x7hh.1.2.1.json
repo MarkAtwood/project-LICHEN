@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.1.2.1",
+  "title": "Specify CCP2 time units and activation boundaries",
+  "description": "Scope: timing fields in /home/mark/Developer/lichen-workspace/project-LICHEN/spec/02b-ccp-receiver-aware.md, using /home/mark/Developer/lichen-workspace/project-LICHEN/spec/09-packets-timing.md section 14.6 as the adopted time-source authority. Specify integer widths and units, reference instant, period, phase, control-window duration, activation/expiry, endpoint inclusion, overflow behavior, and SFN projection. Keep schedule generation, link replay epoch, and SFN wrap distinct. Deliver independently worked boundary examples; do not change the adopted time-source ordering or select a universal control cadence.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Specify observable interval semantics once for all languages. Wall-clock schedule reference and monotonic elapsed accounting remain separate contracts; no new clock-selection policy is introduced.",
+  "acceptance_criteria": "Every offset and duration in the wire contract has exact units and bounds. Worked examples cover exact activation, exact expiry, one-unit-late input, SFN wrap, below-floor time, and invalid clock provenance. The text explains which state is invalidated at each boundary without treating ordinary signed data as synchronization. No timing example silently grants extra setup, response, or guard airtime.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 120,
+  "created_at": "2026-09-09T06:24:04.467056089Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:21.631371626Z",
+  "external_ref": "lichen-decomp-hpc8-deep:wire.03",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "wire.03",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "2d7ce393b5e6a305ac473a7c52bbda09c9770171b6b6164e9e9405698a96943e"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "spec",
+    "timing",
+    "wire"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:04.601534136Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.1.2.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:30:34.668897918Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

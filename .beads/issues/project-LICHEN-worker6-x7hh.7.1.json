@@ -1,19 +1,18 @@
 {
   "id": "project-LICHEN-worker6-x7hh.7.1",
-  "title": "x7hh.7 leaf: Python scheduler TX path: slot_map beacon writer",
+  "title": "x7hh.7 roll-up: Python scheduler TX path: slot_map beacon writer",
   "description": "Integrate finalized CCP2 policy/wire through the Python scheduler TX path including slot_map beacon writing (spec 02a 2a.2), reusing b7z9.22 helpers.",
+  "design": "\n\n[hpc8-deep original]\n{\"acceptance_criteria\": \"Beacon bytes match corpus vectors; scheduler emits only receiver-admissible schedules.\", \"actor\": \"opencode-decomposition\", \"dependencies\": [{\"created_at\": \"2026-09-09T03:37:35.116127284Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.7\", \"issue_id\": \"project-LICHEN-worker6-x7hh.7.1\", \"metadata\": \"{}\", \"type\": \"parent-child\"}, {\"created_at\": \"2026-09-09T03:38:21.084702147Z\", \"created_by\": \"Mark Atwood\", \"depends_on_id\": \"project-LICHEN-worker6-x7hh.6.3\", \"issue_id\": \"project-LICHEN-worker6-x7hh.7.1\", \"metadata\": \"{}\", \"type\": \"blocks\"}], \"description\": \"Integrate finalized CCP2 policy/wire through the Python scheduler TX path including slot_map beacon writing (spec 02a 2a.2), reusing b7z9.22 helpers.\", \"design\": null, \"id\": \"project-LICHEN-worker6-x7hh.7.1\", \"issue_type\": \"task\", \"notes\": null, \"plan_sha256\": \"c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1\", \"title\": \"x7hh.7 leaf: Python scheduler TX path: slot_map beacon writer\"}\n[/hpc8-deep original]\nDecomposition only, not completion or approval. Preserve original requirements through the reviewed child contracts. Prerequisites belong on leaves, not rollups. Child keys: python.01, python.02, python.04, python.05, python.06, python.07, python.09.\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
   "acceptance_criteria": "Beacon bytes match corpus vectors; scheduler emits only receiver-admissible schedules.",
-  "status": "in_progress",
+  "notes": "Claim-first decomposition completed and independently reviewed: this record is a roll-up, not completed implementation. Its child definitions and concrete prerequisites are now available to the dependency-aware frontier. Across the 31 roll-ups there are 172 new leaves and 771 blocking edges, with all scoped references resolved and no hierarchy/completion cycles. Human/RF/security authorization remains explicit; external contacts/filings stay deferred. Nine staged definitions received reviewed producer/handoff amendments in their native Beads fields; those current fields, not the initial temporary import inputs, are authoritative. No feature code, project tests, or RF work was executed as part of decomposition. No underlying work item was closed.",
+  "status": "open",
   "priority": 2,
-  "issue_type": "task",
-  "assignee": "opencode-decomposition",
+  "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T03:37:34.952356507Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T05:42:54.949764152Z",
+  "updated_at": "2026-09-09T07:18:32.203754819Z",
   "started_at": "2026-09-09T05:42:54.949764152Z",
-  "lease_expires_at": "2026-09-09T05:47:54.949764152Z",
-  "heartbeat_at": "2026-09-09T05:42:54.949764152Z",
   "labels": [
     "python",
     "ccp",
@@ -23,18 +22,10 @@
   "dependencies": [
     {
       "issue_id": "project-LICHEN-worker6-x7hh.7.1",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.7",
+      "depends_on_id": "project-LICHEN-kudc",
       "type": "parent-child",
-      "created_at": "2026-09-09T03:37:35.116127284Z",
-      "created_by": "Mark Atwood",
-      "metadata": "{}"
-    },
-    {
-      "issue_id": "project-LICHEN-worker6-x7hh.7.1",
-      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3",
-      "type": "blocks",
-      "created_at": "2026-09-09T03:38:21.084702147Z",
-      "created_by": "Mark Atwood",
+      "created_at": "2026-09-09T06:28:19.457600441Z",
+      "created_by": "opencode-decomposition",
       "metadata": "{}"
     }
   ]

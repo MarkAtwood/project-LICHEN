@@ -1,0 +1,7 @@
+{
+  "id": "1788933895937410743-1",
+  "issue_id": "project-LICHEN-worker6-m4yk",
+  "author": "Mark Atwood",
+  "text": "VERIFIED ALREADY-FIXED (beads-worker-6, 2026-09-09, via ssh heft native_sim/native/64). Built and ran the current tree (identical to origin/main; heft main.c, worker6 main.c, and origin/main are byte-identical) at /tmp/build-m4yk-pingl2: SUITE PASS 8/8, including test_udp_payload_reaches_socket_after_l2_injection (PASS, 0.290s) and both teardown tests (test_disable_retries_incomplete_queue_destruction PASS, test_queue_stats_accessor_lifecycle PASS). The -126 'no signing key' log lines still appear DURING the two teardown tests, but they are transient: queued async TX retries racing the link_ctx wipe between the key clear and reprovision_after_reinit() re-load. Both teardown tests PASS because their own reprovision_after_reinit() re-loads key+peer before asserting, and the UDP test now re-provisions idempotently (main.c:493/509/522, with the state-keyed recovery at :487-519) before send_l2_packet, so its send no longer hits -ENOKEY. The m4yk recovery hardening already present in main.c (state-keyed is_running/needs_reinit branch + idempotent reprovision_after_reinit tolerating -EALREADY, citing this bead at :490-492) is the fix; it predates this round. No code change required. Validation: west build -b native_sim/native/64 clean; zephyr.exe run -\u003e TESTSUITE ping_l2 succeeded, pass=8 fail=0.",
+  "created_at": "2026-09-09T06:04:55.937410743Z"
+}

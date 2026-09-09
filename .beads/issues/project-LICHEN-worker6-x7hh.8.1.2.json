@@ -1,0 +1,80 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.1.2",
+  "title": "Rust: receiver context adoption and expiry",
+  "description": "Connect authenticated Announce processing in rust/lichen-node/src/announce.rs to receiver context owned by rust/lichen-node/src/stack.rs. Store bounded receiver/root/DODAG/plan/generation/profile/validity context and preserve advertised global indices. Receiver home derivation uses receiver wire EUI-64 and shared generation; sender-local permissions validate the selected channel but cannot rehash a different subset.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Reuse existing AnnounceProcessor and trust-store admission rather than inventing a new peer identity database. Keep full authenticated identities and upstream Yggdrasil addresses, not a substituted IID-equality scheme. Key portability remains deferred. Do not change baseline SCHC, custody policy, signature domains or audited OSCORE/EDHOC internals. Legacy range/mask behavior remains explicitly classified rather than silently widened on old wire.",
+  "acceptance_criteria": "Consume vectors.02/.03 through production adoption and selection. Cover direct versus relayed origins, immediate next-hop identity, sender versus receiver generation, sparse sets, stale replacement, expiry, capacity bounds and locally unusable home channel. The same receiver contract remains stable across SFN, density and CCA failures. Extend rust/lichen-node/tests and focused Announce/Stack tests using independent expected channels and events. Run std-enabled tests plus relevant no-default-feature checks, fmt and clippy.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:18.707128766Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:11.720665264Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rust.03",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rust.03",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "5fb6500354966868db3db40f658f993b796c23115f65f30acb782b5a095e6400"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:18.866085759Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:09.712625572Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:10.853348297Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:11.962799523Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:13.097033895Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:38:14.257139153Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

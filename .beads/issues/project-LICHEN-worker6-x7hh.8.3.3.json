@@ -1,0 +1,96 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.3.3",
+  "title": "Rust: gateway resource capability publication",
+  "description": "Connect actual gateway radio resources in rust/lichen-gateway/src/gateway.rs and rust/lichen-hal/src/lib.rs to publication in rust/lichen-gateway/src/capability_announcements.rs. Reuse the core finite-resource model to report supported channel/profile settings, simultaneous RX chains, TX chains, half-duplex exclusions, passband placement and demodulator limits under the finalized authenticated contract. Unknown or unsupported capability must not be represented as an available resource.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "This extracts capability publication from the former rust.14 scope. rust.05 owns the core resource model, rust.02 the wire boundary, rust.09 shared report semantics and rust.13 the integrated node path; do not duplicate those mechanisms or create new hardware support. rust.14.admission separately owns gateway traffic wiring. Preserve radio-owned identity, upstream Yggdrasil, baseline SCHC/security and best-effort custody; portability is deferred and audited OSCORE/EDHOC remains untouched. No hardware access, RF activation or measured-capability claim is authorized.",
+  "acceptance_criteria": "Consume independent vectors.02/.04 through production capability extraction and publication, checking frozen bytes and explicit resource tables. Test one radio, multiple RX/one TX, disjoint/restricted passbands, finite demodulators, unsupported profiles and missing capability data. Assert tunable channel count, scanning and a concentrator type name cannot manufacture parallel reception. Extend rust/lichen-gateway/tests and focused HAL capability tests with deterministic backends. Run hosted tests using current manifests, affected shared-crate --no-default-features checks, fmt and scoped clippy; do not use production publication as its own oracle.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T06:25:29.412217294Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:10.049840531Z",
+  "external_ref": "lichen-decomp-hpc8-deep:rust.14.capabilities",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "rust.14.capabilities",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "076a2074c90b1f1fbc5237007079878c12415748a252c3fc6c4eb911a725871f"
+  },
+  "labels": [
+    "ccp",
+    "ccp2",
+    "decomp-hpc8-deep",
+    "local-ok",
+    "production",
+    "rust"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.3",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:25:29.579998177Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:24.475626368Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:25.564943878Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3.2",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:26.637764327Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:27.741597771Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.12",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:28.845209659Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:29.98976255Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.3.3",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8.1.8",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:39:31.189007043Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

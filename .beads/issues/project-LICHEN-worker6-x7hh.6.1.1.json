@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.6.1.1",
+  "title": "Define strict CCP2 corpus and consumer contract",
+  "description": "Scope: revision-specific fixture/schema entries in /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/ and their existing registration in /home/mark/Developer/lichen-workspace/project-LICHEN/python/tests/test_vectors.py. Define closed, bounded case families, unique IDs, requirement references, oracle provenance, source/wire/corpus revisions, and an explicit nonempty applicability inventory. Specify the language-neutral consumer input, operation, expected outcome and case-accounting contract without implementing production adapters. Reuse existing schema validation rather than mandating a new framework or file layout.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Use the existing per-family or shared-schema pattern that best fits. Keep fixture format_version independent of policy/wire versions, and define a finite inventory that later consumers must report exactly.",
+  "acceptance_criteria": "The vector tree has an explicit strict schema policy for every CCP2 family and the corpus manifest/consumer contract is self-contained. Independent malformed-document tests reject unknown kinds, missing families, duplicate IDs, wrong versions, bool-as-integer inputs and empty selections. No new CCP2 family is added to the pending-schema exemption list. Every required consumer operation has typed inputs and an expected observable outcome; no production API or on-air configuration is enabled.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:12.296034291Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:20.295012919Z",
+  "external_ref": "lichen-decomp-hpc8-deep:vectors.01",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "vectors.01",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "06fa148807f29ebd33726f73067c804cd0b2ac1b0be691b3ec1b2be0848efd82"
+  },
+  "labels": [
+    "ccp",
+    "conformance",
+    "decomp-hpc8-deep",
+    "schema",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.1",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:12.44273497Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.1.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.1.3.4",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:16.409103799Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}

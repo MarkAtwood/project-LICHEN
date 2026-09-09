@@ -1,0 +1,48 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.6.2.2",
+  "title": "Classify legacy CCP oracle provenance and reuse",
+  "description": "Scope: provenance/reuse annotations for the preserved CCP inventory in /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/README.md and associated corpus metadata. Inspect relevant generators under /home/mark/Developer/lichen-workspace/project-LICHEN/test/vectors/ and existing Python/Rust/C consumer references to classify unchanged independent primitives, legacy-policy tests, implementation-generated regressions, conflicting expectations and undrivable cases. Verify the remaining scope of worker6-cmj5, jnn2, 1lfx, jhfm, 7va6, cdwm and fa4t using source evidence and appropriate checks, not old issue status. Do not regenerate/delete fixtures, weaken tests, implement production fixes or alter existing issue claims.\n\nHPC8 execution policy: Code, test, or schema changes require three independent correctness, security, and robustness reviews; file and fix all findings and re-review. Use independent oracles, never weakened legacy tests or self-generated expected results. Preserve upstream Yggdrasil addressing, radio-owned identity, best-effort custody, baseline SCHC, and the human-only OSCORE/EDHOC security edit bar. External actions, hardware/RF operations, and port access require scoped explicit permission and applicable bench safety checks. Research may conclude no-go; an authorization gate requires affirmative, recorded approval for its actual scope. Dependency closure and decomposition are not permission. No speculative activation, including deferred portability or experimental modes.",
+  "design": "Classify facts from the completed inventory instead of repeating enumeration. Reuse existing repair records where applicable; helper completion is not revised-policy or production-integration conformance.",
+  "acceptance_criteria": "Every preserved inventory entry has a sourced provenance category, policy applicability and justified reuse boundary. Independent arithmetic, wire/signature and upstream identity evidence are distinguished from production-derived or round-trip-only expectations. Claimed generator/consumer repairs have actual verification evidence; cmj5's channel-call and local-SF assertions are assessed separately. Conflicting or missing evidence remains explicit and is not converted into CCP2 success. The independently backed signing primitive is not treated as proof for the legacy address constructor, and preserved fixture digests remain unchanged.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "estimated_minutes": 150,
+  "created_at": "2026-09-09T06:24:21.140288278Z",
+  "created_by": "opencode-decomposition",
+  "updated_at": "2026-09-09T07:18:18.981277082Z",
+  "external_ref": "lichen-decomp-hpc8-deep:vectors.10.provenance",
+  "metadata": {
+    "decomposition": "hpc8-deep",
+    "leaf_key": "vectors.10.provenance",
+    "permission": "none",
+    "plan_sha256": "c05b27e14b7037764034ab07df51bb7db783fe4079d5d855e54ea0191ed2f7d1",
+    "scope_sha256": "36b1b011f6eb03c2155bb748e228bda3f06c0da1be8589a4afcce0ec07444a13"
+  },
+  "labels": [
+    "ccp",
+    "decomp-hpc8-deep",
+    "legacy",
+    "provenance",
+    "vectors"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.2",
+      "type": "parent-child",
+      "created_at": "2026-09-09T06:24:21.265185356Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.6.2.2",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.2.1",
+      "type": "blocks",
+      "created_at": "2026-09-09T06:31:35.131361638Z",
+      "created_by": "opencode-decomposition",
+      "metadata": "{}"
+    }
+  ]
+}
