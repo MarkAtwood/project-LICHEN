@@ -41,6 +41,7 @@ pub use self::error::{
     DaoAdmissionError, DaoSendError, RplControlError, RplReceiveError, RplRuntimeReceiveError,
     RplRuntimeTrickleError, RplStackOpenError, RplStackProvisionError,
 };
+pub use self::util::{survey_routing_headers, RoutingHeaderSurvey, SourceRouteView};
 
 /// Outcome of Trickle transmit completion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

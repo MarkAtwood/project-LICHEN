@@ -10,7 +10,7 @@ use lichen_coap::codec::{CoapPacket, OptionIterator};
 use lichen_coap::message::MessageCode;
 #[cfg(test)]
 use lichen_core::constants::{L2_DISPATCH_SCHC, SCHC_MAX_DECOMPRESSED};
-use lichen_core::ipv6::{field, next_header};
+use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
 #[cfg(test)]
 use lichen_core::l2_payload::{
     body as l2_payload_body, classify as classify_l2_payload, L2PayloadKind,
@@ -24,7 +24,10 @@ use lichen_link::identity::{Identity, PeerIdentity};
 use lichen_node::{
     announce::AnnounceProcessor,
     gradient::GradientTable,
-    rpl_stack::{RplBorderIngressOutcome, RplReceiveError, RplReceiveOutcome, RplStack},
+    rpl_stack::{
+        survey_routing_headers, RplBorderIngressOutcome, RplReceiveError, RplReceiveOutcome,
+        RplStack, RoutingHeaderSurvey,
+    },
     secure::{SecureError, SecureResponseData, SecureStack},
     stack::{add_rpl_source_route, MAX_FRAME_SIZE},
     AnnounceTrustStore, RplEvent,
@@ -39,6 +42,9 @@ use tracing::info;
 use tracing::warn;
 
 use crate::resources::{CoapMethod, CoapResponse, GatewayCoordinator};
+use crate::tunnel_auth::{
+    AuthenticatedRoot, DecapsulationRequest, TunnelAuthorizationTable, TunnelDirection,
+};
 use crate::trust::{
     sign, verify, PskError, PskFederation, Seed, TofuResult, TrustError, TrustStore,
     VerifiedGatewayIdentity, SIGNATURE_LEN,
@@ -46,6 +52,19 @@ use crate::trust::{
 use zeroize::Zeroizing;
 
 const MAX_GCP_OSCORE_CONTEXTS: usize = 64;
+
+/// Tunnel-scope policy (spec 06-security 8.11): addresses that may never
+/// terminate or ride an egress tunnel — unspecified, loopback, multicast.
+/// Mirrors `unsafe_addr` in the C reference (tunnel_auth.c:410-414).
+fn tunnel_addr_unsafe(addr: &[u8; 16]) -> bool {
+    *addr == [0u8; 16] || (addr[..15] == [0u8; 15] && addr[15] == 1) || addr[0] == 0xff
+}
+
+/// Link-local (fe80::/10) is out of tunnel scope on both sides, mirroring
+/// the C reference (tunnel_auth.c:433-434).
+fn tunnel_addr_link_local(addr: &[u8; 16]) -> bool {
+    addr[0] == 0xfe && addr[1] & 0xc0 == 0x80
+}
 
 pub struct Gateway {
     rpl_stack: RplStack<LoopbackRadio, GatewayStorage>,
@@ -56,6 +75,8 @@ pub struct Gateway {
     oscore_sender_store: GatewayOscoreSenderStore,
     oscore_recipient_store: GatewayOscoreRecipientStore,
     gcp_context_peers: Vec<([u8; 8], ContextId)>,
+    /// Root-signed egress authorization table (spec 06-security 8.11).
+    tunnel_authorizations: TunnelAuthorizationTable,
     /// Spec 04-network 6.3.4: mesh↔internet multicast is dropped unless
     /// explicitly configured multicast peering is enabled. Defaults to off.
     multicast_peering: bool,
@@ -1043,6 +1064,19 @@ impl Gateway {
             let public = lichen_link::keys::PublicKey::new(pinned.pubkey);
             rpl_stack.install_verified_link_peer(PeerIdentity::from_pubkey(public));
         }
+        let mut tunnel_authorizations = TunnelAuthorizationTable::default();
+        // Spec 06-security 8.11 step 3: a cached authorization must be signed
+        // by the current DODAG root. This gateway type is always its own
+        // DODAG root (provision_root/open_root above with dodag_id == own
+        // address), so the trusted root IID is its own; a root change would
+        // clear the table, which a fixed-root gateway never observes. A
+        // future non-root egress mode must re-point this at the DIO-learned
+        // root identity instead.
+        tunnel_authorizations.set_root(
+            dodag_id[8..]
+                .try_into()
+                .expect("DODAG ID has a complete IID"),
+        );
         Ok(Self {
             rpl_stack,
             radio_peer,
@@ -1052,6 +1086,7 @@ impl Gateway {
             oscore_sender_store: backing.oscore_sender_store,
             oscore_recipient_store: backing.oscore_recipient_store,
             gcp_context_peers: Vec::new(),
+            tunnel_authorizations,
             multicast_peering: false,
         })
     }
@@ -1299,6 +1334,136 @@ impl Gateway {
         )
     }
 
+    /// Wall-clock Unix seconds for time-bounded authorization checks.
+    fn unix_now() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs())
+    }
+
+    /// Test/ops access to the root-signed egress authorization table
+    /// (spec 06-security 8.11).
+    pub fn tunnel_authorizations_mut(&mut self) -> &mut TunnelAuthorizationTable {
+        &mut self.tunnel_authorizations
+    }
+
+    /// Handle one OSCORE-authenticated POST to `/.well-known/tunnel-auth`
+    /// (spec 06-security 8.11) at the post-decryption boundary: the caller
+    /// has already authenticated `sender_iid` and resolved `sender_pubkey`.
+    ///
+    /// Per the permit()/deny() wire convention (C tunnel_auth.c:24-33): an
+    /// accepted authorization answers 2.04 Changed; every validation failure
+    /// answers 4.03 Forbidden uniformly — the denial category never leaks
+    /// onto the wire (only the log carries it). Non-POST methods answer
+    /// 4.05 Method Not Allowed.
+    pub fn handle_tunnel_auth_request(
+        &mut self,
+        method: CoapMethod,
+        payload: &[u8],
+        sender_iid: [u8; 8],
+        sender_pubkey: &[u8; 32],
+        now_unix: u64,
+    ) -> CoapResponse {
+        if method != CoapMethod::Post {
+            return CoapResponse::method_not_allowed();
+        }
+        let public = schnorr48::PublicKey::new(*sender_pubkey);
+        let own_iid: [u8; 8] = self.coordinator.info.iid[8..]
+            .try_into()
+            .expect("gateway address has a complete IID");
+        match self.tunnel_authorizations.accept_post(
+            payload,
+            AuthenticatedRoot {
+                iid: sender_iid,
+                public_key: &public,
+                oscore_authenticated: true,
+            },
+            own_iid,
+            now_unix,
+        ) {
+            Ok(_) => CoapResponse::empty_success(),
+            Err(error) => {
+                warn!(?error, "tunnel-auth POST denied (spec 06 8.11)");
+                CoapResponse::forbidden()
+            }
+        }
+    }
+
+    /// Spec 06-security 8.11 egress data plane: a source-routed tunnel
+    /// terminating at this gateway is decapsulated toward upstream only when
+    /// the root-signed authorization table permits the (inner source prefix,
+    /// route hash) pair, where the route hash is computed from the consumed
+    /// Source-Route Header grid plus the outer destination (this egress).
+    ///
+    /// Non-tunneled packets pass through unexamined. Malformed chains,
+    /// in-transit source routes (relay policy belongs to the node stack),
+    /// terminating non-tunnel source routes (no local consumer on the
+    /// border path), and unauthorized tunnels are all dropped — fail closed.
+    ///
+    /// Returns the datagram to forward upstream, if any.
+    pub fn authorize_tunnel_egress(&mut self, ipv6: &[u8], now_unix: u64) -> Option<Vec<u8>> {
+        let view = match survey_routing_headers(ipv6) {
+            Ok(RoutingHeaderSurvey::Absent) => return Some(ipv6.to_vec()),
+            Ok(RoutingHeaderSurvey::SourceRouted(view)) => view,
+            Err(_) => return None,
+        };
+        if view.segments_left != 0 || ipv6[view.offset] != next_header::IPV6_IN_IPV6 {
+            return None;
+        }
+        let inner = &ipv6[view.offset + view.routing_len..];
+        if inner.len() < IPV6_HEADER_LEN
+            || inner[0] >> 4 != 6
+            || IPV6_HEADER_LEN + usize::from(u16::from_be_bytes([inner[4], inner[5]]))
+                != inner.len()
+        {
+            return None;
+        }
+        // The route in source-route order is the visited grid addresses plus
+        // the current outer destination (the final hop: this egress).
+        let mut route = Vec::with_capacity(view.address_count + 1);
+        for index in 0..view.address_count {
+            let start = view.offset + 8 + index * 16;
+            route.push(
+                ipv6[start + 8..start + 16]
+                    .try_into()
+                    .expect("surveyed grid address IID"),
+            );
+        }
+        route.push(
+            ipv6[field::DST_OFFSET + 8..field::DST_OFFSET + 16]
+                .try_into()
+                .expect("outer destination IID"),
+        );
+        let inner_source: [u8; 16] = inner[8..24].try_into().expect("inner source");
+        let inner_destination: [u8; 16] = inner[24..40].try_into().expect("inner destination");
+        let request = DecapsulationRequest {
+            direction: TunnelDirection::MeshToExternal,
+            inner_source,
+            // Caller-side scope policy, mirroring the C reference data plane
+            // (tunnel_auth.c unsafe_addr + link-local + mesh checks) and the
+            // Python TunnelPolicy: sources may be any routable address (the
+            // signed claim prefix does the fine-grained binding), but
+            // destinations must be truly external — never unspecified,
+            // loopback, multicast, link-local, or mesh.
+            source_is_mesh: !(tunnel_addr_unsafe(&inner_source)
+                || tunnel_addr_link_local(&inner_source)),
+            destination_is_mesh: tunnel_addr_unsafe(&inner_destination)
+                || tunnel_addr_link_local(&inner_destination)
+                || inner_destination[0] == 0x02,
+            route: &route,
+        };
+        match self
+            .tunnel_authorizations
+            .authorize_decapsulation(request, now_unix)
+        {
+            Ok(()) => Some(inner.to_vec()),
+            Err(error) => {
+                warn!(?error, "unauthorized tunnel dropped (spec 06 8.11)");
+                None
+            }
+        }
+    }
+
     /// Decode a SCHC L2 payload after its enclosing link frame has been
     /// authenticated.  Kept private so transports cannot bypass link replay
     /// and signer checks by presenting a bare L2 payload.
@@ -1380,7 +1545,14 @@ impl Gateway {
                     gcp_dispatched = true;
                     (None, RplEvent::None)
                 } else {
-                    (Some(received.ipv6), RplEvent::None)
+                    // Spec 06-security 8.11: source-routed tunnels terminating
+                    // at this egress are decapsulated toward upstream only
+                    // with a valid root-signed authorization; everything else
+                    // passes through unchanged.
+                    (
+                        self.authorize_tunnel_egress(&received.ipv6, Self::unix_now()),
+                        RplEvent::None,
+                    )
                 }
             }
             Some(RplBorderIngressOutcome::Control(outcome)) => {
@@ -1472,6 +1644,60 @@ impl Gateway {
             }
         }
         if segments.len() != 3 || segments[0] != b".well-known" || segments[1] != b"lichen-gw" {
+            // The tunnel-auth resource (spec 06-security 8.11) lives outside
+            // the lichen-gw namespace: /.well-known/tunnel-auth.
+            let tunnel_auth_path = segments.len() == 2
+                && segments[0] == b".well-known"
+                && segments[1] == b"tunnel-auth";
+            if !tunnel_auth_path {
+                return true;
+            }
+            let method = if request.code == MessageCode::POST {
+                CoapMethod::Post
+            } else if request.code == MessageCode::GET {
+                CoapMethod::Get
+            } else if request.code == MessageCode::PUT {
+                CoapMethod::Put
+            } else if request.code == MessageCode::DELETE {
+                CoapMethod::Delete
+            } else {
+                return true;
+            };
+            let Some(peer) = self.trust_store.get(&request.sender_iid) else {
+                return true;
+            };
+            let peer_pubkey = peer.pubkey;
+            let response = self.handle_tunnel_auth_request(
+                method,
+                &request.payload,
+                request.sender_iid,
+                &peer_pubkey,
+                Self::unix_now(),
+            );
+            let content_format_option = [0xc0u8; 1];
+            let response_data = SecureResponseData {
+                code: MessageCode(response.code),
+                options: &content_format_option,
+                payload: &response.payload,
+            };
+            if let Err(error) = self
+                .rpl_stack
+                .send_secure_response(
+                    &Addr(
+                        received.ipv6[8..24]
+                            .try_into()
+                            .expect("validated IPv6 source"),
+                    ),
+                    &request.sender_iid,
+                    &request,
+                    response_data,
+                    &mut self.oscore_sender_store,
+                    now_ms,
+                )
+                .await
+            {
+                warn!(?error, "authenticated tunnel-auth response could not be routed");
+            }
             return true;
         }
         let Ok(resource) = core::str::from_utf8(segments[2]) else {
