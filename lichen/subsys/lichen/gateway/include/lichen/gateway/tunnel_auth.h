@@ -147,6 +147,25 @@ struct lichen_tunnel_result lichen_tunnel_auth_receive(
 	struct lichen_tunnel_auth_ctx *ctx, const uint8_t *body, size_t body_len,
 	bool oscore_authenticated, const uint8_t oscore_sender_iid[8], uint64_t now);
 
+struct sockaddr;
+
+/**
+ * Extract the tunnel sender identity from the request source address.
+ *
+ * LICHEN key-derived link-local addresses embed the canonical pubkey IID
+ * (U/L bit cleared, lichen_key_pubkey_to_iid()) in the low 8 bytes; it is
+ * copied through UNFLIPPED. lichen_tunnel_auth_receive() compares in
+ * canonical pubkey-IID space (the ctx root_iid binding and the COSE kid are
+ * both canonical) - NOT in the wire-EUI64 space (U/L set) that the OSCORE
+ * context store keys on, so the extract+flip used for oscore_ctx_get_by_eui64
+ * must not be applied here.
+ *
+ * Returns -EINVAL for NULL, short, or non-AF_INET6 addresses; callers treat
+ * that as an unidentifiable (hence unauthorized) sender.
+ */
+int lichen_tunnel_sender_iid_from_sockaddr(const struct sockaddr *addr,
+					   size_t addr_len, uint8_t iid[8]);
+
 int lichen_tunnel_auth_change_root(struct lichen_tunnel_auth_ctx *ctx,
 				   const uint8_t root_iid[8],
 				   const uint8_t root_pubkey[32]);

@@ -120,7 +120,14 @@ static void lichen_usb_status_cb(enum usb_dc_status_code status,
 	case USB_DC_DISCONNECTED:
 		USB_STAT_INC(disconnect);
 		break;
-	default:
+	case USB_DC_CONNECTED:
+	case USB_DC_RESUME:
+	case USB_DC_INTERFACE:
+	case USB_DC_SET_HALT:
+	case USB_DC_CLEAR_HALT:
+	case USB_DC_SOF:
+	case USB_DC_UNKNOWN:
+		/* No accounting for these states. */
 		break;
 	}
 }

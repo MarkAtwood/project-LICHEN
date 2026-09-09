@@ -46,7 +46,6 @@
 /* Plaintext staging for the mutating handlers' authorize helper (the old
  * per-handler unprotect result carried an equivalent on-stack buffer). */
 static uint8_t server_plain_buf[CONFIG_LICHEN_OSCORE_PLAINTEXT_MAX];
-#include <lichen/l2/ipv6_addr.h>
 #include <lichen/transport/slip_transport.h>
 
 LOG_MODULE_REGISTER(lichen_coap_server, CONFIG_LICHEN_COAP_SERVER_LOG_LEVEL);
@@ -645,14 +644,16 @@ static int tunnel_auth_post(struct coap_resource *resource,
 					   0, NULL, 0);
 	}
 
-	/* Peer identity: same sockaddr -> IID derivation the OSCORE context
-	 * lookup uses (coap_oscore.c). */
+	/* Peer identity: LICHEN key-derived link-locals embed the canonical
+	 * pubkey IID (U/L cleared) in the low 8 bytes; pass it through
+	 * UNFLIPPED. lichen_tunnel_auth_receive() compares in canonical
+	 * pubkey-IID space (the root_iid binding and the COSE kid) - NOT in
+	 * the wire-EUI64 space (U/L set) the OSCORE context lookup keys on,
+	 * so the extract+flip from coap_oscore.c must NOT be applied here.
+	 * An unidentifiable sender stays all-zero and is denied WRONG_ROOT. */
 	uint8_t sender_iid[8] = { 0 };
-	if (addr_len >= sizeof(struct sockaddr_in6) && addr->sa_family == AF_INET6) {
-		const struct sockaddr_in6 *in6 = (const struct sockaddr_in6 *)addr;
-		memcpy(sender_iid, &in6->sin6_addr.s6_addr[8], 8);
-		lichen_eui64_to_iid(sender_iid, sender_iid);
-	}
+	(void)lichen_tunnel_sender_iid_from_sockaddr(addr, (size_t)addr_len,
+						     sender_iid);
 
 	/* Uptime seconds stand in for unix time until wall-clock sync lands;
 	 * expiry enforcement stays dormant, replay floors do not. */
