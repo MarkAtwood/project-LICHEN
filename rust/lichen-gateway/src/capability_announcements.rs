@@ -6,7 +6,6 @@
 
 use ciborium::de::from_reader;
 use ciborium::value::{Integer, Value};
-use lichen_link::ygg_addr_from_pubkey;
 use schnorr48::{self, PublicKey};
 use sha2::{Digest, Sha256};
 
@@ -218,12 +217,13 @@ impl CapabilityAnnouncement {
     }
 }
 
-/// Derive the announcer IID from a public key (native 02xx profile).
+/// Derive the announcer IID from a public key.
+///
+/// The IID is the canonical SHA-512 derivation (i72x.2): upstream AddrForKey
+/// does not embed the IID, so it must not be sliced out of the routable
+/// address.
 fn pubkey_to_iid(pubkey: &[u8; 32]) -> [u8; 8] {
-    let address = ygg_addr_from_pubkey(pubkey);
-    let mut iid = [0u8; 8];
-    iid.copy_from_slice(&address[8..]);
-    iid
+    lichen_core::addr::iid_from_pubkey_bytes(pubkey)
 }
 
 /// Encode the protected header map {1: -65537} (Schnorr48-Ed25519).
