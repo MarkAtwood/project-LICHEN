@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # Use self-hosted ARM64 runner on EC2
 # Setup: https://docs.github.com/en/actions/hosting-your-own-runners
 jobs:
