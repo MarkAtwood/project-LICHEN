@@ -74,7 +74,7 @@ class ClaimRejectReason(Enum):
     # Merged: keep both reject causes — HEAD binds the claim to the key,
     # beads-worker-7 gates replays by high-water.
     IDENTITY_MISMATCH = auto()  # kid/gateway_iid not bound to verifying key
-    REPLAY = auto()  # claim_seq/superframe at or below the stored high-water
+    REPLAY = auto()  # claim_seq at or below the stored high-water
     SLOT_CONFLICT = auto()  # Overlapping slots, lower IID wins
     # Merged: HEAD's claim-horizon rejects and worker-7's replay-cache
     # capacity reject are independent causes; keep all three.
@@ -356,16 +356,20 @@ class SlotClaimRateLimiter:
 
 
 class SlotClaimReplayCache:
-    """Per-gateway-IID replay high-water (GCP-6.5 step 8, l1qw.20.2).
+    """Per-gateway-IID claim_seq replay high-water (GCP-6.5 step 8, l1qw.20.5).
 
-    Tracks the highest superframe_id accepted per gateway IID and rejects
-    claims at or below it. State is in-memory only; persistence across
-    restarts is the l1qw.20.1/NVS follow-up (mirrors Rust slot.rs
-    last_seen semantics).
+    Tracks the highest claim_seq accepted per gateway IID and rejects
+    claims whose claim_seq is at or below it, independent of superframe
+    (spec/08 step 8: "reject if claim_seq <= cached value for that
+    gateway"). A re-claim — in any superframe, including the current one —
+    must strictly advance claim_seq, preserving the loser-reclaim flow and
+    blocking seq rollback from a rebooted or NVS-wiped sender. State is
+    in-memory only; persistence across restarts is the l1qw.20.1/NVS
+    follow-up (mirrors Rust slot.rs last_seen semantics).
 
     Capacity is bounded at MAX_GATEWAYS (mirroring Rust slot.rs
     max_gateways/StateFull, bead c5lz): a claim from a gateway with no
-    cached high-water when the cache is full is rejected GATEWAY_FULL, so
+    cached high-water when the cache is full is rejected STATE_FULL, so
     IID churn cannot grow the cache without bound. Already-tracked
     gateways always remain usable.
     """
@@ -377,19 +381,21 @@ class SlotClaimReplayCache:
         self._highwater: dict[str, int] = {}
 
     def check_and_update(
-        self, gateway_iid: str, superframe_id: int
+        self, gateway_iid: str, claim_seq: int
     ) -> tuple[bool, ClaimRejectReason | None]:
-        """Advance the high-water for *gateway_iid*.
+        """Advance the claim_seq high-water for *gateway_iid*.
 
         Returns (True, None) and stores the new high-water when the claim
-        strictly advances it; returns (False, REPLAY) otherwise.
+        strictly advances it; returns (False, REPLAY) when it does not,
+        or (False, STATE_FULL) when the IID is untracked and the cache is
+        at capacity.
         """
         previous = self._highwater.get(gateway_iid)
-        if previous is not None and superframe_id <= previous:
+        if previous is not None and claim_seq <= previous:
             return (False, ClaimRejectReason.REPLAY)
         if gateway_iid not in self._highwater and len(self._highwater) >= self.MAX_GATEWAYS:
             return (False, ClaimRejectReason.STATE_FULL)
-        self._highwater[gateway_iid] = superframe_id
+        self._highwater[gateway_iid] = claim_seq
         return (True, None)
 
 
@@ -412,15 +418,15 @@ def verify_slot_claim(
     Args:
         claim: SlotClaim to verify
         gateway_pubkey: 32-byte Ed25519 public key of claiming gateway
-        replay_cache: Optional per-gateway claim high-water (l1qw.20.2).
+        replay_cache: Optional per-gateway claim_seq high-water (l1qw.20.5).
+            When provided, the claim's claim_seq must strictly advance
+            the stored high-water for its gateway IID. Signature checks run
+            first per GCP-6.3, so the replay state is only consumed by
+            signature-valid claims.
         rate_limiter: Optional GCP-6.5 rate limiter (l1qw.22): a claim
             exceeding the 10/min/peer or 60/min/global window returns
             (False, RATE_LIMITED) for a silent drop, never advancing the
             replay high-water.
-            When provided, the claim's superframe_id must strictly advance
-            the stored high-water for its gateway IID. Signature checks run
-            first per GCP-6.3, so the replay state is only consumed by
-            signature-valid claims.
         now_unix: Current Unix timestamp for the claim-horizon check;
             defaults to the wall clock. Claims with a timestamp further
             than MAX_CLAIM_DURATION_SECONDS ahead are rejected EXPIRY_TOO_FAR.
@@ -489,7 +495,7 @@ def verify_slot_claim(
     # horizon check, so a horizon-rejected claim never advances the
     # high-water.
     if replay_cache is not None:
-        ok, reason = replay_cache.check_and_update(claim.gateway_iid, claim.superframe_id)
+        ok, reason = replay_cache.check_and_update(claim.gateway_iid, claim.claim_seq)
         if not ok:
             return (False, reason)
 

@@ -271,51 +271,50 @@ class TestSignAndVerify:
     def test_replay_cache_rejects_replay_and_allows_advance(
         self, keypair: tuple[bytes, bytes]
     ) -> None:
-        """l1qw.20.2: the replay cache rejects at-or-below high-water and
-        accepts strictly advancing superframes (mirrors Rust slot.rs
-        last_seen semantics)."""
+        """l1qw.20.5: the replay cache is a pure claim_seq high-water per
+        gateway IID (GCP-6.5 step 8), independent of superframe — mirrors
+        Rust slot.rs last_seen semantics."""
         privkey, pubkey = keypair
         cache = SlotClaimReplayCache()
 
         iid = _bound_iid(pubkey)
         expiry = int(time.time()) + 8
 
-        # First claim (superframe 5) is accepted and advances the cache.
-        claim_5 = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=5, expiry=expiry, claim_seq=0),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(claim_5, pubkey, replay_cache=cache)
+        def claim(superframe: int, seq: int, slot: int = 0):
+            return sign_slot_claim(
+                SlotClaim(
+                    gateway_iid=iid,
+                    slots=(slot,),
+                    superframe_id=superframe,
+                    expiry=expiry,
+                    claim_seq=seq,
+                ),
+                privkey,
+                pubkey,
+            )
+
+        # First claim (superframe 5, seq 0) is accepted and seeds the cache.
+        is_valid, reason = verify_slot_claim(claim(5, 0), pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
-        # Replay of the same superframe -> REPLAY.
-        replay = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=5, expiry=expiry, claim_seq=1),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(replay, pubkey, replay_cache=cache)
+        # Same superframe with advanced seq -> accepted (loser-reclaim
+        # within a superframe must advance the signed claim_seq).
+        is_valid, reason = verify_slot_claim(claim(5, 1, slot=1), pubkey, replay_cache=cache)
+        assert is_valid and reason is None
+
+        # Replay of the cached seq -> REPLAY.
+        is_valid, reason = verify_slot_claim(claim(5, 1), pubkey, replay_cache=cache)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY
 
-        # Older superframe -> REPLAY.
-        older = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=4, expiry=expiry, claim_seq=2),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(older, pubkey, replay_cache=cache)
+        # Lower seq in a NEWER superframe -> REPLAY (seq rollback across
+        # the superframe boundary is exactly what step 8 blocks).
+        is_valid, reason = verify_slot_claim(claim(6, 0), pubkey, replay_cache=cache)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY
 
-        # Strictly advancing superframe -> accepted.
-        newer = sign_slot_claim(
-            SlotClaim(gateway_iid=iid, slots=(0,), superframe_id=6, expiry=expiry, claim_seq=3),
-            privkey,
-            pubkey,
-        )
-        is_valid, reason = verify_slot_claim(newer, pubkey, replay_cache=cache)
+        # Advancing seq across the superframe boundary -> accepted.
+        is_valid, reason = verify_slot_claim(claim(6, 2), pubkey, replay_cache=cache)
         assert is_valid and reason is None
 
     def test_claim_expiry_bounded_to_max_duration(
@@ -370,14 +369,14 @@ class TestSignAndVerify:
         cache = SlotClaimReplayCache()
         expiry = int(time.time()) + 8
 
-        def claim_for(iid: str, superframe: int):
+        def claim_for(iid: str, superframe: int, seq: int = 0):
             return sign_slot_claim(
                 SlotClaim(
                     gateway_iid=iid,
                     slots=(0,),
                     superframe_id=superframe,
                     expiry=expiry,
-                    claim_seq=0,
+                    claim_seq=seq,
                 ),
                 privkey,
                 pubkey,
@@ -420,8 +419,9 @@ class TestSignAndVerify:
         assert not is_valid
         assert reason == ClaimRejectReason.STATE_FULL
 
-        # An ALREADY-TRACKED gateway still advances at capacity.
-        is_valid, reason = verify_slot_claim(claim_for(tracked_iid, 11), pubkey, cache)
+        # An ALREADY-TRACKED gateway still advances at capacity (seq
+        # high-water strictly advances; superframe is irrelevant).
+        is_valid, reason = verify_slot_claim(claim_for(tracked_iid, 11, seq=1), pubkey, cache)
         assert is_valid and reason is None
 
     def test_replay_cache_tracks_gateways_independently(self, keypair: tuple[bytes, bytes]) -> None:
