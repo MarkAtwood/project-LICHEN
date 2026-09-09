@@ -704,13 +704,44 @@ cause denial of service. All SOS messages MUST be authenticated and rate-limited
 
 **Authentication (REQUIRED):**
 
-SOS messages MUST carry a valid link-layer signature from the originating
-node. The Ed25519/Schnorr signature is verified at each receiving node
-before rebroadcast. Unsigned or invalid SOS messages are silently dropped.
+SOS messages MUST carry a valid SOS Origin Signature from the originating
+node, and every receiver MUST verify it before rebroadcast. SOS messages with
+a missing, malformed, or invalid origin signature are silently dropped.
+
+The link-layer (LLSec) signature is hop-by-hop: relays create a new link
+frame, allocate their own replay counter, populate their own SIID, and
+re-sign each hop (06-security.md §8.4), so it cannot authenticate the origin
+past hop 1. End-to-end origin authentication is therefore a separate object,
+following the DAO Origin Signature pattern (05-routing.md §8.6): the origin
+signs a domain-separated transcript over relay-immutable content, and relays
+preserve the SOS payload and origin signature verbatim, changing only the
+enclosing hop-by-hop link frame and signature.
 
 ```
-SOS frame = [LLSec header] [SOS payload] [Schnorr signature (48B)]
+SOS message = [LLSec header] [SOS payload (CBOR)] [SOS Origin Signature (56B)]
 ```
+
+The SOS Origin Signature is a 56-octet object: an 8-octet Origin Sequence
+(unsigned 64-bit, network byte order) followed by a 48-octet Schnorr48
+signature computed with the origin key over the 64-octet digest:
+
+```
+SHA-512("LICHEN-SOS-ORIGIN-v1" || origin IPv6 address ||
+        Origin Sequence || canonical CBOR SOS payload)
+```
+
+The domain is exactly the 20 ASCII octets shown, with no terminating NUL. The
+origin IPv6 address is the originator's 16-octet primary `02xx` address
+preserved end to end. The SOS payload is the deterministic (canonical, RFC
+8949 §4.2.1) CBOR encoding of the alert map in §18.4.2; no field is decoded,
+normalized, reordered, or re-encoded for the transcript. Each receiver
+verifies the signature against the origin's pinned public key and enforces a
+per-origin monotonic Origin Sequence gate, accepting a sequence only if it
+strictly exceeds the highest sequence already accepted from that origin; this
+closes replay of stale-but-unseen captures. Independently, the current hop's
+LLSec signature is still verified on receipt and the frame is re-signed on
+rebroadcast per 06-security.md §8.4; unsigned or invalid link frames are
+silently dropped.
 
 **Rate Limiting (REQUIRED):**
 
