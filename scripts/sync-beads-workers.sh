@@ -137,9 +137,18 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
         git checkout HEAD -- .beads 2>/dev/null || true
         if git commit --no-edit --quiet; then
             echo "  merged (code only)"
-        else
+        elif git diff --cached --quiet; then
+            # Index empty after normalization: a legitimately-emptied merge
+            # (branch delta was only .beads/oscore). Abort quietly.
             echo "  nothing to commit after normalization"
             git merge --abort 2>/dev/null || true
+        else
+            # Staged content exists but the commit failed (pre-commit hook,
+            # disk). Retrying re-fails identically every run with no signal
+            # (bead gpm7): record it so a human sees the branch.
+            echo "  COMMIT FAILED on clean merge of $branch (staged content present) — recording"
+            git merge --abort 2>/dev/null || true
+            conflicted+=("$branch")
         fi
     else
         # Single-file conflicts: in-loop kimi resolves immediately (measured
@@ -155,8 +164,15 @@ for branch in $(git for-each-ref --format='%(refname:short)' 'refs/heads/beads-w
                 conflicted+=("$branch")
             elif git commit --no-edit --quiet; then
                 echo "  merged via LLM semantic reconciliation"
-            else
+            elif git diff --cached --quiet; then
                 echo "  semantic merge produced no commit — aborting"
+                git merge --abort 2>/dev/null || true
+                conflicted+=("$branch")
+            else
+                # Staged content exists but the commit failed (hook, disk):
+                # surface it explicitly rather than conflating with the
+                # empty case (bead gpm7).
+                echo "  COMMIT FAILED after LLM merge of $branch (staged content present) — recording"
                 git merge --abort 2>/dev/null || true
                 conflicted+=("$branch")
             fi
