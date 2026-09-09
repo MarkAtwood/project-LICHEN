@@ -8,12 +8,13 @@
 //! Key-derived identities bind `fe80::/10` to the SHA-512 IID. Since i72x.2
 //! (decision `upstream-yggdrasil-addressing`) the routable `0200::/8` address
 //! is upstream Yggdrasil `AddrForKey`, which bit-packs the inverted pubkey and
-//! does NOT embed the IID. The quarantined corpora's `native_packed`/`ygg_addr`
-//! fields still encode the REJECTED SHA-512 native profile (see
-//! test/vectors/legacy/README.md), so conformance is pinned per key against
-//! the external oracle (upstream `address.go` @422836ee) while the legacy
-//! corpora are consumed only as quarantine-integrity pins, never as
-//! conformance oracles, until they are regenerated (q6ko.3, i72x.6).
+//! does NOT embed the IID. The live `ipv6-addresses.json` corpus carries that
+//! upstream derivation (regenerated in the i72x.6 slice); the legacy corpora's
+//! `native_packed`/`ygg_addr` fields still encode the REJECTED SHA-512 native
+//! profile (see test/vectors/legacy/README.md) and are consumed only as
+//! quarantine-integrity pins, never as conformance oracles. Conformance is
+//! pinned per key against the external oracle (upstream `address.go`
+//! @422836ee).
 //! EUI-64 and short-address cases are link-interoperability helpers, not
 //! node identities.
 
@@ -127,22 +128,24 @@ fn key_derived_identity_binds_link_local_and_quarantined_native() {
         let expected_iid = decode_hex::<8>(vector["iid"].as_str().expect("iid"));
         let expected_link_local =
             decode_hex::<16>(vector["link_local_packed"].as_str().expect("link-local"));
-        // If native fields are present they MUST hold upstream AddrForKey
-        // bytes (never the rejected SHA-512 profile, which embeds the IID).
-        if let Some(native_packed) = vector.get("native_packed") {
-            let corpus_native =
-                decode_hex::<16>(native_packed.as_str().expect("native_packed hex"));
-            assert_eq!(
-                corpus_native,
-                upstream_addr_for_pubkey(&pubkey),
-                "{name}: live native_packed must equal upstream AddrForKey"
-            );
-            assert_ne!(
-                &corpus_native[8..],
-                &expected_iid[..],
-                "{name}: live native_packed must not embed the IID (rejected profile)"
-            );
-        }
+        // The regenerated corpus carries the upstream AddrForKey primary;
+        // the field is mandatory and MUST equal the external oracle (never
+        // the rejected SHA-512 profile, which embeds the IID).
+        let corpus_native = decode_hex::<16>(
+            vector["native_packed"]
+                .as_str()
+                .expect("key_derived_identity vectors must carry native_packed"),
+        );
+        assert_eq!(
+            corpus_native,
+            upstream_addr_for_pubkey(&pubkey),
+            "{name}: live native_packed must equal upstream AddrForKey"
+        );
+        assert_ne!(
+            &corpus_native[8..],
+            &expected_iid[..],
+            "{name}: live native_packed must not embed the IID (rejected profile)"
+        );
         let legacy_vector = legacy_by_name
             .get(name)
             .expect("every key_derived_identity vector keeps a quarantined twin");
@@ -155,8 +158,8 @@ fn key_derived_identity_binds_link_local_and_quarantined_native() {
 
         assert_eq!(iid, expected_iid, "{name}");
         // Routable address: upstream AddrForKey, pinned per key from the
-        // external oracle (the corpus's native_packed is the rejected
-        // profile; see module docs).
+        // external oracle (table above; the corpus's native_packed is
+        // cross-checked against the same oracle at the top of the loop).
         assert_eq!(native, upstream_addr_for_pubkey(&pubkey), "{name}");
         assert_eq!(link_local, expected_link_local, "{name}");
         assert_eq!(native[0], 0x02, "{name}: 0200::/8 prefix");
@@ -276,6 +279,6 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
         positive += 1;
     }
     assert!(positive >= 4, "positive derivation entries must run");
-    assert_eq!(binding, 1, "binding-invariant entry must run");
+    assert!(binding >= 1, "binding-invariant entry must run");
     assert_eq!(negative, 1, "negative attack entry must run");
 }
