@@ -1105,9 +1105,8 @@ mod tests {
             node: Node::new(leaf_id),
             router: Router::new(leaf_addr, root_addr),
         };
-        let mut announces = AnnounceProcessor::new(
-            GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
-        );
+        let mut announces =
+            AnnounceProcessor::new(GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS));
         announces.pin_for_test(parent_identity.pubkey);
         announces.pin_for_test(leaf_identity.pubkey);
 
@@ -1354,9 +1353,8 @@ mod tests {
             node: Node::new(leaf_id),
             router: Router::new(leaf_addr, root_addr),
         };
-        let mut announces = AnnounceProcessor::new(
-            GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
-        );
+        let mut announces =
+            AnnounceProcessor::new(GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS));
         announces.pin_for_test(parent_identity.pubkey);
         announces.pin_for_test(leaf_identity.pubkey);
 
@@ -1569,9 +1567,8 @@ mod tests {
             router,
         };
         assert!(root.router.set_dao_lifetime_unit(1));
-        let mut announces = AnnounceProcessor::new(
-            GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS),
-        );
+        let mut announces =
+            AnnounceProcessor::new(GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS));
         announces.pin_for_test(identity.pubkey);
         let link = LinkLayer::new(identity.clone());
         let sign = |unsigned: &[u8], origin_sequence: u64| {

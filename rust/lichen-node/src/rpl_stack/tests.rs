@@ -460,7 +460,9 @@ fn root_address(identity: &Identity) -> [u8; 16] {
 }
 
 fn announces() -> AnnounceProcessor {
-    AnnounceProcessor::new(crate::GradientTable::new(crate::announce::MAX_TRACKED_ORIGINATORS))
+    AnnounceProcessor::new(crate::GradientTable::new(
+        crate::announce::MAX_TRACKED_ORIGINATORS,
+    ))
 }
 
 #[test]
