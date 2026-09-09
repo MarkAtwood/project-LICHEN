@@ -1198,12 +1198,15 @@ Local facts and CA credentials can coexist. A node might have:
 
 **X.509v3 Certificate Profile:**
 
-Certificates carried in `x5chain` MUST conform to the LICHEN node
-attestation profile (appendix-x509-cert-profile.md): Ed25519 subject
-key, critical iPAddress SAN carrying the key-derived native `/128`,
-optional non-critical mesh role extension, and the verifier
-key-to-address binding check. The profile is minimal enough that any
-RFC 8410-capable CA can issue interoperable certificates.
+The end-entity certificate carried in `x5chain` MUST conform to the
+LICHEN node attestation profile (appendix-x509-cert-profile.md;
+intermediate and root CA certificates are unconstrained ordinary
+RFC 5280 CA certificates): Ed25519 subject
+key, iPAddress SAN carrying the key-derived native `/128` (critical
+when the subject is empty), optional non-critical mesh role extension,
+and the verifier key-to-address binding check. The profile is minimal
+enough that any RFC 8410-capable CA can issue interoperable
+certificates.
 
 ---
 

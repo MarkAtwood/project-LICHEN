@@ -6,8 +6,10 @@
 This appendix defines the X.509v3 certificate profile referenced by
 06-security.md §8.13.2 (CA Credentials, Portable). When a CA-issued
 credential is carried in the `x5chain` header parameter of a §8.13
-COSE_Sign1 credential (per RFC 9360), the certificates in that chain
-MUST conform to this profile.
+COSE_Sign1 credential (per RFC 9360), the end-entity (leaf) certificate
+in that chain MUST conform to this profile. Intermediate and root CA
+certificates are ordinary RFC 5280 CA certificates (`basicConstraints`
+CA=TRUE, `keyUsage` keyCertSign); this profile does not constrain them.
 
 The profile is deliberately minimal: any conforming CA that can issue
 RFC 5280 certificates with an Ed25519 subject key can issue an
@@ -24,7 +26,7 @@ Key words MUST, MUST NOT, SHOULD, MAY are per RFC 2119.
 | SubjectPublicKeyInfo | Ed25519 (Section 2) |
 | subject | Empty (normative), or `serialNumber` only (Section 3) |
 | issuer | CA-chosen DN; `CN` REQUIRED, `O` SHOULD be present |
-| subjectAltName | Native `/128` as iPAddress, critical (Section 4) |
+| subjectAltName | Native `/128` as iPAddress; critical iff subject is empty (Section 4) |
 | Mesh Role extension | Non-critical, `2.25.…` OID (Section 5) |
 | basicConstraints | Critical, `CA=false` |
 | keyUsage | Critical, `digitalSignature` only |
@@ -49,7 +51,7 @@ The subject public key MUST be an Ed25519 public key:
 No other public key algorithms are defined by this profile. The Ed25519
 public key in the certificate MUST be the node's LICHEN identity key —
 the same key whose SHA-512-derived IID produces the node's addresses
-(03-addressing.md §2).
+(03-addressing.md §3.1).
 
 ## 3. subject and issuer Distinguished Names
 
@@ -59,7 +61,7 @@ check (Section 8). If a subject is included, it MUST consist of a single
 attribute:
 
 - `serialNumber` = the node's 13-character Crockford Base32 short
-  address (03-addressing.md §2), or the 16-character uppercase hex of
+  address (03-addressing.md §3.1), or the 16-character uppercase hex of
   the node IID.
 
 **issuer:** The issuer DN is CA-defined. It MUST contain `CN`, and
@@ -71,27 +73,33 @@ is the only issuer-based decision.
 ## 4. subjectAltName: Native Address
 
 The subjectAltName extension MUST be present, MUST be critical when
-subject is empty (RFC 5280 §4.2.1.6), and MUST contain exactly one
-iPAddress GeneralName (tag `[7]` primitive) encoding the node's
-key-derived native address: the 16-byte `0200::/8` `/128` constructed
-as `addr = [0x02] + SHA-512(pubkey)[0:7] + IID` (03-addressing.md §2,
-04-network.md §12).
+subject is empty and MUST be non-critical when subject is non-empty
+(RFC 5280 §4.2.1.6), and MUST contain exactly one iPAddress GeneralName
+(tag `[7]` primitive) encoding the node's key-derived native address:
+the 16-byte `0200::/8` `/128` constructed
+as `addr = [0x02] + SHA-512(pubkey)[0:7] + IID` (03-addressing.md §3.1,
+04-network.md §12). A second native `0200::/8` iPAddress MUST NOT appear.
 
 dNSName, rfc822Name, and URI GeneralNames MUST NOT be used; LICHEN has
 no DNS namespace and the profile does not bind email or web identity.
 
-A link-local `fe80::/10` address for the same IID MAY be included as a
-second iPAddress; it carries no additional identity information (its
-IID is already determined by the native address) and verifiers MUST
-ignore it for authorization.
+A link-local `fe80::/10` address with the same IID MAY be included as
+one additional iPAddress; it carries no additional identity information
+(its IID is already determined by the native address) and verifiers MUST
+ignore it for authorization. Verifiers MUST ignore any iPAddress other
+than the single native `0200::/8` entry, including a link-local entry
+whose IID does not match the native address's IID.
 
-Worked encoding of the SAN for native address
-`0210:1112:1314:1516:1718:191a:1b1c:1d1e`:
+Worked encoding for subject public key
+`000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`
+(SHA-512 begins `3d 94 ee a4 9c 58 0a ef …`; IID byte 0 `0x3d` already
+has the U/L bit clear, so IID = `3d94eea49c580aef` and the native
+address is `023d:94ee:a49c:580a:3d94:eea4:9c58:0aef`):
 
 ```
 SEQUENCE (subjectAltName)        30 12
   [7] iPAddress (16 bytes)         87 10
-      02 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E
+      02 3D 94 EE A4 9C 58 0A 3D 94 EE A4 9C 58 0A EF
 ```
 
 ## 5. Mesh Role Extension
@@ -118,9 +126,12 @@ The BIT STRING carries named bits; unspecified bits MUST be zero:
 
 Roles are cumulative: a gateway that relays sets both bits 1 and 2.
 The extension MUST be omitted (not an empty bit string) for a
-certificate asserting no role. Verifiers that do not implement this
-extension MUST ignore it (non-critical per RFC 5280 §4.2); authorization
-logic MUST NOT treat absence as "leaf" — absence means "unasserted".
+certificate asserting no role. If the extension is nonetheless present
+with an empty BIT STRING (no named bits), verifiers MUST treat it as
+unasserted, exactly as if the extension were absent. Verifiers that do
+not implement this extension MUST ignore it (non-critical per RFC 5280
+§4.2); authorization logic MUST NOT treat absence as "leaf" — absence
+means "unasserted".
 
 Worked extnValue encodings (OCTET STRING wrapper shown):
 
@@ -144,17 +155,22 @@ Offline meshes cannot check revocation services, so certificate
 lifetime is the primary exposure bound:
 
 - `notBefore` MUST be truncated to 00:00:00 UTC of the issuance day.
-- `notAfter` MUST be finite. The RECOMMENDED validity is 396 days from
-  `notBefore` (aligned with current CA/Browser Forum practice). A
-  validity period longer than 825 days MUST NOT be issued.
+- `notAfter` MUST be finite. The RECOMMENDED validity is 200 days from
+  `notBefore` (the CA/Browser Forum SC-081 maximum for certificates
+  issued on or after 2026-03-15). A validity period longer than 825
+  days MUST NOT be issued.
 - Renewal is by re-issuance through the provisioning flow
-  (viku.7: USB/BLE cert injection). Certificate replacement is signaled
+  (USB/BLE cert injection). Certificate replacement is signaled
   by presenting the new chain; verifiers replace cached chains
   wholesale and have no notion of certificate sequence numbers.
 
 ## 7. Signature Algorithm
 
-The CA is free to sign with any widely supported algorithm it keys for.
+The CA is free to sign with any widely supported algorithm it keys for,
+subject to a floor: the signature algorithm MUST be SHA-256 class or
+stronger (e.g. `ecdsa-with-SHA256`, `ecdsa-with-SHA384`, RSASSA-PSS with
+SHA-256 or better) or `id-Ed25519`; MD5- and SHA-1-based signature
+algorithms MUST NOT be used.
 The `signature` field of `tbsCertificate` and the outer
 `signatureAlgorithm` MUST be identical (RFC 5280 §4.1.2.3).
 RECOMMENDED: `ecdsa-with-SHA256` (`1.2.840.10045.4.3.2`).
@@ -173,7 +189,7 @@ A constrained verifier processing a profile-conformant chain:
 3. Checks `basicConstraints` CA=false and `keyUsage` digitalSignature
    on each end-entity certificate.
 4. **Address binding (the attestation payload):** computes
-   `SHA-512(subjectPublicKey)` per 03-addressing.md §2, clears the U/L
+   `SHA-512(subjectPublicKey)` per 03-addressing.md §3.1, clears the U/L
    bit, and verifies that the resulting IID equals the lower 64 bits of
    the SAN native `/128`. A certificate that fails this check MUST be
    rejected — it attests a key-to-address pairing that does not hold.
@@ -196,4 +212,4 @@ public key from the CSR.
 - The `2.25` UUID-arc OID requires no registration with any authority;
   implementations hard-code the arc value above.
 - Test vectors for chain validation and cross-signing are tracked
-  separately (viku.8) and will live in `test/vectors/`.
+  separately and will live in `test/vectors/`.
