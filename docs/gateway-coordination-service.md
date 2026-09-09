@@ -184,16 +184,26 @@ was never collected.
 
 | Tier | Price | What's included |
 |------|-------|----------------|
-| Community | Free | Self-host Headscale, DIY gateway, community forum |
-| Starter | $15/mo/gateway | Managed Headscale, NAT traversal, OTA, dashboard |
-| Pro | $75/mo/gateway | Multi-mesh routing, SLA, fleet API, alerting, priority DERP |
+| Community | Free | Managed Headscale, NAT traversal, OTA, basic dashboard, community forum |
+| Starter | $15/mo/gateway | Everything in Community + priority DERP, traffic analytics, email support |
+| Pro | $75/mo/gateway | Everything in Starter + SLA, fleet API, alerting, dedicated DERP, phone support |
 | Event | Flat fee | Temporary deployment for conferences/events, includes setup support |
 
-The community tier is not a stripped-down version of Starter. It is the
-same software, self-hosted, with no artificial limitations. We sell
-convenience and reliability, not lock-in. If the managed service
-disappears tomorrow, every gateway can migrate to self-hosted Headscale
-with zero firmware changes.
+**All tiers run on the same managed Headscale instance.** Community
+gateways are not self-hosted islands — they're on the same coordination
+network as paying gateways. Every gateway can route to every other
+gateway regardless of tier. This is critical: the value of the network
+is proportional to its size. Fragmenting free users onto their own
+infrastructure would shrink the network and hurt paying customers.
+
+The free tier is real. No time limits, no nag screens, no artificial
+degradation. Community gateways get NAT traversal, OTA updates, and
+multi-mesh routing. Paid tiers buy better support, SLA guarantees,
+analytics, and priority relay infrastructure — not basic connectivity.
+
+The code is still open source. A gateway operator *can* self-host
+Headscale if they want to run a private network. But the default is the
+managed instance, and the incentive is to stay on it.
 
 ---
 
