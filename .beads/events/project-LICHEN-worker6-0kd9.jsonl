@@ -1,0 +1,2 @@
+{"id":"01a08351-67cb-7373-a431-115fc395945b","issue_id":"project-LICHEN-worker6-0kd9","event_type":"created","actor":"Mark Atwood","old_value":"","new_value":"","created_at":"2026-09-08T23:19:05.419227205Z"}
+{"id":"01a08351-6a71-7372-a8d7-01e6f2bec911","issue_id":"project-LICHEN-worker6-0kd9","event_type":"closed","actor":"Mark Atwood","old_value":"","new_value":"Filed as the durable record of the canary event; closing immediately - documented, resolved, no action.","created_at":"2026-09-08T23:19:06.097226814Z"}

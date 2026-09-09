@@ -70,6 +70,12 @@ const KEY_MAP_ORDINAL: i64 = 4;
 const KEY_MAP_START: i64 = 5;
 const KEY_MAP_COUNT: i64 = 6;
 
+/// Spec GCP-6.4 (R-08-014): GET /slots, /channels and /nodes responses are
+/// limited to at most 32 entries per response; larger result sets require
+/// Block2 pagination. Until block-wise transfer is wired (bead
+/// l1qw.18.3), responses truncate at this bound rather than exceed the MUST.
+pub(crate) const MAX_GET_RESPONSE_ENTRIES: usize = 32;
+
 /// GCP-6.5 validation step 7a (spec/08-gateway-coordination.md): a claim
 /// may not reserve capacity further than this past now (5 superframes x
 /// 60 s + 5 s clock tolerance). The wire key-4 field decoded as
@@ -752,6 +758,8 @@ pub struct SlotClaim {
     pub superframe_id: u64,
     /// Monotonic per-gateway sequence within a superframe.
     pub claim_sequence: u32,
+    /// Allocation mode advertised by the claim.
+    pub mode: AllocationMode,
     /// Unix timestamp of claim (for replay protection).
     pub timestamp: Option<i64>,
     /// Total gateways in federation (for interleaved mode).
@@ -775,6 +783,7 @@ impl SlotClaim {
             slots,
             superframe_id,
             claim_sequence,
+            mode: AllocationMode::Interleaved,
             timestamp: None,
             gateway_count: None,
             ordinal: None,
@@ -798,6 +807,12 @@ impl SlotClaim {
         self
     }
 
+    /// Set the allocation mode advertised in the COSE payload.
+    pub fn with_mode(mut self, mode: AllocationMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     /// Encode and sign as a spec GCP-6.5 COSE_Sign1 envelope (l1qw.16.2.3).
     ///
     /// Mirrors Python `sign_slot_claim` (l1qw.16.1): payload integer keys
@@ -808,9 +823,8 @@ impl SlotClaim {
     /// than MAX_CLAIM_DURATION_SECONDS past now — stamp an in-window
     /// expiry yourself (e.g. `now + 100`), not the bare issue second.
     /// `gateway_count` is a local allocation
-    /// parameter and is never serialized (GCP-6.5). Rust `SlotClaim` has no
-    /// allocation-mode field, so the payload is emitted interleaved (mode
-    /// 0); the ordinal (key 7) is REQUIRED on the wire (corpus vector
+    /// parameter and is never serialized (GCP-6.5). The allocation mode and
+    /// ordinal are signed in the payload; the ordinal (key 7) is REQUIRED on the wire (corpus vector
     /// "ordinal_absent") — build with [`SlotClaim::with_federation`].
     pub fn encode_cose(
         &self,
@@ -837,7 +851,7 @@ impl SlotClaim {
         let payload = slot::SlotClaimPayload {
             slots: self.slots.clone(),
             superframe_epoch: self.superframe_id,
-            mode: slot::AllocationMode::Interleaved,
+            mode: self.mode,
             expiry,
             gateway_iid: self.gateway_iid,
             claim_seq: self.claim_sequence,
@@ -914,9 +928,15 @@ pub struct ChannelMap {
 impl ChannelMap {
     /// Encode as CBOR for transmission.
     pub fn encode(&self) -> Vec<u8> {
+        self.encode_capped(usize::MAX)
+    }
+
+    /// Encode as CBOR, emitting at most `max_entries` channel entries.
+    pub fn encode_capped(&self, max_entries: usize) -> Vec<u8> {
         let entries: Vec<Value> = self
             .channels
             .iter()
+            .take(max_entries)
             .map(|c| Value::Map(c.to_cbor_map()))
             .collect();
 
@@ -945,11 +965,18 @@ pub struct NodeEntry {
 }
 
 /// Encode node registry as SenML/CBOR for GET /nodes response.
-pub fn encode_nodes_senml(registry: &NodeRegistry) -> Vec<u8> {
+///
+/// Emits at most `max_nodes` node records after the base record (spec
+/// GCP-6.4 / R-08-014 response bound).
+pub fn encode_nodes_senml(registry: &NodeRegistry, max_nodes: usize) -> Vec<u8> {
     // SenML pack: array of records
     // Each record is a map with keys per RFC 8428:
     // "bn" = base name, "n" = name, "v" = value, "t" = time
     let nodes = registry.list_nodes();
+    // Truncation must be deterministic: list_nodes() walks a HashMap, so
+    // sort lowest-address-first before capping (finding bead d1so).
+    let mut nodes = nodes;
+    nodes.sort_unstable();
     let mut records: Vec<Value> = Vec::with_capacity(nodes.len() + 1);
 
     // Base record with base name
@@ -959,8 +986,8 @@ pub fn encode_nodes_senml(registry: &NodeRegistry) -> Vec<u8> {
     )]);
     records.push(base_record);
 
-    for addr in nodes {
-        if let Some(entry) = registry.get(&addr) {
+    for addr in nodes.iter().take(max_nodes) {
+        if let Some(entry) = registry.get(addr) {
             // Format address as hex string for SenML name
             let addr_hex: String = addr.iter().map(|b| format!("{:02x}", b)).collect();
 
@@ -1163,7 +1190,7 @@ struct SlotReplayPersistence {
 }
 
 const COORDINATOR_STATE_MAGIC: &[u8; 8] = b"LCHNGCS1";
-const COORDINATOR_STATE_VERSION: u16 = 1;
+const COORDINATOR_STATE_VERSION: u16 = 2;
 const COORDINATOR_STATE_SEAL_DOMAIN: &[u8] = b"LICHEN-GCP-COORDINATOR-STATE-v1";
 
 struct PersistedCoordinatorState {
@@ -1187,7 +1214,7 @@ fn coordinator_state_max_len(
         .ok_or(slot::SlotError::ArithmeticOverflow)?;
     let peer_entry = slots
         .checked_mul(4)
-        .and_then(|value| value.checked_add(8 + 8 + 4 + 4))
+        .and_then(|value| value.checked_add(8 + 8 + 4 + 1 + 1 + 8 + 4))
         .ok_or(slot::SlotError::ArithmeticOverflow)?;
     let peers = max_gateways
         .checked_mul(peer_entry)
@@ -1282,6 +1309,14 @@ fn encode_coordinator_state(
         payload.extend_from_slice(claim.gateway_iid());
         payload.extend_from_slice(&claim.superframe_id().to_be_bytes());
         payload.extend_from_slice(&claim.claim_sequence().to_be_bytes());
+        payload.push(allocation_mode_to_wire(claim.mode()));
+        match claim.ordinal() {
+            Some(ordinal) => {
+                payload.push(1);
+                payload.extend_from_slice(&ordinal.to_be_bytes());
+            }
+            None => payload.push(0),
+        }
         payload.extend_from_slice(&(claim.slots().len() as u32).to_be_bytes());
         for claimed_slot in claim.slots() {
             payload.extend_from_slice(&claimed_slot.to_be_bytes());
@@ -1454,11 +1489,14 @@ fn load_coordinator_state(
     }
 
     let mut cursor = CoordinatorStateCursor::new(payload);
-    if cursor.take(8)? != COORDINATOR_STATE_MAGIC
-        || cursor.u16()? != COORDINATOR_STATE_VERSION
-        || cursor.array::<16>()? != *expected_local_iid
-        || cursor.u32()? != slots_per_superframe
-    {
+    if cursor.take(8)? != COORDINATOR_STATE_MAGIC {
+        return Err(slot::SlotError::CorruptState);
+    }
+    let state_version = cursor.u16()?;
+    if state_version != 1 && state_version != COORDINATOR_STATE_VERSION {
+        return Err(slot::SlotError::CorruptState);
+    }
+    if cursor.array::<16>()? != *expected_local_iid || cursor.u32()? != slots_per_superframe {
         return Err(slot::SlotError::CorruptState);
     }
     let generation = cursor.u64()?;
@@ -1505,6 +1543,21 @@ fn load_coordinator_state(
         let iid = cursor.array()?;
         let superframe = cursor.u64()?;
         let sequence = cursor.u32()?;
+        let (mode, ordinal) = if state_version == 1 {
+            (AllocationMode::Interleaved, None)
+        } else {
+            let mode = match cursor.u8()? {
+                0 => AllocationMode::Interleaved,
+                1 => AllocationMode::Contiguous,
+                _ => return Err(slot::SlotError::CorruptState),
+            };
+            let ordinal = match cursor.u8()? {
+                0 => None,
+                1 => Some(cursor.u64()?),
+                _ => return Err(slot::SlotError::CorruptState),
+            };
+            (mode, ordinal)
+        };
         let slot_count = cursor.u32()? as usize;
         if slot_count > slots_per_superframe as usize {
             return Err(slot::SlotError::CorruptState);
@@ -1518,6 +1571,8 @@ fn load_coordinator_state(
             claimed_slots,
             superframe,
             sequence,
+            mode,
+            ordinal,
             slots_per_superframe,
         )?);
     }
@@ -1829,6 +1884,36 @@ impl GatewayCoordinator {
         self.tunnel_auth.set_root(root_iid);
     }
 
+    /// The tunnel-auth table's bound root IID, if provisioned.
+    pub fn tunnel_auth_root(&self) -> Option<[u8; 8]> {
+        self.tunnel_auth.root_iid()
+    }
+
+    /// Data-path egress gate (spec 06-security 8.11): authorize upstream
+    /// forwarding of one mesh-ingress datagram against the root-signed
+    /// authorization table. Mirrors the C call site in
+    /// `lichen/apps/gateway/src/forwarding.c` (`lichen_tunnel_auth_decapsulate`,
+    /// fail-closed on every denial). The table's clock domain is unix seconds
+    /// (`handle_post_tunnel_auth` observes the same), so the caller's
+    /// monotonic runtime clock must never reach it here.
+    pub fn authorize_egress(
+        &mut self,
+        inner_source: [u8; 16],
+        destination_is_mesh: bool,
+        route: &[[u8; 8]],
+    ) -> Result<(), tunnel_auth::TunnelAuthError> {
+        self.tunnel_auth.authorize_decapsulation(
+            tunnel_auth::DecapsulationRequest {
+                direction: tunnel_auth::TunnelDirection::MeshToExternal,
+                inner_source,
+                source_is_mesh: true,
+                destination_is_mesh,
+                route,
+            },
+            u64::try_from(unix_now()).unwrap_or(0),
+        )
+    }
+
     /// Handle POST /.well-known/tunnel-auth (spec 06-security 8.11): an
     /// OSCORE-authenticated root delivers a COSE_Sign1 (alg -65537) egress
     /// authorization for caching. Fail-closed: every validation failure maps
@@ -1876,6 +1961,7 @@ impl GatewayCoordinator {
             .owned_slots(self.info.capabilities.max_slots);
         let slots_values: Vec<Value> = slots
             .iter()
+            .take(MAX_GET_RESPONSE_ENTRIES)
             .map(|&s| Value::Integer((s as i64).into()))
             .collect();
 
@@ -1948,6 +2034,10 @@ impl GatewayCoordinator {
         let Some(peer_pubkey) = peer_pubkey else {
             return CoapResponse::unauthorized();
         };
+
+        if payload.len() > OWN_CLAIM_COSE_MAX {
+            return CoapResponse::empty_success();
+        }
 
         // Spec GCP-6.5: the claim arrives as a COSE_Sign1 envelope (payload
         // integer keys 1-7, all required — from_cose enforces). Malformed
@@ -2171,7 +2261,7 @@ impl GatewayCoordinator {
 
     /// Handle GET /channels request.
     pub fn handle_get_channels(&self) -> CoapResponse {
-        let payload = self.channel_map.encode();
+        let payload = self.channel_map.encode_capped(MAX_GET_RESPONSE_ENTRIES);
         CoapResponse::content(payload, CONTENT_FORMAT_CBOR)
     }
 
@@ -2232,7 +2322,7 @@ impl GatewayCoordinator {
 
     /// Handle GET /nodes request.
     pub fn handle_get_nodes(&self) -> CoapResponse {
-        let payload = encode_nodes_senml(&self.node_registry);
+        let payload = encode_nodes_senml(&self.node_registry, MAX_GET_RESPONSE_ENTRIES);
         CoapResponse::content(payload, CONTENT_FORMAT_SENML_CBOR)
     }
 
@@ -2323,7 +2413,8 @@ mod tests {
         let iid = crate::trust::iid_from_pubkey(&pubkey);
         let claim = SlotClaim::new(iid, vec![4, 8, 15], 42, 1)
             .with_timestamp()
-            .with_federation(3, 0);
+            .with_federation(3, 0)
+            .with_mode(AllocationMode::Contiguous);
         let envelope = claim.encode_cose(&private, &public).unwrap();
 
         // Field-level round-trip through the strict decoder (16.2.1).
@@ -2334,6 +2425,7 @@ mod tests {
         assert_eq!(decoded.claim_sequence(), 1);
         assert_eq!(decoded.expiry(), claim.timestamp.unwrap() as u64);
         assert_eq!(decoded.ordinal(), Some(0));
+        assert_eq!(decoded.mode(), AllocationMode::Contiguous);
 
         // End-to-end: the envelope verifies under the COSE signature form.
         let mut verifier = slot::SlotClaimVerifier::new_ephemeral(16).unwrap();
@@ -3198,6 +3290,22 @@ mod tests {
     }
 
     #[test]
+    fn post_slots_silently_discards_oversize_peer_claim() {
+        let mut address = [0u8; 16];
+        address[8..].fill(0x02);
+        let mut coordinator = GatewayCoordinator::new_ephemeral(address, 60, 4).unwrap();
+        let peer_pubkey = [0x43; 32];
+        let response = coordinator.handle_post_slots(
+            &vec![0xa1; OWN_CLAIM_COSE_MAX + 1],
+            true,
+            Some(&peer_pubkey),
+            4,
+        );
+        assert_eq!(response.code, 0x44);
+        assert!(response.payload.is_empty());
+    }
+
+    #[test]
     fn gateway_coordinator_get_channels() {
         let iid = [0u8; 16];
         let coordinator = coordinator(iid);
@@ -3358,6 +3466,249 @@ mod tests {
         } else {
             panic!("expected array response");
         }
+    }
+
+    /// Spec GCP-6.4 (R-08-014): GET /slots responses carry at most 32 owned
+    /// slots; a 60-slot interleaved map truncates (Block2 pagination is
+    /// tracked separately in l1qw.18.3).
+    #[test]
+    fn get_slots_caps_owned_entries_at_32() {
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        coordinator.info.slot_map = SlotMap {
+            mode: AllocationMode::Interleaved,
+            gateway_count: 1,
+            ordinal: 0,
+            start_slot: None,
+            slot_count: None,
+            owned: None,
+        };
+
+        let response = coordinator.handle_get_slots();
+        assert_eq!(response.code, 0x45);
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Map(map) = value else {
+            panic!("expected map response");
+        };
+        let owned = map
+            .iter()
+            .find(|(k, _)| *k == Value::Integer(KEY_MAP_OWNED.into()))
+            .map(|(_, v)| v)
+            .expect("owned key present");
+        let Value::Array(entries) = owned else {
+            panic!("owned value must be an array");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+        assert_eq!(entries[0], Value::Integer(0.into()));
+        assert_eq!(entries[31], Value::Integer(31.into()));
+    }
+
+    /// Spec GCP-6.4 (R-08-014): GET /channels responses carry at most 32
+    /// channel entries.
+    #[test]
+    fn get_channels_caps_entries_at_32() {
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        for channel in 0..48u8 {
+            coordinator.channel_map.channels.push(ChannelInfo {
+                channel_id: channel,
+                frequency_hz: 869_525_000 + u32::from(channel) * 200_000,
+                owner_iid: None,
+            });
+        }
+        assert!(coordinator.channel_map.channels.len() > MAX_GET_RESPONSE_ENTRIES);
+
+        let response = coordinator.handle_get_channels();
+        assert_eq!(response.code, 0x45);
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+    }
+
+    /// Spec GCP-6.4 (R-08-014): GET /nodes responses carry the base record
+    /// plus at most 32 node records.
+    #[test]
+    fn get_nodes_caps_records_at_32() {
+        use crate::handoff::NodeRegistryEntry;
+
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        for i in 0..40u8 {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+
+        let response = coordinator.handle_get_nodes();
+        assert_eq!(response.code, 0x45);
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        // Base record + capped node records
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
+        let Value::Map(base) = &records[0] else {
+            panic!("first record must be the SenML base record");
+        };
+        assert!(base.iter().any(|(k, v)| *k == Value::Text("bn".to_string())
+            && *v == Value::Text("urn:lichen:gw:nodes:".to_string())));
+    }
+
+    /// With >32 registered nodes the capped /nodes response must be
+    /// deterministic: the 32 lowest addresses, ascending (finding bead d1so —
+    /// list_nodes() walks a HashMap, so without the sort the subset would
+    /// depend on hash iteration order).
+    #[test]
+    fn get_nodes_truncation_is_deterministic_lowest_addresses() {
+        use crate::handoff::NodeRegistryEntry;
+
+        let iid = [0u8; 16];
+        let mut coordinator = coordinator(iid);
+        // Register 40 nodes in reverse order; the cap must still surface the
+        // 32 lowest addresses in ascending order.
+        for i in (0..40u8).rev() {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+
+        let response = coordinator.handle_get_nodes();
+        let value: Value = ciborium::from_reader(response.payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
+        let mut names: Vec<String> = Vec::new();
+        for record in records.iter().skip(1) {
+            let Value::Map(entries) = record else {
+                panic!("node record must be a map");
+            };
+            let (_, n) = entries
+                .iter()
+                .find(|(k, _)| *k == Value::Text("n".to_string()))
+                .expect("node record carries a name");
+            let Value::Text(name) = n else {
+                panic!("node name must be text");
+            };
+            names.push(name.clone());
+        }
+        let expected: Vec<String> = (0..32u8)
+            .map(|i| {
+                let mut addr = [0x02u8; 16];
+                addr[15] = i;
+                addr.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            })
+            .collect();
+        assert_eq!(names, expected);
+    }
+
+    /// Boundary pinning for the GCP-6.4 cap (finding bead bsaw): exactly-32
+    /// entries must not truncate, empty sets must stay well-formed, and 33
+    /// inputs must truncate by exactly one.
+    #[test]
+    fn get_response_entry_boundaries() {
+        use crate::handoff::NodeRegistryEntry;
+
+        // /channels: empty map -> well-formed empty CBOR array; exactly 32 ->
+        // no truncation; 33 -> truncated by one. The default coordinator
+        // ships 8 built-in channels, so clear them to control the set.
+        let mut coordinator_channels = coordinator([0u8; 16]);
+        coordinator_channels.channel_map.channels.clear();
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        assert_eq!(value, Value::Array(vec![]));
+
+        for entry in 0..33u8 {
+            coordinator_channels.channel_map.channels.push(ChannelInfo {
+                channel_id: entry,
+                frequency_hz: 868_100_000 + u32::from(entry) * 200_000,
+                owner_iid: None,
+            });
+        }
+        coordinator_channels.channel_map.channels.pop();
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), 32);
+
+        coordinator_channels.channel_map.channels.push(ChannelInfo {
+            channel_id: 99,
+            frequency_hz: 869_525_000,
+            owner_iid: None,
+        });
+        let value: Value = ciborium::from_reader(
+            coordinator_channels
+                .handle_get_channels()
+                .payload
+                .as_slice(),
+        )
+        .unwrap();
+        let Value::Array(entries) = value else {
+            panic!("expected array response");
+        };
+        assert_eq!(entries.len(), MAX_GET_RESPONSE_ENTRIES);
+
+        // /slots: exactly 32 owned slots must not truncate. The explicit
+        // owned list bypasses mode arithmetic; validate() accepts it because
+        // every entry is < max_slots (60).
+        let mut coordinator_slots = coordinator([0u8; 16]);
+        coordinator_slots.info.slot_map.owned = Some((0..32u16).collect());
+        let value: Value =
+            ciborium::from_reader(coordinator_slots.handle_get_slots().payload.as_slice()).unwrap();
+        let Value::Map(map) = value else {
+            panic!("expected map response");
+        };
+        let owned = map
+            .iter()
+            .find(|(k, _)| *k == Value::Integer(KEY_MAP_OWNED.into()))
+            .map(|(_, v)| v)
+            .expect("owned key present");
+        let Value::Array(entries) = owned else {
+            panic!("owned value must be an array");
+        };
+        assert_eq!(entries.len(), 32);
+
+        // /nodes: empty registry -> base record only; 33 registered -> base +
+        // 32 (truncated by exactly one).
+        let mut coordinator_nodes = coordinator([0u8; 16]);
+        let value: Value =
+            ciborium::from_reader(coordinator_nodes.handle_get_nodes().payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), 1);
+
+        for i in 0..33u8 {
+            let mut addr = [0x02u8; 16];
+            addr[15] = i;
+            coordinator_nodes
+                .node_registry
+                .register(NodeRegistryEntry::new(addr));
+        }
+        let value: Value =
+            ciborium::from_reader(coordinator_nodes.handle_get_nodes().payload.as_slice()).unwrap();
+        let Value::Array(records) = value else {
+            panic!("expected SenML pack array");
+        };
+        assert_eq!(records.len(), MAX_GET_RESPONSE_ENTRIES + 1);
     }
 
     #[test]

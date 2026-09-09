@@ -110,7 +110,7 @@ struct senml_record {
 	const char *_Nullable unit; /**< Unit (u) - may be NULL */
 	enum senml_value_type type;
 	union {
-		double f;          /**< Float value */
+		double f;          /**< Float value (encoded as CBOR f64) */
 		bool b;            /**< Boolean value */
 		const char *_Nullable s; /**< String value (vs) */
 		struct senml_span data;  /**< Binary value (vd) */
@@ -262,7 +262,9 @@ struct senml_decoded_record {
 
 /** Fixed-capacity, allocation-free decoded SenML pack. */
 struct senml_decoded_pack {
-	struct senml_decoded_record records[SENML_MAX_RECORDS];
+	/* +1 slot for the value-less base record the encoder emits when
+	 * bn/bt are set (SENML_MAX_RECORDS bounds value records). */
+	struct senml_decoded_record records[SENML_MAX_RECORDS + 1];
 	size_t record_count;
 };
 

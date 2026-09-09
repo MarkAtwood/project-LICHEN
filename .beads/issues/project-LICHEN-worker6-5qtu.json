@@ -1,0 +1,21 @@
+{
+  "id": "project-LICHEN-worker6-5qtu",
+  "title": "Reason out CCP congestion policy",
+  "description": "User requests static reasoning for the Probably Right Thing for CCP density/congestion behavior. Derive a minimal receiver-aware policy that separates link budget, rendezvous and offered airtime, with numerical sanity checks. Analysis only: no code, fixture or specification changes; proposed policy is not an adjudicated decision.",
+  "design": "Use independent bounded reviews of single-radio rendezvous and airtime/congestion, check representative airtime arithmetic, and synthesize a proposal with explicit assumptions, rejected alternatives and measurement-dependent parameters. Preserve upstream Yggdrasil addressing and best-effort custody decisions.",
+  "acceptance_criteria": "Recommendation addresses density-driven CH0/SF coupling, receiver and half-duplex constraints, legal airtime groups, weak-signal versus congestion evidence, bounded queues and control-plane preservation. Static conclusions separated from tuning and runtime claims; findings retained in Beads without changing the spec.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "epic",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T00:23:08.243210753Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T00:26:55.270539285Z",
+  "closed_at": "2026-09-09T00:26:55.270539285Z",
+  "close_reason": "Static Probably Right Thing analysis completed and retained in children: separate density/control traffic, link-budget SF and airtime congestion; specify physically feasible receiver rendezvous. Independent arithmetic checked. Recommendation only; existing spec decisions unchanged.",
+  "labels": [
+    "spec",
+    "analysis",
+    "ccp"
+  ]
+}

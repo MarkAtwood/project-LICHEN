@@ -196,3 +196,78 @@ fn gcp_slot_claim_expiry_future_passes_timing_gate() {
         evaluation_time
     ));
 }
+
+/// Basic tier (`gcp_slot_claim.json`, l1qw.16.2): the migrated COSE_Sign1
+/// envelopes must decode and verify through the same Rust paths as the
+/// exhaustive corpus. Names and expectations come from the JSON oracle.
+#[test]
+fn gcp_slot_claim_basic_tier_envelopes() {
+    let document: Value =
+        serde_json::from_str(include_str!("../../../test/vectors/gcp_slot_claim.json"))
+            .expect("parse basic-tier vectors");
+    let evaluation_time = document["constants"]["evaluation_time"].as_i64().unwrap();
+
+    for vector in document["vectors"].as_array().unwrap() {
+        let Some(envelope_hex) = vector["envelope_hex"].as_str() else {
+            continue;
+        };
+        let name = vector["name"].as_str().unwrap();
+        let envelope = hex_bytes(envelope_hex);
+        let expected = &vector["expected"];
+
+        if expected["reason"].as_str() == Some("missing_signature") {
+            // Empty signature bstr: structurally malformed.
+            assert_eq!(
+                RawSlotClaim::from_cose(&envelope, SLOTS_PER_SUPERFRAME).unwrap_err(),
+                SlotError::MalformedClaim,
+                "{name}: expected malformed-envelope rejection"
+            );
+            continue;
+        }
+
+        let pubkey: [u8; 32] = hex_bytes(vector["signer"]["public_key_hex"].as_str().unwrap())
+            .try_into()
+            .unwrap();
+        let claim = RawSlotClaim::from_cose(&envelope, SLOTS_PER_SUPERFRAME)
+            .unwrap_or_else(|e| panic!("{name}: decode failed: {e:?}"));
+
+        let expect_valid = expected["valid"].as_bool().unwrap_or(false)
+            || expected["verify_with_gateway_pubkey"]
+                .as_bool()
+                .unwrap_or(false);
+        if expect_valid {
+            let slots: Vec<u32> = vector["claim"]["slots"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s.as_u64().unwrap() as u32)
+                .collect();
+            assert_eq!(claim.slots(), &slots, "{name}");
+            assert_eq!(
+                claim.superframe_id(),
+                vector["claim"]["superframe_id"].as_u64().unwrap(),
+                "{name}"
+            );
+            let mut verifier = SlotClaimVerifier::new_ephemeral(64).unwrap();
+            verifier
+                .verify(claim.clone(), &pubkey, claim.superframe_id())
+                .unwrap_or_else(|e| panic!("{name}: verify failed: {e:?}"));
+            if let Some(expiry) = vector["claim"]["expiry"].as_i64() {
+                assert!(
+                    validate_claim_timing(expiry, evaluation_time),
+                    "{name}: in-window expiry must pass the timing gate"
+                );
+            }
+        } else {
+            let mut verifier = SlotClaimVerifier::new_ephemeral(64).unwrap();
+            let superframe = claim.superframe_id();
+            assert!(
+                matches!(
+                    verifier.verify(claim, &pubkey, superframe),
+                    Err(SlotError::InvalidSignature)
+                ),
+                "{name}: expected signature rejection"
+            );
+        }
+    }
+}

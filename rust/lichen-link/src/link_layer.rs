@@ -46,6 +46,9 @@ pub enum LinkRxError {
     ClockRegression,
     /// The caller mixed incompatible reception clock units in one link.
     ClockModeMismatch,
+    /// The authenticated frame's destination is another node (mirrors the
+    /// Python reference's `ReceiveError.NOT_FOR_US`).
+    NotForUs,
 }
 
 /// Failure to export or atomically restore authenticated peer trust state.
@@ -85,6 +88,7 @@ impl std::fmt::Display for LinkRxError {
             Self::KeyChange => write!(f, "key change detected"),
             Self::ClockRegression => write!(f, "reception clock moved backwards"),
             Self::ClockModeMismatch => write!(f, "reception clock mode changed"),
+            Self::NotForUs => write!(f, "frame is not addressed to this node"),
         }
     }
 }
@@ -601,6 +605,29 @@ impl LinkLayer {
         let mut eui64 = self.identity.iid;
         eui64[0] ^= 0x02;
         eui64
+    }
+
+    /// Whether an authenticated wire frame's destination is this node.
+    ///
+    /// Mirrors the Python reference's `_wire_is_for_local`
+    /// (python/src/lichen/link/link_layer.py): broadcast is always local;
+    /// Extended requires an exact EUI-64 match; Short is rejected because
+    /// this stack carries no coordinator-assigned short address (the Python
+    /// reference rejects Short frames when none is configured either).
+    ///
+    /// ponytail: Elided frames are always accepted here — deriving the
+    /// Elided destination requires SCHC decompression, which lives in
+    /// lichen-schc (which itself depends on this crate, so lichen-link
+    /// cannot call it). The node stack enforces the authoritative Elided
+    /// destination check on its receive path; upgrade path is a decompress
+    /// callback injected into LinkLayer if a non-stack consumer needs it.
+    fn wire_is_for_local(&self, frame: &LichenFrame<'_>) -> bool {
+        match frame.addr_mode {
+            AddrMode::None => true,
+            AddrMode::Short => false,
+            AddrMode::Extended => frame.dst_addr == self.local_eui64(),
+            AddrMode::Elided => true,
+        }
     }
 
     /// Sign a digest with this link layer's private key (for DAO origin signatures).
@@ -1139,6 +1166,17 @@ impl LinkLayer {
             )
         {
             return Err(LinkRxError::UnknownSender);
+        }
+
+        // Destination admission is deliberately after authentication
+        // (mirrors the Python reference: after the signature binds the
+        // address-mode bits, before replay, pinning, or any protocol
+        // allocation). Unicast frames addressed to third parties are not
+        // processed locally.
+        if !self.wire_is_for_local(&frame) {
+            #[cfg(feature = "log")]
+            debug!("link_layer: authenticated frame is not addressed to this node");
+            return Err(LinkRxError::NotForUs);
         }
 
         let old_state = self.peer_auth_state(&sender.iid);

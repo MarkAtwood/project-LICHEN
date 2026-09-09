@@ -30,11 +30,13 @@ if TYPE_CHECKING:
 __all__ = [
     "HOLDOFF_SUPERFRAMES",
     "MAX_CANDIDATES",
+    "MAX_SLOT_MAP_ENTRIES",
     "MultiRootState",
     "RootCandidate",
     "SlotMapError",
     "VersionChangeOutcome",
     "compare_iid",
+    "encode_slot_map",
     "hash_32",
     "select_root",
     "sfn_delta",
@@ -50,6 +52,11 @@ HOLDOFF_SUPERFRAMES: int = 3
 #: Maximum number of root candidates per beacon window (memory-exhaustion DoS
 #: guard; mirrors Rust ``MAX_CANDIDATES`` in rust/lichen-rpl/src/multi_instance.rs).
 MAX_CANDIDATES: int = 32
+
+#: Maximum slot_map entries the beacon writer accepts (spec 02a 2a.2;
+#: parity: C ``LICHEN_SLOT_MAP_MAX_ENTRIES``, Rust ``MAX_SLOT_MAP_ENTRIES``
+#: in rust/lichen-core/src/tdma_beacon.rs).
+MAX_SLOT_MAP_ENTRIES: int = 64
 
 
 class SlotMapError(Enum):
@@ -94,6 +101,56 @@ def validate_slot_map(
         prev = slot
 
     return (True, None)
+
+
+def encode_slot_map(slot_map: Sequence[int]) -> bytes:
+    """Encode a slot_map as a CBOR array (beacon CBOR options section).
+
+    Root-side writer for the slot_map option (spec 02a 2a.2 R-02a-013).
+    Wire format (parity: C ``lichen_beacon_write_slot_map`` in
+    lichen/subsys/lichen/link/beacon.c, Rust ``write_slot_map`` in
+    rust/lichen-core/src/tdma_beacon.rs):
+
+    - Array header ``0x80 + len`` for 0..=23 entries, long form
+      ``0x98, len`` for 24..=MAX_SLOT_MAP_ENTRIES
+    - Entries: CBOR immediate ``0x00..=0x17`` for slots 0..=23,
+      ``0x18`` prefix + one byte for slots 24..=255
+
+    Entries are encoded as given: no sorting or deduplication is applied
+    (parity with C/Rust writers); callers must pre-validate with
+    :func:`validate_slot_map`.
+
+    Args:
+        slot_map: List of u8 slot indices (each 0..=255).
+
+    Returns:
+        CBOR-encoded slot_map bytes.
+
+    Raises:
+        ValueError: If the map exceeds MAX_SLOT_MAP_ENTRIES entries or
+            an entry is outside the u8 range 0..=255.
+    """
+    if len(slot_map) > MAX_SLOT_MAP_ENTRIES:
+        raise ValueError(
+            f"slot_map exceeds maximum entries ({len(slot_map)} > {MAX_SLOT_MAP_ENTRIES})"
+        )
+    for slot in slot_map:
+        if not 0 <= slot <= 0xFF:
+            raise ValueError(f"slot entry out of u8 range: {slot}")
+
+    out = bytearray()
+    if len(slot_map) <= 23:
+        out.append(0x80 + len(slot_map))
+    else:
+        out.append(0x98)
+        out.append(len(slot_map))
+    for slot in slot_map:
+        if slot <= 0x17:
+            out.append(slot)
+        else:
+            out.append(0x18)
+            out.append(slot)
+    return bytes(out)
 
 
 def tx_allowed(

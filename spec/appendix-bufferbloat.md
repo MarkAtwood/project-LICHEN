@@ -61,22 +61,37 @@ Packets have deadlines. A position report from 30 seconds ago is worthless;
 transmitting it wastes airtime and battery. Queued packets older than their
 deadline are silently dropped.
 
+The two delivery services (see 07-transport-app.md §10.2) use different
+expiry models:
+
 ```
-Routing control:   5 s deadline (RPL DIO/DAO)
-ACK/NACK:          10 s deadline
-Application data:  configurable, default 60 s
+Datagram service (telemetry, position, sensor data):
+  Routing control:   5 s deadline (RPL DIO/DAO)
+  ACK/NACK:          10 s deadline
+  Application data:  configurable, default 60 s
+
+Message service (IM, SOS, tactical chat):
+  Custody messages:  absolute TTL (hours to days, see 05-routing.md §9.8)
+  TX queue deadline:  120 s (time to reach first custodian)
 ```
+
+Datagram-service packets are dropped when stale. Message-service packets
+have a short TX queue deadline (time to reach the first custodian) but a
+long absolute TTL that governs the custody chain. Once a custody-capable
+node accepts the message, the TX queue deadline no longer applies.
 
 ### 3. Priority Queuing
 
-Not all packets are equal:
+Not all packets are equal. See 07-transport-app.md §10.2 for the full
+priority table and delivery service mapping.
 
-| Priority | Traffic Type              |
-|----------|---------------------------|
-| 0 (high) | Routing control (DIO/DAO) |
-| 1        | Link-layer ACKs           |
-| 2        | Urgent app messages       |
-| 3 (low)  | Bulk data                 |
+| Priority | Traffic Type              | Delivery Service |
+|----------|---------------------------|------------------|
+| 0 (high) | SOS, emergency            | Message          |
+| 1        | Routing control (DIO/DAO) | Datagram         |
+| 2        | IM, tactical chat, custody handshakes | Message |
+| 3        | Telemetry, position       | Datagram         |
+| 4 (low)  | Bulk data, firmware       | Datagram         |
 
 Higher-priority packets preempt lower-priority ones. A node struggling to
 maintain routes will not waste airtime on stale bulk transfers.

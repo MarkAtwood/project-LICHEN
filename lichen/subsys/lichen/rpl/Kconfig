@@ -18,6 +18,18 @@ menuconfig LICHEN_RPL
 
 if LICHEN_RPL
 
+config LICHEN_RPL_ROOT_SIG
+	bool "Root DIO signature verification"
+	default n
+	help
+	  Verify the optional COSE_Sign1 Root DIO Signature option (0x17)
+	  on the DIO receive path (spec 06-security.md 8.10.1). Forged,
+	  tampered, and replayed signatures reject the DIO; a missing
+	  option, a missing trust pin, or an expired/unassessable
+	  signature falls back to the link-layer baseline (graceful
+	  degradation). Enable for deployments operating in adversarial
+	  environments.
+
 config LICHEN_RPL_MRHOF
 	bool "MRHOF objective function"
 	default y

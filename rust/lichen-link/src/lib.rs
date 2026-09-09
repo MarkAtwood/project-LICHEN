@@ -108,7 +108,7 @@ pub use sos_origin::{
 };
 pub use tdma_clock::{
     beacon_delta_ms, correction_ms, drift_bound, drift_ppm, guard_sufficient, holdover_expired,
-    in_guard, tx_allowed,
+    in_guard, slot_map_tx_allowed, tx_allowed,
 };
 pub use time_fallback::{consumer_timestamp, ConsumerTimestamp};
 pub use time_source::TimeSourceClass;

@@ -306,6 +306,64 @@ may repeat semantic parsing and exact self-Target validation to idempotently
 reconstruct the missing route. Implementations MUST snapshot the complete route, replay-floor,
 and storage state around rejected DAOs to test that no partial mutation occurs.
 
+### 16.8. Structured Logging Convention
+
+All implementations MUST emit diagnostic log lines in **logfmt** format: space-separated
+`key=value` pairs, with string values containing spaces quoted. This applies to all
+log output on the packet processing path (link through application layer).
+
+```
+ts=1725811200.123 level=debug layer=link pkt_id=47 event=rx_frame sender_iid=a3b2c1d4 rssi=-87 len=42
+ts=1725811200.124 level=debug layer=schc pkt_id=47 event=decompress rule_id=3 compressed=42 decompressed=89
+ts=1725811200.125 level=debug layer=routing pkt_id=47 event=forward next_hop=fe80::1 reason=preferred_parent
+```
+
+Implementations MAY additionally emit JSON Lines (JSONL) to structured sinks (files, CI
+backends) for richer nesting, but logfmt is the required baseline that all tooling —
+including AI test watchers — can parse without configuration.
+
+#### 16.8.1. Standard Field Names
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ts` | float | Unix epoch in seconds with millisecond precision |
+| `level` | string | `debug`, `info`, `warn`, `error` |
+| `layer` | string | `link`, `schc`, `ipv6`, `routing`, `coap`, `oscore`, `app` |
+| `pkt_id` | uint | Monotonic per-node packet correlation ID (assigned at link RX entry) |
+| `event` | string | Verb phrase: `rx_frame`, `tx_drain`, `decompress`, `forward`, `drop`, `reject` |
+| `sender_iid` | hex | IID of sender (when known) |
+| `peer_iid` | hex | IID of peer (when relevant, e.g. CoAP exchange partner) |
+| `errno` | int | Numeric error code (on error paths) |
+| `reason` | string | Machine-readable cause (on drops/rejects, e.g. `replay`, `queue_full`) |
+| `len` | uint | Payload length in bytes |
+| `rssi` | int | Received signal strength in dBm (link layer) |
+
+Implementations MUST include `ts`, `level`, `layer`, and `event` on every log line.
+`pkt_id` MUST be present on all lines in the packet processing path. Other fields are
+included when contextually relevant.
+
+#### 16.8.2. Per-Implementation Notes
+
+- **C/Zephyr:** Emit logfmt fields via existing `LOG_DBG`/`LOG_INF`/`LOG_WRN`/`LOG_ERR`
+  macros with format strings. No heap allocation required. Gate verbose pipeline
+  logging behind `CONFIG_LICHEN_DIAG_VERBOSE`. For native_sim CI, Zephyr's dictionary
+  logging backend (`CONFIG_LOG_BACKEND_DICT`) MAY be post-processed to JSONL.
+- **Rust:** Use the `tracing` crate with structured spans (`info_span!`) on the packet
+  path. `tracing-subscriber` emits JSONL or logfmt depending on configuration.
+  Embedded targets (`lichen-node` on `no_std`) use `defmt` with logfmt conventions
+  in format strings.
+- **Python:** Use `structlog` with bound loggers carrying `pkt_id` and `layer` context.
+  Emit JSONL to files/structured sinks; logfmt to console for human readability.
+
+#### 16.8.3. Correlation ID Assignment
+
+Each node maintains a monotonic `u32` counter (wrapping). A new `pkt_id` is assigned at
+the link layer RX entry point for received frames and at the TX queue push for locally
+originated packets. The `pkt_id` is local to the node and is NOT transmitted on the wire —
+it exists solely for log correlation. Forwarded packets receive a new `pkt_id` at the
+forwarding node; the relationship between the inbound and outbound IDs SHOULD be logged
+as `event=forward in_pkt_id=<rx> pkt_id=<tx>`.
+
 ---
 
 [← Previous: Packets and Timing](09-packets-timing.md) | [Index](README.md) | [Next: Local Client Interface →](11-lci.md)

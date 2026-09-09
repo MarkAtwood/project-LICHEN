@@ -10,6 +10,11 @@ LOCK="/tmp/lichen-beads-sync.lock"
 echo "sync loop: every ${INTERVAL_MIN}m; Ctrl+C to stop (workers keep running)"
 
 while :; do
+    if [ -f "$REPO_ROOT/.fleet-paused" ]; then
+        echo "sync paused"
+        sleep $((INTERVAL_MIN * 60))
+        continue
+    fi
     echo "── sync cycle $(date '+%F %T') ──"
     # Single-flight: skip if another sync is mid-flight
     if ! mkdir "$LOCK" 2>/dev/null; then

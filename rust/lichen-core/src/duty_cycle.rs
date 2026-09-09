@@ -1136,6 +1136,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::clone_on_copy)]
     fn congestion_level_copy_clone() {
         let level = CongestionLevel::Critical;
         let copied = level;

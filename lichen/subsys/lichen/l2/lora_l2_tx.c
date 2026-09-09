@@ -476,6 +476,16 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
         return -EBUSY;
     }
 
+    /* Async RX owns the driver's modem lease until explicitly cancelled. */
+    ret = lora_l2_rx_disarm_locked();
+    if (ret < 0) {
+        k_mutex_unlock(&modem_mutex);
+        atomic_dec(&tx_pending);
+        secure_zero(tx_buf, sizeof(tx_buf));
+        k_mutex_unlock(&tx_buf_mutex);
+        return ret;
+    }
+
     /* CCP-15: bounded CSMA/CA with CAD and exponential backoff. */
     if (lora_data.cca_enabled) {
         ret = lichen_csma_acquire(&lora_data.csma, 0U, csma_rng, NULL,
@@ -485,6 +495,7 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
             LOG_INF("lora_l2: CSMA/CA suppressed TX (%d)", ret);
             k_mutex_unlock(&modem_mutex);
             atomic_dec(&tx_pending);
+            lora_l2_rx_arm();
             secure_zero(tx_buf, sizeof(tx_buf));
             k_mutex_unlock(&tx_buf_mutex);
             return ret;
@@ -554,6 +565,7 @@ int lichen_lora_l2_tx(const uint8_t *data, size_t len, uint8_t channel)
 #endif
 
     atomic_dec(&tx_pending);
+    lora_l2_rx_arm();
 
     /*
      * SECURITY: Zero tx_buf after use to prevent leaking previous payload

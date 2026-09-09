@@ -2,13 +2,14 @@
   "id": "project-LICHEN-worker6-yjg6",
   "title": "Python: implement real Yggdrasil AddrForKey algorithm",
   "description": "Replace yggdrasil_address() in python/src/lichen/crypto/identity.py with exact Yggdrasil algorithm:\n1. Invert pubkey bits (buf = ~pubkey)\n2. Count leading 1-bits in buf\n3. Build address: 0x02 prefix, 7-bit ones count, stripped inverted key bits\n\nReference: yggdrasil-go/src/address/address.go AddrForKey()\nBreaking change: all derived addresses will differ.\nUpdate _NATIVE_MESH_PREFIX to 0200::/7 in node.py.\nRegenerate test/vectors/yggdrasil_address.json with new algorithm.",
+  "notes": "2026-09-08 OVERRIDING ADJUDICATION: Mark reaffirmed upstream Yggdrasil addressing EVERYWHERE. See upstream-yggdrasil-addressing in spec/decisions.jsonl and Settled Protocol Decisions in AGENTS.md/CLAUDE.md. This supersedes conflicting descriptions/notes/closures that bless SHA-512 native addressing, require preserving its bytes or IID-equality invariant, or call for blanket /8-to-/7 replacement. Node /128 MUST equal upstream AddrForKey(key) in 0200::/8. Routed /64, when used, MUST equal upstream SubnetForKey(key) in 0300::/8; 0200::/7 is the aggregate only. Standard link-local/multicast control retains scope. Follow exact pinned upstream source, not the abbreviated algorithm in old issues. Conformance oracle is independently obtained byte-equality vectors from yggdrasil-go revision 422836eeb21a99790caa286aa63d493bbc4766d7 (address.go/address_test.go), not agreement among LICHEN implementations. Report conflicting old tests/fixtures; do not weaken tests or generate expected results from code under test. Classify node versus subnet traffic correctly in routing/SCHC without altering upstream identities. Breaking address changes were already accepted in worker6-vdon. Existing migration work is incomplete; this annotation does not claim it is fixed. Scope origin: project-LICHEN-worker6-rmjn.",
   "status": "open",
   "priority": 3,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-28T23:46:03.728046Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-08-31T05:16:50.635262296Z",
+  "updated_at": "2026-09-08T23:58:01.486101814Z",
   "labels": [
     "python",
     "security"

@@ -26,6 +26,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
 
+from .._sync_callbacks import require_sync_callable
+
 logger = logging.getLogger(__name__)
 
 # Queue capacity (spec says 4 packets max)
@@ -185,6 +187,7 @@ class TxQueueEntry:
         enqueue_time_ms: When packet was queued (for latency stats).
         channel: Radio channel for transmission (CCP-9 rendezvous).
         reservation: Optional reservation for the send() caller to await.
+        pkt_id: Monotonic correlation id assigned at push (u32, wrapping).
     """
 
     data: bytes
@@ -194,6 +197,7 @@ class TxQueueEntry:
     enqueue_time_ms: int
     channel: int = 0
     reservation: TxReservation | None = field(default=None, repr=False)
+    pkt_id: int = 0
 
 
 @dataclass
@@ -254,6 +258,7 @@ class TxQueue:
         self,
         capacity: int = TX_QUEUE_CAPACITY,
         clock: Callable[[], int] | None = None,
+        pkt_id_source: Callable[[], int] | None = None,
     ):
         """Initialize TX queue.
 
@@ -261,14 +266,37 @@ class TxQueue:
             capacity: Maximum packets to buffer.
             clock: Optional clock function for testing. Returns ms since
                    some epoch. Defaults to time.monotonic() * 1000.
+            pkt_id_source: Optional callable supplying the node-wide
+                   monotonic pkt_id (u32, wrapping). When None, entries get
+                   ids from this queue's own counter.
         """
         if capacity <= 0:
             raise ValueError("capacity must be positive")
+        if pkt_id_source is not None:
+            require_sync_callable(pkt_id_source, "pkt_id source")
         self._capacity = capacity
         self._clock = clock or (lambda: int(time.monotonic() * 1000))
+        self._pkt_id_source = pkt_id_source
         self._entries: list[TxQueueEntry] = []
         self.stats = TxQueueStats()
         self._avg_latency_ema: float = 0.0
+        self._pkt_id: int = 0
+
+    def set_pkt_id_source(self, source: Callable[[], int]) -> None:
+        """Share the node-wide pkt_id counter with this queue.
+
+        Called once by the owning LinkLayer so locally-originated TX and
+        RX frames draw from one monotonic per-node id space (spec gy32).
+        """
+        source = require_sync_callable(source, "pkt_id source")
+        self._pkt_id_source = source
+
+    def _next_pkt_id(self) -> int:
+        """Return the next monotonic packet correlation id (u32, wrapping)."""
+        if self._pkt_id_source is not None:
+            return self._pkt_id_source()
+        self._pkt_id = (self._pkt_id + 1) & 0xFFFFFFFF
+        return self._pkt_id
 
     def __len__(self) -> int:
         """Return number of packets currently queued."""
@@ -311,7 +339,11 @@ class TxQueue:
 
         if expired_count > 0:
             self.stats.packets_dropped_deadline += expired_count
-            logger.debug("expired %d stale packets from TX queue", expired_count)
+            logger.debug(
+                "TX queue expired %d stale packets pkt_ids=%s",
+                expired_count,
+                [entry.pkt_id for entry in expired_entries],
+            )
 
         return expired_count
 
@@ -380,13 +412,15 @@ class TxQueue:
             enqueue_time_ms=now,
             channel=channel,
             reservation=reservation,
+            pkt_id=self._next_pkt_id(),
         )
 
         if len(self._entries) < self._capacity:
             self._insert_sorted(entry)
             self.stats.packets_queued += 1
             logger.debug(
-                "TX queue push: priority=%s len=%d/%d",
+                "TX queue push: pkt_id=%d priority=%s len=%d/%d",
+                entry.pkt_id,
                 priority.name,
                 len(self._entries),
                 self._capacity,
@@ -400,8 +434,10 @@ class TxQueue:
         if lowest.reservation is not None:
             lowest.reservation.set_result(False)
         logger.debug(
-            "TX queue preempt: evicted priority=%s for priority=%s",
+            "TX queue preempt: evicted pkt_id=%d priority=%s for pkt_id=%d priority=%s",
+            lowest.pkt_id,
             Priority(lowest.priority).name,
+            entry.pkt_id,
             priority.name,
         )
         self._insert_sorted(entry)
@@ -479,7 +515,8 @@ class TxQueue:
         self.stats.packets_transmitted += 1
 
         logger.debug(
-            "TX queue pop: priority=%s latency=%dms avg=%dms len=%d/%d",
+            "TX queue pop: pkt_id=%d priority=%s latency=%dms avg=%dms len=%d/%d",
+            entry.pkt_id,
             Priority(entry.priority).name,
             latency,
             self.stats.avg_latency_ms,
@@ -582,7 +619,8 @@ class TxQueue:
                 self.stats.avg_latency_ms = int(self._avg_latency_ema)
                 self.stats.packets_transmitted += 1
                 logger.debug(
-                    "TX complete success: priority=%s latency=%dms avg=%dms len=%d/%d",
+                    "TX complete success: pkt_id=%d priority=%s latency=%dms avg=%dms len=%d/%d",
+                    entry.pkt_id,
                     Priority(entry.priority).name,
                     latency,
                     self.stats.avg_latency_ms,
