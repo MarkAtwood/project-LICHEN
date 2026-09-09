@@ -164,30 +164,12 @@ fn dao_prefix_authorization_allow_deny_matrix() {
 
                 if allowed {
                     assert_eq!(outcome, Ok(DaoProcessOutcome::Applied), "{name}");
-                    assert!(
-                        manager
-                            .routing_table()
-                            .lookup(Ipv6Addr::from(origin))
-                            .is_some(),
-                        "{name}"
-                    );
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(origin)).is_some(), "{name}");
                     assert_eq!(manager.origin_high_water().len(), 1, "{name}");
                 } else {
                     assert_eq!(outcome, Err(DaoProcessError::RouteRejected), "{name}");
-                    assert!(
-                        manager
-                            .routing_table()
-                            .lookup(Ipv6Addr::from(origin))
-                            .is_none(),
-                        "{name}"
-                    );
-                    assert!(
-                        manager
-                            .routing_table()
-                            .lookup(Ipv6Addr::from(foreign))
-                            .is_none(),
-                        "{name}"
-                    );
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(origin)).is_none(), "{name}");
+                    assert!(manager.routing_table().lookup(Ipv6Addr::from(foreign)).is_none(), "{name}");
                     assert!(manager.origin_high_water().is_empty(), "{name}");
                 }
             }
@@ -369,8 +351,16 @@ fn delegated_prefix_is_allowed_and_denial_leaves_no_state_mutation() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert!(h.manager.routing_table().lookup(h.origin).is_none());
-    assert!(h.manager.routing_table().lookup(h.foreign).is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.foreign)
+        .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before, "denial persists nothing");
     assert_eq!(format!("{:?}", h.rx_state), rx_before);
@@ -396,8 +386,16 @@ fn delegated_prefix_is_allowed_and_denial_leaves_no_state_mutation() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    assert!(h.manager.routing_table().lookup(h.foreign).is_some());
-    assert!(h.manager.routing_table().lookup(h.origin).is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.foreign)
+        .is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_some());
     assert_eq!(h.manager.origin_high_water().len(), 1);
     assert!(h.storage.writes() > writes_before);
 }
@@ -627,7 +625,11 @@ fn external_egress_transit_is_rejected_at_routing_layer_without_mutation() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert!(h.manager.routing_table().lookup(h.origin).is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before);
 }
@@ -672,8 +674,16 @@ fn delegated_slash64_dao_installs_end_to_end() {
         ),
         Err(DaoProcessError::RouteRejected)
     );
-    assert!(h.manager.routing_table().lookup(delegated_prefix).is_none());
-    assert!(h.manager.routing_table().lookup(h.origin).is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(delegated_prefix)
+        .is_none());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_none());
     assert!(h.manager.origin_high_water().is_empty());
     assert_eq!(h.storage.writes(), writes_before, "denial persists nothing");
 
@@ -693,8 +703,16 @@ fn delegated_slash64_dao_installs_end_to_end() {
         ),
         Ok(DaoProcessOutcome::Applied)
     );
-    assert!(h.manager.routing_table().lookup(delegated_prefix).is_some());
-    assert!(h.manager.routing_table().lookup(h.origin).is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(delegated_prefix)
+        .is_some());
+    assert!(h
+        .manager
+        .routing_table()
+        .lookup(h.origin)
+        .is_some());
     assert_eq!(h.manager.origin_high_water().len(), 1);
 }
 
@@ -753,7 +771,11 @@ fn foreign_slash64_and_default_route_fail_closed_without_mutation() {
             "{name}"
         );
         assert!(h.manager.origin_high_water().is_empty(), "{name}");
-        assert!(h.manager.routing_table().lookup(h.origin).is_none());
+        assert!(h
+            .manager
+            .routing_table()
+            .lookup(h.origin)
+            .is_none());
         assert_eq!(
             h.storage.writes(),
             writes_before,

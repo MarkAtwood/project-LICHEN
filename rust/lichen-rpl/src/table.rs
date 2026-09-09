@@ -187,7 +187,9 @@ impl RoutingTable {
     ) -> bool {
         if target.prefix_len == 128
             || path.last() != Some(&egress)
-            || path.iter().any(|hop| hop.octets() == *target.prefix())
+            || path
+                .iter()
+                .any(|hop| hop.octets() == *target.prefix())
         {
             return false;
         }

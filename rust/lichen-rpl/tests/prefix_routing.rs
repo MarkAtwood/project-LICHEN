@@ -196,5 +196,7 @@ fn prefix_and_dao_host_routes_share_one_atomic_capacity_budget() {
     assert!(result.is_err());
     assert_eq!(manager.routing_table().len(), MAX_ROUTES);
     assert_eq!(manager.routing_table().lookup(host), None);
-    assert!(manager.route_state_diagnostic(authority, 1).is_empty());
+    assert!(manager
+        .route_state_diagnostic(authority, 1)
+        .is_empty());
 }

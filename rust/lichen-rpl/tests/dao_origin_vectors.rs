@@ -25,8 +25,10 @@ fn dao_origin_signature_vectors_match_fixed_literals() {
     // test/vectors/dao_origin_signature.json flips to these bytes when the
     // Python derivation migrates (i72x.6); until then Python consumes the
     // native-profile corpus and Rust consumes this one.
-    let document: Value =
-        serde_json::from_str(include_str!("dao_origin_signature_upstream.json")).unwrap();
+    let document: Value = serde_json::from_str(include_str!(
+        "dao_origin_signature_upstream.json"
+    ))
+    .unwrap();
 
     for vector in document["vectors"].as_array().unwrap() {
         let name = vector["name"].as_str().unwrap();
