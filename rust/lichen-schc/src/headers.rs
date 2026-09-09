@@ -140,6 +140,10 @@ fn is_global(addr: &[u8]) -> bool {
     addr.len() == 16 && (addr[0] >> 5) == 0b001
 }
 
+// is_ula feeds only is_routable, a SCHC well-formedness predicate for
+// compression eligibility — not routing behavior. ULA packets remain valid
+// IPv6 that the profile may compress even though ULA is external under the
+// single-primary routing model (i72x.4).
 fn is_ula(addr: &[u8]) -> bool {
     addr.len() == 16 && (addr[0] & 0xfe) == 0xfc
 }

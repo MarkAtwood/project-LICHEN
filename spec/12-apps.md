@@ -720,7 +720,7 @@ Each node enforces per-source SOS rate limits:
 |-----------|-------|-----------|
 | SOS cooldown | 10 minutes | Prevents accidental spam |
 | Max SOS per hour | 3 | Limits intentional abuse |
-| Burst allowance | 2 | Allows rapid updates to same SOS |
+| Burst allowance | 2 | Rate-limiter headroom for the first 2 SOS per window (see note) |
 
 Nodes track (origin IPv6 source address, SOS count, last SOS uptime). The key
 is the full 16-byte IPv6 source, which relays MUST preserve end-to-end
@@ -732,6 +732,26 @@ is also the node identifier carried in the alert payload (§18.4.2). Rate
 limiting uses monotonic uptime rather than wall-clock time to ensure
 enforcement works even when wall-clock is unavailable. An SOS from a node
 that exceeds rate limits is dropped and logged but not relayed.
+
+Two acknowledged limitations of this tuple (tracking gaps, not new
+requirements):
+
+- **No SOS-ID/seq dimension.** The tuple carries (origin, count, uptime) only;
+  the §18.4.2 payload `seq` field is not tracked by the limiter, so updates
+  to an existing SOS and distinct SOSes are indistinguishable to it. The
+  "burst" row above therefore means limiter headroom for the first 2 SOS of
+  any kind per window, not per-incident updates. Tracking `(origin, seq)` is
+  a future refinement; it is NOT required by this section. Consequence:
+  cancel and update messages (§18.4.2 `seq`, §18.4.4) share the same bucket —
+  a node that exhausts its 3/hour budget may be unable to withdraw an active
+  SOS until refill, leaving it visible mesh-wide until the §18.4.6 timeout.
+  Senders SHOULD reserve headroom for a cancel (guidance, not a requirement).
+- **Key rotation resets abuse state.** Rotation (06-security.md §8.7.4)
+  derives and pins a new identity, so the new IID starts with a fresh 3/hour
+  bucket and a clean soft-blacklist score; an abuser can rotate to evade.
+  This evasion window is accepted and documented here rather than closed:
+  rotation attestations carry no abuse-state hand-over. (Acknowledged;
+  see §8.7.4 for the attestation shape.)
 
 **Soft Blacklist (RECOMMENDED):**
 
@@ -797,6 +817,14 @@ Content-Format: application/cbor
 
 Response: 2.04 Changed
 ```
+
+**Link-layer marking (REQUIRED):** the sender MUST emit the alert with the
+link-layer dispatch byte `0x16` (SOS emergency alert, 02-physical-link.md
+§4.1) carrying the §18.4.2 CBOR alert map — NOT as a SCHC-compressed CoAP
+frame. Relays classify SOS for the separate 3/hour SOS budget (04-network.md
+§6.3.3) solely by this dispatch byte; the CoAP `/sos` path is invisible to
+them (OSCORE encrypts Uri-Path end-to-end, SCHC elides it). The CoAP POST
+above is the application interface; the `0x16` dispatch is the wire form.
 
 Nodes receiving SOS:
 1. Display alert prominently

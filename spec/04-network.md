@@ -19,7 +19,7 @@
 | Type | Prefix | Availability | Purpose |
 |------|--------|--------------|---------|
 | Link-local | fe80::/10 | After `lichen_link_init()` | Control traffic only (NDP, RPL control, neighbor discovery) |
-| Primary (upstream Yggdrasil) | 0200::/8 | Always (upstream `AddrForKey` of Ed25519 pubkey) | All routable traffic (mesh, inter-mesh, BR forwarding). Cryptographically bound to key per 06-security.md §8.5 |
+| Primary (upstream Yggdrasil) | 0200::/8 | Always (upstream `AddrForKey` of Ed25519 pubkey, §12.1) | All routable traffic (mesh, inter-mesh, BR forwarding). Cryptographically bound to key per 06-security.md §8.5 |
 
 All addresses derive from the Ed25519 public key with no additional secrets: the link-local IID uses the SHA-512 profile of 03-addressing.md, and the primary address equals upstream `AddrForKey` (06-security.md §8.5, `upstream-yggdrasil-addressing` decision in `spec/decisions.jsonl`, pinned oracle `test/vectors/yggdrasil_address.json#upstream_addr_for_key`). This provides cryptographic identity binding: every address is recomputable from the presented key. Link-local restricted to post-`lichen_link_init()` per AGENTS.md initialization graph. Single-primary model eliminates ULA/GUA layering, scope selection bugs, and prefix advertisement complexity while preserving isolated-mesh and multi-BR behavior via Yggdrasil.
 
@@ -33,7 +33,7 @@ Unchanged mechanics (lowest EUI-64 deterministic election, DIO monitoring, >50% 
 
 **Multiple Border Routers & Yggdrasil:**
 
-BRs attach LICHEN meshes to Yggdrasil overlay using nodes' upstream-derived 02xx addresses. 
+BRs attach LICHEN meshes to Yggdrasil overlay using nodes' upstream-derived 02xx primary addresses.
 
 - Local traffic stays on LoRa (RPL/gradient/LOADng on primary addresses)
 - Off-mesh 02xx traffic forwards to BR Yggdrasil TUN
@@ -57,6 +57,8 @@ Each LICHEN LoRa mesh is a leaf cluster. Primary 02xx addresses enable seamless 
 
 IID and primary 02xx address are both derived from the Ed25519 public key, but by different functions: the IID uses the LICHEN SHA-512 profile below (link-local use only), while the routable address MUST equal upstream Yggdrasil `AddrForKey(pubkey)` per 06-security.md §8.5 and the `upstream-yggdrasil-addressing` decision in `spec/decisions.jsonl` (MUST match the pinned upstream test vectors byte-for-byte; see also 03-addressing.md:12-18, draft-lichen-schnorr-00, rust/lichen-core/src/addr.rs:86-117 (`iid_from_pubkey_bytes` for the IID; `ygg_addr_from_pubkey` and Python `yggdrasil_address` are the legacy native profile pending migration, not the upstream oracle), python/src/lichen/crypto/identity.py):
 
+The IID below is the live link-local derivation. The primary 0200::/8 address in the second half of the block is upstream Yggdrasil `AddrForKey(pubkey)` (normative byte-for-byte description in §12.1; no hashing, no embedded IID). The former SHA-512 primary half of this block is withdrawn (spec/decisions.jsonl `upstream-yggdrasil-addressing`); it is recorded only in the quarantined legacy corpus `test/vectors/legacy/yggdrasil-derivation.json`.
+
 ```
 // IID (8 bytes, link-local fe80::/10 address only)
 hash512 = SHA-512(pubkey)
@@ -64,7 +66,8 @@ IID = hash512[0:8]
 IID[0] &= 0b11111101                      // clear U/L bit (RFC 4291)
 
 // Primary 02xx address (16 bytes, all routable traffic)
-// Upstream yggdrasil-go AddrForKey (src/address/address.go @ 422836ee):
+// Upstream yggdrasil-go AddrForKey (src/address/address.go @ 422836ee;
+// normative byte-for-byte description in §12.1):
 key_inv = ~pubkey                         // bit-invert the 32-byte public key
 addr[0] = 0x02                            // 0200::/8 node /128 prefix
 addr[1] = count_leading_1_bits(key_inv)   // no hashing anywhere
@@ -138,6 +141,7 @@ Each node tracks broadcasts it relays, per sender:
 Broadcast Relay State:
   sender_addr: <full 16-byte primary 0200::/8 /128 of original sender>
   hop_bucket[1-7]: <count in rolling 1-hour window>
+  sos_count: <SOS count in rolling 1-hour window>
   last_seen: <timestamp>
 ```
 
@@ -159,7 +163,29 @@ Higher Hop Limit = larger blast radius = stricter limit:
 | 2 | 100 | Small radius |
 | 3-4 | 30 | Medium radius |
 | 5-7 | 10 | Mesh-wide, expensive |
-| SOS (any) | 3 | Emergency, always relay once |
+| 8-255 (clamped) | 10 | §6.3.2's 255 (flood) and any hl > 7 use the hl=7 row |
+| SOS (any) | 3 | Emergency, per sender per hour across ALL hop buckets (see SOS note) |
+
+`hop_bucket` is indexed 1-7. Two out-of-table values are defined here:
+
+- **hl = 0:** the packet is consume-only at this node (§6.3.2 step 3) — the
+  relay decision returns before any bucket lookup, so hl=0 never indexes
+  `hop_bucket`. No budget row is needed.
+- **hl = 8..255:** clamped to bucket 7 before lookup (`bucket = min(hl, 7)`),
+  so §6.3.2's 255 (flood) and any oversized hl share the most restrictive
+  (hl=7) budget. Senders that want a wider flood accept the tighter budget.
+
+**SOS counting and detection:** SOS traffic uses its own per-sender counter,
+NOT the shared `hop_bucket` — so the "first SOS is never dropped" property
+holds even for a sender with non-SOS broadcasts in the window (count starts
+at 0 < budget 3, and the yellow-zone probabilistic relay applies only at
+count >= 50% of budget, i.e. not on the first). The row value 3 is per
+sender per hour across all hop limits, not 3 per bucket. Relays detect SOS
+by the link-layer dispatch marker `0x16` (02-physical-link.md §4.1 dispatch
+table). The CoAP `/sos` path (12-apps.md §18.4.3) is NOT a usable relay
+signal: OSCORE encrypts Uri-Path end-to-end and SCHC elides it, so relays
+cannot see it. The "always relay once" rationale refers to the first SOS
+counting at 0 and is consistent with drop-at-budget, not an exemption.
 
 **Relay decision:**
 
@@ -168,11 +194,21 @@ on_receive_broadcast(packet):
   sender = packet.source_addr  # full primary /128, preserved end-to-end
   hl = packet.hop_limit
 
+  if hl == 0:
+    consume(packet)  # §6.3.2: consume-only, never budgeted or relayed
+    return
+
   if sender not in relay_state:
     relay_state[sender] = new_entry()
 
-  budget = get_budget(hl)
-  count = relay_state[sender].hop_bucket[hl]
+  is_sos = (packet.l2_dispatch == 0x16)  # L2 SOS dispatch (02 §4.1)
+  if is_sos:
+    budget = 3                        # SOS row, per sender per hour, all hops
+    count = relay_state[sender].sos_count
+  else:
+    bucket = min(hl, 7)               # hl 8..255 clamp to bucket 7
+    budget = get_budget(hl)
+    count = relay_state[sender].hop_bucket[bucket]
 
   if count >= budget:
     drop(packet)  # sender exceeded budget
@@ -184,7 +220,10 @@ on_receive_broadcast(packet):
       drop(packet)
       return
 
-  relay_state[sender].hop_bucket[hl] += 1
+  if is_sos:
+    relay_state[sender].sos_count += 1
+  else:
+    relay_state[sender].hop_bucket[bucket] += 1
   decrement_hop_limit(packet)
 
   if packet.hop_limit > 0:
@@ -201,8 +240,8 @@ on_receive_broadcast(packet):
 
 **State size:**
 
-Per-sender entry: ~27 bytes (16-byte address + 7 bucket counters + timestamp)
-At 100 active senders: ~2.7 KB
+Per-sender entry: ~28 bytes (16-byte address + 7 hop-bucket counters + SOS counter + timestamp)
+At 100 active senders: ~2.8 KB
 
 #### 6.3.4. Border Router Multicast Filtering
 

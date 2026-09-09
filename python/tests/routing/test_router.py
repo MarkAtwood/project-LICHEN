@@ -18,7 +18,7 @@ Test categories:
 6. LOADng discovery integration
 """
 
-from ipaddress import IPv6Address
+from ipaddress import IPv6Address, IPv6Network
 from unittest.mock import patch
 
 import pytest
@@ -57,10 +57,16 @@ def gradient_table() -> GradientTable:
 
 @pytest.fixture
 def router(gradient_table: GradientTable) -> Router:
-    """A router with minimal configuration."""
+    """A router with minimal configuration.
+
+    fd00::/8 is configured as a mesh prefix: ULA is external by default under
+    the single-primary model (i72x.4), so these pre-migration fixtures opt in
+    via the operator-configured-prefix mechanism.
+    """
     return Router(
         node_address=IPv6Address("fd00::1"),
         gradient_table=gradient_table,
+        mesh_prefixes={IPv6Network("fd00::/8")},
     )
 
 
@@ -79,14 +85,27 @@ class TestAddressClassification:
         addr = IPv6Address("fea0::1")
         assert router.classify_address(addr) == AddressClass.LINK_LOCAL
 
-    def test_ula_is_mesh_local(self, router: Router):
-        """fd00::x (ULA) is mesh-local."""
-        # Why test: LICHEN meshes typically use ULA for internal addressing.
+    def test_ula_without_prefix_is_external(self, gradient_table: GradientTable):
+        """fd00::x (ULA) without a configured prefix is external."""
+        # Why test: under the single-primary model (spec/05-routing.md:30),
+        # ULA is not implicitly mesh-local; it routes via the border router
+        # unless an operator configures a matching mesh prefix (i72x.4).
+        unconfigured = Router(
+            node_address=IPv6Address("fd00::1"),
+            gradient_table=gradient_table,
+        )
+        addr = IPv6Address("fd00::1234")
+        assert unconfigured.classify_address(addr) == AddressClass.EXTERNAL
+
+    def test_ula_with_configured_prefix_is_mesh_local(self, router: Router):
+        """fd00::x (ULA) in mesh_prefixes is mesh-local."""
+        # Why test: legacy configured meshes retain the opt-in mechanism
+        # (the shared fixture configures fd00::/8).
         addr = IPv6Address("fd00::1234")
         assert router.classify_address(addr) == AddressClass.MESH_LOCAL
 
     def test_ula_different_prefix_is_mesh_local(self, router: Router):
-        """fdxx::x (any ULA) is mesh-local."""
+        """fdxx::x (any ULA) is mesh-local when fd00::/8 is configured."""
         # Why test: ULA is fd00::/8, not just fd00::.
         addr = IPv6Address("fdab:cdef::1")
         assert router.classify_address(addr) == AddressClass.MESH_LOCAL
