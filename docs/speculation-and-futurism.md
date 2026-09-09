@@ -621,6 +621,80 @@ credibility stories that sell enterprise accounts.
 
 ---
 
+## Cloud IAM Bridge: Generic Hooks for Enterprise Identity
+
+LICHEN nodes have Ed25519 identities. Cloud platforms have IAM (Identity
+and Access Management) — AWS IAM, Azure AD, GCP IAM. These are different
+worlds: LICHEN identity is cryptographic and self-sovereign; cloud identity
+is centralized and policy-managed. Bridging them is inevitable if any cloud
+provider adopts LICHEN for edge IoT.
+
+**The offer:** Add generic identity bridge hooks to the LICHEN spec and
+reference implementations — not AWS-specific, not Azure-specific, but
+abstract enough that any cloud IAM system can bind to a LICHEN node
+identity without the spec knowing or caring which cloud it is.
+
+**What the hooks look like:**
+
+1. **Attestation binding.** A LICHEN node's Ed25519 public key can be
+   signed by an external authority (cloud CA, enterprise PKI, identity
+   provider) and the attestation carried in the node's Announce payload.
+   The attestation says "cloud provider X vouches that this key belongs
+   to device Y in account Z." Mesh peers don't need to understand the
+   attestation — they just see a signed blob from a trusted root. The
+   cloud gateway does understand it and maps the node to an IAM principal.
+
+2. **Credential injection.** OSCORE contexts require symmetric key
+   material derived from an EDHOC exchange. The EDHOC initiator
+   credential can be an X.509 cert or a raw public key. If the cert is
+   issued by a cloud HSM (AWS CloudHSM, Azure Key Vault, GCP Cloud KMS),
+   the node's OSCORE security context is rooted in the cloud trust chain
+   without the mesh protocol knowing anything about the cloud. The key
+   material never leaves the HSM; the node gets a derived session key.
+
+3. **Policy-as-data.** A cloud-managed node can carry an opaque policy
+   blob in its LCI (LICHEN Configuration Interface) resource. The blob
+   is meaningful only to the cloud gateway — it might encode IAM role
+   ARNs, Azure RBAC assignments, or GCP IAM bindings. The LICHEN spec
+   defines the CoAP resource and the max size. The spec does not define
+   the contents. The cloud provider fills in their semantics.
+
+4. **Telemetry export.** CCP already logs transmission metadata
+   (timestamps, frequencies, power, durations). A cloud bridge can
+   export this telemetry to CloudWatch / Azure Monitor / Cloud Logging
+   as a standard CoAP Observe subscription on the gateway. The spec
+   defines the observable resource format (SenML). The cloud decides
+   what to do with it.
+
+**What the spec does NOT do:**
+
+- No AWS-specific types, fields, or behaviors in the wire protocol
+- No cloud dependency for mesh operation — nodes work without backhaul
+- No cloud-managed key escrow — the node owns its Ed25519 private key
+- No vendor lock-in via protocol extensions — everything above is
+  generic, and multiple cloud providers implementing the same hooks
+  compete on service quality, not protocol capture
+
+**Why this is strategically correct:**
+
+If a cloud provider wants LICHEN integration and the spec doesn't have
+generic hooks, they'll add proprietary extensions. Those extensions
+will be technically competent (they have good engineers) but designed
+to lock devices into their ecosystem (they have good business people).
+Once proprietary extensions exist, the open spec is sidelined.
+
+Generic hooks pre-empt this. The cloud provider gets what they need
+(IAM binding, credential management, policy injection, telemetry) and
+the spec stays vendor-neutral. The hooks are designed by someone who
+spent seven years watching how cloud providers interact with open
+protocols and knows exactly where the capture points are.
+
+The right time to add these hooks is before any cloud provider commits
+to LICHEN integration, not after. After, it's a negotiation. Before,
+it's architecture.
+
+---
+
 ## P25-Style IETF Network
 
 What if we built something like P25 (public safety land mobile radio) but

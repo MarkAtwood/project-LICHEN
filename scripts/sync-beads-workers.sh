@@ -110,6 +110,14 @@ llm_semantic_merge() {
     # hashing staged entries breaks the happy path, which must re-stage its
     # resolutions), unstaged worktree vandalism of tracked files on the
     # success path, and untracked-file wedges against later loop merges.
+    # (Resolution note, main vs beads-worker-2: main's four-dimension pin is
+    # kept — it strictly subsumes beads-worker-2's HEAD+symref pin
+    # (symref_before ≡ ref_before with the DETACHED sentinel) and adds the
+    # MERGE_HEAD and staged-set dimensions the guard below checks.
+    # beads-worker-2's rerere-recording concern and its distinct rewind-path
+    # safeguards — store snapshot, rr-cache restore, dual temp-file cleanup —
+    # are merged into the mutation guard below; the shared rr-cache snapshot
+    # comment there already requires the restore.)
     local head_before ref_before merge_head_before staged_before files_nl
     local ref_after head_after merge_head_after staged_after why
     head_before=$(git rev-parse HEAD)
@@ -137,6 +145,19 @@ llm_semantic_merge() {
     # beads-worker-1's state-pin mutation guard above is preserved in full.
     # The shared log still gets a copy via cat >>.)
     session_log=$(mktemp) || { echo "  mktemp failed — aborting merge"; return 1; }
+    # rr-cache snapshot: rerere.enabled is set at the top of this script, so a
+    # session-run 'git commit' RECORDS its ungated resolution; rewinding HEAD
+    # alone would let the next sync's merge replay it past every gate
+    # (rerere pre-resolves the conflict the LLM then validates). Restore the
+    # pre-session rr-cache on the rewind path. Snapshot failures abort the
+    # merge rather than run the session unprotected.
+    local rr_had=0 rr_snap
+    rr_snap=$(mktemp) || { rm -f "$session_log"; echo "  mktemp failed — aborting merge"; return 1; }
+    if [ -d "$GIT_DIR/rr-cache" ]; then
+        rr_had=1
+        tar -C "$GIT_DIR" -cf "$rr_snap" rr-cache 2>/dev/null ||
+            { rm -f "$session_log" "$rr_snap"; echo "  rr-cache snapshot failed — aborting merge"; return 1; }
+    fi
     timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." > "$session_log" 2>&1; rc=$?
     cat "$session_log" >> "$log" 2>/dev/null || true
     echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> "$log"
@@ -153,6 +174,15 @@ llm_semantic_merge() {
     # on every run; the why-list also names exactly which dimension mutated
     # and logs the full transitions. Main's ordering intent is preserved:
     # this guard still runs before the rc early-return below.)
+    # (Resolution note, main vs beads-worker-2: main's per-dimension
+    # detection is kept; beads-worker-2's three rewind-path safeguards are
+    # merged in and status-checked per the rewind discipline below —
+    # snapshot_store before the destructive reset (the .beads discard policy
+    # is unchanged; the snapshot only keeps concurrent bd writes recoverable,
+    # matching every other rewind path in this script), rr-cache restore (a
+    # session-run commit RECORDED its ungated resolution; replaying it next
+    # sync would bypass every gate — the rr-cache snapshot above exists for
+    # exactly this), and cleanup of BOTH temp files.)
     ref_after=$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)
     head_after=$(git rev-parse HEAD)
     merge_head_after=$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)
@@ -180,6 +210,9 @@ llm_semantic_merge() {
             echo "  FATAL: mutation from a detached HEAD start — manual repair required" | tee -a /tmp/lichen-kimi-last.log
             exit 2
         fi
+        # Preserve concurrent bd writes before the destructive reset
+        # (beads-worker-2; snapshot_store is a no-op on a clean store).
+        snapshot_store "$branch-headmoved"
         if ! git symbolic-ref HEAD "$ref_before" 2>>/tmp/lichen-kimi-last.log; then
             echo "  FATAL: could not repoint HEAD to $ref_before — manual repair required" | tee -a /tmp/lichen-kimi-last.log
             exit 2
@@ -190,11 +223,25 @@ llm_semantic_merge() {
             echo "  FATAL: rewind failed; main may hold ungated state ($(git rev-parse HEAD)) — manual repair required" | tee -a /tmp/lichen-kimi-last.log
             exit 2
         fi
-        rm -f "$session_log"
+        # Rewind rerere (beads-worker-2): the session's commit recorded its
+        # ungated resolution into rr-cache; replaying it next sync would
+        # bypass every gate. Fail-stop on error: a leftover polluted cache
+        # must not pass silently.
+        if ! rm -rf "$GIT_DIR/rr-cache" 2>>/tmp/lichen-kimi-last.log; then
+            echo "  FATAL: could not clear $GIT_DIR/rr-cache — delete it manually before the next sync" | tee -a /tmp/lichen-kimi-last.log
+            exit 2
+        fi
+        if [ "$rr_had" = 1 ]; then
+            if ! tar -C "$GIT_DIR" -xf "$rr_snap" 2>>/tmp/lichen-kimi-last.log; then
+                echo "  FATAL: rr-cache restore failed — delete $GIT_DIR/rr-cache manually before the next sync" | tee -a /tmp/lichen-kimi-last.log
+                exit 2
+            fi
+        fi
+        rm -f "$session_log" "$rr_snap"
         return 1
     fi
     if [ "$rc" -ne 0 ]; then
-        rm -f "$session_log"
+        rm -f "$session_log" "$rr_snap"
         return "$rc"
     fi
 
@@ -202,11 +249,11 @@ llm_semantic_merge() {
     # 0 alone is emitted for any finished session — a session that never
     # resolved must be treated as a failure, not a success.
     if ! grep -qx 'RESOLVED' "$session_log"; then
-        rm -f "$session_log"
+        rm -f "$session_log" "$rr_snap"
         echo "  LLM session did not report RESOLVED — treating as failure"
         return 1
     fi
-    rm -f "$session_log"
+    rm -f "$session_log" "$rr_snap"
 
     # Stage the resolved files; fail if anything is still conflicted. git add
     # resolves an unmerged index entry regardless of content, so the marker

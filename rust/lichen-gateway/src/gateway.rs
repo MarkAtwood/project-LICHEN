@@ -1124,7 +1124,7 @@ impl Gateway {
         if self
             .trust_store
             .get(&peer_iid)
-            .is_none_or(|entry| entry.pubkey != *peer_pubkey)
+            .map_or(true, |entry| entry.pubkey != *peer_pubkey)
         {
             return Err(SecureError::NoContext);
         }
@@ -1290,7 +1290,7 @@ impl Gateway {
                 || self
                     .trust_store
                     .get(&iid)
-                    .is_none_or(|entry| entry.pubkey != *pubkey)
+                    .map_or(true, |entry| entry.pubkey != *pubkey)
             {
                 return CoapResponse::unauthorized();
             }
