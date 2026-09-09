@@ -1,0 +1,7 @@
+{
+  "id": "1788978972719913144-1",
+  "issue_id": "project-LICHEN-worker6-b7z9.92",
+  "author": "Mark Atwood",
+  "text": "worker8 2026-09-09: reproduces on the local Linux 4.1.0 workspace while verifying uwip. Plain 'west build -b native_sim/native/64 lichen/tests/ping_l2' (module auto-loaded from workspace manifest, NO ZEPHYR_EXTRA_MODULES) fails at CMake generate: 'No SOURCES given to target: ..__lichen__subsys__lichen__schc' from schc/CMakeLists.txt:6 zephyr_library - under 4.1.0 the dangling schc_session_authority.c entry is a HARD generate error that blocks even apps with no SCHC usage, not just the schc test. Separate 4.1.0-split symptom observed in the same run: 'west twister -T lichen/tests/ping_l2 -p native_sim/native/64' merges only sanitizers.conf + twister extras and DROPS the app prj.conf (merge list in build.log lacks prj.conf), so CONFIG_ZTEST ends up unset and main.c fails on missing zephyr/ztest.h. Both symptoms are the documented 4.1.0-vs-v3.7.0 split; this comment is evidence, not a request to retarget the pin.",
+  "created_at": "2026-09-09T18:36:12.719913144Z"
+}

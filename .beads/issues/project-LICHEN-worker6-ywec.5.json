@@ -2,13 +2,15 @@
   "id": "project-LICHEN-worker6-ywec.5",
   "title": "ywec.e: secure datagram sender identity from routable source (secure.rs:1933, rpl_stack/secure.rs:143)",
   "description": "Child of project-LICHEN-worker6-ywec. secure.rs:1933 derives sender_iid = header.src.0[8..] for ReceivedSecureDatagram - wrong when src is a routable AddrForKey /128 (that 8-byte tail is not the link-auth SHA-512 IID used as peer key). Downstream rpl_stack/secure.rs:143 peer_matches_destination = dst.0[8..] == peer_iid is likewise dead for routable response destinations. Fix: when the address is link-local keep IID correlation (valid); when routable, correlate via full ygg_addr_from_pubkey(peer pubkey from link layer). Check all consumers of ReceivedSecureDatagram.sender_iid before changing the field semantics.",
-  "status": "open",
+  "status": "closed",
   "priority": 2,
   "issue_type": "bug",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-09T17:22:13.769215607Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T17:22:13.769215607Z",
+  "updated_at": "2026-09-09T17:53:07.36848859Z",
+  "closed_at": "2026-09-09T17:53:07.36848859Z",
+  "close_reason": "Obsolete: fixed on main by 07c586bccb/7331d087c5 (fix(rpl): migrate DAO/DIO identity bindings to upstream AddrForKey). secure.rs:1950 sender_iid now comes from frame.sender_iid (link-authenticated), with an i72x.2 comment noting the src[8..] slice only ever worked under the rejected native profile. rpl_stack/secure.rs:143 peer_matches_destination now matches BOTH forms: dst[8..] == peer_iid (link-local) OR ygg_addr_from_pubkey(pinned key) == dst (routable). Verified on main tip.",
   "labels": [
     "rust",
     "yggdrasil"

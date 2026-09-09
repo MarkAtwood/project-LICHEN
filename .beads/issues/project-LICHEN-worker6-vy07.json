@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-vy07",
+  "title": "csma.c tx_complete: transient -EBUSY strands TX_ALLOWED phase, permanent -EALREADY TX wedge",
+  "description": "Edge-cases review of 2c89c04c1d (k2v9 fix). lichen_csma_tx_complete (lichen/subsys/lichen/link/csma.c:219) returns -EBUSY BEFORE any phase transition when csma_try_lock loses a race (lichen_csma_snapshot from a diag endpoint thread, or lichen_csma_cancel from stop()). The radio-boundary caller lora_l2_tx.c:605 only logs the failure, so the machine stays in LICHEN_CSMA_TX_ALLOWED: every subsequent lichen_csma_acquire hits lichen_csma_start's -EALREADY (csma.c:103-107) forever - the same permanent self-wedge class as k2v9/c4m7, via lock contention instead of positive status. k2v9's description already flagged '-EBUSY/-EPROTO (strand TX_ALLOWED)' as residual and suggested in-lock fail-closed validation for tx_complete like c4m7 added for cad_complete, with design care (marking ERROR after a physically successful TX is wrong bookkeeping). Options: (a) tx_complete retries the lock a bounded number of times, (b) caller treats -EBUSY from tx_complete as fatal and calls lichen_csma_reset, (c) in-lock fail-closed transition on contention. Needs a design decision on which; phase-wise the wedge is real today.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T18:16:50.896409707Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T18:16:50.896409707Z",
+  "labels": [
+    "zephyr",
+    "link"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-vy07",
+      "depends_on_id": "project-LICHEN-worker6-k2v9",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T18:16:51.035458567Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
