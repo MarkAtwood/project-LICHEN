@@ -17,7 +17,7 @@
 #   - model: worker8 = hard-bead lane on gpt-5.6-luna
 set -u
 N="${1:?usage: fleet-headless.sh <worker_n> [rounds_per_session]}"
-MAXROUNDS="${2:-8}"
+MAXROUNDS="${2:-12}"
 REPO="/home/mark/Developer/lichen-workspace/project-LICHEN"
 WT="$HOME/Developer/lichen-workers/worker$N"
 STATE="/tmp/fleet-driver-state"
@@ -30,7 +30,22 @@ cd "$WT" || exit 1
 model() { [ "$N" -eq 8 ] && echo "openai/gpt-5.6-luna" || echo ""; }
 
 PROMPT_COMMON='SELF-CHECK first: if you notice yourself repeating actions you already did, arguing with your own output, or unable to form a next step — touch ~/Developer/lichen-workers/worker'"$N"'/SELF-REPORT-DEGENERATE and end the round immediately; you will be restarted fresh. Otherwise: Continue the beads worker loop (instructions: scripts/beads-worker-full.txt). Claim the next ready bead, complete it fully (tests, 3x codereview delegating each pass to the reviewer model per step 4, findings filed as new beads, close, commit).'
-PROMPT_FLASH="$PROMPT_COMMON Exactly one P0/P1/P2 bead this round. TAIL BATCHING: after your first bead, if it was quick, you may claim and close up to 3 more, but ONLY priority 3 or 4 beads — never batch P0-P2. TIMEBOX: if any bead is too big for ~15 minutes, commit the slice, file follow-ups, release, end the round."
+PROMPT_FLASH="$PROMPT_COMMON Exactly one P0/P1/P2 bead this round. AFFINITY: prefer beads labeled $(affinity $N) (check bd ready --label <label> --json per label first); if none ready, take any. TAIL BATCHING: after your first bead, if it was quick, you may claim and close up to 5 more, but ONLY priority 3 or 4 beads — never batch P0-P2. TIMEBOX: if any bead is too big for ~15 minutes, commit the slice, file follow-ups, release, end the round."
+
+affinity() {  # per-worker domain lanes: session knowledge compounds when a
+    # worker keeps working the same area (the headless migration dropped
+    # this — restored 2026-09-09)
+    case "$1" in
+        1) echo "zephyr link" ;;
+        2) echo "rust rpl" ;;
+        3) echo "python schc" ;;
+        4) echo "schc zephyr" ;;
+        5) echo "python rpl" ;;
+        6) echo "rust networking" ;;
+        7) echo "coap lci" ;;
+        8) echo "" ;;  # hard lane: P0/P1 first, any area
+    esac
+}
 PROMPT_HARD="You are the HARD-BEAD LANE (worker8, stronger model): claim P0/P1 priority beads first (bd ready --json, filter priority 0 or 1). $PROMPT_COMMON Exactly one bead this round. If no P0/P1 is ready, take any ready bead."
 if [ "$N" -eq 8 ]; then PROMPT="$PROMPT_HARD"; else PROMPT="$PROMPT_FLASH"; fi
 
