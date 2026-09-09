@@ -108,7 +108,7 @@ All node identity derives from **a single Ed25519 keypair**. This unifies link-l
 
 1. 32-byte seed → Ed25519 keypair (deterministic per draft-lichen-schnorr-00).
 2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291). **MUST be SHA-512, not SHA-256**. The IID is a **local identifier only**: it forms link-local `fe80::/10` control addresses, human-readable node addresses (03-addressing.md), and key identifiers (TOFU pins, COSE `kid`). It MUST NOT be used to construct or alter the routable address.
-3. Routable /128 = upstream Yggdrasil `AddrForKey(pubkey)` exactly: bit-invert the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; bit-pack the next 112 inverted-key bits into `addr[2:16]`, zero-padding the tail when fewer than 112 bits remain. No hashing. Routed `/64`s, when used, MUST equal upstream `SubnetForKey(pubkey)` in `0300::/8`.
+3. Routable /128 = upstream Yggdrasil `AddrForKey(pubkey)` exactly (yggdrasil-go commit `422836ee`, `src/address/address.go`): bit-invert the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). Routed `/64`s, when used, MUST equal upstream `SubnetForKey(pubkey)` in `0300::/8`.
 4. X25519 priv = clamp(SHA-512(seed)[0:32]) for OSCORE/EDHOC.
 5. TOFU pins pubkey to derived IID and `AddrForKey` address (cryptographically enforced).
 
@@ -142,7 +142,7 @@ A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (
 
 1. **Keypair**: `privkey, pubkey = derive_keypair(seed)` per draft-lichen-schnorr-00.md:97 (h=SHA-512(seed); privkey=clamp(h[0:32]); pubkey=basepoint_mult). Matches schnorr48.py:96 and Rust exactly.
 2. **Link-local IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291; **MUST be SHA-512**). The IID scopes to link-local `fe80::/10` control addressing, human-readable addresses (03-addressing.md), and key identifiers. It MUST NOT be embedded in, or used to alter, the routable address.
-3. **Routable 0200::/8 Address**: MUST equal upstream Yggdrasil `AddrForKey(pubkey)`: invert all bits of the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; bit-pack the next 112 inverted-key bits into `addr[2:16]`, zero-padding the tail when fewer than 112 bits remain. No hashing. Routed `/64` prefixes, when used, MUST equal upstream `SubnetForKey(pubkey)` (`0300::/8`). Reference: yggdrasil-go commit `422836ee`, `src/address/address.go`; byte-equality oracle: `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key`). The SHA-512-based LICHEN native address profile is rejected and MUST NOT be used. No ULA.
+3. **Routable 0200::/8 Address**: MUST equal upstream Yggdrasil `AddrForKey(pubkey)`: invert all bits of the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). Routed `/64` prefixes, when used, MUST equal upstream `SubnetForKey(pubkey)` (`0300::/8`). Reference: yggdrasil-go commit `422836ee`, `src/address/address.go`; byte-equality oracle: `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key`). The SHA-512-based LICHEN native address profile is rejected and MUST NOT be used. No ULA.
  4. **X25519**: `x25519_priv=clamp(SHA-512(seed)[0:32])` per RFC 7748 §5 for EDHOC static DH (see 8.9). Matches Python identity.py:109, standards/crypto.md:79.
 
 
@@ -1252,10 +1252,13 @@ absent, or out-of-range role extensions when applying role-based policy.
   of clock skew.
 - The validity interval MUST NOT exceed 397 days. Shorter intervals are
   RECOMMENDED for constrained nodes and SHOULD be renewed before expiry.
-- `issuer` MUST identify the issuing CA and MUST be identical to the issuer
-  name used by the CA certificate. The profile does not mandate a particular
-  distinguished-name string, but deployments MUST use one stable convention
-  (for example, `O=LICHEN, CN=<deployment CA>`).
+- `issuer` MUST identify the issuing CA and MUST be identical to the subject
+  name of the issuing CA certificate, per RFC 5280 name chaining. When
+  intermediate CAs are present, this rule applies at every hop: each
+  certificate's `issuer` equals the `subject` of the certificate that issued
+  it. The profile does not mandate a particular distinguished-name string,
+  but deployments MUST use one stable convention (for example, `O=LICHEN,
+  CN=<deployment CA>`).
 - `basicConstraints` MUST be present with `CA=FALSE`, and `keyUsage` MUST
   include `digitalSignature` and MUST NOT include `keyCertSign` or `cRLSign`.
 - The issuing CA certificate MUST use `basicConstraints CA=TRUE`; a verifier
