@@ -130,8 +130,17 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     pub async fn send_dis(&mut self, destination: [u8; 16]) -> Result<(), TxError> {
         let control_destination = if destination[0] == 0xff {
             destination
+        } else if destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+            destination
         } else {
-            link_local_from_iid(destination[8..].try_into().expect("complete IPv6 IID"))
+            // Unicast control traffic uses the receiver's canonical
+            // link-local form (spec 09 13.3 admission contract). Routable
+            // 02xx destinations embed no IID after the upstream-AddrForKey
+            // migration, so the link-local form cannot be derived from the
+            // address alone — it must come from a neighbor/IID mapping.
+            // Until that mapping exists (i72x.4/i72x.6), fall back to the
+            // all-RPL-nodes group, which the receiver admits.
+            RPL_ALL_NODES
         };
         let packet = rpl_ipv6_packet(
             self.local_control_addr,

@@ -568,15 +568,24 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                let origin_iid: [u8; 8] = source[8..].try_into().unwrap();
-                let admitted = self
-                    .announces
-                    .pinned_pubkey_for(&origin_iid)
-                    .is_some_and(|key| {
-                        self.dao_admissions
-                            .as_ref()
-                            .is_some_and(|admissions| admissions.contains(key.as_bytes()))
-                    });
+                // Post-i72x.2 the routable DAO source embeds no IID, so the
+                // pinned key is resolved by the upstream-derived source
+                // address, not source[8:16].
+                let signer_pubkey = self.announces.pinned_pubkeys_snapshot().and_then(|pins| {
+                    let mut found: Option<lichen_link::keys::PublicKey> = None;
+                    for key in pins.iter() {
+                        if lichen_core::addr::ygg_addr_from_pubkey(key.as_bytes()) == source {
+                            found = Some(*key);
+                            break;
+                        }
+                    }
+                    found
+                });
+                let admitted = signer_pubkey.is_some_and(|key| {
+                    self.dao_admissions
+                        .as_ref()
+                        .is_some_and(|admissions| admissions.contains(key.as_bytes()))
+                });
                 if !admitted {
                     return Ok(RplReceiveOutcome::DaoOriginNotAdmitted);
                 }

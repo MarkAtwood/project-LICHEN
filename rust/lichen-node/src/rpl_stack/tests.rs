@@ -1140,12 +1140,19 @@ async fn multicast_dio_and_dis_are_received() {
     ));
 
     leaf.send_dis(root_addr).await.unwrap();
+    let outcome = root.receive(1, 1).await.unwrap();
     assert!(matches!(
-        root.receive(1, 1).await.unwrap(),
+        outcome,
         Some(RplReceiveOutcome::Rpl(RplEvent::DisReceived))
     ));
+    // The solicited DIS reply is re-targeted to RPL_ALL_NODES (spec 09
+    // 13.3), so the leaf hears it as a multicast DIO.
+    // The solicited DIS reply is re-targeted to RPL_ALL_NODES (spec 09
+    // 13.3), so the leaf hears it as a multicast DIO.
+    let leaf_outcome = leaf.receive(1, 1).await.unwrap();
+    std::eprintln!("LEAF DIO OUTCOME2: {:?}", leaf_outcome);
     assert!(matches!(
-        leaf.receive(1, 1).await.unwrap(),
+        leaf_outcome,
         Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
     ));
 }
@@ -3261,3 +3268,4 @@ async fn root_dio_signature_roundtrip_produces_and_advances() {
         "second signed DIO must be admitted after seq advance: {outcome:?}"
     );
 }
+

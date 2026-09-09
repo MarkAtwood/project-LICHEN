@@ -706,9 +706,15 @@ impl Router {
         #[cfg(test)]
         {
             use lichen_link::{identity::Identity, keys::Seed};
+            // Post-i72x.2 the routable address embeds no IID, so the test
+            // identity must be recovered by the derived upstream address,
+            // not addr[8:16].
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
-                .find(|identity| identity.iid == packet_source[8..])
+                .find(|identity| {
+                    lichen_link::ygg_addr_from_pubkey(identity.pubkey.as_bytes())
+                        == packet_source
+                })
             else {
                 return false;
             };

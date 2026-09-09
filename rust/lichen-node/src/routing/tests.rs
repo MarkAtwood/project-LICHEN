@@ -463,16 +463,10 @@ fn router_rejects_unauthorized_version_wrap_from_127_to_zero() {
 
 #[test]
 fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
-    let document: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../test/vectors/dodag_version_authorization.json"
-    ))
-    .unwrap();
-    let vector = &document["vectors"][0];
-    let root_seed: [u8; 32] = hex::decode(vector["seed"].as_str().unwrap())
-        .unwrap()
-        .try_into()
-        .unwrap();
-    let root_identity = Identity::from_seed(Seed::new(root_seed));
+    // The shared corpus still signs the legacy native DODAGID (stale until
+    // i72x.6); this test builds the wire from the seed-0x61 root identity
+    // directly so the DODAGID is the upstream derivation end to end.
+    let root_identity = Identity::from_seed(Seed::new([0x61; 32]));
     let parent_identity = Identity::from_seed(Seed::new([0x62; 32]));
     let leaf_identity = Identity::from_seed(Seed::new([0x63; 32]));
     let root_addr = lichen_core::addr::ygg_addr_from_pubkey(root_identity.pubkey.as_bytes());
@@ -486,16 +480,6 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
     let mut root_wire = [0u8; 160];
     let root_len = root.build_authenticated_dio(&mut root_wire, &root_link);
     assert!(root_len > Dio::SERIALIZED_LEN + DODAG_CONFIG_DATA_LEN + 2);
-    assert_eq!(
-        root_link.local_public_key().as_bytes(),
-        &hex::decode(vector["root_pubkey"].as_str().unwrap()).unwrap()[..]
-    );
-    assert_eq!(
-        root_addr.as_slice(),
-        hex::decode(vector["dodag_id"].as_str().unwrap())
-            .unwrap()
-            .as_slice()
-    );
     let root_dio = Dio::from_bytes(&root_wire[..root_len]).unwrap();
 
     let mut parent = Router::new(parent_addr, root_addr);
@@ -513,7 +497,7 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
         .unwrap();
     assert_eq!(
         root_authorization,
-        hex::decode(&vector["option"].as_str().unwrap()[4..]).unwrap()
+        canonical_version_authorization_option()[2..]
     );
     let relayed_authorization = OptionIter::new(Dio::options_tail(&relay_wire[..relay_len]))
         .find_map(|option| {
@@ -540,13 +524,16 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
     assert_eq!(leaf.dodag.version, 1);
 }
 
-/// Canonical root-signed option from `test/vectors/dodag_version_authorization.json`.
+/// Canonical root-signed option. The shared corpus
+/// `test/vectors/dodag_version_authorization.json` still signs the legacy
+/// native DODAGID with instance 1 (stale until i72x.6); this constant is
+/// the same option shape over the UPSTREAM DODAGID for the seed-0x61 root
+/// at RPL_INSTANCE_ID 0 (the Rust constant), produced with the Python
+/// schnorr48 oracle — the same oracle class the corpus uses — and
+/// cross-checked against the Rust signer (byte-identical), never derived
+/// from the Rust verifier alone.
 fn canonical_version_authorization_option() -> Vec<u8> {
-    let document: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../test/vectors/dodag_version_authorization.json"
-    ))
-    .unwrap();
-    hex::decode(document["vectors"][0]["option"].as_str().unwrap()).unwrap()
+    hex::decode("165101af06a3e3291714e4f356c19c9b15cd1951ec6e6662aa77be07547f289383341dee30fd51b804f1a25ae91df86a6f10cc530b314de0d0d5c4e628a5d4e5dd1aaf46930672af7c4d1d2eb113369b12900c").unwrap()
 }
 
 fn authorized_version_one_dio(root_addr: [u8; 16], option: &[u8]) -> (Dio, Vec<u8>) {
@@ -2476,3 +2463,4 @@ fn dense_network_simulation_progressive_suppression() {
         );
     }
 }
+

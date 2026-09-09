@@ -3,9 +3,16 @@
 
 //! Canonical `ipv6-addresses.json` and `yggdrasil-derivation.json` consumers.
 //!
-//! Key-derived identities bind `fe80::/10` and native `0200::/8` to the same
-//! SHA-512 IID. EUI-64 and short-address cases are link-interoperability
-//! helpers, not node identities.
+//! Per the settled `upstream-yggdrasil-addressing` decision (i72x.2), the
+//! routable /128 derivation is EXACT upstream `AddrForKey` (bit-packed, no
+//! hash); the SHA-512 IID is retained for link-local only. The two shared
+//! corpora below still embed the legacy native profile (`native_packed`
+//! with `iid_in_native` binding) — they are stale for the Rust derivation
+//! until i72x.6 regenerates them, so this file pins that divergence rather
+//! than weakening assertions: IID and link-local assertions stay
+//! byte-exact; native-address assertions verify the corpus records the
+//! legacy profile and that the Rust derivation (correctly) disagrees with
+//! it, including the now-dead `addr[8:16] == IID` invariant.
 
 use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey, Ipv6Addr, NodeId};
 use lichen_core::short_addr::{short_addr_from_iid, short_addr_to_iid};
@@ -63,12 +70,15 @@ fn key_derived_identity_binds_link_local_and_native() {
         let link_local = link_local_from_iid(&iid);
 
         assert_eq!(iid, expected_iid, "{name}");
-        assert_eq!(native, expected_native, "{name}");
         assert_eq!(link_local, expected_link_local, "{name}");
-        assert_eq!(
+        // The corpus's native_packed is the legacy SHA-512 profile (stale
+        // until i72x.6); the Rust derivation is upstream AddrForKey and
+        // MUST differ, and the dead IID-binding invariant MUST NOT hold.
+        assert_ne!(native, expected_native, "{name}: corpus is legacy profile");
+        assert_ne!(
             &native[8..],
             &iid[..],
-            "{name}: native lower-64 must equal IID"
+            "{name}: upstream address embeds no SHA-512 IID"
         );
         assert_eq!(native[0], 0x02, "{name}: 0200::/8 prefix");
         assert_eq!(iid[0] & 0x02, 0, "{name}: U/L bit must be clear");
@@ -76,7 +86,7 @@ fn key_derived_identity_binds_link_local_and_native() {
         assert!(Ipv6Addr(link_local).is_link_local(), "{name}");
         assert_eq!(
             vector["iid_in_native"], true,
-            "{name}: corpus records the binding"
+            "{name}: corpus records the legacy binding"
         );
         checked += 1;
     }
@@ -151,7 +161,9 @@ fn yggdrasil_derivation_corpus_matches_native_profile() {
             let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
             let addr = ygg_addr_from_pubkey(&pubkey);
             let iid = iid_from_pubkey_bytes(&pubkey);
-            assert_eq!(&addr[8..], &iid[..]);
+            // The corpus pins the legacy binding; upstream AddrForKey
+            // breaks it by design (i72x.2).
+            assert_ne!(&addr[8..], &iid[..]);
             assert_eq!(addr[0], 0x02);
             binding += 1;
             continue;
@@ -160,12 +172,14 @@ fn yggdrasil_derivation_corpus_matches_native_profile() {
         let addr = ygg_addr_from_pubkey(&pubkey);
         let iid = iid_from_pubkey_bytes(&pubkey);
         if let Some(expected) = entry["ygg_addr"].as_str() {
-            assert_eq!(addr, decode_hex::<16>(expected));
+            // Corpus ygg_addr is the legacy native profile (stale until
+            // i72x.6); the Rust derivation MUST differ from it.
+            assert_ne!(addr, decode_hex::<16>(expected));
         }
         if let Some(expected) = entry["iid"].as_str() {
             assert_eq!(iid, decode_hex::<8>(expected));
         }
-        assert_eq!(&addr[8..], &iid[..]);
+        assert_ne!(&addr[8..], &iid[..]);
         assert_eq!(addr[0], 0x02);
         positive += 1;
     }
