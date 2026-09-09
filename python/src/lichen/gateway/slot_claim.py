@@ -278,12 +278,14 @@ class SlotClaim:
         if type(superframe_epoch) is not int or superframe_epoch < 0 or superframe_epoch > _MAX_U64:
             raise ClaimError("superframe_epoch must be a non-negative integer")
         mode = fields.get(_PAYLOAD_MODE)
-        if mode == _MODE_INTERLEAVED:
-            allocation_mode = AllocationMode.INTERLEAVED
-        elif mode == _MODE_CONTIGUOUS:
-            allocation_mode = AllocationMode.CONTIGUOUS
-        else:
+        # Type-strict: value equality admits CBOR false/true (bool) and
+        # float 0.0/1.0 as modes, which Rust's p.uint() rejects as
+        # MalformedClaim (slot.rs:580) — a signed-claim divergence.
+        if type(mode) is not int or mode not in (_MODE_INTERLEAVED, _MODE_CONTIGUOUS):
             raise ClaimError("mode must be 0 (interleaved) or 1 (contiguous)")
+        allocation_mode = (
+            AllocationMode.INTERLEAVED if mode == _MODE_INTERLEAVED else AllocationMode.CONTIGUOUS
+        )
         expiry = fields.get(_PAYLOAD_EXPIRY)
         if type(expiry) is not int or expiry < 0 or expiry > _MAX_U64:
             raise ClaimError("expiry must be a non-negative integer")

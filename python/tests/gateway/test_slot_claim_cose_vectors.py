@@ -17,6 +17,7 @@ import cbor2
 import pytest
 
 from lichen.gateway.slot_claim import (
+    AllocationMode,
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
@@ -197,6 +198,33 @@ def test_oversized_sibling_fields_rejected_at_decode(key: int, value: object) ->
     body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
     with pytest.raises(ClaimError):
         SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize("bad_mode", [False, True, 0.0, 1.0, 2, None, "0"])
+def test_non_integer_mode_rejected_at_decode(bad_mode: object) -> None:
+    # ft5w: value equality admits CBOR false/true (bool) and float 0.0/1.0
+    # as modes, which Rust's p.uint() rejects as MalformedClaim — the
+    # decode must be type-strict (type(mode) is int, not value == 0/1).
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[3] = bad_mode
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    with pytest.raises(ClaimError, match="mode must be 0"):
+        SlotClaim.decode_cose(body)
+
+
+@pytest.mark.parametrize(
+    "mode,expected",
+    [(0, AllocationMode.INTERLEAVED), (1, AllocationMode.CONTIGUOUS)],
+)
+def test_integer_modes_accepted_at_decode(mode: int, expected: AllocationMode) -> None:
+    case = _case("happy_path_n1")
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    payload = cbor2.loads(elements[2])
+    payload[3] = mode
+    body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
+    assert SlotClaim.decode_cose(body).allocation_mode == expected
 
 
 @pytest.mark.parametrize(
