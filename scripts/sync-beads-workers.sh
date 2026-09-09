@@ -109,7 +109,10 @@ llm_semantic_merge() {
     # staged CONTENT mutation of in-merge paths (name-set granularity only —
     # hashing staged entries breaks the happy path, which must re-stage its
     # resolutions), unstaged worktree vandalism of tracked files on the
-    # success path, and untracked-file wedges against later loop merges.
+    # success path, untracked-file wedges against later loop merges, and
+    # session grandchildren that outlive a TERM-compliant leader (timeout
+    # exits with the leader, so the -k grace KILL never fires for them —
+    # they can mutate state after the pin's single post-session sample).
     local head_before ref_before merge_head_before staged_before files_nl
     local ref_after head_after merge_head_after staged_after why
     head_before=$(git rev-parse HEAD)
@@ -125,7 +128,13 @@ llm_semantic_merge() {
     staged_before=$(git diff --cached --name-only --no-renames | grep -vxF "$files_nl" | sort)
 
     echo "  LLM merge session ($model) on: $files"
-    # 15-minute cap so a hung session cannot wedge the sync loop.
+    # 15-minute cap plus a 10s kill grace (-k 10, bead 7mvj): without -k a
+    # session that ignores SIGTERM wedges the sync loop forever. timeout
+    # signals the child's process group (no --foreground), so the grace KILL
+    # also reaps same-group grandchildren — but only while the session
+    # leader is still being awaited: a TERM-compliant leader exits rc=124
+    # immediately and a TERM-ignoring grandchild survives (see the pin's
+    # residuals list above).
     local log=/tmp/lichen-kimi-last.log
     local session_log rc
     # Session output goes to a private file: the sentinel check must not be
@@ -137,9 +146,9 @@ llm_semantic_merge() {
     # beads-worker-1's state-pin mutation guard above is preserved in full.
     # The shared log still gets a copy via cat >>.)
     session_log=$(mktemp) || { echo "  mktemp failed — aborting merge"; return 1; }
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." > "$session_log" 2>&1; rc=$?
+    timeout -k 10 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." > "$session_log" 2>&1; rc=$?
     cat "$session_log" >> "$log" 2>/dev/null || true
-    echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> "$log"
+    echo "$(date +%FT%T) kimi budget=900s+10s-kill-grace exit=$rc (124=timeout, 137=TERM ignored then KILLed)" >> "$log"
 
     # Mutation guard runs BEFORE the rc early-return: a session that exits
     # non-zero (or is killed at the timeout) after mutating git state must
