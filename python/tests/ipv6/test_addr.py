@@ -119,6 +119,28 @@ def test_key_derived_address_helpers_reject_noncanonical_public_keys(pubkey) -> 
         link_local_from_pubkey(pubkey)
 
 
+# Upstream AddrForKey for each key_derived_identity pubkey in
+# ipv6-addresses.json, from the yggdrasil-go address package @422836ee
+# (independent oracle; run once, hardcoded).
+_UPSTREAM_ADDR_BY_PUBKEY = {
+    "0000000000000000000000000000000000000000000000000000000000000000": (
+        "02000000000000000000000000000000"
+    ),
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": (
+        "0200389e777ace07c7d6ca08166ecd20"
+    ),
+    "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a": (
+        "0200514acffcfa9dea90556802586d37"
+    ),
+    "abababababababababababababababababababababababababababababababab": (
+        "0200a8a8a8a8a8a8a8a8a8a8a8a8a8a8"
+    ),
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff": (
+        "02000000000000000000000000000000"
+    ),
+}
+
+
 def test_key_derived_ipv6_vectors_match_production_boundaries() -> None:
     document = json.loads(VECTORS.read_text())
     key_vectors = [
@@ -128,8 +150,11 @@ def test_key_derived_ipv6_vectors_match_production_boundaries() -> None:
     assert len(key_vectors) >= 5
     for vector in key_vectors:
         public_key = bytes.fromhex(vector["pubkey"])
-        assert native_address_from_pubkey(public_key).packed.hex() == vector["native_packed"]
-        assert str(native_address_from_pubkey(public_key)) == vector["native"]
+        # The corpus' native_packed/native fields are legacy rejected-profile
+        # fixtures (i72x.6 regenerates them); the primary address is pinned
+        # against the upstream Go oracle instead (7pt2).
+        expected = _UPSTREAM_ADDR_BY_PUBKEY[vector["pubkey"]]
+        assert native_address_from_pubkey(public_key).packed.hex() == expected
         assert link_local_from_pubkey(public_key).packed.hex() == vector["link_local_packed"]
 
 

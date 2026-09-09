@@ -28,13 +28,42 @@ def _load(name: str) -> object:
     return json.loads((VECTORS_DIR / name).read_text())
 
 
-def _independent_derivation(public_key: bytes) -> tuple[bytes, bytes, bytes]:
+def _independent_derivation(public_key: bytes) -> tuple[bytes, bytes]:
+    """Test-local oracle for the IID and link-local address (SHA-512 profile).
+
+    The routable primary has NO hash-based independent derivation: it is
+    upstream AddrForKey, pinned by the hardcoded UPSTREAM_ADDR_BY_PUBKEY
+    values below (generated once from yggdrasil-go@422836ee, never from the
+    implementation under test). The corpus' native_packed/native fields are
+    legacy rejected-profile fixtures tracked by i72x.6.
+    """
     digest = hashlib.sha512(public_key).digest()
     iid = bytearray(digest[:8])
     iid[0] &= 0xFD
     link_local = b"\xfe\x80" + bytes(6) + iid
-    native = b"\x02" + digest[:7] + iid
-    return bytes(iid), bytes(link_local), bytes(native)
+    return bytes(iid), bytes(link_local)
+
+
+# Upstream AddrForKey for each key_derived_identity pubkey in
+# ipv6-addresses.json, from the yggdrasil-go address package @422836ee
+# (independent oracle; run once, hardcoded).
+UPSTREAM_ADDR_BY_PUBKEY = {
+    "0000000000000000000000000000000000000000000000000000000000000000": (
+        "02000000000000000000000000000000"
+    ),
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": (
+        "0200389e777ace07c7d6ca08166ecd20"
+    ),
+    "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a": (
+        "0200514acffcfa9dea90556802586d37"
+    ),
+    "abababababababababababababababababababababababababababababababab": (
+        "0200a8a8a8a8a8a8a8a8a8a8a8a8a8a8"
+    ),
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff": (
+        "02000000000000000000000000000000"
+    ),
+}
 
 
 def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> None:
@@ -47,22 +76,23 @@ def test_ipv6_address_vectors_bind_one_key_to_both_addresses_byte_exact() -> Non
     assert len(key_vectors) >= 5
     for vector in key_vectors:
         public_key = bytes.fromhex(vector["pubkey"])
-        iid, link_local, native = _independent_derivation(public_key)
+        iid, link_local = _independent_derivation(public_key)
 
         assert iid.hex() == vector["iid"], vector["name"]
         assert link_local.hex() == vector["link_local_packed"], vector["name"]
-        assert native.hex() == vector["native_packed"], vector["name"]
         assert str(IPv6Address(link_local)) == vector["link_local"], vector["name"]
-        assert str(IPv6Address(native)) == vector["native"], vector["name"]
 
         assert _pubkey_to_iid(public_key) == iid, vector["name"]
         assert link_local_from_pubkey(public_key).packed == link_local, vector["name"]
-        assert yggdrasil_address(public_key).packed == native, vector["name"]
-        assert native_address_from_pubkey(public_key).packed == native, vector["name"]
+
+        # Routable primary: upstream AddrForKey, pinned against the Go oracle.
+        upstream = UPSTREAM_ADDR_BY_PUBKEY[vector["pubkey"]]
+        assert yggdrasil_address(public_key).packed.hex() == upstream, vector["name"]
+        assert native_address_from_pubkey(public_key).packed.hex() == upstream, vector["name"]
 
         assert link_local[:8] == bytes.fromhex("fe80000000000000"), vector["name"]
-        assert link_local[8:] == iid == native[8:], vector["name"]
-        assert native[0] == 0x02, vector["name"]
+        assert link_local[8:] == iid, vector["name"]
+        assert yggdrasil_address(public_key).packed[0] == 0x02, vector["name"]
         assert iid[0] & 0x02 == 0, vector["name"]
 
 
@@ -147,11 +177,13 @@ def test_native_corpora_agree_without_byte_reversal() -> None:
 def test_address_derivation_accepts_exact_width_raw_key_octets() -> None:
     """Addressing is a 32-byte hash map; subgroup checks belong to signature use."""
     low_order_encoding = bytes(32)
-    iid, link_local, native = _independent_derivation(low_order_encoding)
+    iid, link_local = _independent_derivation(low_order_encoding)
 
     assert _pubkey_to_iid(low_order_encoding) == iid
     assert link_local_from_pubkey(low_order_encoding).packed == link_local
-    assert yggdrasil_address(low_order_encoding).packed == native
+    # Upstream oracle (yggdrasil-go@422836ee): an all-zero key inverts to all
+    # 1 bits, the leading-1 count wraps to 0, and no payload bits follow.
+    assert yggdrasil_address(low_order_encoding).packed == b"\x02" + bytes(15)
 
 
 @pytest.mark.parametrize("public_key", [b"", bytes(31), bytes(33)])

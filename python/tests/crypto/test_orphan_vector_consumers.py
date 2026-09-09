@@ -27,7 +27,7 @@ Python verifier error strings is asserted explicitly per case (e.g.
 from __future__ import annotations
 
 import json
-from hashlib import sha256
+from hashlib import sha256, sha512
 from pathlib import Path
 
 import cbor2
@@ -92,6 +92,27 @@ _ROOT_DIO_ERROR_MAP = {
 }
 
 
+def _corpus_dodagid_is_native_profile(vector: dict) -> bool:
+    """Staleness probe: True when the vector's dodag_id equals the REJECTED
+    SHA-512 native-profile derivation for its public_key.
+
+    Computed from the documented old profile (addr = 0x02 || SHA-512(pk)[0:7]
+    || SHA-512(pk)[0:8], U/L bit cleared), not from production code. The
+    root_dio_signature corpus cannot be regenerated until both the Rust
+    (i72x.2, blocked-on-merge) and Python (7pt2) migrations land; i72x.6 owns
+    the regeneration. When it lands, every stale vector's dodag_id matches
+    upstream AddrForKey instead, this probe returns False, and the xfails
+    below disappear.
+    """
+    if "dodag_id" not in vector or "public_key" not in vector:
+        return False
+    digest = sha512(bytes.fromhex(vector["public_key"])).digest()
+    iid = bytearray(digest[:8])
+    iid[0] &= 0xFD
+    native = b"\x02" + digest[:7] + bytes(iid)
+    return native.hex() == vector["dodag_id"]
+
+
 class TestRootDioSignatureVectorFile:
     @pytest.mark.parametrize("name,vector", _root_dio_cases())
     def test_decoded_payload_fields_match_vector(self, name: str, vector: dict) -> None:
@@ -153,6 +174,15 @@ class TestRootDioSignatureVectorFile:
             dio_rank=vector.get("rank"),
             dio_mop=vector.get("mop"),
         )
+        # Migration window (i72x.6): a stale corpus signed over the rejected
+        # native-profile DODAGID fails only at the DODAG binding check.
+        if _corpus_dodagid_is_native_profile(vector) and error == "DODAG_ID_MISMATCH":
+            expected_pair = (
+                expected["overall_valid"],
+                None if expected["overall_valid"] else _ROOT_DIO_ERROR_MAP[expected["error"]],
+            )
+            if (valid, error) != expected_pair:
+                pytest.xfail("stale native-profile DODAGID in corpus (i72x.6)")
         assert valid is expected["overall_valid"], f"{name}: {error}"
         if expected["overall_valid"]:
             assert error is None
@@ -188,6 +218,10 @@ class TestRootDioSignatureVectorFile:
             bytes.fromhex(vector["public_key"]),
             current_time=vector["expiry"] - 1,
         )
+        # Migration window (i72x.6): on a stale corpus the DODAG binding
+        # check fires before the tampered signature is even evaluated.
+        if _corpus_dodagid_is_native_profile(vector) and error == "DODAG_ID_MISMATCH":
+            pytest.xfail("stale native-profile DODAGID in corpus (i72x.6)")
         assert (valid, error) == (False, "SIGNATURE_INVALID")
 
 
