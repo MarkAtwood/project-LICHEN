@@ -21,7 +21,7 @@
 | Link-local | fe80::/10 | After `lichen_link_init()` | Control traffic only (NDP, RPL control, neighbor discovery) |
 | Primary (native) | 0200::/8 | Always (self-derived from Ed25519 pubkey) | All routable traffic (mesh, inter-mesh, BR forwarding). Cryptographically bound to key per 06-security.md §8.5 |
 
-All addresses use stable IID derived from Ed25519 public key (unified derivation in 06-security.md §8.5, test/vectors/yggdrasil-derivation.json, 03-addressing.md). This provides cryptographic identity binding with no additional secrets. Link-local restricted to post-`lichen_link_init()` per AGENTS.md initialization graph. Single-primary model eliminates ULA/GUA layering, scope selection bugs, and prefix advertisement complexity while preserving isolated-mesh and multi-BR behavior via Yggdrasil.
+All addresses use stable IID derived from Ed25519 public key (unified derivation in 06-security.md §8.5, 03-addressing.md; legacy corpus `test/vectors/legacy/yggdrasil-derivation.json` — quarantined rejected SHA-512 native profile per spec/decisions.jsonl `upstream-yggdrasil-addressing`, not a conformance oracle). This provides cryptographic identity binding with no additional secrets. Link-local restricted to post-`lichen_link_init()` per AGENTS.md initialization graph. Single-primary model eliminates ULA/GUA layering, scope selection bugs, and prefix advertisement complexity while preserving isolated-mesh and multi-BR behavior via Yggdrasil.
 
 **Isolated Meshes (No BR):**
 
@@ -253,7 +253,7 @@ Standard ICMPv6 (RFC 4443) for:
 
 ### 12.1. Address Structure
 
-See Section 6.1 for single-primary model (unified Ed25519 derivation per 06-security.md §8.5 and test/vectors/yggdrasil-derivation.json). Summary:
+See Section 6.1 for single-primary model (unified Ed25519 derivation per 06-security.md §8.5; legacy corpus `test/vectors/legacy/yggdrasil-derivation.json` — quarantined rejected SHA-512 native profile per spec/decisions.jsonl `upstream-yggdrasil-addressing`, not a conformance oracle). Summary:
 
 ```
 Link-local:  fe80::<IID>                                  (control only)
@@ -269,12 +269,17 @@ IID and full 02xx address derived from same Ed25519 pubkey (MUST: lower 64 bits 
 | Link-local | fe80::c02:a502:25b4:baaa | Direct neighbors (control) |
 | Primary (02xx) | 020e:02a5:0225:b4ba:0c02:a502:25b4:baaa | Mesh, inter-mesh via Yggdrasil, internet |
 
-Examples use the canonical `rfc8032_test_public_key` vector from
+Examples use the `rfc8032_test_public_key` vector from
 `test/vectors/ipv6-addresses.json`: IID = `SHA-512(pubkey)[0:8]` with the U/L
 bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID, and primary =
 `[0x02] + SHA-512(pubkey)[0:7] + IID` (lower 64 bits == IID). Node uses
 link-local for control + single primary 02xx for everything else. Consistent
-with updated 05-routing.md and 06-security.md. Matches all test vectors.
+with updated 05-routing.md and 06-security.md. Note: the primary/native
+derivation shown — and the corpus's `native`/`native_packed` fields — record
+the REJECTED SHA-512 native profile (spec/decisions.jsonl
+`upstream-yggdrasil-addressing`): pre-migration reference, not a conformance
+oracle; the routable address MUST equal upstream Yggdrasil `AddrForKey`. The
+IID and link-local derivations remain the live profile.
 
 ### 12.3. Short Address Assignment
 
