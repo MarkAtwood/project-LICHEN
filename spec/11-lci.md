@@ -169,8 +169,11 @@ Client: fe80::<IID from device MAC>
 Node:   fe80::<node IID>
 ```
 
-`<node IID>` is always the node's key-derived IID: `IID = SHA-512(pubkey)[0:8]`
+`<node IID>` is always the node's key-derived link-local IID: `IID = SHA-512(pubkey)[0:8]`
 with the U/L bit cleared (spec/04-network.md §6.2, spec/06-security.md §8.5).
+This IID appears only in the link-local address; the node's routable
+`0200::/8` `/128` is upstream `AddrForKey(pubkey)` and does not embed the IID
+(`upstream-yggdrasil-addressing` decision, `spec/decisions.jsonl`).
 The node's wire EUI-64 is obtained from that IID by toggling the U/L bit exactly
 once (spec/02-physical-link.md §4.2); it is never the source of the IID. The
 client is a generic IPv6 host and MAY use a static address or one derived from
