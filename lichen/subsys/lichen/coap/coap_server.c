@@ -213,6 +213,17 @@ static int config_put(struct coap_resource *resource,
 		return ret;
 	}
 
+	/* bead dsrv: authorize_mutating() returns 0 for unprotected requests
+	 * too — without this gate a plaintext PUT /config commits with no
+	 * authentication (standalone mode). Mirror msg_post below and the
+	 * modular coap_config.c config_put: require OSCORE protection or a
+	 * local-admin peer. */
+	if (!is_protected && !lichen_coap_is_local_admin(addr, addr_len)) {
+		return lichen_coap_respond(resource, request, addr, addr_len,
+					   COAP_RESPONSE_CODE_UNAUTHORIZED,
+					   0, NULL, 0);
+	}
+
 	if (payload == NULL || payload_len == 0) {
 		return coap_oscore_send_protected(resource, request, addr,
 						  addr_len, oscore_ctx, piv,
