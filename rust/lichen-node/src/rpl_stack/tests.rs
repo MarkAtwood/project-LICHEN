@@ -2758,6 +2758,14 @@ fn root_seq_cache_is_reachable_from_stack_state() {
 // had two bases and worker-6's side of the file was byte-identical to
 // the older base (an ancestor of HEAD), so it contained nothing new;
 // HEAD's newer evolution above is kept and no worker-6 intent is lost.
+//
+// Merge note (main x beads-worker-5): worker-5's side of this section is
+// the merge-base shape plus two deltas -- a stack-level expiry-boundary
+// test and a version parameter on vector_signed_dio_body. Both are already
+// present below in HEAD's evolved form (expiry_equal_now_... at stack
+// level; clock_equal_to_expiry_boundary_... and gate_fixture/gate_fields
+// at gate level), so HEAD's side is kept wholesale and no worker-5 intent
+// is lost.
 
 const VECTOR_EXPIRY_UNIX: u64 = 1_735_689_600;
 

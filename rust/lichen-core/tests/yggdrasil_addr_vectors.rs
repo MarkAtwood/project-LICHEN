@@ -19,6 +19,24 @@
 //! `error_case` length rejections (live corpus) are not expressible here
 //! because the Rust API takes `&[u8; 32]`, which enforces key length at the
 //! type level.
+//!
+//! Upstream degenerate-key semantics (all-zero public key -> inverted
+//! all-ones -> leading-1 count wraps 256 -> 0, no separator bit, empty
+//! payload) are pinned by the external-oracle edge-class table in
+//! `upstream_edge_classes`; the migration branch's standalone unit check of
+//! that case is subsumed there (same bytes, stronger oracle) and is not
+//! duplicated.
+//!
+//! Merge note (beads-worker-5): the two sides are incompatible — the branch
+//! pinned PRE-migration behavior (`quarantined_native_vectors_byte_exact_pin`
+//! driving the rejected SHA-512 profile byte-exact, and
+//! `upstream_anchor_diverges_from_current_native_profile` asserting
+//! `assert_ne!` against the upstream anchor), while HEAD asserts the
+//! post-migration `assert_eq!` byte-equality that spec/decisions.jsonl
+//! `upstream-yggdrasil-addressing` settles. HEAD's side is kept because the
+//! implementation now bit-packs per upstream (so the branch's pins would
+//! fail) and the branch's own comments required deleting those tests once
+//! the migration landed.
 
 use serde_json::Value;
 
@@ -27,6 +45,8 @@ const LEGACY_NATIVE_JSON: &str =
     include_str!("../../../test/vectors/legacy/yggdrasil_address_native_sha512.json");
 
 const ANCHOR_NAME: &str = "upstream_addr_for_key";
+// Pinned external oracle, from upstream yggdrasil-go address_test.go
+// @422836ee for pubkey bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb.
 const ANCHOR_ADDRESS: [u8; 16] = [
     0x02, 0x00, 0x84, 0x8a, 0x60, 0x4f, 0xbb, 0x7e, 0x43, 0x84, 0x65, 0xdb, 0x8d, 0xb6, 0x68, 0x95,
 ];
@@ -124,13 +144,19 @@ fn upstream_anchor_matches_byte_exact() {
 
 #[test]
 fn upstream_subnet_anchor_matches_byte_exact() {
+    // SubnetForKey = AddrForKey first 8 bytes with the low prefix bit set.
     let pubkey_vec = decode_hex(anchor(&load_document())["public_key"].as_str().unwrap());
     let pubkey: [u8; 32] = pubkey_vec.try_into().expect("32-byte key");
+    let subnet = lichen_core::addr::subnet_for_key(&pubkey);
     assert_eq!(
-        lichen_core::addr::subnet_for_key(&pubkey),
-        ANCHOR_SUBNET,
+        subnet, ANCHOR_SUBNET,
         "MUST equal upstream SubnetForKey byte-for-byte (0300::/8)"
     );
+    // Subnet lives in 0300::/8 (prefix byte low bit set).
+    assert_eq!(subnet[0] & 0x01, 0x01, "subnet prefix bit must be set");
+    // And shares the leading-1 count byte with the address.
+    let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
+    assert_eq!(subnet[1], addr[1], "subnet and address share leading-1 count");
 }
 
 /// Test-local pins produced by running upstream's own `address.go` @422836ee
@@ -199,4 +225,11 @@ fn iid_remains_sha512_derived_not_address_low_half() {
     assert_eq!(iid[0] & 0x02, 0, "U/L bit must be clear in IID");
     let addr = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);
     assert_eq!(addr[0], 0x02, "0200::/8 prefix byte");
+    // Pin the separation this test's name claims: the routable address's low
+    // 64 bits are bit-packed inverted key, NOT the SHA-512 IID.
+    assert_ne!(
+        &addr[8..16],
+        &iid[..],
+        "routable address must NOT embed the SHA-512 IID"
+    );
 }

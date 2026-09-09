@@ -1068,6 +1068,12 @@ impl Gateway {
             let public = lichen_link::keys::PublicKey::new(pinned.pubkey);
             rpl_stack.install_verified_link_peer(PeerIdentity::from_pubkey(public));
         }
+        // Merge resolution (beads-worker-5): the root-signed tunnel-auth
+        // table is owned by the durable GatewayCoordinator — the merged
+        // resources.rs provisions it, dispatches the POST resource to it,
+        // and backs the egress gate with it. The branch's parallel
+        // Gateway-owned table was dropped: two tables would diverge, with
+        // grants written to one and the gate consulting the other.
         // This gateway is the DODAG root (provision_root/open_root above), so
         // the tunnel-auth table binds to its own key-derived IID (spec
         // 06-security 8.11: the POST kid must match the current root).
@@ -1091,7 +1097,7 @@ impl Gateway {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let trust_store =
             TrustStore::new_ephemeral(64).map_err(|_| GatewayOpenError::RplProvision)?;
-        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, 60, 64)
+        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity.iid, 60, 64)
             .map_err(|_| GatewayOpenError::RplProvision)?;
         Self::new(identity, safe_epoch, trust_store, coordinator)
     }
@@ -1151,9 +1157,9 @@ impl Gateway {
         {
             return Err(SecureError::NoContext);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .map_err(|_| SecureError::NoContext)?;
+        // The OSCORE IDs derive from the key-derived IID; the routable
+        // address's low half is not the IID under upstream AddrForKey (i72x.2).
+        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
         const OSCORE_ID_LEN: usize = 7;
         if context.sender_id() != &local_iid[..OSCORE_ID_LEN]
             || context.recipient_id() != &peer_iid[..OSCORE_ID_LEN]
@@ -1208,9 +1214,8 @@ impl Gateway {
         if peer_pubkeys.len() > MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayFederationError::TooManyPeers);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .expect("gateway address has a complete IID");
+        // Key-derived IID, not the low half of the routable address (i72x.2).
+        let local_iid: [u8; 8] = self.rpl_stack.local_iid();
         let mut contexts = Vec::with_capacity(peer_pubkeys.len());
         let mut peer_iids = Vec::with_capacity(peer_pubkeys.len());
         for pubkey in peer_pubkeys {
@@ -1412,9 +1417,11 @@ impl Gateway {
         }
         // Route evidence is this gateway's own IID — it is the egress — not
         // the DODAG root IID, which may differ after a root rebind.
-        let egress_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .expect("coordinator iid is 16 bytes");
+        // Merge resolution: take the IID from the canonical key derivation,
+        // not the low half of `coordinator.info.iid` — after the upstream
+        // AddrForKey migration the routable address bit-packs the inverted
+        // key and does not embed the IID (i72x.2).
+        let egress_iid: [u8; 8] = self.rpl_stack.local_iid();
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
         let route = [egress_iid];
         match self
@@ -1564,7 +1571,9 @@ impl Gateway {
             && segments[1] == b"tunnel-auth"
         {
             // Spec 06-security 8.11: the root delivers egress tunnel
-            // authorizations outside the lichen-gw prefix.
+            // authorizations outside the lichen-gw prefix. Both merge sides
+            // agree on the wire path; the merged resources.rs routes this
+            // resource to the coordinator-owned table.
             "tunnel-auth"
         } else {
             return true;
@@ -2448,7 +2457,7 @@ mod tests {
         private_test_dir(&path);
         let identity = Identity::from_seed(Seed::new([0x61; 32]));
         let root = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
-        let coordinator = GatewayCoordinator::new_ephemeral(root, 60, 8).unwrap();
+        let coordinator = GatewayCoordinator::new_ephemeral(root, identity.iid, 60, 8).unwrap();
         let result = Gateway::new_persistent(
             identity,
             128,
@@ -2487,6 +2496,7 @@ mod tests {
         let trust = TrustStore::new_ephemeral(8).unwrap();
         let coordinator = GatewayCoordinator::provision_persistent(
             root,
+            identity.iid,
             60,
             64,
             &replay_path,
@@ -2573,6 +2583,7 @@ mod tests {
         .unwrap();
         let coordinator = GatewayCoordinator::load_persistent(
             root,
+            identity.iid,
             60,
             64,
             &replay_path,

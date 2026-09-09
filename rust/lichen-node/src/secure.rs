@@ -1930,7 +1930,11 @@ pub(crate) fn secure_datagram_from_received(
             oscore_option = Some(option.value);
         }
     }
-    let sender_iid: [u8; 8] = header.src.0[8..].try_into().unwrap();
+    // The sender IID is the link-authenticated identity from the signed
+    // frame. Slicing it out of the source address only ever worked because
+    // the rejected native profile embedded the IID in the routable address;
+    // upstream AddrForKey does not (i72x.2).
+    let sender_iid: [u8; 8] = frame.sender_iid;
     if empty_ack {
         return Ok(Some(ReceivedSecureDatagram {
             coap: coap.to_vec(),

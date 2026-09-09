@@ -154,7 +154,6 @@ _INVITATION_KEY_ROLE = 4
 _INVITATION_KEY_EXPIRY = 5
 _INVITATION_KEY_INVITEE_IID = 6
 _INVITATION_KEY_NONCE = 7
-_COSE_KID_LABEL = 4
 
 
 @dataclass(frozen=True)
@@ -201,7 +200,7 @@ def encode_invitation_cose(invitation: GroupInvitationCose, identity: Identity) 
         cose_protected_header,
         cose_sig_structure,
     )
-    from lichen.crypto.schnorr48 import sign
+    from lichen.crypto.schnorr48 import COSE_KID_LABEL, sign
 
     if invitation.inviter_iid != identity.iid:
         raise MembershipError("inviter_iid must match the signing identity")
@@ -222,7 +221,7 @@ def encode_invitation_cose(invitation: GroupInvitationCose, identity: Identity) 
     to_sign = sha256(sig_structure).digest()
     signature = sign(identity.privkey, identity.pubkey, to_sign)
     return cbor2.dumps(
-        [protected, {_COSE_KID_LABEL: invitation.inviter_iid}, payload, signature]
+        [protected, {COSE_KID_LABEL: invitation.inviter_iid}, payload, signature]
     )
 
 
@@ -249,7 +248,7 @@ def verify_invitation_cose(
         cose_sig_structure,
     )
     from lichen.crypto.identity import _pubkey_to_iid
-    from lichen.crypto.schnorr48 import verify
+    from lichen.crypto.schnorr48 import COSE_KID_LABEL, verify
 
     if type(envelope) is not bytes:
         raise MembershipError("invitation envelope must be bytes")
@@ -278,7 +277,7 @@ def verify_invitation_cose(
         raise MembershipError("COSE protected header is not valid CBOR") from error
     if type(header) is not dict or header.get(COSE_ALG_LABEL) != SCHNORR48_ED25519_ALG:
         raise MembershipError("invitation alg must be Schnorr48-Ed25519 (-65537)")
-    kid = unprotected.get(_COSE_KID_LABEL)
+    kid = unprotected.get(COSE_KID_LABEL)
     if type(kid) is not bytes or len(kid) != 8:
         raise MembershipError("invitation kid must be an 8-byte inviter IID")
     # Bind the (unprotected) kid to the verifying key's derived IID so a

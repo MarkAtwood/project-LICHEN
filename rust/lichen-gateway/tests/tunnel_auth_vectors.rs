@@ -400,6 +400,19 @@ fn expired_longest_prefix_denies_without_falling_back_to_shorter_live_grant() {
     );
 }
 
+// Merge resolution (beads-worker-5): the branch's wired-path suite was
+// dropped with its API. It exercised Gateway::handle_tunnel_auth_request /
+// Gateway::authorize_tunnel_egress backed by a Gateway-owned authorization
+// table; the staged gateway.rs resolution removed that table in favor of the
+// durable GatewayCoordinator-owned one (see the merge comment in gateway.rs:
+// two tables would diverge, grants written to one and the gate consulting
+// the other). The branch's spec 06-security 8.11 intents are covered below
+// through the surviving surface: POST accept/replay/fail-closed cases go
+// through GatewayCoordinator::handle_request, and the egress data-plane gate
+// is exercised end-to-end through Gateway::ingest_mesh_frame. Wrong-route,
+// scoped source/destination, and expiry denials stay pinned by the corpus
+// post/decapsulation cases above.
+
 // ---- Wired CoAP dispatch (spec 06-security 8.11, POST /.well-known/tunnel-auth) ----
 
 use lichen_gateway::resources::{CoapMethod, GatewayCoordinator};
@@ -422,7 +435,7 @@ fn ygg_addr(iid: [u8; 8]) -> [u8; 16] {
 
 fn egress_coordinator(corpus: &Value, egress_name: &str) -> GatewayCoordinator {
     let (egress_iid, _) = identity(corpus, egress_name);
-    let mut coordinator = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    let mut coordinator = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), egress_iid, 60, 64).unwrap();
     coordinator.set_tunnel_auth_root(identity(corpus, "root").0);
     coordinator
 }
@@ -473,7 +486,7 @@ fn wired_coap_tunnel_auth_fails_closed_on_missing_oscore_wrong_root_and_wrong_eg
 
     // A table with no bound root never accepts (WrongRoot, fail-closed).
     let (egress_iid, _) = identity(&corpus, "egress");
-    let mut unbound = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), 60, 64).unwrap();
+    let mut unbound = GatewayCoordinator::new_ephemeral(ygg_addr(egress_iid), egress_iid, 60, 64).unwrap();
     let response = unbound.handle_request(
         CoapMethod::Post,
         "tunnel-auth",
