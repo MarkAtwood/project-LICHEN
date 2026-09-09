@@ -2341,6 +2341,13 @@ def test_x25519_key_derivation_vector(name: str, vector: dict) -> None:
     Derivation-consistency vectors additionally pin the full seed->key-material bundle
     (Ed25519 keypair, X25519 public, IID, native 02xx address), require identical
     bytes across repeated derivation calls, and cover non-32-byte seed rejection.
+
+    QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the iid and
+    ygg_addr fields encode the rejected SHA-512 native profile from the legacy
+    corpus (test/vectors/legacy/). They pin internal derivation consistency only
+    and MUST NOT be treated as addressing conformance oracles; when the upstream
+    AddrForKey migration lands these fields must be regenerated as pinned
+    upstream byte-equality vectors.
     """
     from hashlib import sha512
 

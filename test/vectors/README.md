@@ -23,7 +23,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `hash_32.json` | `lichen_hash_32` FNV-1a32 primitive (basis 0x811c9dc5) |
 | `oscore.json` | OSCORE key derivation, request/response protection, replay detection (RFC 8613) |
 | `schnorr48.json` | 48-byte Schnorr signatures per draft-lichen-schnorr-00 (Appendix A vectors) |
-| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping |
+| `x25519.json` | X25519/Ed25519 key derivation and RFC 8032 clamping. QUARANTINE NOTE: per-vector `iid`/`ygg_addr` fields encode the rejected SHA-512 native profile (legacy/ corpus); internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
 
 ### Link Layer
 
@@ -121,7 +121,7 @@ Complete index of every vector file (174 files, excluding `schema.json` and the 
 | `gcp_slot_claim.json` | GCP-6.5 slot-claim basic tier: COSE_Sign1 envelopes, Schnorr48 over SHA-256(CBOR(Sig_structure)); generator `generate_gcp_slot_claim.py` |
 | `gcp_slot_claim_cose_sign1.json` | GCP-6.5 slot-claim COSE_Sign1: slots-mutation forgery, claim_seq replay, expiry boundaries, alg decoy, kid mismatch, missing ordinal |
 | `gcp_handoff_cose_sign1.json` | GCP-7.1 handoff request/confirm COSE_Sign1: RFC 9052 Sig_structure, mutations, verification cases |
-| `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid) |
+| `gcp3_trust_models.json` | GCP-3 trust models (pubkey-derived keys, PSK, hybrid). QUARANTINE NOTE: `ygg_addr`/`ygg_addr_str` fields encode the rejected SHA-512 native profile (legacy/ corpus); internal-consistency pins only, not addressing oracles — regenerate against upstream `AddrForKey` when migration lands |
 | `tofu_edge_cases.json` | Canonical TOFU contact, binding, malformed-input, persistence, reboot, rollback, concurrency, and replay invariants |
 | `gcp6_slot_coordination.json` | Superframe slot coordination (spec 08 §6) |
 | `node_handoff.json` | Node-handoff request/response (GCP-7) |
