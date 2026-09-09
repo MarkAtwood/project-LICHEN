@@ -805,8 +805,10 @@ impl SlotClaimVerifier {
     /// Verify one claim for exactly the current superframe.
     ///
     /// Exact matching rejects both captured old claims and pre-played future
-    /// claims. A gateway may re-claim within a superframe only by advancing the
-    /// signed `claim_sequence`, preserving the required loser-reclaim flow.
+    /// claims. The replay gate is the pure `claim_seq` high-water per gateway
+    /// IID (GCP-6.5 step 8): a re-claim — in any superframe — must advance the
+    /// signed `claim_sequence`, preserving the loser-reclaim flow and blocking
+    /// seq rollback from a rebooted or NVS-wiped sender.
     pub fn verify(
         &mut self,
         claim: RawSlotClaim,
@@ -847,7 +849,12 @@ impl SlotClaimVerifier {
             });
         }
         if let Some(previous) = self.last_seen.get(&claim.gateway_iid) {
-            if (claim.superframe_id, claim.claim_sequence) <= *previous {
+            // GCP-6.5 step 8 (spec/08): pure claim_seq high-water per gateway
+            // IID — reject claim_seq <= cached regardless of superframe. The
+            // stale/future-superframe gate above already rejects old- and
+            // future-superframe claims; this gate additionally blocks seq
+            // rollback inside a newer superframe.
+            if claim.claim_sequence <= previous.1 {
                 return Err(SlotError::Replay {
                     gateway_iid: claim.gateway_iid,
                     superframe_id: claim.superframe_id,
@@ -2376,6 +2383,34 @@ mod tests {
         let replacement = verifier.verify(replacement, &pubkey, 10).unwrap();
         assert_eq!(replacement.claim_sequence(), 1);
         assert_eq!(replacement.slots(), &[2]);
+    }
+
+    #[test]
+    fn replay_gate_is_pure_claim_seq_highwater_across_superframes() {
+        let mut verifier = SlotClaimVerifier::new_ephemeral(4).unwrap();
+        let (first, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![1], 10, 5, 60);
+        verifier.verify(first, &pubkey, 10).unwrap();
+
+        // Lower seq in a newer superframe: (superframe, seq) tuple ordering
+        // would accept it; the GCP-6.5 step 8 high-water MUST reject it.
+        let (rollback, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![2], 11, 4, 60);
+        assert!(matches!(
+            verifier.verify(rollback, &pubkey, 11),
+            Err(SlotError::Replay { .. })
+        ));
+
+        // Equal seq in a newer superframe is replay too.
+        let (equal, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![2], 11, 5, 60);
+        assert!(matches!(
+            verifier.verify(equal, &pubkey, 11),
+            Err(SlotError::Replay { .. })
+        ));
+
+        // Advancing seq re-claims normally across the superframe boundary.
+        let (advance, pubkey) = signed_raw_claim_with_sequence([36; 32], vec![3], 11, 6, 60);
+        let accepted = verifier.verify(advance, &pubkey, 11).unwrap();
+        assert_eq!(accepted.claim_sequence(), 6);
+        assert_eq!(accepted.slots(), &[3]);
     }
 
     #[test]
