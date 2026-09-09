@@ -125,6 +125,11 @@ class LocalFactClaims:
             or not all(type(c) is str for c in self.channel)
         ):
             raise LocalFactError(f"{CLAIM_CHANNEL} must be a list of tstr")
+        # Normalize to tuple: from_cbor produces a tuple, and the wire-bstr
+        # consistency check on LocalFact compares by value — accepting a list
+        # at construction would then falsely reject an otherwise valid fact.
+        if self.channel is not None and isinstance(self.channel, list):
+            object.__setattr__(self, "channel", tuple(self.channel))
 
     def to_cbor(self) -> bytes:
         """Encode the claims as a CBOR map (payload of the COSE).
@@ -230,6 +235,14 @@ class LocalFact:
             raise LocalFactError(f"signature must be 48 bytes, got {len(self.signature)}")
         if (self.protected_bytes is None) != (self.payload_bytes is None):
             raise LocalFactError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the claims
+            # carried on the object, or verify would authenticate one claim set
+            # while callers read another (desync via mismatched construction or
+            # dataclasses.replace).
+            if LocalFactClaims.from_cbor(self.payload_bytes) != self.claims:
+                raise LocalFactError("payload_bytes do not decode to the claims on the fact")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as a CBOR COSE_Sign1 array [protected, unprotected, payload, sig].

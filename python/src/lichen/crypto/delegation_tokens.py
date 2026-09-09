@@ -99,7 +99,7 @@ def cose_sig_structure(protected: bytes, payload: bytes) -> bytes:
     return cbor2.dumps(sig_structure)
 
 
-@dataclass
+@dataclass(frozen=True)
 class DelegationTokenPayload:
     """Delegation token payload per spec section 18.8.6.
 
@@ -189,7 +189,7 @@ class DelegationTokenPayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class DelegationToken:
     """COSE_Sign1 delegation token per spec section 18.8.6.
 
@@ -229,6 +229,18 @@ class DelegationToken:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
         if (self.protected_bytes is None) != (self.payload_bytes is None):
             raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = DelegationTokenPayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the token")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.
@@ -476,7 +488,7 @@ DELEGATION_FLAG_EXTERNAL = 1 << 0  # E: delegate may set Transit E flag
 DELEGATION_RESERVED_FLAG_MASK = 0xFE  # Bits 1-7 reserved, MUST be zero
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrefixDelegationTokenPayload:
     """Prefix delegation token payload per spec/05-routing.md section 8.7.2.
 
@@ -541,7 +553,7 @@ class PrefixDelegationTokenPayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrefixDelegationToken:
     """COSE_Sign1 prefix delegation token per spec/05-routing.md 8.7.2.
 
@@ -567,6 +579,18 @@ class PrefixDelegationToken:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
         if (self.protected_bytes is None) != (self.payload_bytes is None):
             raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = PrefixDelegationTokenPayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the token")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.

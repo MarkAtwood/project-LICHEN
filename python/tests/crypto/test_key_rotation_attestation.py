@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import time
 
 import cbor2
@@ -489,3 +491,46 @@ def test_attestation_verified_over_received_wire_bytes() -> None:
         attestation, old_pubkey=old.pubkey, current_time=int(time.time())
     )
     assert (valid, error) == (True, None)
+
+
+# ─── Wire-bstr/payload consistency + immutability (2vp1) ─────────────────────
+
+
+def test_key_rotation_replace_desync_rejected() -> None:
+    old = Identity.from_seed(bytes(range(32)))
+    new = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    forged_successor = Identity.from_seed(bytes([0x55] * 32))
+    attestation = create_key_rotation_attestation(old, new.pubkey, 1, int(time.time()) + 3600)
+    evil = KeyRotationAttestationPayload(
+        old_pubkey=old.pubkey, new_pubkey=forged_successor.pubkey,
+        rotation_seq=attestation.payload.rotation_seq, expiry=attestation.payload.expiry,
+    )
+    import dataclasses as dc
+
+    with pytest.raises(ValueError, match="do not decode"):
+        dc.replace(attestation, payload=evil)
+
+
+def test_key_rotation_is_frozen() -> None:
+    old = Identity.from_seed(bytes(range(32)))
+    new = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    attestation = create_key_rotation_attestation(old, new.pubkey, 1, int(time.time()) + 3600)
+    import dataclasses as dc
+
+    with pytest.raises(dc.FrozenInstanceError):
+        attestation.old_iid = new.iid
+
+
+def test_key_rotation_garbage_wire_bytes_raise_valueerror() -> None:
+    old = Identity.from_seed(bytes(range(32)))
+    new = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    payload = KeyRotationAttestationPayload(
+        old_pubkey=old.pubkey, new_pubkey=new.pubkey,
+        rotation_seq=1, expiry=int(time.time()) + 3600,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        KeyRotationAttestation(
+            payload=payload, old_iid=old.iid, signature=bytes(48),
+            protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
+            payload_bytes=cbor2.dumps([1, 2]),
+        )

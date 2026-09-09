@@ -79,7 +79,7 @@ def _build_sig_structure(protected: bytes, payload: bytes) -> bytes:
     return cbor2.dumps(sig_structure)
 
 
-@dataclass
+@dataclass(frozen=True)
 class CapabilityPayload:
     """Capability announcement payload per spec section 8.12.
 
@@ -167,7 +167,7 @@ class CapabilityPayload:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class CapabilityAnnouncement:
     """COSE_Sign1 capability announcement per spec section 8.12.
 
@@ -190,6 +190,18 @@ class CapabilityAnnouncement:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
         if (self.protected_bytes is None) != (self.payload_bytes is None):
             raise ValueError("wire bstrs must be retained as a pair or not at all")
+        if self.payload_bytes is not None:
+            # The retained wire bstrs are what the signature is verified over
+            # (RFC 9052 section 4.4); they must decode to exactly the payload
+            # carried on the object, or verify would authenticate one payload
+            # while callers read another (desync via mismatched construction
+            # or dataclasses.replace).
+            try:
+                decoded = CapabilityPayload.from_cbor(self.payload_bytes)
+            except (TypeError, KeyError, IndexError, ValueError, cbor2.CBORDecodeError) as e:
+                raise ValueError(f"payload_bytes do not decode to a valid payload: {e}") from None
+            if decoded != self.payload:
+                raise ValueError("payload_bytes do not decode to the payload on the announcement")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.
