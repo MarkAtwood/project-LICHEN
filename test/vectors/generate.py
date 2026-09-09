@@ -157,6 +157,7 @@ EDHOC_REGRESSION_DESCRIPTION = (
 )
 L2_DISPATCH_SCHC = 0x14
 L2_DISPATCH_ROUTING = 0x15
+L2_DISPATCH_SOS = 0x16
 
 LL_SRC = IPv6Address("fe80::1")
 LL_DST = IPv6Address("fe80::2")
@@ -580,15 +581,28 @@ def l2_payload_vectors() -> list[dict]:
             "wrapped": bytes([L2_DISPATCH_ROUTING]).hex(),
         },
         {
-            "name": "reserved_0x16",
+            "name": "sos_0x16",
             "description": (
-                "Dispatch 0x16 is unassigned in the L2 namespace and must not be "
-                "confused with the unrelated RPL DODAG Version option type."
+                "Dispatch 0x16 is the SOS emergency alert (spec/02-physical-link.md "
+                "4.1); the body is the 12-apps.md 18.4.2 CBOR alert map. Distinct "
+                "from the unrelated RPL DODAG Version option type 0x16 (different "
+                "namespace)."
             ),
-            "dispatch": 0x16,
-            "kind": "unknown",
+            "dispatch": L2_DISPATCH_SOS,
+            "kind": "sos",
             "body": "01",
             "wrapped": "1601",
+        },
+        {
+            "name": "malformed_sos_dispatch_only",
+            "description": (
+                "A defined SOS dispatch without its required body byte is malformed "
+                "and must fail closed."
+            ),
+            "dispatch": L2_DISPATCH_SOS,
+            "kind": "unknown",
+            "body": "",
+            "wrapped": bytes([L2_DISPATCH_SOS]).hex(),
         },
     ]
 

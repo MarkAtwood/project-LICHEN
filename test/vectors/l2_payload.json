@@ -44,12 +44,20 @@
       "wrapped": "15"
     },
     {
-      "name": "reserved_0x16",
-      "description": "Dispatch 0x16 is unassigned in the L2 namespace and must not be confused with the unrelated RPL DODAG Version option type.",
+      "name": "sos_0x16",
+      "description": "Dispatch 0x16 is the SOS emergency alert (spec/02-physical-link.md 4.1); the body is the 12-apps.md 18.4.2 CBOR alert map. Distinct from the unrelated RPL DODAG Version option type 0x16 (different namespace).",
       "dispatch": 22,
-      "kind": "unknown",
+      "kind": "sos",
       "body": "01",
       "wrapped": "1601"
+    },
+    {
+      "name": "malformed_sos_dispatch_only",
+      "description": "A defined SOS dispatch without its required body byte is malformed and must fail closed.",
+      "dispatch": 22,
+      "kind": "unknown",
+      "body": "",
+      "wrapped": "16"
     }
   ]
 }

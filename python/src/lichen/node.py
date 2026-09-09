@@ -41,7 +41,7 @@ from lichen.announce.scheduler import (
     AnnounceScheduler,
     SchedulerConfig,
 )
-from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC
+from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC, L2_DISPATCH_SOS
 from lichen.crypto.identity import Identity, PeerIdentity, yggdrasil_address
 from lichen.gradient import GRADIENT_TIMEOUT_MS, GradientTable
 from lichen.ipv6.addr import iid_to_eui64, make_link_local
@@ -892,7 +892,8 @@ class Node:
             return
 
         if not payload or (
-            len(payload) == 1 and payload[0] in (L2_DISPATCH_SCHC, L2_DISPATCH_ROUTING)
+            len(payload) == 1
+            and payload[0] in (L2_DISPATCH_SCHC, L2_DISPATCH_ROUTING, L2_DISPATCH_SOS)
         ):
             # Frame-level spec rules (draft-lichen-link-01 section 3.1): link
             # framing permits an empty PLD, and a defined dispatch value MUST

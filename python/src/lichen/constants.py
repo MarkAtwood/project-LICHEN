@@ -41,6 +41,7 @@ SCHC_RULE_UNCOMPRESSED: int = 255  # No compression; full headers follow
 # Authenticated L2 inner-payload dispatch bytes
 L2_DISPATCH_SCHC: int = 0x14
 L2_DISPATCH_ROUTING: int = 0x15
+L2_DISPATCH_SOS: int = 0x16
 
 # RPL configuration (spec/drafts/draft-lichen-rpl-lora-00.md, RFC 6550)
 RPL_INSTANCE_ID: int = 0

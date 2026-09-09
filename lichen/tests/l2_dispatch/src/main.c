@@ -30,6 +30,8 @@ ZTEST(l2_dispatch, test_all_dispatch_octets_and_short_payloads_fail_closed)
 			expected = LICHEN_L2_PAYLOAD_SCHC;
 		} else if (dispatch == LICHEN_L2_DISPATCH_ROUTING) {
 			expected = LICHEN_L2_PAYLOAD_ROUTING;
+		} else if (dispatch == LICHEN_L2_DISPATCH_SOS) {
+			expected = LICHEN_L2_PAYLOAD_SOS;
 		}
 		zassert_equal(lichen_l2_payload_classify(payload, sizeof(payload)), expected,
 			      "dispatch 0x%02x", dispatch);
@@ -42,7 +44,7 @@ ZTEST(l2_dispatch, test_all_dispatch_octets_and_short_payloads_fail_closed)
 
 ZTEST(l2_dispatch, test_reserved_and_malformed_inputs_do_not_expose_body)
 {
-	static const uint8_t reserved[] = {0x16U, 0x01U};
+	static const uint8_t reserved[] = {0x17U, 0x01U};
 	static const uint8_t schc_short[] = {LICHEN_L2_DISPATCH_SCHC};
 	static const uint8_t routing_short[] = {LICHEN_L2_DISPATCH_ROUTING};
 	size_t body_len = SIZE_MAX;

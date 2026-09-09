@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC
+from lichen.constants import L2_DISPATCH_ROUTING, L2_DISPATCH_SCHC, L2_DISPATCH_SOS
 
 L2_ROUTING_TYPE_ANNOUNCE = 0x01
 
@@ -17,11 +17,13 @@ class L2PayloadKind(Enum):
     The first byte of an authenticated L2 payload indicates its type:
     - SCHC: SCHC-compressed IPv6 packet
     - ROUTING: Routing protocol message (Announce, RPL, LOADng)
+    - SOS: SOS emergency alert (12-apps.md §18.4.2 CBOR payload)
     - UNKNOWN: Unrecognized dispatch byte
     """
 
     SCHC = "schc"
     ROUTING = "routing"
+    SOS = "sos"
     UNKNOWN = "unknown"
 
 
@@ -35,6 +37,8 @@ def classify_l2_payload(payload: bytes) -> L2PayloadKind:
         return L2PayloadKind.SCHC
     if payload[0] == L2_DISPATCH_ROUTING:
         return L2PayloadKind.ROUTING
+    if payload[0] == L2_DISPATCH_SOS:
+        return L2PayloadKind.SOS
     return L2PayloadKind.UNKNOWN
 
 

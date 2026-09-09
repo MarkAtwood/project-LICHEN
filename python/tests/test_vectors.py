@@ -1645,6 +1645,7 @@ def test_l2_payload_vector(name: str, vector: dict) -> None:
     expected = {
         "schc": L2PayloadKind.SCHC,
         "routing": L2PayloadKind.ROUTING,
+        "sos": L2PayloadKind.SOS,
         "unknown": L2PayloadKind.UNKNOWN,
     }[vector["kind"]]
     assert classify_l2_payload(wrapped) is expected, f"classify drift: {name}"
