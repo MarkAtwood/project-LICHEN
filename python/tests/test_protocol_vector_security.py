@@ -380,7 +380,7 @@ def test_authenticated_schc_dio_construction_has_independent_security_checks() -
             vector["name"]
         )
         if vector["trusted_role"] == "root":
-            root_binding = dio[8:24] == _addr_for_key(public_key)
+            root_binding = dio[8:24] == _upstream_addr_for_key(public_key)
             assert root_binding is (vector["expected"]["admitted"] is True), vector["name"]
 
 
