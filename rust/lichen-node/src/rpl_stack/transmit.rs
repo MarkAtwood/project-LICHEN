@@ -18,8 +18,7 @@ use crate::stack::{Priority, TxError};
 
 use super::error::{DaoSendError, RplControlError};
 use super::util::{
-    dao_ipv6_packet, ipv6_eui64, ipv6_l2_destination, link_local_from_iid, rpl_ipv6_packet,
-    RPL_ALL_NODES,
+    dao_ipv6_packet, ipv6_eui64, ipv6_l2_destination, rpl_ipv6_packet, RPL_ALL_NODES,
 };
 use super::{RplRole, RplStack};
 
@@ -133,9 +132,9 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     }
 
     pub async fn send_dis(&mut self, destination: [u8; 16]) -> Result<(), TxError> {
-        let control_destination = if destination[0] == 0xff {
-            destination
-        } else if destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0] {
+        let control_destination = if destination[0] == 0xff
+            || destination[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
+        {
             destination
         } else {
             // Unicast control traffic uses the receiver's canonical
