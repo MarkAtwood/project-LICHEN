@@ -1529,19 +1529,20 @@ pub fn encode_rule255(
     out: &mut [u8],
     single_frame_limit: usize,
 ) -> Result<usize, SchcError> {
-    // Raw-packet profile bound (see compress); independent of the encoded
-    // single_frame_limit check below.
-    if packet.len() > SCHC_FRAG_MAX_PACKET_SIZE {
-        return Err(BufferTooSmall::new(packet.len(), SCHC_FRAG_MAX_PACKET_SIZE).into());
-    }
     validate_full_ipv6(packet)?;
     let needed = packet.len().saturating_add(1);
     let profile_limit = single_frame_limit.min(SCHC_FRAG_MAX_PACKET_SIZE);
-    if needed > profile_limit {
-        return Err(BufferTooSmall::new(needed, profile_limit).into());
-    }
     if out.len() < needed {
         return Err(BufferTooSmall::new(needed, out.len()).into());
+    }
+    if needed > profile_limit {
+        // Terminal profile ceiling (see compress): growing the caller buffer
+        // can never satisfy it, so it must not be reported as the retryable
+        // capacity error. Matches the Python reference's terminal
+        // "Rule 255 raw IPv6 packet exceeds N bytes" rejection.
+        return Err(SchcError::InvalidPacket(
+            "Rule 255 raw IPv6 packet exceeds profile single-frame limit",
+        ));
     }
     out[0] = RULE_UNCOMPRESSED;
     out[1..needed].copy_from_slice(packet);
@@ -3260,11 +3261,31 @@ mod tests {
         );
         assert_eq!(&decoded[..], &raw_exact[..]);
 
-        // Raw one byte over: encoded would be 22,555 — rejected when encoding.
+        // Raw one byte over: encoded would be 22,555 — terminal profile
+        // rejection once the caller buffer is large enough (a grow-and-retry
+        // loop can never satisfy the ceiling). With a short buffer the
+        // capacity error fires first and stays retryable.
         let raw_over = uncompressed_packet(SCHC_FRAG_MAX_PACKET_SIZE);
+        let mut encoded_over = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE + 1];
         assert!(matches!(
-            encode_rule255(&raw_over, &mut encoded, usize::MAX),
+            encode_rule255(&raw_over, &mut encoded_over, usize::MAX),
+            Err(SchcError::InvalidPacket(
+                "Rule 255 raw IPv6 packet exceeds profile single-frame limit"
+            ))
+        ));
+        let mut encoded_short = vec![0u8; SCHC_FRAG_MAX_PACKET_SIZE];
+        assert!(matches!(
+            encode_rule255(&raw_over, &mut encoded_short, usize::MAX),
             Err(SchcError::BufferTooSmall(_))
+        ));
+        // A single-frame limit below the encoded size is likewise terminal
+        // (independent of the profile ceiling): grow-and-retry cannot help.
+        let mut encoded_roomy = vec![0u8; raw_exact.len() + 1];
+        assert!(matches!(
+            encode_rule255(&raw_exact, &mut encoded_roomy, raw_exact.len()),
+            Err(SchcError::InvalidPacket(
+                "Rule 255 raw IPv6 packet exceeds profile single-frame limit"
+            ))
         ));
 
         // Encoded one byte over the ceiling: rejected at ingress. The direct
