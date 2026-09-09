@@ -3026,7 +3026,7 @@ fn baseline_fixture(
     )
     .unwrap();
 
-    let mut sender = RplStack::provision_root(
+    let sender = RplStack::provision_root(
         Stack::new(relay_radio, relay_identity.clone(), 128, 0),
         relay_addr,
         relay_addr,
