@@ -632,9 +632,9 @@ COAP_RESOURCE_DEFINE(lichen_tunnel_auth, lichen_coap_server, {
  * plaintext fallback. The handler (app side) resolves the pinned pubkey,
  * verifies, and records into the capability table; the verdict's human code
  * (204/403/503) maps to the wire encoding via lichen_tunnel_auth_coap_code().
- * 5.03 = 0x85.
+ * 5.03 = (5<<5)|3 = 0xA3 (COAP_MAKE_RESPONSE_CODE uses class<<5).
  */
-BUILD_ASSERT(COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE == 0x85, "5.03 wire encoding drifted");
+BUILD_ASSERT(COAP_RESPONSE_CODE_SERVICE_UNAVAILABLE == 0xA3, "5.03 wire encoding drifted");
 
 static int capability_announce_post(struct coap_resource *resource,
 				    struct coap_packet *request,
