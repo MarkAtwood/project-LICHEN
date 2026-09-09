@@ -508,6 +508,149 @@ static int test_location_base_order_matches_spec_vector_bytes(void)
 }
 
 /*
+ * Oracle vectors from test/vectors/senml_location.json (bead l1qw.10.5.5) —
+ * the C-side byte-parity proof. The accuracy-only positive and the BN/BT
+ * ordering variants are covered above; this test mirrors the remaining four
+ * positive vectors exactly as python/tests/coap/test_senml_location_vectors.py
+ * asserts them (same fields -> same bytes; fields absent from a vector are
+ * passed as NAN, matching the encoder's omit semantics). The two vectors
+ * without bn/bt in fields use base_time == 0, which senml_pack_init() maps
+ * to has_base_time == false — no base record is emitted, matching the
+ * Python base-record-absent shape.
+ */
+static int test_location_oracle_vectors(void)
+{
+	static const char full_hex[] =
+		"88a221781d75726e3a6465763a6d61633a3030313132323333343435353636"
+		"37373a221a66536a90a300636c617401636c617402fb4042e330df9bdc6a"
+		"a300636c6f6e01636c6f6e02fbc05e9ad7b634dad3a30063616c7401616d"
+		"02fb4025000000000000a30065737065656401636d2f7302fb3ff3333333"
+		"333333a3006768656164696e67016364656702fb4046800000000000a300"
+		"646861636301616d02fb4014000000000000a300647661636301616d02fb"
+		"4024000000000000";
+	static const char minimal_hex[] =
+		"82a300636c617401636c617402fb4042e330df9bdc6aa300636c6f6e01"
+		"636c6f6e02fbc05e9ad7b634dad3";
+	static const char lat_lon_alt_hex[] =
+		"83a300636c617401636c617402fb40481a3a29c779a7a300636c6f6e01"
+		"636c6f6e02fb40305ef9db22d0e5a30063616c7401616d02fb4063c000"
+		"00000000";
+	static const char with_base_hex[] =
+		"84a221781d75726e3a6465763a6d61633a616162626363646430303131"
+		"323233333a221a6553f100a300636c617401636c617402fbc040ef34d6"
+		"a161e5a300636c6f6e01636c6f6e02fbc051aad5cfaacd9fa30063616c"
+		"7401616d02fb4080400000000000";
+	uint8_t buf[512];
+	uint8_t oracle[512];
+	size_t oracle_len;
+	int ret;
+
+	/* senml-location-full — all fields present. */
+	ret = senml_encode_location_full("urn:dev:mac:0011223344556677:",
+					 1716742800U, 37.774929, -122.419416,
+					 10.5, 1.2, 45.0, 5.0, 10.0,
+					 buf, sizeof(buf));
+	oracle_len = hex_decode(full_hex, oracle, sizeof(oracle));
+	ASSERT_EQ(oracle_len > 0U, true, "decode full hex fixture");
+	ASSERT_EQ(ret, (int)oracle_len, "full encoded length");
+	ASSERT_MEM_EQ(buf, oracle, oracle_len,
+		      "encode matches senml-location-full vector");
+
+	/* senml-location-minimal — lat/lon only, NO base record (vector
+	 * fields carry neither bn nor bt; base_time == 0 => has_base_time
+	 * false => no base record is emitted). */
+	ret = senml_encode_location_full(NULL, 0U,
+					 37.774929, -122.419416,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	oracle_len = hex_decode(minimal_hex, oracle, sizeof(oracle));
+	ASSERT_EQ(oracle_len > 0U, true, "decode minimal hex fixture");
+	ASSERT_EQ(ret, (int)oracle_len, "minimal encoded length");
+	ASSERT_MEM_EQ(buf, oracle, oracle_len,
+		      "encode matches senml-location-minimal vector");
+
+	/* senml-location-lat-lon-alt — lat, lon, alt; no base record. */
+	ret = senml_encode_location_full(NULL, 0U,
+					 48.2049, 16.371,
+					 158.0, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	oracle_len = hex_decode(lat_lon_alt_hex, oracle, sizeof(oracle));
+	ASSERT_EQ(oracle_len > 0U, true, "decode lat-lon-alt hex fixture");
+	ASSERT_EQ(ret, (int)oracle_len, "lat-lon-alt encoded length");
+	ASSERT_MEM_EQ(buf, oracle, oracle_len,
+		      "encode matches senml-location-lat-lon-alt vector");
+
+	/* senml-location-with-base — bn + bt + lat/lon/alt. */
+	ret = senml_encode_location_full("urn:dev:mac:aabbccdd00112233:",
+					 1700000000U, -33.8688, -70.6693,
+					 520.0, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	oracle_len = hex_decode(with_base_hex, oracle, sizeof(oracle));
+	ASSERT_EQ(oracle_len > 0U, true, "decode with-base hex fixture");
+	ASSERT_EQ(ret, (int)oracle_len, "with-base encoded length");
+	ASSERT_MEM_EQ(buf, oracle, oracle_len,
+		      "encode matches senml-location-with-base vector");
+
+	return 1;
+}
+
+/* Encode-side reject vectors from test/vectors/senml_location.json: range and
+ * finite checks must fail closed (the Python reference rejects these through
+ * profiles.location(); the decoder type-rejects have no C encode analog and
+ * are exercised on the Python/Rust decode paths). Exact error codes are
+ * pinned so a spurious failure of the wrong kind cannot pass. */
+static int test_location_oracle_encode_rejects(void)
+{
+	uint8_t buf[512];
+	int ret;
+
+	/* senml-location-err-lat-above-range: {'lat': 91.0, 'lon': 0.0} */
+	ret = senml_encode_location_full(NULL, 1716742800U,
+					 91.0, 0.0,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	ASSERT_EQ(ret, -ERANGE, "lat 91.0 rejected with -ERANGE");
+
+	/* senml-location-err-lat-below-range: {'lat': -90.5, 'lon': 0.0} */
+	ret = senml_encode_location_full(NULL, 1716742800U,
+					 -90.5, 0.0,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	ASSERT_EQ(ret, -ERANGE, "lat -90.5 rejected with -ERANGE");
+
+	/* senml-location-err-lon-out-of-range: {'lat': 0.0, 'lon': 180.5} */
+	ret = senml_encode_location_full(NULL, 1716742800U,
+					 0.0, 180.5,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	ASSERT_EQ(ret, -ERANGE, "lon 180.5 rejected with -ERANGE");
+
+	/* senml-location-err-lat-nan: {'lat': 'NaN', 'lon': 0.0} */
+	ret = senml_encode_location_full(NULL, 1716742800U,
+					 NAN, 0.0,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	ASSERT_EQ(ret, -EINVAL, "lat NaN rejected with -EINVAL");
+
+	/* Boundary ACCEPT probes: exactly ±90/±180 must encode fine through
+	 * the _full entry point (the plain senml_encode_location boundary
+	 * cases above exercise its duplicated check; this keeps the two
+	 * validation copies from diverging silently). */
+	ret = senml_encode_location_full(NULL, 1716742800U,
+					 90.0, 180.0,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	ASSERT_EQ(ret > 0, true, "boundary (90, 180) accepted");
+	ret = senml_encode_location_full(NULL, 1716742800U,
+					 -90.0, -180.0,
+					 NAN, NAN, NAN, NAN, NAN,
+					 buf, sizeof(buf));
+	ASSERT_EQ(ret > 0, true, "boundary (-90, -180) accepted");
+
+	return 1;
+}
+
+/*
  * Test vector: string value (message="hello") with base time 0
  * Python: cbor2.dumps([{0: 'msg', 3: 'hello'}])
  * CBOR structure:
@@ -1093,6 +1236,8 @@ int main(void)
 	RUN_TEST(test_decode_rejects_malformed_inputs);
 	RUN_TEST(test_location_vectors_encode_match_oracle);
 	RUN_TEST(test_location_vectors_decode_match_oracle);
+	RUN_TEST(test_location_oracle_vectors);
+	RUN_TEST(test_location_oracle_encode_rejects);
 
 	printf("\n%d/%d tests passed\n", tests_passed, tests_run);
 
