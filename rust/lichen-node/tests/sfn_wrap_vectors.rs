@@ -102,7 +102,7 @@ fn test_hash_32_ones_eui() {
 }
 
 // =============================================================================
-// slot_for tests (using expected implementation until Rust is fixed)
+// slot_for tests (drive the production TdmaScheduler::slot_for)
 // =============================================================================
 
 #[test]
