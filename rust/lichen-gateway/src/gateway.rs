@@ -1368,20 +1368,29 @@ impl Gateway {
     /// `[egress_iid]` — this gateway is the egress. ponytail: multi-hop SRH
     /// route extraction is not wired, so grants issued over longer routes
     /// fail closed here; upgrade path is SRH parsing at the node decap site.
-    fn egress_tunnel_authorized(
-        &mut self,
-        received: &lichen_node::stack::ReceivedIpv6,
-    ) -> bool {
+    fn egress_tunnel_authorized(&mut self, received: &lichen_node::stack::ReceivedIpv6) -> bool {
         if received.ipv6.len() < 40 {
-            return true;
+            warn!(
+                len = received.ipv6.len(),
+                "egress dropped: datagram too short for an IPv6 header"
+            );
+            return false;
         }
         let destination: [u8; 16] = received.ipv6[24..40].try_into().expect("len checked");
         if self.is_local_mesh(&destination) {
             return true;
         }
-        let Some(egress_iid) = self.coordinator.tunnel_auth_root() else {
+        // The table must be provisioned (by a current-root POST) before the
+        // gate engages; an unprovisioned table keeps egress open (C
+        // `s_tunnel_ready == false` parity).
+        if self.coordinator.tunnel_auth_root().is_none() {
             return true;
-        };
+        }
+        // Route evidence is this gateway's own IID — it is the egress — not
+        // the DODAG root IID, which may differ after a root rebind.
+        let egress_iid: [u8; 8] = self.coordinator.info.iid[8..]
+            .try_into()
+            .expect("coordinator iid is 16 bytes");
         let inner_source: [u8; 16] = received.ipv6[8..24].try_into().expect("len checked");
         let route = [egress_iid];
         match self
