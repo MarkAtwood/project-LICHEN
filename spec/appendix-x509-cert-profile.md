@@ -178,11 +178,17 @@ lifetime is the primary exposure bound:
   days MUST NOT be issued.
 - Renewal is by re-issuance through the provisioning flow
   (USB/BLE cert injection). Certificate replacement is signaled
-  by presenting the new chain; verifiers have no notion of certificate
-  sequence numbers and MUST apply freshness ordering instead: a
-  presented chain replaces the cached one only if its leaf `notBefore`
-  is strictly later than the cached leaf's. A chain whose leaf is not
-  newer MUST NOT displace the cached chain. This prevents a replayed or
+  by presenting the new chain. Verifiers maintain, per subject key
+  (equivalently per native address), at most one cached chain and have
+  no notion of certificate sequence numbers; they MUST apply freshness
+  ordering instead: a presented chain replaces the cached one only if
+  its leaf `notBefore` is strictly later than the cached leaf's, and
+  only while the cached chain is within its validity window. An expired
+  cached chain MUST be discarded and no longer suppresses replacement.
+  A chain whose leaf is not newer MUST NOT displace a still-valid cached
+  chain. A cached entry whose leaf `notBefore` lies in the verifier's
+  future (clock skew or a future-dated cert) MUST NOT suppress a
+  currently-valid presented chain. These rules prevent a replayed or
   re-fetched older-but-still-valid chain from rolling a node back to a
   prior (e.g. reduced-role or superseded) attestation.
 
@@ -269,16 +275,30 @@ A constrained verifier processing a profile-conformant chain:
    32-byte key, `addr[0]=0x02`, `addr[1]` = count of leading 1-bits of
    the inverted key, `addr[2:16]` = the remaining inverted-key bits
    after the leading 1s and first 0 separator, zero-padded tail; no
-   hashing) and verifies that the SAN native `/128` equals this
-   recomputed 128-bit address byte-for-byte. The SHA-512 IID is not
-   embedded in the routable address and MUST NOT be substituted into its
-   lower 64 bits. A certificate that fails this check MUST be rejected —
-   it attests a key-to-address pairing that does not hold.
+   hashing) and verifies that the SAN contains exactly one native
+   `0200::/8` iPAddress and that it equals this recomputed 128-bit
+   address byte-for-byte. The SHA-512 IID is not embedded in the
+   routable address and MUST NOT be substituted into its lower 64
+   bits. A certificate carrying zero or more than one native entry, or
+   whose single native entry does not match, MUST be rejected — it
+   attests a key-to-address pairing that does not hold. (Issuer
+   behavior is specified in Section 4; this step makes the exactly-one
+   rule a verifier requirement so that conformance does not depend on
+   CA diligence.)
 5. If role-based authorization applies, reads the mesh role extension
    (Section 5); when the certificate asserts the needed role, the check
    passes without contacting the gateway. Role assertions are honored
    only from chains terminating at a trust anchor the deployment has
    explicitly configured as a role-granting authority; see below.
+6. **Freshness / rollback:** the verifier keeps at most one cached
+   chain per subject key (equivalently per native address). If the
+   cached chain is still within its validity window and its leaf
+   `notBefore` is equal to or later than the presented chain's, the
+   verifier MUST base its step-4 binding and step-5 role decisions on
+   the cached chain and MUST NOT honor the presented one.    A presented
+   chain is used (and then replaces the cache) only when it is fresher
+   than the cached chain or the cached chain is outside its validity
+   window (expired or not yet valid); see Section 6.
 
 Step 4 is what makes the certificate an *attestation*: the CA is
 asserting "this Ed25519 key is the identity key for this mesh address".

@@ -123,13 +123,13 @@ remains future `.44.9` work.
 
 ### 8.5. Unified Ed25519 Identity Derivation
 
-All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), the stable link-local IID, and the primary upstream Yggdrasil 0200::/8 address. No separate keys or ULA. See normative steps and full key management in §8.7, the pinned upstream byte-equality oracle `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key` vector), and `spec/decisions.jsonl` (`upstream-yggdrasil-addressing`). Where 03-addressing.md and 04-network.md §6.2 still describe the superseded SHA-512 native address profile, this section and the decision record take precedence; consult them only for the link-local IID, the human-readable address, and the no-ULA model.
+All node identity derives from **a single Ed25519 keypair**. This unifies link-layer Schnorr-48 signatures, X25519 (for EDHOC/OSCORE per §8.9), the stable link-local IID, and the primary upstream Yggdrasil 0200::/8 address (`AddrForKey`). No separate keys or ULA. See normative steps and full key management in §8.7, the pinned upstream byte-equality oracle `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key` vector), `spec/decisions.jsonl` (`upstream-yggdrasil-addressing`), `rust/lichen-core/src/addr.rs` (`iid_from_pubkey_bytes`, `ygg_addr_from_pubkey`), `python/src/lichen/crypto/identity.py` (`_pubkey_to_iid`, `yggdrasil_address`), 04-network.md §6.2 and §12.1, and 03-addressing.md. The rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). Where 03-addressing.md and 04-network.md §6.2 still describe the superseded SHA-512 native address profile, this section and the decision record take precedence; consult them only for the link-local IID, the human-readable address, and the no-ULA model.
 
 **Overview (MUST match §8.7 and the pinned upstream test vectors exactly):**
 
 1. 32-byte seed → Ed25519 keypair (deterministic per draft-lichen-schnorr-00).
-2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291). **MUST be SHA-512, not SHA-256**. The IID is a **local identifier only**: it forms link-local `fe80::/10` control addresses, human-readable node addresses (03-addressing.md), and key identifiers (TOFU pins, COSE `kid`). It MUST NOT be used to construct or alter the routable address.
-3. Routable /128 = upstream Yggdrasil `AddrForKey(pubkey)` exactly (yggdrasil-go commit `422836ee`, `src/address/address.go`): bit-invert the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). Routed `/64`s, when used, MUST equal upstream `SubnetForKey(pubkey)` in `0300::/8`.
+2. IID = SHA-512(pubkey)[0:8]; `iid[0] &= 0b1111_1101` (U/L bit **cleared** per RFC 4291; previous `|=0x02` incorrect). **MUST be SHA-512, not SHA-256**. The IID is a **local identifier only**: it forms link-local `fe80::/10` control addresses, human-readable node addresses (03-addressing.md), and key identifiers (TOFU pins, COSE `kid`). It MUST NOT be used to construct or alter the routable address.
+3. Routable /128 = upstream Yggdrasil `AddrForKey(pubkey)` exactly (yggdrasil-go commit `422836ee`, `src/address/address.go`; spec/decisions.jsonl `upstream-yggdrasil-addressing`; normative byte-for-byte description also in 04-network.md §12.1): bit-invert the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). The address no longer embeds the IID; key binding is by self-derivation (the address IS `AddrForKey(pubkey)`, verifiable by anyone holding the pubkey) — substitution resistance is preserved, stronger than IID-embedding. Routed `/64`s, when used, MUST equal upstream `SubnetForKey(pubkey)` in `0300::/8`.
 4. X25519 priv = clamp(SHA-512(seed)[0:32]) for OSCORE/EDHOC.
 5. TOFU pins pubkey to derived IID and `AddrForKey` address (cryptographically enforced).
 
@@ -157,13 +157,13 @@ high-security deployments, enable per-hop verification (costs CPU, not bytes).
 ### 8.7. Key Management
 
 
-A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (for EDHOC/OSCORE), the stable link-local IID, and the primary upstream Yggdrasil 0200::/8 address. Single key for all purposes. Supports the simplified no-ULA model (fe80::IID + upstream 0200::/8 primary only); see 04-network.md §6.1 for the addressing model and 05-routing.md (address construction in 04-network.md predates the upstream decision — §8.5/§8.7 here are normative). Routable addresses MUST match the pinned upstream vector in `test/vectors/yggdrasil_address.json` exactly; that vector, not any LICHEN-generated fixture, is the independent conformance oracle (`spec/decisions.jsonl`: `upstream-yggdrasil-addressing`).
+A single 32-byte seed produces all material for signatures (Schnorr48), X25519 (for EDHOC/OSCORE), the stable link-local IID, and the primary upstream Yggdrasil 0200::/8 address (`AddrForKey`). Single key for all purposes. Supports the simplified no-ULA model (fe80::IID + upstream 0200::/8 primary only); see 04-network.md §6.1 for the addressing model and 05-routing.md (any address construction in 04-network.md that predates the upstream decision is superseded — §8.5/§8.7 here and 04-network.md §12.1 are normative). Routable addresses MUST match the pinned upstream vector in `test/vectors/yggdrasil_address.json` exactly; that vector, not any LICHEN-generated fixture, is the independent conformance oracle (`spec/decisions.jsonl`: `upstream-yggdrasil-addressing`). The rejected SHA-512 native profile is quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). See `python/src/lichen/crypto/identity.py:60` (from_seed), `rust/lichen-link/src/identity.rs:69` (Identity::from_seed).
 
 **Normative Derivation (MUST match the pinned upstream test vectors exactly):**
 
 1. **Keypair**: `privkey, pubkey = derive_keypair(seed)` per draft-lichen-schnorr-00.md:97 (h=SHA-512(seed); privkey=clamp(h[0:32]); pubkey=basepoint_mult). Matches schnorr48.py:96 and Rust exactly.
-2. **Link-local IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291; **MUST be SHA-512**). The IID scopes to link-local `fe80::/10` control addressing, human-readable addresses (03-addressing.md), and key identifiers. It MUST NOT be embedded in, or used to alter, the routable address.
-3. **Routable 0200::/8 Address**: MUST equal upstream Yggdrasil `AddrForKey(pubkey)`: invert all bits of the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). Routed `/64` prefixes, when used, MUST equal upstream `SubnetForKey(pubkey)` (`0300::/8`). Reference: yggdrasil-go commit `422836ee`, `src/address/address.go`; byte-equality oracle: `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key`). The SHA-512-based LICHEN native address profile is rejected and MUST NOT be used. No ULA.
+2. **Link-local IID**: `hash=SHA-512(pubkey); iid=hash[0:8]; iid[0] &= 0b1111_1101` (U/L bit clear per RFC 4291; **MUST be SHA-512**). The IID scopes to link-local `fe80::/10` control addressing, human-readable addresses (03-addressing.md), and key identifiers. It MUST NOT be embedded in, or used to alter, the routable address. The IID hashes the pubkey; upstream Yggdrasil `AddrForKey` (the routable primary, step 3) does NOT hash at all (it bit-packs the inverted key). The IID and the primary address share no bytes (the IID has no leading `0x02` byte); they are independent derivations from the same pubkey (see the pinned upstream anchor and rejected-profile note in `test/vectors/yggdrasil_address.json`; the rejected profile's vectors are quarantined in `test/vectors/legacy/` per spec/decisions.jsonl `upstream-yggdrasil-addressing`). See 04-network.md §6.2, `rust/lichen-core/src/addr.rs` (`iid_from_pubkey_bytes`).
+3. **Routable 0200::/8 Address**: MUST equal upstream Yggdrasil `AddrForKey(pubkey)`: invert all bits of the 32-byte pubkey; `addr[0]=0x02`; `addr[1]` = count of leading 1 bits in the inverted key; drop those leading 1 bits and the first 0 bit; pack the remaining inverted-key bits MSB-first into whole bytes, discarding any trailing partial byte; copy into `addr[2:16]`, truncating at 14 bytes, with unwritten tail bytes zero. No hashing, no embedded IID. The result MUST match upstream byte-for-byte for every input; upstream is the arbiter for degenerate keys (inverted key with >143 leading 1 bits). Routed `/64` prefixes, when used, MUST equal upstream `SubnetForKey(pubkey)` (`0300::/8`). Substitution resistance comes from self-derivation: the address IS `AddrForKey(pubkey)`, so anyone holding the pubkey recomputes and verifies it; the former "lower 64 bits == IID" MUST is withdrawn (the local IID derivation MUST NOT alter upstream address bytes). Reference: yggdrasil-go commit `422836ee`, `src/address/address.go` (normative byte-for-byte description also in 04-network.md §12.1); byte-equality oracle: `test/vectors/yggdrasil_address.json` (`upstream_addr_for_key`, pinned upstream `address_test.go` anchor); spec/decisions.jsonl `upstream-yggdrasil-addressing`. The SHA-512-based LICHEN native address profile is rejected and MUST NOT be used; its vectors are quarantined in `test/vectors/legacy/yggdrasil-derivation.json` (not a conformance oracle). No ULA.
  4. **X25519**: `x25519_priv=clamp(SHA-512(seed)[0:32])` per RFC 7748 §5 for EDHOC static DH (see 8.9). Matches Python identity.py:109, standards/crypto.md:79.
 
 
@@ -794,9 +794,11 @@ route_hash  = SHA-256(route_bytes)[0:16]
 
 Each `hop[i].addr` is the full 16-byte primary 02xx address of the transit
 node as reconstructed from the IPv6 Source-Route Header, in source-route
-order (first hop to last hop / egress). This matches the order and the
-16-byte hop values carried in the IPv6 Source-Route Header (RFC 6554). The
-hash input is the hop ADDRESSES, not IIDs: under the AddrForKey profile
+order (first hop to last hop / egress). This matches the visitation order
+of the IPv6 Source-Route Header (RFC 6554); the hash input is the full
+16-byte hop ADDRESSES as reconstructed in the routing table, not the
+prefix-elided suffixes the wire SRH may carry under 6LoRH compression.
+The hash input is the hop ADDRESSES, not IIDs: under the AddrForKey profile
 (§8.5/§8.7) a primary 02xx address embeds no IID, so slicing 8 bytes off it
 yields a value with no identity meaning and would break the
 root-signer/egress-validator binding. (The IID remains a real identity —
@@ -1392,7 +1394,13 @@ Local facts and CA credentials can coexist. A node might have:
      profile's normative home is appendix-x509-cert-profile.md on main,
      which supersedes that draft; keeping both would duplicate the
      profile with contradictory normative details (role-extension OID
-     and encoding, SAN criticality, subject DN, validity bounds). -->
+     and encoding, SAN criticality, subject DN, validity bounds).
+     Merge resolution (beads-worker-5 into main): worker-5 deleted this
+     paragraph outright during its addressing-migration sweep (it cites
+     the "key-derived native /128"). Retained: it is the only normative
+     pointer binding x5chain certificates to the appendix profile, and
+     its "native" wording tracks the appendix itself, whose migration to
+     AddrForKey terminology remains incomplete and is tracked separately. -->
 **X.509v3 Certificate Profile:**
 
 The end-entity certificate carried in `x5chain` MUST conform to the

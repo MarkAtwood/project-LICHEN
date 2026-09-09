@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-f6r4",
+  "title": "Resync C lichen/tests/rpl_root_sig local vectors to regenerated root_dio_signature.json",
+  "description": "i72x.6 follow-up (worker3 regenerated root_dio_signature.json with upstream DODAGIDs in commit 48c64007d1). i72x.1 (worker7) had regenerated only the C test's LOCAL copies in lichen/tests/rpl_root_sig/src/main.c. Now that the shared JSON is canonical, resync the C test's local vectors to match the JSON byte-for-byte and confirm the C test still passes. Also confirm other C consumers of the migrated corpora (dao_origin_signature.json, tunnel_authorization.json) are unaffected or resync them.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T10:41:58.283796072Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T10:41:58.283796072Z",
+  "labels": [
+    "zephyr",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-f6r4",
+      "depends_on_id": "project-LICHEN-worker6-i72x.6",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T10:41:58.418610765Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -19,6 +19,12 @@ LICHEN nodes have a stable cryptographic identity based on an Ed25519 keypair. H
 
 **Example:** `KCVN-MRPX-QWERT`
 
+<!-- Merge resolution (HEAD vs beads-worker-5): both sides assert the same
+     upstream-yggdrasil-addressing decision; HEAD's normative phrasing ("MUST
+     equal", link-local "only", explicit non-embedding of the IID) is kept as
+     the more precise superset. beads-worker-5's unqualified plural "IPv6
+     Interface Identifiers" was dropped because it could be misread as the IID
+     appearing in the routable /128 — exactly the withdrawn claim. -->
 This address is short enough to speak, type, and remember. It has acceptable collision probability up to 5B nodes (~0.5 expected collisions). It is cryptographically bound to the Ed25519 public key used for signatures, OSCORE, and the link-local IPv6 Interface Identifier. The same IID is used for the link-local address (`fe80::/10`) only. The node's routable `/128` MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)` in `0200::/8`, which bit-packs the inverted key — no hashing, no embedded IID (normative algorithm in 04-network.md §12.1) — and does not contain this IID; the former claim that the IID forms the lower 64 bits of the primary address is withdrawn (see 04-network.md §6.2 and §12, 06-security.md §8.5, and the `upstream-yggdrasil-addressing` decision in `spec/decisions.jsonl`). ULA addresses (`fc00::/7`) are not used.
 
 On first contact, nodes exchange the full pubkey; TOFU pins the binding. Collisions (rare) are resolved by context, GNSS, or full key verification (DANE/PKIX optional).

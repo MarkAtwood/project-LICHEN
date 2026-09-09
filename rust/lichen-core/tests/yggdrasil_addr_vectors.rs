@@ -26,6 +26,17 @@
 //! `upstream_edge_classes`; the migration branch's standalone unit check of
 //! that case is subsumed there (same bytes, stronger oracle) and is not
 //! duplicated.
+//!
+//! Merge note (beads-worker-5): the two sides are incompatible — the branch
+//! pinned PRE-migration behavior (`quarantined_native_vectors_byte_exact_pin`
+//! driving the rejected SHA-512 profile byte-exact, and
+//! `upstream_anchor_diverges_from_current_native_profile` asserting
+//! `assert_ne!` against the upstream anchor), while HEAD asserts the
+//! post-migration `assert_eq!` byte-equality that spec/decisions.jsonl
+//! `upstream-yggdrasil-addressing` settles. HEAD's side is kept because the
+//! implementation now bit-packs per upstream (so the branch's pins would
+//! fail) and the branch's own comments required deleting those tests once
+//! the migration landed.
 
 use serde_json::Value;
 

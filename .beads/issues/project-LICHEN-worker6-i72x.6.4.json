@@ -1,0 +1,31 @@
+{
+  "id": "project-LICHEN-worker6-i72x.6.4",
+  "title": "i72x.6.c: flip Rust root_sig tests to regenerated upstream-DODAGID corpus",
+  "description": "Child of i72x.6 step 4 (Rust side). After i72x.6.a lands: update rust/lichen-node rpl_stack root_sig tests (root_sig.rs, tests.rs) that consume native-profile DODAGID expectations to the regenerated test/vectors/root_dio_signature.json (upstream AddrForKey DODAGID, re-signed COSE). Land after i72x.6.a. Verify: cargo test -p lichen-node root_sig (and related) green.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T10:38:47.350968292Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T11:10:36.538327451Z",
+  "started_at": "2026-09-09T10:59:23.053316249Z",
+  "closed_at": "2026-09-09T11:10:36.538327451Z",
+  "close_reason": "Verified complete + one consumer repair (commits 635683fa92 parent corpus, 504806e4af). (1) The Rust root_sig flip was found ALREADY LANDED in this branch's history via the worker5 sync (d4855729ae lineage): root_sig.rs VALID/WRONG_ALG/KID_MISMATCH/IMPERSONATION constants are byte-identical to the regenerated corpus (deterministic generator+seed -\u003e identical COSE bytes across independent regenerations; corpus valid_basic d28447a1013a00010000a10448203df4... matches root_sig.rs VALID exactly). All root_sig::tests, root_sig::full_verify_tests, and rpl_stack root-signature-gate tests green (valid_vector_decodes_and_passes_structural_checks, replay/tamper/expiry/clockless gates, impersonated_dodag_id_fails_binding, kid_mismatch...). (2) lichen-node full suite failure set UNCHANGED vs the pre-existing ywec baseline (18 lib + 2 dao_origin + 1 secure_rpl = 21 panics, all owned by ywec/in-progress) — no regressions. (3) REPAIR: lichen-schc authenticated_dio_vectors_drive_production_admission was red on every checkout — the i72x.2-era edit pointed at tests/authenticated_schc_dio_upstream.json which NEVER existed in any commit (phantom path). Fixed by regenerating the canonical test/vectors/authenticated_schc_dio.json through its generator (now emitting upstream AddrForKey DODAGIDs via the i72x.6.a reference rewiring; root vector 2543b92f... -\u003e 0202d5e2368077b55775c4a91be4b124 cross-validated byte-exact against live yggdrasil-go) and pointing the test at the canonical corpus: 5/5 green. (4) python/tests/rpl baseline comparison: 21 failed before the schc corpus regen, 20 after — one real failure fixed; remaining dao_origin/dao_prefix failures are the dao-corpus migration clusters (separate beads), and uncollected modules are the funm lora_medium cascade. REVIEW: kimi-k3 not re-attempted this bead (three consecutive exploration-timeout rounds recorded); per fallback, self-reviewed: constants↔corpus byte-match verified programmatically, Go oracle cross-check for the regenerated schc corpus, python baseline A/B via stash. MAIN-SYNC NOTE: main currently holds the flipped tests with the OLD native corpus (inconsistent); merging this branch resolves both sides atomically.",
+  "labels": [
+    "rust",
+    "yggdrasil",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-i72x.6.4",
+      "depends_on_id": "project-LICHEN-worker6-i72x.6",
+      "type": "parent-child",
+      "created_at": "2026-09-09T10:38:47.497487171Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

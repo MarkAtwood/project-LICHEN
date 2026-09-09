@@ -1068,6 +1068,12 @@ impl Gateway {
             let public = lichen_link::keys::PublicKey::new(pinned.pubkey);
             rpl_stack.install_verified_link_peer(PeerIdentity::from_pubkey(public));
         }
+        // Merge resolution (beads-worker-5): the root-signed tunnel-auth
+        // table is owned by the durable GatewayCoordinator — the merged
+        // resources.rs provisions it, dispatches the POST resource to it,
+        // and backs the egress gate with it. The branch's parallel
+        // Gateway-owned table was dropped: two tables would diverge, with
+        // grants written to one and the gate consulting the other.
         // This gateway is the DODAG root (provision_root/open_root above), so
         // the tunnel-auth table binds to its own key-derived IID (spec
         // 06-security 8.11: the POST kid must match the current root).
@@ -1564,7 +1570,9 @@ impl Gateway {
             && segments[1] == b"tunnel-auth"
         {
             // Spec 06-security 8.11: the root delivers egress tunnel
-            // authorizations outside the lichen-gw prefix.
+            // authorizations outside the lichen-gw prefix. Both merge sides
+            // agree on the wire path; the merged resources.rs routes this
+            // resource to the coordinator-owned table.
             "tunnel-auth"
         } else {
             return true;
