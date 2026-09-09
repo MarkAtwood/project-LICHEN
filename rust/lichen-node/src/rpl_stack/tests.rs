@@ -1764,22 +1764,9 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     // authorization). Then it processes the relayed leaf announce.
     // Drain until the announce lands (bounded). The exact number of
     // interposed DIO echoes depends on the relay's re-emission path.
-    for _ in 0..6 {
-        match root.receive(1, 0).await.unwrap() {
-            Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
-                if peer.iid == leaf_identity.iid =>
-            {
-                break;
-            }
-            _ => {}
-        }
-    }
-    // Drain until the announce lands (bounded). The exact number of
-    // interposed DIO echoes depends on the relay's re-emission path.
     let mut root_outcome = None;
-    for i in 0..6 {
+    for _ in 0..6 {
         let outcome = root.receive(1, 0).await.unwrap();
-        std::eprintln!("ROOT-DRAIN {i}: {outcome:?}");
         if matches!(
             &outcome,
             Some(RplReceiveOutcome::AnnouncementAccepted { peer, .. })
