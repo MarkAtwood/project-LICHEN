@@ -211,13 +211,15 @@ def _build(
     sig_head: bytes | None = None,
     array_head: bytes = b"\x84",
     trailing: bytes = b"",
+    prot_head: bytes | None = None,
 ) -> bytes:
     _, unprot, payload, sig = _elements("happy_path_n1")
     kid = unprot.get(4)
     kid_head = kid_head if kid_head is not None else b"\x48"
     payload_head = payload_head if payload_head is not None else b"\x58" + bytes([len(payload)])
     sig_head = sig_head if sig_head is not None else b"\x58\x30"
-    prot_head = b"\x47" if prot == _elements("happy_path_n1")[0] else _long_bstr_head(prot)
+    if prot_head is None:
+        prot_head = b"\x47" if prot == _elements("happy_path_n1")[0] else _long_bstr_head(prot)
     return (
         array_head
         + prot_head
@@ -240,10 +242,9 @@ def _build(
         ("long-form array head 98 04", {"array_head": b"\x98\x04"}),
         (
             "long-form protected bstr head",
-            {
-                "prot": _long_bstr_head(_elements("happy_path_n1")[0])
-                + _elements("happy_path_n1")[0]
-            },
+            # Head 0x59 00 07 on the correct 7-byte value: rejected for the
+            # head form alone (value is exactly _STRICT_PROTECTED).
+            {"prot_head": b"\x59\x00\x07"},
         ),
         ("long-form payload bstr head", {"payload_head": b"\x59\x00\x1c"}),
         ("long-form signature bstr head", {"sig_head": b"\x59\x00\x30"}),
@@ -271,3 +272,25 @@ def test_strict_body_roundtrip_decodes() -> None:
     claim = SlotClaim.decode_cose(_build(prot))
     assert claim.slots == tuple(_case("happy_path_n1")["slots"])
     assert len(_build(prot)) == 9 + 3 + 8 + 30 + 50  # framing + heads + kid + payload + sig
+
+
+def test_oversized_envelope_rejected_before_decode() -> None:
+    # prgb: the envelope cap fires before the strict reader slices the
+    # payload bstr and cbor2.loads materializes it — a max-legit claim is
+    # ~20.6 KB; 24 KB bounds pre-rejection decode work. Pin both sides of
+    # the boundary: exactly-at-cap parses (fails later for alg), one over
+    # is size-rejected.
+    from lichen.gateway.slot_claim import MAX_CLAIM_ENVELOPE_BYTES
+
+    # Exactly at the cap: parses past the size gate, rejected downstream
+    # (protected head byte 0x00 is a uint, not a bstr). A size-gate
+    # rejection here would instead read "exceeds maximum size".
+    with pytest.raises(ClaimError, match="protected header must be a byte string"):
+        SlotClaim.decode_cose(b"\x84" + b"\x00" * (MAX_CLAIM_ENVELOPE_BYTES - 1))
+    # One over the cap: rejected by the size gate.
+    with pytest.raises(ClaimError, match="envelope exceeds maximum size"):
+        SlotClaim.decode_cose(b"\x84" + b"\x00" * MAX_CLAIM_ENVELOPE_BYTES)
+    # A real envelope is far under the cap.
+    case = _case("happy_path_n60")
+    assert len(_hex(case["cose_sign1_hex"])) < MAX_CLAIM_ENVELOPE_BYTES
+    SlotClaim.decode_cose(_hex(case["cose_sign1_hex"]))

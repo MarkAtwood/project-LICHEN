@@ -80,6 +80,16 @@ Python, malformed to Rust)."""
 MAX_SLOTS_PER_SUPERFRAME = 4_096
 """Rust slot.rs:57 parity: decode-side bound on the slot array length."""
 
+MAX_CLAIM_ENVELOPE_BYTES = 24_576
+"""Decode-side envelope cap (prgb): the strict reader slices the payload
+bstr, then cbor2.loads materializes it — including the slots list — before
+the count check can run, so a hostile oversized envelope costs memory/CPU
+ahead of rejection. Rust reads the CBOR array head and rejects count >
+MAX_SLOTS_PER_SUPERFRAME before allocating (slot.rs:576-580). Python caps
+the envelope instead: a maximum legitimate claim is ~20.6 KB (4096 u32
+slots x 5B + 7-key map + protected/kid/signature); 24 KB covers that with
+margin while bounding pre-rejection decode work."""
+
 _MAX_SLOT_INDEX = 0xFFFF_FFFF
 """Per-slot u32 bound (Rust slot.rs:574 u32::try_from). Also rejects
 negative slot indices, which Rust's uint() never admits."""
@@ -298,6 +308,11 @@ class SlotClaim:
         # instead: exact 0x84 array head, minimal heads, unprotected map
         # exactly {4: kid}, protected byte-equal to the shared constant,
         # nothing after the signature.
+        # Cap before any parse: the strict reader slices the payload bstr
+        # and cbor2.loads materializes it before the slot-count check can
+        # run, so bound the envelope first (prgb).
+        if len(envelope) > MAX_CLAIM_ENVELOPE_BYTES:
+            raise ClaimError("slot-claim envelope exceeds maximum size")
         major, count, pos = _read_head(envelope, 0, "envelope")
         if major != 4 or envelope[0] != 0x84 or count != 4:
             raise ClaimError("COSE_Sign1 must be a 4-element array")
