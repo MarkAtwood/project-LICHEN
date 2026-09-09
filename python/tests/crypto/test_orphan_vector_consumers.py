@@ -92,15 +92,6 @@ _ROOT_DIO_ERROR_MAP = {
 }
 
 
-@pytest.mark.xfail(
-    reason=(
-        "root_dio_signature.json embeds REJECTED SHA-512 native-profile DODAGIDs; "
-        "the Python derivation now derives upstream AddrForKey (i72x, 7pt2), so the "
-        "stale corpus mismatches until i72x.6 regenerates it with upstream DODAGIDs. "
-        "strict=False: xpass signals the corpus has been regenerated."
-    ),
-    strict=False,
-)
 class TestRootDioSignatureVectorFile:
     @pytest.mark.parametrize("name,vector", _root_dio_cases())
     def test_decoded_payload_fields_match_vector(self, name: str, vector: dict) -> None:
