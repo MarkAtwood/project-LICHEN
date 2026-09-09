@@ -1,0 +1,7 @@
+{
+  "id": "1788952855813030308-1",
+  "issue_id": "project-LICHEN-worker6-f6r4",
+  "author": "Mark Atwood",
+  "text": "Completed as duplicate of project-LICHEN-worker6-i72x.6.3 (i72x.6.b, same resync task filed twice). Results: local C fixtures in lichen/tests/rpl_root_sig/src/main.c verified byte-identical to regenerated test/vectors/root_dio_signature.json (commit 635683fa92); 7 stale comment blocks updated (native-profile-pending claims + 2 stale L679 spec-line citations); cmake+ctest green. Extra scope from this bead (other C consumers of migrated corpora): verified NO C test reads dao_origin_signature.json or tunnel_authorization.json by name — grep across lichen/tests found zero consumers; tunnel_auth C test uses independent local fixtures whose route_hash migration is tracked separately (xf1v, osjz). Nothing left open under this bead's scope.",
+  "created_at": "2026-09-09T11:20:55.813030308Z"
+}
