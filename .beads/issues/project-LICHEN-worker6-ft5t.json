@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-ft5t",
+  "title": "capability re-announce POST is plaintext; spec 8.12 mandates OSCORE (root returns 4.01)",
+  "description": "Security review of 99sg.2 (pass 2, finding 1): node.py _reannounce_capabilities_to_new_root builds a bare aiocoap Message and raw-encodes it via wrap_coap — no OSCORE option. spec/06-security.md:946-947 mandates OSCORE with the pairwise announcer-root context; root validation step 1 (:993) verifies OSCORE. The in-repo root CapabilityAnnounceResource.render_post returns 4.01 oscore_required for plaintext (python/src/lichen/coap/resources/capability_announce.py:184-189), so the 99sg.2 re-announce is dead-on-arrival against the project's own root. A passive radio adversary also learns node identity/IID/capabilities in cleartext (spec :1053 rationale). Fix requires node-side OSCORE client context establishment (EDHOC) toward the new root, or an explicit interim design decision by Mark.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T17:42:49.834917604Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T17:42:49.834917604Z",
+  "labels": [
+    "python",
+    "coap",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-ft5t",
+      "depends_on_id": "project-LICHEN-worker6-99sg.2",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T17:42:49.955876411Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
