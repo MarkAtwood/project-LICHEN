@@ -1,0 +1,7 @@
+{
+  "id": "1788955530475736182-1",
+  "issue_id": "project-LICHEN-worker6-1p2r",
+  "author": "Mark Atwood",
+  "text": "Material correction to the mechanism premise, verified empirically by worker5 during 1p2r.1: 44 of the 45 itemized reds PRE-EXIST on current main b465131bbb (own venv, own src): dao_origin 33 + density_adaptive schema 1 + yggdrasil_derivation 6 + x25519 3 + root_signature 1. Only test_protocol_vector_security::test_root_vectors_use_native_addr_for_key_and_independent_signatures is worker6-lineage-specific (eff0f51f8a reference rewiring vs rpl_messages.json). 'Both parents green' does not hold; these are shared quarantine-pin reds against migrated production, identical files on both lineages — so each 1p2r child fix lands green on main at next sync too. Note: protocol_vector_security was green on main in worker5's run (50 passed incl. it) — the eff0f51f8a red reproduces only on the worker6 lineage. Remaining children: .2 (ygg 6), .3 (rpl_messages 1), .4 (root_signature 1), .5 (dao 33+1, blocked on lptm design), .6 (density_adaptive 1). x25519 3 done via 1p2r.1 (a87e729ba8 + README residual 6c50f03406).",
+  "created_at": "2026-09-09T12:05:30.475736182Z"
+}
