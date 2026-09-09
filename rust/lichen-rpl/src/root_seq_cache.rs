@@ -41,7 +41,7 @@ pub enum RootSeqReject {
 }
 
 /// Highest accepted `root_seq` per `(dodag_id, instance)`.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RootSeqCache {
     entries: [Option<([u8; 16], u8, u64)>; MAX_ROOT_SEQ_KEYS],
 }
