@@ -862,7 +862,13 @@ native-client = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
+    { name = "hypothesis" },
+    { name = "jsonschema" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-timeout" },
 ]
 
 [package.metadata]
@@ -907,7 +913,15 @@ requires-dist = [
 provides-extras = ["dev", "meshtastic", "ble", "coap", "native-client"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+dev = [
+    { name = "httpx", specifier = ">=0.28,<0.29" },
+    { name = "hypothesis", specifier = ">=6.100,<7" },
+    { name = "jsonschema", specifier = ">=4.26,<5" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4,<2" },
+    { name = "pytest-cov", specifier = ">=7,<8" },
+    { name = "pytest-timeout", specifier = ">=2.4,<3" },
+]
 
 [[package]]
 name = "linkify-it-py"
@@ -1320,7 +1334,7 @@ name = "pyobjc-framework-cocoa"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or python_full_version >= '3.15' or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/38/91/c54fdffda6d7cfad67ff617f19001163658d50bc72376d1584e691cf4895/pyobjc-framework-Cocoa-9.2.tar.gz", hash = "sha256:efd78080872d8c8de6c2b97e0e4eac99d6203a5d1637aa135d071d464eb2db53", size = 6170134, upload-time = "2023-06-07T09:14:13.129Z" }
 wheels = [
@@ -1333,8 +1347,8 @@ name = "pyobjc-framework-corebluetooth"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or python_full_version >= '3.15' or sys_platform != 'win32'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or python_full_version >= '3.15' or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f1/7a/239d5b1ac63056bb3e754c1f189f3e17051f3d2c3368c339d15b34f2ac48/pyobjc-framework-CoreBluetooth-9.2.tar.gz", hash = "sha256:cb2481b1dfe211ae9ce55f36537dc8155dbf0dc8ff26e0bc2e13f7afb0a291d1", size = 49737, upload-time = "2023-06-07T09:15:57.515Z" }
 wheels = [
@@ -1348,7 +1362,7 @@ name = "pyobjc-framework-libdispatch"
 version = "9.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or python_full_version >= '3.15' or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f1/73/455a8b92d3fc5b47b22e8055b6df19be96b2aa13715676e70a9cb7ed00b2/pyobjc-framework-libdispatch-9.2.tar.gz", hash = "sha256:542e7f7c2b041939db5ed6f3119c1d67d73ec14a996278b92485f8513039c168", size = 37690, upload-time = "2023-06-07T10:17:49.413Z" }
 wheels = [
@@ -1845,7 +1859,7 @@ name = "winrt-windows-devices-bluetooth"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/99/49/23e28c521b31ebb62545d321f5e2753db57fc5ec18e66d4c06962e51468e/winrt-Windows.Devices.Bluetooth-2.0.0b1.tar.gz", hash = "sha256:786bd43786b873a083b89debece538974f720584662a2573d6a8a8501a532860", size = 19438, upload-time = "2023-09-02T02:44:14.738Z" }
 wheels = [
@@ -1862,7 +1876,7 @@ name = "winrt-windows-devices-bluetooth-advertisement"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8d/b2/e39d53ee285068dfd95f43bcfda087a871c6843a1b69094894990f9d7d13/winrt-Windows.Devices.Bluetooth.Advertisement-2.0.0b1.tar.gz", hash = "sha256:d9050faa4377d410d4f0e9cabb5ec555a267531c9747370555ac9ec93ec9f399", size = 12365, upload-time = "2023-09-02T18:03:28.393Z" }
 wheels = [
@@ -1879,7 +1893,7 @@ name = "winrt-windows-devices-bluetooth-genericattributeprofile"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e5/3b/16fab40cb3a70538b6e4a5df81a4883f41f4ff12a2fa92be741933fc6d00/winrt-Windows.Devices.Bluetooth.GenericAttributeProfile-2.0.0b1.tar.gz", hash = "sha256:93b745d51ecfb3e9d3a21623165cc065735c9e0146cb7a26744182c164e63e14", size = 30950, upload-time = "2023-09-02T02:44:16.083Z" }
 wheels = [
@@ -1896,7 +1910,7 @@ name = "winrt-windows-devices-enumeration"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/92/6c/94b29f746b6c85287a044a8d52fac3ae27668997876fefac15edd1ad8c17/winrt-Windows.Devices.Enumeration-2.0.0b1.tar.gz", hash = "sha256:8f214040e4edbe57c4943488887db89f4a00d028c34169aafd2205e228026100", size = 17454, upload-time = "2023-09-02T02:44:17.927Z" }
 wheels = [
@@ -1913,7 +1927,7 @@ name = "winrt-windows-foundation"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a1/9b/0df6e27b5e998c1714a73493e92750b869b8d1cb11984b43d53b37f2bceb/winrt-Windows.Foundation-2.0.0b1.tar.gz", hash = "sha256:976b6da942747a7ca5a179a35729d8dc163f833e03b085cf940332a5e9070d54", size = 21130, upload-time = "2023-09-02T16:32:54.259Z" }
 wheels = [
@@ -1930,7 +1944,7 @@ name = "winrt-windows-foundation-collections"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/59/1d/979d5e80e4bab82ef5a0bccd99815e992e644104d78f094671da4324836c/winrt-Windows.Foundation.Collections-2.0.0b1.tar.gz", hash = "sha256:185d30f8103934124544a40aac005fa5918a9a7cb3179f45e9863bb86e22ad43", size = 11890, upload-time = "2023-09-02T16:32:54.973Z" }
 wheels = [
@@ -1947,7 +1961,7 @@ name = "winrt-windows-storage-streams"
 version = "2.0.0b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "winrt-runtime" },
+    { name = "winrt-runtime", marker = "(python_full_version >= '3.15' and sys_platform != 'win32') or (python_full_version >= '3.12' and sys_platform == 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a6/cd/5f9ee819965521c18792d9be589a63d5f3b16114f0b3c8e5e89c064fd2f5/winrt-Windows.Storage.Streams-2.0.0b1.tar.gz", hash = "sha256:029d67cdc9b092d56c682740fe3c42f267dc5d3346b5c0b12ebc03f38e7d2f1f", size = 20442, upload-time = "2023-09-02T18:04:13.82Z" }
 wheels = [

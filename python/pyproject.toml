@@ -170,4 +170,10 @@ disable_error_code = ["arg-type", "no-any-return"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4,<2",
+    "pytest-timeout>=2.4,<3",
+    "pytest-cov>=7,<8",
+    "httpx>=0.28,<0.29",
+    "hypothesis>=6.100,<7",
+    "jsonschema>=4.26,<5",
 ]

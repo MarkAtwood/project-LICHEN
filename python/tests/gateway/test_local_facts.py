@@ -119,6 +119,33 @@ def test_cose_envelope_roundtrip() -> None:
     assert verify_local_fact(decoded, gw.pubkey) is True
 
 
+def test_verify_rejects_issuer_iid_mismatch() -> None:
+    """issuer_iid is unprotected (not signature-covered); verify must bind it
+    to the verifying pubkey (rtnr, sibling DELEGATOR_IID_MISMATCH hygiene). A
+    fact issued by gateway A but claiming gateway B's IID must fail against
+    A's key — and vice versa."""
+    gw = _gateway()
+    other = _other()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True))
+    # Correct binding passes.
+    assert verify_local_fact(fact, gw.pubkey) is True
+    # Same fact, verified against the WRONG gateway's pubkey: the claimed
+    # issuer_iid no longer matches the verifying key -> False (signature would
+    # also fail, but the IID check fires first and independently).
+    assert verify_local_fact(fact, other.pubkey) is False
+    # Spoofed kid: re-issue the envelope with the attacker's IID in the
+    # unprotected header while keeping A's signature over the payload.
+    import cbor2 as _cbor2
+
+    elements = _cbor2.loads(fact.to_cose_sign1())
+    elements[1] = {4: other.iid}  # COSE kid label
+    spoofed = LocalFact.from_cose_sign1(_cbor2.dumps(elements))
+    assert spoofed.issuer_iid == other.iid
+    # Verifying the spoofed-IID fact against the real signer's key fails the
+    # binding even though the payload signature is A's valid signature.
+    assert verify_local_fact(spoofed, gw.pubkey) is False
+
+
 def test_verify_rejects_wrong_key() -> None:
     fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True))
     assert verify_local_fact(fact, _other().pubkey) is False
@@ -134,6 +161,82 @@ def test_verify_rejects_tampered_claims() -> None:
         signature=fact.signature,
     )
     assert verify_local_fact(tampered, gw.pubkey) is False
+
+
+def test_replace_on_decoded_fact_desync_rejected() -> None:
+    """dataclasses.replace(fact, claims=...) on a decoded fact keeps the old
+    wire bstrs; the resulting desync must be rejected at construction, or
+    verify would pass over the OLD signed payload while .claims carries
+    unverified attacker-relevant fields (2vp1)."""
+    import dataclasses
+
+    gw = _gateway()
+    fact = LocalFact.from_cose_sign1(
+        issue_local_fact(gw, LocalFactClaims(relay=True, priority=0)).to_cose_sign1()
+    )
+    # The decoded fact retains wire bstrs; replace() keeps them while swapping
+    # claims to an elevated grant. Construction must now fail closed.
+    with pytest.raises(LocalFactError, match="do not match the retained payload_bytes"):
+        dataclasses.replace(fact, claims=LocalFactClaims(relay=True, priority=3))
+
+
+def test_construct_with_matching_wire_bstrs_accepted() -> None:
+    """The desync guard must not reject a fact whose wire bstrs genuinely
+    agree with claims (from_cose_sign1 / issue_local_fact normal path)."""
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, priority=1))
+    decoded = LocalFact.from_cose_sign1(fact.to_cose_sign1())
+    assert verify_local_fact(decoded, gw.pubkey) is True
+    # Rebuilding with the same claims + retained bstrs (encoding-agnostic
+    # equality) is also accepted.
+    rebuilt = LocalFact(
+        claims=decoded.claims,
+        issuer_iid=decoded.issuer_iid,
+        signature=decoded.signature,
+        protected_bytes=decoded.protected_bytes,
+        payload_bytes=decoded.payload_bytes,
+    )
+    assert verify_local_fact(rebuilt, gw.pubkey) is True
+
+
+def test_issue_with_list_channel_accepted() -> None:
+    """channel given as a list (most natural literal) must not trip the
+    wire-bstr agreement guard on the issuance path (review finding 1)."""
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(channel=["ops", "team"]))
+    decoded = LocalFact.from_cose_sign1(fact.to_cose_sign1())
+    assert verify_local_fact(decoded, gw.pubkey) is True
+    assert decoded.claims.channel == ("ops", "team")
+
+
+def test_direct_construction_non_bytes_payload_bstr_raises_local_fact_error() -> None:
+    """A non-bytes wire bstr in direct construction must fail with
+    LocalFactError (module contract), not leak a TypeError (review finding 2)."""
+    with pytest.raises(LocalFactError, match="wire bstrs must be bytes"):
+        LocalFact(
+            claims=LocalFactClaims(relay=True),
+            issuer_iid=b"\x01" * 8,
+            signature=b"\x00" * 48,
+            protected_bytes=b"p",
+            payload_bytes="not-bytes",  # type: ignore[arg-type]
+        )
+
+
+def test_wireless_fact_to_cose_sign1_roundtrip() -> None:
+    """A directly-constructed LocalFact has no retained wire bstrs, so
+    to_cose_sign1 must fall back to cose_protected_header()/claims.to_cbor().
+    That fallback (dark on the production decode/issue paths) must produce an
+    envelope that decodes and verifies (awqd)."""
+    gw = _gateway()
+    issued = issue_local_fact(gw, LocalFactClaims(relay=True, priority=2))
+    wireless = LocalFact(
+        claims=LocalFactClaims(relay=True, priority=2),
+        issuer_iid=issued.issuer_iid,
+        signature=issued.signature,
+    )
+    assert wireless.protected_bytes is None and wireless.payload_bytes is None
+    decoded = LocalFact.from_cose_sign1(wireless.to_cose_sign1())
+    assert verify_local_fact(decoded, gw.pubkey) is True
 
 
 # ─── Envelope decode robustness ───────────────────────────────────────────────
