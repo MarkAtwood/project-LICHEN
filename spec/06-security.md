@@ -758,13 +758,18 @@ Integer keys minimize payload size. The payload is the serialized CBOR map.
 **Route Hash Computation:**
 
 ```
-route_bytes = concat(hop[0].iid, hop[1].iid, ..., hop[n].iid)
+route_bytes = concat(hop[0].addr, hop[1].addr, ..., hop[n].addr)
 route_hash  = SHA-256(route_bytes)[0:16]
 ```
 
-Each `hop[i].iid` is the 8-byte IID from the transit node's address, in
-source-route order (first hop to last hop / egress). This matches the
-order in the IPv6 Source-Route Header.
+Each `hop[i].addr` is the transit node's full 16-byte primary `02xx`
+address as reconstructed from the IPv6 Source-Route Header, in source-route
+order (first hop to last hop / egress). This matches the order in the IPv6
+Source-Route Header. The hash input is the raw SRH hop address list, not
+IIDs: a primary `02xx` address is derived via upstream AddrForKey and
+embeds no IID, so no address-to-IID mapping exists or is required. The root
+(signer) and the egress (validator) therefore compute over the identical
+hop address list without holding any hop's public key.
 
 **Signature Computation (COSE_Sign1):**
 
