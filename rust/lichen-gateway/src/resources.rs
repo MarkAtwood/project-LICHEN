@@ -2375,9 +2375,11 @@ mod tests {
     use schnorr48::derive_keypair;
 
     fn coordinator(iid: [u8; 16]) -> GatewayCoordinator {
-        // Test-local identity IID (U/L-clear); no routable correlation happens
-        // in these unit tests, so a synthetic IID is sufficient.
-        let identity_iid = [0u8; 8];
+        // The conflict tiebreak compares own_identity_iid against the claim's
+        // gateway_iid; keep the coordinator's identity IID == the address's
+        // low half so the test's chosen address (e.g. all-0xff for the
+        // highest IID) drives the intended win/lose outcome.
+        let identity_iid: [u8; 8] = iid[8..].try_into().unwrap();
         GatewayCoordinator::new_ephemeral(iid, identity_iid, 60, 64).unwrap()
     }
 
@@ -3042,9 +3044,10 @@ mod tests {
         let sealing_seed = [0x71; 32];
         let mut local_address = [0u8; 16];
         local_address[8..].fill(0xff);
+        let local_iid: [u8; 8] = local_address[8..].try_into().unwrap();
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
-            [0u8; 8],
+            local_iid,
             60,
             4,
             &state_path,
@@ -3073,7 +3076,7 @@ mod tests {
 
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
-            [0u8; 8],
+            local_iid,
             60,
             4,
             &state_path,
@@ -3158,9 +3161,10 @@ mod tests {
         let sealing_seed = [0x74; 32];
         let mut local_address = [0u8; 16];
         local_address[8..].fill(0x01);
+        let local_iid: [u8; 8] = local_address[8..].try_into().unwrap();
         let mut coordinator = GatewayCoordinator::provision_persistent(
             local_address,
-            [0u8; 8],
+            local_iid,
             60,
             4,
             &state_path,
@@ -3202,7 +3206,7 @@ mod tests {
         drop(coordinator);
         let mut restored = GatewayCoordinator::load_persistent(
             local_address,
-            [0u8; 8],
+            local_iid,
             60,
             4,
             &state_path,
