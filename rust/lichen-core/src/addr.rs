@@ -67,20 +67,15 @@ impl NodeId {
 }
 
 /// Derive the IID (Interface Identifier) from an Ed25519 public key for the
-/// LICHEN native 0200::/8 primary address.
+/// link-local (`fe80::/10`) address.
 ///
-/// LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-/// wire-compatible with upstream AddrForKey (which bit-packs the pubkey
-/// without hashing). See test/vectors/yggdrasil_address.json for divergence.
+/// Algorithm: `SHA-512(pubkey)[0:8]`, then clear the U/L bit per RFC 4291
+/// §2.5.1. This is the LICHEN IID profile (03-addressing.md); it is used ONLY
+/// for the link-local address and is independent of the routable primary
+/// address, which is upstream Yggdrasil `AddrForKey` (see
+/// [`ygg_addr_from_pubkey`]). The IID is NOT embedded in the routable address.
 ///
-/// Algorithm: `SHA-512(pubkey)[0:8]`, then clear the U/L bit per RFC 4291 S2.5.1.
-///
-/// The full Yggdrasil address is:
-///   `addr[0] = 0x02`
-///   `addr[1:8] = SHA-512(pubkey)[0:7]`    (routing dispersion within 0200::/8)
-///   `addr[8:16] = SHA-512(pubkey)[0:8]`   (IID; U/L bit cleared)
-///
-/// This is the single canonical implementation; all callers MUST use it
+/// This is the single canonical IID implementation; all callers MUST use it
 /// to ensure cross-implementation consistency.
 /// Re-exported via lichen-link::iid_from_pubkey for convenience.
 pub fn iid_from_pubkey_bytes(pubkey: &[u8; 32]) -> [u8; 8] {
@@ -91,29 +86,87 @@ pub fn iid_from_pubkey_bytes(pubkey: &[u8; 32]) -> [u8; 8] {
     iid
 }
 
-/// Derive the full 16-byte LICHEN native 0200::/8 address from an Ed25519 pubkey.
+/// Derive the full 16-byte routable 0200::/8 address from an Ed25519 pubkey.
 ///
-/// LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-/// wire-compatible with upstream AddrForKey (which bit-packs the pubkey
-/// without hashing). See test/vectors/yggdrasil_address.json for divergence.
+/// This is the upstream Yggdrasil `AddrForKey` algorithm, byte-for-byte, per
+/// the settled `upstream-yggdrasil-addressing` decision (spec/decisions.jsonl;
+/// yggdrasil-go commit `422836ee` `src/address/address.go`). The former
+/// SHA-512-based LICHEN native profile is REJECTED and MUST NOT be used.
 ///
-/// Algorithm:
+/// Algorithm (no hashing):
+///   1. Bit-invert the 32-byte public key.
+///   2. `addr[0] = 0x02` (the `0200::/8` prefix, last bit 0 = node address).
+///   3. `addr[1]` = count of leading 1 bits in the inverted key, as a `u8`
+///      (wraps at 256, matching Go's `byte` overflow semantics).
+///   4. Skip the leading 1 bits and the first 0 bit (the separator).
+///   5. Pack the remaining inverted-key bits MSB-first into whole bytes,
+///      discarding any trailing partial byte; copy into `addr[2:16]`,
+///      truncating at 14 bytes, leaving unwritten tail bytes zero.
 ///
-///   1. Compute `h = SHA-512(pubkey)`
-///   2. `addr = [0x02] || h[0:7] || h[0:8]`
-///   3. Clear U/L bit in IID byte: `addr[8] &= 0xfd`
+/// Degenerate case (inverted key of all 1 bits, i.e. an all-zero public key):
+/// no separator 0 bit is ever seen, so no payload bits are appended and
+/// `ones` wraps to 0 — matching upstream exactly.
 ///
-/// The exact 0200::/8 prefix byte (`0x02`) is the native routing prefix.
-/// Bytes 1-7 (from `h[0:7]`) provide dispersion within that prefix.
-/// Bytes 8-15 (from `h[0:8]`) form the IID, binding the address to the pubkey.
+/// The IID (`iid_from_pubkey_bytes`, a SHA-512 digest) is NOT embedded in this
+/// address; the routable address binds to the key by self-derivation. The
+/// pinned byte-equality oracle is the `upstream_addr_for_key` vector in
+/// test/vectors/yggdrasil_address.json (anchored to upstream address_test.go).
 pub fn ygg_addr_from_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
-    let iid = iid_from_pubkey_bytes(pubkey);
-    let hash512 = Sha512::digest(pubkey);
+    // Bit-invert the key.
+    let mut buf = [0u8; 32];
+    buf.copy_from_slice(pubkey);
+    for b in buf.iter_mut() {
+        *b = !*b;
+    }
+
     let mut addr = [0u8; 16];
     addr[0] = 0x02;
-    addr[1..8].copy_from_slice(&hash512[0..7]);
-    addr[8..16].copy_from_slice(&iid);
+
+    let mut temp = [0u8; 32]; // whole bytes collected from the bit stream
+    let mut temp_len = 0usize;
+    let mut done = false;
+    let mut ones: u8 = 0; // wraps mod 256 like Go's `byte`
+    let mut cur: u8 = 0;
+    let mut nbits = 0u8;
+
+    for idx in 0..(8 * buf.len()) {
+        let bit = (buf[idx / 8] >> (7 - (idx % 8))) & 0x01;
+        if !done && bit != 0 {
+            ones = ones.wrapping_add(1);
+            continue;
+        }
+        if !done {
+            // first leading 0 bit: separator, skipped
+            done = true;
+            continue;
+        }
+        cur = (cur << 1) | bit;
+        nbits += 1;
+        if nbits == 8 {
+            nbits = 0;
+            temp[temp_len] = cur;
+            temp_len += 1;
+        }
+    }
+
+    addr[1] = ones;
+    // copy(addr[2..], temp): whole bytes only, truncate at 14, zero tail.
+    let n = temp_len.min(14);
+    addr[2..2 + n].copy_from_slice(&temp[..n]);
     addr
+}
+
+/// Derive the 8-byte routable 0300::/8 subnet prefix from an Ed25519 pubkey.
+///
+/// Upstream Yggdrasil `SubnetForKey` (same source as [`ygg_addr_from_pubkey`]):
+/// take `AddrForKey`, keep the first 8 bytes, and set the low bit of the first
+/// byte (`byte[0] |= 0x01`) to mark a prefix rather than a node address.
+pub fn subnet_for_key(pubkey: &[u8; 32]) -> [u8; 8] {
+    let addr = ygg_addr_from_pubkey(pubkey);
+    let mut snet = [0u8; 8];
+    snet.copy_from_slice(&addr[..8]);
+    snet[0] |= 0x01;
+    snet
 }
 
 #[cfg(test)]

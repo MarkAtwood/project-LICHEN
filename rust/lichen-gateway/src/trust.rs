@@ -1722,8 +1722,9 @@ mod tests {
         let expected_iid: [u8; 8] = hex!("7dd5cfc679ab6342");
         assert_eq!(iid, expected_iid);
 
+        // Routable address is upstream Yggdrasil AddrForKey (no IID embedding).
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        let expected_ygg: [u8; 16] = hex!("027dd5cfc679ab637dd5cfc679ab6342");
+        let expected_ygg: [u8; 16] = hex!("020224aec2198a4ade94eae2b97eac87");
         assert_eq!(ygg_addr, expected_ygg);
     }
 
@@ -1741,8 +1742,9 @@ mod tests {
         let expected_iid: [u8; 8] = hex!("fd6b265c8585369b");
         assert_eq!(iid, expected_iid);
 
+        // Routable address is upstream Yggdrasil AddrForKey (no IID embedding).
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        let expected_ygg: [u8; 16] = hex!("02fd6b265c858536fd6b265c8585369b");
+        let expected_ygg: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
         assert_eq!(ygg_addr, expected_ygg);
     }
 
@@ -1760,8 +1762,9 @@ mod tests {
         let expected_iid: [u8; 8] = hex!("888bcf64cfefa304");
         assert_eq!(iid, expected_iid);
 
+        // Routable address is upstream Yggdrasil AddrForKey (no IID embedding).
         let ygg_addr = ygg_addr_from_pubkey(&expected_pubkey);
-        let expected_ygg: [u8; 16] = hex!("02888bcf64cfefa3888bcf64cfefa304");
+        let expected_ygg: [u8; 16] = hex!("02012f7519de299fe5c734eeedd5ad94");
         assert_eq!(ygg_addr, expected_ygg);
     }
 
@@ -1792,7 +1795,7 @@ mod tests {
         // Test vector: verify_dodagid_binding with valid pubkey/DODAGID pair
         let pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
-        let dodagid: [u8; 16] = hex!("02fd6b265c858536fd6b265c8585369b");
+        let dodagid: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658");
 
         assert!(verify_dodagid_binding(&pubkey, &dodagid));
     }
@@ -1803,7 +1806,7 @@ mod tests {
         // Attacker uses their pubkey but claims victim's DODAGID
         let attacker_pubkey: [u8; 32] =
             hex!("7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674");
-        let victim_dodagid: [u8; 16] = hex!("02fd6b265c858536fd6b265c8585369b"); // Alice's DODAGID
+        let victim_dodagid: [u8; 16] = hex!("0201cd2950254a181029510cd40cf658"); // Alice's DODAGID
 
         assert!(!verify_dodagid_binding(&attacker_pubkey, &victim_dodagid));
     }
@@ -1815,7 +1818,7 @@ mod tests {
         let pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
         // Change prefix from 0x02 to 0x03
-        let wrong_prefix: [u8; 16] = hex!("03fd6b265c858536fd6b265c8585369b");
+        let wrong_prefix: [u8; 16] = hex!("0301cd2950254a181029510cd40cf658");
 
         assert!(!verify_dodagid_binding(&pubkey, &wrong_prefix));
     }
@@ -2017,17 +2020,22 @@ mod tests {
         assert!(!verify_gateway_message(&pubkey, &tampered, &signature));
     }
 
-    // ── Binding Invariants (test vectors: binding_invariant_*) ───────────────
+    // ── Address Derivation (upstream AddrForKey) ─────────────────────────────
 
     #[test]
     fn binding_invariant_alice() {
+        // Post-migration (spec/decisions.jsonl upstream-yggdrasil-addressing)
+        // the routable address is upstream AddrForKey(pubkey) and does NOT
+        // embed the SHA-512 IID. Pin Alice's upstream-derived address and
+        // assert the IID is not present in its lower 64 bits.
         let pubkey: [u8; 32] =
             hex!("4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29");
         let ygg_addr = ygg_addr_from_pubkey(&pubkey);
         let iid = iid_from_pubkey(&pubkey);
 
-        // ygg_addr[8:16] == IID
-        assert_eq!(&ygg_addr[8..16], &iid);
+        assert_eq!(ygg_addr, hex!("0201cd2950254a181029510cd40cf658"));
+        assert_eq!(ygg_addr[0], 0x02, "0200::/8 prefix");
+        assert_ne!(&ygg_addr[8..16], &iid, "routable address must not embed IID");
     }
 
     #[test]
@@ -2037,8 +2045,9 @@ mod tests {
         let ygg_addr = ygg_addr_from_pubkey(&pubkey);
         let iid = iid_from_pubkey(&pubkey);
 
-        // ygg_addr[8:16] == IID
-        assert_eq!(&ygg_addr[8..16], &iid);
+        assert_eq!(ygg_addr, hex!("02012f7519de299fe5c734eeedd5ad94"));
+        assert_eq!(ygg_addr[0], 0x02, "0200::/8 prefix");
+        assert_ne!(&ygg_addr[8..16], &iid, "routable address must not embed IID");
     }
 
     // ── Trust Store Operations ───────────────────────────────────────────────
