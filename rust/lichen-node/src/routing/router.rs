@@ -695,12 +695,27 @@ impl Router {
         };
         // A direct child signs its own DAO. Beyond one hop, L2 authentication
         // establishes only the forwarding neighbor, not the DAO originator.
-        if parents
-            .iter()
-            .any(|parent| same_interface(parent, &self.dodag_id))
-            && !same_interface(&authenticated_sender, &packet_source)
-        {
-            return false;
+        //
+        // Post-i72x.2 the DAO transit parent is the parent's routable /128
+        // (upstream AddrForKey; no IID embedded), so the parent match must be
+        // exact-equality against the DODAG ID (the root's routable address).
+        // The old `same_interface` low-half comparison was silently dead:
+        // `dodag_id[8..]` is bit-packed key material that never equals a
+        // parent address's low half, so the rejection never fired (ssg9).
+        // The `authenticated_sender` side mirrors node.rs's forwarder gate:
+        // routable senders match by exact address; a link-local sender still
+        // binds the packet source to the L2-authenticated sender IID.
+        if parents.iter().any(|parent| parent == &self.dodag_id) {
+            let source_bound_to_sender = if authenticated_sender[..8]
+                == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
+            {
+                same_interface(&authenticated_sender, &packet_source)
+            } else {
+                authenticated_sender == packet_source
+            };
+            if !source_bound_to_sender {
+                return false;
+            }
         }
 
         #[cfg(test)]

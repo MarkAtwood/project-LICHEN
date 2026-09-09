@@ -862,6 +862,27 @@ fn spoofed_dao_target_is_rejected_before_replay_state_changes() {
 }
 
 #[test]
+fn direct_child_gate_fires_on_routable_upstream_addresses() {
+    // ssg9 regression: post-i72x.2 the DAO transit parent and the DODAG ID
+    // are both upstream AddrForKey /128s with no IID in the low half. The
+    // direct-child anti-spoof gate must therefore match by exact equality.
+    // A spoofed (wrong) sender must be rejected and a correct sender accepted.
+    let root_addr = test_origin(1);
+    let target = test_origin(2);
+    let relay = test_origin(9); // routable but not the origin
+    let mut sender = DaoManager::new(target.into(), RPL_INSTANCE_ID, root_addr.into());
+    let dao = sender.build_dao(root_addr.into());
+    let mut root = Router::new_root(root_addr);
+
+    // Spoofed routable sender (relay claims to forward the child's DAO).
+    assert!(!root.process_dao_at_ms(&dao, target, relay, 0));
+    assert!(root.lookup_route(Ipv6Addr::from(target)).is_none());
+    // Correct sender (origin == source) is accepted.
+    assert!(root.process_dao_at_ms(&dao, target, target, 0));
+    assert_eq!(root.lookup_route(Ipv6Addr::from(target)), Some([Ipv6Addr::from(target)].as_slice()));
+}
+
+#[test]
 fn aggregated_dao_uses_parent_for_packet_source_group() {
     let root_addr = ula(1);
     let first_target = ula(2);
