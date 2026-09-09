@@ -2,13 +2,14 @@
   "id": "project-LICHEN-worker6-b7z9.74",
   "title": "TX_SF announcement + RF-metrics DIO signaling absent (CCP-16 MUSTs, spec 02 3.5)",
   "description": "Reqs R-02-026, R-02-027. NOT-IMPLEMENTED. R-02-026: Gateways and nodes MUST announce current TX_SF in DIO options and Announce messages (1-byte field; absence means SF10) — rg tx_sf/current_tx_sf: zero implementation hits; no SF field in Announce construction (rust/lichen-rpl/src/announce.rs, C routing/announce.c, python link/ announce modules). R-02-027: ASSIGNED_SF and per-neighbor RF metrics (EMA SNR alpha=1/4, loss rate) MUST be signaled in DIO per CCP-16 — no DIO option carries EMA/density/utilization in any impl (C DIO registry rpl_messages.h:59-70 has no RF-metrics option). ASSIGNED_SF emission itself is tracked in sibling bead b7z9.71. Suggested placement: DIO option codecs in all three impls + announce app_data field; keep 1-byte absence-means-SF10 rule.",
+  "notes": "2026-09-09 CCP POLICY SUPERSESSION: user-approved ccp-receiver-aware decision and spec/02b-ccp-receiver-aware.md now own current policy. Conflicting old acceptance text about density-\u003eCH0/SF, synthetic neighbors, continuous all-channel/all-SF receive or locally retuned rendezvous is historical, not a requirement to implement. Preserve unchanged proven helpers and frozen legacy fixtures; no production-derived expected outputs. Full receiver permitted-set/global-index and shared-generation semantics apply; fixed scheduled profile01 remainsSF10; actual RX commitments, half-duplex, full-operation fit and legal/adaptive frequency/group budgets govern TX. Exact new wire encoding is gated by worker6-x7hh.1; independentcorpus .6; productionlanguageintegration .7 Python/.8 Rust/.9 C; joinedCI .10; softwareconstrainttests .12; RFqualification .11; evidence/docs .13. Reuse this bead's nonconflicting mechanics rather than duplicate them. Existing completion metadata is not Revision2 conformance. Missing/unknown capability or operatingauthority doesnotjustify CH0/legal/security bypass. Experimental microfrag/narrow-band/full-band modes have separate gates; baselineSCHC/securitystay. See docs/ccp-conformance.md. No implementation status is changed by this note.",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T12:26:22.15053249Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T12:26:22.15053249Z",
+  "updated_at": "2026-09-09T02:15:07.277474646Z",
   "labels": [
     "ccp",
     "spec-gap"

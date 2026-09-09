@@ -2,13 +2,14 @@
   "id": "project-LICHEN-worker6-b7z9.72",
   "title": "Multi-SF RX absent: gateways/nodes MUST receive on SF7-SF12; SHOULD advertise capability (spec 02 3.4/3.5)",
   "description": "Reqs R-02-019, R-02-020, R-02-025. NOT-IMPLEMENTED. Evidence: C Kconfig placeholder only (lichen/subsys/lichen/l2/Kconfig:198-205 LICHEN_GATEWAY_MULTI_SF default n, no scan code; comments lora_l2.c:289-296); C RX programs a single datarate (lora_l2.c:298-308); rust lichen-hal/lichen-embassy have no SF-scan surface; python sim medium.py has no SF dimension at all so orthogonality/multi-SF RX cannot be simulated. Also blocks R-02-021 cross-SF forwarding via gateway. Suggested placement: C lr1110/lora_l2 CAD multi-SF scan (gateway first), rust lichen-embassy RX scheduler, python sim medium SF dimension; capability bit in DIO.",
+  "notes": "2026-09-09 CCP POLICY SUPERSESSION: user-approved ccp-receiver-aware decision and spec/02b-ccp-receiver-aware.md now own current policy. Conflicting old acceptance text about density-\u003eCH0/SF, synthetic neighbors, continuous all-channel/all-SF receive or locally retuned rendezvous is historical, not a requirement to implement. Preserve unchanged proven helpers and frozen legacy fixtures; no production-derived expected outputs. Full receiver permitted-set/global-index and shared-generation semantics apply; fixed scheduled profile01 remainsSF10; actual RX commitments, half-duplex, full-operation fit and legal/adaptive frequency/group budgets govern TX. Exact new wire encoding is gated by worker6-x7hh.1; independentcorpus .6; productionlanguageintegration .7 Python/.8 Rust/.9 C; joinedCI .10; softwareconstrainttests .12; RFqualification .11; evidence/docs .13. Reuse this bead's nonconflicting mechanics rather than duplicate them. Existing completion metadata is not Revision2 conformance. Missing/unknown capability or operatingauthority doesnotjustify CH0/legal/security bypass. Experimental microfrag/narrow-band/full-band modes have separate gates; baselineSCHC/securitystay. See docs/ccp-conformance.md. No implementation status is changed by this note.",
   "status": "open",
   "priority": 2,
   "issue_type": "task",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-01T12:25:46.69010264Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-01T12:25:46.69010264Z",
+  "updated_at": "2026-09-09T02:15:07.120415232Z",
   "labels": [
     "rf",
     "spec-gap"
