@@ -1004,7 +1004,9 @@ pub struct CoapResponse {
     pub code: u8,
     /// Response payload (CBOR encoded).
     pub payload: Zeroizing<Vec<u8>>,
-    /// Content format (60 for CBOR, 112 for SenML+CBOR).
+    /// Content format (60 for CBOR, 112 for SenML+CBOR). 0 means no
+    /// Content-Format option is emitted on the wire (per coap_oscore.h
+    /// "0 for none"); it is not a text/plain label.
     pub content_format: u16,
 }
 
@@ -1041,7 +1043,7 @@ impl CoapResponse {
         Self {
             code: 0x80, // 4.00 Bad Request
             payload: Zeroizing::new(message.as_bytes().to_vec()),
-            content_format: 0, // text/plain
+            content_format: 0, // no Content-Format option on the wire
         }
     }
 
