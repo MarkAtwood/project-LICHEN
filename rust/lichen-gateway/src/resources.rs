@@ -2125,15 +2125,19 @@ impl GatewayCoordinator {
                 // schedule (GCP-6.3 step 3). The conflict response carries
                 // the WINNING gateway's claim as payload — the C peer
                 // (coap_slot_coord.c conflict arm) echoes the winner's stored
-                // COSE_Sign1 bytes with no Content-Format option, so the same
-                // shape goes out here (content_format 0 = no option). The
+                // COSE_Sign1 bytes with the Content-Format option omitted;
+                // the Rust serializer (gateway.rs) instead maps
+                // content_format 0 to a present zero-length option, so the
+                // wire is not byte-identical to C. The
                 // spec payload is the winning gateway's claim; this
                 // gateway cannot mint a signed COSE claim on the responder
                 // path (no sender-side claim_seq machinery, l1qw.20), so
                 // when no envelope was recorded the 4.09 carries an empty
-                // payload — C parity (coap_slot_coord.c:1640-1645), which
-                // likewise responds 4.09 with resp_len 0 rather than a
-                // descriptor map.
+                // payload. There is no C behavior to mirror here: C always
+                // has the winner's COSE recorded (claim_store_cose,
+                // coap_slot_coord.c:557-571), so this empty-payload fallback
+                // is Rust-only — but 4.09 per spec/08:315 is the right code,
+                // and the legacy rejection map was spec-divergent.
                 if let Some(own_cose) = self.own_claim_cose.clone() {
                     return CoapResponse::conflict(own_cose, 0);
                 }
@@ -2913,13 +2917,13 @@ mod tests {
         let response = coordinator.handle_post_slots(&payload, true, Some(&pubkey), 1);
         // We have lower IID, so we should reject their claim: GCP-6.5 step 11
         // responds 4.09 Conflict for an unresolved slot conflict (spec/08:315).
-        assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
+        assert_eq!(response.code, 0x89); // 4.09 Conflict
 
         // No envelope recorded via record_own_claim_envelope in this setup,
-        // so the 4.09 carries an empty payload — C parity
-        // (coap_slot_coord.c:1640-1645: code 4.09, resp_len 0). The
-        // spec-shaped echo of a recorded envelope is covered by
-        // conflict_response_echoes_own_recorded_envelope.
+        // so the 4.09 carries an empty payload (spec/08:315 mandates the
+        // winning claim as payload; the empty fallback is Rust-only — see
+        // the win-arm comment). The spec-shaped echo of a recorded envelope
+        // is covered by conflict_response_echoes_own_recorded_envelope.
         assert!(response.payload.is_empty());
         assert_eq!(response.content_format, 0);
     }
@@ -3151,7 +3155,7 @@ mod tests {
         let (conflict, pubkey) = signed_slot_claim([0x41; 32], vec![5], 4, 1);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&pubkey), 4);
         // We win the IID tiebreak: GCP-6.5 step 11 responds 4.09 Conflict.
-        assert_eq!(response.code, 0x89); // 4.09 Conflict (rejection payload)
+        assert_eq!(response.code, 0x89); // 4.09 Conflict
         assert!(coordinator.slot_replay_generation() > accepted_generation);
         assert_eq!(coordinator.peer_claims.len(), 1);
         assert_eq!(coordinator.peer_claims[0].slots(), &[5]);
@@ -3226,7 +3230,10 @@ mod tests {
         assert_eq!(conflict_pubkey, peer_pubkey);
         let response = coordinator.handle_post_slots(&conflict, true, Some(&peer_pubkey), 4);
         assert_eq!(response.code, 0x89); // 4.09 Conflict
-        assert_eq!(response.content_format, 0); // C parity: no Content-Format option
+                                         // The Rust serializer (gateway.rs) maps content_format 0 to a
+                                         // present zero-length Content-Format option (0xc0), NOT an omitted
+                                         // option as C does.
+        assert_eq!(response.content_format, 0);
         assert_eq!(response.payload.as_slice(), envelope.as_slice());
     }
 
