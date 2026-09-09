@@ -52,16 +52,10 @@ while :; do
         else
             opencode run "$PROMPT" >> "$STATE/worker$N.log" 2>&1
         fi
-        # Capture the session id opencode just used (first round establishes it)
-        SID=$(opencode sessions list --format json 2>/dev/null | python3 -c "
-import json, sys
-try:
-    rows = json.load(sys.stdin)
-    rows = sorted(rows, key=lambda r: r.get('updated_at', ''), reverse=True)
-    for r in rows:
-        if r.get('directory', '').endswith('worker$N'):
-            print(r.get('id', '')); break
-except Exception: pass" 2>/dev/null)
+        # Capture the session id just created: newest session row for this
+        # worker's directory in the opencode DB (sessions-list CLI is unreliable)
+        SID=$(sqlite3 ~/.local/share/opencode/opencode.db \
+            "SELECT id FROM session WHERE directory='$WT' ORDER BY rowid DESC LIMIT 1" 2>/dev/null)
         [ -n "$SID" ] && echo "$SID" > "$SESSIONS/worker$N.sid"
     fi
     RC=$?
