@@ -122,6 +122,28 @@ fn resolve_dao_signer_from_bounded_snapshot(
         envelope.unsigned_bytes,
     );
     let candidates = announces.pinned_pubkeys_snapshot()?;
+    // Prefer the pin whose upstream AddrForKey equals the claimed origin
+    // (i72x.2: the origin address no longer embeds the IID, so address-based
+    // candidate selection keeps UnknownKey/BadSignature semantics intact).
+    // The claimed origin is only used to SELECT the candidate; the signature
+    // still proves the binding.
+    let by_origin: std::vec::Vec<_> = candidates
+        .iter()
+        .filter(|candidate| {
+            lichen_core::addr::ygg_addr_from_pubkey(candidate.as_bytes()) == origin
+        })
+        .collect();
+    if by_origin.len() > 1 {
+        // Multiple verifying-capable pins for one origin: identity collision.
+        return None;
+    }
+    if let Some(candidate) = by_origin.first() {
+        return Some((*candidate).clone());
+    }
+    // No pin matches the claimed origin: either the origin is unpinned, or the
+    // packet lies about its origin. Fall back to the signature scan so a
+    // signed DAO from a pinned key under a mismatched origin still resolves
+    // (the caller rejects on the origin check afterwards).
     let mut resolved = None;
     for candidate in candidates {
         if lichen_link::schnorr::verify(&candidate, &digest, envelope.origin.signature) {
@@ -192,8 +214,12 @@ impl Node {
         {
             let mut dst_bytes = [0u8; 16];
             dst_bytes.copy_from_slice(&ipv6[field::DST_OFFSET..IPV6_HEADER_LEN]);
+            // ULA (0xfd) is not answered: under the single-primary model
+            // (spec/05-routing.md:30) ULA is external, not mesh-local (i72x.4).
+            // The 2000::/3 arm is equally promiscuous; both arms become an
+            // exact check against this node's 0200::/7 AddrForKey identity
+            // once i72x.2 lands the NodeId accessor (tracked in beads).
             if dst_bytes == self.node_id.link_local_addr().0
-                || dst_bytes[0] == 0xfd
                 || (dst_bytes[0] & 0xe0) == 0x20
             {
                 return self.reply_echo_ipv6(ipv6, reply);
@@ -522,8 +548,10 @@ impl RplNode {
                 // Handle ping
                 let mut dst_bytes = [0u8; 16];
                 dst_bytes.copy_from_slice(&pkt[field::DST_OFFSET..IPV6_HEADER_LEN]);
+                // ULA (0xfd) is not answered: ULA is external, not
+                // mesh-local, under the single-primary model (i72x.4).
+                // See the matching note in Node::handle_ipv6 above.
                 if dst_bytes == self.node.node_id.link_local_addr().0
-                    || dst_bytes[0] == 0xfd
                     || (dst_bytes[0] & 0xe0) == 0x20
                 {
                     let mut reply_ipv6 = [0u8; 256];
@@ -599,9 +627,23 @@ impl RplNode {
                         else {
                             return (0, RplEvent::None);
                         };
+                        // Direct-child anti-relay gate: a DAO that names me
+                        // as parent (in either of my own address forms —
+                        // link-local IID half or exact routable /128) must
+                        // arrive from the origin itself. The
+                        // source↔sender-IID binding is derivable only for
+                        // link-local sources; for routable sources the origin
+                        // proof is the mandatory DAO origin signature check
+                        // downstream (i72x.2: upstream AddrForKey does not
+                        // embed the IID).
+                        let my_routable = self.router.dao_manager.node_address().octets();
+                        let source_is_link_local =
+                            sender_addr[..8] == [0xfe, 0x80, 0, 0, 0, 0, 0, 0];
                         if advertised_parents.iter().any(|parent| {
                             same_interface(parent, &self.node.node_id.link_local_addr().0)
-                        }) && !source_matches_sender_iid(&sender_addr, &sender_iid)
+                                || *parent == my_routable
+                        }) && source_is_link_local
+                            && !source_matches_sender_iid(&sender_addr, &sender_iid)
                         {
                             return (0, RplEvent::None);
                         }
@@ -609,8 +651,9 @@ impl RplNode {
                         let canonical_link_local_source = sender_addr[..8]
                             == [0xfe, 0x80, 0, 0, 0, 0, 0, 0]
                             && source_matches_sender_iid(&sender_addr, &sender_iid);
-                        if (!canonical_link_local_source && !is_ula_or_global(&sender_addr))
-                            || !is_ula_or_global(&dst)
+                        if (!canonical_link_local_source
+                            && !is_native_or_global(&sender_addr))
+                            || !is_native_or_global(&dst)
                         {
                             return (0, RplEvent::None);
                         }
@@ -747,13 +790,15 @@ fn same_interface(left: &[u8; 16], right: &[u8; 16]) -> bool {
 }
 
 #[cfg(feature = "std")]
-fn is_ula_or_global(address: &[u8; 16]) -> bool {
+fn is_native_or_global(address: &[u8; 16]) -> bool {
     let is_lichen_native = address[0] == 0x02;
     let address = Ipv6Addr(*address);
     // LICHEN native identities occupy 0200::/8. This project-specific
     // globally routable space is outside Rust's conventional 2000::/3 GUA
-    // predicate but is valid for isolated-mesh DAO forwarding.
-    is_lichen_native || address.is_ula() || address.is_gua()
+    // predicate but is valid for isolated-mesh DAO forwarding. ULA is
+    // excluded: under the single-primary model (spec/05-routing.md:30)
+    // ULA is external, not mesh-local (i72x.4).
+    is_lichen_native || address.is_gua()
 }
 
 #[cfg(feature = "std")]
@@ -824,8 +869,10 @@ mod tests {
     }
 
     #[cfg(feature = "std")]
-    fn ula(node_id: NodeId) -> [u8; 16] {
-        node_id.ula_addr([0xfd, 0, 0, 0, 0, 0, 0, 0]).0
+    fn native(node_id: NodeId) -> [u8; 16] {
+        // Test stand-in for an 0200::/8 mesh address carrying the node's
+        // IID (production identities derive via AddrForKey, i72x.2).
+        node_id.ula_addr([0x02, 0, 0, 0, 0, 0, 0, 0]).0
     }
 
     #[cfg(feature = "std")]
@@ -1030,7 +1077,7 @@ mod tests {
         leaf_eui64[0] ^= 0x02;
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
-        let root_addr = ula(root_id);
+        let root_addr = native(root_id);
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
@@ -1145,8 +1192,15 @@ mod tests {
             )
             .unwrap();
         let leaf_packet = l2_dao_packet(leaf_addr, root_addr, &leaf_dao);
+        // Link-local DAO sources are bound to the sender IID at this raw
+        // gate; routable sources defer to the DAO origin signature (i72x.2).
+        let mut leaf_ll = [0u8; 16];
+        leaf_ll[0] = 0xfe;
+        leaf_ll[1] = 0x80;
+        leaf_ll[8..].copy_from_slice(&leaf_identity.iid);
+        let ll_packet = l2_dao_packet(leaf_ll, root_addr, &leaf_dao);
         assert_eq!(
-            parent.handle_frame_rpl(&leaf_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
+            parent.handle_frame_rpl(&ll_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
             (0, RplEvent::None)
         );
         let (forwarded_len, event) =
@@ -1258,12 +1312,14 @@ mod tests {
         leaf_eui64[0] ^= 0x02;
         let parent_id = NodeId(parent_eui64);
         let leaf_id = NodeId(leaf_eui64);
-        let root_addr = ula(root_id);
+        let root_addr = native(root_id);
         let parent_addr =
             lichen_core::addr::ygg_addr_from_pubkey(parent_identity.pubkey.as_bytes());
         let leaf_addr = lichen_core::addr::ygg_addr_from_pubkey(leaf_identity.pubkey.as_bytes());
         // §8.7.2 delegated prefix advertised alongside the leaf's own /128.
-        let delegated_prefix = [0xfd, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
+        // Routed /64s come from SubnetForKey space (0300::/8), not ULA
+        // (spec/05-routing.md:30, upstream-yggdrasil-addressing).
+        let delegated_prefix = [0x03, 0x00, 0, 0, 0, 0, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0];
 
         let mut root_storage = MemStorage::new();
         let (root_router, mut root_rx) =
@@ -1415,10 +1471,17 @@ mod tests {
         let leaf_dao = unsigned;
 
         let leaf_packet = l2_dao_packet(leaf_addr, root_addr, &leaf_dao);
-        // A sender whose link-layer IID does not match the DAO origin is not
-        // forwarded, grouped Targets or not.
+        // A sender whose link-layer IID does not match a link-local DAO
+        // source is not forwarded, grouped Targets or not. For routable
+        // sources the binding proof is the DAO origin signature (i72x.2:
+        // the routable address no longer embeds the IID).
+        let mut leaf_ll = [0u8; 16];
+        leaf_ll[0] = 0xfe;
+        leaf_ll[1] = 0x80;
+        leaf_ll[8..].copy_from_slice(&leaf_identity.iid);
+        let ll_packet = l2_dao_packet(leaf_ll, root_addr, &leaf_dao);
         assert_eq!(
-            parent.handle_frame_rpl(&leaf_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
+            parent.handle_frame_rpl(&ll_packet, [0x02, 0, 0, 0, 0, 0, 0, 4], &mut output, 0,),
             (0, RplEvent::None)
         );
         // The grouped DAO is forwarded at the non-root hop: before the
@@ -1492,7 +1555,7 @@ mod tests {
         use lichen_rpl::routing::DaoAdmissionState;
 
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
-        let root_addr = ula(root_id);
+        let root_addr = native(root_id);
         let identity = Identity::from_seed(Seed::new([0x36; 32]));
         let origin = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
         let mut storage = MemStorage::new();
@@ -1576,8 +1639,8 @@ mod tests {
     fn production_dao_time_is_seconds_and_expires_routes() {
         let root_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 1]);
         let first_id = NodeId([0x02, 0, 0, 0, 0, 0, 0, 2]);
-        let root_addr = ula(root_id);
-        let first_addr = ula(first_id);
+        let root_addr = native(root_id);
+        let first_addr = native(first_id);
         let mut root = RplNode {
             node: Node::new(root_id),
             router: Router::new_root(root_addr),

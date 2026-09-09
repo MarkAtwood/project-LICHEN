@@ -303,6 +303,15 @@ impl Radio for MeshRadio {
     }
 }
 
+/// Wire EUI-64 for a test identity: key-derived IID with the U/L bit toggled.
+/// Post-i72x.2 the routable address's low half is not the IID, so tests must
+/// not slice it out of `ygg_addr_from_pubkey` output.
+fn eui64_of(identity: &Identity) -> [u8; 8] {
+    let mut eui64 = identity.iid;
+    eui64[0] ^= 0x02;
+    eui64
+}
+
 fn identity(seed: u8) -> Identity {
     Identity::from_seed(Seed::new([seed; 32]))
 }
@@ -952,6 +961,7 @@ async fn rpl_dispatch_rejects_invalid_ipv6_length_and_checksum() {
     let root_addr = root_address(&root_identity);
     let leaf_addr = address(&leaf_identity, 1);
     let (root_radio, leaf_radio) = LoopbackRadio::pair();
+    let leaf_eui64 = eui64_of(&leaf_identity);
     let mut root = Stack::new_default_epoch(root_radio, root_identity.clone());
     let leaf_stack = Stack::new_default_epoch(leaf_radio, leaf_identity);
     let prefix = root_addr[..8].try_into().unwrap();
@@ -984,7 +994,7 @@ async fn rpl_dispatch_rejects_invalid_ipv6_length_and_checksum() {
 
     for packet in cases {
         if matches!(
-            root.send_ipv6_to(&packet, &ipv6_eui64(leaf_addr), Priority::Routing)
+            root.send_ipv6_to(&packet, &leaf_eui64, Priority::Routing)
                 .await,
             Err(crate::stack::TxError::SchcCompress)
         ) {
@@ -1821,6 +1831,8 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
     ));
 
     relay.send_dao().await.unwrap();
+    // The relay's solicited-DIS DIO was already drained above (root rejected
+    // it), so the relay's DAO is the next frame root pops.
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
     assert!(
         matches!(
@@ -1936,6 +1948,7 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
 #[tokio::test]
 async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     let root_identity = identity(8);
+    let root_eui64_derived = eui64_of(&root_identity);
     let leaf_identity = identity(9);
     let unknown_identity = identity(10);
     let root_addr = root_address(&root_identity);
@@ -1989,7 +2002,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         .unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2004,7 +2017,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     root.admit_dao_origin(leaf_identity.iid).unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2060,14 +2073,17 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     substituted_source[0] ^= 1;
     leaf.send_ipv6_to(
         &dao_ipv6_packet(substituted_source, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
     .unwrap();
+    // Post-i72x.2 the claimed origin carries no IID, so a substituted source
+    // resolves to no pinned identity and fails closed as NotAdmitted (the
+    // pre-migration IidMismatch class required the address-embedded IID).
     assert!(matches!(
         root.receive(1, 0).await.unwrap(),
-        Some(RplReceiveOutcome::Dao(DaoHandlingOutcome::IidMismatch))
+        Some(RplReceiveOutcome::DaoOriginNotAdmitted)
     ));
     assert_eq!(
         root.rpl_node().router.lookup_route(Ipv6Addr::from(substituted_source)),
@@ -2104,7 +2120,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
         .unwrap();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(unknown_addr, root_addr, &unknown_dao).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2121,7 +2137,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     second[3] ^= 1;
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &second).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2141,7 +2157,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     root.fail_next_storage_write();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2157,7 +2173,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
 
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &eui64_of(&root_identity),
         Priority::Routing,
     )
     .await
@@ -2198,7 +2214,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     reopened.fail_next_storage_write();
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &third).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2215,7 +2231,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     // First replay: valid DAO with old sequence should be detected as Replay
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &signed).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2229,7 +2245,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
     // as Replay first (replay check precedes route validation per RFC 6550).
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &malformed_replay).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2245,7 +2261,7 @@ async fn root_dispatch_installs_route_and_failures_do_not_mutate() {
 
     leaf.send_ipv6_to(
         &dao_ipv6_packet(leaf_addr, root_addr, &fourth).unwrap(),
-        &ipv6_eui64(root_addr),
+        &root_eui64_derived,
         Priority::Routing,
     )
     .await
@@ -2824,6 +2840,67 @@ async fn expired_root_signature_admitted_as_baseline_not_rejected() {
             RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
         ),
         "replayed expired signature must stay on baseline, not reject: {outcome:?}"
+    );
+}
+
+#[tokio::test]
+async fn expiry_equal_now_root_signature_admitted_as_baseline_not_rejected() {
+    // THE EQUALITY PIN: receive.rs:719 degrades on `expiry <= now_unix`, so
+    // now == expiry is already Baseline. The stack-level +1 (expired) case is
+    // above; the -1 pre-expiry cases exist only at gate level below (a
+    // stack-level pre-expiry Verified is structurally impossible with the
+    // shared vector, per the block comment at the top of this section). This
+    // pins the exact boundary end-to-end: under a `<` for `<=` regression the
+    // signature passes the expiry gate and is then rejected at the carrier/
+    // payload cross-check (the fixture's carrier diverges by design), so the
+    // DioReceived assertion below is the detector.
+    let (mut sender, mut receiver, packet, relay_identity) =
+        baseline_fixture(Some(|| VECTOR_EXPIRY_UNIX));
+    link_introduce(&mut sender, &mut receiver, &relay_identity).await;
+
+    // Join first (see the expired-clock test): the carrier must be a
+    // steady-state DIO against joined dodag state.
+    sender_ipv6(
+        &mut sender,
+        &dio_packet_from(
+            link_local_from_iid(relay_identity.iid),
+            RPL_ALL_NODES,
+            root_address(&relay_identity),
+            ROOT_RANK,
+        ),
+    )
+    .await;
+    assert!(matches!(
+        receiver.receive(1, 0).await.unwrap(),
+        Some(RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. }))
+    ));
+    assert!(receiver.rpl_node().is_joined());
+
+    sender_ipv6(&mut sender, &packet).await;
+    let outcome = receiver.receive(1, 0).await.unwrap().expect("frame");
+    assert!(
+        matches!(
+            outcome,
+            RplReceiveOutcome::Rpl(RplEvent::DioReceived { .. })
+        ),
+        "now == expiry must degrade to baseline, not reject: {outcome:?}"
+    );
+
+    // Baseline (not Verified): nothing entered the root-seq cache at the
+    // boundary. (The boundary detector is the DioReceived assertion above —
+    // a `<` regression dies at the cross-check Reject before it could pin
+    // root_seq; these asserts pin the correct path's cache hygiene.)
+    let decoded = {
+        use crate::rpl_stack::root_sig;
+        root_sig::DecodedRootSig::from_cose_sign1(&root_sig::tests::vector_cose()).unwrap()
+    };
+    assert_eq!(
+        receiver.root_seq_cached(decoded.payload.dodag_id, decoded.payload.instance),
+        None
+    );
+    assert_eq!(
+        receiver.root_seq_cached(root_address(&relay_identity), decoded.payload.instance),
+        None
     );
 }
 

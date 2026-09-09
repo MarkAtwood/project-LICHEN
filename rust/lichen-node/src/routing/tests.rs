@@ -463,8 +463,9 @@ fn router_rejects_unauthorized_version_wrap_from_127_to_zero() {
 
 #[test]
 fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
+    // UPSTREAM-AddrForKey variant (i72x.2): shared corpus flips in i72x.6.
     let document: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../test/vectors/dodag_version_authorization.json"
+        "../../tests/dodag_version_authorization_upstream.json"
     ))
     .unwrap();
     let vector = &document["vectors"][0];
@@ -542,8 +543,11 @@ fn root_authorized_version_propagates_across_two_hops_and_tampering_fails() {
 
 /// Canonical root-signed option from `test/vectors/dodag_version_authorization.json`.
 fn canonical_version_authorization_option() -> Vec<u8> {
+    // UPSTREAM-AddrForKey variant (i72x.2): the shared corpus still pins the
+    // rejected native-profile DODAGID for the Python consumer; it flips when
+    // the Python derivation migrates (i72x.6).
     let document: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../test/vectors/dodag_version_authorization.json"
+        "../../tests/dodag_version_authorization_upstream.json"
     ))
     .unwrap();
     hex::decode(document["vectors"][0]["option"].as_str().unwrap()).unwrap()

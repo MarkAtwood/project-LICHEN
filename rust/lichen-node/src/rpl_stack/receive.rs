@@ -562,10 +562,12 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 let RplRole::Root(rx) = &mut self.role else {
                     return Ok(RplReceiveOutcome::Dao(DaoHandlingOutcome::RouteRejected));
                 };
-                let origin_iid: [u8; 8] = source[8..].try_into().unwrap();
+                // The DAO source is the origin's routable /128, which does
+                // not embed the origin IID under upstream AddrForKey (i72x.2);
+                // resolve the signer key through the pinned table instead.
                 let admitted = self
                     .announces
-                    .pinned_pubkey_for(&origin_iid)
+                    .pinned_pubkey_for_routable(&source)
                     .is_some_and(|key| {
                         self.dao_admissions
                             .as_ref()

@@ -459,8 +459,14 @@ impl DaoManager {
         }
     }
 
+    /// This node's own address as configured at construction.
+    pub fn node_address(&self) -> Ipv6Addr {
+        self.node_address
+    }
+
     fn as_root(node_address: Ipv6Addr, rpl_instance_id: u8, dodag_id: Ipv6Addr) -> Self {
         let mut m = Self::new(node_address, rpl_instance_id, dodag_id);
+
         m.is_root = true;
         m
     }
@@ -562,7 +568,9 @@ impl DaoManager {
     }
 
     /// Process a verified DAO received from an authenticated immediate sender.
-    /// Sender-to-target authorization (per IPv6/IID identity rules) precedes replay and any route mutation.
+    /// Ordering follows spec/05-routing.md 8.6: per-key replay classification
+    /// precedes prefix authorization and sender-to-target authorization; both
+    /// precede replay-floor persistence and route-state mutation.
     pub fn process_signature_verified<S: NonVolatile>(
         &mut self,
         verified: &SignatureVerifiedDao<'_>,

@@ -708,7 +708,12 @@ impl Router {
             use lichen_link::{identity::Identity, keys::Seed};
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
-                .find(|identity| identity.iid == packet_source[8..])
+                // Match by link-local IID (fe80:: sources carry it in the low
+                // half) or by full routable address; upstream AddrForKey does
+                // not embed the IID (i72x.2).
+                .find(|identity| {
+                    identity.iid == packet_source[8..] || identity.ygg_addr == packet_source
+                })
             else {
                 return false;
             };
