@@ -1375,7 +1375,7 @@ mod tests {
         // 2 slots' worth of TX inside one superframe: ~2/32 = 6.25% -> 6.
         s.record_tx_airtime(0, TDMA_SLOT_MS * 2);
         let pct = s.busy_percent(TDMA_SLOT_MS);
-        assert!(pct >= 6 && pct <= 7, "got {pct}");
+        assert!((6..=7).contains(&pct), "got {pct}");
 
         // Window slide: all old entries drop, new occupancy ~0.
         s.record_tx_airtime(100, 0);

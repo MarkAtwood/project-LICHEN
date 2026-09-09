@@ -644,8 +644,10 @@ mod tests {
         // R-02a-081 SYNCED row (spec/02a-coordinated-capacity.md:267),
         // mirroring the C tdma.c SYNCED branch: >= 3 consecutive missed
         // superframes in SYNCED -> DESYNCED with counter resets.
-        let mut fsm = DesyncFSM::default();
-        fsm.state = DesyncState::Synced;
+        let mut fsm = DesyncFSM {
+            state: DesyncState::Synced,
+            ..Default::default()
+        };
         assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
         assert_eq!(fsm.missed_superframes, 1);
         assert_eq!(fsm.on_missed_superframe(), DesyncState::Synced);
@@ -657,8 +659,10 @@ mod tests {
 
     #[test]
     fn synced_valid_beacon_resets_missed_streak() {
-        let mut fsm = DesyncFSM::default();
-        fsm.state = DesyncState::Synced;
+        let mut fsm = DesyncFSM {
+            state: DesyncState::Synced,
+            ..Default::default()
+        };
         fsm.on_missed_superframe();
         fsm.on_missed_superframe();
         assert_eq!(fsm.missed_superframes, 2);
