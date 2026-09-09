@@ -115,6 +115,35 @@ class TestSlotClaim:
                 claim_seq=0,
             )
 
+    def test_claim_seq_u32_boundary(self) -> None:
+        """claim_seq is u32 on the wire (Rust slot.rs decodes with
+        u32::try_from); 2**32-1 must be accepted and 2**32 rejected at
+        construction so both boundaries match the Rust verdict."""
+        claim = SlotClaim(
+            gateway_iid="0011223344556677",
+            slots=(0,),
+            superframe_id=1,
+            expiry=int(time.time()) + 8,
+            claim_seq=0xFFFF_FFFF,
+        )
+        assert claim.claim_seq == 0xFFFF_FFFF
+        with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
+            SlotClaim(
+                gateway_iid="0011223344556677",
+                slots=(0,),
+                superframe_id=1,
+                expiry=int(time.time()) + 8,
+                claim_seq=0x1_0000_0000,
+            )
+        with pytest.raises(ClaimError, match="claim_seq must be a u32 integer"):
+            SlotClaim(
+                gateway_iid="0011223344556677",
+                slots=(0,),
+                superframe_id=1,
+                expiry=int(time.time()) + 8,
+                claim_seq=-1,
+            )
+
     def test_invalid_signature_length(self) -> None:
         with pytest.raises(ClaimError, match="signature must be 48 bytes"):
             SlotClaim(

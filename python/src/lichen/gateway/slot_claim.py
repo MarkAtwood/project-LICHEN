@@ -64,6 +64,14 @@ STALE_CLAIM_TOLERANCE_SEC = 5
 Spec 6.3 step 7 rejects already-expired claims; the tolerance absorbs
 gateway clock skew so a claim issued moments ago is not dropped."""
 
+_MAX_CLAIM_SEQ = 0xFFFF_FFFF
+"""claim_seq is a u32 on the wire and in every peer implementation (Rust
+slot.rs: u32::try_from(seq) at decode -> MalformedClaim above u32::MAX;
+CBOR tag-2 bignums fail its uint() outright). Python must reject the same
+range at BOTH the dataclass and decode boundaries or a signed claim with
+claim_seq > 2**32-1 diverges cross-implementation (accepted and cached by
+Python, malformed to Rust)."""
+
 
 class ClaimRejectReason(Enum):
     """Reasons a slot claim may be rejected (GCP-6.3)."""
@@ -173,9 +181,10 @@ class SlotClaim:
         if type(self.expiry) is not int or self.expiry < 0:
             raise ClaimError("expiry must be a non-negative integer")
 
-        # claim_seq must be a non-negative integer (spec: key 6)
-        if type(self.claim_seq) is not int or self.claim_seq < 0:
-            raise ClaimError("claim_seq must be a non-negative integer")
+        # claim_seq must be a u32 (spec: key 6; Rust decodes as u32, so a
+        # larger value diverges cross-implementation on identical wire input)
+        if type(self.claim_seq) is not int or self.claim_seq < 0 or self.claim_seq > _MAX_CLAIM_SEQ:
+            raise ClaimError("claim_seq must be a u32 integer")
 
         # Validate signature length if present
         if self.signature is not None and len(self.signature) != 48:
@@ -249,8 +258,8 @@ class SlotClaim:
         if not isinstance(iid_bytes, bytes) or len(iid_bytes) != 8:
             raise ClaimError("gateway_iid must be bstr(8)")
         claim_seq = fields.get(_PAYLOAD_CLAIM_SEQ)
-        if type(claim_seq) is not int or claim_seq < 0:
-            raise ClaimError("claim_seq must be a non-negative integer")
+        if type(claim_seq) is not int or claim_seq < 0 or claim_seq > _MAX_CLAIM_SEQ:
+            raise ClaimError("claim_seq must be a u32 integer")
         ordinal = fields.get(_PAYLOAD_ORDINAL)
         # Key 7 is required (shared corpus gcp_slot_claim_cose_sign1.json
         # case ordinal_absent: without the ordinal the receiver cannot
