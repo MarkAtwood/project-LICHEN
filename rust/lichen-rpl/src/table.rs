@@ -208,7 +208,7 @@ impl RoutingTable {
     }
 
     fn add_target_route(&mut self, target: RouteTarget, path: &[Ipv6Addr]) -> bool {
-        if path.len() > MAX_ROUTE_HOPS {
+        if path.is_empty() || path.len() > MAX_ROUTE_HOPS {
             return false;
         }
         let is_new = !self.routes.contains_key(&target);

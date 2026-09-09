@@ -1621,6 +1621,13 @@ impl DaoManager {
         )? {
             return Ok(None);
         }
+        // `target == root` (or its canonical link-local alias) yields an empty
+        // chain: root-to-self is not a route. Treat it as no-route rather than
+        // install an empty path that would later panic the diagnostic at
+        // path[path.len() - 2].
+        if chain.is_empty() {
+            return Ok(None);
+        }
         chain.reverse();
         Ok(Some(chain))
     }
@@ -1833,6 +1840,64 @@ mod tests {
 
     fn ll(iid: u8) -> [u8; 16] {
         [0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0, 0, 0, 0, 0, 0, iid]
+    }
+
+    #[test]
+    fn routing_table_rejects_empty_paths() {
+        let mut table = RoutingTable::new();
+        let target = Ipv6Addr::from(ll(3));
+        // An empty host path must not be admitted: it would leave a stored
+        // entry whose path slice is empty, panicking the diagnostic at
+        // routing.rs path[path.len() - 2].
+        assert!(!table.add_route(target, &[]));
+        assert!(table.lookup(target).is_none());
+        assert!(table.is_empty());
+
+        // A refresh with an empty path must not shrink an existing path.
+        let path = [Ipv6Addr::from(ll(2)), target];
+        assert!(table.add_route(target, &path));
+        assert!(!table.add_route(target, &[]));
+        assert_eq!(table.lookup(target), Some(path.as_slice()));
+
+        // add_prefix_route is equally unable to install an empty path.
+        let prefix = RouteTarget::new(ll(9), 64).unwrap();
+        let egress = Ipv6Addr::from(ll(8));
+        assert!(!table.add_prefix_route(prefix, egress, &[]));
+        assert!(table.lookup(Ipv6Addr::from(ll(9))).is_none());
+    }
+
+    #[test]
+    fn dao_for_root_self_installs_no_empty_route() {
+        use crate::message::OPT_TRANSIT_INFO;
+        use crate::routing::{DaoDiagnosticLimits, DaoProcessTiming};
+
+        // A DAO advertising the root's own /128 as a target (with a non-root
+        // parent, so contains_cycle does not reject it as a self-loop) must not
+        // install a route. assemble_path_from(root) yields an empty chain;
+        // without the empty-chain guard rebuilt_routes would insert that empty
+        // path and the diagnostic would panic at path[path.len() - 2].
+        let root = Ipv6Addr::from(ll(1));
+        let parent = Ipv6Addr::from(ll(2));
+        let authority = Ipv6Addr::from(ll(3));
+        let mut manager = DaoManager::diagnostic_root(root, 0, root);
+        let mut dao = vec![0, 0, 0, 1, 5, 18, 0, 128];
+        dao.extend_from_slice(&root.octets()); // target == root
+        dao.extend_from_slice(&[OPT_TRANSIT_INFO, 20, 0, 0x80, 1, 255]);
+        dao.extend_from_slice(&parent.octets()); // parent != root
+        let limits = DaoDiagnosticLimits {
+            max_targets: 16,
+            max_candidates_per_target: 16,
+            max_candidates: 16,
+        };
+        let timing = DaoProcessTiming {
+            now_seconds: 0,
+            lifetime_unit_seconds: 1,
+            max_deadline_seconds: u64::MAX,
+        };
+        let _ = manager.process_route_state_diagnostic(&dao, authority, timing, limits);
+        assert!(manager.routing_table().lookup(root).is_none());
+        // Must not panic on the empty-path diagnostic.
+        let _ = manager.route_state_diagnostic(authority, 1);
     }
 
     #[test]
