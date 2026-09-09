@@ -125,6 +125,13 @@ class LocalFactClaims:
             or not all(type(c) is str for c in self.channel)
         ):
             raise LocalFactError(f"{CLAIM_CHANNEL} must be a list of tstr")
+        # Normalize to tuple: from_cbor decodes CBOR arrays to list but
+        # normalizes to tuple itself, and to_cbor accepts either. Frozen
+        # dataclass equality is by-value, so a list-built claims would never
+        # equal its own decode — breaking the LocalFact wire-bstr agreement
+        # guard. Single source of truth here keeps encode/decode symmetric.
+        if self.channel is not None and not isinstance(self.channel, tuple):
+            object.__setattr__(self, "channel", tuple(self.channel))
 
     def to_cbor(self) -> bytes:
         """Encode the claims as a CBOR map (payload of the COSE).
@@ -230,6 +237,25 @@ class LocalFact:
             raise LocalFactError(f"signature must be 48 bytes, got {len(self.signature)}")
         if (self.protected_bytes is None) != (self.payload_bytes is None):
             raise LocalFactError("wire bstrs must be retained as a pair or not at all")
+        # Wire bstrs, when present, must actually be bytes (module contract:
+        # bad field types raise LocalFactError, never leak a TypeError from
+        # the CBOR layer).
+        if self.protected_bytes is not None and (
+            not isinstance(self.protected_bytes, bytes)
+            or not isinstance(self.payload_bytes, bytes)
+        ):
+            raise LocalFactError("wire bstrs must be bytes")
+        # The retained wire bstrs must agree with claims. On a frozen
+        # dataclass the idiomatic mutation is dataclasses.replace(fact,
+        # claims=...), which keeps the old wire bstrs; without this check a
+        # desynced fact would verify over the OLD signed payload while
+        # .claims carries unverified fields, silently dropping the
+        # tamper-resistance property. Compare decoded (encoding-agnostic) so
+        # a peer's valid-but-different CBOR encoding still passes.
+        if self.payload_bytes is not None and (
+            LocalFactClaims.from_cbor(self.payload_bytes) != self.claims
+        ):
+            raise LocalFactError("claims do not match the retained payload_bytes")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as a CBOR COSE_Sign1 array [protected, unprotected, payload, sig].
