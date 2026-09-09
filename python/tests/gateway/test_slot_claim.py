@@ -19,6 +19,7 @@ from lichen.crypto.identity import Identity, _pubkey_to_iid
 from lichen.gateway import slot_claim
 from lichen.gateway.slot_claim import (
     MAX_CLAIM_DURATION_SECONDS,
+    AllocationMode,
     ClaimError,
     ClaimRejectReason,
     SlotClaim,
@@ -181,6 +182,23 @@ class TestSlotClaim:
         # None ordinal (local-only claim) and empty slots remain valid.
         SlotClaim(**{**base, "ordinal": None})
         SlotClaim(**{**base, "slots": ()})
+
+    def test_allocation_mode_must_be_enum(self) -> None:
+        """9ez4: a raw int/str allocation_mode must not construct — it would
+        serialize inverted (any non-INTERLEAVED value maps to CONTIGUOUS on
+        the wire)."""
+        base = {
+            "gateway_iid": "0011223344556677",
+            "slots": (0,),
+            "superframe_id": 1,
+            "expiry": int(time.time()) + 8,
+            "claim_seq": 0,
+        }
+        for bad in (0, 1, "interleaved", None):
+            with pytest.raises(ClaimError, match="allocation_mode must be an AllocationMode"):
+                SlotClaim(**{**base, "allocation_mode": bad})
+        for good in (AllocationMode.INTERLEAVED, AllocationMode.CONTIGUOUS):
+            SlotClaim(**{**base, "allocation_mode": good})
 
     def test_invalid_signature_length(self) -> None:
         with pytest.raises(ClaimError, match="signature must be 48 bytes"):

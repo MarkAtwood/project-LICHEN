@@ -216,6 +216,11 @@ class SlotClaim:
         ):
             raise ClaimError("ordinal must be a non-negative integer")
 
+        # allocation_mode must be the enum: a raw int constructs silently and
+        # encode_claim_canonical would invert it (non-INTERLEAVED -> CONTIGUOUS)
+        if not isinstance(self.allocation_mode, AllocationMode):
+            raise ClaimError("allocation_mode must be an AllocationMode")
+
         # Validate signature length if present
         if self.signature is not None and len(self.signature) != 48:
             raise ClaimError(f"signature must be 48 bytes, got {len(self.signature)}")
