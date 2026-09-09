@@ -1,0 +1,30 @@
+{
+  "id": "project-LICHEN-worker6-p7ya",
+  "title": "[review] COSE from_cbor lenient decoders leak IndexError/CBORDecodeError on non-map payloads (from_cose_sign1 path)",
+  "description": "Pre-existing, surfaced during 2vp1 rounds: CapabilityPayload.from_cbor (capability_announcements.py), KeyRotationAttestationPayload.from_cbor, RootDioSignaturePayload.from_cbor, PrefixDelegationTokenPayload.from_cbor index the decoded object with no isinstance(dict) guard (unlike DelegationTokenPayload.from_cbor and local_facts' _loads_strict). On the from_cose_sign1 decode path, a non-map or truncated payload bstr escapes as IndexError / cbor2.CBORDecodeError instead of the documented ValueError. The 2vp1 __post_init__ check wraps this on the construction path, but from_cose_sign1's direct from_cbor call remains unguarded. Fix: add the dict guard + error normalization to the four lenient from_cbor decoders (mirror DelegationTokenPayload.from_cbor).",
+  "status": "in_progress",
+  "priority": 3,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T05:34:56.453603882Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:36:09.026172582Z",
+  "started_at": "2026-09-09T05:36:09.026172582Z",
+  "lease_expires_at": "2026-09-09T05:41:09.026172582Z",
+  "heartbeat_at": "2026-09-09T05:36:09.026172582Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-p7ya",
+      "depends_on_id": "project-LICHEN-worker6-2vp1",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T05:34:56.58337389Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
