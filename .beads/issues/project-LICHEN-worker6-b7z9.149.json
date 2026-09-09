@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b7z9.149",
+  "title": "[spec-gap][R-05-010] Martian filter not applied at forwarding decision; emission-only enforcement (spec 7.3, 04-network 6.3.5)",
+  "description": "Spec 7.3: a router MUST NOT forward a packet whose source or destination is policy-invalid, MUST drop it at the forwarding decision, MUST report the rejection locally without transmitting a protocol error onto the mesh; link intake stays byte-preserving. Classification: divergent. The full martian table (unspecified/loopback/multicast/IPv4-mapped source; unspecified/loopback/IPv4-mapped destination; multicast scope 2-14) is enforced only at SCHC emission (TX): rust/lichen-schc/src/codec.rs:241-263 validate_address_policy (TX-only per adjudicated decision rule255-rx-decode), C schc_helpers.c:462-488, python schc/headers.py:223-249. The forwarding decision checks only a subset (unspecified/multicast source, multicast scope 0/15, hop-limit 0, relay-claims-own-source): C router.c:340,600-605,627-636,664-668; rust lichen-node/src/rpl_stack/util.rs:297-313 survey_routing_headers. Loopback/IPv4-mapped in transit are not dropped at forwarding in any stack. Also test/vectors/no_silent_drops.json B.2.5.2 expects an ICMPv6 ADMIN_PROHIBITED NACK to the mesh source while runtime records drops locally without transmitting (documented in docs/spec-coverage/appendix-bufferbloat.md R-BB-012). Constraint: adjudicated decision rule255-rx-decode requires RX decode byte-preserving - the policy must attach to the forwarding decision, never to RX decode. Suggested placement: forwarding-plane policy check in C router.c route_packet_checked, rust survey_routing_headers consumers (stack.rs), python Router.route; resolve B.2.5.2 vector expectation.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T22:53:37.142824205Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T22:53:37.142824205Z",
+  "labels": [
+    "routing",
+    "spec-gap"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b7z9.149",
+      "depends_on_id": "project-LICHEN-worker6-b7z9",
+      "type": "parent-child",
+      "created_at": "2026-09-09T22:53:37.267392679Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
