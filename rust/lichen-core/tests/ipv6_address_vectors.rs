@@ -100,11 +100,12 @@ fn link_local_from_iid(iid: &[u8; 8]) -> [u8; 16] {
 
 #[test]
 fn key_derived_identity_binds_link_local_and_quarantined_native() {
-    // The live corpus pins only the IID + link-local derivations. The
-    // primary/native 0200::/8 fields are the REJECTED SHA-512 profile and
-    // live in test/vectors/legacy/ipv6_addresses_native_sha512.json
-    // (QUARANTINED — quarantine-integrity pin only, never a conformance
-    // oracle; delete when the upstream AddrForKey migration lands).
+    // The live corpus pins the IID + link-local derivations and, since the
+    // i72x.6 corpus regeneration, carries the primary 0200::/8 fields as
+    // upstream AddrForKey values (native/native_packed/iid_in_native). The
+    // REJECTED SHA-512 profile lives only in
+    // test/vectors/legacy/ipv6_addresses_native_sha512.json (QUARANTINED —
+    // quarantine-integrity pin only, never a conformance oracle).
     let document = ipv6_document();
     assert_eq!(document["format_version"], 2);
     let legacy: Value = serde_json::from_str(LEGACY_IPV6_NATIVE_VECTORS)
@@ -126,13 +127,22 @@ fn key_derived_identity_binds_link_local_and_quarantined_native() {
         let expected_iid = decode_hex::<8>(vector["iid"].as_str().expect("iid"));
         let expected_link_local =
             decode_hex::<16>(vector["link_local_packed"].as_str().expect("link-local"));
-        // The rejected-profile corpus must not leak back into the live file.
-        assert!(
-            vector.get("native_packed").is_none()
-                && vector.get("native").is_none()
-                && vector.get("iid_in_native").is_none(),
-            "{name}: live corpus must not carry rejected native fields"
-        );
+        // If native fields are present they MUST hold upstream AddrForKey
+        // bytes (never the rejected SHA-512 profile, which embeds the IID).
+        if let Some(native_packed) = vector.get("native_packed") {
+            let corpus_native =
+                decode_hex::<16>(native_packed.as_str().expect("native_packed hex"));
+            assert_eq!(
+                corpus_native,
+                upstream_addr_for_pubkey(&pubkey),
+                "{name}: live native_packed must equal upstream AddrForKey"
+            );
+            assert_ne!(
+                &corpus_native[8..],
+                &expected_iid[..],
+                "{name}: live native_packed must not embed the IID (rejected profile)"
+            );
+        }
         let legacy_vector = legacy_by_name
             .get(name)
             .expect("every key_derived_identity vector keeps a quarantined twin");
@@ -255,7 +265,9 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
             assert_eq!(iid, decode_hex::<8>(expected));
         }
         assert_eq!(addr[0], 0x02);
-        if entry["test_type"] == "binding_invariant" {
+        if entry["test_type"] == "binding_invariant"
+            || entry["test_type"] == "binding_invariant_rejected"
+        {
             // The addr[8..] == IID invariant is retired with the rejected
             // profile; the entry now pins the upstream address for its key.
             binding += 1;
