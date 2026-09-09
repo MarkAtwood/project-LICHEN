@@ -227,6 +227,19 @@ def test_integer_modes_accepted_at_decode(mode: int, expected: AllocationMode) -
     assert SlotClaim.decode_cose(body).allocation_mode == expected
 
 
+def test_oversized_envelope_rejected_before_decode() -> None:
+    # prgb: the envelope cap fires before cbor2.loads materializes anything —
+    # a max-legit claim is ~21.1 KB; 24 KB bounds pre-rejection decode work.
+    from lichen.gateway.slot_claim import MAX_CLAIM_ENVELOPE_BYTES
+
+    with pytest.raises(ClaimError, match="envelope exceeds maximum size"):
+        SlotClaim.decode_cose(b"\x84" + b"\x00" * (MAX_CLAIM_ENVELOPE_BYTES + 1))
+    # A real envelope is far under the cap.
+    case = _case("happy_path_n60")
+    assert len(_hex(case["cose_sign1_hex"])) < MAX_CLAIM_ENVELOPE_BYTES
+    SlotClaim.decode_cose(_hex(case["cose_sign1_hex"]))
+
+
 @pytest.mark.parametrize(
     "key,value",
     [

@@ -75,6 +75,16 @@ Python, malformed to Rust)."""
 MAX_SLOTS_PER_SUPERFRAME = 4_096
 """Rust slot.rs:57 parity: decode-side bound on the slot array length."""
 
+MAX_CLAIM_ENVELOPE_BYTES = 24_576
+"""Decode-side envelope cap (prgb): cbor2.loads materializes the entire
+payload — including the slots list — before the count check can run, so a
+hostile oversized envelope costs memory/CPU ahead of rejection. Rust reads
+the CBOR array head and rejects count > MAX_SLOTS_PER_SUPERFRAME before
+allocating (slot.rs:567-570). Python cannot read the head without decoding,
+so the envelope is capped instead: a maximum legitimate claim is ~21.1 KB
+(4096 u32 slots x 5B + 7-key map + protected/kid/signature); 24 KB covers
+that with margin while bounding pre-rejection decode work."""
+
 _MAX_SLOT_INDEX = 0xFFFF_FFFF
 """Per-slot u32 bound (Rust slot.rs:574 u32::try_from). Also rejects
 negative slot indices, which Rust's uint() never admits."""
@@ -241,6 +251,8 @@ class SlotClaim:
         payload key/type conformance. Signature verification is the caller's
         (verify_slot_claim) with the resolved gateway pubkey.
         """
+        if len(envelope) > MAX_CLAIM_ENVELOPE_BYTES:
+            raise ClaimError("slot-claim envelope exceeds maximum size")
         try:
             document = cbor2.loads(envelope)
         except (cbor2.CBORDecodeError, OverflowError) as e:
