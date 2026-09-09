@@ -361,11 +361,15 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 		/* Bounded consecutive-failure accounting keyed by the
 		 * authenticated signer (spec 03 5.7); exactly one
 		 * notification per consecutive run. Static in-context
-		 * storage keeps the footprint bounded. */
+		 * storage keeps the footprint bounded. The tracker and its
+		 * rx-ctx member exist only under CONFIG_LICHEN_SCHC (same
+		 * gate as link.h:451 and link_ctx.c:210). */
+#ifdef CONFIG_LICHEN_SCHC
 		if (ctx->schc_failures != NULL && ctx->peer_pubkey != NULL) {
 			lichen_schc_failure_record(ctx->schc_failures,
 						   ctx->peer_pubkey);
 		}
+#endif
 		ret = -EINVAL;
 		goto cleanup;
 	}
@@ -387,10 +391,12 @@ int lichen_link_rx(struct lichen_link_rx_ctx *ctx,
 	memcpy(out_ipv6, ipv6_buf, ipv6_len);
 	*out_len = ipv6_len;
 	memcpy(src_eui64, auth.info.src_eui64, LICHEN_EUI64_LEN);
+#ifdef CONFIG_LICHEN_SCHC
 	if (ctx->schc_failures != NULL && ctx->peer_pubkey != NULL) {
 		lichen_schc_failure_clear(ctx->schc_failures,
 					  ctx->peer_pubkey);
 	}
+#endif
 	ret = 0;
 
 cleanup:
