@@ -386,7 +386,8 @@ class Node:
         if self.config.rreq_jitter_min_ms > self.config.rreq_jitter_max_ms:
             raise ValueError("rreq_jitter_min_ms must not exceed rreq_jitter_max_ms")
         if (
-            type(self.config.node_capabilities) is not int
+            not isinstance(self.config.node_capabilities, int)
+            or isinstance(self.config.node_capabilities, bool)
             or not 0 <= self.config.node_capabilities <= MAX_CAPABILITY_BITMASK
         ):
             raise ValueError(
@@ -1200,32 +1201,37 @@ class Node:
         # entries are superseded flap history, and announcing to them would
         # disclose capabilities to DODAGs the node no longer belongs to.
         _previous, new_root = changes[-1]
-        self._capability_announce_seq += 1
-        self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
-        announcement = create_capability_announcement(
-            self.identity,
-            capabilities,
-            prefix=b"",
-            prefix_len=0,
-            expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
-            seq=self._capability_announce_seq,
-        )
-        request = Message(
-            code=POST,
-            _mtype=NON,
-            _mid=self._capability_announce_mid,
-            uri=f"coap://[{new_root}]/.well-known/capability-announce",
-            payload=announcement.to_cose_sign1(),
-        )
-        ipv6_bytes = wrap_coap(
-            yggdrasil_address(self.identity.pubkey),
-            new_root,
-            cast(bytes, request.encode()),
-            src_port=DEFAULT_COAP_PORT,
-            dst_port=DEFAULT_COAP_PORT,
-        )
-        if not await self.send(ipv6_bytes):
-            logger.warning("capability re-announce to new root %s routed to drop", new_root)
+        try:
+            self._capability_announce_seq += 1
+            self._capability_announce_mid = (self._capability_announce_mid + 1) & 0xFFFF
+            announcement = create_capability_announcement(
+                self.identity,
+                capabilities,
+                prefix=b"",
+                prefix_len=0,
+                expiry=int(time.time()) + CAPABILITY_ANNOUNCE_TTL_S,
+                seq=self._capability_announce_seq,
+            )
+            request = Message(
+                code=POST,
+                _mtype=NON,
+                _mid=self._capability_announce_mid,
+                uri=f"coap://[{new_root}]/.well-known/capability-announce",
+                payload=announcement.to_cose_sign1(),
+            )
+            ipv6_bytes = wrap_coap(
+                yggdrasil_address(self.identity.pubkey),
+                new_root,
+                cast(bytes, request.encode()),
+                src_port=DEFAULT_COAP_PORT,
+                dst_port=DEFAULT_COAP_PORT,
+            )
+            if not await self.send(ipv6_bytes):
+                logger.warning("capability re-announce to new root %s routed to drop", new_root)
+        except Exception:
+            # Fire-and-forget (bead 5e79): a build/sign/encode/send failure
+            # must not escape into the receive loop as an opaque traceback.
+            logger.exception("capability re-announce to new root %s failed", new_root)
 
     async def _transmit_peer_schc(
         self,

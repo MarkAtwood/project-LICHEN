@@ -32,7 +32,9 @@ from lichen.node import (
 )
 from lichen.rpl.dodag import INFINITE_RANK
 from lichen.rpl.messages import DIO, RPL_ICMPV6_TYPE, RplCode
+from lichen.schc.fragment import TILE_SIZE, Fragment
 from lichen.schc.headers import compress_packet
+from lichen.schc.reassembly import ReceiverResult
 
 IDENTITY = Identity.from_seed(bytes(range(32)))
 PEER = Identity.from_seed(bytes(range(32, 64)))
@@ -207,6 +209,50 @@ async def test_dio_ingress_wiring_triggers_reannounce(
     assert message.code == POST
 
 
+@pytest.mark.asyncio
+async def test_fragmented_dio_ingress_wiring_triggers_reannounce(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """bead lcf4: the fragment-reassembly DIO path also drains root changes.
+
+    Mirrors the unfragmented wiring test but enters through the
+    accept_authenticated_schc_fragment_dio -> process_authenticated_dio_evidence
+    branch (node.py fragment path).
+    """
+    node = _node()
+    sent = _capture_send(node, monkeypatch)
+    assert node.dodag is not None
+    peer = PeerIdentity.from_pubkey(PEER.pubkey)
+    evidence = object()
+
+    monkeypatch.setattr(node.link, "accept_authenticated_schc_sender_control", lambda _rx: None)
+    monkeypatch.setattr(
+        node.link,
+        "accept_authenticated_schc_fragment_dio",
+        lambda *_args, **_kwargs: (
+            ReceiverResult(reassembled=b"compressed-dio"),
+            bytes.fromhex("6000000000003b40") + bytes(32),
+            evidence,
+        ),
+    )
+
+    def admit_via_real_dodag(
+        _link: object, authenticated: object, *, expected_role: str, link_etx: float = 1.0
+    ) -> None:
+        assert authenticated is evidence
+        assert expected_role == "root"
+        node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=link_etx)
+
+    monkeypatch.setattr(node.dodag, "process_authenticated_dio_evidence", admit_via_real_dodag)
+
+    fragment = Fragment(0x78, 0, 62, bytes(TILE_SIZE)).to_bytes()
+    await node._process_received(_verified_rx(fragment, peer))
+
+    assert len(sent) == 1
+    message = _decode_post(sent[0], IPv6Address(DODAG_A))
+    assert message.code == POST
+
+
 def test_node_capabilities_bitmask_validation() -> None:
     for valid in range(MAX_CAPABILITY_BITMASK + 1):
         _node(capabilities=valid)  # must not raise
@@ -240,3 +286,41 @@ async def test_root_flap_announces_only_to_current_root(
     assert len(sent) == 1
     message = _decode_post(sent[0], IPv6Address(DODAG_A))
     assert message.code == POST
+
+
+def test_node_capabilities_accepts_capability_intflag() -> None:
+    """bead rawl: the config knob accepts the canonical Capability IntFlag."""
+    node = _node(capabilities=int(Capability.EGRESS | Capability.PREFIX_DELEGATION))
+    assert node.config.node_capabilities == 0b11
+    # IntFlag instances themselves must pass validation unchanged.
+    node2 = Node(
+        identity=IDENTITY,
+        radio=_CaptureRadio(),
+        config=NodeConfig(
+            rpl_instance_id=0,
+            rpl_dodag_id=IPv6Address(DODAG_A),
+            rpl_dodag_version=1,
+            rpl_dio_expected_role="root",
+            node_capabilities=Capability.EGRESS,
+        ),
+    )
+    assert node2.config.node_capabilities == Capability.EGRESS
+
+
+@pytest.mark.asyncio
+async def test_send_exception_is_contained_and_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """bead 5e79: a send failure must not escape the receive loop."""
+    node = _node()
+    assert node.dodag is not None
+
+    async def exploding_send(_ipv6_bytes: bytes) -> bool:
+        raise RuntimeError("link layer exploded")
+
+    monkeypatch.setattr(node, "send", exploding_send)
+    node.dodag.process_dio(_dio(DODAG_A), P1, link_etx=1.0)
+    with caplog.at_level("ERROR", logger="lichen.node"):
+        await node._reannounce_capabilities_to_new_root()  # must not raise
+    assert "capability re-announce to new root" in caplog.text
+    assert node.dodag.take_root_changes() == []  # still drained
