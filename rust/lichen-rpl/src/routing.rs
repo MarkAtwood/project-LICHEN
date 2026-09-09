@@ -941,12 +941,12 @@ impl DaoManager {
                     .collect::<Option<Vec<_>>>()?;
                 let selected_candidate = if disposition == DaoDiagnosticDisposition::Active {
                     self.routing_table
-                        .lookup(&target.octets())
+                        .lookup(*target)
                         .and_then(|path| {
                             let parent = if path.len() == 1 {
                                 self.node_address
                             } else {
-                                Ipv6Addr::from(path[path.len() - 2])
+                                path[path.len() - 2]
                             };
                             let candidate = self
                                 .candidate_map
@@ -1791,12 +1791,11 @@ impl DaoManager {
                     if routes.routes.len() >= MAX_ROUTES {
                         return None;
                     }
-                    let octets: Vec<[u8; 16]> = path.iter().map(Ipv6Addr::octets).collect();
                     routes.routes.insert(
-                        RouteTarget::host(target.octets()),
-                        RouteEntry::fresh(&octets),
+                        RouteTarget::host(*target),
+                        RouteEntry::fresh(&path),
                     );
-                    routes.rpl_managed_hosts.insert(target.octets());
+                    routes.rpl_managed_hosts.insert(*target);
                 }
                 Ok(None) => {}
                 Err(()) => return None,
@@ -1810,7 +1809,7 @@ impl DaoManager {
                 if let Some(entry) = routes.routes.get_mut(prefix) {
                     let _ = entry.mark_expired();
                 }
-            } else if let Some(path) = routes.lookup(egress) {
+            } else if let Some(path) = routes.lookup(*egress) {
                 let egress_path = path.to_vec();
                 if !egress_path.is_empty() {
                     routes
@@ -1839,15 +1838,15 @@ mod tests {
     #[test]
     fn routing_table_add_lookup_remove() {
         let mut table = RoutingTable::new();
-        let target = ll(3);
-        let path = [ll(2), ll(3)];
+        let target = Ipv6Addr::from(ll(3));
+        let path = [Ipv6Addr::from(ll(2)), target];
         assert!(table.add_route(target, &path));
 
         assert_eq!(table.len(), 1);
-        assert_eq!(table.lookup(&target), Some(path.as_slice()));
+        assert_eq!(table.lookup(target), Some(path.as_slice()));
 
-        table.remove_route(&target);
-        assert!(table.lookup(&target).is_none());
+        table.remove_route(target);
+        assert!(table.lookup(target).is_none());
         assert!(table.is_empty());
     }
 

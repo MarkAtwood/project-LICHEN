@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
+use core::net::Ipv6Addr;
+
 #[cfg(feature = "std")]
 use crate::srh::MAX_ROUTE_HOPS;
 
@@ -47,7 +49,7 @@ pub struct InvalidRouteEntryTransition {
 #[cfg(feature = "std")]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteEntry {
-    pub path: Vec<[u8; 16]>,
+    pub path: Vec<Ipv6Addr>,
     pub state: RouteEntryState,
 }
 
@@ -77,9 +79,9 @@ impl RouteTarget {
         Some(Self { prefix, prefix_len })
     }
 
-    pub const fn host(address: [u8; 16]) -> Self {
+    pub fn host(address: Ipv6Addr) -> Self {
         Self {
-            prefix: address,
+            prefix: address.octets(),
             prefix_len: 128,
         }
     }
@@ -92,7 +94,8 @@ impl RouteTarget {
         self.prefix_len
     }
 
-    pub fn contains(&self, address: &[u8; 16]) -> bool {
+    pub fn contains(&self, address: Ipv6Addr) -> bool {
+        let address = address.octets();
         let whole_bytes = usize::from(self.prefix_len / 8);
         if self.prefix[..whole_bytes] != address[..whole_bytes] {
             return false;
@@ -106,7 +109,7 @@ impl RouteTarget {
 
 #[cfg(feature = "std")]
 impl RouteEntry {
-    pub fn fresh(path: &[[u8; 16]]) -> Self {
+    pub fn fresh(path: &[Ipv6Addr]) -> Self {
         Self {
             path: path.to_vec(),
             state: RouteEntryState::Fresh,
@@ -133,7 +136,7 @@ impl RouteEntry {
         self.transition_to(RouteEntryState::Expired)
     }
 
-    pub fn refresh(&mut self, path: &[[u8; 16]]) -> Result<(), InvalidRouteEntryTransition> {
+    pub fn refresh(&mut self, path: &[Ipv6Addr]) -> Result<(), InvalidRouteEntryTransition> {
         if self.state == RouteEntryState::Expired {
             return Err(InvalidRouteEntryTransition {
                 from: self.state,
@@ -159,8 +162,8 @@ impl RouteEntry {
 pub struct RoutingTable {
     pub(crate) routes: HashMap<RouteTarget, RouteEntry>,
     pub(crate) prefix_route_count: usize,
-    pub(crate) rpl_managed_hosts: HashSet<[u8; 16]>,
-    pub(crate) rpl_managed_prefixes: HashMap<RouteTarget, [u8; 16]>,
+    pub(crate) rpl_managed_hosts: HashSet<Ipv6Addr>,
+    pub(crate) rpl_managed_prefixes: HashMap<RouteTarget, Ipv6Addr>,
     pub(crate) unavailable_managed_prefixes: HashSet<RouteTarget>,
 }
 
@@ -171,7 +174,7 @@ impl RoutingTable {
     }
 
     /// Add or replace a route, returning `false` if a new entry would exceed capacity.
-    pub fn add_route(&mut self, target: [u8; 16], path: &[[u8; 16]]) -> bool {
+    pub fn add_route(&mut self, target: Ipv6Addr, path: &[Ipv6Addr]) -> bool {
         self.add_target_route(RouteTarget::host(target), path)
     }
 
@@ -179,12 +182,14 @@ impl RoutingTable {
     pub fn add_prefix_route(
         &mut self,
         target: RouteTarget,
-        egress: [u8; 16],
-        path: &[[u8; 16]],
+        egress: Ipv6Addr,
+        path: &[Ipv6Addr],
     ) -> bool {
         if target.prefix_len == 128
             || path.last() != Some(&egress)
-            || path.iter().any(|hop| hop == target.prefix())
+            || path
+                .iter()
+                .any(|hop| hop.octets() == *target.prefix())
         {
             return false;
         }
@@ -202,7 +207,7 @@ impl RoutingTable {
         true
     }
 
-    fn add_target_route(&mut self, target: RouteTarget, path: &[[u8; 16]]) -> bool {
+    fn add_target_route(&mut self, target: RouteTarget, path: &[Ipv6Addr]) -> bool {
         if path.len() > MAX_ROUTE_HOPS {
             return false;
         }
@@ -226,8 +231,8 @@ impl RoutingTable {
         true
     }
 
-    pub fn remove_route(&mut self, target: &[u8; 16]) {
-        self.routes.remove(&RouteTarget::host(*target));
+    pub fn remove_route(&mut self, target: Ipv6Addr) {
+        self.routes.remove(&RouteTarget::host(target));
     }
 
     pub fn remove_prefix_route(&mut self, target: RouteTarget) {
@@ -240,25 +245,25 @@ impl RoutingTable {
 
     pub fn mark_stale(
         &mut self,
-        target: &[u8; 16],
+        target: Ipv6Addr,
     ) -> Option<Result<(), InvalidRouteEntryTransition>> {
         self.routes
-            .get_mut(&RouteTarget::host(*target))
+            .get_mut(&RouteTarget::host(target))
             .map(RouteEntry::mark_stale)
     }
 
     pub fn mark_expired(
         &mut self,
-        target: &[u8; 16],
+        target: Ipv6Addr,
     ) -> Option<Result<(), InvalidRouteEntryTransition>> {
         self.routes
-            .get_mut(&RouteTarget::host(*target))
+            .get_mut(&RouteTarget::host(target))
             .map(RouteEntry::mark_expired)
     }
 
-    pub fn entry_state(&self, target: &[u8; 16]) -> Option<RouteEntryState> {
+    pub fn entry_state(&self, target: Ipv6Addr) -> Option<RouteEntryState> {
         self.routes
-            .get(&RouteTarget::host(*target))
+            .get(&RouteTarget::host(target))
             .map(|entry| entry.state)
     }
 
@@ -272,11 +277,11 @@ impl RoutingTable {
     }
 
     /// Return the longest-prefix path for `target`, or `None` if no route is known.
-    pub fn lookup(&self, target: &[u8; 16]) -> Option<&[[u8; 16]]> {
+    pub fn lookup(&self, target: Ipv6Addr) -> Option<&[Ipv6Addr]> {
         if self.prefix_route_count == 0 {
             return self
                 .routes
-                .get(&RouteTarget::host(*target))
+                .get(&RouteTarget::host(target))
                 .filter(|entry| entry.is_usable())
                 .map(|entry| entry.path.as_slice());
         }

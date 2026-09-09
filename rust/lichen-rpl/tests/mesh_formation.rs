@@ -6,6 +6,8 @@
 //!   - Downward routing: root assembles source routes from DAOs
 //!   - Parent switching on link failure
 
+use core::net::Ipv6Addr;
+
 use lichen_hal::storage::mem::MemStorage;
 use lichen_link::{identity::Identity, keys::Seed};
 use lichen_rpl::{
@@ -145,27 +147,27 @@ fn downward_routes_assembled_from_daos() {
     // n2 sends DAO: target=n2, parent=root
     let mut mgr2 = DaoManager::new(n2.into(), 0, dodag_id().into());
     assert!(root.process_dao(&mgr2.build_dao(root_addr.into())));
-    assert_eq!(root.routing_table().lookup(&n2), Some(&[n2] as &[[u8; 16]]));
+    assert_eq!(root.routing_table().lookup(n2.into()), Some(&[n2.into()] as &[Ipv6Addr]));
 
     // n3 sends DAO: target=n3, parent=n2
     let mut mgr3 = DaoManager::new(n3.into(), 0, dodag_id().into());
     assert!(root.process_dao(&mgr3.build_dao(n2.into())));
     assert_eq!(
-        root.routing_table().lookup(&n3),
-        Some(&[n2, n3] as &[[u8; 16]])
+        root.routing_table().lookup(n3.into()),
+        Some(&[n2.into(), n3.into()] as &[Ipv6Addr])
     );
 
     // n5 sends DAO: target=n5, parent=root (single hop)
     let mut mgr5 = DaoManager::new(n5.into(), 0, dodag_id().into());
     assert!(root.process_dao(&mgr5.build_dao(root_addr.into())));
-    assert_eq!(root.routing_table().lookup(&n5), Some(&[n5] as &[[u8; 16]]));
+    assert_eq!(root.routing_table().lookup(n5.into()), Some(&[n5.into()] as &[Ipv6Addr]));
 
     // n4 sends DAO: target=n4, parent=n2 (two hops: root→n2→n4)
     let mut mgr4 = DaoManager::new(n4.into(), 0, dodag_id().into());
     assert!(root.process_dao(&mgr4.build_dao(n2.into())));
     assert_eq!(
-        root.routing_table().lookup(&n4),
-        Some(&[n2, n4] as &[[u8; 16]])
+        root.routing_table().lookup(n4.into()),
+        Some(&[n2.into(), n4.into()] as &[Ipv6Addr])
     );
 
     // Root has routes to all 4 non-root nodes
@@ -219,16 +221,16 @@ fn route_updates_when_node_reparents() {
     root.process_dao(&mgr4.build_dao(n3.into())); // n4 → n3
 
     assert_eq!(
-        root.routing_table().lookup(&n4),
-        Some(&[n2, n3, n4] as &[[u8; 16]])
+        root.routing_table().lookup(n4.into()),
+        Some(&[n2.into(), n3.into(), n4.into()] as &[Ipv6Addr])
     );
 
     // n3 fails; n4 reparents to n2 and sends a new DAO
     root.process_dao(&mgr4.build_dao(n2.into())); // n4 → n2 (shorter path)
 
     assert_eq!(
-        root.routing_table().lookup(&n4),
-        Some(&[n2, n4] as &[[u8; 16]])
+        root.routing_table().lookup(n4.into()),
+        Some(&[n2.into(), n4.into()] as &[Ipv6Addr])
     );
 }
 

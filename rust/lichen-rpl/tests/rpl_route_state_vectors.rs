@@ -27,8 +27,8 @@ fn hex_bytes(value: &str) -> Vec<u8> {
         .collect()
 }
 
-fn address(value: &Value) -> [u8; 16] {
-    hex_bytes(value.as_str().unwrap()).try_into().unwrap()
+fn address(value: &Value) -> Ipv6Addr {
+    Ipv6Addr::from(<[u8; 16]>::try_from(hex_bytes(value.as_str().unwrap())).unwrap())
 }
 
 fn hex(value: &[u8]) -> String {
@@ -111,19 +111,19 @@ fn assert_routes(manager: &DaoManager, expected: &Value, name: &str) {
         let prefix = address(&target["prefix"]);
         if target["selected_candidate"].is_null() {
             assert_eq!(
-                manager.routing_table().lookup(&prefix),
+                manager.routing_table().lookup(prefix),
                 None,
                 "{name}: unexpected route"
             );
         } else {
-            let path: Vec<[u8; 16]> = target["selected_candidate"]["path"]
+            let path: Vec<Ipv6Addr> = target["selected_candidate"]["path"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .map(address)
                 .collect();
             assert_eq!(
-                manager.routing_table().lookup(&prefix),
+                manager.routing_table().lookup(prefix),
                 Some(path.as_slice()),
                 "{name}: route path"
             );
@@ -309,7 +309,7 @@ fn canonical_route_state_vectors_match_production_manager() {
 
     for boundary in document["route_hop_boundaries"].as_array().unwrap() {
         let name = boundary["name"].as_str().unwrap();
-        let path: Vec<[u8; 16]> = boundary["path"]
+        let path: Vec<Ipv6Addr> = boundary["path"]
             .as_array()
             .unwrap()
             .iter()
@@ -324,7 +324,7 @@ fn canonical_route_state_vectors_match_production_manager() {
             "{name}: route acceptance"
         );
         assert_eq!(
-            table.lookup(&target),
+            table.lookup(target),
             expected_accepted.then_some(path.as_slice()),
             "{name}: route installation"
         );
@@ -420,7 +420,7 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         )
         .unwrap();
     let before = manager.route_state_diagnostic(authority.into(), timing.lifetime_unit_seconds);
-    let route_before = manager.routing_table().lookup(&target).unwrap().to_vec();
+    let route_before = manager.routing_table().lookup(Ipv6Addr::from(target)).unwrap().to_vec();
     let mut malformed = vec![0, 0, 0, 2, 5, 18, 0, 128];
     malformed.extend_from_slice(&target);
     malformed.extend_from_slice(&[OPT_TRANSIT_INFO, 0]);
@@ -433,7 +433,7 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         before
     );
     assert_eq!(
-        manager.routing_table().lookup(&target),
+        manager.routing_table().lookup(Ipv6Addr::from(target)),
         Some(route_before.as_slice())
     );
 
@@ -449,7 +449,7 @@ fn zero_length_transit_is_rejected_without_public_state_mutation() {
         before
     );
     assert_eq!(
-        manager.routing_table().lookup(&target),
+        manager.routing_table().lookup(Ipv6Addr::from(target)),
         Some(route_before.as_slice())
     );
 }
