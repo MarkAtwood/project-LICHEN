@@ -96,22 +96,50 @@ def _read_exact_snapshot(
     return b"".join(chunks)
 
 
+_OWNER_ONLY_GROUP_CACHE: dict[tuple[int, int], bool] = {}
+
+
 def _group_write_reaches_owner_only(info: os.stat_result) -> bool:
     """Whether the group-write bit admits no principal beyond the owner.
 
     Single-user hosts conventionally run umask 002 against a user-private
     group whose name equals the user name (the Debian/Ubuntu/RHEL adduser
     default), so a group-writable parent directory there is owner-writable
-    in effect and workspaces created with that umask stay usable. A host
-    whose group name does not match its user name is treated as a
-    shared-group host and keeps the strict no-group-write requirement.
+    in effect and workspaces created with that umask stay usable. The
+    convention is verified as far as the local name service allows: the
+    group must resolve to the owner's name with no additional members, and
+    no enumerated account may carry the group as its primary group. Names
+    that fail to resolve fail closed. Known limit: ``pwd.getpwall()``
+    enumerates only what NSS exposes — on clients with enumeration disabled
+    (e.g. SSSD ``enumerate = false``) a non-local account sharing the gid
+    would go undetected, so the primary-gid leg is best-effort there.
+
+    Verdicts are memoized per (uid, gid): group configuration is
+    process-stable for these short-lived generator runs, and the mode bits
+    — the mutable part — are re-validated by the caller on every snapshot.
     """
+    key = (info.st_uid, info.st_gid)
+    cached = _OWNER_ONLY_GROUP_CACHE.get(key)
+    if cached is not None:
+        return cached
+    verdict = _resolve_group_write_owner_only(info.st_uid, info.st_gid)
+    _OWNER_ONLY_GROUP_CACHE[key] = verdict
+    return verdict
+
+
+def _resolve_group_write_owner_only(uid: int, gid: int) -> bool:
     try:
-        user = pwd.getpwuid(info.st_uid).pw_name
-        group = grp.getgrgid(info.st_gid).gr_name
+        user = pwd.getpwuid(uid).pw_name
+        group_entry = grp.getgrgid(gid)
     except KeyError:
         return False
-    return bool(user) and group == user
+    if not user or group_entry.gr_name != user:
+        return False
+    if any(member != user for member in group_entry.gr_mem):
+        return False
+    return not any(
+        account.pw_name != user and account.pw_gid == gid for account in pwd.getpwall()
+    )
 
 
 def _parent_mode_unsafe(info: os.stat_result) -> bool:
