@@ -105,12 +105,24 @@ llm_semantic_merge() {
     # gating. Rewind restores main's checkout only — a session-created branch
     # with commits survives as debris (the loop only consumes beads-worker-*).
     # Residuals by design (tracked in follow-up beads): session writes to
-    # worker-branch refs, hooks/config, .beads content, push to remote.
-    local head_before ref_before merge_head_before staged_before
+    # worker-branch refs, hooks/config, .beads content, push to remote,
+    # staged CONTENT mutation of in-merge paths (name-set granularity only —
+    # hashing staged entries breaks the happy path, which must re-stage its
+    # resolutions), unstaged worktree vandalism of tracked files on the
+    # success path, and untracked-file wedges against later loop merges.
+    local head_before ref_before merge_head_before staged_before files_nl
+    local ref_after head_after merge_head_after staged_after why
     head_before=$(git rev-parse HEAD)
     ref_before=$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)
     merge_head_before=$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)
-    staged_before=$(git diff --cached --name-only | sort)
+    # The conflicted paths ($files) are excluded from the staged-set pin: the
+    # session MUST re-stage them to resolve, and an accept-ours resolution
+    # (staged blob == HEAD blob) legitimately drops the path from the
+    # name-only diff — comparing with them included wedges that valid
+    # resolution as a false "mutation" every sync. --no-renames keeps the
+    # name set stable against rename pairing.
+    files_nl=$(printf '%s\n' $files)
+    staged_before=$(git diff --cached --name-only --no-renames | grep -vxF "$files_nl" | sort)
 
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
@@ -132,11 +144,27 @@ llm_semantic_merge() {
     # Mutation guard runs BEFORE the rc early-return: a session that exits
     # non-zero (or is killed at the timeout) after mutating git state must
     # still be rewound, or ungated state persists on main.
-    if [ "$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)" != "$ref_before" ] ||
-       [ "$(git rev-parse HEAD)" != "$head_before" ] ||
-       [ "$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)" != "$merge_head_before" ] ||
-       [ "$(git diff --cached --name-only | sort)" != "$staged_before" ]; then
-        echo "  LLM session mutated git state mid-merge (ref $ref_before -> $(git symbolic-ref HEAD 2>/dev/null || echo DETACHED), HEAD $head_before -> $(git rev-parse HEAD)) — rewinding"
+    # (Resolution note, main vs beads-worker-1: beads-worker-1's form is kept
+    # — computing the after-values and the per-dimension why-list is the only
+    # form consistent with the staged-set pin above, which excludes the
+    # conflicted paths via $files_nl and --no-renames. Main's inline
+    # `git diff --cached --name-only | sort` compares against a different set
+    # than the pinned staged_before and would misfire as a false "mutation"
+    # on every run; the why-list also names exactly which dimension mutated
+    # and logs the full transitions. Main's ordering intent is preserved:
+    # this guard still runs before the rc early-return below.)
+    ref_after=$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)
+    head_after=$(git rev-parse HEAD)
+    merge_head_after=$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)
+    staged_after=$(git diff --cached --name-only --no-renames | grep -vxF "$files_nl" | sort)
+    why=""
+    [ "$ref_after" != "$ref_before" ] && why="$why ref"
+    [ "$head_after" != "$head_before" ] && why="$why HEAD"
+    [ "$merge_head_after" != "$merge_head_before" ] && why="$why MERGE_HEAD"
+    [ "$staged_after" != "$staged_before" ] && why="$why staged-set"
+    if [ -n "$why" ]; then
+        echo "  LLM session mutated git state mid-merge (${why# }) — rewinding"
+        echo "$(date +%FT%T) mutation:$why | ref $ref_before->$ref_after HEAD $head_before->$head_after MERGE_HEAD $merge_head_before->$merge_head_after" >> /tmp/lichen-kimi-last.log
         # .beads worktree changes from the session window are discarded with
         # the rewind — same policy as the caller's failure-path
         # 'git checkout -- .beads': session vandalism and live-worker writes
