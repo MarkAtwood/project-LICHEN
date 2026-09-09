@@ -113,7 +113,16 @@ fn multi_root_version_conflict_vector_semantics() {
     // behavior, not the version gate — so the semantics pin is kept.
     let v = find_case("multi_root_version_conflict_desync");
     assert_eq!(v["expected"], "desync");
-    assert_ne!(v["version"], v["alternate_version"]);
+    // Pin presence+type before the inequality (bead 686f): serde_json
+    // indexing yields Null for a missing key, and Null != anything — so
+    // assert_ne! alone passes if either field is deleted or renamed.
+    let version = v["version"]
+        .as_u64()
+        .expect("version present and integer-valued");
+    let alternate = v["alternate_version"]
+        .as_u64()
+        .expect("alternate_version present and integer-valued");
+    assert_ne!(version, alternate);
 }
 
 #[test]
