@@ -194,7 +194,7 @@ static int gnss_ag3335_resume(const struct device *dev)
 		return ret;
 	}
 
-	ret = modem_pipe_open(data->uart_pipe);
+	ret = modem_pipe_open(data->uart_pipe, K_SECONDS(10));
 	if (ret < 0) {
 		gnss_ag3335_power_off(dev);
 		return ret;
@@ -202,7 +202,7 @@ static int gnss_ag3335_resume(const struct device *dev)
 
 	ret = modem_chat_attach(&data->chat, data->uart_pipe);
 	if (ret < 0) {
-		modem_pipe_close(data->uart_pipe);
+		modem_pipe_close(data->uart_pipe, K_SECONDS(10));
 		gnss_ag3335_power_off(dev);
 		return ret;
 	}
@@ -210,7 +210,7 @@ static int gnss_ag3335_resume(const struct device *dev)
 	ret = modem_chat_run_script(&data->chat, &gnss_ag3335_init_chat_script);
 	if (ret < 0) {
 		modem_chat_release(&data->chat);
-		modem_pipe_close(data->uart_pipe);
+		modem_pipe_close(data->uart_pipe, K_SECONDS(10));
 		gnss_ag3335_power_off(dev);
 	}
 	return ret;
@@ -222,7 +222,7 @@ static int gnss_ag3335_suspend(const struct device *dev)
 	struct gnss_ag3335_data *data = dev->data;
 
 	modem_chat_release(&data->chat);
-	modem_pipe_close(data->uart_pipe);
+	modem_pipe_close(data->uart_pipe, K_SECONDS(10));
 	return gnss_ag3335_power_off(dev);
 }
 
@@ -234,6 +234,9 @@ static int gnss_ag3335_pm_action(const struct device *dev,
 		return gnss_ag3335_resume(dev);
 	case PM_DEVICE_ACTION_SUSPEND:
 		return gnss_ag3335_suspend(dev);
+	case PM_DEVICE_ACTION_TURN_ON:
+	case PM_DEVICE_ACTION_TURN_OFF:
+		return 0;
 	default:
 		return -ENOTSUP;
 	}
