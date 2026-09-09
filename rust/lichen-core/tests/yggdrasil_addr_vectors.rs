@@ -105,9 +105,9 @@ fn corpus_shape() {
         .filter(|v| v["expect_error"] == "pubkey_length")
         .count();
     assert!(error_cases >= 2, "length-rejection cases expected");
-    // Non-error vectors are the anchor plus any upstream-profile entries;
-    // the corpus may grow (e.g. shared-fixture keys) but every entry must
-    // carry the upstream profile.
+    // Non-error vectors are the anchor (which carries no profile field)
+    // plus any upstream-profile entries; the corpus may grow (e.g.
+    // shared-fixture keys) but every entry must carry the upstream profile.
     let upstream_cases = vectors
         .iter()
         .filter(|v| v["profile"] == "upstream_addr_for_key")
@@ -115,8 +115,8 @@ fn corpus_shape() {
     assert!(upstream_cases >= 10, "upstream derivation corpus expected");
     assert_eq!(
         vectors.len(),
-        error_cases + upstream_cases,
-        "live corpus must hold only upstream-profile vectors plus error cases"
+        error_cases + upstream_cases + 1,
+        "live corpus must hold only the anchor, upstream-profile vectors, and error cases"
     );
     // The rejected native profile must not leak back into the live corpus.
     assert!(
