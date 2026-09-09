@@ -266,7 +266,8 @@ static void test_table(void)
 	assert(lichen_capability_table_record(&t, &upd));
 	assert(lichen_capability_table_cached_seq(&t, live) == 5);
 
-	/* purge_expired drops lapsed entries and pins their floor. */
+	/* purge_expired drops lapsed entries; the floor pinned at record()
+	 * time survives the purge. */
 	struct lichen_capability_payload doomed = mk_payload(3, 0x0, 9, 10);
 	assert(lichen_capability_table_record(&t, &doomed));
 	uint8_t dseed[8]; memset(dseed, 3, 8); dseed[7] = 3;
@@ -347,4 +348,34 @@ static void test_floor_ledger_bounds(void)
 	assert(lichen_capability_table_record(&t, &after));
 	assert(seq_for_seed(&t, 0xF2) == -1);          /* pruned: lowest dead */
 	assert(seq_for_seed(&t, 0xF3) == 100U * 0xF3); /* dead but retained */
+
+	/* A pending raiser is itself a prune candidate: a new announcer
+	 * whose IID is lower than every dead floor gets no floor (Python
+	 * and Rust raise it and immediately bound it away), and the
+	 * protective dead floors survive. */
+	struct lichen_capability_table t2;
+	lichen_capability_table_init(&t2);
+	for (uint8_t i = 30; i <= 35; i++) {
+		struct lichen_capability_payload p = mk_payload(i, 0x0, i, 1000);
+		assert(lichen_capability_table_record(&t2, &p));
+	}
+	assert(lichen_capability_table_purge_expired(&t2, 2000) == 6);
+	for (uint8_t i = 36; i <= 41; i++) {
+		struct lichen_capability_payload p = mk_payload(i, 0x0, i, 100000);
+		assert(lichen_capability_table_record(&t2, &p));
+	}
+	/* Dead floors {34,35}; 36..41 live; ledger full. */
+	struct lichen_capability_payload low =
+		mk_payload(29, LICHEN_CAPABILITY_EGRESS, 100, 1500);
+	assert(lichen_capability_table_record(&t2, &low));
+	assert(seq_for_seed(&t2, 34) == 34); /* protective dead floor kept */
+	assert(seq_for_seed(&t2, 35) == 35);
+	assert(seq_for_seed(&t2, 29) == 100); /* live entry pins its seq */
+	/* Expiring 29 leaves no floor: the Python reference's purge_expired
+	 * (the only reference with expiry) captures no floors, so dead
+	 * floors 34/35 survive untouched. */
+	assert(lichen_capability_table_purge_expired(&t2, 2000) == 1);
+	assert(seq_for_seed(&t2, 29) == -1);
+	assert(seq_for_seed(&t2, 34) == 34);
+	assert(seq_for_seed(&t2, 35) == 35);
 }
