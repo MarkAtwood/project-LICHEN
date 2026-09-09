@@ -793,17 +793,18 @@ route_hash  = SHA-256(route_bytes)[0:16]
 ```
 
 Each `hop[i].addr` is the full 16-byte primary 02xx address of the transit
-node, in source-route order (first hop to last hop / egress). This matches
-the order and the 16-byte hop values carried in the IPv6 Source-Route Header
-(RFC 6554). The hash input is the hop ADDRESSES, not IIDs: under the
-AddrForKey profile (§8.5/§8.7) a primary 02xx address embeds no IID, so
-slicing 8 bytes off it yields a value with no identity meaning and would
-break the root-signer/egress-validator binding. (The IID remains a real
-identity — the SHA-512(pubkey) link-local derivation used for `kid` and
-`egress_iid` below — it is just not recoverable from the 02xx address.)
-Hashing the full addresses is deterministic for both root and egress without
-any pubkey lookup, and removes the 64-bit IID-collision false loop-rejection
-inherent in 8-byte hop comparison.
+node as reconstructed from the IPv6 Source-Route Header, in source-route
+order (first hop to last hop / egress). This matches the order and the
+16-byte hop values carried in the IPv6 Source-Route Header (RFC 6554). The
+hash input is the hop ADDRESSES, not IIDs: under the AddrForKey profile
+(§8.5/§8.7) a primary 02xx address embeds no IID, so slicing 8 bytes off it
+yields a value with no identity meaning and would break the
+root-signer/egress-validator binding. (The IID remains a real identity —
+the SHA-512(pubkey) link-local derivation used for `kid` and `egress_iid`
+below — it is just not recoverable from the 02xx address.) Hashing the full
+addresses is deterministic for both root and egress without any pubkey
+lookup, and removes the 64-bit IID-collision false loop-rejection inherent
+in 8-byte hop comparison.
 
 **Signature Computation (COSE_Sign1):**
 
