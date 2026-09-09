@@ -382,8 +382,11 @@ impl RplNode {
         now_ms: u64,
         dao_admission: &lichen_rpl::routing::DaoAdmissionState,
     ) -> DaoHandlingOutcome {
-        let iid = origin[8..].try_into().expect("IPv6 IID is eight bytes");
-        let pinned_key = announces.pinned_pubkey_for(&iid).or_else(|| {
+        // The DAO origin is the origin's primary 02xx address (spec 05-routing
+        // §8.6), which post-AddrForKey embeds no IID. Resolve the pinned key by
+        // full-address match against every pinned identity's AddrForKey, then
+        // fall back to the bounded snapshot (which re-verifies the signature).
+        let pinned_key = announces.pinned_pubkey_for_addr(&origin).or_else(|| {
             resolve_dao_signer_from_bounded_snapshot(
                 dao_bytes,
                 origin,

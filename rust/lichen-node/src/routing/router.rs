@@ -697,7 +697,13 @@ impl Router {
             use lichen_link::{identity::Identity, keys::Seed};
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
-                .find(|identity| identity.iid == packet_source[8..])
+                // The DAO packet source is the origin's primary 02xx address
+                // (AddrForKey), which post-migration embeds no IID. Recover
+                // the test identity by full-address match, not by slicing the
+                // low 64 bits.
+                .find(|identity| {
+                    lichen_link::ygg_addr_from_pubkey(identity.pubkey.as_bytes()) == packet_source
+                })
             else {
                 return false;
             };
