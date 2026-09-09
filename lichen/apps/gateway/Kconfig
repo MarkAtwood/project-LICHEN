@@ -196,7 +196,12 @@ config LICHEN_GATEWAY_PREFIX_DELEGATION
 	depends on LICHEN_RPL
 	depends on NET_DHCPV6
 	depends on NET_IPV6_ND
-	select WIFI
+	# WiFi backhaul boards (heltec_v3, t_deck) enable CONFIG_WIFI in their
+	# board .conf. Depending on WIFI instead of selecting it breaks the
+	# Zephyr 4.1 Kconfig recursion WIFI -> NET_IPV6 -> NET_CONFIG_AUTO_INIT
+	# -> USBD_CDC_ECM_CLASS -> NET_L2_ETHERNET -> WIFI_AIROC -> WIFI that
+	# aborted native_sim configure (jy0a).
+	depends on WIFI
 	select NET_L2_WIFI_MGMT
 	select NET_IPV6_ND6
 	imply NET_DHCPV6_CLIENT

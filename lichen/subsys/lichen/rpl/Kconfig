@@ -137,8 +137,12 @@ config LICHEN_CCP_TDMA
 	bool "CCP-1 TDMA time slots with RPL"
 	default y
 	depends on LICHEN_RPL
-	select LICHEN_TDMA
-	select LICHEN_CCP_TIME_SYNC
+	# LICHEN_TDMA and LICHEN_CCP_TIME_SYNC genuinely require
+	# LICHEN_LINK_CCP16_LOAD_BALANCING; unconditional selects produce
+	# unsatisfied-deps Kconfig warnings (fatal under WARN_TO_ERROR) on
+	# builds with the persist options off, e.g. native_sim gateway (jy0a).
+	select LICHEN_TDMA if LICHEN_LINK_CCP16_LOAD_BALANCING
+	select LICHEN_CCP_TIME_SYNC if LICHEN_LINK_CCP16_LOAD_BALANCING
 	help
 	  Enable TDMA integration for CCP-1 (coordinated capacity planning).
 	  Adds support for slot assignment, beacon sync, and tdma_tx_allowed()
