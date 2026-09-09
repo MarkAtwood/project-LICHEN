@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import time
 
 import cbor2
@@ -667,3 +669,234 @@ class TestPayloadIntegerKeys:
         assert decoded[3] == "team-alpha"
         assert decoded[4] == 1700000000
         assert decoded[5] == 42
+
+
+# ─── Wire-bytes verification (RFC 9052 4.4, C/Rust interop) ──────────────────
+
+
+def _foreign_delegation_envelope(identity, payload_map):
+    """Build a COSE_Sign1 envelope as a non-Python encoder might: payload map
+    in an order this module never emits, plus an extra protected-header entry.
+    Signed over the transported bstrs with schnorr48 directly (independent of
+    the module's own encoding helpers)."""
+    from hashlib import sha256
+
+    from lichen.crypto import schnorr48
+
+    payload = cbor2.dumps(payload_map)
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG, 99: b"x"})
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload])
+    signature = schnorr48.sign(identity.privkey, identity.pubkey, sha256(sig_structure).digest())
+    return cbor2.dumps([protected, {COSE_KID_LABEL: identity.iid}, payload, signature])
+
+
+def test_delegation_token_verified_over_received_wire_bytes() -> None:
+    delegator = Identity.from_seed(bytes(range(32)))
+    delegate = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    expiry = int(time.time()) + 3600
+    # Foreign key order (5,4,3,2,1) the module's to_cbor() never emits.
+    payload_map = {
+        5: 9,
+        4: expiry,
+        3: "team-alpha",
+        2: int(DelegationScope.INVITE),
+        1: delegate.iid,
+    }
+    envelope = _foreign_delegation_envelope(delegator, payload_map)
+    # Guard the differential: module re-encode would differ, so the old
+    # re-encode-verify path could never pass here.
+    assert cbor2.dumps(payload_map) != DelegationTokenPayload(
+        delegate=delegate.iid,
+        scope=int(DelegationScope.INVITE),
+        resource="team-alpha",
+        expiry=expiry,
+        seq=9,
+    ).to_cbor()
+    token = decode_delegation_token(envelope)
+    valid, error = verify_delegation_token(
+        token,
+        delegator_pubkey=delegator.pubkey,
+        delegate_iid=delegate.iid,
+        expected_resource="team-alpha",
+        current_time=int(time.time()),
+        is_delegator_owner=True,
+    )
+    assert (valid, error) == (True, None)
+
+
+def test_prefix_delegation_token_verified_over_received_wire_bytes() -> None:
+    from lichen.crypto.delegation_tokens import (
+        PrefixDelegationToken,
+        verify_prefix_delegation_token,
+    )
+
+    root = Identity.from_seed(bytes(range(32)))
+    delegate = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    expiry = int(time.time()) + 3600
+    # Foreign key order (6..1) the module's to_cbor() never emits.
+    payload_map = {6: 0, 5: 3, 4: expiry, 3: delegate.iid, 2: 64, 1: b"\x02" + b"\x00" * 7}
+    envelope = _foreign_delegation_envelope(root, payload_map)
+    token = PrefixDelegationToken.from_cose_sign1(envelope)
+    valid, error = verify_prefix_delegation_token(
+        token,
+        delegator_pubkey=root.pubkey,
+        delegate_iid=delegate.iid,
+        current_time=int(time.time()),
+    )
+    assert (valid, error) == (True, None)
+
+
+def test_capability_announcement_verified_over_received_wire_bytes() -> None:
+    """CapabilityAnnouncement retains+verifies wire bstrs (RFC 9052 4.4)."""
+    from hashlib import sha256
+
+    from lichen.crypto import schnorr48
+    from lichen.crypto.capability_announcements import (
+        Capability,
+        CapabilityAnnouncement,
+        CapabilityPayload,
+        verify_capability_announcement,
+    )
+
+    identity = Identity.from_seed(bytes(range(32)))
+    expiry = int(time.time()) + 3600
+    # Foreign key order (6..1) the module's to_cbor() never emits.
+    payload_map = {6: identity.iid, 5: 7, 4: expiry, 3: 64, 2: bytes(8), 1: int(Capability.EGRESS)}
+    payload = cbor2.dumps(payload_map)
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG, 99: b"x"})
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload])
+    signature = schnorr48.sign(identity.privkey, identity.pubkey, sha256(sig_structure).digest())
+    envelope = cbor2.dumps([protected, {COSE_KID_LABEL: identity.iid}, payload, signature])
+    # Guard the differential: module re-encode would differ.
+    assert payload != CapabilityPayload(
+        capabilities=int(Capability.EGRESS),
+        prefix=bytes(8),
+        prefix_len=64,
+        expiry=expiry,
+        seq=7,
+        announcer_iid=identity.iid,
+    ).to_cbor()
+    announcement = CapabilityAnnouncement.from_cose_sign1(envelope)
+    valid, error = verify_capability_announcement(
+        announcement=announcement,
+        pubkey=identity.pubkey,
+        current_time=int(time.time()),
+    )
+    assert (valid, error) == (True, None)
+
+
+# ─── Wire-bstr/payload consistency + immutability (2vp1) ─────────────────────
+
+
+def _delegation_token() -> DelegationToken:
+    delegator = Identity.from_seed(bytes(range(32)))
+    delegate = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    return create_delegation_token(
+        delegator, delegate.iid, DelegationScope.INVITE, "team-alpha",
+        int(time.time()) + 3600, 1,
+    )
+
+
+def test_delegation_token_replace_desync_rejected() -> None:
+    token = _delegation_token()
+    evil = DelegationTokenPayload(
+        delegate=token.payload.delegate, scope=VALID_SCOPE_MASK,
+        resource=token.payload.resource, expiry=token.payload.expiry, seq=2,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        dataclasses.replace(token, payload=evil)
+
+
+def test_delegation_token_mismatched_wire_bytes_rejected() -> None:
+    token = _delegation_token()
+    other = DelegationTokenPayload(
+        delegate=token.payload.delegate, scope=VALID_SCOPE_MASK,
+        resource=token.payload.resource, expiry=token.payload.expiry, seq=2,
+    ).to_cbor()
+    with pytest.raises(ValueError, match="do not decode"):
+        DelegationToken(
+            payload=token.payload, delegator_iid=token.delegator_iid,
+            signature=token.signature, protected_bytes=token.protected_bytes,
+            payload_bytes=other,
+        )
+
+
+def test_prefix_delegation_token_mismatched_wire_bytes_rejected() -> None:
+    from ipaddress import IPv6Address
+
+    from lichen.crypto.delegation_tokens import (
+        PrefixDelegationToken,
+        PrefixDelegationTokenPayload,
+        create_prefix_delegation_token,
+    )
+
+    root = Identity.from_seed(bytes(range(32)))
+    delegate = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    expiry = int(time.time()) + 3600
+    token = create_prefix_delegation_token(
+        root, delegate.iid, IPv6Address("0200::"), 64, expiry, 1
+    )
+    other = PrefixDelegationTokenPayload(
+        prefix=bytes(8), prefix_len=64, delegate_iid=delegate.iid,
+        expiry=expiry, delegation_seq=2, flags=0,
+    ).to_cbor()
+    with pytest.raises(ValueError, match="do not decode"):
+        PrefixDelegationToken(
+            payload=token.payload, delegator_iid=token.delegator_iid,
+            signature=token.signature, protected_bytes=token.protected_bytes,
+            payload_bytes=other,
+        )
+
+
+def test_delegation_token_is_frozen() -> None:
+    token = _delegation_token()
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        token.signature = b"\x00" * 48
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        token.payload.scope = VALID_SCOPE_MASK
+
+
+def test_prefix_token_garbage_wire_bytes_raise_valueerror() -> None:
+    # Non-map payload_bytes must surface as ValueError, not IndexError leaking
+    # from the lenient from_cbor (2vp1 review finding).
+    from lichen.crypto.delegation_tokens import PrefixDelegationToken, PrefixDelegationTokenPayload
+
+    delegate = Identity.from_seed(bytes(range(32)))
+    payload = PrefixDelegationTokenPayload(
+        prefix=bytes(8), prefix_len=64, delegate_iid=delegate.iid,
+        expiry=int(time.time()) + 3600, delegation_seq=1, flags=0,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        PrefixDelegationToken(
+            payload=payload, delegator_iid=bytes(8), signature=bytes(48),
+            protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
+            payload_bytes=cbor2.dumps([1, 2]),
+        )
+
+
+def test_prefix_token_truncated_wire_bytes_raise_valueerror() -> None:
+    # Truncated (undecodable) payload_bytes must surface as ValueError, not a
+    # raw cbor2.CBORDecodeError (round-2 review: CBORDecodeError is not a
+    # ValueError subclass in cbor2 5.9.0).
+    from lichen.crypto.delegation_tokens import PrefixDelegationToken, PrefixDelegationTokenPayload
+
+    delegate = Identity.from_seed(bytes(range(32)))
+    payload = PrefixDelegationTokenPayload(
+        prefix=bytes(8), prefix_len=64, delegate_iid=delegate.iid,
+        expiry=int(time.time()) + 3600, delegation_seq=1, flags=0,
+    )
+    with pytest.raises(ValueError, match="do not decode"):
+        PrefixDelegationToken(
+            payload=payload, delegator_iid=bytes(8), signature=bytes(48),
+            protected_bytes=cbor2.dumps({1: SCHNORR48_ED25519_ALG}),
+            payload_bytes=b"\xa1\x01",  # map(1) header, truncated value
+        )
+
+
+def test_prefix_from_cbor_rejects_non_map() -> None:
+    # A non-map payload must surface as TypeError (mirroring the sibling
+    # DelegationTokenPayload guard), not an IndexError from list indexing.
+    from lichen.crypto.delegation_tokens import PrefixDelegationTokenPayload
+
+    with pytest.raises(TypeError, match="CBOR map"):
+        PrefixDelegationTokenPayload.from_cbor(cbor2.dumps([1, 2]))

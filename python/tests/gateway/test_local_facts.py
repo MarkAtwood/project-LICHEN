@@ -251,3 +251,37 @@ def test_decoded_fact_reserializes_byte_stably() -> None:
     assert reencoded[2] == payload
     relayed = LocalFact.from_cose_sign1(fact.to_cose_sign1())
     assert verify_local_fact(relayed, gw.pubkey) is True
+
+
+# ─── Wire-bstr/claims consistency (2vp1) ─────────────────────────────────────
+
+
+def test_local_fact_replace_desync_rejected() -> None:
+    import dataclasses as dc
+
+    fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True, priority=0))
+    with pytest.raises(LocalFactError, match="do not decode"):
+        dc.replace(fact, claims=LocalFactClaims(relay=True, priority=3))
+
+
+def test_local_fact_mismatched_wire_bytes_rejected() -> None:
+    fact = issue_local_fact(_gateway(), LocalFactClaims(relay=True))
+    other = LocalFactClaims(relay=True, quota=5).to_cbor()
+    with pytest.raises(LocalFactError, match="do not decode"):
+        LocalFact(
+            claims=fact.claims,
+            issuer_iid=fact.issuer_iid,
+            signature=fact.signature,
+            protected_bytes=fact.protected_bytes,
+            payload_bytes=other,
+        )
+
+
+def test_local_fact_issue_with_list_channel() -> None:
+    # channel is accepted as list or tuple; issuance must not false-reject a
+    # list (2vp1 review: from_cbor normalizes to tuple, so the wire-bstr
+    # consistency check must see equal claims either way).
+    gw = _gateway()
+    fact = issue_local_fact(gw, LocalFactClaims(relay=True, channel=["ops", "eng"]))
+    assert fact.claims.channel == ("ops", "eng")
+    assert verify_local_fact(fact, gw.pubkey) is True
