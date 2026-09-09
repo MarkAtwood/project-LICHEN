@@ -2018,6 +2018,16 @@ mod tests {
     }
 
     // ── Binding Invariants (test vectors: binding_invariant_*) ───────────────
+    //
+    // QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
+    // invariant asserted here (ygg_addr[8:16] == IID) is an artifact of the
+    // REJECTED SHA-512 native profile. Upstream AddrForKey bit-packs the
+    // inverted key and does NOT embed the IID in the low 64 bits, so these
+    // tests hold only while lichen-core ygg_addr_from_pubkey is unmigrated.
+    // Tripwire: they MUST be regenerated as pinned upstream AddrForKey
+    // byte-equality assertions when i72x.2 lands and the gcp3_trust_models.json
+    // corpus flips (its binding_* entries are marked live_conformance:false).
+    // See the matching QUARANTINE note in rust/lichen-link/src/trust.rs.
 
     #[test]
     fn binding_invariant_alice() {

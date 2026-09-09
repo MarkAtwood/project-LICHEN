@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "format_version": 2,
   "name": "gcp3_trust_models",
-  "description": "GCP-3 Trust Models test vectors per spec/08-gateway-coordination.md. Covers key derivation (pubkey->IID->02xx), TOFU verification, key rotation with Schnorr signatures, open/closed federation, PSK derivation, and binding invariants. Python oracle: lichen.crypto.trust.",
+  "description": "GCP-3 Trust Models test vectors per spec/08-gateway-coordination.md. Covers key derivation (pubkey->IID->02xx), TOFU verification, key rotation with Schnorr signatures, open/closed federation, PSK derivation, and binding invariants. Python oracle: lichen.crypto.trust. NOTE: all ygg_addr/ygg_addr_str fields in this corpus encode the REJECTED SHA-512 native profile ([0x02]+SHA-512(pubkey)[0:7]+IID), and the 'binding' category entries (binding_invariant_*) additionally assert the withdrawn invariant ygg_addr[8:16]==IID as binding_valid:true. These are quarantined as internal-consistency reference only (live_conformance:false), NOT addressing conformance oracles, per spec/decisions.jsonl upstream-yggdrasil-addressing: upstream AddrForKey bit-packs the inverted key and does NOT embed the IID. Regenerate as pinned upstream AddrForKey byte-equality vectors when the i72x migration lands.",
   "spec": "spec/08-gateway-coordination.md Section 3",
   "vectors": [
     {
@@ -178,8 +178,11 @@
     },
     {
       "name": "binding_invariant_alice",
-      "description": "Binding invariant: ygg_addr[8:16] == IID for alice.",
+      "description": "REJECTED-PROFILE REFERENCE (not live conformance): native-profile binding artifact ygg_addr[8:16] == IID for alice. The upstream-yggdrasil-addressing decision (spec/decisions.jsonl) withdraws this invariant: upstream AddrForKey bit-packs the inverted key and does NOT embed the IID in the low 64 bits. Quarantined as internal-consistency reference only; see tripwire.",
       "category": "binding",
+      "profile": "rejected-native-sha512",
+      "live_conformance": false,
+      "tripwire": "Flip-on-migration: when lichen-core ygg_addr_from_pubkey migrates to upstream AddrForKey (i72x.2) and this corpus regenerates (i72x.6/osjz), the ygg_addr[8:16]==IID form no longer holds and binding_valid must be recomputed FALSE for it; replace with pinned upstream AddrForKey byte-equality vectors. Oracle: test/vectors/yggdrasil_address.json#upstream_addr_for_key.",
       "pubkey": "4cb5abf6ad79fbf5abbccafcc269d85cd2651ed4b885b5869f241aedf0a5ba29",
       "ygg_addr": "02fd6b265c858536fd6b265c8585369b",
       "ygg_lower64": "fd6b265c8585369b",
@@ -188,8 +191,11 @@
     },
     {
       "name": "binding_invariant_bob",
-      "description": "Binding invariant: ygg_addr[8:16] == IID for bob.",
+      "description": "REJECTED-PROFILE REFERENCE (not live conformance): native-profile binding artifact ygg_addr[8:16] == IID for bob. The upstream-yggdrasil-addressing decision (spec/decisions.jsonl) withdraws this invariant: upstream AddrForKey bit-packs the inverted key and does NOT embed the IID in the low 64 bits. Quarantined as internal-consistency reference only; see tripwire.",
       "category": "binding",
+      "profile": "rejected-native-sha512",
+      "live_conformance": false,
+      "tripwire": "Flip-on-migration: when lichen-core ygg_addr_from_pubkey migrates to upstream AddrForKey (i72x.2) and this corpus regenerates (i72x.6/osjz), the ygg_addr[8:16]==IID form no longer holds and binding_valid must be recomputed FALSE for it; replace with pinned upstream AddrForKey byte-equality vectors. Oracle: test/vectors/yggdrasil_address.json#upstream_addr_for_key.",
       "pubkey": "7422b9887598068e32c4448a949adb290d0f4e35b9e01b0ee5f1a1e600fe2674",
       "ygg_addr": "02888bcf64cfefa3888bcf64cfefa304",
       "ygg_lower64": "888bcf64cfefa304",
