@@ -459,8 +459,14 @@ impl DaoManager {
         }
     }
 
+    /// This node's own address as configured at construction.
+    pub fn node_address(&self) -> Ipv6Addr {
+        self.node_address
+    }
+
     fn as_root(node_address: Ipv6Addr, rpl_instance_id: u8, dodag_id: Ipv6Addr) -> Self {
         let mut m = Self::new(node_address, rpl_instance_id, dodag_id);
+
         m.is_root = true;
         m
     }

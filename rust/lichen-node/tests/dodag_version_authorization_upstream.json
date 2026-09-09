@@ -1,0 +1,20 @@
+{
+ "format_version": 2,
+ "name": "dodag_version_authorization",
+ "description": "Canonical root-owned DODAG version authorization propagated unchanged across link-authenticated RPL relays. UPSTREAM-AddrForKey variant (i72x.2): DODAGID recomputed with yggdrasil-go@422836ee semantics and re-signed with the reference schnorr48; shared corpus flips in i72x.6.",
+ "spec": "spec/05-routing.md Section 8.4.1",
+ "vectors": [
+  {
+   "name": "root_version_one",
+   "seed": "6161616161616161616161616161616161616161616161616161616161616161",
+   "root_pubkey": "af06a3e3291714e4f356c19c9b15cd1951ec6e6662aa77be07547f289383341d",
+   "rpl_instance_id": "0",
+   "dodag_id": "0200a1f2b839add1d63619527cc6c9d4",
+   "dodag_version": 1,
+   "transcript": "4c494348454e2d52504c2d444f4441472d56455253494f4e2d7631000200a1f2b839add1d63619527cc6c9d401",
+   "signature": "ee30fd51b804f1a25ae91df86a6f10cc530b314de0d0d5c4e628a5d4e5dd1aaf46930672af7c4d1d2eb113369b12900c",
+   "option": "165101af06a3e3291714e4f356c19c9b15cd1951ec6e6662aa77be07547f289383341dee30fd51b804f1a25ae91df86a6f10cc530b314de0d0d5c4e628a5d4e5dd1aaf46930672af7c4d1d2eb113369b12900c",
+   "expected_valid": true
+  }
+ ]
+}

@@ -291,6 +291,18 @@ impl AnnounceProcessor {
         )
     }
 
+    /// Resolve a pinned public key by the peer's routable 0200::/8 address.
+    ///
+    /// Upstream AddrForKey does not embed the IID in the address (i72x.2), so
+    /// the origin IID is not recoverable from the address bytes; scan the
+    /// pinned table (bounded by the announce table capacity) instead.
+    pub fn pinned_pubkey_for_routable(&self, addr: &[u8; 16]) -> Option<PublicKey> {
+        self.pinned_keys
+            .values()
+            .map(|entry| PublicKey::new(entry.pubkey))
+            .find(|key| lichen_core::addr::ygg_addr_from_pubkey(key.as_bytes()) == *addr)
+    }
+
     pub fn pinned_pubkey_for(&self, iid: &[u8; 8]) -> Option<PublicKey> {
         if let Some(entry) = self.pinned_keys.get(iid) {
             let public_key = PublicKey::new(entry.pubkey);
