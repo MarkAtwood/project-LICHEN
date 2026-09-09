@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-yc6p",
   "title": "ci.yml: add permissions: contents: read (rust jobs run with default GITHUB_TOKEN)",
   "description": "Security review finding (mbzu pass-2): ci.yml has no permissions block, so all jobs run with the repo-default GITHUB_TOKEN; rust-build-test/clippy/all-features compile cloned external content (oscore-fork build.rs executes). Workflow never writes via the token. Fix: permissions: contents: read at workflow top level (or per-job) in ci.yml; check other workflows too.",
-  "status": "open",
+  "status": "in_progress",
   "priority": 3,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T07:30:00.772442795Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-31T07:30:00.772442795Z",
+  "updated_at": "2026-09-09T13:36:54.36659637Z",
+  "started_at": "2026-09-09T13:36:54.36659637Z",
+  "lease_expires_at": "2026-09-09T13:41:54.36659637Z",
+  "heartbeat_at": "2026-09-09T13:36:54.36659637Z",
   "labels": [
     "rust"
   ]

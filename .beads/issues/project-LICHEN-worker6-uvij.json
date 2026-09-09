@@ -2,17 +2,17 @@
   "id": "project-LICHEN-worker6-uvij",
   "title": "Rust native-address documentation still labels exact 0200 prefix as /7",
   "description": "Rust production code constructs and routes native addresses with byte 0 exactly 0x02, matching the resolved 0200::/8 profile, but lichen-core/src/addr.rs, lichen-gateway/src/config.rs, and gateway trust docs still describe 0200::/7 and /7 dispersion. This contradicts API invariants and can lead callers to admit 0x03 addresses. Update Rust documentation/comments to exact /8 terminology; do not alter canonical derivation bytes.",
-  "status": "in_progress",
+  "status": "closed",
   "priority": 3,
   "issue_type": "bug",
   "assignee": "Mark Atwood",
   "owner": "me@mark.atwood.name",
   "created_at": "2026-08-24T16:06:26.937164Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-09T13:23:26.655896058Z",
+  "updated_at": "2026-09-09T13:36:26.840855604Z",
   "started_at": "2026-08-24T16:06:32.51508Z",
-  "lease_expires_at": "2026-09-09T13:28:26.655896058Z",
-  "heartbeat_at": "2026-09-09T13:23:26.655896058Z",
+  "closed_at": "2026-09-09T13:36:26.840855604Z",
+  "close_reason": "Fixed: the three named files (addr.rs, config.rs, trust.rs) were already /8-clean; the sole remaining stale site was rust/lichen-node/src/node.rs:198 comment '0200::/7 AddrForKey identity' -\u003e '0200::/8'. Verified no other 0200::/7 variants remain in rust/ (fc00::/7 ULA hits are correct RFC 4193). cargo check -p lichen-node green. 3x delegated codereview (kimi-k3): pass1 found 2 adjacent comment-accuracy nits (stale i72x.2 forward-ref, link-local-arm misstatement) -\u003e filed as a8q1 per protocol; pass2 security PASS (change moves terminology in the secure direction); pass3 edge PASS (last /7 instance, // comment, no rustdoc leak).",
   "labels": [
     "rust"
   ]
