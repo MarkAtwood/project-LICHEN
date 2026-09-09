@@ -21,6 +21,7 @@ from lichen.crypto import (
 from lichen.crypto.capability_announcements import (
     COSE_ALG_LABEL,
     COSE_KID_LABEL,
+    _announcer_iid_from_pubkey,
     _build_sig_structure,
     _encode_protected_header,
 )
@@ -259,7 +260,10 @@ class TestCreateAndVerify:
         )
 
         assert announcement.payload.capabilities == 1
-        assert announcement.payload.announcer_iid == identity.iid
+        # announcer_iid = low 8 bytes of upstream AddrForKey(pubkey) (kd0p)
+        assert announcement.payload.announcer_iid == _announcer_iid_from_pubkey(
+            identity.pubkey
+        )
         assert len(announcement.signature) == 48
 
     def test_verify_valid_announcement(self, identity: Identity) -> None:
@@ -476,7 +480,7 @@ class TestCoseSign1Encoding:
 
         # Unprotected header contains kid
         assert COSE_KID_LABEL in unprotected
-        assert unprotected[COSE_KID_LABEL] == identity.iid
+        assert unprotected[COSE_KID_LABEL] == _announcer_iid_from_pubkey(identity.pubkey)
 
         # Signature is 48 bytes
         assert len(signature) == 48

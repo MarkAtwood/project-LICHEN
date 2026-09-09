@@ -218,7 +218,7 @@ impl CapabilityAnnouncement {
     }
 }
 
-/// Derive the announcer IID from a public key (native 02xx profile).
+/// Derive the announcer IID from a public key (low half of upstream AddrForKey).
 fn pubkey_to_iid(pubkey: &[u8; 32]) -> [u8; 8] {
     let address = ygg_addr_from_pubkey(pubkey);
     let mut iid = [0u8; 8];
