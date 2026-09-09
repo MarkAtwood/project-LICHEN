@@ -1213,9 +1213,12 @@ impl Gateway {
         if peer_pubkeys.len() > MAX_GCP_OSCORE_CONTEXTS {
             return Err(GatewayFederationError::TooManyPeers);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .expect("gateway address has a complete IID");
+        // The OSCORE ids and the LocalPeer check bind the canonical identity
+        // IID (SHA-512(pubkey)[0:8]), not the routable address in
+        // coordinator.info.iid (upstream AddrForKey: its low half is
+        // bit-packed key material, never the IID). install_gcp_context
+        // cross-checks sender_id against the same identity IID.
+        let local_iid: [u8; 8] = self.coordinator.own_identity_iid();
         let mut contexts = Vec::with_capacity(peer_pubkeys.len());
         let mut peer_iids = Vec::with_capacity(peer_pubkeys.len());
         for pubkey in peer_pubkeys {

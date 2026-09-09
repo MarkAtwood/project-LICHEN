@@ -128,7 +128,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 }
                 if !rpl_ipv6_multicast_is_allowed(&received.ipv6)
                     || !valid_rpl_ipv6(&received.ipv6)
-                    || !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr)
+                    || !dio_dis_destination_is_allowed(&received.ipv6, self.local_control_addr)
                 {
                     return Ok(Some(RplBorderIngressOutcome::Control(
                         RplReceiveOutcome::RplRejected,
@@ -320,7 +320,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 if !valid_rpl_ipv6(&received.ipv6) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
-                if !dio_dis_destination_is_allowed(&received.ipv6, self.local_rpl_addr) {
+                if !dio_dis_destination_is_allowed(&received.ipv6, self.local_control_addr) {
                     return Ok(Some(RplReceiveOutcome::RplRejected));
                 }
                 self.process_rpl(frame, received, now_ms).await.map(Some)
