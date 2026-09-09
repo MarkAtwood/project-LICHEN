@@ -4,13 +4,15 @@
   "description": "Record Mark's current clarifications: all routable IPv6 addressing must be upstream-compatible Yggdrasil, not a custom SHA512 native profile; custody delivery remains best effort, with MUST requirements defining conforming node behavior rather than enforceable guarantees. Scope is decision ledger, agent guidance and existing Beads alignment; no runtime or fixture migration during this design discussion.",
   "design": "Append adjudicated decisions to spec/decisions.jsonl; mirror focused guidance in AGENTS.md and CLAUDE.md; annotate existing upstream-address migration tasks and persistent memory. Distinguish Yggdrasil /7 aggregate, /8 node space with /128 identities, and /8 subnet space with /64 allocations. Preserve standard link-local/multicast control. Do not reopen upstream compatibility or invent a substitute profile. Avoid implying compliance or delivery is enforceable against failed or malicious custodians.",
   "acceptance_criteria": "Both user decisions recorded without overclaiming implementation completion; instruction files agree; existing addressing work no longer treats custom SHA512 vectors as authority; JSONL parses and focused doc diff checks pass.",
-  "status": "open",
+  "status": "closed",
   "priority": 1,
   "issue_type": "epic",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-09-08T23:50:55.80761637Z",
   "created_by": "Mark Atwood",
-  "updated_at": "2026-09-08T23:50:55.80761637Z",
+  "updated_at": "2026-09-08T23:58:54.958561855Z",
+  "closed_at": "2026-09-08T23:58:54.958561855Z",
+  "close_reason": "Both user clarifications recorded in spec/decisions.jsonl and mirrored agent guidance, existing addressing tasks and persistent context aligned. JSONL parse/unique-ID and scoped doc diff checks passed; focused independent review found no issues. Repository-wide diff check found unrelated concurrent lora_l2_rx.c conflict markers, left untouched. Guidance-only work; no implementation migration, custody-policy change, commit or push.",
   "labels": [
     "spec",
     "decision"
