@@ -12,6 +12,11 @@ from hashlib import sha512
 # Single definition; COSE modules import from here.
 SCHNORR48_ED25519_ALG = -65537
 
+# COSE header labels (RFC 9052). Single definition; COSE modules
+# import from here.
+COSE_ALG_LABEL = 1  # Algorithm
+COSE_KID_LABEL = 4  # Key ID
+
 from nacl.bindings import (
     crypto_core_ed25519_is_valid_point,
     crypto_core_ed25519_scalar_reduce,
