@@ -14,6 +14,7 @@
 
 static void test_corpus(void);
 static void test_malformed(void);
+static void test_table(void);
 
 #include "capability_announce_vectors.h"
 
@@ -206,6 +207,67 @@ int main(void)
 {
 	test_corpus();
 	test_malformed();
+	test_table();
 	printf("capability_announce: all tests passed\n");
 	return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Capability table (spec 8.12): LRU + 25% egress reservation + eviction
+ * seq-floor ledger.  CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY is 8 here, so
+ * the egress-reserved tail is 2 and non-egress inserts cap at 6.
+ */
+
+static struct lichen_capability_payload mk_payload(uint8_t seed, uint32_t caps,
+						   uint64_t seq, uint64_t expiry)
+{
+	struct lichen_capability_payload p = { 0 };
+	memset(p.announcer_iid, seed, 8);
+	p.announcer_iid[7] = seed; /* distinct IIDs per seed */
+	p.capabilities = caps;
+	p.seq = seq;
+	p.expiry = expiry;
+	return p;
+}
+
+static void test_table(void)
+{
+	struct lichen_capability_table t;
+	lichen_capability_table_init(&t);
+
+	/* Unknown announcer reports no baseline. */
+	assert(lichen_capability_table_cached_seq(&t, (const uint8_t *)"nonexist") == -1);
+
+	/* Non-egress inserts fill to capacity - reserved (6 of 8). */
+	for (uint8_t i = 1; i <= 6; i++) {
+		struct lichen_capability_payload p = mk_payload(i, 0x0, i, 1000);
+		assert(lichen_capability_table_record(&t, &p));
+	}
+	/* 7th non-egress insert would consume the reserved tail: refused. */
+	struct lichen_capability_payload extra = mk_payload(7, 0x0, 7, 1000);
+	assert(!lichen_capability_table_record(&t, &extra));
+
+	/* Egress insert reclaims the reserved tail via LRU eviction. */
+	struct lichen_capability_payload eg = mk_payload(0xe0, LICHEN_CAPABILITY_EGRESS, 100, 1000);
+	assert(lichen_capability_table_record(&t, &eg));
+	/* The LRU victim was seed=1 (seq 1); its floor survives eviction. */
+	uint8_t victim[8] = { 0 };
+	memset(victim, 1, 8); victim[7] = 1;
+	assert(lichen_capability_table_cached_seq(&t, victim) == 1);
+
+	/* cached_seq for a live entry returns its seq. */
+	uint8_t live[8]; memset(live, 2, 8); live[7] = 2;
+	assert(lichen_capability_table_cached_seq(&t, live) == 2);
+
+	/* Insert-or-refresh updates an existing entry. */
+	struct lichen_capability_payload upd = mk_payload(2, 0x2, 5, 2000);
+	assert(lichen_capability_table_record(&t, &upd));
+	assert(lichen_capability_table_cached_seq(&t, live) == 5);
+
+	/* purge_expired drops lapsed entries and pins their floor. */
+	struct lichen_capability_payload doomed = mk_payload(3, 0x0, 9, 10);
+	assert(lichen_capability_table_record(&t, &doomed));
+	uint8_t dseed[8]; memset(dseed, 3, 8); dseed[7] = 3;
+	assert(lichen_capability_table_purge_expired(&t, 10) == 1);
+	assert(lichen_capability_table_cached_seq(&t, dseed) == 9);
 }

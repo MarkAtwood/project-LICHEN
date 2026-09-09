@@ -17,9 +17,24 @@ config LICHEN_CAPABILITY_ANNOUNCE
 	select LICHEN_CRYPTO_MONOCYPHER
 	select TINYCRYPT
 	select TINYCRYPT_SHA256
+	select LICHEN_TUNNEL_AUTH
 	help
 	  Verify node capability announcements (COSE_Sign1, Schnorr48) received
-	  by the DODAG root per spec/06-security.md section 8.12.
+	  by the DODAG root per spec/06-security.md section 8.12. The CoAP
+	  resource reuses tunnel_auth's OSCORE authorize helper and sender-IID
+	  extraction, so it selects LICHEN_TUNNEL_AUTH.
+
+if LICHEN_CAPABILITY_ANNOUNCE
+
+config LICHEN_CAPABILITY_TABLE_CAPACITY
+	int "Maximum capability table entries (spec 8.12)"
+	default 256
+	range 4 512
+	help
+	  Bounded LRU capability table. The spec-recommended capacity is 256
+	  with up to 25% reserved for egress-bit announcements.
+
+endif
 
 if LICHEN_TUNNEL_AUTH
 
