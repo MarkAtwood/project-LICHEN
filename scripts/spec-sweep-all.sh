@@ -41,7 +41,23 @@ for SECTION in $SECTIONS; do
     SECNAME=$(basename "$SECTION" .md)
     MATRIX="$REPO_ROOT/docs/spec-coverage/$SECNAME.md"
     FLAGGED="$REPO_ROOT/docs/spec-coverage/$SECNAME-flagged.md"
-    [ -f "$MATRIX" ] && { echo "skip $SECNAME (already swept)"; continue; }
+    VERIFY_LOG="$REPO_ROOT/docs/spec-coverage/$SECNAME-verify.log"
+
+    # Already-swept section: still run the Opus verify pass if it was swept but
+    # never verified (flagged set present, verify log empty/missing). Closes the
+    # resume gap where a prior run reached the matrix before the verify block.
+    if [ -f "$MATRIX" ]; then
+        if [ -f "$FLAGGED" ] && [ ! -s "$VERIFY_LOG" ]; then
+            echo "── Opus verification (previously swept, unverified): $SECNAME ──"
+            opencode run --model "$OPUS_MODEL" "$(cat "$REPO_ROOT/scripts/opus-verify-prompt.md")
+
+SPEC SECTION: $REPO_ROOT/$SECTION
+FLAGGED SET: $(cat "$FLAGGED")" 2>&1 | tee -a "$VERIFY_LOG" | tail -2
+        else
+            echo "skip $SECNAME (already swept)"
+        fi
+        continue
+    fi
 
     # No credit gating: auto-topup keeps the balance healthy, and killing a
     # mid-extraction session wastes its paid work and forces a full-price
