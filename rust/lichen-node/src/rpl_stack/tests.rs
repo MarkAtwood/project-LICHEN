@@ -21,7 +21,6 @@ use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
 use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
 use lichen_link::frame::{AddrMode, LichenFrame};
 use lichen_link::identity::{Identity, PeerIdentity};
-use lichen_link::keys::PublicKey;
 use lichen_link::keys::Seed;
 use lichen_link::link_layer::{LinkLayer, LinkRxError};
 use lichen_link::schnorr;
@@ -2584,7 +2583,7 @@ async fn dao_tx_scheduler_idles_then_schedules_on_join() {
     let second = leaf.dao_tx_advance(2_500);
     match (first, second) {
         (DaoTxAdvance::NotYet { remaining_ms }, DaoTxAdvance::NotYet { .. }) => {
-            assert!(remaining_ms >= 1 && remaining_ms <= 2_000);
+            assert!((1..=2_000).contains(&remaining_ms));
         }
         (DaoTxAdvance::Due, _) | (_, DaoTxAdvance::Due) => {}
         other => panic!("unexpected scheduler state: {other:?}"),
@@ -2596,7 +2595,7 @@ async fn dao_tx_scheduler_idles_then_schedules_on_join() {
     match (first, second) {
         (DaoTxAdvance::NotYet { remaining_ms }, DaoTxAdvance::NotYet { .. }) => {
             // deadline in [2000, 4000] -> remaining in [1, 2000]
-            assert!(remaining_ms >= 1 && remaining_ms <= 2_000);
+            assert!((1..=2_000).contains(&remaining_ms));
         }
         (DaoTxAdvance::Due, _) | (_, DaoTxAdvance::Due) => {
             // random offset 0 -> immediately due at now_ms >= deadline

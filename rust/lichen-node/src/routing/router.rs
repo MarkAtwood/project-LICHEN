@@ -944,7 +944,7 @@ impl Router {
             1, // Non-Storing, matching build_dio_with_authorization.
         ) {
             Ok(option) => {
-                if !(base + option.len() <= out.len()) {
+                if base + option.len() > out.len() {
                     panic!(
                         "TRACE root-sig: option {} + base {base} > out {}",
                         option.len(),
@@ -1381,7 +1381,7 @@ mod sf_emission_tests {
             lichen_link::keys::Seed::new([7u8; 32]),
         ));
         let dodag_id = lichen_core::addr::ygg_addr_from_pubkey(link.local_public_key().as_bytes());
-        let mut router = Router::new_root(dodag_id);
+        let router = Router::new_root(dodag_id);
         let mut out = [0u8; 256];
         let len = router.build_authenticated_dio(&mut out, &link);
         assert!(len > 0);
