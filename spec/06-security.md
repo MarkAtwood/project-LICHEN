@@ -17,6 +17,27 @@
 | Routing attacks | Link-layer signatures REQUIRED on all RPL control frames (DIO/DAO/DIS); RPL secure mode optional |
 | DoS | Rate limiting, admission control |
 
+**Broadcast budget key not authenticated end-to-end (acknowledged ceiling):**
+the 04-network.md §6.3.3 broadcast relay budget is keyed on the packet's
+source IID field, which the limiter never binds to any authenticated
+identity. Link-layer Schnorr signatures are per-hop (relays re-sign with
+their own keys, 02-physical-link.md:305-308); OSCORE (pairwise or group)
+secures CoAP payloads, not the network-layer source field; and DAO-origin
+authentication is DAO-only (§8.4). End-to-end-signed broadcast classes do
+exist — SOS origin signatures (12-apps.md §18.4.1) and self-authenticating
+announces (05-routing.md §9.2) — but the §6.3.3 limiter does not consult
+them; it keys on the unauthenticated inner source field. A radio adversary
+therefore gets fresh budget identities for free by inventing arbitrary source
+IIDs under a single existing keypair (no new keypair needed), and can also
+spoof a victim's source to exhaust that victim's budget; IID spoofing
+additionally pressures the un-capped §6.3.3 relay-state table. Residual risk:
+per-hop budgets still bound the blast radius any single claimed identity can
+cause through one honest relay, so the budgets remain worthwhile as a
+rate-of-amplification limiter — not as proof of origin. This ceiling is
+acknowledged here; it is not closed at this layer (the limiter would have to
+key on a verified end-to-end identity, which §8.4 scopes to DAO only).
+Coordinate any change with the open 06-security addressing-consistency audit.
+
 ### 8.2. Security Layers
 
 ```
