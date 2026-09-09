@@ -11,7 +11,7 @@ use hashbrown::HashMap;
 use lichen_link::PublicKey;
 
 // Re-export Ipv6Addr from lichen-core
-pub use lichen_core::addr::{ygg_addr_from_pubkey, Ipv6Addr};
+pub use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey, Ipv6Addr};
 
 /// Link-local prefix (fe80::/64).
 const LINK_LOCAL_PREFIX: [u8; 8] = [0xfe, 0x80, 0, 0, 0, 0, 0, 0];
@@ -138,9 +138,9 @@ impl AddressMapper {
     /// Returns `true` if the mapping was accepted/updated, `false` if
     /// rejected due to TOFU violation (collision on IID with different key).
     pub fn learn_mapping(&mut self, node_id: MeshtasticNodeId, pubkey: &PublicKey) -> bool {
-        let iid = ygg_addr_from_pubkey(pubkey.as_bytes())[8..16]
-            .try_into()
-            .unwrap();
+        // IID comes from the canonical SHA-512 derivation, not from the
+        // routable address: upstream AddrForKey does not embed the IID.
+        let iid = iid_from_pubkey_bytes(pubkey.as_bytes());
 
         // TOFU/collision check: reject if IID already pinned to a different pubkey.
         // This prevents the by_iid map from pointing to the wrong node_id and
@@ -267,9 +267,7 @@ mod tests {
     #[test]
     fn test_iid_from_pubkey_clears_ul_bit() {
         let pubkey = PublicKey::new([0u8; 32]);
-        let iid: [u8; 8] = ygg_addr_from_pubkey(pubkey.as_bytes())[8..16]
-            .try_into()
-            .unwrap();
+        let iid = iid_from_pubkey_bytes(pubkey.as_bytes());
         assert_eq!(iid[0] & 0x02, 0, "U/L bit must be cleared");
     }
 

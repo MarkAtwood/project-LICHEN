@@ -3,9 +3,13 @@
 
 //! Canonical `ipv6-addresses.json` and `yggdrasil-derivation.json` consumers.
 //!
-//! Key-derived identities bind `fe80::/10` and native `0200::/8` to the same
-//! SHA-512 IID. EUI-64 and short-address cases are link-interoperability
-//! helpers, not node identities.
+//! Key-derived identities bind `fe80::/10` to the SHA-512 IID. Since i72x.2
+//! (decision `upstream-yggdrasil-addressing`) the routable `0200::/8` address
+//! is upstream Yggdrasil `AddrForKey`, which bit-packs the inverted pubkey and
+//! does NOT embed the IID; the corpora's `native_packed`/`ygg_addr` fields
+//! still encode the rejected SHA-512 native profile, so this test pins the
+//! upstream addresses per key from the external oracle (upstream `address.go`
+//! @422836ee) until the corpora are quarantined/regenerated (q6ko.3, i72x.6).
 
 use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey, Ipv6Addr, NodeId};
 use lichen_core::short_addr::{short_addr_from_iid, short_addr_to_iid};
@@ -14,6 +18,51 @@ use serde_json::Value;
 const IPV6_ADDRESS_VECTORS: &str = include_str!("../../../test/vectors/ipv6-addresses.json");
 const YGG_DERIVATION_VECTORS: &str =
     include_str!("../../../test/vectors/yggdrasil-derivation.json");
+
+/// Upstream `AddrForKey` for each corpus pubkey, produced by running
+/// upstream's own `address.go` @422836ee (external oracle, never this crate).
+fn upstream_addr_for_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
+    let table: [(&str, &str); 8] = [
+        (
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "02000000000000000000000000000000",
+        ),
+        (
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "0200389e777ace07c7d6ca08166ecd20",
+        ),
+        (
+            "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+            "0200514acffcfa9dea90556802586d37",
+        ),
+        (
+            "abababababababababababababababababababababababababababababababab",
+            "0200a8a8a8a8a8a8a8a8a8a8a8a8a8a8",
+        ),
+        (
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "02000000000000000000000000000000",
+        ),
+        (
+            "0202020202020202020202020202020202020202020202020202020202020202",
+            "0206fefefefefefefefefefefefefefe",
+        ),
+        (
+            "0101010101010101010101010101010101010101010101010101010101010101",
+            "0207fefefefefefefefefefefefefefe",
+        ),
+        (
+            "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
+            "020042a482206a028a8242a482206a02",
+        ),
+    ];
+    let hex: String = pubkey.iter().map(|b| format!("{b:02x}")).collect();
+    let (_, expected) = table
+        .iter()
+        .find(|(pk, _)| *pk == hex)
+        .expect("corpus pubkey must have a pinned upstream address");
+    decode_hex::<16>(expected)
+}
 
 fn decode_hex<const N: usize>(value: &str) -> [u8; N] {
     assert_eq!(
@@ -54,7 +103,6 @@ fn key_derived_identity_binds_link_local_and_native() {
         let name = vector["name"].as_str().expect("vector name");
         let pubkey = decode_hex::<32>(vector["pubkey"].as_str().expect("pubkey"));
         let expected_iid = decode_hex::<8>(vector["iid"].as_str().expect("iid"));
-        let expected_native = decode_hex::<16>(vector["native_packed"].as_str().expect("native"));
         let expected_link_local =
             decode_hex::<16>(vector["link_local_packed"].as_str().expect("link-local"));
 
@@ -63,21 +111,15 @@ fn key_derived_identity_binds_link_local_and_native() {
         let link_local = link_local_from_iid(&iid);
 
         assert_eq!(iid, expected_iid, "{name}");
-        assert_eq!(native, expected_native, "{name}");
+        // Routable address: upstream AddrForKey, pinned per key from the
+        // external oracle (the corpus's native_packed is the rejected
+        // profile; see module docs).
+        assert_eq!(native, upstream_addr_for_pubkey(&pubkey), "{name}");
         assert_eq!(link_local, expected_link_local, "{name}");
-        assert_eq!(
-            &native[8..],
-            &iid[..],
-            "{name}: native lower-64 must equal IID"
-        );
         assert_eq!(native[0], 0x02, "{name}: 0200::/8 prefix");
         assert_eq!(iid[0] & 0x02, 0, "{name}: U/L bit must be clear");
         assert_eq!(&link_local[8..], &iid[..], "{name}: fe80 IID");
         assert!(Ipv6Addr(link_local).is_link_local(), "{name}");
-        assert_eq!(
-            vector["iid_in_native"], true,
-            "{name}: corpus records the binding"
-        );
         checked += 1;
     }
     assert_eq!(checked, 5, "all key-derived identity vectors must run");
@@ -127,7 +169,7 @@ fn short_address_rfc4944_iid_vectors() {
 }
 
 #[test]
-fn yggdrasil_derivation_corpus_matches_native_profile() {
+fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
     let entries: Vec<Value> =
         serde_json::from_str(YGG_DERIVATION_VECTORS).expect("yggdrasil-derivation.json must parse");
 
@@ -147,26 +189,22 @@ fn yggdrasil_derivation_corpus_matches_native_profile() {
             negative += 1;
             continue;
         }
-        if entry["test_type"] == "binding_invariant" {
-            let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
-            let addr = ygg_addr_from_pubkey(&pubkey);
-            let iid = iid_from_pubkey_bytes(&pubkey);
-            assert_eq!(&addr[8..], &iid[..]);
-            assert_eq!(addr[0], 0x02);
-            binding += 1;
-            continue;
-        }
         let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
         let addr = ygg_addr_from_pubkey(&pubkey);
         let iid = iid_from_pubkey_bytes(&pubkey);
-        if let Some(expected) = entry["ygg_addr"].as_str() {
-            assert_eq!(addr, decode_hex::<16>(expected));
-        }
+        // The corpus's ygg_addr is the rejected native profile; the upstream
+        // AddrForKey value is pinned per key from the external oracle.
+        assert_eq!(addr, upstream_addr_for_pubkey(&pubkey));
         if let Some(expected) = entry["iid"].as_str() {
             assert_eq!(iid, decode_hex::<8>(expected));
         }
-        assert_eq!(&addr[8..], &iid[..]);
         assert_eq!(addr[0], 0x02);
+        if entry["test_type"] == "binding_invariant" {
+            // The addr[8..] == IID invariant is retired with the rejected
+            // profile; the entry now pins the upstream address for its key.
+            binding += 1;
+            continue;
+        }
         positive += 1;
     }
     assert!(positive >= 4, "positive derivation entries must run");

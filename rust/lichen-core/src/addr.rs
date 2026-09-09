@@ -66,19 +66,15 @@ impl NodeId {
     }
 }
 
-/// Derive the IID (Interface Identifier) from an Ed25519 public key for the
-/// LICHEN native 0200::/8 primary address.
+/// Derive the IID (Interface Identifier) from an Ed25519 public key.
 ///
-/// LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-/// wire-compatible with upstream AddrForKey (which bit-packs the pubkey
-/// without hashing). See test/vectors/yggdrasil_address.json for divergence.
+/// The IID is used for the link-local `fe80::/10` control address and as the
+/// COSE `kid`/identity handle. It has no relationship to the routable
+/// 0200::/8 address: upstream `AddrForKey` bit-packs the inverted pubkey and
+/// does not embed this IID (spec/decisions.jsonl
+/// `upstream-yggdrasil-addressing`).
 ///
 /// Algorithm: `SHA-512(pubkey)[0:8]`, then clear the U/L bit per RFC 4291 S2.5.1.
-///
-/// The full Yggdrasil address is:
-///   `addr[0] = 0x02`
-///   `addr[1:8] = SHA-512(pubkey)[0:7]`    (routing dispersion within 0200::/8)
-///   `addr[8:16] = SHA-512(pubkey)[0:8]`   (IID; U/L bit cleared)
 ///
 /// This is the single canonical implementation; all callers MUST use it
 /// to ensure cross-implementation consistency.
@@ -91,29 +87,78 @@ pub fn iid_from_pubkey_bytes(pubkey: &[u8; 32]) -> [u8; 8] {
     iid
 }
 
-/// Derive the full 16-byte LICHEN native 0200::/8 address from an Ed25519 pubkey.
+/// Derive the routable 0200::/8 address from an Ed25519 pubkey.
 ///
-/// LICHEN native profile inspired by Yggdrasil 0200::/8 range; NOT
-/// wire-compatible with upstream AddrForKey (which bit-packs the pubkey
-/// without hashing). See test/vectors/yggdrasil_address.json for divergence.
+/// MUST equal upstream Yggdrasil `AddrForKey` byte-for-byte
+/// (yggdrasil-go commit `422836ee`, `src/address/address.go`;
+/// spec/decisions.jsonl `upstream-yggdrasil-addressing`; spec/06-security.md
+/// §8.5/§8.7). The SHA-512-based LICHEN native profile previously used here
+/// is rejected; the pinned upstream anchor in
+/// `test/vectors/yggdrasil_address.json` is the conformance oracle.
 ///
-/// Algorithm:
+/// Algorithm (no hashing):
 ///
-///   1. Compute `h = SHA-512(pubkey)`
-///   2. `addr = [0x02] || h[0:7] || h[0:8]`
-///   3. Clear U/L bit in IID byte: `addr[8] &= 0xfd`
-///
-/// The exact 0200::/8 prefix byte (`0x02`) is the native routing prefix.
-/// Bytes 1-7 (from `h[0:7]`) provide dispersion within that prefix.
-/// Bytes 8-15 (from `h[0:8]`) form the IID, binding the address to the pubkey.
+///   1. Bit-invert all 32 pubkey bytes.
+///   2. `addr[0] = 0x02`; `addr[1]` = count of leading 1 bits in the inverted
+///      key (u8, wrapping at 256 like upstream's byte counter — the all-ones
+///      inverted key yields 0).
+///   3. Drop those leading 1 bits and the first 0 bit.
+///   4. Pack the remaining bits MSB-first into whole bytes, DISCARDING any
+///      trailing partial byte; copy into `addr[2:16]` (at most 14 bytes).
+///   5. Unwritten tail bytes stay zero.
 pub fn ygg_addr_from_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
-    let iid = iid_from_pubkey_bytes(pubkey);
-    let hash512 = Sha512::digest(pubkey);
     let mut addr = [0u8; 16];
     addr[0] = 0x02;
-    addr[1..8].copy_from_slice(&hash512[0..7]);
-    addr[8..16].copy_from_slice(&iid);
+
+    let mut inverted = [0u8; 32];
+    for (i, b) in pubkey.iter().enumerate() {
+        inverted[i] = !b;
+    }
+
+    let mut ones: u8 = 0;
+    let mut done = false;
+    let mut bits: u8 = 0;
+    let mut nbits = 0u8;
+    let mut packed = [0u8; 32];
+    let mut packed_len = 0usize;
+
+    for idx in 0..256usize {
+        let bit = (inverted[idx / 8] >> (7 - (idx % 8))) & 1;
+        if !done && bit == 1 {
+            ones = ones.wrapping_add(1);
+            continue;
+        }
+        if !done {
+            done = true;
+            continue;
+        }
+        bits = (bits << 1) | bit;
+        nbits += 1;
+        if nbits == 8 {
+            nbits = 0;
+            packed[packed_len] = bits;
+            packed_len += 1;
+            bits = 0;
+        }
+    }
+
+    addr[1] = ones;
+    let copy_len = packed_len.min(14);
+    addr[2..2 + copy_len].copy_from_slice(&packed[..copy_len]);
     addr
+}
+
+/// Derive the routed /64 subnet from an Ed25519 pubkey (0300::/8).
+///
+/// MUST equal upstream Yggdrasil `SubnetForKey` byte-for-byte: the
+/// `AddrForKey` result truncated to 8 bytes with the low bit of the first
+/// byte set (`addr[0] | 0x01`).
+pub fn subnet_for_key(pubkey: &[u8; 32]) -> [u8; 8] {
+    let addr = ygg_addr_from_pubkey(pubkey);
+    let mut subnet = [0u8; 8];
+    subnet.copy_from_slice(&addr[..8]);
+    subnet[0] |= 0x01;
+    subnet
 }
 
 #[cfg(test)]
