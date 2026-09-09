@@ -1196,6 +1196,15 @@ Local facts and CA credentials can coexist. A node might have:
 - CA credential: `oidc:name = "Mark Atwood"` (portable identity)
 - Local fact: `lichen:priority = 2` (this mesh only)
 
+**X.509v3 Certificate Profile:**
+
+Certificates carried in `x5chain` MUST conform to the LICHEN node
+attestation profile (appendix-x509-cert-profile.md): Ed25519 subject
+key, critical iPAddress SAN carrying the key-derived native `/128`,
+optional non-critical mesh role extension, and the verifier
+key-to-address binding check. The profile is minimal enough that any
+RFC 8410-capable CA can issue interoperable certificates.
+
 ---
 
 ## 15. Security Considerations
