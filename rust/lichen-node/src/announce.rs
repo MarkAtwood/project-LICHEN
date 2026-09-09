@@ -11,14 +11,19 @@ use std::rc::Rc;
 use std::vec::Vec;
 
 use lichen_core::announce::Announce;
-use lichen_link::identity::{iid_from_pubkey, PeerIdentity};
+use lichen_link::identity::iid_from_pubkey;
+use lichen_link::identity::PeerIdentity;
 use lichen_link::keys::PublicKey;
 use lichen_link::schnorr;
 
-use crate::announce_store::{AnnounceStoreError, AnnounceTrustState, AnnounceTrustStore};
-use crate::gradient::{
-    GeoCoords, GradientEntry, GradientSource, GradientTable, GRADIENT_TIMEOUT_MS,
-};
+use crate::announce_store::AnnounceStoreError;
+use crate::announce_store::AnnounceTrustState;
+use crate::announce_store::AnnounceTrustStore;
+use crate::gradient::GeoCoords;
+use crate::gradient::GradientEntry;
+use crate::gradient::GradientSource;
+use crate::gradient::GradientTable;
+use crate::gradient::GRADIENT_TIMEOUT_MS;
 
 pub const MAX_TRACKED_ORIGINATORS: usize = 64;
 const SEQ_HALF: u16 = 1 << 15;
@@ -459,13 +464,15 @@ pub fn encode_tx_sf(sf: u8) -> Option<[u8; 2]> {
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
-    use lichen_core::announce::{write_announce_signed_data, AnnounceBuilder};
+    use lichen_core::announce::write_announce_signed_data;
+    use lichen_core::announce::AnnounceBuilder;
     use lichen_link::identity::Identity;
     use lichen_link::keys::Seed;
     use lichen_link::schnorr::sign;
     use std::format;
     use std::string::String;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn tx_sf_tlv_absence_means_sf10() {

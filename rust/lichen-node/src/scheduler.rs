@@ -16,7 +16,9 @@ extern crate std;
 use std::boxed::Box;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU16;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::vec;
@@ -27,9 +29,13 @@ use lichen_link::identity::Identity;
 use lichen_link::schnorr::sign;
 
 #[cfg(feature = "defmt")]
-use defmt::{info, warn};
+use defmt::info;
+#[cfg(feature = "defmt")]
+use defmt::warn;
 #[cfg(all(feature = "log", not(feature = "defmt")))]
-use log::{info, warn};
+use log::info;
+#[cfg(all(feature = "log", not(feature = "defmt")))]
+use log::warn;
 
 /// Default announce interval in milliseconds (spec 9.4: 5 minutes).
 pub const DEFAULT_INTERVAL_MS: u64 = 300_000;
@@ -384,8 +390,10 @@ impl<T: AnnounceTransmitter + 'static> AnnounceScheduler<T> {
 
 /// Generate a random u64 in the range [min, max] using LCG for jitter.
 fn random_range(min: u64, max: u64) -> u64 {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
 
     if min >= max {
         return min;

@@ -6,10 +6,14 @@
 //!
 //! Port 10883 (MQTT-SN) requires a dedicated SCHC rule but preserves IANA compliance.
 
-use lichen_core::constants::{
-    PORT_APRS_IS, PORT_CAYENNE_LPP, PORT_COAP, PORT_COAP_DTLS, PORT_COMPACT_COT, PORT_MQTT_SN,
-    PORT_NMEA, PORT_SENML,
-};
+use lichen_core::constants::PORT_APRS_IS;
+use lichen_core::constants::PORT_CAYENNE_LPP;
+use lichen_core::constants::PORT_COAP;
+use lichen_core::constants::PORT_COAP_DTLS;
+use lichen_core::constants::PORT_COMPACT_COT;
+use lichen_core::constants::PORT_MQTT_SN;
+use lichen_core::constants::PORT_NMEA;
+use lichen_core::constants::PORT_SENML;
 use lichen_core::error::TooShort;
 
 /// Application protocol identified by UDP destination port.

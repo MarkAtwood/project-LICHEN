@@ -4,14 +4,23 @@
 //! Consume spec 09 section 13.1 CoAP-to-PHY walkthrough vectors.
 
 use lichen_coap::option::content_format::CBOR;
-use lichen_coap::{CoapBuilder, CoapPacket, MessageCode, MessageType};
+use lichen_coap::CoapBuilder;
+use lichen_coap::CoapPacket;
+use lichen_coap::MessageCode;
+use lichen_coap::MessageType;
 use lichen_core::addr::Ipv6Addr;
 use lichen_core::airtime::airtime_us;
 use lichen_core::constants::L2_DISPATCH_SCHC;
 use lichen_core::ipv6::write_header;
-use lichen_core::l2_payload::{body, classify, L2PayloadKind};
+use lichen_core::l2_payload::body;
+use lichen_core::l2_payload::classify;
+use lichen_core::l2_payload::L2PayloadKind;
 use lichen_core::udp::write_datagram;
-use lichen_link::frame::{AddrMode, Encryption, LichenFrame, MicLength, Signature};
+use lichen_link::frame::AddrMode;
+use lichen_link::frame::Encryption;
+use lichen_link::frame::LichenFrame;
+use lichen_link::frame::MicLength;
+use lichen_link::frame::Signature;
 use lichen_link::LinkSeqNum;
 use lichen_schc::compress;
 use serde_json::Value;

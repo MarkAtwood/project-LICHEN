@@ -18,31 +18,44 @@ pub(crate) mod util;
 #[cfg(test)]
 mod tests;
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::vec::Vec;
 
 use lichen_hal::storage::RedundantValue;
-use lichen_hal::{NonVolatile, Radio};
+use lichen_hal::NonVolatile;
+use lichen_hal::Radio;
 use lichen_link::identity::PeerIdentity;
 use lichen_link::link_layer::PeerAuthState;
 use lichen_rpl::root_seq_cache::RootSeqCache;
 
 mod dao_tx_sched;
-use dao_tx_sched::{DaoTxAdvance, DaoTxPhase, DaoTxScheduler};
-use lichen_rpl::routing::{DaoAdmissionState, DaoTxState};
+use dao_tx_sched::DaoTxAdvance;
+use dao_tx_sched::DaoTxPhase;
+use dao_tx_sched::DaoTxScheduler;
+use lichen_rpl::routing::DaoAdmissionState;
+use lichen_rpl::routing::DaoTxState;
 
 use crate::announce::AnnounceProcessor;
-use crate::node::{DaoHandlingOutcome, RplEvent, RplNode};
+use crate::node::DaoHandlingOutcome;
+use crate::node::RplEvent;
+use crate::node::RplNode;
 use crate::routing::DaoRxState;
 use crate::routing::RplMaintenanceOutcome;
 use crate::secure::SecureStack;
 use crate::stack::ReceivedIpv6;
 
-pub use self::error::{
-    DaoAdmissionError, DaoSendError, RplControlError, RplReceiveError, RplRuntimeReceiveError,
-    RplRuntimeTrickleError, RplStackOpenError, RplStackProvisionError,
-};
-pub use self::util::{survey_routing_headers, RoutingHeaderSurvey, SourceRouteView};
+pub use self::error::DaoAdmissionError;
+pub use self::error::DaoSendError;
+pub use self::error::RplControlError;
+pub use self::error::RplReceiveError;
+pub use self::error::RplRuntimeReceiveError;
+pub use self::error::RplRuntimeTrickleError;
+pub use self::error::RplStackOpenError;
+pub use self::error::RplStackProvisionError;
+pub use self::util::survey_routing_headers;
+pub use self::util::RoutingHeaderSurvey;
+pub use self::util::SourceRouteView;
 
 /// Outcome of Trickle transmit completion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

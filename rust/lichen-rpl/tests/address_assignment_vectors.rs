@@ -15,17 +15,24 @@
 //! test in this suite contains that substring, so omitting
 //! `--test address_assignment_vectors` silently skips every check here.
 
-use lichen_rpl::address_assignment::{
-    decode_assignment_state, encode_assignment_state, AddressAssignmentAck,
-    AddressAssignmentRequest, AddressAssignmentStore, AssignmentError, AssignmentOperation,
-    AssignmentStatus, MemoryAddressAssignmentStore, ShortAddressAssignmentClient,
-    ShortAddressCoordinator, SHORT_ADDRESS_OPTION_TYPE,
-};
+use lichen_rpl::address_assignment::decode_assignment_state;
+use lichen_rpl::address_assignment::encode_assignment_state;
+use lichen_rpl::address_assignment::AddressAssignmentAck;
+use lichen_rpl::address_assignment::AddressAssignmentRequest;
+use lichen_rpl::address_assignment::AddressAssignmentStore;
+use lichen_rpl::address_assignment::AssignmentError;
+use lichen_rpl::address_assignment::AssignmentOperation;
+use lichen_rpl::address_assignment::AssignmentStatus;
+use lichen_rpl::address_assignment::MemoryAddressAssignmentStore;
+use lichen_rpl::address_assignment::ShortAddressAssignmentClient;
+use lichen_rpl::address_assignment::ShortAddressCoordinator;
+use lichen_rpl::address_assignment::SHORT_ADDRESS_OPTION_TYPE;
 use serde_json::Value;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 const VECTORS: &str = include_str!("../../../test/vectors/short_addr_assignment.json");
 const EUI: [u8; 8] = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77];

@@ -8,55 +8,130 @@
 
 // Re-export from submodules
 #[cfg(feature = "std")]
-pub use crate::announce::{AnnounceRelayAction, AnnounceState, ANNOUNCE_TYPE, MAX_ANNOUNCE_HOPS};
+pub use crate::announce::AnnounceRelayAction;
 #[cfg(feature = "std")]
-pub use crate::dao_origin::{
-    compute_dao_digest, DaoOriginRejectReason, DaoOriginResult, DaoOriginValidator,
-    DaoOriginValidatorNoReplay, OriginReplayStore, PinTable, DAO_ORIGIN_SIGNATURE_LENGTH,
-    DAO_ORIGIN_SIGNATURE_TYPE,
-};
+pub use crate::announce::AnnounceState;
 #[cfg(feature = "std")]
-pub use crate::persistence::{
-    DaoAdmissionState, DaoAdmissionUpdateError, DaoPersistentOpenError, DaoProvisionError,
-    DaoRxState, DaoTxError, DaoTxState, MAX_SIGNED_DAO_LEN,
-};
+pub use crate::announce::ANNOUNCE_TYPE;
 #[cfg(feature = "std")]
-pub use crate::srh::{SourceRoutingHeader, MAX_ROUTE_HOPS};
+pub use crate::announce::MAX_ANNOUNCE_HOPS;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::compute_dao_digest;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::DaoOriginRejectReason;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::DaoOriginResult;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::DaoOriginValidator;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::DaoOriginValidatorNoReplay;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::OriginReplayStore;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::PinTable;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::DAO_ORIGIN_SIGNATURE_LENGTH;
+#[cfg(feature = "std")]
+pub use crate::dao_origin::DAO_ORIGIN_SIGNATURE_TYPE;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoAdmissionState;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoAdmissionUpdateError;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoPersistentOpenError;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoProvisionError;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoRxState;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoTxError;
+#[cfg(feature = "std")]
+pub use crate::persistence::DaoTxState;
+#[cfg(feature = "std")]
+pub use crate::persistence::MAX_SIGNED_DAO_LEN;
+#[cfg(feature = "std")]
+pub use crate::srh::SourceRoutingHeader;
+#[cfg(feature = "std")]
+pub use crate::srh::MAX_ROUTE_HOPS;
+#[cfg(feature = "std")]
+pub use crate::table::InvalidRouteEntryTransition;
+#[cfg(feature = "std")]
+pub use crate::table::RouteEntry;
+#[cfg(feature = "std")]
+pub use crate::table::RouteEntryState;
 pub use crate::table::RouteTarget;
 #[cfg(feature = "std")]
-pub use crate::table::{
-    InvalidRouteEntryTransition, RouteEntry, RouteEntryState, RoutingTable, MAX_ROUTES,
-};
+pub use crate::table::RoutingTable;
 #[cfg(feature = "std")]
-pub use crate::verify::{
-    dao_origin_digest, DaoMalformed, DaoVerifyError, SignatureVerifiedDao, DAO_ORIGIN_DOMAIN,
-};
+pub use crate::table::MAX_ROUTES;
+#[cfg(feature = "std")]
+pub use crate::verify::dao_origin_digest;
+#[cfg(feature = "std")]
+pub use crate::verify::DaoMalformed;
+#[cfg(feature = "std")]
+pub use crate::verify::DaoVerifyError;
+#[cfg(feature = "std")]
+pub use crate::verify::SignatureVerifiedDao;
+#[cfg(feature = "std")]
+pub use crate::verify::DAO_ORIGIN_DOMAIN;
 
 #[cfg(feature = "std")]
 use core::net::Ipv6Addr;
 #[cfg(feature = "std")]
-use std::{
-    collections::{HashMap, HashSet},
-    vec,
-    vec::Vec,
-};
+use std::collections::HashMap;
+#[cfg(feature = "std")]
+use std::collections::HashSet;
+#[cfg(feature = "std")]
+use std::vec;
+#[cfg(feature = "std")]
+use std::vec::Vec;
 
 #[cfg(feature = "std")]
-use crate::message::{
-    Dao, OptionIter, RplTarget, TransitInfo, OPT_RPL_TARGET, OPT_RPL_TARGET_DESCRIPTOR,
-    OPT_TRANSIT_INFO,
-};
+use crate::message::Dao;
 #[cfg(feature = "std")]
-use crate::persistence::{
-    decode_high_water, encode_high_water, map_open_error, map_rx_update_error, HighWaterMap,
-    DAO_RX_KEYS, DAO_RX_MAGIC, HIGH_WATER_HEADER_LEN, HIGH_WATER_PAYLOAD_LEN, HIGH_WATER_SCOPE_LEN,
-    SLOT_OVERHEAD,
-};
+use crate::message::OptionIter;
 #[cfg(feature = "std")]
-use lichen_hal::{
-    storage::{open_redundant, provision_redundant, update_redundant, RedundantProvisionError},
-    NonVolatile,
-};
+use crate::message::RplTarget;
+#[cfg(feature = "std")]
+use crate::message::TransitInfo;
+#[cfg(feature = "std")]
+use crate::message::OPT_RPL_TARGET;
+#[cfg(feature = "std")]
+use crate::message::OPT_RPL_TARGET_DESCRIPTOR;
+#[cfg(feature = "std")]
+use crate::message::OPT_TRANSIT_INFO;
+#[cfg(feature = "std")]
+use crate::persistence::decode_high_water;
+#[cfg(feature = "std")]
+use crate::persistence::encode_high_water;
+#[cfg(feature = "std")]
+use crate::persistence::map_open_error;
+#[cfg(feature = "std")]
+use crate::persistence::map_rx_update_error;
+#[cfg(feature = "std")]
+use crate::persistence::HighWaterMap;
+#[cfg(feature = "std")]
+use crate::persistence::DAO_RX_KEYS;
+#[cfg(feature = "std")]
+use crate::persistence::DAO_RX_MAGIC;
+#[cfg(feature = "std")]
+use crate::persistence::HIGH_WATER_HEADER_LEN;
+#[cfg(feature = "std")]
+use crate::persistence::HIGH_WATER_PAYLOAD_LEN;
+#[cfg(feature = "std")]
+use crate::persistence::HIGH_WATER_SCOPE_LEN;
+#[cfg(feature = "std")]
+use crate::persistence::SLOT_OVERHEAD;
+#[cfg(feature = "std")]
+use lichen_hal::storage::open_redundant;
+#[cfg(feature = "std")]
+use lichen_hal::storage::provision_redundant;
+#[cfg(feature = "std")]
+use lichen_hal::storage::update_redundant;
+#[cfg(feature = "std")]
+use lichen_hal::storage::RedundantProvisionError;
+#[cfg(feature = "std")]
+use lichen_hal::NonVolatile;
 #[cfg(feature = "std")]
 const LOLLIPOP_CIRCULAR_BIT: u8 = 128;
 #[cfg(feature = "std")]
@@ -948,27 +1023,24 @@ impl DaoManager {
                     })
                     .collect::<Option<Vec<_>>>()?;
                 let selected_candidate = if disposition == DaoDiagnosticDisposition::Active {
-                    self.routing_table
-                        .lookup(*target)
-                        .and_then(|path| {
-                            let parent = if path.len() == 1 {
-                                self.node_address
-                            } else {
-                                path[path.len() - 2]
-                            };
-                            let candidate = self
-                                .candidate_map
-                                .get(target)?
-                                .iter()
-                                .find(|candidate| candidate.parent == parent)?;
-                            Some(DaoDiagnosticSelectedCandidate {
-                                parent,
-                                preference_subfield: Self::path_control_rank(
-                                    candidate.path_control,
-                                )? + 1,
-                                path: path.to_vec(),
-                            })
+                    self.routing_table.lookup(*target).and_then(|path| {
+                        let parent = if path.len() == 1 {
+                            self.node_address
+                        } else {
+                            path[path.len() - 2]
+                        };
+                        let candidate = self
+                            .candidate_map
+                            .get(target)?
+                            .iter()
+                            .find(|candidate| candidate.parent == parent)?;
+                        Some(DaoDiagnosticSelectedCandidate {
+                            parent,
+                            preference_subfield: Self::path_control_rank(candidate.path_control)?
+                                + 1,
+                            path: path.to_vec(),
                         })
+                    })
                 } else {
                     None
                 };
@@ -1806,10 +1878,9 @@ impl DaoManager {
                     if routes.routes.len() >= MAX_ROUTES {
                         return None;
                     }
-                    routes.routes.insert(
-                        RouteTarget::host(*target),
-                        RouteEntry::fresh(&path),
-                    );
+                    routes
+                        .routes
+                        .insert(RouteTarget::host(*target), RouteEntry::fresh(&path));
                     routes.rpl_managed_hosts.insert(*target);
                 }
                 Ok(None) => {}
@@ -1877,7 +1948,8 @@ mod tests {
     #[test]
     fn dao_for_root_self_installs_no_empty_route() {
         use crate::message::OPT_TRANSIT_INFO;
-        use crate::routing::{DaoDiagnosticLimits, DaoProcessTiming};
+        use crate::routing::DaoDiagnosticLimits;
+        use crate::routing::DaoProcessTiming;
 
         // A DAO advertising the root's own /128 as a target (with a non-root
         // parent, so contains_cycle does not reject it as a self-loop) must not

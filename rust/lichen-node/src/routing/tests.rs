@@ -1,17 +1,28 @@
 //! Tests for the routing module.
 
-use super::gpsr::{haversine, is_valid_coords};
-use super::router::{dao_parents_for_source, sign_dao};
+use super::gpsr::haversine;
+use super::gpsr::is_valid_coords;
+use super::router::dao_parents_for_source;
+use super::router::sign_dao;
 use super::*;
 use core::net::Ipv6Addr;
 use lichen_core::constants::RPL_INSTANCE_ID;
-use lichen_link::{identity::Identity, keys::Seed, link_layer::LinkLayer};
-use lichen_rpl::dodag::{DodagState, MIN_HOP_RANK_INCREASE};
-use lichen_rpl::message::{
-    Dao, Dio, DodagConfig, OptionIter, TransitInfo, DODAG_CONFIG_DATA_LEN,
-    DODAG_VERSION_AUTHORIZATION_DATA_LEN, OPT_DODAG_CONFIG, OPT_DODAG_VERSION_AUTHORIZATION,
-    OPT_RPL_TARGET, OPT_TRANSIT_INFO,
-};
+use lichen_link::identity::Identity;
+use lichen_link::keys::Seed;
+use lichen_link::link_layer::LinkLayer;
+use lichen_rpl::dodag::DodagState;
+use lichen_rpl::dodag::MIN_HOP_RANK_INCREASE;
+use lichen_rpl::message::Dao;
+use lichen_rpl::message::Dio;
+use lichen_rpl::message::DodagConfig;
+use lichen_rpl::message::OptionIter;
+use lichen_rpl::message::TransitInfo;
+use lichen_rpl::message::DODAG_CONFIG_DATA_LEN;
+use lichen_rpl::message::DODAG_VERSION_AUTHORIZATION_DATA_LEN;
+use lichen_rpl::message::OPT_DODAG_CONFIG;
+use lichen_rpl::message::OPT_DODAG_VERSION_AUTHORIZATION;
+use lichen_rpl::message::OPT_RPL_TARGET;
+use lichen_rpl::message::OPT_TRANSIT_INFO;
 use lichen_rpl::trickle::TrickleTimer;
 use std::vec;
 use std::vec::Vec;

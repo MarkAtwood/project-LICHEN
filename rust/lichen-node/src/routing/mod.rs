@@ -20,46 +20,112 @@ mod router;
 #[cfg(all(test, feature = "std"))]
 mod tests;
 
-pub use dtn_option::{decide_expiry_action, parse_dtn_option, DtnOption, ExpiryAction, DTN_FLAG_S};
+pub use dtn_option::decide_expiry_action;
+pub use dtn_option::parse_dtn_option;
+pub use dtn_option::DtnOption;
+pub use dtn_option::ExpiryAction;
+pub use dtn_option::DTN_FLAG_S;
 
 // Re-exports from neighbor module
+pub use neighbor::GeoCoords;
+pub use neighbor::LinkEtx;
+pub use neighbor::Neighbor;
+pub use neighbor::NeighborTable;
 #[cfg(feature = "std")]
 pub use neighbor::TrickleAwareNeighborLiveness;
-pub use neighbor::{
-    GeoCoords, LinkEtx, Neighbor, NeighborTable, TrickleSafeLivenessPolicy, MAX_NEIGHBORS,
-};
+pub use neighbor::TrickleSafeLivenessPolicy;
+pub use neighbor::MAX_NEIGHBORS;
 
 // Re-exports from router module
 #[cfg(feature = "std")]
 pub(crate) use router::dao_parents_for_source;
 #[cfg(feature = "std")]
-pub use router::{DioProcessOutcome, Router, RplMaintenanceOutcome};
+pub use router::DioProcessOutcome;
+#[cfg(feature = "std")]
+pub use router::Router;
+#[cfg(feature = "std")]
+pub use router::RplMaintenanceOutcome;
 
 // Re-exports from dtn module
 #[cfg(feature = "std")]
-pub use dtn::{DtnBuffer, DtnMessage, DTN_BUFFER_MAX_BYTES};
+pub use dtn::DtnBuffer;
+#[cfg(feature = "std")]
+pub use dtn::DtnMessage;
+#[cfg(feature = "std")]
+pub use dtn::DTN_BUFFER_MAX_BYTES;
 
 // Re-exports from lichen-rpl
 #[cfg(feature = "std")]
-pub use lichen_rpl::dodag::{DodagRole, DodagState, ParentCandidate, ROOT_RANK};
+pub use lichen_rpl::dodag::DodagRole;
 #[cfg(feature = "std")]
-pub use lichen_rpl::message::{
-    Dao, DaoOriginSignature, Dio, DodagConfig, OptionIter, RplError, RplTarget, SignedDaoEnvelope,
-    TransitInfo, DAO_ORIGIN_SIGNATURE_LEN, OPT_DODAG_CONFIG, OPT_RPL_TARGET, OPT_TRANSIT_INFO,
-};
+pub use lichen_rpl::dodag::DodagState;
 #[cfg(feature = "std")]
-pub use lichen_rpl::routing::{
-    DaoOriginHighWater, DaoPersistentOpenError, DaoProvisionError, DaoRxState, RouteTarget,
-    RoutingTable, SourceRoutingHeader,
-};
+pub use lichen_rpl::dodag::ParentCandidate;
 #[cfg(feature = "std")]
-pub use lichen_rpl::trickle::{TrickleEvent, TrickleTimer};
+pub use lichen_rpl::dodag::ROOT_RANK;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::Dao;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::DaoOriginSignature;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::Dio;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::DodagConfig;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::OptionIter;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::RplError;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::RplTarget;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::SignedDaoEnvelope;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::TransitInfo;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::DAO_ORIGIN_SIGNATURE_LEN;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::OPT_DODAG_CONFIG;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::OPT_RPL_TARGET;
+#[cfg(feature = "std")]
+pub use lichen_rpl::message::OPT_TRANSIT_INFO;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::DaoOriginHighWater;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::DaoPersistentOpenError;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::DaoProvisionError;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::DaoRxState;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::RouteTarget;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::RoutingTable;
+#[cfg(feature = "std")]
+pub use lichen_rpl::routing::SourceRoutingHeader;
+#[cfg(feature = "std")]
+pub use lichen_rpl::trickle::TrickleEvent;
+#[cfg(feature = "std")]
+pub use lichen_rpl::trickle::TrickleTimer;
 
 // Internal re-exports for router module
 #[cfg(feature = "std")]
-pub(crate) use lichen_rpl::routing::SignatureVerifiedDao;
+pub(crate) use lichen_rpl::routing::dao_origin_digest;
 #[cfg(feature = "std")]
-pub(crate) use lichen_rpl::routing::{
-    dao_origin_digest, DaoAdmissionState, DaoManager, DaoProcessError, DaoProcessOutcome,
-    DaoProcessTiming, DaoTxError, DaoTxState, DaoVerifyError,
-};
+pub(crate) use lichen_rpl::routing::DaoAdmissionState;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoManager;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoProcessError;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoProcessOutcome;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoProcessTiming;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoTxError;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoTxState;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::DaoVerifyError;
+#[cfg(feature = "std")]
+pub(crate) use lichen_rpl::routing::SignatureVerifiedDao;

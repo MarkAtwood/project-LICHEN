@@ -4,10 +4,13 @@
 //! Error types for the production RPL stack.
 
 use lichen_hal::storage::RedundantOpenError;
-use lichen_rpl::routing::{DaoPersistentOpenError, DaoProvisionError, DaoTxError};
+use lichen_rpl::routing::DaoPersistentOpenError;
+use lichen_rpl::routing::DaoProvisionError;
+use lichen_rpl::routing::DaoTxError;
 
 use crate::runtime::RplRuntimeActionError;
-use crate::stack::{RxError, TxError};
+use crate::stack::RxError;
+use crate::stack::TxError;
 
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]

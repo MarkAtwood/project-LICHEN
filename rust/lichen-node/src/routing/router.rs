@@ -7,28 +7,44 @@ use std::vec::Vec;
 use lichen_core::constants::RPL_INSTANCE_ID;
 use lichen_core::sf_assignment::make_assigned_sf_option;
 use lichen_hal::NonVolatile;
-use lichen_link::{
-    keys::PublicKey,
-    link_layer::{AuthenticatedFrame, LinkLayer},
-};
+use lichen_link::keys::PublicKey;
+use lichen_link::link_layer::AuthenticatedFrame;
+use lichen_link::link_layer::LinkLayer;
 use lichen_rpl::dodag::DioOutcome;
-use lichen_rpl::message::{
-    Dao, Dio, DodagConfig, DodagVersionAuthorization, OptionIter, TransitInfo,
-    DODAG_CONFIG_DATA_LEN, OPT_DODAG_VERSION_AUTHORIZATION,
-};
+use lichen_rpl::message::Dao;
+use lichen_rpl::message::Dio;
+use lichen_rpl::message::DodagConfig;
+use lichen_rpl::message::DodagVersionAuthorization;
+use lichen_rpl::message::OptionIter;
+use lichen_rpl::message::TransitInfo;
+use lichen_rpl::message::DODAG_CONFIG_DATA_LEN;
+use lichen_rpl::message::OPT_DODAG_VERSION_AUTHORIZATION;
 use lichen_rpl::trickle::TrickleTimer;
 
-use super::{
-    dao_origin_digest, DaoAdmissionState, DaoManager, DaoOriginSignature, DaoPersistentOpenError,
-    DaoProcessError, DaoProcessOutcome, DaoProcessTiming, DaoProvisionError, DaoRxState,
-    DaoTxError, DaoTxState, SignatureVerifiedDao, DAO_ORIGIN_SIGNATURE_LEN, OPT_DODAG_CONFIG,
-};
+use super::dao_origin_digest;
+use super::DaoAdmissionState;
+use super::DaoManager;
+use super::DaoOriginSignature;
+use super::DaoPersistentOpenError;
+use super::DaoProcessError;
+use super::DaoProcessOutcome;
+use super::DaoProcessTiming;
+use super::DaoProvisionError;
+use super::DaoRxState;
+use super::DaoTxError;
+use super::DaoTxState;
+use super::SignatureVerifiedDao;
+use super::DAO_ORIGIN_SIGNATURE_LEN;
+use super::OPT_DODAG_CONFIG;
 pub use lichen_rpl::dodag::DodagState;
 
-use super::gpsr::{haversine, is_valid_coords};
-use super::neighbor::{
-    GeoCoords, LinkEtx, NeighborTable, TrickleSafeLivenessPolicy, MAX_NEIGHBORS,
-};
+use super::gpsr::haversine;
+use super::gpsr::is_valid_coords;
+use super::neighbor::GeoCoords;
+use super::neighbor::LinkEtx;
+use super::neighbor::NeighborTable;
+use super::neighbor::TrickleSafeLivenessPolicy;
+use super::neighbor::MAX_NEIGHBORS;
 
 const NON_STORING_MOP: u8 = 1;
 const MRHOF_OCP: u16 = 1;
@@ -694,7 +710,8 @@ impl Router {
 
         #[cfg(test)]
         {
-            use lichen_link::{identity::Identity, keys::Seed};
+            use lichen_link::identity::Identity;
+            use lichen_link::keys::Seed;
             let Some(identity) = (0u8..=u8::MAX)
                 .map(|seed| Identity::from_seed(Seed::new([seed; 32])))
                 // Match by link-local IID (fe80:: sources carry it in the low
@@ -1295,7 +1312,8 @@ pub(crate) fn dao_parents_for_source(
     dao_bytes: &[u8],
     packet_source: &[u8; 16],
 ) -> Option<Vec<[u8; 16]>> {
-    use lichen_rpl::message::{OPT_RPL_TARGET, OPT_TRANSIT_INFO};
+    use lichen_rpl::message::OPT_RPL_TARGET;
+    use lichen_rpl::message::OPT_TRANSIT_INFO;
 
     let _dao = Dao::from_bytes(dao_bytes).ok()?;
     let mut parents = Vec::new();

@@ -45,7 +45,13 @@ use lichen_hal::NonVolatile;
 #[cfg(feature = "std")]
 use lichen_link::keys::Seed;
 #[cfg(feature = "std")]
-use lichen_link::schnorr::{derive_keypair, sign, verify, SIGNATURE_LENGTH};
+use lichen_link::schnorr::derive_keypair;
+#[cfg(feature = "std")]
+use lichen_link::schnorr::sign;
+#[cfg(feature = "std")]
+use lichen_link::schnorr::verify;
+#[cfg(feature = "std")]
+use lichen_link::schnorr::SIGNATURE_LENGTH;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
@@ -60,7 +66,9 @@ use std::vec::Vec;
 use zeroize::Zeroizing;
 
 #[cfg(feature = "std")]
-use crate::announce::{seq_gt, MAX_TRACKED_ORIGINATORS};
+use crate::announce::seq_gt;
+#[cfg(feature = "std")]
+use crate::announce::MAX_TRACKED_ORIGINATORS;
 
 /// Exact TOFU key pin plus the highest accepted origin Announce sequence.
 #[cfg(feature = "std")]
@@ -510,7 +518,8 @@ fn hex_iid(iid: &[u8; 8]) -> String {
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
 
     static TEST_PATH: AtomicU64 = AtomicU64::new(1);
 

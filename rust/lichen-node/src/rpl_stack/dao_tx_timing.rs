@@ -15,7 +15,9 @@
 
 use core::time::Duration;
 
-use lichen_rpl::dao_timing::{checked_dao_refresh_deadline, dao_initial_delay_ms, DaoRefreshTimer};
+use lichen_rpl::dao_timing::checked_dao_refresh_deadline;
+use lichen_rpl::dao_timing::dao_initial_delay_ms;
+use lichen_rpl::dao_timing::DaoRefreshTimer;
 
 /// Phase of the DAO origination TX state machine.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

@@ -1,6 +1,8 @@
 //! Authenticated DIS solicitation handling (RFC 6550 Sections 6.7.9 and 8.3).
 
-use crate::message::{Dis, OptionIter, RplError};
+use crate::message::Dis;
+use crate::message::OptionIter;
+use crate::message::RplError;
 use crate::trickle::TrickleTimer;
 
 const OPT_SOLICITED_INFORMATION: u8 = 7;

@@ -6,7 +6,8 @@
 
 #![forbid(unsafe_code)]
 
-use lichen_core::error::{BufferTooSmall, TooShort};
+use lichen_core::error::BufferTooSmall;
+use lichen_core::error::TooShort;
 
 /// Error returned when a message or option is malformed.
 #[derive(Debug, PartialEq, Eq)]

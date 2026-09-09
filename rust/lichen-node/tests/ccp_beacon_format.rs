@@ -3,7 +3,8 @@
 
 //! Cross-language CCP beacon and TDMA slot vectors.
 
-use lichen_core::{lichen_hash_32, tdma_beacon::TdmaBeaconHeader};
+use lichen_core::lichen_hash_32;
+use lichen_core::tdma_beacon::TdmaBeaconHeader;
 use lichen_node::TdmaScheduler;
 use serde_json::Value;
 

@@ -9,47 +9,86 @@ use super::*;
 use core::net::Ipv6Addr;
 
 use crate::announce::MAX_TRACKED_ORIGINATORS;
-use crate::routing::{Router, ROOT_RANK};
-use crate::runtime::{RplRuntimeAction, RplRuntimeActionError, RplRuntimeConfig};
+use crate::routing::Router;
+use crate::routing::ROOT_RANK;
+use crate::runtime::RplRuntimeAction;
+use crate::runtime::RplRuntimeActionError;
+use crate::runtime::RplRuntimeConfig;
 use crate::secure::SecureStack;
-use crate::stack::{Priority, RxError, Stack, TxError, MAX_FRAME_SIZE};
+use crate::stack::Priority;
+use crate::stack::RxError;
+use crate::stack::Stack;
+use crate::stack::TxError;
+use crate::stack::MAX_FRAME_SIZE;
 
-use lichen_core::announce::{write_announce_signed_data, AnnounceBuilder};
+use lichen_core::announce::write_announce_signed_data;
+use lichen_core::announce::AnnounceBuilder;
 use lichen_core::constants::L2_DISPATCH_ROUTING;
-use lichen_core::ipv6::{field, IPV6_HEADER_LEN};
+use lichen_core::ipv6::field;
+use lichen_core::ipv6::IPV6_HEADER_LEN;
 use lichen_hal::loopback::LoopbackRadio;
 use lichen_hal::storage::mem::MemStorage;
-use lichen_hal::{ChannelConfig, Radio, RadioConfig, RxPacket, TxResult};
-use lichen_ipv6::{next_header, Addr, Ipv6Header, UdpHeader, UDP_HEADER_LEN};
-use lichen_link::frame::{AddrMode, LichenFrame};
-use lichen_link::identity::{Identity, PeerIdentity};
+use lichen_hal::storage::mem::MemStorageError;
+use lichen_hal::ChannelConfig;
+use lichen_hal::Radio;
+use lichen_hal::RadioConfig;
+use lichen_hal::RxPacket;
+use lichen_hal::TxResult;
+use lichen_ipv6::next_header;
+use lichen_ipv6::Addr;
+use lichen_ipv6::Ipv6Header;
+use lichen_ipv6::UdpHeader;
+use lichen_ipv6::UDP_HEADER_LEN;
+use lichen_link::frame::AddrMode;
+use lichen_link::frame::LichenFrame;
+use lichen_link::identity::Identity;
+use lichen_link::identity::PeerIdentity;
 use lichen_link::keys::PublicKey;
 use lichen_link::keys::Seed;
-use lichen_link::link_layer::{LinkLayer, LinkRxError};
+use lichen_link::link_layer::LinkLayer;
+use lichen_link::link_layer::LinkRxError;
 use lichen_link::schnorr;
-use lichen_oscore::types::{ContextId, SenderSequenceState};
-use lichen_oscore::{Context, ContextStateStore, SenderStateStore};
-use lichen_rpl::message::{DaoOriginSignature, Dio, SignedDaoEnvelope};
-use lichen_rpl::routing::{
-    DaoAdmissionState, DaoPersistentOpenError, DaoProvisionError, DaoTxError, DaoTxState,
-};
+use lichen_oscore::types::ContextId;
+use lichen_oscore::types::SenderSequenceState;
+use lichen_oscore::Context;
+use lichen_oscore::ContextStateStore;
+use lichen_oscore::SenderStateStore;
+use lichen_rpl::message::DaoOriginSignature;
+use lichen_rpl::message::Dio;
+use lichen_rpl::message::SignedDaoEnvelope;
+use lichen_rpl::routing::DaoAdmissionState;
+use lichen_rpl::routing::DaoPersistentOpenError;
+use lichen_rpl::routing::DaoProvisionError;
+use lichen_rpl::routing::DaoTxError;
+use lichen_rpl::routing::DaoTxState;
 use lichen_schc::codec;
 use std::collections::VecDeque;
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
-use crate::announce::{AnnounceProcessor, AnnounceRejectReason};
-use crate::node::{rpl_code, RplEvent};
+use crate::announce::AnnounceProcessor;
+use crate::announce::AnnounceRejectReason;
+use crate::node::rpl_code;
+use crate::node::RplEvent;
 use crate::runtime::RplRuntime;
-use crate::secure::{SecureResponse, SecureResponseData};
+use crate::secure::SecureResponse;
+use crate::secure::SecureResponseData;
 
-use super::error::{RplReceiveError, RplRuntimeReceiveError};
+use super::error::RplReceiveError;
+use super::error::RplRuntimeReceiveError;
 use super::provisioning::provision_or_resume_root_state;
 use super::receive::DioRootSigOutcome;
-use super::util::{
-    advance_rpl_source_route, dao_ipv6_packet, dao_parts, decapsulate_ipv6, eui64_link_local,
-    ipv6_eui64, link_local_from_iid, multicast_dis_jitter, rpl_ipv6_packet, RPL_ALL_NODES,
-};
+use super::util::advance_rpl_source_route;
+use super::util::dao_ipv6_packet;
+use super::util::dao_parts;
+use super::util::decapsulate_ipv6;
+use super::util::eui64_link_local;
+use super::util::ipv6_eui64;
+use super::util::link_local_from_iid;
+use super::util::multicast_dis_jitter;
+use super::util::rpl_ipv6_packet;
+use super::util::RPL_ALL_NODES;
 
 struct MeshState {
     eui64s: [[u8; 8]; 3],
@@ -3324,7 +3363,6 @@ fn verified_root_signature_high_water_survives_reboot() {
     // eebl: the root_seq high-water must be durable. A captured
     // still-unexpired DIO replayed AFTER a reboot must hit the restored
     // cache and reject, never re-verify as fresh.
-    use lichen_hal::storage::mem::MemStorage;
     let (mut stack, body) = gate_fixture_with_storage(MemStorage::new());
     stack.announces.pin_for_test(root_sig_vector_pubkey());
     stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
@@ -3379,7 +3417,6 @@ fn corrupt_root_seq_record_fails_closed_at_open() {
     // eebl: durable anti-replay state must never be silently discarded —
     // a corrupt record fails the open instead of booting with an empty
     // cache that would admit replays.
-    use lichen_hal::storage::mem::MemStorage;
     use lichen_hal::storage::RedundantOpenError;
     let (mut stack, body) = gate_fixture_with_storage(MemStorage::new());
     stack.announces.pin_for_test(root_sig_vector_pubkey());
@@ -3400,7 +3437,7 @@ fn corrupt_root_seq_record_fails_closed_at_open() {
     let mut corrupt = persisted.clone();
     corrupt.set_raw("rpl.rseq.a", b"torn");
     corrupt.set_raw("rpl.rseq.b", b"torn");
-    let result = gate_fixture_try_reopen(corrupt);
+    let result = gate_reopen_stack(corrupt, &identity(41), gate_dodag_id());
     assert!(matches!(
         result,
         Err(RplStackOpenError::RootSeq(RedundantOpenError::Corrupt))
@@ -3434,39 +3471,15 @@ fn gate_fixture_with_storage(storage: MemStorage) -> (RplStack<MeshRadio, MemSto
 /// Reopen the gate-fixture leaf on existing durable storage (simulated
 /// reboot): `open_leaf` resumes the provisioned DAO TX state and loads the
 /// persisted root-seq cache.
-fn gate_fixture_reopen(storage: MemStorage) -> (RplStack<MeshRadio, MemStorage>, Vec<u8>) {
-    let (body, dodag_id) = gate_body();
-    let node_identity = identity(41);
-    let (_mesh, [radio, _spare1, _spare2]) =
-        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
-    let stack = gate_fixture_try_reopen_with(storage, radio, &node_identity, dodag_id)
-        .expect("reopen on intact storage");
-    (stack, body)
-}
+type GateReopen = Result<RplStack<MeshRadio, MemStorage>, RplStackOpenError<MemStorageError>>;
 
-fn gate_fixture_try_reopen(
+fn gate_reopen_stack(
     storage: MemStorage,
-) -> Result<
-    (RplStack<MeshRadio, MemStorage>, Vec<u8>),
-    RplStackOpenError<lichen_hal::storage::mem::MemStorageError>,
-> {
-    let (body, dodag_id) = gate_body();
-    let node_identity = identity(41);
-    let (_mesh, [radio, _spare1, _spare2]) =
-        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
-    let stack = gate_fixture_try_reopen_with(storage, radio, &node_identity, dodag_id)?;
-    Ok((stack, body))
-}
-
-fn gate_fixture_try_reopen_with(
-    storage: MemStorage,
-    radio: MeshRadio,
     node_identity: &Identity,
     dodag_id: [u8; 16],
-) -> Result<
-    RplStack<MeshRadio, MemStorage>,
-    RplStackOpenError<lichen_hal::storage::mem::MemStorageError>,
-> {
+) -> GateReopen {
+    let (_mesh, [radio, _spare1, _spare2]) =
+        MeshHarness::new([node_identity.iid, [0u8; 8], [0u8; 8]]);
     RplStack::open_leaf(
         Stack::new(radio, node_identity.clone(), 129, 0),
         address(node_identity, 1),
@@ -3474,6 +3487,13 @@ fn gate_fixture_try_reopen_with(
         announces(dodag_id[..8].try_into().unwrap()),
         storage,
     )
+}
+
+fn gate_fixture_reopen(storage: MemStorage) -> (RplStack<MeshRadio, MemStorage>, Vec<u8>) {
+    let (body, dodag_id) = gate_body();
+    let stack =
+        gate_reopen_stack(storage, &identity(41), dodag_id).expect("reopen on intact storage");
+    (stack, body)
 }
 
 /// Signed DIO body (Dio + 0x17 option carrying VALID_COSE_SIGN1) and the

@@ -9,35 +9,60 @@ use std::vec::Vec;
 use lichen_core::announce::Announce;
 use lichen_core::constants::L2_DISPATCH_ROUTING;
 use lichen_core::icmpv6::hdr_field;
-use lichen_core::ipv6::{field, next_header, IPV6_HEADER_LEN};
-use lichen_core::l2_payload::{classify as classify_l2_payload, L2PayloadKind};
-use lichen_hal::{NonVolatile, Radio};
+use lichen_core::ipv6::field;
+use lichen_core::ipv6::next_header;
+use lichen_core::ipv6::IPV6_HEADER_LEN;
+use lichen_core::l2_payload::classify as classify_l2_payload;
+use lichen_core::l2_payload::L2PayloadKind;
+use lichen_hal::NonVolatile;
+use lichen_hal::Radio;
 use lichen_ipv6::Ipv6Header;
 use lichen_link::identity::iid_from_pubkey;
 use lichen_link::keys::PublicKey;
-use lichen_link::link_layer::{AuthenticatedFrame, LinkRxError};
+use lichen_link::link_layer::AuthenticatedFrame;
+use lichen_link::link_layer::LinkRxError;
 
 use crate::announce::AnnounceRejectReason;
-use crate::node::{
-    claims_rpl_ipv6, is_rpl_ipv6, rpl_code, valid_ipv6_envelope, valid_rpl_ipv6,
-    DaoHandlingOutcome, RplEvent,
-};
+use crate::node::claims_rpl_ipv6;
+use crate::node::is_rpl_ipv6;
+use crate::node::rpl_code;
+use crate::node::valid_ipv6_envelope;
+use crate::node::valid_rpl_ipv6;
+use crate::node::DaoHandlingOutcome;
+use crate::node::RplEvent;
 use crate::secure::secure_datagram_from_received;
-use crate::stack::{Priority, ReceivedIpv6, RxError, MAX_FRAME_SIZE};
+use crate::stack::Priority;
+use crate::stack::ReceivedIpv6;
+use crate::stack::RxError;
+use crate::stack::MAX_FRAME_SIZE;
 
 use super::error::RplReceiveError;
-use super::root_sig::{DecodedRootSig, DioFields};
+use super::root_sig::DecodedRootSig;
+use super::root_sig::DioFields;
 // Merge resolution: both intents are required by the merged body below —
 // HEAD's `decapsulate_ipv6` (egress/SRH-consumed tunnel decapsulation,
 // R-05-063) and beads-worker-7's `RPL_ALL_NODES` (solicited DIS responses
 // re-targeted to the canonical multicast DIO address per R-09-005).
-use super::util::{
-    advance_rpl_source_route, bootstrap_announce_peer, dao_parts, decapsulate_ipv6,
-    dio_dis_destination_is_allowed, eui64_link_local, ipv6_eui64, l2_destination,
-    link_local_from_iid, multicast_dis_jitter, routing_announce, rpl_ipv6_multicast_is_allowed,
-    survey_routing_headers, wire_is_for_local, RoutingHeaderSurvey, RPL_ALL_NODES,
-};
-use super::{RplBorderIngressOutcome, RplReceiveOutcome, RplRole, RplStack};
+use super::util::advance_rpl_source_route;
+use super::util::bootstrap_announce_peer;
+use super::util::dao_parts;
+use super::util::decapsulate_ipv6;
+use super::util::dio_dis_destination_is_allowed;
+use super::util::eui64_link_local;
+use super::util::ipv6_eui64;
+use super::util::l2_destination;
+use super::util::link_local_from_iid;
+use super::util::multicast_dis_jitter;
+use super::util::routing_announce;
+use super::util::rpl_ipv6_multicast_is_allowed;
+use super::util::survey_routing_headers;
+use super::util::wire_is_for_local;
+use super::util::RoutingHeaderSurvey;
+use super::util::RPL_ALL_NODES;
+use super::RplBorderIngressOutcome;
+use super::RplReceiveOutcome;
+use super::RplRole;
+use super::RplStack;
 
 impl<R: Radio, S: NonVolatile> RplStack<R, S> {
     /// Authenticate and admit one complete link-layer wire frame received by
@@ -677,7 +702,8 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
         dio_body: &[u8],
         dio_fields: &DioFields,
     ) -> DioRootSigOutcome {
-        use lichen_rpl::message::{OptionIter, OPT_ROOT_DIO_SIGNATURE};
+        use lichen_rpl::message::OptionIter;
+        use lichen_rpl::message::OPT_ROOT_DIO_SIGNATURE;
 
         let options_offset = lichen_rpl::message::Dio::SERIALIZED_LEN;
         let Some(options) = dio_body.get(options_offset..) else {

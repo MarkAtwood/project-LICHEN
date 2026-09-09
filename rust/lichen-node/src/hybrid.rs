@@ -11,14 +11,28 @@
 #[cfg(feature = "std")]
 extern crate std;
 #[cfg(feature = "std")]
-use std::{collections::VecDeque, vec::Vec};
+use std::collections::VecDeque;
+#[cfg(feature = "std")]
+use std::vec::Vec;
 
 #[cfg(feature = "std")]
-use crate::gradient::{
-    GeoCoords, GradientEntry, GradientSource, GradientTable, GRADIENT_TIMEOUT_MS,
-};
+use crate::gradient::GeoCoords;
 #[cfg(feature = "std")]
-use lichen_core::loadng::{Idle, RouteDiscovery, Rreq, Searching};
+use crate::gradient::GradientEntry;
+#[cfg(feature = "std")]
+use crate::gradient::GradientSource;
+#[cfg(feature = "std")]
+use crate::gradient::GradientTable;
+#[cfg(feature = "std")]
+use crate::gradient::GRADIENT_TIMEOUT_MS;
+#[cfg(feature = "std")]
+use lichen_core::loadng::Idle;
+#[cfg(feature = "std")]
+use lichen_core::loadng::RouteDiscovery;
+#[cfg(feature = "std")]
+use lichen_core::loadng::Rreq;
+#[cfg(feature = "std")]
+use lichen_core::loadng::Searching;
 
 /// Classification of IPv6 destination address (spec 7.2 table).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

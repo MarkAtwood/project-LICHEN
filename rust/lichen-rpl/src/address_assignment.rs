@@ -9,7 +9,10 @@
 //! it. Canonical wires and maintenance values live in
 //! `test/vectors/short_addr_assignment.json`.
 
-use crate::message::{Dao, DaoAck, OptionIter, RplError};
+use crate::message::Dao;
+use crate::message::DaoAck;
+use crate::message::OptionIter;
+use crate::message::RplError;
 
 /// Project-private RPL option type. This is not an IANA allocation.
 pub const SHORT_ADDRESS_OPTION_TYPE: u8 = 252;
@@ -504,14 +507,22 @@ impl ShortAddressAssignmentClient {
 
 #[cfg(feature = "std")]
 mod std_support {
-    use super::{
-        check_eui64, check_short, AddressAssignmentAck, AddressAssignmentRequest, AssignmentError,
-        AssignmentOperation, AssignmentStatus, FIRST_SHORT, LAST_SHORT,
-    };
+    use super::check_eui64;
+    use super::check_short;
+    use super::AddressAssignmentAck;
+    use super::AddressAssignmentRequest;
+    use super::AssignmentError;
+    use super::AssignmentOperation;
+    use super::AssignmentStatus;
+    use super::FIRST_SHORT;
+    use super::LAST_SHORT;
     use crate::message::Dao;
-    use lichen_core::short_addr::{crc32_ieee, derive_short_addr, derive_short_addr_with_seed};
+    use lichen_core::short_addr::crc32_ieee;
+    use lichen_core::short_addr::derive_short_addr;
+    use lichen_core::short_addr::derive_short_addr_with_seed;
     use std::cell::RefCell;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
+    use std::collections::HashMap;
     use std::rc::Rc;
     use std::vec::Vec;
 
@@ -1283,15 +1294,23 @@ mod std_support {
 }
 
 #[cfg(feature = "std")]
-pub use std_support::{
-    decode_assignment_state, encode_assignment_state, AddressAssignmentStore,
-    MemoryAddressAssignmentStore, NoStore, ShortAddressCoordinator,
-};
+pub use std_support::decode_assignment_state;
+#[cfg(feature = "std")]
+pub use std_support::encode_assignment_state;
+#[cfg(feature = "std")]
+pub use std_support::AddressAssignmentStore;
+#[cfg(feature = "std")]
+pub use std_support::MemoryAddressAssignmentStore;
+#[cfg(feature = "std")]
+pub use std_support::NoStore;
+#[cfg(feature = "std")]
+pub use std_support::ShortAddressCoordinator;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lichen_core::short_addr::{crc32_ieee, derive_short_addr};
+    use lichen_core::short_addr::crc32_ieee;
+    use lichen_core::short_addr::derive_short_addr;
 
     const EUI: [u8; 8] = [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77];
 
@@ -1422,7 +1441,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn origin_validated_dao_requires_valid_origin_and_matching_eui() {
-        use crate::dao_origin::{DaoOriginRejectReason, DaoOriginResult};
+        use crate::dao_origin::DaoOriginRejectReason;
+        use crate::dao_origin::DaoOriginResult;
 
         let pubkey = [0x42u8; 32];
         let origin = lichen_core::addr::ygg_addr_from_pubkey(&pubkey);

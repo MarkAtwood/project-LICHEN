@@ -18,7 +18,8 @@
 #![cfg_attr(not(test), expect(dead_code))]
 
 use ciborium::value::Value;
-use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey};
+use lichen_core::addr::iid_from_pubkey_bytes;
+use lichen_core::addr::ygg_addr_from_pubkey;
 #[cfg(feature = "std")]
 use lichen_rpl::root_seq_cache::RootSeqCache;
 
@@ -330,7 +331,8 @@ impl DecodedRootSig {
     /// SHA-256(Sig_structure).
     #[cfg(feature = "std")]
     pub fn verify_signature(&self, pubkey: &[u8; 32]) -> Result<(), RootSigError> {
-        use sha2::{Digest, Sha256};
+        use sha2::Digest;
+        use sha2::Sha256;
 
         const CANONICAL_PROTECTED: [u8; 7] = [0xa1, 0x01, 0x3a, 0x00, 0x01, 0x00, 0x00];
         let payload = self.canonical_payload()?;
@@ -451,8 +453,10 @@ pub(crate) fn produce_root_dio_signature_option(
     mop: u8,
 ) -> Result<std::vec::Vec<u8>, RootSigError> {
     use ciborium::ser::into_writer;
-    use lichen_rpl::message::{RootDioSignature, OPT_ROOT_DIO_SIGNATURE};
-    use sha2::{Digest, Sha256};
+    use lichen_rpl::message::RootDioSignature;
+    use lichen_rpl::message::OPT_ROOT_DIO_SIGNATURE;
+    use sha2::Digest;
+    use sha2::Sha256;
 
     if expiry == 0 || root_seq == 0 {
         return Err(RootSigError::Decode);

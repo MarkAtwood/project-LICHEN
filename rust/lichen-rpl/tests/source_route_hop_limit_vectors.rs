@@ -1,4 +1,5 @@
-use lichen_rpl::routing::{SourceRoutingHeader, MAX_ROUTE_HOPS};
+use lichen_rpl::routing::SourceRoutingHeader;
+use lichen_rpl::routing::MAX_ROUTE_HOPS;
 use serde_json::Value;
 
 const VECTORS: &str = include_str!("../../../test/vectors/source_route_hop_limit.json");

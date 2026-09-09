@@ -3,10 +3,17 @@
 
 //! Consume `test/vectors/rpl_messages.json` through the public RPL codecs.
 
-use lichen_rpl::message::{
-    Dao, DaoAck, Dio, Dis, DodagConfig, RplError, RplTarget, TransitInfo, OPT_DODAG_CONFIG,
-    OPT_RPL_TARGET, OPT_TRANSIT_INFO,
-};
+use lichen_rpl::message::Dao;
+use lichen_rpl::message::DaoAck;
+use lichen_rpl::message::Dio;
+use lichen_rpl::message::Dis;
+use lichen_rpl::message::DodagConfig;
+use lichen_rpl::message::RplError;
+use lichen_rpl::message::RplTarget;
+use lichen_rpl::message::TransitInfo;
+use lichen_rpl::message::OPT_DODAG_CONFIG;
+use lichen_rpl::message::OPT_RPL_TARGET;
+use lichen_rpl::message::OPT_TRANSIT_INFO;
 use serde_json::Value;
 
 const JSON: &str = include_str!("../../../test/vectors/rpl_messages.json");

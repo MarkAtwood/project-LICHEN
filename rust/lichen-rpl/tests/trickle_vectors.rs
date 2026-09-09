@@ -1,7 +1,9 @@
-use lichen_rpl::trickle::{
-    TrickleScope, TrickleTimer, LICHEN_TRICKLE_IMAX_DOUBLINGS, LICHEN_TRICKLE_IMAX_MS,
-    LICHEN_TRICKLE_IMIN_MS, LICHEN_TRICKLE_K,
-};
+use lichen_rpl::trickle::TrickleScope;
+use lichen_rpl::trickle::TrickleTimer;
+use lichen_rpl::trickle::LICHEN_TRICKLE_IMAX_DOUBLINGS;
+use lichen_rpl::trickle::LICHEN_TRICKLE_IMAX_MS;
+use lichen_rpl::trickle::LICHEN_TRICKLE_IMIN_MS;
+use lichen_rpl::trickle::LICHEN_TRICKLE_K;
 use serde_json::Value;
 
 fn case<'a>(document: &'a Value, name: &str) -> &'a Value {

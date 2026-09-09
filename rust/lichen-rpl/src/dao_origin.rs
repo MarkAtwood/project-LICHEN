@@ -15,16 +15,25 @@
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "std")]
-use crate::message::{
-    Dao, DaoEnvelopeError, SignedDaoEnvelope, DAO_ORIGIN_SIGNATURE_DATA_LEN,
-    OPT_DAO_ORIGIN_SIGNATURE,
-};
+use crate::message::Dao;
+#[cfg(feature = "std")]
+use crate::message::DaoEnvelopeError;
+#[cfg(feature = "std")]
+use crate::message::SignedDaoEnvelope;
+#[cfg(feature = "std")]
+use crate::message::DAO_ORIGIN_SIGNATURE_DATA_LEN;
+#[cfg(feature = "std")]
+use crate::message::OPT_DAO_ORIGIN_SIGNATURE;
 #[cfg(feature = "std")]
 use crate::verify::dao_origin_digest;
 #[cfg(feature = "std")]
-use lichen_link::{schnorr, ygg_addr_from_pubkey};
+use lichen_link::schnorr;
 #[cfg(feature = "std")]
-use sha2::{Digest, Sha512};
+use lichen_link::ygg_addr_from_pubkey;
+#[cfg(feature = "std")]
+use sha2::Digest;
+#[cfg(feature = "std")]
+use sha2::Sha512;
 
 /// DAO Origin Signature Option type (spec 8.6, temporary value pending IANA).
 #[cfg(feature = "std")]

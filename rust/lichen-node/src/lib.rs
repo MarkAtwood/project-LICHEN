@@ -62,61 +62,125 @@ pub mod stack;
 pub mod tdma_scheduler;
 
 #[cfg(feature = "std")]
-pub use announce::{
-    seq_gt, AnnounceProcessor, AnnounceRejectReason, AnnounceResult, MAX_TRACKED_ORIGINATORS,
-};
+pub use announce::seq_gt;
 #[cfg(feature = "std")]
-pub use announce_store::{AnnounceStoreError, AnnounceTrustState, AnnounceTrustStore};
-pub use dispatch::{Dispatcher, Request, Resource, Response};
+pub use announce::AnnounceProcessor;
+#[cfg(feature = "std")]
+pub use announce::AnnounceRejectReason;
+#[cfg(feature = "std")]
+pub use announce::AnnounceResult;
+#[cfg(feature = "std")]
+pub use announce::MAX_TRACKED_ORIGINATORS;
+#[cfg(feature = "std")]
+pub use announce_store::AnnounceStoreError;
+#[cfg(feature = "std")]
+pub use announce_store::AnnounceTrustState;
+#[cfg(feature = "std")]
+pub use announce_store::AnnounceTrustStore;
+pub use dispatch::Dispatcher;
+pub use dispatch::Request;
+pub use dispatch::Resource;
+pub use dispatch::Response;
+pub use gradient::GeoCoords;
+pub use gradient::GradientEntry;
+pub use gradient::GradientSource;
 #[cfg(feature = "std")]
 pub use gradient::GradientTable;
-pub use gradient::{
-    GeoCoords, GradientEntry, GradientSource, DATA_GRADIENT_TIMEOUT_MS, GRADIENT_TIMEOUT_MS,
-};
-pub use hybrid::{AddressClass, RouteDecision, RouteResult};
+pub use gradient::DATA_GRADIENT_TIMEOUT_MS;
+pub use gradient::GRADIENT_TIMEOUT_MS;
+pub use hybrid::AddressClass;
 #[cfg(feature = "std")]
-pub use hybrid::{HybridRouter, MeshPrefix, PendingPacket};
+pub use hybrid::HybridRouter;
+#[cfg(feature = "std")]
+pub use hybrid::MeshPrefix;
+#[cfg(feature = "std")]
+pub use hybrid::PendingPacket;
+pub use hybrid::RouteDecision;
+pub use hybrid::RouteResult;
 #[cfg(feature = "std")]
 pub use node::rpl_code;
 #[cfg(feature = "std")]
 pub use node::DaoHandlingOutcome;
+pub use node::Node;
+pub use node::RplEvent;
 #[cfg(feature = "std")]
 pub use node::RplNode;
-pub use node::{Node, RplEvent};
-pub use port_dispatch::{
-    dispatch_by_port, AppProtocol, DispatchError, Dispatched, UdpDispatchError,
-};
+pub use port_dispatch::dispatch_by_port;
+pub use port_dispatch::AppProtocol;
+pub use port_dispatch::DispatchError;
+pub use port_dispatch::Dispatched;
+pub use port_dispatch::UdpDispatchError;
 #[cfg(feature = "std")]
-pub use routing::{
-    DtnBuffer, DtnMessage, RouteTarget, Router, TrickleAwareNeighborLiveness, DTN_BUFFER_MAX_BYTES,
-};
-pub use routing::{Neighbor, NeighborTable, TrickleSafeLivenessPolicy};
+pub use routing::DtnBuffer;
 #[cfg(feature = "std")]
-pub use rpl_stack::{RplReceiveOutcome, RplStack};
+pub use routing::DtnMessage;
+pub use routing::Neighbor;
+pub use routing::NeighborTable;
+#[cfg(feature = "std")]
+pub use routing::RouteTarget;
+#[cfg(feature = "std")]
+pub use routing::Router;
+#[cfg(feature = "std")]
+pub use routing::TrickleAwareNeighborLiveness;
+pub use routing::TrickleSafeLivenessPolicy;
+#[cfg(feature = "std")]
+pub use routing::DTN_BUFFER_MAX_BYTES;
+#[cfg(feature = "std")]
+pub use rpl_stack::RplReceiveOutcome;
+#[cfg(feature = "std")]
+pub use rpl_stack::RplStack;
 // SECURITY: SecureStack is the primary export for CoAP traffic per spec section 8.7.
 // Use Stack (PlaintextStack) only for ICMPv6, diagnostics, or testing.
 #[cfg(feature = "std")]
-pub use secure::{
-    SecureError, SecureObserveCorrelation, SecureObserveRegistration, SecureObserveResponse,
-    SecureStack,
-};
+pub use secure::SecureError;
 #[cfg(feature = "std")]
-pub use stack::{Priority, ReceivedIpv6, RxError, Stack, TxError};
+pub use secure::SecureObserveCorrelation;
+#[cfg(feature = "std")]
+pub use secure::SecureObserveRegistration;
+#[cfg(feature = "std")]
+pub use secure::SecureObserveResponse;
+#[cfg(feature = "std")]
+pub use secure::SecureStack;
+#[cfg(feature = "std")]
+pub use stack::Priority;
+#[cfg(feature = "std")]
+pub use stack::ReceivedIpv6;
+#[cfg(feature = "std")]
+pub use stack::RxError;
+#[cfg(feature = "std")]
+pub use stack::Stack;
+#[cfg(feature = "std")]
+pub use stack::TxError;
 /// Type alias for `Stack` — use only for ICMPv6, diagnostics, or testing.
 /// For CoAP traffic, use [`SecureStack`] instead (per spec section 8.7).
 #[cfg(feature = "std")]
 pub type PlaintextStack<R> = Stack<R>;
 #[cfg(feature = "std")]
-pub use forward_buffer::{
-    ForwardBuffer, ForwardEntry, ForwardError, ForwardStats, MAX_FORWARDING_SOURCES,
-    MAX_PACKETS_PER_SOURCE,
-};
+pub use forward_buffer::ForwardBuffer;
+#[cfg(feature = "std")]
+pub use forward_buffer::ForwardEntry;
+#[cfg(feature = "std")]
+pub use forward_buffer::ForwardError;
+#[cfg(feature = "std")]
+pub use forward_buffer::ForwardStats;
+#[cfg(feature = "std")]
+pub use forward_buffer::MAX_FORWARDING_SOURCES;
+#[cfg(feature = "std")]
+pub use forward_buffer::MAX_PACKETS_PER_SOURCE;
 #[cfg(feature = "std")]
 pub use lichen_link::link_layer::LinkRxError;
 #[cfg(feature = "std")]
-pub use scheduler::{AnnounceScheduler, AnnounceTransmitter, SchedulerConfig, SchedulerError};
+pub use scheduler::AnnounceScheduler;
 #[cfg(feature = "std")]
-pub use tdma_scheduler::{TdmaScheduler, TdmaSchedulerError};
+pub use scheduler::AnnounceTransmitter;
+#[cfg(feature = "std")]
+pub use scheduler::SchedulerConfig;
+#[cfg(feature = "std")]
+pub use scheduler::SchedulerError;
+#[cfg(feature = "std")]
+pub use tdma_scheduler::TdmaScheduler;
+#[cfg(feature = "std")]
+pub use tdma_scheduler::TdmaSchedulerError;
 
 #[cfg(feature = "std")]
 extern crate std;
