@@ -737,6 +737,14 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                 return DioRootSigOutcome::Reject;
             }
         }
+        // The key is either tracked (the cached() pre-check above already
+        // rejected any non-increasing root_seq, so accept() cannot fail) or
+        // untracked (accept() fails only on RootSeqReject::Capacity). Mapping
+        // every error to Reject would let an on-link adversary with pinned
+        // keys fill the table and hard-Reject a NEW genuine root's first
+        // signed DIO — punishing the signed option itself. A genuine new root
+        // must degrade to the unsigned baseline, while cached-key
+        // replay/regression stays hard-Rejected by the pre-check.
         if self
             .root_seqs
             .accept(
@@ -746,7 +754,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
             )
             .is_err()
         {
-            return DioRootSigOutcome::Reject;
+            return DioRootSigOutcome::Baseline;
         }
 
         DioRootSigOutcome::Verified

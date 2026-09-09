@@ -3273,6 +3273,40 @@ fn clock_equal_to_expiry_boundary_degrades_to_baseline() {
     assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
 }
 
+#[test]
+fn full_root_seq_cache_degrades_new_genuine_root_to_baseline_not_reject() {
+    // THE PIN (r2oz): a full RootSeqCache (16 attacker-filled keys) must not
+    // hard-Reject a NEW genuine root's first signed DIO — that punishes the
+    // signed option itself (self-DoS). The untracked key degrades to the
+    // unsigned baseline, while cached-key replay/regression stays Reject via
+    // the cached() pre-check.
+    use lichen_rpl::root_seq_cache::MAX_ROOT_SEQ_KEYS;
+    let (mut stack, body) = gate_fixture();
+    stack.announces.pin_for_test(root_sig_vector_pubkey());
+    stack.set_wall_clock_unix(|| VECTOR_EXPIRY_UNIX - 1);
+    // Fill every slot with distinct (dodag_id, instance) keys that are NOT
+    // the genuine root's key.
+    for index in 0..MAX_ROOT_SEQ_KEYS {
+        let mut filler = [0u8; 16];
+        filler[15] = index as u8 + 1;
+        filler[14] = 0xF0; // keep clear of gate_dodag_id()'s low half
+        stack.root_seqs.accept(filler, 0, 1).unwrap();
+    }
+    // Sanity: the genuine root key is untracked and the table is full.
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // The genuine root's first signed DIO degrades to Baseline (processed on
+    // the link-layer floor), never Reject, and no seq is admitted.
+    let outcome = stack.verify_dio_root_signature(&body, &gate_fields());
+    assert_eq!(outcome, DioRootSigOutcome::Baseline);
+    assert_eq!(stack.root_seq_cached(gate_dodag_id(), 0), None);
+    // The table is untouched: a tracked key still replay-rejects (fail closed
+    // for cached keys is preserved).
+    let mut tracked = [0u8; 16];
+    tracked[15] = 1;
+    tracked[14] = 0xF0;
+    assert_eq!(stack.root_seq_cached(tracked, 0), Some(1));
+}
+
 fn root_sig_vector_pubkey() -> PublicKey {
     use crate::rpl_stack::root_sig;
     root_sig::tests::vector_pubkey()
