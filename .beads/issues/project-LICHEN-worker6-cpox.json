@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-cpox",
+  "title": "rpl_stack three_rpl_stacks route-lookup not installed after i72x.2 (needs announce-gradient fix d78f67bdfa)",
+  "description": "Residual from z4f6 (17/18 green via 7331d087c5 cherry-pick 07c586bccb). rpl_stack::tests::three_rpl_stacks_send_leaf_dao_via_preferred_parent still fails at rust/lichen-node/src/rpl_stack/tests.rs:1864 — lookup_route returns None (expected Some([200:5f6a:..., 202:fdfd:...])). The leaf-\u003erelay-\u003eroot DAO was accepted but the route is not installed at the asserting node. Root cause is the announce-gradient destination still using a pre-AddrForKey derivation; the follow-on fix d78f67bdfa ('announce gradient destination uses AddrForKey pubkey derivation') repairs it but is entangled with in-flight worker4/worker8 merges (gateway.rs, announce.rs, gradient.rs, node.rs) and does not cherry-pick green standalone (moved the failure from :1798 announce-accept to :1864 route-install). Recommend: land d78f67bdfa via the owning worker branch, or after those merges settle; then re-run cargo test -p lichen-node --lib three_rpl_stacks. Discovered-from z4f6.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:23:06.612208519Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:23:06.612208519Z",
+  "labels": [
+    "rust",
+    "rpl",
+    "yggdrasil"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-cpox",
+      "depends_on_id": "project-LICHEN-worker6-z4f6",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T15:23:06.722247904Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

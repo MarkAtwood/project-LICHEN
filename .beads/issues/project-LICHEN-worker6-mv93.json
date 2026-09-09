@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-mv93",
+  "title": "DAO anti-spoof gate bypassable via routable/GUA source (route-poison)",
+  "description": "Codereview (P1 security) on the z4f6 i72x.2 cherry-pick. rust/lichen-node/src/node.rs:642-648: the DAO forged-sender anti-spoof gate revived by 7331d087c5 only rejects when 'source_is_link_local' (645) is true. An adversary who sets an advertised transit parent equal to the node's routable /128 (*parent == my_routable, 644) but sends the DAO from a routable 02xx::/8 or GUA source address skips the source_is_link_local conjunct, so the IID-mismatch rejection never fires; the DAO is forwarded (661-671) and installs routes toward targets the sender does not key-own -\u003e route-poison / blackhole DoS. The IID binding check source_matches_sender_iid is only enforced for link-local sources; routable sources are accepted by is_native_or_global (654-655) without any pinned-pubkey/IID correlation. Root cause: post-AddrForKey, a routable 02xx source embeds no IID, so source_matches_sender_iid can never validate it, yet the gate treats it as a pass. Fix direction: correlate the routable source against a pinned pubkey (AnnounceProcessor::pinned_pubkey_for_routable, added in 7331) before accepting a DAO that names a direct-child parent, or require direct-child-parent DAOs to be sent from the canonical link-local source and reject routable-source DAOs claiming a direct child. Related: ssg9 (router.rs:721 direct-child gate dead), nnmc (parent two forms). Verify cargo test -p lichen-node after.",
+  "status": "open",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T15:22:46.678808351Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T15:22:46.678808351Z",
+  "labels": [
+    "rust",
+    "networking",
+    "security"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-mv93",
+      "depends_on_id": "project-LICHEN-worker6-z4f6",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T15:22:46.824184066Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
