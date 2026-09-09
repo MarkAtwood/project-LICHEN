@@ -127,7 +127,9 @@ static void lichen_usb_status_cb(enum usb_dc_status_code status,
 	case USB_DC_CLEAR_HALT:
 	case USB_DC_SOF:
 	case USB_DC_UNKNOWN:
-		/* No accounting for these states. */
+		/* No accounting for these states. All usb_dc_status_code
+		 * values are handled explicitly and default: is omitted on
+		 * purpose so -Wswitch flags any future enum addition. */
 		break;
 	}
 }

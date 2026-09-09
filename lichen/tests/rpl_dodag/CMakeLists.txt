@@ -13,10 +13,13 @@ add_executable(rpl_dodag_test
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/dodag.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/messages.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/trickle.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/rpl_sf_assignment.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/hash32.c
 )
 
 target_include_directories(rpl_dodag_test PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/rpl/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../subsys/lichen/link/include
   ${CMAKE_CURRENT_SOURCE_DIR}/stub
 )
 target_compile_definitions(rpl_dodag_test PRIVATE LICHEN_RPL_TEST=1)

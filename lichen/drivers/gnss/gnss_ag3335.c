@@ -236,7 +236,13 @@ static int gnss_ag3335_pm_action(const struct device *dev,
 		return gnss_ag3335_suspend(dev);
 	case PM_DEVICE_ACTION_TURN_ON:
 	case PM_DEVICE_ACTION_TURN_OFF:
-		/* Not on a power domain; TURN_ON/TURN_OFF do not apply. */
+		/* Not on a power domain; TURN_ON/TURN_OFF do not apply.
+		 * -ENOTSUP, not 0: silent success would leave the GNSS
+		 * unpowered if the node were ever placed on a power domain.
+		 * (Validated under ARM -Werror -Wswitch-enum per bead
+		 * project-LICHEN-worker6-gvf1; supersedes worker6's
+		 * return-0/default variant.)
+		 */
 		return -ENOTSUP;
 	}
 	return -ENOTSUP;
