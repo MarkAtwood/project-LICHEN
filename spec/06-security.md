@@ -1203,6 +1203,22 @@ issuer. Verifiers MUST fail closed: a fact carrying `lichen:expiry` cannot
 be accepted without a current time to check against, and a fact carrying
 `lichen:seq` cannot be accepted without a per-issuer sequence cache.
 
+Because wall-clock time is untrusted input (a radio adversary can spoof a
+verifier's GPS/RTC clock), the verifier's expiry check MUST be robust to
+clock rollback, mirroring the issuer-side `max(floor + 1, time-derived)`
+clamp below: the verifier persists a monotone floor of the highest wall-clock
+time it has observed and evaluates `lichen:expiry` against
+`max(floor, current time)`, never against a time that has moved backward.
+Without this clamp a backward-spoofed clock makes an expired fact read as
+unexpired, and — because revocation-by-non-renewal leaves the revoked fact as
+the highest-seq fact the verifier has seen — the seq check then passes and
+the revoked grant is re-admitted until the wall clock is set forward again.
+The floor prevents that rollback-driven re-admission: a backward-spoofed
+clock does not lower the effective time used for the expiry check. A verifier
+with no trustworthy time source at all MUST NOT honor expiring facts (it
+cannot evaluate `lichen:expiry`); mesh-lifetime facts without freshness
+claims are unaffected.
+
 On first contact with an issuer the cache has no entry; the verifier treats
 the empty cache as "highest seq = -1", accepts any non-negative seq, and
 seeds the cache from the verified fact. A verifier MUST NOT derive the
