@@ -26,10 +26,7 @@ from lichen.gateway.slot_claim import (
 
 VECTORS = json.loads(
     (
-        Path(__file__).resolve().parents[3]
-        / "test"
-        / "vectors"
-        / "gcp_slot_claim_cose_sign1.json"
+        Path(__file__).resolve().parents[3] / "test" / "vectors" / "gcp_slot_claim_cose_sign1.json"
     ).read_text()
 )
 
@@ -74,9 +71,7 @@ def test_valid_claims_verify() -> None:
         claim = _decode(case)
         _assert_fields(claim, case, name)
         pubkey = _pubkey(case)
-        is_valid, reason = verify_slot_claim(
-            claim, pubkey, now_unix=EVAL_TIME
-        )
+        is_valid, reason = verify_slot_claim(claim, pubkey, now_unix=EVAL_TIME)
         assert is_valid and reason is None, f"{name}: {reason}"
 
 
@@ -84,9 +79,7 @@ def test_slots_array_mutation_rejected() -> None:
     case = _case("slots_array_mutation")
     claim = _decode(case)
     pubkey = _pubkey(case)
-    is_valid, reason = verify_slot_claim(
-        claim, pubkey, now_unix=EVAL_TIME
-    )
+    is_valid, reason = verify_slot_claim(claim, pubkey, now_unix=EVAL_TIME)
     assert not is_valid
     assert reason == ClaimRejectReason.INVALID_SIGNATURE
 
@@ -97,17 +90,13 @@ def test_claim_seq_replay_equal_and_lower_rejected() -> None:
     seed = _decode(_case("claim_seq_cache_seed"))
     cache = SlotClaimReplayCache()
     seed_pubkey = _pubkey(_case("claim_seq_cache_seed"))
-    is_valid, _ = verify_slot_claim(
-        seed, seed_pubkey, replay_cache=cache, now_unix=EVAL_TIME
-    )
+    is_valid, _ = verify_slot_claim(seed, seed_pubkey, replay_cache=cache, now_unix=EVAL_TIME)
     assert is_valid
 
     for name in ("claim_seq_replay_equal", "claim_seq_replay_lower"):
         claim = _decode(_case(name))
         pubkey = _pubkey(_case(name))
-        is_valid, reason = verify_slot_claim(
-            claim, pubkey, replay_cache=cache, now_unix=EVAL_TIME
-        )
+        is_valid, reason = verify_slot_claim(claim, pubkey, replay_cache=cache, now_unix=EVAL_TIME)
         assert not is_valid
         assert reason == ClaimRejectReason.REPLAY, name
 
@@ -128,9 +117,7 @@ def test_expiry_boundary_future_passes_verify() -> None:
     case = _case("expiry_boundary_future")
     claim = _decode(case)
     pubkey = _pubkey(case)
-    is_valid, _ = verify_slot_claim(
-        claim, pubkey, now_unix=EVAL_TIME
-    )
+    is_valid, _ = verify_slot_claim(claim, pubkey, now_unix=EVAL_TIME)
     assert is_valid
 
 
@@ -196,3 +183,91 @@ def test_oversized_sibling_fields_rejected_at_decode(key: int, value: object) ->
     body = cbor2.dumps([elements[0], elements[1], cbor2.dumps(payload), elements[3]])
     with pytest.raises(ClaimError):
         SlotClaim.decode_cose(body)
+
+
+# ─── Byte-strict envelope framing (33vn) ──────────────────────────────────────
+
+
+def _long_bstr_head(value: bytes) -> bytes:
+    # Long-form bstr head: argument 0x59 with a 2-byte length.
+    return b"\x59" + len(value).to_bytes(2, "big") + value
+
+
+def _elements(name: str) -> tuple[bytes, bytes, bytes, bytes]:
+    # (protected, unprotected map, payload, signature) of a signature-valid
+    # envelope; the signature stays byte-identical in every malleation
+    # below, so the Schnorr digest still verifies — only the strict envelope
+    # reader can reject these forms.
+    elements = cbor2.loads(_hex(_case(name)["cose_sign1_hex"]))
+    return elements[0], elements[1], elements[2], elements[3]
+
+
+def _build(
+    prot: bytes,
+    unprot_head: bytes = b"\xa1",
+    label_head: bytes = b"\x04",
+    kid_head: bytes | None = None,
+    payload_head: bytes | None = None,
+    sig_head: bytes | None = None,
+    array_head: bytes = b"\x84",
+    trailing: bytes = b"",
+) -> bytes:
+    _, unprot, payload, sig = _elements("happy_path_n1")
+    kid = unprot.get(4)
+    kid_head = kid_head if kid_head is not None else b"\x48"
+    payload_head = payload_head if payload_head is not None else b"\x58" + bytes([len(payload)])
+    sig_head = sig_head if sig_head is not None else b"\x58\x30"
+    prot_head = b"\x47" if prot == _elements("happy_path_n1")[0] else _long_bstr_head(prot)
+    return (
+        array_head
+        + prot_head
+        + prot
+        + unprot_head
+        + label_head
+        + kid_head
+        + kid
+        + payload_head
+        + payload
+        + sig_head
+        + sig
+        + trailing
+    )
+
+
+@pytest.mark.parametrize(
+    "description,kwargs",
+    [
+        ("long-form array head 98 04", {"array_head": b"\x98\x04"}),
+        (
+            "long-form protected bstr head",
+            {
+                "prot": _long_bstr_head(_elements("happy_path_n1")[0])
+                + _elements("happy_path_n1")[0]
+            },
+        ),
+        ("long-form payload bstr head", {"payload_head": b"\x59\x00\x1c"}),
+        ("long-form signature bstr head", {"sig_head": b"\x59\x00\x30"}),
+        ("two-entry unprotected map", {"unprot_head": b"\xa2", "trailing": b"\x45x"}),
+        ("non-minimal kid label uint", {"label_head": b"\x18\x04"}),
+        ("non-minimal bstr head for kid", {"kid_head": b"\x59\x00\x08"}),
+        ("trailing bytes after signature", {"trailing": b"\x00"}),
+    ],
+)
+def test_lenient_envelope_framing_rejected(description: str, kwargs: dict) -> None:
+    # 33vn: a lenient framing form of a signature-valid envelope must fail
+    # decode exactly as Rust from_cose fails the identical bytes (long-form
+    # array/bstr heads, non-minimal uint, extra unprotected entries,
+    # trailing bytes).
+    prot = kwargs.pop("prot", _elements("happy_path_n1")[0])
+    malleated = _build(prot, **kwargs)
+    with pytest.raises(ClaimError):
+        SlotClaim.decode_cose(malleated)
+
+
+def test_strict_body_roundtrip_decodes() -> None:
+    # Sanity: the hand-built strict envelope decodes to the vector fields
+    # (guards _build's minimal heads against drift).
+    prot, unprot, payload, sig = _elements("happy_path_n1")
+    claim = SlotClaim.decode_cose(_build(prot))
+    assert claim.slots == tuple(_case("happy_path_n1")["slots"])
+    assert len(_build(prot)) == 9 + 3 + 8 + 30 + 50  # framing + heads + kid + payload + sig

@@ -134,6 +134,53 @@ class ClaimError(Exception):
     """Slot claim processing error."""
 
 
+_STRICT_PROTECTED = b"\xa1\x01\x3a\x00\x01\x00\x00"
+"""Byte-exact protected header {1: -65537} (Rust tunnel_auth::PROTECTED).
+
+Byte-compare at envelope decode instead of re-parsing: long-form heads
+inside the header map, extra header entries, or any other alg variant
+that cbor2.loads would silently normalize are rejected exactly as Rust
+from_cose rejects them (slot.rs:524-545).
+"""
+
+
+def _read_head(data: bytes, pos: int, what: str) -> tuple[int, int, int]:
+    """Read one minimal-length CBOR head (major type, argument, end pos).
+
+    Strict-form reader used by SlotClaim.decode_cose: mirrors Rust's
+    Reader::head (tunnel_auth) which rejects long-form heads whose
+    argument would have fit a shorter encoding, plus indefinite and
+    reserved forms.
+    """
+    if pos >= len(data):
+        raise ClaimError(f"truncated {what} head")
+    initial = data[pos]
+    major, ai = initial >> 5, initial & 0x1F
+    pos += 1
+    if ai < 24:
+        return major, ai, pos
+    width = {24: 1, 25: 2, 26: 4, 27: 8}.get(ai)
+    if width is None:
+        raise ClaimError(f"invalid {what} head (indefinite or reserved)")
+    if pos + width > len(data):
+        raise ClaimError(f"truncated {what} head")
+    value = int.from_bytes(data[pos : pos + width], "big")
+    # Minimality: the argument must not have fit a shorter form.
+    if value <= {24: 23, 25: 0xFF, 26: 0xFFFF, 27: 0xFFFFFFFF}[ai]:
+        raise ClaimError(f"non-minimal {what} head")
+    return major, value, pos + width
+
+
+def _read_bstr(data: bytes, pos: int, what: str) -> tuple[bytes, int]:
+    """Read one byte string with a minimal head; return (value, next pos)."""
+    major, length, pos = _read_head(data, pos, what)
+    if major != 2:
+        raise ClaimError(f"{what} must be a byte string")
+    if pos + length > len(data):
+        raise ClaimError(f"truncated {what}")
+    return data[pos : pos + length], pos + length
+
+
 @dataclass(frozen=True)
 class SlotClaim:
     """Slot claim message for POST /.well-known/lichen-gw/slots.
@@ -241,29 +288,36 @@ class SlotClaim:
         payload key/type conformance. Signature verification is the caller's
         (verify_slot_claim) with the resolved gateway pubkey.
         """
-        try:
-            document = cbor2.loads(envelope)
-        except (cbor2.CBORDecodeError, OverflowError) as e:
-            raise ClaimError(f"invalid CBOR envelope: {e}") from None
-        if not isinstance(document, list) or len(document) != 4:
+        # Byte-strict envelope framing (33vn): cbor2.loads accepts every
+        # lenient variant Rust from_cose rejects (slot.rs:524-545) —
+        # long-form array head (98 04), non-0xa1 unprotected heads, extra
+        # protected-header entries, long-form bstr heads, trailing bytes —
+        # and verify_slot_claim digests a canonical re-encode, so a
+        # signature-valid claim with one malleated head byte split Python
+        # vs Rust verdicts. Read the envelope with the strict reader
+        # instead: exact 0x84 array head, minimal heads, unprotected map
+        # exactly {4: kid}, protected byte-equal to the shared constant,
+        # nothing after the signature.
+        major, count, pos = _read_head(envelope, 0, "envelope")
+        if major != 4 or envelope[0] != 0x84 or count != 4:
             raise ClaimError("COSE_Sign1 must be a 4-element array")
-        protected, unprotected, payload, signature = document
-        if not isinstance(protected, bytes) or not isinstance(payload, bytes):
-            raise ClaimError("COSE protected header and payload must be bytes")
-        if not isinstance(unprotected, dict):
-            raise ClaimError("COSE unprotected header must be a map")
-        if not isinstance(signature, bytes):
-            raise ClaimError("COSE signature must be bytes")
-        try:
-            header = cbor2.loads(protected)
-        except (cbor2.CBORDecodeError, OverflowError) as e:
-            raise ClaimError(f"invalid protected header: {e}") from None
-        if not isinstance(header, dict) or header.get(1) != -65537:
+        protected, pos = _read_bstr(envelope, pos, "COSE protected header")
+        if protected != _STRICT_PROTECTED:
             # Validation step 4: non-(-65537) algorithms are decoys; reject.
             raise ClaimError("slot-claim alg must be Schnorr48-Ed25519 (-65537)")
-        kid = unprotected.get(_COSE_KID_LABEL)
-        if not isinstance(kid, bytes) or len(kid) != 8:
+        major, pairs, pos = _read_head(envelope, pos, "unprotected header")
+        if major != 5 or pairs != 1:
+            raise ClaimError("COSE unprotected header must be exactly {4: kid}")
+        major, label, pos = _read_head(envelope, pos, "unprotected kid label")
+        if major != 0 or label != _COSE_KID_LABEL:
+            raise ClaimError("COSE unprotected header must be exactly {4: kid}")
+        kid, pos = _read_bstr(envelope, pos, "slot-claim kid")
+        if len(kid) != 8:
             raise ClaimError("slot-claim kid must be an 8-byte gateway IID")
+        payload, pos = _read_bstr(envelope, pos, "COSE payload")
+        signature, pos = _read_bstr(envelope, pos, "COSE signature")
+        if pos != len(envelope):
+            raise ClaimError("trailing bytes after COSE_Sign1")
         try:
             fields = cbor2.loads(payload)
         except (cbor2.CBORDecodeError, OverflowError) as e:
