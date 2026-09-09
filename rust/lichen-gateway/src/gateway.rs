@@ -1095,9 +1095,10 @@ impl Gateway {
     /// do not represent a persistent gateway deployment.
     pub fn new_ephemeral(identity: Identity, safe_epoch: u8) -> Result<Self, GatewayOpenError> {
         let root_addr = lichen_core::addr::ygg_addr_from_pubkey(identity.pubkey.as_bytes());
+        let identity_iid = lichen_core::addr::iid_from_pubkey_bytes(identity.pubkey.as_bytes());
         let trust_store =
             TrustStore::new_ephemeral(64).map_err(|_| GatewayOpenError::RplProvision)?;
-        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, 60, 64)
+        let coordinator = GatewayCoordinator::new_ephemeral(root_addr, identity_iid, 60, 64)
             .map_err(|_| GatewayOpenError::RplProvision)?;
         Self::new(identity, safe_epoch, trust_store, coordinator)
     }
@@ -1157,9 +1158,7 @@ impl Gateway {
         {
             return Err(SecureError::NoContext);
         }
-        let local_iid: [u8; 8] = self.coordinator.info.iid[8..]
-            .try_into()
-            .map_err(|_| SecureError::NoContext)?;
+        let local_iid: [u8; 8] = self.coordinator.own_identity_iid();
         const OSCORE_ID_LEN: usize = 7;
         if context.sender_id() != &local_iid[..OSCORE_ID_LEN]
             || context.recipient_id() != &peer_iid[..OSCORE_ID_LEN]

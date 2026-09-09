@@ -409,6 +409,7 @@ async fn main() -> ExitCode {
     } else {
         let coordinator = match GatewayCoordinator::load_persistent(
             lichen_core::addr::ygg_addr_from_pubkey(id.pubkey.as_bytes()),
+            lichen_core::addr::iid_from_pubkey_bytes(id.pubkey.as_bytes()),
             60,
             256,
             &slot_path,
@@ -1286,10 +1287,19 @@ fn recover_or_provision_slot_replay(
         }
     }
     let coordinator = if slot_path.exists() {
-        GatewayCoordinator::load_persistent(iid, 60, 256, slot_path, slot_floor_path, sealing_seed)
+        GatewayCoordinator::load_persistent(
+            iid,
+            lichen_core::addr::iid_from_pubkey_bytes(&identity_pubkey),
+            60,
+            256,
+            slot_path,
+            slot_floor_path,
+            sealing_seed,
+        )
     } else {
         GatewayCoordinator::provision_persistent(
             iid,
+            lichen_core::addr::iid_from_pubkey_bytes(&identity_pubkey),
             60,
             256,
             slot_path,

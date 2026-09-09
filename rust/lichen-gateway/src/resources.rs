@@ -1157,6 +1157,14 @@ pub const CONTENT_FORMAT_SENML_CBOR: u16 = 112;
 pub struct GatewayCoordinator {
     /// This gateway's info.
     pub info: GatewayInfo,
+    /// This gateway's canonical identity IID (SHA-512(pubkey)[0:8], U/L
+    /// cleared). Stored separately from `info.iid` because `info.iid` holds the
+    /// routable upstream AddrForKey /128 whose low half is bit-packed key
+    /// material, NOT this IID (i72x.2). On-wire slot-claim kid, tunnel-auth
+    /// egress IID, GCP OSCORE sender/recipient ids, and IID-ordering
+    /// tiebreaks all bind identity by this SHA-512 IID; slicing it out of the
+    /// routable address never matches the peer's derivation.
+    identity_iid: [u8; 8],
     /// Validated capability announcements (spec 8.12, bounded LRU).
     pub capability_table: crate::capability::CapabilityTable,
     /// Node registry.
@@ -1658,16 +1666,18 @@ impl GatewayCoordinator {
     /// Create an explicitly ephemeral coordinator for tests/simulations.
     pub fn new_ephemeral(
         iid: [u8; 16],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
     ) -> Result<Self, slot::SlotError> {
         let verifier = slot::SlotClaimVerifier::new_ephemeral(max_gateways)?;
-        Self::with_verifier(iid, slots_per_superframe, verifier, None)
+        Self::with_verifier(iid, identity_iid, slots_per_superframe, verifier, None)
     }
 
     /// Provision new durable replay state. Existing files fail closed.
     pub fn provision_persistent(
         iid: [u8; 16],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
         replay_path: &Path,
@@ -1678,7 +1688,8 @@ impl GatewayCoordinator {
             return Err(slot::SlotError::CorruptState);
         }
         let verifier = slot::SlotClaimVerifier::new_ephemeral(max_gateways)?;
-        let mut coordinator = Self::with_verifier(iid, slots_per_superframe, verifier, None)?;
+        let mut coordinator =
+            Self::with_verifier(iid, identity_iid, slots_per_superframe, verifier, None)?;
         save_coordinator_state_atomic(
             replay_path,
             &coordinator.info.iid,
@@ -1704,6 +1715,7 @@ impl GatewayCoordinator {
     /// minimum generation floor before serving coordination resources.
     pub fn load_persistent(
         iid: [u8; 16],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         max_gateways: usize,
         replay_path: &Path,
@@ -1721,6 +1733,7 @@ impl GatewayCoordinator {
         )?;
         let mut coordinator = Self::with_verifier(
             iid,
+            identity_iid,
             slots_per_superframe,
             restored.verifier,
             Some(SlotReplayPersistence {
@@ -1734,8 +1747,17 @@ impl GatewayCoordinator {
         Ok(coordinator)
     }
 
+    /// This gateway's canonical identity IID (SHA-512(pubkey)[0:8], U/L
+    /// cleared) for on-wire identity binding: slot-claim kid, tunnel-auth
+    /// egress IID, GCP OSCORE ids, and IID tiebreaks. Distinct from the
+    /// routable address in `info.iid` (see the `identity_iid` field note).
+    pub fn own_identity_iid(&self) -> [u8; 8] {
+        self.identity_iid
+    }
+
     fn with_verifier(
         iid: [u8; 16],
+        identity_iid: [u8; 8],
         slots_per_superframe: u32,
         verifier: slot::SlotClaimVerifier,
         replay_persistence: Option<SlotReplayPersistence>,
@@ -1789,6 +1811,7 @@ impl GatewayCoordinator {
 
         Ok(Self {
             info: GatewayInfo::new(iid),
+            identity_iid,
             node_registry: NodeRegistry::new(),
             channel_map: ChannelMap { channels },
             capability_table: crate::capability::CapabilityTable::new(),
@@ -1823,7 +1846,7 @@ impl GatewayCoordinator {
         }
         let claim = slot::RawSlotClaim::from_cose(envelope, self.slots_per_superframe)
             .map_err(|_| ResourceError::InvalidCbor)?;
-        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        let own_iid: [u8; 8] = self.own_identity_iid();
         if *claim.gateway_iid() != own_iid {
             return Err(ResourceError::InvalidFieldType("gateway_iid"));
         }
@@ -1935,9 +1958,10 @@ impl GatewayCoordinator {
             public_key: &PublicKey::new(*pubkey),
             oscore_authenticated: oscore_verified,
         };
-        // Egress identity: the low 8 bytes of the gateway's key-derived
-        // native address (same derivation as record_own_claim_envelope).
-        let own_iid: [u8; 8] = self.info.iid[8..16].try_into().expect("iid is 16 bytes");
+        // Egress identity: the gateway's canonical SHA-512 identity IID (the
+        // peer derives it the same way; the routable AddrForKey low half is
+        // bit-packed key material, not this IID).
+        let own_iid: [u8; 8] = self.own_identity_iid();
         let now = u64::try_from(unix_now()).unwrap_or(0);
         match self
             .tunnel_auth
@@ -2108,7 +2132,7 @@ impl GatewayCoordinator {
         if !overlap.is_empty() {
             // Conflict resolution: lowest IID wins (GCP-6.3)
             // Use slot module's comparison function for consistent IID ordering
-            let our_iid: [u8; 8] = self.info.iid[8..16].try_into().unwrap();
+            let our_iid: [u8; 8] = self.own_identity_iid();
             let their_iid = *claim.gateway_iid();
 
             if slot::compare_iids(&our_iid, &their_iid) == std::cmp::Ordering::Less {
