@@ -455,10 +455,11 @@ mod tests {
     #[test]
     fn test_elect_time_master_from_test_vector() {
         // From test vector "superframe_sync_time_master_election"
-        // candidates (sorted by iid_decimal):
+        // candidates (sorted by iid_to_u64; vector decimals for the latter two
+        // are wrong — see test_iid_to_u64_from_test_vector for corrections):
         // - 0x0011223344556677 = 4822678189205111 (should win)
-        // - 0xaabbccddeeff0011 = 12302652060662325265
-        // - 0xdeadbeefcafebabe = 16045690984833335998
+        // - 0xaabbccddeeff0011 = 12302652060662169617
+        // - 0xdeadbeefcafebabe = 16045690984503098046
         let candidates = [
             TimeMasterCandidate {
                 iid: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11],
