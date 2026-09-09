@@ -1342,8 +1342,11 @@ mod tests {
             eui64_from_authenticated_identity(origin, pubkey).unwrap(),
             expected_eui
         );
+        // The wire EUI-64 comes from the authenticated key, never from the
+        // origin address bytes. Under upstream AddrForKey the origin's low
+        // half is bit-packed key material, not the IID, so no byte-level
+        // relationship between the two is asserted (i72x.2).
         assert_ne!(expected_eui, raw_iid);
-        assert_eq!(expected_eui[0], raw_iid[0] ^ 0x02);
 
         let mut non_native = origin;
         non_native[0] = 0x03;

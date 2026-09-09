@@ -25,7 +25,7 @@ use lichen_core::loadng::{Idle, RouteDiscovery, Rreq, Searching};
 pub enum AddressClass {
     /// fe80::/10 - direct neighbor, one hop away.
     LinkLocal,
-    /// Native 0200::/8 (plus legacy configured mesh prefixes) - peer in mesh.
+    /// Native 0200::/8 (plus configured mesh prefixes) - peer in mesh.
     MeshLocal,
     /// Other GUA or unknown - route via border router.
     External,
@@ -176,7 +176,7 @@ pub struct HybridRouter {
     rpl_parent: Option<[u8; 16]>,
     /// Whether this node is joined to an RPL DODAG.
     rpl_joined: bool,
-    /// Mesh-local prefixes (ULA or configured GUA).
+    /// Configured mesh-local prefixes.
     mesh_prefixes: Vec<MeshPrefix>,
     /// Packets waiting for route discovery.
     pending_queue: std::collections::HashMap<[u8; 16], VecDeque<PendingPacket>>,
@@ -228,11 +228,6 @@ impl HybridRouter {
             return AddressClass::MeshLocal;
         }
 
-        // ULA: fd00::/8
-        if addr[0] == 0xfd {
-            return AddressClass::MeshLocal;
-        }
-
         // Check configured mesh prefixes
         for prefix in &self.mesh_prefixes {
             if prefix.contains(addr) {
@@ -265,7 +260,7 @@ impl HybridRouter {
         }
     }
 
-    /// Route to a native or legacy mesh-local address.
+    /// Route to a native or configured mesh-local address.
     fn route_mesh_local(&mut self, dst: &[u8; 16], now_ms: u32) -> RouteResult {
         // Check gradient table for existing route
         if let Some(entry) = self.gradient_table.lookup(dst, now_ms) {
@@ -284,7 +279,7 @@ impl HybridRouter {
 
         // Local paths are always preferred for native addresses.  When local
         // discovery is unavailable/exhausted, use the identity-preserving
-        // Yggdrasil path by forwarding up the RPL DODAG.  Legacy configured
+        // Yggdrasil path by forwarding up the RPL DODAG.  Configured
         // prefixes have no implicit Yggdrasil fallback.
         if dst[0] == 0x02 {
             return self.route_external();
@@ -691,8 +686,14 @@ mod tests {
     }
 
     #[test]
-    fn classify_ula() {
-        let router = HybridRouter::new(link_local(1));
+    fn classify_ula_is_external_without_configured_prefix() {
+        // No-ULA model (zt3c.7, spec/05-routing.md §7.2): fd00::/8 has no
+        // hardcoded mesh-local status. It is external unless an operator
+        // configures a mesh prefix covering it.
+        let mut router = HybridRouter::new(link_local(1));
+        assert_eq!(router.classify_address(&ula(2)), AddressClass::External);
+
+        router.add_mesh_prefix(ula(0), 8);
         assert_eq!(router.classify_address(&ula(2)), AddressClass::MeshLocal);
     }
 
@@ -741,8 +742,9 @@ mod tests {
     }
 
     #[test]
-    fn route_mesh_local_no_gradient_is_queue() {
+    fn route_mesh_local_configured_prefix_no_gradient_is_queue() {
         let mut router = HybridRouter::new(link_local(1));
+        router.add_mesh_prefix(ula(0), 8);
         let result = router.route(&ula(2), 1000);
         assert_eq!(result.decision, RouteDecision::Queue);
     }
@@ -815,6 +817,7 @@ mod tests {
     #[test]
     fn route_mesh_local_with_gradient_is_forward() {
         let mut router = HybridRouter::new(link_local(1));
+        router.add_mesh_prefix(ula(0), 8);
 
         // Install gradient
         let entry = GradientEntry {
