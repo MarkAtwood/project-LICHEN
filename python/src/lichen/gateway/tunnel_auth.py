@@ -25,7 +25,7 @@ from ipaddress import IPv6Address, IPv6Network
 import cbor2
 
 from lichen.crypto import schnorr48
-from lichen.crypto.identity import Identity, _pubkey_to_iid
+from lichen.crypto.identity import Identity, _pubkey_to_iid, yggdrasil_address
 from lichen.crypto.schnorr48 import SCHNORR48_ED25519_ALG
 from lichen.ipv6.packet import IPv6Packet
 
@@ -146,21 +146,21 @@ def _network_from_prefix(value: object, prefix_len_value: object) -> IPv6Network
     return IPv6Network((IPv6Address(prefix + bytes(16 - expected)), prefix_len), strict=True)
 
 
-def _iid(value: IPv6Address | bytes) -> bytes:
+def _addr(value: IPv6Address | bytes) -> bytes:
     if isinstance(value, IPv6Address):
-        return value.packed[-8:]
-    return _strict_bytes(value, 8, "route hop IID")
+        return value.packed
+    return _strict_bytes(value, 16, "route hop address")
 
 
 def compute_route_hash(route: Sequence[IPv6Address | bytes]) -> bytes:
-    """Return the 16-byte hash of the ordered source-route hop IIDs."""
+    """Return the 16-byte hash of the ordered full 16-byte hop addresses."""
 
     if not 1 <= len(route) <= MAX_ROUTE_HOPS:
         raise TunnelAuthError(f"route must contain 1-{MAX_ROUTE_HOPS} hops")
-    iids = tuple(_iid(hop) for hop in route)
-    if len(set(iids)) != len(iids):
+    addrs = tuple(_addr(hop) for hop in route)
+    if len(set(addrs)) != len(addrs):
         raise TunnelAuthError("route must not contain a loop")
-    return sha256(b"".join(iids)).digest()[:16]
+    return sha256(b"".join(addrs)).digest()[:16]
 
 
 @dataclass(frozen=True)
@@ -271,13 +271,15 @@ def create_tunnel_authorization(
     route: Sequence[IPv6Address | bytes],
     path_seq: int,
     expiry: int,
-    egress_iid: bytes,
+    egress_pubkey: bytes,
 ) -> TunnelAuthorization:
     """Create a deterministic, egress-bound COSE_Sign1 authorization."""
 
+    pubkey = _strict_bytes(egress_pubkey, 32, "egress_pubkey")
     route_digest = compute_route_hash(route)
-    if _iid(route[-1]) != _strict_bytes(egress_iid, 8, "egress_iid"):
+    if _addr(route[-1]) != yggdrasil_address(pubkey).packed:
         raise TunnelAuthError("route does not terminate at the requested egress")
+    egress_iid = _pubkey_to_iid(pubkey)
     payload = TunnelAuthorizationPayload(
         target=target,
         route_hash=route_digest,
@@ -317,7 +319,7 @@ class RootTunnelAuthorizer:
         route: Sequence[IPv6Address | bytes],
         path_seq: int,
         expiry: int,
-        egress_iid: bytes,
+        egress_pubkey: bytes,
         egress_capable: bool,
         send: Callable[[TunnelAuthPost], bool],
     ) -> AuthorizationResult:
@@ -327,9 +329,12 @@ class RootTunnelAuthorizer:
             return AuthorizationResult.deny(TunnelDenial.DESTINATION_SCOPE)
         try:
             authorization = create_tunnel_authorization(
-                self._identity, target, route, path_seq, expiry, egress_iid
+                self._identity, target, route, path_seq, expiry, egress_pubkey
             )
-            request = TunnelAuthPost(peer_iid=egress_iid, payload=authorization.to_cose_sign1())
+            request = TunnelAuthPost(
+                peer_iid=_pubkey_to_iid(_strict_bytes(egress_pubkey, 32, "egress_pubkey")),
+                payload=authorization.to_cose_sign1(),
+            )
         except (TunnelAuthError, ValueError, TypeError):
             return AuthorizationResult.deny(TunnelDenial.INVALID_ROUTE)
         try:
@@ -371,14 +376,16 @@ class TunnelAuthorizationTable:
     def __init__(
         self,
         *,
-        egress_iid: bytes,
+        egress_pubkey: bytes,
         root_iid: bytes,
         root_pubkey: bytes,
         max_entries: int = MAX_AUTHORIZATIONS,
         max_history: int | None = None,
         policy: TunnelPolicy | None = None,
     ) -> None:
-        self._egress_iid = _strict_bytes(egress_iid, 8, "egress_iid")
+        pubkey = _strict_bytes(egress_pubkey, 32, "egress_pubkey")
+        self._egress_iid = _pubkey_to_iid(pubkey)
+        self._egress_addr = yggdrasil_address(pubkey).packed
         self._root_iid = _strict_bytes(root_iid, 8, "root_iid")
         self._root_pubkey = _strict_bytes(root_pubkey, 32, "root_pubkey")
         if _pubkey_to_iid(root_pubkey) != root_iid:
@@ -521,7 +528,7 @@ class TunnelAuthorizationTable:
         if direction is not TunnelDirection.MESH_TO_EXTERNAL:
             return AuthorizationResult.deny(TunnelDenial.WRONG_DIRECTION)
         try:
-            if _iid(route[-1]) != self._egress_iid:
+            if _addr(route[-1]) != self._egress_addr:
                 return AuthorizationResult.deny(TunnelDenial.INVALID_ROUTE)
             digest = compute_route_hash(route)
         except (TunnelAuthError, IndexError):
