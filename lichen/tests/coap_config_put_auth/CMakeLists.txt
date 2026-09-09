@@ -21,12 +21,13 @@ target_compile_definitions(app PRIVATE
   CONFIG_LICHEN_COAP_SERVER_LOG_LEVEL=4
 )
 
-# coap_server.c provides the real lichen_coap_respond and calls it from
-# within its own translation unit, so --wrap cannot intercept it there;
-# capture responses one level down at coap_resource_send (different TU,
-# same approach as lichen/tests/coap_msg_sent). The OSCORE helper
-# (coap_oscore.c) is intentionally NOT linked so its entry points can be
-# mocked directly in main.c.
+# coap_respond.c provides the real lichen_coap_respond; coap_server.c
+# calls it from within its own translation unit, so --wrap cannot
+# intercept it there; capture responses one level down at
+# coap_resource_send (different TU, same approach as
+# lichen/tests/coap_msg_sent). The OSCORE helper (coap_oscore.c) is
+# intentionally NOT linked so its entry points can be mocked directly in
+# main.c.
 zephyr_ld_options(-Wl,--wrap=coap_resource_send)
 zephyr_ld_options(-Wl,--wrap=coap_oscore_authorize_mutating)
 
