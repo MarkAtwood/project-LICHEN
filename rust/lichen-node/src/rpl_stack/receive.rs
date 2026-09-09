@@ -143,13 +143,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     RplReceiveOutcome::AnnouncementRejected(AnnounceRejectReason::Malformed),
                 )))
             }
-            // SOS (0x16) is a defined L2 dispatch but neither RPL/routing nor
-            // SCHC; the RPL stack does not handle it, so it fails closed here
-            // exactly like an unknown dispatch. SOS relay/budget handling
-            // lives in the application/link path, not RPL.
-            L2PayloadKind::Sos | L2PayloadKind::Unknown => {
-                Err(RplReceiveError::Receive(RxError::SchcDecompress))
-            }
+            L2PayloadKind::Unknown => Err(RplReceiveError::Receive(RxError::SchcDecompress)),
         }
     }
 
@@ -336,12 +330,7 @@ impl<R: Radio, S: NonVolatile> RplStack<R, S> {
                     AnnounceRejectReason::Malformed,
                 )))
             }
-            // SOS (0x16): defined L2 dispatch but not RPL/routing or SCHC;
-            // fail closed like an unknown dispatch (see the matching arm in
-            // the border-ingress path above).
-            L2PayloadKind::Sos | L2PayloadKind::Unknown => {
-                Err(RplReceiveError::Receive(RxError::SchcDecompress))
-            }
+            L2PayloadKind::Unknown => Err(RplReceiveError::Receive(RxError::SchcDecompress)),
         }
     }
 
