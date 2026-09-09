@@ -319,7 +319,7 @@ class SlotClaim:
         if type(ordinal) is not int or ordinal < 0 or ordinal > _MAX_U64:
             raise ClaimError("ordinal must be a non-negative integer")
 
-        return cls(
+        claim = cls(
             gateway_iid=iid_bytes.hex(),
             slots=tuple(raw_slots),
             superframe_id=superframe_epoch,
@@ -329,6 +329,23 @@ class SlotClaim:
             ordinal=ordinal,
             signature=signature,
         )
+        # Canonical-form gate (5rfl): cbor2 decodes tag-2 bignums and
+        # non-minimal long-form uints to plain int, so the type gates above
+        # accept wire forms Rust's strict reader rejects as MalformedClaim
+        # (slot.rs p.uint()/head) — and verify_slot_claim digests a canonical
+        # RE-ENCODE, so a signature-valid claim with one field re-encoded
+        # non-canonically on the wire would be accepted here and rejected by
+        # every Rust peer: cross-implementation slot-map divergence. Byte-
+        # equality against the canonical re-encode closes ALL fields
+        # uniformly: bignums, long-form uints, indefinite lengths, duplicate
+        # and unknown payload keys (Rust rejects all of these at decode),
+        # and payload key order — the adjudicated wire contract is a
+        # deterministic-CBOR payload (spec/decisions.jsonl
+        # slot-claim-cose-sign1), which Rust's order-insensitive key loop
+        # does not yet enforce (tracked separately).
+        if encode_claim_canonical(claim) != payload:
+            raise ClaimError("slot-claim payload must be canonically encoded")
+        return claim
 
 
 # ─── COSE_Sign1 wire format (spec/08-gateway-coordination.md GCP-6.5) ────────

@@ -266,3 +266,73 @@ def test_boundary_sibling_fields_accepted_at_decode(key: int, value: object) -> 
         assert claim.expiry == value
     else:
         assert claim.ordinal == value
+
+
+def _rebuild_envelope(case: dict, payload_bytes: bytes) -> bytes:
+    """Reassemble the COSE_Sign1 with *payload_bytes* as the payload bstr."""
+    elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    return b"\x84" + (
+        cbor2.dumps(elements[0])
+        + cbor2.dumps(elements[1])
+        + cbor2.dumps(payload_bytes)
+        + cbor2.dumps(elements[3])
+    )
+
+
+def _payload_bytes_with_raw(case: dict, key: int, raw_value: bytes) -> bytes:
+    """Encode the canonical payload map, substituting *raw_value* (unparsed
+    CBOR) for key *key* — the envelope keeps the signer's original signature."""
+    case_envelope = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(case_envelope[2])
+    assert len(fields) == 7
+    body = bytearray([0xA7])
+    for k in range(1, 8):
+        body += cbor2.dumps(k)
+        body += raw_value if k == key else cbor2.dumps(fields[k])
+    return bytes(body)
+
+
+@pytest.mark.parametrize(
+    "key,raw_value,label",
+    [
+        (3, b"\xc2\x41\x00", "tag-2 bignum 0 at mode"),
+        (3, b"\xc2\x41\x01", "tag-2 bignum 1 at mode"),
+        (6, b"\x18\x00", "long-form uint at claim_seq"),
+        (6, b"\xc2\x41\x05", "tag-2 bignum at claim_seq"),
+        (2, b"\x18\x0c", "long-form uint at superframe_epoch"),
+        (1, b"\x81\x18\x07", "long-form uint in slots"),
+    ],
+)
+def test_non_canonical_uint_encodings_rejected_at_decode(
+    key: int, raw_value: bytes, label: str
+) -> None:
+    # 5rfl: cbor2 decodes tag-2 bignums (c2 41 00) and non-minimal long-form
+    # uints (18 00) to plain int, so every type gate accepts them — while
+    # Rust's p.uint()/head(0) rejects the identical wire bytes as
+    # MalformedClaim before any signature check. Three of the six cases
+    # (bignum 0 at mode, 18 0c at epoch, 81 18 07 in slots) decode to the
+    # signer's own values, so the signature still verifies over the
+    # canonical re-encode: without the canonical-form gate, signature-valid
+    # wire input splits Python's verdict from every Rust peer. The other
+    # three change the signed semantic value (the signature would fail too),
+    # but Rust still rejects them at decode — decode must agree. The gate
+    # rejects all such forms uniformly.
+    case = _case("happy_path_n1")
+    payload = _payload_bytes_with_raw(case, key, raw_value)
+    with pytest.raises(ClaimError, match="canonically encoded"):
+        SlotClaim.decode_cose(_rebuild_envelope(case, payload))
+
+
+def test_canonical_uint_encodings_accepted_at_decode() -> None:
+    # Positive control for the 5rfl gate: the same hand-built map with
+    # canonical (minimal) value encodings must still decode — the gate
+    # rejects encodings, not the hand-built construction itself.
+    case = _case("happy_path_n1")
+    envelope_elements = cbor2.loads(_hex(case["cose_sign1_hex"]))
+    fields = cbor2.loads(envelope_elements[2])
+    payload_bytes = _payload_bytes_with_raw(case, 3, cbor2.dumps(fields[3]))
+    claim = SlotClaim.decode_cose(_rebuild_envelope(case, payload_bytes))
+    assert claim.allocation_mode == (
+        AllocationMode.INTERLEAVED if fields[3] == 0 else AllocationMode.CONTIGUOUS
+    )
+    assert verify_slot_claim(claim, _pubkey(case), now_unix=EVAL_TIME) == (True, None)
