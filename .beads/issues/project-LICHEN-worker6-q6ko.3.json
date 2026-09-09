@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-q6ko.3",
+  "title": "Quarantine ipv6-addresses.json native-profile fields; reconcile cross-impl test",
+  "description": "Slice of q6ko discovered during recon: test/vectors/ipv6-addresses.json key_derived_identity vectors carry native_packed/native/iid fields from the same rejected SHA-512 native profile, and python/tests/ipv6/test_key_address_cross_impl_vectors.py::test_native_corpora_agree_without_byte_reversal cross-asserts them against the yggdrasil_address.json native vectors (shared_keys \u003e= 4). Survey ALL consumers of ipv6-addresses.json first (rust/python/C), then apply the q6ko quarantine decision consistently (label or move the native-profile fields) and reconcile/retire the cross-impl test so nothing presents the rejected profile as a live conformance oracle. Do not weaken pinned upstream byte-equality vectors.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:51:31.309870277Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:51:31.309870277Z",
+  "labels": [
+    "yggdrasil",
+    "python"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-q6ko.3",
+      "depends_on_id": "project-LICHEN-worker6-q6ko",
+      "type": "parent-child",
+      "created_at": "2026-09-09T04:51:31.464626239Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "1788929820967470246-1",
+  "issue_id": "project-LICHEN-worker6-zxyj",
+  "author": "Mark Atwood",
+  "text": "Analysis (worker4, 2026-09-09) — not a mechanical fix, needs Mark's call. _open_owned_directory (atomic_json.py:97-122) enforces owner-only-write (rejects st_mode \u0026 0o022) AND st_uid == euid on the parent dir for BOTH the writer (vector generation) and the read-only --check path (read_bounded_exact :133). Option (a) 'relax to 0o002-only' has a real cost: the same helper guards the WRITE path, so tolerating group-write (0o020 allowed) would let any group member of a 0775 dir tamper committed test vectors — the uid check pins the owner, not group members, so group-write is not 'same uid intent'. That weakens the trust root for cross-impl validation. Option (b) chmod in test setup is safest but brittle across hosts. Option (c) document umask 022 requirement is zero-code. My recommendation: keep 0o022 for the writer, and either (i) split the helper so read_bounded_exact/--check tolerates group-write while generation keeps owner-only, or (ii) option (c) + have the failing test skip when the checkout is group-writable. Flagging 'human' label for the decision.",
+  "created_at": "2026-09-09T04:57:00.967470246Z"
+}

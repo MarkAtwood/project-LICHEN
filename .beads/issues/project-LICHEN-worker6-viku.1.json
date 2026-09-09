@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-viku.1",
+  "title": "X.509v3 attestation cert profile spec",
+  "description": "Define the X.509v3 certificate profile for LICHEN node attestation. Fields: Ed25519 subject public key, SAN encoding for Yggdrasil /128 address, custom extension OID for mesh role (relay/leaf/gateway), validity period convention, issuer distinguished name convention. Profile must be minimal enough that any CA can issue interoperable certs. Output: spec addendum to §8.13.2 and/or standalone cert profile document. Reference: JDF cert profile concept from futurism doc.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:59:32.567303189Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:13:57.55032627Z",
+  "started_at": "2026-09-09T04:07:03.211303397Z",
+  "closed_at": "2026-09-09T04:13:57.55032627Z",
+  "close_reason": "Added X.509v3 LICHEN node attestation certificate profile with Ed25519 SPKI, upstream Yggdrasil /128 SAN binding, role extension, validity, issuer, key usage, and chain verification requirements. Three delegated reviews completed; follow-up findings filed as Beads.",
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-viku.1",
+      "depends_on_id": "project-LICHEN-worker6-viku",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:59:32.705937028Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

@@ -562,7 +562,9 @@ impl DaoManager {
     }
 
     /// Process a verified DAO received from an authenticated immediate sender.
-    /// Sender-to-target authorization (per IPv6/IID identity rules) precedes replay and any route mutation.
+    /// Ordering follows spec/05-routing.md 8.6: per-key replay classification
+    /// precedes prefix authorization and sender-to-target authorization; both
+    /// precede replay-floor persistence and route-state mutation.
     pub fn process_signature_verified<S: NonVolatile>(
         &mut self,
         verified: &SignatureVerifiedDao<'_>,

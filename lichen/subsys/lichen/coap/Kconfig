@@ -313,6 +313,11 @@ config LICHEN_COAP_LOCATION_LOG_LEVEL
 config LICHEN_COAP_METRICS
 	bool "CoAP /metrics resource (SenML radio metrics)"
 	depends on LICHEN_COAP_SERVER
+
+config LICHEN_COAP_METRICS
+	bool "CoAP /metrics resource (SenML RF/airtime counters)"
+	depends on LICHEN_COAP_SERVER
+	depends on !LICHEN_COAP_SERVER_STANDALONE
 	depends on LICHEN_SENML
 	depends on LICHEN_LORA_L2
 	default n
@@ -321,6 +326,10 @@ config LICHEN_COAP_METRICS
 	  radio transmit/receive/error counters (pkt_tx, pkt_rx, tx_fail).
 	  Requires the SenML encoder and the LoRa L2 counters. Prerequisite
 	  for the CCP-15 metrics layer (b7z9.29).
+	  Serve GET /metrics as a SenML pack (application/senml+cbor)
+	  with LoRa L2 TX/RX counters (attempts, errors, accepted frames),
+	  matching spec 02a RF metrics windows. Requires the SenML encoder
+	  and the LoRa L2 (for the node EUI-64 base name and stats).
 
 config LICHEN_COAP_METRICS_LOG_LEVEL
 	int "CoAP metrics log level"

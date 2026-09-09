@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-2vp1",
+  "title": "[review] local-fact: dataclasses.replace can desync claims from retained wire bstrs",
+  "description": "Edge-case review of lquv fix (pass 3). python/src/lichen/gateway/local_facts.py LocalFact retains protected_bytes/payload_bytes (RFC 9052 4.4) but __post_init__ only enforces both-or-neither pairing, never that claims matches payload_bytes. On a frozen dataclass the idiomatic mutation is dataclasses.replace(fact, claims=...), which KEEPS the old wire bstrs: verify_local_fact(desynced) returns True (verified over the old signed payload) while desynced.claims carries unverified attacker-relevant fields (priority/quota/relay), and to_cose_sign1 emits the OLD payload contradicting .claims. The pre-lquv tamper-resistance property (mutate claims -\u003e verify fails, per test_verify_rejects_tampered_claims) is silently lost on the replace-on-decoded-fact path. Verified against working tree. Fix: in __post_init__, when both wire bstrs are present, require LocalFactClaims.from_cbor(payload_bytes) == claims (cheap, exact, encoding-agnostic).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:55:37.486891892Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:55:37.486891892Z",
+  "labels": [
+    "python",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-2vp1",
+      "depends_on_id": "project-LICHEN-worker6-lquv",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:55:37.626559935Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

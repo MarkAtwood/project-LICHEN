@@ -1,0 +1,7 @@
+{
+  "id": "1788928296160806920-1",
+  "issue_id": "project-LICHEN-worker6-q6ko",
+  "author": "Mark Atwood",
+  "text": "Edge-case review finding: the sole pinned upstream vector (upstream_addr_for_key, pubkey bdbacfd8...) has zero leading 1 bits in its inverted key, so addr[1]=0x00 and the bit-shift is exactly 1 — an implementation that hardcodes addr[1]=0 or miscounts leading 1s across byte boundaries still passes the oracle. The corpus needs at least one upstream-derived vector with addr[1] != 0 (pubkey whose inverse has several leading 1 bits), generated from the pinned upstream algorithm (yggdrasil-go commit 422836ee src/address/address.go) via an independent implementation, never from the code under test.",
+  "created_at": "2026-09-09T04:31:36.16080692Z"
+}

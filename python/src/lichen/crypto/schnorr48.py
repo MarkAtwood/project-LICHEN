@@ -8,6 +8,10 @@ Deterministic nonce prevents catastrophic failure from reuse.
 
 from hashlib import sha512
 
+# COSE algorithm ID for Schnorr48-Ed25519 (private use range).
+# Single definition; COSE modules import from here.
+SCHNORR48_ED25519_ALG = -65537
+
 from nacl.bindings import (
     crypto_core_ed25519_is_valid_point,
     crypto_core_ed25519_scalar_reduce,

@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-tj9l",
+  "title": "Decision: trailing-bit masking for capability-announce prefixes — Python and Rust both lack it (tunnel-auth has it)",
+  "description": "Found during zeaj review (correctness pass, kimi-k3). Tunnel-auth enforces canonical trailing-bit zeroing for non-byte-aligned prefix_len (rust tunnel_auth.rs prefix_is_canonical, python tunnel_auth.py:144, C tunnel_auth.c prefix_valid), but neither capability-announce validator does: Python CapabilityPayload.__post_init__ checks only range + ceil-length (empirically accepts prefix=0200123481, prefix_len=33), and Rust from_cose_sign1 deliberately matches it (zeaj — identical wire verdicts take precedence). A /33 with tail bits set and the same /33 masked decode as different announcements under different producers. Decide: add the mask check to BOTH Python capability_announcements.py __post_init__ and Rust from_cose_sign1 (spec 8.12 clarification likely needed), or document capability prefixes as intentionally tail-bit-tolerant. If enforcing: update the Rust noncanonical_prefix_is_rejected test's tail-bit case to Malformed.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:49:52.8964776Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:49:52.8964776Z",
+  "labels": [
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-tj9l",
+      "depends_on_id": "project-LICHEN-worker6-zeaj",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:49:53.030832686Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

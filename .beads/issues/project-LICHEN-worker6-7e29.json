@@ -2,13 +2,17 @@
   "id": "project-LICHEN-worker6-7e29",
   "title": "rust/scripts/link-oscore-fork.sh: stale 'CI provisioning not wired yet' comment",
   "description": "Edge review finding (mbzu pass-3): comment lines 11-13 still say CI runners have no provisioning and the script exits 1 there until a candidate checkout exists — now false; ci.yml rust jobs materialize rust/oscore-fork via .github/actions/oscore-fork (pinned clone). Update the comment to describe both paths.",
-  "status": "open",
+  "status": "closed",
   "priority": 4,
   "issue_type": "task",
+  "assignee": "Mark Atwood",
   "owner": "mark@reviewcommit.com",
   "created_at": "2026-08-31T07:30:01.004458875Z",
   "created_by": "opencode-worker-6",
-  "updated_at": "2026-08-31T07:30:01.004458875Z",
+  "updated_at": "2026-09-09T04:37:25.163743087Z",
+  "started_at": "2026-09-09T04:37:02.171731601Z",
+  "closed_at": "2026-09-09T04:37:25.163743087Z",
+  "close_reason": "Rewrote stale comment in rust/scripts/link-oscore-fork.sh (lines 11-14) to describe both paths: dev hosts run this script to create the symlink; CI materializes rust/oscore-fork via .github/actions/oscore-fork pinned clone. bash -n passes; behavior unchanged.",
   "labels": [
     "rust"
   ]

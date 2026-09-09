@@ -19,13 +19,12 @@ from typing import TYPE_CHECKING
 import cbor2
 
 from . import schnorr48
+from .schnorr48 import SCHNORR48_ED25519_ALG
 from .identity import Identity, _pubkey_to_iid
 
 if TYPE_CHECKING:
     pass
 
-# COSE algorithm ID for Schnorr48-Ed25519 (private use range)
-SCHNORR48_ED25519_ALG = -65537
 
 # COSE header labels
 COSE_ALG_LABEL = 1  # Algorithm

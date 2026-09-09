@@ -1,0 +1,26 @@
+{
+  "id": "project-LICHEN-worker6-b27v",
+  "title": "Option B follow-up: bounded authenticated solicited-unicast-DIO admission (RFC 6550 8.3 SHOULD)",
+  "description": "Follow-up to project-LICHEN-worker6-ehcn (closed with option A: solicited DIS responses re-targeted to RPL_ALL_NODES multicast, receive.rs:633). Option A is RFC-compliant (unicast response is a SHOULD, not MUST) and matches the R-09-005 admission gate + Python parity. If RFC-optimal solicited unicast DIO responses are ever wanted, implement option B: admit unicast-dst DIOs iff dst == own link-local AND hop 255 AND Rule 255 AND link-authenticated AND replay-fresh AND a matching authenticated DIS was admitted from that peer within a bounded window (solicitation ledger). Requires: Python mirror (dis.py UNICAST_DIO_WITH_CONFIGURATION receiver side), spec 09 normative text, and the ledger must run admission against the provisioned DODAG state (worker-6's scope-mismatch hazard: DodagState commit revalidation with zeroed scope — see 5byi). Not a conformance fix — an enhancement.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "feature",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:10:03.97132002Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T04:10:03.97132002Z",
+  "labels": [
+    "rust",
+    "networking"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-b27v",
+      "depends_on_id": "project-LICHEN-worker6-ehcn",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T04:10:04.100757382Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

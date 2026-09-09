@@ -1,0 +1,7 @@
+{
+  "id": "1788930995790367662-1",
+  "issue_id": "project-LICHEN-worker6-2vp1",
+  "author": "Mark Atwood",
+  "text": "Edge-review of y2a2 (pass 3) confirms this defect class is codebase-wide, not local-fact-only. All 4 COSE modules now share it: delegation_tokens.py (DelegationToken :222-223, PrefixDelegationToken :560-561), capability_announcements.py :185-186, key_rotation_attestation.py :160-161, root_dio_signature.py :190-191. Verify authenticates retained payload_bytes but enforces semantics (delegate/resource/scope/expiry/seq/flags/dodag_id/IID) on the un-bound mutable .payload field; __post_init__ checks only both-or-neither pairing, never that payload_bytes decodes to payload. Post-change this fails OPEN (pre-change re-encode-verify failed closed on mutation). Reachable via direct mismatched-pair construction or post-construction mutation; classes are plain @dataclass (not frozen like identity.py:154). Fix direction: when wire bstrs present, derive the checked payload by decoding payload_bytes inside verify, and/or freeze the envelope+payload dataclasses. Apply same fix across all 4 modules + local_facts.",
+  "created_at": "2026-09-09T05:16:35.790367662Z"
+}

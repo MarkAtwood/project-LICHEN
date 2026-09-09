@@ -1,0 +1,28 @@
+{
+  "id": "project-LICHEN-worker6-at2y",
+  "title": "Zephyr 4.1: TINYCRYPT selects DEPRECATED, aborting all LICHEN builds using LICHEN_GATEWAY/LICHEN_CRYPTO/LICHEN_EDHOC (native_sim gateway still blocked)",
+  "description": "Follow-up to project-LICHEN-worker6-jy0a (whose recursion + promptless + unsatisfied-select fixes leave exactly ONE remaining Kconfig warning on the native_sim gateway west build: 'Deprecated symbol TINYCRYPT is enabled'). Zephyr 4.1 modules/Kconfig.tinycrypt:9-12 has config TINYCRYPT 'select DEPRECATED', and 4.1's scripts/kconfig/kconfig.py check_deprecated() aborts configure on ANY warning with no per-symbol suppress knob and no CONFIG_WARN_TO_ERROR symbol (4.1 removed it). LICHEN selects TINYCRYPT from subsys/lichen/crypto/Kconfig:9, subsys/lichen/edhoc/Kconfig:8, subsys/lichen/gateway/Kconfig:8 (tunnel_auth.c includes tinycrypt/sha256.h under __ZEPHYR__; edhoc/oscore use tinycrypt AES_CCM/HMAC). So every Zephyr build enabling those modules fails configure on 4.1, including the native_sim gateway validation target. NOTE: edhoc/oscore crypto internals are human-only edit bar - the migration design (PSA crypto? mbedTLS? keep tinycrypt via a zephyr fork patch?) is a Mark decision. Options: (a) migrate tunnel_auth SHA256 to a non-deprecated provider and drop LICHEN_GATEWAY's select (smallest surface; edhoc/oscore stay on tinycrypt until their own migration), (b) tree-wide tinycrypt replacement, (c) carry a zephyr downstream patch removing the select DEPRECATED. Repro after jy0a fixes: west build -b native_sim/native/64 lichen/apps/gateway on heft -\u003e single remaining warning 'Deprecated symbol TINYCRYPT is enabled' -\u003e abort. ALSO NOTE (stripped-module recipe artifact only): cmake -DZEPHYR_MODULES=lichen,tinycrypt recipe additionally warns ZCBOR assigned-but-n (no zcbor module in the set); full west build does not - recipe artifact, not a tree bug.",
+  "status": "closed",
+  "priority": 1,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T02:01:01.874732423Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:02:23.904304394Z",
+  "closed_at": "2026-09-09T03:02:23.904304394Z",
+  "close_reason": "DONE (worker8/heft). Migrated every agent-editable TINYCRYPT consumer to mbedTLS (Zephyr 4.1 TINYCRYPT selects DEPRECATED -\u003e kconfig.py aborts on the warning with no suppress knob). Provider wrapper: lichen_sha256() in l2/lichen_util.c keys on CONFIG_MBEDTLS_SHA256 (Zephyr, mbedtls_sha256 one-shot) vs host (tinycrypt streaming, unchanged); lichen_util.h is now crypto-header-free. Call sites migrated: lora_l2_identity.c (EUI-64), gateway/tunnel_auth.c (Sig_structure digest), coap/coap_keys_format.c (fingerprint), coap/coap_slot_coord.c (claim digest). Kconfigs: link/l2(x2)/gateway select MBEDTLS+MBEDTLS_SHA256 (NOT MBEDTLS_BUILTIN — a choice member whose select triggered a recursive-dependency loop through PSA RNG/ENTROPY/RING_BUFFER; choice default covers builtin); routing's vestigial selects dropped (zero SHA-256 usage there); coap SLOT_COORD selects MBEDTLS_SHA256 only (selecting MBEDTLS there re-entered the loop via KEYS-\u003eSLIP-\u003eRING_BUFFER); KEYS imply MBEDTLS_SHA256. 6 test prj.conf direct TINYCRYPT assignments dropped; tests/util prj.conf gains CONFIG_MBEDTLS=y and its CMake links mbedTLS for the app-compiled lichen_util.c copy. VALIDATION (all native_sim, zero 'Deprecated symbol TINYCRYPT' warnings, TINYCRYPT=n confirmed in .config): tunnel_auth_zephyr 3/3, util 12/12 (golden SHA-256 vectors incl. empty-message on mbedTLS), coap_keys 37/37, coap_client 7/7, coap_lci_auth 11/11, ping_l2 8/8 (EUI-64 path on mbedTLS); ARM t1000_e tunnel_auth_zephyr builds clean; coap_slot_claim host test PASS (tinycrypt stub path preserved). OSCORE/EDHOC/AES_CCM selects intentionally untouched (human-only edit bar per bead) — coap_keys still shows the warning via its LICHEN_OSCORE=y chain, which is Mark's migration decision. Gateway native_sim app build itself stays blocked on jy0a (in-progress, Mark) — out of scope here. 3x codereview ALL DELEGATED to kimi-k3: correctness (1 P3: KEYS imply lost -\u003e restored), security (0 in-diff defects; pre-existing degraded-fingerprint label issue filed), edge-cases (3 findings: P0 slot_coord sign-path gate missed -\u003e fixed; 2 P4 doc/comment drift -\u003e fixed); fix re-review PASS. Findings filed: project-LICHEN-worker6-uqib (degraded SHA256: label, P2), native_parse SERIAL breakage (P2), LICHEN_COAP_SLOT_COORD never-compiled Zephyr bit-rot (P1), plus earlier gvf1 sibling ax5b context noted. Commits: 71fb171444 + 15b3410cb4 (orchestrator sweeps of the migration) + c95e92f17c (review fixes).",
+  "labels": [
+    "zephyr",
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-at2y",
+      "depends_on_id": "project-LICHEN-worker6-jy0a",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T02:01:02.032820766Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

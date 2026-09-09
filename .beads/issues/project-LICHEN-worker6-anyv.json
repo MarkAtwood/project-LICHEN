@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-anyv",
+  "title": "python: broken lora_medium import blocks 5 gateway test modules' collection",
+  "description": "Found while running tests for project-LICHEN-worker6-lquv on beads-worker-3 (pre-existing, verified identical on unmodified tree): python/src/lichen/timing/duty_cycle.py:11 does 'from lora_medium import DutyCycleTracker' but no top-level lora_medium module exists under python/src (only lichen/sim/medium.py). pytest collection fails for tests/gateway/test_ble_lci.py, test_gcp6_vectors.py, test_gcp_iid_comparison_vectors.py, test_slot_claim.py, test_slot_claim_cose_vectors.py. Same run also shows 13 pre-existing failures + 1 error elsewhere in tests/gateway (e.g. test_tunnel_auth_vectors::test_decapsulation_cases_drive_python_gateway_policy, test_waypoint_admission_identity collection error) — likely mid-flight work from another worker branch; investigate whether these are branch-local or a real main regression.",
+  "status": "closed",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T04:55:50.234613139Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T05:06:19.889698545Z",
+  "started_at": "2026-09-09T04:56:37.272692914Z",
+  "closed_at": "2026-09-09T05:06:19.889698545Z",
+  "close_reason": "Root cause: NOT a broken import in duty_cycle.py -- 'from lora_medium import DutyCycleTracker' is correct (lora-medium is a pinned pyproject dependency exporting DutyCycleTracker from .venv). The collection failure was an environment artifact: reproducing interpreter lacked the declared dep. The REAL defect found and fixed: [dependency-groups] dev (what 'uv sync' installs) declared only bare pytest, while [project.optional-dependencies] dev held the canonical test set (pytest-asyncio/timeout/cov/httpx/hypothesis/jsonschema). The venv therefore lacked pytest-asyncio -\u003e 10 test_ble_lci.py async tests failed (Unknown pytest.mark.asyncio, coroutine never run) and hypothesis/jsonschema absence caused the ktfz tunnel_auth reds + test_waypoint_admission_identity collection error. FIX: synced dependency-groups.dev to the canonical set. Verified: uv sync --group dev installs all 6; tests/gateway = 317 passed/3 skipped (was 10 fails + collection errors); the 5 named modules = 130 passed/3 skipped; tunnel_auth = 20 passed. 3x delegated codereview (kimi-k3): correctness PASS (pins match optional-deps exactly, no conflicts), security PASS (test-only, dev-extra surface), edge PASS (zero missing-dep imports tree-wide, hypothesis confirmed used by tunnel_auth, no asyncio/anyio marker clash). Also resolved ktfz (same root cause).",
+  "labels": [
+    "python",
+    "gateway"
+  ]
+}

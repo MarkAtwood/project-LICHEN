@@ -1,0 +1,37 @@
+{
+  "id": "project-LICHEN-worker6-x7hh.8.1",
+  "title": "x7hh.8 leaf: Rust core/node TX-RX CCP2 integration",
+  "description": "Integrate finalized CCP2 contract and independent fixtures through Rust core/node TX/RX and scheduler.",
+  "acceptance_criteria": "Corpus vectors pass through production core/node paths; wire bytes byte-identical to corpus.",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:37:36.647669808Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:37:36.647669808Z",
+  "labels": [
+    "rust",
+    "ccp",
+    "conformance",
+    "local-ok"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.8",
+      "type": "parent-child",
+      "created_at": "2026-09-09T03:37:36.809471362Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    },
+    {
+      "issue_id": "project-LICHEN-worker6-x7hh.8.1",
+      "depends_on_id": "project-LICHEN-worker6-x7hh.6.3",
+      "type": "blocks",
+      "created_at": "2026-09-09T03:38:22.771730974Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

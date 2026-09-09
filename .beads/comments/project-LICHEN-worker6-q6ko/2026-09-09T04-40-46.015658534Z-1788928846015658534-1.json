@@ -1,0 +1,7 @@
+{
+  "id": "1788928846015658534-1",
+  "issue_id": "project-LICHEN-worker6-q6ko",
+  "author": "Mark Atwood",
+  "text": "Second independent review found the oracle-gap class again and added two more required vector types: (1) tail-discard class — a pubkey whose inverted form has \u003e=144 leading 1 bits, where remaining bits \u003c 112 and the trailing partial byte is DISCARDED (not zero-padded); spec §8.5/§8.7 prose has been corrected to upstream's whole-byte-pack/discard semantics (this matters: e.g. inverted remainder 11111 -\u003e upstream yields 0 whole bytes, wrong prose yields 0xf8); (2) a SubnetForKey vector covering 0300::/8. All new vectors must be generated from upstream yggdrasil-go commit 422836ee src/address/address.go via an independent implementation, never from LICHEN code under test.",
+  "created_at": "2026-09-09T04:40:46.015658534Z"
+}
