@@ -195,8 +195,6 @@ class TestRootDioSignatureVectorFile:
 _DECODE_REJECT = {
     "capability_invalid_reserved_bits": "[Rr]eserved",
     "capability_iid_mismatch": "kid",
-    "capability_prefix_delegation": "prefix",
-    "capability_both": "prefix",
 }
 
 

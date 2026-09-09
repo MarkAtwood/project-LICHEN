@@ -400,14 +400,6 @@ mod tests {
         hex(value).try_into().unwrap()
     }
 
-    /// Whether a corpus vector's prefix fields satisfy the canonical form
-    /// (spec 8.12: prefix is ceil(prefix_len/8) bytes).
-    fn vector_prefix_is_canonical(vector: &serde_json::Value) -> bool {
-        let prefix_len = vector["prefix_len"].as_u64().unwrap();
-        let prefix_octets = vector["prefix"].as_str().unwrap().len() / 2;
-        prefix_len <= 128 && prefix_octets == usize::try_from(prefix_len.div_ceil(8)).unwrap()
-    }
-
     #[test]
     fn vectors_decode_verify_and_encode() {
         for vector in vectors() {
@@ -419,16 +411,6 @@ mod tests {
                 Ok(announcement) => announcement,
                 Err(AnnounceError::KidMismatch) => {
                     assert!(!iid_match_of(&vector), "{name}");
-                    continue;
-                }
-                Err(AnnounceError::Malformed)
-                    if !vector_prefix_is_canonical(&vector) =>
-                {
-                    // capability_prefix_delegation / capability_both carry a
-                    // 16-byte prefix with prefix_len 64/48 — non-canonical
-                    // (ceil is 8/6). Python's decoder rejects them too
-                    // (capability_announcements.py __post_init__ ceil check),
-                    // so decode rejection is the cross-impl verdict.
                     continue;
                 }
                 Err(error) => panic!("decode {name} failed: {error:?}"),
