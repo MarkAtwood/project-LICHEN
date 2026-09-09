@@ -1823,8 +1823,10 @@ async fn three_rpl_stacks_send_leaf_dao_via_preferred_parent() {
 
     relay.send_dao().await.unwrap();
     // Drain the relay's multicast DIO echo the root heard before the DAO.
-    let _ = root.receive(1, 0).await;
+    let drain1 = root.receive(1, 0).await;
+    std::eprintln!("DAO-DRAIN-1: {drain1:?}");
     let relay_dao_outcome = root.receive(1, 0).await.unwrap();
+    std::eprintln!("DAO-DRAIN-2: {relay_dao_outcome:?}");
     assert!(
         matches!(
             relay_dao_outcome,
