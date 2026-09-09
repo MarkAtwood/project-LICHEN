@@ -38,6 +38,11 @@ int lichen_key_pubkey_to_iid(const uint8_t pubkey[32], uint8_t iid[8])
 	 * canonical LICHEN/Yggdrasil identity derivation from spec 8.5/8.7 and
 	 * test/vectors/yggdrasil-derivation.json.  It must not silently fall back
 	 * to raw key bytes or SHA-256 when a crypto Kconfig option is absent.
+	 *
+	 * QUARANTINED-PENDING-UPSTREAM-MIGRATION: this SHA-512 profile is rejected
+	 * by the upstream-yggdrasil-addressing decision in spec/decisions.jsonl
+	 * (routable address MUST equal upstream AddrForKey); pinned only until the
+	 * C derivation migrates.  Do not extend.  Bead project-LICHEN-worker6-q6ko.
 	 */
 	crypto_sha512(hash, pubkey, 32);
 	memcpy(iid, hash, 8);

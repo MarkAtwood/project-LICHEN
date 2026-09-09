@@ -1186,6 +1186,30 @@ Gateway decides policy (who gets what facts) out of band.
 | `lichen:channel` | [tstr] | Authorized channel/group IDs |
 | `lichen:quota` | uint | Monthly bytes (0=unlimited) |
 | `lichen:sponsored` | tstr | "Traffic sponsored by X" |
+| `lichen:expiry` | uint | Unix timestamp after which the fact is invalid |
+| `lichen:seq` | uint | Strictly increasing per-issuer sequence number |
+
+**Freshness and Revocation:**
+
+A fact carrying no freshness claim is mesh-lifetime only: it cannot be
+revoked or superseded while the issuing gateway's key remains trusted.
+Gateways SHOULD therefore include `lichen:expiry` and `lichen:seq` on every
+issued fact. A gateway revokes a grant by issuing a replacement fact with a
+higher `lichen:seq` and ceasing to renew it; verifiers reject a fact whose
+`lichen:expiry` is not greater than the current time, and whose `lichen:seq`
+is not strictly greater than the highest seq previously seen from the same
+issuer. Verifiers MUST fail closed: a fact carrying `lichen:expiry` cannot
+be accepted without a current time to check against, and a fact carrying
+`lichen:seq` cannot be accepted without a per-issuer sequence cache.
+
+On first contact with an issuer the cache has no entry; the verifier treats
+the empty cache as "highest seq = -1", accepts any non-negative seq, and
+seeds the cache from the verified fact. A verifier MUST NOT derive the
+comparison baseline from the fact being verified. The per-issuer cache MUST
+be updated only after the fact's signature verifies, and the update MUST be
+atomic with acceptance: updating from an unverified fact lets an
+unauthenticated sender poison the cache with a large seq and deny service to
+the legitimate issuer.
 
 **Emergency Services Authorization:**
 
@@ -1219,7 +1243,9 @@ COSE_Sign with multiple COSE_Signature entries
 **Validity:**
 
 Local facts are mesh-lifetime. Gateway restart or root re-election
-invalidates cached facts; nodes re-request from new gateway.
+invalidates cached facts; nodes re-request from new gateway. Within a mesh
+lifetime, `lichen:expiry` and `lichen:seq` (above) provide revocation and
+supersession without waiting for infrastructural invalidation.
 
 #### 8.13.2. CA Credentials (Portable)
 

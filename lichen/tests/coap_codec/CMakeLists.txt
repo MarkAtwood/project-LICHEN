@@ -28,7 +28,7 @@ set(CODEC_SOURCE ${CMAKE_CURRENT_LIST_DIR}/../../subsys/lichen/coap/coap_codec.c
 set(CODEC_INCLUDE ${CMAKE_CURRENT_LIST_DIR}/../../subsys/lichen/coap/include)
 
 if(DEFINED ENV{ZEPHYR_BASE})
-  target_sources(app PRIVATE src/main.c)
+  target_sources(app PRIVATE src/main.c ${CODEC_SOURCE})
   target_include_directories(app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 else()
   add_executable(coap_codec_test src/main.c ${CODEC_SOURCE})

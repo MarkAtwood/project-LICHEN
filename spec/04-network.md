@@ -320,29 +320,18 @@ IID (SHA-512 profile) and the primary 02xx address derive from the same Ed25519 
 
 | Type | Example | Routable To |
 |------|---------|-------------|
-| Link-local | fe80::c02:a502:25b4:baaa | Direct neighbors (control) |
+| Link-local | fe80::cd97:71d9:dd74:5946 | Direct neighbors (control) |
 | Primary (02xx) | 200:848a:604f:bb7e:4384:65db:8db6:6895 | Mesh, inter-mesh via Yggdrasil, internet |
 
-The link-local example uses the canonical `rfc8032_test_public_key` vector from
-`test/vectors/ipv6-addresses.json`: IID = `SHA-512(pubkey)[0:8]` with the U/L
-bit cleared (`0c02a50225b4baaa`), link-local = `fe80::` + IID. The primary
-example is the pinned upstream Go `AddrForKey` reference vector from
-`test/vectors/yggdrasil_address.json` (`upstream_addr_for_key`, public key
-`bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb`); its bytes
-bit-pack the inverted key and contain no IID. The two rows derive from
-different keys and illustrate each address form; they are not one node's
-address pair. Node uses link-local for control + single primary 02xx for
-everything else. Consistent with updated 05-routing.md and 06-security.md.
-Matches the pinned upstream test vectors. (Migration state: implementation
-migration is tracked under epic i72x.) Note: the native example shown in this
-table before the migration (`020e:02a5:0225:b4ba:0c02:a502:25b4:baaa`,
-derived as `[0x02] + SHA-512(pubkey)[0:7] + IID`, lower 64 bits == IID) — and
-the corpus's `native`/`native_packed` fields, now quarantined in
-`test/vectors/legacy/ipv6_addresses_native_sha512.json` — record the REJECTED
-SHA-512 native profile (spec/decisions.jsonl `upstream-yggdrasil-addressing`):
-pre-migration reference, not a conformance oracle; the routable address MUST
-equal upstream Yggdrasil `AddrForKey` (§12.1), which embeds no IID bytes. The
-IID and link-local derivations remain the live profile.
+Examples use the upstream `AddrForKey` anchor vector in
+`test/vectors/yggdrasil_address.json` (pubkey `bdbacfd8...6efb`): primary =
+`AddrForKey(pubkey)` = `0200848a604fbb7e438465db8db66895`, link-local =
+`fe80::` + IID where IID = `SHA-512(pubkey)[0:8]` with the U/L bit cleared
+(`cd9771d9dd745946`). The IID binding applies to link-local only; the primary
+address's lower 64 bits are the upstream bit-packed bytes, not the IID. Node
+uses link-local for control + single primary 02xx for everything else.
+Consistent with updated 05-routing.md and 06-security.md. Matches the pinned
+upstream byte-equality vectors.
 
 ### 12.3. Short Address Assignment
 

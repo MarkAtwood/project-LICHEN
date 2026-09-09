@@ -31,6 +31,9 @@ target_include_directories(capability_announce_test PRIVATE
   ../../include
 )
 target_compile_definitions(capability_announce_test PRIVATE CONFIG_LICHEN_CRYPTO_MONOCYPHER=1)
+# Small table so the host test exercises LRU eviction, the egress-reserved
+# tail, and the eviction seq-floor ledger without allocating 256 slots.
+target_compile_definitions(capability_announce_test PRIVATE CONFIG_LICHEN_CAPABILITY_TABLE_CAPACITY=8)
 target_link_libraries(capability_announce_test PRIVATE OpenSSL::Crypto)
 lichen_test_target(capability_announce_test)
 include(CTest)

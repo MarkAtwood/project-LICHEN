@@ -503,7 +503,13 @@ ZTEST(link_crypto, test_lichen_yggdrasil_addr_matches_test_vectors)
 	 * IID does not appear in the routable address.
 	 * Oracle: upstream address_test.go anchor (vector 4 below), never
 	 * the impl under test. Tests the lichen_yggdrasil_addr wrapper
-	 * (project-LICHEN-gp7u). */
+	 * (project-LICHEN-gp7u).
+	 * Merge resolution: kept over beads-worker-3's
+	 * QUARANTINED-PENDING-UPSTREAM-MIGRATION note because the literals
+	 * below are already the migrated upstream AddrForKey vectors
+	 * required by the settled upstream-yggdrasil-addressing decision;
+	 * the quarantine described the pre-migration SHA-512 literals that
+	 * this side replaced (bead project-LICHEN-worker6-q6ko). */
 	static const uint8_t vec1_pubkey[32] = {
 		0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14,
 		0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
