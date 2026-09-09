@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-3mz9",
+  "title": "GCP-6.5 step 11: 4.09 Conflict payload is the rejection map, not the winning gateway's claim",
+  "description": "Residual from bead project-LICHEN-worker6-yiv0 (closed: 4.09 response code + test reconciliation landed at HEAD). spec/08:315 step 11 mandates the 4.09 payload carry the WINNING gateway's claim; resources.rs handle_post_slots win-arm (resources.rs:1955-1979) instead carries the rejection CBOR map (status/reason/conflicting_slots). STRUCTURAL BLOCKER: GatewayCoordinator (resources.rs:1122-1134) holds no signing key — responding with our own claim as COSE_Sign1 requires threading the gateway Schnorr48 keypair (or a pre-encoded claim) into the coordinator, mirroring the C claim_store_cose pattern. worker-1's round-4 comment: peer_claims only record the LOSER's claim (resources.rs:1941-1948), so no stored winning COSE exists to echo back. Also verify the GCP-6.5 step 10 contract (2.04 Changed on conflict-resolved) while in the area — the relinquish arm currently responds 2.05/success-shaped. Discovered while verifying yiv0: 252 lib tests green, 3 conflict tests assert 0x89. Out of yiv0's declared scope ('only the code constant needs changing').",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T00:35:46.998392248Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T00:35:46.998392248Z",
+  "labels": [
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-3mz9",
+      "depends_on_id": "project-LICHEN-worker6-yiv0",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T00:35:47.127117712Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
