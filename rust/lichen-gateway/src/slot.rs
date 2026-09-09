@@ -469,7 +469,7 @@ fn cose_sig_digest(payload: &[u8]) -> Result<[u8; 32], SlotError> {
         w.tstr(b"Signature1").map_err(malformed)?;
         w.bstr(PROTECTED).map_err(malformed)?;
         w.bstr(&[]).map_err(malformed)?;
-        w.bstr(&payload).map_err(malformed)?;
+        w.bstr(payload).map_err(malformed)?;
         w.position()
     };
     Ok(Sha256::digest(&input[..len]).into())
