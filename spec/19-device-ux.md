@@ -193,3 +193,43 @@ Boot → Status → Position → Last message → (screensaver). Each screen's
 data source is a CoAP resource already defined by spec 17/18 (status,
 position, message presence). Anything beyond this inventory is a
 `ux-default` bead and a later version.
+
+## 15. Design traditions
+
+Nothing in this language is novel at the component level. Each element
+is borrowed from a context where it has been validated by millions of
+users or decades of industrial practice:
+
+| Element | Tradition | Source |
+|---------|-----------|--------|
+| Ring of screens, not a menu (§4) | Casio digital watch mode cycling | G-Shock, 1983–present; every digital watch since |
+| Phone is GUI, device is status/fallback/emergency (§1) | Apple Watch design philosophy | WatchOS HIG: "glanceable, actionable, responsive" |
+| One glance, one fact (§3) | Cockpit instrument design, Tufte | One gauge = one reading; Tufte, *Visual Display of Quantitative Information* |
+| Holds for consequential actions only (§4) | Industrial safety HMI | IEC 60447: emergency stop requires sustained action |
+| LEDs are not decorations / fixed state table (§10) | Embedded systems orthodoxy | Medical devices (IEC 62366), networking equipment, industrial controllers |
+| Three styling tokens (§7) | Mono display design | Kindle, e-ink signage: black, white, gray — no fourth state |
+| Event-driven, no periodic refresh (§6) | Embedded power management | Standard practice for battery-powered embedded since MSP430 era |
+| Match existing muscle memory (§11) | Platform convention inheritance | Apple HIG, Material Design: don't surprise users who learned elsewhere |
+
+**Corollary:** If you want a sophisticated app or UX — maps,
+conversation threads, contact management, sensor dashboards, custom
+alerts — the device is not your canvas. The device exposes its state
+as CoAP resources (spec 11 LCI, spec 17 border router, spec 18
+application). Connect a phone, tablet, or desktop over BLE or USB,
+read the resources, and build whatever you want. The datafeed is
+stable, documented, and observable (CoAP Observe). The device screen
+is not.
+
+**What is original to this document:**
+
+1. **The tiebreaker order as an agent directive (§12).** "Don't ask a
+   human for an aesthetic decision" is not found in conventional UX
+   specs. The four-level decision procedure (fewer states → less power →
+   Meshtastic → fail toward less info) is written specifically for AI
+   agent implementors who would otherwise escalate every visual choice.
+
+2. **The assembly.** No prior work combines watch interaction + glance
+   philosophy + industrial LED tables + embedded power rules + incumbent
+   muscle memory compatibility + agent-facing tiebreakers into a single
+   document for a mesh radio. Each piece is boring and proven. The
+   combination is specific to this problem.
