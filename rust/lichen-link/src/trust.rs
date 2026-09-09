@@ -294,11 +294,13 @@ mod tests {
     // ── Key derivation vectors (gcp3_trust_models.json) ───────────────────
     //
     // QUARANTINE (spec/decisions.jsonl upstream-yggdrasil-addressing): the
-    // iid/ygg_addr values in gcp3_trust_models.json encode the rejected
-    // SHA-512 native profile (test/vectors/legacy/). They pin internal
-    // consistency only, MUST NOT be treated as addressing conformance
-    // oracles, and must be regenerated as pinned upstream AddrForKey
-    // byte-equality vectors when the migration lands.
+    // ygg_addr values in gcp3_trust_models.json encode the rejected
+    // SHA-512 native address profile (test/vectors/legacy/). The iid values
+    // are the retained link-local IID per the preserved local IID rules.
+    // The ygg_addr fields pin internal consistency only, MUST NOT be
+    // treated as addressing conformance oracles, and must be regenerated
+    // as pinned upstream AddrForKey byte-equality vectors when the
+    // migration lands.
 
     #[test]
     fn derivation_zero() {
