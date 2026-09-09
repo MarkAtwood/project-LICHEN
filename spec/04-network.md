@@ -309,10 +309,12 @@ See Section 6.1 for single-primary model (Ed25519 derivation per 06-security.md 
 
 ```
 Link-local:  fe80::<IID>                                  (control only)
-Primary:     AddrForKey(pubkey)                           (upstream 0200::/8 /128, all routable traffic)
+Primary:     AddrForKey(pubkey)                           (upstream Yggdrasil 0200::/8 /128, all routable traffic)
 ```
 
-IID (SHA-512 profile) and the primary 02xx address derive from the same Ed25519 pubkey but are independent byte strings: the upstream address bit-packs the inverted key and does NOT embed the IID. Routed /64 subnets, when used, equal upstream `SubnetForKey` in `0300::/8`. No ULA or layered GUA model (see 06-security.md).
+**Primary (normative, spec/decisions.jsonl `upstream-yggdrasil-addressing`):** a node /128 MUST equal upstream Yggdrasil `AddrForKey(Ed25519PublicKey)` byte-for-byte: bit-invert the 32-byte pubkey; `addr[0] = 0x02`; `addr[1]` = count of leading 1-bits in the inverted key (a whole-byte value that wraps at 256 per Go overflow semantics for a degenerate all-ones inverted key); skip the leading 1s and the first 0 bit; pack the remaining bits MSB-first into whole bytes, discarding the trailing partial byte; `addr[2:16]`, zero tail. No hashing. The independent conformance oracle is the pinned upstream `address_test.go` anchor in `test/vectors/yggdrasil_address.json`. Routed /64s, when used, MUST equal upstream `SubnetForKey` in `0300::/8`. The SHA-512-based native profile formerly shown here is REJECTED and quarantined in `test/vectors/legacy/yggdrasil-derivation.json`.
+
+IID (SHA-512 profile) and the primary 02xx address derive from the same Ed25519 pubkey but are independent byte strings. The former "lower 64 bits of primary address == IID" binding invariant is withdrawn: the primary address no longer embeds the IID, and the local IID derivation MUST NOT alter upstream address bytes. Key binding of the primary address is by self-derivation (the address IS `AddrForKey(pubkey)`, verifiable by anyone holding the pubkey) and by TOFU (06-security.md §8.5/§8.7) pinning the pubkey itself. The IID remains the link-local identity (`fe80::<IID>`), unchanged. No ULA or layered GUA model (see 06-security.md).
 
 ### 12.2. Example Addresses
 
@@ -329,9 +331,18 @@ example is the pinned upstream Go `AddrForKey` reference vector from
 `bdbacfd82240de3dcd123924cbb55256fb8dab08aa98e305528ab84f419e6efb`); its bytes
 bit-pack the inverted key and contain no IID. The two rows derive from
 different keys and illustrate each address form; they are not one node's
-address pair. Node uses link-local for control
-+ single primary 02xx for everything else. Consistent with updated
-05-routing.md and 06-security.md. Matches the pinned upstream test vectors.
+address pair. Node uses link-local for control + single primary 02xx for
+everything else. Consistent with updated 05-routing.md and 06-security.md.
+Matches the pinned upstream test vectors. (Migration state: implementation
+migration is tracked under epic i72x.) Note: the native example shown in this
+table before the migration (`020e:02a5:0225:b4ba:0c02:a502:25b4:baaa`,
+derived as `[0x02] + SHA-512(pubkey)[0:7] + IID`, lower 64 bits == IID) — and
+the corpus's `native`/`native_packed` fields, now quarantined in
+`test/vectors/legacy/ipv6_addresses_native_sha512.json` — record the REJECTED
+SHA-512 native profile (spec/decisions.jsonl `upstream-yggdrasil-addressing`):
+pre-migration reference, not a conformance oracle; the routable address MUST
+equal upstream Yggdrasil `AddrForKey` (§12.1), which embeds no IID bytes. The
+IID and link-local derivations remain the live profile.
 
 ### 12.3. Short Address Assignment
 
