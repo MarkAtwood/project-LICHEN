@@ -34,6 +34,10 @@ struct lichen_lora_cad_entry {
     lichen_lora_cad_done_fn done;
     void *done_user_data;
     struct k_work_delayable emu_work;
+    /* Emulated-path verdict status captured at arm: -ETIMEDOUT when the
+     * caller's window cannot contain the emulated CAD duration, matching
+     * the hardware driver's fail-closed deadline classification. */
+    int emu_status;
     /* Per-device verdict slot for the CSMA continuation (uwip.3): reset
      * inside lichen_lora_cad_start's claim section, written by the done
      * callback (invoked under cad_registry_mutex), collected by the
@@ -58,8 +62,10 @@ static void lichen_lora_cad_emu_work(struct k_work *work)
     struct k_work_delayable *dwork = k_work_delayable_from_work(work);
     struct lichen_lora_cad_entry *entry =
         CONTAINER_OF(dwork, struct lichen_lora_cad_entry, emu_work);
+    int status = entry->emu_status;
 
-    lichen_lora_cad_done(entry->dev, false, 0);
+    /* A lapsed emulation window is not evidence of a clear channel. */
+    lichen_lora_cad_done(entry->dev, status != 0, status);
 }
 
 /* TX_DONE completion for the async LoRa TX API. The signal is reset before
@@ -205,6 +211,17 @@ int lichen_lora_cad_start(const struct device *dev, k_timeout_t timeout,
     k_poll_signal_reset(&cad_registry[index].verdict_signal);
     cad_registry[index].done = done;
     cad_registry[index].done_user_data = user_data;
+    /* Emulate the hardware deadline semantic exactly as the lr1110 driver
+     * computes it (k_ticks_to_ms_floor64): a window that cannot contain
+     * the emulated CAD duration never produces a verdict. Tick
+     * quantization is intentional — K_MSEC(1) at 100 ticks/s is a 10 ms
+     * floor deadline on hardware too. K_FOREVER (-1 ticks) has no
+     * deadline; K_NO_WAIT (0) always lapses. */
+    cad_registry[index].emu_status =
+        (timeout.ticks >= 0 &&
+         k_ticks_to_ms_floor64(timeout.ticks) < LICHEN_CAD_EMU_DELAY_MS)
+            ? -ETIMEDOUT
+            : 0;
     k_work_reschedule(&cad_registry[index].emu_work,
                       K_MSEC(LICHEN_CAD_EMU_DELAY_MS));
     k_mutex_unlock(&cad_registry_mutex);
@@ -277,7 +294,9 @@ static int csma_cad_probe(const struct device *dev, uint32_t timeout_ms,
         return ret;
     }
 
-    ret = k_poll(&cad_event, 1, K_MSEC(timeout_ms + 100U));
+    /* Widen before adding: timeout_ms is caller-controlled via
+     * lichen_lora_perform_cca and must not wrap near UINT32_MAX. */
+    ret = k_poll(&cad_event, 1, K_MSEC((uint64_t)timeout_ms + 100U));
     k_poll_signal_check(&entry->verdict_signal, &signaled, &result);
     if (ret != 0 || signaled == 0U) {
         return -ETIMEDOUT;

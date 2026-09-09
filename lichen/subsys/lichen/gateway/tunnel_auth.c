@@ -7,8 +7,10 @@
 #include <lichen/gateway/tunnel_auth.h>
 
 #ifdef __ZEPHYR__
-#include <tinycrypt/sha256.h>
-#include <tinycrypt/constants.h>
+/* Both sides reconciled: worker-8 routes SHA-256 through lichen_util.h
+ * (TinyCrypt is deprecated in Zephyr 4.1, so its headers are gone), while
+ * HEAD's sender_iid_from_sockaddr() needs net_ip.h for sockaddr_in6. */
+#include "lichen_util.h"
 #include <zephyr/net/net_ip.h>
 #include <lichen/link_ctx.h>
 #include <lichen/schnorr48.h>
@@ -469,9 +471,8 @@ struct lichen_tunnel_result lichen_tunnel_auth_decapsulate(struct lichen_tunnel_
 #ifdef __ZEPHYR__
 static int default_sha256(const uint8_t *input, size_t len, uint8_t out[32])
 {
-	struct tc_sha256_state_struct s;
-	return tc_sha256_init(&s) == TC_CRYPTO_SUCCESS && tc_sha256_update(&s, input, len) == TC_CRYPTO_SUCCESS &&
-	       tc_sha256_final(out, &s) == TC_CRYPTO_SUCCESS ? 0 : -EIO;
+	/* mbedTLS (via lichen_sha256): TinyCrypt is deprecated in Zephyr 4.1. */
+	return lichen_sha256(input, len, out, 32);
 }
 static int default_sign(const uint8_t sk[32], const uint8_t pk[32], const uint8_t d[32], uint8_t s[48])
 { return schnorr48_sign(sk, pk, d, 32, s); }

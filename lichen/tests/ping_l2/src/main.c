@@ -784,6 +784,22 @@ ZTEST(ping_l2, test_async_cad_emulated_completion)
 	zassert_equal(ret, 0, "second CAD completion never arrived");
 	zassert_equal(ctx.status, 0, "second CAD status: %d", ctx.status);
 	zassert_false(ctx.busy, "second emulated CAD must report clear");
+
+	/* A window that cannot contain the emulated CAD duration must fail
+	 * closed (-ETIMEDOUT, busy), matching the hardware driver's deadline
+	 * classification instead of reporting a clear channel. K_NO_WAIT is
+	 * the only such window at 100 ticks/s (tick quantization floors
+	 * K_MSEC(1) to a 10 ms deadline, exactly like the lr1110 driver). */
+	k_sem_reset(&ctx.done_sem);
+	ctx.busy = false;
+	ctx.status = 0;
+	ret = lichen_lora_cad_start(lora_dev, K_NO_WAIT, cad_test_done, &ctx);
+	zassert_equal(ret, 0, "short-window CAD arm failed: %d", ret);
+	ret = k_sem_take(&ctx.done_sem, K_MSEC(500));
+	zassert_equal(ret, 0, "short-window CAD completion never arrived");
+	zassert_equal(ctx.status, -ETIMEDOUT, "short-window CAD status: %d",
+		      ctx.status);
+	zassert_true(ctx.busy, "short-window CAD must report busy");
 }
 
 ZTEST_SUITE(ping_l2, NULL, ping_l2_setup, NULL, NULL, NULL);
