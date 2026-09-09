@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-kd0p",
+  "title": "lichen-gateway trust.rs + capability_announcements.rs lib tests pin rejected native-profile derivations (8 red)",
+  "description": "Observed on beads-worker-7 @ 6d0e4c78fc (post main merge), cargo test -p lichen-gateway --lib: 8 pre-existing failures in the same post-AddrForKey family as a763 (which covers only tests/end_to_end.rs) and r1ur (authenticated_schc_dio.json only). RED: trust::tests::{derivation_alice,derivation_bob,derivation_zero,binding_invariant_alice,binding_invariant_bob,dodagid_binding_valid} (trust.rs:1727-1797) pin the rejected SHA-512 native profile — actual bytes are valid upstream AddrForKey (0x0201.../0x0202...) while expectations embed the old repeated-IID pattern; and capability_announcements::tests::{vectors_decode_verify_and_encode,expiry_and_replay_semantics} (capability_announcements.rs:436/457) fail with Err(IidMismatch) where Ok expected — the recorded vector announcer_iid no longer matches AddrForKey-derived IID. FIX: regenerate pinned expectations in trust.rs tests from the pinned upstream byte-equality oracle, and regen the capability_announcements vector corpus (test/vectors capability JSON) like r1ur did for authenticated_schc_dio.json. Never derive expectations from the implementation under test — use the upstream yggdrasil reference or the pinned conformance vectors.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "bug",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T12:58:06.540275327Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:59:21.64401715Z",
+  "started_at": "2026-09-09T12:59:21.64401715Z",
+  "lease_expires_at": "2026-09-09T13:04:21.64401715Z",
+  "heartbeat_at": "2026-09-09T12:59:21.64401715Z",
+  "labels": [
+    "rust",
+    "yggdrasil"
+  ]
+}

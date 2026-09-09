@@ -1,0 +1,20 @@
+{
+  "id": "project-LICHEN-worker6-60u0",
+  "title": "lichen/tests/coap_config/src/main.c:373 hardcodes rejected IID-embedding primary address",
+  "description": "Found during 0qcc review (lci_identity.json migration). lichen/tests/coap_config/src/main.c:373 does strcpy(test_identity.primary, \"2ed:4242:ead4:ac69:ed42:42ea:d4ac:6948\") for pubkey 03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8 (seed 000102..1f). That is the REJECTED IID-embedding native profile (settled upstream-yggdrasil-addressing decision); the C test never reads test/vectors/lci_identity.json so it self-confirms a non-conformant address. Correct upstream AddrForKey value: 206:2f7c:2006:18f7:a0f1:4791:738c:5a1f (packed 02062f7c200618f7a0f14791738c5a1f), derived by an independent reimplementation anchored byte-for-byte to the genuine upstream Go vector in test/vectors/yggdrasil_address.json. Note: coap_config app currently has a build blocker (0whw, zcbor headers) — this fixture fix is content-only and independent of that.",
+  "status": "in_progress",
+  "priority": 2,
+  "issue_type": "task",
+  "assignee": "Mark Atwood",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T12:28:13.837785859Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T13:03:51.939664687Z",
+  "started_at": "2026-09-09T13:03:51.939664687Z",
+  "lease_expires_at": "2026-09-09T13:08:51.939664687Z",
+  "heartbeat_at": "2026-09-09T13:03:51.939664687Z",
+  "labels": [
+    "zephyr",
+    "yggdrasil"
+  ]
+}

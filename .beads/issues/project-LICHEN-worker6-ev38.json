@@ -1,0 +1,16 @@
+{
+  "id": "project-LICHEN-worker6-ev38",
+  "title": "Flaky: resources::tests::gateway_coordinator_post_slots_enforces_max_claim_duration passes solo, fails intermittently in full lichen-gateway lib suite",
+  "description": "Observed on beads-worker-7 @ 6d0e4c78fc: test passes when run with a name filter (cargo test -p lichen-gateway --lib slot) but FAILED in one full-suite run (9 FAILED lines incl. it, 263 passed) and PASSED in the next full-suite run (8 failed, it green). Order/timing/shared-state dependent — same flakiness class as up5p (oscore timing) and qfqk (coap timing pressure). Investigate shared slot-state persistence dir, unix_now() superframe-boundary sensitivity, or parallel-test contention in resources.rs tests.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T12:58:08.121973406Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T12:58:08.121973406Z",
+  "labels": [
+    "rust",
+    "gateway"
+  ]
+}

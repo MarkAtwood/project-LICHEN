@@ -1,0 +1,7 @@
+{
+  "id": "1788957202617574289-1",
+  "issue_id": "project-LICHEN-worker6-ywec",
+  "author": "Mark Atwood",
+  "text": "Slice landed as a348cba56e (fix(node): resolve DAO origin identity by full AddrForKey): added AnnounceProcessor::pinned_pubkey_for_addr (full-16B AddrForKey match) + handle_dao origin pin resolution + router.rs test identity recovery. receive.rs:572 admission was already fixed by the mjm7 rebase-resolution. This diff also REPAIRS a compile break: committed HEAD's receive.rs:572 called pinned_pubkey_for_addr which was undefined until this diff (mjm7 rebase-resolution used the method but worker5's announce.rs impl was lost in the worker5-merge conflict). 3x codereview (correctness/security/edge via kimi-k3): PASS x3; removed dead pinned_iid_for_addr per review. Independent site classification found the sweep is LARGER than this bead's stated list — remaining valid sites filed as follow-ups: secure/L2 unicast addressing (new P1), announce gradient derivation (new P1), 6 pre-existing test failures (new P2). Verified: 353 lib tests pass, no regressions from this slice (the 6-9 failures are pre-existing/flaky, confirmed by revert). Releasing — remaining sites tracked in the follow-up beads.",
+  "created_at": "2026-09-09T12:33:22.617574289Z"
+}
