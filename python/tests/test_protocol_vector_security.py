@@ -50,6 +50,37 @@ def _addr_for_key(public_key: bytes) -> bytes:
     return b"\x02" + digest[:7] + _iid_for_key(public_key)
 
 
+def _upstream_addr_for_key(public_key: bytes) -> bytes:
+    """Upstream yggdrasil-go AddrForKey: bit-invert the key, count leading 1
+    bits into addr[1], drop them plus the separator 0, then pack the rest
+    MSB-first into addr[2:16]. No hashing.
+
+    Migration split (spec/decisions.jsonl upstream-yggdrasil-addressing):
+    corpora already regenerated to upstream (root_signature.json) use this
+    oracle; corpora still on the rejected SHA-512 profile
+    (root_authorization.json, authenticated_schc_dio.json) keep the legacy
+    ``_addr_for_key`` until their own regeneration lands.
+    """
+    inverted = bytes(b ^ 0xFF for b in public_key)
+    ones = 0
+    while ones < 256 and (inverted[ones // 8] >> (7 - ones % 8)) & 1:
+        ones += 1
+    payload = bytearray(14)
+    acc = 0
+    nbits = 0
+    pos = 0
+    for i in range(ones + 1, 256):
+        acc = (acc << 1) | ((inverted[i // 8] >> (7 - i % 8)) & 1)
+        nbits += 1
+        if nbits == 8:
+            if pos < 14:
+                payload[pos] = acc
+                pos += 1
+            acc = 0
+            nbits = 0
+    return bytes((0x02, ones & 0xFF)) + bytes(payload)
+
+
 def _ones_complement_sum(data: bytes) -> int:
     if len(data) % 2:
         data += b"\x00"
@@ -440,7 +471,7 @@ def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> No
         if public_hex is None or len(public_hex) != 64:
             continue
         public_key = bytes.fromhex(public_hex)
-        binding = bytes.fromhex(vector["dodagid"]) == _addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid"]) == _upstream_addr_for_key(public_key)
         assert binding is vector.get("binding_valid", vector.get("error") != "DODAGID_MISMATCH")
         if "signature" in vector and "message" in vector:
             valid_signature = verify(
