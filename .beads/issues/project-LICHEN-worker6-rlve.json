@@ -1,0 +1,25 @@
+{
+  "id": "project-LICHEN-worker6-rlve",
+  "title": "Corpus: add reordered-keys + trailing-bytes reject cases to gcp_slot_claim_cose_sign1 vectors",
+  "description": "Found during l2uk review (security pass, kimi-k3). test/vectors/gcp_slot_claim_cose_sign1.json has 13 cases (happy_path, mutations, replay, expiry, decoy, kid-mismatch, ordinal_absent) but no non-ascending-payload-keys or trailing-payload-bytes rejection case. Rust now rejects both (l2uk); C rejects both implicitly (digests received bytes); Python accepts both (parity gap, filed separately). The project rule is identical verdicts on test/vectors/ across implementations — add both cases (plus generator support) so C and Python are mechanically cross-checked against the deterministic-CBOR rejection class; a Python corpus harness for these cases will go red until the Python decoder parity fix lands.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T03:31:44.222717628Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T03:31:44.222717628Z",
+  "labels": [
+    "gateway"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-rlve",
+      "depends_on_id": "project-LICHEN-worker6-l2uk",
+      "type": "discovered-from",
+      "created_at": "2026-09-09T03:31:44.346230058Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

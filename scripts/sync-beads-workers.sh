@@ -63,18 +63,52 @@ cd "$REPO_ROOT"
 echo ""
 echo "=== Merging worker branches to main ==="
 
-# Restore the pre-session rr-cache snapshot unconditionally. Called after the
-# LLM session on every path: the session may record an ungated postimage (via
-# its own commit, a direct file write, or a legit bare 'git rerere'), and the
-# next sync's clean-merge path replays rr-cache past every gate. Restoring on
-# every path — not just on detected tamper — both neutralizes poisoning and
-# avoids a false positive from a compliant session's 'git rerere' (which
-# writes rr-cache without moving HEAD). Reads rr_had/rr_snap_b64 from the
-# enclosing function (bash dynamic scoping).
+# Shared fail-stop for the LLM-merge guards (bead ndtl). Exiting with
+# MERGE_HEAD/MSG/MODE still in place lets the NEXT run's pre-loop .beads
+# checkpoint commit a phantom merge (tree of HEAD + .beads, second parent
+# the worker branch): 'git rev-list main..branch' then returns 0 forever and
+# the branch's real commits are silently never synced. The index must also
+# be unstaged (review finding): the session's never-gated staged resolution
+# would otherwise ride that same checkpoint in as a normal commit. Both are
+# best-effort — the exit is already fail-stop. The non-fatal 'return 1'
+# paths leave merge state for the caller's 'git merge --abort' by design.
+llm_merge_fatal() {
+    echo "  FATAL: $1" | tee -a /tmp/lichen-kimi-last.log
+    rm -f "$GIT_DIR/MERGE_HEAD" "$GIT_DIR/MERGE_MSG" "$GIT_DIR/MERGE_MODE"
+    # A session-planted stale index.lock would make the reset fail and leave
+    # never-gated staged content for the next run's checkpoint; the lock's
+    # owner is dying with this process, so removing it is safe here.
+    rm -f "$GIT_DIR/index.lock"
+    git reset -q >/dev/null 2>&1 || true
+    # A poisoned rr-cache must not survive a fail-stop either: the next run
+    # would snapshot it as the pre-session baseline and replay its postimage
+    # past every gate. Deleting costs only rerere history (re-recorded on
+    # the next conflict); called from rr_restore too, where rm may already
+    # have failed — best-effort.
+    rm -rf "$GIT_DIR/rr-cache" 2>/dev/null || true
+    rm -f "$session_log"
+    exit 2
+}
+
+# rr-cache restore, on EVERY post-session path (bead ndtl): a compliant
+# session's bare 'git rerere' — or a malicious direct postimage write —
+# changes rr-cache without tripping the mutation guard (no commit, no
+# HEAD/ref/MERGE_HEAD/MERGE_MSG/staged-set move), and the next sync's
+# CLEAN-merge path replays the postimage past every gate. Restoring only on
+# the mutation path both misses that poisoning and would false-positive a
+# legit 'git rerere' if rr-cache were pinned instead. Restoring
+# unconditionally neutralizes both. Fail-stop on error: a leftover polluted
+# cache must not pass silently. Reads rr_had/rr_snap_b64 from the enclosing
+# function (bash dynamic scoping); the snapshot is shell memory, not a /tmp
+# file, so the session cannot craft what gets restored.
 rr_restore() {
-    rm -rf "$GIT_DIR/rr-cache"
+    if ! rm -rf "$GIT_DIR/rr-cache" 2>>/tmp/lichen-kimi-last.log; then
+        llm_merge_fatal "could not clear $GIT_DIR/rr-cache — delete it manually before the next sync"
+    fi
     if [ "$rr_had" = 1 ] && [ -n "$rr_snap_b64" ]; then
-        printf '%s' "$rr_snap_b64" | base64 -d | tar -C "$GIT_DIR" -xf -
+        if ! printf '%s' "$rr_snap_b64" | base64 -d | tar -C "$GIT_DIR" -xf - 2>>/tmp/lichen-kimi-last.log; then
+            llm_merge_fatal "rr-cache restore failed — delete $GIT_DIR/rr-cache manually before the next sync"
+        fi
     fi
 }
 
@@ -153,12 +187,32 @@ llm_semantic_merge() {
     # decision, not more pin lines. This note supersedes the earlier
     # main-vs-beads-worker-2 note, which predates the in-memory snapshot and
     # the replace-ref dimension.)
-    local head_before ref_before merge_head_before staged_before files_nl
-    local ref_after head_after merge_head_after staged_after why
-    local replace_before rr_had=0 rr_snap_b64=""
+    # (Resolution note, this merge, main vs beads-worker-2 (bead ndtl round):
+    # compatible, both kept — main's pin structure stands (detached-HEAD
+    # entry refusal, in-pin in-memory rr-cache snapshot with the fail-closed
+    # rule, rewind verification, and the MERGE_HEAD-names-branch gate before
+    # staging), and beads-worker-2's bead-ndtl review findings are merged in
+    # on top: the llm_merge_fatal / fail-stop rr_restore helpers above, the
+    # full-content MERGE_HEAD pin via cat (a session-appended extra parent
+    # is invisible to 'git rev-parse MERGE_HEAD', which prints only the
+    # first line), the new MERGE_MSG pin dimension, sequencer-state
+    # clearing, and GIT_NO_REPLACE_OBJECTS on every object read including
+    # the rewind-failure path. An intervening accept-ours resolution had
+    # dropped the ndtl set wholesale; this reconciliation restores it. The
+    # pin is now five dimensions: HEAD + symref + MERGE_HEAD + MERGE_MSG +
+    # staged-set.)
+    local head_before ref_before merge_head_before merge_msg_before staged_before files_nl
+    local ref_after head_after merge_head_after merge_msg_after staged_after why
+    local replace_before replace_now replace_new rr_had=0 rr_snap_b64=""
+    # GIT_NO_REPLACE_OBJECTS on every object read in this guard (review
+    # finding, bead ndtl): a pre-session 'git replace <main-sha> <evil>'
+    # would make head_before resolve to the attacker's object, and the
+    # mutation-path 'git reset --hard "$head_before"' would then move main
+    # straight onto it — the rewind becoming the landing vector. The
+    # replace-ref list is pinned too and session-created ones are purged
+    # post-session, before any gate or downstream 'git checkout HEAD'.
     head_before=$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD)
     ref_before=$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)
-    merge_head_before=$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)
     # Detached HEAD at entry (beads-worker-2): the rewind would move whatever
     # ref the session left current; refuse fail-closed (the caller aborts the
     # merge).
@@ -167,12 +221,29 @@ llm_semantic_merge() {
         return 1
     fi
     replace_before=$(git replace -l 2>/dev/null | sort)
+    # Full MERGE_HEAD content, not 'git rev-parse MERGE_HEAD': rev-parse
+    # prints only the FIRST line of a multi-parent MERGE_HEAD, so a session
+    # appending an extra parent (ancestry injection without a commit) would
+    # be invisible to this pin (harness case merge_head_extra, bead ndtl).
+    # cat is also immune to replace-refs.
+    merge_head_before=$(cat "$GIT_DIR/MERGE_HEAD" 2>/dev/null || echo NONE)
+    # MERGE_MSG too (review finding, bead ndtl): the caller commits with
+    # --no-edit, so a session-rewritten message (forged trailers/signoffs)
+    # would land ungated on main's merge commit without tripping any other
+    # dimension.
+    merge_msg_before=$(cat "$GIT_DIR/MERGE_MSG" 2>/dev/null || echo NONE)
     # rr-cache snapshot in shell memory: rerere.enabled is set at the top of
     # this script, so a session-run 'git commit' (or a direct postimage
     # write) RECORDS its ungated resolution; rewinding HEAD alone would let
     # the next sync's merge replay it past every gate (rerere pre-resolves
     # the conflict the LLM then validates). Restored on the rewind path
-    # (status-checked) and again on every non-tamper path (rr_restore).
+    # (status-checked) and again on every non-tamper path (rr_restore). The
+    # bytes live in this shell variable, not a /tmp file (review finding,
+    # bead ndtl): /tmp is same-UID-writable by the session for the full
+    # 900s session window, so a file-held snapshot would let the session
+    # craft the rr-cache that rr_restore "restores" — the restore becomes
+    # the poisoning vector. Parent-shell memory is not reachable by the
+    # session.
     if [ -d "$GIT_DIR/rr-cache" ]; then
         rr_had=1
         rr_snap_b64=$(tar -C "$GIT_DIR" -cf - rr-cache 2>/dev/null | base64)
@@ -221,10 +292,11 @@ llm_semantic_merge() {
     cat "$session_log" >> "$log" 2>/dev/null || true
     echo "$(date +%FT%T) kimi budget=900s+10s-kill-grace exit=$rc (124=timeout, 137=TERM ignored then KILLed)" >> "$log"
 
-    # Purge session-created replace refs on EVERY path (beads-worker-2): they
-    # rewrite object reads repo-wide (including the caller's commit and
-    # future syncs). Must run before the mutation guard's pin reads.
-    local replace_now replace_new
+    # Purge session-created replace refs on EVERY path (review finding, bead
+    # ndtl): they rewrite object reads repo-wide — the caller's commit, the
+    # conflict-path 'git checkout HEAD -- .beads' sites, and future syncs
+    # all honor refs/replace/*. Must run before the mutation guard's pin
+    # reads.
     replace_now=$(git replace -l 2>/dev/null | sort)
     replace_new=$(comm -13 <(printf '%s\n' "$replace_before") <(printf '%s\n' "$replace_now"))
     if [ -n "$replace_new" ]; then
@@ -233,6 +305,11 @@ llm_semantic_merge() {
             git replace -d "$r" >/dev/null 2>&1 || true
         done
     fi
+    # Clear sequencer state on every path too (review finding, bead ndtl):
+    # the caller's 'git merge --no-commit' would have refused pre-existing
+    # CHERRY_PICK_HEAD/REVERT_HEAD, so any present now are session-planted;
+    # 'git commit' reuses CHERRY_PICK_HEAD's AUTHOR (forged author on main).
+    rm -f "$GIT_DIR/CHERRY_PICK_HEAD" "$GIT_DIR/REVERT_HEAD"
 
     # Mutation guard runs BEFORE the rc early-return: a session that exits
     # non-zero (or is killed at the timeout) after mutating git state must
@@ -256,12 +333,14 @@ llm_semantic_merge() {
     # silently strand the branch — worker-2 review finding).)
     ref_after=$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)
     head_after=$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD)
-    merge_head_after=$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)
+    merge_head_after=$(cat "$GIT_DIR/MERGE_HEAD" 2>/dev/null || echo NONE)
+    merge_msg_after=$(cat "$GIT_DIR/MERGE_MSG" 2>/dev/null || echo NONE)
     staged_after=$(git diff --cached --name-only --no-renames | grep -vxF "$files_nl" | sort)
     why=""
     [ "$ref_after" != "$ref_before" ] && why="$why ref"
     [ "$head_after" != "$head_before" ] && why="$why HEAD"
     [ "$merge_head_after" != "$merge_head_before" ] && why="$why MERGE_HEAD"
+    [ "$merge_msg_after" != "$merge_msg_before" ] && why="$why MERGE_MSG"
     [ "$staged_after" != "$staged_before" ] && why="$why staged-set"
     if [ -n "$why" ]; then
         echo "  LLM session mutated git state mid-merge (${why# }) — rewinding"
@@ -279,49 +358,34 @@ llm_semantic_merge() {
             # Defense in depth: the entry refusal above makes this
             # unreachable; fail-stop anyway rather than risk moving the
             # wrong ref (a session may have attached+advanced some branch).
-            echo "  FATAL: mutation from a detached HEAD start — manual repair required" | tee -a /tmp/lichen-kimi-last.log
-            exit 2
+            llm_merge_fatal "mutation from a detached HEAD start — manual repair required"
         fi
         # Preserve concurrent bd writes before the destructive reset
         # (beads-worker-2; snapshot_store is a no-op on a clean store).
         snapshot_store "$branch-headmoved"
         if ! git symbolic-ref HEAD "$ref_before" 2>>/tmp/lichen-kimi-last.log; then
-            echo "  FATAL: could not repoint HEAD to $ref_before — manual repair required" | tee -a /tmp/lichen-kimi-last.log
-            exit 2
+            llm_merge_fatal "could not repoint HEAD to $ref_before — manual repair required"
         fi
         if GIT_NO_REPLACE_OBJECTS=1 git reset --hard "$head_before" >> /tmp/lichen-kimi-last.log 2>&1; then
             echo "$(date +%FT%T) kimi mutated git state (exit=$rc); rewound to $head_before on $ref_before" >> /tmp/lichen-kimi-last.log
         else
-            echo "  FATAL: rewind failed; main may hold ungated state ($(git rev-parse HEAD)) — manual repair required" | tee -a /tmp/lichen-kimi-last.log
-            exit 2
+            llm_merge_fatal "rewind failed; main may hold ungated state ($(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD)) — manual repair required"
         fi
         # Rewind rerere: the session's commit recorded its ungated resolution
         # into rr-cache; replaying it next sync would bypass every gate.
-        # Fail-stop on error (main's discipline): a leftover polluted cache
-        # must not pass silently. The restore comes from the in-memory
-        # snapshot (beads-worker-2), not main's old /tmp temp file — /tmp is
-        # same-UID-writable by the session.
-        if ! rm -rf "$GIT_DIR/rr-cache" 2>>/tmp/lichen-kimi-last.log; then
-            echo "  FATAL: could not clear $GIT_DIR/rr-cache — delete it manually before the next sync" | tee -a /tmp/lichen-kimi-last.log
-            exit 2
-        fi
-        if [ "$rr_had" = 1 ] && [ -n "$rr_snap_b64" ]; then
-            if ! printf '%s' "$rr_snap_b64" | base64 -d | tar -C "$GIT_DIR" -xf - 2>>/tmp/lichen-kimi-last.log; then
-                echo "  FATAL: rr-cache restore failed — delete $GIT_DIR/rr-cache manually before the next sync" | tee -a /tmp/lichen-kimi-last.log
-                exit 2
-            fi
-        fi
+        # rr_restore restores the in-memory snapshot (not a session-writable
+        # /tmp file) and fail-stops via llm_merge_fatal on error: a leftover
+        # polluted cache must not pass silently.
+        rr_restore
         # Verify the rewind actually landed (beads-worker-2): continuing the
         # merge loop on unverified repo state risks exactly the ungated
-        # landing this guards. Clear stale MERGE_HEAD/MSG/MODE before the
-        # fail-stop: exiting with a merge still in flight lets the NEXT run's
-        # pre-loop .beads checkpoint complete a phantom merge and silently
-        # strand the branch.
+        # landing this guards. llm_merge_fatal clears stale
+        # MERGE_HEAD/MSG/MODE before the fail-stop: exiting with a merge
+        # still in flight lets the NEXT run's pre-loop .beads checkpoint
+        # complete a phantom merge and silently strand the branch.
         if [ "$(GIT_NO_REPLACE_OBJECTS=1 git rev-parse HEAD 2>/dev/null)" != "$head_before" ] ||
            [ "$(git symbolic-ref -q HEAD 2>/dev/null || true)" != "$ref_before" ]; then
-            echo "  FATAL: rewind verification failed — manual repair required" | tee -a /tmp/lichen-kimi-last.log
-            rm -f "$GIT_DIR/MERGE_HEAD" "$GIT_DIR/MERGE_MSG" "$GIT_DIR/MERGE_MODE"
-            exit 2
+            llm_merge_fatal "rewind verification failed — manual repair required"
         fi
         rm -f "$session_log"
         return 1
