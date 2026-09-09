@@ -228,7 +228,11 @@ fn test_sfn_wrap_continuity() {
     assert_eq!(delta, expected_delta);
     assert_eq!(
         slot_at_current,
-        ((slot_at_last as u32 + delta) % num_slots as u32) as u16
+        // Mirror production wrapping_add (tdma_scheduler.rs): delta is a full
+        // u32, so plain + can overflow on large-delta vectors. The (slot +
+        // delta) % N identity is exact only because num_slots=16 divides
+        // 2^32; a non-power-of-two N would need the unreduced hash sum.
+        ((slot_at_last as u32).wrapping_add(delta) % num_slots as u32) as u16
     );
 }
 
@@ -368,7 +372,7 @@ fn test_delta_equals_slot_difference() {
         let delta = expected_sfn_delta(current, last);
         let s_last = TdmaScheduler::slot_for(&eui, last, num_slots).unwrap();
         let s_current = TdmaScheduler::slot_for(&eui, current, num_slots).unwrap();
-        let expected_slot = ((s_last as u32 + delta) % num_slots as u32) as u16;
+        let expected_slot = ((s_last as u32).wrapping_add(delta) % num_slots as u32) as u16;
         assert_eq!(
             s_current, expected_slot,
             "For SFN {} -> {}: slot_for({}) = {}, but (slot_for({}) + delta) % {} = {}",
