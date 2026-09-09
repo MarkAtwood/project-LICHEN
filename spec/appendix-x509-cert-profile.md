@@ -63,8 +63,9 @@ The subject public key MUST be an Ed25519 public key:
 
 No other public key algorithms are defined by this profile. The Ed25519
 public key in the certificate MUST be the node's LICHEN identity key —
-the same key whose SHA-512-derived IID produces the node's addresses
-(03-addressing.md §3.1).
+the same key from which the node's addresses derive: the link-local IID
+(SHA-512 profile) and the routable upstream Yggdrasil `AddrForKey`
+`/128` (03-addressing.md §3.1, 04-network.md §6.2).
 
 ## 3. subject and issuer Distinguished Names
 
@@ -89,30 +90,32 @@ The subjectAltName extension MUST be present, MUST be critical when
 subject is empty and MUST be non-critical when subject is non-empty
 (RFC 5280 §4.2.1.6), and MUST contain exactly one iPAddress GeneralName
 (tag `[7]` primitive) encoding the node's key-derived native address:
-the 16-byte `0200::/8` `/128` constructed
-as `addr = [0x02] + SHA-512(pubkey)[0:7] + IID` (03-addressing.md §3.1,
-04-network.md §12). A second native `0200::/8` iPAddress MUST NOT appear.
+the 16-byte `0200::/8` `/128` equal to upstream Yggdrasil
+`AddrForKey(subjectPublicKey)` (04-network.md §6.2, 06-security.md §8.5,
+and the `upstream-yggdrasil-addressing` decision in
+`spec/decisions.jsonl`). A second native `0200::/8` iPAddress MUST NOT
+appear.
 
 dNSName, rfc822Name, and URI GeneralNames MUST NOT be used; LICHEN has
 no DNS namespace and the profile does not bind email or web identity.
 
-A link-local `fe80::/10` address with the same IID MAY be included as
+A link-local `fe80::/10` address with the node's IID MAY be included as
 one additional iPAddress; it carries no additional identity information
-(its IID is already determined by the native address) and verifiers MUST
-ignore it for authorization. Verifiers MUST ignore any iPAddress other
-than the single native `0200::/8` entry, including a link-local entry
-whose IID does not match the native address's IID.
+(its IID is independently derived from the same key, and the native
+`AddrForKey` address does not embed the IID) and verifiers MUST ignore
+it for authorization. Verifiers MUST ignore any iPAddress other than the
+single native `0200::/8` entry, including a link-local entry.
 
 Worked encoding for subject public key
 `000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f`
-(SHA-512 begins `3d 94 ee a4 9c 58 0a ef …`; IID byte 0 `0x3d` already
-has the U/L bit clear, so IID = `3d94eea49c580aef` and the native
-address is `023d:94ee:a49c:580a:3d94:eea4:9c58:0aef`):
+(upstream `AddrForKey` bit-packs the inverted key: byte 0 `0x02`, byte 1
+= 15 leading 1-bits of the inverted key, then the remaining inverted-key
+bits, giving `020f:fdfc:fbfa:f9f8:f7f6:f5f4:f3f2:f1f0`):
 
 ```
 SEQUENCE (subjectAltName)        30 12
   [7] iPAddress (16 bytes)         87 10
-      02 3D 94 EE A4 9C 58 0A 3D 94 EE A4 9C 58 0A EF
+      02 0F FD FC FB FA F9 F8 F7 F6 F5 F4 F3 F2 F1 F0
 ```
 
 ## 5. Mesh Role Extension
@@ -261,13 +264,16 @@ A constrained verifier processing a profile-conformant chain:
 3. Checks `basicConstraints` CA=false and `keyUsage` digitalSignature
    on each end-entity certificate.
 4. **Address binding (the attestation payload):** recomputes the full
-   native address from the subject public key per 03-addressing.md §3.1 —
-   `SHA-512(subjectPublicKey)`, set `addr[0]=0x02`, `addr[1:8]=hash[0:7]`,
-   IID = `hash[0:8]` with the U/L bit cleared into `addr[8:16]` — and
-   verifies that the SAN native `/128` equals this recomputed 128-bit
-   address (not merely that its lower 64 bits match the IID). A
-   certificate that fails this check MUST be rejected — it attests a
-   key-to-address pairing that does not hold.
+   native address from the subject public key as upstream Yggdrasil
+   `AddrForKey(subjectPublicKey)` (04-network.md §6.2 — bit-invert the
+   32-byte key, `addr[0]=0x02`, `addr[1]` = count of leading 1-bits of
+   the inverted key, `addr[2:16]` = the remaining inverted-key bits
+   after the leading 1s and first 0 separator, zero-padded tail; no
+   hashing) and verifies that the SAN native `/128` equals this
+   recomputed 128-bit address byte-for-byte. The SHA-512 IID is not
+   embedded in the routable address and MUST NOT be substituted into its
+   lower 64 bits. A certificate that fails this check MUST be rejected —
+   it attests a key-to-address pairing that does not hold.
 5. If role-based authorization applies, reads the mesh role extension
    (Section 5); when the certificate asserts the needed role, the check
    passes without contacting the gateway. Role assertions are honored
