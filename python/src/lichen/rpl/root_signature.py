@@ -27,7 +27,19 @@ from enum import Enum, auto
 from ipaddress import IPv6Address
 from typing import Any
 
-from lichen.crypto.identity import yggdrasil_address
+from lichen.crypto.identity import yggdrasil_address  # noqa: F401  (re-export compat)
+
+
+def _root_addr_for_key(pubkey: bytes) -> bytes:
+    """Upstream yggdrasil-go AddrForKey(pubkey) — the routable DODAGID (rubw).
+
+    Replaces the rejected SHA-512 native profile (identity.yggdrasil_address)
+    per spec/decisions.jsonl upstream-yggdrasil-addressing. Lazy import:
+    lichen.ipv6 pulls lichen.crypto.identity at package init.
+    """
+    from lichen.ipv6.addr import upstream_addr_for_key
+
+    return upstream_addr_for_key(pubkey).packed
 from lichen.crypto.schnorr48 import verify as schnorr_verify
 
 
@@ -61,8 +73,8 @@ def verify_dodagid_binding(pubkey: bytes, dodagid: IPv6Address | bytes) -> bool:
     that DODAGID equals AddrForKey(root_pubkey)." This cryptographic binding
     ensures the root controls the private key for the advertised DODAGID.
 
-    The AddrForKey function computes the native 0200::/8 address from the
-    Ed25519 public key (see identity.yggdrasil_address).
+    The AddrForKey function computes the upstream yggdrasil-go 0200::/8
+    address from the Ed25519 public key (see ipv6.addr.upstream_addr_for_key).
 
     Args:
         pubkey: 32-byte Ed25519 public key of the root.
@@ -79,7 +91,7 @@ def verify_dodagid_binding(pubkey: bytes, dodagid: IPv6Address | bytes) -> bool:
     if len(dodagid_bytes) != 16:
         return False
 
-    derived = yggdrasil_address(pubkey).packed
+    derived = _root_addr_for_key(pubkey)
     # SECURITY: Constant-time comparison prevents timing attacks
     return hmac.compare_digest(derived, dodagid_bytes)
 
@@ -120,7 +132,7 @@ def verify_root_signature(
         )
 
     # Compute derived DODAGID for diagnostics
-    derived = yggdrasil_address(pubkey)
+    derived = IPv6Address(_root_addr_for_key(pubkey))
 
     # Verify DODAGID binding (spec 8.4)
     if not verify_dodagid_binding(pubkey, dodagid):
@@ -148,9 +160,8 @@ def verify_root_signature(
 def derive_dodagid_from_pubkey(pubkey: bytes) -> IPv6Address:
     """Derive the DODAGID that a root with this pubkey should use.
 
-    Per spec section 8.4: DODAGID == AddrForKey(root_pubkey).
-    This function implements AddrForKey, which returns the Yggdrasil
-    0200::/8 address derived from the Ed25519 public key.
+    Per spec section 8.4: DODAGID == AddrForKey(root_pubkey), where
+    AddrForKey is the upstream yggdrasil-go derivation (rubw).
 
     Args:
         pubkey: 32-byte Ed25519 public key.
@@ -163,7 +174,7 @@ def derive_dodagid_from_pubkey(pubkey: bytes) -> IPv6Address:
     """
     if len(pubkey) != 32:
         raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
-    return yggdrasil_address(pubkey)
+    return IPv6Address(_root_addr_for_key(pubkey))
 
 
 # Canonical-schema vector helpers (test/vectors format_version 2).
@@ -225,7 +236,7 @@ def generate_root_signature_vector(
 
     identity = Identity.from_seed(seed)
     signature = sign(identity.privkey, identity.pubkey, message)
-    dodagid = yggdrasil_address(identity.pubkey)
+    dodagid = IPv6Address(_root_addr_for_key(identity.pubkey))
 
     return {
         "description": "Generated root-signature vector",

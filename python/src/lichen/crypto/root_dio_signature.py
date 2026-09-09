@@ -41,7 +41,7 @@ import cbor2
 
 from . import schnorr48
 from .schnorr48 import SCHNORR48_ED25519_ALG
-from .identity import _pubkey_to_iid, yggdrasil_address
+from .identity import _pubkey_to_iid
 
 if TYPE_CHECKING:
     from .identity import Identity
@@ -343,9 +343,12 @@ def verify_root_dio_signature(
         return False, "IID_MISMATCH"
 
     # Step 3: Verify DODAGID binds to the signer key: DODAGID must equal
-    # AddrForKey(pubkey) (the 0200::/8 key-derived address), per the vector
+    # upstream yggdrasil-go AddrForKey(pubkey) (rubw; the SHA-512 native
+    # profile is rejected per spec/decisions.jsonl), per the vector
     # oracle in test/vectors/root_dio_signature.json.
-    if payload.dodag_id != yggdrasil_address(pubkey).packed:
+    from lichen.ipv6.addr import upstream_addr_for_key  # lazy: import cycle
+
+    if payload.dodag_id != upstream_addr_for_key(pubkey).packed:
         return False, "DODAG_ID_MISMATCH"
 
     # Step 1: Verify signature

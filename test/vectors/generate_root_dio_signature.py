@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 from ipaddress import IPv6Address
 from pathlib import Path
@@ -123,9 +124,53 @@ def _build_cose_sign1(
     return cbor2.dumps(cbor2.CBORTag(18, cose_sign1))
 
 
+def _upstream_addr_for_key(pubkey: bytes) -> bytes:
+    """Upstream yggdrasil-go AddrForKey (bit-invert, count leading 1s, bit-pack).
+
+    Matches Rust lichen-core ygg_addr_from_pubkey byte-for-byte, including
+    the Go byte-counter wrap at 256 and the trailing partial-byte discard.
+    Anchored at import time to the pinned upstream vector in
+    yggdrasil_address.json so this reimplementation cannot silently diverge.
+    """
+    if len(pubkey) != 32:
+        raise ValueError(f"pubkey must be 32 bytes, got {len(pubkey)}")
+    buf = bytes(b ^ 0xFF for b in pubkey)
+    ones = 0
+    first_zero = 256
+    for idx in range(256):
+        if (buf[idx // 8] >> (7 - idx % 8)) & 1:
+            ones = (ones + 1) & 0xFF
+        else:
+            first_zero = idx
+            break
+    packed = bytearray(14)
+    start = first_zero + 1
+    whole_bits = max(0, 256 - start) & ~7
+    for out_bit in range(min(whole_bits, 112)):
+        src = start + out_bit
+        if (buf[src // 8] >> (7 - src % 8)) & 1:
+            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
+    return bytes((0x02, ones)) + bytes(packed)
+
+
+def _upstream_anchor_check() -> None:
+    """Pin _upstream_addr_for_key to the upstream conformance vector."""
+    anchor_path = VECTORS_DIR / "yggdrasil_address.json"
+    anchor_doc = json.loads(anchor_path.read_text())
+    anchor = next(v for v in anchor_doc["vectors"] if v["name"] == "upstream_addr_for_key")
+    derived = _upstream_addr_for_key(bytes.fromhex(anchor["public_key"]))
+    if derived.hex() != anchor["address"]:
+        raise SystemExit(
+            f"upstream AddrForKey anchor mismatch: {derived.hex()} != {anchor['address']}"
+        )
+
+
+_upstream_anchor_check()
+
+
 def _derive_dodag_id(identity: ReferenceIdentity) -> bytes:
-    """Derive DODAGID from identity's Yggdrasil address (AddrForKey binding)."""
-    return identity.ygg_addr
+    """Derive DODAGID as upstream AddrForKey(pubkey) (rubw; native rejected)."""
+    return _upstream_addr_for_key(identity.pubkey)
 
 
 def _vector(

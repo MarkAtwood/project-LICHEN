@@ -50,6 +50,28 @@ def _addr_for_key(public_key: bytes) -> bytes:
     return b"\x02" + digest[:7] + _iid_for_key(public_key)
 
 
+def _upstream_addr_for_key(public_key: bytes) -> bytes:
+    """Upstream yggdrasil-go AddrForKey (rubw): invert, count leading 1s,
+    skip the first 0 bit, bit-pack whole bytes into addr[2:16]."""
+    buf = bytes(b ^ 0xFF for b in public_key)
+    ones = 0
+    first_zero = 256
+    for idx in range(256):
+        if (buf[idx // 8] >> (7 - idx % 8)) & 1:
+            ones = (ones + 1) & 0xFF
+        else:
+            first_zero = idx
+            break
+    packed = bytearray(14)
+    start = first_zero + 1
+    whole_bits = max(0, 256 - start) & ~7
+    for out_bit in range(min(whole_bits, 112)):
+        src = start + out_bit
+        if (buf[src // 8] >> (7 - src % 8)) & 1:
+            packed[out_bit // 8] |= 1 << (7 - out_bit % 8)
+    return bytes((0x02, ones)) + bytes(packed)
+
+
 def _ones_complement_sum(data: bytes) -> int:
     if len(data) % 2:
         data += b"\x00"
@@ -434,13 +456,13 @@ def test_timing_dio_envelope_has_independent_integrity_checks() -> None:
         assert source_matches_signer is (case["name"] != "signed-wrong-signer"), case["name"]
 
 
-def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> None:
+def test_root_vectors_use_upstream_addr_for_key_and_independent_signatures() -> None:
     for vector in _load("root_signature.json")["vectors"]:
         public_hex = vector.get("pubkey")
         if public_hex is None or len(public_hex) != 64:
             continue
         public_key = bytes.fromhex(public_hex)
-        binding = bytes.fromhex(vector["dodagid"]) == _addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid"]) == _upstream_addr_for_key(public_key)
         assert binding is vector.get("binding_valid", vector.get("error") != "DODAGID_MISMATCH")
         if "signature" in vector and "message" in vector:
             valid_signature = verify(
@@ -455,7 +477,7 @@ def test_root_vectors_use_native_addr_for_key_and_independent_signatures() -> No
         if len(public_key) != 32:
             assert vector["expected_valid"] is False
             continue
-        binding = bytes.fromhex(vector["dodagid_hex"]) == _addr_for_key(public_key)
+        binding = bytes.fromhex(vector["dodagid_hex"]) == _upstream_addr_for_key(public_key)
         signature = verify(
             public_key,
             bytes.fromhex(vector["message_hex"]),
