@@ -5,20 +5,20 @@
 //! (`legacy/yggdrasil-derivation.json`,
 //! `legacy/ipv6_addresses_native_sha512.json`).
 //!
-//! Key-derived identities bind `fe80::/10` to the SHA-512 IID. Since i72x.2
-//! (decision `upstream-yggdrasil-addressing`) the routable `0200::/8` address
-//! is upstream Yggdrasil `AddrForKey`, which bit-packs the inverted pubkey and
-//! does NOT embed the IID. The quarantined corpora's `native_packed`/`ygg_addr`
-//! fields still encode the REJECTED SHA-512 native profile (see
-//! test/vectors/legacy/README.md), so conformance is pinned per key against
-//! the external oracle (upstream `address.go` @422836ee) while the legacy
-//! corpora are consumed only as quarantine-integrity pins, never as
-//! conformance oracles, until they are regenerated (q6ko.3, i72x.6).
-//! EUI-64 and short-address cases are link-interoperability helpers, not
-//! node identities.
+//! Key-derived identities bind `fe80::/10` to the SHA-512 IID. The primary
+//! 0200::/8 routable address is upstream Yggdrasil `AddrForKey`
+//! (spec/decisions.jsonl upstream-yggdrasil-addressing); the rejected
+//! SHA-512 native profile lives only in the quarantined legacy corpora and
+//! is consumed through a test-local transcription
+//! ([`native_profile_reference`]) as data-integrity pins, never as
+//! conformance oracles. EUI-64 and short-address cases are
+//! link-interoperability helpers, not node identities.
 
-use lichen_core::addr::{iid_from_pubkey_bytes, ygg_addr_from_pubkey, Ipv6Addr, NodeId};
+mod native_profile_reference;
+
+use lichen_core::addr::{iid_from_pubkey_bytes, Ipv6Addr, NodeId};
 use lichen_core::short_addr::{short_addr_from_iid, short_addr_to_iid};
+use native_profile_reference::{native_sha512_addr, native_sha512_iid};
 use serde_json::Value;
 
 const IPV6_ADDRESS_VECTORS: &str = include_str!("../../../test/vectors/ipv6-addresses.json");
@@ -26,51 +26,6 @@ const YGG_DERIVATION_VECTORS: &str =
     include_str!("../../../test/vectors/legacy/yggdrasil-derivation.json");
 const LEGACY_IPV6_NATIVE_VECTORS: &str =
     include_str!("../../../test/vectors/legacy/ipv6_addresses_native_sha512.json");
-
-/// Upstream `AddrForKey` for each corpus pubkey, produced by running
-/// upstream's own `address.go` @422836ee (external oracle, never this crate).
-fn upstream_addr_for_pubkey(pubkey: &[u8; 32]) -> [u8; 16] {
-    let table: [(&str, &str); 8] = [
-        (
-            "0000000000000000000000000000000000000000000000000000000000000000",
-            "02000000000000000000000000000000",
-        ),
-        (
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "0200389e777ace07c7d6ca08166ecd20",
-        ),
-        (
-            "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
-            "0200514acffcfa9dea90556802586d37",
-        ),
-        (
-            "abababababababababababababababababababababababababababababababab",
-            "0200a8a8a8a8a8a8a8a8a8a8a8a8a8a8",
-        ),
-        (
-            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-            "02000000000000000000000000000000",
-        ),
-        (
-            "0202020202020202020202020202020202020202020202020202020202020202",
-            "0206fefefefefefefefefefefefefefe",
-        ),
-        (
-            "0101010101010101010101010101010101010101010101010101010101010101",
-            "0207fefefefefefefefefefefefefefe",
-        ),
-        (
-            "deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe",
-            "020042a482206a028a8242a482206a02",
-        ),
-    ];
-    let hex: String = pubkey.iter().map(|b| format!("{b:02x}")).collect();
-    let (_, expected) = table
-        .iter()
-        .find(|(pk, _)| *pk == hex)
-        .expect("corpus pubkey must have a pinned upstream address");
-    decode_hex::<16>(expected)
-}
 
 fn decode_hex<const N: usize>(value: &str) -> [u8; N] {
     assert_eq!(
@@ -99,12 +54,12 @@ fn link_local_from_iid(iid: &[u8; 8]) -> [u8; 16] {
 }
 
 #[test]
-fn key_derived_identity_binds_link_local_and_quarantined_native() {
-    // The live corpus pins only the IID + link-local derivations. The
-    // primary/native 0200::/8 fields are the REJECTED SHA-512 profile and
-    // live in test/vectors/legacy/ipv6_addresses_native_sha512.json
-    // (QUARANTINED — quarantine-integrity pin only, never a conformance
-    // oracle; delete when the upstream AddrForKey migration lands).
+fn key_derived_identity_link_local_and_quarantined_twin() {
+    // The live corpus pins only the IID + link-local derivations (unchanged
+    // by the upstream AddrForKey migration). The rejected native 0200::/8
+    // fields live in test/vectors/legacy/ipv6_addresses_native_sha512.json
+    // (QUARANTINED) and are pinned against the test-local reference of the
+    // rejected profile, never against the live implementation.
     let document = ipv6_document();
     assert_eq!(document["format_version"], 2);
     let legacy: Value = serde_json::from_str(LEGACY_IPV6_NATIVE_VECTORS)
@@ -140,31 +95,22 @@ fn key_derived_identity_binds_link_local_and_quarantined_native() {
             decode_hex::<16>(legacy_vector["native_packed"].as_str().expect("native"));
 
         let iid = iid_from_pubkey_bytes(&pubkey);
-        let native = ygg_addr_from_pubkey(&pubkey);
+        let reference_native = native_sha512_addr(&pubkey);
         let link_local = link_local_from_iid(&iid);
 
         assert_eq!(iid, expected_iid, "{name}");
-        // Routable address: upstream AddrForKey, pinned per key from the
-        // external oracle (the corpus's native_packed is the rejected
-        // profile; see module docs).
-        assert_eq!(native, upstream_addr_for_pubkey(&pubkey), "{name}");
+        assert_eq!(iid, native_sha512_iid(&pubkey), "{name}: live IID derivation must match the quarantined-profile transcription");
+        assert_eq!(reference_native, expected_native, "{name}");
         assert_eq!(link_local, expected_link_local, "{name}");
-        assert_eq!(native[0], 0x02, "{name}: 0200::/8 prefix");
+        assert_eq!(
+            &reference_native[8..],
+            &iid[..],
+            "{name}: quarantined native lower-64 must equal IID (rejected-profile property)"
+        );
+        assert_eq!(reference_native[0], 0x02, "{name}: 0200::/8 prefix");
         assert_eq!(iid[0] & 0x02, 0, "{name}: U/L bit must be clear");
         assert_eq!(&link_local[8..], &iid[..], "{name}: fe80 IID");
         assert!(Ipv6Addr(link_local).is_link_local(), "{name}");
-        // Quarantine-integrity pins on the legacy corpus only — never against
-        // the migrated implementation: the rejected-profile record keeps its
-        // 0200::/8 prefix, still embeds the IID, and records the binding.
-        assert_eq!(
-            expected_native[0], 0x02,
-            "{name}: quarantined 0200::/8 prefix"
-        );
-        assert_eq!(
-            &expected_native[8..],
-            &iid[..],
-            "{name}: quarantined record embeds the IID"
-        );
         assert_eq!(
             legacy_vector["iid_in_native"], true,
             "{name}: quarantined corpus records the binding"
@@ -218,14 +164,13 @@ fn short_address_rfc4944_iid_vectors() {
 }
 
 #[test]
-fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
-    // The corpus is QUARANTINED under test/vectors/legacy/ and its `ygg_addr`
-    // fields encode the rejected SHA-512 native profile
-    // (test/vectors/legacy/README.md). The upstream AddrForKey migration has
-    // landed, so — exactly as the pre-migration quarantine pin required — the
-    // rejected-profile assertions are replaced here with pinned upstream
-    // byte-equality values from the external oracle (see module docs), and
-    // this test takes its post-migration name.
+fn legacy_derivation_corpus_quarantine_pin() {
+    // DATA-INTEGRITY PIN of the QUARANTINED corpus, not a conformance
+    // oracle: the corpus encodes the rejected SHA-512 native profile
+    // (test/vectors/legacy/README.md). Its address expectations are checked
+    // against a test-local transcription of the rejected profile
+    // ([`native_profile_reference`]); IID expectations still match the live
+    // implementation, which retains the SHA-512 IID for link-local use.
     let entries: Vec<Value> =
         serde_json::from_str(YGG_DERIVATION_VECTORS).expect("yggdrasil-derivation.json must parse");
 
@@ -245,22 +190,26 @@ fn yggdrasil_derivation_corpus_matches_upstream_addr_for_key() {
             negative += 1;
             continue;
         }
-        let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
-        let addr = ygg_addr_from_pubkey(&pubkey);
-        let iid = iid_from_pubkey_bytes(&pubkey);
-        // The corpus's ygg_addr is the rejected native profile; the upstream
-        // AddrForKey value is pinned per key from the external oracle.
-        assert_eq!(addr, upstream_addr_for_pubkey(&pubkey));
-        if let Some(expected) = entry["iid"].as_str() {
-            assert_eq!(iid, decode_hex::<8>(expected));
-        }
-        assert_eq!(addr[0], 0x02);
         if entry["test_type"] == "binding_invariant" {
-            // The addr[8..] == IID invariant is retired with the rejected
-            // profile; the entry now pins the upstream address for its key.
+            let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
+            let addr = native_sha512_addr(&pubkey);
+            let iid = iid_from_pubkey_bytes(&pubkey);
+            assert_eq!(&addr[8..], &iid[..]);
+            assert_eq!(addr[0], 0x02);
             binding += 1;
             continue;
         }
+        let pubkey = decode_hex::<32>(entry["pubkey"].as_str().expect("pubkey"));
+        let addr = native_sha512_addr(&pubkey);
+        let iid = iid_from_pubkey_bytes(&pubkey);
+        if let Some(expected) = entry["ygg_addr"].as_str() {
+            assert_eq!(addr, decode_hex::<16>(expected));
+        }
+        if let Some(expected) = entry["iid"].as_str() {
+            assert_eq!(iid, decode_hex::<8>(expected));
+        }
+        assert_eq!(&addr[8..], &iid[..]);
+        assert_eq!(addr[0], 0x02);
         positive += 1;
     }
     assert!(positive >= 4, "positive derivation entries must run");
