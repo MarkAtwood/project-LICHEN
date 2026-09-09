@@ -31,7 +31,7 @@ static void iface_init(struct net_if *iface)
 {
 	static uint8_t mac[6] = { 0x02, 0x00, 0x5e, 0x10, 0x20, 0x30 };
 
-	net_if_set_link_addr(iface, mac, sizeof(mac), NET_LINK_ETHERNET);
+	net_if_set_link_addr(iface, mac, sizeof(mac), NET_LINK_DUMMY);
 	test_iface = iface;
 }
 
@@ -65,9 +65,11 @@ ZTEST(sos_mcast_membership, test_ff02_1_membership_tracks_mld)
 	zassert_not_null(test_iface, "dummy interface not initialized");
 	zassert_true(net_if_is_up(test_iface), "interface must be up");
 
-	/* join_mcast_nodes() runs when a unicast IPv6 address is added
-	 * (net_if.c:2074), mirroring how the LICHEN L2 interface joins
-	 * ff02::1 when its link-local address comes up.
+	/* The all-nodes group joins under MLD whenever a unicast IPv6
+	 * address is added or an interface with NET_L2_MULTICAST comes up
+	 * (net_if.c join_mcast_nodes / rejoin_multicast_groups, exact lines
+	 * vary by Zephyr version), mirroring how the LICHEN L2 interface
+	 * joins ff02::1 when its link-local address comes up.
 	 */
 	ifaddr = net_if_ipv6_addr_add(test_iface, &link_local,
 				      NET_ADDR_MANUAL, 0);

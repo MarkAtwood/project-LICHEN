@@ -22,7 +22,10 @@ tests:
       - native_sim
   net.lichen.sos_mcast_membership.mld_off:
     extra_configs:
+      # CONFIG_NET_IPV6_ND selects NET_IPV6_MLD unless NET_TEST is set;
+      # without this the MLD=n override would be silently reverted.
       - CONFIG_NET_IPV6_MLD=n
+      - CONFIG_NET_TEST=y
     platform_allow:
       - native_sim
       - native_sim/native/64
