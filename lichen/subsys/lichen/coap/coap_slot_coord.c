@@ -921,7 +921,7 @@ int lichen_slot_coord_sign_claim(const uint8_t *privkey,
 	if (privkey == NULL || pubkey == NULL || claim == NULL || buf == NULL) {
 		return -EINVAL;
 	}
-#ifdef CONFIG_TINYCRYPT_SHA256
+#if defined(CONFIG_MBEDTLS_SHA256) || defined(CONFIG_TINYCRYPT_SHA256)
 	/* Payload -> Sig_structure digest -> Schnorr48 signature */
 	uint8_t payload[CLAIM_PAYLOAD_MAX];
 	uint8_t digest[TC_SHA256_DIGEST_SIZE];
@@ -960,7 +960,7 @@ int lichen_slot_coord_sign_claim(const uint8_t *privkey,
 
 	return (int)e.off;
 #else
-#error "slot-coord requires TINYCRYPT_SHA256: claim digest must never be compiled out"
+#error "slot-coord requires a SHA-256 provider (MBEDTLS_SHA256 or TINYCRYPT_SHA256): claim digest must never be compiled out"
 	return -EIO;
 #endif
 }

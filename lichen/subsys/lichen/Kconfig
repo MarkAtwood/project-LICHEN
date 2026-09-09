@@ -32,6 +32,7 @@ rsource "senml/Kconfig"
 rsource "rpl/Kconfig"
 rsource "routing/Kconfig"
 rsource "transport/Kconfig"
+rsource "ux/Kconfig"
 
 config LICHEN_ADAPTIVE_SF_ENABLED
 	bool "Adaptive spreading factor selection (per-neighbor SNR/CCP16)"
