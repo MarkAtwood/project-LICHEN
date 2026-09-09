@@ -73,9 +73,59 @@ llm_semantic_merge() {
         return 1
     fi
 
+    # State pin (bead project-LICHEN-worker6-d42k): the session runs with
+    # shell/git access mid-merge. If it commits, switches branch, restarts the
+    # merge on a different parent, aborts it, or stages foreign content, every
+    # gate below is bypassed and the caller's 'git merge --abort' no-ops while
+    # main advances ungated (or commits land on the wrong branch). Snapshot
+    # HEAD + ref + merge parent + staged set; rewind any mutation before
+    # gating. Rewind restores main's checkout only — a session-created branch
+    # with commits survives as debris (the loop only consumes beads-worker-*).
+    # Residuals by design (tracked in follow-up beads): session writes to
+    # worker-branch refs, hooks/config, .beads content, push to remote.
+    local head_before ref_before merge_head_before staged_before
+    head_before=$(git rev-parse HEAD)
+    ref_before=$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)
+    merge_head_before=$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)
+    staged_before=$(git diff --cached --name-only | sort)
+
     echo "  LLM merge session ($model) on: $files"
     # 15-minute cap so a hung session cannot wedge the sync loop.
-    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log; return $rc
+    timeout 900 opencode run --model "$model" "You are resolving a GIT MERGE CONFLICT between the current branch (main, HEAD) and incoming branch $branch in the LICHEN repo. The conflicted files are: $files. For each conflict: read both sides plus surrounding code, understand each side's INTENT, and write the reconciled resolution (both intents preserved when compatible; otherwise pick the correct one and say why in a comment). Then run the touched crates'/packages' quick tests (cargo check / pytest for touched paths). You are done when: git diff --check passes, no conflict markers remain in any file, and the touched code compiles/tests clean. Do not resolve by deleting a side wholesale; do not touch .beads/ or spec text. Finish with the single word RESOLVED on its own line." >> /tmp/lichen-kimi-last.log 2>&1; rc=$?; echo "$(date +%FT%T) kimi budget=900s exit=$rc (124=timeout)" >> /tmp/lichen-kimi-last.log
+
+    if [ "$(git symbolic-ref HEAD 2>/dev/null || echo DETACHED)" != "$ref_before" ] ||
+       [ "$(git rev-parse HEAD)" != "$head_before" ] ||
+       [ "$(git rev-parse MERGE_HEAD 2>/dev/null || echo NONE)" != "$merge_head_before" ] ||
+       [ "$(git diff --cached --name-only | sort)" != "$staged_before" ]; then
+        echo "  LLM session mutated git state mid-merge (ref $ref_before -> $(git symbolic-ref HEAD 2>/dev/null || echo DETACHED), HEAD $head_before -> $(git rev-parse HEAD)) — rewinding"
+        # .beads worktree changes from the session window are discarded with
+        # the rewind — same policy as the caller's failure-path
+        # 'git checkout -- .beads': session vandalism and live-worker writes
+        # are indistinguishable in the window, and this path is PROVABLY
+        # session-hostile (mutation detected). The per-branch checkpoint
+        # bounds collateral to writes landed during this branch's session.
+        # set -e is suppressed in this function's call context (if-condition),
+        # so every rewind step MUST be status-checked: a silent failure leaves
+        # ungated state on main and the loop would keep merging on top of it.
+        if [ "$ref_before" = DETACHED ]; then
+            # Ambiguous ref state (session may have attached+advanced some
+            # branch): fail-stop rather than risk moving the wrong ref.
+            echo "  FATAL: mutation from a detached HEAD start — manual repair required" | tee -a /tmp/lichen-kimi-last.log
+            exit 2
+        fi
+        if ! git symbolic-ref HEAD "$ref_before" 2>>/tmp/lichen-kimi-last.log; then
+            echo "  FATAL: could not repoint HEAD to $ref_before — manual repair required" | tee -a /tmp/lichen-kimi-last.log
+            exit 2
+        fi
+        if git reset --hard "$head_before" >> /tmp/lichen-kimi-last.log 2>&1; then
+            echo "$(date +%FT%T) kimi mutated git state (exit=$rc); rewound to $head_before on $ref_before" >> /tmp/lichen-kimi-last.log
+        else
+            echo "  FATAL: rewind failed; main may hold ungated state ($(git rev-parse HEAD)) — manual repair required" | tee -a /tmp/lichen-kimi-last.log
+            exit 2
+        fi
+        return 1
+    fi
+    return $rc
 
     # stage whatever the LLM resolved; fail if anything is still conflicted
     git add -- $files
