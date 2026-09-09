@@ -3,7 +3,9 @@
 
 # MeshCore App Smoke Test
 
-This procedure validates the LICHEN MeshCore-compatible local app surface. It is
+This procedure validates the LICHEN MeshCore-compatible local app surface. The
+current implementation is hosted by the gateway app; the puck app does not yet
+select or link the MeshCore BLE surface. It is
 not an RF interoperability test: a pass means a MeshCore client can use the
 local BLE app interface to inspect and exercise a LICHEN node, not that LICHEN
 frames can join a MeshCore radio mesh.
@@ -56,9 +58,8 @@ tools/zephyr-clean-worktree.sh verify-twister "$PWD" \
 Expected result: all selected configurations pass with no warnings. Do not
 commit `twister-out-meshcore-smoke-preflight/`.
 
-If the smoke run uses a newly enabled board, also build the gateway image before
-flashing. Replace `<board>` and any extra overlays with the target-specific
-values:
+Build the gateway image before flashing. Replace `<board>` and any extra
+overlays with the target-specific values:
 
 ```sh
 cat >/tmp/meshcore-smoke.conf <<'EOF'
@@ -74,10 +75,22 @@ CONFIG_BT_SMP=y
 CONFIG_BT_FIXED_PASSKEY=y
 EOF
 
-west build -p always -b <board> lichen/apps/gateway -- \
+west build -p always -b <board> lichen/apps/gateway -d build/meshcore -- \
   -DZEPHYR_EXTRA_MODULES=$PWD/lichen \
   -DEXTRA_CONF_FILE=/tmp/meshcore-smoke.conf
+
+# Use the board's configured west runner; add runner-specific arguments when
+# the board requires them.
+west flash -d build/meshcore
 ```
+
+The resulting configuration MUST include `CONFIG_LORA_LICHEN_MESHCORE_BLE=y`,
+`CONFIG_LICHEN_MESHCORE_CODEC=y`, `CONFIG_BT=y`,
+`CONFIG_BT_PERIPHERAL=y`, `CONFIG_BT_MAX_CONN=1`, `CONFIG_BT_SMP=y`, and
+`CONFIG_BT_FIXED_PASSKEY=y`. It MUST set both
+`CONFIG_LORA_LICHEN_BLE=n` and `CONFIG_LORA_LICHEN_MESHTASTIC_BLE=n`.
+Do not use `lichen/apps/puck` for this procedure until that app explicitly
+selects the MeshCore gateway sources and Kconfig surface.
 
 Do not continue to client testing if the build falls back to native NUS
 (`CONFIG_LORA_LICHEN_BLE=y`) or Meshtastic BLE
