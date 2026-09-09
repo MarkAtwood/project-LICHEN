@@ -19,7 +19,7 @@ sig = Schnorr48(old_privkey, SHA256(CBOR(Sig_structure)))
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
@@ -157,22 +157,34 @@ class KeyRotationAttestation:
     payload: KeyRotationAttestationPayload
     old_iid: bytes
     signature: bytes
+    protected_bytes: bytes | None = None
+    payload_bytes: bytes | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.old_iid, bytes) or len(self.old_iid) != 8:
             raise ValueError(f"old_iid must be 8 bytes, got {len(self.old_iid)}")
         if not isinstance(self.signature, bytes) or len(self.signature) != 48:
             raise ValueError(f"signature must be 48 bytes, got {len(self.signature)}")
+        if (self.protected_bytes is None) != (self.payload_bytes is None):
+            raise ValueError("wire bstrs must be retained as a pair or not at all")
 
     def to_cose_sign1(self) -> bytes:
         """Encode as COSE_Sign1 structure.
 
+        When wire bstrs were retained (decode or creation), they are emitted
+        verbatim so a forwarded/stored attestation stays signature-valid for
+        downstream verifiers (RFC 9052 section 4.4).
+
         Returns:
             CBOR-encoded COSE_Sign1 array
         """
-        protected = _encode_protected_header()
+        protected = (
+            self.protected_bytes if self.protected_bytes is not None else _encode_protected_header()
+        )
+        payload_bytes = (
+            self.payload_bytes if self.payload_bytes is not None else self.payload.to_cbor()
+        )
         unprotected = {COSE_KID_LABEL: self.old_iid}
-        payload_bytes = self.payload.to_cbor()
 
         cose_sign1 = [protected, unprotected, payload_bytes, self.signature]
         return cbor2.dumps(cose_sign1)
@@ -217,7 +229,12 @@ class KeyRotationAttestation:
         if not isinstance(signature, bytes) or len(signature) != 48:
             raise ValueError("signature must be 48 bytes")
 
-        return cls(payload=payload, old_iid=old_iid, signature=signature)
+        attestation = cls(payload=payload, old_iid=old_iid, signature=signature)
+        # Retain the transported bstrs (RFC 9052 section 4.4): the signature
+        # covers them verbatim, not any re-encoding of the decoded payload.
+        return replace(
+            attestation, protected_bytes=protected_bytes, payload_bytes=payload_bytes
+        )
 
 
 def create_key_rotation_attestation(
@@ -257,7 +274,11 @@ def create_key_rotation_attestation(
     signature = schnorr48.sign(old_identity.privkey, old_identity.pubkey, to_sign)
 
     return KeyRotationAttestation(
-        payload=payload, old_iid=old_identity.iid, signature=signature
+        payload=payload,
+        old_iid=old_identity.iid,
+        signature=signature,
+        protected_bytes=protected,
+        payload_bytes=payload_bytes,
     )
 
 
@@ -298,9 +319,14 @@ def verify_key_rotation_attestation(
     if payload.old_pubkey != old_pubkey:
         return False, "OLD_PUBKEY_MISMATCH"
 
-    # Step 4: Verify signature
-    protected = _encode_protected_header()
-    payload_bytes = payload.to_cbor()
+    # Step 4: Verify signature over the transported bstrs (RFC 9052 section
+    # 4.4), falling back to re-encoding for a field-constructed attestation.
+    if attestation.protected_bytes is not None and attestation.payload_bytes is not None:
+        protected = attestation.protected_bytes
+        payload_bytes = attestation.payload_bytes
+    else:
+        protected = _encode_protected_header()
+        payload_bytes = payload.to_cbor()
     sig_structure = _build_sig_structure(protected, payload_bytes)
     to_verify = sha256(sig_structure).digest()
 

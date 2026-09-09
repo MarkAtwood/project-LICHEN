@@ -667,3 +667,117 @@ class TestPayloadIntegerKeys:
         assert decoded[3] == "team-alpha"
         assert decoded[4] == 1700000000
         assert decoded[5] == 42
+
+
+# ─── Wire-bytes verification (RFC 9052 4.4, C/Rust interop) ──────────────────
+
+
+def _foreign_delegation_envelope(identity, payload_map):
+    """Build a COSE_Sign1 envelope as a non-Python encoder might: payload map
+    in an order this module never emits, plus an extra protected-header entry.
+    Signed over the transported bstrs with schnorr48 directly (independent of
+    the module's own encoding helpers)."""
+    from hashlib import sha256
+
+    from lichen.crypto import schnorr48
+
+    payload = cbor2.dumps(payload_map)
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG, 99: b"x"})
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload])
+    signature = schnorr48.sign(identity.privkey, identity.pubkey, sha256(sig_structure).digest())
+    return cbor2.dumps([protected, {COSE_KID_LABEL: identity.iid}, payload, signature])
+
+
+def test_delegation_token_verified_over_received_wire_bytes() -> None:
+    delegator = Identity.from_seed(bytes(range(32)))
+    delegate = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    expiry = int(time.time()) + 3600
+    # Foreign key order (5,4,3,2,1) the module's to_cbor() never emits.
+    payload_map = {
+        5: 9,
+        4: expiry,
+        3: "team-alpha",
+        2: int(DelegationScope.INVITE),
+        1: delegate.iid,
+    }
+    envelope = _foreign_delegation_envelope(delegator, payload_map)
+    # Guard the differential: module re-encode would differ, so the old
+    # re-encode-verify path could never pass here.
+    assert cbor2.dumps(payload_map) != DelegationTokenPayload(
+        delegate=delegate.iid,
+        scope=int(DelegationScope.INVITE),
+        resource="team-alpha",
+        expiry=expiry,
+        seq=9,
+    ).to_cbor()
+    token = decode_delegation_token(envelope)
+    valid, error = verify_delegation_token(
+        token,
+        delegator_pubkey=delegator.pubkey,
+        delegate_iid=delegate.iid,
+        expected_resource="team-alpha",
+        current_time=int(time.time()),
+        is_delegator_owner=True,
+    )
+    assert (valid, error) == (True, None)
+
+
+def test_prefix_delegation_token_verified_over_received_wire_bytes() -> None:
+    from lichen.crypto.delegation_tokens import (
+        PrefixDelegationToken,
+        verify_prefix_delegation_token,
+    )
+
+    root = Identity.from_seed(bytes(range(32)))
+    delegate = Identity.from_seed(bytes([0xFF - i for i in range(32)]))
+    expiry = int(time.time()) + 3600
+    # Foreign key order (6..1) the module's to_cbor() never emits.
+    payload_map = {6: 0, 5: 3, 4: expiry, 3: delegate.iid, 2: 64, 1: b"\x02" + b"\x00" * 7}
+    envelope = _foreign_delegation_envelope(root, payload_map)
+    token = PrefixDelegationToken.from_cose_sign1(envelope)
+    valid, error = verify_prefix_delegation_token(
+        token,
+        delegator_pubkey=root.pubkey,
+        delegate_iid=delegate.iid,
+        current_time=int(time.time()),
+    )
+    assert (valid, error) == (True, None)
+
+
+def test_capability_announcement_verified_over_received_wire_bytes() -> None:
+    """CapabilityAnnouncement retains+verifies wire bstrs (RFC 9052 4.4)."""
+    from hashlib import sha256
+
+    from lichen.crypto import schnorr48
+    from lichen.crypto.capability_announcements import (
+        Capability,
+        CapabilityAnnouncement,
+        CapabilityPayload,
+        verify_capability_announcement,
+    )
+
+    identity = Identity.from_seed(bytes(range(32)))
+    expiry = int(time.time()) + 3600
+    # Foreign key order (6..1) the module's to_cbor() never emits.
+    payload_map = {6: identity.iid, 5: 7, 4: expiry, 3: 64, 2: bytes(8), 1: int(Capability.EGRESS)}
+    payload = cbor2.dumps(payload_map)
+    protected = cbor2.dumps({1: SCHNORR48_ED25519_ALG, 99: b"x"})
+    sig_structure = cbor2.dumps(["Signature1", protected, b"", payload])
+    signature = schnorr48.sign(identity.privkey, identity.pubkey, sha256(sig_structure).digest())
+    envelope = cbor2.dumps([protected, {COSE_KID_LABEL: identity.iid}, payload, signature])
+    # Guard the differential: module re-encode would differ.
+    assert payload != CapabilityPayload(
+        capabilities=int(Capability.EGRESS),
+        prefix=bytes(8),
+        prefix_len=64,
+        expiry=expiry,
+        seq=7,
+        announcer_iid=identity.iid,
+    ).to_cbor()
+    announcement = CapabilityAnnouncement.from_cose_sign1(envelope)
+    valid, error = verify_capability_announcement(
+        announcement=announcement,
+        pubkey=identity.pubkey,
+        current_time=int(time.time()),
+    )
+    assert (valid, error) == (True, None)
