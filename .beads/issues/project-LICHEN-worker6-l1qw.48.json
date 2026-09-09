@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.48",
+  "title": "[spec-gap][R-11-018/073/074] Status/UI display MUSTs unimplemented: home-vs-current tuning labeling, duty accounting-scope display",
+  "description": "Spec 17.5.3: Status and UIs MUST distinguish advertised home channel from current tuning; if current tuning is not reported it is unknown, never inferred from home. Changing logical channels or retuning MUST NOT be displayed as acquiring a fresh airtime budget. Spec 17.8.6: channel display MUST label advertised home and current tuning distinctly; duty displays MUST identify the applicable accounting scope. Classification: not-implemented. Evidence: no current-tuning field exists in any /status encoder (C ccp map coap_status.c:667-676 emits home rx_channel only); no display UI exists to label anything; duty_cycle_pct is one continuous rolling budget per radio (rust/lichen-core/src/duty_cycle.rs:348 DutyCycleTracker; C hal/hal_duty.c single rolling record per ctx, l2/lora_l2.c:186) so retune structurally does not reset budget, but there is no per-regulatory-accounting-group or per-physical-frequency bucketing (duty_cycle.rs:59-78 regions only) and no test asserts retune-does-not-refresh; no production C code populates duty_cycle_pct_x10 outside tests (coap_status_get/src/main.c:220). Suggested placement: add current_tuning (or explicit unknown marker) to /status ccp object in C encoder + lci_status.json vector; add duty accounting-group label to status display path; add a retune-does-not-refresh-budget test. Related display work: l1qw.47 (UI screens).",
+  "status": "open",
+  "priority": 2,
+  "issue_type": "bug",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T21:10:58.546173805Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T21:10:58.546173805Z",
+  "labels": [
+    "lci",
+    "spec-gap",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.48",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-09-09T21:10:58.670871751Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}

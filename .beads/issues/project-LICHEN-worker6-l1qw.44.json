@@ -1,0 +1,27 @@
+{
+  "id": "project-LICHEN-worker6-l1qw.44",
+  "title": "[spec-gap][R-11-006] RTOS IPC transport lci_send/lci_recv absent from all stacks (spec 17.3.4)",
+  "description": "Spec 17.3.4: same-device RTOS applications send/receive discrete IPv6 packets via void lci_send(const uint8_t*, size_t) and size_t lci_recv(uint8_t*, size_t, uint32_t timeout_ms); no framing needed. Classification: not-implemented (repo-wide: the only occurrences are the spec lines 143/146). Closest existing: ble_lci_send netif (lichen/apps/gateway/src/ble_lci_netif.c:76), KISS ports KISS_PORT_LCI_IPV6=2 / KISS_PORT_LCI_CTRL=3 (lichen/subsys/lichen/transport/kiss_transport.h:84-85); transport Kconfig lists only 17.3.1/17.3.2 bindings. Suggested placement: Zephyr lichen/subsys/lichen/transport IPC transport (message queue or pipe backed) + Kconfig entry citing 17.3.4; Rust/Python sim equivalents optional.",
+  "status": "open",
+  "priority": 3,
+  "issue_type": "task",
+  "owner": "mark@reviewcommit.com",
+  "created_at": "2026-09-09T21:10:15.700907153Z",
+  "created_by": "Mark Atwood",
+  "updated_at": "2026-09-09T21:10:15.700907153Z",
+  "labels": [
+    "lci",
+    "spec-gap",
+    "spec"
+  ],
+  "dependencies": [
+    {
+      "issue_id": "project-LICHEN-worker6-l1qw.44",
+      "depends_on_id": "project-LICHEN-worker6-l1qw",
+      "type": "parent-child",
+      "created_at": "2026-09-09T21:10:15.838509076Z",
+      "created_by": "Mark Atwood",
+      "metadata": "{}"
+    }
+  ]
+}
