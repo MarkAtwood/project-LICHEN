@@ -144,6 +144,41 @@ class TestSlotClaim:
                 claim_seq=-1,
             )
 
+    def test_sibling_field_upper_bounds(self) -> None:
+        """s61e: Rust slot.rs decodes superframe_epoch/expiry/ordinal as u64
+        and slot indices as u32 (count <= 4096); Python must reject the same
+        out-of-range values at construction so a signed claim cannot be
+        accepted by Python while Rust calls the identical bytes malformed."""
+        base = {
+            "gateway_iid": "0011223344556677",
+            "slots": (0,),
+            "superframe_id": 1,
+            "expiry": int(time.time()) + 8,
+            "claim_seq": 0,
+        }
+        # Boundary values accepted (Rust u64/u32 maxima are encodable).
+        SlotClaim(**{**base, "superframe_id": 0xFFFF_FFFF_FFFF_FFFF})
+        SlotClaim(**{**base, "expiry": 0xFFFF_FFFF_FFFF_FFFF})
+        SlotClaim(**{**base, "ordinal": 0xFFFF_FFFF_FFFF_FFFF})
+        SlotClaim(**{**base, "slots": (0xFFFF_FFFF,)})
+        # Above the Rust-decodable range -> rejected.
+        with pytest.raises(ClaimError, match="superframe_id"):
+            SlotClaim(**{**base, "superframe_id": 0x1_0000_0000_0000_0000})
+        with pytest.raises(ClaimError, match="expiry"):
+            SlotClaim(**{**base, "expiry": 0x1_0000_0000_0000_0000})
+        with pytest.raises(ClaimError, match="ordinal"):
+            SlotClaim(**{**base, "ordinal": 0x1_0000_0000_0000_0000})
+        with pytest.raises(ClaimError, match="ordinal"):
+            SlotClaim(**{**base, "ordinal": -1})
+        with pytest.raises(ClaimError, match="slots must be u32"):
+            SlotClaim(**{**base, "slots": (0x1_0000_0000,)})
+        with pytest.raises(ClaimError, match="slots must be u32"):
+            SlotClaim(**{**base, "slots": (-1,)})
+        with pytest.raises(ClaimError, match="slots must be u32"):
+            SlotClaim(**{**base, "slots": (True,)})
+        with pytest.raises(ClaimError, match="MAX_SLOTS_PER_SUPERFRAME"):
+            SlotClaim(**{**base, "slots": tuple(range(4097))})
+
     def test_invalid_signature_length(self) -> None:
         with pytest.raises(ClaimError, match="signature must be 48 bytes"):
             SlotClaim(
